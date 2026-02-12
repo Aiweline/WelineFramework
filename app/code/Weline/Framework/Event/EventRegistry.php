@@ -130,13 +130,19 @@ class EventRegistry
             $eventObserversList = $xmlReader->read();
             
             $env = \Weline\Framework\App\Env::getInstance();
+            $moduleList = $env->getModuleList();
+            // 首次安装时 modules.php 可能尚未生成，moduleList 为空，此时不过滤观察者，否则 register_installer 等观察者会全部被跳过，导致 Theme/I18n Handle 不存在
+            $skipByStatus = !empty($moduleList);
             
             // 合并所有模块的观察者
             foreach ($eventObserversList as $module_and_file => $moduleEventObservers) {
                 // 提取模块名并检查模块状态
                 $moduleName = explode('::', $module_and_file)[0] ?? '';
-                if (empty($moduleName) || !$env->getModuleStatus($moduleName)) {
-                    // 跳过禁用的模块
+                if (empty($moduleName)) {
+                    continue;
+                }
+                if ($skipByStatus && !$env->getModuleStatus($moduleName)) {
+                    // 模块列表已存在时，跳过禁用的模块
                     continue;
                 }
                 

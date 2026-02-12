@@ -16,6 +16,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\System\Process\Processer;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\WlsInstanceRegistry;
 
@@ -82,24 +83,22 @@ class ConfigChangedObserver implements ObserverInterface
         
         // 回退：信号方式
         $masterPids = $registry->getRunningMasterPids();
-        if (!empty($masterPids) && (!\defined('IS_WIN') || !IS_WIN) && \function_exists('posix_kill')) {
+        if (!empty($masterPids) && \defined('SIGHUP')) {
             foreach ($masterPids as $pid) {
                 $pid = (int) $pid;
                 if ($pid > 0) {
-                    @\posix_kill($pid, SIGHUP);
+                    Processer::sendSignal($pid, SIGHUP, true);
                 }
             }
             return;
         }
 
         $allWorkerPids = $registry->getRunningWorkerPids();
-        if (!\defined('IS_WIN') || !IS_WIN) {
-            if (\function_exists('posix_kill')) {
-                foreach ($allWorkerPids as $pid) {
-                    $pid = (int) $pid;
-                    if ($pid > 0 && @\posix_kill($pid, 0)) {
-                        @\posix_kill($pid, \SIGUSR1);
-                    }
+        if (\defined('SIGUSR1')) {
+            foreach ($allWorkerPids as $pid) {
+                $pid = (int) $pid;
+                if ($pid > 0 && Processer::isRunningByPid($pid)) {
+                    Processer::sendSignal($pid, \SIGUSR1, true);
                 }
             }
         }

@@ -22,6 +22,7 @@ use GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder;
 use GuoLaiRen\PageBuilder\Service\AI\CodeValidator;
 use GuoLaiRen\PageBuilder\Service\AI\CodeFixer;
 use GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer;
+use GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser;
 
 /**
  * AI内容生成控制器
@@ -1269,48 +1270,54 @@ class AiGenerate extends BackendController
             // 验证组件
             $componentValidation = $this->validateGeneratedComponent($component, $styleCode);
             
-            // #region agent log（定位 Unclosed '{' on line 103：记录即将渲染的 phtml 片段）
             $phtmlLines = explode("\n", $phtmlCode);
-            $totalLines = count($phtmlLines);
-            $snippet = array_slice($phtmlLines, 97, 16);
-            $entry = json_encode(['when' => 'before_preview', 'totalLines' => $totalLines, 'lines98to113' => $snippet, 'timestamp' => (int)(microtime(true) * 1000)]) . "\n";
-            @file_put_contents(sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pagebuilder_ai_debug.log', $entry, FILE_APPEND | LOCK_EX);
-            $wsLog = (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log';
-            if (is_dir(dirname($wsLog))) {
-                @file_put_contents($wsLog, $entry, FILE_APPEND | LOCK_EX);
-            }
-            // #endregion
+            $this->logAgentDebug('AiGenerate::componentStream before_preview', 'phtml_snippet', ['totalLines' => count($phtmlLines), 'lines98to113' => array_slice($phtmlLines, 97, 16)]);
 
-            // 生成预览
-            $preview = $this->generateComponentPreview($phtmlCode);
-
-            // 将当前模板写入临时文件并生成 refine_token，微调时只传 token 不再传整份代码
+            // 先修复模板，再写入 phtml 文件，然后调用 ob 服务渲染该文件得到预览 HTML
             $refineToken = '';
+            $preview = '';
             try {
+                $generator = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::class);
+                $fixedCode = $generator->prepareTemplateForPreview($phtmlCode);
                 $refineToken = 'pb_refine_' . bin2hex(random_bytes(8));
                 $refineDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pb_refine';
                 if (!is_dir($refineDir)) {
                     mkdir($refineDir, 0770, true);
                 }
                 $refinePath = $refineDir . DIRECTORY_SEPARATOR . $refineToken . '.phtml';
-                file_put_contents($refinePath, $phtmlCode);
+                file_put_contents($refinePath, $fixedCode);
                 $paths = $this->session->getData('pagebuilder_refine_paths') ?: [];
                 $paths[$refineToken] = ['path' => $refinePath, 'created' => time()];
                 $this->session->setData('pagebuilder_refine_paths', $paths);
+                $renderer = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer::class);
+                $renderResult = $renderer->renderFromFile($refinePath);
+                if ($renderResult['success'] && !empty($renderResult['html'])) {
+                    $preview = '<!DOCTYPE html><html><head><meta charset="UTF-8">';
+                    $preview .= '<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:#f5f5f5;}</style>';
+                    $preview .= '</head><body>' . $renderResult['html'] . '</body></html>';
+                } else {
+                    $preview = $this->generateFallbackPreview($phtmlCode, $renderResult['error'] ?? '渲染失败');
+                }
             } catch (\Throwable $e) {
-                // 不影响主流程，仅无 token 时微调需传 template_content
+                $preview = $this->generateFallbackPreview($phtmlCode, $e->getMessage());
             }
-            
-            // 发送完成事件
-            $sse->sendEvent('complete', [
-                'success' => true,
-                'component' => $component,
-                'validation' => $componentValidation,
-                'preview' => $preview,
-                'use_framework' => $useFramework,
-                'final_prompt' => $prompt,
-                'refine_token' => $refineToken,
+
+            $draftId = $this->saveDraftAndGetId($phtmlCode, [
+                'name' => $name,
+                'code' => $componentCode,
+                'region' => $region,
+                'style_code' => $styleCode,
             ]);
+            $this->logAgentDebug('AiGenerate::componentStream complete', 'sending', ['draft_id' => $draftId, 'has_preview' => !empty($preview)]);
+            $sse->sendEvent('complete', $this->buildComponentStreamCompletePayload(
+                $component,
+                $componentValidation,
+                $preview,
+                $useFramework,
+                $prompt,
+                $refineToken,
+                $draftId
+            ));
             
             // 发送结束事件（使用 complete 方法）
             $sse->complete(['message' => __('生成完成')]);
@@ -1318,14 +1325,8 @@ class AiGenerate extends BackendController
         } catch (\Throwable $e) {
             // 捕获 Exception 与 Error（含 ParseError），避免未捕获导致连接直接断开、前端只显示「连接中断或服务器错误」
             $cleanMsg = preg_replace('/\x1b\[[0-9;]*m/', '', $e->getMessage());
-            // #region agent log（Unclosed '{' 等解析错误时定位用）
-            $entry = json_encode(['when' => 'catch', 'message' => $cleanMsg, 'file' => $e->getFile(), 'line' => $e->getLine(), 'class' => get_class($e), 'timestamp' => (int)(microtime(true) * 1000)]) . "\n";
-            @file_put_contents(sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pagebuilder_ai_debug.log', $entry, FILE_APPEND | LOCK_EX);
-            $wsLog = (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log';
-            if (is_dir(dirname($wsLog))) {
-                @file_put_contents($wsLog, $entry, FILE_APPEND | LOCK_EX);
-            }
-            // #endregion
+            @file_put_contents(sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pagebuilder_ai_debug.log', json_encode(['when' => 'catch', 'message' => $cleanMsg, 'file' => $e->getFile(), 'line' => $e->getLine(), 'class' => get_class($e), 'timestamp' => (int)(microtime(true) * 1000)]) . "\n", FILE_APPEND | LOCK_EX);
+            $this->logAgentDebug('AiGenerate::componentStream catch', 'exception', ['message' => $cleanMsg, 'file' => $e->getFile(), 'line' => $e->getLine(), 'class' => get_class($e)]);
             $sse->sendEvent('error', [
                 'message' => $cleanMsg
             ]);
@@ -2371,34 +2372,27 @@ PROMPT;
             throw new \Exception(__('AI 未返回任何内容，请检查网络或重试'));
         }
 
-        // #region agent log
-        $logPath = (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log';
-        @file_put_contents($logPath, json_encode(['hypothesisId' => 'JSON', 'location' => 'parseComponentResponse', 'message' => 'entry', 'data' => ['responseLen' => strlen($response), 'head' => mb_substr($response, 0, 350), 'tail' => mb_substr($response, -200)], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n", FILE_APPEND | LOCK_EX);
-        // #endregion
+        $this->logAgentDebug('parseComponentResponse', 'entry', ['responseLen' => strlen($response), 'head' => mb_substr($response, 0, 350), 'tail' => mb_substr($response, -200)]);
 
-        // 1. 提取 JSON 字符串（支持多种包裹格式）
-        $json = $this->extractJsonFromResponse($response);
-        if ($json === null) {
-            // #region agent log
-            @file_put_contents($logPath, json_encode(['hypothesisId' => 'JSON', 'location' => 'parseComponentResponse', 'message' => 'extractJson returned null', 'data' => ['snippet' => mb_substr($response, 0, 500)], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n", FILE_APPEND | LOCK_EX);
-            // #endregion
-            // 尝试直接提取 PHTML 代码块（旧模式兼容）
+        $parser = ObjectManager::getInstance(AiResponseJsonParser::class);
+        $data = $parser->extractAndDecode($response);
+
+        if ($data === null) {
+            $this->logAgentDebug('parseComponentResponse', 'extractAndDecode null', ['snippet' => mb_substr($response, 0, 500)]);
             if (preg_match('/```(?:php|phtml|html)?\s*([\s\S]*?)\s*```/s', $response, $matches)) {
                 return ['phtml' => trim($matches[1])];
             }
-            $snippet = mb_substr($response, 0, 200);
-            throw new \Exception(__('AI返回的内容格式不正确：未找到有效 JSON，内容预览：%{1}', $snippet));
+            throw new \Exception(__('AI返回的内容格式不正确：未找到有效 JSON，内容预览：%{1}', mb_substr($response, 0, 200)));
         }
 
-        // 2. 解析 JSON（含常见修复）
-        $data = $this->decodeJsonWithRepair($json);
-        if ($data === null) {
-            $snippet = mb_substr($json, 0, 150);
-            throw new \Exception(__('AI返回的内容格式不正确：JSON 解析失败（%{1}），预览：%{2}', [json_last_error_msg(), $snippet]));
-        }
-        
-        // 标准化字段名称（支持多种命名风格）
-        $normalized = [];
+        return $this->normalizeComponentPayload($data);
+    }
+
+    /**
+     * 组件 JSON 字段标准化（支持多种 AI 命名风格）
+     */
+    private function normalizeComponentPayload(array $data): array
+    {
         $fieldMappings = [
             'extra_fields' => ['extra_fields', 'extraFields', 'fields'],
             'php_variables' => ['php_variables', 'phpVariables', 'php_vars', 'phpVars'],
@@ -2409,19 +2403,117 @@ PROMPT;
             'html_extra_column' => ['html_extra_column', 'htmlExtraColumn'],
             'footer_extra_text' => ['footer_extra_text', 'footerExtraText'],
             'js_content' => ['js_content', 'jsContent', 'js', 'javascript'],
-            'phtml' => ['phtml', 'code', 'template'], // 旧模式兼容
+            'phtml' => ['phtml', 'code', 'template'],
         ];
-        
+        $normalized = [];
         foreach ($fieldMappings as $normalizedKey => $possibleKeys) {
             foreach ($possibleKeys as $key) {
-                if (isset($data[$key]) && !empty($data[$key])) {
+                if (isset($data[$key]) && $data[$key] !== '' && $data[$key] !== null) {
                     $normalized[$normalizedKey] = $data[$key];
                     break;
                 }
             }
         }
-        
-        return $normalized ?: $data ?: [];
+        return $normalized ?: $data;
+    }
+
+    /**
+     * 统一写 AI 解析调试日志（便于后续切换为 Debug::env / agent_log）
+     */
+    private function logAgentDebug(string $location, string $message, array $data = []): void
+    {
+        $logPath = (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log';
+        if (!is_dir(dirname($logPath))) {
+            return;
+        }
+        @file_put_contents($logPath, json_encode([
+            'hypothesisId' => 'JSON',
+            'location' => $location,
+            'message' => $message,
+            'data' => $data,
+            'timestamp' => (int) (microtime(true) * 1000),
+        ]) . "\n", FILE_APPEND | LOCK_EX);
+    }
+
+    /**
+     * 将装配好的 phtml 写入草稿表，返回 draft_id；失败返回 0。
+     */
+    private function saveDraftAndGetId(string $phtmlCode, array $meta): int
+    {
+        try {
+            $draft = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Model\AiComponentDraft::class);
+            $draft->setData(\GuoLaiRen\PageBuilder\Model\AiComponentDraft::fields_TEMPLATE_CONTENT, $phtmlCode);
+            $draft->setData(\GuoLaiRen\PageBuilder\Model\AiComponentDraft::fields_COMPONENT_META, json_encode($meta, JSON_UNESCAPED_UNICODE));
+            $draft->setData(\GuoLaiRen\PageBuilder\Model\AiComponentDraft::fields_CREATED_AT, time());
+            $inserted = $draft->insert($draft->getModelData())->fetch();
+            $draftId = is_numeric($inserted) ? (int) $inserted : 0;
+            if ($draftId === 0 && method_exists($draft->getQuery(), 'getConnectionInterface')) {
+                $conn = $draft->getQuery()->getConnectionInterface();
+                if ($conn !== null) {
+                    $lid = $conn->lastInsertId();
+                    if ($lid !== false && $lid !== '' && is_numeric($lid)) {
+                        $draftId = (int) $lid;
+                    }
+                }
+            }
+            return $draftId;
+        } catch (\Throwable $e) {
+            $this->logAgentDebug('AiGenerate::saveDraftAndGetId', $e->getMessage(), ['code' => $e->getCode(), 'file' => $e->getFile(), 'line' => $e->getLine()]);
+            return 0;
+        }
+    }
+
+    /**
+     * 构建 component-stream 的 complete 事件 payload。
+     */
+    private function buildComponentStreamCompletePayload(
+        array $component,
+        array $componentValidation,
+        string $preview,
+        bool $useFramework,
+        string $prompt,
+        string $refineToken,
+        int $draftId
+    ): array {
+        return [
+            'success' => true,
+            'component' => $component,
+            'validation' => $componentValidation,
+            'preview' => $preview,
+            'use_framework' => $useFramework,
+            'final_prompt' => $prompt,
+            'refine_token' => $refineToken,
+            'draft_id' => $draftId,
+        ];
+    }
+
+    /**
+     * 构建 agent-component-stream 成功时的 complete 事件 payload。
+     */
+    private function buildAgentStreamCompletePayload(
+        array $componentData,
+        string $componentCode,
+        string $styleCode,
+        string $phtmlCode,
+        int $componentId,
+        string $agentCode,
+        string $modelCode,
+        int $iterations,
+        int $toolCallsCount
+    ): array {
+        return [
+            'success' => true,
+            'message' => __('组件生成完成'),
+            'component' => $componentData,
+            'component_code' => $componentCode,
+            'style_code' => $styleCode,
+            'phtml_code' => $phtmlCode,
+            'component_id' => $componentId,
+            'agent_code' => $agentCode,
+            'model_code' => $modelCode,
+            'iterations' => $iterations,
+            'tool_calls_count' => $toolCallsCount,
+        ];
     }
 
     /**
@@ -2511,7 +2603,7 @@ PROMPT;
             *{margin:0;padding:0;box-sizing:border-box;}
             body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:#1a1a2e;color:#fff;padding:20px;}
             .error-banner{background:#dc3545;color:#fff;padding:12px 20px;border-radius:8px;margin-bottom:20px;}
-            .code-preview{background:#0d1117;border-radius:8px;padding:20px;overflow-x:auto;}
+            .code-preview{background:#0d1117;border-radius:8px;padding:20px;overflow:auto;max-height:70vh;}
             .code-preview pre{color:#c9d1d9;font-family:monospace;font-size:12px;white-space:pre-wrap;word-break:break-all;}
         </style></head><body>';
         
@@ -2519,8 +2611,8 @@ PROMPT;
             $previewHtml .= '<div class="error-banner"><strong>预览渲染失败:</strong> ' . htmlspecialchars($error) . '</div>';
         }
         
-        // 显示代码预览
-        $previewHtml .= '<div class="code-preview"><pre>' . htmlspecialchars(substr($phtmlCode, 0, 3000)) . '</pre></div>';
+        // 显示完整代码预览（不截断，容器内滚动）
+        $previewHtml .= '<div class="code-preview"><pre>' . htmlspecialchars($phtmlCode) . '</pre></div>';
         $previewHtml .= '</body></html>';
         
         return $previewHtml;
@@ -2600,189 +2692,6 @@ PROMPT;
     }
 
     /**
-     * 从 AI 响应中提取 JSON 字符串
-     * 支持：```json...```、```...```、纯 JSON、多个代码块时选最像 JSON 的、或从任意 { 平衡取整段
-     */
-    private function extractJsonFromResponse(string $response): ?string
-    {
-        $response = trim($response);
-        if ($response === '') {
-            return null;
-        }
-
-        $logPath = (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log';
-        // 1a. 代码块：要求结束围栏在行首（\n```），避免 JSON 字符串值内的 ``` 导致截断
-        if (preg_match('/```(?:json)?\s*\r?\n([\s\S]*?)\r?\n\s*```/s', $response, $lineEndMatch)) {
-            $candidate = trim($lineEndMatch[1]);
-            if (str_starts_with($candidate, '{')) {
-                $decoded = $this->decodeJsonWithRepair($candidate);
-                if ($decoded !== null && is_array($decoded)) {
-                    return $candidate;
-                }
-                return $candidate;
-            }
-        }
-        // 1b. 兼容：任意 ```...``` 块（可能被内容中的 ``` 截断）
-        $hasCodeBlocks = (bool) preg_match_all('/```(?:json)?\s*([\s\S]*?)\s*```/s', $response, $cbMatches);
-        $firstBrace = strpos($response, '{');
-        if ($hasCodeBlocks) {
-            $best = null;
-            $bestLen = 0;
-            foreach ($cbMatches[1] as $block) {
-                $candidate = trim($block);
-                if ($candidate === '' || !str_starts_with($candidate, '{')) {
-                    continue;
-                }
-                $decoded = $this->decodeJsonWithRepair($candidate);
-                if ($decoded !== null && is_array($decoded)) {
-                    return $candidate;
-                }
-                if (strlen($candidate) > $bestLen) {
-                    $bestLen = strlen($candidate);
-                    $best = $candidate;
-                }
-            }
-            if ($best !== null) {
-                return $best;
-            }
-        }
-
-        // 2. 响应整体就是 JSON
-        if (str_starts_with($response, '{') && str_ends_with($response, '}')) {
-            return $response;
-        }
-
-        // 3. 从第一个 { 开始，括号匹配取完整 JSON 对象
-        if ($firstBrace !== false) {
-            $extracted = $this->extractBalancedBraces($response, $firstBrace);
-            if ($extracted !== null) {
-                return $extracted;
-            }
-        }
-
-        // 4. 尝试去掉首尾非 JSON 行后再从 { 提取（常见：前后有说明文字）
-        $lines = preg_split('/\r?\n/', $response);
-        $startIdx = 0;
-        $endIdx = count($lines) - 1;
-        while ($startIdx <= $endIdx && trim($lines[$startIdx]) !== '' && !str_contains(trim($lines[$startIdx]), '{')) {
-            $startIdx++;
-        }
-        while ($endIdx >= $startIdx && trim($lines[$endIdx]) !== '' && !str_contains(trim($lines[$endIdx]), '}')) {
-            $endIdx--;
-        }
-        if ($startIdx <= $endIdx) {
-            $trimmed = implode("\n", array_slice($lines, $startIdx, $endIdx - $startIdx + 1));
-            $pos = strpos($trimmed, '{');
-            if ($pos !== false) {
-                $extracted = $this->extractBalancedBraces($trimmed, $pos);
-                if ($extracted !== null) {
-                    return $extracted;
-                }
-            }
-        }
-
-        // #region agent log
-        @file_put_contents($logPath, json_encode(['hypothesisId' => 'JSON', 'location' => 'extractJsonFromResponse', 'message' => 'return null', 'data' => ['responseLen' => strlen($response), 'hasCodeBlocks' => $hasCodeBlocks, 'firstBrace' => $firstBrace, 'sample' => mb_substr($response, 0, 600)], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n", FILE_APPEND | LOCK_EX);
-        // #endregion
-        return null;
-    }
-
-    /**
-     * 从 position 处的 { 开始，取括号平衡的一段子串
-     */
-    private function extractBalancedBraces(string $str, int $start): ?string
-    {
-        $len = strlen($str);
-        $depth = 0;
-        $inString = false;
-        $escape = false;
-        $quote = '';
-        $i = $start;
-
-        while ($i < $len) {
-            $c = $str[$i];
-            if ($escape) {
-                $escape = false;
-                $i++;
-                continue;
-            }
-            if ($inString) {
-                if ($c === '\\') {
-                    $escape = true;
-                } elseif ($c === $quote) {
-                    $inString = false;
-                }
-                $i++;
-                continue;
-            }
-            if ($c === '"' || $c === "'") {
-                $inString = true;
-                $quote = $c;
-                $i++;
-                continue;
-            }
-            if ($c === '{') {
-                $depth++;
-                $i++;
-                continue;
-            }
-            if ($c === '}') {
-                $depth--;
-                if ($depth === 0) {
-                    return substr($str, $start, $i - $start + 1);
-                }
-                $i++;
-                continue;
-            }
-            $i++;
-        }
-        return null;
-    }
-
-    /**
-     * 解析 JSON 并尝试修复常见问题
-     */
-    private function decodeJsonWithRepair(string $json): ?array
-    {
-        // 第一次尝试：直接解析
-        $data = json_decode($json, true);
-        if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
-            return $data;
-        }
-        
-        // 第二次尝试：字符级遍历修复控制字符（避免 PCRE 回溯爆炸）
-        $fixed = $this->fixControlCharsInJsonStrings($json);
-        $fixed = preg_replace('/,\s*}/', '}', $fixed);
-        $fixed = preg_replace('/,\s*]/', ']', $fixed);
-        
-        $data = json_decode($fixed, true);
-        if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
-            return $data;
-        }
-        
-        // 第三次尝试：激进移除所有控制字符
-        $fixed = preg_replace('/[\x00-\x1F\x7F]/u', '', $json);
-        $fixed = preg_replace('/,\s*}/', '}', $fixed);
-        $fixed = preg_replace('/,\s*]/', ']', $fixed);
-        
-        $data = json_decode($fixed, true);
-        if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
-            return $data;
-        }
-        
-        // 第四次尝试：修复截断的 JSON（AI 输出可能中途被截断）
-        $repaired = $this->repairTruncatedJson($json);
-        if ($repaired !== null) {
-            $data = json_decode($repaired, true);
-            if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
-                return $data;
-            }
-        }
-        
-        return null;
-    }
-
-    /**
      * 后端校验组件 JSON 合法性（工具函数）
      * 校验通过返回 ['valid' => true]，失败返回 ['valid' => false, 'error' => '...']
      */
@@ -2846,124 +2755,6 @@ PROMPT;
             return $response['content'] ?? null;
         }
         return null;
-    }
-
-    /**
-     * 字符级遍历：修复 JSON 字符串值内的控制字符
-     * 不使用正则，避免大文本 PCRE 回溯限制问题
-     */
-    private function fixControlCharsInJsonStrings(string $json): string
-    {
-        $len = strlen($json);
-        $result = '';
-        $inString = false;
-        $i = 0;
-        
-        while ($i < $len) {
-            $ch = $json[$i];
-            
-            if ($inString) {
-                if ($ch === '\\' && $i + 1 < $len) {
-                    // 转义序列，原样保留
-                    $result .= $ch . $json[$i + 1];
-                    $i += 2;
-                    continue;
-                }
-                if ($ch === '"') {
-                    // 字符串结束
-                    $result .= $ch;
-                    $inString = false;
-                    $i++;
-                    continue;
-                }
-                // 在字符串内部：替换控制字符
-                $ord = ord($ch);
-                if ($ord < 0x20 || $ord === 0x7F) {
-                    // 控制字符 → 转义
-                    $result .= match ($ch) {
-                        "\n" => '\\n',
-                        "\r" => '\\r',
-                        "\t" => '\\t',
-                        "\x08" => '\\b',
-                        "\x0C" => '\\f',
-                        default => '\\u' . str_pad(dechex($ord), 4, '0', STR_PAD_LEFT),
-                    };
-                } else {
-                    $result .= $ch;
-                }
-            } else {
-                if ($ch === '"') {
-                    $inString = true;
-                }
-                $result .= $ch;
-            }
-            $i++;
-        }
-        
-        return $result;
-    }
-    
-    /**
-     * 修复被截断的 JSON：关闭未闭合的字符串、数组和对象
-     */
-    private function repairTruncatedJson(string $json): ?string
-    {
-        // 先清理控制字符
-        $clean = preg_replace('/[\x00-\x1F\x7F]/u', '', $json);
-        $clean = preg_replace('/,\s*}/', '}', $clean);
-        $clean = preg_replace('/,\s*]/', ']', $clean);
-        
-        // 检测是否像被截断的 JSON（以 { 开头但不以 } 结尾）
-        $trimmed = rtrim($clean);
-        if (!str_starts_with($trimmed, '{')) {
-            return null;
-        }
-        if (str_ends_with($trimmed, '}')) {
-            return null; // 不像截断，已经有闭合的 }
-        }
-        
-        // 逐字符分析，关闭未闭合的结构
-        $stack = [];
-        $inString = false;
-        $len = strlen($trimmed);
-        
-        for ($i = 0; $i < $len; $i++) {
-            $ch = $trimmed[$i];
-            if ($inString) {
-                if ($ch === '\\' && $i + 1 < $len) {
-                    $i++; // 跳过转义字符
-                    continue;
-                }
-                if ($ch === '"') {
-                    $inString = false;
-                }
-                continue;
-            }
-            match ($ch) {
-                '"' => $inString = true,
-                '{' => $stack[] = '}',
-                '[' => $stack[] = ']',
-                '}' => array_pop($stack),
-                ']' => array_pop($stack),
-                default => null,
-            };
-        }
-        
-        // 如果还在字符串内，先关闭字符串
-        if ($inString) {
-            $trimmed .= '"';
-        }
-        
-        // 移除可能的尾部不完整键值对（如 "key": 或 "key": "partial）
-        // 尝试截断到最后一个完整的键值对
-        $trimmed = preg_replace('/,\s*"[^"]*"\s*:\s*("([^"\\\\]|\\\\.)*)?$/', '', $trimmed);
-        
-        // 关闭所有未闭合的结构
-        while (!empty($stack)) {
-            $trimmed .= array_pop($stack);
-        }
-        
-        return $trimmed;
     }
 
     // ============================================================
@@ -3103,14 +2894,14 @@ PROMPT;
 
                 $currentContent = $result->content;
                 $hasRetried = false;
-                $rawJson = $this->extractJsonFromResponse($currentContent);
-                $componentData = $rawJson ? $this->decodeJsonWithRepair($rawJson) : null;
+                $parser = ObjectManager::getInstance(AiResponseJsonParser::class);
+                $componentData = $parser->extractAndDecode($currentContent);
+                if ($componentData !== null) {
+                    $componentData = $this->normalizeComponentPayload($componentData);
+                }
 
-                // 解析失败：后端校验不通过，给 AI 一次重试机会
                 if ($componentData === null) {
-                    $parseError = $rawJson === null
-                        ? __('Output was truncated or contained no valid JSON.')
-                        : __('The content is not valid JSON.');
+                    $parseError = __('Output was truncated or contained no valid JSON.');
                     if (!$hasRetried) {
                         $sse->sendEvent('agent_status', [
                             'status' => 'retry',
@@ -3120,13 +2911,12 @@ PROMPT;
                         $hasRetried = true;
                         if ($retryContent !== null && $retryContent !== '') {
                             $currentContent = $retryContent;
-                            $rawJson = $this->extractJsonFromResponse($currentContent);
-                            $componentData = $rawJson ? $this->decodeJsonWithRepair($rawJson) : null;
+                            $decoded = $parser->extractAndDecode($currentContent);
+                            $componentData = $decoded !== null ? $this->normalizeComponentPayload($decoded) : null;
                         }
                     }
                 }
 
-                // 解析通过后再做结构校验（后端校验工具函数）
                 if ($componentData !== null) {
                     $validation = $this->validateComponentJson($componentData);
                     if (!$validation['valid']) {
@@ -3139,8 +2929,8 @@ PROMPT;
                             $hasRetried = true;
                             if ($retryContent !== null && $retryContent !== '') {
                                 $currentContent = $retryContent;
-                                $rawJson = $this->extractJsonFromResponse($currentContent);
-                                $componentData = $rawJson ? $this->decodeJsonWithRepair($rawJson) : null;
+                                $decoded = $parser->extractAndDecode($currentContent);
+                                $componentData = $decoded !== null ? $this->normalizeComponentPayload($decoded) : null;
                                 if ($componentData !== null) {
                                     $validation = $this->validateComponentJson($componentData);
                                 }
@@ -3194,18 +2984,19 @@ PROMPT;
                                 'status' => 'saved',
                                 'message' => __('组件已注册并生成实体文件，准备渲染预览...'),
                             ]);
-                            $sse->sendEvent('complete', [
-                                'success' => true,
-                                'message' => __('组件生成完成'),
-                                'component' => $componentData,
-                                'component_code' => $componentCode,
-                                'style_code' => $dbStyleCode,
-                                'phtml_code' => $phtmlCode,
-                                'agent_code' => $result->agentCode,
-                                'model_code' => $result->modelCode,
-                                'iterations' => $result->iterations,
-                                'tool_calls_count' => count($result->toolCalls),
-                            ]);
+                            $compId = $savedComponent->getId();
+                            $this->logAgentDebug('AiGenerate::agentComponentStream complete', 'sending', ['component_id' => $compId]);
+                            $sse->sendEvent('complete', $this->buildAgentStreamCompletePayload(
+                                $componentData,
+                                $componentCode,
+                                $dbStyleCode,
+                                $phtmlCode,
+                                $compId,
+                                $result->agentCode,
+                                $result->modelCode,
+                                $result->iterations,
+                                count($result->toolCalls)
+                            ));
                         }
                     } else {
                         $sse->sendEvent('agent_status', [
@@ -3213,9 +3004,7 @@ PROMPT;
                             'message' => __('JSON 解析/校验失败（已重试一次）'),
                         ]);
                         if ($componentData === null) {
-                            $parseFailMessage = $rawJson === null
-                                ? __('输出可能被截断或未包含有效 JSON，请简化组件描述后重试')
-                                : __('AI 返回内容不是有效 JSON，请重试');
+                            $parseFailMessage = __('输出可能被截断或未包含有效 JSON，请简化组件描述后重试');
                         } else {
                             $parseFailMessage = __('组件 JSON 校验未通过：%{1}，请重试', [$validation['error'] ?? '']);
                         }
@@ -3230,9 +3019,7 @@ PROMPT;
                         'status' => 'parse_failed',
                         'message' => __('JSON 解析失败（已重试一次）'),
                     ]);
-                    $parseFailMessage = $rawJson === null
-                        ? __('输出可能被截断或未包含有效 JSON，请简化组件描述后重试')
-                        : __('AI 返回内容不是有效 JSON，请重试');
+                    $parseFailMessage = __('输出可能被截断或未包含有效 JSON，请简化组件描述后重试');
                     $sse->sendEvent('complete', [
                         'success' => false,
                         'message' => $parseFailMessage,
@@ -3251,13 +3038,13 @@ PROMPT;
         } catch (\Throwable $e) {
             $errorMsg = preg_replace('/\x1b\[[0-9;]*m/', '', $e->getMessage());
             error_log("[AgentComponentStream] 错误: " . $errorMsg);
-            // #region agent log
-            @file_put_contents(
-                (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log',
-                json_encode(['hypothesisId' => 'H4', 'location' => 'AiGenerate.php:catch', 'message' => 'Agent stream exception', 'data' => ['msg' => $errorMsg, 'file' => $e->getFile(), 'line' => $e->getLine(), 'class' => get_class($e), 'trace' => array_slice(array_map(function ($t) { return ($t['file'] ?? '') . ':' . ($t['line'] ?? 0) . ' ' . ($t['function'] ?? ''); }, $e->getTrace()), 0, 8)], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n",
-                FILE_APPEND | LOCK_EX
-            );
-            // #endregion
+            $this->logAgentDebug('AiGenerate::agentComponentStream catch', 'Agent stream exception', [
+                'msg' => $errorMsg,
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'class' => get_class($e),
+                'trace' => array_slice(array_map(fn($t) => ($t['file'] ?? '') . ':' . ($t['line'] ?? 0) . ' ' . ($t['function'] ?? ''), $e->getTrace()), 0, 8),
+            ]);
             $sse->sendEvent('error', ['message' => $errorMsg]);
         }
     }

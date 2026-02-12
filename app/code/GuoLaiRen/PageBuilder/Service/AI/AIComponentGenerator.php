@@ -233,6 +233,21 @@ class AIComponentGenerator
      * @param string $templateContent 模板内容
      * @return array ['success' => bool, 'html' => string, 'error' => string]
      */
+    /**
+     * 仅对模板内容做修复（笔误、continue/break、unexpected token if），不渲染。
+     * 用于「先写入 phtml 文件，再调用 ob 服务渲染」流程。
+     *
+     * @param string $templateContent 原始 phtml 源码
+     * @return string 修复后的源码
+     */
+    public function prepareTemplateForPreview(string $templateContent): string
+    {
+        $templateContent = $this->fixCommonAiTyposInTemplate($templateContent);
+        $templateContent = $this->stripInvalidContinueBreakInTemplate($templateContent);
+        $templateContent = $this->fixUnexpectedTokenIf($templateContent);
+        return $templateContent;
+    }
+    
     public function previewTemplateContent(string $templateContent): array
     {
         // 修复 AI 常见笔误（如 <4> 应为 <h4>、) 后缺分号导致 unexpected token if）
@@ -352,6 +367,32 @@ class AIComponentGenerator
      */
     private function fixCommonAiTyposInTemplate(string $code): string
     {
+        // CSS 中 AI 常把 #<?= $componentId ?> 错写成 #= $componentId（缺 <? 和 ?>），导致选择器无效
+        $code = preg_replace('/#=\s*\$componentId\b/', '#<?= $componentId ?>', $code);
+        // 模板中含 ai-footer-social 时，JS 里 .pb-footer-social-icons 与框架不一致，统一为 .ai-footer-social
+        if (strpos($code, 'ai-footer-social') !== false) {
+            $code = preg_replace('/\.pb-footer-social-icons\b/', '.ai-footer-social', $code);
+        }
+        // Footer 框架使用 ai-footer-*，AI 常多写 .footer / .footer-brand / .footer-social 等，需与 HTML 一致（先替换子类再替换父类；.footer 单独出现时指根容器 .ai-footer）
+        if (strpos($code, 'ai-footer-') !== false) {
+            $code = preg_replace('/\.footer-brand-desc\b/', '.ai-footer-brand-desc', $code);
+            $code = preg_replace('/\.footer-brand-logo\b/', '.ai-footer-logo', $code);
+            $code = preg_replace('/\.footer-brand\b/', '.ai-footer-brand', $code);
+            $code = preg_replace('/\.footer-social\b/', '.ai-footer-social', $code);
+            $code = preg_replace('/\.footer(?!\-)/', '.ai-footer', $code); // .footer 且非 .footer-xxx → .ai-footer
+        }
+        // @fields_start ... @fields_end 内双星号 "* * " 修正为 "* "
+        $code = preg_replace_callback(
+            '/@fields_start(.*?)@fields_end/s',
+            function ($m) {
+                return '@fields_start' . preg_replace('/\*\s*\*\s+/', '* ', $m[1]) . '@fields_end';
+            },
+            $code
+        );
+        // JS 中 alert( 替换为兼容 FrontendToast 的调用（先占位再替换，避免对插入内容中的 alert 二次替换）
+        $placeholder = '__PB_ALERT_' . bin2hex(random_bytes(4)) . '__';
+        $code = preg_replace('/\balert\s*\(\s*/', $placeholder, $code);
+        $code = str_replace($placeholder, '(typeof FrontendToast !== \'undefined\' && FrontendToast.warning ? FrontendToast.warning : alert)(', $code);
         // <4> 且后面是 <?= 或 </h4> 的，视为 <h4> 笔误（AI 常把 h4 写成 4）
         $code = preg_replace('/<4>(?=\s*<\?=|\s*<\/h4>)/i', '<h4>', $code);
         // 跨行：上一行未以 ; } { : , 结尾且下一行以 if ( 开头 → 在上一行末补 ;（覆盖 ) 或 >5 等漏写分号导致 unexpected token "if"）

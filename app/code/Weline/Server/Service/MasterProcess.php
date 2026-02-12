@@ -728,7 +728,8 @@ class MasterProcess
                         $isHealthy = $this->checkWorkerHealth($port);
                         if (!$isHealthy) {
                             $worker['health_failures'] = ($worker['health_failures'] ?? 0) + 1;
-                            if ($worker['health_failures'] >= 5) {
+                            $maxHealthFailures = (PHP_OS === 'Darwin') ? 6 : 5;
+                            if ($worker['health_failures'] >= $maxHealthFailures) {
                                 $needRestart = true;
                                 $reason = __('HTTP 健康检查连续失败 %{1} 次', [$worker['health_failures']]);
                                 $worker['health_failures'] = 0;
@@ -784,7 +785,11 @@ class MasterProcess
                 
                 if ($isPortInUse) {
                     $this->log(__('强制终止僵死 Worker #%{1}', [$workerId]), 'warning');
-                    Processer::killProcessByPort($port);
+                    $workerProcessName = '--name=' . 'weline-master-' . $this->instanceName . '-worker-' . $workerId;
+                    if (!Processer::destroy($workerProcessName)) {
+                        // 兜底：仅在进程管理器清理失败时按端口强制处理
+                        Processer::killProcessByPort($port);
+                    }
                     \usleep(500000);
                 }
                 
@@ -1005,6 +1010,7 @@ class MasterProcess
         
         // 进程名包含实例名和 Worker ID
         $processName = 'weline-master-' . $this->instanceName . '-worker-' . $workerId;
+        $processNameFlag = '--name=' . $processName;
         
         // 构建参数列表
         $argList = [
@@ -1021,29 +1027,42 @@ class MasterProcess
             // TCP 透传模式：Worker 需要延迟 SSL 握手
             $argList[] = '--defer-ssl';
         }
-        $argList[] = '--name=' . $processName;
+        $argList[] = $processNameFlag;
         $argList[] = '--reuseport';  // 关键：启用 SO_REUSEPORT
         
         if ($this->frontend) {
             $argList[] = '--frontend';
         }
         
-        // Linux/Mac: nohup
+        // Linux/Mac: 使用 Processer 统一创建（避免手写 nohup 脚本造成 PID 偏差）
         $args = \array_merge([$phpBinary], $argList);
         $command = \implode(' ', \array_map('escapeshellarg', $args));
-        $command = "nohup {$command} >> \"{$logFile}\" 2>&1 & echo \$!";
-        $output = [];
-        @\exec($command, $output);
-        
-        if (!empty($output[0]) && \is_numeric($output[0])) {
-            $pid = (int)$output[0];
-            // 验证进程确实启动
+        $pid = Processer::create($command, true, $this->frontend);
+        if ($pid > 0) {
             \usleep(300000); // 300ms
             if (Processer::isRunningByPid($pid)) {
                 return $pid;
             }
         }
-        
+
+        // 直连模式多个 Worker 共用同一端口，禁止按端口反查 PID；
+        // 改为按进程名回查对应 workerId 的真实 PID，避免 PID 错配。
+        $maxAttempts = 10;
+        $attemptDelay = 300000; // 300ms，总计约 3s
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            \usleep($attemptDelay);
+
+            $indexedPid = (int) Processer::getData($processNameFlag, 'pid');
+            if ($indexedPid > 0 && Processer::isRunningByPid($indexedPid)) {
+                return $indexedPid;
+            }
+
+            $foundPid = Processer::getPid($processNameFlag);
+            if ($foundPid > 0 && Processer::isRunningByPid($foundPid)) {
+                return $foundPid;
+            }
+        }
+
         return 0;
     }
     
@@ -1061,134 +1080,96 @@ class MasterProcess
         $strategy = IS_WIN ? 'Windows PowerShell 批量启动' : ($this->mode === self::MODE_LINUX_DIRECT ? 'Linux SO_REUSEPORT' : 'Linux 独立端口');
         $this->log(__('启动 %{1} 个 Worker 进程 (策略: %{2})...', [$workerCount, $strategy]));
         
-        if (IS_WIN) {
-            // Windows 下批量启动优化：生成一个总的 ps1 脚本一次性执行
-            $psScripts = [];
-            $phpBinary = PHP_BINARY;
-            $phpBinaryEsc = \str_replace('/', '\\', $phpBinary);
-            $windowStyle = $this->frontend ? 'Normal' : 'Hidden';
-            $host = $this->config['host'] ?? '127.0.0.1';
-            $this->log(__('  PHP 二进制: %{1}', [$phpBinary]));
-            $this->log(__('  窗口样式: %{1}', [$windowStyle]));
-            $this->log(__('  监听地址: %{1}', [$host]));
-            
-            $startCount = 0;
-            foreach ($this->workers as $workerId => &$worker) {
-                $port = $worker['port'];
-                $this->log(__('  准备 Worker #%{1}: 端口 %{2}', [$workerId, $port]));
-                // 启动前清理端口缓存，确保检测的是最新状态
-                Processer::clearPortCache($port);
-                if (Processer::isPortInUse($port)) {
-                    $this->log(__('  Worker #%{1} 端口 %{2} 已被占用，尝试强制释放...', [$workerId, $port]), 'warning');
-                    $oldPid = Processer::getProcessIdByPort($port);
-                    if ($oldPid > 0) {
-                        Processer::killByPid($oldPid);
-                        \usleep(500000);
-                        Processer::clearPortCache($port);
-                    }
-                    if (Processer::isPortInUse($port)) {
-                        $this->log(__('Worker #%{1} 端口 %{2} 无法释放，跳过', [$workerId, $port]), 'error');
-                        continue;
-                    }
-                }
-                
-                $processName = 'weline-master-' . $this->instanceName . '-worker-' . $workerId;
-                $argList = [
-                    $this->workerScript,
-                    $host,
-                    (string) $port,
-                    (string) $workerId,
-                    $this->instanceName,
-                ];
-                if ($this->sslCert && $this->sslKey) {
-                    $argList[] = $this->sslCert;
-                    $argList[] = $this->sslKey;
-                    $argList[] = '--defer-ssl';
-                }
-                $argList[] = '--name=' . $processName;
-                if ($this->controlPort > 0) {
-                    $argList[] = '--control-port=' . $this->controlPort;
-                }
-                if ($this->frontend) {
-                    $argList[] = '--frontend';
-                }
-                
-                $escapedArgs = \array_map(function($arg) {
-                    return '"' . \str_replace('"', '`"', (string)$arg) . '"';
-                }, $argList);
-                $argsStr = \implode(',', $escapedArgs);
-                $psScripts[] = "Start-Process -FilePath \"{$phpBinaryEsc}\" -ArgumentList {$argsStr} -WindowStyle {$windowStyle}";
-                $startCount++;
+        foreach ($this->workers as $workerId => &$worker) {
+            $port = $worker['port'];
+            if (Processer::isPortInUse($port)) {
+                $this->log(__('Worker #%{1} 端口 %{2} 已被占用，跳过', [$workerId, $port]), 'warning');
+                continue;
+            }
+            $pid = ($this->mode === self::MODE_LINUX_DIRECT) ? $this->restartWorkerLinuxDirect($workerId) : $this->restartWorker($workerId, $port);
+            if ($pid <= 0) {
+                $worker['state'] = self::WORKER_STATE_STOPPED;
+                $worker['state_since'] = \time();
+                $this->log(__('Worker #%{1} (端口: %{2}) 启动失败，已停止后续 Worker 启动', [$workerId, $port]), 'error');
+                break;
             }
             
-            if (!empty($psScripts)) {
-                $ps1File = Env::VAR_DIR . 'tmp' . DS . "start_all_workers_" . \time() . ".ps1";
-                @\mkdir(\dirname($ps1File), 0755, true);
-                
-                // 使用 -PassThru 获取 PID 并输出
-                $psScriptsWithPid = \array_map(function($script) {
-                    return "({$script} -PassThru).Id";
-                }, $psScripts);
-                
-                \file_put_contents($ps1File, \implode("\n", $psScriptsWithPid));
-                $this->log(__('  执行批量启动脚本: %{1} (%{2} 个 Worker)', [$ps1File, $startCount]));
-                
-                $output = [];
-                @\exec("powershell -NoProfile -ExecutionPolicy Bypass -File \"{$ps1File}\" 2>&1", $output);
-                
-                // 给进程一点启动时间
-                @\usleep(500000);
-                @\unlink($ps1File);
-                $this->log(__('  PowerShell 输出: %{1}', [\implode(', ', $output) ?: '(空)']));
-                
-                // 解析输出的 PID
-                $pids = [];
-                foreach ($output as $line) {
-                    $line = \trim($line);
-                    if (\is_numeric($line)) {
-                        $pids[] = (int)$line;
-                    }
-                }
-                
-                // 批量更新状态；状态机：批量启动后进入 STARTING
-                $pidIndex = 0;
-                foreach ($this->workers as $workerId => &$worker) {
-                    if (!empty($worker['pid']) && Processer::isRunningByPid($worker['pid'])) {
-                        continue;
-                    }
-                    $worker['state'] = self::WORKER_STATE_STARTING;
-                    $worker['state_since'] = \time();
-                    $pid = $pids[$pidIndex++] ?? 0;
-                    if ($pid > 0) {
-                        $worker['pid'] = $pid;
-                        $worker['started_at'] = \time();
-                        $worker['restarts'] = 0;
-                        $this->log(__('Worker #%{1} (端口: %{2}) 启动成功，PID: %{3}', [$workerId, $worker['port'], $pid]), 'success');
-                    }
-                }
+            $worker['pid'] = $pid;
+            $worker['started_at'] = \time();
+            $worker['restarts'] = 0;
+            $worker['state'] = self::WORKER_STATE_STARTING;
+            $worker['state_since'] = \time();
+            $this->log(__('Worker #%{1} (端口: %{2}) 启动成功，PID: %{3}', [$workerId, $port, $pid]), 'success');
+            
+            if (!$this->isProcessAliveWithRetry($pid)) {
+                $worker['state'] = self::WORKER_STATE_STOPPED;
+                $worker['state_since'] = \time();
+                $this->log(__('Worker #%{1} (端口: %{2}) 启动后快速退出，已停止后续 Worker 启动', [$workerId, $port]), 'error');
+                break;
             }
-        } else {
-            // Linux 下保持原有逻辑或后续优化
-            foreach ($this->workers as $workerId => &$worker) {
-                $port = $worker['port'];
-                if (Processer::isPortInUse($port)) {
-                    $this->log(__('Worker #%{1} 端口 %{2} 已被占用，跳过', [$workerId, $port]), 'warning');
-                    continue;
-                }
-                $pid = ($this->mode === self::MODE_LINUX_DIRECT) ? $this->restartWorkerLinuxDirect($workerId) : $this->restartWorker($workerId, $port);
-                if ($pid > 0) {
-                    $worker['pid'] = $pid;
-                    $worker['started_at'] = \time();
-                    $worker['restarts'] = 0;
-                    $worker['state'] = self::WORKER_STATE_STARTING;
-                    $worker['state_since'] = \time();
-                    $this->log(__('Worker #%{1} (端口: %{2}) 启动成功，PID: %{3}', [$workerId, $port, $pid]), 'success');
-                }
+            
+            if ($this->shouldStopStartingWorkersByMemory()) {
+                $this->log(__('Worker #%{1} 启动后触发内存保护阈值，已停止后续 Worker 启动', [$workerId]), 'warning');
+                break;
             }
         }
         
         // 更新实例文件中的 Worker PID 列表
         $this->updateInstanceWorkerPids();
+    }
+    
+    /**
+     * 进程启动后短时间内存活检测，避免启动风暴
+     */
+    protected function isProcessAliveWithRetry(int $pid, int $retries = 3, int $intervalMs = 120): bool
+    {
+        if ($pid <= 0) {
+            return false;
+        }
+        for ($i = 0; $i < $retries; $i++) {
+            if (Processer::isRunningByPid($pid)) {
+                return true;
+            }
+            \usleep($intervalMs * 1000);
+        }
+        return false;
+    }
+    
+    /**
+     * 启动保护：达到内存阈值后停止继续拉起 Worker
+     */
+    protected function shouldStopStartingWorkersByMemory(): bool
+    {
+        $memoryLimit = (string)\ini_get('memory_limit');
+        $limitBytes = $this->parseMemoryToBytes($memoryLimit);
+        if ($limitBytes <= 0) {
+            return false;
+        }
+        // 使用 90% 作为保护阈值，避免在临界点继续扩容导致抖动
+        $thresholdBytes = (int)\floor($limitBytes * 0.9);
+        return \memory_get_usage(true) >= $thresholdBytes;
+    }
+    
+    /**
+     * 解析 PHP memory_limit（如 512M/1G/-1）为字节
+     */
+    protected function parseMemoryToBytes(string $value): int
+    {
+        $raw = \trim($value);
+        if ($raw === '' || $raw === '-1') {
+            return -1;
+        }
+        if (\is_numeric($raw)) {
+            return (int)$raw;
+        }
+        $unit = \strtolower($raw[\strlen($raw) - 1]);
+        $num = (float)\substr($raw, 0, -1);
+        return match ($unit) {
+            'g' => (int)($num * 1024 * 1024 * 1024),
+            'm' => (int)($num * 1024 * 1024),
+            'k' => (int)($num * 1024),
+            default => (int)$raw,
+        };
     }
     
     /**
@@ -1319,71 +1300,29 @@ class MasterProcess
             $argList[] = '--frontend';
         }
         
-        if (IS_WIN) {
-            // Windows: 使用 PowerShell 启动
-            // 前台模式使用 Normal 窗口样式，后台模式使用 Hidden
-            $windowStyle = $this->frontend ? 'Normal' : 'Hidden';
-            // 每个参数单独引用，避免逗号被解析为参数分隔符
-            $escapedArgs = \array_map(function($arg) {
-                // PowerShell 参数需要用引号包裹（特别是路径和包含逗号的字符串）
-                $arg = (string)$arg;
-                return '"' . \str_replace('"', '`"', $arg) . '"';
-            }, $argList);
-            $argsStr = \implode(',', $escapedArgs);
-            
-            $psScript = <<<POWERSHELL
-\$p = Start-Process -FilePath "{$phpBinaryEsc}" -ArgumentList {$argsStr} -WindowStyle {$windowStyle} -PassThru
-\$p.Id
-POWERSHELL;
-            
-            $ps1File = Env::VAR_DIR . 'tmp' . DS . "restart_dispatcher_{$port}.ps1";
-            $ps1Dir = \dirname($ps1File);
-            if (!\is_dir($ps1Dir)) {
-                @\mkdir($ps1Dir, 0755, true);
-            }
-            \file_put_contents($ps1File, $psScript);
-            $output = [];
-            @\exec("powershell -NoProfile -ExecutionPolicy Bypass -File \"{$ps1File}\" 2>&1", $output);
-            @\usleep(300000);
-            @\unlink($ps1File);
-            
-            $pid = 0;
-            foreach ($output as $line) {
-                $line = \trim($line);
-                if (\is_numeric($line)) {
-                    $pid = (int)$line;
-                    break;
-                }
-            }
-            
-            return $pid;
-        } else {
-            // Linux/Mac: nohup（使用统一的参数格式）
-            // 参数格式: <host> <port> <worker_base_port> <worker_count> <instance_name>
-            $args = [
-                $phpBinary,
-                $this->dispatcherScript,
-                $host,
-                (string) $port,
-                (string) $workerBasePort,
-                (string) $workerCount,
-                $this->instanceName,
-                '--name=' . $processName,
-            ];
-            if ($this->controlPort > 0) {
-                $args[] = '--control-port=' . $this->controlPort;
-            }
-            // 前台模式标记
-            if ($this->frontend) {
-                $args[] = '--frontend';
-            }
-            $logFile = $logDir . "dispatcher-{$port}.log";
-            $command = \implode(' ', \array_map('escapeshellarg', $args));
-            $command = "nohup {$command} >> \"{$logFile}\" 2>&1 & echo \$!";
-            $output = [];
-            @\exec($command, $output);
-            return !empty($output[0]) && \is_numeric($output[0]) ? (int)$output[0] : 0;
+        $args = [
+            $phpBinary,
+            $this->dispatcherScript,
+            $host,
+            (string) $port,
+            (string) $workerBasePort,
+            (string) $workerCount,
+            $this->instanceName,
+            '--name=' . $processName,
+        ];
+        if ($this->controlPort > 0) {
+            $args[] = '--control-port=' . $this->controlPort;
         }
+        if ($this->frontend) {
+            $args[] = '--frontend';
+        }
+        $command = \implode(' ', \array_map('escapeshellarg', $args));
+        $pid = Processer::create($command, false, $this->frontend);
+        if ($pid > 0) {
+            return $pid;
+        }
+        \usleep(500000);
+        return Processer::getProcessIdByPort($port) ?: 0;
     }
     
     /**
@@ -1466,56 +1405,14 @@ POWERSHELL;
             $this->workers[$workerId]['state_since'] = \time();
         }
         
-        // 启动进程
-        if (IS_WIN) {
-            // Windows: 使用 PowerShell 启动
-            // 前台模式使用 Normal 窗口样式，后台模式使用 Hidden
-            $windowStyle = $this->frontend ? 'Normal' : 'Hidden';
-            // 注意：-FilePath 是 PHP 二进制路径，-ArgumentList 是脚本和参数（不含 PHP 路径）
-            $phpBinaryEsc = \str_replace('/', '\\', $phpBinary);
-            $escapedArgs = \array_map(function($arg) {
-                // PowerShell 参数需要用引号包裹（特别是路径和包含空格的字符串）
-                $arg = (string)$arg;
-                return '"' . \str_replace('"', '`"', $arg) . '"';
-            }, $argList);
-            $argsStr = \implode(',', $escapedArgs);
-            
-            $psScript = <<<POWERSHELL
-Start-Process -FilePath "{$phpBinaryEsc}" -ArgumentList {$argsStr} -WindowStyle {$windowStyle}
-POWERSHELL;
-            
-            $ps1File = Env::VAR_DIR . 'tmp' . DS . "restart_worker_{$port}.ps1";
-            $ps1Dir = \dirname($ps1File);
-            if (!\is_dir($ps1Dir)) {
-                @\mkdir($ps1Dir, 0755, true);
-            }
-            \file_put_contents($ps1File, $psScript);
-            
-            // 记录调试日志
-            $debugLog = Env::VAR_DIR . 'log' . DS . 'master_restart_debug.log';
-            @\file_put_contents($debugLog, \date('Y-m-d H:i:s') . " Worker #{$workerId} restart attempt:\n" .
-                "  workerScript: {$this->workerScript}\n" .
-                "  host: {$host}, port: {$port}\n" .
-                "  ps1File: {$ps1File}\n" .
-                "  psScript: {$psScript}\n\n", FILE_APPEND);
-            
-            @\exec("powershell -NoProfile -ExecutionPolicy Bypass -File \"{$ps1File}\" > NUL 2>&1");
-            @\usleep(300000); // 300ms 初始等待
-            @\unlink($ps1File);
-        } else {
-            // Linux/Mac: nohup（追加模式，保留历史日志）
-            $args = \array_merge([$phpBinary], $argList);
-            $command = \implode(' ', \array_map('escapeshellarg', $args));
-            $command = "nohup {$command} >> \"{$logFile}\" 2>&1 & echo \$!";
-            $output = [];
-            \exec($command, $output);
-            if (!empty($output[0]) && \is_numeric($output[0])) {
-                $pid = (int)$output[0];
-                // Linux 上可以立即返回 PID，但需要验证进程确实启动
-                \usleep(200000); // 200ms
-                if (Processer::isRunningByPid($pid)) {
-                    return $pid;
-                }
+        // 启动进程：统一通过 Processer::create（由驱动封装 OS 差分）
+        $args = \array_merge([$phpBinary], $argList);
+        $command = \implode(' ', \array_map('escapeshellarg', $args));
+        $pid = Processer::create($command, true, $this->frontend);
+        if ($pid > 0) {
+            \usleep(200000);
+            if (Processer::isRunningByPid($pid)) {
+                return $pid;
             }
         }
         
@@ -1601,57 +1498,10 @@ POWERSHELL;
             $argList[] = '--frontend';
         }
         
-        if (IS_WIN) {
-            // Windows: 使用 PowerShell 启动，避免 cmd 黑框
-            $phpBinaryEsc = \str_replace('/', '\\', $phpBinary);
-            $windowStyle = $this->frontend ? 'Normal' : 'Hidden';
-            $escapedArgs = \array_map(function ($arg) {
-                $arg = (string) $arg;
-                return '"' . \str_replace('"', '`"', $arg) . '"';
-            }, $argList);
-            $argsStr = \implode(',', $escapedArgs);
-            
-            $psScript = <<<POWERSHELL
-\$p = Start-Process -FilePath "{$phpBinaryEsc}" -ArgumentList {$argsStr} -WindowStyle {$windowStyle} -PassThru
-\$p.Id
-POWERSHELL;
-            
-            $ps1File = Env::VAR_DIR . 'tmp' . DS . "start_http_redirect_{$httpPort}.ps1";
-            $ps1Dir = \dirname($ps1File);
-            if (!\is_dir($ps1Dir)) {
-                @\mkdir($ps1Dir, 0755, true);
-            }
-            \file_put_contents($ps1File, $psScript);
-            $output = [];
-            @\exec("powershell -NoProfile -ExecutionPolicy Bypass -File \"{$ps1File}\" 2>&1", $output);
-            @\usleep(300000);
-            @\unlink($ps1File);
-            
-            $pid = 0;
-            foreach ($output as $line) {
-                $line = \trim($line);
-                if (\is_numeric($line)) {
-                    $pid = (int) $line;
-                    break;
-                }
-            }
-            
-            if ($pid > 0) {
-                $pname = '--name=' . $processName;
-                Processer::setPid($pname, $pid);
-                Processer::setProcessPorts($pname, [$httpPort]);
-            }
-            return $pid;
-        }
-        
-        // 非 Windows：使用 Processer 统一管理进程启动
         $args = \array_merge([$phpBinary], $argList);
         $command = \implode(' ', \array_map('escapeshellarg', $args));
         
-        // block=false 表示非阻塞启动（后台进程）
-        // Processer::create() 内部会检查 proc_open, exec, shell_exec, popen 等函数
-        // 如果函数不可用，会自动选择其他方案，并提示用户启用函数
-        $pid = Processer::create($command, false);
+        $pid = Processer::create($command, false, $this->frontend);
         
         // 如果 Processer::create 返回 0（非阻塞模式可能返回 0），尝试通过端口获取 PID
         if ($pid === 0) {
@@ -1784,7 +1634,7 @@ POWERSHELL;
         $contextOptions = [
             'http' => [
                 'method' => 'GET',
-                'timeout' => 5, // 5 秒超时（给繁忙的 Worker 更多时间响应）
+                'timeout' => (PHP_OS === 'Darwin') ? 8 : 5, // macOS 放宽超时，减少误判重启
                 'ignore_errors' => true,
             ],
         ];
@@ -2103,22 +1953,12 @@ POWERSHELL;
         
         $cmd = $phpBinary . ' ' . \escapeshellarg($workerScript) . ' ' . \implode(' ', \array_map('escapeshellarg', $args));
         
-        if (IS_WIN) {
-            $bp = \str_replace("'", "''", BP);
-            $phpBin = \str_replace("'", "''", $phpBinary);
-            $argStr = "'" . \str_replace("'", "''", $workerScript) . "'";
-            foreach ($args as $arg) {
-                $argStr .= ",'" . \str_replace("'", "''", $arg) . "'";
-            }
-            $psCmd = "Set-Location -LiteralPath '{$bp}'; Start-Process -FilePath '{$phpBin}' -ArgumentList {$argStr} -WindowStyle Hidden -WorkingDirectory '{$bp}'";
-            $fullCmd = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "' . \str_replace('"', '\"', $psCmd) . '"';
-            @\exec($fullCmd . ' 2>NUL');
-            \usleep(500000); // 500ms
-            return Processer::getProcessIdByPort($port) ?: 0;
-        }
-        
         $pid = Processer::create($cmd, false);
-        return $pid > 0 ? $pid : 0;
+        if ($pid > 0) {
+            return $pid;
+        }
+        \usleep(500000);
+        return Processer::getProcessIdByPort($port) ?: 0;
     }
     
     // ========== IPC 控制服务器 ==========
@@ -2557,12 +2397,15 @@ POWERSHELL;
         $killedWorkers = 0;
         foreach ($this->workers as $workerId => $worker) {
             $port = $worker['port'] ?? 0;
-            if ($port > 0) {
+            $workerProcessName = '--name=' . 'weline-master-' . $this->instanceName . '-worker-' . $workerId;
+            $result = Processer::destroy($workerProcessName);
+            if (!$result && $port > 0) {
+                // 兜底：仅在无法按进程名销毁时按端口清理
                 $result = Processer::killProcessByPort($port);
-                if ($result) {
-                    $killedWorkers++;
-                    $this->log(__('  已停止 Worker #%{1} (端口: %{2})', [$workerId, $port]));
-                }
+            }
+            if ($result) {
+                $killedWorkers++;
+                $this->log(__('  已停止 Worker #%{1} (端口: %{2})', [$workerId, $port]));
             }
         }
         
@@ -2592,8 +2435,13 @@ POWERSHELL;
         }
         
         if ($dispatcherPort !== null && $dispatcherPort > 0) {
-            // 先尝试通过端口杀死
-            $result = Processer::killProcessByPort($dispatcherPort);
+            // 优先通过进程管理器按进程名销毁
+            $dispatcherProcessName = '--name=' . 'weline-dispatcher-' . $this->instanceName;
+            $result = Processer::destroy($dispatcherProcessName);
+            if (!$result) {
+                // 兜底：按端口杀死
+                $result = Processer::killProcessByPort($dispatcherPort);
+            }
             
             // 如果 killProcessByPort 失败但端口仍被占用，强制通过 PID 杀死
             // 注意：Windows 上可能有多个进程占用同一端口，需要循环杀死所有相关进程
@@ -2744,13 +2592,17 @@ POWERSHELL;
                 }
             }
             
-            // 尝试通过端口杀死
-            $result = Processer::killProcessByPort($httpRedirectPort);
+            // 优先通过进程管理器按进程名销毁
+            $redirectName = self::HTTP_REDIRECT_PROCESS_NAME;
+            $result = Processer::destroy('--name=' . $redirectName);
+            if (!$result) {
+                // 兜底：按端口杀死
+                $result = Processer::killProcessByPort($httpRedirectPort);
+            }
             
             // 如果 killProcessByPort 失败但端口仍被占用，强制通过 PID 杀死
             // 注意：Windows 上可能有多个进程占用同一端口，需要循环杀死所有相关进程
             // 优先通过进程名杀死（HTTP 重定向有固定的进程名）
-            $redirectName = self::HTTP_REDIRECT_PROCESS_NAME;
             $redirectPid = (int) Processer::getData('--name=' . $redirectName, 'pid');
             
             if ($redirectPid > 0 && Processer::isRunningByPid($redirectPid)) {

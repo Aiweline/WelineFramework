@@ -116,7 +116,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         if (empty($data)) {
             throw new DbException('插入数据不能为空！');
         }
-        
+        $this->fetch_type = __FUNCTION__;
+
         // 处理更新字段
         if ($update_fields) {
             if (is_string($update_fields)) {
@@ -255,33 +256,13 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             }
         }
 
-        $this->fetch_type = __FUNCTION__;
         $this->prepareSql(__FUNCTION__);
         return $this;
     }
 
-    public function update(array|string $field = '', int|string $value_or_condition_field = 'id'): QueryInterface
-    {
-        if ($field) {
-            # 单条记录更新
-            if (is_string($field)) {
-                $this->single_updates[$field] = $value_or_condition_field;
-            } else {
-                // 设置数据更新依赖条件主键
-                if ($this->identity_field !== $value_or_condition_field) {
-                    $this->identity_field = $value_or_condition_field;
-                }
-                if (is_string(array_key_first($field))) {
-                    $this->updates[] = $field;
-                } else {
-                    $this->updates = $field;
-                }
-            }
-        }
-        $this->fetch_type = __FUNCTION__;
-        $this->prepareSql(__FUNCTION__);
-        return $this;
-    }
+    /**
+     * update/find/select/delete 统一走 QueryAst，仅在本适配器实现 prepareSql 将 AST 编译为方言 SQL
+     */
 
     public function alias(string $table_alias_name): QueryInterface
     {
@@ -508,35 +489,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 $this->wheres[] = $where_array;
             }
         }
-        return $this;
-    }
-
-    public function find(string $find_fields = ''): QueryInterface
-    {
-        if ($find_fields) {
-            $this->find_fields = $find_fields;
-            $this->fields($find_fields);
-        }
-        $this->limit(1, 0);
-        $this->fetch_type = __FUNCTION__;
-        $this->prepareSql(__FUNCTION__);
-        return $this;
-    }
-
-    public function select(string $fields = ''): QueryInterface
-    {
-        if ($fields) {
-            $this->fields($fields);
-        }
-        $this->fetch_type = __FUNCTION__;
-        $this->prepareSql(__FUNCTION__);
-        return $this;
-    }
-
-    public function delete(): QueryInterface
-    {
-        $this->fetch_type = __FUNCTION__;
-        $this->prepareSql(__FUNCTION__);
         return $this;
     }
 
@@ -2037,6 +1989,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         
         // 🔧 修复：转换参数名（PostgreSQL 要求参数名必须以字母开头）
         $sql = $this->normalizeParameterNames($sql);
+        
+        // 保持对象状态一致：后续回退到 exec() 时，SQL 占位符必须与 bound_values 键一致
+        $this->sql = $sql;
         
         // 尝试 prepare，如果失败则检查是否是多个命令的错误
         $stmt = @$this->getLink()->prepare($sql, $options);

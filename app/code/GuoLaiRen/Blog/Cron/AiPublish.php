@@ -12,6 +12,7 @@ namespace GuoLaiRen\Blog\Cron;
 use GuoLaiRen\Blog\Helper\RandomAuthorName;
 use GuoLaiRen\Blog\Model\Category;
 use GuoLaiRen\Blog\Model\Post as PostModel;
+use GuoLaiRen\Blog\Model\TrendProfile;
 use GuoLaiRen\Blog\Model\TrendingKeywordLog;
 use GuoLaiRen\Blog\Model\TrendsConfig;
 use GuoLaiRen\Blog\Model\TrendSiteQuota;
@@ -46,8 +47,11 @@ class AiPublish implements CronTaskInterface
         /** @var TrendSiteQuota $quotaModel */
         $quotaModel = ObjectManager::getInstance(TrendSiteQuota::class);
         $quotas = $quotaModel->clear()->select()->fetch()->getItems();
+        $hasTrendSource = TrendsConfig::useSerpApi() || TrendsConfig::useOfficialApi();
         $todayStart = date('Y-m-d 00:00:00');
         $published = 0;
+        $locale = TrendsConfig::get(TrendsConfig::KEY_DEFAULT_LANGUAGE, 'en_US');
+        $asDraft = TrendsConfig::publishAsDraft();
 
         foreach ($quotas as $quota) {
             $siteId = (int)$quota->getData(TrendSiteQuota::fields_SITE_ID);
@@ -76,63 +80,106 @@ class AiPublish implements CronTaskInterface
                 continue;
             }
 
-            /** @var TrendingKeywordLog $logModel */
-            $logModel = ObjectManager::getInstance(TrendingKeywordLog::class);
-            $logs = $logModel->clear()
-                ->where(TrendingKeywordLog::fields_PROFILE_ID, $profileId)
-                ->where(TrendingKeywordLog::fields_USED_AT, null, 'IS')
-                ->order(TrendingKeywordLog::fields_ID, 'ASC')
-                ->limit($need)
-                ->select()
-                ->fetch()
-                ->getItems();
+            if ($hasTrendSource) {
+                /** @var TrendingKeywordLog $logModel */
+                $logModel = ObjectManager::getInstance(TrendingKeywordLog::class);
+                $logs = $logModel->clear()
+                    ->where(TrendingKeywordLog::fields_PROFILE_ID, $profileId)
+                    ->where(TrendingKeywordLog::fields_USED_AT, null, 'IS')
+                    ->order(TrendingKeywordLog::fields_ID, 'ASC')
+                    ->limit($need)
+                    ->select()
+                    ->fetch()
+                    ->getItems();
 
-            $locale = TrendsConfig::get(TrendsConfig::KEY_DEFAULT_LANGUAGE, 'en_US');
-            $asDraft = TrendsConfig::publishAsDraft();
+                foreach ($logs as $log) {
+                    $keyword = (string)$log->getData(TrendingKeywordLog::fields_KEYWORD);
+                    $logId = (int)$log->getData(TrendingKeywordLog::fields_ID);
 
-            foreach ($logs as $log) {
-                $keyword = $log->getData(TrendingKeywordLog::fields_KEYWORD);
-                $logId = (int)$log->getData(TrendingKeywordLog::fields_ID);
-
-                try {
-                    $article = $this->generateArticle($keyword, $locale);
-                    if (empty($article['title']) || empty($article['content'])) {
+                    try {
+                        if ($this->publishByKeyword($keyword, $siteId, $categoryId, $profileId, $locale, $asDraft)) {
+                            $log->setData(TrendingKeywordLog::fields_USED_AT, date('Y-m-d H:i:s'))->save();
+                            $published++;
+                        }
+                    } catch (\Throwable $e) {
+                        trigger_error(
+                            __('Blog AI 发文失败（关键词 %{keyword}，log_id %{log_id}）：%{error}', [
+                                'keyword' => $keyword,
+                                'log_id' => (string)$logId,
+                                'error' => $e->getMessage(),
+                            ]),
+                            E_USER_WARNING
+                        );
                         continue;
                     }
-
-                    $slug = $this->uniqueSlug($article['title'], $siteId);
-                    $post = ObjectManager::getInstance(PostModel::class);
-                    $post->setData(PostModel::fields_SITE_ID, $siteId)
-                        ->setData(PostModel::fields_CATEGORY_ID, $categoryId)
-                        ->setData(PostModel::fields_TITLE, $article['title'])
-                        ->setData(PostModel::fields_SLUG, $slug)
-                        ->setData(PostModel::fields_SUMMARY, $article['summary'] ?? '')
-                        ->setData(PostModel::fields_CONTENT, $article['content'])
-                        ->setData(PostModel::fields_AUTHOR, RandomAuthorName::generate())
-                        ->setData(PostModel::fields_STATUS, $asDraft ? PostModel::STATUS_DRAFT : PostModel::STATUS_PUBLISHED)
-                        ->setData(PostModel::fields_TREND_PROFILE_ID, $profileId)
-                        ->setData(PostModel::fields_PUBLISHED_AT, $asDraft ? null : date('Y-m-d H:i:s'))
-                        ->setData(PostModel::fields_VIEW_COUNT, 0)
-                        ->setData(PostModel::fields_IS_FEATURED, 0)
-                        ->save();
-
-                    $log->setData(TrendingKeywordLog::fields_USED_AT, date('Y-m-d H:i:s'))->save();
-                    $published++;
-                } catch (\Throwable $e) {
-                    trigger_error(
-                        __('Blog AI 发文失败（关键词 %{keyword}，log_id %{log_id}）：%{error}', [
-                            'keyword' => $keyword,
-                            'log_id' => (string)$logId,
-                            'error' => $e->getMessage(),
-                        ]),
-                        E_USER_WARNING
-                    );
+                }
+            } else {
+                /** @var TrendProfile $profile */
+                $profile = ObjectManager::getInstance(TrendProfile::class);
+                $profile->clear()->load($profileId);
+                if (!$profile->getId() || (int)$profile->getData(TrendProfile::fields_IS_ACTIVE) !== 1) {
                     continue;
+                }
+
+                $keywords = array_values(array_unique($profile->getKeywordsArray()));
+                if (empty($keywords)) {
+                    continue;
+                }
+                $keywords = array_slice($keywords, 0, $need);
+
+                foreach ($keywords as $keyword) {
+                    try {
+                        if ($this->publishByKeyword($keyword, $siteId, $categoryId, $profileId, $locale, $asDraft)) {
+                            $published++;
+                        }
+                    } catch (\Throwable $e) {
+                        trigger_error(
+                            __('Blog AI 发文失败（关键词 %{keyword}，log_id %{log_id}）：%{error}', [
+                                'keyword' => (string)$keyword,
+                                'log_id' => 'fallback',
+                                'error' => $e->getMessage(),
+                            ]),
+                            E_USER_WARNING
+                        );
+                        continue;
+                    }
                 }
             }
         }
 
         return __('自动发文完成：本次发布 %{count} 篇', ['count' => $published]);
+    }
+
+    private function publishByKeyword(
+        string $keyword,
+        int $siteId,
+        int $categoryId,
+        int $profileId,
+        string $locale,
+        bool $asDraft
+    ): bool {
+        $article = $this->generateArticle($keyword, $locale);
+        if (empty($article['title']) || empty($article['content'])) {
+            return false;
+        }
+
+        $slug = $this->uniqueSlug($article['title'], $siteId);
+        $post = ObjectManager::getInstance(PostModel::class);
+        $post->setData(PostModel::fields_SITE_ID, $siteId)
+            ->setData(PostModel::fields_CATEGORY_ID, $categoryId)
+            ->setData(PostModel::fields_TITLE, $article['title'])
+            ->setData(PostModel::fields_SLUG, $slug)
+            ->setData(PostModel::fields_SUMMARY, $article['summary'] ?? '')
+            ->setData(PostModel::fields_CONTENT, $article['content'])
+            ->setData(PostModel::fields_AUTHOR, RandomAuthorName::generate())
+            ->setData(PostModel::fields_STATUS, $asDraft ? PostModel::STATUS_DRAFT : PostModel::STATUS_PUBLISHED)
+            ->setData(PostModel::fields_TREND_PROFILE_ID, $profileId)
+            ->setData(PostModel::fields_PUBLISHED_AT, $asDraft ? null : date('Y-m-d H:i:s'))
+            ->setData(PostModel::fields_VIEW_COUNT, 0)
+            ->setData(PostModel::fields_IS_FEATURED, 0)
+            ->save();
+
+        return true;
     }
 
     private function generateArticle(string $keyword, string $locale): array

@@ -162,3 +162,8 @@ tests/**/node_modules/
 tests/**/package-lock.json
 tests/**/yarn.lock
 tests/**/pnpm-lock.yaml
+
+# ============================================
+# 服务安装目录
+# ============================================
+extend/server/

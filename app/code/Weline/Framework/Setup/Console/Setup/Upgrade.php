@@ -273,7 +273,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             // 检查系统是否已安装
             if (!$this->checkSystemInstalled()) {
                 $this->releaseLock($lockHandle, $lockFile);
-                $this->handleSystemNotInstalled();
+                $this->handleSystemNotInstalled($args);
                 return;
             }
             
@@ -1023,7 +1023,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $all_modules = [];
         // 扫描模型注册代码
         list($origin_vendor_modules, $dependencyModules) = Register::getOriginModulesData();
-        // 注册模组
+        // 两阶段注册：先只执行 MODULE，再刷新依赖，再执行 THEME/ROUTER/i18n
+        Register::setRegisterPhase(Register::PHASE_MODULE_ONLY);
         $this->printing->note(__('1)注册模组'));
         foreach ($dependencyModules as $module_name => $module) {
             if ($argsModule and !in_array($module_name, $argsModule)) {
@@ -1033,6 +1034,14 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 require $module['register'];
             }
         }
+        $this->printing->note(__('2)刷新注册表（事件/Hook/Extends）'));
+        // 强制重读模块列表，使事件/Hook/Extends 刷新时能扫到刚在 1) 中完成 MODULE 注册的模块（Theme、I18n 等），否则 register_installer 观察者不在表内，后续 runPendingRegistrations 会仍用不存在的 Framework\Theme\Handle、Framework\I18n\Handle
+        Env::getInstance()->getModuleList(true);
+        /** @var RegistryUpdateService $registryService */
+        $registryService = ObjectManager::getInstance(RegistryUpdateService::class);
+        $registryService->updateAllRegistries(true, false);
+        Register::runPendingRegistrations();
+        Register::clearRegisterPhase();
         $modules = Env::getInstance()->getModuleList();
         $no_modules = [];
         $diff_base_path_modules = [];
@@ -2046,9 +2055,31 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
     /**
      * 处理系统未安装的情况
+     * @param array $args 命令参数，含 -y/--yes 时不提示直接安装
      */
-    private function handleSystemNotInstalled(): void
+    private function handleSystemNotInstalled(array $args = []): void
     {
+        $skipConfirm = isset($args['y']) || isset($args['yes']);
+
+        // 若 env.php 中已配置数据库且可连接，直接安装不提示
+        if ($this->envHasWorkingDb()) {
+            $this->printing->note(__('env.php 中数据库配置有效，直接执行安装...'));
+            $this->executeInstallWithExistingDb();
+            return;
+        }
+
+        // -y/--yes 时不做交互检测：有 db 配置则用现有配置直接安装，否则走开发环境快速安装
+        if ($skipConfirm) {
+            if ($this->envHasDbConfig()) {
+                $this->printing->note(__('检测到系统尚未安装（-y 模式），按 env.php 中 db 配置直接安装...'));
+                $this->executeInstallWithExistingDb();
+            } else {
+                $this->printing->note(__('检测到系统尚未安装（-y 模式），直接执行开发环境快速安装...'));
+                $this->executeDevelopmentInstall();
+            }
+            return;
+        }
+
         $this->printing->warning(__('检测到系统尚未安装！'), __('警告'));
         
         // 检查是否在交互式环境中
@@ -2168,10 +2199,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     private function executeDevelopmentInstall(): void
     {
-        # 使用默认配置生成
-        $default_sample_db = Env::get('db') ?? [];
-        Env::set('sample_db', $default_sample_db);
-        
+        # 使用默认配置生成（不再写入 sample 配置）
         $sandbox_db = Env::get('sandbox_db') ?? [];
         if (empty($sandbox_db)) {
             $sandbox_db = [
@@ -2183,18 +2211,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     'collate' => 'utf8mb4_general_ci',
                 ],
                 'slaves' => [],
-                'mysql_sample_db' => [
-                    'tip' => __('演示如何配置mysql数据库的配置信息样例，mysql_sample_db可以删除，不影响系统，仅作为配置参考。'),
-                    'hostname' => 'demo',
-                    'database' => 'demo',
-                    'username' => 'demo',
-                    'password' => 'demo',
-                    'type' => 'mysql',
-                    'hostport' => '3306',
-                    'prefix' => 'm_',
-                    'charset' => 'utf8mb4',
-                    'collate' => 'utf8mb4_general_ci',
-                ],
             ];
         }
         
@@ -2243,13 +2259,116 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $this->printing->success(__('使用server:start命令指定的地址访问网站，默认使用http://127.0.0.1:9981，例如:'), __('安装'));
         $this->printing->note(__('访问后台：%{1}/admin/login', 'http://127.0.0.1:9981/' . $backendPrefix), __('安装'));
         $this->printing->note(__('访问后台 REST API：%{1}', 'http://127.0.0.1:9981/' . $restBackendPrefix), __('安装'));
-        $this->printing->warning(__('默认使用sqlite作为开发数据库，若要修改数据库，请转到 %{1} 下的env.php按照数组键sample_db中的配置样本，修改db键即可。', APP_ETC_PATH), __('安装'));
+        $this->printing->warning(__('默认使用 sqlite 作为开发数据库，若要修改数据库请编辑 %{1} 下的 env.php 中 db 键。', APP_ETC_PATH), __('安装'));
         $this->printing->setup(__('由于您属于第一次安装，您可以使用命令行：php bin/w setup:upgrade , 然后使用：php bin/w server:start 快速开启本地开发服务器。'), __('安装'));
         
         # 设置环境用户
         Env::set('user', Env::user());
         
         # 设置安装文件
+        file_put_contents(BP . 'setup/install.lock', date('Y-m-d H:i:s'));
+    }
+
+    /**
+     * 检查 env.php 中是否有 pgsql/mysql 的 db 配置（不检测连接，供 -y 时用）
+     */
+    private function envHasDbConfig(): bool
+    {
+        $envFile = defined('APP_ETC_PATH') ? (APP_ETC_PATH . 'env.php') : (BP . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'env.php');
+        if (!is_file($envFile)) {
+            return false;
+        }
+        $config = @include $envFile;
+        if (!is_array($config) || empty($config['db']['master'])) {
+            return false;
+        }
+        $m = $config['db']['master'];
+        $type = strtolower((string)($m['type'] ?? ''));
+        $dbname = trim((string)($m['database'] ?? ''));
+        $user = trim((string)($m['username'] ?? ''));
+        return ($type === 'pgsql' || $type === 'mysql') && $dbname !== '' && $user !== '';
+    }
+
+    /**
+     * 检查 env.php 中是否已配置数据库且能连接（能连上则直接安装不提示）
+     */
+    private function envHasWorkingDb(): bool
+    {
+        if (!$this->envHasDbConfig()) {
+            return false;
+        }
+        $envFile = defined('APP_ETC_PATH') ? (APP_ETC_PATH . 'env.php') : (BP . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'env.php');
+        $config = @include $envFile;
+        if (!is_array($config) || empty($config['db']['master'])) {
+            return false;
+        }
+        $m = $config['db']['master'];
+        $type = strtolower((string)($m['type'] ?? ''));
+        $host = $m['hostname'] ?? $m['host'] ?? '127.0.0.1';
+        $port = $m['hostport'] ?? $m['port'] ?? ('pgsql' === $type ? '5432' : '3306');
+        $dbname = trim((string)($m['database'] ?? ''));
+        $user = trim((string)($m['username'] ?? ''));
+        $pass = $m['password'] ?? '';
+        if ($dbname === '' || $user === '') {
+            return false;
+        }
+        if ($type !== 'pgsql' && $type !== 'mysql') {
+            return false;
+        }
+        try {
+            if ($type === 'pgsql') {
+                $dsn = "pgsql:host=" . $host . ";port=" . $port . ";dbname=" . $dbname;
+                new \PDO($dsn, $user, $pass, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+            } else {
+                $dsn = "mysql:host=" . $host . ";port=" . $port . ";dbname=" . $dbname . ";charset=utf8mb4";
+                new \PDO($dsn, $user, $pass, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+            }
+            return true;
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * 使用 env.php 中已有数据库配置直接完成安装（不覆盖 db、不提示）
+     */
+    private function executeInstallWithExistingDb(): void
+    {
+        // 检查并初始化 area_routes 配置
+        $areaRoutes = Env::getAreaRoutes();
+        if (empty($areaRoutes) || empty($areaRoutes['backend']['prefix'] ?? '')) {
+            $newAreaRoutes = [
+                'backend' => [
+                    'prefix' => $areaRoutes['backend']['prefix'] ?? Text::random_string(32),
+                    'description' => '后台管理',
+                ],
+                'rest_frontend' => [
+                    'prefix' => $areaRoutes['rest_frontend']['prefix'] ?? 'api',
+                    'description' => '前端 REST API',
+                ],
+                'rest_backend' => [
+                    'prefix' => $areaRoutes['rest_backend']['prefix'] ?? Text::random_string(32),
+                    'description' => '后台 REST API',
+                ],
+            ];
+            Env::set('area_routes', $newAreaRoutes);
+        }
+
+        $this->executeModuleUpgrade([], []);
+
+        /** @var EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        $eventsManager->dispatch('Weline_Framework_Setup::upgrade_after');
+
+        $backendPrefix = Env::getAreaRoutePrefix('backend');
+        $restBackendPrefix = Env::getAreaRoutePrefix('rest_backend');
+
+        $this->printing->success(__('系统已按 env.php 中数据库配置完成安装。'), __('安装'));
+        $this->printing->success(__('您的后台入口地址密钥：%{1} ', $backendPrefix), __('安装'));
+        $this->printing->success(__('您的 REST 后台入口地址密钥：%{1}', $restBackendPrefix), __('安装'));
+        $this->printing->note(__('访问后台：%{1}/admin/login', 'http://127.0.0.1:9981/' . $backendPrefix), __('安装'));
+
+        Env::set('user', Env::user());
         file_put_contents(BP . 'setup/install.lock', date('Y-m-d H:i:s'));
     }
 }

@@ -200,24 +200,14 @@ class LinuxDirectStrategy implements ServerStrategyInterface
             $command .= " --frontend";
         }
         
-        // 使用 nohup 启动后台进程
-        $logFile = $config->logDir . "worker-{$port}-{$workerId}.log";
-        
-        if ($config->frontend) {
-            // 前台模式：直接执行（阻塞）
-            $pid = Processer::create($command, true, true);
-        } else {
-            // 后台模式
-            $command = "nohup {$command} > \"{$logFile}\" 2>&1 & echo \$!";
-            $output = [];
-            \exec($command, $output);
-            $pid = (int) ($output[0] ?? 0);
-            
-            if ($pid > 0) {
-                Processer::setPid($processName, $pid);
-            }
+        $pid = Processer::create($command, !$config->frontend, $config->frontend);
+        if ($pid <= 0 && !$config->frontend) {
+            \usleep(500000);
+            $pid = Processer::getProcessIdByPort($port);
         }
-        
+        if ($pid > 0) {
+            Processer::setPid($processName, $pid);
+        }
         return $pid;
     }
     
@@ -235,20 +225,17 @@ class LinuxDirectStrategy implements ServerStrategyInterface
         }
         
         $processName = 'weline-http-redirect-' . $config->instanceName;
-        $logFile = $config->logDir . "http-redirect-{$config->httpRedirectPort}.log";
-        
         $command = "\"{$config->phpBinary}\" \"{$script}\" {$config->host} {$config->httpRedirectPort} {$config->port} {$config->instanceName}";
         $command .= " --name={$processName}";
         
         if ($config->frontend) {
             $command .= " --frontend";
-            return Processer::create($command, true, true);
         }
-        
-        $command = "nohup {$command} > \"{$logFile}\" 2>&1 & echo \$!";
-        $output = [];
-        \exec($command, $output);
-        $pid = (int) ($output[0] ?? 0);
+        $pid = Processer::create($command, !$config->frontend, $config->frontend);
+        if ($pid <= 0 && !$config->frontend) {
+            \usleep(500000);
+            $pid = Processer::getProcessIdByPort($config->httpRedirectPort);
+        }
         
         if ($pid > 0) {
             Processer::setPid($processName, $pid);
@@ -272,12 +259,11 @@ class LinuxDirectStrategy implements ServerStrategyInterface
         $command = "\"{$config->phpBinary}\" \"" . BP . "bin/w\" server:start --master-only --instance={$config->instanceName}";
         $command .= " --name={$processName}";
         
-        $logFile = $config->logDir . "master-{$config->instanceName}.log";
-        $command = "nohup {$command} > \"{$logFile}\" 2>&1 & echo \$!";
-        
-        $output = [];
-        \exec($command, $output);
-        $pid = (int) ($output[0] ?? 0);
+        $pid = Processer::create($command, false, false);
+        if ($pid <= 0) {
+            \usleep(500000);
+            $pid = Processer::getPid($processName);
+        }
         
         if ($pid > 0) {
             Processer::setPid($processName, $pid);

@@ -2628,6 +2628,9 @@
                         }
                         
                         console.log(`[ThemeEditor] New widget ${layoutId} inserted into slot ${slotId} with hover actions`);
+
+                        // 为新插入的部件启用 draggable（委托已绑在 body 上，无需再绑事件）
+                        setDraggableOnSlotWidgets(iframe.contentDocument);
                         
                         // 高亮新部件
                         setTimeout(() => wrapper.classList.remove('widget-new'), 1500);
@@ -4415,55 +4418,62 @@
     }
 
     /**
-     * 处理部件上移
+     * 处理部件上移 — 先交换 DOM 再走 persistSlotSortOrder 统一持久化
      */
     async function handleWidgetMoveUp(layoutId) {
         console.log('[ThemeEditor] Move up widget:', layoutId);
-        
+
         const iframe = elements.previewFrame;
         if (!iframe || !iframe.contentDocument) return;
-        
+
         const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
         if (!widgetEl) return;
-        
+
         const prevWidget = widgetEl.previousElementSibling;
         if (!prevWidget || !prevWidget.hasAttribute('data-layout-id')) {
             showToast('已经是第一个部件', 'info');
             return;
         }
-        
-        const prevLayoutId = prevWidget.getAttribute('data-layout-id');
-        
-        // 交换位置
-        await swapWidgetOrder(layoutId, prevLayoutId);
+
+        // DOM 交换：把当前部件插到前一个部件之前
+        prevWidget.parentNode.insertBefore(widgetEl, prevWidget);
+
+        // 解析 slotId 并统一持久化
+        const slotId = widgetEl.getAttribute('data-slot-id') ||
+                       widgetEl.closest('[data-wslot]')?.getAttribute('data-wslot') || '';
+        await persistSlotSortOrder(slotId);
     }
 
     /**
-     * 处理部件下移
+     * 处理部件下移 — 先交换 DOM 再走 persistSlotSortOrder 统一持久化
      */
     async function handleWidgetMoveDown(layoutId) {
         console.log('[ThemeEditor] Move down widget:', layoutId);
-        
+
         const iframe = elements.previewFrame;
         if (!iframe || !iframe.contentDocument) return;
-        
+
         const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
         if (!widgetEl) return;
-        
+
         const nextWidget = widgetEl.nextElementSibling;
         if (!nextWidget || !nextWidget.hasAttribute('data-layout-id')) {
             showToast('已经是最后一个部件', 'info');
             return;
         }
-        
-        const nextLayoutId = nextWidget.getAttribute('data-layout-id');
-        
-        // 交换位置
-        await swapWidgetOrder(layoutId, nextLayoutId);
+
+        // DOM 交换：把当前部件插到下一个部件之后
+        nextWidget.parentNode.insertBefore(widgetEl, nextWidget.nextSibling);
+
+        // 解析 slotId 并统一持久化
+        const slotId = widgetEl.getAttribute('data-slot-id') ||
+                       widgetEl.closest('[data-wslot]')?.getAttribute('data-wslot') || '';
+        await persistSlotSortOrder(slotId);
     }
 
     /**
-     * 交换两个部件的排序
+     * 交换两个部件的排序（保留用于非插槽内场景，插槽内排序请用 persistSlotSortOrder）
+     * @deprecated 插槽内排序已改用 persistSlotSortOrder，此函数仅作备用
      */
     async function swapWidgetOrder(layoutId1, layoutId2) {
         try {
@@ -4479,33 +4489,28 @@
                     layout_id_2: layoutId2
                 })
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
-                // 在 iframe 中交换 DOM 位置
                 const iframe = elements.previewFrame;
                 if (iframe && iframe.contentDocument) {
                     const el1 = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId1}"]`);
                     const el2 = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId2}"]`);
-                    
+
                     if (el1 && el2) {
-                        // 判断哪个在前
                         if (el1.compareDocumentPosition(el2) & Node.DOCUMENT_POSITION_FOLLOWING) {
-                            // el1 在 el2 前面，el1 要移到 el2 后面
                             el2.parentNode.insertBefore(el1, el2.nextSibling);
                         } else {
-                            // el2 在 el1 前面，el1 要移到 el2 前面
                             el2.parentNode.insertBefore(el1, el2);
                         }
-                        
-                        // 更新移动按钮状态
-                        const slotId = el1.getAttribute('data-slot-id') || 
+
+                        const slotId = el1.getAttribute('data-slot-id') ||
                                        el1.closest('[data-wslot]')?.getAttribute('data-wslot') || '';
                         updateSiblingMoveButtons(slotId);
                     }
                 }
-                
+
                 showToast('部件位置已更新', 'success');
             } else {
                 showToast(result.message || '移动失败', 'error');
@@ -4546,156 +4551,201 @@
     }
 
     /**
+     * 为 iframe 中所有符合条件的部件设置 draggable 属性（幂等）
+     * 独占插槽内的部件不设置 draggable。
+     *
+     * @param {Document} iframeDoc iframe 的 contentDocument
+     */
+    function setDraggableOnSlotWidgets(iframeDoc) {
+        if (!iframeDoc) return;
+
+        const widgets = iframeDoc.querySelectorAll('.widget-wrapper[data-layout-id], [data-layout-id]');
+        widgets.forEach(widget => {
+            const slotId = widget.getAttribute('data-slot-id') ||
+                           widget.closest('[data-wslot]')?.getAttribute('data-wslot') || '';
+
+            if (isExclusiveSlot(slotId, '')) {
+                widget.removeAttribute('draggable');
+            } else {
+                widget.setAttribute('draggable', 'true');
+            }
+        });
+    }
+
+    /**
      * 初始化部件拖拽排序功能
+     *
+     * 采用事件委托：在 iframe body 上只绑定一次 drag 事件，
+     * 新插入的部件无需再次绑定即可自动参与排序。
      */
     function initWidgetSortable() {
         const iframe = elements.previewFrame;
         if (!iframe || !iframe.contentDocument) return;
-        
+
         const iframeDoc = iframe.contentDocument;
-        
-        // 为所有部件包装器添加拖拽属性
-        const widgets = iframeDoc.querySelectorAll('.widget-wrapper[data-layout-id]');
-        
-        widgets.forEach(widget => {
-            const slotId = widget.getAttribute('data-slot-id') || 
-                           widget.closest('[data-wslot]')?.getAttribute('data-wslot') || '';
-            
-            // 独占插槽不需要排序
-            if (isExclusiveSlot(slotId, '')) {
-                return;
+
+        // 1) 为当前所有部件设置 draggable
+        setDraggableOnSlotWidgets(iframeDoc);
+
+        // 2) 事件委托：只绑定一次（通过标记防重复）
+        if (iframeDoc.body._sortableDelegationBound) {
+            console.log('[ThemeEditor] Widget sortable delegation already bound, skipped');
+            return;
+        }
+        iframeDoc.body._sortableDelegationBound = true;
+
+        // —— 辅助函数：从事件目标找到最近的带 data-layout-id 的 widget-wrapper ——
+        function resolveWidget(target) {
+            return target.closest('.widget-wrapper[data-layout-id]') ||
+                   target.closest('[data-layout-id]');
+        }
+
+        // —— 辅助函数：取 widget 所属 slotId ——
+        function getWidgetSlotId(widget) {
+            return widget.getAttribute('data-slot-id') ||
+                   widget.closest('[data-wslot]')?.getAttribute('data-wslot') || '';
+        }
+
+        // —— dragstart ——
+        iframeDoc.body.addEventListener('dragstart', function(e) {
+            const widget = resolveWidget(e.target);
+            if (!widget) return;
+
+            const slotId = getWidgetSlotId(widget);
+            if (isExclusiveSlot(slotId, '')) return;
+
+            e.stopPropagation();
+
+            const layoutId = widget.getAttribute('data-layout-id');
+            e.dataTransfer.setData('text/plain', layoutId);
+            e.dataTransfer.effectAllowed = 'move';
+
+            widget.classList.add('dragging');
+
+            state.sortDragging = {
+                layoutId: layoutId,
+                slotId: slotId,
+                element: widget
+            };
+        });
+
+        // —— dragend ——
+        iframeDoc.body.addEventListener('dragend', function(e) {
+            if (state.sortDragging && state.sortDragging.element) {
+                state.sortDragging.element.classList.remove('dragging');
             }
-            
-            // 设置可拖拽
-            widget.setAttribute('draggable', 'true');
-            
-            // 拖拽开始
-            widget.addEventListener('dragstart', function(e) {
-                e.stopPropagation();
-                this.classList.add('dragging');
-                
-                const layoutId = this.getAttribute('data-layout-id');
-                e.dataTransfer.setData('text/plain', layoutId);
-                e.dataTransfer.effectAllowed = 'move';
-                
-                // 记录拖拽数据
-                state.sortDragging = {
-                    layoutId: layoutId,
-                    slotId: slotId,
-                    element: this
-                };
-            });
-            
-            // 拖拽结束
-            widget.addEventListener('dragend', function(e) {
-                this.classList.remove('dragging');
-                state.sortDragging = null;
-                
-                // 移除所有拖拽指示器
-                iframeDoc.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(el => {
-                    el.classList.remove('drag-over-top', 'drag-over-bottom');
-                });
-            });
-            
-            // 拖拽经过
-            widget.addEventListener('dragover', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                if (!state.sortDragging) return;
-                
-                // 检查是否是同层部件
-                const targetSlotId = this.getAttribute('data-slot-id') || 
-                                     this.closest('[data-wslot]')?.getAttribute('data-wslot') || '';
-                
-                if (targetSlotId !== state.sortDragging.slotId) {
-                    e.dataTransfer.dropEffect = 'none';
-                    return;
-                }
-                
-                // 不能放到自己身上
-                if (this === state.sortDragging.element) {
-                    return;
-                }
-                
-                e.dataTransfer.dropEffect = 'move';
-                
-                // 计算鼠标位置，决定插入到上方还是下方
-                const rect = this.getBoundingClientRect();
-                const midY = rect.top + rect.height / 2;
-                
-                this.classList.remove('drag-over-top', 'drag-over-bottom');
-                if (e.clientY < midY) {
-                    this.classList.add('drag-over-top');
-                } else {
-                    this.classList.add('drag-over-bottom');
-                }
-            });
-            
-            // 拖拽离开
-            widget.addEventListener('dragleave', function(e) {
-                this.classList.remove('drag-over-top', 'drag-over-bottom');
-            });
-            
-            // 放置
-            widget.addEventListener('drop', async function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                this.classList.remove('drag-over-top', 'drag-over-bottom');
-                
-                if (!state.sortDragging) return;
-                
-                const sourceLayoutId = state.sortDragging.layoutId;
-                const targetLayoutId = this.getAttribute('data-layout-id');
-                
-                if (sourceLayoutId === targetLayoutId) return;
-                
-                // 计算插入位置
-                const rect = this.getBoundingClientRect();
-                const midY = rect.top + rect.height / 2;
-                const insertBefore = e.clientY < midY;
-                
-                // 保存排序
-                await saveWidgetSortOrder(sourceLayoutId, targetLayoutId, insertBefore, state.sortDragging.slotId);
+            state.sortDragging = null;
+
+            // 移除所有拖拽指示器
+            iframeDoc.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(el => {
+                el.classList.remove('drag-over-top', 'drag-over-bottom');
             });
         });
-        
-        console.log('[ThemeEditor] Widget sortable initialized,', widgets.length, 'widgets');
+
+        // —— dragover ——
+        iframeDoc.body.addEventListener('dragover', function(e) {
+            if (!state.sortDragging) return;
+
+            const targetWidget = resolveWidget(e.target);
+            if (!targetWidget) return;
+
+            // 同一 slot 内才允许排序
+            const targetSlotId = getWidgetSlotId(targetWidget);
+            if (targetSlotId !== state.sortDragging.slotId) {
+                e.dataTransfer.dropEffect = 'none';
+                return;
+            }
+
+            // 不能放到自己身上
+            if (targetWidget === state.sortDragging.element) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+            e.dataTransfer.dropEffect = 'move';
+
+            // 计算鼠标位置，决定插入到上方还是下方
+            const rect = targetWidget.getBoundingClientRect();
+            const midY = rect.top + rect.height / 2;
+
+            targetWidget.classList.remove('drag-over-top', 'drag-over-bottom');
+            if (e.clientY < midY) {
+                targetWidget.classList.add('drag-over-top');
+            } else {
+                targetWidget.classList.add('drag-over-bottom');
+            }
+        });
+
+        // —— dragleave ——
+        iframeDoc.body.addEventListener('dragleave', function(e) {
+            const targetWidget = resolveWidget(e.target);
+            if (targetWidget) {
+                targetWidget.classList.remove('drag-over-top', 'drag-over-bottom');
+            }
+        });
+
+        // —— drop ——
+        iframeDoc.body.addEventListener('drop', async function(e) {
+            if (!state.sortDragging) return;
+
+            const targetWidget = resolveWidget(e.target);
+            if (!targetWidget) return;
+
+            const targetSlotId = getWidgetSlotId(targetWidget);
+            if (targetSlotId !== state.sortDragging.slotId) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            targetWidget.classList.remove('drag-over-top', 'drag-over-bottom');
+
+            const sourceLayoutId = state.sortDragging.layoutId;
+            const targetLayoutId = targetWidget.getAttribute('data-layout-id');
+            if (sourceLayoutId === targetLayoutId) return;
+
+            // 计算插入位置
+            const rect = targetWidget.getBoundingClientRect();
+            const midY = rect.top + rect.height / 2;
+            const insertBefore = e.clientY < midY;
+
+            // 交给统一入口：DOM 移动 + 持久化
+            await saveWidgetSortOrder(sourceLayoutId, targetLayoutId, insertBefore, state.sortDragging.slotId);
+        });
+
+        console.log('[ThemeEditor] Widget sortable initialized with delegation');
     }
 
     /**
-     * 保存部件排序顺序
+     * 统一排序持久化 — 所有"插槽内顺序变更"的唯一出口
+     *
+     * 读取 iframe 中指定 slotId 对应 DOM 的当前顺序，
+     * 收集 { layoutId: index } 并 POST /update-sort 保存。
+     *
+     * @param {string} slotId 插槽 ID（data-wslot 值）
+     * @returns {Promise<boolean>} 是否保存成功
      */
-    async function saveWidgetSortOrder(sourceLayoutId, targetLayoutId, insertBefore, slotId) {
+    async function persistSlotSortOrder(slotId) {
         const iframe = elements.previewFrame;
-        if (!iframe || !iframe.contentDocument) return;
-        
+        if (!iframe || !iframe.contentDocument || !slotId) return false;
+
         const iframeDoc = iframe.contentDocument;
-        const sourceEl = iframeDoc.querySelector(`[data-layout-id="${sourceLayoutId}"]`);
-        const targetEl = iframeDoc.querySelector(`[data-layout-id="${targetLayoutId}"]`);
-        
-        if (!sourceEl || !targetEl) return;
-        
-        // 先在 DOM 中移动
-        if (insertBefore) {
-            targetEl.parentNode.insertBefore(sourceEl, targetEl);
-        } else {
-            targetEl.parentNode.insertBefore(sourceEl, targetEl.nextSibling);
-        }
-        
-        // 收集新的排序顺序
-        const slot = targetEl.parentNode;
-        const widgets = slot.querySelectorAll('[data-layout-id]');
+        const slotEl = iframeDoc.querySelector(`[data-wslot="${slotId}"]`) ||
+                       iframeDoc.querySelector(`[data-slot="${slotId}"]`);
+        if (!slotEl) return false;
+
+        // 找到装部件的容器：取第一个带 data-layout-id 的节点的 parentNode
+        const firstWidget = slotEl.querySelector('[data-layout-id]');
+        const container = firstWidget ? firstWidget.parentNode : slotEl;
+
+        // 只取容器下直接子级中带 data-layout-id 的部件，避免嵌套 slot 内部件混入
+        const widgets = Array.from(container.children).filter(el => el.hasAttribute('data-layout-id'));
+        if (widgets.length === 0) return true; // 无部件则不需要排序
+
         const sortData = {};
-        
         widgets.forEach((widget, index) => {
-            const layoutId = widget.getAttribute('data-layout-id');
-            sortData[layoutId] = index;
+            sortData[widget.getAttribute('data-layout-id')] = index;
         });
-        
+
         try {
-            // 调用后端 API 保存排序
             const response = await fetch(config.apiBase + '/update-sort', {
                 method: 'POST',
                 headers: {
@@ -4707,24 +4757,53 @@
                     sort_data: sortData
                 })
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
                 showToast('排序已保存', 'success');
-                
-                // 更新移动按钮状态
                 updateSiblingMoveButtons(slotId);
+                return true;
             } else {
-                // 保存失败，恢复原位置
                 loadLayoutPreview();
                 showToast(result.message || '排序保存失败', 'error');
+                return false;
             }
         } catch (err) {
-            console.error('[ThemeEditor] Save sort order error:', err);
+            console.error('[ThemeEditor] persistSlotSortOrder error:', err);
             loadLayoutPreview();
             showToast('保存排序时发生错误', 'error');
+            return false;
         }
+    }
+
+    /**
+     * 在 iframe 中移动部件 DOM 位置，然后持久化该 slot 的排序
+     *
+     * @param {string} sourceLayoutId 被移动的部件
+     * @param {string} targetLayoutId 目标部件（拖放到它上面/下面）
+     * @param {boolean} insertBefore true=插到 target 前面，false=插到 target 后面
+     * @param {string} slotId 所在插槽 ID
+     */
+    async function saveWidgetSortOrder(sourceLayoutId, targetLayoutId, insertBefore, slotId) {
+        const iframe = elements.previewFrame;
+        if (!iframe || !iframe.contentDocument) return;
+
+        const iframeDoc = iframe.contentDocument;
+        const sourceEl = iframeDoc.querySelector(`[data-layout-id="${sourceLayoutId}"]`);
+        const targetEl = iframeDoc.querySelector(`[data-layout-id="${targetLayoutId}"]`);
+
+        if (!sourceEl || !targetEl) return;
+
+        // 在 DOM 中移动
+        if (insertBefore) {
+            targetEl.parentNode.insertBefore(sourceEl, targetEl);
+        } else {
+            targetEl.parentNode.insertBefore(sourceEl, targetEl.nextSibling);
+        }
+
+        // 委托给统一排序持久化
+        await persistSlotSortOrder(slotId);
     }
 
     /**
