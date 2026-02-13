@@ -124,16 +124,38 @@ run_privileged() {
   return 1
 }
 
-# Mac：用 Homebrew 安装 PHP 编译依赖（openssl、libxml2、curl 等）
-install_macos_brew_deps() {
-  if ! command -v brew &>/dev/null; then
-    echo "ERROR: Homebrew not found. Install from https://brew.sh then re-run." >&2
+# Mac：确保 Homebrew 已安装（未安装则自动安装）
+ensure_brew_installed() {
+  if command -v brew &>/dev/null; then
+    return 0
+  fi
+  # 安装后可能未加入当前 shell 的 PATH，先尝试常见路径
+  if [[ -x /opt/homebrew/bin/brew ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+    return 0
+  fi
+  if [[ -x /usr/local/bin/brew ]]; then
+    eval "$(/usr/local/bin/brew shellenv)"
+    return 0
+  fi
+  echo "Homebrew not found. Installing Homebrew ..."
+  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || return 1
+  # 安装完成后注入 PATH（Apple Silicon: /opt/homebrew，Intel: /usr/local）
+  if [[ -x /opt/homebrew/bin/brew ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  elif [[ -x /usr/local/bin/brew ]]; then
+    eval "$(/usr/local/bin/brew shellenv)"
+  else
+    echo "ERROR: Homebrew install may have failed. Try: https://brew.sh" >&2
     return 1
   fi
+}
+
+# Mac：用 Homebrew 安装 PHP 编译依赖（openssl、libxml2、curl 等）
+install_macos_brew_deps() {
+  ensure_brew_installed || return 1
   echo "Installing macOS build dependencies (brew)..."
-  # 清理未完成/锁，避免 brew 卡住
   brew cleanup --prune=all 2>/dev/null || true
-  # PHP 源码编译所需
   brew install pkg-config zlib openssl libxml2 libxslt oniguruma curl libzip icu4c bison re2c
 }
 
@@ -261,11 +283,7 @@ install_php_from_source() {
 
   local brew_prefix=""
   if [[ "$PLATFORM" == "mac" ]]; then
-    if ! command -v brew &>/dev/null; then
-      echo "ERROR: Homebrew not found. Install from https://brew.sh then re-run." >&2
-      popd >/dev/null
-      return 1
-    fi
+    ensure_brew_installed || { popd >/dev/null; return 1; }
     brew_prefix="$(brew --prefix)"
     export PATH="$brew_prefix/bin:$PATH"
     export PKG_CONFIG_PATH="$brew_prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
