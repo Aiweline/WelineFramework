@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# 安装脚本只负责：安装 PHP 主版本（Linux/macOS 下自动安装编译依赖并下载 php-src 编译到 extend/server/php）、
-# 将 extend/server/* 加入 PATH，然后交给 run.php 处理其余（扩展/函数依赖、php.ini、env、composer、setup 等）。
+# 安装脚本只负责：安装 PHP 主版本（Linux 下编译到 extend/server/php；macOS 下用 Homebrew 安装 PHP 及扩展，依赖可控）、
+# 将 extend/server/* 或 brew PHP 加入 PATH，然后交给 run.php 处理其余（php.ini、env、composer、setup 等）。
 # SOLID：Windows 流程由 install.bat 独立处理；本脚本仅处理 Linux/macOS。
 # 用法：./install.sh [--path-only] [php] [pgsql] [mysql]  无参数时默认 php + pgsql（仅 PATH，pgsql/mysql 不安装只检测）
 # 兼容：Bash 3.2+（macOS 默认）、GNU/BSD grep、常见 Linux 发行版
@@ -151,11 +151,27 @@ ensure_brew_installed() {
   fi
 }
 
-# Mac：用 Homebrew 安装 PHP 编译依赖（openssl、libxml2、curl 等）
-install_macos_brew_deps() {
+# Mac：用 Homebrew 安装 PHP 及扩展（不自行编译，依赖由 brew 管理）
+install_php_via_brew() {
   ensure_brew_installed || return 1
-  echo "Installing macOS build dependencies (brew)..."
-  brew install pkg-config zlib openssl libxml2 libxslt oniguruma curl libzip icu4c libiconv libpq bison re2c
+  local formula="php"
+  # 指定主版本时使用 php@8.4 等，便于与项目要求一致
+  if [[ "$PHP_VERSION" == "8.4" ]]; then
+    formula="php@8.4"
+  elif [[ "$PHP_VERSION" == "8.3" ]]; then
+    formula="php@8.3"
+  fi
+  echo "Installing PHP via Homebrew ($formula)..."
+  brew install "$formula" || return 1
+  local php_prefix
+  php_prefix="$(brew --prefix "$formula" 2>/dev/null)"
+  [[ -z "$php_prefix" ]] && php_prefix="$(brew --prefix php 2>/dev/null)"
+  if [[ -n "$php_prefix" ]] && [[ -d "$php_prefix/bin" ]]; then
+    add_to_path "$php_prefix/bin"
+    echo "PHP (brew $formula) added to PATH: $php_prefix/bin"
+  else
+    echo "WARNING: Could not get brew PHP path. Ensure \`php\` is in your PATH." >&2
+  fi
 }
 
 install_php_system_deps() {
@@ -194,11 +210,7 @@ install_php_system_deps() {
     return 1
   fi
 
-  if [[ "$PLATFORM" == "mac" ]]; then
-    install_macos_brew_deps
-    return $?
-  fi
-
+  # Mac 不再在此安装依赖，PHP 由 install_php_via_brew 用 brew 安装
   echo "ERROR: Unsupported platform for dependency install: $PLATFORM" >&2
   return 1
 }
@@ -383,10 +395,43 @@ get_installed_php_major_minor() {
   fi
 }
 
-# ---- PHP ----（与 Windows 一致：检测到 extend/server/php 且版本符合则跳过，不重复编译安装）
+# ---- PHP ----（Linux：检测 extend/server/php 或编译安装；Mac：仅用 Homebrew 安装，不自行编译）
 install_php() {
   local dest="$SERVER_DIR/php"
   local php_exe=""
+
+  # Mac：统一用 Homebrew 安装 PHP 及扩展，依赖由 brew 管理，不自行编译
+  if [[ "$PLATFORM" == "mac" ]]; then
+    if [[ "$PATH_ONLY" == true ]]; then
+      local p
+      for p in "$(brew --prefix php@8.4 2>/dev/null)/bin" "$(brew --prefix php@8.3 2>/dev/null)/bin" "$(brew --prefix php 2>/dev/null)/bin"; do
+        [[ -d "$p" ]] && add_to_path "$p"
+      done
+      echo "(--path-only) Brew PHP paths added if present."
+      return
+    fi
+    ensure_brew_installed || return 1
+    # 尝试从 PATH 或常见 brew 路径获取已有 php
+    php_exe="$(command -v php 2>/dev/null)"
+    [[ -z "$php_exe" ]] && [[ -x "$(brew --prefix php 2>/dev/null)/bin/php" ]] && php_exe="$(brew --prefix php)/bin/php"
+    [[ -z "$php_exe" ]] && [[ -x "$(brew --prefix php@8.4 2>/dev/null)/bin/php" ]] && php_exe="$(brew --prefix php@8.4)/bin/php"
+    [[ -z "$php_exe" ]] && [[ -x "$(brew --prefix php@8.3 2>/dev/null)/bin/php" ]] && php_exe="$(brew --prefix php@8.3)/bin/php"
+    if [[ -n "$php_exe" ]]; then
+      local installed
+      installed=$(get_installed_php_major_minor "$php_exe")
+      if [[ -n "$installed" ]] && [[ "$installed" == "$PHP_VERSION" ]]; then
+        local php_prefix
+        php_prefix="$(brew --prefix php@${PHP_VERSION} 2>/dev/null)" || php_prefix="$(brew --prefix php 2>/dev/null)"
+        [[ -d "$php_prefix/bin" ]] && add_to_path "$php_prefix/bin"
+        echo "PHP already installed via brew (version $installed). Skipping."
+        return
+      fi
+    fi
+    install_php_via_brew
+    return
+  fi
+
+  # Linux：检测 extend/server/php 或从源码编译
   [[ -x "$dest/php.exe" ]] && php_exe="$dest/php.exe"
   [[ -z "$php_exe" ]] && [[ -x "$dest/php" ]] && php_exe="$dest/php"
   [[ -z "$php_exe" ]] && [[ -x "$dest/bin/php" ]] && php_exe="$dest/bin/php"
