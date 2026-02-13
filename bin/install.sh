@@ -340,6 +340,9 @@ install_php_from_source() {
 
   if [[ "$PLATFORM" == "mac" ]]; then
     local deps_prefix="$SERVER_DIR/deps"
+    export PATH="$deps_prefix/bin:$PATH"
+    export PKG_CONFIG="${deps_prefix}/bin/pkg-config"
+    [[ ! -x "$PKG_CONFIG" ]] && PKG_CONFIG="${deps_prefix}/bin/pkgconf"
     export CPPFLAGS="-I$deps_prefix/include ${CPPFLAGS:-}"
     export LDFLAGS="-L$deps_prefix/lib ${LDFLAGS:-}"
     export PKG_CONFIG_PATH="$deps_prefix/lib/pkgconfig:$deps_prefix/lib64/pkgconfig:${PKG_CONFIG_PATH:-}"
