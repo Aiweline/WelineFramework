@@ -14,7 +14,8 @@ class RouterRunBefore implements ObserverInterface
     {
         $request_uri = $_SERVER['REQUEST_URI']??'';
         # 移除查询字符串
-        $path = strtolower(parse_url($request_uri, PHP_URL_PATH));
+        $path_original = parse_url($request_uri, PHP_URL_PATH);
+        $path = $path_original !== false ? strtolower($path_original) : '';
         # 匹配静态资源/static/
         if (str_starts_with($path, '/static/')) {
             $file_path = BP .'/pub' . $path;
@@ -36,24 +37,43 @@ class RouterRunBefore implements ObserverInterface
         
         # 匹配模块静态资源（开发环境下直接从模块目录加载）
         # 路径格式: /Weline/ModuleName/view/statics/... 或 /Vendor/ModuleName/view/statics/...
-        if (preg_match('#^/([A-Za-z0-9_]+)/([A-Za-z0-9_]+)/view/statics/(.+)$#', $path, $matches)) {
+        if (preg_match('#^/([a-z0-9_]+)/([a-z0-9_]+)/view/statics/(.+)$#', $path, $matches)) {
             $vendor = $matches[1];
             $module = $matches[2];
             $file = $matches[3];
-            
-            // 构建模块静态文件路径
             $module_file_path = BP . '/app/code/' . $vendor . '/' . $module . '/view/statics/' . $file;
-            if(IS_WIN){
-                $module_file_path = str_replace('/','\\',$module_file_path);
-                $module_file_path = str_replace('\\\\','\\',$module_file_path);
-            }else{
-                $module_file_path = str_replace('//','/',$module_file_path);
+            if (IS_WIN) {
+                $module_file_path = str_replace('/', '\\', $module_file_path);
+                $module_file_path = str_replace('\\\\', '\\', $module_file_path);
+            } else {
+                $module_file_path = str_replace('//', '/', $module_file_path);
             }
             if (is_file($module_file_path)) {
                 /**@var Core $core */
                 $core = ObjectManager::getInstance(Core::class);
                 $static_url = '/app/code/' . $vendor . '/' . $module . '/view/statics/' . $file;
                 $core->StaticFile($static_url, true);
+                exit;
+            }
+        }
+        # 匹配主题资源（开发环境下直接从模块 view/theme 目录加载，如 theme:css）
+        # 路径格式: /Vendor/ModuleName/view/theme/...
+        if (preg_match('#^/([a-z0-9_]+)/([a-z0-9_]+)/view/theme/(.+)$#', $path, $matches) && $path_original !== false) {
+            $file = $matches[3];
+            $suffix = '/view/theme/' . $file;
+            $prefix_len = strlen($path_original) - strlen($suffix);
+            $vendor_module = $prefix_len > 0 ? substr($path_original, 1, $prefix_len - 1) : '';
+            $theme_file_path = BP . '/app/code/' . str_replace('/', DIRECTORY_SEPARATOR, $vendor_module) . DIRECTORY_SEPARATOR . 'view' . DIRECTORY_SEPARATOR . 'theme' . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $file);
+            if (IS_WIN) {
+                $theme_file_path = str_replace('/', '\\', $theme_file_path);
+                $theme_file_path = str_replace('\\\\', '\\', $theme_file_path);
+            } else {
+                $theme_file_path = str_replace('//', '/', $theme_file_path);
+            }
+            if (is_file($theme_file_path)) {
+                /**@var Core $core */
+                $core = ObjectManager::getInstance(Core::class);
+                $core->StaticFile($path_original, true);
                 exit;
             }
         }

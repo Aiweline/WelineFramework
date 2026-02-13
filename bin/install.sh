@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 安装脚本只负责：安装 PHP 主版本（Linux 下编译到 extend/server/php；macOS 下用 Homebrew 安装 PHP 及扩展，依赖可控）、
-# 将 extend/server/* 或 brew PHP 加入 PATH，然后交给 run.php 处理其余（php.ini、env、composer、setup 等）。
+# 将 extend/server/php/bin 与 extend/server/pgsql/bin 加入 PATH（Linux/Mac 写 shell 配置；Windows 由 install.bat 写用户 PATH），
+# 然后交给 run.php 处理其余（php.ini、env、composer、setup 等）。所有系统安装后均配置好 php 与 pgsql 环境变量。
 # SOLID：Windows 流程由 install.bat 独立处理；本脚本仅处理 Linux/macOS。
 # 用法：./bin/install.sh 或 bash bin/install.sh（必须用 bash，不要用 sh）
 # 兼容：Bash 3.2+（macOS 默认）、GNU/BSD grep、常见 Linux 发行版
@@ -99,14 +100,20 @@ case "$OS" in
   *)       echo "Unsupported OS: $OS. On Windows use: bin\\install.bat" >&2; exit 1 ;;
 esac
 
-# 向 PATH 追加（避免重复）；同时在本 shell 中生效，便于后续 command -v 等能找到
+# 向 PATH 追加（避免重复）；同时在本 shell 中生效；Mac/Linux 下若配置文件不存在则创建，确保安装后新终端可用 php/pgsql
 add_to_path() {
   local dir="$1"
   [[ ! -d "$dir" ]] && return
   export PATH="$dir:$PATH"
   local line="export PATH=\"$dir:\$PATH\""
-  for f in ~/.bashrc ~/.zshrc ~/.bash_profile; do
-    [[ -f "$f" ]] || continue
+  # Linux：.bashrc + .profile（登录 shell 常用）+ .bash_profile + .zshrc
+  # Mac：默认 zsh，.zshrc + .zprofile（登录 shell）+ .bash_profile + .bashrc
+  local rc_files=(~/.bashrc ~/.profile ~/.bash_profile ~/.zshrc)
+  [[ "$PLATFORM" == "mac" ]] && rc_files=(~/.zshrc ~/.zprofile ~/.bash_profile ~/.bashrc)
+  for f in "${rc_files[@]}"; do
+    if [[ ! -f "$f" ]]; then
+      touch "$f" 2>/dev/null || continue
+    fi
     if grep -qF "$dir" "$f" 2>/dev/null; then
       continue
     fi
@@ -553,6 +560,10 @@ for c in "${COMPONENTS[@]}"; do
   esac
 done
 
+# 安装后：将 php 与 pgsql 的 bin 目录写入环境变量（Linux/Mac 新开终端即可用 php、psql）
+[[ -d "$SERVER_DIR/php/bin" ]] && add_to_path "$SERVER_DIR/php/bin"
+[[ -d "$SERVER_DIR/pgsql/bin" ]] && add_to_path "$SERVER_DIR/pgsql/bin"
+
 # 安装后：由 setup/server_installer/run.php 执行（与 Windows 一致；无 PHP 则报错退出）
 # 优先用 extend/server/php/bin/php（含 Mac 下指向 brew 的软链），再尝试 PATH 中的 php，Mac 下再显式查 brew 路径
 PHP_EXE=""
@@ -571,5 +582,7 @@ fi
 echo ""
 (cd "$ROOT" && "$PHP_EXE" setup/server_installer/run.php) || exit 1
 echo ""
-echo "Done. To apply PATH in this shell, run: source ~/.bashrc   (or source ~/.zshrc)"
-echo "Or open a new terminal."
+echo "Done. php and pgsql have been added to PATH (written to shell config)."
+echo "  Linux: ~/.bashrc, ~/.profile  |  Mac: ~/.zshrc, ~/.zprofile"
+echo "To use in this terminal now:  source ~/.bashrc   (Linux) or source ~/.zshrc   (Mac)"
+echo "Or open a new terminal window."

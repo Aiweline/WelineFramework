@@ -29,4 +29,33 @@ class TemplateTest extends TestCore
             self::assertEquals('/static/' . $theme . '/Weline/Admin/view/statics/css/index.css', $content, '解析静态资源');
         }
     }
+
+    /**
+     * <css> 标签对应路径：Weline_Admin::backend/lib/... 必须输出正确格式（无重复 statics、带模块前缀）
+     */
+    public function testFetchTagSourceCssStylePath(): void
+    {
+        $template = Template::getInstance();
+        $path = 'Weline_Admin::backend/lib/bootstrap-5.1.3-dist/css/bootstrap.min.css';
+        $content = $template->fetchTagSource(
+            \Weline\Framework\View\Data\DataInterface::dir_type_STATICS,
+            $path
+        );
+        $pathOnly = preg_replace('#\?v=.*$#', '', $content);
+        if (DEV) {
+            self::assertEquals(
+                '/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-dist/css/bootstrap.min.css',
+                $pathOnly,
+                '开发环境：statics 路径应为 /Weline/Admin/view/statics/backend/lib/...'
+            );
+        } else {
+            $theme = Env::get('theme')['path'] ?? Env::default_theme_DATA['path'];
+            $theme = str_replace('\\', '/', $theme);
+            self::assertEquals(
+                '/static/' . $theme . '/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-dist/css/bootstrap.min.css',
+                $pathOnly,
+                '生产环境：statics 路径应为 /static/{theme}/Weline/Admin/view/statics/...'
+            );
+        }
+    }
 }
