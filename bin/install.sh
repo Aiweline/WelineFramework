@@ -155,7 +155,7 @@ ensure_brew_installed() {
 install_macos_brew_deps() {
   ensure_brew_installed || return 1
   echo "Installing macOS build dependencies (brew)..."
-  brew install pkg-config zlib openssl libxml2 libxslt oniguruma curl libzip icu4c libiconv bison re2c
+  brew install pkg-config zlib openssl libxml2 libxslt oniguruma curl libzip icu4c libiconv libpq bison re2c
 }
 
 install_php_system_deps() {
@@ -285,9 +285,10 @@ install_php_from_source() {
     ensure_brew_installed || { popd >/dev/null; return 1; }
     brew_prefix="$(brew --prefix)"
     export PATH="$brew_prefix/bin:$PATH"
-    export PKG_CONFIG_PATH="$brew_prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-    export CPPFLAGS="-I$brew_prefix/include ${CPPFLAGS:-}"
-    export LDFLAGS="-L$brew_prefix/lib ${LDFLAGS:-}"
+    # 包含 icu4c、libzip、oniguruma 等 opt 公式的 pkgconfig，便于 configure 一次性找到所有依赖
+    export PKG_CONFIG_PATH="$brew_prefix/lib/pkgconfig:$brew_prefix/opt/icu4c/lib/pkgconfig:$brew_prefix/opt/libzip/lib/pkgconfig:$brew_prefix/opt/oniguruma/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+    export CPPFLAGS="-I$brew_prefix/include -I$brew_prefix/opt/icu4c/include ${CPPFLAGS:-}"
+    export LDFLAGS="-L$brew_prefix/lib -L$brew_prefix/opt/icu4c/lib ${LDFLAGS:-}"
   fi
 
   local -a conf
@@ -321,22 +322,30 @@ install_php_from_source() {
       "--with-libxml=$brew_prefix/opt/libxml2"
       "--with-xsl=$brew_prefix/opt/libxslt"
       "--with-iconv=$brew_prefix/opt/libiconv"
+      "--with-libzip=$brew_prefix/opt/libzip"
+      "--with-onig=$brew_prefix/opt/oniguruma"
+      "--with-pgsql=$brew_prefix/opt/libpq"
     )
   fi
 
-  if command -v pkg-config &>/dev/null && pkg-config --exists libzip 2>/dev/null; then
-    conf+=("--with-zip")
-  else
-    echo "libzip not found; building PHP without zip extension."
+  if [[ "$PLATFORM" != "mac" ]]; then
+    if command -v pkg-config &>/dev/null && pkg-config --exists libzip 2>/dev/null; then
+      conf+=("--with-zip")
+    else
+      echo "libzip not found; building PHP without zip extension."
+    fi
   fi
 
   echo "Configuring php-src ..."
   if [[ "$PLATFORM" == "mac" && -n "$brew_prefix" ]]; then
     (
       export PATH="$brew_prefix/bin:$PATH"
-      export PKG_CONFIG_PATH="$brew_prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-      export CPPFLAGS="-I$brew_prefix/include ${CPPFLAGS:-}"
-      export LDFLAGS="-L$brew_prefix/lib ${LDFLAGS:-}"
+      export PKG_CONFIG_PATH="$brew_prefix/lib/pkgconfig:$brew_prefix/opt/icu4c/lib/pkgconfig:$brew_prefix/opt/libzip/lib/pkgconfig:$brew_prefix/opt/oniguruma/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+      export CPPFLAGS="-I$brew_prefix/include -I$brew_prefix/opt/icu4c/include ${CPPFLAGS:-}"
+      export LDFLAGS="-L$brew_prefix/lib -L$brew_prefix/opt/icu4c/lib ${LDFLAGS:-}"
+      # 显式指定 ICU，避免 configure 报 icu-uc/icu-io/icu-i18n not found
+      export ICU_CFLAGS="-I$brew_prefix/opt/icu4c/include"
+      export ICU_LIBS="-L$brew_prefix/opt/icu4c/lib -licuuc -licui18n -licudata"
       "${conf[@]}"
     )
   else
