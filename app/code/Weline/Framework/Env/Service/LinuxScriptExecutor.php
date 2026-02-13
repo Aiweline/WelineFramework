@@ -110,12 +110,19 @@ class LinuxScriptExecutor implements InstallScriptExecutorInterface
 
     /**
      * 解析脚本路径
+     * macOS (Darwin) 优先使用 script_darwin，否则使用 script_linux
      */
     private function resolveScriptPath(array $item, string $envDir): ?string
     {
-        // 优先使用 script_linux
-        if (isset($item['script_linux']) && !empty($item['script_linux'])) {
-            $path = $envDir . $item['script_linux'];
+        $script = null;
+        if (PHP_OS_FAMILY === 'Darwin' && isset($item['script_darwin']) && $item['script_darwin'] !== '') {
+            $script = $item['script_darwin'];
+        }
+        if ($script === null && isset($item['script_linux']) && $item['script_linux'] !== '') {
+            $script = $item['script_linux'];
+        }
+        if ($script !== null) {
+            $path = $envDir . $script;
             if (is_file($path) && $this->isPathSafe($path, $envDir)) {
                 return $path;
             }
