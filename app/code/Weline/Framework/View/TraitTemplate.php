@@ -495,28 +495,34 @@ trait TraitTemplate
     }
 
     /**
-     * @DESC         |转化静态文件的URL路径
+     * @DESC         |转化静态文件的URL路径（将磁盘路径转为可访问的 URL 路径）
      *
      * 参数区：
      *
-     * @param string $real_path
+     * @param string $real_path 磁盘上的真实路径（可为反斜杠或正斜杠）
      *
-     * @return string
+     * @return string 以 / 开头的 URL 路径，如 /Aiweline/PlayingInChina/view/statics/...
      */
     private function getUrlPath(string $real_path): string
     {
+        $normalized = str_replace('\\', '/', $real_path);
         $url_path = '';
         if (DEV) {
-            if (is_int(strpos($real_path, APP_CODE_PATH))) {
-                $url_path = rtrim(str_replace('\\', '/', DS . str_replace(APP_CODE_PATH, '', $real_path)), '/');
-            } elseif (is_int(strpos($real_path, VENDOR_PATH))) {
-                $url_path = rtrim(str_replace('\\', '/', DS . str_replace(VENDOR_PATH, '', $real_path)), '/');
+            $appCode = str_replace('\\', '/', APP_CODE_PATH);
+            $vendorPath = defined('VENDOR_PATH') ? str_replace('\\', '/', VENDOR_PATH) : '';
+            if ($appCode !== '' && str_starts_with($normalized, $appCode)) {
+                $url_path = '/' . ltrim(substr($normalized, strlen($appCode)), '/');
+            } elseif ($vendorPath !== '' && str_starts_with($normalized, $vendorPath)) {
+                $url_path = '/' . ltrim(substr($normalized, strlen($vendorPath)), '/');
             }
         } else {
-            # 检测模块位置
-            $url_path = rtrim(str_replace('\\', '/', DS . str_replace(PUB, '', $real_path)), '/');
+            $pubPath = defined('PUB') ? str_replace('\\', '/', PUB) : '';
+            if ($pubPath !== '' && str_starts_with($normalized, $pubPath)) {
+                $url_path = '/' . ltrim(substr($normalized, strlen($pubPath)), '/');
+            }
         }
-        return $url_path;
+        // 保留末尾 /，供调用方 rtrim(..., 'statics') 时不会误删 URL 中的 statics 目录名
+        return $url_path === '' ? '' : rtrim($url_path, '/') . '/';
     }
 
     /**
