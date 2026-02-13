@@ -124,116 +124,17 @@ run_privileged() {
   return 1
 }
 
-fetch_and_extract_source() {
-  local name="$1"
-  local version="$2"
-  local url="$3"
-  local work_root="$ROOT/var/tmp/source-deps"
-  local archive="$work_root/${url##*/}"
-  local extract_root="$work_root/${name}-${version}-src"
-
-  mkdir -p "$work_root"
-  if [[ ! -f "$archive" ]]; then
-    echo "Downloading ${name}-${version} ..."
-    if command -v curl &>/dev/null; then
-      curl -L -f -o "$archive" "$url"
-    elif command -v wget &>/dev/null; then
-      wget -O "$archive" "$url"
-    else
-      echo "ERROR: curl or wget is required to download ${name}-${version}." >&2
-      return 1
-    fi
-  else
-    echo "Using cached source archive: $archive"
-  fi
-
-  rm -rf "$extract_root"
-  mkdir -p "$extract_root"
-  tar -xf "$archive" -C "$extract_root"
-
-  local src_dir
-  src_dir=$(find "$extract_root" -mindepth 1 -maxdepth 1 -type d | head -1)
-  if [[ -z "$src_dir" ]]; then
-    src_dir="$extract_root"
-  fi
-  echo "$src_dir"
-}
-
-build_autotools_dep() {
-  local deps_prefix="$1"
-  local name="$2"
-  local version="$3"
-  local url="$4"
-  shift 4
-  local marker="$deps_prefix/.built-${name}-${version}"
-  if [[ -f "$marker" ]]; then
-    echo "${name}-${version} already built."
-    return 0
-  fi
-  local src_dir
-  src_dir=$(fetch_and_extract_source "$name" "$version" "$url") || return 1
-  pushd "$src_dir" >/dev/null
-  ./configure --prefix="$deps_prefix" "$@"
-  make -j"${BUILD_JOBS:-2}"
-  make install
-  popd >/dev/null
-  touch "$marker"
-}
-
-build_openssl_dep() {
-  local deps_prefix="$1"
-  local version="$2"
-  local url="$3"
-  local marker="$deps_prefix/.built-openssl-${version}"
-  if [[ -f "$marker" ]]; then
-    echo "openssl-${version} already built."
-    return 0
-  fi
-  local src_dir
-  src_dir=$(fetch_and_extract_source "openssl" "$version" "$url") || return 1
-  pushd "$src_dir" >/dev/null
-  ./config --prefix="$deps_prefix" --openssldir="$deps_prefix/ssl" shared zlib
-  make -j"${BUILD_JOBS:-2}"
-  make install_sw
-  popd >/dev/null
-  touch "$marker"
-}
-
-install_macos_source_deps() {
-  if ! xcode-select -p &>/dev/null; then
-    echo "ERROR: Xcode Command Line Tools not found. Run: xcode-select --install" >&2
+# Mac：用 Homebrew 安装 PHP 编译依赖（openssl、libxml2、curl 等）
+install_macos_brew_deps() {
+  if ! command -v brew &>/dev/null; then
+    echo "ERROR: Homebrew not found. Install from https://brew.sh then re-run." >&2
     return 1
   fi
-  if ! command -v make &>/dev/null; then
-    echo "ERROR: make not found. Install Xcode Command Line Tools first." >&2
-    return 1
-  fi
-  if ! command -v tar &>/dev/null; then
-    echo "ERROR: tar not found." >&2
-    return 1
-  fi
-  local deps_prefix="$SERVER_DIR/deps"
-  mkdir -p "$deps_prefix"
-  BUILD_JOBS=$(sysctl -n hw.ncpu 2>/dev/null || echo 2)
-
-  # 先编译 pkgconf，提供 pkg-config 能力，避免依赖系统包管理器
-  build_autotools_dep "$deps_prefix" "pkgconf" "2.3.0" "https://distfiles.dereferenced.org/pkgconf/pkgconf-2.3.0.tar.xz" || return 1
-  if [[ -x "$deps_prefix/bin/pkgconf" ]] && [[ ! -x "$deps_prefix/bin/pkg-config" ]]; then
-    ln -sf "$deps_prefix/bin/pkgconf" "$deps_prefix/bin/pkg-config"
-  fi
-
-  export PATH="$deps_prefix/bin:$PATH"
-  export CPPFLAGS="-I$deps_prefix/include ${CPPFLAGS:-}"
-  export LDFLAGS="-L$deps_prefix/lib ${LDFLAGS:-}"
-  export PKG_CONFIG_PATH="$deps_prefix/lib/pkgconfig:$deps_prefix/lib64/pkgconfig:${PKG_CONFIG_PATH:-}"
-
-  # 统一走源码编译，避免依赖 brew/macports
-  build_autotools_dep "$deps_prefix" "zlib" "1.3.1" "https://zlib.net/zlib-1.3.1.tar.gz" || return 1
-  build_openssl_dep "$deps_prefix" "3.3.2" "https://www.openssl.org/source/openssl-3.3.2.tar.gz" || return 1
-  build_autotools_dep "$deps_prefix" "libxml2" "2.12.10" "https://download.gnome.org/sources/libxml2/2.12/libxml2-2.12.10.tar.xz" --without-python || return 1
-  build_autotools_dep "$deps_prefix" "libxslt" "1.1.42" "https://download.gnome.org/sources/libxslt/1.1/libxslt-1.1.42.tar.xz" --with-libxml-prefix="$deps_prefix" || return 1
-  build_autotools_dep "$deps_prefix" "oniguruma" "6.9.9" "https://github.com/kkos/oniguruma/releases/download/v6.9.9/onig-6.9.9.tar.gz" || return 1
-  build_autotools_dep "$deps_prefix" "curl" "8.9.1" "https://curl.se/download/curl-8.9.1.tar.gz" --with-openssl="$deps_prefix" --with-zlib="$deps_prefix" || return 1
+  echo "Installing macOS build dependencies (brew)..."
+  # 清理未完成/锁，避免 brew 卡住
+  brew cleanup --prune=all 2>/dev/null || true
+  # PHP 源码编译所需
+  brew install pkg-config zlib openssl libxml2 libxslt oniguruma curl libzip icu4c bison re2c
 }
 
 install_php_system_deps() {
@@ -273,8 +174,7 @@ install_php_system_deps() {
   fi
 
   if [[ "$PLATFORM" == "mac" ]]; then
-    echo "Installing macOS source-built dependencies into $SERVER_DIR/deps ..."
-    install_macos_source_deps
+    install_macos_brew_deps
     return $?
   fi
 
@@ -359,24 +259,18 @@ install_php_from_source() {
   mkdir -p "$dest"
   pushd "$src_dir" >/dev/null
 
-  local deps_prefix=""
-  local mac_pkg_config=""
+  local brew_prefix=""
   if [[ "$PLATFORM" == "mac" ]]; then
-    deps_prefix="$SERVER_DIR/deps"
-    if [[ ! -d "$deps_prefix" ]] || ( [[ ! -x "$deps_prefix/bin/pkgconf" ]] && [[ ! -x "$deps_prefix/bin/pkg-config" ]] ); then
-      echo "Mac deps not found at $deps_prefix; building them first ..."
-      install_macos_source_deps || { popd >/dev/null; return 1; }
+    if ! command -v brew &>/dev/null; then
+      echo "ERROR: Homebrew not found. Install from https://brew.sh then re-run." >&2
+      popd >/dev/null
+      return 1
     fi
-    mac_pkg_config="$deps_prefix/bin/pkg-config"
-    [[ ! -x "$mac_pkg_config" ]] && mac_pkg_config="$deps_prefix/bin/pkgconf"
-    export PATH="$deps_prefix/bin:$PATH"
-    export PKG_CONFIG="$mac_pkg_config"
-    export CPPFLAGS="-I$deps_prefix/include -I$deps_prefix/include/libxml2 ${CPPFLAGS:-}"
-    export LDFLAGS="-L$deps_prefix/lib ${LDFLAGS:-}"
-    export PKG_CONFIG_PATH="$deps_prefix/lib/pkgconfig:$deps_prefix/lib64/pkgconfig:${PKG_CONFIG_PATH:-}"
-    # 显式设置 libxml 编译/链接参数，避免 configure 因找不到 pkg-config 而失败
-    export LIBXML_CFLAGS="-I$deps_prefix/include/libxml2"
-    export LIBXML_LIBS="-L$deps_prefix/lib -lxml2"
+    brew_prefix="$(brew --prefix)"
+    export PATH="$brew_prefix/bin:$PATH"
+    export PKG_CONFIG_PATH="$brew_prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+    export CPPFLAGS="-I$brew_prefix/include ${CPPFLAGS:-}"
+    export LDFLAGS="-L$brew_prefix/lib ${LDFLAGS:-}"
   fi
 
   local -a conf
@@ -402,13 +296,13 @@ install_php_from_source() {
     "--with-iconv"
   )
 
-  if [[ "$PLATFORM" == "mac" && -n "$deps_prefix" ]]; then
+  if [[ "$PLATFORM" == "mac" && -n "$brew_prefix" ]]; then
     conf+=(
-      "--with-openssl=$deps_prefix"
-      "--with-curl=$deps_prefix"
-      "--with-zlib=$deps_prefix"
-      "--with-libxml=$deps_prefix"
-      "--with-xsl=$deps_prefix"
+      "--with-openssl=$brew_prefix/opt/openssl"
+      "--with-curl=$brew_prefix/opt/curl"
+      "--with-zlib=$brew_prefix/opt/zlib"
+      "--with-libxml=$brew_prefix/opt/libxml2"
+      "--with-xsl=$brew_prefix/opt/libxslt"
     )
   fi
 
@@ -419,16 +313,12 @@ install_php_from_source() {
   fi
 
   echo "Configuring php-src ..."
-  if [[ "$PLATFORM" == "mac" && -n "$deps_prefix" ]]; then
-    # 在子 shell 内统一 export，确保 configure 及其子进程都能拿到依赖路径
+  if [[ "$PLATFORM" == "mac" && -n "$brew_prefix" ]]; then
     (
-      export PATH="$deps_prefix/bin:$PATH"
-      export PKG_CONFIG="$mac_pkg_config"
-      export PKG_CONFIG_PATH="$deps_prefix/lib/pkgconfig:$deps_prefix/lib64/pkgconfig:${PKG_CONFIG_PATH:-}"
-      export CPPFLAGS="-I$deps_prefix/include -I$deps_prefix/include/libxml2 ${CPPFLAGS:-}"
-      export LDFLAGS="-L$deps_prefix/lib ${LDFLAGS:-}"
-      export LIBXML_CFLAGS="-I$deps_prefix/include/libxml2"
-      export LIBXML_LIBS="-L$deps_prefix/lib -lxml2"
+      export PATH="$brew_prefix/bin:$PATH"
+      export PKG_CONFIG_PATH="$brew_prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+      export CPPFLAGS="-I$brew_prefix/include ${CPPFLAGS:-}"
+      export LDFLAGS="-L$brew_prefix/lib ${LDFLAGS:-}"
       "${conf[@]}"
     )
   else
