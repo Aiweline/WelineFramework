@@ -216,6 +216,7 @@ final class TagRegistry
             ),
 
             // ==================== 内容标签 (优先级 500) ====================
+            // lang/trans：编译期直接输出译文；仅 @lang 内联形式且含动态参数时由回调返回 PHP 代码
             new TagDefinition(
                 name: 'lang',
                 stage: TagDefinition::STAGE_COMPILE,
