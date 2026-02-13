@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# 安装脚本只负责：安装 PHP 主版本（Mac/Linux 下用 brew 或提示包管理器）、将 extend/server/* 加入 PATH，然后交给 run.php 处理其余（扩展/函数依赖、php.ini、env、composer、setup 等）。SOLID：其余一律由 PHP 根据环境自行处理。
+# 安装脚本只负责：安装 PHP 主版本（Linux/macOS 下自动安装编译依赖并下载 php-src 编译到 extend/server/php）、
+# 将 extend/server/* 加入 PATH，然后交给 run.php 处理其余（扩展/函数依赖、php.ini、env、composer、setup 等）。
+# SOLID：Windows 流程由 install.bat 独立处理；本脚本仅处理 Linux/macOS。
 # 用法：./install.sh [--path-only] [php] [pgsql] [mysql]  无参数时默认 php + pgsql（仅 PATH，pgsql/mysql 不安装只检测）
 # 兼容：Bash 3.2+（macOS 默认）、GNU/BSD grep、常见 Linux 发行版
 
@@ -71,7 +73,9 @@ get_php_version() {
   echo "8.4"
 }
 
-PHP_VERSION=$(get_php_version)
+# PHP 版本：与 Windows 一致，优先 weline.env 的 INSTALL_PHP_VERSION，否则从 composer.json 解析
+PHP_VERSION="${INSTALL_PHP_VERSION:-$(get_php_version)}"
+[[ "$PHP_VERSION" =~ ^([0-9]+\.[0-9]+) ]] && PHP_VERSION="${BASH_REMATCH[1]}"
 mkdir -p "$SERVER_DIR"
 
 # 安装前：weline.env 配置完整性检查（与 Windows 一致）
@@ -104,6 +108,183 @@ add_to_path() {
     echo "$line" >> "$f"
     echo "Added to $f: $dir"
   done
+}
+
+run_privileged() {
+  if [[ "$(id -u)" -eq 0 ]]; then
+    "$@"
+    return $?
+  fi
+  if command -v sudo &>/dev/null; then
+    sudo "$@"
+    return $?
+  fi
+  echo "ERROR: sudo not found and current user is not root. Please install dependencies manually." >&2
+  return 1
+}
+
+install_php_system_deps() {
+  if [[ "$PLATFORM" == "linux" ]]; then
+    if [[ -f /etc/debian_version ]]; then
+      echo "Installing Linux build dependencies (apt)..."
+      run_privileged apt-get update
+      run_privileged apt-get install -y \
+        build-essential autoconf libtool pkg-config bison re2c \
+        libxml2-dev libssl-dev libcurl4-openssl-dev libsqlite3-dev \
+        libzip-dev libpng-dev libjpeg-dev libfreetype6-dev libonig-dev \
+        libxslt1-dev libpq-dev libicu-dev zlib1g-dev
+      return
+    fi
+    if [[ -f /etc/redhat-release ]]; then
+      echo "Installing Linux build dependencies (dnf/yum)..."
+      if command -v dnf &>/dev/null; then
+        run_privileged dnf install -y \
+          gcc gcc-c++ make autoconf libtool pkgconfig bison re2c \
+          libxml2-devel openssl-devel libcurl-devel sqlite-devel \
+          libzip-devel libpng-devel libjpeg-turbo-devel freetype-devel \
+          oniguruma-devel libxslt-devel postgresql-devel libicu-devel zlib-devel
+      elif command -v yum &>/dev/null; then
+        run_privileged yum install -y \
+          gcc gcc-c++ make autoconf libtool pkgconfig bison re2c \
+          libxml2-devel openssl-devel libcurl-devel sqlite-devel \
+          libzip-devel libpng-devel libjpeg-turbo-devel freetype-devel \
+          oniguruma-devel libxslt-devel postgresql-devel libicu-devel zlib-devel
+      else
+        echo "ERROR: Neither dnf nor yum found. Please install PHP build dependencies manually." >&2
+        return 1
+      fi
+      return
+    fi
+    echo "ERROR: Unsupported Linux distribution for auto dependency install. Install build deps manually." >&2
+    return 1
+  fi
+
+  if [[ "$PLATFORM" == "mac" ]]; then
+    if ! xcode-select -p &>/dev/null; then
+      echo "ERROR: Xcode Command Line Tools not found. Run: xcode-select --install" >&2
+      return 1
+    fi
+    if ! command -v brew &>/dev/null; then
+      echo "ERROR: Homebrew not found. Install Homebrew first, then re-run installer." >&2
+      return 1
+    fi
+    echo "Installing macOS build dependencies (brew)..."
+    brew install pkg-config openssl libxml2 curl sqlite libzip libpng jpeg freetype oniguruma libxslt icu4c
+    return
+  fi
+
+  echo "ERROR: Unsupported platform for dependency install: $PLATFORM" >&2
+  return 1
+}
+
+download_php_source() {
+  local tarball="$1"
+  local found=""
+  for p in 20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0; do
+    local ver="${PHP_VERSION}.${p}"
+    local url="https://www.php.net/distributions/php-${ver}.tar.gz"
+    echo "Trying PHP source ${ver} ..."
+    if command -v curl &>/dev/null; then
+      if curl -L -s -f -o "$tarball" "$url"; then
+        found="$ver"
+        break
+      fi
+    elif command -v wget &>/dev/null; then
+      if wget -q -O "$tarball" "$url"; then
+        found="$ver"
+        break
+      fi
+    else
+      echo "ERROR: curl or wget is required to download php-src." >&2
+      return 1
+    fi
+  done
+  if [[ -z "$found" ]]; then
+    echo "Download failed. Check network/VPN, then retry." >&2
+    return 1
+  fi
+  echo "Downloaded php-src version: $found"
+  return 0
+}
+
+install_php_from_source() {
+  local dest="$1"
+  local build_root="$ROOT/var/tmp/php-build-${PHP_VERSION}-$$"
+  local tarball="$build_root/php-src.tar.gz"
+  mkdir -p "$build_root"
+
+  download_php_source "$tarball"
+
+  echo "Extracting php-src ..."
+  tar -xzf "$tarball" -C "$build_root"
+  local src_dir
+  src_dir=$(find "$build_root" -maxdepth 1 -type d -name "php-${PHP_VERSION}.*" | head -1)
+  if [[ -z "$src_dir" ]]; then
+    src_dir=$(find "$build_root" -maxdepth 1 -type d -name "php-*" | head -1)
+  fi
+  if [[ -z "$src_dir" ]]; then
+    echo "ERROR: php-src extract failed." >&2
+    rm -rf "$build_root"
+    return 1
+  fi
+
+  local jobs
+  jobs=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
+
+  mkdir -p "$dest"
+  pushd "$src_dir" >/dev/null
+
+  local -a conf
+  conf=(
+    "./configure"
+    "--prefix=$dest"
+    "--with-config-file-path=$dest"
+    "--with-config-file-scan-dir=$dest/conf.d"
+    "--with-zlib"
+    "--with-openssl"
+    "--with-curl"
+    "--enable-mbstring"
+    "--enable-exif"
+    "--enable-intl"
+    "--enable-bcmath"
+    "--enable-opcache"
+    "--enable-pcntl"
+    "--with-xsl"
+    "--with-pdo-pgsql"
+    "--with-pgsql"
+    "--with-sqlite3"
+    "--with-pdo-sqlite"
+    "--with-zip"
+    "--with-iconv"
+  )
+
+  if [[ "$PLATFORM" == "mac" ]]; then
+    conf+=(
+      "--with-openssl=$(brew --prefix openssl)"
+      "--with-curl=$(brew --prefix curl)"
+      "--with-zlib=$(brew --prefix)"
+      "--with-libxml=$(brew --prefix libxml2)"
+      "--with-xsl=$(brew --prefix libxslt)"
+      "--with-icu-dir=$(brew --prefix icu4c)"
+    )
+  fi
+
+  echo "Configuring php-src ..."
+  "${conf[@]}"
+  echo "Building php-src (jobs=$jobs) ..."
+  make -j"$jobs"
+  echo "Installing php to $dest ..."
+  make install
+
+  popd >/dev/null
+  rm -rf "$build_root"
+
+  if [[ ! -x "$dest/bin/php" ]] && [[ ! -x "$dest/php" ]]; then
+    echo "ERROR: PHP install verification failed at $dest." >&2
+    return 1
+  fi
+  echo "PHP installed to $dest."
+  return 0
 }
 
 # 从已安装的 php 可执行文件获取主次版本（如 8.4.16 -> 8.4），与 Windows install.bat 逻辑一致
@@ -144,32 +325,11 @@ install_php() {
     echo "(--path-only) PHP not found at $dest; add PATH manually if needed."
     return
   fi
-  if [[ "$PLATFORM" == "mac" ]]; then
-    if command -v brew &>/dev/null; then
-      echo "Installing PHP $PHP_VERSION via Homebrew..."
-      brew install "php@${PHP_VERSION}" 2>/dev/null || brew install php
-      local prefix
-      prefix=$(brew --prefix php 2>/dev/null || brew --prefix "php@${PHP_VERSION}" 2>/dev/null || echo "/usr/local")
-      add_to_path "$prefix/bin"
-      return
-    fi
-    echo "Homebrew not found. Download PHP from https://www.php.net/downloads and extract to $dest"
-    echo "Then run: $0 --path-only php"
-    return
-  fi
-  # Linux：不在此脚本安装 PHP，仅提示；扩展与依赖由 run.php 根据环境处理
-  if command -v php &>/dev/null; then
-    echo "PHP already in PATH ($(command -v php)). To use extend/server, install manually to $dest and run --path-only."
-    return
-  fi
-  echo "Linux: install PHP via your package manager, then run: $0 --path-only php"
-  if [[ -f /etc/debian_version ]]; then
-    echo "  e.g. sudo apt update && sudo apt install -y php-cli"
-  elif [[ -f /etc/redhat-release ]]; then
-    echo "  e.g. sudo dnf install -y php-cli"
-  else
-    echo "  Or download from https://www.php.net/downloads and extract to $dest"
-  fi
+  echo "Installing PHP $PHP_VERSION from php-src into $dest ..."
+  install_php_system_deps
+  install_php_from_source "$dest"
+  add_to_path "$dest"
+  [[ -d "$dest/bin" ]] && add_to_path "$dest/bin"
 }
 
 # ---- PostgreSQL ----（仅检测并加 PATH，不安装；安装与配置交给 run.php / env）
@@ -220,16 +380,17 @@ for c in "${COMPONENTS[@]}"; do
   esac
 done
 
-# 安装后：由 setup/server_installer/run.php 执行（composer、env、setup、server）
+# 安装后：由 setup/server_installer/run.php 执行（与 Windows 一致；无 PHP 则报错退出）
 PHP_EXE=""
 [[ -x "$SERVER_DIR/php/bin/php" ]] && PHP_EXE="$SERVER_DIR/php/bin/php"
 [[ -x "$SERVER_DIR/php/php" ]] && PHP_EXE="$SERVER_DIR/php/php"
 [[ -z "$PHP_EXE" ]] && command -v php &>/dev/null && PHP_EXE="php"
-if [[ -n "$PHP_EXE" ]] && "$PHP_EXE" -v &>/dev/null; then
-  echo ""
-  (cd "$ROOT" && "$PHP_EXE" setup/server_installer/run.php) || exit 1
+if [[ -z "$PHP_EXE" ]] || ! "$PHP_EXE" -v &>/dev/null; then
+  echo "ERROR: PHP not found. Install to $SERVER_DIR/php or add php to PATH." >&2
+  exit 1
 fi
-
+echo ""
+(cd "$ROOT" && "$PHP_EXE" setup/server_installer/run.php) || exit 1
 echo ""
 echo "Done. To apply PATH in this shell, run: source ~/.bashrc   (or source ~/.zshrc)"
 echo "Or open a new terminal."
