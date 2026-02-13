@@ -43,19 +43,15 @@ if (!is_dir($generatedCodeDir)) {
     echo "Created generated/code/ for Composer autoload.\n";
 }
 
-// 1. composer install（vendor 已存在则跳过）；composer 为独立命令，不能用 php composer 方式调用
+// 1. composer install（无论 vendor 是否存在都执行，确保依赖完整）；composer 为独立命令，不能用 php composer 方式调用
 if (!$fromStep5b) {
-    if (is_dir($projectRoot . DIRECTORY_SEPARATOR . 'vendor')) {
-        echo "vendor/ exists, skipping composer install.\n";
-    } else {
-        $composerPhar = $projectRoot . DIRECTORY_SEPARATOR . 'composer.phar';
-        $code = is_file($composerPhar)
-            ? $run($composerPhar . ' install -n --no-interaction')
-            : $runRaw('composer install -n --no-interaction');
-        if ($code !== 0) {
-            fwrite(STDERR, "ERROR: composer install failed (exit $code).\n");
-            exit(1);
-        }
+    $composerPhar = $projectRoot . DIRECTORY_SEPARATOR . 'composer.phar';
+    $code = is_file($composerPhar)
+        ? $run($composerPhar . ' install -n --no-interaction')
+        : $runRaw('composer install -n --no-interaction');
+    if ($code !== 0) {
+        fwrite(STDERR, "ERROR: composer install failed (exit $code).\n");
+        exit(1);
     }
 }
 
