@@ -529,14 +529,11 @@ CNF;
             return $opensslConfig;
         }
         
-        // 生成 SAN 配置文件（按域名哈希命名，避免冲突）
+        // 生成 SAN 配置文件（按域名哈希命名，避免冲突；始终覆盖以保证配置格式更新后生效，如 macOS/LibreSSL 兼容）
         $configHash = \md5($domain . \serialize($sanEntries));
         $sanConfigPath = $this->certBaseDir . "openssl_san_{$configHash}.cnf";
-        
-        if (!\is_file($sanConfigPath)) {
-            $sanConfig = $this->buildSanOpenSslConfig($domain, $sanEntries);
-            @\file_put_contents($sanConfigPath, $sanConfig);
-        }
+        $sanConfig = $this->buildSanOpenSslConfig($domain, $sanEntries);
+        @\file_put_contents($sanConfigPath, $sanConfig);
         
         if (\is_file($sanConfigPath)) {
             $opensslConfig['config'] = $sanConfigPath;
@@ -641,18 +638,24 @@ CNF;
         }
         $altNamesStr = \implode("\n", $altNames);
         
+        // 分离 CSR 与 x509 扩展：macOS/LibreSSL 在 openssl_csr_new 时加载 req_extensions，
+        // 若 v3_req 含仅证书适用的扩展（如 basicConstraints/keyUsage 等）会报 "Error loading extension section v3_req"。
+        // req_extensions 仅保留 subjectAltName；x509_extensions 用于签发时使用完整扩展。
         return <<<CNF
 [ req ]
 default_bits = 2048
 default_md = sha256
 distinguished_name = dn
 req_extensions = v3_req
-x509_extensions = v3_req
+x509_extensions = v3_ca
 
 [ dn ]
 CN = {$domain}
 
 [ v3_req ]
+subjectAltName = @alt_names
+
+[ v3_ca ]
 subjectKeyIdentifier = hash
 authorityKeyIdentifier = keyid:always,issuer
 basicConstraints = CA:true
