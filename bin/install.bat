@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableDelayedExpansion
-REM Install: PHP to extend\server\php + PATH; then run.php handles extensions, php.ini, composer, setup.
-REM pgsql/mysql: not downloaded; add to PATH only when already present.
+REM Install: PHP to extend\server\php + PATH; pgsql/mysql add to PATH when present. Then run.php handles extensions, php.ini, composer, setup.
+REM All systems: after install, php and pgsql (if present) are written to User PATH (Windows) or shell config (Linux/Mac via install.sh).
 
 cd /d "%~dp0.."
 goto :main
@@ -120,6 +120,10 @@ if defined MYSQL_OK (
 )
 :skip_mysql
 
+REM 安装后：将 php 与 pgsql 的目录写入用户 PATH（与 Linux/Mac 一致，所有系统都处理好）
+if exist "%PHP_DIR%\php.exe" call :add_path "%PHP_DIR%"
+if exist "%SERVER%\pgsql\bin\psql.exe" call :add_path "%SERVER%\pgsql\bin"
+
 call :cecho Cyan "========== Run installer =========="
 set "USE_PHP=php"
 set "HAVE_PHP="
@@ -136,7 +140,7 @@ call :cecho Gray "Running: php setup\server_installer\run.php"
 "!USE_PHP!" "%ROOT%\setup\server_installer\run.php"
 if errorlevel 1 exit /b 1
 echo.
-call :cecho Green "Done. Reopen the terminal for PATH to take effect."
+call :cecho Green "Done. php and pgsql have been added to User PATH. Reopen the terminal for PATH to take effect."
 endlocal
 exit /b 0
 
