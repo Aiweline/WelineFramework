@@ -21,6 +21,7 @@ if (!\defined('APP_CODE_PATH')) {
 }
 
 // 注册 app/code 和 generated/code 优先的自动加载器（在 Composer 之前，prepend=true）
+// 顺序：classmap → generated/code → app/code（兜底，classmap 未刷新时新类仍可加载）
 \spl_autoload_register(function ($class) {
     static $loadedFiles = [];
     static $classMap = null;
