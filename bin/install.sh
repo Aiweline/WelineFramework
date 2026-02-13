@@ -155,8 +155,7 @@ ensure_brew_installed() {
 install_macos_brew_deps() {
   ensure_brew_installed || return 1
   echo "Installing macOS build dependencies (brew)..."
-  brew cleanup --prune=all 2>/dev/null || true
-  brew install pkg-config zlib openssl libxml2 libxslt oniguruma curl libzip icu4c bison re2c
+  brew install pkg-config zlib openssl libxml2 libxslt oniguruma curl libzip icu4c libiconv bison re2c
 }
 
 install_php_system_deps() {
@@ -321,6 +320,7 @@ install_php_from_source() {
       "--with-zlib=$brew_prefix/opt/zlib"
       "--with-libxml=$brew_prefix/opt/libxml2"
       "--with-xsl=$brew_prefix/opt/libxslt"
+      "--with-iconv=$brew_prefix/opt/libiconv"
     )
   fi
 
