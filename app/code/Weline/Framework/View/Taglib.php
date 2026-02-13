@@ -1848,7 +1848,8 @@ class Taglib
                         $raw2 = trim((string)($tag_data[2] ?? ''));
                         // #region agent log (confirm theme:css is NOT handled by css callback)
                         if (str_contains($raw1, '::') || str_contains($raw2, 'theme/')) {
-                            $lp = (defined('BP') ? rtrim(BP, DIRECTORY_SEPARATOR) : dirname(__DIR__, 5)) . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
+                            $lp = (defined('BP') ? rtrim(BP, DIRECTORY_SEPARATOR) : dirname(__DIR__, 5)) . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'theme_css_debug.log';
+                            if (!is_dir(dirname($lp))) { @mkdir(dirname($lp), 0755, true); }
                             @file_put_contents($lp, json_encode(['id'=>'framework_css_cb','timestamp'=>time()*1000,'location'=>'Taglib.php:css callback','message'=>'builtin css callback invoked with path-like data','data'=>['tag_key'=>$tag_key,'raw1Substr'=>substr($raw1,0,100),'raw2Substr'=>substr($raw2,0,100)],'hypothesisId'=>'H2,H4'])."\n", FILE_APPEND | LOCK_EX);
                         }
                         // #endregion
@@ -3479,7 +3480,8 @@ class Taglib
         $config = $tags[$node->name] ?? null;
         // #region agent log
         if ($node->name === 'theme:css') {
-            $lp = (defined('BP') ? rtrim(BP, DIRECTORY_SEPARATOR) : dirname(__DIR__, 5)) . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
+            $lp = (defined('BP') ? rtrim(BP, DIRECTORY_SEPARATOR) : dirname(__DIR__, 5)) . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'theme_css_debug.log';
+            if (!is_dir(dirname($lp))) { @mkdir(dirname($lp), 0755, true); }
             @file_put_contents($lp, json_encode(['id'=>'taglib_render_node','timestamp'=>time()*1000,'location'=>'Taglib.php:renderTagNode','message'=>'theme:css compile','data'=>['nodeName'=>$node->name,'configPresent'=>($config!==null),'rawAttributesSubstr'=>substr((string)($node->rawAttributes??''),0,100)],'hypothesisId'=>'H1,H2,H5'])."\n", FILE_APPEND | LOCK_EX);
         }
         // #endregion
@@ -3507,7 +3509,8 @@ class Taglib
         $attributes = $this->buildAttributesFromRaw($rawAttributes);
         // #region agent log
         if ($node->name === 'theme:css') {
-            $lp = (defined('BP') ? rtrim(BP, DIRECTORY_SEPARATOR) : dirname(__DIR__, 5)) . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
+            $lp = (defined('BP') ? rtrim(BP, DIRECTORY_SEPARATOR) : dirname(__DIR__, 5)) . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'theme_css_debug.log';
+            if (!is_dir(dirname($lp))) { @mkdir(dirname($lp), 0755, true); }
             @file_put_contents($lp, json_encode(['id'=>'taglib_tagdata','timestamp'=>time()*1000,'location'=>'Taglib.php:renderTagNode tagData','message'=>'theme:css tagData','data'=>['tagKey'=>$tagKey,'tagData1Substr'=>isset($tagData[1])?substr((string)$tagData[1],0,100):'','tagData2Substr'=>isset($tagData[2])?substr((string)$tagData[2],0,100):''],'hypothesisId'=>'H1,H3'])."\n", FILE_APPEND | LOCK_EX);
         }
         // #endregion
@@ -3679,7 +3682,8 @@ class Taglib
         $config = $tags[$tagName] ?? null;
         // #region agent log
         if ($tagName === 'theme:css') {
-            $lp = (defined('BP') ? rtrim(BP, DIRECTORY_SEPARATOR) : dirname(__DIR__, 5)) . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
+            $lp = (defined('BP') ? rtrim(BP, DIRECTORY_SEPARATOR) : dirname(__DIR__, 5)) . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'theme_css_debug.log';
+            if (!is_dir(dirname($lp))) { @mkdir(dirname($lp), 0755, true); }
             $tagDataPre = ($tagKey === '@tag()' || $tagKey === '@tag{}') ? [$inlineContent, $inlineContent] : [null, $rawAttributes, $content];
             @file_put_contents($lp, json_encode(['id'=>'taglib_runtime','timestamp'=>time()*1000,'location'=>'Taglib.php:renderRuntimeTag','message'=>'theme:css runtime','data'=>['tagName'=>$tagName,'tagKey'=>$tagKey,'configPresent'=>($config!==null),'contentSubstr'=>substr($content,0,100),'rawAttributesSubstr'=>substr($rawAttributes,0,100),'tagData1Substr'=>isset($tagDataPre[1])?substr((string)$tagDataPre[1],0,100):'','tagData2Substr'=>isset($tagDataPre[2])?substr((string)$tagDataPre[2],0,100):''],'hypothesisId'=>'H2,H3,H4'])."\n", FILE_APPEND | LOCK_EX);
         }

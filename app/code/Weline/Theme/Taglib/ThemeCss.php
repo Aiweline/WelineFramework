@@ -83,7 +83,8 @@ class ThemeCss implements TaglibInterface
                 $attrs = '';
             }
             // #region agent log
-            $lp = (defined('BP') ? rtrim(BP, DIRECTORY_SEPARATOR) : dirname(__DIR__, 4)) . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
+            $lp = (defined('BP') ? rtrim(BP, DIRECTORY_SEPARATOR) : dirname(__DIR__, 5)) . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'theme_css_debug.log';
+            if (!is_dir(dirname($lp))) { @mkdir(dirname($lp), 0755, true); }
             @file_put_contents($lp, json_encode(['id'=>'themecss_cb','timestamp'=>time()*1000,'location'=>'ThemeCss.php:callback','message'=>'theme:css callback','data'=>['tag_key'=>$tag_key,'raw1Substr'=>substr($raw1,0,100),'raw2Substr'=>substr($raw2,0,100),'looksLikePath'=>$looksLikePath,'attrsSubstr'=>substr($attrs,0,80),'contentSubstr'=>substr($content,0,80)],'hypothesisId'=>'H1,H3'])."\n", FILE_APPEND | LOCK_EX);
             // #endregion
             if (empty($content)) {
@@ -95,6 +96,7 @@ class ThemeCss implements TaglibInterface
                 $attrsStr = $attrs ? ' ' . trim($attrs) : '';
                 $result = "<link{$attrsStr} href='{$href}' rel=\"stylesheet\" type=\"text/css\"/>";
                 // #region agent log
+                if (!is_dir(dirname($lp))) { @mkdir(dirname($lp), 0755, true); }
                 @file_put_contents($lp, json_encode(['id'=>'themecss_result','timestamp'=>time()*1000,'location'=>'ThemeCss.php:callback result','message'=>'theme:css output','data'=>['resultSubstr'=>substr($result,0,220)],'hypothesisId'=>'H1,H3'])."\n", FILE_APPEND | LOCK_EX);
                 // #endregion
                 return $result;
