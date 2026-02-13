@@ -25,6 +25,7 @@ return [
             'name' => 'Terraform CLI',
             'description' => 'Terraform CLI 用于批量创建 CDN 域名与 DNS 记录。',
             'script_linux' => 'script/terraform_linux.sh',
+            'script_darwin' => 'script/terraform_linux.sh',
             'script_windows' => 'script/terraform_windows.ps1',
         ],
     ],
