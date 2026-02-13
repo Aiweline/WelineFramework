@@ -127,7 +127,9 @@ class EnvRequirements
     /**
      * 添加复杂依赖项（基于 name + module 去重）
      *
-     * @param array $item 包含 name, description, script_linux, script_windows, module 等
+     * @param array $item 包含 name, description, script_linux, script_windows, module 等。
+     *                   可选 platform（'windows'|'linux'|'darwin'|'unix'|'all'）或 supported_os（PHP_OS_FAMILY 数组）：
+     *                   仅当前环境匹配时收集器才会加入，不声明则全平台均参与检测与安装。
      */
     public function addItem(array $item): self
     {
@@ -284,7 +286,7 @@ class EnvRequirements
     }
 
     /**
-     * 添加推荐复杂依赖项
+     * 添加推荐复杂依赖项。可选 platform / supported_os，语义同 addItem，仅匹配时参与。
      */
     public function addRecommendedItem(array $item): self
     {
