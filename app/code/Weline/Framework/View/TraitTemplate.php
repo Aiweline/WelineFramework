@@ -160,9 +160,7 @@ trait TraitTemplate
                 $this->viewCache->set($cache_key, $t_f);
                 break;
             case DataInterface::dir_type_STATICS:
-                if ($data = $this->viewCache->get($cache_key)) {
-                    break;
-                }
+                // 静态 URL 不读写缓存，避免跨请求/环境读到错误 URL（key 若未含 BP/模块足够信息会串用）
                 list($t_f, $module_name) = $this->processModuleSourceFilePath($type, $source);
                 # 第三方模组或当前模组
                 if ($module_name) {
@@ -183,8 +181,22 @@ trait TraitTemplate
                         $base_url_path = rtrim($this->statics_dir, DataInterface::dir_type_STATICS);
                     }
                 }
-                $data = rtrim($this->getUrlPath($base_url_path), DataInterface::dir_type_STATICS) . DS . $t_f;
-                $this->viewCache->set($cache_key, $data);
+                $t_f = preg_replace('#^statics[/\\\\]+#', '', str_replace('\\', '/', $t_f));
+                $t_f = ltrim($t_f, '/');
+                $url_base = $this->getUrlPath($base_url_path);
+                if ($url_base === '' && $base_url_path !== '') {
+                    $name_for_base = $module_name ?? $this->getRequest()->getModuleName();
+                    if ($name_for_base !== '') {
+                        $url_base = '/' . str_replace('_', '/', $name_for_base) . '/view/statics/';
+                        if (defined('PROD') && PROD) {
+                            $themePath = Env::get('theme')['path'] ?? Env::default_theme_DATA['path'];
+                            $themePath = str_replace('\\', '/', $themePath);
+                            $url_base = '/static/' . $themePath . '/' . ltrim($url_base, '/');
+                        }
+                        $url_base = rtrim($url_base, '/') . '/';
+                    }
+                }
+                $data = $url_base . $t_f;
                 break;
             default:
         }
@@ -239,7 +251,24 @@ trait TraitTemplate
                         $base_url_path = rtrim($this->statics_dir, DataInterface::dir_type_STATICS);
                     }
                 }
-                $data = rtrim($this->getUrlPath($base_url_path), DataInterface::dir_type_STATICS) . DS . $t_f;
+                // base_url_path 已含 view/statics/，去掉 t_f 前多余的 statics/ 避免重复
+                $t_f = preg_replace('#^statics[/\\\\]+#', '', str_replace('\\', '/', $t_f));
+                $t_f = ltrim($t_f, '/');
+                $url_base = $this->getUrlPath($base_url_path);
+                // 当 getUrlPath 返回空时兜底：$base_url_path 有值但路径未匹配 APP_CODE_PATH/VENDOR_PATH(PROD 下 PUB) 时会返回空，见 getUrlPath() 注释
+                if ($url_base === '' && $base_url_path !== '') {
+                    $name_for_base = $module_name ?? $this->getRequest()->getModuleName();
+                    if ($name_for_base !== '') {
+                        $url_base = '/' . str_replace('_', '/', $name_for_base) . '/view/statics/';
+                        if (defined('PROD') && PROD) {
+                            $themePath = Env::get('theme')['path'] ?? Env::default_theme_DATA['path'];
+                            $themePath = str_replace('\\', '/', $themePath);
+                            $url_base = '/static/' . $themePath . '/' . ltrim($url_base, '/');
+                        }
+                        $url_base = rtrim($url_base, '/') . '/';
+                    }
+                }
+                $data = $url_base . $t_f;
                 break;
             case DataInterface::dir_type_THEME:
                 // 检查是否是静态资源文件（js/css等），如果是则返回URL，否则返回文件路径
@@ -252,27 +281,38 @@ trait TraitTemplate
                         $modules = Env::getInstance()->getModuleList();
                         if (isset($modules[$module_name]) && $module = $modules[$module_name]) {
                             $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
-                            // 对于THEME类型，使用theme目录
-                            $base_url_path = $module_view_dir_path . 'theme' . DS;
+                            $base_url_path = $this->getModuleViewDir($module_view_dir_path, DataInterface::dir_type_THEME, $module_name);
                             $t_f = str_replace($module_name . '::', '', $t_f);
-                            // 移除type前缀（theme/），因为base_url_path已经包含了theme目录
                             $t_f = preg_replace('#^theme' . preg_quote(DS, '#') . '#', '', $t_f);
                             $t_f = preg_replace('#^theme' . preg_quote('/', '#') . '#', '', $t_f);
                         } else {
                             throw new Exception(__('资源不存在：%{1}，模组：%{2}', [$source, $module_name]));
                         }
                     } else {
-                        // 没有指定模块时，使用当前请求模块的theme目录
                         $current_module_name = $this->getRequest()->getModuleName();
                         $modules = Env::getInstance()->getModuleList();
                         if (isset($modules[$current_module_name]) && $module = $modules[$current_module_name]) {
                             $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
-                            $base_url_path = $module_view_dir_path . 'theme' . DS;
+                            $base_url_path = $this->getModuleViewDir($module_view_dir_path, DataInterface::dir_type_THEME, $current_module_name);
                         } else {
                             $base_url_path = rtrim($this->statics_dir, DataInterface::dir_type_STATICS) . 'theme' . DS;
                         }
                     }
-                    $data = rtrim($this->getUrlPath($base_url_path), '/') . '/' . str_replace('\\', '/', $t_f);
+                    $url_base = $this->getUrlPath($base_url_path);
+                    if ($url_base === '' && $base_url_path !== '' && defined('APP_CODE_PATH')) {
+                        $norm = str_replace('\\', '/', $base_url_path);
+                        $appCode = str_replace('\\', '/', APP_CODE_PATH);
+                        if (stripos($norm, $appCode) === 0) {
+                            $url_base = '/' . ltrim(substr($norm, strlen($appCode)), '/');
+                        }
+                    }
+                    if ($url_base === '') {
+                        $name_for_base = $module_name !== '' ? $module_name : $this->getRequest()->getModuleName();
+                        if ($name_for_base !== '') {
+                            $url_base = '/' . str_replace('_', '/', $name_for_base) . '/view/theme/';
+                        }
+                    }
+                    $data = ($url_base !== '' ? rtrim($url_base, '/') . '/' : '') . str_replace('\\', '/', $t_f);
                 } else {
                     // 模板文件：返回文件路径
                     $data = $this->viewCache->get($cache_key);
@@ -460,7 +500,8 @@ trait TraitTemplate
                 }
                 break;
             case DataInterface::dir_type_STATICS:
-                $cache_key = 'getViewDir' . $module_view_dir_path . $type . (PROD ? 'prod' : 'dev');
+                // key 必须含模块名与 BP，避免跨模块/跨环境串用（如 CLI 与 Web 路径不一致导致缓存错）
+                $cache_key = 'getViewDir' . (defined('BP') ? BP : '') . $module_name . $module_view_dir_path . $type . (PROD ? 'prod' : 'dev');
                 if ($cache_static_dir = $this->viewCache->get($cache_key)) {
                     return $cache_static_dir;
                 }
@@ -475,6 +516,18 @@ trait TraitTemplate
                 }
                 $path = $module_view_dir_path . DataInterface::view_STATICS_DIR . DS;
                 # 生产环境处理
+                if (PROD) {
+                    $path = str_replace(APP_CODE_PATH, PUB . 'static' . DS . $this->theme['path'] . DS, $path);
+                    $path = str_replace(VENDOR_PATH, PUB . 'static' . DS . $this->theme['path'] . DS, $path);
+                }
+                $this->viewCache->set($cache_key, $path);
+                break;
+            case DataInterface::dir_type_THEME:
+                $cache_key = 'getViewDir' . (defined('BP') ? BP : '') . $module_name . $module_view_dir_path . $type . (PROD ? 'prod' : 'dev');
+                if ($cache_static_dir = $this->viewCache->get($cache_key)) {
+                    return $cache_static_dir;
+                }
+                $path = $module_view_dir_path . 'theme' . DS;
                 if (PROD) {
                     $path = str_replace(APP_CODE_PATH, PUB . 'static' . DS . $this->theme['path'] . DS, $path);
                     $path = str_replace(VENDOR_PATH, PUB . 'static' . DS . $this->theme['path'] . DS, $path);
@@ -501,7 +554,9 @@ trait TraitTemplate
      *
      * @param string $real_path 磁盘上的真实路径（可为反斜杠或正斜杠）
      *
-     * @return string 以 / 开头的 URL 路径，如 /Aiweline/PlayingInChina/view/statics/...
+     * @return string 以 / 开头的 URL 路径，如 /Aiweline/PlayingInChina/view/statics/...；以下情况返回空字符串：
+     *                 - 开发：real_path 不以 APP_CODE_PATH 或 VENDOR_PATH 开头（如 CLI 下常量未正确初始化、路径格式不一致）
+     *                 - 生产：real_path 不以 PUB 开头
      */
     private function getUrlPath(string $real_path): string
     {
@@ -539,7 +594,6 @@ trait TraitTemplate
                 $url_path = '/' . ltrim($stripPrefix($normalized, $pubPath), '/');
             }
         }
-        // 保留末尾 /，供调用方 rtrim(..., 'statics') 时不会误删 URL 中的 statics 目录名
         return $url_path === '' ? '' : rtrim($url_path, '/') . '/';
     }
 
