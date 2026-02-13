@@ -1,4 +1,4 @@
-g'i'tgit#!/usr/bin/env bash
+#!/usr/bin/env bash
 # 安装脚本只负责：安装 PHP 主版本（Linux/macOS 下自动安装编译依赖并下载 php-src 编译到 extend/server/php）、
 # 将 extend/server/* 加入 PATH，然后交给 run.php 处理其余（扩展/函数依赖、php.ini、env、composer、setup 等）。
 # SOLID：Windows 流程由 install.bat 独立处理；本脚本仅处理 Linux/macOS。
@@ -123,6 +123,118 @@ run_privileged() {
   return 1
 }
 
+fetch_and_extract_source() {
+  local name="$1"
+  local version="$2"
+  local url="$3"
+  local work_root="$ROOT/var/tmp/source-deps"
+  local archive="$work_root/${url##*/}"
+  local extract_root="$work_root/${name}-${version}-src"
+
+  mkdir -p "$work_root"
+  if [[ ! -f "$archive" ]]; then
+    echo "Downloading ${name}-${version} ..."
+    if command -v curl &>/dev/null; then
+      curl -L -f -o "$archive" "$url"
+    elif command -v wget &>/dev/null; then
+      wget -O "$archive" "$url"
+    else
+      echo "ERROR: curl or wget is required to download ${name}-${version}." >&2
+      return 1
+    fi
+  else
+    echo "Using cached source archive: $archive"
+  fi
+
+  rm -rf "$extract_root"
+  mkdir -p "$extract_root"
+  tar -xf "$archive" -C "$extract_root"
+
+  local src_dir
+  src_dir=$(find "$extract_root" -mindepth 1 -maxdepth 1 -type d | head -1)
+  if [[ -z "$src_dir" ]]; then
+    src_dir="$extract_root"
+  fi
+  echo "$src_dir"
+}
+
+build_autotools_dep() {
+  local deps_prefix="$1"
+  local name="$2"
+  local version="$3"
+  local url="$4"
+  shift 4
+  local marker="$deps_prefix/.built-${name}-${version}"
+  if [[ -f "$marker" ]]; then
+    echo "${name}-${version} already built."
+    return 0
+  fi
+  local src_dir
+  src_dir=$(fetch_and_extract_source "$name" "$version" "$url") || return 1
+  pushd "$src_dir" >/dev/null
+  ./configure --prefix="$deps_prefix" "$@"
+  make -j"${BUILD_JOBS:-2}"
+  make install
+  popd >/dev/null
+  touch "$marker"
+}
+
+build_openssl_dep() {
+  local deps_prefix="$1"
+  local version="$2"
+  local url="$3"
+  local marker="$deps_prefix/.built-openssl-${version}"
+  if [[ -f "$marker" ]]; then
+    echo "openssl-${version} already built."
+    return 0
+  fi
+  local src_dir
+  src_dir=$(fetch_and_extract_source "openssl" "$version" "$url") || return 1
+  pushd "$src_dir" >/dev/null
+  ./config --prefix="$deps_prefix" --openssldir="$deps_prefix/ssl" shared zlib
+  make -j"${BUILD_JOBS:-2}"
+  make install_sw
+  popd >/dev/null
+  touch "$marker"
+}
+
+install_macos_source_deps() {
+  if ! xcode-select -p &>/dev/null; then
+    echo "ERROR: Xcode Command Line Tools not found. Run: xcode-select --install" >&2
+    return 1
+  fi
+  if ! command -v make &>/dev/null; then
+    echo "ERROR: make not found. Install Xcode Command Line Tools first." >&2
+    return 1
+  fi
+  if ! command -v tar &>/dev/null; then
+    echo "ERROR: tar not found." >&2
+    return 1
+  fi
+  local deps_prefix="$SERVER_DIR/deps"
+  mkdir -p "$deps_prefix"
+  BUILD_JOBS=$(sysctl -n hw.ncpu 2>/dev/null || echo 2)
+
+  # 先编译 pkgconf，提供 pkg-config 能力，避免依赖系统包管理器
+  build_autotools_dep "$deps_prefix" "pkgconf" "2.3.0" "https://distfiles.dereferenced.org/pkgconf/pkgconf-2.3.0.tar.xz" || return 1
+  if [[ -x "$deps_prefix/bin/pkgconf" ]] && [[ ! -x "$deps_prefix/bin/pkg-config" ]]; then
+    ln -sf "$deps_prefix/bin/pkgconf" "$deps_prefix/bin/pkg-config"
+  fi
+
+  export PATH="$deps_prefix/bin:$PATH"
+  export CPPFLAGS="-I$deps_prefix/include ${CPPFLAGS:-}"
+  export LDFLAGS="-L$deps_prefix/lib ${LDFLAGS:-}"
+  export PKG_CONFIG_PATH="$deps_prefix/lib/pkgconfig:$deps_prefix/lib64/pkgconfig:${PKG_CONFIG_PATH:-}"
+
+  # 统一走源码编译，避免依赖 brew/macports
+  build_autotools_dep "$deps_prefix" "zlib" "1.3.1" "https://zlib.net/zlib-1.3.1.tar.gz" || return 1
+  build_openssl_dep "$deps_prefix" "3.3.2" "https://www.openssl.org/source/openssl-3.3.2.tar.gz" || return 1
+  build_autotools_dep "$deps_prefix" "libxml2" "2.12.10" "https://download.gnome.org/sources/libxml2/2.12/libxml2-2.12.10.tar.xz" --without-python || return 1
+  build_autotools_dep "$deps_prefix" "libxslt" "1.1.42" "https://download.gnome.org/sources/libxslt/1.1/libxslt-1.1.42.tar.xz" --with-libxml-prefix="$deps_prefix" || return 1
+  build_autotools_dep "$deps_prefix" "oniguruma" "6.9.9" "https://github.com/kkos/oniguruma/releases/download/v6.9.9/onig-6.9.9.tar.gz" || return 1
+  build_autotools_dep "$deps_prefix" "curl" "8.9.1" "https://curl.se/download/curl-8.9.1.tar.gz" --with-openssl="$deps_prefix" --with-zlib="$deps_prefix" || return 1
+}
+
 install_php_system_deps() {
   if [[ "$PLATFORM" == "linux" ]]; then
     if [[ -f /etc/debian_version ]]; then
@@ -160,52 +272,9 @@ install_php_system_deps() {
   fi
 
   if [[ "$PLATFORM" == "mac" ]]; then
-    if ! xcode-select -p &>/dev/null; then
-      echo "ERROR: Xcode Command Line Tools not found. Run: xcode-select --install" >&2
-      return 1
-    fi
-    if ! command -v brew &>/dev/null; then
-      echo "ERROR: Homebrew not found. Install Homebrew first, then re-run installer." >&2
-      return 1
-    fi
-    # 先检测已安装的依赖，只安装缺失的，避免每次都重新下载
-    local brew_deps=(pkg-config openssl libxml2 curl sqlite libzip libpng jpeg freetype oniguruma libxslt icu4c)
-    local missing=()
-    local f
-    for f in "${brew_deps[@]}"; do
-      brew list "$f" &>/dev/null || missing+=("$f")
-    done
-    if [[ ${#missing[@]} -eq 0 ]]; then
-      echo "macOS build dependencies already installed."
-      return 0
-    fi
-    # 若有未退出的 brew install，会占用锁导致报错，先提示退出
-    if pgrep -f "brew install" &>/dev/null; then
-      echo "ERROR: Another 'brew install' is still running. Wait for it to finish or run: pkill -f 'brew install'" >&2
-      return 1
-    fi
-    # 彻底清理残留锁与未完成下载（重启后仍可能留下 .incomplete 文件）
-    local brew_prefix
-    brew_prefix=$(brew --prefix 2>/dev/null) || true
-    if [[ -d "$HOME/Library/Caches/Homebrew/downloads" ]]; then
-      find "$HOME/Library/Caches/Homebrew/downloads" -maxdepth 1 -name "*.incomplete" -delete 2>/dev/null || true
-      find "$HOME/Library/Caches/Homebrew/downloads" -maxdepth 1 -name "*.lock" -delete 2>/dev/null || true
-    fi
-    if [[ -n "$brew_prefix" ]] && [[ -d "$brew_prefix/var/homebrew/locks" ]]; then
-      rm -rf "${brew_prefix}/var/homebrew/locks/"* 2>/dev/null || true
-    fi
-    # /tmp 下 Homebrew 锁（部分版本会写在这里）
-    rm -f /tmp/Homebrew*.lock 2>/dev/null || true
-    echo "Installing missing macOS build dependencies (brew): ${missing[*]}"
-    if ! brew install "${missing[@]}"; then
-      echo "" >&2
-      echo "Homebrew install failed (e.g. lock file). Try manual cleanup then re-run:" >&2
-      echo "  rm -f \$HOME/Library/Caches/Homebrew/downloads/*.incomplete" >&2
-      echo "  rm -rf \$(brew --prefix)/var/homebrew/locks/*" >&2
-      echo "  ./bin/install.sh" >&2
-      return 1
-    fi
-    return
+    echo "Installing macOS source-built dependencies into $SERVER_DIR/deps ..."
+    install_macos_source_deps
+    return $?
   fi
 
   echo "ERROR: Unsupported platform for dependency install: $PLATFORM" >&2
@@ -269,6 +338,13 @@ install_php_from_source() {
   mkdir -p "$dest"
   pushd "$src_dir" >/dev/null
 
+  if [[ "$PLATFORM" == "mac" ]]; then
+    local deps_prefix="$SERVER_DIR/deps"
+    export CPPFLAGS="-I$deps_prefix/include ${CPPFLAGS:-}"
+    export LDFLAGS="-L$deps_prefix/lib ${LDFLAGS:-}"
+    export PKG_CONFIG_PATH="$deps_prefix/lib/pkgconfig:$deps_prefix/lib64/pkgconfig:${PKG_CONFIG_PATH:-}"
+  fi
+
   local -a conf
   conf=(
     "./configure"
@@ -289,19 +365,24 @@ install_php_from_source() {
     "--with-pgsql"
     "--with-sqlite3"
     "--with-pdo-sqlite"
-    "--with-zip"
     "--with-iconv"
   )
 
   if [[ "$PLATFORM" == "mac" ]]; then
+    local deps_prefix="$SERVER_DIR/deps"
     conf+=(
-      "--with-openssl=$(brew --prefix openssl)"
-      "--with-curl=$(brew --prefix curl)"
-      "--with-zlib=$(brew --prefix)"
-      "--with-libxml=$(brew --prefix libxml2)"
-      "--with-xsl=$(brew --prefix libxslt)"
-      "--with-icu-dir=$(brew --prefix icu4c)"
+      "--with-openssl=$deps_prefix"
+      "--with-curl=$deps_prefix"
+      "--with-zlib=$deps_prefix"
+      "--with-libxml=$deps_prefix"
+      "--with-xsl=$deps_prefix"
     )
+  fi
+
+  if command -v pkg-config &>/dev/null && pkg-config --exists libzip; then
+    conf+=("--with-zip")
+  else
+    echo "libzip not found; building PHP without zip extension."
   fi
 
   echo "Configuring php-src ..."
@@ -380,12 +461,12 @@ install_pgsql() {
     return
   fi
   echo "PostgreSQL not at $dest. Install manually, then run: $0 --path-only pgsql"
-  if [[ "$PLATFORM" == "mac" ]] && command -v brew &>/dev/null; then
-    echo "  e.g. brew install postgresql@${INSTALL_PGSQL_VERSION}"
-  elif [[ -f /etc/debian_version ]]; then
+  if [[ -f /etc/debian_version ]]; then
     echo "  e.g. sudo apt install -y postgresql-${INSTALL_PGSQL_VERSION} postgresql-client-${INSTALL_PGSQL_VERSION}"
   elif [[ -f /etc/redhat-release ]]; then
     echo "  e.g. sudo dnf install -y postgresql${INSTALL_PGSQL_VERSION}-server postgresql${INSTALL_PGSQL_VERSION}"
+  elif [[ "$PLATFORM" == "mac" ]]; then
+    echo "  Install PostgreSQL manually (without brew if desired), then ensure psql is available in $dest/bin"
   fi
 }
 
