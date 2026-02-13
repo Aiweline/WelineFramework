@@ -55,16 +55,21 @@ if (!$fromStep5b) {
     }
 }
 
-// 2. env:check（必需项缺失时非零退出，直接终止后续步骤）
+// 2. env:check；未通过则先 env:install 再重检，仍不通过再退出
 if (!$fromStep5b) {
     $code = $run('bin/w env:check');
     if ($code !== 0) {
-        fwrite(STDERR, "ERROR: env:check failed (exit $code). Fix required dependencies and re-run.\n");
-        exit(1);
+        echo "环境检测未通过，正在运行 env:install 尝试自动安装依赖...\n";
+        $run('bin/w env:install -y');
+        $code = $run('bin/w env:check');
+        if ($code !== 0) {
+            fwrite(STDERR, "ERROR: env:check failed (exit $code). Fix required dependencies and re-run.\n");
+            exit(1);
+        }
     }
 }
 
-// 3. env:install -y
+// 3. env:install -y（安装/补齐推荐项等）
 if (!$fromStep5b) {
     $code = $run('bin/w env:install -y');
     if ($code !== 0) {
