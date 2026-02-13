@@ -71,6 +71,16 @@ class Clear implements \Weline\Framework\Console\CommandInterface
             }
         }
         
+        // 同时清理模板标签库编译缓存，确保模板变更或标签逻辑修复后能重新编译
+        try {
+            $taglib = ObjectManager::getInstance(\Weline\Framework\View\Taglib::class);
+            if (method_exists($taglib, 'clearCache')) {
+                $taglib->clearCache();
+            }
+        } catch (\Throwable $e) {
+            // 忽略（如 View 未加载）
+        }
+        
         // 显示总体统计
         $this->printOverallSummary($totalStats);
     }

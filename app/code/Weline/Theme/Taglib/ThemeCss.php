@@ -9,6 +9,10 @@ use Weline\Framework\View\Template;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Taglib\TaglibInterface;
 
+/**
+ * theme:css 标签：仅处理主题样式（THEME，如 Weline_Theme::theme/...）。
+ * 与框架内置的 css 标签（STATICS，Module::statics/...）是不同标签，不可混用。
+ */
 class ThemeCss implements TaglibInterface
 {
     /**
@@ -60,30 +64,39 @@ class ThemeCss implements TaglibInterface
             /** @var Template $template */
             $template = ObjectManager::getInstance(Template::class);
             
-            // 对于成对标签，内容在 $tag_data[2]，属性在 $tag_data[1]
-            // 对于 @tag() 或 @tag{} 格式，内容在 $tag_data[1]
-            $content = '';
-            $attrs = '';
+            // 框架约定：tag_data[0]=rawTag, [1]=rawAttributes/内联内容, [2]=子内容
+            // 运行期 tag-start 时内容在 [2]，编译期 tag 时内容在 [2]、属性在 [1]
+            // 若 [1] 被误当作路径（含 :: 或 /），不得作为 HTML 属性输出，并优先当作 content
+            $raw1 = trim((string)($tag_data[1] ?? ''));
+            $raw2 = trim((string)($tag_data[2] ?? ''));
+            $looksLikePath = $raw1 !== '' && (str_contains($raw1, '::') || str_contains($raw1, '/'));
             
             if ($tag_key === 'tag') {
-                // 成对标签：<theme:css>content</theme:css>
-                $attrs = $tag_data[1] ?? '';
-                $content = trim($tag_data[2] ?? '');
+                $content = $raw2 !== '' ? $raw2 : $raw1;
+                $attrs = (!$looksLikePath && $raw1 !== '') ? $raw1 : '';
+            } elseif ($tag_key === '@tag()' || $tag_key === '@tag{}') {
+                $content = $raw1;
+                $attrs = '';
             } else {
-                // @tag() 或 @tag{} 格式
-                $content = trim($tag_data[1] ?? '');
+                // tag-start 等：运行期内容在 [2]
+                $content = $raw2 !== '' ? $raw2 : $raw1;
+                $attrs = '';
             }
-            
+            // #region agent log
+            $lp = (defined('BP') ? rtrim(BP, DIRECTORY_SEPARATOR) : dirname(__DIR__, 4)) . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
+            @file_put_contents($lp, json_encode(['id'=>'themecss_cb','timestamp'=>time()*1000,'location'=>'ThemeCss.php:callback','message'=>'theme:css callback','data'=>['tag_key'=>$tag_key,'raw1Substr'=>substr($raw1,0,100),'raw2Substr'=>substr($raw2,0,100),'looksLikePath'=>$looksLikePath,'attrsSubstr'=>substr($attrs,0,80),'contentSubstr'=>substr($content,0,80)],'hypothesisId'=>'H1,H3'])."\n", FILE_APPEND | LOCK_EX);
+            // #endregion
             if (empty($content)) {
                 return '';
             }
             
             try {
                 $href = $template->fetchTagSource(DataInterface::dir_type_THEME, $content);
-                
                 $attrsStr = $attrs ? ' ' . trim($attrs) : '';
                 $result = "<link{$attrsStr} href='{$href}' rel=\"stylesheet\" type=\"text/css\"/>";
-                
+                // #region agent log
+                @file_put_contents($lp, json_encode(['id'=>'themecss_result','timestamp'=>time()*1000,'location'=>'ThemeCss.php:callback result','message'=>'theme:css output','data'=>['resultSubstr'=>substr($result,0,220)],'hypothesisId'=>'H1,H3'])."\n", FILE_APPEND | LOCK_EX);
+                // #endregion
                 return $result;
             } catch (\Exception $e) {
                 throw $e;

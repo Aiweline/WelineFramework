@@ -1839,26 +1839,31 @@ class Taglib
                         };
                     }
             ],
+            // 注意：本项为内置 css 标签（仅处理 STATICS：<css>Module::statics/.../file.css</css>）。
             'css' => [
                 'tag' => 1,
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) use ($template) {
-                        // 过滤掉包含 :: 的非标准属性（开发模式调试信息）
+                        $raw1 = trim((string)($tag_data[1] ?? ''));
+                        $raw2 = trim((string)($tag_data[2] ?? ''));
+                        // #region agent log (confirm theme:css is NOT handled by css callback)
+                        if (str_contains($raw1, '::') || str_contains($raw2, 'theme/')) {
+                            $lp = (defined('BP') ? rtrim(BP, DIRECTORY_SEPARATOR) : dirname(__DIR__, 5)) . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
+                            @file_put_contents($lp, json_encode(['id'=>'framework_css_cb','timestamp'=>time()*1000,'location'=>'Taglib.php:css callback','message'=>'builtin css callback invoked with path-like data','data'=>['tag_key'=>$tag_key,'raw1Substr'=>substr($raw1,0,100),'raw2Substr'=>substr($raw2,0,100)],'hypothesisId'=>'H2,H4'])."\n", FILE_APPEND | LOCK_EX);
+                        }
+                        // #endregion
+                        // 若 [1] 被误解析为路径串（含 :: 或 /），不当作 HTML 属性输出，仅作 href 来源
+                        $looksLikePath = $raw1 !== '' && (str_contains($raw1, '::') || str_contains($raw1, '/'));
                         $filteredAttrs = '';
-                        if (!empty($tag_data[1])) {
-                            $rawAttrs = $tag_data[1];
-                            // 移除包含 :: 的属性（非标准属性名）- 改进正则以匹配完整路径
-                            $filteredAttrs = preg_replace('/[a-zA-Z_][\w]*::[^\s>]*/u', '', $rawAttrs);
-                            // 清理多余的空格
+                        if (!empty($raw1) && !$looksLikePath) {
+                            $filteredAttrs = preg_replace('/[a-zA-Z_][\w]*::[^\s>]*/u', '', $raw1);
                             $filteredAttrs = trim($filteredAttrs);
                             if ($filteredAttrs !== '') {
                                 $filteredAttrs = ' ' . $filteredAttrs;
                             }
                         }
-                        return match ($tag_key) {
-                            'tag' => "<link{$filteredAttrs} href='{$template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, trim($tag_data[2]))}' rel=\"stylesheet\" type=\"text/css\"/>",
-                            default => "<link{$filteredAttrs} href='{$template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, trim($tag_data[1]))}' rel=\"stylesheet\" type=\"text/css\"/>"
-                        };
+                        $path = ($tag_key === 'tag' && $raw2 !== '') ? $raw2 : ($raw2 !== '' ? $raw2 : $raw1);
+                        return "<link{$filteredAttrs} href='{$template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, trim($path))}' rel=\"stylesheet\" type=\"text/css\"/>";
                     }
             ],
             'lang' => [
@@ -3472,6 +3477,12 @@ class Taglib
     private function renderTagNode(TagNode $node, array $tags, Template $template, string $fileName): string
     {
         $config = $tags[$node->name] ?? null;
+        // #region agent log
+        if ($node->name === 'theme:css') {
+            $lp = (defined('BP') ? rtrim(BP, DIRECTORY_SEPARATOR) : dirname(__DIR__, 5)) . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
+            @file_put_contents($lp, json_encode(['id'=>'taglib_render_node','timestamp'=>time()*1000,'location'=>'Taglib.php:renderTagNode','message'=>'theme:css compile','data'=>['nodeName'=>$node->name,'configPresent'=>($config!==null),'rawAttributesSubstr'=>substr((string)($node->rawAttributes??''),0,100)],'hypothesisId'=>'H1,H2,H5'])."\n", FILE_APPEND | LOCK_EX);
+        }
+        // #endregion
         if ($config === null) {
             return $this->buildOriginalTagMarkup($node);
         }
@@ -3479,17 +3490,27 @@ class Taglib
         $rawAttributes = $node->rawAttributes ?? '';
         
         // 对于 hook/w:hook 标签，使用原始内容而不是 generatePhpFromNodes
-        // 因为 hook 回调需要原始的 <else/> 来分割内容
         $isHookTag = ($node->name === 'hook' || $node->name === 'w:hook');
         if ($isHookTag) {
-            // 使用原始内容，保留 <else/> 标签
             $content = $this->buildOriginalChildrenContent($node->children);
+        } elseif (!$this->isNodesDynamic($node->children)) {
+            // 子节点全为静态时用字面内容，避免依赖 generatePhpFromNodes 的节点类型
+            $content = $this->buildStringFromNodes($node->children);
         } else {
             $content = $this->generatePhpFromNodes($node->children, $tags, $template, $fileName);
         }
+        $rawContent = $node->rawContent ?? '';
+        if ($content === '' && str_starts_with($rawContent, '__STATIC_CHILDREN__')) {
+            $content = substr($rawContent, 19);
+        }
         $tagData = $this->buildTagData($node, $content);
         $attributes = $this->buildAttributesFromRaw($rawAttributes);
-
+        // #region agent log
+        if ($node->name === 'theme:css') {
+            $lp = (defined('BP') ? rtrim(BP, DIRECTORY_SEPARATOR) : dirname(__DIR__, 5)) . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
+            @file_put_contents($lp, json_encode(['id'=>'taglib_tagdata','timestamp'=>time()*1000,'location'=>'Taglib.php:renderTagNode tagData','message'=>'theme:css tagData','data'=>['tagKey'=>$tagKey,'tagData1Substr'=>isset($tagData[1])?substr((string)$tagData[1],0,100):'','tagData2Substr'=>isset($tagData[2])?substr((string)$tagData[2],0,100):''],'hypothesisId'=>'H1,H3'])."\n", FILE_APPEND | LOCK_EX);
+        }
+        // #endregion
         if ($tagKey === 'tag-start' && !empty($config['tag-end'])) {
             $start = $config['callback']('tag-start', $config, $tagData, $attributes);
             $end = $config['callback']('tag-end', $config, $tagData, $attributes);
@@ -3656,6 +3677,13 @@ class Taglib
     ): string {
         $tags = $this->getTags($template, $fileName, $content);
         $config = $tags[$tagName] ?? null;
+        // #region agent log
+        if ($tagName === 'theme:css') {
+            $lp = (defined('BP') ? rtrim(BP, DIRECTORY_SEPARATOR) : dirname(__DIR__, 5)) . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
+            $tagDataPre = ($tagKey === '@tag()' || $tagKey === '@tag{}') ? [$inlineContent, $inlineContent] : [null, $rawAttributes, $content];
+            @file_put_contents($lp, json_encode(['id'=>'taglib_runtime','timestamp'=>time()*1000,'location'=>'Taglib.php:renderRuntimeTag','message'=>'theme:css runtime','data'=>['tagName'=>$tagName,'tagKey'=>$tagKey,'configPresent'=>($config!==null),'contentSubstr'=>substr($content,0,100),'rawAttributesSubstr'=>substr($rawAttributes,0,100),'tagData1Substr'=>isset($tagDataPre[1])?substr((string)$tagDataPre[1],0,100):'','tagData2Substr'=>isset($tagDataPre[2])?substr((string)$tagDataPre[2],0,100):''],'hypothesisId'=>'H2,H3,H4'])."\n", FILE_APPEND | LOCK_EX);
+        }
+        // #endregion
         if ($config === null) {
             return $content;
         }

@@ -267,28 +267,14 @@ abstract class QueryAst implements QueryInterface
 
         # 更新依据条件
         if (is_string($update_where_fields) and $update_where_fields) {
-            $update_where_fields = explode(',', $update_where_fields);
+            $update_where_fields = array_filter(array_map('trim', explode(',', $update_where_fields)), function ($f) {
+                return $f !== '';
+            });
         }
         if (is_array($update_where_fields)) {
-            $this->insert_update_where_fields = $update_where_fields;
+            $this->insert_update_where_fields = array_values($update_where_fields);
         }
-        # 如果没有忽略主键，则需要添加主键
-        if (empty($this->insert_update_where_fields) and !$ignore_primary_key) {
-            if (!in_array($this->identity_field, $this->insert_update_where_fields)) {
-                $this->insert_update_where_fields[] = $this->identity_field;
-            }
-            if (empty($this->insert_update_where_fields)) {
-                foreach ($this->_unit_primary_keys as $unit_primary_key) {
-                    if (!in_array($unit_primary_key, $this->insert_update_where_fields)) {
-                        $this->insert_update_where_fields[] = $unit_primary_key;
-                    }
-                }
-            }
-            # 倒序
-            $this->insert_update_where_fields = array_reverse($this->insert_update_where_fields);
-        }
-        # 如果要更新的字段为空
-        # 插入数据
+        # 插入数据（先收集，再根据实际数据确定冲突依据字段）
         if (is_string(array_key_first($data))) {
             $this->insert['origin'][] = $data;
         } else {
@@ -302,6 +288,29 @@ abstract class QueryAst implements QueryInterface
         }
 
         if (count($this->insert)) {
+            $first_insert_item = $this->insert['origin'][0] ?? [];
+            $first_insert_item_keys = array_keys($first_insert_item);
+
+            # 仅保留实际数据中存在的冲突依据字段（与 Pgsql 一致，避免“所需含 code 实际无 code”）
+            $this->insert_update_where_fields = array_values(array_intersect(
+                $this->insert_update_where_fields,
+                $first_insert_item_keys
+            ));
+            # 若过滤后冲突依据为空且未忽略主键，则补充主键/自增键
+            if (empty($this->insert_update_where_fields) and !$ignore_primary_key) {
+                if (!in_array($this->identity_field, $this->insert_update_where_fields)) {
+                    $this->insert_update_where_fields[] = $this->identity_field;
+                }
+                if (empty($this->insert_update_where_fields)) {
+                    foreach ($this->_unit_primary_keys as $unit_primary_key) {
+                        if (!in_array($unit_primary_key, $this->insert_update_where_fields)) {
+                            $this->insert_update_where_fields[] = $unit_primary_key;
+                        }
+                    }
+                }
+                $this->insert_update_where_fields = array_reverse($this->insert_update_where_fields);
+            }
+
             # 除去主键的联合查询字段
             $insert_have_not_identity_fields = $this->insert_update_where_fields;
             foreach ($insert_have_not_identity_fields as $insert_have_not_identity_field_key => $insert_have_not_identity_field) {
@@ -310,34 +319,24 @@ abstract class QueryAst implements QueryInterface
                     break;
                 }
             }
-            # 需要插入的字段
-            $insert_need_fields = array_merge($this->_unit_primary_keys, $this->insert_update_where_fields);
-            $this->insert_need_fields = $insert_need_fields;
-            # 检测要更新的字段主键对应值是否存在，如果存在且非数字，那么插入的数据认为是无法自增的，需要的字段要包含主键
-            $first_insert_item = $this->insert['origin'][0] ?? [];
-            $first_insert_item_keys = array_keys($first_insert_item);
+            # 需要插入的字段 = 主键/冲突依据与首行键的并集（不按索引覆盖）
+            $insert_need_fields = array_unique(array_merge(
+                $this->_unit_primary_keys,
+                $this->insert_update_where_fields,
+                $first_insert_item_keys
+            ));
             if (!isset($first_insert_item[$this->identity_field]) or is_numeric($first_insert_item[$this->identity_field])) {
-                foreach ($insert_need_fields as $insert_need_field_key => $insert_need_field) {
-                    if ($insert_need_field == $this->identity_field) {
-                        unset($insert_need_fields[$insert_need_field_key]);
-                        break;
-                    }
-                }
+                $insert_need_fields = array_values(array_filter($insert_need_fields, function ($f) {
+                    return $f !== $this->identity_field;
+                }));
             }
-            # 调整$this->insert_need_fields字段顺序
-            foreach ($first_insert_item_keys as $first_insert_item_key_index => $first_insert_item_key) {
-                $this->insert_need_fields[$first_insert_item_key_index] = $first_insert_item_key;
-            }
-            $this->insert_need_fields = array_unique($this->insert_need_fields);
-            # 如果长度不一致报错
-            if (count($this->insert_need_fields) != count($first_insert_item_keys)) {
-                throw new Exception(__('插入数据和更新依据字段不匹配，请检查! 所需字段：%{1}，实际字段: %{2}', [implode(',', $this->insert_need_fields), implode(',', $first_insert_item_keys)]));
-            }
+            $this->insert_need_fields = $insert_need_fields;
             foreach ($first_insert_item as $f => $fv) {
                 if (!in_array($f, $insert_need_fields)) {
                     $insert_need_fields[] = $f;
                 }
             }
+            $insert_need_fields = array_unique($insert_need_fields);
             # 区分更新或者插入（在 AST 构建阶段处理）
             foreach ($this->insert['origin'] as $item) {
                 # 检测个数据是否有需要更新的字段以及更新依据字段的字段数据
