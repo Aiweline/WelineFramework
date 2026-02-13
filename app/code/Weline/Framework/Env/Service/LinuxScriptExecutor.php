@@ -138,14 +138,15 @@ class LinuxScriptExecutor implements InstallScriptExecutorInterface
         // 设置工作目录为 env 目录
         $envDir = dirname($scriptPath);
 
-        // 执行命令
+        // 执行命令：注入 PATH，使脚本在 check/install 时能找到 /usr/local/bin、~/.local/bin 下的二进制
         $descriptorSpec = [
             0 => ['pipe', 'r'],  // stdin
             1 => ['pipe', 'w'],  // stdout
             2 => ['pipe', 'w'],  // stderr
         ];
 
-        $process = proc_open($command, $descriptorSpec, $pipes, $envDir);
+        $env = $this->buildProcessEnv();
+        $process = proc_open($command, $descriptorSpec, $pipes, $envDir, $env);
 
         if (!is_resource($process)) {
             return ExecutionResult::failure(-1, __('无法启动进程'), $command, $action)
@@ -193,6 +194,28 @@ class LinuxScriptExecutor implements InstallScriptExecutorInterface
             default:
                 return escapeshellarg($scriptPath) . ' ' . escapeshellarg($action);
         }
+    }
+
+    /**
+     * 构建子进程环境变量（Linux/macOS）
+     * 在 PATH 前追加 /usr/local/bin 与 ~/.local/bin，便于依赖脚本在 check/install 时找到已安装的 CLI
+     */
+    private function buildProcessEnv(): array
+    {
+        $env = getenv();
+        if (!is_array($env)) {
+            $env = [];
+        }
+
+        $path = $env['PATH'] ?? '/usr/local/bin:/usr/bin:/bin';
+        $prefix = '/usr/local/bin';
+        $home = getenv('HOME');
+        if ($home !== false && $home !== '') {
+            $prefix .= ':' . $home . '/.local/bin';
+        }
+        $env['PATH'] = $prefix . ':' . $path;
+
+        return $env;
     }
 
     /**
