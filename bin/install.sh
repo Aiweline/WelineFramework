@@ -184,17 +184,27 @@ install_php_system_deps() {
       echo "ERROR: Another 'brew install' is still running. Wait for it to finish or run: pkill -f 'brew install'" >&2
       return 1
     fi
-    # 避免上次 brew 未完成导致的锁冲突：每次安装前清理 incomplete 与 locks
-    if [[ -d "$HOME/Library/Caches/Homebrew/downloads" ]]; then
-      rm -f "$HOME/Library/Caches/Homebrew/downloads/"*.incomplete 2>/dev/null || true
-    fi
+    # 彻底清理残留锁与未完成下载（重启后仍可能留下 .incomplete 文件）
     local brew_prefix
     brew_prefix=$(brew --prefix 2>/dev/null) || true
+    if [[ -d "$HOME/Library/Caches/Homebrew/downloads" ]]; then
+      find "$HOME/Library/Caches/Homebrew/downloads" -maxdepth 1 -name "*.incomplete" -delete 2>/dev/null || true
+      find "$HOME/Library/Caches/Homebrew/downloads" -maxdepth 1 -name "*.lock" -delete 2>/dev/null || true
+    fi
     if [[ -n "$brew_prefix" ]] && [[ -d "$brew_prefix/var/homebrew/locks" ]]; then
       rm -rf "${brew_prefix}/var/homebrew/locks/"* 2>/dev/null || true
     fi
+    # /tmp 下 Homebrew 锁（部分版本会写在这里）
+    rm -f /tmp/Homebrew*.lock 2>/dev/null || true
     echo "Installing missing macOS build dependencies (brew): ${missing[*]}"
-    brew install "${missing[@]}"
+    if ! brew install "${missing[@]}"; then
+      echo "" >&2
+      echo "Homebrew install failed (e.g. lock file). Try manual cleanup then re-run:" >&2
+      echo "  rm -f \$HOME/Library/Caches/Homebrew/downloads/*.incomplete" >&2
+      echo "  rm -rf \$(brew --prefix)/var/homebrew/locks/*" >&2
+      echo "  ./bin/install.sh" >&2
+      return 1
+    fi
     return
   fi
 
