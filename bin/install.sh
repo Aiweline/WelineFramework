@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+g'i'tgit#!/usr/bin/env bash
 # 安装脚本只负责：安装 PHP 主版本（Linux/macOS 下自动安装编译依赖并下载 php-src 编译到 extend/server/php）、
 # 将 extend/server/* 加入 PATH，然后交给 run.php 处理其余（扩展/函数依赖、php.ini、env、composer、setup 等）。
 # SOLID：Windows 流程由 install.bat 独立处理；本脚本仅处理 Linux/macOS。
@@ -167,6 +167,20 @@ install_php_system_deps() {
     if ! command -v brew &>/dev/null; then
       echo "ERROR: Homebrew not found. Install Homebrew first, then re-run installer." >&2
       return 1
+    fi
+    # 若有未退出的 brew install，会占用锁导致报错，先提示退出
+    if pgrep -f "brew install" &>/dev/null; then
+      echo "ERROR: Another 'brew install' is still running. Wait for it to finish or run: pkill -f 'brew install'" >&2
+      return 1
+    fi
+    # 避免上次 brew 未完成导致的锁冲突：每次安装前清理 incomplete 与 locks
+    if [[ -d "$HOME/Library/Caches/Homebrew/downloads" ]]; then
+      rm -f "$HOME/Library/Caches/Homebrew/downloads/"*.incomplete 2>/dev/null || true
+    fi
+    local brew_prefix
+    brew_prefix=$(brew --prefix 2>/dev/null) || true
+    if [[ -n "$brew_prefix" ]] && [[ -d "$brew_prefix/var/homebrew/locks" ]]; then
+      rm -rf "${brew_prefix}/var/homebrew/locks/"* 2>/dev/null || true
     fi
     echo "Installing macOS build dependencies (brew)..."
     brew install pkg-config openssl libxml2 curl sqlite libzip libpng jpeg freetype oniguruma libxslt icu4c
