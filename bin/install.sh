@@ -99,10 +99,11 @@ case "$OS" in
   *)       echo "Unsupported OS: $OS. On Windows use: bin\\install.bat" >&2; exit 1 ;;
 esac
 
-# 向 PATH 追加（避免重复）
+# 向 PATH 追加（避免重复）；同时在本 shell 中生效，便于后续 command -v 等能找到
 add_to_path() {
   local dir="$1"
   [[ ! -d "$dir" ]] && return
+  export PATH="$dir:$PATH"
   local line="export PATH=\"$dir:\$PATH\""
   for f in ~/.bashrc ~/.zshrc ~/.bash_profile; do
     [[ -f "$f" ]] || continue
@@ -174,6 +175,11 @@ install_php_via_brew() {
   if [[ -n "$php_prefix" ]] && [[ -d "$php_prefix/bin" ]]; then
     add_to_path "$php_prefix/bin"
     echo "PHP (brew $formula) added to PATH: $php_prefix/bin"
+    # 在 extend/server/php/bin 做软链，便于框架和 run.php 统一从该路径读取
+    mkdir -p "$SERVER_DIR/php/bin"
+    ln -sf "$php_prefix/bin/php" "$SERVER_DIR/php/bin/php"
+    [[ -x "$php_prefix/bin/php-fpm" ]] && ln -sf "$php_prefix/bin/php-fpm" "$SERVER_DIR/php/bin/php-fpm" 2>/dev/null || true
+    echo "Symlink: $SERVER_DIR/php/bin/php -> $php_prefix/bin/php"
   else
     echo "WARNING: Could not get brew PHP path. Ensure \`php\` is in your PATH." >&2
   fi
@@ -428,7 +434,12 @@ install_php() {
       if [[ -n "$installed" ]] && [[ "$installed" == "$PHP_VERSION" ]]; then
         local php_prefix
         php_prefix="$(brew --prefix php@${PHP_VERSION} 2>/dev/null)" || php_prefix="$(brew --prefix php 2>/dev/null)"
-        [[ -d "$php_prefix/bin" ]] && add_to_path "$php_prefix/bin"
+        if [[ -n "$php_prefix" ]] && [[ -d "$php_prefix/bin" ]]; then
+          add_to_path "$php_prefix/bin"
+          mkdir -p "$SERVER_DIR/php/bin"
+          ln -sf "$php_prefix/bin/php" "$SERVER_DIR/php/bin/php"
+          [[ -x "$php_prefix/bin/php-fpm" ]] && ln -sf "$php_prefix/bin/php-fpm" "$SERVER_DIR/php/bin/php-fpm" 2>/dev/null || true
+        fi
         echo "PHP already installed via brew (version $installed). Skipping."
         return
       fi
@@ -520,12 +531,18 @@ for c in "${COMPONENTS[@]}"; do
 done
 
 # 安装后：由 setup/server_installer/run.php 执行（与 Windows 一致；无 PHP 则报错退出）
+# 优先用 extend/server/php/bin/php（含 Mac 下指向 brew 的软链），再尝试 PATH 中的 php，Mac 下再显式查 brew 路径
 PHP_EXE=""
 [[ -x "$SERVER_DIR/php/bin/php" ]] && PHP_EXE="$SERVER_DIR/php/bin/php"
-[[ -x "$SERVER_DIR/php/php" ]] && PHP_EXE="$SERVER_DIR/php/php"
-[[ -z "$PHP_EXE" ]] && command -v php &>/dev/null && PHP_EXE="php"
+[[ -z "$PHP_EXE" ]] && [[ -x "$SERVER_DIR/php/php" ]] && PHP_EXE="$SERVER_DIR/php/php"
+[[ -z "$PHP_EXE" ]] && command -v php &>/dev/null && PHP_EXE="$(command -v php)"
+if [[ -z "$PHP_EXE" ]] && [[ "$PLATFORM" == "mac" ]]; then
+  for p in "$(brew --prefix php@8.4 2>/dev/null)" "$(brew --prefix php@8.3 2>/dev/null)" "$(brew --prefix php 2>/dev/null)"; do
+    [[ -n "$p" ]] && [[ -x "$p/bin/php" ]] && PHP_EXE="$p/bin/php" && break
+  done
+fi
 if [[ -z "$PHP_EXE" ]] || ! "$PHP_EXE" -v &>/dev/null; then
-  echo "ERROR: PHP not found. Install to $SERVER_DIR/php or add php to PATH." >&2
+  echo "ERROR: PHP not found. Install to $SERVER_DIR/php or add php to PATH. On Mac: brew install php@$PHP_VERSION" >&2
   exit 1
 fi
 echo ""
