@@ -507,18 +507,36 @@ trait TraitTemplate
     {
         $normalized = str_replace('\\', '/', $real_path);
         $url_path = '';
+        $isWindows = DIRECTORY_SEPARATOR === '\\';
+        $startsWithPath = static function (string $path, string $prefix) use ($isWindows): bool {
+            if ($prefix === '') {
+                return false;
+            }
+            return $isWindows
+                ? str_starts_with(strtolower($path), strtolower($prefix))
+                : str_starts_with($path, $prefix);
+        };
+        $stripPrefix = static function (string $path, string $prefix) use ($isWindows): string {
+            if ($prefix === '') {
+                return $path;
+            }
+            if ($isWindows) {
+                return (string)preg_replace('/^' . preg_quote($prefix, '/') . '/i', '', $path, 1);
+            }
+            return str_starts_with($path, $prefix) ? substr($path, strlen($prefix)) : $path;
+        };
         if (DEV) {
             $appCode = str_replace('\\', '/', APP_CODE_PATH);
             $vendorPath = defined('VENDOR_PATH') ? str_replace('\\', '/', VENDOR_PATH) : '';
-            if ($appCode !== '' && str_starts_with($normalized, $appCode)) {
-                $url_path = '/' . ltrim(substr($normalized, strlen($appCode)), '/');
-            } elseif ($vendorPath !== '' && str_starts_with($normalized, $vendorPath)) {
-                $url_path = '/' . ltrim(substr($normalized, strlen($vendorPath)), '/');
+            if ($startsWithPath($normalized, $appCode)) {
+                $url_path = '/' . ltrim($stripPrefix($normalized, $appCode), '/');
+            } elseif ($startsWithPath($normalized, $vendorPath)) {
+                $url_path = '/' . ltrim($stripPrefix($normalized, $vendorPath), '/');
             }
         } else {
             $pubPath = defined('PUB') ? str_replace('\\', '/', PUB) : '';
-            if ($pubPath !== '' && str_starts_with($normalized, $pubPath)) {
-                $url_path = '/' . ltrim(substr($normalized, strlen($pubPath)), '/');
+            if ($startsWithPath($normalized, $pubPath)) {
+                $url_path = '/' . ltrim($stripPrefix($normalized, $pubPath), '/');
             }
         }
         // 保留末尾 /，供调用方 rtrim(..., 'statics') 时不会误删 URL 中的 statics 目录名
