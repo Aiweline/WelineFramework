@@ -32,6 +32,17 @@ $runRaw = function (string $cmd): int {
     return (int) $code;
 };
 
+// 0. 确保 generated/code 存在（Composer classmap 会扫描，缺失会报错）
+$generatedCodeDir = $projectRoot . DIRECTORY_SEPARATOR . 'generated' . DIRECTORY_SEPARATOR . 'code';
+if (!is_dir($generatedCodeDir)) {
+    mkdir($generatedCodeDir, 0755, true);
+    $gitkeep = $generatedCodeDir . DIRECTORY_SEPARATOR . '.gitkeep';
+    if (!is_file($gitkeep)) {
+        file_put_contents($gitkeep, "# 保留此目录以便 Composer classmap 可扫描；目录内生成文件由 .gitignore 忽略\n");
+    }
+    echo "Created generated/code/ for Composer autoload.\n";
+}
+
 // 1. composer install（vendor 已存在则跳过）；composer 为独立命令，不能用 php composer 方式调用
 if (!$fromStep5b) {
     if (is_dir($projectRoot . DIRECTORY_SEPARATOR . 'vendor')) {
