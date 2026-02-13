@@ -199,7 +199,7 @@ class Check extends CommandAbstract
 
             $this->printer->note('');
             $this->printer->note(__('提示: 推荐项为可选优化，不影响系统运行，但安装后可显著提升性能'));
-            $this->printer->note(__('运行 php bin/w env:install 可尝试自动安装推荐项'));
+            $this->printer->note(__('按需安装推荐项: php bin/w env:install <名称> -y，例如 env:install event -y'));
         }
     }
 
@@ -266,7 +266,7 @@ class Check extends CommandAbstract
             }
         }
 
-        $this->printer->note(__('提示: 您也可以尝试运行 php bin/w env:install 自动修复部分问题'));
+        $this->printer->note(__('提示: 可运行 php bin/w env:install -y 尝试自动安装必需依赖'));
     }
 
     /**
