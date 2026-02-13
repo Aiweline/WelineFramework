@@ -957,22 +957,25 @@ abstract class QueryAst implements QueryInterface
             $origin_data = $result;
             $this->reset();
         } else {
-            // 单条语句，使用 prepare/execute
-            try {
-                $this->PDOStatement = $this->getConnectionInterface()->prepare($this->sql);
-                $this->PDOStatement->execute($this->bound_values);
-            } catch (\PDOException $e) {
-                // 其他错误继续抛出
-                throw $e;
-            }
-            // 检查是否有多个结果集
-            $origin_data = [];
-            do {
-                $fetched = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
-                $origin_data[] = $fetched;
-            } while ($this->PDOStatement->nextRowset());
-            if (count($origin_data) == 1) {
-                $origin_data = $origin_data[0];
+            // 单条语句：若子类已执行并设置 PDOStatement（如 Pgsql 改写 SQL 后先执行），则不再 prepare，直接取结果（符合 Liskov：父类包容子类契约）
+            $sqlForPrepare = trim($this->sql ?? '');
+            if ($this->PDOStatement !== null && $sqlForPrepare === '') {
+                $origin_data = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
+            } else {
+                try {
+                    $this->PDOStatement = $this->getConnectionInterface()->prepare($this->sql);
+                    $this->PDOStatement->execute($this->bound_values);
+                } catch (\PDOException $e) {
+                    throw $e;
+                }
+                $origin_data = [];
+                do {
+                    $fetched = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
+                    $origin_data[] = $fetched;
+                } while ($this->PDOStatement->nextRowset());
+                if (count($origin_data) == 1) {
+                    $origin_data = $origin_data[0];
+                }
             }
         }
         $this->batch = false;
