@@ -155,8 +155,11 @@ class Install extends CommandAbstract
                     $this->printer->printing(__('  来源模块: %{module}', ['module' => $module]));
                 }
                 
+                $scriptDarwin = $item['script_darwin'] ?? '';
                 if (PHP_OS_FAMILY === 'Windows' && $scriptWindows) {
                     $this->printer->printing(__('  将执行脚本: %{script} --install', ['script' => $scriptWindows]));
+                } elseif (PHP_OS_FAMILY === 'Darwin' && $scriptDarwin) {
+                    $this->printer->printing(__('  将执行脚本: %{script} --install（macOS）', ['script' => $scriptDarwin]));
                 } elseif (PHP_OS_FAMILY !== 'Windows' && $scriptLinux) {
                     $this->printer->printing(__('  将执行脚本: %{script} --install', ['script' => $scriptLinux]));
                 } else {
