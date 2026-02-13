@@ -168,6 +168,17 @@ install_php_system_deps() {
       echo "ERROR: Homebrew not found. Install Homebrew first, then re-run installer." >&2
       return 1
     fi
+    # 先检测已安装的依赖，只安装缺失的，避免每次都重新下载
+    local brew_deps=(pkg-config openssl libxml2 curl sqlite libzip libpng jpeg freetype oniguruma libxslt icu4c)
+    local missing=()
+    local f
+    for f in "${brew_deps[@]}"; do
+      brew list "$f" &>/dev/null || missing+=("$f")
+    done
+    if [[ ${#missing[@]} -eq 0 ]]; then
+      echo "macOS build dependencies already installed."
+      return 0
+    fi
     # 若有未退出的 brew install，会占用锁导致报错，先提示退出
     if pgrep -f "brew install" &>/dev/null; then
       echo "ERROR: Another 'brew install' is still running. Wait for it to finish or run: pkill -f 'brew install'" >&2
@@ -182,8 +193,8 @@ install_php_system_deps() {
     if [[ -n "$brew_prefix" ]] && [[ -d "$brew_prefix/var/homebrew/locks" ]]; then
       rm -rf "${brew_prefix}/var/homebrew/locks/"* 2>/dev/null || true
     fi
-    echo "Installing macOS build dependencies (brew)..."
-    brew install pkg-config openssl libxml2 curl sqlite libzip libpng jpeg freetype oniguruma libxslt icu4c
+    echo "Installing missing macOS build dependencies (brew): ${missing[*]}"
+    brew install "${missing[@]}"
     return
   fi
 
