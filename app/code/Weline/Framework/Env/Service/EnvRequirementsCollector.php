@@ -177,10 +177,17 @@ class EnvRequirementsCollector implements EnvRequirementsCollectorInterface
             $requirements->addFunctions($data['functions']);
         }
 
-        // 复杂依赖项 items
+        // 复杂依赖项 items（支持 platform：仅当前平台匹配时才加入，不声明或 platform=all 表示全平台）
         if (isset($data['items']) && is_array($data['items'])) {
             foreach ($data['items'] as $item) {
-                // 为每个 item 添加模块信息
+                $platform = $item['platform'] ?? $item['supported_os'] ?? 'all';
+                $platform = is_array($platform) ? (in_array(PHP_OS_FAMILY, $platform, true) ? 'all' : 'none') : (string)$platform;
+                if ($platform !== 'all' && $platform !== 'none' && !EnvRequirements::matchesPlatform($platform)) {
+                    continue;
+                }
+                if ($platform === 'none') {
+                    continue;
+                }
                 $item['module'] = $moduleName;
                 $item['module_path'] = $modulePath;
                 $requirements->addItem($item);
@@ -197,9 +204,17 @@ class EnvRequirementsCollector implements EnvRequirementsCollectorInterface
             $requirements->addRecommendedFunctions($data['recommended_functions']);
         }
 
-        // 推荐复杂依赖项
+        // 推荐复杂依赖项（支持 platform：仅当前平台匹配时才加入）
         if (isset($data['recommended_items']) && is_array($data['recommended_items'])) {
             foreach ($data['recommended_items'] as $item) {
+                $platform = $item['platform'] ?? $item['supported_os'] ?? 'all';
+                $platform = is_array($platform) ? (in_array(PHP_OS_FAMILY, $platform, true) ? 'all' : 'none') : (string)$platform;
+                if ($platform !== 'all' && $platform !== 'none' && !EnvRequirements::matchesPlatform($platform)) {
+                    continue;
+                }
+                if ($platform === 'none') {
+                    continue;
+                }
                 $item['module'] = $moduleName;
                 $item['module_path'] = $modulePath;
                 $requirements->addRecommendedItem($item);
