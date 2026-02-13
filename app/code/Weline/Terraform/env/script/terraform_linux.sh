@@ -4,15 +4,25 @@ set -e
 ACTION="${1:-check}"
 VERSION="${TERRAFORM_VERSION:-1.9.8}"
 
+# 检测 terraform 是否可用：先看 PATH，再看常见安装路径（便于 env:check 与安装后验证一致）
+terraform_cmd=""
 if command -v terraform >/dev/null 2>&1; then
+  terraform_cmd="terraform"
+elif [ -x "/usr/local/bin/terraform" ]; then
+  terraform_cmd="/usr/local/bin/terraform"
+elif [ -n "${HOME}" ] && [ -x "${HOME}/.local/bin/terraform" ]; then
+  terraform_cmd="${HOME}/.local/bin/terraform"
+fi
+
+if [ -n "$terraform_cmd" ]; then
   echo "INSTALLED"
-  terraform -version | head -n 1 || true
+  $terraform_cmd -version | head -n 1 || true
   exit 0
 fi
 
 if [ "$ACTION" = "check" ]; then
   echo "MISSING"
-  echo "terraform not found in PATH"
+  echo "terraform not found in PATH or /usr/local/bin or ~/.local/bin"
   exit 1
 fi
 
@@ -69,9 +79,10 @@ fi
 
 install -m 0755 "$TMP_DIR/terraform" "$BIN_DIR/terraform"
 
-if command -v terraform >/dev/null 2>&1; then
+# 用安装路径直接验证，避免依赖当前 PATH 是否包含 BIN_DIR（如 ~/.local/bin）
+if [ -x "$BIN_DIR/terraform" ] && "$BIN_DIR/terraform" -version >/dev/null 2>&1; then
   echo "INSTALLED"
-  terraform -version | head -n 1 || true
+  "$BIN_DIR/terraform" -version | head -n 1 || true
   exit 0
 fi
 
