@@ -477,7 +477,27 @@ install_php() {
   [[ -d "$dest/bin" ]] && add_to_path "$dest/bin"
 }
 
-# ---- PostgreSQL ----（仅检测并加 PATH，不安装；安装与配置交给 run.php / env）
+# Mac：用 Homebrew 安装 PostgreSQL，并在 extend/server/pgsql 做软链（与 Windows 路径一致，初始化逻辑复用 run.php）
+install_pgsql_via_brew() {
+  ensure_brew_installed || return 1
+  local formula="postgresql@${INSTALL_PGSQL_VERSION}"
+  echo "Installing PostgreSQL via Homebrew ($formula)..."
+  brew install "$formula" || return 1
+  brew services start "$formula" 2>/dev/null || true
+  local pg_prefix
+  pg_prefix="$(brew --prefix "$formula" 2>/dev/null)"
+  if [[ -z "$pg_prefix" ]] || [[ ! -d "$pg_prefix/bin" ]]; then
+    echo "WARNING: Could not get brew PostgreSQL path." >&2
+    return 1
+  fi
+  mkdir -p "$SERVER_DIR/pgsql"
+  rm -rf "$SERVER_DIR/pgsql/bin"
+  ln -sf "$pg_prefix/bin" "$SERVER_DIR/pgsql/bin"
+  add_to_path "$SERVER_DIR/pgsql/bin"
+  echo "PostgreSQL (brew $formula) linked at $SERVER_DIR/pgsql/bin -> $pg_prefix/bin"
+}
+
+# ---- PostgreSQL ----（Linux 仅检测；Mac 用 brew 自动安装并软链到 extend/server/pgsql；初始化与 Win 一致由 run.php Step 5b 完成）
 install_pgsql() {
   local dest="$SERVER_DIR/pgsql"
   if [[ -f "$dest/bin/psql" ]] || [[ -f "$dest/bin/postgres" ]]; then
@@ -489,13 +509,16 @@ install_pgsql() {
     echo "(--path-only) PostgreSQL not found at $dest."
     return
   fi
+  if [[ "$PLATFORM" == "mac" ]]; then
+    echo "========== PostgreSQL (Mac, Homebrew) =========="
+    install_pgsql_via_brew
+    return
+  fi
   echo "PostgreSQL not at $dest. Install manually, then run: $0 --path-only pgsql"
   if [[ -f /etc/debian_version ]]; then
     echo "  e.g. sudo apt install -y postgresql-${INSTALL_PGSQL_VERSION} postgresql-client-${INSTALL_PGSQL_VERSION}"
   elif [[ -f /etc/redhat-release ]]; then
     echo "  e.g. sudo dnf install -y postgresql${INSTALL_PGSQL_VERSION}-server postgresql${INSTALL_PGSQL_VERSION}"
-  elif [[ "$PLATFORM" == "mac" ]]; then
-    echo "  Install PostgreSQL manually (without brew if desired), then ensure psql is available in $dest/bin"
   fi
 }
 
