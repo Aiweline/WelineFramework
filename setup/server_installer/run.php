@@ -25,13 +25,22 @@ $run = function (string $cmd) use ($projectRoot, $phpBin): int {
     passthru($full, $code);
     return (int) $code;
 };
+// 执行裸命令（不 prepend php），用于 composer 等独立可执行命令
+$runRaw = function (string $cmd): int {
+    echo "执行命令：$cmd\n";
+    passthru($cmd, $code);
+    return (int) $code;
+};
 
-// 1. composer install（vendor 已存在则跳过）
+// 1. composer install（vendor 已存在则跳过）；composer 为独立命令，不能用 php composer 方式调用
 if (!$fromStep5b) {
     if (is_dir($projectRoot . DIRECTORY_SEPARATOR . 'vendor')) {
         echo "vendor/ exists, skipping composer install.\n";
     } else {
-        $code = $run('composer install -n --no-interaction');
+        $composerPhar = $projectRoot . DIRECTORY_SEPARATOR . 'composer.phar';
+        $code = is_file($composerPhar)
+            ? $run($composerPhar . ' install -n --no-interaction')
+            : $runRaw('composer install -n --no-interaction');
         if ($code !== 0) {
             fwrite(STDERR, "ERROR: composer install failed (exit $code).\n");
             exit(1);
