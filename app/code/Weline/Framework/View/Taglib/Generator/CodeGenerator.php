@@ -800,7 +800,7 @@ final class CodeGenerator
         if ($node->selfClosing || str_starts_with($node->rawContent, '__INLINE_OPTIMIZED__')) {
             // 无子内容，直接调用渲染器
             return ExprBuilder::wrapEcho(
-                "\$this->taglib->renderRuntimeTag(\$this, {$tagName}, {$tagKey}, {$attrs}, '', '', {$rawAttributes}, '')"
+                "\$this->getTaglib()->renderRuntimeTag(\$this, {$tagName}, {$tagKey}, {$attrs}, '', '', {$rawAttributes}, '')"
             );
         }
         
@@ -808,7 +808,7 @@ final class CodeGenerator
         if (str_starts_with($node->rawContent, '__STATIC_CHILDREN__')) {
             $staticContent = var_export(substr($node->rawContent, 19), true);
             return ExprBuilder::wrapEcho(
-                "\$this->taglib->renderRuntimeTag(\$this, {$tagName}, {$tagKey}, {$attrs}, {$staticContent}, '', {$rawAttributes}, '')"
+                "\$this->getTaglib()->renderRuntimeTag(\$this, {$tagName}, {$tagKey}, {$attrs}, {$staticContent}, '', {$rawAttributes}, '')"
             );
         }
         
@@ -820,7 +820,7 @@ final class CodeGenerator
         $code .= $children;
         $code .= ExprBuilder::wrapPhp("{$childrenVar} = ob_get_clean();");
         $code .= ExprBuilder::wrapEcho(
-            "\$this->taglib->renderRuntimeTag(\$this, {$tagName}, {$tagKey}, {$attrs}, {$childrenVar}, '', {$rawAttributes}, '')"
+            "\$this->getTaglib()->renderRuntimeTag(\$this, {$tagName}, {$tagKey}, {$attrs}, {$childrenVar}, '', {$rawAttributes}, '')"
         );
 
         return $code;
