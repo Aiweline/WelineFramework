@@ -322,15 +322,14 @@ class EnvChecker implements EnvCheckerInterface
     }
 
     /**
-     * 获取当前系统对应的脚本执行器
+     * 获取当前系统对应的脚本执行器（Windows → Windows；Linux/macOS → Linux）
      */
     private function getScriptExecutor(): ?InstallScriptExecutorInterface
     {
         if (PHP_OS_FAMILY === 'Windows') {
             return ObjectManager::getInstance(WindowsScriptExecutor::class);
-        } else {
-            return ObjectManager::getInstance(LinuxScriptExecutor::class);
         }
+        return ObjectManager::getInstance(LinuxScriptExecutor::class);
     }
 
     /**
