@@ -12,6 +12,7 @@
 | 默认组件 | 无参数时安装 `php` + `pgsql`（不要只装 php 或只装 pgsql） |
 | 安装目录 | `extend/server/php`、`extend/server/pgsql`、`extend/server/mysql` |
 | PHP 版本来源 | 从项目根 `composer.json` 的 `require.php` 解析主次版本（如 ^8.4 → 8.4） |
+| Linux/macOS PHP 安装方式 | 当 `extend/server/php` 不存在可用 php 时，`install.sh` 自动安装系统编译依赖并下载 `php-src` 编译安装到 `extend/server/php`（不安装系统 php 包） |
 | 已存在则跳过 | 若 `extend/server/php` 下已有 php 且主次版本与 composer 一致，则跳过下载，仅做 PATH |
 | 版本提示文案 | 三种情况统一：① "matches required X" ② "Keeping existing" ③ "version check failed" |
 | weline.env | 读取 `INSTALL_PGSQL_VERSION`、`INSTALL_MYSQL_VERSION`、可选 `INSTALL_PHP_VERSION`；缺省 pgsql=16、mysql=8.0 |
