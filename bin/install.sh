@@ -2,8 +2,13 @@
 # 安装脚本只负责：安装 PHP 主版本（Linux 下编译到 extend/server/php；macOS 下用 Homebrew 安装 PHP 及扩展，依赖可控）、
 # 将 extend/server/* 或 brew PHP 加入 PATH，然后交给 run.php 处理其余（php.ini、env、composer、setup 等）。
 # SOLID：Windows 流程由 install.bat 独立处理；本脚本仅处理 Linux/macOS。
-# 用法：./install.sh [--path-only] [php] [pgsql] [mysql]  无参数时默认 php + pgsql（仅 PATH，pgsql/mysql 不安装只检测）
+# 用法：./bin/install.sh 或 bash bin/install.sh（必须用 bash，不要用 sh）
 # 兼容：Bash 3.2+（macOS 默认）、GNU/BSD grep、常见 Linux 发行版
+
+# 必须用 bash 运行（脚本使用 [[ ]]、数组等），若用 sh 调用则自动用 bash 重新执行
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec /usr/bin/env bash "$0" "$@"
+fi
 
 set -e
 
@@ -402,6 +407,7 @@ install_php() {
 
   # Mac：统一用 Homebrew 安装 PHP 及扩展，依赖由 brew 管理，不自行编译
   if [[ "$PLATFORM" == "mac" ]]; then
+    echo "========== PHP (Mac, Homebrew) =========="
     if [[ "$PATH_ONLY" == true ]]; then
       local p
       for p in "$(brew --prefix php@8.4 2>/dev/null)/bin" "$(brew --prefix php@8.3 2>/dev/null)/bin" "$(brew --prefix php 2>/dev/null)/bin"; do
@@ -502,7 +508,12 @@ install_mysql() {
 echo "WelineFramework install: components=${COMPONENTS[*]}, path-only=$PATH_ONLY, PHP version=$PHP_VERSION, pgsql=$INSTALL_PGSQL_VERSION, mysql=$INSTALL_MYSQL_VERSION"
 for c in "${COMPONENTS[@]}"; do
   case "$c" in
-    php)   install_php ;;
+    php)
+      if ! install_php; then
+        echo "ERROR: PHP installation failed. On Mac use: brew install php@$PHP_VERSION" >&2
+        exit 1
+      fi
+      ;;
     pgsql) install_pgsql ;;
     mysql) install_mysql ;;
   esac
