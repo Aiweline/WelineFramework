@@ -20,6 +20,7 @@ use Weline\Framework\Env\Api\InstallScriptExecutorInterface;
 use Weline\Framework\Env\Api\Data\EnvCheckResult;
 use Weline\Framework\Env\Service\EnvChecker;
 use Weline\Framework\Env\Service\EnvRequirementsCollector;
+use Weline\Framework\Env\Service\ExtensionInstallStrategyMap;
 use Weline\Framework\Env\Service\LinuxScriptExecutor;
 use Weline\Framework\Env\Service\RecommendedStatusService;
 use Weline\Framework\Env\Service\WindowsScriptExecutor;
@@ -480,7 +481,7 @@ class Install extends CommandAbstract
      * 尝试安装/启用 PHP 扩展
      *
      * Windows: 检查 ext 目录是否有对应 DLL，有则修改 php.ini 启用
-     * Linux:   尝试通过 apt/yum/dnf/pecl 等安装
+     * Linux/macOS: 按平台优先尝试常用包管理器（Mac→brew、Ubuntu→apt、CentOS→yum 等），再回退逐个尝试（先检查命令存在）
      */
     private function tryInstallExtension(string $ext): bool
     {
@@ -593,62 +594,54 @@ class Install extends CommandAbstract
     }
 
     /**
-     * Linux/macOS: 尝试通过包管理器或 pecl 安装扩展
+     * Linux/macOS: 按当前系统优先尝试常用包管理器（如 Mac→brew、Ubuntu→apt、CentOS→yum），命令不存在则回退逐个尝试（先检查命令存在）
      */
     private function tryInstallExtensionLinux(string $ext): bool
     {
-        // 检测 PHP 版本（用于 apt 包名）
         $phpVersion = PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
+        $map = ObjectManager::getInstance(ExtensionInstallStrategyMap::class);
+        $platform = $map->getCurrentPlatform();
 
-        // 安装策略列表（按优先级排列）
-        $strategies = [];
+        $this->printer->note(__('    当前平台: %{platform}，优先尝试: %{pkg}', [
+            'platform' => $platform,
+            'pkg'      => $map->getPreferredPackageManagerName($platform),
+        ]));
 
-        // Docker 环境
-        if (file_exists('/.dockerenv') || is_file('/proc/1/cgroup') && str_contains((string)file_get_contents('/proc/1/cgroup'), 'docker')) {
-            $strategies[] = ['cmd' => 'docker-php-ext-install ' . escapeshellarg($ext), 'name' => 'docker-php-ext-install'];
-        }
-
-        // phpenmod (已安装但未启用的情况，如 Ubuntu)
-        $strategies[] = ['cmd' => 'phpenmod ' . escapeshellarg($ext), 'name' => 'phpenmod'];
-
-        // apt (Debian/Ubuntu)
-        $aptPackages = [
-            'php' . $phpVersion . '-' . $ext,
-            'php-' . $ext,
-        ];
-        foreach ($aptPackages as $pkg) {
-            $strategies[] = ['cmd' => 'apt-get install -y ' . escapeshellarg($pkg), 'name' => 'apt (' . $pkg . ')'];
-        }
-
-        // yum/dnf (CentOS/RHEL/Fedora)
-        $strategies[] = ['cmd' => 'yum install -y php-' . escapeshellarg($ext), 'name' => 'yum'];
-        $strategies[] = ['cmd' => 'dnf install -y php-' . escapeshellarg($ext), 'name' => 'dnf'];
-
-        // pecl
-        $strategies[] = ['cmd' => 'pecl install ' . escapeshellarg($ext), 'name' => 'pecl'];
-
-        foreach ($strategies as $strategy) {
-            $this->printer->note(__('    尝试: %{name}...', ['name' => $strategy['name']]));
-            $output = [];
-            $returnCode = 0;
-            @exec($strategy['cmd'] . ' 2>&1', $output, $returnCode);
-
-            if ($returnCode === 0) {
-                $this->printer->success(__('    %{name} 执行成功', ['name' => $strategy['name']]));
-                // 验证扩展是否真的加载了
-                $checkOutput = [];
-                @exec('php -m 2>&1', $checkOutput, $checkCode);
-                $loadedExts = array_map('strtolower', $checkOutput);
-                if (in_array(strtolower($ext), $loadedExts, true)) {
+        $tryStrategies = function (array $strategies) use ($map, $ext): bool {
+            foreach ($strategies as $s) {
+                if (!$map->commandExists($s['check'])) {
+                    continue;
+                }
+                $this->printer->note(__('    尝试: %{name}...', ['name' => $s['name']]));
+                $output = [];
+                $returnCode = 0;
+                @exec($s['cmd'] . ' 2>&1', $output, $returnCode);
+                if ($returnCode === 0) {
+                    $this->printer->success(__('    %{name} 执行成功', ['name' => $s['name']]));
+                    $checkOutput = [];
+                    @exec('php -m 2>&1', $checkOutput, $checkCode);
+                    $loadedExts = array_map('strtolower', $checkOutput);
+                    if (in_array(strtolower($ext), $loadedExts, true)) {
+                        return true;
+                    }
+                    $this->tryEnableExtensionInIniLinux($ext);
                     return true;
                 }
-                // 虽然命令成功但扩展未加载，可能需要在 php.ini 中启用
-                $this->tryEnableExtensionInIniLinux($ext);
-                return true;
             }
+            return false;
+        };
+
+        $preferred = $map->getPreferredStrategies($platform, $ext, $phpVersion);
+        if ($tryStrategies($preferred)) {
+            return true;
         }
 
-        // 所有策略失败，尝试直接在 php.ini 中启用（也许 .so 文件已存在）
+        $this->printer->note(__('    优先方式未成功，回退尝试其他安装命令（仅尝试已存在的命令）...'));
+        $fallback = $map->getFallbackStrategies($platform, $ext, $phpVersion);
+        if ($tryStrategies($fallback)) {
+            return true;
+        }
+
         if ($this->tryEnableExtensionInIniLinux($ext)) {
             return true;
         }
@@ -657,7 +650,7 @@ class Install extends CommandAbstract
     }
 
     /**
-     * Linux: 在 php.ini 中启用扩展（.so 文件可能已存在）
+     * Linux/macOS: 在 php.ini 中启用扩展（.so 文件可能已存在）
      */
     private function tryEnableExtensionInIniLinux(string $ext): bool
     {
