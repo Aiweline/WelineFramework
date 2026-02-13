@@ -37,20 +37,11 @@ class Disable extends CommandAbstract
                     $this->printer->error('不存在的模块:' . $module);
                 }
             }
-            // 更新模块信息
+            // 更新模块信息（updateModules 会统一触发注册表刷新）
             /**@var Data $helper */
             $helper = ObjectManager::getInstance(Data::class);
             $helper->updateModules($module_list);
-            
-            // 更新注册表
-            try {
-                /** @var \Weline\Framework\Registry\Service\RegistryUpdateService $registryService */
-                $registryService = ObjectManager::getInstance(\Weline\Framework\Registry\Service\RegistryUpdateService::class);
-                $registryService->updateAllRegistries(true); // 静默执行
-                $this->printer->success(__('注册表已更新完成。'));
-            } catch (\Exception $e) {
-                $this->printer->warning(__('注册表更新失败：%{1}，请手动执行 php bin/w setup:upgrade', [$e->getMessage()]));
-            }
+            $this->printer->success(__('注册表已更新完成。'));
 
             // 禁用对应模块的后台菜单（软禁用 is_enable=0，包括 WeShop_Cms::cms_page_management 等）
             if (!empty($disabledModules)) {

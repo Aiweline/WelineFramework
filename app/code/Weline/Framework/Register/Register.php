@@ -107,14 +107,112 @@ class Register implements RegisterDataInterface
 
     /**
      * 执行所有延后的注册项（依赖刷新后由 Upgrade 调用）
+     * 对 THEME 类型按 parent 依赖排序后再执行，保证父主题先于子主题安装。
      */
     public static function runPendingRegistrations(): void
     {
         self::$registerPhase = self::PHASE_ALL;
-        foreach (self::$pendingRegistrations as $args) {
+        $ordered = self::sortPendingRegistrationsByThemeParent(self::$pendingRegistrations);
+        foreach ($ordered as $args) {
             self::register(...$args);
         }
         self::$pendingRegistrations = [];
+    }
+
+    /**
+     * 对待执行队列按主题父依赖排序：THEME 类型根据 param['parent'] 拓扑排序，其余类型保持原序。
+     * 父主题名 'default' 与框架默认主题名 'Default 默认主题' 视为等价。
+     *
+     * @param array $pending 延后注册项列表，每项为 register(...) 的 func_get_args()
+     * @return array 排序后的列表（非 THEME 原序 + THEME 按父依赖拓扑序）
+     */
+    private static function sortPendingRegistrationsByThemeParent(array $pending): array
+    {
+        $themes = [];
+        $nonThemes = [];
+        foreach ($pending as $args) {
+            $type = $args[0] ?? '';
+            if ($type === self::THEME && is_array($args[2] ?? null)) {
+                $themes[] = $args;
+            } else {
+                $nonThemes[] = $args;
+            }
+        }
+        if (empty($themes)) {
+            return $pending;
+        }
+        $sortedThemes = self::topoSortThemesByParent($themes);
+        return array_merge($nonThemes, $sortedThemes);
+    }
+
+    /**
+     * 对 THEME 注册项按 parent 做拓扑排序（父主题先于子主题）
+     *
+     * @param array $themes 每项为 [type, module_name, param, version, description, dependencies]
+     * @return array 拓扑序
+     */
+    private static function topoSortThemesByParent(array $themes): array
+    {
+        $n = count($themes);
+        $nameToIndex = []; // 主题 name => 在 $themes 中的下标（第一个提供该 name 的）
+        $defaultThemeIndex = null; // 提供 "Default 默认主题" 的下标
+
+        for ($i = 0; $i < $n; $i++) {
+            $param = $themes[$i][2] ?? [];
+            $name = isset($param['name']) ? trim((string)$param['name']) : '';
+            if ($name !== '') {
+                if (!isset($nameToIndex[$name])) {
+                    $nameToIndex[$name] = $i;
+                }
+                if ($name === 'Default 默认主题') {
+                    $defaultThemeIndex = $i;
+                }
+            }
+        }
+        if ($defaultThemeIndex !== null && !isset($nameToIndex['default'])) {
+            $nameToIndex['default'] = $defaultThemeIndex;
+        }
+
+        $deps = array_fill(0, $n, []); // $deps[i] = 必须在 i 之前执行的下标列表
+        for ($i = 0; $i < $n; $i++) {
+            $param = $themes[$i][2] ?? [];
+            $parent = isset($param['parent']) ? trim((string)$param['parent']) : '';
+            if ($parent === '') {
+                continue;
+            }
+            $providerIndex = $nameToIndex[$parent] ?? null;
+            if ($providerIndex !== null && $providerIndex !== $i) {
+                $deps[$i][] = $providerIndex;
+            }
+        }
+
+        $inDegree = array_fill(0, $n, 0);
+        foreach ($deps as $list) {
+            foreach ($list as $j) {
+                $inDegree[$j]++;
+            }
+        }
+        $queue = [];
+        for ($i = 0; $i < $n; $i++) {
+            if ($inDegree[$i] === 0) {
+                $queue[] = $i;
+            }
+        }
+        $order = [];
+        while (!empty($queue)) {
+            $i = array_shift($queue);
+            $order[] = $themes[$i];
+            foreach ($deps[$i] as $j) {
+                $inDegree[$j]--;
+                if ($inDegree[$j] === 0) {
+                    $queue[] = $j;
+                }
+            }
+        }
+        if (count($order) < $n) {
+            return $themes;
+        }
+        return $order;
     }
 
     /**

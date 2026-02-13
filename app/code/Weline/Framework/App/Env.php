@@ -863,6 +863,10 @@ class Env extends DataObject
             throw $e;
         }
 
+        // 重载模块列表时一并清理依赖模块的缓存，避免新模块/卸载模块在 Env 侧仍为旧状态
+        $this->active_module_list = [];
+        self::$module_configs = [];
+
         return $this->module_list;
     }
 
