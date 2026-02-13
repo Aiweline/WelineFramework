@@ -383,22 +383,22 @@ get_installed_php_major_minor() {
   fi
 }
 
-# ---- PHP ----（与 Windows 一致：检测到 extend/server/php 且版本符合则跳过下载）
+# ---- PHP ----（与 Windows 一致：检测到 extend/server/php 且版本符合则跳过，不重复编译安装）
 install_php() {
   local dest="$SERVER_DIR/php"
   local php_exe=""
-  [[ -f "$dest/php.exe" ]] && php_exe="$dest/php.exe"
-  [[ -f "$dest/php" ]] && php_exe="$dest/php"
-  [[ -f "$dest/bin/php" ]] && php_exe="$dest/bin/php"
+  [[ -x "$dest/php.exe" ]] && php_exe="$dest/php.exe"
+  [[ -z "$php_exe" ]] && [[ -x "$dest/php" ]] && php_exe="$dest/php"
+  [[ -z "$php_exe" ]] && [[ -x "$dest/bin/php" ]] && php_exe="$dest/bin/php"
   if [[ -n "$php_exe" ]]; then
     local installed
     installed=$(get_installed_php_major_minor "$php_exe")
     if [[ -n "$installed" ]] && [[ "$installed" == "$PHP_VERSION" ]]; then
-      echo "PHP already present at $dest (version $installed, matches required $PHP_VERSION). Skipping download."
+      echo "PHP already installed at $dest (version $installed). Skipping build and install."
     elif [[ -n "$installed" ]]; then
       echo "PHP at $dest is $installed (required $PHP_VERSION). Keeping existing; adding to PATH."
     else
-      echo "PHP already present at $dest (version check failed). Adding to PATH."
+      echo "PHP already present at $dest. Adding to PATH."
     fi
     add_to_path "$dest"
     [[ -d "$dest/bin" ]] && add_to_path "$dest/bin"
