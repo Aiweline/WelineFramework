@@ -10,6 +10,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SERVER_DIR="$ROOT/extend/server"
+PHP_SRC_CACHE="${PHP_SRC_CACHE:-$ROOT/var/tmp/php-src-cache}"
 VALID_COMPONENTS="php pgsql mysql"
 
 # 默认版本（weline.env 可覆盖）
@@ -284,17 +285,37 @@ install_php_system_deps() {
 download_php_source() {
   local tarball="$1"
   local found=""
+  local used_cache=""
+  mkdir -p "$PHP_SRC_CACHE"
+  # 若缓存中已有该大版本任一补丁，优先用缓存中版本最高的，避免重复下载
   for p in 20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0; do
     local ver="${PHP_VERSION}.${p}"
+    local cache_file="$PHP_SRC_CACHE/php-${ver}.tar.gz"
+    if [[ -f "$cache_file" ]]; then
+      echo "Using cached php-src version: $ver"
+      cp -f "$cache_file" "$tarball"
+      found="$ver"
+      used_cache=1
+      break
+    fi
+  done
+  if [[ -n "$found" ]]; then
+    return 0
+  fi
+  for p in 20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0; do
+    local ver="${PHP_VERSION}.${p}"
+    local cache_file="$PHP_SRC_CACHE/php-${ver}.tar.gz"
     local url="https://www.php.net/distributions/php-${ver}.tar.gz"
     echo "Trying PHP source ${ver} ..."
     if command -v curl &>/dev/null; then
       if curl -L -s -f -o "$tarball" "$url"; then
+        cp -f "$tarball" "$cache_file"
         found="$ver"
         break
       fi
     elif command -v wget &>/dev/null; then
       if wget -q -O "$tarball" "$url"; then
+        cp -f "$tarball" "$cache_file"
         found="$ver"
         break
       fi
@@ -307,7 +328,7 @@ download_php_source() {
     echo "Download failed. Check network/VPN, then retry." >&2
     return 1
   fi
-  echo "Downloaded php-src version: $found"
+  [[ -z "$used_cache" ]] && echo "Downloaded php-src version: $found"
   return 0
 }
 
@@ -338,11 +359,14 @@ install_php_from_source() {
   mkdir -p "$dest"
   pushd "$src_dir" >/dev/null
 
+  local deps_prefix=""
+  local mac_pkg_config=""
   if [[ "$PLATFORM" == "mac" ]]; then
-    local deps_prefix="$SERVER_DIR/deps"
+    deps_prefix="$SERVER_DIR/deps"
+    mac_pkg_config="$deps_prefix/bin/pkg-config"
+    [[ ! -x "$mac_pkg_config" ]] && mac_pkg_config="$deps_prefix/bin/pkgconf"
     export PATH="$deps_prefix/bin:$PATH"
-    export PKG_CONFIG="${deps_prefix}/bin/pkg-config"
-    [[ ! -x "$PKG_CONFIG" ]] && PKG_CONFIG="${deps_prefix}/bin/pkgconf"
+    export PKG_CONFIG="$mac_pkg_config"
     export CPPFLAGS="-I$deps_prefix/include ${CPPFLAGS:-}"
     export LDFLAGS="-L$deps_prefix/lib ${LDFLAGS:-}"
     export PKG_CONFIG_PATH="$deps_prefix/lib/pkgconfig:$deps_prefix/lib64/pkgconfig:${PKG_CONFIG_PATH:-}"
@@ -371,8 +395,7 @@ install_php_from_source() {
     "--with-iconv"
   )
 
-  if [[ "$PLATFORM" == "mac" ]]; then
-    local deps_prefix="$SERVER_DIR/deps"
+  if [[ "$PLATFORM" == "mac" && -n "$deps_prefix" ]]; then
     conf+=(
       "--with-openssl=$deps_prefix"
       "--with-curl=$deps_prefix"
@@ -382,14 +405,23 @@ install_php_from_source() {
     )
   fi
 
-  if command -v pkg-config &>/dev/null && pkg-config --exists libzip; then
+  if command -v pkg-config &>/dev/null && pkg-config --exists libzip 2>/dev/null; then
     conf+=("--with-zip")
   else
     echo "libzip not found; building PHP without zip extension."
   fi
 
   echo "Configuring php-src ..."
-  "${conf[@]}"
+  if [[ "$PLATFORM" == "mac" && -n "$deps_prefix" ]]; then
+    env PATH="$deps_prefix/bin:$PATH" \
+       PKG_CONFIG="$mac_pkg_config" \
+       PKG_CONFIG_PATH="$deps_prefix/lib/pkgconfig:$deps_prefix/lib64/pkgconfig:${PKG_CONFIG_PATH:-}" \
+       CPPFLAGS="-I$deps_prefix/include ${CPPFLAGS:-}" \
+       LDFLAGS="-L$deps_prefix/lib ${LDFLAGS:-}" \
+       "${conf[@]}"
+  else
+    "${conf[@]}"
+  fi
   echo "Building php-src (jobs=$jobs) ..."
   make -j"$jobs"
   echo "Installing php to $dest ..."
