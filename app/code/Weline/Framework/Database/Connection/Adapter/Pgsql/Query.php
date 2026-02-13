@@ -139,41 +139,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             $this->insert_update_where_fields = array_values($update_where_fields); // 重新索引数组
         }
         
-        // 如果没有忽略主键，则需要添加主键
-        if (empty($this->insert_update_where_fields) && !$ignore_primary_key) {
-            if (!in_array($this->identity_field, $this->insert_update_where_fields)) {
-                $this->insert_update_where_fields[] = $this->identity_field;
-            }
-            if (empty($this->insert_update_where_fields)) {
-                foreach ($this->_unit_primary_keys as $unit_primary_key) {
-                    if (!in_array($unit_primary_key, $this->insert_update_where_fields)) {
-                        $this->insert_update_where_fields[] = $unit_primary_key;
-                    }
-                }
-            }
-            $this->insert_update_where_fields = array_reverse($this->insert_update_where_fields);
-        }
-        
-        // 处理 ON CONFLICT 语法
-        // 🔧 修复：即使 insert_update_fields 为空，只要有 insert_update_where_fields，也应该设置 exist_update_sql
-        // 这样可以在 buildInsertForPgsql 中自动添加 ON CONFLICT 子句
-        if (!empty($this->insert_update_where_fields)) {
-            if (!empty($this->insert_update_fields)) {
-                // 如果指定了要更新的字段，只更新这些字段
-                $this->exist_update_sql = 'DO UPDATE SET ';
-                foreach ($this->insert_update_fields as $field) {
-                    $field = trim(str_replace(['`', '"'], '', $field));
-                    $this->exist_update_sql .= "\"{$field}\"=EXCLUDED.\"{$field}\",";
-                }
-                $this->exist_update_sql = trim($this->exist_update_sql, ',');
-            } else {
-                // 如果没有指定要更新的字段，更新所有字段（除了冲突检测字段和主键字段）
-                // 这里先设置一个标记，在 buildInsertForPgsql 中会根据实际字段生成更新语句
-                $this->exist_update_sql = 'DO UPDATE SET ALL_FIELDS';
-            }
-        }
-        
-        // 插入数据
+        // 插入数据（先收集，再根据实际数据确定冲突依据字段）
         if (is_string(array_key_first($data))) {
             $this->insert['origin'][] = $data;
         } else {
@@ -186,8 +152,46 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             $this->batch = true;
         }
 
-        // 处理插入数据分类
+        // 处理插入数据分类（按 PostgreSQL：冲突依据字段仅使用实际数据中存在的列）
         if (count($this->insert)) {
+            $first_insert_item = $this->insert['origin'][0] ?? [];
+            $first_insert_item_keys = array_keys($first_insert_item);
+
+            // 仅保留实际数据中存在的冲突依据字段，避免要求数据中包含表中不存在的列
+            $this->insert_update_where_fields = array_values(array_intersect(
+                $this->insert_update_where_fields,
+                $first_insert_item_keys
+            ));
+
+            // 若过滤后冲突依据为空且未忽略主键，则补充主键/自增键
+            if (empty($this->insert_update_where_fields) && !$ignore_primary_key) {
+                if (!in_array($this->identity_field, $this->insert_update_where_fields)) {
+                    $this->insert_update_where_fields[] = $this->identity_field;
+                }
+                if (empty($this->insert_update_where_fields)) {
+                    foreach ($this->_unit_primary_keys as $unit_primary_key) {
+                        if (!in_array($unit_primary_key, $this->insert_update_where_fields)) {
+                            $this->insert_update_where_fields[] = $unit_primary_key;
+                        }
+                    }
+                }
+                $this->insert_update_where_fields = array_reverse($this->insert_update_where_fields);
+            }
+
+            // 处理 ON CONFLICT 语法（使用过滤后的冲突依据字段）
+            if (!empty($this->insert_update_where_fields)) {
+                if (!empty($this->insert_update_fields)) {
+                    $this->exist_update_sql = 'DO UPDATE SET ';
+                    foreach ($this->insert_update_fields as $field) {
+                        $field = trim(str_replace(['`', '"'], '', $field));
+                        $this->exist_update_sql .= "\"{$field}\"=EXCLUDED.\"{$field}\",";
+                    }
+                    $this->exist_update_sql = trim($this->exist_update_sql, ',');
+                } else {
+                    $this->exist_update_sql = 'DO UPDATE SET ALL_FIELDS';
+                }
+            }
+
             $insert_have_not_identity_fields = $this->insert_update_where_fields;
             foreach ($insert_have_not_identity_fields as $insert_have_not_identity_field_key => $insert_have_not_identity_field) {
                 if ($insert_have_not_identity_field == $this->identity_field) {
@@ -195,38 +199,28 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                     break;
                 }
             }
-            
-            $insert_need_fields = array_merge($this->_unit_primary_keys, $this->insert_update_where_fields);
-            $this->insert_need_fields = $insert_need_fields;
-            
-            $first_insert_item = $this->insert['origin'][0] ?? [];
-            $first_insert_item_keys = array_keys($first_insert_item);
-            
+
+            // 所需字段 = 主键/冲突依据与首行键的并集（不按索引覆盖，避免“所需含 code 实际无 code”的误报）
+            $insert_need_fields = array_unique(array_merge(
+                $this->_unit_primary_keys,
+                $this->insert_update_where_fields,
+                $first_insert_item_keys
+            ));
             if (!isset($first_insert_item[$this->identity_field]) || is_numeric($first_insert_item[$this->identity_field])) {
-                foreach ($insert_need_fields as $insert_need_field_key => $insert_need_field) {
-                    if ($insert_need_field == $this->identity_field) {
-                        unset($insert_need_fields[$insert_need_field_key]);
-                        break;
-                    }
-                }
+                $insert_need_fields = array_values(array_filter($insert_need_fields, function ($f) {
+                    return $f !== $this->identity_field;
+                }));
             }
-            
-            foreach ($first_insert_item_keys as $first_insert_item_key_index => $first_insert_item_key) {
-                $this->insert_need_fields[$first_insert_item_key_index] = $first_insert_item_key;
-            }
-            $this->insert_need_fields = array_unique($this->insert_need_fields);
-            
-            if (count($this->insert_need_fields) != count($first_insert_item_keys)) {
-                throw new Exception(__('插入数据和更新依据字段不匹配，请检查! 所需字段：%{1}，实际字段: %{2}', [implode(',', $this->insert_need_fields), implode(',', $first_insert_item_keys)]));
-            }
-            
+            $this->insert_need_fields = $insert_need_fields;
+
             foreach ($first_insert_item as $f => $fv) {
                 if (!in_array($f, $insert_need_fields)) {
                     $insert_need_fields[] = $f;
                 }
             }
-            
-            // 区分更新或者插入
+            $insert_need_fields = array_unique($insert_need_fields);
+
+            // 校验每行均包含所需字段
             foreach ($this->insert['origin'] as $item) {
                 $item_fields = array_keys($item);
                 foreach ($insert_need_fields as $insert_need_field) {
@@ -234,7 +228,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                         throw new Exception(__('插入数据和更新依据字段不匹配，请检查! 所需字段：%{1}，实际字段: %{2}', [implode(',', $insert_need_fields), implode(',', $item_fields)]));
                     }
                 }
-                
                 if (!empty($this->insert_update_fields)) {
                     foreach ($this->insert_update_fields as $insert_update_field) {
                         if (!in_array($insert_update_field, $item_fields)) {
@@ -242,7 +235,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                         }
                     }
                 }
-                
                 if (!$insert_have_not_identity_fields) {
                     if (empty($item[$this->identity_field])) {
                         $this->insert['insert'][] = $item;
