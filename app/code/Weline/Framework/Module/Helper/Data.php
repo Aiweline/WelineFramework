@@ -20,6 +20,7 @@ use Weline\Framework\System\File\Io\File;
 use Weline\Framework\Helper\AbstractHelper;
 use Weline\Framework\Http\RequestInterface;
 use Weline\Framework\Module\Handle;
+use Weline\Framework\Registry\Service\RegistryUpdateService;
 use Weline\Framework\Register\Register;
 use Weline\Framework\Register\Router\Data\DataInterface;
 use Weline\Framework\System\File\Scan;
@@ -774,6 +775,17 @@ class Data extends AbstractHelper
         $this->file->write($text);
         $this->file->close();
         Env::getInstance()->getModuleList(true);
+
+        // 非 defer 模式下立即刷新注册表，确保新模块的 event/hook/extends 立即生效
+        if (!Handle::isDeferRegistryUpdate()) {
+            try {
+                /** @var RegistryUpdateService $registryService */
+                $registryService = ObjectManager::getInstance(RegistryUpdateService::class);
+                $registryService->updateAllRegistries(true);
+            } catch (\Exception $e) {
+                Env::log_warning('registry_update.log', __('模块列表更新后注册表刷新失败: %{1}', [$e->getMessage()]));
+            }
+        }
     }
 
     /**

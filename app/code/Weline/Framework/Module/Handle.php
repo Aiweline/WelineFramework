@@ -311,22 +311,9 @@ class Handle implements HandleInterface, RegisterInterface
             $this->setupModel($module);
         }
         $this->modules[$module->getName()] = $module->getData();
-        // 更新模块
+        // 更新模块（updateModules 在非 defer 模式下会统一触发注册表刷新）
         $this->helper->updateModules($this->modules);
-        
-        // 更新注册表（模块安装/升级后）
-        // 优化：如果处于延迟模式（批量升级时），跳过立即更新，由顶层统一处理
-        if (!self::$deferRegistryUpdate) {
-            try {
-                /** @var \Weline\Framework\Registry\Service\RegistryUpdateService $registryService */
-                $registryService = ObjectManager::getInstance(\Weline\Framework\Registry\Service\RegistryUpdateService::class);
-                $registryService->updateAllRegistries(true); // 静默执行
-            } catch (\Exception $e) {
-                // 注册表更新失败不影响模块安装，只记录日志
-                \Weline\Framework\App\Env::log_warning('registry_update.log', __('模块安装后注册表更新失败: %{1}', [$e->getMessage()]));
-            }
-        }
-        
+
         return $module;
     }
 

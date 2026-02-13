@@ -1035,7 +1035,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             }
         }
         $this->printing->note(__('2)刷新注册表（事件/Hook/Extends）'));
-        // 强制重读模块列表，使事件/Hook/Extends 刷新时能扫到刚在 1) 中完成 MODULE 注册的模块（Theme、I18n 等），否则 register_installer 观察者不在表内，后续 runPendingRegistrations 会仍用不存在的 Framework\Theme\Handle、Framework\I18n\Handle
+        // 强制重读模块列表并清理 Env 中依赖模块的缓存（active_module_list、module_configs），使事件/Hook/Extends 刷新时能扫到刚在 1) 中完成 MODULE 注册的模块（Theme、I18n 等），否则 register_installer 观察者不在表内，后续 runPendingRegistrations 会仍用不存在的 Framework\Theme\Handle、Framework\I18n\Handle；先更新 Env 再刷新注册表，确保新模块的 event/hook/extends 立即生效
         Env::getInstance()->getModuleList(true);
         /** @var RegistryUpdateService $registryService */
         $registryService = ObjectManager::getInstance(RegistryUpdateService::class);
