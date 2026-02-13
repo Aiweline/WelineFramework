@@ -107,7 +107,7 @@ if (!$step5bOk && DIRECTORY_SEPARATOR === '\\' && is_dir($pgsqlBin)) {
 }
 
 if (!$step5bOk) {
-    fwrite(STDERR, "ERROR: PostgreSQL database init failed. PDO connection check did not succeed. Fix weline.env / DB user password and re-run.\n");
+    fwrite(STDERR, "ERROR: PostgreSQL database init failed. 请按上方提示在 weline.env 中设置 PGSQL_INIT_PASSWORD 后重新执行。\n");
     exit(1);
 }
 
