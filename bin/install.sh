@@ -364,9 +364,8 @@ install_php_from_source() {
   if [[ "$PLATFORM" == "mac" ]]; then
     deps_prefix="$SERVER_DIR/deps"
     if [[ ! -d "$deps_prefix" ]] || ( [[ ! -x "$deps_prefix/bin/pkgconf" ]] && [[ ! -x "$deps_prefix/bin/pkg-config" ]] ); then
-      echo "ERROR: Mac deps not built at $deps_prefix. Run: $0 php (without --path-only) to build deps first." >&2
-      popd >/dev/null
-      return 1
+      echo "Mac deps not found at $deps_prefix; building them first ..."
+      install_macos_source_deps || { popd >/dev/null; return 1; }
     fi
     mac_pkg_config="$deps_prefix/bin/pkg-config"
     [[ ! -x "$mac_pkg_config" ]] && mac_pkg_config="$deps_prefix/bin/pkgconf"
