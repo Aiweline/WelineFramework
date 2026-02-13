@@ -22,12 +22,17 @@ if [ "$ACTION" != "install" ]; then
   exit 1
 fi
 
-OS="linux"
 ARCH="amd64"
 case "$(uname -m)" in
   x86_64|amd64) ARCH="amd64" ;;
   aarch64|arm64) ARCH="arm64" ;;
   *) echo "MISSING"; echo "unsupported arch: $(uname -m)"; exit 1 ;;
+esac
+
+case "$(uname -s)" in
+  Linux)   OS="linux" ;;
+  Darwin)  OS="darwin" ;;
+  *) echo "MISSING"; echo "unsupported os: $(uname -s)"; exit 1 ;;
 esac
 
 URL="https://releases.hashicorp.com/terraform/${VERSION}/terraform_${VERSION}_${OS}_${ARCH}.zip"
