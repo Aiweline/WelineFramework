@@ -363,13 +363,21 @@ install_php_from_source() {
   local mac_pkg_config=""
   if [[ "$PLATFORM" == "mac" ]]; then
     deps_prefix="$SERVER_DIR/deps"
+    if [[ ! -d "$deps_prefix" ]] || ( [[ ! -x "$deps_prefix/bin/pkgconf" ]] && [[ ! -x "$deps_prefix/bin/pkg-config" ]] ); then
+      echo "ERROR: Mac deps not built at $deps_prefix. Run: $0 php (without --path-only) to build deps first." >&2
+      popd >/dev/null
+      return 1
+    fi
     mac_pkg_config="$deps_prefix/bin/pkg-config"
     [[ ! -x "$mac_pkg_config" ]] && mac_pkg_config="$deps_prefix/bin/pkgconf"
     export PATH="$deps_prefix/bin:$PATH"
     export PKG_CONFIG="$mac_pkg_config"
-    export CPPFLAGS="-I$deps_prefix/include ${CPPFLAGS:-}"
+    export CPPFLAGS="-I$deps_prefix/include -I$deps_prefix/include/libxml2 ${CPPFLAGS:-}"
     export LDFLAGS="-L$deps_prefix/lib ${LDFLAGS:-}"
     export PKG_CONFIG_PATH="$deps_prefix/lib/pkgconfig:$deps_prefix/lib64/pkgconfig:${PKG_CONFIG_PATH:-}"
+    # 显式设置 libxml 编译/链接参数，避免 configure 因找不到 pkg-config 而失败
+    export LIBXML_CFLAGS="-I$deps_prefix/include/libxml2"
+    export LIBXML_LIBS="-L$deps_prefix/lib -lxml2"
   fi
 
   local -a conf
@@ -413,12 +421,17 @@ install_php_from_source() {
 
   echo "Configuring php-src ..."
   if [[ "$PLATFORM" == "mac" && -n "$deps_prefix" ]]; then
-    env PATH="$deps_prefix/bin:$PATH" \
-       PKG_CONFIG="$mac_pkg_config" \
-       PKG_CONFIG_PATH="$deps_prefix/lib/pkgconfig:$deps_prefix/lib64/pkgconfig:${PKG_CONFIG_PATH:-}" \
-       CPPFLAGS="-I$deps_prefix/include ${CPPFLAGS:-}" \
-       LDFLAGS="-L$deps_prefix/lib ${LDFLAGS:-}" \
-       "${conf[@]}"
+    # 在子 shell 内统一 export，确保 configure 及其子进程都能拿到依赖路径
+    (
+      export PATH="$deps_prefix/bin:$PATH"
+      export PKG_CONFIG="$mac_pkg_config"
+      export PKG_CONFIG_PATH="$deps_prefix/lib/pkgconfig:$deps_prefix/lib64/pkgconfig:${PKG_CONFIG_PATH:-}"
+      export CPPFLAGS="-I$deps_prefix/include -I$deps_prefix/include/libxml2 ${CPPFLAGS:-}"
+      export LDFLAGS="-L$deps_prefix/lib ${LDFLAGS:-}"
+      export LIBXML_CFLAGS="-I$deps_prefix/include/libxml2"
+      export LIBXML_LIBS="-L$deps_prefix/lib -lxml2"
+      "${conf[@]}"
+    )
   else
     "${conf[@]}"
   fi
