@@ -284,11 +284,11 @@ install_php_from_source() {
   if [[ "$PLATFORM" == "mac" ]]; then
     ensure_brew_installed || { popd >/dev/null; return 1; }
     brew_prefix="$(brew --prefix)"
-    export PATH="$brew_prefix/bin:$PATH"
+    export PATH="$brew_prefix/bin:$brew_prefix/opt/libpq/bin:$PATH"
     # 包含 icu4c、libzip、oniguruma 等 opt 公式的 pkgconfig，便于 configure 一次性找到所有依赖
     export PKG_CONFIG_PATH="$brew_prefix/lib/pkgconfig:$brew_prefix/opt/icu4c/lib/pkgconfig:$brew_prefix/opt/libzip/lib/pkgconfig:$brew_prefix/opt/oniguruma/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-    export CPPFLAGS="-I$brew_prefix/include -I$brew_prefix/opt/icu4c/include ${CPPFLAGS:-}"
-    export LDFLAGS="-L$brew_prefix/lib -L$brew_prefix/opt/icu4c/lib ${LDFLAGS:-}"
+    export CPPFLAGS="-I$brew_prefix/include -I$brew_prefix/opt/icu4c/include -I$brew_prefix/opt/libpq/include ${CPPFLAGS:-}"
+    export LDFLAGS="-L$brew_prefix/lib -L$brew_prefix/opt/icu4c/lib -L$brew_prefix/opt/libpq/lib ${LDFLAGS:-}"
   fi
 
   local -a conf
@@ -339,13 +339,16 @@ install_php_from_source() {
   echo "Configuring php-src ..."
   if [[ "$PLATFORM" == "mac" && -n "$brew_prefix" ]]; then
     (
-      export PATH="$brew_prefix/bin:$PATH"
+      export PATH="$brew_prefix/bin:$brew_prefix/opt/libpq/bin:$PATH"
       export PKG_CONFIG_PATH="$brew_prefix/lib/pkgconfig:$brew_prefix/opt/icu4c/lib/pkgconfig:$brew_prefix/opt/libzip/lib/pkgconfig:$brew_prefix/opt/oniguruma/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-      export CPPFLAGS="-I$brew_prefix/include -I$brew_prefix/opt/icu4c/include ${CPPFLAGS:-}"
-      export LDFLAGS="-L$brew_prefix/lib -L$brew_prefix/opt/icu4c/lib ${LDFLAGS:-}"
+      export CPPFLAGS="-I$brew_prefix/include -I$brew_prefix/opt/icu4c/include -I$brew_prefix/opt/libpq/include ${CPPFLAGS:-}"
+      export LDFLAGS="-L$brew_prefix/lib -L$brew_prefix/opt/icu4c/lib -L$brew_prefix/opt/libpq/lib ${LDFLAGS:-}"
       # 显式指定 ICU，避免 configure 报 icu-uc/icu-io/icu-i18n not found
       export ICU_CFLAGS="-I$brew_prefix/opt/icu4c/include"
       export ICU_LIBS="-L$brew_prefix/opt/icu4c/lib -licuuc -licui18n -licudata"
+      # 显式指定 libpq，避免 configure 报 Cannot find libpq-fe.h or pq library
+      export PGSQL_CFLAGS="-I$brew_prefix/opt/libpq/include"
+      export PGSQL_LIBS="-L$brew_prefix/opt/libpq/lib -lpq"
       "${conf[@]}"
     )
   else
