@@ -31,12 +31,13 @@ final class SetupPgsqlDatabase
         $password = trim($this->env['DB_PASSWORD'] ?? 'weline');
 
         // 超管：仅用于连接并创建 weline 用户/库，不用于应用运行时
-        $initUser = trim($this->env['PGSQL_INIT_USER'] ?? 'postgres');
-        $initPass = $this->resolveInitPassword($host, $port, $initUser);
-        if ($initPass === null) {
-            echo "  (Cannot connect as $initUser. Set PGSQL_INIT_PASSWORD in weline.env to the postgres superuser password; if you initialize PostgreSQL yourself, use that same password.)\n";
+        // Mac (Homebrew) 默认只创建当前系统用户为超管、无 postgres 用户，故需回退尝试当前用户+空密码
+        $initCreds = $this->resolveInitUserAndPassword($host, $port);
+        if ($initCreds === null) {
+            $this->echoPgsqlInitRequired(trim($this->env['PGSQL_INIT_USER'] ?? 'postgres'));
             return false;
         }
+        [$initUser, $initPass] = $initCreds;
 
         // 优先用 PDO 路径（不依赖 psql，与 create_pgsql_user.php 一致）
         if (extension_loaded('pdo_pgsql')) {
@@ -82,7 +83,7 @@ final class SetupPgsqlDatabase
         );
 
         if (!$this->canConnect($psqlExe, $host, $port, $initUser, $envForPsql)) {
-            echo "  (Cannot connect to PostgreSQL. Is the server running? Or set PGSQL_INIT_PASSWORD in weline.env to the postgres superuser password.)\n";
+            $this->echoPgsqlInitRequired($initUser);
             return false;
         }
         echo "  Can connect to PostgreSQL.\n";
@@ -112,27 +113,64 @@ final class SetupPgsqlDatabase
     }
 
     /**
-     * 解析超管密码：若 weline.env 已配置 PGSQL_INIT_PASSWORD 则用之并校验；否则依次尝试空、postgres、weline。
-     * 初始化 PostgreSQL 实例时须用相同信息设置 postgres 密码，以便此处可连接。
+     * 解析超管用户名与密码，返回 [user, password] 或 null。
+     * 若 weline.env 已配置 PGSQL_INIT_USER/PGSQL_INIT_PASSWORD 则用之；否则先试 postgres + 空/postgres/weline。
+     * Mac (Homebrew) 默认只创建当前系统用户为超管、无 postgres 用户，故 postgres 连不上时回退尝试当前 OS 用户 + 空密码。
      */
-    private function resolveInitPassword(string $host, string $port, string $initUser): ?string
+    private function resolveInitUserAndPassword(string $host, string $port): ?array
     {
+        $initUser = trim($this->env['PGSQL_INIT_USER'] ?? 'postgres');
         $configured = trim($this->env['PGSQL_INIT_PASSWORD'] ?? '');
         if (!extension_loaded('pdo_pgsql')) {
-            return $configured !== '' ? $configured : '';
+            return $configured !== '' ? [$initUser, $configured] : [$initUser, ''];
         }
         if ($configured !== '') {
             if ($this->connectPdo($host, $port, 'postgres', $initUser, $configured) !== null) {
-                return $configured;
+                return [$initUser, $configured];
             }
             return null;
         }
         foreach (['', 'postgres', 'weline'] as $try) {
             if ($this->connectPdo($host, $port, 'postgres', $initUser, $try) !== null) {
-                return $try;
+                return [$initUser, $try];
+            }
+        }
+        // Mac (Homebrew)：默认只有当前系统用户为超管，trust 认证无需密码
+        if (PHP_OS_FAMILY === 'Darwin') {
+            $currentUser = getenv('USER') ?: (function_exists('posix_getpwuid') && function_exists('posix_geteuid')
+                ? (posix_getpwuid(posix_geteuid())['name'] ?? '')
+                : '');
+            if ($currentUser !== '' && $this->connectPdo($host, $port, 'postgres', $currentUser, '') !== null) {
+                echo "  Using current macOS user as PostgreSQL superuser: $currentUser (Homebrew default).\n";
+                return [$currentUser, ''];
             }
         }
         return null;
+    }
+
+    /**
+     * 醒目提示：PostgreSQL 初始化需要什么（连不上 postgres 时输出）
+     */
+    private function echoPgsqlInitRequired(string $initUser): void
+    {
+        $isMac = (PHP_OS_FAMILY === 'Darwin');
+        echo "\n";
+        echo "========================================\n";
+        echo "  需要配置 weline.env 才能完成数据库初始化\n";
+        echo "========================================\n";
+        echo "  在项目根目录的 weline.env 中设置：\n";
+        echo "  - PGSQL_INIT_USER=" . $initUser . "   （超管用户名，默认 postgres）\n";
+        echo "  - PGSQL_INIT_PASSWORD=你的postgres密码  （必填，与 PostgreSQL 里 postgres 用户密码一致）\n";
+        echo "\n";
+        if ($isMac) {
+            echo "  Mac (Homebrew) 若从未设过 postgres 密码，可先执行：\n";
+            echo "    psql postgres -c \"ALTER USER postgres WITH PASSWORD '你的密码';\"\n";
+            echo "  再把相同密码填入 weline.env 的 PGSQL_INIT_PASSWORD。\n";
+            echo "  并确认服务已启动：brew services start postgresql@16\n";
+            echo "\n";
+        }
+        echo "  修改后重新执行：php setup/server_installer/run.php  或  bin/install.sh\n";
+        echo "========================================\n\n";
     }
 
     /**
