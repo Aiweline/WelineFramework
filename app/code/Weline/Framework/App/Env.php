@@ -332,6 +332,12 @@ class Env extends DataObject
 
     public function reload(): static
     {
+        // 清空依赖本实例的缓存，保证后续 getModuleList/getActiveModules/getDependencies/module_env 读取到最新文件
+        $this->module_list = [];
+        $this->active_module_list = [];
+        $this->dependencies = [];
+        self::$module_configs = [];
+
         // 检查环境配置文件是否存在，不存在则创建
         if (!is_file(self::path_ENV_FILE)) {
             $file = new File();
