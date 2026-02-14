@@ -1445,7 +1445,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             // 第四步：提交文件更新阶段
             $this->printing->note(__('   - 提交文件更新阶段...'));
             $fileStage->commit();
-            
+            // 一次性重载 Env（含 modules.php），避免本进程后续 getModuleList 仍用旧缓存导致 base_path 等错误
+            Env::getInstance()->reload();
+
             $this->printing->success(__('✓ 所有阶段更新完成！'));
         } catch (Exception $e) {
             $this->printing->error(__('阶段提交失败：%{1}', [$e->getMessage()]));
