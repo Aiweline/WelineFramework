@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # 一键安装引导脚本：克隆仓库并执行 bin/install。
-# 用法（复制到终端执行，建议加 sudo 以安装 Homebrew/PHP 等）：
-#   Linux/macOS/Git Bash: curl -fsSL https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.sh | sudo bash -s --
-#   指定分支: curl -fsSL https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.sh | sudo bash -s -- -b server-opt
+# 用法（复制到终端执行，勿用 sudo，Homebrew 禁止 root 运行；需权限时会提示输入密码）：
+#   Linux/macOS/Git Bash: curl -fsSL https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.sh | bash -s --
+#   指定分支: curl -fsSL https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.sh | bash -s -- -b server-opt
 # 依赖：macOS 会自动检测并等待 Xcode 命令行工具（含 Git）；Linux 下需已安装 Git 或由 install.sh 按发行版自动安装。
 
 if [ -z "${BASH_VERSION:-}" ]; then
