@@ -214,9 +214,8 @@ ensure_brew_installed() {
     eval "$(/usr/local/bin/brew shellenv)"
     return 0
   fi
-  echo "Homebrew not found. Installing Homebrew (如需管理员权限，请根据提示输入本机登录密码) ..."
-  # 取消 NONINTERACTIVE，让 Homebrew 安装脚本能提示输入 sudo 密码
-  (unset NONINTERACTIVE; /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)") || return 1
+  echo "Homebrew not found. Installing Homebrew ..."
+  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || return 1
   # 安装完成后注入 PATH（Apple Silicon: /opt/homebrew，Intel: /usr/local）
   if [[ -x /opt/homebrew/bin/brew ]]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
