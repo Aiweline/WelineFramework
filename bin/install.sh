@@ -200,7 +200,7 @@ ensure_git_installed() {
   return 0
 }
 
-# Mac：确保 Homebrew 已安装（未安装则自动安装）
+# Mac：确保 Homebrew 已安装（未安装则自动安装；需要 sudo 时会提示输入密码）
 ensure_brew_installed() {
   if command -v brew &>/dev/null; then
     return 0
@@ -214,7 +214,8 @@ ensure_brew_installed() {
     eval "$(/usr/local/bin/brew shellenv)"
     return 0
   fi
-  echo "Homebrew not found. Installing Homebrew ..."
+  echo "Homebrew not found. Installing Homebrew (如需管理员权限，请根据提示输入本机登录密码) ..."
+  sudo -v || true
   NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || return 1
   # 安装完成后注入 PATH（Apple Silicon: /opt/homebrew，Intel: /usr/local）
   if [[ -x /opt/homebrew/bin/brew ]]; then
@@ -614,7 +615,8 @@ for c in "${COMPONENTS[@]}"; do
   case "$c" in
     php)
       if ! install_php; then
-        echo "ERROR: PHP installation failed. On Mac use: brew install php@$PHP_VERSION" >&2
+        echo "ERROR: PHP installation failed." >&2
+        echo "  On Mac: 若因权限报错，请将当前用户设为管理员后重试，或由管理员执行: brew install php@$PHP_VERSION" >&2
         exit 1
       fi
       ;;
