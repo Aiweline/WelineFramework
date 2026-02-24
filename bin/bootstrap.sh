@@ -11,13 +11,11 @@ fi
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-# 已在项目目录内（存在 run.php 与 bin/install）则直接执行 install，不 clone
-if [[ -f "$ROOT/setup/server_installer/run.php" ]] && [[ -f "$ROOT/bin/install" ]]; then
+# 项目根 = 含 bin/ 的目录（各平台一致）。优先用当前目录判断是否已在仓库内（兼容 curl | bash 时无脚本路径）
+if [[ -f "./setup/server_installer/run.php" ]] && [[ -f "./bin/install" ]]; then
   echo "Already in WelineFramework. Running install..."
-  cd "$ROOT" && exec ./bin/install "$@"
+  chmod +x ./bin/install ./bin/install.sh 2>/dev/null || true
+  exec ./bin/install "$@"
 fi
 
 # macOS：克隆前必须已有 Xcode 命令行工具（git 依赖）。若未安装则脚本内用 softwareupdate 直接安装（终端可见进度），失败则回退到弹窗安装并等待
@@ -71,13 +69,23 @@ for i in "$@"; do
   [[ "$i" == "-b" ]] && next_is_b=1
 done
 
-if [[ -d "$INSTALL_DIR/.git" ]]; then
+# 当前目录为空则克隆到当前目录（项目根 = 含 bin/ 的目录）；否则克隆到 INSTALL_DIR 子目录
+is_empty_dir() { [[ -z "$(ls -A "$1" 2>/dev/null)" ]]; }
+CLONE_TO_ROOT=false
+if is_empty_dir .; then
+  echo "Cloning WelineFramework (branch: $BRANCH) into current directory (project root)..."
+  git clone -b "$BRANCH" "$REPO_URL" .
+  CLONE_TO_ROOT=true
+elif [[ -d "$INSTALL_DIR/.git" ]]; then
   echo "Directory $INSTALL_DIR already exists. Updating..."
   (cd "$INSTALL_DIR" && git fetch origin && git checkout "$BRANCH" 2>/dev/null || git pull origin "$BRANCH" 2>/dev/null || true)
+  cd "$INSTALL_DIR"
 else
   echo "Cloning WelineFramework (branch: $BRANCH) into $INSTALL_DIR..."
   git clone -b "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
+  cd "$INSTALL_DIR"
 fi
 
-cd "$INSTALL_DIR"
+# 保证 bin/install 可执行（克隆后可能无 x 位）
+chmod +x bin/install bin/install.sh 2>/dev/null || true
 exec ./bin/install "$@"
