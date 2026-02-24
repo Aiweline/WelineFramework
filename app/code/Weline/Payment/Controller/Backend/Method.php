@@ -64,7 +64,7 @@ class Method extends BackendController
         
         /** @var PaymentMethod $paymentMethod */
         $paymentMethod = ObjectManager::getInstance(PaymentMethod::class);
-        $paymentMethod->load($code, PaymentMethod::fields_CODE);
+        $paymentMethod->load(PaymentMethod::fields_CODE, $code);
         
         if (!$paymentMethod->getId()) {
             $this->getMessageManager()->addError(__('支付方式不存在'));
@@ -106,7 +106,7 @@ class Method extends BackendController
         
         /** @var PaymentMethod $paymentMethod */
         $paymentMethod = ObjectManager::getInstance(PaymentMethod::class);
-        $paymentMethod->load($code, PaymentMethod::fields_CODE);
+        $paymentMethod->load(PaymentMethod::fields_CODE, $code);
         
         if (!$paymentMethod->getId()) {
             return $this->error(__('支付方式不存在'));
@@ -145,7 +145,7 @@ class Method extends BackendController
         
         /** @var PaymentMethod $paymentMethod */
         $paymentMethod = ObjectManager::getInstance(PaymentMethod::class);
-        $paymentMethod->load($code, PaymentMethod::fields_CODE);
+        $paymentMethod->load(PaymentMethod::fields_CODE, $code);
         
         if (!$paymentMethod->getId()) {
             return $this->error(__('支付方式不存在'));
