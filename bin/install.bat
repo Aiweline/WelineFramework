@@ -128,9 +128,10 @@ if defined MYSQL_OK (
 )
 :skip_mysql
 
-REM 安装后：将 php 与 pgsql 的目录写入用户 PATH（与 Linux/Mac 一致，所有系统都处理好）
+REM 安装后：将 php、pgsql、项目 bin（w 命令）写入用户 PATH（与 Linux/Mac 一致，所有系统都处理好）
 if exist "%PHP_DIR%\php.exe" call :add_path "%PHP_DIR%"
 if exist "%SERVER%\pgsql\bin\psql.exe" call :add_path "%SERVER%\pgsql\bin"
+call :add_path "%ROOT%\bin"
 
 REM 若 setup\server_installer\run.php 不存在，说明代码未安装：按 -b 指定分支拉取，未指定则 master
 if not exist "%ROOT%\setup\server_installer\run.php" (
@@ -182,7 +183,8 @@ call :cecho Gray "Running: php setup\server_installer\run.php"
 "!USE_PHP!" "%ROOT%\setup\server_installer\run.php"
 if errorlevel 1 exit /b 1
 echo.
-call :cecho Green "Done. php and pgsql have been added to User PATH. Reopen the terminal for PATH to take effect."
+cd /d "%ROOT%"
+call :cecho Green "Done. php, pgsql and bin (w command) have been added to User PATH. Current directory: project root. Reopen the terminal for PATH, then you can run: w setup:upgrade"
 endlocal
 exit /b 0
 

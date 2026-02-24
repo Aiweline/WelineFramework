@@ -640,9 +640,10 @@ for c in "${COMPONENTS[@]}"; do
   esac
 done
 
-# 安装后：将 php 与 pgsql 的 bin 目录写入环境变量（Linux/Mac 新开终端即可用 php、psql）
+# 安装后：将 php、pgsql、项目 bin（w 命令）写入环境变量（Linux/Mac 新开终端即可用 php、psql、w）
 [[ -d "$SERVER_DIR/php/bin" ]] && add_to_path "$SERVER_DIR/php/bin"
 [[ -d "$SERVER_DIR/pgsql/bin" ]] && add_to_path "$SERVER_DIR/pgsql/bin"
+add_to_path "$ROOT/bin"
 
 # 安装后：由 setup/server_installer/run.php 执行（与 Windows 一致；无 PHP 则报错退出）
 # 优先用 extend/server/php/bin/php（含 Mac 下指向 brew 的软链），再尝试 PATH 中的 php，Mac 下再显式查 brew 路径
@@ -692,7 +693,9 @@ fi
 echo ""
 (cd "$ROOT" && "$PHP_EXE" setup/server_installer/run.php) || exit 1
 echo ""
-echo "Done. php and pgsql have been added to PATH (written to shell config)."
+cd "$ROOT"
+echo "Done. php, pgsql and bin (w command) have been added to PATH (written to shell config)."
 echo "  Linux: ~/.bashrc, ~/.profile  |  Mac: ~/.zshrc, ~/.zprofile"
 echo "To use in this terminal now:  source ~/.bashrc   (Linux) or source ~/.zshrc   (Mac)"
-echo "Or open a new terminal window."
+echo "Or open a new terminal window. Then you can run: w setup:upgrade"
+echo "Current directory is now project root: $ROOT"
