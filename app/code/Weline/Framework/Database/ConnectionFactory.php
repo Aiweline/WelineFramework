@@ -39,13 +39,17 @@ class ConnectionFactory
 
     /**
      * 获取或创建连接工厂实例
+     * 当 $configProvider 为 null 时（如 ObjectManager 无参解析），使用 DbManager 默认配置。
      *
-     * @param ConfigProvider $configProvider
+     * @param ConfigProvider|null $configProvider
      * @return static
      * @throws LinkException
      */
-    public static function getInstance(ConfigProvider $configProvider): static
+    public static function getInstance(?ConfigProvider $configProvider = null): static
     {
+        if ($configProvider === null) {
+            $configProvider = ObjectManager::getInstance(DbManager::class)->getConfig();
+        }
         $key = self::getInstanceKey($configProvider);
         if (!isset(self::$instances[$key])) {
             self::$instances[$key] = [
