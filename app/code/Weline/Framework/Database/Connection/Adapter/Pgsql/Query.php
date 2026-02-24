@@ -1785,6 +1785,17 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
      */
     protected function normalizeSql(string $sql): string
     {
+        // 0. 移除 MySQL 专用语句（PostgreSQL 不支持）
+        $sql = preg_replace('/SET\s+NAMES\s+\w+\s*;?\s*/i', '', $sql);
+        $sql = preg_replace('/SET\s+CHARACTER\s+SET\s+\w+\s*;?\s*/i', '', $sql);
+        $sql = preg_replace('/SET\s+FOREIGN_KEY_CHECKS\s*=\s*[01]\s*;?\s*/i', '', $sql);
+        // 移除表/列定义中的 MySQL 专用子句
+        $sql = preg_replace('/\s+CHARACTER\s+SET\s+\w+/i', '', $sql);
+        $sql = preg_replace('/\s+COLLATE\s+\w+/i', '', $sql);
+        $sql = preg_replace('/\s+ENGINE\s*=\s*\w+/i', '', $sql);
+        $sql = preg_replace('/\s+AUTO_INCREMENT\s*=\s*\d+/i', '', $sql);
+        $sql = preg_replace('/\s+ROW_FORMAT\s*=\s*\w+/i', '', $sql);
+
         // 1. 转换 SHOW FULL COLUMNS FROM 语法
         $sql = self::convertShowColumnsToInformationSchema($sql);
         
