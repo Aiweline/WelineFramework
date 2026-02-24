@@ -1122,6 +1122,10 @@ class Env extends DataObject
                 return $area;
             }
         }
+        // 固定别名：/admin/ 始终视为后台入口（便于记忆，与密钥入口并存）
+        if ($prefix === 'admin' && isset($areaRoutes['backend'])) {
+            return 'backend';
+        }
         return null;
     }
     

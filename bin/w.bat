@@ -1,2 +1,3 @@
 @echo off
-php %CD%\bin\w %*
+set "BIN_DIR=%~dp0"
+php "%BIN_DIR%w" %*

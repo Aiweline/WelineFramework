@@ -2944,6 +2944,7 @@ PHP;
 
         $urlFrontend = rtrim($baseUrl, '/') . '/';
         $urlBackend = rtrim($baseUrl, '/') . '/' . ($backendPrefix !== '' ? $backendPrefix . '/' : '');
+        $urlBackendAdmin = rtrim($baseUrl, '/') . '/admin/';
         $urlRestBackend = rtrim($baseUrl, '/') . '/' . ($restBackendPrefix !== '' ? $restBackendPrefix . '/' : '');
         $urlRestFrontend = rtrim($baseUrl, '/') . '/' . ($restFrontendPrefix !== '' ? $restFrontendPrefix . '/' : '');
 
@@ -2954,6 +2955,7 @@ PHP;
             __('╠══════════════════════════════════════════════════════════════╣'),
             __('║  前台/首页：%{1}  ║', [$urlFrontend]),
             __('║  后台入口：%{1}  ║', [$urlBackend]),
+            __('║  后台入口(admin)：%{1}  ║', [$urlBackendAdmin]),
             __('║  后台 REST 接口：%{1}  ║', [$urlRestBackend]),
             __('║  前台 REST 接口：%{1}  ║', [$urlRestFrontend]),
             __('╠══════════════════════════════════════════════════════════════╣'),
