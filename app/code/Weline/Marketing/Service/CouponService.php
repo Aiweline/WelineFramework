@@ -65,7 +65,7 @@ class CouponService
         // 检查是否已存在
         /** @var Coupon $coupon */
         $coupon = ObjectManager::getInstance(Coupon::class);
-        if ($coupon->load($code, Coupon::fields_CODE)->getId()) {
+        if ($coupon->load(Coupon::fields_CODE, $code)->getId()) {
             return $this->generateCouponCode($length);
         }
 
@@ -83,7 +83,7 @@ class CouponService
     {
         /** @var Coupon $coupon */
         $coupon = ObjectManager::getInstance(Coupon::class);
-        $coupon->load($code, Coupon::fields_CODE);
+        $coupon->load(Coupon::fields_CODE, $code);
 
         if (!$coupon->getId()) {
             return null;

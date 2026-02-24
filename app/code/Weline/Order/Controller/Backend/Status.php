@@ -123,7 +123,7 @@ class Status extends BackendController
             // 如果修改了代码，检查新代码是否已存在
             if ($statusModel->getData(OrderStatus::fields_CODE) !== $code) {
                 $existing = ObjectManager::getInstance(OrderStatus::class);
-                $existing->load($code, OrderStatus::fields_CODE);
+                $existing->load(OrderStatus::fields_CODE, $code);
                 if ($existing->getId()) {
                     return $this->error(__('状态代码已存在'));
                 }
@@ -131,7 +131,7 @@ class Status extends BackendController
         } else {
             // 新建时检查代码是否已存在
             $existing = ObjectManager::getInstance(OrderStatus::class);
-            $existing->load($code, OrderStatus::fields_CODE);
+            $existing->load(OrderStatus::fields_CODE, $code);
             if ($existing->getId()) {
                 return $this->error(__('状态代码已存在'));
             }

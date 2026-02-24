@@ -60,7 +60,7 @@ class OrderStatusService
     {
         /** @var OrderStatus $statusModel */
         $statusModel = $this->objectManager->getInstance(OrderStatus::class);
-        $statusModel->load($code, OrderStatus::fields_CODE);
+        $statusModel->load(OrderStatus::fields_CODE, $code);
         
         if (!$statusModel->getId()) {
             return null;
@@ -266,7 +266,7 @@ class OrderStatusService
         
         foreach ($defaultStatuses as $statusData) {
             $statusModel->reset();
-            $statusModel->load($statusData['code'], OrderStatus::fields_CODE);
+            $statusModel->load(OrderStatus::fields_CODE, $statusData['code']);
             
             if (!$statusModel->getId()) {
                 $statusModel->setData($statusData)
