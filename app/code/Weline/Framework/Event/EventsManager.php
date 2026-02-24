@@ -248,6 +248,24 @@ class EventsManager
             }
             
             $this->events[$eventName]->dispatch();
+
+            // 将 Observer 修改的 Event 数据回写到调用方的 $data（通过引用）
+            // Event 构造时复制了 $data，Observer 修改的是 Event 内部的 _data，
+            // 必须在 dispatch 完成后同步回去，否则调用方永远读不到 Observer 设置的 result/error 等
+            if (is_array($data)) {
+                $modifiedInner = $this->events[$eventName]->getEvenData();
+                if ($modifiedInner !== null) {
+                    if (array_key_exists('data', $data)) {
+                        // 结构化事件数据（如 ['data' => ['operation' => ...]]）
+                        $data['data'] = $modifiedInner;
+                    } elseif (is_array($modifiedInner)) {
+                        // 扁平事件数据（如 ['provider' => ..., 'result' => null]）
+                        foreach ($modifiedInner as $k => $v) {
+                            $data[$k] = $v;
+                        }
+                    }
+                }
+            }
         } finally {
             // 事件执行完毕，弹出栈
             array_pop(self::$currentEventStack);

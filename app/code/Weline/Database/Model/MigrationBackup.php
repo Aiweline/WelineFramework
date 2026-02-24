@@ -8,8 +8,10 @@
 
 namespace Weline\Database\Model;
 
-use Weline\Framework\Database\Api\Db\ModelInterface;
+use Weline\Framework\Database\ModelInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Setup\Data\Context;
 
 class MigrationBackup extends Model implements ModelInterface
 {
@@ -30,7 +32,30 @@ class MigrationBackup extends Model implements ModelInterface
     {
         $this->init('weline_database_backups', self::fields_ID);
     }
-    
+
+    public function setup(ModelSetup $setup, Context $context): void
+    {
+        $this->install($setup, $context);
+    }
+
+    public function upgrade(ModelSetup $setup, Context $context): void
+    {
+    }
+
+    public function install(ModelSetup $setup, Context $context): void
+    {
+        if ($setup->tableExist() === false) {
+            $setup->createTable('Database Migration Backups')
+                ->addColumn(self::fields_ID, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'Backup ID')
+                ->addColumn(self::fields_MIGRATION_ID, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'not null', 'Migration ID')
+                ->addColumn(self::fields_TABLE_NAME, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'not null', 'Table Name')
+                ->addColumn(self::fields_BACKUP_DATA, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, 'default null', 'Backup Data')
+                ->addColumn(self::fields_BACKUP_TYPE, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 50, 'not null', 'Backup Type')
+                ->addColumn(self::fields_CREATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TIMESTAMP, null, 'default CURRENT_TIMESTAMP', 'Created At')
+                ->create();
+        }
+    }
+
     /**
      * 获取迁移的所有备份记录
      * 

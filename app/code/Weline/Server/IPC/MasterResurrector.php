@@ -18,7 +18,10 @@ declare(strict_types=1);
 
 namespace Weline\Server\IPC;
 
+use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
+use Weline\Server\Service\MasterProcess;
 
 class MasterResurrector
 {
@@ -73,8 +76,13 @@ class MasterResurrector
      */
     public function shouldResurrect(bool $receivedShutdown): bool
     {
-        // 收到过 shutdown → 不复活
+        // 收到过 shutdown（IPC 控制通道下发）→ 不复活；停止/重启时由 Master 广播 shutdown，不依赖文件
         if ($receivedShutdown) {
+            return false;
+        }
+
+        // 服务异常（复活三次失败等，此时无 Master 无法走 IPC）→ 停止复活策略，等待人工干预
+        if (MasterProcess::hasServiceException($this->instanceName)) {
             return false;
         }
 
@@ -131,6 +139,25 @@ class MasterResurrector
             $delay = \min($delay * 2, 30);
         }
 
+        // 三次均无法复活：发送服务异常信号，派发事件向后台报错，停止策略等待人工干预（Worker 继续正常服务）
+        $message = \sprintf(
+            __('WLS 实例 [%s] Master 复活失败，已尝试 %d 次，请人工检查并执行 server:start 或 server:restart。'),
+            $this->instanceName,
+            $this->maxRetries
+        );
+        MasterProcess::setServiceException($this->instanceName, $message, $this->maxRetries);
+        $eventData = [
+            'instance_name' => $this->instanceName,
+            'attempts' => $this->maxRetries,
+            'message' => $message,
+        ];
+        try {
+            /** @var EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+            $eventsManager->dispatch('Weline_Server::service::master_resurrection_failed', $eventData);
+        } catch (\Throwable $e) {
+            \error_log('[MasterResurrector] dispatch master_resurrection_failed event failed: ' . $e->getMessage());
+        }
         return false;
     }
 
@@ -170,12 +197,13 @@ class MasterResurrector
         $phpBinary = \defined('PHP_BINARY') ? PHP_BINARY : 'php';
         $script = BP . 'bin' . DS . 'w';
 
+        $masterName = \Weline\Server\Service\MasterProcess::getMasterProcessName($this->instanceName);
         if (IS_WIN) {
             $bp = \str_replace("'", "''", BP);
             $phpBin = \str_replace("'", "''", $phpBinary);
             $scriptRel = 'bin' . DS . 'w';
             $instName = \str_replace("'", "''", $this->instanceName);
-            $argList = "'{$scriptRel}','server:start','{$instName}','--master-only'";
+            $argList = "'{$scriptRel}','server:start','{$instName}','--master-only','--name=" . \str_replace("'", "''", $masterName) . "'";
             $psCmd = "Set-Location -LiteralPath '{$bp}'; Start-Process -FilePath '{$phpBin}' -ArgumentList {$argList} -WindowStyle Hidden -WorkingDirectory '{$bp}'";
             $fullCmd = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "' . \str_replace('"', '\"', $psCmd) . '"';
             @\exec($fullCmd . ' 2>NUL');
@@ -183,10 +211,11 @@ class MasterResurrector
         }
 
         $cmd = \sprintf(
-            '%s %s server:start %s --master-only',
+            '%s %s server:start %s --master-only --name=%s',
             $phpBinary,
             \escapeshellarg($script),
-            \escapeshellarg($this->instanceName)
+            \escapeshellarg($this->instanceName),
+            \escapeshellarg($masterName)
         );
 
         Processer::create($cmd, false);

@@ -4,7 +4,6 @@
  *
  * @var \Weline\Framework\View\Template $this
  * @var array $websites
- * @var array|null $index_file
  * @var array $providers
  * @var array $module_sitemaps
  */
@@ -12,7 +11,6 @@
 $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 
 $websites = $websites ?? [];
-$indexFile = $index_file ?? null;
 $providers = $providers ?? [];
 $moduleSitemaps = $module_sitemaps ?? [];
 $websiteStats = $website_stats ?? [];
@@ -453,7 +451,6 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                             </h5>
                                             <div style="background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
                                                 <pre style="margin: 0; font-size: 12px; line-height: 1.6; color: #333; background: #f8f9fa; padding: 15px; border-radius: 6px; overflow-x: auto;"><code>pub/sitemaps/
-├── sitemap.xml                          # 跨站总索引（可选）
 ├── default/                             # 站点目录
 │   ├── google/                          # Google 平台目录
 │   │   ├── sitemap.xml                  # Google 平台索引
@@ -659,19 +656,6 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                     
                     <!-- 右侧：Sitemap 文件列表 -->
                     <div class="col-xl-8">
-                        <!-- 跨站总索引提示 -->
-                        <?php if ($indexFile): ?>
-                        <div class="index-file-hint">
-                            <i class="mdi mdi-information-outline"></i>
-                            <span><lang>跨站总索引</lang>: <strong><?= htmlspecialchars($indexFile['name']) ?></strong> (<?= $indexFile['size_formatted'] ?>)</span>
-                            <code class="ms-2" style="font-size: 0.85em; background: #f5f5f5; padding: 2px 8px; border-radius: 3px;"><?= htmlspecialchars($indexFile['url']) ?></code>
-                            <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="copyToClipboard('<?= htmlspecialchars($indexFile['full_url'], ENT_QUOTES) ?>')" title="<?= __('复制地址') ?>">
-                                <i class="mdi mdi-content-copy"></i>
-                            </button>
-                            <a href="<?= htmlspecialchars($indexFile['full_url']) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary ms-1"><i class="mdi mdi-open-in-new"></i> <lang>查看</lang></a>
-                        </div>
-                        <?php endif; ?>
-                        
                         <!-- 多平台 Sitemap（pub/sitemaps/{site}/{platform}/ 目录） -->
                         <?php if (!empty($moduleSitemaps)): ?>
                         <div class="card mb-3">

@@ -20,6 +20,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Security;
 
+use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Service\AttackLogService;
 
 class AttackDetector
@@ -76,6 +78,31 @@ class AttackDetector
             'window' => 60,           // 时间窗口（秒）
             'max_requests' => 100,    // 最大请求数
             'block_duration' => 300,  // 封禁时长（秒）
+        ],
+        // 路径级限流（可精细控制 Query API 等路径）
+        'path_rate_limits' => [
+            'enabled' => true,
+            'rules' => [
+                [
+                    'path' => '/api/framework/query',
+                    'window' => 60,
+                    'max_requests' => 120,
+                    'block_duration' => 120,
+                    'enabled' => true,
+                ],
+                [
+                    'path' => '/api_admin/framework/query',
+                    'window' => 60,
+                    'max_requests' => 300,
+                    'block_duration' => 120,
+                    'enabled' => true,
+                ],
+            ],
+        ],
+        // CDN 回源 IP 白名单（Dispatcher 可据此跳过攻击探测）
+        'cdn_trusted_ips' => [
+            'enabled' => true,
+            'ips' => [],
         ],
         
         // 路径扫描检测
@@ -182,6 +209,7 @@ class AttackDetector
         'total_requests' => 0,
         'blocked_requests' => 0,
         'rate_limit_blocks' => 0,
+        'path_rate_limit_blocks' => 0,
         'path_scan_blocks' => 0,
         'malicious_blocks' => 0,
         'bad_ua_blocks' => 0,
@@ -347,6 +375,14 @@ class AttackDetector
         }
         
         // 3. 路径扫描检测
+        $pathRateResult = $this->checkPathRateLimit($clientIp, $uri);
+        if ($pathRateResult['is_attack']) {
+            $this->stats['path_rate_limit_blocks']++;
+            $this->persistAttackLog($pathRateResult, $requestInfo);
+            return $pathRateResult;
+        }
+
+        // 4. 路径扫描检测
         $pathResult = $this->checkPathScan($clientIp, $uri);
         if ($pathResult['is_attack']) {
             $this->stats['path_scan_blocks']++;
@@ -355,7 +391,7 @@ class AttackDetector
             return $pathResult;
         }
         
-        // 4. 敏感路径保护
+        // 5. 敏感路径保护
         $protectedResult = $this->checkProtectedPaths($clientIp, $uri);
         if ($protectedResult['is_attack']) {
             $this->stats['protected_path_blocks']++;
@@ -363,7 +399,7 @@ class AttackDetector
             return $protectedResult;
         }
         
-        // 5. 恶意特征检测
+        // 6. 恶意特征检测
         $maliciousResult = $this->checkMaliciousPatterns($clientIp, $uri, $body);
         if ($maliciousResult['is_attack']) {
             $this->stats['malicious_blocks']++;
@@ -371,7 +407,7 @@ class AttackDetector
             return $maliciousResult;
         }
         
-        // 6. 恶意 User-Agent 检测
+        // 7. 恶意 User-Agent 检测
         $uaResult = $this->checkUserAgent($clientIp, $headers);
         if ($uaResult['is_attack']) {
             $this->stats['bad_ua_blocks']++;
@@ -475,6 +511,76 @@ class AttackDetector
         
         return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
     }
+
+    private function checkPathRateLimit(string $ip, string $uri): array
+    {
+        $rule = $this->rules['path_rate_limits'] ?? [];
+        if (!($rule['enabled'] ?? true)) {
+            return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
+        }
+        $rules = $rule['rules'] ?? [];
+        if (!\is_array($rules) || $rules === []) {
+            return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
+        }
+
+        $path = (string)(\parse_url($uri, PHP_URL_PATH) ?? '/');
+        $matched = null;
+        foreach ($rules as $item) {
+            if (!\is_array($item) || !($item['enabled'] ?? true)) {
+                continue;
+            }
+            $targetPath = (string)($item['path'] ?? '');
+            if ($targetPath === '') {
+                continue;
+            }
+            if ($path === $targetPath || \str_starts_with($path, \rtrim($targetPath, '/') . '/')) {
+                $matched = $item;
+                break;
+            }
+        }
+        if ($matched === null) {
+            return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
+        }
+
+        $window = (int)($matched['window'] ?? 60);
+        $maxRequests = (int)($matched['max_requests'] ?? 60);
+        $blockDuration = (int)($matched['block_duration'] ?? 60);
+        $counterKey = '__path_rate__' . (string)($matched['path'] ?? $path);
+        $now = \time();
+
+        if (!isset($this->ipCounters[$ip])) {
+            $this->ipCounters[$ip] = [
+                'count' => 0,
+                'first_time' => $now,
+                'paths' => [],
+            ];
+        }
+        if (!isset($this->ipCounters[$ip]['paths'][$counterKey])) {
+            $this->ipCounters[$ip]['paths'][$counterKey] = ['count' => 0, 'first_time' => $now];
+        }
+
+        $bucket = &$this->ipCounters[$ip]['paths'][$counterKey];
+        if (!\is_array($bucket)) {
+            $bucket = ['count' => 0, 'first_time' => $now];
+        }
+
+        if (($now - (int)($bucket['first_time'] ?? $now)) > $window) {
+            $bucket = ['count' => 0, 'first_time' => $now];
+        }
+        $bucket['count'] = (int)($bucket['count'] ?? 0) + 1;
+
+        if ($bucket['count'] > $maxRequests) {
+            $this->blockIp($ip, $blockDuration);
+            return [
+                'is_attack' => true,
+                'type' => 'path_rate_limit',
+                'reason' => "路径限流触发: {$path} {$bucket['count']}/{$window}s",
+                'should_block' => true,
+            ];
+        }
+
+        return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
+    }
     
     /**
      * 路径扫描检测
@@ -497,12 +603,27 @@ class AttackDetector
         
         // 记录访问路径
         $path = \parse_url($uri, PHP_URL_PATH) ?? '/';
+        // 仅统计真实 URI 路径，避免与 path_rate_limits 的内部计数桶冲突
+        foreach ($counter['paths'] as $key => $value) {
+            if (\str_starts_with((string)$key, '__path_rate__')) {
+                continue;
+            }
+            if (!\is_numeric($value)) {
+                $counter['paths'][$key] = 0;
+            }
+        }
         if (!isset($counter['paths'][$path])) {
             $counter['paths'][$path] = 0;
         }
         $counter['paths'][$path]++;
         
-        $uniquePathCount = \count($counter['paths']);
+        $uniquePathCount = 0;
+        foreach ($counter['paths'] as $key => $value) {
+            if (\str_starts_with((string)$key, '__path_rate__')) {
+                continue;
+            }
+            $uniquePathCount++;
+        }
         
         if ($uniquePathCount > $maxUniquePaths) {
             $this->blockIp($ip, $blockDuration);
@@ -682,6 +803,7 @@ class AttackDetector
             'total_requests' => $this->stats['total_requests'],
             'blocked_requests' => $this->stats['blocked_requests'],
             'rate_limit_blocks' => $this->stats['rate_limit_blocks'],
+            'path_rate_limit_blocks' => $this->stats['path_rate_limit_blocks'],
             'path_scan_blocks' => $this->stats['path_scan_blocks'],
             'malicious_blocks' => $this->stats['malicious_blocks'],
             'bad_ua_blocks' => $this->stats['bad_ua_blocks'],
@@ -764,6 +886,15 @@ class AttackDetector
         
         // 写入更新标记
         @\file_put_contents(self::getRulesUpdateFlagPath(), (string) \time());
+
+        /** @var EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        $eventData = [
+            'rules' => $rules,
+            'merged_rules' => $this->rules,
+            'instance' => $this->instanceName,
+        ];
+        $eventsManager->dispatch('Weline_Server::integration::security_rules_updated', $eventData);
     }
     
     /**

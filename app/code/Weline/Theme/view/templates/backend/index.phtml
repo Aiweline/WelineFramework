@@ -335,14 +335,15 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => response.json())
         .then(data => {
-            if (data.status === 'success' || data.success) {
+            // 兼容框架统一格式：code===200 或 status/success 均为成功
+            if (data.code === 200 || data.status === 'success' || data.success) {
                 activateModal.hide();
                 // 显示成功提示并刷新
                 setTimeout(function() {
                     window.location.reload();
                 }, 500);
             } else {
-                alert(data.message || '<?= __('激活失败') ?>');
+                alert(data.msg || data.message || '<?= __('激活失败') ?>');
                 btn.disabled = false;
                 btn.innerHTML = '<i class="mdi mdi-check-circle"></i> <?= __('确认激活') ?>';
             }

@@ -1,6 +1,6 @@
 <?php
 
-namespace Weline\ElfinderFileManager;
+namespace Weline\ElFinderFileManager;
 
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;

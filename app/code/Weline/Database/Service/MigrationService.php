@@ -47,42 +47,49 @@ class MigrationService
     public function upgradeMigration(string $moduleName, string $migrationFile): bool
     {
         try {
-            // 检查迁移文件是否存在
             if (!file_exists($migrationFile)) {
                 throw new \Exception("迁移文件不存在: {$migrationFile}");
             }
             
-            // 加载迁移类
             $migrationClass = $this->loadMigrationClass($migrationFile);
             if (!$migrationClass instanceof MigrationInterface) {
                 throw new \Exception("迁移类必须实现MigrationInterface接口");
             }
             
-            // 验证前置条件
             if (!$migrationClass->validate()) {
                 throw new \Exception("迁移前置条件验证失败");
             }
             
-            // 检查依赖
             $dependencies = $migrationClass->getDependencies();
             if (!$this->checkDependencies($moduleName, $dependencies)) {
                 throw new \Exception("迁移依赖未满足");
             }
             
-            // 开始事务
             $query = $this->connectionFactory->query('SELECT 1');
             $query->beginTransaction();
             
             try {
-                // 执行迁移
+                $needsBackup = $this->migrationRequiresBackup($migrationClass);
+                $migrationId = 0;
+                
+                if ($needsBackup) {
+                    $migrationId = $this->insertMigrationRecord(
+                        $moduleName, $migrationFile, $migrationClass, Migration::STATUS_RUNNING
+                    );
+                    $this->performBackup($migrationClass, $migrationId);
+                }
+                
                 $result = $migrationClass->install();
                 
                 if (!$result) {
                     throw new \Exception("迁移执行失败");
                 }
                 
-                // 记录迁移
-                $this->recordMigration($moduleName, $migrationFile, $migrationClass);
+                if ($migrationId > 0) {
+                    $this->updateMigrationStatus($moduleName, basename($migrationFile), Migration::STATUS_INSTALLED);
+                } else {
+                    $this->recordMigration($moduleName, $migrationFile, $migrationClass);
+                }
                 
                 $query->commit();
                 
@@ -91,6 +98,9 @@ class MigrationService
                 
             } catch (\Exception $e) {
                 $query->rollBack();
+                if ($migrationId > 0) {
+                    $this->updateMigrationStatus($moduleName, basename($migrationFile), Migration::STATUS_FAILED);
+                }
                 throw $e;
             }
             
@@ -110,31 +120,32 @@ class MigrationService
     public function rollbackMigration(string $moduleName, string $migrationFile): bool
     {
         try {
-            // 检查迁移是否已安装
-            if (!$this->migrationModel->isMigrationExists($moduleName, basename($migrationFile))) {
+            $filename = basename($migrationFile);
+            if (!$this->migrationModel->isMigrationExists($moduleName, $filename)) {
                 throw new \Exception("迁移记录不存在: {$migrationFile}");
             }
             
-            // 加载迁移类
             $migrationClass = $this->loadMigrationClass($migrationFile);
             if (!$migrationClass instanceof MigrationInterface) {
                 throw new \Exception("迁移类必须实现MigrationInterface接口");
             }
             
-            // 开始事务
             $query = $this->connectionFactory->query('SELECT 1');
             $query->beginTransaction();
             
             try {
-                // 执行回滚
                 $result = $migrationClass->uninstall();
                 
                 if (!$result) {
                     throw new \Exception("迁移回滚失败");
                 }
                 
-                // 更新迁移状态
-                $this->updateMigrationStatus($moduleName, basename($migrationFile), Migration::STATUS_ROLLED_BACK);
+                $migrationId = $this->migrationModel->findMigrationId($moduleName, $filename);
+                if ($migrationId > 0) {
+                    $this->restoreBackupsForMigration($migrationId);
+                }
+                
+                $this->updateMigrationStatus($moduleName, $filename, Migration::STATUS_ROLLED_BACK);
                 
                 $query->commit();
                 
@@ -309,28 +320,93 @@ class MigrationService
     }
     
     /**
-     * 记录迁移执行
-     * 
-     * @param string $moduleName 模块名称
-     * @param string $migrationFile 迁移文件路径
-     * @param MigrationInterface $migrationClass 迁移类实例
+     * 记录迁移执行（status = installed）
      */
-    private function recordMigration(string $moduleName, string $migrationFile, MigrationInterface $migrationClass): void
+    private function recordMigration(string $moduleName, string $migrationFile, MigrationInterface $migrationClass): int
     {
-        $info = $migrationClass->getInfo();
-        
+        return $this->insertMigrationRecord($moduleName, $migrationFile, $migrationClass, Migration::STATUS_INSTALLED);
+    }
+
+    /**
+     * 插入迁移记录
+     *
+     * @return int 记录 ID
+     */
+    private function insertMigrationRecord(
+        string $moduleName,
+        string $migrationFile,
+        MigrationInterface $migrationClass,
+        string $status
+    ): int {
         $data = [
-            'module_name' => $moduleName,
-            'version' => $migrationClass->getVersion(),
+            'module_name'    => $moduleName,
+            'version'        => $migrationClass->getVersion(),
             'migration_file' => basename($migrationFile),
-            'description' => $migrationClass->getDescription(),
-            'status' => Migration::STATUS_INSTALLED,
-            'dependencies' => $migrationClass->getDependencies(),
-            'checksum' => md5_file($migrationFile),
-            'executed_at' => date('Y-m-d H:i:s')
+            'description'    => $migrationClass->getDescription(),
+            'status'         => $status,
+            'dependencies'   => $migrationClass->getDependencies(),
+            'checksum'       => file_exists($migrationFile) ? md5_file($migrationFile) : '',
+            'executed_at'    => date('Y-m-d H:i:s'),
         ];
-        
-        $this->migrationModel->recordMigration($data);
+
+        return $this->migrationModel->recordMigration($data);
+    }
+
+    /**
+     * 判断迁移脚本是否需要备份（兼容未实现新方法的旧脚本）
+     */
+    private function migrationRequiresBackup(MigrationInterface $migration): bool
+    {
+        if (method_exists($migration, 'requiresBackup')) {
+            return $migration->requiresBackup();
+        }
+        return false;
+    }
+
+    /**
+     * 根据备份策略执行备份
+     */
+    private function performBackup(MigrationInterface $migration, int $migrationId): void
+    {
+        $strategy = method_exists($migration, 'getBackupStrategy')
+            ? $migration->getBackupStrategy()
+            : ['strategy' => 'none', 'tables' => [], 'columns' => []];
+
+        if ($strategy['strategy'] === 'none' || empty($strategy['tables'])) {
+            return;
+        }
+
+        $tables  = $strategy['tables'] ?? [];
+        $columns = $strategy['columns'] ?? [];
+
+        foreach ($tables as $table) {
+            if ($strategy['strategy'] === 'column' && !empty($columns)) {
+                foreach ($columns as $column) {
+                    $this->backupService->backupColumnData($table, $column, $migrationId);
+                }
+            } else {
+                $this->backupService->backupTableData($table, $migrationId);
+            }
+        }
+
+        $this->printing->info(__("迁移备份完成 (migration_id: %{1})", $migrationId));
+    }
+
+    /**
+     * 回滚时恢复关联备份
+     */
+    private function restoreBackupsForMigration(int $migrationId): void
+    {
+        $backups = $this->backupService->getBackupsByMigrationId($migrationId);
+        if (empty($backups)) {
+            return;
+        }
+
+        $this->printing->info(__("正在恢复迁移备份 (migration_id: %{1})...", $migrationId));
+
+        foreach ($backups as $backup) {
+            $this->backupService->restoreByBackupId((int) $backup->getId());
+        }
     }
     
     /**

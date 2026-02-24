@@ -266,6 +266,8 @@ final class Tokenizer
                         } else {
                             // 非框架标签：检查属性中是否包含双花括号变量、内联标签或框架标签
                             // 如果包含，需要分割生成多个 Token
+                            // 注意：内联标签（@if{...}、@var{...} 等）已在 Taglib::expandInlineTags()
+                            // 预展开阶段替换为 PHP 代码，此处 @ 检查仅作为兼容保留
                             $hasSpecialContent = str_contains($fullMatch, '{{') || str_contains($fullMatch, '@');
                             
                             // 快速检查：只有包含 < 且有框架标签时才进一步检查

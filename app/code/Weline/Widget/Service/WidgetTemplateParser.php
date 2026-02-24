@@ -126,20 +126,78 @@ class WidgetTemplateParser
     {
         $result = [];
 
-        // 匹配 @widget.key {value} 格式
-        // 支持：@widget.name {Header 搜索框}
-        // 支持：@widget.position {["header", "content"]}
-        // 支持：@widget.exclusive {true}
-        $pattern = '/@widget\.([a-z_]+)\s*\{([^}]+)\}/i';
-        
-        if (preg_match_all($pattern, $content, $matches, PREG_SET_ORDER)) {
-            foreach ($matches as $match) {
-                $key = $match[1];
-                $value = trim($match[2]);
-                
-                // 解析值
-                $result[$key] = $this->parseValue($value);
+        // 支持格式：
+        // @widget.name {Header 搜索框}
+        // @widget.position {["header", "content"]}
+        // @widget.exclusive {true}
+        // @widget.slots { "logo": {...}, "search": {...} }
+        //
+        // 需要支持值中出现嵌套花括号（例如 JSON 对象），
+        // 因此不能简单用正则截取，改为手动扫描，按花括号计数来匹配结束位置。
+
+        $offset = 0;
+        $len = strlen($content);
+        $pattern = '/@widget\.([a-z_]+)\s*\{/i';
+
+        while ($offset < $len && preg_match($pattern, $content, $match, PREG_OFFSET_CAPTURE, $offset)) {
+            $key = $match[1][0];
+            $matchPos = $match[0][1];
+
+            // 找到当前 key 后面的第一个 '{'
+            $bracePos = strpos($content, '{', $matchPos);
+            if ($bracePos === false) {
+                $offset = $matchPos + strlen($match[0][0]);
+                continue;
             }
+
+            // 从第一个 '{' 开始进行花括号计数，找到成对的结束位置
+            $level = 0;
+            $i = $bracePos;
+            for (; $i < $len; $i++) {
+                $ch = $content[$i];
+                if ($ch === '{') {
+                    $level++;
+                } elseif ($ch === '}') {
+                    $level--;
+                    if ($level === 0) {
+                        break;
+                    }
+                }
+            }
+
+            if ($level !== 0) {
+                // 花括号未能正常闭合，跳过本次匹配，防止死循环
+                $offset = $bracePos + 1;
+                continue;
+            }
+
+            // 提取大括号内部的内容（去掉最外层的一对花括号）
+            $valueStart = $bracePos + 1;
+            $valueLength = $i - $valueStart;
+            if ($valueLength < 0) {
+                $offset = $i + 1;
+                continue;
+            }
+
+            $rawValue = trim(substr($content, $valueStart, $valueLength));
+
+            if ($rawValue === '') {
+                $offset = $i + 1;
+                continue;
+            }
+
+            // 对于 slots 这种对象型配置，rawValue 形如 `"logo": {...}, "search": {...}`
+            // 需要补上最外层的一对花括号后再交给 parseValue 作为 JSON 对象解析。
+            if ($key === 'slots') {
+                $valueForParse = '{' . $rawValue . '}';
+            } else {
+                $valueForParse = $rawValue;
+            }
+
+            $result[$key] = $this->parseValue($valueForParse);
+
+            // 更新 offset，继续向后搜索
+            $offset = $i + 1;
         }
 
         return $result;

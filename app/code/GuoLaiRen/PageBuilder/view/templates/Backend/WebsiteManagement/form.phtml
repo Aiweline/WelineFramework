@@ -121,14 +121,16 @@ $selected_languages = $selected_languages ?? [];
 
                     <div class="col-4 mb-3">
                         <label for="scope" class="form-label"><?= __('业务范围 (Scope)') ?></label>
+                        <input type="hidden" name="scope" value="page_builder">
                         <input type="text" 
-                               class="form-control" 
+                               class="form-control bg-body-secondary" 
                                id="scope" 
-                               name="scope"
-                               value="<?= htmlspecialchars($website['scope'] ?? '') ?>"
-                               placeholder="<?= __('如：page_builder、catalog') ?>">
+                               value="page_builder"
+                               readonly
+                               disabled
+                               title="<?= __('PageBuilder 内固定为 page_builder，不可修改') ?>">
                         <div class="form-text-hint">
-                            <?= __('用于标识站点的业务来源，留空表示通用站点。') ?>
+                            <?= __('PageBuilder 内固定为 page_builder，用于标识站点来源。') ?>
                         </div>
                     </div>
 

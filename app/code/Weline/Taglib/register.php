@@ -13,7 +13,7 @@ Register::register(
     Register::MODULE,
     'Weline_Taglib',
     __DIR__,
-    '1.0.1',
+    '1.0.2',
     'Taglib标签库插件，协助支持自定义标签功能',
     [
         'Weline_ModuleManager'

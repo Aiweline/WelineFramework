@@ -8,8 +8,10 @@
 
 namespace Weline\Database\Model;
 
-use Weline\Framework\Database\Api\Db\ModelInterface;
+use Weline\Framework\Database\ModelInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Setup\Data\Context;
 
 class ModuleVersion extends Model implements ModelInterface
 {
@@ -23,7 +25,29 @@ class ModuleVersion extends Model implements ModelInterface
     {
         $this->init('weline_database_module_versions', self::fields_ID);
     }
-    
+
+    public function setup(ModelSetup $setup, Context $context): void
+    {
+        $this->install($setup, $context);
+    }
+
+    public function upgrade(ModelSetup $setup, Context $context): void
+    {
+    }
+
+    public function install(ModelSetup $setup, Context $context): void
+    {
+        if ($setup->tableExist() === false) {
+            $setup->createTable('Module Versions Table')
+                ->addColumn(self::fields_ID, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
+                ->addColumn(self::fields_MODULE_NAME, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'not null', 'Module Name')
+                ->addColumn(self::fields_CURRENT_VERSION, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 50, 'not null', 'Current Version')
+                ->addColumn(self::fields_LAST_MIGRATION, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'default null', 'Last Migration')
+                ->addColumn(self::fields_UPDATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TIMESTAMP, null, 'default CURRENT_TIMESTAMP', 'Updated At')
+                ->create();
+        }
+    }
+
     /**
      * 获取模块当前版本
      * 

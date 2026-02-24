@@ -903,6 +903,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         '<span class="text-danger">' +
                         '<?= __('未配置端侧模型，任务启动前需要先在“配置管理”中选择 Hugging Face 模型。') ?>' +
                         '</span>';
+                    // 同步清除扩展中的 stale 配置，避免扩展误以为有模型而自动加载（导致内存暴增）
+                    try {
+                        window.postMessage({ type: 'MODEL_SAVE_CONFIG', payload: { modelId: null, enabled: false } }, '*');
+                    } catch (e) { /* ignore */ }
                     return;
                 }
 
@@ -951,8 +955,11 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }
                                 var mCard = document.getElementById('model-status-card');
                                 if (mCard) mCard.style.borderColor = 'var(--bs-info)';
+                            } else if (extStatus && extStatus.isLoading) {
+                                // 扩展正在加载，不重复触发，避免双端同时加载导致内存暴增
+                                console.log('[TaskPage] 扩展正在加载模型，等待完成');
                             } else {
-                                // 扩展端没有模型，尝试页面端自动加载
+                                // 扩展端没有模型且未在加载，尝试触发扩展加载（由扩展统一加载，页面不直接加载）
                                 if (typeof ModelLifecycle !== 'undefined' && !ModelLifecycle.isLoaded()) {
                                     console.log('[TaskPage] 检测到已启用模型，触发自动加载:', modelId);
                                     setTimeout(function() {

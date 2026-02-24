@@ -5,7 +5,13 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
     <title>@lang{Elfinder文件管理器-2.1.6}</title>
-
+    <style>
+        /* 使 #elfinder 自动占满除 #elfinder-recommend-hint 外的可用高度 */
+        html, body { height: 100%; margin: 0; }
+        body { display: flex; flex-direction: column; }
+        #elfinder-recommend-hint { flex-shrink: 0; }
+        #elfinder { flex: 1; min-height: 0; }
+    </style>
     <js:part name="escape-unescape-string"/>
     <js:part name="file-size-to-string"/>
     <!-- Require JS (REQUIRED) -->
@@ -33,13 +39,16 @@
         let ext = urlParams.ext;
         let size = urlParams.size;
         let setAttr = urlParams.setAttr;
+        let recommendWidth = urlParams.recommend_width || '';
+        let recommendHeight = urlParams.recommend_height || '';
+        function qs(v) { return (v != null && v !== 'undefined') ? v : ''; }
         define('elFinderConfig', {
             // elFinder options (REQUIRED)
             // Documentation for client options:
             // https://github.com/Studio-42/elFinder/wiki/Client-configuration-options
             defaultOpts: {
                 cssAutoLoad: ['themes/windows-10/css/theme.css'],
-                url: '@backend-url("*/backend/connector")?startPath=' + startPath+'&ext='+ext+'&size='+size+'&multi='+multi, // or connector.maximal.php : connector URL (REQUIRED)
+                url: '@backend-url("*/backend/connector")?startPath=' + qs(startPath)+'&ext='+qs(ext)+'&size='+qs(size)+'&multi='+qs(multi), // or connector.maximal.php : connector URL (REQUIRED)
                 commandsOptions: {
                     getfile: {
                         multiple: true,
@@ -408,6 +417,11 @@
 </head>
 <body>
 
+<!-- Optional hint when recommend_width/recommend_height are in URL (e.g. from widget media_image) -->
+<div id="elfinder-recommend-hint" class="elfinder-recommend-hint" style="display:none; padding: 6px 10px; background: #e7f3ff; border-bottom: 1px solid #dee2e6; font-size: 13px;"></div>
+<script>
+(function(){ var p = {}; (decodeURIComponent(window.location.search || '').replace(/^\?/,'').split('&')).forEach(function(pair){ var i = pair.indexOf('='); if (i > 0) p[pair.slice(0,i)] = pair.slice(i+1); }); var rw = p.recommend_width || ''; var rh = p.recommend_height || ''; if (rw && rh) { var el = document.getElementById('elfinder-recommend-hint'); if (el) { el.style.display = 'block'; el.textContent = '建议尺寸：' + rw + ' × ' + rh; } } })();
+</script>
 <!-- Element where elFinder will be created (REQUIRED) -->
 <div id="elfinder"></div>
 

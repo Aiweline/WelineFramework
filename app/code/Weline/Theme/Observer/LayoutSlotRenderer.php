@@ -153,7 +153,6 @@ class LayoutSlotRenderer implements ObserverInterface
 
         // 处理插槽替换
         $processedHtml = $this->slotRenderer->processSlots($html, $themeId, $pageType, $status);
-        
         // 检查是否有孤儿部件（找不到对应插槽的部件）
         // 这些部件的配置数据不会被删除，只是无法在当前布局中显示
         if ($this->slotRenderer->hasOrphanWidgets()) {

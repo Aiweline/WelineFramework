@@ -13,6 +13,7 @@ namespace Weline\Widget\Console\Widget;
 
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Widget\Service\ParamSchemaRegistry;
 use Weline\Widget\Service\WidgetRegistry;
 
 /**
@@ -42,6 +43,16 @@ class Refresh extends CommandAbstract
                 $this->printer->note(__('位置：generated/widgets.php'));
             } else {
                 $this->printer->error(__('✖ 写入部件注册表失败。'));
+            }
+
+            /** @var ParamSchemaRegistry $paramSchemaRegistry */
+            $paramSchemaRegistry = ObjectManager::getInstance(ParamSchemaRegistry::class);
+            $schemaOk = $paramSchemaRegistry->refresh();
+            if ($schemaOk) {
+                $this->printer->success(__('✓ ParamSchema 注册表已刷新完成。'));
+                $this->printer->note(__('位置：generated/param_schemas.php'));
+            } else {
+                $this->printer->error(__('✖ 写入 ParamSchema 注册表失败。'));
             }
         } catch (\Throwable $e) {
             $this->printer->error(__('刷新失败：%{1}', [$e->getMessage()]));

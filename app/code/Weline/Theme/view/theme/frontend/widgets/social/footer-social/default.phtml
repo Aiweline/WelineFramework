@@ -16,9 +16,9 @@
  * 
  * @param title {default="",name="标题",description="部件标题，可选",type=string}
  * @param custom_links {default="",name="自定义社交链接",description="JSON格式的自定义社交链接配置，格式：[{\"platform\":\"facebook\",\"url\":\"https://...\"}]",type=string}
- * @param alignment {default="left",name="对齐方式",description="图标对齐方式：left(左对齐)、center(居中)、right(右对齐)",type=string,option={left:左对齐,center:居中,right:右对齐}}
- * @param icon_size {default="medium",name="图标尺寸",description="图标大小：small(32px)、medium(40px)、large(48px)",type=string,option={small:小号,medium:中号,large:大号}}
- * @param icon_style {default="colored",name="图标样式",description="图标显示样式：colored(彩色)、mono(单色)、outline(线框)",type=string,option={colored:彩色,mono:单色,outline:线框}}
+ * @param alignment {default="left",name="对齐方式",description="图标对齐方式",type=select,options={left:"左对齐",center:"居中",right:"右对齐"}}
+ * @param icon_size {default="medium",name="图标尺寸",description="图标大小",type=select,options={small:"小号",medium:"中号",large:"大号"}}
+ * @param icon_style {default="colored",name="图标样式",description="图标显示样式",type=select,options={colored:"彩色",mono:"单色",outline:"线框"}}
  * @param gap {default="10px",name="图标间距",description="图标之间的间距，支持CSS单位（如10px、1rem）",type=string}
  * @param facebook {default="",name="Facebook链接",description="Facebook主页链接",type=string}
  * @param twitter {default="",name="Twitter/X链接",description="Twitter/X主页链接",type=string}

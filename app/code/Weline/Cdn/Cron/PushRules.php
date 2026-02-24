@@ -13,6 +13,7 @@ namespace Weline\Cdn\Cron;
 
 use Weline\Cdn\Model\Domain;
 use Weline\Cdn\Service\RuleManager;
+use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -89,9 +90,10 @@ class PushRules implements CronTaskInterface
         $failedCount = 0;
 
         foreach ($domains as $domain) {
+            if (!$domain instanceof Domain) {
+                continue;
+            }
             try {
-                // 2. 获取合并后的规则（只包含定时触发的规则）
-                // trigger=cron 或未指定的规则
                 $rules = $this->ruleManager->getMergedRules($domain, 'cron');
                 
                 if (empty($rules)) {
@@ -113,7 +115,7 @@ class PushRules implements CronTaskInterface
             } catch (\Exception $e) {
                 $failedCount++;
                 // 记录错误日志
-                error_log("CDN规则推送失败 [域名: {$domain->getData(Domain::fields_DOMAIN_NAME)}]: " . $e->getMessage());
+                Env::log_error("CDN规则推送失败 [域名: {$domain->getData(Domain::fields_DOMAIN_NAME)}]: " . $e->getMessage());
             }
         }
 

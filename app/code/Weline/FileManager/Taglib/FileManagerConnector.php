@@ -48,6 +48,12 @@ class FileManagerConnector implements TaglibInterface
             'w' => false,
             'h' => false,
             'size' => false,
+            'recommend_width' => false,
+            'recommend_height' => false,
+            'min_width' => false,
+            'min_height' => false,
+            'max_width' => false,
+            'max_height' => false,
         ];
     }
 
@@ -150,6 +156,12 @@ class FileManagerConnector implements TaglibInterface
             $attributes['size'] = $attributes['size'] ?? '';
             $attributes['title'] = $attributes['title'] ?? '';
             $attributes['multi'] = $attributes['multi'] ?? '0';
+            $attributes['recommend_width'] = $attributes['recommend_width'] ?? '';
+            $attributes['recommend_height'] = $attributes['recommend_height'] ?? '';
+            $attributes['min_width'] = $attributes['min_width'] ?? '';
+            $attributes['min_height'] = $attributes['min_height'] ?? '';
+            $attributes['max_width'] = $attributes['max_width'] ?? '';
+            $attributes['max_height'] = $attributes['max_height'] ?? '';
             $result = $fileManager->getConnector($attributes);
             $cache->set($cacheKey, $result);
             return $result;
@@ -208,6 +220,9 @@ value：可选。默认当前的文件路径
 multi：可选。默认单选
 w：可选。默认预览宽50px
 h：可选。默认预览高50px
+recommend_width：可选。建议图片宽度（选择器内展示提示）
+recommend_height：可选。建议图片高度
+min_width/min_height/max_width/max_height：可选。分辨率限制（供选择后校验）
 HTML;
     }
 }

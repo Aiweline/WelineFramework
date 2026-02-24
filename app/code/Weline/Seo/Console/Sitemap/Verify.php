@@ -63,7 +63,6 @@ class Verify implements CommandInterface
         $this->testFileStructure();
         $this->testXmlValidity();
         $this->testUrlAccessibility();
-        $this->testCrossSiteIndex();
         
         $this->printSummary();
         
@@ -226,12 +225,6 @@ class Verify implements CommandInterface
         
         $sitemapsDir = BP . '/pub/sitemaps';
         
-        // 测试跨站索引
-        $crossSiteIndex = $sitemapsDir . '/sitemap.xml';
-        if (file_exists($crossSiteIndex)) {
-            $this->checkXmlFile($crossSiteIndex, '跨站总索引');
-        }
-        
         // 测试站点文件
         $siteDirs = glob($sitemapsDir . '/*', GLOB_ONLYDIR);
         
@@ -281,13 +274,6 @@ class Verify implements CommandInterface
         
         $sitemapsDir = BP . '/pub/sitemaps';
         
-        // 检查跨站索引的 URL 映射
-        $crossSiteIndex = $sitemapsDir . '/sitemap.xml';
-        if (file_exists($crossSiteIndex)) {
-            $expectedUrl = '/sitemaps/sitemap.xml';
-            $this->check(true, "跨站索引 URL: {$expectedUrl}");
-        }
-        
         // 检查站点平台索引
         $siteDirs = glob($sitemapsDir . '/*', GLOB_ONLYDIR);
         
@@ -302,34 +288,6 @@ class Verify implements CommandInterface
                 if (file_exists($indexFile)) {
                     $expectedUrl = "/sitemaps/{$siteName}/{$platformName}/sitemap.xml";
                     $this->check(true, "平台索引 URL: {$expectedUrl}");
-                }
-            }
-        }
-    }
-
-    private function testCrossSiteIndex(): void
-    {
-        $this->printTest('检查跨站总索引');
-        
-        $crossSiteIndex = BP . '/pub/sitemaps/sitemap.xml';
-        
-        $this->check(file_exists($crossSiteIndex), '跨站总索引文件存在');
-        
-        if (file_exists($crossSiteIndex)) {
-            $xml = simplexml_load_file($crossSiteIndex);
-            
-            if ($xml !== false) {
-                $sitemaps = $xml->sitemap ?? [];
-                $count = count($sitemaps);
-                
-                $this->check($count > 0, '跨站索引包含站点链接',
-                    "包含 {$count} 个站点");
-                
-                // 验证链接格式
-                foreach ($sitemaps as $sitemap) {
-                    $loc = (string)$sitemap->loc;
-                    $this->check(strpos($loc, '/sitemaps/') !== false,
-                        "索引链接使用正确的路径: {$loc}");
                 }
             }
         }
@@ -429,7 +387,6 @@ Sitemap E2E 端到端验证测试
 5. 文件结构规范
 6. XML 格式有效性
 7. URL 路径映射
-8. 跨站总索引
 
 使用方法：
   php bin/w sitemap:verify

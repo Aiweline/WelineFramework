@@ -167,5 +167,16 @@ interface AdapterInterface
      * @return bool
      */
     public function supportsAttackMode(): bool;
+
+    /**
+     * 获取用于解析真实客户端 IP 的 $_SERVER keys
+     *
+     * CDN 供应商会在请求中注入专有 Header 传递真实 IP，
+     * 适配器返回其供应商对应的 keys，供 Framework 在 getClientIp 时合并使用。
+     * 如无专有 header 则返回空数组。
+     *
+     * @return array<string> $_SERVER 格式的 key 列表，如 ['HTTP_CF_CONNECTING_IP']
+     */
+    public function getRealIpHeaderKeys(): array;
 }
 

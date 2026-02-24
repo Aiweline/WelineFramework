@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Http\Request;
 
+use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 
 /**
@@ -291,13 +293,17 @@ class ServerBag
     
     /**
      * 获取客户端 IP
-     * 
+     *
+     * 通过事件 Weline_Framework_Http::integration::client_ip_keys 收集 keys，
+     * CDN 模块等可注册专有 header（如 Cloudflare 的 HTTP_CF_CONNECTING_IP），
+     * 实现任意 CDN 供应商兼容，符合 OCP。
+     *
      * @return string
      */
     public function getClientIp(): string
     {
-        // 按优先级检查各种可能的 IP 来源
-        $ipKeys = [
+        // 基础 keys：通用代理头，不含 CDN 专有项
+        $baseKeys = [
             'HTTP_CLIENT_IP',
             'HTTP_X_FORWARDED_FOR',
             'HTTP_X_FORWARDED',
@@ -306,6 +312,15 @@ class ServerBag
             'HTTP_FORWARDED',
             'REMOTE_ADDR',
         ];
+        $eventData = ['keys' => $baseKeys];
+        try {
+            /** @var EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+            $eventsManager->dispatch('Weline_Framework_Http::integration::client_ip_keys', $eventData);
+        } catch (\Throwable $e) {
+            // 事件失败不影响 IP 解析
+        }
+        $ipKeys = $eventData['keys'];
         
         foreach ($ipKeys as $key) {
             $ip = $this->get($key);

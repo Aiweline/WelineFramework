@@ -345,9 +345,9 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
      */
     private function startMasterProcess(ServerConfig $config): int
     {
-        $processName = 'weline-master-' . $config->instanceName;
+        $processName = \Weline\Server\Service\MasterProcess::getMasterProcessName($config->instanceName);
         
-        // Master 进程通过 Start 命令的 --master-only 参数启动
+        // Master 进程通过 Start 命令的 --master-only 参数启动（统一前缀便于按前缀清理逃逸 Master）
         $command = "\"{$config->phpBinary}\" \"" . BP . "bin" . DIRECTORY_SEPARATOR . "w\" server:start --master-only --instance={$config->instanceName}";
         $command .= " --name={$processName}";
         
@@ -422,8 +422,8 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
         
         $data = \json_decode(\file_get_contents($instanceFile), true);
         
-        // 停止 Master 进程
-        $masterName = 'weline-master-' . $instanceName;
+        // 停止 Master 进程（使用统一前缀名）
+        $masterName = \Weline\Server\Service\MasterProcess::getMasterProcessName($instanceName);
         $masterPid = Processer::getPid($masterName);
         if ($masterPid > 0) {
             Processer::killByPid($masterPid);

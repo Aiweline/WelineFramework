@@ -916,6 +916,31 @@
             },
         },
 
+        Query: {
+            request: async (provider, operation, params = {}, options = {}) => {
+                const area = options.area || 'backend';
+                const queryConfig = runtimeConfig.query || {};
+                const frontendUrl = queryConfig.frontendUrl || '/api/framework/query';
+                const backendUrl = queryConfig.backendUrl || '/api_admin/framework/query';
+                const endpoint = area === 'frontend' ? frontendUrl : backendUrl;
+                const response = await Weline.Api.request(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        provider: provider,
+                        operation: operation,
+                        params: params
+                    })
+                });
+                if (!response || response.code !== 200) {
+                    throw new Error((response && response.msg) ? response.msg : __('查询失败'));
+                }
+                return response.data;
+            }
+        },
+
         /**
          * i18n 国际化对象（从PHP初始化）
          */
@@ -1076,6 +1101,10 @@
 
     // 挂载到全局
     window.Weline = Weline;
+    window.w_query = function (provider, operation, params = {}, options = {}) {
+        return Weline.Query.request(provider, operation, params, options);
+    };
+    window.w_providerQuery = window.w_query;
     setupDeprecatedConfigAlias();
 
     /**

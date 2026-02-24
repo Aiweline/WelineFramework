@@ -48,8 +48,9 @@ function getContainerWithChildren(array $areaWidgets): array {
 }
 
 /**
- * 渲染单个部件
+ * 渲染单个部件（function_exists 防护：WLS 下同进程可能多次 include 本模板，避免重复声明）
  */
+if (!function_exists('renderWidget')) {
 function renderWidget($template, array $widget, array $children = []): string {
     $widgetTemplate = $widget['meta']['template'] ?? '';
     $config = $widget['config'] ?? [];
@@ -103,10 +104,12 @@ function renderWidget($template, array $widget, array $children = []): string {
         );
     }
 }
+}
 
 /**
  * 渲染占位符
  */
+if (!function_exists('renderWidgetPlaceholder')) {
 function renderWidgetPlaceholder(array $widget): string {
     $name = (string)($widget['meta']['name'] ?? $widget['widget_code'] ?? '未知部件');
     $layoutId = (int)($widget['layout_id'] ?? 0);
@@ -124,10 +127,12 @@ function renderWidgetPlaceholder(array $widget): string {
         htmlspecialchars((string)($name ?? ''))
     );
 }
+}
 
 /**
  * 渲染空区域占位符
  */
+if (!function_exists('renderAreaPlaceholder')) {
 function renderAreaPlaceholder(string $area, string $label): string {
     return sprintf(
         '<div class="area-placeholder" data-area="%s">
@@ -139,6 +144,7 @@ function renderAreaPlaceholder(string $area, string $label): string {
         htmlspecialchars((string)$area),
         htmlspecialchars((string)$label)
     );
+}
 }
 ?>
 <!DOCTYPE html>
