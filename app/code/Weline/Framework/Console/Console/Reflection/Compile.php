@@ -53,6 +53,16 @@ class Compile extends CommandAbstract
         $errorCount = 0;
         /** @var array<string, array{className: string, constructor: array|null, useGetInstance: bool, isStaticClass: bool}> */
         $factoryCandidates = [];
+        /** @var array<string, array{candidates_hash: string, safe: list<string>}> */
+        $safeClassesCache = ['modules' => []];
+        $cacheFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'reflection_safe_classes.php';
+        if (\is_file($cacheFile)) {
+            $loaded = @(include $cacheFile);
+            if (\is_array($loaded) && isset($loaded['modules']) && \is_array($loaded['modules'])) {
+                $safeClassesCache['modules'] = $loaded['modules'];
+            }
+        }
+        $seenModuleSignatures = [];
 
         foreach ($modules as $module) {
             $basePath = $module['base_path'] ?? '';
@@ -75,9 +85,24 @@ class Compile extends CommandAbstract
                 }
                 $candidates[$className] = $phpFile;
             }
-            
-            // 第二步：在子进程中批量验证哪些类可以安全加载
-            $safeClasses = $this->verifySafeClasses(\array_keys($candidates), $verbose);
+
+            $candidateKeys = \array_keys($candidates);
+            \sort($candidateKeys);
+            $moduleSignature = $this->computeModuleSignature($phpFiles);
+            $candidatesHash = \hash('sha256', \implode(',', $candidateKeys));
+            $seenModuleSignatures[$moduleSignature] = true;
+
+            // 第二步：在子进程中批量验证哪些类可以安全加载（或从缓存复用）
+            $cached = $safeClassesCache['modules'][$moduleSignature] ?? null;
+            if ($cached !== null && ($cached['candidates_hash'] ?? '') === $candidatesHash) {
+                $safeClasses = \array_fill_keys($cached['safe'], true);
+            } else {
+                $safeClasses = $this->verifySafeClasses($candidateKeys, $verbose);
+                $safeClassesCache['modules'][$moduleSignature] = [
+                    'candidates_hash' => $candidatesHash,
+                    'safe' => \array_keys($safeClasses),
+                ];
+            }
 
             foreach ($candidates as $className => $phpFile) {
                 // 跳过子进程验证失败的类
@@ -219,6 +244,12 @@ class Compile extends CommandAbstract
             }
         }
 
+        // 保存安全类缓存（仅保留本次运行涉及的模块签名）
+        $safeClassesCache['modules'] = \array_intersect_key(
+            $safeClassesCache['modules'] ?? [],
+            $seenModuleSignatures
+        );
+        $safeClassesCache['generated_at'] = \date('Y-m-d H:i:s');
         $generatedDir = BP . 'generated';
         if (!\is_dir($generatedDir)) {
             \mkdir($generatedDir, 0755, true);
@@ -238,6 +269,9 @@ class Compile extends CommandAbstract
         $metadataContent .= "return " . var_export($metadata, true) . ";\n";
 
         \file_put_contents($outputFile, $metadataContent);
+
+        $safeCacheContent = "<?php\n/**\n * 安全类验证缓存 - 自动生成，请勿手动编辑\n * 生成时间: " . $safeClassesCache['generated_at'] . "\n * 用途：reflection:compile 复用验证结果，减少子进程次数\n */\nreturn " . \var_export($safeClassesCache, true) . ";\n";
+        \file_put_contents($cacheFile, $safeCacheContent);
 
         $factoryCount = $this->generateCompiledFactories($factoryCandidates, $generatedDir);
 
@@ -443,6 +477,22 @@ class Compile extends CommandAbstract
     }
     
     /**
+     * 计算模块签名：基于 scanPhpFiles 结果，任意文件增删改会失效
+     *
+     * @param list<string> $phpFiles
+     */
+    private function computeModuleSignature(array $phpFiles): string
+    {
+        $parts = [];
+        foreach ($phpFiles as $path) {
+            $mtime = @\filemtime($path);
+            $parts[] = $path . '|' . ($mtime !== false ? (string) $mtime : '0');
+        }
+        \sort($parts);
+        return \hash('sha256', \implode("\n", $parts));
+    }
+
+    /**
      * 递归扫描目录下的 PHP 文件
      */
     private function scanPhpFiles(string $dir): array
@@ -548,8 +598,8 @@ class Compile extends CommandAbstract
         $phpBin = PHP_BINARY ?: 'php';
         $bootstrap = BP . 'app' . DIRECTORY_SEPARATOR . 'bootstrap.php';
         
-        // 分批验证（每批最多 50 个类，平衡子进程开销和隔离粒度）
-        $batches = \array_chunk($classNames, 50);
+        // 分批验证（每批最多 100 个类，平衡子进程开销和隔离粒度）
+        $batches = \array_chunk($classNames, 100);
         
         foreach ($batches as $batch) {
             $result = $this->verifyBatch($batch, $phpBin, $bootstrap);
