@@ -85,7 +85,11 @@ class Install implements InstallInterface
      */
     private function insertDefaultRules(Setup $setup): void
     {
-        // 使用 Data Setup 的简易查询接口插入默认规则
+        $db = $setup->getDb();
+        $table = $db->getTable('desensitization_rule');
+        if (!$db->tableExist('desensitization_rule')) {
+            return;
+        }
         $defaultRules = [
             ['email', 'email', '/([a-zA-Z0-9._-]+)@([a-zA-Z0-9.-]+)\.([a-zA-Z]{2,})/', '$1***@$2.***', '邮箱脱敏', 5],
             ['phone', 'phone', '/(\d{3})\d{4}(\d{4})/', '$1****$2', '手机号脱敏', 5],
@@ -93,7 +97,6 @@ class Install implements InstallInterface
             ['bank_card', 'bank_card', '/(\d{4})\d{12}(\d{4})/', '$1************$2', '银行卡号脱敏', 5],
             ['credit_card', 'credit_card', '/(\d{4})[\s-]?\d{4}[\s-]?\d{4}[\s-]?(\d{4})/', '$1****$2', '信用卡号脱敏', 5],
         ];
-        
         foreach ($defaultRules as $rule) {
             $name = addslashes($rule[0]);
             $type = addslashes($rule[1]);
@@ -101,8 +104,8 @@ class Install implements InstallInterface
             $replacement = addslashes($rule[3]);
             $description = addslashes($rule[4]);
             $priority = (int)$rule[5];
-            $setup->getDb()->query(
-                "INSERT INTO desensitization_rule (`name`,`type`,`pattern`,`replacement`,`description`,`priority`,`is_active`) " .
+            $db->query(
+                "INSERT INTO {$table} (name,type,pattern,replacement,description,priority,is_active) " .
                 "VALUES ('{$name}','{$type}','{$pattern}','{$replacement}','{$description}',{$priority},1)"
             );
         }
