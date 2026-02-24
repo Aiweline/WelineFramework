@@ -1,0 +1,80 @@
+<css>Weline_MediaManager::css/manager.css</css>
+<js>Weline_MediaManager::js/manager.js</js>
+
+<div class="mmf-wrap">
+    <!-- 侧边树 -->
+    <div class="mmf-sidebar">
+        <div class="mmf-sidebar-title"><lang>Folders</lang></div>
+        <ul class="mmf-tree"></ul>
+    </div>
+
+    <!-- 主区域 -->
+    <div class="mmf-main">
+        <!-- 工具栏 -->
+        <div class="mmf-toolbar">
+            <button class="mmf-btn mmf-btn-primary" id="mmf-btn-upload" title="Upload">
+                &#x2B06; <lang>Upload</lang>
+            </button>
+            <button class="mmf-btn" id="mmf-btn-newfolder" title="New Folder">
+                &#x1F4C1; <lang>New Folder</lang>
+            </button>
+            <span class="mmf-toolbar-sep"></span>
+            <button class="mmf-btn" id="mmf-btn-rename" title="Rename">
+                &#x270F;&#xFE0F; <lang>Rename</lang>
+            </button>
+            <button class="mmf-btn" id="mmf-btn-download" title="Download">
+                &#x1F4E5; <lang>Download</lang>
+            </button>
+            <button class="mmf-btn mmf-btn-danger" id="mmf-btn-delete" title="Delete">
+                &#x1F5D1;&#xFE0F; <lang>Delete</lang>
+            </button>
+            <span class="mmf-toolbar-sep"></span>
+            <button class="mmf-btn" id="mmf-btn-refresh" title="Refresh">
+                &#x1F504; <lang>Refresh</lang>
+            </button>
+            <div class="mmf-path"></div>
+        </div>
+
+        <!-- 上传区 -->
+        <div class="mmf-upload-drop"><lang>Drop files here to upload</lang></div>
+        <div class="mmf-upload-progress">
+            <div class="mmf-progress-bar-wrap"><div class="mmf-progress-bar"></div></div>
+            <div class="mmf-progress-text">0%</div>
+        </div>
+
+        <!-- 文件列表 -->
+        <div class="mmf-content">
+            <div class="mmf-grid"></div>
+        </div>
+
+        <!-- 状态栏 -->
+        <div class="mmf-statusbar">
+            <span class="mmf-status-info"></span>
+            <span class="mmf-status-size"></span>
+        </div>
+    </div>
+</div>
+
+<!-- 右键菜单 -->
+<div class="mmf-context-menu"></div>
+
+<!-- 对话框 -->
+<div class="mmf-dialog-overlay">
+    <div class="mmf-dialog">
+        <div class="mmf-dialog-title"></div>
+        <input type="text" class="mmf-dialog-input">
+        <div class="mmf-dialog-actions">
+            <button class="mmf-btn mmf-dialog-cancel"><lang>Cancel</lang></button>
+            <button class="mmf-btn mmf-btn-primary mmf-dialog-ok"><lang>OK</lang></button>
+        </div>
+    </div>
+</div>
+
+<!-- 隐藏上传 input -->
+<input type="file" id="mmf-file-input" multiple style="display:none">
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        WelineMediaManager.init('{{$connector_url}}');
+    });
+</script>

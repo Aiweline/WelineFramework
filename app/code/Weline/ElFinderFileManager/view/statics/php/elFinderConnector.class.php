@@ -4,6 +4,9 @@
  * Default elFinder connector
  *
  * @author Dmitry (dio) Levashov
+ *
+ * WLS 兼容：原版在输出响应后调用 exit()，在常驻 Worker 下会终止整个进程。
+ * 此处将 exit() 改为 return，由框架正常结束请求，Worker 可继续处理下一请求。
  **/
 class elFinderConnector
 {
@@ -167,7 +170,7 @@ class elFinderConnector
             // clear output buffer
             while (ob_get_level() && ob_end_clean()) {
             }
-            exit();
+            return; // WLS: 不用 exit()，避免杀死 Worker
         }
     }
 
@@ -297,10 +300,10 @@ class elFinderConnector
             } else {
                 fclose($fp);
             }
-            exit();
+            return; // WLS: 不用 exit()，避免杀死 Worker
         } else {
             self::outputJson($data);
-            exit(0);
+            return; // WLS: 不用 exit(0)，避免杀死 Worker
         }
     }
 
