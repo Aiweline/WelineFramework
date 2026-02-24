@@ -212,18 +212,6 @@ class Start extends CommandAbstract
                 $port = self::DEFAULT_PORT_HTTPS;
                 $config['port'] = $port;
                 
-                // 检查 443 端口是否可用（仅在未显式指定端口时检查）
-                if (!$portExplicit && Processer::isPortInUse($port)) {
-                    // 443 被占用，直接报错退出（不再自动切换到备用端口）
-                    $this->printer->error(__('默认 HTTPS 端口 443 被占用！'));
-                    $this->printer->note(__(''));
-                    $this->printer->setup(__('解决方案：'));
-                    $this->printer->note(__('  1. 使用 -p 参数指定其他端口：php bin/w server:start -p 8443'));
-                    $this->printer->note(__('  2. 或使用 --no-ssl 以 HTTP 模式启动：php bin/w server:start --no-ssl'));
-                    $this->printer->note(__('  3. 或停止占用端口 443 的进程：php bin/w server:kill-port -p 443'));
-                    $this->printer->note(__('  4. 或查看占用端口的进程：netstat -ano | findstr :443 (Windows) 或 lsof -i :443 (Linux/Mac)'));
-                    return;
-                }
             }
             if ($sslResult['is_new'] ?? false) {
                 $this->printer->success(__('已生成新证书：%{1}', [$sslResult['issuer']]));
@@ -366,6 +354,7 @@ class Start extends CommandAbstract
         
         // ========== HTTP Redirect 端口计算（HTTPS 模式始终启动） ==========
         $httpRedirectPort = 0;
+        $explicitRedirectPort = false;
         if ($sslEnabled) {
             // 优先级：命令行参数 > 配置文件 > 自动计算
             // 检查是否明确指定（命令行参数或配置文件中明确设置为 0 表示禁用）
@@ -402,29 +391,58 @@ class Start extends CommandAbstract
             }
         }
         
-        // 默认端口（80/443）被占用时的处理 - 直接报错，不再自动切换到备用端口
-        if (($port === self::DEFAULT_PORT || $port === self::DEFAULT_PORT_HTTPS)
-            && Processer::isPortInUse($port)
-            && !$portExplicit) {
-            $portName = $port === self::DEFAULT_PORT ? 'HTTP (80)' : 'HTTPS (443)';
-            $this->printer->error(__('默认 %{1} 端口被占用！', [$portName]));
-            $this->printer->note(__(''));
-            $this->printer->setup(__('解决方案：'));
-            $this->printer->note(__('  1. 使用 -p 参数指定其他端口：php bin/w server:start -p %{1}', [$port === self::DEFAULT_PORT ? '8080' : '8443']));
-            if ($sslEnabled) {
-                $this->printer->note(__('  2. 或使用 --no-ssl 以 HTTP 模式启动：php bin/w server:start --no-ssl'));
+        // 非显式端口：若被非框架进程占用，则自动跳过到可用端口
+        if (!$portExplicit && Processer::isPortInUse($port) && !Processer::isPortUsedByWeline($port)) {
+            $nextPort = Processer::findAvailablePort($port + 1, 200);
+            if ($nextPort > 0 && $nextPort !== $port) {
+                $this->printer->warning(__('端口 %{1} 被非框架进程占用，自动切换到可用端口 %{2}', [$port, $nextPort]));
+                $port = $nextPort;
+                $config['port'] = $port;
+                $workerPort = $dispatcherEnabled ? ($workerBasePort + $port) : $port;
+                if ($sslEnabled && $httpRedirectPort > 0 && !$explicitRedirectPort) {
+                    $httpRedirectPort = $port - 463;
+                    if ($httpRedirectPort <= 0 || $httpRedirectPort > 65535) {
+                        $httpRedirectPort = 80;
+                    }
+                }
             }
-            $this->printer->note(__('  3. 或停止占用端口 %{1} 的进程：php bin/w server:kill-port -p %{1}', [$port]));
-            $this->printer->note(__('  4. 或查看占用端口的进程：netstat -ano | findstr :%{1} (Windows) 或 lsof -i :%{1} (Linux/Mac)', [$port]));
-            return;
+        }
+
+        // Dispatcher 模式：Worker 端口段若包含非框架占用端口，自动跳到下一段可用端口
+        if ($dispatcherEnabled) {
+            $nextWorkerPort = $this->findAvailableWorkerPortBase($workerPort, $count);
+            if ($nextWorkerPort !== $workerPort) {
+                $this->printer->warning(__('Worker 端口段 %{1}-%{2} 存在非框架占用，自动切换到 %{3}-%{4}', [
+                    $workerPort,
+                    $workerPort + $count - 1,
+                    $nextWorkerPort,
+                    $nextWorkerPort + $count - 1
+                ]));
+                $workerPort = $nextWorkerPort;
+            }
+        }
+
+        // 自动计算的 HTTP Redirect 端口若被非框架进程占用，则自动跳过
+        if ($sslEnabled && $httpRedirectPort > 0 && !$explicitRedirectPort
+            && Processer::isPortInUse($httpRedirectPort)
+            && !Processer::isPortUsedByWeline($httpRedirectPort)
+        ) {
+            $nextRedirectPort = Processer::findAvailablePort($httpRedirectPort + 1, 200);
+            if ($nextRedirectPort > 0 && $nextRedirectPort !== $httpRedirectPort) {
+                $this->printer->warning(__('HTTP 重定向端口 %{1} 被非框架进程占用，自动切换到 %{2}', [$httpRedirectPort, $nextRedirectPort]));
+                $httpRedirectPort = $nextRedirectPort;
+            }
         }
         
         // 显示启动信息
-        $this->showStartupInfo($instanceName, $host, $port, $count, $daemon, $config['source'], $sslEnabled, $dispatcherEnabled, $workerPort, $httpRedirectPort);
+        $directReusePortEnabled = !$dispatcherEnabled && $supportsReusePort && $count > 1;
+        $this->showStartupInfo($instanceName, $host, $port, $count, $daemon, $config['source'], $sslEnabled, $dispatcherEnabled, $workerPort, $httpRedirectPort, $directReusePortEnabled);
 
         // 80/443 端口自我处理提示（特权端口、单端口建议）
-        if (!$dispatcherEnabled) {
+        if (!$dispatcherEnabled && !$supportsReusePort) {
             $this->showStandardPortHints($port, $count, $sslEnabled);
+        } elseif (!$dispatcherEnabled && $supportsReusePort && $count > 1) {
+            $this->printer->note(__('提示：当前为 SO_REUSEPORT 直连模式，多 Worker 复用同一端口 %{1}。', [$port]));
         }
 
         // 检查端口是否被占用（框架进程占用时最多重试 3 次，仍占用则按 Master 前缀清理逃逸 Master 后再试）
@@ -445,8 +463,13 @@ class Start extends CommandAbstract
                 return;
             }
         } else {
-            // 直连模式：检查 Worker 端口
-            if (!$this->checkAndReleasePorts($host, $port, $count, $forceRestart, $instanceName)) {
+            // 直连模式：
+            // - SO_REUSEPORT: 多 Worker 复用同一端口，只检查主端口
+            // - 非 SO_REUSEPORT: 仍按连续端口检查
+            $checkResult = $supportsReusePort
+                ? $this->checkAndReleasePort($host, $port, $forceRestart, 'Worker(Main)', $instanceName)
+                : $this->checkAndReleasePorts($host, $port, $count, $forceRestart, $instanceName);
+            if (!$checkResult) {
                 if (!empty($maintenanceEnabledByUs)) {
                     $this->disableMaintenanceMode();
                     $this->printer->note(__('维护模式已关闭（端口检查未通过）。'));
@@ -1372,7 +1395,7 @@ class Start extends CommandAbstract
     /**
      * 显示启动信息
      */
-    protected function showStartupInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, string $source = '', bool $sslEnabled = false, bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0): void
+    protected function showStartupInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, string $source = '', bool $sslEnabled = false, bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $directReusePortEnabled = false): void
     {
         $this->printer->setup(__('Weline Server'));
         echo "\n";
@@ -1395,7 +1418,12 @@ class Start extends CommandAbstract
             $workerProtocol = $sslEnabled ? 'SSL' : 'HTTP';
             $this->printer->note(\sprintf('║  Worker 端口：%-47s║', "{$workerPort} - " . ($workerPort + $count - 1) . " ({$workerProtocol})"));
         } else {
-            $this->printer->note(\sprintf('║  端口范围：%-50s║', "{$port} - " . ($port + $count - 1)));
+            if ($directReusePortEnabled) {
+                $this->printer->note(\sprintf('║  端口模式：%-50s║', __('SO_REUSEPORT 同端口复用')));
+                $this->printer->note(\sprintf('║  Worker 端口：%-47s║', "{$port} (共享端口)"));
+            } else {
+                $this->printer->note(\sprintf('║  端口范围：%-50s║', "{$port} - " . ($port + $count - 1)));
+            }
         }
         
         // HTTPS 模式显示 HTTP 重定向端口
@@ -1816,6 +1844,28 @@ class Start extends CommandAbstract
         $this->printer->error(__('无法释放端口 %{1}', [$stillInUse[0]]));
         $this->printer->note(__('请尝试: php bin/w server:kill-port %{1} -f', [$stillInUse[0]]));
         return false;
+    }
+
+    /**
+     * 查找 Dispatcher 模式下可用的 Worker 连续端口段（仅跳过非框架占用）
+     */
+    protected function findAvailableWorkerPortBase(int $startPort, int $count, int $maxScan = 500): int
+    {
+        $base = $startPort;
+        for ($attempt = 0; $attempt < $maxScan; $attempt++, $base++) {
+            $hasNonFrameworkConflict = false;
+            for ($i = 0; $i < $count; $i++) {
+                $port = $base + $i;
+                if (Processer::isPortInUse($port) && !Processer::isPortUsedByWeline($port)) {
+                    $hasNonFrameworkConflict = true;
+                    break;
+                }
+            }
+            if (!$hasNonFrameworkConflict) {
+                return $base;
+            }
+        }
+        return $startPort;
     }
     
     /**
