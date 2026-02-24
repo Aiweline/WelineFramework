@@ -20,6 +20,9 @@ use Weline\Framework\Output\Cli\Printing;
 
 class Core extends CommandAbstract
 {
+    /** 命令别名：支持旧用法 core:update */
+    public const ALIASES = ['core:update'];
+
     private System $system;
     private bool $isWindows;
     private string $defaultRepo = 'https://gitee.com/aiweline/WelineFramework.git';
@@ -75,11 +78,11 @@ class Core extends CommandAbstract
                 '版本验证' => '如果指定了标签但不存在，命令会报错并退出',
             ],
             [
-                '增量更新到最新' => 'php bin/w update:core -b main',
+                '增量更新到最新' => 'php bin/w update:core -b main  （或 core:update -b main）',
                 '强制完整更新' => 'php bin/w update:core -b main -f',
                 '指定标签' => 'php bin/w update:core -b main -t v1.0.0',
             ],
-            'php bin/w update:core -b <分支名>'
+            'php bin/w update:core -b <分支名> 或 php bin/w core:update -b <分支名>'
         );
     }
 

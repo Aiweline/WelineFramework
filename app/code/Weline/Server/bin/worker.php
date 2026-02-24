@@ -270,12 +270,19 @@ if (!\function_exists('getSystemFreeMemory')) {
                 }
             }
             // macOS: vm_stat 仅 "Pages free" 偏小，需加上可回收的 inactive/speculative（与 Linux MemAvailable 语义一致）
+            // 注意：macOS 可能输出千位逗号（如 "1,234,567"），需去掉逗号再转 int，否则会误判为内存严重不足
             $output = @\shell_exec('vm_stat 2>/dev/null');
             if ($output) {
                 $pageSize = 4096;
-                $free = \preg_match('/Pages free:\s*(\d+)/', $output, $m) ? (int)$m[1] : 0;
-                $inactive = \preg_match('/Pages inactive:\s*(\d+)/', $output, $m) ? (int)$m[1] : 0;
-                $speculative = \preg_match('/Pages speculative:\s*(\d+)/', $output, $m) ? (int)$m[1] : 0;
+                $parse = static function (string $text, string $key): int {
+                    if (!\preg_match('/' . \preg_quote($key, '/') . ':\s*([\d,\.]+)/', $text, $m)) {
+                        return 0;
+                    }
+                    return (int)\str_replace([',', '.'], '', $m[1]);
+                };
+                $free = $parse($output, 'Pages free');
+                $inactive = $parse($output, 'Pages inactive');
+                $speculative = $parse($output, 'Pages speculative');
                 $availablePages = $free + $inactive + $speculative;
                 if ($availablePages > 0) {
                     return $availablePages * $pageSize;
@@ -366,10 +373,26 @@ $fatalErrorTypes = [\E_ERROR, \E_PARSE, \E_CORE_ERROR, \E_COMPILE_ERROR, \E_RECO
         \in_array($error['type'], $fatalErrorTypes, true)
         || $error['type'] === 0  // 部分 SAPI 下未捕获 Error/TypeError 报告为 0
     );
-    if (!$isFatal) {
+    if ($isFatal) {
+        $errorMsg = "Worker 致命错误 [PID: " . \getmypid() . "] [Worker: {$workerId}] [Port: {$port}]: {$error['message']} in {$error['file']}:{$error['line']}";
+    } else {
+        // 无致命错误但进程即将退出：多为业务代码 die()/exit()，记录日志便于排查
+        $exitMsg = "Worker 非致命退出 [PID: " . \getmypid() . "] [Worker: {$workerId}] [Port: {$port}] 可能为 die()/exit() 或信号终止";
+        $wlsLog($exitMsg, 'WARN');
+        $flushLog(true);
+        if ($processLogFile) {
+            @\file_put_contents($processLogFile, '[' . \date('Y-m-d H:i:s') . '] [EXIT] ' . $exitMsg . "\n", \FILE_APPEND | \LOCK_EX);
+        }
+        $line = '[' . \date('Y-m-d H:i:s') . '] [instance:' . $instanceName . '] [Worker:' . $workerId . '] [Port:' . $port . '] [EXIT] ' . $exitMsg . "\n";
+        if (\defined('BP') && BP !== '') {
+            $crashLogDir = BP . 'var' . DS . 'log';
+            if (!\is_dir($crashLogDir)) {
+                @\mkdir($crashLogDir, 0755, true);
+            }
+            @\file_put_contents($crashLogDir . DS . 'wls-worker-crash.log', $line, \FILE_APPEND | \LOCK_EX);
+        }
         return;
     }
-    $errorMsg = "Worker 致命错误 [PID: " . \getmypid() . "] [Worker: {$workerId}] [Port: {$port}]: {$error['message']} in {$error['file']}:{$error['line']}";
     $wlsLog($errorMsg, 'ERROR');
     $flushLog(true);
     \error_log('[WLS Worker FATAL] ' . $errorMsg);
