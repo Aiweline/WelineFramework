@@ -281,7 +281,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $this->executeUpgradeProcess($args, $data, $maintenanceEnabled);
             
             // ========== 完成阶段 ==========
-            $this->completeUpgrade();
+            $this->completeUpgrade($args);
             
             // 通知 WLS 服务器热重载（如果正在运行）
             $this->notifyWlsReload();
@@ -526,13 +526,14 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     
     /**
      * 完成升级：显示成功信息
-     * 
+     *
+     * @param array $args 命令参数（用于 --skip-reflection-compile 等）
      * @return void
      */
-    private function completeUpgrade(): void
+    private function completeUpgrade(array $args = []): void
     {
         // 生成优化缓存（类映射和 PSR-4 映射）
-        $this->generateOptimizationCache();
+        $this->generateOptimizationCache($args);
         
         $this->printing->success(__('系统升级完成！'));
     }
@@ -540,10 +541,11 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     /**
      * 生成优化缓存：类映射和 PSR-4 映射
      * 这些缓存在运行时只读取，不更新，以提高性能
-     * 
+     *
+     * @param array $args 命令参数（支持 --skip-reflection-compile / --skip-reflect）
      * @return void
      */
-    private function generateOptimizationCache(): void
+    private function generateOptimizationCache(array $args = []): void
     {
         $this->printing->note(__('正在生成优化缓存...'));
         
@@ -554,7 +556,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $this->generatePsr4Cache();
         
         // 3. 编译反射元数据与编译型工厂（reflection_metadata.php + compiled_factories.php）
-        $this->compileReflectionAndFactories();
+        $skipReflectionCompile = isset($args['skip-reflection-compile']) || isset($args['skip-reflect']);
+        if ($skipReflectionCompile) {
+            $this->printing->note(__('已跳过反射/工厂编译，需要时可执行：php bin/w reflection:compile'));
+        } else {
+            $this->compileReflectionAndFactories();
+        }
         
         $this->printing->success(__('✓ 优化缓存生成完成。'));
     }
@@ -2004,6 +2011,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '--hot' => '热更新模式，通知运行中的 WLS 服务器重载',
                 '-s, --skip-env-check' => '跳过环境依赖检测',
                 '-f, --force' => '强制升级（跳过环境依赖检测）',
+                '--skip-reflection-compile, --skip-reflect' => __('跳过反射元数据与编译型工厂生成（可事后执行 reflection:compile）'),
                 '-h, --help' => '显示帮助信息',
             ],
             [],
@@ -2016,6 +2024,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '升级指定模块（短选项）' => 'php bin/w setup:upgrade -m Weline_Demo',
                 '升级指定模块的模型' => 'php bin/w setup:upgrade --model -m Weline_Demo',
                 '热更新 WLS 服务器' => 'php bin/w setup:upgrade --hot',
+                __('跳过反射编译（加快 s:up）') => 'php bin/w setup:upgrade --skip-reflection-compile',
             ],
             'php bin/w setup:upgrade [--model|--route|--hot] [-m|--module=<模块名>]'
         );

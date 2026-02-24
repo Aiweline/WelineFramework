@@ -2059,6 +2059,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
      */
     protected function hasMultipleSqlCommands(string $sql): bool
     {
+        // preg_replace_callback 在出错或回溯超限时返回 null，需兜底
         // 移除字符串中的分号（单引号和双引号中的分号）
         $sqlWithoutStrings = preg_replace_callback(
             '/(["\'])(?:(?=(\\\\?))\2.)*?\1/',
@@ -2067,7 +2068,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 return str_replace(';', '___SEMICOLON_PLACEHOLDER___', $matches[0]);
             },
             $sql
-        );
+        ) ?? $sql;
         
         // 计算分号数量（排除末尾的分号）
         $trimmedSql = rtrim(trim($sqlWithoutStrings), ';');
