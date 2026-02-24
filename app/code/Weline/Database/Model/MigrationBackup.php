@@ -64,11 +64,12 @@ class MigrationBackup extends Model implements ModelInterface
      */
     public function getMigrationBackups(int $migrationId): array
     {
-        $collection = $this->getCollection();
-        $collection->addFieldToFilter(self::fields_MIGRATION_ID, $migrationId);
-        $collection->setOrder(self::fields_CREATED_AT, 'ASC');
-        
-        return $collection->getItems();
+        return $this->reset()
+            ->where(self::fields_MIGRATION_ID, $migrationId)
+            ->order(self::fields_CREATED_AT, 'ASC')
+            ->select()
+            ->fetch()
+            ->getItems();
     }
     
     /**
@@ -80,12 +81,13 @@ class MigrationBackup extends Model implements ModelInterface
      */
     public function getTableBackups(int $migrationId, string $tableName): array
     {
-        $collection = $this->getCollection();
-        $collection->addFieldToFilter(self::fields_MIGRATION_ID, $migrationId);
-        $collection->addFieldToFilter(self::fields_TABLE_NAME, $tableName);
-        $collection->setOrder(self::fields_CREATED_AT, 'ASC');
-        
-        return $collection->getItems();
+        return $this->reset()
+            ->where(self::fields_MIGRATION_ID, $migrationId)
+            ->where(self::fields_TABLE_NAME, $tableName)
+            ->order(self::fields_CREATED_AT, 'ASC')
+            ->select()
+            ->fetch()
+            ->getItems();
     }
     
     /**
@@ -98,13 +100,14 @@ class MigrationBackup extends Model implements ModelInterface
      */
     public function getColumnBackups(int $migrationId, string $tableName, string $columnName): array
     {
-        $collection = $this->getCollection();
-        $collection->addFieldToFilter(self::fields_MIGRATION_ID, $migrationId);
-        $collection->addFieldToFilter(self::fields_TABLE_NAME, $tableName);
-        $collection->addFieldToFilter(self::fields_BACKUP_TYPE, self::TYPE_COLUMN);
-        $collection->setOrder(self::fields_CREATED_AT, 'ASC');
-        
-        return $collection->getItems();
+        return $this->reset()
+            ->where(self::fields_MIGRATION_ID, $migrationId)
+            ->where(self::fields_TABLE_NAME, $tableName)
+            ->where(self::fields_BACKUP_TYPE, self::TYPE_COLUMN)
+            ->order(self::fields_CREATED_AT, 'ASC')
+            ->select()
+            ->fetch()
+            ->getItems();
     }
     
     /**
@@ -117,12 +120,11 @@ class MigrationBackup extends Model implements ModelInterface
      */
     public function isBackupExists(int $migrationId, string $tableName, string $backupType): bool
     {
-        $collection = $this->getCollection();
-        $collection->addFieldToFilter(self::fields_MIGRATION_ID, $migrationId);
-        $collection->addFieldToFilter(self::fields_TABLE_NAME, $tableName);
-        $collection->addFieldToFilter(self::fields_BACKUP_TYPE, $backupType);
-        
-        return $collection->getSize() > 0;
+        return $this->reset()
+            ->where(self::fields_MIGRATION_ID, $migrationId)
+            ->where(self::fields_TABLE_NAME, $tableName)
+            ->where(self::fields_BACKUP_TYPE, $backupType)
+            ->total() > 0;
     }
     
     /**
@@ -133,10 +135,11 @@ class MigrationBackup extends Model implements ModelInterface
      */
     public function getBackupStats(int $migrationId): array
     {
-        $collection = $this->getCollection();
-        $collection->addFieldToFilter(self::fields_MIGRATION_ID, $migrationId);
-        
-        $backups = $collection->getItems();
+        $backups = $this->reset()
+            ->where(self::fields_MIGRATION_ID, $migrationId)
+            ->select()
+            ->fetch()
+            ->getItems();
         $stats = [
             'total' => count($backups),
             'tables' => 0,
@@ -182,16 +185,15 @@ class MigrationBackup extends Model implements ModelInterface
     public function cleanupExpiredBackups(int $days = 30): int
     {
         $expiredDate = date('Y-m-d H:i:s', strtotime("-{$days} days"));
-        
-        $collection = $this->getCollection();
-        $collection->addFieldToFilter(self::fields_CREATED_AT, ['lt' => $expiredDate]);
-        
-        $count = $collection->getSize();
-        
-        foreach ($collection->getItems() as $backup) {
+        $backups = $this->reset()
+            ->where(self::fields_CREATED_AT, $expiredDate, '<')
+            ->select()
+            ->fetch()
+            ->getItems();
+        $count = count($backups);
+        foreach ($backups as $backup) {
             $backup->delete();
         }
-        
         return $count;
     }
     
@@ -203,11 +205,13 @@ class MigrationBackup extends Model implements ModelInterface
      */
     public function getBackupDataSize(int $migrationId): int
     {
-        $collection = $this->getCollection();
-        $collection->addFieldToFilter(self::fields_MIGRATION_ID, $migrationId);
-        
+        $backups = $this->reset()
+            ->where(self::fields_MIGRATION_ID, $migrationId)
+            ->select()
+            ->fetch()
+            ->getItems();
         $totalSize = 0;
-        foreach ($collection->getItems() as $backup) {
+        foreach ($backups as $backup) {
             $data = $backup->getData(self::fields_BACKUP_DATA);
             $totalSize += strlen($data);
         }

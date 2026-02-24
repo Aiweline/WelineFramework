@@ -808,8 +808,8 @@ class ObjectManager implements ManagerInterface
      */
     private static function processFactoryClass(string $class, $factoryObject): mixed
     {
-        // 提前返回特殊处理
-        if (self::isDbManagerFactory($class)) {
+        // 提前返回特殊处理：这些类名以 Factory 结尾但 create() 需要参数，实例已由 getInstance 提供
+        if (self::isDbManagerFactory($class) || self::isConnectionFactory($class)) {
             return $factoryObject;
         }
         
@@ -826,6 +826,14 @@ class ObjectManager implements ManagerInterface
         }
         
         return $factoryObject;
+    }
+    
+    /**
+     * 检查是否为 ConnectionFactory（create(ConfigProvider) 需参数，不无参调用）
+     */
+    private static function isConnectionFactory(string $class): bool
+    {
+        return $class === \Weline\Framework\Database\ConnectionFactory::class;
     }
     
     /**
@@ -1123,7 +1131,23 @@ class ObjectManager implements ManagerInterface
                                     $paramMeta['isClass'] = true;
                                 }
                             } catch (\ReflectionException $e) {
-                                // 不是类或接口，忽略
+                                // 非 FQN 时尝试按声明类命名空间解析短类名（避免 getInstance(ConfigProvider) 等被解析为 null）
+                                $builtin = ['array', 'string', 'int', 'float', 'bool', 'object', 'mixed', 'null', 'false', 'true'];
+                                if (strpos($typeName, '\\') === false && !in_array($typeName, $builtin, true)) {
+                                    $declaringClass = $method->getDeclaringClass();
+                                    $ns = $declaringClass->getNamespaceName();
+                                    $candidates = [$ns . '\\' . $typeName];
+                                    if (str_contains($ns, 'Database')) {
+                                        $candidates[] = $ns . '\\DbManager\\' . $typeName;
+                                    }
+                                    foreach ($candidates as $fqn) {
+                                        if (self::cachedClassExists($fqn)) {
+                                            $typeName = $fqn;
+                                            $paramMeta['isClass'] = true;
+                                            break;
+                                        }
+                                    }
+                                }
                             }
                         }
                         

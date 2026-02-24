@@ -56,12 +56,14 @@ class ModuleVersion extends Model implements ModelInterface
      */
     public function getCurrentVersion(string $moduleName): ?string
     {
-        $collection = $this->getCollection();
-        $collection->addFieldToFilter(self::fields_MODULE_NAME, $moduleName);
-        
-        $version = $collection->getFirstItem();
-        
-        return $version->getId() ? $version->getData(self::fields_CURRENT_VERSION) : null;
+        $items = $this->reset()
+            ->where(self::fields_MODULE_NAME, $moduleName)
+            ->limit(1)
+            ->select()
+            ->fetch()
+            ->getItems();
+        $version = $items[0] ?? null;
+        return $version && $version->getId() ? $version->getData(self::fields_CURRENT_VERSION) : null;
     }
     
     /**
@@ -72,12 +74,14 @@ class ModuleVersion extends Model implements ModelInterface
      */
     public function getLastMigration(string $moduleName): ?string
     {
-        $collection = $this->getCollection();
-        $collection->addFieldToFilter(self::fields_MODULE_NAME, $moduleName);
-        
-        $version = $collection->getFirstItem();
-        
-        return $version->getId() ? $version->getData(self::fields_LAST_MIGRATION) : null;
+        $items = $this->reset()
+            ->where(self::fields_MODULE_NAME, $moduleName)
+            ->limit(1)
+            ->select()
+            ->fetch()
+            ->getItems();
+        $version = $items[0] ?? null;
+        return $version && $version->getId() ? $version->getData(self::fields_LAST_MIGRATION) : null;
     }
     
     /**
@@ -88,10 +92,9 @@ class ModuleVersion extends Model implements ModelInterface
      */
     public function isModuleExists(string $moduleName): bool
     {
-        $collection = $this->getCollection();
-        $collection->addFieldToFilter(self::fields_MODULE_NAME, $moduleName);
-        
-        return $collection->getSize() > 0;
+        return $this->reset()
+            ->where(self::fields_MODULE_NAME, $moduleName)
+            ->total() > 0;
     }
     
     /**
@@ -101,10 +104,11 @@ class ModuleVersion extends Model implements ModelInterface
      */
     public function getAllModuleVersions(): array
     {
-        $collection = $this->getCollection();
-        $collection->setOrder(self::fields_UPDATED_AT, 'DESC');
-        
-        return $collection->getItems();
+        return $this->reset()
+            ->order(self::fields_UPDATED_AT, 'DESC')
+            ->select()
+            ->fetch()
+            ->getItems();
     }
     
     /**
@@ -114,8 +118,10 @@ class ModuleVersion extends Model implements ModelInterface
      */
     public function getVersionStats(): array
     {
-        $collection = $this->getCollection();
-        $modules = $collection->getItems();
+        $modules = $this->reset()
+            ->select()
+            ->fetch()
+            ->getItems();
         
         $stats = [
             'total_modules' => count($modules),
