@@ -507,10 +507,14 @@ class ObjectManager implements ManagerInterface
         $cache = self::$constructorCache[$class];
         
         // 处理私有构造函数：使用静态工厂方法
+        // 注意：必须传入 getInstance 方法的参数，而非构造函数的参数（二者签名可能不同，如 ConnectionFactory）
         if (!$cache['isPublic'] && $cache['hasGetInstance']) {
             $getInstanceMethod = $cache['getInstanceMethod'];
             if ($getInstanceMethod?->isStatic()) {
-                return self::invokeGetInstance($getInstanceMethod, $class, $arguments);
+                $getInstanceArgs = count($getInstanceMethod->getParameters()) > 0
+                    ? self::getMethodParams($class, 'getInstance')
+                    : $arguments;
+                return self::invokeGetInstance($getInstanceMethod, $class, $getInstanceArgs);
             }
         }
         

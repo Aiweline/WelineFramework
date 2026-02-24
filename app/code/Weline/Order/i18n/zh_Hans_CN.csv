@@ -121,6 +121,9 @@
 退款记录不存在,退款记录不存在
 只有待处理的退款才能处理,只有待处理的退款才能处理
 订单已退款,订单已退款
+订单管理模块安装完成,订单管理模块安装完成
+"已创建以下数据表: weline_order, weline_order_item, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation","已创建以下数据表: weline_order, weline_order_item, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation"
+"安装失败: %{1}","安装失败: %{1}"
 编辑订单,编辑订单
 新建订单,新建订单
 系统,系统
