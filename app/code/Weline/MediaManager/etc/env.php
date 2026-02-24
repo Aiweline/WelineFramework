@@ -1,5 +1,6 @@
 <?php
 
 return [
-    'router' => 'media'
+    'router' => 'media',
+    'backend_router' => 'media',
 ];

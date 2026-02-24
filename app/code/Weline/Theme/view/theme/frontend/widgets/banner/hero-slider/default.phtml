@@ -12,7 +12,38 @@
  * @widget.position {["content"]}
  * @widget.page_layouts {["homepage", "cms_page"]}
  * 
- * @param slides {default=[],type="array",label="轮播图片",description="图片数组，每项包含image、title、subtitle、link、button_text"}
+ * @param slides {default=[],type="array",label="轮播图片",description="图片数组，每项包含image、title、subtitle、link、button_text",schema=[
+ *     "image": {
+ *         "type": "string",
+ *         "label": "图片",
+ *         "description": "图片",
+ *     },
+ *     "title": {
+ *         "type": "string",
+ *         "label": "标题",
+ *         "description": "标题",
+ *     },
+ *     "subtitle": {
+ *         "type": "string",
+ *         "label": "副标题",
+ *         "description": "副标题",
+ *     },
+ *     "link": {
+ *         "type": "string",
+ *         "label": "链接",
+ *         "description": "链接",
+ *     },
+ *     "button_text": {
+ *         "type": "string",
+ *         "label": "按钮文字",
+ *         "description": "按钮文字",
+ *     },
+ *     "text_position": {
+ *         "type": "string",
+ *         "label": "文字位置",
+ *         "description": "文字位置",
+ *     },
+ * ]}
  * @param autoplay {default=true,type="bool",label="自动播放"}
  * @param autoplay_speed {default=5000,type="number",label="播放间隔",description="自动播放间隔（毫秒）"}
  * @param show_dots {default=true,type="bool",label="显示指示点"}
