@@ -1,0 +1,49 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$rulesJson = (string)$this->getData('rulesJson');
+?>
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><?= __('WLS 安全规则配置') ?></h5>
+    </div>
+    <div class="card-body">
+        <p class="text-muted"><?= __('可编辑 path_rate_limits、cdn_trusted_ips 等规则，保存后自动下发到运行中的 WLS。') ?></p>
+        <textarea id="wls-security-rules" class="form-control" rows="24"><?= htmlspecialchars($rulesJson) ?></textarea>
+        <div class="mt-3">
+            <button type="button" id="save-wls-security-rules" class="btn btn-primary"><?= __('保存规则') ?></button>
+        </div>
+    </div>
+</div>
+<script>
+(() => {
+    const button = document.getElementById('save-wls-security-rules');
+    const textarea = document.getElementById('wls-security-rules');
+    if (!button || !textarea) {
+        return;
+    }
+    button.addEventListener('click', async () => {
+        try {
+            JSON.parse(textarea.value);
+        } catch (error) {
+            AdminToast.error(__('JSON 格式错误：%{1}', {1: error.message || ''}));
+            return;
+        }
+        try {
+            const response = await fetch('<?= $this->getUrl('server/backend/server-monitor/save-security-rules') ?>', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({rules: textarea.value})
+            });
+            const result = await response.json();
+            if (result.success) {
+                AdminToast.success(result.message || __('保存成功'));
+            } else {
+                AdminToast.error(result.message || __('保存失败'));
+            }
+        } catch (error) {
+            AdminToast.error(__('请求失败：%{1}', {1: error.message || ''}));
+        }
+    });
+})();
+</script>
+

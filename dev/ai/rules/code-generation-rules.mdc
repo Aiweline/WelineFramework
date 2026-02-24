@@ -1,0 +1,49 @@
+---
+description: |
+  代码生成必须遵循框架技能与下列硬性规则。生成前请阅 AI 提示词.md、AI-常犯错误.md。
+alwaysApply: true
+---
+
+# 代码生成规则（强制）
+
+## 必须遵循的技能
+
+代码生成**必须**参考并遵循以下技能（按场景选用）：
+
+- **code-generation-standards** — 模块结构、框架边界、禁止自造方法
+- **module-development** — register.php、数据库升级(hasField)、接口签名、路由(setup:upgrade --route)、event.xml(单数)
+- **theme-development** / **code-generation-standards** — 模板标签(`<w:template>`/`<w:theme:template>`)、`<if>` 条件、标签内禁止 PHP、变量用 `{{}}`、禁止 fetch()、DEV/Area/路径/setData/性能规范
+- **i18n-internationalization** — 用户可见文案 `<lang>`/`@lang()`/`__()`，禁止硬编码
+- **friendly-notifications** — 禁止 alert/confirm/prompt，使用 AdminToast/ThemeToast
+- **database-model-standards** — 链式 fetch()、禁止业务层手写 SQL
+- **create-event** — dispatch 用变量、data 键、触发顺序、event.xml 与 dispatch 对应
+- **debug-logging** — 禁止 error_log()，使用 Env::log_error/log_warning 等
+- **documentation-standards** — 仅当用户明确要求或 3 类文档时写文档
+- **quality-assurance** — 功能验证、测试、扣分机制
+
+详细规范与示例均在对应 SKILL.md 中。
+
+## 不确定时：查阅再生成（强制）
+
+生成代码时，若因时间久远或上下文不足导致**某处细节不清楚**（如：某技能的具体约定、某 API 的签名、某命名/路径规范等）：
+
+- **必须**先调用对应技能或规则（Read 对应 SKILL.md / 规则文件）查阅清楚，再基于查阅结果重新规划并生成代码。
+- **禁止**在不确定的情况下凭记忆或猜测继续写码；可先记住大纲，细节通过工具查阅后再落笔。
+- 适用场景示例：记不清事件命名格式 → 读 create-event；记不清 hasField/升级写法 → 读 database-model-standards 或 module-development；记不清模板标签语法 → 读 theme-development；等等。
+
+原则：**宁可先查再写，不可写了再错。**
+
+## 硬性禁止（全局）
+
+- **禁止**编辑 `generated/` 下任何文件；须改源文件后重新生成。
+- **禁止**使用 `error_log()`、echo/print 输出错误；须用 `Env::log_error()` 等。
+- **禁止**在模板标签内容中使用 PHP 变量或 `<?= ?>`；须用 `{{variable}}` 或先取到值再输出。
+- **禁止**在模板 .phtml 中定义全局函数或使用 `function_exists(...)` 打补丁；须用闭包（如 `$renderXxx = function(...) use (&$renderXxx) { ... };`）。详见 theme-development 技能「0.5 模板中禁止定义全局函数」。
+- **禁止**使用 `routes.xml`；路由为自动扫描，新控制器后执行 `php bin/w setup:upgrade --route`。
+- **禁止**在未验证修复成功前更新错误知识库（见 auto-update-skills-on-error.mdc）。
+
+## 开发前与验证
+
+- 开发前评估并编写需求文档（可放在模块 `doc/` 下）。
+- 功能完成后必须验证（单元测试/HTTP 测试/浏览器 MCP 等）；禁止仅修复不验证。
+- 参考：`./AI 提示词.md`、`./开发文档.md`、`./AI-常犯错误.md`、`app/code/Weline/Admin/doc/主题配色变量文档.md`。

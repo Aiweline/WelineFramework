@@ -173,6 +173,8 @@ SQL调试输出,SQL调试输出
 "只编译 weline.modules.js","只编译 weline.modules.js"
 "只编译 less","只编译 less"
 使用别名,使用别名
+查询成功,查询成功
+查询失败：%{1},查询失败：%{1}
 未知,未知
 环境管理,"Environment Manager"
 参数不完整,"Missing parameters"
@@ -1020,6 +1022,41 @@ HTTP方法,HTTP方法
 "[%{1}] 测试类 %{2} 不应放在业务代码目录 %{3} 下","[%{1}] 测试类 %{2} 不应放在业务代码目录 %{3} 下"
 文件位置：%{1},文件位置：%{1}
 "修复建议：将测试文件移动到专门的测试目录（如 Test、UnitTest、Tests、tests）下","修复建议：将测试文件移动到专门的测试目录（如 Test、UnitTest、Tests、tests）下"
+"参数 provider 不能为空","参数 provider 不能为空"
+"参数 operation 不能为空","参数 operation 不能为空"
+查询被拒绝,查询被拒绝
+"introspect 参数 what 必须为 providers、operations 或 operation，当前：%{1}","introspect 参数 what 必须为 providers、operations 或 operation，当前：%{1}"
+"introspect what=operations 时，参数 provider 必填","introspect what=operations 时，参数 provider 必填"
+"未找到 provider：%{1}","未找到 provider：%{1}"
+"introspect what=operation 时，参数 provider 和 operation 必填","introspect what=operation 时，参数 provider 和 operation 必填"
+"provider %{1} 中未找到 operation：%{2}","provider %{1} 中未找到 operation：%{2}"
+"缺少 operation 参数","缺少 operation 参数"
+"CRUD 通用查询","CRUD 通用查询"
+"基于模型的通用增删改查操作，支持任意 AbstractModel 子类","基于模型的通用增删改查操作，支持任意 AbstractModel 子类"
+创建记录,创建记录
+"模型类名或短名（配合 module 参数）","模型类名或短名（配合 module 参数）"
+"模块名（使用短 model 名时必填，如 Weline_Widget）","模块名（使用短 model 名时必填，如 Weline_Widget）"
+要写入的字段键值对,要写入的字段键值对
+读取单条记录,读取单条记录
+模型类名或短名,模型类名或短名
+模块名,模块名
+主键值,主键值
+"主键字段名，默认 id","主键字段名，默认 id"
+更新记录,更新记录
+要更新的字段键值对,要更新的字段键值对
+删除记录,删除记录
+列表查询（分页、过滤、排序）,列表查询（分页、过滤、排序）
+"页码，默认 1","页码，默认 1"
+"每页条数，默认 20","每页条数，默认 20"
+排序字段,排序字段
+"排序方向，ASC 或 DESC，默认 DESC","排序方向，ASC 或 DESC，默认 DESC"
+"过滤条件数组，每项 {field, operator, value}","过滤条件数组，每项 {field, operator, value}"
+"不支持的默认 CRUD 操作：%{1}","不支持的默认 CRUD 操作：%{1}"
+"参数 model 必填","参数 model 必填"
+"model 必须是有效模型类名：%{1}","model 必须是有效模型类名：%{1}"
+"参数 id 必填","参数 id 必填"
+未找到要更新的数据,未找到要更新的数据
+未找到要删除的数据,未找到要删除的数据
 "Session 驱动找不到！请检查env配置文件中 session['default'] 是否正确。驱动类：%{1}","Session 驱动找不到！请检查env配置文件中 session['default'] 是否正确。驱动类：%{1}"
 "指定Session驱动为: %{1} 但是驱动类找不到!","指定Session驱动为: %{1} 但是驱动类找不到!"
 "正在检查 composer 命令...","正在检查 composer 命令..."
@@ -1245,6 +1282,27 @@ HTTP方法,HTTP方法
 "升级到 PHP 8.4+ 可获得 Lazy Objects 支持，预计启动时间减少 40%%，内存减少 30%%","升级到 PHP 8.4+ 可获得 Lazy Objects 支持，预计启动时间减少 40%%，内存减少 30%%"
 "PHP 8.4+ 提供新数组函数 (array_find/array_any/array_all)，可简化代码并提升性能","PHP 8.4+ 提供新数组函数 (array_find/array_any/array_all)，可简化代码并提升性能"
 "PHP 8.4+ 支持 Property Hooks，可在 Model 属性上直接定义 get/set 行为","PHP 8.4+ 支持 Property Hooks，可在 Model 属性上直接定义 get/set 行为"
+当前系统配置（env.php）：,当前系统配置（env.php）：
+"配置键 ""%{1}"" 不存在或值为 null","配置键 ""%{1}"" 不存在或值为 null"
+"读取系统配置项（来自 env.php）","读取系统配置项（来自 env.php）"
+"读取 env.php 中的系统配置项，支持点号分隔的嵌套键。不传 key 则显示全部配置。","读取 env.php 中的系统配置项，支持点号分隔的嵌套键。不传 key 则显示全部配置。"
+"配置键名（可选），支持点号分隔（如 server.host）","配置键名（可选），支持点号分隔（如 server.host）"
+查看全部配置,查看全部配置
+查看服务器配置,查看服务器配置
+查看监听地址,查看监听地址
+查看数据库类型,查看数据库类型
+配置已更新,配置已更新
+"配置写入失败，请检查 app/etc/env.php 文件权限","配置写入失败，请检查 app/etc/env.php 文件权限"
+"设置系统配置项（写入 env.php）","设置系统配置项（写入 env.php）"
+"设置 env.php 中的系统配置项，支持点号分隔的嵌套键","设置 env.php 中的系统配置项，支持点号分隔的嵌套键"
+"配置键名，支持点号分隔（如 server.host）","配置键名，支持点号分隔（如 server.host）"
+"配置值（自动识别 int/float/bool/null/string 类型）","配置值（自动识别 int/float/bool/null/string 类型）"
+设置服务器监听地址,设置服务器监听地址
+设置服务器监听端口,设置服务器监听端口
+"设置 Worker 数量","设置 Worker 数量"
+设置智能模式,设置智能模式
+设置布尔值,设置布尔值
+设置顶级配置,设置顶级配置
 数据库配置为空！已使用默认Sqlite数据库！,数据库配置为空！已使用默认Sqlite数据库！
 "沙盒数据库配置为空！示例：bin/w system:install --sandbox_db-type=mysql","沙盒数据库配置为空！示例：bin/w system:install --sandbox_db-type=mysql"
 沙盒数据库,沙盒数据库

@@ -10,6 +10,7 @@ declare(strict_types=1);
 $projectRoot = dirname(__DIR__, 2);
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'EnvLoader.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'SetupPgsqlDatabase.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'ConfigurePhpIni.php';
 
 $env = (new EnvLoader($projectRoot))->load(true);
 $argv = $GLOBALS['argv'] ?? [];
@@ -18,6 +19,7 @@ $fromStep5b = in_array('--from', $argv, true)
     && isset($argv[$i + 1])
     && $argv[$i + 1] === '5b';
 
+$phpDir = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php';
 $phpBin = defined('PHP_BINARY') ? PHP_BINARY : 'php';
 $run = function (string $cmd) use ($projectRoot, $phpBin): int {
     $full = $phpBin . ' ' . $cmd;
@@ -41,6 +43,17 @@ if (!is_dir($generatedCodeDir)) {
         file_put_contents($gitkeep, "# 保留此目录以便 Composer classmap 可扫描；目录内生成文件由 .gitignore 忽略\n");
     }
     echo "Created generated/code/ for Composer autoload.\n";
+}
+
+// 0b. 在 composer 前先配置 php.ini（extension_dir、openssl 等），避免 composer 报 “openssl extension is required”
+if (!$fromStep5b && is_dir($phpDir)) {
+    echo "Step 0b: Configuring php.ini (extension_dir, openssl, etc.) for Composer...\n";
+    try {
+        $configPhpIni = new ConfigurePhpIni($projectRoot, $phpDir);
+        $configPhpIni->apply($env);
+    } catch (Throwable $e) {
+        fwrite(STDERR, "WARNING: php.ini configuration failed: " . $e->getMessage() . "\n");
+    }
 }
 
 // 1. composer install（无论 vendor 是否存在都执行，确保依赖完整）；composer 为独立命令，不能用 php composer 方式调用
@@ -82,7 +95,6 @@ if (!$fromStep5b) {
 
 // 5. 将 pgsql/bin 加入 PATH（便于 psql / pdo_pgsql 加载 libpq.dll）
 $pgsqlBin = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'pgsql' . DIRECTORY_SEPARATOR . 'bin';
-$phpDir = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php';
 if (is_dir($pgsqlBin)) {
     $currentPath = getenv('PATH') ?: '';
     $pathSep = (DIRECTORY_SEPARATOR === '\\') ? ';' : ':';

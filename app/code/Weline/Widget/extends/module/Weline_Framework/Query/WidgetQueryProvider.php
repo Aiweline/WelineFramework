@@ -1,0 +1,147 @@
+<?php
+declare(strict_types=1);
+
+namespace Weline\Widget\Extends\Module\Weline_Framework\Query;
+
+use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Widget\Service\WidgetConfigService;
+use Weline\Widget\Service\WidgetListService;
+use Weline\Widget\Service\WidgetPreviewService;
+
+class WidgetQueryProvider implements QueryProviderInterface
+{
+    public function __construct(
+        private readonly WidgetListService $listService,
+        private readonly WidgetConfigService $configService,
+        private readonly WidgetPreviewService $previewService
+    ) {
+    }
+
+    public function getProviderName(): string
+    {
+        return 'widget';
+    }
+
+    public function execute(string $operation, array $params = []): mixed
+    {
+        return match ($operation) {
+            'getAvailableList' => $this->listService->getAvailableList(
+                $params['page_type'] ?? null,
+                $params['filter_options'] ?? null
+            ),
+            'getParamDefinitions' => $this->configService->getParamDefinitions(
+                (string)($params['widget_module'] ?? ''),
+                (string)($params['widget_code'] ?? ''),
+                (string)($params['area'] ?? 'frontend')
+            ),
+            'getConfigForm' => $this->configService->renderForm(
+                $params['layout_id'] ?? '',
+                $params['params'] ?? [],
+                $params['config'] ?? []
+            ),
+            'renderField' => $this->configService->renderField(
+                (string)($params['key'] ?? ''),
+                $params['param'] ?? [],
+                $params['value'] ?? null,
+                $params['layout_id'] ?? '',
+                $params['attrs'] ?? []
+            ),
+            'validateConfig' => $this->configService->validateConfig(
+                $params['params'] ?? [],
+                $params['values'] ?? []
+            ),
+            'processConfig' => $this->configService->processConfig(
+                $params['params'] ?? [],
+                $params['values'] ?? []
+            ),
+            'preview' => $this->previewService->render(
+                (string)($params['widget_module'] ?? ''),
+                (string)($params['widget_code'] ?? ''),
+                $params['config'] ?? [],
+                (string)($params['area'] ?? 'frontend')
+            ),
+            'getRegisteredTypes' => $this->configService->getRegisteredTypes(),
+            default => throw new \InvalidArgumentException((string)__('Widget 查询器不支持的 operation：%{1}', $operation)),
+        };
+    }
+
+    public function getDescriptor(): array
+    {
+        return [
+            'provider' => 'widget',
+            'name' => __('Widget 部件查询'),
+            'description' => __('提供部件列表、参数定义、配置表单、字段渲染、配置校验、预览等查询能力'),
+            'module' => 'Weline_Widget',
+            'operations' => [
+                [
+                    'name' => 'getAvailableList',
+                    'description' => __('获取可用部件列表（分组、过滤、i18n）'),
+                    'params' => [
+                        ['name' => 'page_type', 'type' => 'string|null', 'required' => false, 'description' => __('页面类型，null 表示不过滤')],
+                        ['name' => 'filter_options', 'type' => 'array|null', 'required' => false, 'description' => __('过滤选项，如 slot_id、area、show_exclusive_only')],
+                    ],
+                ],
+                [
+                    'name' => 'getParamDefinitions',
+                    'description' => __('获取部件的参数定义（schema）'),
+                    'params' => [
+                        ['name' => 'widget_module', 'type' => 'string', 'required' => true, 'description' => __('部件模块名')],
+                        ['name' => 'widget_code', 'type' => 'string', 'required' => true, 'description' => __('部件代码')],
+                        ['name' => 'area', 'type' => 'string', 'required' => false, 'description' => __('区域，默认 frontend')],
+                    ],
+                ],
+                [
+                    'name' => 'getConfigForm',
+                    'description' => __('获取配置表单 HTML'),
+                    'params' => [
+                        ['name' => 'layout_id', 'type' => 'int|string', 'required' => true, 'description' => __('布局实例 ID')],
+                        ['name' => 'params', 'type' => 'array', 'required' => true, 'description' => __('参数定义')],
+                        ['name' => 'config', 'type' => 'array', 'required' => false, 'description' => __('当前配置值')],
+                    ],
+                ],
+                [
+                    'name' => 'renderField',
+                    'description' => __('渲染单个配置字段 HTML'),
+                    'params' => [
+                        ['name' => 'key', 'type' => 'string', 'required' => true, 'description' => __('字段键名')],
+                        ['name' => 'param', 'type' => 'array', 'required' => true, 'description' => __('字段定义')],
+                        ['name' => 'value', 'type' => 'mixed', 'required' => false, 'description' => __('当前值')],
+                        ['name' => 'layout_id', 'type' => 'int|string', 'required' => false, 'description' => __('布局 ID')],
+                        ['name' => 'attrs', 'type' => 'array', 'required' => false, 'description' => __('额外属性')],
+                    ],
+                ],
+                [
+                    'name' => 'validateConfig',
+                    'description' => __('校验配置值'),
+                    'params' => [
+                        ['name' => 'params', 'type' => 'array', 'required' => true, 'description' => __('参数定义')],
+                        ['name' => 'values', 'type' => 'array', 'required' => true, 'description' => __('待校验的提交值')],
+                    ],
+                ],
+                [
+                    'name' => 'processConfig',
+                    'description' => __('保存前处理配置'),
+                    'params' => [
+                        ['name' => 'params', 'type' => 'array', 'required' => true, 'description' => __('参数定义')],
+                        ['name' => 'values', 'type' => 'array', 'required' => true, 'description' => __('原始提交值')],
+                    ],
+                ],
+                [
+                    'name' => 'preview',
+                    'description' => __('获取部件预览 HTML'),
+                    'params' => [
+                        ['name' => 'widget_module', 'type' => 'string', 'required' => true, 'description' => __('部件模块名')],
+                        ['name' => 'widget_code', 'type' => 'string', 'required' => true, 'description' => __('部件代码')],
+                        ['name' => 'config', 'type' => 'array', 'required' => false, 'description' => __('部件配置')],
+                        ['name' => 'area', 'type' => 'string', 'required' => false, 'description' => __('区域，默认 frontend')],
+                    ],
+                ],
+                [
+                    'name' => 'getRegisteredTypes',
+                    'description' => __('获取已注册的 ParamType 类型名列表'),
+                    'params' => [],
+                ],
+            ],
+        ];
+    }
+}
