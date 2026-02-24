@@ -264,9 +264,9 @@ $pages = $this->getData('pages') ?: [];
                                         
                                         <!-- 操作按钮 -->
                                         <div class="mt-3 d-flex gap-2 flex-wrap">
-                                            <!-- 配置预览按钮 -->
+                                            <!-- 配置预览按钮（已隐藏） -->
                                             <button type="button" 
-                                                    class="btn btn-sm btn-primary flex-fill" 
+                                                    class="btn btn-sm btn-primary flex-fill d-none" 
                                                     onclick="openConfigPreview('<?= $safeStyleCode ?>')"
                                                     title="<?= __('使用选定页面的数据预览并编辑模板配置') ?>">
                                                 <i class="mdi mdi-cog"></i> <?= __('配置预览') ?>

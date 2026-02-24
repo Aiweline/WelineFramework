@@ -75,9 +75,6 @@ class FrameworkBuilder
     public function loadFramework(string $category): string
     {
         $category = strtolower($category);
-        // #region agent log
-        @file_put_contents((defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log', json_encode(['hypothesisId' => 'H4', 'location' => 'FrameworkBuilder::loadFramework', 'message' => 'entry', 'data' => ['category' => $category], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n", FILE_APPEND | LOCK_EX);
-        // #endregion
         if (!isset(self::FRAMEWORK_FILES[$category])) {
             throw new \Exception("未知的组件分类: {$category}");
         }
@@ -553,25 +550,11 @@ class FrameworkBuilder
         if (!empty($data['php_variables'])) {
             $pv = $data['php_variables'];
             $hasBrace = (strpos($pv, '{') !== false || strpos($pv, '}') !== false);
-            // #region agent log
-            @file_put_contents(
-                (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log',
-                json_encode(['hypothesisId' => 'H2', 'location' => 'FrameworkBuilder::validateAiData', 'message' => 'php_variables check', 'data' => ['pvLen' => strlen($pv), 'hasBrace' => $hasBrace, 'willCallCheckPhpSyntax' => !$hasBrace], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n",
-                FILE_APPEND | LOCK_EX
-            );
-            // #endregion
             if ($hasBrace) {
                 $errors[] = 'php_variables 只能为简单赋值，禁止包含大括号 { }';
             } else {
                 $syntaxCheck = $this->checkPhpSyntax($pv);
                 if (!$syntaxCheck['valid']) {
-                    // #region agent log
-                    @file_put_contents(
-                        (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log',
-                        json_encode(['hypothesisId' => 'H2', 'location' => 'FrameworkBuilder::validateAiData', 'message' => 'checkPhpSyntax failed', 'data' => ['error' => $syntaxCheck['error']], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n",
-                        FILE_APPEND | LOCK_EX
-                    );
-                    // #endregion
                     $errors[] = 'PHP代码语法错误: ' . $syntaxCheck['error'];
                 }
             }
@@ -598,14 +581,6 @@ class FrameworkBuilder
      */
     private function checkPhpSyntax(string $code): array
     {
-        // #region agent log
-        $lineCount = substr_count($code, "\n") + 2;
-        @file_put_contents(
-            (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log',
-            json_encode(['hypothesisId' => 'H2', 'location' => 'FrameworkBuilder::checkPhpSyntax', 'message' => 'entry', 'data' => ['codeLen' => strlen($code), 'lineCount' => $lineCount], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n",
-            FILE_APPEND | LOCK_EX
-        );
-        // #endregion
         // 创建临时文件进行语法检查
         $tempFile = sys_get_temp_dir() . '/ai_php_check_' . uniqid() . '.php';
         $phpOpen = chr(60) . chr(63) . 'php';
@@ -617,16 +592,7 @@ class FrameworkBuilder
         exec("php -l " . escapeshellarg($tempFile) . " 2>&1", $output, $returnVar);
         
         unlink($tempFile);
-        
-        if ($returnVar !== 0) {
-            // #region agent log
-            @file_put_contents(
-                (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log',
-                json_encode(['hypothesisId' => 'H2', 'location' => 'FrameworkBuilder::checkPhpSyntax', 'message' => 'php -l failed', 'data' => ['rawOutput' => $output], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n",
-                FILE_APPEND | LOCK_EX
-            );
-            // #endregion
-        }
+
         return [
             'valid' => $returnVar === 0,
             'error' => $returnVar !== 0 ? implode("\n", $output) : '',

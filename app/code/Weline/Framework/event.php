@@ -166,6 +166,16 @@ return [
             'tip' => ['type' => 'string', 'required' => false, 'description' => '缓存说明'],
         ],
     ],
+    'Weline_Framework_Cache::driver_create_before' => [
+        'name' => __('缓存驱动创建前'),
+        'description' => __('在创建缓存驱动实例前触发，允许其他模块（如 Weline_Server）接管驱动，例如 WLS 模式下将 File 缓存替换为内存缓存。'),
+        'doc' => 'cache/driver_create_before.md',
+    ],
+    'Weline_Framework_Session::driver_create_before' => [
+        'name' => __('Session 驱动创建前'),
+        'description' => __('在创建 Session 驱动实例前触发，允许其他模块（如 Weline_Server）接管驱动，例如 WLS 模式下将 File Session 替换为内存 Session。'),
+        'doc' => 'session/driver_create_before.md',
+    ],
     
     // ========== 控制台事件 ==========
     'Weline_Framework_Console::compile' => [
@@ -314,6 +324,16 @@ return [
     ],
     
     // ========== HTTP事件 ==========
+    'Weline_Framework_Http::integration::client_ip_keys' => [
+        'name' => __('客户端IP头Keys收集'),
+        'description' => __('在解析客户端真实IP前触发，允许CDN模块等通过观察者注册 $_SERVER keys。Framework 提供基础 keys，观察者应 prepend 其专有 keys（如 HTTP_CF_CONNECTING_IP），以实现任意 CDN 供应商兼容。'),
+        'doc' => 'http/客户端IP头Keys收集.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'keys' => ['type' => 'array', 'required' => true, 'description' => '用于解析真实IP的 $_SERVER keys，按优先级排序。观察者应 array_unshift 追加其 keys。'],
+        ],
+    ],
     'Weline_Framework_Http::process_area' => [
         'name' => __('处理区域'),
         'description' => __('在处理HTTP请求区域时触发，允许其他模块自定义区域处理逻辑。'),
@@ -354,5 +374,29 @@ return [
         'name' => __('部署模式切换到生产环境后'),
         'description' => __('在部署模式切换到生产环境(prod)后触发，允许其他模块执行生产环境相关的操作，如生成加密token等。'),
         'doc' => 'deploy/部署模式切换到生产环境后.md',
+    ],
+
+    // ========== 动态模块查询事件（无需各模块单独注册） ==========
+    '{Module}::query' => [
+        'name' => __('模块查询'),
+        'description' => __('动态事件：任意 Module_Name::query 触发时，自动路由到 FrameworkQueryService::execute()，由 QueryProviderRegistry 中已注册的查询器处理。模块通过 extends 注册 QueryProviderInterface 实现即可。'),
+        'doc' => 'query/模块查询动态事件.md',
+    ],
+
+    // ========== Query 统一查询事件 ==========
+    'Weline_Framework_Query::before_execute' => [
+        'name' => __('统一查询执行前'),
+        'description' => __('统一查询执行前触发，可用于鉴权、参数校验、限流与拦截。'),
+        'doc' => 'query/统一查询执行前.md',
+    ],
+    'Weline_Framework_Query::provider_execute' => [
+        'name' => __('【已废弃】统一查询执行提供者'),
+        'description' => __('已废弃：查询由 extends 注册的查询器（QueryProviderInterface）执行，不再通过事件分发。请实现 QueryProviderInterface 并在 extends/module/Weline_Framework/Query/ 下注册。'),
+        'doc' => 'query/统一查询执行提供者.md',
+    ],
+    'Weline_Framework_Query::after_execute' => [
+        'name' => __('统一查询执行后'),
+        'description' => __('统一查询执行后触发，可用于结果过滤和审计。'),
+        'doc' => 'query/统一查询执行后.md',
     ]
 ];

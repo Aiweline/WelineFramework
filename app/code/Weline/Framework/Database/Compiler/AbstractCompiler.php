@@ -119,6 +119,12 @@ abstract class AbstractCompiler implements CompilerInterface
                 $parts[] = '(' . $where[0] . ')' . $logic;
                 continue;
             }
+            // IS NULL / IS NOT NULL：必须生成布尔表达式，不能只写 (field)，否则 PostgreSQL 报 42804
+            $op = strtolower((string)($where[1] ?? ''));
+            if ($op === 'is null' || $op === 'is not null') {
+                $parts[] = '(' . $fieldQuoted . ' ' . strtoupper((string)$where[1]) . ')' . $logic;
+                continue;
+            }
             if (($where[2] ?? null) === null) {
                 $parts[] = '(' . $fieldQuoted . ')' . $logic;
                 continue;
