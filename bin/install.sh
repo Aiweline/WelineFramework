@@ -105,6 +105,14 @@ case "$OS" in
   *)       echo "Unsupported OS: $OS. On Windows use: bin\\install.bat" >&2; exit 1 ;;
 esac
 
+# macOS：Homebrew 禁止以 root 运行，必须一开始就退出并提示
+if [[ "$PLATFORM" == "mac" ]] && { [[ "${EUID:-$(id -u)}" -eq 0 ]] || [[ -n "${SUDO_UID:-}" ]]; }; then
+  echo "ERROR: 请勿使用 sudo 执行安装。Homebrew 禁止以 root 运行。" >&2
+  echo "  请以当前用户重新执行，例如：" >&2
+  echo "  curl -fsSL https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.sh | bash -s -- -b server-opt" >&2
+  exit 1
+fi
+
 # 向 PATH 追加（避免重复）；同时在本 shell 中生效；Mac/Linux 下若配置文件不存在则创建，确保安装后新终端可用 php/pgsql
 add_to_path() {
   local dir="$1"
@@ -233,6 +241,10 @@ ensure_brew_installed() {
 
 # Mac：用 Homebrew 安装 PHP 及扩展（不自行编译，依赖由 brew 管理）
 install_php_via_brew() {
+  if [[ "${EUID:-$(id -u)}" -eq 0 ]] || [[ -n "${SUDO_UID:-}" ]]; then
+    echo "ERROR: Homebrew 禁止以 root 运行，请以当前用户重新执行安装（不要用 sudo）。" >&2
+    return 1
+  fi
   ensure_brew_installed || return 1
   local formula="php"
   # 指定主版本时使用 php@8.4 等，便于与项目要求一致
