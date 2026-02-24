@@ -23,20 +23,25 @@ VALID_COMPONENTS="php pgsql mysql"
 INSTALL_PGSQL_VERSION="${INSTALL_PGSQL_VERSION:-16}"
 INSTALL_MYSQL_VERSION="${INSTALL_MYSQL_VERSION:-8.0}"
 
+WELINE_REPO_URL="${WELINE_REPO_URL:-https://gitee.com/aiweline/WelineFramework.git}"
+
 usage() {
-  echo "Usage: $0 [--path-only] [php] [pgsql] [mysql]"
+  echo "Usage: $0 [--path-only] [-b BRANCH] [php] [pgsql] [mysql]"
   echo "  No args: install php and pgsql (default)."
   echo "  --path-only: only add extend/server/*/bin to PATH, do not download/install."
+  echo "  -b BRANCH: when run.php is missing, clone this branch (default: master)."
   exit 0
 }
 
 # 解析参数
 PATH_ONLY=false
+BRANCH="master"
 COMPONENTS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help) usage ;;
     --path-only) PATH_ONLY=true; shift ;;
+    -b) [[ -n "${2:-}" ]] && { BRANCH="$2"; shift 2; } || shift ;;
     php|pgsql|mysql)
       if [[ " $VALID_COMPONENTS " == *" $1 "* ]]; then
         COMPONENTS+=("$1"); shift
@@ -135,6 +140,50 @@ run_privileged() {
   fi
   echo "ERROR: sudo not found and current user is not root. Please install dependencies manually." >&2
   return 1
+}
+
+# 确保 git 已安装（拉取代码时需要）；按平台自动安装
+ensure_git_installed() {
+  if command -v git &>/dev/null; then
+    return 0
+  fi
+  echo "Git not found. Installing Git..."
+  if [[ "$PLATFORM" == "mac" ]]; then
+    if command -v brew &>/dev/null || [[ -x /opt/homebrew/bin/brew ]] || [[ -x /usr/local/bin/brew ]]; then
+      ensure_brew_installed || return 1
+      brew install git || return 1
+    else
+      echo "Installing Xcode Command Line Tools (includes Git)..."
+      xcode-select --install 2>/dev/null || true
+      echo "Please complete the installer dialog, then re-run this script." >&2
+      return 1
+    fi
+  elif [[ "$PLATFORM" == "linux" ]]; then
+    if [[ -f /etc/debian_version ]]; then
+      run_privileged apt-get update && run_privileged apt-get install -y git || return 1
+    elif [[ -f /etc/redhat-release ]]; then
+      if command -v dnf &>/dev/null; then
+        run_privileged dnf install -y git || return 1
+      elif command -v yum &>/dev/null; then
+        run_privileged yum install -y git || return 1
+      else
+        echo "ERROR: Neither dnf nor yum found. Install git manually." >&2
+        return 1
+      fi
+    elif [[ -f /etc/os-release ]] && grep -qEi "suse|opensuse" /etc/os-release 2>/dev/null; then
+      run_privileged zypper install -y git || return 1
+    elif [[ -f /etc/alpine-release ]]; then
+      run_privileged apk add --no-cache git || return 1
+    else
+      echo "ERROR: Unsupported Linux distro for auto Git install. Install git manually (apt/dnf/yum/zypper/apk)." >&2
+      return 1
+    fi
+  else
+    echo "ERROR: Unsupported platform for Git install: $PLATFORM" >&2
+    return 1
+  fi
+  echo "Git installed."
+  return 0
 }
 
 # Mac：确保 Homebrew 已安装（未安装则自动安装）
@@ -579,6 +628,36 @@ if [[ -z "$PHP_EXE" ]] || ! "$PHP_EXE" -v &>/dev/null; then
   echo "ERROR: PHP not found. Install to $SERVER_DIR/php or add php to PATH. On Mac: brew install php@$PHP_VERSION" >&2
   exit 1
 fi
+
+# 若 setup/server_installer/run.php 不存在，说明代码未安装：按 -b 指定分支拉取，未指定则 master
+if [[ ! -f "$ROOT/setup/server_installer/run.php" ]]; then
+  ensure_git_installed || { echo "ERROR: Git is required to install code. Install Git and re-run." >&2; exit 1; }
+  echo "run.php not found. Installing framework code from gitee (branch: $BRANCH)..."
+  if [[ -d "$ROOT/.git" ]]; then
+    git -C "$ROOT" fetch origin 2>/dev/null || true
+    git -C "$ROOT" checkout "$BRANCH" 2>/dev/null || git -C "$ROOT" pull origin "$BRANCH" 2>/dev/null || true
+  else
+    tmp_clone="$(mktemp -d)"
+    if ! git clone -b "$BRANCH" "$WELINE_REPO_URL" "$tmp_clone"; then
+      echo "ERROR: Clone failed. Manual: git clone -b $BRANCH $WELINE_REPO_URL ." >&2
+      rm -rf "$tmp_clone"
+      exit 1
+    fi
+    if [[ ! -f "$tmp_clone/setup/server_installer/run.php" ]]; then
+      echo "ERROR: Branch $BRANCH has no run.php. Try -b master or another branch." >&2
+      rm -rf "$tmp_clone"
+      exit 1
+    fi
+    cp -R "$tmp_clone"/. "$ROOT/"
+    rm -rf "$tmp_clone"
+  fi
+  if [[ ! -f "$ROOT/setup/server_installer/run.php" ]]; then
+    echo "ERROR: Code install failed. Ensure setup/server_installer/run.php exists." >&2
+    exit 1
+  fi
+  echo "Code installed (branch: $BRANCH)."
+fi
+
 echo ""
 (cd "$ROOT" && "$PHP_EXE" setup/server_installer/run.php) || exit 1
 echo ""

@@ -1,0 +1,14 @@
+---
+description: 事件系统使用须遵守 create-event 技能中的 dispatch/数据格式/触发顺序规范。
+globs:
+  - "**/*.php"
+---
+
+# 事件系统错误预防（硬性）
+
+使用 `EventsManager::dispatch` 或修改 event.xml/Observer 时，**必须**遵守以下规范（详见 `.cursor/skills/create-event/SKILL.md`「CRITICAL」与「事件系统错误预防」章节）：
+
+1. **dispatch 第二参数必须为变量**，不能传数组字面量（引用传递）。
+2. **事件数据必须放在 `'data'` 键下**，Observer 通过 `$event->getData('data')` 获取。
+3. **事件须在依赖它的代码之前触发**（如先 dispatch 再渲染模板）。
+4. **event.xml 中注册了 observer 则必须在代码中某处 dispatch 该事件**。

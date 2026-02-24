@@ -1,0 +1,16 @@
+---
+description: |
+  计划采用总计划概述+引入子计划；大计划 .cursor/plans/ 写概述并链接子计划，小计划 模块/doc/开发/plan.md 只写本模块变化；进度在模块 plan.md 更新，完成与任务细分在 task.md
+alwaysApply: true
+---
+
+# 计划与任务协议（强制）
+
+- **大计划包含小计划**：总计划写概述并**引入子计划**（链接各模块 doc/开发/plan.md）；小计划只写**本模块涉及的变化**。
+- **大/整体计划** → `.cursor/plans/<名称>.plan.md`（总计划概述 + 子计划列表/链接）
+- **模块/小计划** → `app/code/<Vendor>/<Module>/doc/开发/plan.md`（仅该模块变更与进度）
+- **进度更新** → 在对应模块 `doc/开发/plan.md` 内更新
+- **新增** → 修改对应 plan；**完成** → 在对应模块 `doc/开发/task.md` 标记
+- **模块任务细分** → 写在对应模块 `doc/开发/task.md`，认真标记每项进度
+
+**技能**：`.cursor/skills/create-plan/SKILL.md`

@@ -1,0 +1,19 @@
+---
+description: |
+  以下场景必须主动读取并执行对应技能。触发词: 修复错误后、做完了、完成了、创建计划、写计划、plan、task、修改了进程、WLS、static、StateManager、更新技能
+alwaysApply: true
+---
+
+# 场景→技能强制触发
+
+| 场景 | 必须读取并执行 |
+|------|----------------|
+| 修复错误/bug 后 | `error-learning` + `error-tracking`，并遵循 `auto-update-skills-on-error.mdc` |
+| 任务/计划完成（都处理了、做完了、搞定了） | `post-plan-completion-check` |
+| **创建/写计划**（plan、任务拆分、更新进度、plan.md、task.md） | `create-plan`，并遵循 `create-plan.mdc` |
+| 修改 Server/Worker/进程代码 | `process-management` |
+| 新增 static 或修改 WLS/Runtime/State | `weline-server`（状态管理章节） |
+| 用户说「更新技能/架构图/记录更改」 | 更新相关 SKILL.md |
+| **新增/修改规则或技能**（添加规则、新增技能、编辑 .cursor） | `cursor-as-reference`，在 `dev/ai/rules`、`dev/ai/skills` 下操作 |
+
+**映射详情与触发词**：`dev/ai/skills/skill-trigger-reminders/SKILL.md`
