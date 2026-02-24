@@ -40,8 +40,8 @@ git clone https://gitee.com/aiweline/WelineFramework.git weline && cd weline && 
 
 | 脚本 | 说明 |
 |------|------|
-| **bin/install** | **通用入口**：自动识别 **Mac / Linux / Windows(Git Bash)**，执行对应安装流程。在项目根目录执行 `./bin/install`。 |
-| **bin/install.bat** | Windows **CMD 或 PowerShell** 下使用，在项目根执行 `bin\install.bat`。 |
+| **bin/install.bat** | **Windows 通用入口**：CMD / PowerShell 下直接运行，无需 Git Bash。在项目根执行 `bin\install.bat`。 |
+| **bin/install** | **Linux/Mac/Git Bash 通用入口**：自动识别系统并执行对应安装。在项目根执行 `./bin/install`。 |
 | **bin/install.sh** | Linux/Mac 安装逻辑，一般通过 `./bin/install` 调用，也可直接 `./bin/install.sh`。 |
 | **bin/bootstrap.sh** | 一键引导（Linux/macOS/Git Bash）：克隆仓库并执行 install，用于 `curl \| bash`。 |
 | **bin/bootstrap.ps1** | 一键引导（Windows PowerShell）：克隆仓库并执行 install.bat，用于 `iex (DownloadString(...))`。 |
