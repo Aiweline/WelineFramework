@@ -433,6 +433,11 @@ class Start extends CommandAbstract
                 $httpRedirectPort = $nextRedirectPort;
             }
         }
+
+        // Linux/Mac 非 root 绑定特权端口时，自动触发 sudo 密码输入并重启当前命令
+        if (!$this->ensurePrivilegedPortPermission($port, $httpRedirectPort, $sslEnabled)) {
+            return;
+        }
         
         // 显示启动信息
         $directReusePortEnabled = !$dispatcherEnabled && $supportsReusePort && $count > 1;
@@ -1476,6 +1481,68 @@ class Start extends CommandAbstract
             $this->printer->note(__('提示：HTTPS 标准端口 443 通常单进程监听；当前 Worker 数 %{1} 将占用端口 %{2}-%{3}。若只需 443，请 -c 1。', [$count, $port, $port + $count - 1]));
             echo "\n";
         }
+    }
+
+    /**
+     * 检查特权端口权限，不足时自动使用 sudo 重新执行并触发密码输入。
+     *
+     * @return bool true=可继续执行；false=当前进程应终止（已交给 sudo 子进程或提示失败）
+     */
+    protected function ensurePrivilegedPortPermission(int $mainPort, int $httpRedirectPort, bool $sslEnabled): bool
+    {
+        if (IS_WIN) {
+            return true;
+        }
+        if (!\function_exists('posix_geteuid')) {
+            // 无法判断权限时不阻断（保持兼容）
+            return true;
+        }
+        if ((int)\posix_geteuid() === 0) {
+            return true;
+        }
+        if (\getenv('WLS_SUDO_RELAUNCHED') === '1') {
+            // 已经尝试过 sudo，避免死循环
+            return true;
+        }
+
+        $privilegedPorts = [];
+        if ($mainPort > 0 && $mainPort < 1024) {
+            $privilegedPorts[] = $mainPort;
+        }
+        if ($sslEnabled && $httpRedirectPort > 0 && $httpRedirectPort < 1024) {
+            $privilegedPorts[] = $httpRedirectPort;
+        }
+        $privilegedPorts = \array_values(\array_unique($privilegedPorts));
+        if (empty($privilegedPorts)) {
+            return true;
+        }
+
+        // 仅在交互终端中尝试自动 sudo；否则直接提示
+        $interactive = \defined('STDIN')
+            && \function_exists('posix_isatty')
+            && @\posix_isatty(STDIN);
+        if (!$interactive || !\function_exists('passthru')) {
+            $this->printer->error(__('端口 %{1} 需要 root 权限，请使用 sudo 重新执行。', [\implode(', ', $privilegedPorts)]));
+            return false;
+        }
+
+        $rawArgv = $_SERVER['argv'] ?? [];
+        if (!\is_array($rawArgv) || empty($rawArgv)) {
+            $this->printer->error(__('无法自动重启为 sudo，请手动执行：sudo php bin/w server:start ...'));
+            return false;
+        }
+        $parts = \array_merge([PHP_BINARY], $rawArgv);
+        $escaped = \array_map('escapeshellarg', $parts);
+        $relaunchCommand = 'sudo env WLS_SUDO_RELAUNCHED=1 ' . \implode(' ', $escaped);
+
+        $this->printer->warning(__('检测到特权端口 %{1}，将自动请求 sudo 密码并继续启动。', [\implode(', ', $privilegedPorts)]));
+        $this->printer->note(__('执行命令：%{1}', [$relaunchCommand]));
+        $exitCode = 0;
+        @\passthru($relaunchCommand, $exitCode);
+        if ($exitCode !== 0) {
+            $this->printer->error(__('sudo 执行失败，退出码：%{1}', [(string)$exitCode]));
+        }
+        return false;
     }
     
     /**
