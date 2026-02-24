@@ -37,24 +37,30 @@ class CreateTables implements CommandInterface
             $printing = ObjectManager::getInstance(Printing::class);
             $setup = new Setup($dbSetup, $printing);
             
-            // Get install instance and call setup
-            $install = new Install($connFactory);
+            // Get install instance and call setup（Install 无构造参数，连接由 setup 内 $setup->getDb() 提供）
+            $install = new Install();
             $install->setup($setup, $context);
             
             echo "✅ AI module tables created successfully!\n\n";
             
-            // Ensure supplier column is nullable for compatibility
+            // Ensure supplier column is nullable for compatibility（表名使用 getTable 以带前缀）
             try {
-                $conn->query("ALTER TABLE ai_model MODIFY COLUMN supplier VARCHAR(100) NULL")->fetch();
+                $aiModelTable = $dbSetup->getTable('ai_model');
+                $dbSetup->query("ALTER TABLE {$aiModelTable} MODIFY COLUMN supplier VARCHAR(100) NULL");
                 echo "✓ Ensured ai_model.supplier is NULL-able for compatibility.\n";
             } catch (\Throwable $e) {
-                // ignore if not needed
+                // ignore if not needed (e.g. PostgreSQL 使用不同语法)
             }
 
-            // List created tables
+            // List created tables（依赖当前数据库类型：SQLite 用 sqlite_master，MySQL/Pg 可用 information_schema）
             echo "=== Verifying Tables ===\n";
-            $sql = "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'ai_%' ORDER BY name";
-            $tables = $conn->query($sql)->fetchArray();
+            $prefix = $dbSetup->getTablePrefix();
+            $tables = [];
+            foreach (['ai_model', 'ai_api_key', 'ai_assistant', 'ai_tenant', 'ai_model_monitoring'] as $base) {
+                if ($conn->tableExist($dbSetup->getTable($base))) {
+                    $tables[] = ['name' => $prefix . $base];
+                }
+            }
             
             if ($tables) {
                 foreach ($tables as $table) {

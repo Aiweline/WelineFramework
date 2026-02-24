@@ -24,15 +24,18 @@ class CheckTableStructure implements CommandInterface
     {
         echo "\n=== AI Tables Structure Check ===\n\n";
         
-        $connection = $this->connectionFactory->getConnection();
-        $tables = ['ai_tenant', 'ai_model', 'ai_api_key'];
+        $conn = $this->connectionFactory->getConnector();
+        $prefix = $conn->getConfigProvider()->getPrefix() ?? '';
+        $baseTables = ['ai_tenant', 'ai_model', 'ai_api_key'];
         
-        foreach ($tables as $table) {
+        foreach ($baseTables as $base) {
+            $table = ($prefix !== '' && !str_starts_with($base, $prefix)) ? $prefix . $base : $base;
             echo "📋 Table: {$table}\n";
             echo "----------------------------------------\n";
             
             try {
-                $columns = $connection->query("PRAGMA table_info({$table})")->fetchArray();
+                // PRAGMA 为 SQLite 语法；MySQL/Pg 需用 information_schema / pg_catalog
+                $columns = $conn->query("PRAGMA table_info({$table})")->fetchArray();
                 
                 foreach ($columns as $column) {
                     echo sprintf(
