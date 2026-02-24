@@ -86,7 +86,7 @@ class UpgradeData
             ->forceCheck(true, [Set::fields_code, Set::fields_eav_entity_id])
             ->save();
         
-        return $setModel->getId();
+        return (int) $setModel->getId();
     }
     
     /**
@@ -112,7 +112,7 @@ class UpgradeData
             ])
             ->save();
         
-        return $groupModel->getId();
+        return (int) $groupModel->getId();
     }
     
     /**
