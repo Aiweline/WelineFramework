@@ -154,9 +154,6 @@ SQL调试输出,SQL调试输出
 "输出文件: %{1}","输出文件: %{1}"
 "编译工厂: %{1}","编译工厂: %{1}"
 "预编译反射元数据（加速 ObjectManager 依赖注入）","预编译反射元数据（加速 ObjectManager 依赖注入）"
-已跳过反射/工厂编译，需要时可执行：php bin/w reflection:compile,Reflection/factory compile skipped. Run manually when needed: php bin/w reflection:compile
-跳过反射元数据与编译型工厂生成（可事后执行 reflection:compile）,Skip reflection metadata and compiled factories generation (run reflection:compile later if needed)
-跳过反射编译（加快 s:up）,Skip reflection compile (speed up s:up)
 显示详细编译信息,显示详细编译信息
 显示帮助信息,显示帮助信息
 基本用法,基本用法
@@ -1209,6 +1206,8 @@ HTTP方法,HTTP方法
 "热更新信号已发送给 %{1} 个实例","热更新信号已发送给 %{1} 个实例"
 "没有可用的 WLS 实例接收热更新信号","没有可用的 WLS 实例接收热更新信号"
 "检测到运行中的 WLS 服务器，发送热重载信号...","检测到运行中的 WLS 服务器，发送热重载信号..."
+"跳过反射元数据与编译型工厂生成（可事后执行 reflection:compile）","Skip reflection metadata and compiled factories generation (run reflection:compile later if needed)"
+"跳过反射编译（加快 s:up）","Skip reflection compile (speed up s:up)"
 "env.php 中数据库配置有效，直接执行安装...","env.php 中数据库配置有效，直接执行安装..."
 "检测到系统尚未安装（-y 模式），按 env.php 中 db 配置直接安装...","检测到系统尚未安装（-y 模式），按 env.php 中 db 配置直接安装..."
 "检测到系统尚未安装（-y 模式），直接执行开发环境快速安装...","检测到系统尚未安装（-y 模式），直接执行开发环境快速安装..."
@@ -1634,6 +1633,7 @@ hello,hello
 "确定要重置所有安装记录吗？下次 env:install 将重新尝试所有推荐项。","Are you sure to reset all records? Next env:install will retry all."
 异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2},异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2}
 资源不存在：%{1}，模组：%{2},资源不存在：%{1}，模组：%{2}
+"已跳过反射/工厂编译，需要时可执行：php bin/w reflection:compile","Reflection/factory compile skipped. Run manually when needed: php bin/w reflection:compile"
 统一查询执行提供者,统一查询执行提供者
 "统一查询非 crud 提供者执行事件，允许模块实现自定义 provider。","统一查询非 crud 提供者执行事件，允许模块实现自定义 provider。"
 "参数 model 必填且必须是有效模型类名","参数 model 必填且必须是有效模型类名"
