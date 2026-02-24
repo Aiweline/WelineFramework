@@ -20,6 +20,10 @@ class ConnectorOptionsBuilder
             $base = \is_string($path) && $path !== '' ? \basename($path) : '';
             $firstChar = $base !== '' ? $base[0] : '';
             $relpathLen = \is_string($relpath) ? \strlen($relpath) : -1;
+            // .trash 与 .tmb 为 elFinder 回收站与缩略图目录，必须可读写
+            if ($base === '.trash' || $base === '.tmb') {
+                return null;
+            }
             return $firstChar === '.' && $relpathLen !== 1
                 ? !($attr === 'read' || $attr === 'write')
                 : null;
