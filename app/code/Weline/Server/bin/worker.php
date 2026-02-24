@@ -349,27 +349,41 @@ if ($freeMemory > 0 && $freeMemory < $requiredMemory) {
 $wlsLog("内存缓存：上限 " . \round($WLS_STATIC_CACHE_MAX_TOTAL / 1024 / 1024, 1) . "MB，单文件 " . \round($WLS_STATIC_CACHE_MAX_SIZE / 1024, 1) . "KB", 'INFO');
 // ========== 内存缓存配置结束 ==========
 
-// 注册 shutdown handler 捕获致命错误（Fatal Error、内存溢出等）
-\register_shutdown_function(function() use ($wlsLog, $flushLog, $workerId, $port, $processLogFile, $instanceName) {
+// 注册 shutdown handler 捕获致命错误（Fatal Error、TypeError、内存溢出等）
+// 崩溃日志必须立即落盘（LOCK_EX），避免进程退出后丢失
+$fatalErrorTypes = [\E_ERROR, \E_PARSE, \E_CORE_ERROR, \E_COMPILE_ERROR, \E_RECOVERABLE_ERROR, \E_USER_ERROR];
+\register_shutdown_function(function() use ($wlsLog, $flushLog, $workerId, $port, $processLogFile, $instanceName, $fatalErrorTypes) {
     $error = \error_get_last();
-    if ($error !== null && \in_array($error['type'], [\E_ERROR, \E_PARSE, \E_CORE_ERROR, \E_COMPILE_ERROR, \E_RECOVERABLE_ERROR])) {
-        $errorMsg = "Worker 致命错误 [PID: " . \getmypid() . "] [Worker: {$workerId}] [Port: {$port}]: {$error['message']} in {$error['file']}:{$error['line']}";
-        $wlsLog($errorMsg, 'ERROR');
-        // 强制刷新日志缓冲区，确保致命错误被写入文件
-        $flushLog(true);
-        \error_log('[WLS Worker FATAL] ' . $errorMsg);
-        // 双保险：直接写入进程日志文件
-        if ($processLogFile) {
-            @\file_put_contents($processLogFile, '[' . \date('Y-m-d H:i:s') . '] [FATAL] ' . $errorMsg . "\n", \FILE_APPEND);
-        }
-        // 统一崩溃日志：便于在一个文件查看所有 Worker 崩溃原因
+    $isFatal = $error !== null && (
+        \in_array($error['type'], $fatalErrorTypes, true)
+        || $error['type'] === 0  // 部分 SAPI 下未捕获 Error/TypeError 报告为 0
+    );
+    if (!$isFatal) {
+        return;
+    }
+    $errorMsg = "Worker 致命错误 [PID: " . \getmypid() . "] [Worker: {$workerId}] [Port: {$port}]: {$error['message']} in {$error['file']}:{$error['line']}";
+    $wlsLog($errorMsg, 'ERROR');
+    $flushLog(true);
+    \error_log('[WLS Worker FATAL] ' . $errorMsg);
+    if ($processLogFile) {
+        @\file_put_contents($processLogFile, '[' . \date('Y-m-d H:i:s') . '] [FATAL] ' . $errorMsg . "\n", \FILE_APPEND | \LOCK_EX);
+    }
+    // 统一崩溃日志：立即写入（LOCK_EX 确保落盘），失败时 fallback 到进程日志或系统临时目录
+    $line = '[' . \date('Y-m-d H:i:s') . '] [instance:' . $instanceName . '] [Worker:' . $workerId . '] [Port:' . $port . '] ' . $error['message'] . ' in ' . $error['file'] . ':' . $error['line'] . "\n";
+    $written = false;
+    if (\defined('BP') && BP !== '') {
         $crashLogDir = BP . 'var' . DS . 'log';
         if (!\is_dir($crashLogDir)) {
             @\mkdir($crashLogDir, 0755, true);
         }
         $crashLogFile = $crashLogDir . DS . 'wls-worker-crash.log';
-        $line = '[' . \date('Y-m-d H:i:s') . '] [instance:' . $instanceName . '] [Worker:' . $workerId . '] [Port:' . $port . '] ' . $error['message'] . ' in ' . $error['file'] . ':' . $error['line'] . "\n";
-        @\file_put_contents($crashLogFile, $line, \FILE_APPEND);
+        $written = @\file_put_contents($crashLogFile, $line, \FILE_APPEND | \LOCK_EX) !== false;
+    }
+    if (!$written && $processLogFile) {
+        @\file_put_contents($processLogFile, '[' . \date('Y-m-d H:i:s') . '] [CRASH] ' . $line, \FILE_APPEND | \LOCK_EX);
+    }
+    if (!$written) {
+        @\file_put_contents(\sys_get_temp_dir() . DS . 'wls-worker-crash.log', $line, \FILE_APPEND | \LOCK_EX);
     }
 });
 

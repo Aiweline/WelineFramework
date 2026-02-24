@@ -282,26 +282,25 @@ class Post extends BackendController
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::blog_trigger_ai', '手动生成SEO文章', 'mdi mdi-robot', '手动触发 AI 生成 SEO 博客文章', 'GuoLaiRen_Blog::blog')]
     public function getTriggerAiPublishSse(): void
     {
-        header('Content-Type: text/event-stream');
-        header('Cache-Control: no-cache');
-        header('Connection: keep-alive');
-        header('X-Accel-Buffering: no');
-        while (ob_get_level()) {
-            ob_end_flush();
-        }
-        $send = function (string $event, array $data) {
-            echo 'event: ' . $event . "\n";
-            echo 'data: ' . json_encode($data, JSON_UNESCAPED_UNICODE) . "\n\n";
-            flush();
-        };
+        // SSE 流式生成可能较耗时，取消 PHP 执行时间限制并防止客户端断开中止脚本
+        @set_time_limit(0);
+        @ignore_user_abort(true);
+
+        // 使用框架内置的 SseWriter，兼容 WLS 与 FPM 模式
+        $sse = new \Weline\Framework\Http\Sse\SseWriter();
+        $sse->start();
+
         try {
+            /** @var AiPublish $cron */
             $cron = ObjectManager::getInstance(AiPublish::class);
-            $cron->execute(function (string $event, array $data) use ($send) {
-                $send($event, $data);
+            $cron->execute(function (string $event, array $data) use ($sse) {
+                $sse->sendEvent($event, $data);
             });
         } catch (\Throwable $e) {
-            $send('error', ['message' => $e->getMessage()]);
+            $sse->sendEvent('error', ['message' => $e->getMessage()]);
         }
+
+        // 注意：不要在此处 exit，WlsRuntime 会根据 SseContext 判断并避免重复输出响应
     }
 
     /**
