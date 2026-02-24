@@ -137,13 +137,16 @@ class Install implements InstallInterface
             ->addIndex('INDEX', 'idx_ai_model_monitoring_date', ['date'])
             ->create();
         
-        // Insert initial data - default tenant
-        $connection->query('INSERT INTO ai_tenant (name, domain, config, billing_plan, status) VALUES (:name, :domain, :config, :billing_plan, :status)', [
+        // Insert initial data - default tenant（表名需带前缀，与 createTable 一致）
+        $tenantTable = $connection->getTable('ai_tenant');
+        $query = $connection->getConnector()->query("INSERT INTO {$tenantTable} (name, domain, config, billing_plan, status) VALUES (:name, :domain, :config, :billing_plan, :status)");
+        $query->bound_values = [
             'name' => 'Default Tenant',
             'domain' => 'default.localhost',
             'config' => json_encode(['timezone' => 'Asia/Shanghai', 'locale' => 'zh_Hans_CN']),
             'billing_plan' => 'enterprise',
             'status' => 'active',
-        ])->fetch();
+        ];
+        $query->fetch();
     }
 }
