@@ -278,7 +278,7 @@ class MetaData
                     
                     // 先尝试当前语言
                     $md5 = LocaleDictionary::generateMd5($translationKey, $currentLocale);
-                    $localeDict->load($md5, LocaleDictionary::fields_MD5);
+                    $localeDict->load(LocaleDictionary::fields_MD5, $md5);
                     
                     if ($localeDict->getId()) {
                         $translation = $localeDict->getData(LocaleDictionary::fields_TRANSLATE);
@@ -290,7 +290,7 @@ class MetaData
                     // 如果当前语言没有翻译，尝试默认语言
                     if ($currentLocale !== $defaultLocale) {
                         $md5Default = LocaleDictionary::generateMd5($translationKey, $defaultLocale);
-                        $localeDict->load($md5Default, LocaleDictionary::fields_MD5);
+                        $localeDict->load(LocaleDictionary::fields_MD5, $md5Default);
                         
                         if ($localeDict->getId()) {
                             $translation = $localeDict->getData(LocaleDictionary::fields_TRANSLATE);
@@ -477,7 +477,7 @@ class MetaData
                         
                         // 先尝试当前语言
                         $md5 = LocaleDictionary::generateMd5($translationKey, $locale);
-                        $localeDict->load($md5, LocaleDictionary::fields_MD5);
+                        $localeDict->load(LocaleDictionary::fields_MD5, $md5);
                         
                         if ($localeDict->getId()) {
                             $translation = $localeDict->getData(LocaleDictionary::fields_TRANSLATE);
@@ -489,7 +489,7 @@ class MetaData
                         // 如果当前语言没有翻译，尝试默认语言
                         if ($locale !== $defaultLocale) {
                             $md5Default = LocaleDictionary::generateMd5($translationKey, $defaultLocale);
-                            $localeDict->load($md5Default, LocaleDictionary::fields_MD5);
+                            $localeDict->load(LocaleDictionary::fields_MD5, $md5Default);
                             
                             if ($localeDict->getId()) {
                                 $translation = $localeDict->getData(LocaleDictionary::fields_TRANSLATE);
@@ -1243,7 +1243,7 @@ class MetaData
                         $localeDict = ObjectManager::getInstance(LocaleDictionary::class);
                         
                         $md5 = LocaleDictionary::generateMd5($translationKey, $locale);
-                        $localeDict->load($md5, LocaleDictionary::fields_MD5);
+                        $localeDict->load(LocaleDictionary::fields_MD5, $md5);
                         
                         if ($localeDict->getId()) {
                             // 更新
