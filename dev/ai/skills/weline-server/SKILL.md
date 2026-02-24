@@ -512,3 +512,5 @@ cat var/log/master_health_debug.log
 3. **Worker 内 die/exit**：会触发 `register_shutdown_function`，记录到 `var/log/wls-worker-crash.log`（[EXIT]）及 WLS 运行日志，便于排查业务误用 exit/die。
 4. **缓存不生效**：`php bin/w cache:clear`
 5. **热重载无效**：检查 `var/server/reload.flag` 文件
+6. **Mac/Linux 非 root 绑定 80/443 失败**：`server:start` 会在命令入口检测特权端口（<1024），自动触发 `sudo` 重新执行并提示输入密码；若非交互终端则提示手动 `sudo` 启动。
+7. **直连模式端口语义**：SO_REUSEPORT 直连下多个 Worker 共用主端口（不是 `port + i`）；若出现 Worker 绑定到 444/445 等递增端口，说明模式实现异常，应检查 `MasterProcess` 初始化与启动路径。
