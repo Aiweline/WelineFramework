@@ -45,12 +45,13 @@ if (!is_dir($generatedCodeDir)) {
     echo "Created generated/code/ for Composer autoload.\n";
 }
 
-// 0b. 在 composer 前先配置 php.ini（extension_dir、openssl 等），避免 composer 报 “openssl extension is required”
+// 0b. 在 composer 前先配置 php.ini（extension_dir、openssl、日志路径、扩展、disable_functions 等），避免 composer 报 “openssl extension is required”
+$phpDir = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php';
 if (!$fromStep5b && is_dir($phpDir)) {
-    echo "Step 0b: Configuring php.ini (extension_dir, openssl, etc.) for Composer...\n";
+    echo "Step 0b: Configuring php.ini (log paths, extensions, functions)...\n";
     try {
-        $configPhpIni = new ConfigurePhpIni($projectRoot, $phpDir);
-        $configPhpIni->apply($env);
+        $iniCfg = new ConfigurePhpIni($projectRoot, $phpDir);
+        $iniCfg->apply($env);
     } catch (Throwable $e) {
         fwrite(STDERR, "WARNING: php.ini configuration failed: " . $e->getMessage() . "\n");
     }

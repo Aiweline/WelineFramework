@@ -16,4 +16,5 @@
     <event name="Weline_Framework_Module::module_install_after">
         <observer name="Weline_Widget::module_install_after" instance="Weline\Widget\Observer\ModuleInstallAfter" disabled="false" shared="true" sort="0"/>
     </event>
+
 </config>

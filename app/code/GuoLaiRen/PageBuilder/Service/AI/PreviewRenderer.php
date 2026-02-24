@@ -298,12 +298,6 @@ class PreviewRenderer
             
             // 4. 保存编译后的文件
             file_put_contents($comFile, $compiledContent);
-            // #region agent log（定位 line 103：编译后、执行前的内容片段）
-            $debugLog = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pagebuilder_ai_debug.log';
-            $compLines = explode("\n", $compiledContent);
-            $snippet = array_slice($compLines, 97, 16);
-            @file_put_contents($debugLog, json_encode(['when' => 'after_compile_before_ob', 'totalLines' => count($compLines), 'lines98to113' => $snippet, 'timestamp' => (int)(microtime(true) * 1000)]) . "\n", FILE_APPEND | LOCK_EX);
-            // #endregion
 
             // 5. 设置自定义错误处理器
             $errorMessage = '';
@@ -349,10 +343,6 @@ class PreviewRenderer
         } catch (\Throwable $t) {
             // 确保恢复错误处理器
             restore_error_handler();
-            // #region agent log
-            $debugLog = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pagebuilder_ai_debug.log';
-            @file_put_contents($debugLog, json_encode(['when' => 'PreviewRenderer_catch', 'message' => $t->getMessage(), 'file' => $t->getFile(), 'line' => $t->getLine(), 'class' => get_class($t), 'timestamp' => (int)(microtime(true) * 1000)]) . "\n", FILE_APPEND | LOCK_EX);
-            // #endregion
             return [
                 'success' => false,
                 'html' => $this->generateErrorHtml($t->getMessage()),

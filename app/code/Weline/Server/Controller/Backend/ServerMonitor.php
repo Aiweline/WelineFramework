@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Weline\Server\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Server\Security\AttackDetector;
 use Weline\Server\Model\AttackLog;
 use Weline\Server\Model\ServerStatusLog;
 use Weline\Server\Service\OptimizationGuideService;
@@ -309,5 +310,44 @@ class ServerMonitor extends BackendController
                 'attack_logs_cleaned' => $attackCleaned,
             ],
         ];
+    }
+
+    public function getSecurityRules(): string
+    {
+        $rules = AttackDetector::getInstance()->getRules();
+        $this->assign('rulesJson', \json_encode($rules, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        return $this->fetch('security-rules');
+    }
+
+    public function postSaveSecurityRules(): array
+    {
+        try {
+            $body = $this->request->getBodyParams(true);
+            if (!\is_array($body)) {
+                $body = [];
+            }
+            $rulesRaw = $body['rules'] ?? $this->request->getPost('rules', '');
+            if (\is_string($rulesRaw)) {
+                $decoded = \json_decode($rulesRaw, true);
+                if (!\is_array($decoded)) {
+                    throw new \InvalidArgumentException((string)__('规则 JSON 格式不正确'));
+                }
+                $rules = $decoded;
+            } elseif (\is_array($rulesRaw)) {
+                $rules = $rulesRaw;
+            } else {
+                throw new \InvalidArgumentException((string)__('规则数据不能为空'));
+            }
+            AttackDetector::getInstance()->updateRules($rules);
+            return [
+                'success' => true,
+                'message' => __('安全规则已保存'),
+            ];
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'message' => __('保存失败：%{1}', $throwable->getMessage()),
+            ];
+        }
     }
 }

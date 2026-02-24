@@ -65,4 +65,32 @@ interface MigrationInterface
      * @return string 迁移日期
      */
     public function getDate(): string;
+
+    /**
+     * 获取迁移类型
+     * 
+     * @return string 迁移类型 (create_table, drop_table, add_column, drop_column, modify_column, add_index, drop_index, data_migration)
+     */
+    public function getType(): string;
+
+    /**
+     * 获取影响的数据表
+     * 
+     * @return array 表名数组
+     */
+    public function getAffectedTables(): array;
+
+    /**
+     * 是否需要在迁移执行前备份
+     * 
+     * @return bool
+     */
+    public function requiresBackup(): bool;
+
+    /**
+     * 获取备份策略
+     * 
+     * @return array 备份配置，格式：['strategy' => 'table'|'column'|'none', 'tables' => [...], 'columns' => [...]]
+     */
+    public function getBackupStrategy(): array;
 }

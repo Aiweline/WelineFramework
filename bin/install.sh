@@ -155,8 +155,22 @@ ensure_git_installed() {
     else
       echo "Installing Xcode Command Line Tools (includes Git)..."
       xcode-select --install 2>/dev/null || true
-      echo "Please complete the installer dialog, then re-run this script." >&2
-      return 1
+      local wait_clt=600
+      echo "请在弹出的窗口中完成「命令行开发者工具」安装。安装完成后脚本将自动继续（最多等待 $((wait_clt/60)) 分钟）。"
+      local waited=0
+      while [[ $waited -lt $wait_clt ]]; do
+        if xcode-select -p &>/dev/null && command -v git &>/dev/null; then
+          echo "Xcode 命令行工具已就绪。"
+          break
+        fi
+        sleep 10
+        waited=$((waited + 10))
+        printf "  已等待 %ds …\r" "$waited"
+      done
+      if ! command -v git &>/dev/null; then
+        echo "ERROR: 等待超时，仍未检测到 Git。请完成安装后重新执行本脚本。" >&2
+        return 1
+      fi
     fi
   elif [[ "$PLATFORM" == "linux" ]]; then
     if [[ -f /etc/debian_version ]]; then

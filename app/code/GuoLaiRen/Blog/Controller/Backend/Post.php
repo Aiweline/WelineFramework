@@ -277,7 +277,35 @@ class Post extends BackendController
     }
 
     /**
-     * 手动触发 AI 生成 SEO 文章（AJAX）
+     * 手动触发 AI 生成 SEO 文章（SSE 实时推送进度，GET 供 EventSource 使用）
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::blog_trigger_ai', '手动生成SEO文章', 'mdi mdi-robot', '手动触发 AI 生成 SEO 博客文章', 'GuoLaiRen_Blog::blog')]
+    public function getTriggerAiPublishSse(): void
+    {
+        header('Content-Type: text/event-stream');
+        header('Cache-Control: no-cache');
+        header('Connection: keep-alive');
+        header('X-Accel-Buffering: no');
+        while (ob_get_level()) {
+            ob_end_flush();
+        }
+        $send = function (string $event, array $data) {
+            echo 'event: ' . $event . "\n";
+            echo 'data: ' . json_encode($data, JSON_UNESCAPED_UNICODE) . "\n\n";
+            flush();
+        };
+        try {
+            $cron = ObjectManager::getInstance(AiPublish::class);
+            $cron->execute(function (string $event, array $data) use ($send) {
+                $send($event, $data);
+            });
+        } catch (\Throwable $e) {
+            $send('error', ['message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * 手动触发 AI 生成 SEO 文章（AJAX 一次性返回，保留兼容）
      */
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::blog_trigger_ai', '手动生成SEO文章', 'mdi mdi-robot', '手动触发 AI 生成 SEO 博客文章', 'GuoLaiRen_Blog::blog')]
     public function postTriggerAiPublish(): string
@@ -289,10 +317,16 @@ class Post extends BackendController
             $cron = ObjectManager::getInstance(AiPublish::class);
             $result = $cron->execute();
 
+            $message = __('当前模式：%{mode}；%{result}', ['mode' => $modeText, 'result' => $result]);
+            if (str_contains($result, '0 篇')) {
+                $hint = AiPublish::getZeroPublishHint();
+                $message .= "\n" . $hint;
+            }
+
             return json_encode([
                 'success' => true,
                 'mode' => $modeText,
-                'message' => __('当前模式：%{mode}；%{result}', ['mode' => $modeText, 'result' => $result]),
+                'message' => $message,
             ], JSON_UNESCAPED_UNICODE);
         } catch (\Throwable $e) {
             return json_encode([

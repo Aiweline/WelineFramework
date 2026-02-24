@@ -169,6 +169,23 @@ return [
         ],
     ],
 
+    /**
+     * 统一 URL 提交入口事件
+     * 当外部请求提交 URL 到 SEO 时触发，由本模块 Observer 处理
+     */
+    'Weline_Seo::integration::url_submit_request' => [
+        'name' => __('统一 URL 提交入口'),
+        'description' => __('统一 URL 提交入口事件，由 SEO 模块自身 Observer 处理提交逻辑。'),
+        'doc' => 'integration/url_submit_request.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'urls' => ['type' => 'array', 'required' => false, 'description' => '待提交的 URL 列表'],
+            'subject_type' => ['type' => 'string', 'required' => false, 'description' => '主体类型'],
+            'subject_id' => ['type' => 'integer', 'required' => false, 'description' => '主体ID'],
+        ],
+    ],
+
     // ========== Application Events (应用事件) ==========
     
     /**

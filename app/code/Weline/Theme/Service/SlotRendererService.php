@@ -466,6 +466,9 @@ class SlotRendererService
     /**
      * 获取布局数据（带缓存和降级逻辑）
      * 
+     * 草稿（draft）不缓存：后台编辑器/预览为实时操作，多进程下其他 Worker 可能仍持旧缓存，
+     * 导致删除/拖拽后预览不更新，故 draft 始终从 DB 读取。
+     * 
      * 优先级：
      * 1. 按指定状态获取数据
      * 2. 如果是已发布状态且没有数据，尝试获取草稿数据
@@ -475,62 +478,69 @@ class SlotRendererService
     private function getLayoutData(int $themeId, string $pageType, string $status = ThemeLayout::STATUS_PUBLISHED): array
     {
         $cacheKey = "{$themeId}:{$pageType}:{$status}";
+        $isDraft = ($status === ThemeLayout::STATUS_DRAFT);
 
-        if (!isset($this->layoutCache[$cacheKey])) {
-            // 1. 按指定状态获取数据
-            $layout = $this->layoutService->getFullLayout($themeId, $pageType, $status);
-            
-            // 2. 检查是否有部件数据
-            $hasWidgets = $this->hasWidgetsInLayout($layout);
-            
-            // 3. 如果没有数据且是已发布状态，尝试降级到草稿数据
-            if (!$hasWidgets && $status === ThemeLayout::STATUS_PUBLISHED) {
-                $draftLayout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT);
-                if ($this->hasWidgetsInLayout($draftLayout)) {
-                    // 使用草稿数据，并自动发布（后台静默发布）
-                    $this->autoPublishDraft($themeId, $pageType, $draftLayout);
-                    $layout = $draftLayout;
+        // 草稿不读缓存，保证编辑器/预览每次请求都拿到最新布局（删除、拖拽后立即生效）
+        if (!$isDraft && isset($this->layoutCache[$cacheKey])) {
+            return $this->layoutCache[$cacheKey];
+        }
+
+        // 1. 按指定状态获取数据
+        $layout = $this->layoutService->getFullLayout($themeId, $pageType, $status);
+        
+        // 2. 检查是否有部件数据
+        $hasWidgets = $this->hasWidgetsInLayout($layout);
+        
+        // 3. 如果没有数据且是已发布状态，尝试降级到草稿数据
+        if (!$hasWidgets && $status === ThemeLayout::STATUS_PUBLISHED) {
+            $draftLayout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT);
+            if ($this->hasWidgetsInLayout($draftLayout)) {
+                // 使用草稿数据，并自动发布（后台静默发布）
+                $this->autoPublishDraft($themeId, $pageType, $draftLayout);
+                $layout = $draftLayout;
+                $hasWidgets = true;
+            }
+        }
+        
+        // 3.5. 如果仍然没有数据，尝试生成默认布局种子
+        // 注意：仅在前端访问（published状态）时自动seed，编辑器模式（draft状态）不自动seed
+        // 这样可以尊重用户在编辑器中删除部件的操作，避免被删除的部件自动重新创建
+        if (!$hasWidgets && $status === ThemeLayout::STATUS_PUBLISHED) {
+            $seeded = $this->seedDefaultLayoutIfNeeded($themeId, $pageType);
+            if ($seeded) {
+                // 重新获取布局数据
+                $layout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT);
+                if ($this->hasWidgetsInLayout($layout)) {
                     $hasWidgets = true;
-                }
-            }
-            
-            // 3.5. 如果仍然没有数据，尝试生成默认布局种子
-            // 注意：仅在前端访问（published状态）时自动seed，编辑器模式（draft状态）不自动seed
-            // 这样可以尊重用户在编辑器中删除部件的操作，避免被删除的部件自动重新创建
-            if (!$hasWidgets && $status === ThemeLayout::STATUS_PUBLISHED) {
-                $seeded = $this->seedDefaultLayoutIfNeeded($themeId, $pageType);
-                if ($seeded) {
-                    // 重新获取布局数据
-                    $layout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT);
-                    if ($this->hasWidgetsInLayout($layout)) {
-                        $hasWidgets = true;
-                        // 如果是前端请求已发布状态，自动发布
-                        if ($status === ThemeLayout::STATUS_PUBLISHED) {
-                            $this->autoPublishDraft($themeId, $pageType, $layout);
-                        }
+                    // 如果是前端请求已发布状态，自动发布
+                    if ($status === ThemeLayout::STATUS_PUBLISHED) {
+                        $this->autoPublishDraft($themeId, $pageType, $layout);
                     }
                 }
             }
-            
-            // 4. 如果当前页面类型没有数据，尝试获取默认页面类型的数据
-            if (!$hasWidgets && $pageType !== ThemeLayout::PAGE_TYPE_DEFAULT) {
-                $defaultLayout = $this->layoutService->getFullLayout($themeId, ThemeLayout::PAGE_TYPE_DEFAULT, $status);
-                if ($this->hasWidgetsInLayout($defaultLayout)) {
-                    $layout = $defaultLayout;
-                } else if ($status === ThemeLayout::STATUS_PUBLISHED) {
-                    // 尝试默认页面类型的草稿
-                    $defaultDraftLayout = $this->layoutService->getFullLayout($themeId, ThemeLayout::PAGE_TYPE_DEFAULT, ThemeLayout::STATUS_DRAFT);
-                    if ($this->hasWidgetsInLayout($defaultDraftLayout)) {
-                        $this->autoPublishDraft($themeId, ThemeLayout::PAGE_TYPE_DEFAULT, $defaultDraftLayout);
-                        $layout = $defaultDraftLayout;
-                    }
+        }
+        
+        // 4. 如果当前页面类型没有数据，尝试获取默认页面类型的数据
+        if (!$hasWidgets && $pageType !== ThemeLayout::PAGE_TYPE_DEFAULT) {
+            $defaultLayout = $this->layoutService->getFullLayout($themeId, ThemeLayout::PAGE_TYPE_DEFAULT, $status);
+            if ($this->hasWidgetsInLayout($defaultLayout)) {
+                $layout = $defaultLayout;
+            } else if ($status === ThemeLayout::STATUS_PUBLISHED) {
+                // 尝试默认页面类型的草稿
+                $defaultDraftLayout = $this->layoutService->getFullLayout($themeId, ThemeLayout::PAGE_TYPE_DEFAULT, ThemeLayout::STATUS_DRAFT);
+                if ($this->hasWidgetsInLayout($defaultDraftLayout)) {
+                    $this->autoPublishDraft($themeId, ThemeLayout::PAGE_TYPE_DEFAULT, $defaultDraftLayout);
+                    $layout = $defaultDraftLayout;
                 }
             }
-            
+        }
+
+        // 仅已发布状态写入缓存；草稿不缓存
+        if (!$isDraft) {
             $this->layoutCache[$cacheKey] = $layout;
         }
 
-        return $this->layoutCache[$cacheKey];
+        return $layout;
     }
     
     /**

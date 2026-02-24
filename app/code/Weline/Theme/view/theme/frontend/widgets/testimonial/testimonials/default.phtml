@@ -56,22 +56,33 @@ if (empty($testimonials)) {
 }
 
 $widgetId = 'testimonials-' . uniqid();
+
+// 确保传给 htmlspecialchars 的为字符串（部件参数有时为数组）
+$esc = function ($v) {
+    if (is_string($v)) {
+        return htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+    }
+    if (is_array($v)) {
+        return htmlspecialchars(implode(', ', array_map('strval', $v)), ENT_QUOTES, 'UTF-8');
+    }
+    return htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+};
 ?>
 
 <div class="widget-testimonials" id="<?= $widgetId ?>">
     <?php if ($title || $subtitle): ?>
         <div class="widget-header">
             <?php if ($title): ?>
-                <h2 class="widget-title"><?= htmlspecialchars($title) ?></h2>
+                <h2 class="widget-title"><?= $esc($title) ?></h2>
             <?php endif; ?>
             <?php if ($subtitle): ?>
-                <p class="widget-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+                <p class="widget-subtitle"><?= $esc($subtitle) ?></p>
             <?php endif; ?>
         </div>
     <?php endif; ?>
     
-    <div class="testimonials-container layout-<?= htmlspecialchars($layout) ?>">
-        <div class="testimonials-grid columns-<?= htmlspecialchars($columns) ?>">
+    <div class="testimonials-container layout-<?= $esc($layout) ?>">
+        <div class="testimonials-grid columns-<?= $esc($columns) ?>">
             <?php foreach ($testimonials as $testimonial): ?>
                 <div class="testimonial-card">
                     <div class="testimonial-quote">
@@ -86,19 +97,19 @@ $widgetId = 'testimonials-' . uniqid();
                         </div>
                     <?php endif; ?>
                     
-                    <p class="testimonial-content"><?= htmlspecialchars($testimonial['content'] ?? '') ?></p>
+                    <p class="testimonial-content"><?= $esc($testimonial['content'] ?? '') ?></p>
                     
                     <div class="testimonial-author">
                         <?php if ($showAvatar && !empty($testimonial['avatar'])): ?>
-                            <img src="<?= htmlspecialchars($testimonial['avatar'] ?? '') ?>" 
-                                 alt="<?= htmlspecialchars($testimonial['author'] ?? '') ?>"
+                            <img src="<?= $esc($testimonial['avatar'] ?? '') ?>" 
+                                 alt="<?= $esc($testimonial['author'] ?? '') ?>"
                                  class="author-avatar">
                         <?php endif; ?>
                         
                         <div class="author-info">
-                            <h4 class="author-name"><?= htmlspecialchars($testimonial['author'] ?? '') ?></h4>
+                            <h4 class="author-name"><?= $esc($testimonial['author'] ?? '') ?></h4>
                             <?php if (!empty($testimonial['position'])): ?>
-                                <span class="author-position"><?= htmlspecialchars($testimonial['position'] ?? '') ?></span>
+                                <span class="author-position"><?= $esc($testimonial['position'] ?? '') ?></span>
                             <?php endif; ?>
                         </div>
                     </div>

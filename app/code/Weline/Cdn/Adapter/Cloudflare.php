@@ -575,6 +575,16 @@ class Cloudflare implements AdapterInterface
     {
         return true;
     }
+
+    /**
+     * @inheritDoc
+     *
+     * Cloudflare 注入 Cf-Connecting-Ip Header 传递真实客户端 IP
+     */
+    public function getRealIpHeaderKeys(): array
+    {
+        return ['HTTP_CF_CONNECTING_IP'];
+    }
     
     /**
      * 封禁攻击者 IP（使用 Cloudflare Access Rules）

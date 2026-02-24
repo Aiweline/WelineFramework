@@ -3,6 +3,37 @@
  */
 
 const CustomerServiceWidget = (function() {
+    /**
+     * 国际化：优先使用页面注入的 __，否则降级为占位符替换
+     * @param {string} text
+     * @param {Object|Array} params
+     * @returns {string}
+     */
+    function __(text, params) {
+        if (typeof window !== 'undefined' && typeof window.__ === 'function') {
+            return window.__(text, params);
+        }
+        if (typeof window !== 'undefined' && window.Weline && window.Weline.i18n && typeof window.Weline.i18n.__ === 'function') {
+            return window.Weline.i18n.__(text, params);
+        }
+        if (params) {
+            let result = text;
+            if (typeof params === 'object' && !Array.isArray(params)) {
+                for (const key in params) {
+                    result = result.replace(new RegExp('%\\{' + key + '\\}', 'g'), String(params[key]));
+                }
+            } else if (Array.isArray(params)) {
+                params.forEach((param, index) => {
+                    result = result.replace(new RegExp('%\\{' + (index + 1) + '\\}', 'g'), String(param));
+                });
+            } else {
+                result = result.replace(/%\{1\}/g, String(params));
+            }
+            return result;
+        }
+        return text;
+    }
+
     let config = {
         chatUrl: '',
         bindUrl: '',

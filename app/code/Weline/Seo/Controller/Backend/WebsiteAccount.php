@@ -33,6 +33,45 @@ class WebsiteAccount extends BackendController
     }
 
     /**
+     * 站点-SEO账户绑定列表（入口页）
+     *
+     * @return string
+     */
+    #[AclAttribute('Weline_Seo::website_account_index', '查看站点账户绑定', 'mdi-view-list', '查看站点与SEO账户的绑定列表')]
+    public function index(): string
+    {
+        try {
+            /** @var Website $websiteModel */
+            $websiteModel = $this->objectManager->getInstance(Website::class);
+            $websites = $websiteModel->reset()->select()->fetchArray();
+
+            /** @var SeoWebsiteAccount $websiteAccountModel */
+            $websiteAccountModel = $this->objectManager->getInstance(SeoWebsiteAccount::class);
+
+            $bindingCounts = [];
+            foreach ($websites as $website) {
+                $websiteId = (int)($website['website_id'] ?? $website['id'] ?? 0);
+                if ($websiteId > 0) {
+                    $bindings = $websiteAccountModel->reset()
+                        ->where(SeoWebsiteAccount::fields_WEBSITE_ID, $websiteId)
+                        ->select()
+                        ->fetchArray();
+                    $bindingCounts[$websiteId] = count($bindings);
+                }
+            }
+
+            $this->assign('websites', $websites);
+            $this->assign('binding_counts', $bindingCounts);
+            return $this->fetch();
+        } catch (\Exception $e) {
+            Message::error(__('加载失败：%{1}', $e->getMessage()));
+            $this->assign('websites', []);
+            $this->assign('binding_counts', []);
+            return $this->fetch();
+        }
+    }
+
+    /**
      * 管理指定站点的SEO账户绑定
      * 
      * @return string

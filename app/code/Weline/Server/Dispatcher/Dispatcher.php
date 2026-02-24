@@ -34,7 +34,7 @@ class Dispatcher
 {
     /**
      * 服务器 socket
-     * @var resource
+     * @var \Socket|resource
      */
     private $serverSocket;
     
@@ -70,7 +70,7 @@ class Dispatcher
     
     /**
      * 活跃的客户端连接
-     * @var array<int, resource>
+     * @var array<int, \Socket|resource>
      */
     private array $clientConnections = [];
     
@@ -299,6 +299,17 @@ class Dispatcher
         if ($this->logFunction !== null) {
             ($this->logFunction)($message, $level);
         }
+    }
+
+    private function socketId($socket): int
+    {
+        if (\is_object($socket)) {
+            return \spl_object_id($socket);
+        }
+        if (\is_resource($socket)) {
+            return \get_resource_id($socket);
+        }
+        return 0;
     }
     
     /**
@@ -581,7 +592,7 @@ class Dispatcher
             $workerSocket = $this->passthroughCore->getWorkerSocket($clientSocket);
             if ($workerSocket !== null) {
                 $readSockets[] = $workerSocket;
-                $workerSockets[\spl_object_id($workerSocket)] = $connId;
+                $workerSockets[$this->socketId($workerSocket)] = $connId;
             }
         }
         
@@ -608,7 +619,7 @@ class Dispatcher
         
         // 处理可读的 socket
         foreach ($readSockets as $socket) {
-            $socketId = \spl_object_id($socket);
+            $socketId = $this->socketId($socket);
             
             // 检查是否是 Worker socket
             if (isset($workerSockets[$socketId])) {
@@ -675,7 +686,7 @@ class Dispatcher
                 break;
             }
             
-            $connId = \spl_object_id($clientSocket);
+            $connId = $this->socketId($clientSocket);
             
             // 获取客户端 IP
             $clientIp = '127.0.0.1';
@@ -684,21 +695,18 @@ class Dispatcher
             }
             
             // 攻击探测（在建立 Worker 连接前）
-            // 本地 IP 白名单，跳过攻击检测
-            $isLocalIp = \in_array($clientIp, ['127.0.0.1', '::1', 'localhost'], true) 
-                || \str_starts_with($clientIp, '192.168.') 
-                || \str_starts_with($clientIp, '10.')
-                || \str_starts_with($clientIp, '172.');
+            // 本地与可信回源 IP 白名单，跳过攻击检测
+            $isTrustedIp = $this->isTrustedSourceIp($clientIp);
             
             // SSL 握手失败封禁检查（独立于通用攻击检测，非本地 IP 才封禁）
-            if (!$isLocalIp && $this->attackDetector->isSslBanned($clientIp)) {
+            if (!$isTrustedIp && $this->attackDetector->isSslBanned($clientIp)) {
                 $this->log("SSL 封禁拦截: {$clientIp} (connId: {$connId}) — IP 因频繁 SSL 握手失败被封禁", 'BAN');
                 @\socket_close($clientSocket);
                 $accepted++;
                 continue;
             }
             
-            if ($this->attackDetectionEnabled && !$isLocalIp) {
+            if ($this->attackDetectionEnabled && !$isTrustedIp) {
                 // 获取 SNI（如果可用）用于攻击探测
                 $sni = $this->passthroughCore->extractSniFromSocketPublic($clientSocket);
                 
@@ -775,7 +783,7 @@ class Dispatcher
      */
     private function handleClientData($clientSocket): void
     {
-        $connId = \spl_object_id($clientSocket);
+        $connId = $this->socketId($clientSocket);
         
         $result = $this->passthroughCore->forwardToWorker($clientSocket);
         
@@ -805,7 +813,7 @@ class Dispatcher
      */
     private function handleWorkerData($clientSocket): void
     {
-        $connId = \spl_object_id($clientSocket);
+        $connId = $this->socketId($clientSocket);
         
         $result = $this->passthroughCore->forwardToClient($clientSocket);
         
@@ -890,11 +898,8 @@ class Dispatcher
         
         $durationStr = \round($duration, 1);
         
-        // 本地 IP 白名单：只记录日志，不封禁
-        $isLocalIp = \in_array($clientIp, ['127.0.0.1', '::1', 'localhost'], true)
-            || \str_starts_with($clientIp, '192.168.')
-            || \str_starts_with($clientIp, '10.')
-            || \str_starts_with($clientIp, '172.');
+        // 本地和 CDN 回源白名单：只记录日志，不封禁
+        $isLocalIp = $this->isTrustedSourceIp($clientIp);
         
         if ($isLocalIp) {
             // 本地 IP：仅记录，不追踪封禁
@@ -1072,5 +1077,51 @@ class Dispatcher
             'bytes_out' => $this->bytesCount['out'],
             'core_stats' => $this->passthroughCore->getStats(),
         ];
+    }
+
+    private function isTrustedSourceIp(string $ip): bool
+    {
+        if (\in_array($ip, ['127.0.0.1', '::1', 'localhost'], true)
+            || \str_starts_with($ip, '192.168.')
+            || \str_starts_with($ip, '10.')
+            || \str_starts_with($ip, '172.')) {
+            return true;
+        }
+
+        $rules = $this->attackDetector->getRules();
+        $trusted = $rules['cdn_trusted_ips'] ?? [];
+        if (!($trusted['enabled'] ?? true)) {
+            return false;
+        }
+        $ipRules = $trusted['ips'] ?? [];
+        foreach ((array)$ipRules as $item) {
+            $pattern = \trim((string)$item);
+            if ($pattern === '') {
+                continue;
+            }
+            if ($this->ipMatches($ip, $pattern)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function ipMatches(string $ip, string $pattern): bool
+    {
+        if ($ip === $pattern) {
+            return true;
+        }
+        if (!\str_contains($pattern, '/')) {
+            return false;
+        }
+        [$subnet, $mask] = \explode('/', $pattern, 2);
+        $maskBits = (int)$mask;
+        $ipLong = \ip2long($ip);
+        $subnetLong = \ip2long($subnet);
+        if ($ipLong === false || $subnetLong === false || $maskBits < 0 || $maskBits > 32) {
+            return false;
+        }
+        $maskLong = $maskBits === 0 ? 0 : (~0 << (32 - $maskBits));
+        return (($ipLong & $maskLong) === ($subnetLong & $maskLong));
     }
 }

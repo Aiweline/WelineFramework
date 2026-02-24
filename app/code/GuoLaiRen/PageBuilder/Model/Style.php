@@ -158,12 +158,7 @@ class Style extends Model
             return;
         }
         
-        $styleDirs = glob($baseStylePath . '*', GLOB_ONLYDIR);
-        
-        if (empty($styleDirs)) {
-            return;
-        }
-        
+        $styleDirs = glob($baseStylePath . '*', GLOB_ONLYDIR) ?: [];
         $styleModel = \Weline\Framework\Manager\ObjectManager::getInstance(self::class);
         
         foreach ($styleDirs as $styleDir) {
@@ -238,13 +233,15 @@ class Style extends Model
     
     /**
      * 清理已删除的样式
+     * 当模板文件已从文件系统删除时，同步删除数据库中 Style 及其关联的 Component、Component\LocalDescription 数据，
+     * 并将使用该样式的 Page 回退到默认样式
      */
     private static function cleanupDeletedStyles(array $styleDirs, self $styleModel): void
     {
-        // 获取所有文件系统中的样式代码
+        // 获取所有文件系统中仍存在的样式代码（与目录名一致，用于对比）
         $fileStyleCodes = [];
         foreach ($styleDirs as $styleDir) {
-            $fileStyleCodes[] = basename($styleDir);
+            $fileStyleCodes[] = trim((string) basename($styleDir));
         }
         
         // 获取数据库中所有样式
@@ -254,14 +251,56 @@ class Style extends Model
             ->fetch()
             ->getItems();
         
-        // 检查并删除不存在的样式
+        $fallbackStyle = $fileStyleCodes[0] ?? 'tpmst';
+        
         foreach ($dbStyles as $dbStyle) {
-            $code = $dbStyle->getData(self::fields_CODE);
-            if (!in_array($code, $fileStyleCodes)) {
-                // 文件已删除，禁用样式而不是删除（保留历史数据）
-                $dbStyle->setData(self::fields_IS_ACTIVE, 0)->save();
+            $code = trim((string) $dbStyle->getData(self::fields_CODE));
+            $styleId = $dbStyle->getData(self::fields_ID);
+            if ($code === '' || !in_array($code, $fileStyleCodes, true)) {
+                self::deleteStyleAndRelatedData($code, $fallbackStyle);
+                $styleModel->clear()
+                    ->where(self::fields_ID, $styleId)
+                    ->delete()
+                    ->fetch();
             }
         }
+    }
+    
+    /**
+     * 删除样式关联数据：Component、Component\LocalDescription，并将引用该样式的 Page 回退到默认样式
+     */
+    private static function deleteStyleAndRelatedData(string $styleCode, string $fallbackStyle): void
+    {
+        $componentModel = \Weline\Framework\Manager\ObjectManager::getInstance(Component::class);
+        $components = $componentModel->clear()
+            ->where(Component::fields_STYLE_CODE, $styleCode)
+            ->select()
+            ->fetch()
+            ->getItems();
+        
+        $componentIds = [];
+        foreach ($components as $comp) {
+            $componentIds[] = $comp->getData(Component::fields_ID);
+        }
+        
+        if (!empty($componentIds)) {
+            $localDescModel = \Weline\Framework\Manager\ObjectManager::getInstance(Component\LocalDescription::class);
+            $localDescModel->clear()
+                ->where(Component\LocalDescription::fields_ID, $componentIds, 'in')
+                ->delete()
+                ->fetch();
+            
+            $componentModel->clear()
+                ->where(Component::fields_STYLE_CODE, $styleCode)
+                ->delete()
+                ->fetch();
+        }
+        
+        $pageModel = \Weline\Framework\Manager\ObjectManager::getInstance(Page::class);
+        $pageModel->clear()
+            ->where(Page::fields_STYLE, $styleCode)
+            ->update([Page::fields_STYLE => $fallbackStyle])
+            ->fetch();
     }
     
     /**

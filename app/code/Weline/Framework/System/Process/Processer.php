@@ -2395,9 +2395,39 @@ class Processer
     }
     
     /**
+     * 从 var/process（name_index）中按前缀枚举进程名
+     *
+     * 用于在杀逃逸进程前从进程目录明确找到匹配的进程，再配合 killByProcessNamePrefix 使用。
+     *
+     * @param string $prefix 进程名前缀（如 weline-wls-master- 或 weline-wls-master-default）
+     * @return array<string> 匹配的 pname 列表（name_index 的 key）
+     */
+    public static function getProcessNamesByPrefix(string $prefix): array
+    {
+        if (empty($prefix) || \strpos($prefix, self::WELINE_PROCESS_PREFIX) === false) {
+            return [];
+        }
+        $nameIndex = self::readNameIndex();
+        $matched = [];
+        foreach ($nameIndex as $pname => $info) {
+            $taskName = '';
+            try {
+                $taskName = self::getTaskName($pname);
+            } catch (\Exception $e) {
+                continue;
+            }
+            if (\str_starts_with($taskName, $prefix) || \str_starts_with($pname, '--name=' . $prefix)) {
+                $matched[] = $pname;
+            }
+        }
+        return $matched;
+    }
+
+    /**
      * 按进程名前缀批量杀进程（使用 name_index 查找，仅杀己方进程）
      * 
-     * 用途：例如前缀 weline-master-default- 可杀该实例下所有 worker
+     * 用途：例如前缀 weline-master-default- 可杀该实例下所有 worker；
+     * 逃逸 Master 清理时可由 getProcessNamesByPrefix 从 var/process 找到旧 master 再按此前缀杀。
      * 
      * 安全策略：
      * 1. prefix 必须包含 weline-，否则返回 0

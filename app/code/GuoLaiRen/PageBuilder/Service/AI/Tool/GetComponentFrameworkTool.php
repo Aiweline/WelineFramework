@@ -42,10 +42,6 @@ class GetComponentFrameworkTool implements ToolInterface
     public function execute(array $args): mixed
     {
         $category = $args['category'] ?? 'content';
-        // #region agent log
-        $logPath = (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log';
-        @file_put_contents($logPath, json_encode(['hypothesisId' => 'H4', 'location' => 'GetComponentFrameworkTool::execute', 'message' => 'entry', 'data' => ['category' => $category], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n", FILE_APPEND | LOCK_EX);
-        // #endregion
 
         /** @var FrameworkBuilder $frameworkBuilder */
         $frameworkBuilder = ObjectManager::getInstance(FrameworkBuilder::class);

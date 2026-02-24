@@ -132,7 +132,7 @@ class Account extends BackendController
             
             if (!$account->getData(AccountModel::fields_ACCOUNT_ID)) {
                 Message::error(__('账户不存在'));
-                return $this->redirect('*/backend/account/index');
+                return (string)$this->redirect('*/backend/account/index');
             }
             
             $this->assign('account', $account);
@@ -143,6 +143,7 @@ class Account extends BackendController
         // 获取所有适配器
         $adapters = $this->getAdapterResolver()->getAllAdapters();
         $this->assign('adapters', $adapters);
+        $this->assign('originToken', $this->getOriginToken());
 
         return $this->fetch();
     }
@@ -174,7 +175,7 @@ class Account extends BackendController
                 if (!$account->getData(AccountModel::fields_ACCOUNT_ID)) {
                     $errorMsg = __('账户不存在');
                     if ($this->request->isIframe()) {
-                        return $this->redirect('/component/offcanvas/error', [
+                        return (string)$this->redirect('/component/offcanvas/error', [
                             'msg' => $errorMsg,
                             'reload' => 0
                         ]);
@@ -190,7 +191,7 @@ class Account extends BackendController
             if (empty($data['name'])) {
                 $errorMsg = __('账户名称不能为空');
                 if ($this->request->isIframe()) {
-                    return $this->redirect('/component/offcanvas/error', [
+                    return (string)$this->redirect('/component/offcanvas/error', [
                         'msg' => $errorMsg,
                         'reload' => 0
                     ]);
@@ -204,7 +205,7 @@ class Account extends BackendController
             if (empty($data['adapter'])) {
                 $errorMsg = __('适配器不能为空');
                 if ($this->request->isIframe()) {
-                    return $this->redirect('/component/offcanvas/error', [
+                    return (string)$this->redirect('/component/offcanvas/error', [
                         'msg' => $errorMsg,
                         'reload' => 0
                     ]);
@@ -220,7 +221,7 @@ class Account extends BackendController
             if (!isset($adapters[$data['adapter']])) {
                 $errorMsg = __('无效的适配器');
                 if ($this->request->isIframe()) {
-                    return $this->redirect('/component/offcanvas/error', [
+                    return (string)$this->redirect('/component/offcanvas/error', [
                         'msg' => $errorMsg,
                         'reload' => 0
                     ]);
@@ -270,7 +271,7 @@ class Account extends BackendController
 
             // 如果是 iframe 模式（OffCanvas），重定向到成功页面
             if ($this->request->isIframe()) {
-                return $this->redirect('/component/offcanvas/success', [
+                return (string)$this->redirect('/component/offcanvas/success', [
                     'msg' => __('账户保存成功'),
                     'reload' => 1
                 ]);
@@ -284,7 +285,7 @@ class Account extends BackendController
         } catch (\Exception $e) {
             // 如果是 iframe 模式（OffCanvas），重定向到错误页面
             if ($this->request->isIframe()) {
-                return $this->redirect('/component/offcanvas/error', [
+                return (string)$this->redirect('/component/offcanvas/error', [
                     'msg' => __('保存失败：%{1}', $e->getMessage()),
                     'reload' => 0
                 ]);
@@ -406,7 +407,7 @@ class Account extends BackendController
 
         if (!$id) {
             Message::error(__('账户ID不能为空'));
-            return $this->redirect('*/backend/account/index');
+            return (string)$this->redirect('*/backend/account/index');
         }
 
         try {
@@ -414,7 +415,7 @@ class Account extends BackendController
             
             if (!$account->getData(AccountModel::fields_ACCOUNT_ID)) {
                 Message::error(__('账户不存在'));
-                return $this->redirect('*/backend/account/index');
+                return (string)$this->redirect('*/backend/account/index');
             }
 
             $domains = $this->getAccountManager()->getAccountDomains($id);
@@ -425,7 +426,7 @@ class Account extends BackendController
             return $this->fetch();
         } catch (\Exception $e) {
             Message::error(__('加载域名列表失败：%{1}', $e->getMessage()));
-            return $this->redirect('*/backend/account/index');
+            return (string)$this->redirect('*/backend/account/index');
         }
     }
 
@@ -440,6 +441,19 @@ class Account extends BackendController
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
         return json_encode($data, JSON_UNESCAPED_UNICODE);
+    }
+
+    private function getOriginToken(): string
+    {
+        $envFile = BP . 'app' . DS . 'etc' . DS . 'env.php';
+        if (!\is_file($envFile)) {
+            return '';
+        }
+        $envConfig = include $envFile;
+        if (!\is_array($envConfig)) {
+            return '';
+        }
+        return (string)($envConfig['server']['origin_token'] ?? '');
     }
 }
 

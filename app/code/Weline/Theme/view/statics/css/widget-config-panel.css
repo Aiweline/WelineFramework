@@ -917,8 +917,47 @@
     margin: 0;
 }
 
+/* 配置项输入区域 - 与主题一致的输入容器 */
 .config-field-input {
     position: relative;
+    padding: 0.5rem 0.625rem;
+    border-radius: 8px;
+    background: linear-gradient(135deg,
+        rgba(102, 126, 234, 0.03) 0%,
+        rgba(118, 75, 162, 0.02) 100%);
+    border: 1px solid rgba(102, 126, 234, 0.08);
+    transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.config-field-input:hover {
+    background: linear-gradient(135deg,
+        rgba(102, 126, 234, 0.05) 0%,
+        rgba(118, 75, 162, 0.04) 100%);
+    border-color: rgba(102, 126, 234, 0.15);
+}
+
+.config-field-input:focus-within {
+    background: linear-gradient(135deg,
+        rgba(102, 126, 234, 0.06) 0%,
+        rgba(118, 75, 162, 0.05) 100%);
+    border-color: rgba(102, 126, 234, 0.25);
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.08);
+}
+
+.config-field-input .form-control,
+.config-field-input .form-select,
+.config-field-input input[type="text"],
+.config-field-input input[type="number"],
+.config-field-input input[type="url"],
+.config-field-input input[type="email"],
+.config-field-input textarea {
+    width: 100%;
+}
+
+.config-field-input .form-control:focus,
+.config-field-input .form-select:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.12);
 }
 
 /* 多语言编辑按钮 */

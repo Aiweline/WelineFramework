@@ -368,6 +368,50 @@ class WlsMemory implements AdapterInterface
     }
 
     /**
+     * @inheritDoc
+     *
+     * WLS 内存缓存无专有真实 IP Header，返回空数组
+     */
+    public function getRealIpHeaderKeys(): array
+    {
+        return [];
+    }
+
+    /**
+     * @inheritDoc
+     *
+     * WLS 本地内存缓存不支持攻击防护模式
+     */
+    public function enableAttackMode(string $zoneId, array $credentials, array $attackData = []): array
+    {
+        return [
+            'success' => true,
+            'message' => __('WLS 内存缓存适配器不支持攻击防护模式'),
+            'adapter' => self::ADAPTER_CODE,
+        ];
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function disableAttackMode(string $zoneId, array $credentials): array
+    {
+        return [
+            'success' => true,
+            'message' => __('WLS 内存缓存适配器不支持攻击防护模式'),
+            'adapter' => self::ADAPTER_CODE,
+        ];
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function supportsAttackMode(): bool
+    {
+        return false;
+    }
+
+    /**
      * 格式化字节数为人类可读格式
      *
      * @param int $bytes

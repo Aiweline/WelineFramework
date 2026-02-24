@@ -68,5 +68,23 @@
                   shared="true" 
                   sort="0"/>
     </event>
+
+    <!-- Framework 解析客户端真实 IP 前，注册 CDN 专有 Header keys -->
+    <event name="Weline_Framework_Http::integration::client_ip_keys">
+        <observer name="Weline_Cdn::client_ip_keys"
+                  instance="Weline\Cdn\Observer\ClientIpKeysObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
+
+    <!-- WLS 安全规则更新后，触发 CDN 规则同步 -->
+    <event name="Weline_Server::integration::security_rules_updated">
+        <observer name="Weline_Cdn::sync_security_rules_to_cdn"
+                  instance="Weline\Cdn\Observer\SyncSecurityRulesToCdn"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
 </config>
 

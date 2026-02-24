@@ -172,6 +172,8 @@ CDN缓存清理,CDN缓存清理
 在清理CDN缓存时触发，允许其他模块监听并处理缓存清理操作。事件数据包含域名、清理模式等信息。,在清理CDN缓存时触发，允许其他模块监听并处理缓存清理操作。事件数据包含域名、清理模式等信息。
 CDN攻击检测信号,CDN攻击检测信号
 CDN攻击恢复信号,CDN攻击恢复信号
+CDN规则推送,CDN规则推送
+在推送CDN规则到服务商时触发，允许其他模块监听并参与规则推送。事件数据包含规则列表、域名等信息。,在推送CDN规则到服务商时触发，允许其他模块监听并参与规则推送。事件数据包含规则列表、域名等信息。
 CDN统一请求事件,CDN统一请求事件
 CDN供应商列表,CDN供应商列表
 "获取CDN供应商列表时触发，允许其他模块补充或修改供应商列表数据。事件数据包含 providers 数组。","获取CDN供应商列表时触发，允许其他模块补充或修改供应商列表数据。事件数据包含 providers 数组。"
@@ -261,6 +263,9 @@ id属性不能为空,id属性不能为空
 "Account ID","Account ID"
 "请输入Account ID（Cloudflare）","请输入Account ID（Cloudflare）"
 "Cloudflare Zone 创建需要 Account ID","Cloudflare Zone 创建需要 Account ID"
+"回源 Origin Token（只读）","回源 Origin Token（只读）"
+"请在 app/etc/env.php 的 server.origin_token 中配置","请在 app/etc/env.php 的 server.origin_token 中配置"
+"CDN 回源时可通过自定义 Header 传递该 Token，在源站进行校验。","CDN 回源时可通过自定义 Header 传递该 Token，在源站进行校验。"
 默认账户,默认账户
 设置为该适配器的默认账户,设置为该适配器的默认账户
 保存,保存

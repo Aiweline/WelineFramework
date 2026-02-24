@@ -2,6 +2,7 @@
 setlocal EnableDelayedExpansion
 REM Install: PHP to extend\server\php + PATH; pgsql/mysql add to PATH when present. Then run.php handles extensions, php.ini, composer, setup.
 REM All systems: after install, php and pgsql (if present) are written to User PATH (Windows) or shell config (Linux/Mac via install.sh).
+REM From Git Bash: run ./bin/install (not install.bat) so that this .bat is executed by cmd.exe.
 
 cd /d "%~dp0.."
 goto :main

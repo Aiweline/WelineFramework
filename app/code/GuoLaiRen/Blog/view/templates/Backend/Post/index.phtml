@@ -252,9 +252,27 @@ $aiModeLabel = (string)($this->getData('ai_mode_label') ?? __('画像关键词�
 })();
 </script>
 
-<!-- 手动触发 AI 生成 SEO 文章 -->
+<!-- 手动触发 AI 生成 SEO 文章（使用 Toast 提示，禁止原生 alert） -->
 <script>
 (function(){
+    function showToast(msg, type) {
+        type = type || 'info';
+        if (typeof AdminToast !== 'undefined') {
+            if (type === 'success') AdminToast.success(msg);
+            else if (type === 'error') AdminToast.error(msg);
+            else AdminToast.info(msg);
+            return;
+        }
+        var el = document.createElement('div');
+        el.setAttribute('role', 'alert');
+        el.style.cssText = 'position:fixed;top:20px;right:20px;max-width:400px;padding:12px 20px;border-radius:8px;font-size:14px;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,0.15);white-space:pre-wrap;';
+        el.textContent = msg;
+        if (type === 'success') { el.style.background = '#d4edda'; el.style.color = '#155724'; el.style.border = '1px solid #c3e6cb'; }
+        else if (type === 'error') { el.style.background = '#f8d7da'; el.style.color = '#721c24'; el.style.border = '1px solid #f5c6cb'; }
+        else { el.style.background = '#d1ecf1'; el.style.color = '#0c5460'; el.style.border = '1px solid #bee5eb'; }
+        document.body.appendChild(el);
+        setTimeout(function(){ el.remove(); }, 4000);
+    }
     var btn = document.getElementById('btnTriggerAi');
     if (!btn) return;
     btn.addEventListener('click', function(){
@@ -262,29 +280,60 @@ $aiModeLabel = (string)($this->getData('ai_mode_label') ?? __('画像关键词�
         btn.disabled = true;
         btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('生成中...') ?>';
 
-        fetch('<?= $this->getBackendUrl('blog/backend/post/trigger-ai-publish') ?>', {
-            method: 'POST',
-            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' }
-        })
-        .then(function(r){ return r.json(); })
-        .then(function(res){
-            if (typeof AdminToast !== 'undefined') {
-                res.success ? AdminToast.success(res.message) : AdminToast.error(res.message);
-            } else {
-                alert(res.message);
-            }
-            if (res.success) {
-                setTimeout(function(){ window.location.reload(); }, 1500);
-            }
-        })
-        .catch(function(){
-            if (typeof AdminToast !== 'undefined') AdminToast.error('<?= __('请求失败，请重试') ?>');
-            else alert('<?= __('请求失败，请重试') ?>');
-        })
-        .finally(function(){
+        var progressBox = document.createElement('div');
+        progressBox.setAttribute('role', 'alert');
+        progressBox.style.cssText = 'position:fixed;top:20px;right:20px;max-width:420px;padding:16px 20px;border-radius:8px;font-size:14px;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,0.2);background:#fff;border:1px solid #dee2e6;white-space:pre-wrap;';
+        progressBox.innerHTML = '<div class="mb-2"><i class="mdi mdi-robot"></i> <?= __('生成SEO文章') ?></div><div id="sseProgressText"><?= __('正在连接…') ?></div>';
+        document.body.appendChild(progressBox);
+
+        var sseUrl = '<?= $this->getBackendUrl('blog/backend/post/trigger-ai-publish-sse') ?>';
+        var es = new EventSource(sseUrl);
+        var progressEl = document.getElementById('sseProgressText');
+
+        es.addEventListener('start', function(e){
+            var d = JSON.parse(e.data || '{}');
+            if (progressEl) progressEl.textContent = (d.mode || '') + '\n' + (d.quotas_count !== undefined ? '<?= __('配额数') ?>: ' + d.quotas_count : '');
+        });
+        es.addEventListener('article_start', function(e){
+            var d = JSON.parse(e.data || '{}');
+            if (progressEl) progressEl.textContent = '<?= __('正在生成第') ?> ' + (d.index || 0) + '/' + (d.total || 0) + ' <?= __('篇') ?>：' + (d.keyword || '');
+        });
+        es.addEventListener('article_done', function(e){
+            var d = JSON.parse(e.data || '{}');
+            if (progressEl) progressEl.textContent = '<?= __('已生成') ?> ' + (d.published || 0) + ' <?= __('篇') ?>（' + (d.keyword || '') + '）';
+        });
+        es.addEventListener('article_error', function(e){
+            var d = JSON.parse(e.data || '{}');
+            if (progressEl) progressEl.textContent = '<?= __('生成失败') ?>：' + (d.keyword || '') + ' - ' + (d.error || '');
+        });
+        es.addEventListener('done', function(e){
+            var d = JSON.parse(e.data || '{}');
+            es.close();
+            progressBox.remove();
             btn.disabled = false;
             btn.innerHTML = origText;
+            showToast((d.result || '') + (d.published === 0 ? '\n' + '<?= __('可能原因：请检查配额、默认分类与画像关键词。') ?>' : ''), d.published > 0 ? 'success' : 'error');
+            if (d.published > 0) setTimeout(function(){ window.location.reload(); }, 1500);
         });
+        es.addEventListener('error', function(e){
+            if (es.readyState === EventSource.CLOSED) return;
+            es.close();
+            progressBox.remove();
+            btn.disabled = false;
+            btn.innerHTML = origText;
+            var msg = '<?= __('连接中断或请求失败，请重试。') ?>';
+            try { var ev = e; if (ev && ev.data) { var d = JSON.parse(ev.data); if (d.message) msg = d.message; } } catch(err) {}
+            showToast(msg, 'error');
+        });
+        es.onerror = function(){
+            if (es.readyState === 2) {
+                es.close();
+                progressBox.remove();
+                btn.disabled = false;
+                btn.innerHTML = origText;
+                showToast('<?= __('连接中断，请重试') ?>', 'error');
+            }
+        };
     });
 })();
 </script>

@@ -11,12 +11,14 @@ declare(strict_types=1);
 namespace Weline\Theme\Helper;
 
 use Weline\Framework\App\State;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\Locale\Dictionary;
 use Weline\Meta\Helper\MetaData;
 use Weline\Meta\Model\MetaConfig;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Widget\Ui\ParamType\AbstractParamType;
 
 /**
  * ThemeData 静态类
@@ -1310,60 +1312,21 @@ class ThemeData
         string $area = 'frontend',
         $widgetRegistry = null
     ): array {
-        $params = [];
-        
-        // 方案1：优先从 WidgetRegistry 获取（widget.php 定义）
-        if ($widgetRegistry !== null) {
-            $registry = $widgetRegistry->getRegistry();
-            
-            // WidgetRegistry 是按类型分组的，需要遍历两层
-            foreach ($registry as $type => $widgets) {
-                if (!is_array($widgets)) {
-                    continue;
-                }
-                foreach ($widgets as $code => $widget) {
-                    if (!is_array($widget)) {
-                        continue;
-                    }
-                    if (($widget['module'] ?? '') === $widgetModule && ($widget['code'] ?? '') === $widgetCode) {
-                        $params = $widget['params'] ?? [];
-                        break 2;
-                    }
-                }
-            }
-        }
-        
-        // 如果从 WidgetRegistry 获取到了参数，直接返回
-        if (!empty($params)) {
-            // 确保每个参数都有完整的结构
-            foreach ($params as $key => $param) {
-                if (!isset($param['translatable'])) {
-                    $params[$key]['translatable'] = false;
-                }
-            }
-            return $params;
-        }
-        
-        // 方案2：回退到 Meta 扫描（@param 注释）
-        $identify = self::getWidgetIdentify($widgetModule, $widgetCode, $area);
-        $metaParams = self::getParamDefinitions($identify);
-        
-        if (!empty($metaParams)) {
-            // 转换 Meta 扫描的格式为统一格式
-            foreach ($metaParams as $key => $def) {
-                $params[$key] = [
-                    'type' => $def['input'] ?? $def['type'] ?? 'text',
-                    'label' => $def['name'] ?? $key,
-                    'default' => $def['default'] ?? '',
-                    'description' => $def['description'] ?? '',
-                    'required' => $def['meta']['required'] ?? false,
-                    'options' => $def['options'] ?? [],
-                    'translatable' => $def['translate'] ?? false,
-                ];
-            }
-        }
-        
-        return $params;
+        $eventData = [
+            'data' => [
+                'operation' => 'getParamDefinitions',
+                'params' => [
+                    'widget_module' => $widgetModule,
+                    'widget_code' => $widgetCode,
+                    'area' => $area,
+                ],
+            ],
+        ];
+        /** @var EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        $eventsManager->dispatch('Weline_Widget::query', $eventData);
+        $params = $eventData['data']['result'] ?? null;
+        return is_array($params) ? $params : [];
     }
     
     /**
@@ -1520,6 +1483,209 @@ class ThemeData
     ): void {
         $identify = self::getWidgetIdentify($widgetModule, $widgetCode, $area);
         self::deleteParamValue($identify, $paramName, 'default', $locale);
+    }
+
+    // ─── 按路径的多语言读写（支持数组子字段） ─────────────────────
+
+    /**
+     * 获取部件所有可翻译路径模式
+     *
+     * 返回格式:
+     *   'top'   => ['title', 'subtitle'],                    // 顶级可翻译参数名
+     *   'array' => [ 'slides' => ['title', 'subtitle'] ]     // 数组参数 => 可翻译子字段列表
+     *
+     * @param array $paramDefs 参数定义（来自 Weline_Widget::query 或 widget.php）
+     */
+    public static function getTranslatablePaths(array $paramDefs): array
+    {
+        $top = [];
+        $arrayFields = [];
+
+        foreach ($paramDefs as $paramName => $def) {
+            if (!is_array($def)) {
+                continue;
+            }
+
+            $type = $def['type'] ?? 'string';
+
+            if ($type !== 'array' && AbstractParamType::isTranslatable($def)) {
+                $top[] = $paramName;
+            }
+
+            if ($type === 'array' && !empty($def['item_schema']) && is_array($def['item_schema'])) {
+                $subTranslatable = [];
+                foreach ($def['item_schema'] as $fieldKey => $fieldDef) {
+                    if (is_array($fieldDef) && AbstractParamType::isTranslatable($fieldDef)) {
+                        $subTranslatable[] = $fieldKey;
+                    }
+                }
+                if (!empty($subTranslatable)) {
+                    $arrayFields[$paramName] = $subTranslatable;
+                }
+            }
+        }
+
+        return ['top' => $top, 'array' => $arrayFields];
+    }
+
+    /**
+     * 按路径读取翻译值（支持 slides.0.title 格式）
+     */
+    public static function getPathTranslation(
+        string $identify,
+        string $path,
+        string $scope = 'default',
+        ?string $locale = null,
+        ?string $default = null
+    ): ?string {
+        self::ensureInitialized();
+        $identify = self::normalizeIdentify($identify);
+        $configIdentify = "{$identify}.path.{$path}.value";
+
+        $result = MetaTranslation::getTranslatedValueWithScope(
+            $configIdentify,
+            $scope,
+            $locale,
+            $default
+        );
+        return $result !== '' ? $result : $default;
+    }
+
+    /**
+     * 按路径写入翻译值
+     */
+    public static function setPathTranslation(
+        string $identify,
+        string $path,
+        string $value,
+        string $scope = 'default',
+        ?string $locale = null
+    ): bool {
+        self::ensureInitialized();
+        $identify = self::normalizeIdentify($identify);
+
+        if ($locale === null) {
+            $locale = Cookie::getLangLocal() ?? 'zh_Hans_CN';
+        }
+
+        $metaKey = "{$identify}.path.{$path}.value";
+        $translationKey = '@meta::' . $metaKey;
+        if ($scope !== 'default') {
+            $translationKey .= '|scope:' . $scope;
+        }
+
+        /** @var Dictionary $dict */
+        $dict = ObjectManager::getInstance(Dictionary::class);
+        $md5 = Dictionary::generateMd5($translationKey, $locale);
+        $dict->load(Dictionary::fields_MD5, $md5);
+
+        $dict->setData(Dictionary::fields_MD5, $md5);
+        $dict->setData(Dictionary::fields_WORD, $translationKey);
+        $dict->setData(Dictionary::fields_LOCALE_CODE, $locale);
+        $dict->setData(Dictionary::fields_TRANSLATE, $value);
+
+        $dict->save();
+        return true;
+    }
+
+    /**
+     * 将 locale 的可翻译路径值合并进 base config
+     *
+     * @param array $baseConfig   基础配置（来自 m_theme_layout.config）
+     * @param array $paramDefs    参数定义
+     * @param string $identify    meta identify
+     * @param string|null $locale 语言代码
+     * @return array 合并后的 config
+     */
+    public static function mergeTranslatedPaths(
+        array $baseConfig,
+        array $paramDefs,
+        string $identify,
+        ?string $locale = null
+    ): array {
+        $paths = self::getTranslatablePaths($paramDefs);
+
+        foreach ($paths['top'] as $paramName) {
+            $val = self::getParamTranslation($identify, $paramName, 'default', $locale);
+            if ($val !== '' && $val !== null) {
+                $baseConfig[$paramName] = $val;
+            }
+        }
+
+        foreach ($paths['array'] as $arrayKey => $subFields) {
+            if (!isset($baseConfig[$arrayKey]) || !is_array($baseConfig[$arrayKey])) {
+                continue;
+            }
+            foreach ($baseConfig[$arrayKey] as $index => $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                foreach ($subFields as $fieldKey) {
+                    $path = "{$arrayKey}.{$index}.{$fieldKey}";
+                    $val = self::getPathTranslation($identify, $path, 'default', $locale);
+                    if ($val !== null) {
+                        $baseConfig[$arrayKey][$index][$fieldKey] = $val;
+                    }
+                }
+            }
+        }
+
+        return $baseConfig;
+    }
+
+    /**
+     * 将 config 中的可翻译路径值保存到翻译存储
+     *
+     * @param array $configData  用户提交的 config（可能包含 "slides.0.title" 形式的路径 key）
+     * @param array $paramDefs   参数定义
+     * @param string $identify   meta identify
+     * @param string|null $locale 语言代码
+     * @return array 过滤掉路径 key 后的普通 config（用于写入 m_theme_layout.config）
+     */
+    public static function saveTranslatablePaths(
+        array $configData,
+        array $paramDefs,
+        string $identify,
+        ?string $locale = null
+    ): array {
+        $paths = self::getTranslatablePaths($paramDefs);
+        $normalConfig = [];
+
+        foreach ($configData as $key => $value) {
+            if (str_contains($key, '.')) {
+                self::setPathTranslation($identify, $key, (string)$value, 'default', $locale);
+            } else {
+                $normalConfig[$key] = $value;
+            }
+        }
+
+        if ($locale === null) {
+            $resolvedLocale = Cookie::getLangLocal() ?? 'zh_Hans_CN';
+            foreach ($paths['top'] as $paramName) {
+                if (array_key_exists($paramName, $normalConfig) && is_scalar($normalConfig[$paramName])) {
+                    self::setParamTranslation($identify, $paramName, (string)$normalConfig[$paramName], 'default', $resolvedLocale);
+                }
+            }
+
+            foreach ($paths['array'] as $arrayKey => $subFields) {
+                if (!isset($normalConfig[$arrayKey]) || !is_array($normalConfig[$arrayKey])) {
+                    continue;
+                }
+                foreach ($normalConfig[$arrayKey] as $index => $item) {
+                    if (!is_array($item)) {
+                        continue;
+                    }
+                    foreach ($subFields as $fieldKey) {
+                        if (array_key_exists($fieldKey, $item) && is_scalar($item[$fieldKey])) {
+                            $path = "{$arrayKey}.{$index}.{$fieldKey}";
+                            self::setPathTranslation($identify, $path, (string)$item[$fieldKey], 'default', $resolvedLocale);
+                        }
+                    }
+                }
+            }
+        }
+
+        return $normalConfig;
     }
 }
 

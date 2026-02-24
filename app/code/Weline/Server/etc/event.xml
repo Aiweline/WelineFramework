@@ -48,6 +48,15 @@
                   sort="0"/>
     </event>
     
+    <!-- Master 复活失败时向后台报错，由 Admin 消息中心展示 -->
+    <event name="Weline_Server::service::master_resurrection_failed">
+        <observer name="Weline_Server::master_resurrection_failed_notify"
+                  instance="Weline\Server\Observer\MasterResurrectionFailedObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="0"/>
+    </event>
+
     <!-- 攻击信号处理已改为 Cron 定时任务方式（非阻塞） -->
     <!-- @see Weline\Server\Cron\AttackSignalMonitor -->
     <!-- @see Weline\Server\Service\AttackSignalFileService -->

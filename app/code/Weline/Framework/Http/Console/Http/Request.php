@@ -55,6 +55,8 @@ class Request extends CommandAbstract
         $method = strtoupper($args['method'] ?? $args['m'] ?? 'GET');
         $headers = $args['header'] ?? $args['H'] ?? [];
         $body = $args['data'] ?? $args['d'] ?? '';
+        $overridePort = isset($args['port']) || isset($args['P']) ? (int)($args['port'] ?? $args['P']) : null;
+        $overrideHttps = isset($args['https']) ? true : null;
 
         // 检查是否是不需要登录的页面（如登录页、静态资源等）
         $noLoginRequired = $this->isPublicPath($path, $isBackend);
@@ -69,7 +71,7 @@ class Request extends CommandAbstract
         }
 
         // 构建完整URL
-        $url = $this->buildUrl($path, $isBackend, $isApiBackend);
+        $url = $this->buildUrl($path, $isBackend, $isApiBackend, $overridePort, $overrideHttps);
         
         $this->printer->note(__('正在请求: %{1}', [$url]));
         $this->printer->note(__('请求方法: %{1}', [$method]));
@@ -248,10 +250,14 @@ class Request extends CommandAbstract
         $serverConfig = $env->get('server') ?? [];
         $host = $serverConfig['host'] ?? '127.0.0.1';
         $port = $serverConfig['port'] ?? '9981';
-        $adminKey = $env->get('admin') ?? '';
+        $useHttps = \array_key_exists('https', $serverConfig)
+            ? (bool) $serverConfig['https']
+            : ((int)$port === 443);
+        $scheme = $useHttps ? 'https' : 'http';
+        $backendPrefix = $env::getAreaRoutePrefix('backend') ?? '';
         
         // 构建登录URL
-        $loginPageUrl = "http://{$host}:{$port}/{$adminKey}/admin/login";
+        $loginPageUrl = "{$scheme}://{$host}:{$port}/{$backendPrefix}/admin/login";
         $loginPostUrl = $loginPageUrl . '/post';
         
         $this->printer->note(__('正在登录: %{1}', [$username]));
@@ -480,7 +486,7 @@ class Request extends CommandAbstract
      * WLS 模式下 server:start 默认启用 HTTPS，故请求默认使用 https；
      * 可通过 env server.https = false 改为 http。
      */
-    private function buildUrl(string $path, bool $isBackend, bool $isApiBackend = false): string
+    private function buildUrl(string $path, bool $isBackend, bool $isApiBackend = false, ?int $overridePort = null, ?bool $overrideHttps = null): string
     {
         $env = Env::getInstance();
         $serverConfig = $env->get('server') ?? [];
@@ -488,10 +494,18 @@ class Request extends CommandAbstract
         // 获取服务器配置
         $host = $serverConfig['host'] ?? '127.0.0.1';
         $port = (int) ($serverConfig['port'] ?? 9981);
+        // 命令行 --port/-P 覆盖
+        if ($overridePort !== null) {
+            $port = $overridePort;
+        }
         // 若未显式配置 https，则根据端口推断：80 用 http，443 用 https，避免 https://host:80 导致 TLS 错误
         $useHttps = \array_key_exists('https', $serverConfig)
             ? (bool) $serverConfig['https']
             : ($port === 443);
+        // 命令行 --https 覆盖
+        if ($overrideHttps !== null) {
+            $useHttps = $overrideHttps;
+        }
         $scheme = $useHttps ? 'https' : 'http';
         
         // 处理路径
@@ -1221,6 +1235,8 @@ class Request extends CommandAbstract
                 '-m, method=<方法>' => '指定HTTP请求方法（默认GET）',
                 '-H, header=<头>' => '添加HTTP请求头',
                 '-d, data=<数据>' => '发送POST/PUT数据',
+                '-P, --port=<端口>' => '指定服务器端口（覆盖env.server.port）',
+                '--https' => '强制使用HTTPS协议（覆盖env.server.https）',
                 '-C, --concurrent' => '启用并发请求模式（需配合-t使用）',
                 '-t, --times=<次数>' => '并发请求次数（默认1次）',
                 '-h, --help' => '显示帮助信息',

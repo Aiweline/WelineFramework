@@ -306,4 +306,151 @@ class InlineTagTest extends TestCase
         // 验证结果不为空，说明模板被正确处理
         self::assertNotEmpty($result, '编译结果不应为空');
     }
+
+    // ====== expandInlineTags 预展开测试 ======
+
+    /**
+     * 测试 @var{} 内联标签预展开
+     *
+     * @var 是最简单的内联标签，验证预展开后编译结果中包含 PHP echo
+     */
+    public function testExpandInlineVar(): void
+    {
+        $taglib = new \Weline\Framework\View\Taglib();
+        $template = \Weline\Framework\View\Template::getInstance();
+
+        $content = '<span>@var{$name}</span>';
+        $result = $taglib->compile($template, $content, 'test_expand.phtml');
+
+        // @var{$name} 应被展开为 PHP echo，编译后不应残留 @var
+        self::assertStringNotContainsString('@var', $result, '@var should be pre-expanded');
+        self::assertStringContainsString('$name', $result, '$name should appear in compiled result');
+    }
+
+    /**
+     * 测试 @if{} 内联标签预展开
+     *
+     * 重点验证之前 <tr @if{...}> 无法解析的场景
+     */
+    public function testExpandInlineIfInHtmlAttribute(): void
+    {
+        $taglib = new \Weline\Framework\View\Taglib();
+        $template = \Weline\Framework\View\Template::getInstance();
+
+        $content = '<tr @if{$cache->getPermanently()=>"style=\'background:#2a334d\'"}>';
+        $result = $taglib->compile($template, $content, 'test_expand_if.phtml');
+
+        // @if{...} 应被预展开为 PHP 代码，编译结果中不应残留 @if{
+        self::assertStringNotContainsString('@if{', $result, '@if should be pre-expanded');
+        self::assertStringContainsString('<' . '?', $result, 'expanded result should contain PHP code');
+    }
+
+    /**
+     * 测试多个内联标签混合预展开
+     */
+    public function testExpandMultipleInlineTags(): void
+    {
+        $taglib = new \Weline\Framework\View\Taglib();
+        $template = \Weline\Framework\View\Template::getInstance();
+
+        $content = '<div>@var{$title}</div><p>@var{$content}</p>';
+        $result = $taglib->compile($template, $content, 'test_expand_multi.phtml');
+
+        self::assertStringNotContainsString('@var', $result, '所有 @var 标签应被预展开');
+        self::assertStringContainsString('$title', $result);
+        self::assertStringContainsString('$content', $result);
+    }
+
+    /**
+     * 测试无 @ 的内容不受影响（快速路径）
+     */
+    public function testExpandNoAtSymbol(): void
+    {
+        $taglib = new \Weline\Framework\View\Taglib();
+        $template = \Weline\Framework\View\Template::getInstance();
+
+        $content = '<div>Hello World</div>';
+        $result = $taglib->compile($template, $content, 'test_expand_no_at.phtml');
+
+        self::assertStringContainsString('Hello World', $result, '无 @ 的内容应原样保留');
+    }
+
+    /**
+     * 测试 email 中的 @ 不被误处理
+     */
+    public function testExpandEmailAtNotMistaken(): void
+    {
+        $taglib = new \Weline\Framework\View\Taglib();
+        $template = \Weline\Framework\View\Template::getInstance();
+
+        $content = '<a href="mailto:user@example.com">user@example.com</a>';
+        $result = $taglib->compile($template, $content, 'test_expand_email.phtml');
+
+        // email 中的 @ 后跟的 example 不是已注册标签，不应被处理
+        self::assertStringContainsString('@example.com', $result, 'email 地址中的 @ 不应被展开');
+    }
+
+    /**
+     * 测试 @if{} 带多条件（| 分隔）预展开
+     */
+    public function testExpandInlineIfMultiCondition(): void
+    {
+        $taglib = new \Weline\Framework\View\Taglib();
+        $template = \Weline\Framework\View\Template::getInstance();
+
+        $content = '@if{$a===1=>yes|$a===2=>no|default}';
+        $result = $taglib->compile($template, $content, 'test_expand_if_multi.phtml');
+
+        self::assertStringNotContainsString('@if{', $result, '@if 多条件标签应被预展开');
+        self::assertStringContainsString('if(', $result, '预展开后应包含 if 语句');
+    }
+
+    /**
+     * 测试 @lang() 内联标签预展开
+     */
+    public function testExpandInlineLang(): void
+    {
+        $taglib = new \Weline\Framework\View\Taglib();
+        $template = \Weline\Framework\View\Template::getInstance();
+
+        $content = '<button>@lang(提交)</button>';
+        $result = $taglib->compile($template, $content, 'test_expand_lang.phtml');
+
+        // @lang(提交) 应被预展开为翻译后的文本
+        self::assertStringNotContainsString('@lang(', $result, '@lang 应被预展开');
+    }
+
+    /**
+     * 测试 @block{} 内联标签预展开
+     */
+    public function testExpandInlineBlock(): void
+    {
+        $taglib = new \Weline\Framework\View\Taglib();
+        $template = \Weline\Framework\View\Template::getInstance();
+
+        $content = '@block{Weline\Demo\Block\Demo|template=Weline_Demo::demo.phtml}';
+        $result = $taglib->compile($template, $content, 'test_expand_block.phtml');
+
+        // @block{...} 应被预展开为 framework_view_process_block 调用
+        self::assertStringNotContainsString('@block{', $result, '@block 内联标签应被预展开');
+        self::assertStringContainsString('framework_view_process_block', $result, '应生成 block 处理调用');
+    }
+
+    /**
+     * 测试异常回调：expandInlineTags 捕获异常后保留原文
+     *
+     * @elseif 独立使用时回调会抛 TemplateException，预展开阶段会捕获异常并保留原文，
+     * 但后续编译管道仍会处理残留的 @elseif 并抛出异常（这是正确行为）。
+     * 此测试验证 TemplateException 确实被抛出。
+     */
+    public function testExpandCallbackExceptionIsHandled(): void
+    {
+        $taglib = new \Weline\Framework\View\Taglib();
+        $template = \Weline\Framework\View\Template::getInstance();
+
+        // @elseif{...} 独立使用会在编译管道中抛出 TemplateException
+        $this->expectException(\Weline\Framework\View\Exception\TemplateException::class);
+        $content = '@elseif{$x=>y}';
+        $taglib->compile($template, $content, 'test_expand_exception.phtml');
+    }
 }

@@ -1,12 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Weline\ElFinderFileManager\Controller\Frontend;
 
 use elFinder;
 use elFinderConnector;
+use Weline\ElFinderFileManager\Service\ConnectorOptionsBuilder;
 use Weline\FileManager\Helper\MimeTypes;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Manager\ObjectManager;
 
 class Connector extends FrontendController
 {
@@ -59,151 +63,40 @@ class Connector extends FrontendController
 
     public function index()
     {
-        //////////////////////////////////////////////////////////////////////
-        // CONFIGS
-        // 读取支持的类型
-        $mimesExt = $this->request->getParam('ext');
-        $mimes = ['image', 'text/plain'];
-        if ($mimesExt) {
-            $mimesExt = explode(',', $mimesExt);
-            foreach ($mimesExt as $k => $mimeExt) {
-                $mimes = array_merge($mimes, MimeTypes::getMimeTypes(trim($mimeExt)));
-            }
-        }
-        // Enable FTP connector netmount
-        $useFtpNetMount = true;
+        $mimes = $this->collectMimesFromParam($this->request->getParam('mimes'));
+        $rootPath = PUB . 'media';
+        $rootUrl = '/pub/media';
+        $startPath = $this->request->getParam('startPath');
+        $local = Cookie::getLangLocal();
 
-        // Set root path/url
-        define('ELFINDER_ROOT_PATH', PUB . 'media');
-        define('ELFINDER_ROOT_URL', '/pub/media');
-        # 卷目录处理
-        if (!is_dir(ELFINDER_ROOT_PATH . '/.trash/.tmb/')) {
-            mkdir(ELFINDER_ROOT_PATH . '/.trash/.tmb/', 755, true);
-        }
-        if (!is_dir(ELFINDER_ROOT_PATH . '/.tmb')) {
-            mkdir(ELFINDER_ROOT_PATH . '/.tmb', 755, true);
-        }
-        // 读取支持的类型
-        $mimesExt = $this->request->getParam('mimes');
-        $mimes = ['image', 'text/plain'];
-        if ($mimesExt) {
-            foreach ($mimesExt as $k => $mimeExt) {
-                $mimes = array_merge($mimes, MimeTypes::getMimeTypes(trim($mimeExt)));
-            }
-        }
-        // Volumes config
-        // Documentation for connector options:
-        // https://github.com/Studio-42/elFinder/wiki/Connector-configuration-options
-        $opts = array(
-            'debug' => DEBUG,
-            'local' => Cookie::getLangLocal(),
-            'roots' => array(
-                array(
-                    'driver' => 'LocalFileSystem',           // driver for accessing file system (REQUIRED)
-                    'path' => ELFINDER_ROOT_PATH . '/', // path to files (REQUIRED)
-                    'startPath' => $this->request->getParam('startPath'), // path to files (REQUIRED)
-                    'URL' => ELFINDER_ROOT_URL . '/', // URL to files (REQUIRED)
-                    'trashHash' => 't1_Lw',                     // elFinder's hash of trash folder
-                    'uploadDeny' => array('all'),                // All Mimetypes not allowed to upload
-                    'uploadAllow' => $mimes,#array('image', 'text/plain'),// Mimetype `image` and `text/plain` allowed to upload
-                    'uploadOrder' => array('deny', 'allow'),      // allowed Mimetype `image` and `text/plain` only
-                    'accessControl' => 'access'                     // disable and hide dot starting files (OPTIONAL)
-                ),
-                // Trash volume
-                array(
-                    'id' => '1',
-                    'driver' => 'Trash',
-                    'path' => ELFINDER_ROOT_PATH . '/.trash/',
-                    'tmbURL' => ELFINDER_ROOT_URL . '/.trash/.tmb/',
-                    'uploadDeny' => array('all'),                // Recomend the same settings as the original volume that uses the trash
-                    'uploadAllow' => $mimes,#array('image', 'text/plain'),// Same as above
-                    'uploadOrder' => array('deny', 'allow'),      // Same as above
-                    'accessControl' => 'access',                    // Same as above
-                )
-            ),
-            'optionsNetVolumes' => array(
-                '*' => array(
-                    'tmbURL' => ELFINDER_ROOT_URL . '/.tmb',
-                    'tmbPath' => ELFINDER_ROOT_PATH . '/.tmb',
-                    'syncMinMs' => 30000
-                )
-            )
-        );
-        //////////////////////////////////////////////////////////////////////
-        // load composer autoload.php
+        /** @var ConnectorOptionsBuilder $builder */
+        $builder = ObjectManager::getInstance(ConnectorOptionsBuilder::class);
+        $opts = $builder->build($rootPath, $rootUrl, $mimes, $startPath, $local);
+
         require VENDOR_PATH . '/autoload.php';
+        elFinder::$netDrivers['ftp'] = 'FTP';
 
-        // Enable FTP connector netmount
-        if ($useFtpNetMount) {
-            elFinder::$netDrivers['ftp'] = 'FTP';
-        }
-
-        // // Required for Dropbox network mount
-        // // Installation by composer
-        // // `composer require kunalvarma05/dropbox-php-sdk`
-        // // Enable network mount
-        // elFinder::$netDrivers['dropbox2'] = 'Dropbox2';
-        // // Dropbox2 Netmount driver need next two settings. You can get at https://www.dropbox.com/developers/apps
-        // // AND reuire regist redirect url to "YOUR_CONNECTOR_URL?cmd=netmount&protocol=dropbox2&host=1"
-        // define('ELFINDER_DROPBOX_APPKEY',    '');
-        // define('ELFINDER_DROPBOX_APPSECRET', '');
-        // ===============================================
-
-        // // Required for Google Drive network mount
-        // // Installation by composer
-        // // `composer require google/apiclient:^2.0`
-        // // Enable network mount
-        // elFinder::$netDrivers['googledrive'] = 'GoogleDrive';
-        // // GoogleDrive Netmount driver need next two settings. You can get at https://console.developers.google.com
-        // // AND reuire regist redirect url to "YOUR_CONNECTOR_URL?cmd=netmount&protocol=googledrive&host=1"
-        // define('ELFINDER_GOOGLEDRIVE_CLIENTID',     '');
-        // define('ELFINDER_GOOGLEDRIVE_CLIENTSECRET', '');
-        // // Required case of without composer
-        // define('ELFINDER_GOOGLEDRIVE_GOOGLEAPICLIENT', '/path/to/google-api-php-client/vendor/autoload.php');
-        // ===============================================
-
-        // // Required for One Drive network mount
-        // //  * cURL PHP extension required
-        // //  * HTTP server PATH_INFO supports required
-        // // Enable network mount
-        // elFinder::$netDrivers['onedrive'] = 'OneDrive';
-        // // GoogleDrive Netmount driver need next two settings. You can get at https://dev.onedrive.com
-        // // AND reuire regist redirect url to "YOUR_CONNECTOR_URL/netmount/onedrive/1"
-        // define('ELFINDER_ONEDRIVE_CLIENTID',     '');
-        // define('ELFINDER_ONEDRIVE_CLIENTSECRET', '');
-        // ===============================================
-
-        // // Required for Box network mount
-        // //  * cURL PHP extension required
-        // // Enable network mount
-        // elFinder::$netDrivers['box'] = 'Box';
-        // // Box Netmount driver need next two settings. You can get at https://developer.box.com
-        // // AND reuire regist redirect url to "YOUR_CONNECTOR_URL"
-        // define('ELFINDER_BOX_CLIENTID',     '');
-        // define('ELFINDER_BOX_CLIENTSECRET', '');
-        // ===============================================
-
-        /**
-         * Simple function to demonstrate how to control file access using "accessControl" callback.
-         * This method will disable accessing files/folders starting from '.' (dot)
-         *
-         * @param string $attr attribute name (read|write|locked|hidden)
-         * @param string $path file path relative to volume root directory started with directory separator
-         * @return bool|null
-         **/
-        function access($attr, $path, $data, $volume, $isDir, $relpath)
-        {
-            return basename($path)[0] === '.'            // if file/folder begins with '.' (dot) with out volume root
-            && strlen($relpath) !== 1
-                ? !($attr == 'read' || $attr == 'write') // set read+write to false, other (locked+hidden) set to true
-                : null;                                 // else elFinder decide it itself
-        }
-
-        // run elFinder
         $connector = new elFinderConnector(new elFinder($opts));
         $connector->run();
+    }
 
-        // end connector
+    /**
+     * 从请求参数 mimes（数组或逗号分隔字符串）收集允许的 MIME 类型。
+     */
+    private function collectMimesFromParam(mixed $param): array
+    {
+        $mimes = ['image', 'text/plain'];
+        if ($param === null || $param === '') {
+            return $mimes;
+        }
+        $items = is_array($param) ? $param : explode(',', (string) $param);
+        foreach ($items as $mimeExt) {
+            $mimeExt = trim((string) $mimeExt);
+            if ($mimeExt !== '') {
+                $mimes = array_merge($mimes, MimeTypes::getMimeTypes($mimeExt));
+            }
+        }
+        return $mimes;
     }
 
     public function getManager()

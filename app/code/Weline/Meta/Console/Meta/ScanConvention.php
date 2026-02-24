@@ -202,7 +202,10 @@ class ScanConvention extends CommandAbstract
                 // 统一路径分隔符
                 $modulePath = str_replace('\\', '/', $modulePath);
                 $conventionPath = rtrim($modulePath, '/') . '/extends/Weline_Meta/' . $currentModuleName . '/@meta.json';
-                // 统一路径分隔符（Windows 兼容）
+                // 兼容 extends/module/Weline_Meta/{ModuleName}/ 规约位置
+                if (!file_exists(str_replace('/', DIRECTORY_SEPARATOR, $conventionPath))) {
+                    $conventionPath = rtrim($modulePath, '/') . '/extends/module/Weline_Meta/' . $currentModuleName . '/@meta.json';
+                }
                 $conventionPath = str_replace('/', DIRECTORY_SEPARATOR, $conventionPath);
 
                 if (!file_exists($conventionPath)) {
@@ -234,98 +237,98 @@ class ScanConvention extends CommandAbstract
                 }
 
                 $metaConvention = $convention['meta'];
+                $scanPathsConfig = $metaConvention['scan_paths'] ?? null;
                 $basePath = $metaConvention['base_path'] ?? '';
 
-                if (empty($basePath)) {
-                    $this->printer->error(__('模块 %{1} 规约文件中缺少 \'base_path\' 字段', [$currentModuleName]));
+                // 支持 scan_paths 数组：仅扫描指定目录，减少全模块扫描；未配置时回退到 base_path
+                $pathsToScan = [];
+                if (!empty($scanPathsConfig) && is_array($scanPathsConfig)) {
+                    foreach ($scanPathsConfig as $p) {
+                        if (is_string($p) && strpos($p, '::') !== false) {
+                            $pathsToScan[] = $p;
+                        }
+                    }
+                }
+                if (empty($pathsToScan) && !empty($basePath)) {
+                    $pathsToScan = [$basePath];
+                }
+                if (empty($pathsToScan)) {
+                    $this->printer->error(__('模块 %{1} 规约文件中需提供 \'base_path\' 或 \'scan_paths\'', [$currentModuleName]));
                     $totalResults['failed']++;
                     continue;
                 }
 
-                $this->printer->note(__('基础路径：%{1}', [$basePath]));
+                $this->printer->note(__('扫描路径数：%{1}', [count($pathsToScan)]));
 
-                // 解析 base_path
-                if (strpos($basePath, '::') === false) {
-                    $this->printer->error(__('模块 %{1} base_path 格式错误，应为：ModuleName::相对路径', [$currentModuleName]));
-                    $totalResults['failed']++;
-                    continue;
-                }
-
-                [$baseModuleName, $relativePath] = explode('::', $basePath, 2);
-                
-                // 获取基础模块路径
                 $moduleList = Env::getInstance()->getModuleList();
-                if (!isset($moduleList[$baseModuleName])) {
+                $namespace = null;
+                foreach ($metaConvention as $key => $value) {
+                    if ($key !== 'base_path' && $key !== 'scan_paths') {
+                        $namespace = $key;
+                        break;
+                    }
+                }
+                $firstPath = $pathsToScan[0];
+                [$baseModuleName, $firstRelativePath] = explode('::', $firstPath, 2);
+                if (!$namespace) {
+                    $pathParts = explode('/', trim($firstRelativePath, '/'));
+                    $namespace = end($pathParts) ?: 'theme';
+                    $this->printer->note(__('从路径提取命名空间：%{1}', [$namespace]));
+                } else {
+                    $this->printer->note(__('命名空间：%{1}', [$namespace]));
+                }
+
+                $moduleListForPath = Env::getInstance()->getModuleList();
+                if (!isset($moduleListForPath[$baseModuleName])) {
                     $this->printer->error(__('模块 %{1} 基础模块不存在：%{2}', [$currentModuleName, $baseModuleName]));
                     $totalResults['failed']++;
                     continue;
                 }
                 $baseModule = ObjectManager::getInstance(Module::class);
-                $baseModule->setData($moduleList[$baseModuleName]);
-
-                // 获取基础模块路径
-                $baseModulePath = $baseModule->getData('base_path');
-                if (empty($baseModulePath)) {
-                    $baseModulePath = $baseModule->getData('path');
-                }
-                // 统一路径分隔符
+                $baseModule->setData($moduleListForPath[$baseModuleName]);
+                $baseModulePath = $baseModule->getData('base_path') ?: $baseModule->getData('path');
                 $baseModulePath = str_replace('\\', '/', $baseModulePath);
-                // 如果是相对路径，需要加上 BP
                 if (!is_dir($baseModulePath) && !file_exists($baseModulePath)) {
                     $baseModulePath = BP . '/' . trim($baseModulePath, '/');
                 }
-                $scanPath = rtrim($baseModulePath, '/') . '/' . ltrim($relativePath, '/');
 
-                if (!is_dir($scanPath)) {
-                    $this->printer->error(__('模块 %{1} 扫描路径不存在：%{2}', [$currentModuleName, $scanPath]));
-                    $totalResults['failed']++;
-                    continue;
-                }
+                $aggregateResults = ['stored' => 0, 'skipped' => 0, 'failed' => 0, 'details' => [], 'errors' => []];
+                $moduleList = Env::getInstance()->getModuleList();
 
-                $this->printer->note(__('扫描路径：%{1}', [$scanPath]));
-
-                // 从规约中提取命名空间
-                $namespace = null;
-                foreach ($metaConvention as $key => $value) {
-                    if ($key !== 'base_path') {
-                        $namespace = $key;
-                        break;
-                    }
-                }
-
-                // 如果没有定义命名空间，从 base_path 的路径中提取最后一个目录名
-                if (!$namespace) {
-                    $pathParts = explode('/', trim($relativePath, '/'));
-                    $namespace = end($pathParts); // 获取最后一个目录名
-                    if (empty($namespace)) {
-                        // 如果路径为空，尝试从完整路径中提取
-                        $fullPathParts = explode('/', trim($scanPath, '/'));
-                        $namespace = end($fullPathParts);
-                    }
-                    
-                    if (empty($namespace)) {
-                        $this->printer->error(__('模块 %{1} 无法从 base_path 中提取命名空间', [$currentModuleName]));
-                        $totalResults['failed']++;
+                foreach ($pathsToScan as $pathSpec) {
+                    if (strpos($pathSpec, '::') === false) {
+                        $this->printer->warning(__('跳过非法路径：%{1}', [$pathSpec]));
                         continue;
                     }
-                    
-                    $this->printer->note(__('从 base_path 提取命名空间：%{1}', [$namespace]));
-                } else {
-                    $this->printer->note(__('命名空间：%{1}', [$namespace]));
+                    [$pathModuleName, $relativePath] = explode('::', $pathSpec, 2);
+                    $pathModulePath = isset($moduleList[$pathModuleName]) ? ($moduleList[$pathModuleName]['base_path'] ?? $moduleList[$pathModuleName]['path'] ?? '') : '';
+                    $pathModulePath = str_replace('\\', '/', $pathModulePath);
+                    if (!is_dir($pathModulePath) && !file_exists($pathModulePath)) {
+                        $pathModulePath = BP . '/' . trim($pathModulePath, '/');
+                    }
+                    $scanPath = rtrim($pathModulePath, '/') . '/' . ltrim($relativePath, '/');
+
+                    if (!is_dir($scanPath)) {
+                        $this->printer->note(__('跳过不存在的路径：%{1}', [$pathSpec]));
+                        continue;
+                    }
+                    $this->printer->note(__('扫描路径：%{1}', [$pathSpec]));
+
+                    $results = $this->scanAndStore($namespace, $scanPath, $pathSpec, $metaConvention, $currentModuleName, $verbose);
+                    $aggregateResults['stored'] += $results['stored'];
+                    $aggregateResults['skipped'] += $results['skipped'];
+                    $aggregateResults['failed'] += $results['failed'];
+                    $aggregateResults['details'] = array_merge($aggregateResults['details'], $results['details']);
+                    $aggregateResults['errors'] = array_merge($aggregateResults['errors'], $results['errors']);
                 }
 
-                // 扫描目录结构并存储元数据（只根据目录结构，不依赖规约中的默认值等）
-                // 同时验证文件中的 @meta:: 标记是否与目录层级匹配
-                $results = $this->scanAndStore($namespace, $scanPath, $basePath, $metaConvention, $currentModuleName, $verbose);
+                $totalResults['stored'] += $aggregateResults['stored'];
+                $totalResults['skipped'] += $aggregateResults['skipped'];
+                $totalResults['failed'] += $aggregateResults['failed'];
+                $totalResults['details'] = array_merge($totalResults['details'], $aggregateResults['details']);
+                $totalResults['errors'] = array_merge($totalResults['errors'], $aggregateResults['errors']);
 
-                // 累计结果
-                $totalResults['stored'] += $results['stored'];
-                $totalResults['skipped'] += $results['skipped'];
-                $totalResults['failed'] += $results['failed'];
-                $totalResults['details'] = array_merge($totalResults['details'], $results['details']);
-                $totalResults['errors'] = array_merge($totalResults['errors'], $results['errors']);
-
-                $this->printer->success(__('模块 %{1} 扫描完成：成功 %{2}，失败 %{3}', [$currentModuleName, $results['stored'], $results['failed']]));
+                $this->printer->success(__('模块 %{1} 扫描完成：成功 %{2}，失败 %{3}', [$currentModuleName, $aggregateResults['stored'], $aggregateResults['failed']]));
 
             } catch (\Exception $e) {
                 // 输出详细的错误信息
@@ -772,16 +775,20 @@ class ScanConvention extends CommandAbstract
         
         // 检查规约中是否定义了 namespace
         if (!isset($convention[$namespace])) {
-            // 如果规约中只有 base_path，允许所有目录层级
+            // 如果规约中只有 base_path 或使用了 scan_paths，允许所有目录层级
             $hasOnlyBasePath = count($convention) === 1 && isset($convention['base_path']);
-            return $hasOnlyBasePath;
+            $hasScanPaths = !empty($convention['scan_paths']);
+            return $hasOnlyBasePath || $hasScanPaths;
         }
         
         // 从规约中查找
         $current = $convention[$namespace];
         
-        // 如果规约中只有 base_path，允许所有目录层级
+        // 如果规约中只有 base_path 或使用了 scan_paths，允许所有目录层级（仅扫描指定目录时放宽校验）
         if (count($convention) === 1 && isset($convention['base_path'])) {
+            return true;
+        }
+        if (!empty($convention['scan_paths'])) {
             return true;
         }
         

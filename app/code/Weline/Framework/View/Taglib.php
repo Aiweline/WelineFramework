@@ -258,11 +258,94 @@ class Taglib
     }
     
     // ====== 核心编译方法（v2 API）======
-    
+
+    /**
+     * 内联标签预展开（阶段 0）
+     *
+     * 在 PHP 提取之前对全文做一次扫描，把 @tagname(...) / @tagname{...} 形式的内联标签
+     * 替换为对应的 PHP 代码。这样后续 Tokenizer/AST 不再需要处理「属性里的 @」等边界情况。
+     *
+     * @param string $content 原始模板内容
+     * @param Template $template 模板对象
+     * @param string $fileName 文件名
+     * @return string 展开后的内容（内联标签已替换为 PHP）
+     */
+    private function expandInlineTags(string $content, Template &$template, string $fileName): string
+    {
+        // 快速路径：无 @ 则无内联标签
+        if (!str_contains($content, '@')) {
+            return $content;
+        }
+
+        $tags = $this->getTags($template, $fileName, $content);
+        $len = strlen($content);
+        $offset = 0;
+
+        while ($offset < $len) {
+            $pos = strpos($content, '@', $offset);
+            if ($pos === false) {
+                break;
+            }
+
+            // 尝试解析内联标签
+            $token = $this->tryParseInlineTagToken($content, $pos, 1, 1);
+            if ($token === null) {
+                // 不是有效内联标签，跳过这个 @
+                $offset = $pos + 1;
+                continue;
+            }
+
+            $name = $token->meta['name'] ?? '';
+            $tagKey = $token->meta['inlineKey'] ?? '@tag()';
+            $value = $token->meta['value'] ?? '';
+            $raw = $token->meta['raw'] ?? $token->value;
+
+            // 查找 tag 配置（支持 w: 前缀别名）
+            $tagConfig = $tags[$name] ?? $tags['w:' . $name] ?? null;
+            if ($tagConfig === null || !isset($tagConfig['callback'])) {
+                // 该标签无回调或不存在，跳过
+                $offset = $pos + strlen($raw);
+                continue;
+            }
+
+            // 构造回调参数，与现有 callback 签名一致：($tag_key, $config, $tag_data, $attributes)
+            $tagData = [$raw, $value, ''];
+            $callback = $tagConfig['callback'];
+
+            try {
+                $replacement = $callback($tagKey, $tagConfig, $tagData, []);
+            } catch (\Throwable $e) {
+                // 回调异常时保留原文不替换，继续扫描
+                $offset = $pos + strlen($raw);
+                continue;
+            }
+
+            if (!is_string($replacement)) {
+                $offset = $pos + strlen($raw);
+                continue;
+            }
+
+            // 替换原文中的 @tag{...} 为生成的 PHP 代码
+            $content = substr($content, 0, $pos) . $replacement . substr($content, $pos + strlen($raw));
+            $len = strlen($content);
+            // 跳过替换后的内容（替换结果可能含 PHP 标签，不应再被当成 @ 扫描）
+            $offset = $pos + strlen($replacement);
+        }
+
+        return $content;
+    }
+
+    /**
+     * 编译深度（用于检测嵌套编译，如 <w:template> 引入子模板时）
+     * 嵌套编译必须使用独立 PhpExtractor，否则会覆盖父级的占位符映射导致 __PHP_X__ 未恢复
+     */
+    private static int $compileDepth = 0;
+
     /**
      * 编译模板（v2 主入口）
      * 
      * 使用新的编译管道：
+     * 0. expandInlineTags - 内联标签预展开（@tag 替换为 PHP）
      * 1. PhpExtractor - 提取 PHP 代码为占位符
      * 2. Tokenizer - 词法分析
      * 3. AstBuilder - 构建 AST
@@ -296,49 +379,58 @@ class Taglib
             $this->sourceMap = new SourceMap();
             $this->sourceMap->setSourceFile($fileName);
         }
+
+        // 阶段 0: 内联标签预展开（在 PHP 提取前把 @tag{...}/@tag(...) 替换为 PHP 代码）
+        $content = $this->expandInlineTags($content, $template, $fileName);
         
-        // 阶段 1: 提取 PHP 代码（复用实例 + reset，避免每次编译创建新对象）
-        $extractor = $this->getPhpExtractor();
-        $extractor->reset();
-        $cleanContent = $extractor->extract($content);
-        
-        // 阶段 2: 词法分析（复用实例 + reset）
-        $tokenizer = $this->getTokenizer();
-        $tokenizer->reset();
-        $tags = $this->getTags($template, $fileName, $content);
-        $tokenizer->setFrameworkTags(array_keys($tags));
-        $tokens = $tokenizer->tokenize($cleanContent);
-        
-        // 阶段 3: 构建 AST（复用实例 + reset）
-        $astBuilder = $this->getAstBuilder();
-        $astBuilder->reset();
-        $astBuilder->setPhpExtractor($extractor);
-        $ast = $astBuilder->build($tokens, $fileName);
-        
-        // 阶段 4: 编译管道优化
-        $pipeline = $this->getCompilePipeline();
-        $ast = $pipeline->process($ast);
-        
-        // 阶段 5: 生成代码（复用实例 + reset，避免回调累积）
-        $generator = $this->getCodeGenerator();
-        $generator->reset();
-        $generator->setPhpExtractor($extractor);
-        
-        // 调试模式：传递 SourceMap 给生成器
-        if ($this->debug && $this->sourceMap !== null) {
-            $generator->setSourceMap($this->sourceMap);
+        // 阶段 1: 提取 PHP 代码
+        // 嵌套编译（如 <w:template> 触发子模板编译）必须用独立 extractor，否则会覆盖父级占位符
+        self::$compileDepth++;
+        try {
+            $extractor = (self::$compileDepth > 1) ? new PhpExtractor() : $this->getPhpExtractor();
+            $extractor->reset();
+            $cleanContent = $extractor->extract($content);
+            
+            // 阶段 2: 词法分析（复用实例 + reset）
+            $tokenizer = $this->getTokenizer();
+            $tokenizer->reset();
+            $tags = $this->getTags($template, $fileName, $content);
+            $tokenizer->setFrameworkTags(array_keys($tags));
+            $tokens = $tokenizer->tokenize($cleanContent);
+            
+            // 阶段 3: 构建 AST（复用实例 + reset）
+            $astBuilder = $this->getAstBuilder();
+            $astBuilder->reset();
+            $astBuilder->setPhpExtractor($extractor);
+            $ast = $astBuilder->build($tokens, $fileName);
+            
+            // 阶段 4: 编译管道优化
+            $pipeline = $this->getCompilePipeline();
+            $ast = $pipeline->process($ast);
+            
+            // 阶段 5: 生成代码（复用实例 + reset，避免回调累积）
+            $generator = $this->getCodeGenerator();
+            $generator->reset();
+            $generator->setPhpExtractor($extractor);
+            
+            // 调试模式：传递 SourceMap 给生成器
+            if ($this->debug && $this->sourceMap !== null) {
+                $generator->setSourceMap($this->sourceMap);
+            }
+            
+            $this->registerTagCallbacks($generator, $tags, $template, $fileName);
+            $result = $generator->generate($ast);
+            
+            // 恢复 PHP 占位符
+            $result = $extractor->restore($result);
+            
+            // 缓存结果（写入所有缓存层）
+            $cache->set($template, $fileName, $content, $result);
+            
+            return $result;
+        } finally {
+            self::$compileDepth--;
         }
-        
-        $this->registerTagCallbacks($generator, $tags, $template, $fileName);
-        $result = $generator->generate($ast);
-        
-        // 恢复 PHP 占位符
-        $result = $extractor->restore($result);
-        
-        // 缓存结果（写入所有缓存层）
-        $cache->set($template, $fileName, $content, $result);
-        
-        return $result;
     }
     
     /**
@@ -438,7 +530,7 @@ class Taglib
                     $rawContent,           // [1] 内联内容（@tag() 格式的值）
                     $innerContent,         // [2] 子内容
                 ];
-                
+
                 // 调用原始回调：function ($tag_key, $config, $tag_data, $attributes)
                 return $callback($tag_key, $tagConfig, $tag_data, $attrs);
                 });
@@ -1779,9 +1871,11 @@ class Taglib
                 'tag' => 1,
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                        // 编译期 tag_data[1]=路径；运行时 tag_data[1]=rawAttributes、tag_data[2]=路径
+                        $path = trim($tag_data[1] ?? '') ?: trim($tag_data[2] ?? '');
                         return match ($tag_key) {
-                            'tag' => $template->fetchTagSource('statics', trim($tag_data[2])),
-                            default => $template->fetchTagSource('statics', trim($tag_data[1]))
+                            'tag' => $template->fetchTagSource('statics', $path),
+                            default => $template->fetchTagSource('statics', $path)
                         };
                     }
             ],
@@ -1833,9 +1927,18 @@ class Taglib
                                 $filteredAttrs = ' ' . $filteredAttrs;
                             }
                         }
+                        // 成对标签 <js>path</js>：编译期 tag_data[1]=rawContent（路径）、tag_data[2]=编译后子内容；运行时 tag_data[1]=rawAttributes、tag_data[2]=content（路径）
+                        $path = trim($tag_data[1] ?? '') ?: trim($tag_data[2] ?? '');
+                        if ($path === '' && defined('DEV') && DEV) {
+                            throw new \Weline\Framework\View\Exception\TemplateException(__('<js> 标签路径不能为空，示例：%{1}', ['<js>Weline_Admin::assets/js/app.js</js>']));
+                        }
+                        $url = $template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, $path);
+                        if (defined('DEV') && DEV && preg_match('#/view/statics/\s*[\'"]?\s*$#', $url)) {
+                            throw new \Weline\Framework\View\Exception\TemplateException(__('<js> 标签解析后 URL 无文件名，路径：%{1}，请检查模块与路径是否正确', [$path]));
+                        }
                         return match ($tag_key) {
-                            'tag' => "<script{$filteredAttrs} src='{$template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, trim($tag_data[2]))}'></script>",
-                            default => "<script{$filteredAttrs} src='{$template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, trim($tag_data[1]))}'></script>"
+                            'tag' => "<script{$filteredAttrs} src='{$url}'></script>",
+                            default => "<script{$filteredAttrs} src='{$url}'></script>"
                         };
                     }
             ],
@@ -1856,78 +1959,54 @@ class Taglib
                                 $filteredAttrs = ' ' . $filteredAttrs;
                             }
                         }
-                        $path = ($tag_key === 'tag' && $raw2 !== '') ? $raw2 : ($raw2 !== '' ? $raw2 : $raw1);
+                        // 成对标签 <css>path</css>：编译期 raw1=路径；运行时 raw1=rawAttributes、raw2=路径，取有路径语义的一方
+                        $path = ($raw1 !== '' && (str_contains($raw1, '::') || str_contains($raw1, '/'))) ? $raw1 : ($raw2 !== '' ? $raw2 : $raw1);
                         return "<link{$filteredAttrs} href='{$template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, trim($path))}' rel=\"stylesheet\" type=\"text/css\"/>";
                     }
             ],
-            // 编译期执行：静态内容直接输出译文；仅 @lang 内联且动态参数时返回 PHP
+            // 编译期标签：静态内容直接返回译文等最终文本，不返回 PHP 代码（见 code-generation-standards 技能）
             'lang' => [
                 'tag' => 1,
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) {
-                        // 处理 @lang() 和 @lang{} 格式的参数
                         if ($tag_key === '@tag()' || $tag_key === '@tag{}') {
                             $content = trim($tag_data[1] ?? '');
-                            
-                            // 检查是否包含逗号（可能是参数分隔符）
-                            // 注意：需要处理字符串中的逗号，不能简单按逗号分割
-                            // 先尝试解析：可能是 "文本, 参数" 或 "文本" 格式
                             $word = $content;
-                            $args_code = null;
-                            
-                            // 尝试解析参数（如果内容以引号开始，可能是字符串参数）
-                            // 否则检查是否有逗号分隔的参数
+
                             if (preg_match('/^([^,]+?)\s*,\s*(.+)$/', $content, $matches)) {
-                                // 有逗号，可能是参数格式：@lang(文本, 参数)
                                 $word = trim($matches[1]);
-                                $args_code = trim($matches[2]);
-                                
-                                // 移除可能的引号
                                 $word = trim($word, '\'"');
-                                
-                                // 返回带参数的 PHP 代码
-                                return self::PHP_OPEN_TAG . '=__(\'' . addslashes($word) . '\', ' . $args_code . ')' . self::PHP_CLOSE_TAG;
-                            } else {
-                                // 无参数处理
-                                $word = trim($content);
-                                
-                                // 如果是引号包裹的字符串，直接编译期翻译
-                                if (preg_match('/^([\'"])(.*)\1$/', $word, $matches)) {
-                                    return __($matches[2]);
-                                }
-                                
-                                // 检查是否是 PHP 变量或表达式（以 $ 开头，或包含 -> 或 ::）
-                                $isPhpExpression = preg_match('/^\$/', $word) || 
-                                                   strpos($word, '->') !== false || 
-                                                   strpos($word, '::') !== false ||
-                                                   preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*\s*\(/', $word); // 函数调用
-                                
-                                if ($isPhpExpression) {
-                                    // PHP 表达式，运行期执行
-                                    return self::PHP_OPEN_TAG . '=__(' . $content . ')' . self::PHP_CLOSE_TAG;
-                                }
-                                
-                                // 普通文本字符串（可能包含空格、中文等），编译期翻译
-                                return __($word);
+                                // 有逗号：运行期带参数翻译，返回 PHP
+                                return self::PHP_OPEN_TAG . '=__(\'' . addslashes($word) . '\', ' . trim($matches[2]) . ')' . self::PHP_CLOSE_TAG;
                             }
+
+                            $word = trim($content);
+                            // 引号包裹的字符串：编译期翻译，直接返回译文（不输出 PHP）
+                            if (preg_match('/^([\'"])(.*)\1$/', $word, $matches)) {
+                                return (string) __($matches[2]);
+                            }
+                            // PHP 变量或表达式：运行期执行，返回 PHP
+                            $isPhpExpression = preg_match('/^\$/', $word)
+                                || strpos($word, '->') !== false
+                                || strpos($word, '::') !== false
+                                || preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*\s*\(/', $word);
+                            if ($isPhpExpression) {
+                                return self::PHP_OPEN_TAG . '=__(' . $content . ')' . self::PHP_CLOSE_TAG;
+                            }
+                            // 普通文本：编译期翻译，直接返回译文（不输出 PHP）
+                            return (string) __($word);
                         }
-                        
-                        // 处理 <lang> 标签格式
+
                         $word = match ($tag_key) {
                             'tag' => $tag_data[2] ?? '',
                             default => $tag_data[1] ?? ''
                         };
                         $word = trim($word);
-                        
-                        // 处理 args 属性
                         if (isset($attributes['args']) && !empty($attributes['args'])) {
-                            // 如果有 args 属性，传递给 __() 函数
-                            $args_code = $attributes['args'];
-                            return self::PHP_OPEN_TAG . '=__(\'' . addslashes($word) . '\', ' . $args_code . ')' . self::PHP_CLOSE_TAG;
-                        } else {
-                            // 没有 args 属性，直接调用 __() 函数
-                            return __($word);
+                            return self::PHP_OPEN_TAG . '=__(\'' . addslashes($word) . '\', ' . $attributes['args'] . ')' . self::PHP_CLOSE_TAG;
                         }
+                        // 无 args：编译期翻译，直接返回译文（不输出 PHP）
+                        return (string) __($word);
                     }
             ],
             'url' => [

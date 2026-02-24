@@ -82,10 +82,8 @@ $categories = [
 
 $widgetId = 'category-list-' . uniqid();
 
-/**
- * 递归渲染分类
- */
-function renderCategoryList($categories, $depth = 0, $maxDepth = 2, $showCount = true, $showImage = false, $collapsed = false) {
+// 递归渲染分类（闭包，避免模板多次包含时重复声明）
+$renderCategoryList = function ($categories, $depth = 0, $maxDepth = 2, $showCount = true, $showImage = false, $collapsed = false) use (&$renderCategoryList) {
     if ($depth >= $maxDepth || empty($categories)) return;
     
     $isCollapsed = $collapsed && $depth > 0;
@@ -111,13 +109,13 @@ function renderCategoryList($categories, $depth = 0, $maxDepth = 2, $showCount =
                     <button class="toggle-btn <?= $isCollapsed ? 'collapsed' : '' ?>" type="button">
                         <i class="ri-arrow-<?= $isCollapsed ? 'right' : 'down' ?>-s-line"></i>
                     </button>
-                    <?php renderCategoryList($category['children'], $depth + 1, $maxDepth, $showCount, $showImage, $collapsed); ?>
+                    <?php $renderCategoryList($category['children'], $depth + 1, $maxDepth, $showCount, $showImage, $collapsed); ?>
                 <?php endif; ?>
             </li>
         <?php endforeach; ?>
     </ul>
     <?php
-}
+};
 ?>
 
 <div class="widget-category-list" id="<?= $widgetId ?>">
@@ -128,7 +126,7 @@ function renderCategoryList($categories, $depth = 0, $maxDepth = 2, $showCount =
         </h3>
     <?php endif; ?>
     
-    <?php renderCategoryList($categories, 0, $maxDepth, $showCount, $showImage, $collapsed); ?>
+    <?php $renderCategoryList($categories, 0, $maxDepth, $showCount, $showImage, $collapsed); ?>
 </div>
 
 <style>

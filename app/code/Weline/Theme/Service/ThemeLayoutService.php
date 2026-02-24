@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
@@ -27,6 +28,11 @@ class ThemeLayoutService
         $this->themeLayout = $themeLayout;
         $this->welineTheme = $welineTheme;
         $this->widgetRegistry = $widgetRegistry;
+    }
+
+    private function getEventsManager(): EventsManager
+    {
+        return ObjectManager::getInstance(EventsManager::class);
     }
 
     /**
@@ -635,24 +641,20 @@ class ThemeLayoutService
      */
     public function deleteWidget(int $layoutId): bool
     {
-        $this->themeLayout->clearQuery()->load($layoutId);
+        // 不对 clearQuery() 链式调用 load()，避免在 Query 上调用 load() 导致致命错误
+        $this->themeLayout->load($layoutId);
         $loadedId = $this->themeLayout->getLayoutId();
 
         if (!$loadedId) {
             return false;
         }
 
-        // 使用明确的 WHERE 条件删除，不依赖模型内部状态
-        $this->themeLayout->clearQuery()
-            ->where('layout_id', $layoutId)
-            ->delete()
-            ->fetch();
+        // 使用模型已加载状态执行删除（getQuery() 会带表名，delete() 用主键条件，避免 clearQuery 后链式导致表名/条件丢失）
+        $this->themeLayout->delete()->fetch();
 
         // 验证删除结果
-        $checkAfter = $this->themeLayout->clearQuery()
-            ->where('layout_id', $layoutId)
-            ->select()
-            ->fetchArray();
+        $this->themeLayout->clearQuery();
+        $checkAfter = $this->themeLayout->where('layout_id', $layoutId)->select()->fetchArray();
 
         return empty($checkAfter);
     }
@@ -846,230 +848,18 @@ class ThemeLayoutService
      */
     public function getAvailableWidgets(?string $pageType = null, ?array $filterOptions = null): array
     {
-        $widgets = $this->widgetRegistry->getRegistry();
-
-        // WidgetRegistry 返回的结构是 $result[$type][$name] = $config
-        // 需要遍历两层：类型 -> 部件名称
-        $grouped = [];
-        
-        foreach ($widgets as $type => $typeWidgets) {
-            // $type 是类型（如 'header', 'footer'）
-            // $typeWidgets 是该类型下的所有部件数组
-            if (!is_array($typeWidgets)) {
-                continue;
-            }
-            
-            // 遍历该类型下的所有部件
-            foreach ($typeWidgets as $widgetName => $widget) {
-                if (!is_array($widget)) {
-                    continue;
-                }
-                
-                // 确保部件数据包含 type 字段
-                if (!isset($widget['type'])) {
-                    $widget['type'] = $type;
-                }
-                // 确保部件数据包含 code 字段
-                if (!isset($widget['code'])) {
-                    $widget['code'] = $widgetName;
-                }
-                
-                // 从原始配置中提取字段
-                // WidgetScanner 将原始配置存储在 'config' 子数组中
-                $originalConfig = $widget['config'] ?? [];
-                
-                // 提取 page_layouts 字段（布局目录名）
-                $pageLayouts = $widget['page_layouts'] ?? $originalConfig['page_layouts'] ?? ['*'];
-                $widget['page_layouts'] = $pageLayouts;
-                
-                // 如果指定了布局类型，检查部件是否适用
-                if ($pageType !== null) {
-                    if (!$this->isWidgetAllowedForLayout($pageLayouts, $pageType)) {
-                        continue; // 跳过不适用于当前布局的部件
-                    }
-                }
-                
-                // 确保 position 字段存在（从原始配置中提取）
-                if (!isset($widget['position']) && isset($originalConfig['position'])) {
-                    $widget['position'] = $originalConfig['position'];
-                }
-                // 如果仍然没有 position，根据 type 设置默认值
-                if (!isset($widget['position']) || empty($widget['position'])) {
-                    $widget['position'] = $this->getDefaultPositionByType($type);
-                }
-                
-                // 确保 compatible 字段存在
-                if (!isset($widget['compatible'])) {
-                    $widget['compatible'] = $originalConfig['compatible'] ?? false;
-                }
-                
-                // 提取 exclusive 字段（独占部件）
-                if (!isset($widget['exclusive'])) {
-                    $widget['exclusive'] = $originalConfig['exclusive'] ?? false;
-                }
-                
-                // 提取 is_container 字段
-                if (!isset($widget['is_container'])) {
-                    $widget['is_container'] = $originalConfig['is_container'] ?? false;
-                }
-                
-                // 提取 slot 字段
-                if (!isset($widget['slot'])) {
-                    $widget['slot'] = $originalConfig['slot'] ?? null;
-                }
-                
-                // 提取 slots 字段（容器部件的内部插槽定义）
-                if (!isset($widget['slots'])) {
-                    $widget['slots'] = $originalConfig['slots'] ?? [];
-                }
-                
-                // 翻译 params 中的 label、description、placeholder 和 options
-                if (!empty($widget['params']) && is_array($widget['params'])) {
-                    $translatedParams = [];
-                    foreach ($widget['params'] as $paramKey => $paramConfig) {
-                        if (!is_array($paramConfig)) {
-                            $translatedParams[$paramKey] = $paramConfig;
-                            continue;
-                        }
-                        
-                        // 翻译 label
-                        if (!empty($paramConfig['label'])) {
-                            $paramConfig['label'] = __($paramConfig['label']);
-                        }
-                        
-                        // 翻译 description
-                        if (!empty($paramConfig['description'])) {
-                            $paramConfig['description'] = __($paramConfig['description']);
-                        }
-                        
-                        // 翻译 placeholder
-                        if (!empty($paramConfig['placeholder'])) {
-                            $paramConfig['placeholder'] = __($paramConfig['placeholder']);
-                        }
-                        
-                        // 翻译 options（用于 select 类型）
-                        if (!empty($paramConfig['options']) && is_array($paramConfig['options'])) {
-                            $translatedOptions = [];
-                            foreach ($paramConfig['options'] as $optionValue => $optionLabel) {
-                                $translatedOptions[$optionValue] = __($optionLabel);
-                            }
-                            $paramConfig['options'] = $translatedOptions;
-                        }
-                        
-                        $translatedParams[$paramKey] = $paramConfig;
-                    }
-                    $widget['params'] = $translatedParams;
-                }
-                
-                // 应用筛选选项（如果提供）
-                if ($filterOptions !== null) {
-                    if (!$this->matchesSlotFilter($widget, $filterOptions)) {
-                        continue; // 跳过不匹配筛选条件的部件
-                    }
-                }
-                
-                // 添加到分组
-                if (!isset($grouped[$type])) {
-                    $grouped[$type] = [
-                        'label' => $this->getTypeLabel($type),
-                        'widgets' => [],
-                    ];
-                }
-                
-                $grouped[$type]['widgets'][] = $widget;
-            }
-        }
-
-        return $grouped;
-    }
-    
-    /**
-     * 检查部件是否匹配 slot 筛选条件
-     * 
-     * 筛选逻辑：
-     * 1. 顶层独占区域（header/footer）：只显示 exclusive=true 的大部件
-     * 2. 子 slot（logo/search/navigation 等）：显示匹配该 slot 的小部件
-     * 3. content 区域：显示所有适用于 content 位置的部件（非独占）
-     * 
-     * @param array $widget 部件配置
-     * @param array $filterOptions 筛选选项
-     * @return bool
-     */
-    private function matchesSlotFilter(array $widget, array $filterOptions): bool
-    {
-        $slotId = $filterOptions['slot_id'] ?? null;
-        $area = $filterOptions['area'] ?? null;
-        $showExclusiveOnly = $filterOptions['show_exclusive_only'] ?? false;
-        
-        // 如果没有指定 slot 或 area，返回所有部件
-        if (!$slotId && !$area) {
-            return true;
-        }
-        
-        $widgetExclusive = $widget['exclusive'] ?? false;
-        $widgetSlot = $widget['slot'] ?? null;
-        $widgetPositions = $widget['position'] ?? [];
-        $widgetType = $widget['type'] ?? '';
-        
-        // 确保 positions 是数组
-        if (!is_array($widgetPositions)) {
-            $widgetPositions = [$widgetPositions];
-        }
-        
-        // 检查是否是子 slot
-        $isSubSlot = isset(self::SUB_SLOTS_MAP[$slotId]);
-        $parentArea = $isSubSlot ? self::SUB_SLOTS_MAP[$slotId] : null;
-        
-        // 检查当前区域是否是独占区域
-        $isExclusiveArea = in_array($area, self::EXCLUSIVE_AREAS);
-        
-        // 情况1：选中的是子 slot（如 logo、search、navigation）
-        if ($isSubSlot) {
-            // 子 slot 内只显示匹配该 slot 的小部件
-            // 部件的 slot 属性必须与选中的 slot 匹配
-            if ($widgetSlot === $slotId) {
-                return true;
-            }
-            // 或者部件 position 包含该 slot
-            if (in_array($slotId, $widgetPositions)) {
-                return true;
-            }
-            return false;
-        }
-        
-        // 情况2：选中的是顶层独占区域（header/footer）
-        if ($isExclusiveArea && ($area === $slotId || $slotId === null)) {
-            // 独占区域只显示 exclusive=true 的大部件
-            if ($showExclusiveOnly) {
-                return $widgetExclusive === true;
-            }
-            // 否则显示所有 position 包含该区域的部件
-            // 但独占大部件应优先显示
-            if (in_array($area, $widgetPositions) || in_array('*', $widgetPositions)) {
-                return true;
-            }
-            return false;
-        }
-        
-        // 情况3：选中的是 content 区域（非独占）
-        if ($area === 'content' || $slotId === 'content') {
-            // content 区域显示所有 position 包含 content 的部件
-            // 但排除 header 和 footer 类型的部件
-            if ($widgetType === 'header' || $widgetType === 'footer') {
-                return false;
-            }
-            if (in_array('content', $widgetPositions) || in_array('*', $widgetPositions)) {
-                return true;
-            }
-            return false;
-        }
-        
-        // 默认：根据 position 匹配
-        if ($area && (in_array($area, $widgetPositions) || in_array('*', $widgetPositions))) {
-            return true;
-        }
-        
-        return false;
+        $eventData = [
+            'data' => [
+                'operation' => 'getAvailableList',
+                'params' => [
+                    'page_type' => $pageType,
+                    'filter_options' => $filterOptions,
+                ],
+            ],
+        ];
+        $this->getEventsManager()->dispatch('Weline_Widget::query', $eventData);
+        $result = $eventData['data']['result'] ?? null;
+        return is_array($result) ? $result : [];
     }
     
     /**
@@ -1154,88 +944,4 @@ class ThemeLayoutService
         ];
     }
 
-    /**
-     * 检查部件是否适用于指定的布局
-     * 
-     * @param array $widgetLayouts 部件支持的布局目录名列表
-     * @param string $layoutName 当前布局目录名
-     * @return bool
-     */
-    private function isWidgetAllowedForLayout(array $widgetLayouts, string $layoutName): bool
-    {
-        // * 表示所有布局都可用
-        if (in_array('*', $widgetLayouts)) {
-            return true;
-        }
-        
-        // 检查是否包含当前布局
-        if (in_array($layoutName, $widgetLayouts)) {
-            return true;
-        }
-        
-        // default 布局的部件在所有页面都可用
-        if (in_array('default', $widgetLayouts)) {
-            return true;
-        }
-        
-        return false;
-    }
-    
-    /**
-     * 根据部件类型获取默认允许的位置
-     */
-    private function getDefaultPositionByType(string $type): array
-    {
-        $typePositionMap = [
-            'header' => ['header'],
-            'footer' => ['footer'],
-            'sidebar' => ['sidebar', 'left_sidebar', 'right_sidebar'],
-            'banner' => ['banner', 'content'],
-            'carousel' => ['banner', 'content'],
-            'slider' => ['banner', 'content'],
-            'product' => ['content', 'sidebar'],
-            'category' => ['content', 'sidebar'],
-            'navigation' => ['header'],
-            'search' => ['header'],
-            'breadcrumb' => ['content'],
-            'pagination' => ['content'],
-            'social' => ['footer', 'sidebar'],
-            'newsletter' => ['footer', 'sidebar', 'content'],
-            'testimonial' => ['content'],
-            'faq' => ['content'],
-            'video' => ['content', 'banner'],
-            'content' => ['content', 'banner', 'sidebar'],
-        ];
-        
-        return $typePositionMap[$type] ?? ['content']; // 默认允许在内容区
-    }
-
-    /**
-     * 获取类型标签
-     */
-    private function getTypeLabel(string $type): string
-    {
-        $labels = [
-            'header' => __('头部部件'),
-            'footer' => __('底部部件'),
-            'sidebar' => __('侧栏部件'),
-            'content' => __('内容部件'),
-            'banner' => __('横幅部件'),
-            'carousel' => __('轮播部件'),
-            'product' => __('产品部件'),
-            'category' => __('分类部件'),
-            'navigation' => __('导航部件'),
-            'search' => __('搜索部件'),
-            'social' => __('社交部件'),
-            'newsletter' => __('订阅部件'),
-            'testimonial' => __('评价部件'),
-            'faq' => __('FAQ部件'),
-            'breadcrumb' => __('面包屑部件'),
-            'pagination' => __('分页部件'),
-            'video' => __('视频部件'),
-            'other' => __('其他部件'),
-        ];
-
-        return $labels[$type] ?? ucfirst($type);
-    }
 }

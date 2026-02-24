@@ -50,6 +50,31 @@ return [
                 ],
             ],
         ],
+        // 统一查询器扩展点
+        'Query' => [
+            'path' => 'extends/module/Weline_Framework/Query',
+            'type' => ['module'],
+            'description' => '统一查询器扩展点，各模块实现 QueryProviderInterface 注册查询能力（含执行与使用说明）',
+            'required' => false,
+            'multiple' => true,
+            'interface' => 'Weline\Framework\Service\Query\Provider\QueryProviderInterface',
+            'details' => [
+                'file_location' => [
+                    'path' => 'extends/module/Weline_Framework/Query/{ProviderName}QueryProvider.php',
+                    'description' => '查询器实现类位置',
+                    'example' => 'app/code/Weline/Widget/extends/module/Weline_Framework/Query/WidgetQueryProvider.php',
+                ],
+                'interface' => [
+                    'interface' => 'Weline\Framework\Service\Query\Provider\QueryProviderInterface',
+                    'description' => '查询器必须实现的接口',
+                    'required_methods' => [
+                        'getProviderName' => '返回提供者标识（如 widget），用于路由',
+                        'execute' => '执行查询操作',
+                        'getDescriptor' => '返回使用说明描述（provider、operations、params 等）',
+                    ],
+                ],
+            ],
+        ],
         // Session 驱动扩展点
         'Session' => [
             'path' => 'extends/module/Weline_Framework/Session',

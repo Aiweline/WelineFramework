@@ -42,4 +42,9 @@
         <observer name="Weline_Framework_Router::strip_currency_locale_prefix" instance="Weline\Framework\Router\Observer\StripCurrencyLocalePrefix" disabled="false" shared="true" sort="-10"/>
     </event>
 
+    <!-- 动态模块查询：任意 {Module}::query 自动路由到 FrameworkQueryService，由 QueryProviderRegistry 中已注册的查询器处理 -->
+    <event name="{Module}::query">
+        <observer name="Weline_Framework_Query::module_query_dispatcher" instance="Weline\Framework\Service\Query\Observer\ModuleQueryDispatcher" disabled="false" shared="true" sort="0"/>
+    </event>
+
 </config>

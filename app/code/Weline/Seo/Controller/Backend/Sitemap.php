@@ -38,9 +38,6 @@ class Sitemap extends BackendController
             // 获取所有站点
             $websites = $this->getAllWebsites();
             
-            // 获取主 sitemap 索引文件
-            $indexFile = $this->getIndexSitemapFile();
-            
             // 获取所有注册的 SitemapProvider
             $providers = $this->getRegisteredProviders();
             
@@ -48,7 +45,6 @@ class Sitemap extends BackendController
             $moduleSitemaps = $this->getModuleSitemapsWithStatus($websites);
             
             $this->assign('websites', $websites);
-            $this->assign('index_file', $indexFile);
             $this->assign('providers', $providers);
             $this->assign('module_sitemaps', $moduleSitemaps);
             
@@ -57,7 +53,6 @@ class Sitemap extends BackendController
         } catch (\Exception $e) {
             Message::error(__('加载Sitemap管理失败：%{1}', $e->getMessage()));
             $this->assign('websites', []);
-            $this->assign('index_file', null);
             $this->assign('providers', []);
             $this->assign('module_sitemaps', []);
             return $this->fetch();
@@ -189,11 +184,6 @@ class Sitemap extends BackendController
                     'error' => true,
                 ];
             }
-        }
-        
-        // 生成跨站点总索引文件
-        if ($totalFiles > 0) {
-            $this->generateSitemapIndex();
         }
         
         return [
@@ -483,40 +473,6 @@ class Sitemap extends BackendController
     }
     
     /**
-     * 获取主 sitemap 索引文件信息
-     * 
-     * @return array|null
-     */
-    private function getIndexSitemapFile(): ?array
-    {
-        $indexFile = self::PUB_DIR . '/sitemaps/sitemap.xml';
-        
-        if (!file_exists($indexFile)) {
-            return null;
-        }
-        
-        // 获取前台基础 URL（纯域名，不含后台路径）
-        $frontendBaseUrl = $this->request->getBaseHost();
-        if (!preg_match('/^https?:\/\//i', $frontendBaseUrl)) {
-            $scheme = $this->request->isSecure() ? 'https' : 'http';
-            $host = $this->request->getHttpHost();
-            $frontendBaseUrl = $scheme . '://' . $host;
-        }
-        $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
-        
-        $fileSize = filesize($indexFile);
-        return [
-            'name' => 'sitemap.xml',
-            'path' => $indexFile,
-            'size' => $fileSize,
-            'size_formatted' => $this->formatBytes($fileSize),
-            'modified' => date('Y-m-d H:i:s', filemtime($indexFile)),
-            'url' => '/sitemaps/sitemap.xml',  // 相对路径
-            'full_url' => $frontendBaseUrl . '/sitemaps/sitemap.xml',  // 完整前台 URL
-        ];
-    }
-    
-    /**
      * 格式化文件大小
      * 
      * @param int $bytes
@@ -536,34 +492,6 @@ class Sitemap extends BackendController
     }
     
     /**
-     * 获取已生成的sitemap文件列表
-     * 
-     * @return array
-     */
-    private function getSitemapFiles(): array
-    {
-        $files = [];
-        $sitemapDir = self::PUB_DIR;
-        
-        if (!is_dir($sitemapDir)) {
-            return $files;
-        }
-        
-        $pattern = $sitemapDir . '/sitemap*.xml';
-        $foundFiles = glob($pattern);
-        
-        foreach ($foundFiles as $file) {
-            $files[] = [
-                'name' => basename($file),
-                'size' => filesize($file),
-                'modified' => date('Y-m-d H:i:s', filemtime($file)),
-            ];
-        }
-        
-        return $files;
-    }
-    
-    /**
      * 生成全站Sitemap
      * 
      * @return array
@@ -579,9 +507,6 @@ class Sitemap extends BackendController
                 $results[] = $this->generateSitemapForWebsite($websiteId);
             }
         }
-        
-        // 生成sitemap索引文件
-        $this->generateSitemapIndex();
         
         return $results;
     }
@@ -712,46 +637,6 @@ class Sitemap extends BackendController
         
         $xml .= '</urlset>';
         
-        file_put_contents($filepath, $xml);
-    }
-    
-    /**
-     * 生成Sitemap索引文件
-     * 
-     * @return void
-     */
-    private function generateSitemapIndex(): void
-    {
-        $sitemapFiles = $this->getSitemapFiles();
-        
-        // 获取前台基础 URL（纯域名，不含后台路径）
-        $frontendBaseUrl = $this->request->getBaseHost();
-        if (!preg_match('/^https?:\/\//i', $frontendBaseUrl)) {
-            $scheme = $this->request->isSecure() ? 'https' : 'http';
-            $host = $this->request->getHttpHost();
-            $frontendBaseUrl = $scheme . '://' . $host;
-        }
-        $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
-        
-        $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
-        $xml .= '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
-        
-        foreach ($sitemapFiles as $file) {
-            $xml .= "  <sitemap>\n";
-            $xml .= "    <loc>" . htmlspecialchars($frontendBaseUrl . '/sitemaps/' . $file['name']) . "</loc>\n";
-            $xml .= "    <lastmod>" . htmlspecialchars($file['modified']) . "</lastmod>\n";
-            $xml .= "  </sitemap>\n";
-        }
-        
-        $xml .= '</sitemapindex>';
-        
-        // 确保目录存在
-        $sitemapsDir = self::PUB_DIR . '/sitemaps';
-        if (!is_dir($sitemapsDir)) {
-            mkdir($sitemapsDir, 0755, true);
-        }
-        
-        $filepath = $sitemapsDir . '/sitemap.xml';
         file_put_contents($filepath, $xml);
     }
     

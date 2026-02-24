@@ -442,6 +442,9 @@ class StateManager
         // CacheFactory::$creatingDriver — 防止缓存驱动创建时循环调用
         self::registerStaticReset(\Weline\Framework\Cache\CacheFactory::class, 'creatingDriver', false);
         
+        // Taglib::$compileDepth — 嵌套编译深度，异常中断可能残留非零值
+        self::registerStaticReset(\Weline\Framework\View\Taglib::class, 'compileDepth', 0);
+        
         // ========== 3. 请求上下文 ==========
         
         // RequestContext — 请求 ID、区域、语言、货币等请求级上下文
@@ -564,6 +567,7 @@ class StateManager
         
         self::registerStaticReset(\Weline\Framework\App\Env::class, 'maintenanceCached', null);
         self::registerStaticReset(\Weline\Framework\App\Env::class, 'maintenanceLastCheck', 0.0);
+        self::registerStaticReset(\Weline\Framework\App\Env::class, 'mergedCacheConfig', null);
         
         // ========== 8. 主题插槽渲染缓存 ==========
         // SlotRendererService 持有 layoutCache/widgetCache/orphanWidgets，都是请求级数据。
