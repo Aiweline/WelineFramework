@@ -68,7 +68,7 @@ class Meta extends BackendController
             
             // 先尝试带 scope 的 key
             $md5 = LocaleDictionary::generateMd5($metaKeyWithScope, $locale);
-            $localeDict->load($md5, LocaleDictionary::fields_MD5);
+            $localeDict->load(LocaleDictionary::fields_MD5, $md5);
             
             $translation = '';
             if ($localeDict->getId()) {
@@ -78,7 +78,7 @@ class Meta extends BackendController
             // 如果没有找到，尝试不带 scope 的 key（使用默认值）
             if (empty($translation) && $scope !== 'default') {
                 $md5Default = LocaleDictionary::generateMd5($metaKey, $locale);
-                $localeDict->load($md5Default, LocaleDictionary::fields_MD5);
+                $localeDict->load(LocaleDictionary::fields_MD5, $md5Default);
                 if ($localeDict->getId()) {
                     $translation = $localeDict->getData(LocaleDictionary::fields_TRANSLATE);
                 }
@@ -138,7 +138,7 @@ class Meta extends BackendController
             /** @var LocaleDictionary $localeDict */
             $localeDict = ObjectManager::getInstance(LocaleDictionary::class);
             $md5 = LocaleDictionary::generateMd5($metaKeyWithScope, $locale);
-            $localeDict->load($md5, LocaleDictionary::fields_MD5);
+            $localeDict->load(LocaleDictionary::fields_MD5, $md5);
             
             if ($localeDict->getId()) {
                 // 更新

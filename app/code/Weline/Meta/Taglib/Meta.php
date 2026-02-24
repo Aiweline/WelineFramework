@@ -143,7 +143,7 @@ class Meta implements TaglibInterface
                         /** @var LocaleDictionary $localeDict */
                         $localeDict = ObjectManager::getInstance(LocaleDictionary::class);
                         $md5 = LocaleDictionary::generateMd5($translationKey, $locale);
-                        $localeDict->load($md5, LocaleDictionary::fields_MD5);
+                        $localeDict->load(LocaleDictionary::fields_MD5, $md5);
                         
                         if ($localeDict->getId()) {
                             $translation = $localeDict->getData(LocaleDictionary::fields_TRANSLATE);
