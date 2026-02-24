@@ -123,8 +123,18 @@ API文档管理,API文档管理
 没有发现孤立文档,没有发现孤立文档
 没有发现需要清理的文档,没有发现需要清理的文档
 "共清理 %{count} 条文档","共清理 %{count} 条文档"
-开始导入数据库Sql文件,"Start importingDatabaseSQLFile"
-数据库Sql文件导入完成,"DatabaseSQLFileImport complete"
+前言,前言
+说在前面,说在前面
+安装,安装
+安装文档,安装文档
+快速开始,快速开始
+框架模组,框架模组
+框架规范,框架规范
+框架类的规范,框架类的规范
+模型文档,模型文档
+使用控制器,使用控制器
+模组事件,模组事件
+WelineFramework插件功能,WelineFramework插件功能
 开发,Development
 "Weline Admin 管理面板","Weline Admin Management Panel"
 管理开发文档,"ManagementDevelopment Documentation"
@@ -404,6 +414,8 @@ Header值,Header值
 返回文档列表,BackDocumentList
 返回网站,返回网站
 请从左侧选择分类查看文档,"Please fromLeftSelectCategoryViewDocument"
+开始导入数据库Sql文件,"Start importingDatabaseSQLFile"
+数据库Sql文件导入完成,"DatabaseSQLFileImport complete"
 "扫描 Weline_Framework/doc 目录（特殊处理模式：子目录作为顶层分类 PID=0，doc根目录文档关联到模块分类）","扫描 Weline_Framework/doc 目录（特殊处理模式：子目录作为顶层分类 PID=0，doc根目录文档关联到模块分类）"
 "已删除 %{count} 条自动导入的重复文档","已删除 %{count} 条自动导入的重复文档"
 "已删除 %{count} 条手动创建的重复文档","已删除 %{count} 条手动创建的重复文档"
