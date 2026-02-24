@@ -13,6 +13,7 @@ use Weline\Admin\Controller\BaseController;
 use Weline\Currency\Model\Currency;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Http\RedirectException;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\Locals;
@@ -150,6 +151,9 @@ class WebsiteManagement extends BaseController
         if ($this->request->isPost()) {
             $data = $this->request->getPost();
             try {
+                // PageBuilder 内 scope 固定为 page_builder，不允许修改
+                $data['scope'] = 'page_builder';
+                
                 // 处理关联货币和语言
                 $currencyCodes = $data['currency_codes'] ?? [];
                 $languageCodes = $data['language_codes'] ?? [];
@@ -209,6 +213,9 @@ class WebsiteManagement extends BaseController
                     'time' => '3',
                 ]);
             } catch (\Exception $e) {
+                if ($e instanceof RedirectException) {
+                    throw $e;
+                }
                 $this->redirect('/component/offcanvas/error', [
                     'msg' => __('网站添加失败: %{1}', $e->getMessage()),
                     'url' => '/',
@@ -269,6 +276,9 @@ class WebsiteManagement extends BaseController
 
         if ($this->request->isPost()) {
             $data = $this->request->getPost();
+            
+            // PageBuilder 内 scope 固定为 page_builder，不允许修改
+            $data['scope'] = 'page_builder';
             
             $postWebsiteId = $data['website_id'] ?? null;
             if (empty($postWebsiteId)) {
@@ -349,6 +359,9 @@ class WebsiteManagement extends BaseController
                     'time' => '3',
                 ]);
             } catch (\Exception $e) {
+                if ($e instanceof RedirectException) {
+                    throw $e;
+                }
                 $this->redirect('/component/offcanvas/error', [
                     'msg' => $e->getMessage(),
                     'reload' => '0',

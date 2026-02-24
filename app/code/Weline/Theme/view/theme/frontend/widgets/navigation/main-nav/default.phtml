@@ -44,10 +44,8 @@ if (empty($menuItems)) {
     ];
 }
 
-/**
- * 递归渲染菜单项
- */
-function renderMenuItem($item, $depth = 0, $maxDepth = 3, $showIcons = false) {
+// 递归渲染菜单项（闭包，避免模板多次包含时重复声明）
+$renderMenuItem = function ($item, $depth = 0, $maxDepth = 3, $showIcons = false) use (&$renderMenuItem) {
     $hasChildren = !empty($item['children']) && $depth < $maxDepth;
     $icon = $item['icon'] ?? '';
     ?>
@@ -64,19 +62,19 @@ function renderMenuItem($item, $depth = 0, $maxDepth = 3, $showIcons = false) {
         <?php if ($hasChildren): ?>
             <ul class="dropdown-menu">
                 <?php foreach ($item['children'] as $child): ?>
-                    <?php renderMenuItem($child, $depth + 1, $maxDepth, $showIcons); ?>
+                    <?php $renderMenuItem($child, $depth + 1, $maxDepth, $showIcons); ?>
                 <?php endforeach; ?>
             </ul>
         <?php endif; ?>
     </li>
     <?php
-}
+};
 ?>
 
 <nav class="widget-main-nav nav-style-<?= htmlspecialchars($menuStyle) ?>">
     <ul class="nav-menu">
         <?php foreach ($menuItems as $item): ?>
-            <?php renderMenuItem($item, 0, $maxDepth, $showIcons); ?>
+            <?php $renderMenuItem($item, 0, $maxDepth, $showIcons); ?>
         <?php endforeach; ?>
     </ul>
 </nav>

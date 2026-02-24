@@ -80,6 +80,27 @@ return [
     
     // ========== Integration Events (集成事件) ==========
     
+    // ========== Service Events (服务层事件) ==========
+    
+    /**
+     * Master 复活失败事件
+     * 当 WLS 子进程尝试复活 Master 三次均失败时触发，用于向后台报错、等待人工干预
+     */
+    'Weline_Server::service::master_resurrection_failed' => [
+        'name' => __('WLS Master 复活失败'),
+        'description' => __('当 Master 进程异常退出后，子进程尝试复活三次均失败时触发；Worker 继续服务，需人工执行 server:start 或 server:restart。'),
+        'doc' => 'service/master_resurrection_failed.md',
+        'version' => '1.0.0',
+        'type' => 'application',
+        'data_contract' => [
+            'instance_name' => ['type' => 'string', 'required' => true, 'description' => 'WLS 实例名称'],
+            'attempts' => ['type' => 'integer', 'required' => true, 'description' => '复活尝试次数'],
+            'message' => ['type' => 'string', 'required' => true, 'description' => '异常描述'],
+        ],
+    ],
+    
+    // ========== Integration Events (集成事件) ==========
+    
     /**
      * 请求域名列表事件
      * 当 Server 模块需要获取可选域名列表时触发
@@ -93,6 +114,18 @@ return [
         'data_contract' => [
             'filter' => ['type' => 'array', 'required' => false, 'description' => '过滤条件'],
             'domains' => ['type' => 'array', 'required' => false, 'description' => '域名列表（由观察者填充）'],
+        ],
+    ],
+    'Weline_Server::integration::security_rules_updated' => [
+        'name' => __('安全规则更新'),
+        'description' => __('当 WLS 安全规则保存后触发，允许 CDN 模块同步边缘防护规则。'),
+        'doc' => 'integration/security_rules_updated.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'rules' => ['type' => 'array', 'required' => true, 'description' => '保存时提交的规则'],
+            'merged_rules' => ['type' => 'array', 'required' => true, 'description' => '合并默认值后的完整规则'],
+            'instance' => ['type' => 'string', 'required' => false, 'description' => '实例名'],
         ],
     ],
 ];

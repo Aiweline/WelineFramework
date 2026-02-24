@@ -14,6 +14,7 @@ namespace Weline\Widget\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\View\Template;
 use Weline\Widget\Model\Widget\LocalDescription;
 
 /**
@@ -616,6 +617,16 @@ class WidgetScanner
             if (!$hasTemplate) {
                 error_log("警告: 部件 {$moduleName}/{$type}/{$name} 缺少模板文件或 Block 类");
                 return null;
+            }
+
+            // 有模板路径且无 block_class 时，校验模板文件存在，避免注册表出现预览 404
+            if (empty($blockClass) && !empty($config['template'])) {
+                $template = ObjectManager::getInstance(Template::class);
+                $realPath = $template->getTemplateRealPath($config['template']);
+                if ($realPath === '' || !file_exists($realPath)) {
+                    error_log("警告: 部件 {$moduleName}/{$type}/{$name} 模板文件不存在，已跳过: {$config['template']}");
+                    return null;
+                }
             }
 
             // 获取翻译的名称和描述

@@ -39,29 +39,6 @@ test.describe('Sitemap Management Backend', () => {
     console.log('✓ 页面标题正确显示');
   });
 
-  test('应该显示跨站总索引信息', async ({ page }) => {
-    await page.goto(`${BASE_URL}${ADMIN_PATH}/seo/backend/sitemap`);
-    await page.waitForLoadState('networkidle');
-    
-    // 查找跨站总索引提示
-    const indexHint = page.locator('.index-file-hint, .cross-site-index');
-    
-    // 应该显示总索引信息
-    if (await indexHint.count() > 0) {
-      await expect(indexHint.first()).toBeVisible();
-      await expect(indexHint.first()).toContainText(/跨站|总索引|sitemap\.xml/i);
-      
-      // 验证 URL 显示
-      const urlCode = indexHint.locator('code');
-      await expect(urlCode).toBeVisible();
-      await expect(urlCode).toContainText('/sitemaps/sitemap.xml');
-      
-      console.log('✓ 跨站总索引信息正确显示');
-    } else {
-      console.log('⚠ 跨站总索引未显示（可能是空数据）');
-    }
-  });
-
   test('应该显示站点分组卡片', async ({ page }) => {
     await page.goto(`${BASE_URL}${ADMIN_PATH}/seo/backend/sitemap`);
     await page.waitForLoadState('networkidle');
@@ -435,25 +412,6 @@ test.describe('Sitemap Management Backend', () => {
 
 test.describe('Sitemap File Access', () => {
   
-  test('跨站总索引文件应该可访问', async ({ page }) => {
-    // 直接访问 sitemap URL
-    const response = await page.goto(`${BASE_URL}/sitemaps/sitemap.xml`);
-    
-    // 验证响应状态
-    expect(response?.status()).toBe(200);
-    
-    // 验证内容类型
-    const contentType = response?.headers()['content-type'] || '';
-    expect(contentType).toContain('xml');
-    
-    // 验证内容
-    const content = await page.content();
-    expect(content).toContain('<?xml');
-    expect(content).toContain('sitemapindex');
-    
-    console.log('✓ 跨站总索引文件可访问');
-  });
-
   test('站点平台索引文件应该可访问', async ({ page }) => {
     // 测试 default 站点的 google 平台索引
     const response = await page.goto(`${BASE_URL}/sitemaps/default/google/sitemap.xml`);

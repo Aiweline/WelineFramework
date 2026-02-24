@@ -1,6 +1,6 @@
 <?php
 
-namespace Weline\ElfinderFileManager\Setup;
+namespace Weline\ElFinderFileManager\Setup;
 
 use Weline\Framework\Setup\Data;
 use Weline\Framework\Setup\UpgradeInterface;

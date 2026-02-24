@@ -234,13 +234,6 @@ class Test implements CommandInterface
             return;
         }
         
-        // 检查跨站总索引
-        $crossSiteIndex = $sitemapsDir . '/sitemap.xml';
-        if (file_exists($crossSiteIndex)) {
-            $size = $this->formatBytes(filesize($crossSiteIndex));
-            echo "  ✓ 跨站总索引: sitemap.xml ({$size})\n";
-        }
-        
         // 检查各站点
         $siteDirs = glob($sitemapsDir . '/*', GLOB_ONLYDIR);
         

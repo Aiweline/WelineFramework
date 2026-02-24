@@ -78,6 +78,34 @@ trait TraitTemplate
 
     /**--------------------------资源处理------------------------------*/
 
+    /**
+     * 根据模板路径（含 Module:: 或相对路径）解析出模板文件的真实绝对路径。
+     * 用于部件扫描等场景，不依赖当前请求的 module，仅根据路径中的模块前缀解析。
+     *
+     * @param string $templatePath 如 Weline_Theme::theme/frontend/widgets/header/logo/default.phtml
+     * @return string 绝对路径，不存在时也返回拼接路径；无法解析时返回空字符串
+     */
+    public function getTemplateRealPath(string $templatePath): string
+    {
+        $templatePath = trim($templatePath);
+        if ($templatePath === '') {
+            return '';
+        }
+        $fileDir = '';
+        try {
+            list($fileName, , $view_dir, , ) = $this->processFileSource($templatePath, $fileDir);
+        } catch (\Throwable $e) {
+            return '';
+        }
+        $fileName = str_replace('/', DS, $fileName);
+        $ext = substr(strrchr($fileName, '.'), 1);
+        $tplFile = $view_dir . $fileName;
+        if ($ext === '' || $ext === false) {
+            $tplFile .= $this->getFileExt();
+        }
+        return str_replace(['/', '\\'], DS, $tplFile);
+    }
+
     public function processFileSource(string $fileName, string $file_dir): array
     {
         if (is_int(strpos($fileName, '::'))) {
@@ -138,9 +166,11 @@ trait TraitTemplate
             }
         };
         if (empty($t_f_arr)) {
-            return [$t_f, $this->getRequest()->getModuleName()];
+            $mod = $this->getRequest()->getModuleName();
+            return [$t_f, $mod];
         }
-        return [$t_f, array_shift($t_f_arr)];
+        $mod = array_shift($t_f_arr);
+        return [$t_f, $mod];
     }
 
     public function fetchTagSourceFile(string $type, string $source)

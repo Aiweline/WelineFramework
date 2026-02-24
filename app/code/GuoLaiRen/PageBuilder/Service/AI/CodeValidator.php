@@ -238,14 +238,6 @@ class CodeValidator
         if (strpos(trim($code), $phpOpen) !== 0 && strpos(trim($code), chr(60) . chr(63)) !== 0) {
             $testCode = $phpOpen . ' ' . $code;
         }
-        // #region agent log
-        $lineCount = substr_count($testCode, "\n") + 1;
-        @file_put_contents(
-            (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log',
-            json_encode(['hypothesisId' => 'H5', 'location' => 'CodeValidator::checkSyntax', 'message' => 'entry', 'data' => ['codeLen' => strlen($testCode), 'lineCount' => $lineCount], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n",
-            FILE_APPEND | LOCK_EX
-        );
-        // #endregion
 
         // 创建临时文件
         $tempFile = tempnam(sys_get_temp_dir(), 'php_syntax_check_');
@@ -265,13 +257,6 @@ class CodeValidator
 
         if ($returnCode !== 0) {
             $errorMessage = implode("\n", $output);
-            // #region agent log
-            @file_put_contents(
-                (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log',
-                json_encode(['hypothesisId' => 'H5', 'location' => 'CodeValidator::checkSyntax', 'message' => 'php -l failed', 'data' => ['rawOutput' => $output, 'lineCount' => $lineCount], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n",
-                FILE_APPEND | LOCK_EX
-            );
-            // #endregion
             $errorMessage = preg_replace('/in\s+[^\s]+\s+on\s+line/', 'on line', $errorMessage);
             $errorMessage = preg_replace('/Errors parsing [^\n]+/', '', $errorMessage);
             return [
@@ -429,14 +414,6 @@ class CodeValidator
     public function validatePhpCode(string $phpCode): array
     {
         $errors = [];
-        // #region agent log
-        $hasBrace = (strpos($phpCode, '{') !== false || strpos($phpCode, '}') !== false);
-        @file_put_contents(
-            (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log',
-            json_encode(['hypothesisId' => 'H1', 'location' => 'CodeValidator::validatePhpCode', 'message' => 'entry', 'data' => ['phpCodeLen' => strlen($phpCode), 'lines' => substr_count($phpCode, "\n") + 1, 'hasBrace' => $hasBrace], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n",
-            FILE_APPEND | LOCK_EX
-        );
-        // #endregion
 
         $phpOpenPattern = '/<\x3f(?:php|=)?/';
         if (preg_match($phpOpenPattern, $phpCode)) {
@@ -457,13 +434,6 @@ class CodeValidator
             $wrappedCode = $openTag . "\n" . $phpCode . "\n" . $closeTag;
             $syntaxResult = $this->checkSyntax($wrappedCode);
             if (!$syntaxResult['valid']) {
-                // #region agent log
-                @file_put_contents(
-                    (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log',
-                    json_encode(['hypothesisId' => 'H1', 'location' => 'CodeValidator::validatePhpCode', 'message' => 'checkSyntax failed', 'data' => ['error' => $syntaxResult['error']], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n",
-                    FILE_APPEND | LOCK_EX
-                );
-                // #endregion
                 $errors[] = $syntaxResult['error'];
             }
         }

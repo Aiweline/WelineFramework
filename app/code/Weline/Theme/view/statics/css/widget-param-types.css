@@ -30,8 +30,34 @@
     margin-left: 2px;
 }
 
+/* 配置项输入区域 - 与主题一致的输入容器 */
 .config-field-input {
     position: relative;
+    padding: 0.5rem 0.625rem;
+    border-radius: 8px;
+    background: var(--te-bg-hover, rgba(99, 102, 241, 0.04));
+    border: 1px solid var(--te-border);
+    transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.config-field-input:hover {
+    background: var(--te-bg-hover, rgba(99, 102, 241, 0.06));
+    border-color: rgba(99, 102, 241, 0.2);
+}
+
+.config-field-input:focus-within {
+    border-color: var(--primary, #667eea);
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.config-field-input .form-control,
+.config-field-input .form-select,
+.config-field-input input[type="text"],
+.config-field-input input[type="number"],
+.config-field-input input[type="url"],
+.config-field-input input[type="email"],
+.config-field-input textarea {
+    width: 100%;
 }
 
 .config-field-description {
