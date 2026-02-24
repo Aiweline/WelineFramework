@@ -9,25 +9,16 @@ use Weline\Database\Model\Migration;
 use Weline\Database\Service\BackupService;
 use Weline\Database\Service\MigrationService;
 use Weline\Framework\Console\CommandInterface;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 
 class Backup implements CommandInterface
 {
-    private MigrationService $migrationService;
-    private BackupService $backupService;
-    private Migration $migrationModel;
     private Printing $printing;
 
-    public function __construct(
-        MigrationService $migrationService,
-        BackupService $backupService,
-        Migration $migrationModel,
-        Printing $printing
-    ) {
-        $this->migrationService = $migrationService;
-        $this->backupService    = $backupService;
-        $this->migrationModel   = $migrationModel;
-        $this->printing         = $printing;
+    public function __construct(Printing $printing)
+    {
+        $this->printing = $printing;
     }
 
     public function execute(array $args = [], array $data = []): void
@@ -54,12 +45,27 @@ class Backup implements CommandInterface
         $this->backupPendingMigrations($moduleName);
     }
 
-    /**
-     * 手动备份指定表
-     */
+    private function getMigrationService(): MigrationService
+    {
+        return ObjectManager::getInstance(MigrationService::class);
+    }
+
+    private function getBackupService(): BackupService
+    {
+        return ObjectManager::getInstance(BackupService::class);
+    }
+
+    private function getMigrationModel(): Migration
+    {
+        return ObjectManager::getInstance(Migration::class);
+    }
+
     private function backupTablesDirect(array $tables, string $moduleName): void
     {
-        $migrationId = $this->migrationModel->recordMigration([
+        $migrationModel = $this->getMigrationModel();
+        $backupService  = $this->getBackupService();
+
+        $migrationId = $migrationModel->recordMigration([
             'module_name'    => $moduleName ?: '_manual_',
             'version'        => '0.0.0',
             'migration_file' => '_manual_backup_' . date('YmdHis'),
@@ -81,7 +87,7 @@ class Backup implements CommandInterface
                 continue;
             }
             try {
-                $this->backupService->backupTableData($table, $migrationId);
+                $backupService->backupTableData($table, $migrationId);
                 $backupIds[] = $table;
             } catch (\Exception $e) {
                 $this->printing->error(__("备份表 %{1} 失败: %{2}", [$table, $e->getMessage()]));
@@ -92,19 +98,20 @@ class Backup implements CommandInterface
             [$migrationId, implode(', ', $backupIds)]));
     }
 
-    /**
-     * 备份单个迁移文件涉及的数据
-     */
     private function backupSingleFile(string $moduleName, string $file): void
     {
-        $migrations = $this->migrationService->getMigrationsByVersion(
+        $migrationService = $this->getMigrationService();
+        $migrationModel   = $this->getMigrationModel();
+        $backupService    = $this->getBackupService();
+
+        $migrations = $migrationService->getMigrationsByVersion(
             $moduleName,
             $this->extractVersionFromFile($file),
             $file
         );
 
         if (empty($migrations)) {
-            $allMigrations = $this->migrationService->getModuleMigrations($moduleName);
+            $allMigrations = $migrationService->getModuleMigrations($moduleName);
             $migrations = array_filter($allMigrations, fn(array $m) => $m['filename'] === $file);
             $migrations = array_values($migrations);
         }
@@ -138,7 +145,7 @@ class Backup implements CommandInterface
             return;
         }
 
-        $migrationId = $this->migrationModel->recordMigration([
+        $migrationId = $migrationModel->recordMigration([
             'module_name'    => $moduleName,
             'version'        => $instance->getVersion(),
             'migration_file' => '_pre_backup_' . basename($file),
@@ -153,16 +160,17 @@ class Backup implements CommandInterface
             return;
         }
 
-        $this->performStrategyBackup($instance, $migrationId);
+        $this->performStrategyBackup($backupService, $instance, $migrationId);
         $this->printing->success(__("迁移文件备份完成 (migration_id: %{1})", $migrationId));
     }
 
-    /**
-     * 备份模块下所有 pending 且 requiresBackup 的迁移
-     */
     private function backupPendingMigrations(string $moduleName): void
     {
-        $pending = $this->migrationService->getPendingMigrations($moduleName);
+        $migrationService = $this->getMigrationService();
+        $migrationModel   = $this->getMigrationModel();
+        $backupService    = $this->getBackupService();
+
+        $pending = $migrationService->getPendingMigrations($moduleName);
         if (empty($pending)) {
             $this->printing->info(__("模块 %{1} 没有待执行的迁移", $moduleName));
             return;
@@ -189,7 +197,7 @@ class Backup implements CommandInterface
                 continue;
             }
 
-            $migrationId = $this->migrationModel->recordMigration([
+            $migrationId = $migrationModel->recordMigration([
                 'module_name'    => $moduleName,
                 'version'        => $instance->getVersion(),
                 'migration_file' => '_pre_backup_' . $migration['filename'],
@@ -203,7 +211,7 @@ class Backup implements CommandInterface
                 continue;
             }
 
-            $this->performStrategyBackup($instance, $migrationId);
+            $this->performStrategyBackup($backupService, $instance, $migrationId);
             $this->printing->info(__("已备份: %{1} (migration_id: %{2})", [$migration['filename'], $migrationId]));
             $count++;
         }
@@ -215,7 +223,7 @@ class Backup implements CommandInterface
         }
     }
 
-    private function performStrategyBackup(MigrationInterface $instance, int $migrationId): void
+    private function performStrategyBackup(BackupService $backupService, MigrationInterface $instance, int $migrationId): void
     {
         $strategy = method_exists($instance, 'getBackupStrategy')
             ? $instance->getBackupStrategy()
@@ -231,10 +239,10 @@ class Backup implements CommandInterface
         foreach ($tables as $table) {
             if ($strategy['strategy'] === 'column' && !empty($columns)) {
                 foreach ($columns as $column) {
-                    $this->backupService->backupColumnData($table, $column, $migrationId);
+                    $backupService->backupColumnData($table, $column, $migrationId);
                 }
             } else {
-                $this->backupService->backupTableData($table, $migrationId);
+                $backupService->backupTableData($table, $migrationId);
             }
         }
     }
@@ -258,9 +266,9 @@ class Backup implements CommandInterface
             '',
             $this->tip(),
             [
-                '--module'  => __('模块名称'),
-                '--file'    => __('迁移文件名（可选）'),
-                '--tables'  => __('手动备份的表名列表，逗号分隔（可选）'),
+                '--module'   => __('模块名称'),
+                '--file'     => __('迁移文件名（可选）'),
+                '--tables'   => __('手动备份的表名列表，逗号分隔（可选）'),
                 '-h, --help' => __('显示帮助信息'),
             ],
             [
