@@ -137,7 +137,7 @@ class ModelManager
             }
         } catch (\Weline\Framework\Database\Exception\DatabaseException $e) {
             $this->printing->error(__('数据库操作失败（%{1}）：%{2}', [$model::class, $e->getMessage()]));
-            throw new Exception(__('数据库更新失败：%{1}。若为连接/版本问题，请查看 var/log/database_version.log。', [$e->getMessage()]), 0, $e);
+            throw new Exception(__('数据库更新失败：%{1}。若为连接/版本问题，请查看 var/log/database_version.log。', [$e->getMessage()]), $e, 0);
         }
     }
 
