@@ -208,12 +208,15 @@ class BackupService
      */
     private function getBackupData(int $migrationId, string $tableName, string $backupType): ?MigrationBackup
     {
-        $collection = $this->backupModel->getCollection();
-        $collection->addFieldToFilter(MigrationBackup::fields_MIGRATION_ID, $migrationId);
-        $collection->addFieldToFilter(MigrationBackup::fields_TABLE_NAME, $tableName);
-        $collection->addFieldToFilter(MigrationBackup::fields_BACKUP_TYPE, $backupType);
-        
-        return $collection->getFirstItem();
+        $items = $this->backupModel->reset()
+            ->where(MigrationBackup::fields_MIGRATION_ID, $migrationId)
+            ->where(MigrationBackup::fields_TABLE_NAME, $tableName)
+            ->where(MigrationBackup::fields_BACKUP_TYPE, $backupType)
+            ->limit(1)
+            ->select()
+            ->fetch()
+            ->getItems();
+        return $items[0] ?? null;
     }
     
     /**
@@ -225,10 +228,11 @@ class BackupService
     public function cleanupBackupData(int $migrationId): bool
     {
         try {
-            $collection = $this->backupModel->getCollection();
-            $collection->addFieldToFilter(MigrationBackup::fields_MIGRATION_ID, $migrationId);
-            
-            $backups = $collection->getItems();
+            $backups = $this->backupModel->reset()
+                ->where(MigrationBackup::fields_MIGRATION_ID, $migrationId)
+                ->select()
+                ->fetch()
+                ->getItems();
             foreach ($backups as $backup) {
                 $backup->delete();
             }
@@ -307,10 +311,11 @@ class BackupService
      */
     public function getBackupStats(int $migrationId): array
     {
-        $collection = $this->backupModel->getCollection();
-        $collection->addFieldToFilter(MigrationBackup::fields_MIGRATION_ID, $migrationId);
-        
-        $backups = $collection->getItems();
+        $backups = $this->backupModel->reset()
+            ->where(MigrationBackup::fields_MIGRATION_ID, $migrationId)
+            ->select()
+            ->fetch()
+            ->getItems();
         $stats = [
             'total' => count($backups),
             'tables' => 0,
