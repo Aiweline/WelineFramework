@@ -13,6 +13,7 @@ namespace Weline\Multipass\Setup;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
+use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Framework\Setup\InstallInterface;
 use Weline\Multipass\Model\MultipassSite;
 
@@ -23,21 +24,17 @@ class Install implements InstallInterface
 {
     public function setup(Setup $setup, Context $context): void
     {
-        $this->install($context);
-    }
-
-    public function install(Context $context): void
-    {
         try {
-            // 安装 MultipassSite 模型
             /** @var MultipassSite $multipassSite */
             $multipassSite = ObjectManager::getInstance(MultipassSite::class);
-            $multipassSite->install($multipassSite->setup(), $context);
+            $modelSetup = ObjectManager::make(ModelSetup::class);
+            $modelSetup->putModel($multipassSite);
+            $multipassSite->install($modelSetup, $context);
 
-            $context->getOutput()->writeln('<info>Multipass 模块安装完成</info>');
+            $context->getPrinter()->success(__('Multipass 模块安装完成'));
 
         } catch (\Exception $e) {
-            $context->getOutput()->writeln('<error>安装失败: ' . $e->getMessage() . '</error>');
+            $context->getPrinter()->error(__('安装失败: %{1}', [$e->getMessage()]));
             throw $e;
         }
     }
