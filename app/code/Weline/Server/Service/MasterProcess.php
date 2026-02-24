@@ -311,9 +311,12 @@ class MasterProcess
         }
         
         // 初始化 Worker 信息（含状态机字段，防重复启动）
+        // 直连模式（SO_REUSEPORT）：所有 Worker 共用主端口，无需递增
+        // Dispatcher/Legacy 模式：每个 Worker 占独立端口，递增分配
+        $isDirectMode = ($this->mode === self::MODE_LINUX_DIRECT);
         $workerPorts = [];
         for ($i = 0; $i < $count; $i++) {
-            $currentPort = $workerPort + $i;
+            $currentPort = $isDirectMode ? $workerPort : ($workerPort + $i);
             $this->workers[$i + 1] = [
                 'port' => $currentPort,
                 'pid' => 0,
@@ -322,11 +325,17 @@ class MasterProcess
                 'state' => self::WORKER_STATE_STOPPED,
                 'state_since' => \time(),
             ];
-            $workerPorts[] = $currentPort;
+            if (!$isDirectMode) {
+                $workerPorts[] = $currentPort;
+            }
         }
         
         // ========== 初始化日志：Worker 端口分配 ==========
-        $this->log(__('  Worker 端口分配: %{1}', [\implode(', ', $workerPorts)]));
+        if ($isDirectMode) {
+            $this->log(__('  Worker 端口: %{1}（%{2} 个 Worker 共用，SO_REUSEPORT）', [$workerPort, $count]));
+        } else {
+            $this->log(__('  Worker 端口分配: %{1}', [\implode(', ', $workerPorts)]));
+        }
         
         // ========== 初始化日志：Dispatcher 配置 ==========
         $this->log(__('  Dispatcher 启用: %{1}', [$dispatcherEnabled ? 'Yes' : 'No']));
@@ -1224,6 +1233,8 @@ class MasterProcess
         $strategy = IS_WIN ? 'Windows PowerShell 批量启动' : ($this->mode === self::MODE_LINUX_DIRECT ? 'Linux SO_REUSEPORT' : 'Linux 独立端口');
         $this->log(__('启动 %{1} 个 Worker 进程 (策略: %{2})...', [$workerCount, $strategy]));
         
+        $isDirectMode = ($this->mode === self::MODE_LINUX_DIRECT);
+        
         foreach ($this->workers as $workerId => &$worker) {
             $port = $worker['port'];
             // 采纳在役 Worker：复活场景下实例文件中的 PID 仍存活则视为已运行，不重复启动（避免僵尸进程）
@@ -1234,11 +1245,12 @@ class MasterProcess
                 $this->log(__('Worker #%{1} (端口: %{2}) 已在役 (PID: %{3})，采纳并跳过启动', [$workerId, $port, $existingPid]));
                 continue;
             }
-            if (Processer::isPortInUse($port)) {
+            // 直连模式下多个 Worker 通过 SO_REUSEPORT 共用同一端口，端口被占用是预期行为
+            if (!$isDirectMode && Processer::isPortInUse($port)) {
                 $this->log(__('Worker #%{1} 端口 %{2} 已被占用，跳过', [$workerId, $port]), 'warning');
                 continue;
             }
-            $pid = ($this->mode === self::MODE_LINUX_DIRECT) ? $this->restartWorkerLinuxDirect($workerId) : $this->restartWorker($workerId, $port);
+            $pid = $isDirectMode ? $this->restartWorkerLinuxDirect($workerId) : $this->restartWorker($workerId, $port);
             if ($pid <= 0) {
                 $worker['state'] = self::WORKER_STATE_STOPPED;
                 $worker['state_since'] = \time();
@@ -1735,11 +1747,12 @@ class MasterProcess
         if ($allReady) {
             $this->log(__('  所有 Worker 已就绪 (%{1}/%{2})，耗时: %{3} 秒', [$totalWorkers, $totalWorkers, $elapsedTime]), 'success');
         } else {
-            // 输出每个 Worker 的最终状态
+            // 输出每个 Worker 的最终状态（直连模式用 PID 判断，避免共用端口误判）
             foreach ($this->workers as $wid => $worker) {
                 $port = $worker['port'] ?? 0;
-                $isUp = $port > 0 && Processer::isPortInUse($port);
-                $this->log(__('    Worker #%{1} (端口 %{2}): %{3}', [$wid, $port, $isUp ? '就绪' : '未就绪']), $isUp ? 'success' : 'warning');
+                $pid = (int)($worker['pid'] ?? 0);
+                $isUp = ($pid > 0 && Processer::isRunningByPid($pid)) || ($port > 0 && Processer::isPortInUse($port));
+                $this->log(__('    Worker #%{1} (端口 %{2}, PID %{3}): %{4}', [$wid, $port, $pid, $isUp ? '就绪' : '未就绪']), $isUp ? 'success' : 'warning');
             }
             $this->log(__('  等待超时 (%{1} 秒)，%{2}/%{3} 个 Worker 就绪', [$elapsedTime, $readyCount ?? 0, $totalWorkers]), 'warning');
             // 即使超时也继续运行，健康检查会处理未启动的 Worker
@@ -1749,11 +1762,17 @@ class MasterProcess
         $this->log(__('  额外稳定化等待 2 秒...'));
         \sleep(2);
         
-        // 状态机：将仍为 STARTING 且端口已就绪的 Worker 标记为 RUNNING
+        // 状态机：将仍为 STARTING 且已就绪的 Worker 标记为 RUNNING
+        // 直连模式用 PID 判断（共用端口无法区分单个 Worker），其他模式用端口判断
+        $isDirectMode = ($this->mode === self::MODE_LINUX_DIRECT);
         foreach ($this->workers as $wid => &$w) {
             if (($w['state'] ?? self::WORKER_STATE_STOPPED) === self::WORKER_STATE_STARTING) {
+                $pid = (int)($w['pid'] ?? 0);
                 $port = $w['port'] ?? 0;
-                if ($port > 0 && Processer::isPortInUse($port)) {
+                $isReady = $isDirectMode
+                    ? ($pid > 0 && Processer::isRunningByPid($pid))
+                    : ($port > 0 && Processer::isPortInUse($port));
+                if ($isReady) {
                     $w['state'] = self::WORKER_STATE_RUNNING;
                     $w['state_since'] = \time();
                 }
@@ -1904,8 +1923,9 @@ class MasterProcess
         
         $port = $worker['port'];
         
-        // 通知 Dispatcher 停止向该 Worker 路由新流量
-        if ($this->controlServer) {
+        // 仅 Dispatcher/Legacy 模式需要通知 Dispatcher 停止路由；
+        // 直连模式无 Dispatcher，跳过该步骤。
+        if ($this->controlServer && $this->mode !== self::MODE_LINUX_DIRECT) {
             $this->controlServer->sendToRole(ControlMessage::ROLE_DISPATCHER, ControlMessage::drain([$port]));
         }
         
@@ -1970,8 +1990,9 @@ class MasterProcess
         $worker = $this->workers[$workerId] ?? null;
         if ($worker) {
             $port = $worker['port'];
-            // 使用已有的重启方法
-            $newPid = $this->restartWorker($workerId, $port);
+            $newPid = ($this->mode === self::MODE_LINUX_DIRECT)
+                ? $this->restartWorkerLinuxDirect($workerId)
+                : $this->restartWorker($workerId, $port);
             if ($newPid > 0) {
                 $this->log(__('新 Worker #%{1} 已启动 (PID: %{2})，等待 ready...', [$workerId, $newPid]));
             } else {
@@ -2076,7 +2097,11 @@ class MasterProcess
      */
     protected function getMaintenanceWorkerBasePort(): int
     {
-        // 使用最大 Worker 端口 + 100 作为维护 Worker 起始端口
+        // 直连模式：所有 Worker 共用主端口，基于主端口 + 100
+        if ($this->mode === self::MODE_LINUX_DIRECT && $this->mainPort > 0) {
+            return $this->mainPort + 100;
+        }
+        // Dispatcher/Legacy 模式：最大 Worker 端口 + 100
         $maxPort = 0;
         foreach ($this->workers as $worker) {
             if ($worker['port'] > $maxPort) {
@@ -2580,13 +2605,14 @@ class MasterProcess
         }
         
         // 1. 杀死所有 Worker 进程（兜底：如果控制通道 shutdown 不生效）
+        $isDirectMode = ($this->mode === self::MODE_LINUX_DIRECT);
         $killedWorkers = 0;
         foreach ($this->workers as $workerId => $worker) {
             $port = $worker['port'] ?? 0;
             $workerProcessName = '--name=' . 'weline-master-' . $this->instanceName . '-worker-' . $workerId;
             $result = Processer::destroy($workerProcessName);
-            if (!$result && $port > 0) {
-                // 兜底：仅在无法按进程名销毁时按端口清理
+            if (!$result && $port > 0 && !$isDirectMode) {
+                // 兜底：仅在无法按进程名销毁时按端口清理（直连模式下共用端口，不能按端口杀）
                 $result = Processer::killProcessByPort($port);
             }
             if ($result) {
@@ -2953,11 +2979,12 @@ class MasterProcess
         $this->log(__('运行时间: %{1}', [$this->getUptime()]));
         
         foreach ($this->workers as $workerId => $worker) {
-            $status = Processer::isPortInUse($worker['port']) ? '运行中' : '已停止';
+            $pid = (int)($worker['pid'] ?? 0);
+            $status = ($pid > 0 && Processer::isRunningByPid($pid)) ? '运行中' : '已停止';
             $this->log(__('  Worker #%{1}: 端口=%{2}, PID=%{3}, 状态=%{4}, 重启=%{5}次', [
                 $workerId,
                 $worker['port'],
-                $worker['pid'],
+                $pid,
                 $status,
                 $worker['restarts'],
             ]));
@@ -3030,10 +3057,11 @@ class MasterProcess
     {
         $status = [];
         foreach ($this->workers as $workerId => $worker) {
-            $isRunning = Processer::isPortInUse($worker['port']);
+            $pid = (int)($worker['pid'] ?? 0);
+            $isRunning = ($pid > 0 && Processer::isRunningByPid($pid)) || Processer::isPortInUse($worker['port']);
             $status[$workerId] = [
                 'port' => $worker['port'],
-                'pid' => $worker['pid'],
+                'pid' => $pid,
                 'running' => $isRunning,
                 'restarts' => $worker['restarts'],
             ];

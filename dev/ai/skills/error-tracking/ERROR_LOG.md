@@ -4,6 +4,48 @@
 
 ---
 
+## [2026-02-24] WLS 直连模式端口语义错误 + Mac 特权端口权限引导缺失 ✅ 已修复
+
+**错误类型**: WLS 进程管理 / 端口权限
+
+**错误信息**:
+```text
+[WLS-SSL] Worker #2 ... Socket 创建失败 (defer-ssl): Permission denied
+```
+
+**根本原因**:
+1. `MasterProcess` 在直连模式（`MODE_LINUX_DIRECT`）仍按 `worker_port + i` 递增端口，导致 Worker 误尝试绑定 444/445...，偏离 SO_REUSEPORT 共用主端口的设计。
+2. `server:start` 在 Linux/Mac 下使用 80/443（及重定向 80）时，非 root 场景仅提示文案，未主动触发 `sudo` 密码输入引导。
+
+**解决方案**:
+1. 修正直连模式端口语义：
+   - `init()`：直连模式 Worker 端口统一为主端口，不递增。
+   - `startAllWorkers()`：直连模式跳过“端口已占用即跳过”的分支。
+   - `drainNextWorker()`：直连模式不再向 Dispatcher 发送 drain（无 Dispatcher）。
+   - `waitForWorkersReady()/logStatus()/getWorkersStatus()/cleanup()/getMaintenanceWorkerBasePort()`：按直连模式改为 PID 优先和主端口语义。
+2. `Start::execute()` 增加 `ensurePrivilegedPortPermission()`：
+   - Linux/Mac 非 root 且目标端口含 `<1024` 时，自动 `sudo env WLS_SUDO_RELAUNCHED=1 ...` 重新执行当前命令；
+   - 触发系统密码输入，避免直接启动后在 Worker 阶段才报权限错误；
+   - 通过 `WLS_SUDO_RELAUNCHED` 防止循环重启。
+
+**验证方法**:
+```bash
+php -l "e:/WelineFramework/DEV-workspace/app/code/Weline/Server/Console/Server/Start.php"
+php -l "e:/WelineFramework/DEV-workspace/app/code/Weline/Server/Service/MasterProcess.php"
+```
+
+**验证结果**: ✅ 成功（两处语法检查通过）
+
+**预防措施**:
+1. 直连 SO_REUSEPORT 场景必须坚持“所有 Worker 共用主端口”的单一语义，禁止复用 Dispatcher 的连续端口思维。
+2. 特权端口（<1024）启动前必须在命令入口完成权限校验与交互引导，不要延迟到 Worker 运行阶段。
+
+**相关文件**:
+- `app/code/Weline/Server/Service/MasterProcess.php`
+- `app/code/Weline/Server/Console/Server/Start.php`
+
+---
+
 ## [2026-02-24] WLS 启动时端口检测与 SO_REUSEPORT 误判（Mac/Linux）✅ 已修复
 
 **错误类型**: 进程管理 / WLS 端口策略 / 跨平台行为
