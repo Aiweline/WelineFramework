@@ -121,6 +121,9 @@
 退款记录不存在,"Refund record does not exist"
 只有待处理的退款才能处理,"Only pending refunds can be processed"
 订单已退款,"Order refunded"
+订单管理模块安装完成,订单管理模块安装完成
+"已创建以下数据表: weline_order, weline_order_item, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation","已创建以下数据表: weline_order, weline_order_item, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation"
+"安装失败: %{1}","安装失败: %{1}"
 编辑订单,"Edit Order"
 新建订单,"Create Order"
 系统,System

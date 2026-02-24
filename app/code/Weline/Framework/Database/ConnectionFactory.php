@@ -17,7 +17,6 @@ namespace Weline\Framework\Database;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
-use Weline\Framework\Database\Connection\Api\Sql\Table\AlterInterface;
 use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\Exception\LinkException;
 use Weline\Framework\Database\Service\DriverRegistry;
