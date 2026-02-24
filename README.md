@@ -6,16 +6,16 @@
 
 **Linux / macOS / Git Bash（复制整行到终端执行）：**
 
-一键安装会安装 Homebrew、PHP 等，**需管理员权限**，请使用 **sudo** 执行（执行时会提示输入本机登录密码）：
+**请以当前用户执行，不要用 sudo**（Homebrew 禁止以 root 运行；需要权限时脚本会提示输入本机密码）：
 
 ```bash
-curl -fsSL https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.sh | sudo bash -s --
+curl -fsSL https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.sh | bash -s --
 ```
 
 指定分支（如 server-opt）：在末尾加 `-b server-opt`：
 
 ```bash
-curl -fsSL https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.sh | sudo bash -s -- -b server-opt
+curl -fsSL https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.sh | bash -s -- -b server-opt
 ```
 
 **Windows：系统默认不能直接运行 .sh，可用下面两种方式之一。**
