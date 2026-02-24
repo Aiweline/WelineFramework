@@ -154,6 +154,9 @@ SQL调试输出,SQL调试输出
 "输出文件: %{1}","输出文件: %{1}"
 "编译工厂: %{1}","编译工厂: %{1}"
 "预编译反射元数据（加速 ObjectManager 依赖注入）","预编译反射元数据（加速 ObjectManager 依赖注入）"
+已跳过反射/工厂编译，需要时可执行：php bin/w reflection:compile,已跳过反射/工厂编译，需要时可执行：php bin/w reflection:compile
+跳过反射元数据与编译型工厂生成（可事后执行 reflection:compile）,跳过反射元数据与编译型工厂生成（可事后执行 reflection:compile）
+跳过反射编译（加快 s:up）,跳过反射编译（加快 s:up）
 显示详细编译信息,显示详细编译信息
 显示帮助信息,显示帮助信息
 基本用法,基本用法
