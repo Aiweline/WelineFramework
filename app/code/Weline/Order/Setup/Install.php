@@ -96,20 +96,11 @@ class Install implements InstallInterface
             $statusService = ObjectManager::getInstance(OrderStatusService::class);
             $statusService->initDefaultStatuses();
 
-            $context->getOutput()->writeln('<info>订单管理模块安装完成</info>');
-            $context->getOutput()->writeln('<info>已创建以下数据表:</info>');
-            $context->getOutput()->writeln('<info>- weline_order (订单主表)</info>');
-            $context->getOutput()->writeln('<info>- weline_order_item (订单项表)</info>');
-            $context->getOutput()->writeln('<info>- weline_order_payment (支付记录表)</info>');
-            $context->getOutput()->writeln('<info>- weline_order_shipment (发货记录表)</info>');
-            $context->getOutput()->writeln('<info>- weline_order_refund (退款记录表)</info>');
-            $context->getOutput()->writeln('<info>- weline_order_invoice (发票表)</info>');
-            $context->getOutput()->writeln('<info>- weline_order_history (订单历史表)</info>');
-            $context->getOutput()->writeln('<info>- weline_order_status (订单状态表)</info>');
-            $context->getOutput()->writeln('<info>- weline_order_status_translation (订单状态翻译表)</info>');
+            $context->getPrinter()->success(__('订单管理模块安装完成'));
+            $context->getPrinter()->setup(__('已创建以下数据表: weline_order, weline_order_item, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation'));
             
         } catch (\Exception $e) {
-            $context->getOutput()->writeln('<error>安装失败: ' . $e->getMessage() . '</error>');
+            $context->getPrinter()->error(__('安装失败: %{1}', [$e->getMessage()]));
             throw $e;
         }
     }
