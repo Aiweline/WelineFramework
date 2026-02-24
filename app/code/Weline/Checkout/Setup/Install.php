@@ -12,26 +12,19 @@ declare(strict_types=1);
 namespace Weline\Checkout\Setup;
 
 use Weline\Framework\Setup\InstallInterface;
-use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
 
 /**
  * Checkout Module Installation Script
- * 
+ *
  * Handles database schema creation for the Weline_Checkout module.
- * 
+ * Connection is obtained via Setup::getDb() (set by setModuleContext before setup runs).
+ *
  * @package Weline_Checkout
  */
 class Install implements InstallInterface
 {
-    private ConnectionFactory $connectionFactory;
-
-    public function __construct(ConnectionFactory $connectionFactory)
-    {
-        $this->connectionFactory = $connectionFactory;
-    }
-
     /**
      * Execute installation
      * 

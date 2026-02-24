@@ -12,7 +12,6 @@ declare(strict_types=1);
 namespace Weline\TranslationService\Setup;
 
 use Weline\Framework\Setup\InstallInterface;
-use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
@@ -21,16 +20,10 @@ use Weline\TranslationService\Model\TranslationRecord;
 
 /**
  * 翻译服务模块安装脚本
+ * 连接通过 Setup::getDb() 获取（由 setModuleContext 在 setup 执行前设置）。
  */
 class Install implements InstallInterface
 {
-    private ConnectionFactory $connectionFactory;
-
-    public function __construct(ConnectionFactory $connectionFactory)
-    {
-        $this->connectionFactory = $connectionFactory;
-    }
-
     /**
      * 执行安装
      * 

@@ -5,27 +5,19 @@ declare(strict_types=1);
 namespace Weline\Ai\Setup;
 
 use Weline\Framework\Setup\InstallInterface;
-use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
 
 /**
  * AI Module Installation Script
- * 
+ *
  * Handles database schema creation and initial data setup for the Weline_Ai module.
- * Following WelineFramework's Setup/Install.php pattern.
- * 
+ * Connection is obtained via Setup::getDb() (set by setModuleContext before setup runs).
+ *
  * @package Weline_Ai
  */
 class Install implements InstallInterface
 {
-    private ConnectionFactory $connectionFactory;
-
-    public function __construct(ConnectionFactory $connectionFactory)
-    {
-        $this->connectionFactory = $connectionFactory;
-    }
-
     /**
      * Execute installation
      * 
