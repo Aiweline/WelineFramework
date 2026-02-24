@@ -418,12 +418,15 @@ class MigrationService
      */
     private function updateMigrationStatus(string $moduleName, string $migrationFile, string $status): void
     {
-        $collection = $this->migrationModel->getCollection();
-        $collection->addFieldToFilter(Migration::fields_MODULE, $moduleName);
-        $collection->addFieldToFilter(Migration::fields_FILE, $migrationFile);
-        
-        $migration = $collection->getFirstItem();
-        if ($migration->getId()) {
+        $items = $this->migrationModel->reset()
+            ->where(Migration::fields_MODULE, $moduleName)
+            ->where(Migration::fields_FILE, $migrationFile)
+            ->limit(1)
+            ->select()
+            ->fetch()
+            ->getItems();
+        $migration = $items[0] ?? null;
+        if ($migration && $migration->getId()) {
             $migration->updateStatus($status);
         }
     }

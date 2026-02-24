@@ -41,12 +41,15 @@ class ConnectionFactory
     /**
      * 获取或创建连接工厂实例
      *
-     * @param ConfigProvider $configProvider 数据库配置提供者，不可为 null
+     * @param ConfigProvider|null $configProvider 数据库配置提供者；为 null 时使用默认配置（便于 ObjectManager 依赖注入在早期阶段解析）
      * @return static
      * @throws LinkException
      */
-    public static function getInstance(ConfigProvider $configProvider): static
+    public static function getInstance(?ConfigProvider $configProvider): static
     {
+        if ($configProvider === null) {
+            $configProvider = new ConfigProvider();
+        }
         $key = self::getInstanceKey($configProvider);
         if (!isset(self::$instances[$key])) {
             self::$instances[$key] = [
