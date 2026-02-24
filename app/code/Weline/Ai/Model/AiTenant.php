@@ -66,7 +66,7 @@ class AiTenant extends Model
                 ->create();
         }
         // 初始数据使用模型 save() 插入，避免 SQL 方言差异（PostgreSQL/MySQL/SQLite）
-        if ($this->getCollection()->getSize() === 0) {
+        if ($this->reset()->total() === 0) {
             $this->setData([
                 'name' => 'Default Tenant',
                 'domain' => 'default.localhost',

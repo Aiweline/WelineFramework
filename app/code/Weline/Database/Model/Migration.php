@@ -81,49 +81,50 @@ class Migration extends Model implements ModelInterface
     
     /**
      * 获取模块的所有迁移记录
-     * 
+     *
      * @param string $moduleName 模块名称
      * @return array
      */
     public function getModuleMigrations(string $moduleName): array
     {
-        $collection = $this->getCollection();
-        $collection->addFieldToFilter(self::fields_MODULE, $moduleName);
-        $collection->setOrder(self::fields_EXECUTED_AT, 'ASC');
-        
-        return $collection->getItems();
+        return $this->reset()
+            ->where(self::fields_MODULE, $moduleName)
+            ->order(self::fields_EXECUTED_AT, 'ASC')
+            ->select()
+            ->fetch()
+            ->getItems();
     }
-    
+
     /**
      * 获取已安装的迁移
-     * 
+     *
      * @param string $moduleName 模块名称
      * @return array
      */
     public function getInstalledMigrations(string $moduleName): array
     {
-        $collection = $this->getCollection();
-        $collection->addFieldToFilter(self::fields_MODULE, $moduleName);
-        $collection->addFieldToFilter(self::fields_STATUS, self::STATUS_INSTALLED);
-        $collection->setOrder(self::fields_EXECUTED_AT, 'ASC');
-        
-        return $collection->getItems();
+        return $this->reset()
+            ->where(self::fields_MODULE, $moduleName)
+            ->where(self::fields_STATUS, self::STATUS_INSTALLED)
+            ->order(self::fields_EXECUTED_AT, 'ASC')
+            ->select()
+            ->fetch()
+            ->getItems();
     }
-    
+
     /**
      * 检查迁移是否已存在
-     * 
+     *
      * @param string $moduleName 模块名称
      * @param string $migrationFile 迁移文件名
      * @return bool
      */
     public function isMigrationExists(string $moduleName, string $migrationFile): bool
     {
-        $collection = $this->getCollection();
-        $collection->addFieldToFilter(self::fields_MODULE, $moduleName);
-        $collection->addFieldToFilter(self::fields_FILE, $migrationFile);
-        
-        return $collection->getSize() > 0;
+        return $this->reset()
+            ->where(self::fields_MODULE, $moduleName)
+            ->where(self::fields_FILE, $migrationFile)
+            ->total() > 0;
     }
     
     /**
@@ -169,42 +170,43 @@ class Migration extends Model implements ModelInterface
     
     /**
      * 按模块名和文件名查找迁移记录 ID
-     * 
+     *
      * @param string $moduleName 模块名称
      * @param string $migrationFile 迁移文件名
      * @return int 记录 ID，未找到返回 0
      */
     public function findMigrationId(string $moduleName, string $migrationFile): int
     {
-        $collection = $this->getCollection();
-        $collection->addFieldToFilter(self::fields_MODULE, $moduleName);
-        $collection->addFieldToFilter(self::fields_FILE, $migrationFile);
-
-        $item = $collection->getFirstItem();
-        return $item->getId() ? (int) $item->getId() : 0;
+        $items = $this->reset()
+            ->where(self::fields_MODULE, $moduleName)
+            ->where(self::fields_FILE, $migrationFile)
+            ->limit(1)
+            ->select()
+            ->fetch()
+            ->getItems();
+        $first = $items[0] ?? null;
+        return $first && $first->getId() ? (int) $first->getId() : 0;
     }
 
     /**
      * 获取迁移统计信息
-     * 
+     *
      * @param string $moduleName 模块名称
-     * @return array
+     * @return array{total: int, installed: int, failed: int, pending: int}
      */
     public function getMigrationStats(string $moduleName): array
     {
-        $collection = $this->getCollection();
-        $collection->addFieldToFilter(self::fields_MODULE, $moduleName);
-        
-        $total = $collection->getSize();
-        
-        $installedCollection = clone $collection;
-        $installedCollection->addFieldToFilter(self::fields_STATUS, self::STATUS_INSTALLED);
-        $installed = $installedCollection->getSize();
-        
-        $failedCollection = clone $collection;
-        $failedCollection->addFieldToFilter(self::fields_STATUS, self::STATUS_FAILED);
-        $failed = $failedCollection->getSize();
-        
+        $total = $this->reset()
+            ->where(self::fields_MODULE, $moduleName)
+            ->total();
+        $installed = $this->reset()
+            ->where(self::fields_MODULE, $moduleName)
+            ->where(self::fields_STATUS, self::STATUS_INSTALLED)
+            ->total();
+        $failed = $this->reset()
+            ->where(self::fields_MODULE, $moduleName)
+            ->where(self::fields_STATUS, self::STATUS_FAILED)
+            ->total();
         return [
             'total' => $total,
             'installed' => $installed,
