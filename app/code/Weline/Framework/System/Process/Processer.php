@@ -416,7 +416,19 @@ class Processer
                 return 0;
             }
             
-            // Linux/Mac 前端模式：使用 proc_open
+            // macOS 前端模式：每个子进程在独立 Terminal 窗口中运行（与 Windows 行为一致）
+            if (!IS_WIN && \PHP_OS === 'Darwin' && $availableFunctions['exec']) {
+                $cmd = 'cd ' . \escapeshellarg(BP) . ' && ' . $pname;
+                $cmdEscaped = \str_replace(['\\', '"'], ['\\\\', '\\"'], $cmd);
+                $script = 'tell application "Terminal" to activate' . "\n"
+                    . 'tell application "Terminal" to do script "' . $cmdEscaped . '"';
+                $osascriptArg = \escapeshellarg($script);
+                @\exec('osascript -e ' . $osascriptArg . ' 2>/dev/null');
+                // osascript 无法返回子进程 PID，前端模式允许 pid=0 视为成功
+                return 0;
+            }
+            
+            // Linux 前端模式：使用 proc_open（输出继承当前终端）
             if (!IS_WIN && $availableFunctions['proc_open']) {
                 $nohupCommand = $pname . ' &';
                 $descriptorspec = [
