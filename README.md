@@ -36,6 +36,52 @@ v1.1 解决初始化安装问题以及升级框架内核。
 
 # WelineFramework
 
+## 推荐安装（一键命令）
+
+以下为**推荐安装方式**：复制整行到终端执行即可完成克隆与安装（需已安装 [Git](https://git-scm.com)，未安装时脚本会尝试自动安装）。
+
+**Linux / macOS / Git Bash（一条命令）：**
+
+```bash
+git clone https://gitee.com/aiweline/WelineFramework.git weline && cd weline && ./bin/install
+```
+
+**指定分支（如 server-opt）：**
+
+```bash
+git clone -b server-opt https://gitee.com/aiweline/WelineFramework.git weline && cd weline && ./bin/install
+```
+
+**Windows CMD（一条命令）：**
+
+```cmd
+git clone https://gitee.com/aiweline/WelineFramework.git weline && cd weline && bin\install.bat
+```
+
+**或使用引导脚本（仅 Linux/macOS/Git Bash，无需先 clone）：**
+
+```bash
+curl -fsSL https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.sh | bash -s --
+```
+
+指定分支：在末尾加 `-b server-opt`，即 `bash -s -- -b server-opt`。
+
+---
+
+## 通用安装脚本说明（bin 目录）
+
+| 脚本 | 说明 |
+|------|------|
+| **bin/install** | **通用入口**：自动识别 **Mac / Linux / Windows(Git Bash)**，执行对应安装流程。在项目根目录执行 `./bin/install`。 |
+| **bin/install.bat** | Windows **CMD 或 PowerShell** 下使用，在项目根执行 `bin\install.bat`。 |
+| **bin/install.sh** | Linux/Mac 安装逻辑，一般通过 `./bin/install` 调用，也可直接 `./bin/install.sh`。 |
+| **bin/bootstrap.sh** | 一键引导：克隆仓库并执行 install，用于 `curl \| bash` 方式安装。 |
+
+- 安装脚本会安装 PHP 到 `extend/server/php`、配置 php.ini（含 openssl/sockets 等）、执行 composer、环境检测与数据库初始化。
+- 支持参数：`-b <分支>` 指定克隆分支（缺省 master）；`--path-only` 仅写入 PATH；`php` / `pgsql` / `mysql` 指定安装组件。
+
+---
+
 ## 快速入门
 
 ### 使用本地命令行环境，快速开始
@@ -43,8 +89,8 @@ v1.1 解决初始化安装问题以及升级框架内核。
 【注意】此环境仅用于快速搭建开发环境，不可直接用于生产环境。
 
 若本机尚未安装 PHP，可先在项目根执行 **install** 脚本安装 PHP 到 extend/server 并配置环境变量：  
-- Windows：`bin\install.bat`  
-- Linux/Mac：`chmod +x bin/install.sh && ./bin/install.sh`
+- **Windows CMD**：`bin\install.bat`  
+- **Linux/Mac 或 Git Bash**：`./bin/install` 或 `./bin/install.sh`
 
 运行命令：
 
@@ -74,7 +120,7 @@ php bin/w server:start  # 启动框架内置服务器
 │   ├── design          # -主题
 │   ├── etc             # -配置
 │   └── i18n            # -语言包
-├── bin                 # 命令目录
+├── bin                 # 命令目录（含 install 通用安装脚本、w 入口等）
 ├── dev                 # 开发目录
 ├── extend              # 拓展
 ├── generated           # 系统自动生成目录
