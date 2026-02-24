@@ -6,23 +6,23 @@ namespace Weline\Database\Console\Db\Migrate;
 
 use Weline\Database\Service\BackupService;
 use Weline\Framework\Console\CommandInterface;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 
 class Restore implements CommandInterface
 {
-    private BackupService $backupService;
     private Printing $printing;
 
-    public function __construct(
-        BackupService $backupService,
-        Printing $printing
-    ) {
-        $this->backupService = $backupService;
-        $this->printing      = $printing;
+    public function __construct(Printing $printing)
+    {
+        $this->printing = $printing;
     }
 
     public function execute(array $args = [], array $data = []): void
     {
+        /** @var BackupService $backupService */
+        $backupService = ObjectManager::getInstance(BackupService::class);
+
         $backupId    = (int) ($args['backup-id'] ?? 0);
         $migrationId = (int) ($args['migration-id'] ?? 0);
 
@@ -32,30 +32,17 @@ class Restore implements CommandInterface
         }
 
         if ($backupId > 0) {
-            $this->restoreSingle($backupId);
+            $this->printing->note(__("正在恢复备份 (backup_id: %{1})...", $backupId));
+            $result = $backupService->restoreByBackupId($backupId);
+            if ($result) {
+                $this->printing->success(__("备份恢复完成 (backup_id: %{1})", $backupId));
+            } else {
+                $this->printing->error(__("备份恢复失败 (backup_id: %{1})", $backupId));
+            }
             return;
         }
 
-        $this->restoreByMigration($migrationId);
-    }
-
-    private function restoreSingle(int $backupId): void
-    {
-        $this->printing->note(__("正在恢复备份 (backup_id: %{1})...", $backupId));
-
-        $result = $this->backupService->restoreByBackupId($backupId);
-
-        if ($result) {
-            $this->printing->success(__("备份恢复完成 (backup_id: %{1})", $backupId));
-        } else {
-            $this->printing->error(__("备份恢复失败 (backup_id: %{1})", $backupId));
-        }
-    }
-
-    private function restoreByMigration(int $migrationId): void
-    {
-        $backups = $this->backupService->getBackupsByMigrationId($migrationId);
-
+        $backups = $backupService->getBackupsByMigrationId($migrationId);
         if (empty($backups)) {
             $this->printing->warning(__("未找到迁移 %{1} 关联的备份记录", $migrationId));
             return;
@@ -67,7 +54,7 @@ class Restore implements CommandInterface
         $failed  = 0;
         foreach ($backups as $backup) {
             $bid = (int) $backup->getId();
-            if ($this->backupService->restoreByBackupId($bid)) {
+            if ($backupService->restoreByBackupId($bid)) {
                 $success++;
             } else {
                 $failed++;
