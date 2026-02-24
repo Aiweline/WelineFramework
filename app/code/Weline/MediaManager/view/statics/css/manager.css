@@ -1,0 +1,470 @@
+/* ========================================================================
+   Weline Media Manager — 完全自建前端样式
+   使用框架主题 CSS 变量，兼容暗色/亮色模式
+   ======================================================================== */
+
+/* 布局 */
+.mmf-wrap {
+    display: flex;
+    height: calc(100vh - 120px);
+    min-height: 500px;
+    gap: 0;
+    background: var(--backend-color-bg-primary, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-md, 8px);
+    overflow: hidden;
+    box-shadow: var(--backend-card-shadow, 0 0 13px 0 rgba(74, 53, 107, 0.05));
+}
+
+/* 侧边树 */
+.mmf-sidebar {
+    width: 240px;
+    min-width: 180px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-right: 1px solid var(--backend-color-border-default, #dee2e6);
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+.mmf-sidebar-title {
+    padding: var(--backend-spacing-sm, 8px) var(--backend-spacing-md, 16px);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--backend-color-text-secondary, #6c757d);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    user-select: none;
+}
+
+.mmf-tree {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.mmf-tree ul {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 16px;
+}
+
+.mmf-tree-item {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 0.875rem;
+    color: var(--backend-color-text-primary, #212529);
+    border-radius: var(--backend-border-radius-sm, 4px);
+    transition: background 0.15s;
+    user-select: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mmf-tree-item:hover {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+}
+
+.mmf-tree-item.active {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary, #556ee6);
+    font-weight: 600;
+}
+
+.mmf-tree-toggle {
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+/* 主区域 */
+.mmf-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* 工具栏 */
+.mmf-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-bottom: 1px solid var(--backend-color-border-default, #dee2e6);
+    flex-wrap: wrap;
+}
+
+.mmf-toolbar-sep {
+    width: 1px;
+    height: 24px;
+    background: var(--backend-color-border-default, #dee2e6);
+}
+
+.mmf-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 12px;
+    font-size: 0.8125rem;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-card-bg, #fff);
+    color: var(--backend-color-text-primary, #212529);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.mmf-btn:hover {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    border-color: var(--backend-color-border-emphasis, #adb5bd);
+}
+
+.mmf-btn:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.mmf-btn-primary {
+    background: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-inverse, #fff);
+    border-color: var(--backend-color-primary, #556ee6);
+}
+
+.mmf-btn-primary:hover {
+    background: var(--backend-color-primary-hover, #4857d4);
+}
+
+.mmf-btn-danger {
+    background: var(--backend-color-danger, #f46a6a);
+    color: #fff;
+    border-color: var(--backend-color-danger, #f46a6a);
+}
+
+.mmf-btn-danger:hover {
+    opacity: 0.85;
+}
+
+.mmf-path {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8125rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+    min-width: 0;
+    overflow: hidden;
+}
+
+.mmf-path-seg {
+    cursor: pointer;
+    color: var(--backend-color-primary, #556ee6);
+    white-space: nowrap;
+}
+
+.mmf-path-seg:hover {
+    text-decoration: underline;
+}
+
+.mmf-path-sep {
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+/* 文件列表区 */
+.mmf-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+}
+
+.mmf-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+}
+
+.mmf-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 8px 8px;
+    border: 2px solid transparent;
+    border-radius: var(--backend-border-radius-md, 8px);
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+    user-select: none;
+    position: relative;
+}
+
+.mmf-item:hover {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+}
+
+.mmf-item.selected {
+    border-color: var(--backend-color-primary, #556ee6);
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+}
+
+.mmf-item-icon {
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 6px;
+    border-radius: var(--backend-border-radius, 6px);
+    overflow: hidden;
+}
+
+.mmf-item-icon img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: var(--backend-border-radius-sm, 4px);
+}
+
+.mmf-item-icon .mmf-icon-placeholder {
+    font-size: 2.5rem;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+.mmf-item-name {
+    font-size: 0.8125rem;
+    color: var(--backend-color-text-primary, #212529);
+    word-break: break-all;
+    line-height: 1.3;
+    max-height: 2.6em;
+    overflow: hidden;
+    width: 100%;
+}
+
+.mmf-item-name input {
+    width: 100%;
+    font-size: 0.8125rem;
+    border: 1px solid var(--backend-color-primary, #556ee6);
+    border-radius: 3px;
+    padding: 1px 4px;
+    text-align: center;
+    background: var(--backend-color-input-bg, #fff);
+    color: var(--backend-color-text-primary, #212529);
+    outline: none;
+}
+
+/* 上传区 */
+.mmf-upload-drop {
+    border: 2px dashed var(--backend-color-border-emphasis, #adb5bd);
+    border-radius: var(--backend-border-radius-lg, 12px);
+    padding: 24px;
+    text-align: center;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    transition: all 0.2s;
+    margin-bottom: 12px;
+    display: none;
+}
+
+.mmf-upload-drop.dragover {
+    border-color: var(--backend-color-primary, #556ee6);
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.mmf-upload-drop.visible {
+    display: block;
+}
+
+/* 上传进度 */
+.mmf-upload-progress {
+    display: none;
+    margin-bottom: 12px;
+}
+
+.mmf-upload-progress.visible {
+    display: block;
+}
+
+.mmf-progress-bar-wrap {
+    height: 6px;
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.mmf-progress-bar {
+    height: 100%;
+    background: var(--backend-color-primary, #556ee6);
+    border-radius: 3px;
+    transition: width 0.2s;
+    width: 0;
+}
+
+.mmf-progress-text {
+    font-size: 0.75rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+    margin-top: 4px;
+}
+
+/* 状态栏 */
+.mmf-statusbar {
+    padding: 6px 16px;
+    font-size: 0.75rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-top: 1px solid var(--backend-color-border-default, #dee2e6);
+    display: flex;
+    justify-content: space-between;
+}
+
+/* 空状态 */
+.mmf-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+.mmf-empty-icon {
+    font-size: 3rem;
+    opacity: 0.4;
+    margin-bottom: 12px;
+}
+
+/* 加载动画 */
+.mmf-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.875rem;
+}
+
+.mmf-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--backend-color-border-default, #dee2e6);
+    border-top-color: var(--backend-color-primary, #556ee6);
+    border-radius: 50%;
+    animation: mmf-spin 0.6s linear infinite;
+    margin-right: 8px;
+}
+
+@keyframes mmf-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* 右键菜单 */
+.mmf-context-menu {
+    position: fixed;
+    z-index: 10000;
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    box-shadow: var(--backend-dropdown-shadow, 0 0.5rem 1rem rgba(0, 0, 0, 0.175));
+    min-width: 160px;
+    padding: 4px 0;
+    display: none;
+}
+
+.mmf-context-menu.visible {
+    display: block;
+}
+
+.mmf-context-item {
+    padding: 6px 16px;
+    font-size: 0.8125rem;
+    color: var(--backend-color-text-primary, #212529);
+    cursor: pointer;
+    transition: background 0.1s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mmf-context-item:hover {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.mmf-context-sep {
+    height: 1px;
+    background: var(--backend-color-border-light, #e9ecef);
+    margin: 4px 0;
+}
+
+/* 对话框 */
+.mmf-dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 10001;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.mmf-dialog-overlay.visible {
+    display: flex;
+}
+
+.mmf-dialog {
+    background: var(--backend-color-card-bg, #fff);
+    border-radius: var(--backend-border-radius-lg, 12px);
+    padding: 24px;
+    min-width: 340px;
+    max-width: 480px;
+    box-shadow: var(--backend-shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1));
+}
+
+.mmf-dialog-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+    margin-bottom: 12px;
+}
+
+.mmf-dialog-input {
+    width: 100%;
+    padding: var(--backend-padding-input, 8px 12px);
+    border: 2px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-input-bg, #fff);
+    color: var(--backend-color-text-primary, #333);
+    font-size: 0.875rem;
+    margin-bottom: 16px;
+    box-sizing: border-box;
+}
+
+.mmf-dialog-input:focus {
+    outline: none;
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: var(--backend-focus-ring, 0 0 0 3px rgba(85, 110, 230, 0.1));
+}
+
+.mmf-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .mmf-sidebar {
+        width: 180px;
+        min-width: 140px;
+    }
+    .mmf-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    }
+}

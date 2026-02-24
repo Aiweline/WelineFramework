@@ -36,7 +36,7 @@ return [
         'doc' => 'system/系统更新后.md',
     ],
     
-    // ========== 模块升级事件 ==========
+    // ========== 模块生命周期事件 ==========
     'Weline_Framework_Module::module_upgrade_before' => [
         'name' => __('模块升级前'),
         'description' => __('模块升级前触发，允许其他模块在升级前执行必要的操作。'),
@@ -51,6 +51,11 @@ return [
         'name' => __('模块安装后'),
         'description' => __('模块安装完成后触发，允许其他模块执行安装后的操作。'),
         'doc' => 'module/模块安装后.md',
+    ],
+    'Framework_Module::module_uninstall_after' => [
+        'name' => __('模块卸载后'),
+        'description' => __('模块卸载完成后触发，允许其他模块在卸载后执行清理和后续操作。'),
+        'doc' => 'module/模块卸载后.md',
     ],
     
     // 服务器启动/停止事件已迁移至 Weline_Server 模块（Weline_Server::start_after / Weline_Server::stop_after）
