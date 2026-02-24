@@ -63,6 +63,15 @@ URL别名已存在，请更换一个,"URL slug already exists"
 "按站点+画像配额，从增长词记录中取词，调用 AI 生成标题+摘要+正文并写入博客（草稿或直接发布）","按站点+画像配额，从增长词记录中取词，调用 AI 生成标题+摘要+正文并写入博客（草稿或直接发布）"
 "Blog AI 发文失败（关键词 %{keyword}，log_id %{log_id}）：%{error}","Blog AI publish failed (keyword %{keyword}, log_id %{log_id}): %{error}"
 "自动发文完成：本次发布 %{count} 篇","Auto publish done: %{count} posts published"
+请先在「趋势站点配额」中配置：站点、画像、每日篇数、默认分类。,请先在「趋势站点配额」中配置：站点、画像、每日篇数、默认分类。
+配额未设置默认分类,配额未设置默认分类
+默认分类不存在或不属于该站点,默认分类不存在或不属于该站点
+今日该配额已发满，明日再试,今日该配额已发满，明日再试
+当前无未使用的增长词，请先运行「趋势同步」或明日再试,当前无未使用的增长词，请先运行「趋势同步」或明日再试
+请启用画像,请启用画像
+请在该画像中配置关键词,请在该画像中配置关键词
+可能原因：,可能原因：
+"请检查 AI 服务配置或稍后重试。","请检查 AI 服务配置或稍后重试。"
 "Blog 趋势同步","Blog Trend Sync"
 每日拉取各画像关键词趋势，计算日/周环比，将满足阈值的增长词写入记录表,每日拉取各画像关键词趋势，计算日/周环比，将满足阈值的增长词写入记录表
 未配置趋势数据源，已跳过,未配置趋势数据源，已跳过
@@ -181,7 +190,15 @@ URL别名将用于生成分类页面的访问地址。,"URL slug will be used to
 "共 %{total} 条记录，第 %{page}/%{pages} 页","共 %{total} 条记录，第 %{page}/%{pages} 页"
 确定发布,"Confirm Publish"
 生成中...,Generating...
-请求失败，请重试,"Request failed, please retry"
+正在连接…,正在连接…
+配额数,配额数
+正在生成第,正在生成第
+篇,篇
+已生成,已生成
+生成失败,生成失败
+可能原因：请检查配额、默认分类与画像关键词。,可能原因：请检查配额、默认分类与画像关键词。
+连接中断或请求失败，请重试。,连接中断或请求失败，请重试。
+连接中断，请重试,连接中断，请重试
 日志列表,"Log List"
 清理旧日志,"Clear Old Logs"
 暂无增长词日志,"No trending keyword logs"
@@ -272,6 +289,7 @@ URL别名将用于生成分类页面的访问地址。,"URL slug will be used to
 发布时间：,"Published At:"
 摘要：,Summary:
 返回博客列表,"Back to Blog List"
+请求失败，请重试,"Request failed, please retry"
 "从趋势增长词中取词，调用 AI 生成文章（草稿）","Pick trending keywords and generate articles via AI (as draft)"
 "在 serpapi.com 注册并获取 API Key，用于拉取 Google Trends 数据。","Register at serpapi.com and get API Key for Google Trends data."
 "1. 访问 https://serpapi.com 注册账号；","1. Visit https://serpapi.com to register;"

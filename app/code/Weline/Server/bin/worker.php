@@ -96,6 +96,21 @@ if (\is_file($envFile)) {
     $envConfig = @include $envFile;
 }
 
+// Origin Token 回源校验配置（可选安全增强）
+$originToken = '';
+$originTokenValidationEnabled = false;
+$originTokenHeader = 'X-Weline-Origin-Token';
+$originTokenAllowLocal = true;
+if (\is_array($envConfig)) {
+    $originToken = (string)($envConfig['server']['origin_token'] ?? '');
+    $originValidationConfig = $envConfig['server']['origin_token_validation'] ?? [];
+    if (\is_array($originValidationConfig)) {
+        $originTokenValidationEnabled = (bool)($originValidationConfig['enabled'] ?? false);
+        $originTokenHeader = (string)($originValidationConfig['header'] ?? $originTokenHeader);
+        $originTokenAllowLocal = (bool)($originValidationConfig['allow_local'] ?? true);
+    }
+}
+
 // ========== WLS 高性能日志系统（缓冲模式） ==========
 // 日志缓冲区（避免每次都 fwrite + fflush）
 $logBuffer = [];
@@ -335,7 +350,7 @@ $wlsLog("内存缓存：上限 " . \round($WLS_STATIC_CACHE_MAX_TOTAL / 1024 / 1
 // ========== 内存缓存配置结束 ==========
 
 // 注册 shutdown handler 捕获致命错误（Fatal Error、内存溢出等）
-\register_shutdown_function(function() use ($wlsLog, $flushLog, $workerId, $port, $processLogFile) {
+\register_shutdown_function(function() use ($wlsLog, $flushLog, $workerId, $port, $processLogFile, $instanceName) {
     $error = \error_get_last();
     if ($error !== null && \in_array($error['type'], [\E_ERROR, \E_PARSE, \E_CORE_ERROR, \E_COMPILE_ERROR, \E_RECOVERABLE_ERROR])) {
         $errorMsg = "Worker 致命错误 [PID: " . \getmypid() . "] [Worker: {$workerId}] [Port: {$port}]: {$error['message']} in {$error['file']}:{$error['line']}";
@@ -347,6 +362,14 @@ $wlsLog("内存缓存：上限 " . \round($WLS_STATIC_CACHE_MAX_TOTAL / 1024 / 1
         if ($processLogFile) {
             @\file_put_contents($processLogFile, '[' . \date('Y-m-d H:i:s') . '] [FATAL] ' . $errorMsg . "\n", \FILE_APPEND);
         }
+        // 统一崩溃日志：便于在一个文件查看所有 Worker 崩溃原因
+        $crashLogDir = BP . 'var' . DS . 'log';
+        if (!\is_dir($crashLogDir)) {
+            @\mkdir($crashLogDir, 0755, true);
+        }
+        $crashLogFile = $crashLogDir . DS . 'wls-worker-crash.log';
+        $line = '[' . \date('Y-m-d H:i:s') . '] [instance:' . $instanceName . '] [Worker:' . $workerId . '] [Port:' . $port . '] ' . $error['message'] . ' in ' . $error['file'] . ':' . $error['line'] . "\n";
+        @\file_put_contents($crashLogFile, $line, \FILE_APPEND);
     }
 });
 
@@ -625,8 +648,10 @@ $gracefulExit = function (string $reason = '', bool $waitForRequests = true) use
         $wlsLog("优雅关闭: {$reason}", 'INFO');
     }
     
-    // 停止接受新连接（关闭监听 socket）
-    @\fclose($socket);
+    // 停止接受新连接（关闭监听 socket；仅对有效 stream 调用 fclose，避免已关闭 resource 导致 TypeError）
+    if (\is_resource($socket) && \get_resource_type($socket) === 'stream') {
+        @\fclose($socket);
+    }
     $wlsLog("已停止接受新连接", 'INFO');
     
     // 等待活跃请求完成
@@ -651,7 +676,9 @@ $gracefulExit = function (string $reason = '', bool $waitForRequests = true) use
                 
                 if ($data === false || $data === '') {
                     // 连接已关闭
-                    @\fclose($conn);
+                    if (\is_resource($conn) && \get_resource_type($conn) === 'stream') {
+                        @\fclose($conn);
+                    }
                     unset($connections[$connId]);
                     unset($requestBuffers[$connId]);
                     unset($connectionLastActivity[$connId]);
@@ -674,9 +701,11 @@ $gracefulExit = function (string $reason = '', bool $waitForRequests = true) use
         }
     }
     
-    // 关闭剩余连接
+    // 关闭剩余连接（仅对有效 stream 调用 fclose，避免已关闭 resource 导致 TypeError）
     foreach ($connections as $conn) {
-        @\fclose($conn);
+        if (\is_resource($conn) && \get_resource_type($conn) === 'stream') {
+            @\fclose($conn);
+        }
     }
     
     // 清理连接相关数据
@@ -986,7 +1015,11 @@ while (true) {
         $handleStartTime = \microtime(true);
         $response = handleRequest(
             $rawRequest, $runtime, $runtimeError, $instanceName, $workerId, $port, 
-            $requestCount, $activeRequests, \count($connections), $startTime, $wlsLog
+            $requestCount, $activeRequests, \count($connections), $startTime, $wlsLog,
+            $originToken,
+            $originTokenValidationEnabled,
+            $originTokenHeader,
+            $originTokenAllowLocal
         );
         $handleDuration = \round((\microtime(true) - $handleStartTime) * 1000, 2);
         
@@ -1142,6 +1175,16 @@ function isKeepAlive(string $rawRequest): bool
     return $isHttp11;
 }
 
+function getHeaderValue(string $rawRequest, string $headerName): ?string
+{
+    $pattern = '/^' . \preg_quote($headerName, '/') . ':\s*([^\r\n]+)/im';
+    if (\preg_match($pattern, $rawRequest, $matches)) {
+        $value = \trim($matches[1]);
+        return $value === '' ? null : $value;
+    }
+    return null;
+}
+
 function handleRequest(
     string $rawRequest,
     ?\Weline\Framework\Runtime\WlsRuntime $runtime,
@@ -1153,7 +1196,11 @@ function handleRequest(
     int $activeRequests,
     int $connectionCount,
     int $startTime,
-    callable $wlsLog
+    callable $wlsLog,
+    string $originToken,
+    bool $originTokenValidationEnabled,
+    string $originTokenHeader,
+    bool $originTokenAllowLocal
 ): string {
     // 解析请求 URI
     $uri = '/';
@@ -1167,7 +1214,10 @@ function handleRequest(
     
     // 获取客户端 IP
     $clientIp = '127.0.0.1';
-    if (\preg_match('/X-Real-IP:\s*([^\r\n]+)/i', $rawRequest, $matches)) {
+    $cfConnectingIp = getHeaderValue($rawRequest, 'CF-Connecting-IP');
+    if ($cfConnectingIp !== null) {
+        $clientIp = $cfConnectingIp;
+    } elseif (\preg_match('/X-Real-IP:\s*([^\r\n]+)/i', $rawRequest, $matches)) {
         $clientIp = \trim($matches[1]);
     } elseif (\preg_match('/X-Forwarded-For:\s*([^\r\n,]+)/i', $rawRequest, $matches)) {
         $clientIp = \trim($matches[1]);
@@ -1224,6 +1274,19 @@ function handleRequest(
             : "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
     }
     // ========== 健康检查接口结束 ==========
+
+    // ========== Origin Token 回源校验（可选）==========
+    if ($originTokenValidationEnabled && $originToken !== '') {
+        $isLocalClient = $isLocal;
+        if (!$originTokenAllowLocal || !$isLocalClient) {
+            $receivedToken = getHeaderValue($rawRequest, $originTokenHeader) ?? '';
+            if (!\hash_equals($originToken, $receivedToken)) {
+                $forbiddenBody = '{"error":true,"message":"Origin token validation failed"}';
+                return "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: " . \strlen($forbiddenBody) . "\r\nConnection: close\r\n\r\n{$forbiddenBody}";
+            }
+        }
+    }
+    // ========== Origin Token 回源校验结束 ==========
     
     // ========== 静态文件处理（WLS 模式特有） ==========
     $staticResponse = handleStaticFile($uri, $rawRequest);

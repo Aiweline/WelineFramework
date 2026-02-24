@@ -62,6 +62,11 @@ CDN 模块处理流程：
 3. 恢复正常访问策略'),
         'doc' => 'CDN攻击恢复信号.md',
     ],
+    'Weline_Cdn::push_rules' => [
+        'name' => __('CDN规则推送'),
+        'description' => __('在推送CDN规则到服务商时触发，允许其他模块监听并参与规则推送。事件数据包含规则列表、域名等信息。'),
+        'doc' => 'CDN规则推送.md',
+    ],
     'Weline_Cdn::request' => [
         'name' => __('CDN统一请求事件'),
         'description' => __('统一的CDN操作请求接口，支持多种操作类型。

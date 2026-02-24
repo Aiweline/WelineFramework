@@ -172,8 +172,19 @@ File: Main Js File
         var bestMatch = null;
         var bestScore = -1;
         
+        // 仅搜索主菜单（排除搜索项、常用菜单），避免多分支同时高亮
+        var $mainMenuLinks = $("#side-menu a").not(function () {
+            return $(this).closest('.menu-search-item, .menu-frequent-item').length > 0;
+        });
+        
+        // 先清除主菜单中已有的 active/mm-active/mm-show，确保只高亮一条链路
+        var $mainMenu = $("#side-menu > li").not('.menu-search-item, .menu-frequent-item');
+        $mainMenu.add($mainMenu.find('li')).removeClass('mm-active');
+        $mainMenu.find('a').removeClass('active mm-active');
+        $mainMenu.find('ul.sub-menu').removeClass('mm-show');
+        
         // 第一遍：查找精确匹配或最长路径匹配
-        $("#sidebar-menu a").each(function () {
+        $mainMenuLinks.each(function () {
             var menuUrl = this.href;
             
             // 跳过无效链接（如 # 或 javascript:）
@@ -197,7 +208,7 @@ File: Main Js File
             }
         });
         
-        // 激活最佳匹配的菜单项
+        // 激活最佳匹配的菜单项（仅一条链路）
         if (bestMatch && bestScore > 0) {
             bestMatch.addClass("active");
             bestMatch.parent().addClass("mm-active"); // add active to li of the current link

@@ -34,6 +34,12 @@ class MasterProcess
     public const MODE_WINDOWS_DISPATCHER = 'windows-dispatcher'; // Windows Dispatcher TCP 透传模式
     
     /**
+     * Master 进程名统一前缀（用于识别与按前缀清理逃逸 Master）
+     * 完整进程名：weline-wls-master-{instanceName}
+     */
+    public const MASTER_PROCESS_NAME_PREFIX = 'weline-wls-master-';
+    
+    /**
      * Worker 生命周期状态（防重复启动）
      */
     public const WORKER_STATE_STOPPED  = 'stopped';
@@ -181,12 +187,24 @@ class MasterProcess
     protected bool $shouldStopFlag = false;
     
     /**
+     * 是否处于启动阶段（阶段 0～5 期间为 true，进入主循环前置为 false）
+     * 启动阶段不执行健康检查、重启策略等，完全启动后才恢复。
+     */
+    protected bool $startupPhase = false;
+    
+    /**
      * Worker 重启互斥标志 [workerId => timestamp]
      * 
      * 防止多个路径（健康检查、滚动重启、IPC 断开回调）同时触发同一 Worker 的重启。
      * 启动前设置时间戳，启动完成后清除。超过 30 秒自动过期（防止死锁）。
      */
     protected array $restartingWorkers = [];
+    
+    /**
+     * 是否为复活模式（Master 由 Worker 等子进程拉起）
+     * 为 true 时在启动 Worker 前会先等待子进程通过 IPC 重连并 register，再仅对未重连的槽位启动新进程。
+     */
+    protected bool $resurrectionMode = false;
     
     public function __construct()
     {
@@ -362,6 +380,38 @@ class MasterProcess
     }
     
     /**
+     * 设置复活模式（由 runMasterOnly 调用）
+     * 复活时先通过 IPC 等待在役子进程重连，再做通信检查，仅对未重连的槽位启动新进程。
+     */
+    public function setResurrectionMode(bool $resurrection): self
+    {
+        $this->resurrectionMode = $resurrection;
+        return $this;
+    }
+    
+    /**
+     * 设置 Dispatcher PID（复活时从实例文件恢复，用于采纳在役进程）
+     */
+    public function setDispatcherPid(int $pid): self
+    {
+        if ($this->dispatcher !== null && $pid > 0) {
+            $this->dispatcher['pid'] = $pid;
+        }
+        return $this;
+    }
+    
+    /**
+     * 设置 HTTP 重定向进程 PID（复活时从实例文件恢复，用于采纳在役进程）
+     */
+    public function setHttpRedirectPid(int $pid): self
+    {
+        if ($this->httpRedirectWorker !== null && $pid > 0) {
+            $this->httpRedirectWorker['pid'] = $pid;
+        }
+        return $this;
+    }
+    
+    /**
      * 获取实例文件路径
      */
     protected function getInstanceFile(): string
@@ -439,10 +489,66 @@ class MasterProcess
     }
     
     /**
+     * 获取 Master 进程名（用于 Processer 注册与按前缀杀进程）
+     * 统一前缀便于识别逃逸 Master 并一同按前缀清理。
+     */
+    public static function getMasterProcessName(string $instanceName): string
+    {
+        return self::MASTER_PROCESS_NAME_PREFIX . $instanceName;
+    }
+    
+    /**
+     * 服务异常标记文件路径（Master 复活三次失败后写入，等待人工干预）
+     * 仅在此场景使用文件：此时无 Master 无法走 IPC，子进程需跨进程得知“停止复活”。
+     * 停止/重启均由 Master 通过 IPC 广播 shutdown，不依赖文件信号。
+     */
+    public static function getServiceExceptionFile(string $instanceName): string
+    {
+        $dir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0755, true);
+        }
+        return $dir . $instanceName . '.service_exception';
+    }
+    
+    /**
+     * 设置服务异常（复活失败等），停止策略运行，等待人工干预
+     */
+    public static function setServiceException(string $instanceName, string $message, int $attempts = 0): void
+    {
+        $file = self::getServiceExceptionFile($instanceName);
+        $data = [
+            'message' => $message,
+            'attempts' => $attempts,
+            'time' => \time(),
+            'date' => \date('Y-m-d H:i:s'),
+        ];
+        @\file_put_contents($file, \json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    }
+    
+    /**
+     * 清除服务异常（Master 正常启动时调用）
+     */
+    public static function clearServiceException(string $instanceName): void
+    {
+        @\unlink(self::getServiceExceptionFile($instanceName));
+    }
+    
+    /**
+     * 是否处于服务异常状态（停止策略，等待人工干预）
+     */
+    public static function hasServiceException(string $instanceName): bool
+    {
+        return \is_file(self::getServiceExceptionFile($instanceName));
+    }
+    
+    /**
      * 运行 Master 进程（主循环）
      */
     public function run(): void
     {
+        $this->startupPhase = true;
+        self::clearServiceException($this->instanceName);
         $masterPid = \getmypid();
         $this->log('========================================');
         $this->log(__('Master 进程启动'), 'success');
@@ -461,6 +567,22 @@ class MasterProcess
         $this->log(__('[保存] 写入 Master 实例信息...'));
         $this->saveMasterInfo();
         
+        // 复活模式：等待在役 Worker / Dispatcher / HTTP Redirect 通过 IPC 重连并 register，相互认识后再做启动决策
+        if ($this->resurrectionMode && $this->controlServer) {
+            $waitSeconds = 6;
+            $this->log(__('复活模式：等待子进程重连 (Worker/Dispatcher/Redirect, %{1}s)...', [$waitSeconds]));
+            for ($i = 0; $i < $waitSeconds; $i++) {
+                $this->controlServer->poll(1, 0);
+            }
+            $registeredWorkers = $this->controlServer->getClientsByRole(ControlMessage::ROLE_WORKER);
+            $registeredDisp = $this->controlServer->getClientsByRole(ControlMessage::ROLE_DISPATCHER);
+            $registeredRedirect = $this->controlServer->getClientsByRole(ControlMessage::ROLE_REDIRECT);
+            $this->log(__('复活模式：已重连 Worker %{1}/%{2}, Dispatcher %{3}, Redirect %{4}', [
+                \count($registeredWorkers), \count($this->workers),
+                \count($registeredDisp), \count($registeredRedirect),
+            ]));
+        }
+        
         // ========== 阶段 1: 启动 Worker 进程 ==========
         $workerCount = \count($this->workers);
         $this->log(__('[阶段 1/6] 启动 %{1} 个 Worker 进程...', [$workerCount]));
@@ -475,15 +597,20 @@ class MasterProcess
         
         // ========== 阶段 2: 启动 Dispatcher 进程 ==========
         if ($this->dispatcher !== null) {
-            $this->log(__('[阶段 2/6] 启动 Dispatcher 进程 (端口: %{1})...', [$this->dispatcher['port']]));
-            $dispStartTime = \microtime(true);
-            $pid = $this->startDispatcherProcess();
-            $dispElapsed = \round((\microtime(true) - $dispStartTime) * 1000, 1);
-            if ($pid > 0) {
-                $this->dispatcher['pid'] = $pid;
-                $this->log(__('[阶段 2/6] Dispatcher 启动成功，PID: %{1} (%{2}ms)', [$pid, $dispElapsed]), 'success');
+            $existingDispPid = (int)($this->dispatcher['pid'] ?? 0);
+            if ($existingDispPid > 0 && Processer::isRunningByPid($existingDispPid)) {
+                $this->log(__('[阶段 2/6] Dispatcher 已在役 (PID: %{1})，采纳并跳过启动', [$existingDispPid]));
             } else {
-                $this->log(__('[阶段 2/6] Dispatcher 启动失败 (%{1}ms)', [$dispElapsed]), 'error');
+                $this->log(__('[阶段 2/6] 启动 Dispatcher 进程 (端口: %{1})...', [$this->dispatcher['port']]));
+                $dispStartTime = \microtime(true);
+                $pid = $this->startDispatcherProcess();
+                $dispElapsed = \round((\microtime(true) - $dispStartTime) * 1000, 1);
+                if ($pid > 0) {
+                    $this->dispatcher['pid'] = $pid;
+                    $this->log(__('[阶段 2/6] Dispatcher 启动成功，PID: %{1} (%{2}ms)', [$pid, $dispElapsed]), 'success');
+                } else {
+                    $this->log(__('[阶段 2/6] Dispatcher 启动失败 (%{1}ms)', [$dispElapsed]), 'error');
+                }
             }
         } else {
             $this->log(__('[阶段 2/6] Dispatcher 未启用，跳过'));
@@ -491,20 +618,25 @@ class MasterProcess
         
         // ========== 阶段 3: 启动 HTTP 重定向进程 ==========
         if ($this->httpRedirectWorker !== null && \is_file($this->httpRedirectScript)) {
-            $this->log(__('[阶段 3/6] 启动 HTTP→HTTPS 重定向进程 (端口: %{1})...', [$this->httpRedirectWorker['port']]));
-            try {
-                $redirectStartTime = \microtime(true);
-                $pid = $this->startHttpRedirectWorker();
-                $redirectElapsed = \round((\microtime(true) - $redirectStartTime) * 1000, 1);
-                if ($pid > 0) {
-                    $this->httpRedirectWorker['pid'] = $pid;
-                    $this->log(__('[阶段 3/6] HTTP 重定向进程启动成功，PID: %{1} (%{2}ms)', [$pid, $redirectElapsed]), 'success');
-                } else {
-                    $this->log(__('[阶段 3/6] HTTP 重定向进程启动失败 (%{1}ms)（非致命）', [$redirectElapsed]), 'warning');
+            $existingRedirectPid = (int)($this->httpRedirectWorker['pid'] ?? 0);
+            if ($existingRedirectPid > 0 && Processer::isRunningByPid($existingRedirectPid)) {
+                $this->log(__('[阶段 3/6] HTTP 重定向进程已在役 (PID: %{1})，采纳并跳过启动', [$existingRedirectPid]));
+            } else {
+                $this->log(__('[阶段 3/6] 启动 HTTP→HTTPS 重定向进程 (端口: %{1})...', [$this->httpRedirectWorker['port']]));
+                try {
+                    $redirectStartTime = \microtime(true);
+                    $pid = $this->startHttpRedirectWorker();
+                    $redirectElapsed = \round((\microtime(true) - $redirectStartTime) * 1000, 1);
+                    if ($pid > 0) {
+                        $this->httpRedirectWorker['pid'] = $pid;
+                        $this->log(__('[阶段 3/6] HTTP 重定向进程启动成功，PID: %{1} (%{2}ms)', [$pid, $redirectElapsed]), 'success');
+                    } else {
+                        $this->log(__('[阶段 3/6] HTTP 重定向进程启动失败 (%{1}ms)（非致命）', [$redirectElapsed]), 'warning');
+                    }
+                } catch (\RuntimeException $e) {
+                    // HTTP 重定向启动失败不应该导致 Master 崩溃
+                    $this->log(__('[阶段 3/6] HTTP 重定向启动异常: %{1}（非致命）', [$e->getMessage()]), 'warning');
                 }
-            } catch (\RuntimeException $e) {
-                // HTTP 重定向启动失败不应该导致 Master 崩溃
-                $this->log(__('[阶段 3/6] HTTP 重定向启动异常: %{1}（非致命）', [$e->getMessage()]), 'warning');
             }
         } else {
             $this->log(__('[阶段 3/6] HTTP 重定向未启用，跳过'));
@@ -584,6 +716,7 @@ class MasterProcess
         $this->log(__('  内存使用: %{1} MB', [\round(\memory_get_usage(true) / 1024 / 1024, 2)]));
         $this->log('========================================');
         
+        $this->startupPhase = false;
         // ========== 主循环：stream_select 驱动，融合控制通道 I/O ==========
         $lastHealthCheck = \time();
         $lastSaveInfo    = \time();
@@ -653,6 +786,7 @@ class MasterProcess
             case SIGTERM:
             case SIGINT:
                 $this->log(__('收到终止信号 (%{1})，准备停止...', [$signo]));
+                $this->shouldStopFlag = true;
                 $this->running = false;
                 break;
             case SIGHUP:
@@ -676,6 +810,9 @@ class MasterProcess
      */
     protected function healthCheckAndRepair(): void
     {
+        if (!$this->shouldRunManagementStrategies()) {
+            return;
+        }
         // 调试日志：记录 workers 数组状态
         $debugLog = Env::VAR_DIR . 'log' . DS . 'master_health_debug.log';
         $workerCount = \count($this->workers);
@@ -805,10 +942,12 @@ class MasterProcess
             }
         }
         
-        // HTTP 重定向进程健康检查与重启
+        // HTTP 重定向进程健康检查与重启（优先 PID，与 Dispatcher 一致，采纳的在役进程可被正确识别）
         if ($this->httpRedirectWorker !== null) {
             $port = $this->httpRedirectWorker['port'];
-            $isRunning = Processer::isPortInUse($port);
+            $redirectPid = (int)($this->httpRedirectWorker['pid'] ?? 0);
+            $isRunning = ($redirectPid > 0 && Processer::isRunningByPid($redirectPid))
+                || Processer::isPortInUse($port);
             if (!$isRunning) {
                 if ($this->httpRedirectWorker['restarts'] >= $this->maxRestarts) {
                     if (\time() - $this->httpRedirectWorker['last_restart'] < 60) {
@@ -888,6 +1027,9 @@ class MasterProcess
      */
     protected function healthCheckLinuxDirectMode(): void
     {
+        if (!$this->shouldRunManagementStrategies()) {
+            return;
+        }
         // 1. 检查主端口是否有进程在监听
         $mainPortListening = $this->mainPort > 0 && Processer::isPortInUse($this->mainPort);
         
@@ -945,10 +1087,12 @@ class MasterProcess
         
         @\file_put_contents($debugLog, \date('Y-m-d H:i:s') . " [LinuxDirect] runningWorkers={$runningWorkers}/" . \count($this->workers) . "\n", FILE_APPEND);
         
-        // 4. HTTP 重定向进程健康检查（与其他模式相同）
+        // 4. HTTP 重定向进程健康检查（优先 PID，采纳的在役进程可被正确识别）
         if ($this->httpRedirectWorker !== null) {
             $port = $this->httpRedirectWorker['port'];
-            $isRunning = Processer::isPortInUse($port);
+            $redirectPid = (int)($this->httpRedirectWorker['pid'] ?? 0);
+            $isRunning = ($redirectPid > 0 && Processer::isRunningByPid($redirectPid))
+                || Processer::isPortInUse($port);
             if (!$isRunning) {
                 if ($this->httpRedirectWorker['restarts'] >= $this->maxRestarts) {
                     if (\time() - ($this->httpRedirectWorker['last_restart'] ?? 0) < 60) {
@@ -1082,6 +1226,14 @@ class MasterProcess
         
         foreach ($this->workers as $workerId => &$worker) {
             $port = $worker['port'];
+            // 采纳在役 Worker：复活场景下实例文件中的 PID 仍存活则视为已运行，不重复启动（避免僵尸进程）
+            $existingPid = (int)($worker['pid'] ?? 0);
+            if ($existingPid > 0 && Processer::isRunningByPid($existingPid)) {
+                $worker['state'] = self::WORKER_STATE_RUNNING;
+                $worker['state_since'] = \time();
+                $this->log(__('Worker #%{1} (端口: %{2}) 已在役 (PID: %{3})，采纳并跳过启动', [$workerId, $port, $existingPid]));
+                continue;
+            }
             if (Processer::isPortInUse($port)) {
                 $this->log(__('Worker #%{1} 端口 %{2} 已被占用，跳过', [$workerId, $port]), 'warning');
                 continue;
@@ -1779,6 +1931,9 @@ class MasterProcess
      */
     protected function handleWorkerDisconnect(int $workerId, int $port): void
     {
+        if (!$this->shouldRunManagementStrategies()) {
+            return;
+        }
         if ($this->rollingRestart && $workerId === $this->drainingWorkerId) {
             // 滚动重启中：Worker 排水后退出，启动新 Worker
             $this->log(__('Worker #%{1} 已退出，正在启动新 Worker...', [$workerId]));
@@ -1807,6 +1962,9 @@ class MasterProcess
      */
     protected function restartWorkerAndContinue(int $workerId): void
     {
+        if (!$this->shouldRunManagementStrategies()) {
+            return;
+        }
         // 新 Worker 启动后会 register + ready，Master 在 handleReady 中 undrain 并继续
         // 这里只需触发 Worker 重启（由已有的 healthCheckAndRepair 或直接调用）
         $worker = $this->workers[$workerId] ?? null;
@@ -2039,11 +2197,15 @@ class MasterProcess
                 $wid  = $msg['worker_id'] ?? 0;
                 $this->log(__('进程注册: role=%{1}, pid=%{2}, port=%{3}, worker_id=%{4}', [$role, $pid, $port, $wid]));
                 
-                // 更新内部 workers 数组的 PID（精确 PID，不再猜测）；状态机：IPC 注册为最可靠的就绪信号
+                // 更新内部 workers / dispatcher / httpRedirect 的 PID；IPC 注册为最可靠的就绪信号，复活后重连即相互认识
                 if ($role === ControlMessage::ROLE_WORKER && $wid > 0 && isset($this->workers[$wid])) {
                     $this->workers[$wid]['pid'] = (int)$pid;
                     $this->workers[$wid]['state'] = self::WORKER_STATE_RUNNING;
                     $this->workers[$wid]['state_since'] = \time();
+                } elseif ($role === ControlMessage::ROLE_DISPATCHER && $this->dispatcher !== null) {
+                    $this->dispatcher['pid'] = (int)$pid;
+                } elseif ($role === ControlMessage::ROLE_REDIRECT && $this->httpRedirectWorker !== null) {
+                    $this->httpRedirectWorker['pid'] = (int)$pid;
                 }
                 break;
                 
@@ -2083,7 +2245,7 @@ class MasterProcess
         switch ($action) {
             case ControlMessage::ACTION_STOP:
                 $this->log(__('收到 CLI 停止命令'));
-                // 广播 shutdown 给所有子进程
+                // 通过 IPC 控制通道广播 shutdown，子进程收后不复活（不依赖文件信号）
                 if ($this->controlServer) {
                     $this->controlServer->broadcast(ControlMessage::shutdown('server:stop'));
                     // 给子进程时间收到消息
@@ -2166,6 +2328,30 @@ class MasterProcess
     protected function shouldStop(): bool
     {
         return $this->shouldStopFlag;
+    }
+    
+    /**
+     * 是否允许执行管理策略（健康检查、重启 Worker 等）
+     *
+     * 统一判断入口：关闭/启动期间不执行，收到关闭信号立即停止，完全启动后才恢复。
+     * - 已收到停止信号 → 不允许（直接停止）
+     * - 处于启动阶段（阶段 0～5）→ 不允许（等完全重启后恢复）
+     * - 复活阶段（resurrectionMode 下阶段 0～5）→ 不允许，等待复活结果
+     * - 服务异常状态（复活三次失败等）→ 不允许，等待人工干预
+     * - 否则 → 允许
+     */
+    protected function shouldRunManagementStrategies(): bool
+    {
+        if ($this->shouldStopFlag) {
+            return false;
+        }
+        if ($this->startupPhase) {
+            return false;
+        }
+        if (self::hasServiceException($this->instanceName)) {
+            return false;
+        }
+        return true;
     }
     
     /**

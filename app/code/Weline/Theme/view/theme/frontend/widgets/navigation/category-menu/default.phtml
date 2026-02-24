@@ -95,10 +95,8 @@ $categories = [
 
 $widgetId = 'category-menu-' . uniqid();
 
-/**
- * 递归渲染子菜单
- */
-function renderSubmenu($items, $depth = 1, $maxDepth = 3, $showCount = false) {
+// 递归渲染子菜单（闭包，避免模板多次包含时重复声明）
+$renderSubmenu = function ($items, $depth = 1, $maxDepth = 3, $showCount = false) use (&$renderSubmenu) {
     if ($depth >= $maxDepth || empty($items)) return;
     ?>
     <ul class="submenu submenu-depth-<?= $depth ?>">
@@ -114,13 +112,13 @@ function renderSubmenu($items, $depth = 1, $maxDepth = 3, $showCount = false) {
                     <?php endif; ?>
                 </a>
                 <?php if (!empty($item['children'])): ?>
-                    <?php renderSubmenu($item['children'], $depth + 1, $maxDepth, $showCount); ?>
+                    <?php $renderSubmenu($item['children'], $depth + 1, $maxDepth, $showCount); ?>
                 <?php endif; ?>
             </li>
         <?php endforeach; ?>
     </ul>
     <?php
-}
+};
 ?>
 
 <div class="widget-category-menu menu-style-<?= htmlspecialchars($style) ?>" 
@@ -150,7 +148,7 @@ function renderSubmenu($items, $depth = 1, $maxDepth = 3, $showCount = false) {
                         <?php endif; ?>
                     </a>
                     <?php if (!empty($category['children'])): ?>
-                        <?php renderSubmenu($category['children'], 1, $maxDepth, $showCount); ?>
+                        <?php $renderSubmenu($category['children'], 1, $maxDepth, $showCount); ?>
                     <?php endif; ?>
                 </li>
             <?php endforeach; ?>

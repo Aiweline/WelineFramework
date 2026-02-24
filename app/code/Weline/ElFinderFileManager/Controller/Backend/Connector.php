@@ -1,12 +1,16 @@
 <?php
 
-namespace Weline\ElfinderFileManager\Controller\Backend;
+declare(strict_types=1);
+
+namespace Weline\ElFinderFileManager\Controller\Backend;
 
 use elFinder;
 use elFinderConnector;
+use Weline\ElFinderFileManager\Service\ConnectorOptionsBuilder;
 use Weline\FileManager\Helper\MimeTypes;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Manager\ObjectManager;
 
 class Connector extends BackendController
 {
@@ -59,78 +63,30 @@ class Connector extends BackendController
 
     public function index()
     {
-        //////////////////////////////////////////////////////////////////////
-        // CONFIGS
-        // 读取支持的类型
-        $mimesExt = $this->request->getParam('ext');
-        $mimes = ['image', 'text/plain'];
-        if ($mimesExt) {
-            $mimesExt = explode(',', $mimesExt);
-            foreach ($mimesExt as $k => $mimeExt) {
-                $mimes = array_merge($mimes, MimeTypes::getMimeTypes(trim($mimeExt)));
+        // #region agent log — 致命错误时在 shutdown 中写入 error_get_last()
+        $logFile = (defined('BP') ? BP : dirname(__DIR__, 6) . DS) . 'debug-beb774.log';
+        register_shutdown_function(static function () use ($logFile) {
+            $err = error_get_last();
+            if ($err !== null && isset($err['message']) && $err['message'] !== '') {
+                file_put_contents($logFile, json_encode(['sessionId' => 'beb774', 'location' => 'shutdown', 'message' => 'fatal', 'data' => $err, 'timestamp' => (int) (microtime(true) * 1000), 'hypothesisId' => 'G']) . "\n", FILE_APPEND);
             }
-        }
-        // Enable FTP connector netmount
-        $useFtpNetMount = true;
+        });
+        // #endregion
+        try {
+            $mimes = $this->collectMimesFromExt($this->request->getParam('ext'));
+            $rootPath = PUB . 'media';
+            $rootUrl = '/pub/media';
+            $startPath = $this->request->getParam('startPath');
+            $local = Cookie::getLangLocal();
 
-        // Set root path/url
-        define('ELFINDER_ROOT_PATH', PUB . 'media');
-        define('ELFINDER_ROOT_URL', '/pub/media');
-        # 卷目录处理
-        if (!is_dir(ELFINDER_ROOT_PATH . '/.trash/.tmb/')) {
-            mkdir(ELFINDER_ROOT_PATH . '/.trash/.tmb/', 755, true);
-        }
-        if (!is_dir(ELFINDER_ROOT_PATH . '/.tmb')) {
-            mkdir(ELFINDER_ROOT_PATH . '/.tmb', 755, true);
-        }
-        // Volumes config
-        // Documentation for connector options:
-        // https://github.com/Studio-42/elFinder/wiki/Connector-configuration-options
-        $opts = array(
-            'debug' => DEBUG,
-            'local' => Cookie::getLangLocal(),
-            'roots' => array(
-                array(
-                    'driver' => 'LocalFileSystem',           // driver for accessing file system (REQUIRED)
-                    'path' => ELFINDER_ROOT_PATH . '/', // path to files (REQUIRED)
-                    'startPath' => $this->request->getParam('startPath'), // path to files (REQUIRED)
-                    'URL' => ELFINDER_ROOT_URL . '/', // URL to files (REQUIRED)
-                    'trashHash' => 't1_Lw',                     // elFinder's hash of trash folder
-                    'uploadDeny' => array('all'),                // All Mimetypes not allowed to upload
-                    'uploadAllow' => $mimes,// Mimetype `image` and `text/plain` allowed to upload
-                    'uploadOrder' => array('deny', 'allow'),      // allowed Mimetype `image` and `text/plain` only
-                    'accessControl' => 'access'                     // disable and hide dot starting files (OPTIONAL)
-                ),
-                // Trash volume
-                array(
-                    'id' => '1',
-                    'driver' => 'Trash',
-                    'path' => ELFINDER_ROOT_PATH . '/.trash/',
-                    'tmbURL' => ELFINDER_ROOT_URL . '/.trash/.tmb/',
-                    'uploadDeny' => array('all'),                // Recomend the same settings as the original volume that uses the trash
-                    'uploadAllow' => $mimes,// Same as above
-                    'uploadOrder' => array('deny', 'allow'),      // Same as above
-                    'accessControl' => 'access',                    // Same as above
-                )
-            ),
-            'optionsNetVolumes' => array(
-                '*' => array(
-                    'tmbURL' => ELFINDER_ROOT_URL . '/.tmb',
-                    'tmbPath' => ELFINDER_ROOT_PATH . '/.tmb',
-                    'syncMinMs' => 30000
-                )
-            )
-        );
-        //////////////////////////////////////////////////////////////////////
-        // load composer autoload.php
-        require VENDOR_PATH . '/autoload.php';
+            /** @var ConnectorOptionsBuilder $builder */
+            $builder = ObjectManager::getInstance(ConnectorOptionsBuilder::class);
+            $opts = $builder->build($rootPath, $rootUrl, $mimes, $startPath, $local);
 
-        // Enable FTP connector netmount
-        if ($useFtpNetMount) {
+            require VENDOR_PATH . '/autoload.php';
             elFinder::$netDrivers['ftp'] = 'FTP';
-        }
 
-        // // Required for Dropbox network mount
+            // // Required for Dropbox network mount
         // // Installation by composer
         // // `composer require kunalvarma05/dropbox-php-sdk`
         // // Enable network mount
@@ -175,27 +131,45 @@ class Connector extends BackendController
         // define('ELFINDER_BOX_CLIENTSECRET', '');
         // ===============================================
 
-        /**
-         * Simple function to demonstrate how to control file access using "accessControl" callback.
-         * This method will disable accessing files/folders starting from '.' (dot)
-         *
-         * @param string $attr attribute name (read|write|locked|hidden)
-         * @param string $path file path relative to volume root directory started with directory separator
-         * @return bool|null
-         **/
-        function access($attr, $path, $data, $volume, $isDir, $relpath)
-        {
-            return basename($path)[0] === '.'            // if file/folder begins with '.' (dot) with out volume root
-            && strlen($relpath) !== 1
-                ? !($attr == 'read' || $attr == 'write') // set read+write to false, other (locked+hidden) set to true
-                : null;                                 // else elFinder decide it itself
+            // run elFinder
+            $connector = new elFinderConnector(new elFinder($opts));
+            // #region agent log
+            file_put_contents($logFile, json_encode(['sessionId' => 'beb774', 'location' => 'Connector.php:index', 'message' => 'before_run', 'data' => [], 'timestamp' => (int) (microtime(true) * 1000), 'hypothesisId' => 'E']) . "\n", FILE_APPEND);
+            // #endregion
+            $connector->run();
+            // #region agent log
+            file_put_contents($logFile, json_encode(['sessionId' => 'beb774', 'location' => 'Connector.php:index', 'message' => 'after_run', 'data' => [], 'timestamp' => (int) (microtime(true) * 1000), 'hypothesisId' => 'E']) . "\n", FILE_APPEND);
+            // #endregion
+        } catch (\Throwable $e) {
+            file_put_contents($logFile, json_encode([
+                'sessionId' => 'beb774',
+                'location' => 'Connector.php:index',
+                'message' => 'throwable',
+                'data' => [
+                    'class' => get_class($e),
+                    'message' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                ],
+                'timestamp' => (int) (microtime(true) * 1000),
+                'hypothesisId' => 'H',
+            ]) . "\n", FILE_APPEND);
+            throw $e;
         }
+    }
 
-        // run elFinder
-        $connector = new elFinderConnector(new elFinder($opts));
-        $connector->run();
-
-        // end connector
+    /**
+     * 从请求参数 ext（逗号分隔扩展名）收集允许的 MIME 类型。
+     */
+    private function collectMimesFromExt(?string $ext): array
+    {
+        $mimes = ['image', 'text/plain'];
+        if ($ext !== null && $ext !== '') {
+            foreach (explode(',', $ext) as $mimeExt) {
+                $mimes = array_merge($mimes, MimeTypes::getMimeTypes(trim($mimeExt)));
+            }
+        }
+        return $mimes;
     }
 
     public function getManager()

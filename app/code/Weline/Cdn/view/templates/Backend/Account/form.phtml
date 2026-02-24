@@ -12,6 +12,7 @@ $adapters = $this->getData('adapters') ?: [];
 $isEdit = $account && $account->getData('account_id');
 $credentials = $account ? $account->getCredentialsArray() : [];
 $isIframe = $this->request->getGet('isIframe') === 'true';
+$originToken = (string)($this->getData('originToken') ?? '');
 ?>
 <!DOCTYPE html>
 <html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
@@ -164,6 +165,13 @@ $isIframe = $this->request->getGet('isIframe') === 'true';
                                                                    placeholder="<?= __('请输入Account ID（Cloudflare）') ?>">
                                                             <small class="form-text text-muted"><?= __('Cloudflare Zone 创建需要 Account ID') ?></small>
                                                         </div>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label"><?= __('回源 Origin Token（只读）') ?></label>
+                                                        <input type="text" class="form-control" readonly
+                                                               value="<?= htmlspecialchars($originToken) ?>"
+                                                               placeholder="<?= __('请在 app/etc/env.php 的 server.origin_token 中配置') ?>">
+                                                        <small class="form-text text-muted"><?= __('CDN 回源时可通过自定义 Header 传递该 Token，在源站进行校验。') ?></small>
                                                     </div>
                                                 </div>
                                             </div>

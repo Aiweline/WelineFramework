@@ -151,14 +151,14 @@ class WlsRequest extends Request
             $originalScheme = $headers['Weline-Original-Scheme'] ?? 'http';
             $originalPort = $headers['Weline-Original-Port'] ?? '';
             $originalSsl = $headers['Weline-Original-Ssl'] ?? 'off';
-            $realIp = $headers['Weline-Real-Ip'] ?? '';
+            $realIp = $headers['CF-Connecting-IP'] ?? ($headers['Weline-Real-Ip'] ?? '');
             $isHttps = ($originalScheme === 'https' || $originalSsl === 'on');
         } else {
             // 回退到标准 X-Forwarded-* 头（兼容其他代理）
             $originalHost = $headers['X-Forwarded-Host'] ?? $headers['Host'] ?? 'localhost';
             $originalPort = ''; // 非 Dispatcher 模式，端口从 Host 头解析
             $forwardedProto = $headers['X-Forwarded-Proto'] ?? '';
-            $realIp = $headers['X-Real-IP'] ?? '';
+            $realIp = $headers['CF-Connecting-IP'] ?? ($headers['X-Real-IP'] ?? '');
             
             // 检测 HTTPS：多种检测方式
             $isHttps = false;
@@ -265,7 +265,7 @@ class WlsRequest extends Request
             $server['REMOTE_ADDR'] = $realIp;
         } elseif (!isset($server['REMOTE_ADDR']) || empty($server['REMOTE_ADDR'])) {
             // 从 X-Forwarded-For 取第一个 IP
-            $forwardedFor = $headers['X-Forwarded-For'] ?? $headers['Weline-Forwarded-For'] ?? '';
+            $forwardedFor = $headers['CF-Connecting-IP'] ?? ($headers['X-Forwarded-For'] ?? $headers['Weline-Forwarded-For'] ?? '');
             if ($forwardedFor) {
                 $ips = \explode(',', $forwardedFor);
                 $server['REMOTE_ADDR'] = \trim($ips[0]);

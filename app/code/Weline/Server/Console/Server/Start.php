@@ -270,6 +270,7 @@ class Start extends CommandAbstract
                 $this->showAlreadyRunningInfo($instanceName, $port);
                 return;
             }
+            // 强制重启：先停旧 Master，其通过 IPC 广播 shutdown，子进程收后不复活
             if ($forceSwitch) {
                 $this->printer->warning(__('检测到服务器已运行，-f 直接切换（不等待）...'));
                 $this->stopExistingServer($instanceName, $port, $count);
@@ -426,17 +427,17 @@ class Start extends CommandAbstract
             $this->showStandardPortHints($port, $count, $sslEnabled);
         }
 
-        // 检查端口是否被占用
+        // 检查端口是否被占用（框架进程占用时最多重试 3 次，仍占用则按 Master 前缀清理逃逸 Master 后再试）
         if ($dispatcherEnabled) {
             // Dispatcher 模式：检查主端口（Dispatcher 用）+ Worker 内网端口
-            if (!$this->checkAndReleasePort($host, $port, $forceRestart, 'Dispatcher')) {
+            if (!$this->checkAndReleasePort($host, $port, $forceRestart, 'Dispatcher', $instanceName)) {
                 if (!empty($maintenanceEnabledByUs)) {
                     $this->disableMaintenanceMode();
                     $this->printer->note(__('维护模式已关闭（端口检查未通过）。'));
                 }
                 return;
             }
-            if (!$this->checkAndReleasePorts($host, $workerPort, $count, $forceRestart)) {
+            if (!$this->checkAndReleasePorts($host, $workerPort, $count, $forceRestart, $instanceName)) {
                 if (!empty($maintenanceEnabledByUs)) {
                     $this->disableMaintenanceMode();
                     $this->printer->note(__('维护模式已关闭（端口检查未通过）。'));
@@ -445,7 +446,7 @@ class Start extends CommandAbstract
             }
         } else {
             // 直连模式：检查 Worker 端口
-            if (!$this->checkAndReleasePorts($host, $port, $count, $forceRestart)) {
+            if (!$this->checkAndReleasePorts($host, $port, $count, $forceRestart, $instanceName)) {
                 if (!empty($maintenanceEnabledByUs)) {
                     $this->disableMaintenanceMode();
                     $this->printer->note(__('维护模式已关闭（端口检查未通过）。'));
@@ -456,7 +457,7 @@ class Start extends CommandAbstract
         
         // ========== 检查 HTTP 重定向端口（在启动前检测，避免启动到一半才报错） ==========
         if ($sslEnabled && $httpRedirectPort > 0) {
-            if (!$this->checkAndReleasePort($host, $httpRedirectPort, $forceRestart, 'HTTP Redirect')) {
+            if (!$this->checkAndReleasePort($host, $httpRedirectPort, $forceRestart, 'HTTP Redirect', $instanceName)) {
                 if (!empty($maintenanceEnabledByUs)) {
                     $this->disableMaintenanceMode();
                     $this->printer->note(__('维护模式已关闭（HTTP 重定向端口检查未通过）。'));
@@ -479,6 +480,9 @@ class Start extends CommandAbstract
         
         // 保存实例配置（配置记忆：下次 server:start <name> 直接使用相同配置）
         $this->saveInstanceConfig($instanceName, $args, $config);
+        
+        // 将实际的 host/port/https 同步到 env.php，供 http:req 等 CLI 工具读取
+        $this->syncServerConfigToEnv($host, $port, $sslEnabled);
         
         // 显示优化建议
         $this->showOptimizationTips($count, $config['mode'] ?? 'io');
@@ -580,6 +584,9 @@ class Start extends CommandAbstract
             ->setMainPort($mainPort)
             ->init($instanceName, $config, $workerScript, (string)($data['ssl_cert'] ?? ''), (string)($data['ssl_key'] ?? ''), $sslEnabled, $httpRedirectPort, $frontend)
             ->setWorkerPids($workerPids)
+            ->setDispatcherPid((int)($data['dispatcher_pid'] ?? 0))
+            ->setHttpRedirectPid((int)($data['http_redirect_pid'] ?? 0))
+            ->setResurrectionMode(true)
             ->run();
     }
     
@@ -594,16 +601,17 @@ class Start extends CommandAbstract
         $phpBinary = \defined('PHP_BINARY') ? PHP_BINARY : 'php';
         $script = BP . 'bin' . DS . 'w';
         
+        $masterName = MasterProcess::getMasterProcessName($instanceName);
         if (IS_WIN) {
             $bp = \str_replace("'", "''", BP);
             $phpBin = \str_replace("'", "''", $phpBinary);
             $scriptRel = 'bin' . DS . 'w';
-            $argList = "'" . $scriptRel . "','server:start','" . \str_replace("'", "''", $instanceName) . "','--master-only'";
+            $argList = "'" . $scriptRel . "','server:start','" . \str_replace("'", "''", $instanceName) . "','--master-only','--name=" . \str_replace("'", "''", $masterName) . "'";
             $psCmd = "Set-Location -LiteralPath '" . $bp . "'; Start-Process -FilePath '" . $phpBin . "' -ArgumentList " . $argList . " -WindowStyle Hidden -WorkingDirectory '" . $bp . "'";
             $fullCmd = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "' . \str_replace('"', '\"', $psCmd) . '"';
             @\exec($fullCmd . ' 2>NUL');
         } else {
-            $cmd = \sprintf('%s %s server:start %s --master-only', $phpBinary, \escapeshellarg($script), \escapeshellarg($instanceName));
+            $cmd = \sprintf('%s %s server:start %s --master-only --name=%s', $phpBinary, \escapeshellarg($script), \escapeshellarg($instanceName), \escapeshellarg($masterName));
             Processer::create($cmd, false);
         }
         
@@ -1641,105 +1649,173 @@ class Start extends CommandAbstract
      */
     /**
      * 检查并释放单个端口
+     * 框架进程占用时最多尝试 3 次；仍杀不死则按 Master 前缀清理逃逸 Master 后再试一次。
+     *
+     * @param string $instanceName 实例名，用于按前缀清理逃逸 Master
      */
-    protected function checkAndReleasePort(string $host, int $port, bool $forceRelease = false, string $label = 'Port'): bool
+    protected function checkAndReleasePort(string $host, int $port, bool $forceRelease = false, string $label = 'Port', string $instanceName = 'default'): bool
     {
         $this->printer->note(__('检查 %{1} 端口 %{2} 可用性...', [$label, $port]));
         
-        if (Processer::isPortInUse($port)) {
-            $isWelineProcess = Processer::isPortUsedByWeline($port);
-            if ($forceRelease) {
-                if ($isWelineProcess) {
-                    $this->printer->warning(__('%{1} 端口 %{2} 已被框架进程占用，强制释放...', [$label, $port]));
-                    // 使用改进的端口释放方法（内部会重试）
-                    $released = Processer::killProcessByPort($port);
-                    if (!$released) {
-                        // 普通方式失败，尝试强制方式
-                        $this->printer->warning(__('普通方式失败，尝试强制释放端口 %{1}...', [$port]));
-                        $released = Processer::forceReleasePort($port);
-                    }
-                    // Windows 端口释放需要额外等待（TIME_WAIT 状态）
-                    if (!$released && IS_WIN) {
-                        $maxWaitMs = 3000;
-                        $waitStep = 300;
-                        $waited = 0;
-                        while ($waited < $maxWaitMs && Processer::isPortInUse($port)) {
-                            \usleep($waitStep * 1000);
-                            $waited += $waitStep;
-                        }
-                        $released = !Processer::isPortInUse($port);
-                    }
-                } else {
-                    $this->printer->error(__('%{1} 端口 %{2} 被非框架进程占用，不予杀死', [$label, $port]));
-                    $this->printer->note(__('请手动停止占用该端口的进程，或更换端口'));
-                    $this->printer->note(__('或使用: php bin/w server:kill-port %{1} -f', [$port]));
-                    return false;
-                }
-            } else {
-                $this->printer->error(__('%{1} 端口 %{2} 已被占用', [$label, $port]));
-                $this->printer->note(__('使用 -r 参数强制重启（仅杀框架进程），或手动停止占用该端口的进程'));
-                $this->printer->note(__('或使用: php bin/w server:kill-port %{1} -f', [$port]));
-                return false;
+        if (!Processer::isPortInUse($port)) {
+            $this->printer->success(__('%{1} 端口 %{2} 可用 ✓', [$label, $port]));
+            return true;
+        }
+
+        $isWelineProcess = Processer::isPortUsedByWeline($port);
+        if (!$forceRelease) {
+            $this->printer->error(__('%{1} 端口 %{2} 已被占用', [$label, $port]));
+            $this->printer->note(__('使用 -r 参数强制重启（仅杀框架进程），或手动停止占用该端口的进程'));
+            $this->printer->note(__('或使用: php bin/w server:kill-port %{1} -f', [$port]));
+            return false;
+        }
+        if (!$isWelineProcess) {
+            $this->printer->error(__('%{1} 端口 %{2} 被非框架进程占用，不予杀死', [$label, $port]));
+            $this->printer->note(__('请手动停止占用该端口的进程，或更换端口'));
+            $this->printer->note(__('或使用: php bin/w server:kill-port %{1} -f', [$port]));
+            return false;
+        }
+
+        $this->printer->warning(__('%{1} 端口 %{2} 已被框架进程占用，强制释放...', [$label, $port]));
+        $maxAttempts = 3;
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            $released = Processer::killProcessByPort($port);
+            if (!$released) {
+                $released = Processer::forceReleasePort($port);
             }
-            
-            if (Processer::isPortInUse($port)) {
-                $this->printer->error(__('无法释放 %{1} 端口 %{2}', [$label, $port]));
-                $this->printer->note(__('请尝试: php bin/w server:kill-port %{1} -f', [$port]));
-                return false;
+            if (IS_WIN && !$released) {
+                $waited = 0;
+                while ($waited < 3000 && Processer::isPortInUse($port)) {
+                    \usleep(300000);
+                    $waited += 300;
+                }
+                $released = !Processer::isPortInUse($port);
+            }
+            if (!Processer::isPortInUse($port)) {
+                $this->printer->success(__('%{1} 端口 %{2} 可用 ✓', [$label, $port]));
+                return true;
+            }
+            if ($attempt < $maxAttempts) {
+                \usleep(500000);
             }
         }
-        
-        $this->printer->success(__('%{1} 端口 %{2} 可用 ✓', [$label, $port]));
-        return true;
+
+        // 三次仍杀不死：存在逃逸 Master 在不断拉起子进程，从 var/process 按 Master 前缀找并杀
+        $this->printer->warning(__('端口 %{1} 经 %{2} 次仍占用，按 Master 前缀清理逃逸进程...', [$port, $maxAttempts]));
+        $masterPrefix = MasterProcess::MASTER_PROCESS_NAME_PREFIX . $instanceName;
+        $pnamesInProcessDir = Processer::getProcessNamesByPrefix($masterPrefix);
+        if (\count($pnamesInProcessDir) > 0) {
+            $this->printer->note(__('  从 var/process 发现 %{1} 个匹配 Master，正在按前缀杀死', [\count($pnamesInProcessDir)]));
+        }
+        $killed = Processer::killByProcessNamePrefix($masterPrefix);
+        if ($killed > 0) {
+            $this->printer->note(__('  已按前缀清理 %{1} 个逃逸 Master 进程', [$killed]));
+        }
+        \sleep(1);
+        $released = Processer::killProcessByPort($port) || Processer::forceReleasePort($port);
+        if (!Processer::isPortInUse($port)) {
+            $this->printer->success(__('%{1} 端口 %{2} 可用 ✓', [$label, $port]));
+            return true;
+        }
+
+        $this->printer->error(__('无法释放 %{1} 端口 %{2}', [$label, $port]));
+        $this->printer->note(__('请尝试: php bin/w server:kill-port %{1} -f', [$port]));
+        return false;
     }
     
     /**
-     * 检查并释放端口
-     * 
-     * 注意：只杀框架进程（通过 --name=weline-xxx 识别），非框架进程不乱杀，提示用户手动处理。
+     * 检查并释放多个端口（Worker 端口）
+     * 框架进程占用时最多尝试 3 轮；仍杀不死则按 Master 前缀清理逃逸 Master 后再试一轮。
+     *
+     * @param string $instanceName 实例名，用于按前缀清理逃逸 Master
      */
-    protected function checkAndReleasePorts(string $host, int $port, int $count, bool $forceRelease = false): bool
+    protected function checkAndReleasePorts(string $host, int $port, int $count, bool $forceRelease = false, string $instanceName = 'default'): bool
     {
         $this->printer->note(__('检查 Worker 端口可用性...'));
         
+        $portsInUse = [];
         for ($i = 0; $i < $count; $i++) {
             $currentPort = $port + $i;
             if (Processer::isPortInUse($currentPort)) {
-                $isWelineProcess = Processer::isPortUsedByWeline($currentPort);
-                if ($forceRelease) {
-                    if ($isWelineProcess) {
-                        $this->printer->warning(__('端口 %{1} 已被框架进程占用，强制释放...', [$currentPort]));
-                        // 使用改进的端口释放方法（内部会重试）
-                        $released = Processer::killProcessByPort($currentPort);
-                        if (!$released) {
-                            // 普通方式失败，尝试强制方式
-                            $this->printer->warning(__('普通方式失败，尝试强制释放端口 %{1}...', [$currentPort]));
-                            $released = Processer::forceReleasePort($currentPort);
-                        }
-                    } else {
-                        $this->printer->error(__('端口 %{1} 被非框架进程占用，不予杀死', [$currentPort]));
-                        $this->printer->note(__('请手动停止占用该端口的进程，或更换端口'));
-                        $this->printer->note(__('或使用: php bin/w server:kill-port %{1} -f', [$currentPort]));
-                        return false;
-                    }
-                } else {
-                    $this->printer->error(__('端口 %{1} 已被占用', [$currentPort]));
-                    $this->printer->note(__('使用 -r 参数强制重启（仅杀框架进程），或手动停止占用该端口的进程'));
-                    $this->printer->note(__('或使用: php bin/w server:kill-port %{1} -f', [$currentPort]));
-                    return false;
-                }
-                
-                if (Processer::isPortInUse($currentPort)) {
-                    $this->printer->error(__('无法释放端口 %{1}', [$currentPort]));
-                    $this->printer->note(__('请尝试: php bin/w server:kill-port %{1} -f', [$currentPort]));
-                    return false;
-                }
+                $portsInUse[] = $currentPort;
             }
         }
-        
-        $this->printer->success(__('端口检查通过'));
-        echo "\n";
-        return true;
+        if (empty($portsInUse)) {
+            $this->printer->success(__('端口检查通过'));
+            echo "\n";
+            return true;
+        }
+
+        if (!$forceRelease) {
+            $this->printer->error(__('端口 %{1} 已被占用', [$portsInUse[0]]));
+            $this->printer->note(__('使用 -r 参数强制重启（仅杀框架进程），或手动停止占用该端口的进程'));
+            return false;
+        }
+        foreach ($portsInUse as $p) {
+            if (!Processer::isPortUsedByWeline($p)) {
+                $this->printer->error(__('端口 %{1} 被非框架进程占用，不予杀死', [$p]));
+                $this->printer->note(__('请手动停止占用该端口的进程，或更换端口'));
+                return false;
+            }
+        }
+
+        $maxAttempts = 3;
+        for ($round = 1; $round <= $maxAttempts; $round++) {
+            foreach ($portsInUse as $p) {
+                Processer::killProcessByPort($p);
+                Processer::forceReleasePort($p);
+            }
+            if (IS_WIN) {
+                \usleep(500000);
+            }
+            $stillInUse = [];
+            foreach ($portsInUse as $p) {
+                if (Processer::isPortInUse($p)) {
+                    $stillInUse[] = $p;
+                }
+            }
+            $portsInUse = $stillInUse;
+            if (empty($portsInUse)) {
+                $this->printer->success(__('端口检查通过'));
+                echo "\n";
+                return true;
+            }
+            if ($round < $maxAttempts) {
+                \usleep(500000);
+            }
+        }
+
+        // 三轮仍杀不死：从 var/process 按 Master 前缀找并杀逃逸 Master 后再试
+        $this->printer->warning(__('端口经 %{1} 轮仍占用，按 Master 前缀清理逃逸进程...', [$maxAttempts]));
+        $masterPrefix = MasterProcess::MASTER_PROCESS_NAME_PREFIX . $instanceName;
+        $pnamesInProcessDir = Processer::getProcessNamesByPrefix($masterPrefix);
+        if (\count($pnamesInProcessDir) > 0) {
+            $this->printer->note(__('  从 var/process 发现 %{1} 个匹配 Master，正在按前缀杀死', [\count($pnamesInProcessDir)]));
+        }
+        $killed = Processer::killByProcessNamePrefix($masterPrefix);
+        if ($killed > 0) {
+            $this->printer->note(__('  已按前缀清理 %{1} 个逃逸 Master 进程', [$killed]));
+        }
+        \sleep(1);
+        foreach ($portsInUse as $p) {
+            Processer::killProcessByPort($p);
+            Processer::forceReleasePort($p);
+        }
+        $stillInUse = [];
+        foreach ($portsInUse as $p) {
+            if (Processer::isPortInUse($p)) {
+                $stillInUse[] = $p;
+            }
+        }
+        if (empty($stillInUse)) {
+            $this->printer->success(__('端口检查通过'));
+            echo "\n";
+            return true;
+        }
+
+        $this->printer->error(__('无法释放端口 %{1}', [$stillInUse[0]]));
+        $this->printer->note(__('请尝试: php bin/w server:kill-port %{1} -f', [$stillInUse[0]]));
+        return false;
     }
     
     /**
@@ -1791,6 +1867,40 @@ class Start extends CommandAbstract
         }
         
         \file_put_contents($instanceFile, \json_encode($instanceData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    }
+    
+    /**
+     * 将实际的 host/port/https 同步到 env.php 的 server 配置
+     *
+     * http:req 等 CLI 工具依赖 env.server.{host,port,https} 构建请求 URL，
+     * 若 server:start 实际使用的端口与 env 不一致（如自动从 80→443 或备用 9981），
+     * 会导致 http:req 请求到错误地址。此方法在启动时自动同步，保证一致。
+     */
+    protected function syncServerConfigToEnv(string $host, int $port, bool $sslEnabled): void
+    {
+        $env = Env::getInstance();
+        $serverConfig = $env->get('server') ?? [];
+        if (!\is_array($serverConfig)) {
+            $serverConfig = [];
+        }
+        
+        $needsUpdate = false;
+        if (($serverConfig['host'] ?? null) !== $host) {
+            $needsUpdate = true;
+        }
+        if (($serverConfig['port'] ?? null) !== $port) {
+            $needsUpdate = true;
+        }
+        if (($serverConfig['https'] ?? null) !== $sslEnabled) {
+            $needsUpdate = true;
+        }
+        
+        if ($needsUpdate) {
+            $serverConfig['host'] = $host;
+            $serverConfig['port'] = $port;
+            $serverConfig['https'] = $sslEnabled;
+            $env->setConfig('server', $serverConfig);
+        }
     }
     
     /*----------------------------------------实例配置记忆（Config Shorthand）------------------------------------------*/

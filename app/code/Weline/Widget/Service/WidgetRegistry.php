@@ -40,22 +40,23 @@ class WidgetRegistry
     {
         // 使用静态缓存，跨实例共享，避免每次请求都读取文件
         if (!$forceReload && self::$staticCachedRegistry !== null) {
-            // 运行时（Web）模式下，跳过文件修改时间检查，直接返回缓存
-            // 只有在 CLI 模式下才检查文件修改时间（用于开发时自动刷新）
-            if (PHP_SAPI === 'cli') {
-                // CLI 模式下检查文件修改时间
-                if (self::$staticCachedFileMtime !== null && file_exists(self::REGISTRY_FILE)) {
-                    $currentMtime = filemtime(self::REGISTRY_FILE);
-                    if ($currentMtime === self::$staticCachedFileMtime) {
-                        return self::$staticCachedRegistry;
-                    }
+            if (!file_exists(self::REGISTRY_FILE)) {
+                return self::$staticCachedRegistry;
+            }
+            $currentMtime = filemtime(self::REGISTRY_FILE);
+            $mtimeUnchanged = self::$staticCachedFileMtime !== null && $currentMtime === self::$staticCachedFileMtime;
+            // 缓存非空且 mtime 未变：直接返回
+            if (self::$staticCachedRegistry !== [] && $mtimeUnchanged) {
+                return self::$staticCachedRegistry;
+            }
+            // 缓存为空：若文件可能已有内容（mtime 变了或文件较大）则重载，否则返回空
+            if (self::$staticCachedRegistry === []) {
+                if (!$mtimeUnchanged || filesize(self::REGISTRY_FILE) > 100) {
+                    // 重载
                 } else {
-                    // 文件修改时间未设置，直接返回缓存
                     return self::$staticCachedRegistry;
                 }
-            } else {
-                // Web 运行时：直接返回缓存，不检查文件修改时间（提升性能）
-                // 文件更新需要通过 widget:refresh 命令或清除缓存来触发
+            } elseif ($mtimeUnchanged) {
                 return self::$staticCachedRegistry;
             }
         }

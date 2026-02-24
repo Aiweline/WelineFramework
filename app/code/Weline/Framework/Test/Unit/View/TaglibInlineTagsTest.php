@@ -120,6 +120,23 @@ class TaglibInlineTagsTest extends TestCore
     }
 
     /**
+     * <js>Weline_Backend::/backend/... 格式（与 head.phtml 一致）必须正确解析，不得输出空路径或错模块
+     */
+    public function testJsTagWelineBackendFormat(): void
+    {
+        $content = '<js>Weline_Backend::/backend/lib/jquery/3.6.0/jquery.js</js>';
+        $result = $this->taglib->compile($this->template, $content, 'head-js.phtml');
+        $this->assertStringNotContainsString('<js>', $result, '原始 <js> 标签应被替换');
+        $this->assertMatchesRegularExpression("#src='([^']+)'#", $result, '应包含 src 属性');
+        preg_match("#src='([^']+)'#", $result, $m);
+        $pathOnly = preg_replace('#\?v=.*$#', '', $m[1] ?? '');
+        $this->assertStringContainsString('jquery.js', $pathOnly, '路径应包含文件名 jquery.js');
+        $this->assertStringNotContainsString('/view/statics/\'</script>', $pathOnly, '路径不应以 statics/ 结尾无文件名');
+        // 模块应为 Backend 而非 Admin
+        $this->assertMatchesRegularExpression('#Weline/Backend/view/statics/#', $pathOnly, '应为 Weline_Backend 模块路径');
+    }
+
+    /**
      * <theme:css> 标签必须输出正确格式的 href：开发 /Vendor/Module/view/theme/...，生产 /static/{theme}/Vendor/Module/view/theme/...
      */
     public function testThemeCssTagOutputFormat(): void

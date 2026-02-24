@@ -22,40 +22,41 @@ $areas = $this->getData('areas') ?: [];
 $layout = $this->getData('layout') ?: [];
 $available_widgets = $this->getData('available_widgets') ?: [];
 
-// 辅助函数 - 获取部件图标
-if (!function_exists('getWidgetIcon')) {
-    function getWidgetIcon($type) {
-        $icons = [
-            'header' => 'ri-layout-top-line',
-            'footer' => 'ri-layout-bottom-line',
-            'sidebar' => 'ri-layout-left-line',
-            'banner' => 'ri-image-line',
-            'carousel' => 'ri-slideshow-line',
-            'slider' => 'ri-slideshow-line',
-            'product' => 'ri-shopping-bag-line',
-            'category' => 'ri-folder-line',
-            'navigation' => 'ri-menu-line',
-            'search' => 'ri-search-line',
-            'breadcrumb' => 'ri-route-line',
-            'pagination' => 'ri-more-line',
-            'social' => 'ri-share-line',
-            'newsletter' => 'ri-mail-line',
-            'testimonial' => 'ri-chat-quote-line',
-            'faq' => 'ri-question-answer-line',
-            'video' => 'ri-video-line',
-            'content' => 'ri-file-text-line',
-        ];
-        return $icons[$type] ?? 'ri-widgets-line';
-    }
-}
+// 辅助：获取部件图标（闭包，避免模板多次包含时重复声明）
+$getWidgetIcon = function ($type) {
+    $icons = [
+        'header' => 'ri-layout-top-line',
+        'footer' => 'ri-layout-bottom-line',
+        'sidebar' => 'ri-layout-left-line',
+        'banner' => 'ri-image-line',
+        'carousel' => 'ri-slideshow-line',
+        'slider' => 'ri-slideshow-line',
+        'product' => 'ri-shopping-bag-line',
+        'category' => 'ri-folder-line',
+        'navigation' => 'ri-menu-line',
+        'search' => 'ri-search-line',
+        'breadcrumb' => 'ri-route-line',
+        'pagination' => 'ri-more-line',
+        'social' => 'ri-share-line',
+        'newsletter' => 'ri-mail-line',
+        'testimonial' => 'ri-chat-quote-line',
+        'faq' => 'ri-question-answer-line',
+        'video' => 'ri-video-line',
+        'content' => 'ri-file-text-line',
+    ];
+    return $icons[$type] ?? 'ri-widgets-line';
+};
 ?>
 <!-- 引入 Remix Icon CSS -->
-<link rel="stylesheet" href="<?= $this->getStaticUrl('Weline_Admin::assets/css/icons.min.css') ?>">
+<css>Weline_Admin::assets/css/icons.min.css</css>
 <!-- 引入部件配置面板美化样式 -->
-<link rel="stylesheet" href="<?= $this->getStaticUrl('Weline_Theme::css/widget-config-panel.css') ?>">
+<css>Weline_Theme::css/widget-config-panel.css</css>
+<!-- Widget 参数类型 UI 自包含样式与脚本（唯一前缀 w-param-，闭包） -->
+<css>Weline_Widget::css/widget-param-types.css</css>
 
 <div class="theme-editor-container" id="themeEditor" 
-     data-theme-id="<?= $theme_id ?>" 
+     data-theme-id="<?= $theme_id ?>"
+     data-file-manager-connector-base="<?= $this->getBackendUrl('elfinder/backend/connector/manager') ?>" 
      data-page-type="<?= htmlspecialchars((string)($page_type ?? 'homepage')) ?>"
      data-api-base="<?= $this->getUrl('theme/backend/theme-editor') ?>"
      data-api-save-widget="<?= $this->getUrl('theme/backend/theme-editor/save-widget') ?>"
@@ -68,6 +69,7 @@ if (!function_exists('getWidgetIcon')) {
      data-api-widget-preview="<?= $this->getUrl('theme/backend/theme-editor/widget-preview') ?>"
      data-api-compile-layout="<?= $this->getUrl('theme/backend/theme-editor/compile-layout') ?>"
      data-api-layout-preview="<?= $this->getUrl('theme/backend/theme-editor/layout-preview') ?>"
+     data-api-param-render-form="<?= $this->getUrl('theme/backend/widget/paramrender/form') ?>"
      data-api-save-compiled-layout="<?= $this->getUrl('theme/backend/theme-editor/save-compiled-layout') ?>"
      data-api-versions="<?= $this->getUrl('theme/backend/theme-editor/versions') ?>"
      data-api-save-version="<?= $this->getUrl('theme/backend/theme-editor/save-version') ?>"
@@ -406,18 +408,23 @@ if (!function_exists('getWidgetIcon')) {
                                                 <?= $widget['preview_html'] ?? '' ?>
                                             </div>
                                             <div class="widget-preview-overlay">
-                                                <div class="widget-preview-title">
-                                                    <?= htmlspecialchars($wName) ?>
-                                                    <?php if ($wIsContainer): ?>
-                                                        <span class="badge badge-sm bg-primary ms-1" title="<?= __('容器部件') ?>">
-                                                            <i class="ri-layout-grid-line"></i>
-                                                        </span>
-                                                    <?php endif; ?>
-                                                    <?php if ($wExclusive): ?>
-                                                        <span class="badge badge-sm bg-warning ms-1" title="<?= __('独占部件') ?>">
-                                                            <i class="ri-focus-2-line"></i>
-                                                        </span>
-                                                    <?php endif; ?>
+                                                <div class="widget-preview-title-row d-flex align-items-center justify-content-between gap-2">
+                                                    <div class="widget-preview-title">
+                                                        <?= htmlspecialchars($wName) ?>
+                                                        <?php if ($wIsContainer): ?>
+                                                            <span class="badge badge-sm bg-primary ms-1" title="<?= __('容器部件') ?>">
+                                                                <i class="ri-layout-grid-line"></i>
+                                                            </span>
+                                                        <?php endif; ?>
+                                                        <?php if ($wExclusive): ?>
+                                                            <span class="badge badge-sm bg-warning ms-1" title="<?= __('独占部件') ?>">
+                                                                <i class="ri-focus-2-line"></i>
+                                                            </span>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary btn-preview-component flex-shrink-0" title="<?= __('预览') ?>" data-widget-module="<?= htmlspecialchars($wModule) ?>" data-widget-code="<?= htmlspecialchars($wCode) ?>" data-widget-name="<?= htmlspecialchars($wName) ?>">
+                                                        <i class="ri-eye-line"></i>
+                                                    </button>
                                                 </div>
                                                 <div class="widget-preview-desc"><?= htmlspecialchars($wDesc) ?></div>
                                             </div>
@@ -448,6 +455,69 @@ if (!function_exists('getWidgetIcon')) {
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden"><?= __('加载中...') ?></span>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 组件预览模态框 - PC / iPad / Mobile / 响应式 -->
+<div class="modal fade" id="componentPreviewModal" tabindex="-1" aria-labelledby="componentPreviewModalLabel" aria-hidden="true" style="display: none;">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content theme-modal-dark">
+            <div class="modal-header">
+                <h5 class="modal-title" id="componentPreviewModalLabel">
+                    <i class="ri-smartphone-line"></i> <span id="componentPreviewModalTitle"><?= __('组件预览') ?></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <ul class="nav nav-tabs px-3 pt-2 border-bottom-0" id="componentPreviewTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="tab-pc" data-bs-toggle="tab" data-bs-target="#panel-pc" type="button" role="tab">PC (1200px)</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="tab-ipad" data-bs-toggle="tab" data-bs-target="#panel-ipad" type="button" role="tab">iPad (768px)</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="tab-mobile" data-bs-toggle="tab" data-bs-target="#panel-mobile" type="button" role="tab">Mobile (375px)</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="tab-responsive" data-bs-toggle="tab" data-bs-target="#panel-responsive" type="button" role="tab"><?= __('响应式') ?></button>
+                    </li>
+                </ul>
+                <div class="tab-content p-3" id="componentPreviewTabContent">
+                    <div class="tab-pane fade show active" id="panel-pc" role="tabpanel">
+                        <div class="component-preview-viewport component-preview-viewport-pc" data-width="1200">
+                            <div class="component-preview-inner"></div>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="panel-ipad" role="tabpanel">
+                        <div class="component-preview-viewport component-preview-viewport-ipad" data-width="768">
+                            <div class="component-preview-inner"></div>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="panel-mobile" role="tabpanel">
+                        <div class="component-preview-viewport component-preview-viewport-mobile" data-width="375">
+                            <div class="component-preview-inner"></div>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="panel-responsive" role="tabpanel">
+                        <div class="component-preview-responsive-wrap">
+                            <label class="form-label d-flex align-items-center gap-2">
+                                <span><?= __('宽度') ?></span>
+                                <input type="range" class="form-range" id="componentPreviewResponsiveWidth" min="320" max="1200" value="768" style="max-width: 200px;">
+                                <span id="componentPreviewResponsiveWidthLabel">768px</span>
+                            </label>
+                            <div class="component-preview-viewport component-preview-viewport-responsive" id="componentPreviewViewportResponsive">
+                                <div class="component-preview-inner"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-center py-2 border-top" id="componentPreviewLoading">
+                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                    <span class="ms-2"><?= __('加载预览...') ?></span>
                 </div>
             </div>
         </div>
@@ -687,14 +757,24 @@ body{
 
 .widget-preview-canvas {
     width: 100%;
+    height: 120px;
     overflow: hidden;
     /* 使用中性灰色背景，白色和黑色文字都能看到 */
     background: #6b7280;
     border-radius: 4px;
     min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.widget-preview-canvas > * {
+/* 设计视口由 JS 控制宽高，内部内容 scale 缩放 */
+.widget-preview-canvas .widget-preview-viewport {
+    flex-shrink: 0;
+    box-sizing: border-box;
+}
+
+.widget-preview-canvas > *:not(.widget-preview-viewport) {
     max-width: 100%;
 }
 
@@ -712,6 +792,9 @@ body{
     gap: 4px;
 }
 
+.widget-preview-title-row {
+    min-width: 0;
+}
 .widget-preview-title {
     font-size: 12px;
     font-weight: 600;
@@ -719,6 +802,11 @@ body{
     align-items: center;
     gap: 6px;
     color: var(--te-text-primary);
+    min-width: 0;
+}
+.btn-preview-component {
+    padding: 2px 6px;
+    font-size: 14px;
 }
 
 .widget-preview-desc {
@@ -2810,6 +2898,29 @@ body{
     color: var(--te-accent);
 }
 
+/* 组件预览弹窗 - PC / iPad / Mobile / 响应式视口 */
+.component-preview-viewport {
+    margin: 0 auto;
+    min-height: 200px;
+    max-height: 70vh;
+    overflow: auto;
+    background: #6b7280;
+    border-radius: 8px;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+}
+.component-preview-viewport-pc { width: 100%; max-width: 1200px; }
+.component-preview-viewport-ipad { width: 768px; }
+.component-preview-viewport-mobile { width: 375px; }
+.component-preview-viewport-responsive { width: 768px; transition: width 0.2s ease; }
+.component-preview-inner {
+    min-height: 100px;
+    background: #fff;
+    margin: 0 auto;
+}
+.component-preview-responsive-wrap .form-range { flex: 1; max-width: 200px; }
+#componentPreviewLoading { display: none; }
+#componentPreviewLoading.visible { display: flex; align-items: center; justify-content: center; }
+
 .spin {
     animation: spin 1s linear infinite;
 }
@@ -3352,5 +3463,6 @@ body{
 </style>
 
 <!-- 本地 Remix Icon CSS URL，禁止使用外网 CDN -->
-<script>window.WELINE_REMIXICON_CSS_URL = '<?= $this->getStaticUrl('Weline_Theme::css/remixicon.css') ?>';</script>
+<script>window.WELINE_REMIXICON_CSS_URL = '<?= $this->getRequest()->getBaseHost() . $this->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, 'Weline_Theme::css/remixicon.css') ?>';</script>
+<js>Weline_Widget::js/widget-param-types.js</js>
 <script src="@static(Weline_Theme::js/theme-editor.js)"></script>

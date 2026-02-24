@@ -244,6 +244,62 @@ class BackupService
     }
     
     /**
+     * 按 backup_id 恢复单条备份
+     * 
+     * @param int $backupId 备份记录主键
+     * @return bool
+     */
+    public function restoreByBackupId(int $backupId): bool
+    {
+        try {
+            $backup = clone $this->backupModel;
+            $backup->load($backupId);
+            if (!$backup->getId()) {
+                throw new \Exception(__("备份记录不存在: %{1}", $backupId));
+            }
+
+            $tableName  = $backup->getData(MigrationBackup::fields_TABLE_NAME);
+            $backupType = $backup->getData(MigrationBackup::fields_BACKUP_TYPE);
+            $migrationId = (int) $backup->getData(MigrationBackup::fields_MIGRATION_ID);
+
+            if ($backupType === MigrationBackup::TYPE_TABLE) {
+                return $this->restoreTableData($tableName, $migrationId);
+            }
+
+            if ($backupType === MigrationBackup::TYPE_COLUMN) {
+                $data = json_decode($backup->getData(MigrationBackup::fields_BACKUP_DATA), true);
+                if (!empty($data) && is_array($data)) {
+                    $firstRow = reset($data);
+                    $columns  = array_keys($firstRow);
+                    $columns  = array_filter($columns, fn(string $c) => strtolower($c) !== 'id');
+                    foreach ($columns as $column) {
+                        $this->restoreColumnData($tableName, $column, $migrationId);
+                    }
+                }
+                return true;
+            }
+
+            $this->printing->warning(__("未知的备份类型: %{1}", $backupType));
+            return false;
+
+        } catch (\Exception $e) {
+            $this->printing->error(__("按 backup_id 恢复失败: %{1}", $e->getMessage()));
+            return false;
+        }
+    }
+
+    /**
+     * 获取指定迁移的所有备份记录
+     * 
+     * @param int $migrationId 迁移ID
+     * @return array MigrationBackup[]
+     */
+    public function getBackupsByMigrationId(int $migrationId): array
+    {
+        return $this->backupModel->getMigrationBackups($migrationId);
+    }
+
+    /**
      * 获取备份统计信息
      * 
      * @param int $migrationId 迁移ID

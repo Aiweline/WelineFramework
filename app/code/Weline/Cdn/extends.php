@@ -73,7 +73,8 @@ return [
                         'purgeCacheKeys' => '按Cache Key清理缓存',
                         'getRules' => '获取缓存规则',
                         'putRules' => '推送缓存规则',
-                        'ensureZone' => '确保Zone存在'
+                        'ensureZone' => '确保Zone存在',
+                        'getRealIpHeaderKeys' => '返回用于解析真实IP的 $_SERVER keys，无则返回 []'
                     ]
                 ],
                 'use_case' => [
