@@ -254,23 +254,23 @@ class BackupManager
      */
     public function getBackupList(array $filters = []): array
     {
-        $collection = $this->backupModel->getCollection();
+        $query = $this->backupModel->reset();
 
         if (!empty($filters['backup_type'])) {
-            $collection->where('backup_type', $filters['backup_type']);
+            $query->where('backup_type', $filters['backup_type']);
         }
 
         if (!empty($filters['status'])) {
-            $collection->where('status', $filters['status']);
+            $query->where('status', $filters['status']);
         }
 
-        $collection->order('created_at', 'DESC');
+        $query->order('created_at', 'DESC');
 
         if (isset($filters['limit'])) {
-            $collection->limit($filters['limit']);
+            $query->limit((int) $filters['limit']);
         }
 
-        $items = $collection->getItems();
+        $items = $query->select()->fetch()->getItems();
         $result = [];
 
         foreach ($items as $item) {
@@ -290,9 +290,11 @@ class BackupManager
     {
         $cutoffDate = date('Y-m-d H:i:s', strtotime("-{$retentionDays} days"));
 
-        $collection = $this->backupModel->getCollection();
-        $collection->where('created_at', '<', $cutoffDate);
-        $backups = $collection->getItems();
+        $backups = $this->backupModel->reset()
+            ->where('created_at', $cutoffDate, '<')
+            ->select()
+            ->fetch()
+            ->getItems();
 
         $result = [
             'deleted_count' => 0,

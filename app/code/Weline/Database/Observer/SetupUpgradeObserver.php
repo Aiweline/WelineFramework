@@ -68,7 +68,7 @@ class SetupUpgradeObserver implements ObserverInterface
             
             // 遍历所有模块
             foreach ($activeModules as $moduleName) {
-                $this->printing->println('');
+                $this->printing->printing('');
                 $this->printing->info("检查模块: {$moduleName}");
                 
                 try {
@@ -96,7 +96,7 @@ class SetupUpgradeObserver implements ObserverInterface
             }
             
             // 输出总体结果
-            $this->printing->println('');
+            $this->printing->printing('');
             $this->printing->info("=== 系统升级迁移执行完成 ===");
             $this->printing->info("总迁移数: {$totalMigrations}");
             $this->printing->info("成功: {$totalSuccess}");

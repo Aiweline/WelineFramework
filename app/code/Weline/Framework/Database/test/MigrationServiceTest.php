@@ -260,11 +260,15 @@ class CreateTableTest20250101V100 implements MigrationInterface
         $method->invoke($this->migrationService, $moduleName, $migrationFile, Migration::STATUS_ROLLED_BACK);
         
         // 验证状态已更新
-        $collection = $this->migrationModel->getCollection();
-        $collection->addFieldToFilter(Migration::fields_MODULE, $moduleName);
-        $collection->addFieldToFilter(Migration::fields_FILE, $migrationFile);
-        
-        $migration = $collection->getFirstItem();
+        $items = $this->migrationModel->reset()
+            ->where(Migration::fields_MODULE, $moduleName)
+            ->where(Migration::fields_FILE, $migrationFile)
+            ->limit(1)
+            ->select()
+            ->fetch()
+            ->getItems();
+        $migration = $items[0] ?? null;
+        $this->assertNotNull($migration);
         $this->assertEquals(Migration::STATUS_ROLLED_BACK, $migration->getData(Migration::fields_STATUS));
     }
 }
