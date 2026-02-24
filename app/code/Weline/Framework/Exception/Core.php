@@ -25,13 +25,13 @@ class Core extends \Exception
     private array $config;
 
     /**
-     * Exception 初始函数...
+     * Exception 初始函数（与 PHP \Exception 参数顺序一致：message, code, previous）
      *
      * @param string $message
-     * @param \Exception|null $cause
      * @param int $code
+     * @param \Throwable|null $previous
      */
-    public function __construct(string $message = '', null|\Exception $cause = null, $code = 0)
+    public function __construct(string $message = '', int $code = 0, ?\Throwable $previous = null)
     {
         $this->init();
 
@@ -39,7 +39,7 @@ class Core extends \Exception
         $this->config = (array)$this->etc->getConfig();
         $this->_debug = new Printing();
 
-        parent::__construct($message, $code, $cause);
+        parent::__construct($message, $code, $previous);
         $this->__toString();
 
 
