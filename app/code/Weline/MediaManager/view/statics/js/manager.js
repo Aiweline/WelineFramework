@@ -43,11 +43,18 @@
             opts.method = 'GET';
         }
         var xhr = new XMLHttpRequest();
+        var timedOut = false;
         xhr.open(opts.method, url, true);
+        xhr.timeout = 30000;
         if (!isUpload) {
             xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
         }
+        xhr.ontimeout = function () {
+            timedOut = true;
+            (onErr || showError)('Request timeout. The server may be busy or the connector URL may be wrong.');
+        };
         xhr.onload = function () {
+            if (timedOut) return;
             if (xhr.status >= 200 && xhr.status < 300) {
                 try {
                     var data = JSON.parse(xhr.responseText);
@@ -63,7 +70,7 @@
                 (onErr || showError)('HTTP ' + xhr.status);
             }
         };
-        xhr.onerror = function () { (onErr || showError)('Network error'); };
+        xhr.onerror = function () { if (!timedOut) (onErr || showError)('Network error'); };
         if (isUpload && xhr.upload) {
             xhr.upload.onprogress = function (ev) {
                 if (ev.lengthComputable) updateUploadProgress(Math.round(ev.loaded / ev.total * 100));
@@ -114,7 +121,12 @@
     /* ─── init ───────────────────────────────────────────────────────── */
 
     function init(connectorUrl) {
-        CONNECTOR = connectorUrl;
+        CONNECTOR = (typeof connectorUrl === 'string' ? connectorUrl : '').trim();
+        if (!CONNECTOR) {
+            setLoading(false);
+            showError('Connector URL is not configured. Please refresh the page.');
+            return;
+        }
         bindToolbar();
         bindDragDrop();
         bindContextMenu();
@@ -130,27 +142,32 @@
         else { params.tree = '1'; }
 
         api(params, function (data) {
-            setLoading(false);
-            CWD_HASH = data.cwd ? data.cwd.hash : '';
-            CWD_INFO = data.cwd || {};
+            try {
+                setLoading(false);
+                CWD_HASH = data.cwd ? data.cwd.hash : '';
+                CWD_INFO = data.cwd || {};
 
-            FILES = {};
-            if (data.files) {
-                data.files.forEach(function (f) { FILES[f.hash] = f; });
+                FILES = {};
+                if (data.files) {
+                    data.files.forEach(function (f) { FILES[f.hash] = f; });
+                }
+
+                if (data.tree) {
+                    data.tree.forEach(function (f) {
+                        TREE[f.hash] = f;
+                        if (!FILES[f.hash]) FILES[f.hash] = f;
+                    });
+                }
+
+                SELECTED = [];
+                renderTree();
+                renderFiles();
+                renderPath();
+                updateStatus();
+            } catch (e) {
+                setLoading(false);
+                showError('Invalid response: ' + (e && e.message ? e.message : String(e)));
             }
-
-            if (data.tree) {
-                data.tree.forEach(function (f) {
-                    TREE[f.hash] = f;
-                    if (!FILES[f.hash]) FILES[f.hash] = f;
-                });
-            }
-
-            SELECTED = [];
-            renderTree();
-            renderFiles();
-            renderPath();
-            updateStatus();
         }, function (err) {
             setLoading(false);
             showError(err);
