@@ -1,0 +1,127 @@
+<?php
+/**
+ * 站点-SEO账户绑定列表
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $websites
+ * @var array $binding_counts
+ */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$websites = $websites ?? [];
+$bindingCounts = $binding_counts ?? [];
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>站点账户绑定</lang></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <div class='row'>
+                    <div class='col-12'>
+                        <template>Weline_Component::message.phtml</template>
+                    </div>
+                </div>
+
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <i class="mdi mdi-link-variant me-2"></i>
+                                <lang>站点账户绑定</lang>
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>SEO管理</lang></a></li>
+                                    <li class='breadcrumb-item active'><lang>站点账户绑定</lang></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <p class="text-muted mb-4">
+                                    <lang>为不同站点绑定 SEO 账户，配置 Sitemap 提交策略。绑定后，系统将按设定频率自动生成并提交 Sitemap 到对应搜索引擎。</lang>
+                                </p>
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th><lang>站点</lang></th>
+                                                <th><lang>域名</lang></th>
+                                                <th><lang>已绑定账户</lang></th>
+                                                <th><lang>操作</lang></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php if (empty($websites)): ?>
+                                            <tr>
+                                                <td colspan="4" class="text-center text-muted py-4">
+                                                    <i class="mdi mdi-web-off" style="font-size: 40px; opacity: 0.3;"></i>
+                                                    <p class="mt-2 mb-0"><lang>暂无站点</lang></p>
+                                                    <p class="small mb-0"><lang>请先在站点管理中创建站点</lang></p>
+                                                </td>
+                                            </tr>
+                                            <?php else: ?>
+                                            <?php foreach ($websites as $website):
+                                                $websiteId = (int)($website['website_id'] ?? $website['id'] ?? 0);
+                                                $websiteName = $website['name'] ?? __('站点') . ' ' . $websiteId;
+                                                $websiteDomain = $website['domain'] ?? $website['url'] ?? '-';
+                                                $boundCount = $bindingCounts[$websiteId] ?? 0;
+                                                $manageUrl = $this->getBackendUrl('seo/backend/websiteAccount/manage', ['website_id' => $websiteId]);
+                                            ?>
+                                            <tr>
+                                                <td>
+                                                    <strong><?= htmlspecialchars((string)$websiteName, ENT_QUOTES) ?></strong>
+                                                    <br><small class="text-muted"><?= htmlspecialchars((string)($website['code'] ?? ''), ENT_QUOTES) ?></small>
+                                                </td>
+                                                <td><?= htmlspecialchars((string)$websiteDomain, ENT_QUOTES) ?></td>
+                                                <td>
+                                                    <?php if ($boundCount > 0): ?>
+                                                    <span class="badge bg-success"><?= $boundCount ?> <lang>个账户</lang></span>
+                                                    <?php else: ?>
+                                                    <span class="badge bg-secondary"><lang>未绑定</lang></span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <a href="<?= htmlspecialchars($manageUrl, ENT_QUOTES) ?>" class="btn btn-sm btn-primary">
+                                                        <i class="mdi mdi-cog me-1"></i><lang>管理绑定</lang>
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                            <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @template(Weline_Admin::common/right-sidebar.phtml)
+</div>
+
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>
