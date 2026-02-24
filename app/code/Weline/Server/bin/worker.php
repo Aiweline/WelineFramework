@@ -269,9 +269,17 @@ if (!\function_exists('getSystemFreeMemory')) {
                     if ($free > 0) return $free * 1024;
                 }
             }
+            // macOS: vm_stat 仅 "Pages free" 偏小，需加上可回收的 inactive/speculative（与 Linux MemAvailable 语义一致）
             $output = @\shell_exec('vm_stat 2>/dev/null');
-            if ($output && \preg_match('/Pages free:\s*(\d+)/', $output, $matches)) {
-                return (int)$matches[1] * 4096;
+            if ($output) {
+                $pageSize = 4096;
+                $free = \preg_match('/Pages free:\s*(\d+)/', $output, $m) ? (int)$m[1] : 0;
+                $inactive = \preg_match('/Pages inactive:\s*(\d+)/', $output, $m) ? (int)$m[1] : 0;
+                $speculative = \preg_match('/Pages speculative:\s*(\d+)/', $output, $m) ? (int)$m[1] : 0;
+                $availablePages = $free + $inactive + $speculative;
+                if ($availablePages > 0) {
+                    return $availablePages * $pageSize;
+                }
             }
         }
         return 0;

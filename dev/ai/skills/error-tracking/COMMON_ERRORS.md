@@ -99,6 +99,7 @@ __('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count]
 |------|------|----------|
 | `Call to undefined function posix_killpg()`（macOS） | PHP 构建未提供 `posix_killpg`，代码直接调用导致 Fatal | 用 `posix_kill(-$pgid, $signal)` 向进程组发信号，失败再降级 `posix_kill($pid, $signal)` |
 | `Expected type 'Socket'. Found 'resource'.`（Intelephense） | socket 变量在 PHP 版本/扩展桩下被推断为 resource | 统一用兼容 ID 方法（object→`spl_object_id`，resource→`get_resource_id`），并避免直接依赖单一 socket 类型假设 |
+| `server:start` 报“端口 xxx 被占用”（Mac/Linux 直连多 Worker） | 直连 `SO_REUSEPORT` 路径错误地按连续端口范围检查，或 Worker 端口段含非框架占用未自动跳过 | 直连复用模式只检查主端口；非框架占用时自动切换到下一个可用端口/端口段（主端口、Worker 段、HTTP Redirect） |
 
 ## 模块升级
 
