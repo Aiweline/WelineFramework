@@ -85,15 +85,15 @@ class Dashboard extends BackendController
     }
     
     /**
-     * 检查表是否存在
+     * 检查表是否存在（使用带前缀表名与 Connector::tableExist，兼容多数据库）
      */
     private function tableExists(string $tableName): bool
     {
         try {
-            $connection = ObjectManager::getInstance(\Weline\Framework\Database\ConnectionFactory::class)
-                ->getConnection();
-            $result = $connection->query("SHOW TABLES LIKE '{$tableName}'");
-            return !empty($result);
+            $conn = ObjectManager::getInstance(\Weline\Framework\Database\ConnectionFactory::class)->getConnector();
+            $prefix = $conn->getConfigProvider()->getPrefix() ?? '';
+            $fullName = ($prefix !== '' && !str_starts_with($tableName, $prefix)) ? $prefix . $tableName : $tableName;
+            return $conn->tableExist($fullName);
         } catch (\Exception $e) {
             return false;
         }

@@ -12,7 +12,7 @@ use Weline\Framework\Setup\Data\Setup;
  * AI Module Installation Script
  *
  * Handles database schema creation and initial data setup for the Weline_Ai module.
- * Connection is obtained via Setup::getDb() (set by setModuleContext before setup runs).
+ * Connection is obtained via Setup::getDbSetup() (set by setModuleContext before setup runs).
  *
  * @package Weline_Ai
  */
@@ -29,7 +29,7 @@ class Install implements InstallInterface
      */
     public function setup(Setup $setup, Context $context): void
     {
-        $connection = $setup->getDb();
+        $connection = $setup->getDbSetup();
         
         // Core AI Model table
         // 表名: ai_model (由 AiModel 类名自动推导，遵循 WelineFramework ORM 约定)
@@ -105,21 +105,7 @@ class Install implements InstallInterface
             ->addIndex('INDEX', 'idx_ai_assistant_tenant', ['tenant_id'])
             ->create();
         
-        // AI Tenant table
-        $connection->createTable('ai_tenant', 'AI租户表')
-            ->addColumn('id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
-            ->addColumn('name', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'not null', '租户名称')
-            ->addColumn('domain', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'null', '域名')
-            ->addColumn('config', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, 'null', '配置JSON')
-            ->addColumn('quota_monthly', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'null', '每月配额')
-            ->addColumn('usage_monthly', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '每月使用量')
-            ->addColumn('billing_plan', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'default \'free\'', '计费计划')
-            ->addColumn('status', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'default \'active\'', '状态')
-            ->addColumn('created_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
-            ->addColumn('updated_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
-            ->addIndex('UNIQUE', 'idx_ai_tenant_domain_unique', ['domain'])
-            ->create();
-        
+        // ai_tenant 表由 AiTenant::install() 模型安装创建，初始数据也在模型内通过 save() 插入，不使用 SQL 方言
         // AI Model Monitoring table
         $connection->createTable('ai_model_monitoring', 'AI模型监控表')
             ->addColumn('id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
@@ -136,17 +122,5 @@ class Install implements InstallInterface
             ->addColumn('created_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
             ->addIndex('INDEX', 'idx_ai_model_monitoring_date', ['date'])
             ->create();
-        
-        // Insert initial data - default tenant（表名需带前缀，与 createTable 一致）
-        $tenantTable = $connection->getTable('ai_tenant');
-        $query = $connection->getConnector()->query("INSERT INTO {$tenantTable} (name, domain, config, billing_plan, status) VALUES (:name, :domain, :config, :billing_plan, :status)");
-        $query->bound_values = [
-            'name' => 'Default Tenant',
-            'domain' => 'default.localhost',
-            'config' => json_encode(['timezone' => 'Asia/Shanghai', 'locale' => 'zh_Hans_CN']),
-            'billing_plan' => 'enterprise',
-            'status' => 'active',
-        ];
-        $query->fetch();
     }
 }

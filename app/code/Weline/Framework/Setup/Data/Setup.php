@@ -78,6 +78,16 @@ class Setup
     }
 
     /**
+     * 获取数据库 DDL 设置实例（建表、改表等）
+     *
+     * @return DbSetup
+     */
+    public function getDbSetup(): DbSetup
+    {
+        return $this->setup_db;
+    }
+
+    /**
      * @DESC          # 获取数据库链接
      *
      * @AUTH    秋枫雁飞
@@ -85,11 +95,11 @@ class Setup
      * @DateTime: 2021/8/31 20:47
      * 参数区：
      * @return DbSetup
-     * @deprecated
+     * @deprecated Use getDbSetup() instead
      */
     public function getDb(): DbSetup
     {
-        return $this->setup_db;
+        return $this->getDbSetup();
     }
 
     /**
