@@ -316,13 +316,20 @@ function getSystemFreeMemory(): int
             }
         }
         // Mac: vm_stat 仅 "Pages free" 偏小，需加上可回收的 inactive/speculative（与 Linux MemAvailable 语义一致）
+        // 注意：macOS 可能输出千位逗号（如 "1,234,567"），需去掉逗号再转 int，否则会误判为内存严重不足
         if (isShellExecAvailable()) {
             $output = @\shell_exec('vm_stat 2>/dev/null');
             if ($output) {
-                $pageSize = 4096; // macOS 页面大小
-                $free = \preg_match('/Pages free:\s*(\d+)/', $output, $m) ? (int)$m[1] : 0;
-                $inactive = \preg_match('/Pages inactive:\s*(\d+)/', $output, $m) ? (int)$m[1] : 0;
-                $speculative = \preg_match('/Pages speculative:\s*(\d+)/', $output, $m) ? (int)$m[1] : 0;
+                $pageSize = 4096; // macOS 页面大小（Intel/Apple Silicon 均为 4KB）
+                $parse = static function (string $text, string $key): int {
+                    if (!\preg_match('/' . \preg_quote($key, '/') . ':\s*([\d,\.]+)/', $text, $m)) {
+                        return 0;
+                    }
+                    return (int)\str_replace([',', '.'], '', $m[1]);
+                };
+                $free = $parse($output, 'Pages free');
+                $inactive = $parse($output, 'Pages inactive');
+                $speculative = $parse($output, 'Pages speculative');
                 $availablePages = $free + $inactive + $speculative;
                 if ($availablePages > 0) {
                     return $availablePages * $pageSize;
@@ -457,10 +464,26 @@ $fatalErrorTypes = [\E_ERROR, \E_PARSE, \E_CORE_ERROR, \E_COMPILE_ERROR, \E_RECO
         \in_array($error['type'], $fatalErrorTypes, true)
         || $error['type'] === 0  // 部分 SAPI 下未捕获 Error/TypeError 报告为 0
     );
-    if (!$isFatal) {
+    if ($isFatal) {
+        $errorMsg = "Worker SSL 致命错误 [PID: " . \getmypid() . "] [Worker: {$workerId}] [Port: {$port}]: {$error['message']} in {$error['file']}:{$error['line']}";
+    } else {
+        // 无致命错误但进程即将退出：多为业务代码 die()/exit()，记录日志便于排查
+        $exitMsg = "Worker SSL 非致命退出 [PID: " . \getmypid() . "] [Worker: {$workerId}] [Port: {$port}] 可能为 die()/exit() 或信号终止";
+        $wlsLog($exitMsg, 'WARN');
+        $flushLog(true);
+        if ($processLogFile) {
+            @\file_put_contents($processLogFile, '[' . \date('Y-m-d H:i:s') . '] [EXIT] ' . $exitMsg . "\n", \FILE_APPEND | \LOCK_EX);
+        }
+        $line = '[' . \date('Y-m-d H:i:s') . '] [instance:' . $instanceName . '] [Worker:' . $workerId . '] [Port:' . $port . '] [SSL] [EXIT] ' . $exitMsg . "\n";
+        if (\defined('BP') && BP !== '') {
+            $crashLogDir = BP . 'var' . DS . 'log';
+            if (!\is_dir($crashLogDir)) {
+                @\mkdir($crashLogDir, 0755, true);
+            }
+            @\file_put_contents($crashLogDir . DS . 'wls-worker-crash.log', $line, \FILE_APPEND | \LOCK_EX);
+        }
         return;
     }
-    $errorMsg = "Worker SSL 致命错误 [PID: " . \getmypid() . "] [Worker: {$workerId}] [Port: {$port}]: {$error['message']} in {$error['file']}:{$error['line']}";
     $wlsLog($errorMsg, 'ERROR');
     $flushLog(true);
     \error_log('[WLS Worker SSL FATAL] ' . $errorMsg);
@@ -521,8 +544,62 @@ if ($useReusePort && !$supportsReusePort) {
 
 $socket = null;
 
-// 方案1：使用 socket 扩展创建支持 SO_REUSEPORT 的 socket（更可靠）
-if ($useReusePort && $supportsReusePort && \function_exists('socket_create')) {
+// 延迟 SSL 时共用：accept 后根据首包判断 HTTP 重定向或启用 SSL（同端口 http→https）
+if ($deferSsl) {
+    $deferSslOptions = [
+        'local_cert' => $sslCert,
+        'local_pk' => $sslKey,
+        'verify_peer' => false,
+        'verify_peer_name' => false,
+        'allow_self_signed' => true,
+        'disable_compression' => true,
+        'crypto_method' => $cryptoMethod,
+        'ciphers' => 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:HIGH:!aNULL:!MD5:!RC4',
+        'single_dh_use' => true,
+        'honor_cipher_order' => true,
+        'SNI_enabled' => false,
+    ];
+}
+
+// 方案1a：SO_REUSEPORT + 延迟 SSL（同端口 HTTP→HTTPS 重定向，与方案2b 行为一致）
+if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket_create')) {
+    $wlsLog("使用 SO_REUSEPORT + 延迟 SSL，监听 tcp://{$host}:{$port}（同端口 HTTP→HTTPS 重定向）", 'INFO');
+    $rawSocket = @\socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+    if (!$rawSocket) {
+        $wlsLog("socket_create 失败: " . \socket_strerror(\socket_last_error()), 'ERROR');
+        exit(1);
+    }
+    if (!@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEADDR, 1)) {
+        $wlsLog("设置 SO_REUSEADDR 失败", 'WARN');
+    }
+    if (!@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEPORT, 1)) {
+        $wlsLog("设置 SO_REUSEPORT 失败: " . \socket_strerror(\socket_last_error($rawSocket)), 'ERROR');
+        @\socket_close($rawSocket);
+        exit(1);
+    }
+    if (!@\socket_bind($rawSocket, $host, $port)) {
+        $errCode = \socket_last_error($rawSocket);
+        $errMsg = \socket_strerror($errCode);
+        $wlsLog("socket_bind 失败: ({$errCode}) {$errMsg}", 'ERROR');
+        @\socket_close($rawSocket);
+        exit(1);
+    }
+    if (!@\socket_listen($rawSocket, 102400)) {
+        $wlsLog("socket_listen 失败: " . \socket_strerror(\socket_last_error($rawSocket)), 'ERROR');
+        @\socket_close($rawSocket);
+        exit(1);
+    }
+    $socket = \socket_export_stream($rawSocket);
+    if (!$socket) {
+        $wlsLog("socket_export_stream 失败", 'ERROR');
+        @\socket_close($rawSocket);
+        exit(1);
+    }
+    // 不在此 socket 上启用 SSL，由 accept 后按首包处理
+    $wlsLog("SO_REUSEPORT + 延迟 SSL socket 创建成功，Worker #{$workerId} 监听 {$host}:{$port}", 'INFO');
+
+// 方案1b：使用 socket 扩展创建支持 SO_REUSEPORT 的 socket（直接 SSL，无同端口重定向）
+} elseif ($useReusePort && $supportsReusePort && \function_exists('socket_create')) {
     $wlsLog("使用 socket 扩展创建 SO_REUSEPORT socket...", 'INFO');
     
     // 创建原始 socket
@@ -596,25 +673,10 @@ if ($useReusePort && $supportsReusePort && \function_exists('socket_create')) {
     
 } elseif ($deferSsl) {
     // 方案2b：延迟 SSL 模式（TCP 透传架构）
-    // 先监听纯 TCP，在 accept 后手动启用 SSL
+    // 先监听纯 TCP，在 accept 后手动启用 SSL（同端口 HTTP→HTTPS 重定向）
     $socketOptions = [
         'backlog' => 102400,
         'so_reuseaddr' => true,
-    ];
-
-    // SSL 配置（用于 accept 后设置到连接上）
-    $deferSslOptions = [
-        'local_cert' => $sslCert,
-        'local_pk' => $sslKey,
-        'verify_peer' => false,
-        'verify_peer_name' => false,
-        'allow_self_signed' => true,
-        'disable_compression' => true,
-        'crypto_method' => $cryptoMethod,
-        'ciphers' => 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:HIGH:!aNULL:!MD5:!RC4',
-        'single_dh_use' => true,
-        'honor_cipher_order' => true,
-        'SNI_enabled' => false, // 禁用 SNI 验证，避免 SNI 不匹配导致的 alert bad certificate
     ];
 
     $context = \stream_context_create([
@@ -1125,13 +1187,70 @@ while (true) {
             
             // H5: 非阻塞 SSL 握手（防止 5 秒超时阻塞整个 Worker）
             if ($deferSsl) {
+                // 同端口 HTTP→HTTPS 重定向：peek 首包判断是否为明文 HTTP，是则 301 后关闭
+                \stream_set_blocking($conn, true);
+                \stream_set_timeout($conn, 2, 0);
+                $peek = @\stream_socket_recv($conn, 8, \STREAM_PEEK);
+                \stream_set_blocking($conn, false);
+                if ($peek !== false && $peek !== '' && \strlen($peek) >= 4) {
+                    $firstByte = \ord($peek[0]);
+                    $isPlainHttp = ($firstByte !== 0x16) && (
+                        \substr($peek, 0, 4) === 'GET '
+                        || \substr($peek, 0, 5) === 'POST '
+                        || \substr($peek, 0, 5) === 'HEAD '
+                        || \substr($peek, 0, 4) === 'PUT '
+                        || (\strlen($peek) >= 6 && \substr($peek, 0, 6) === 'PATCH ')
+                        || (\strlen($peek) >= 7 && \substr($peek, 0, 7) === 'DELETE ')
+                        || (\strlen($peek) >= 8 && \substr($peek, 0, 8) === 'OPTIONS ')
+                    );
+                    if ($isPlainHttp) {
+                        $raw = '';
+                        while (\strpos($raw, "\r\n\r\n") === false && \strlen($raw) < 65536) {
+                            $chunk = @\fread($conn, 8192);
+                            if ($chunk === false || $chunk === '') {
+                                break;
+                            }
+                            $raw .= $chunk;
+                        }
+                        $path = '/';
+                        $redirectHost = $host . ':' . $port;
+                        if (\preg_match('/^\w+\s+(\S+)\s+/', $raw, $m)) {
+                            $path = \parse_url($m[1], \PHP_URL_PATH);
+                            if ($path === false || $path === null) {
+                                $path = $m[1];
+                            }
+                            if ($path === false || $path === null || $path === '') {
+                                $path = '/';
+                            }
+                        }
+                        if (\preg_match('/\r\nHost:\s*([^\r\n]+)/i', $raw, $h)) {
+                            $redirectHost = \trim($h[1]);
+                        }
+                        $redirectPort = (int) $port;
+                        if (\strpos($redirectHost, ':') !== false) {
+                            $redirectUrl = "https://{$redirectHost}{$path}";
+                        } else {
+                            $redirectUrl = ($redirectPort === 443)
+                                ? "https://{$redirectHost}{$path}"
+                                : "https://{$redirectHost}:{$redirectPort}{$path}";
+                        }
+                        $body = '';
+                        $response = "HTTP/1.1 301 Moved Permanently\r\nLocation: {$redirectUrl}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " . \strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
+                        @\fwrite($conn, $response);
+                        @\fclose($conn);
+                        $key = \array_search($socket, $read);
+                        if ($key !== false) {
+                            unset($read[$key]);
+                        }
+                        continue;
+                    }
+                }
+                \stream_set_blocking($conn, false);
+
                 // 为 accept 的连接设置 SSL context（关键步骤！）
                 foreach ($deferSslOptions as $optName => $optValue) {
                     \stream_context_set_option($conn, 'ssl', $optName, $optValue);
                 }
-                
-                // 保持非阻塞模式进行 SSL 握手
-                \stream_set_blocking($conn, false);
                 
                 // 尝试启动 SSL 握手
                 $cryptoResult = @\stream_socket_enable_crypto($conn, true, $cryptoMethod);
