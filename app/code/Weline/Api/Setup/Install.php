@@ -14,27 +14,20 @@ namespace Weline\Api\Setup;
 use Weline\Acl\Model\WhiteAclSource;
 use Weline\Api\Model\ApiUser;
 use Weline\Framework\Setup\InstallInterface;
-use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
 
 /**
  * API Module Installation Script
- * 
+ *
  * Handles database schema creation and initial data setup for the Weline_Api module.
- * 
+ * Connection is obtained via Setup::getDb() (set by setModuleContext before setup runs).
+ *
  * @package Weline_Api
  */
 class Install implements InstallInterface
 {
-    private ConnectionFactory $connectionFactory;
-
-    public function __construct(ConnectionFactory $connectionFactory)
-    {
-        $this->connectionFactory = $connectionFactory;
-    }
-
     /**
      * Execute installation
      * 
