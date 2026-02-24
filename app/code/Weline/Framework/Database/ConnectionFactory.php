@@ -41,12 +41,19 @@ class ConnectionFactory
     /**
      * 获取或创建连接工厂实例
      *
-     * @param ConfigProvider $configProvider
+     * 当 $configProvider 为 null 时（如 setup:upgrade 阶段 ObjectManager 依赖解析尚未就绪），
+     * 使用占位配置，避免 TypeError。实际建连会在 getConnector() 时进行，届时若未配置库会按原有逻辑报错。
+     *
+     * @param ConfigProvider|null $configProvider 为 null 时使用占位 ConfigProvider，不读 env 配置
      * @return static
      * @throws LinkException
      */
-    public static function getInstance(ConfigProvider $configProvider): static
+    public static function getInstance(?ConfigProvider $configProvider = null): static
     {
+        if ($configProvider === null) {
+            // 占位配置，不触发 ConfigProvider::getConfig()，避免安装前阶段因“数据库未配置”抛错
+            $configProvider = new ConfigProvider(['master' => []]);
+        }
         $key = self::getInstanceKey($configProvider);
         if (!isset(self::$instances[$key])) {
             self::$instances[$key] = [

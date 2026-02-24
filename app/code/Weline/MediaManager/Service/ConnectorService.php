@@ -98,7 +98,7 @@ class ConnectorService
         $phash = $dirRel === '' ? null : $this->encodeHash($dirRel);
 
         $mime = $isDir ? 'directory' : $this->detectMime($abs);
-        $size = $isDir ? 0 : @\filesize($abs) ?: 0;
+        $size = $isDir ? 0 : ((@\filesize($abs)) ?: 0);
         $ts   = @\filemtime($abs) ?: \time();
 
         return [
