@@ -4619,9 +4619,11 @@ XML;
         try {
             // 获取模块的所有表
             $moduleTableModel = ObjectManager::getInstance('Weline\ModuleManager\Model\Module\Table');
-            $collection = $moduleTableModel->getCollection();
-            $collection->addFieldToFilter('module_name', $moduleName);
-            $moduleTables = $collection->getItems();
+            $moduleTables = $moduleTableModel->reset()
+                ->where('module_name', $moduleName)
+                ->select()
+                ->fetch()
+                ->getItems();
             
             if (empty($moduleTables)) {
                 $backupInfo['message'] = __('模块没有注册的数据库表');

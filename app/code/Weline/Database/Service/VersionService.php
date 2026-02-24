@@ -77,12 +77,14 @@ class VersionService
      */
     public function getModuleVersion(string $moduleName): ?ModuleVersion
     {
-        $collection = $this->versionModel->getCollection();
-        $collection->addFieldToFilter(ModuleVersion::fields_MODULE_NAME, $moduleName);
-        
-        $version = $collection->getFirstItem();
-        
-        return $version->getId() ? $version : null;
+        $items = $this->versionModel->reset()
+            ->where(ModuleVersion::fields_MODULE_NAME, $moduleName)
+            ->limit(1)
+            ->select()
+            ->fetch()
+            ->getItems();
+        $version = $items[0] ?? null;
+        return $version && $version->getId() ? $version : null;
     }
     
     /**
@@ -112,10 +114,7 @@ class VersionService
      */
     public function getAllModuleVersions(): array
     {
-        $collection = $this->versionModel->getCollection();
-        $collection->setOrder(ModuleVersion::fields_UPDATED_AT, 'DESC');
-        
-        return $collection->getItems();
+        return $this->versionModel->getAllModuleVersions();
     }
     
     /**
@@ -174,8 +173,10 @@ class VersionService
      */
     public function getVersionStats(): array
     {
-        $collection = $this->versionModel->getCollection();
-        $modules = $collection->getItems();
+        $modules = $this->versionModel->reset()
+            ->select()
+            ->fetch()
+            ->getItems();
         
         $stats = [
             'total_modules' => count($modules),
