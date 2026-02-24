@@ -65,6 +65,16 @@ class AiTenant extends Model
                 ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_DEFAULT, 'idx_status', 'status')
                 ->create();
         }
+        // 初始数据使用模型 save() 插入，避免 SQL 方言差异（PostgreSQL/MySQL/SQLite）
+        if ($this->getCollection()->getSize() === 0) {
+            $this->setData([
+                'name' => 'Default Tenant',
+                'domain' => 'default.localhost',
+                'config' => ['timezone' => 'Asia/Shanghai', 'locale' => 'zh_Hans_CN'],
+                'billing_plan' => self::PLAN_ENTERPRISE,
+                'status' => self::STATUS_ACTIVE,
+            ])->save();
+        }
     }
 
     public function isActive(): bool
