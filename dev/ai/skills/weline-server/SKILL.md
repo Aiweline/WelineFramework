@@ -508,6 +508,7 @@ cat var/log/master_health_debug.log
    - 自动计算的 HTTP Redirect 端口被非框架进程占用时，也会自动切换到可用端口
    - 显式指定端口（如 `-p 443`）时保持严格模式：占用则直接报错，避免与用户明确配置不一致
    - 如需释放框架进程占用端口，可用：`php bin/w server:kill-port -p 443`
-2. **Worker 崩溃**：检查 `var/log/error.log`
-3. **缓存不生效**：`php bin/w cache:clear`
-4. **热重载无效**：检查 `var/server/reload.flag` 文件
+2. **Worker 崩溃**：检查 `var/log/error.log`、`var/log/wls-worker-crash.log`（致命错误与 die/exit 均会写入后者，标签为 [FATAL]/[EXIT]）。
+3. **Worker 内 die/exit**：会触发 `register_shutdown_function`，记录到 `var/log/wls-worker-crash.log`（[EXIT]）及 WLS 运行日志，便于排查业务误用 exit/die。
+4. **缓存不生效**：`php bin/w cache:clear`
+5. **热重载无效**：检查 `var/server/reload.flag` 文件

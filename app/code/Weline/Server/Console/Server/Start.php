@@ -2993,8 +2993,8 @@ PHP;
         $restFrontendPrefix = Env::getAreaRoutePrefix('rest_frontend') ?? 'api';
 
         $urlFrontend = rtrim($baseUrl, '/') . '/';
-        $urlBackend = rtrim($baseUrl, '/') . '/' . ($backendPrefix !== '' ? $backendPrefix . '/' : '');
-        $urlBackendAdmin = rtrim($baseUrl, '/') . '/admin/';
+        // 后台入口 = 密钥路径 + /admin（不输出单独的 /admin 地址）
+        $urlBackend = rtrim($baseUrl, '/') . '/' . ($backendPrefix !== '' ? $backendPrefix . '/' : '') . 'admin';
         $urlRestBackend = rtrim($baseUrl, '/') . '/' . ($restBackendPrefix !== '' ? $restBackendPrefix . '/' : '');
         $urlRestFrontend = rtrim($baseUrl, '/') . '/' . ($restFrontendPrefix !== '' ? $restFrontendPrefix . '/' : '');
 
@@ -3005,7 +3005,6 @@ PHP;
             __('╠══════════════════════════════════════════════════════════════╣'),
             __('║  前台/首页：%{1}  ║', [$urlFrontend]),
             __('║  后台入口：%{1}  ║', [$urlBackend]),
-            __('║  后台入口(admin)：%{1}  ║', [$urlBackendAdmin]),
             __('║  后台 REST 接口：%{1}  ║', [$urlRestBackend]),
             __('║  前台 REST 接口：%{1}  ║', [$urlRestFrontend]),
             __('╠══════════════════════════════════════════════════════════════╣'),
