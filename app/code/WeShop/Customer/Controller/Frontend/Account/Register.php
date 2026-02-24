@@ -111,7 +111,7 @@ class Register extends BaseController
             $customer = ObjectManager::getInstance(Customer::class);
             
             // 检查邮箱是否已存在
-            $existingCustomer = $customer->reset()->load($email, Customer::fields_EMAIL);
+            $existingCustomer = $customer->reset()->load(Customer::fields_EMAIL, $email);
             if ($existingCustomer->getId()) {
                 $this->getMessageManager()->addError(__('该邮箱已被注册'));
                 return $this->redirect('weshop/customer/account/register');

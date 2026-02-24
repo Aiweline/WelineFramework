@@ -83,7 +83,7 @@ class OrderService
     {
         /** @var Order $order */
         $order = ObjectManager::getInstance(Order::class);
-        $order->load($incrementId, Order::fields_increment_id);
+        $order->load(Order::fields_increment_id, $incrementId);
         
         if ($order->getId()) {
             return $order;

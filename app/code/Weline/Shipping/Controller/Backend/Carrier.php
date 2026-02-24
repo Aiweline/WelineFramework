@@ -137,7 +137,7 @@ class Carrier extends BackendController
             } else {
                 // 新增模式：检查代码是否已存在
                 $existing = $this->carrier->reset()
-                    ->load($carrierCode, CarrierModel::fields_CARRIER_CODE);
+                    ->load(CarrierModel::fields_CARRIER_CODE, $carrierCode);
                 if ($existing->getId()) {
                     throw new \RuntimeException(__('快递公司代码已存在'));
                 }

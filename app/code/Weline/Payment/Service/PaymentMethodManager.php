@@ -71,7 +71,7 @@ class PaymentMethodManager
         
         /** @var PaymentMethod $paymentMethod */
         $paymentMethod = $this->objectManager->getInstance(PaymentMethod::class);
-        $paymentMethod->load($code, PaymentMethod::fields_CODE);
+        $paymentMethod->load(PaymentMethod::fields_CODE, $code);
         
         if (!$paymentMethod->getId()) {
             // 新建
@@ -119,7 +119,7 @@ class PaymentMethodManager
     {
         /** @var PaymentMethod $paymentMethod */
         $paymentMethod = $this->objectManager->getInstance(PaymentMethod::class);
-        $paymentMethod->load($code, PaymentMethod::fields_CODE);
+        $paymentMethod->load(PaymentMethod::fields_CODE, $code);
         
         if (!$paymentMethod->getId()) {
             return null;

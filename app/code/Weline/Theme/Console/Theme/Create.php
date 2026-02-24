@@ -1502,7 +1502,7 @@ USAGE;
                 
                 foreach ($allThemeWords as $word) {
                     $md5 = LocaleDictionary::generateMd5($word, $targetLocale);
-                    $translation = $localeDictionary->clearData()->load($md5, LocaleDictionary::fields_MD5);
+                    $translation = $localeDictionary->clearData()->load(LocaleDictionary::fields_MD5, $md5);
                     
                     if ($translation->getId() && !empty($translation->getData(LocaleDictionary::fields_TRANSLATE))) {
                         $translatedWords[$word] = $translation->getData(LocaleDictionary::fields_TRANSLATE);

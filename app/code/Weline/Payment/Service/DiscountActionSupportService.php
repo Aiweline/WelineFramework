@@ -79,7 +79,7 @@ class DiscountActionSupportService
     {
         /** @var PaymentMethod $paymentMethod */
         $paymentMethod = ObjectManager::getInstance(PaymentMethod::class);
-        $paymentMethod->load($paymentMethodCode, PaymentMethod::fields_CODE);
+        $paymentMethod->load(PaymentMethod::fields_CODE, $paymentMethodCode);
         
         if (!$paymentMethod->getId()) {
             // 如果支付方式不存在，默认支持所有
@@ -100,7 +100,7 @@ class DiscountActionSupportService
     {
         /** @var PaymentMethod $paymentMethod */
         $paymentMethod = ObjectManager::getInstance(PaymentMethod::class);
-        $paymentMethod->load($paymentMethodCode, PaymentMethod::fields_CODE);
+        $paymentMethod->load(PaymentMethod::fields_CODE, $paymentMethodCode);
         
         if (!$paymentMethod->getId()) {
             // 如果支付方式不存在，返回所有可用优惠方式

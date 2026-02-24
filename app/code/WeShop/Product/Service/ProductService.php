@@ -42,7 +42,7 @@ class ProductService
     {
         /** @var Product $product */
         $product = ObjectManager::getInstance(Product::class);
-        $product->load($sku, Product::fields_sku);
+        $product->load(Product::fields_sku, $sku);
         
         if ($product->getId()) {
             return $product;

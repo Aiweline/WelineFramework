@@ -19,9 +19,9 @@ class PageService
     {
         /** @var Page $page */
         $page = ObjectManager::getInstance(Page::class);
-        $page->load($identifier, Page::fields_IDENTIFIER);
+        $page->load(Page::fields_HANDLE, $identifier);
         
-        if ($page->getId() && (bool)($page->getData(Page::fields_IS_ACTIVE) ?? true)) {
+        if ($page->getId() && (int)($page->getData(Page::fields_STATUS) ?? 0) === Page::STATUS_PUBLISHED) {
             return $page;
         }
         
@@ -41,15 +41,15 @@ class PageService
         }
         
         $page->setData([
-            Page::fields_title => $pageData['title'] ?? '',
-            Page::fields_identifier => $pageData['identifier'] ?? '',
-            Page::fields_content => $pageData['content'] ?? '',
-            Page::fields_is_active => $pageData['is_active'] ?? 1,
-            Page::fields_updated_at => date('Y-m-d H:i:s'),
+            Page::fields_TITLE => $pageData['title'] ?? '',
+            Page::fields_HANDLE => $pageData['identifier'] ?? $pageData['handle'] ?? '',
+            Page::fields_CONTENT => $pageData['content'] ?? '',
+            Page::fields_STATUS => (int)($pageData['is_active'] ?? $pageData['status'] ?? Page::STATUS_PUBLISHED),
+            Page::fields_UPDATE_TIME => date('Y-m-d H:i:s'),
         ]);
         
         if (!$page->getId()) {
-            $page->setCreatedAt(date('Y-m-d H:i:s'));
+            $page->setData(Page::fields_CREATE_TIME, date('Y-m-d H:i:s'));
         }
         
         $page->save();
