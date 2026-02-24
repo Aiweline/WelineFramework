@@ -214,8 +214,12 @@ ensure_brew_installed() {
     eval "$(/usr/local/bin/brew shellenv)"
     return 0
   fi
-  echo "Homebrew not found. Installing Homebrew ..."
-  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || return 1
+  if [[ "$EUID" -eq 0 ]] || [[ -n "${SUDO_UID:-}" ]]; then
+    echo "ERROR: 请勿使用 sudo 执行安装。Homebrew 禁止以 root 运行，请以当前用户重新执行（需要权限时会提示输入密码）。" >&2
+    return 1
+  fi
+  echo "Homebrew not found. Installing Homebrew (如需权限，请根据提示输入本机登录密码) ..."
+  (unset NONINTERACTIVE; /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)") || return 1
   # 安装完成后注入 PATH（Apple Silicon: /opt/homebrew，Intel: /usr/local）
   if [[ -x /opt/homebrew/bin/brew ]]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
