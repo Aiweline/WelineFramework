@@ -68,7 +68,7 @@ class AffiliateService
     {
         /** @var Affiliate $affiliate */
         $affiliate = ObjectManager::getInstance(Affiliate::class);
-        $affiliate->load($referralCode, Affiliate::fields_REFERRAL_CODE);
+        $affiliate->load(Affiliate::fields_REFERRAL_CODE, $referralCode);
         
         if (!$affiliate->getId() || $affiliate->getData(Affiliate::fields_STATUS) !== 'active') {
             return 0;

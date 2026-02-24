@@ -81,7 +81,7 @@ class Login extends BaseController
         try {
             /** @var \WeShop\Customer\Model\Customer $customer */
             $customer = ObjectManager::getInstance(\WeShop\Customer\Model\Customer::class);
-            $customer->load($email, \WeShop\Customer\Model\Customer::fields_EMAIL);
+            $customer->load(\WeShop\Customer\Model\Customer::fields_EMAIL, $email);
             
             if (!$customer->getId()) {
                 $this->getMessageManager()->addError(__('邮箱或密码错误'));

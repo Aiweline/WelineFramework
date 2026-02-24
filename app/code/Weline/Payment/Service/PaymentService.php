@@ -146,7 +146,7 @@ class PaymentService
 
         /** @var PaymentTransaction $transaction */
         $transaction = $this->objectManager->getInstance(PaymentTransaction::class);
-        $transaction->load($transactionNo, PaymentTransaction::fields_TRANSACTION_NO);
+        $transaction->load(PaymentTransaction::fields_TRANSACTION_NO, $transactionNo);
         
         if (!$transaction->getId()) {
             throw new \Exception(__('交易记录不存在: %{no}', ['no' => $transactionNo]));
@@ -186,7 +186,7 @@ class PaymentService
     {
         /** @var PaymentTransaction $transaction */
         $transaction = $this->objectManager->getInstance(PaymentTransaction::class);
-        $transaction->load($transactionNo, PaymentTransaction::fields_TRANSACTION_NO);
+        $transaction->load(PaymentTransaction::fields_TRANSACTION_NO, $transactionNo);
         
         if (!$transaction->getId()) {
             return null;
@@ -240,7 +240,7 @@ class PaymentService
     {
         /** @var PaymentTransaction $transaction */
         $transaction = $this->objectManager->getInstance(PaymentTransaction::class);
-        $transaction->load($transactionNo, PaymentTransaction::fields_TRANSACTION_NO);
+        $transaction->load(PaymentTransaction::fields_TRANSACTION_NO, $transactionNo);
         
         if (!$transaction->getId()) {
             throw new \Exception(__('交易记录不存在'));

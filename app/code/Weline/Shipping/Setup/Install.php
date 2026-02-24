@@ -311,7 +311,7 @@ class Install implements InstallInterface
 
         foreach ($defaultCarriers as $carrierData) {
             $carrierModel->reset();
-            $carrierModel->load($carrierData['carrier_code'], Carrier::fields_CARRIER_CODE);
+            $carrierModel->load(Carrier::fields_CARRIER_CODE, $carrierData['carrier_code']);
             
             // 如果不存在，则插入
             if (!$carrierModel->getId()) {
