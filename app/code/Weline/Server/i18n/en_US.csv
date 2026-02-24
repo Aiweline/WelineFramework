@@ -714,6 +714,8 @@ DDoS攻击,DDoS攻击
 信号,signal
 "WLS 重载：已通知 %{1}/%{2} 个 Worker（%{3}，%{4}）","WLS 重载：已通知 %{1}/%{2} 个 Worker（%{3}，%{4}）"
 "WLS 重载：所有通知方式均失败，请检查 WLS 是否运行中","WLS 重载：所有通知方式均失败，请检查 WLS 是否运行中"
+"WLS 实例 [%s] Master 复活失败，已尝试 %d 次，请人工检查并执行 server:start 或 server:restart。","WLS 实例 [%s] Master 复活失败，已尝试 %d 次，请人工检查并执行 server:start 或 server:restart。"
+"WLS Master 复活失败","WLS Master 复活失败"
 "高性能异步常驻内存服务器，支持 HTTP/WebSocket/TCP/UDP 协议，支持多实例管理、服务器监控、攻击日志、证书管理 Hook 集成","高性能异步常驻内存服务器，支持 HTTP/WebSocket/TCP/UDP 协议，支持多实例管理、服务器监控、攻击日志、证书管理 Hook 集成"
 "Windows 上需要 proc_open 或 exec 函数来启动多进程，请检查 disable_functions 配置","Windows requires proc_open or exec to start multi-process, please check disable_functions configuration"
 "缺少 sockets 扩展","Missing sockets extension"
@@ -1200,6 +1202,13 @@ URI,URI
 "确定要清理过期日志吗？\n- 状态日志：保留7天\n- 攻击日志：保留30天","确定要清理过期日志吗？\n- 状态日志：保留7天\n- 攻击日志：保留30天"
 正在清理...,正在清理...
 清理失败,清理失败
+"WLS 安全规则配置","WLS 安全规则配置"
+"可编辑 path_rate_limits、cdn_trusted_ips 等规则，保存后自动下发到运行中的 WLS。","可编辑 path_rate_limits、cdn_trusted_ips 等规则，保存后自动下发到运行中的 WLS。"
+保存规则,保存规则
+"JSON 格式错误：%{1}","JSON 格式错误：%{1}"
+保存成功,保存成功
+保存失败,保存失败
+请求失败：%{1},请求失败：%{1}
 同步域名,"Sync Domains"
 证书总数,"Total Certificates"
 "HTTPS 启用","HTTPS Enabled"

@@ -15,6 +15,7 @@ set "PATH_ONLY="
 set "DO_PHP=0"
 set "DO_PGSQL=0"
 set "DO_MYSQL=0"
+set "BRANCH=master"
 
 REM Parse args (avoid for %%a in () when %* is empty - causes ") was unexpected" in cmd)
 if "%~1"=="" (
@@ -28,6 +29,12 @@ if "%~1"=="" (
     if "%%a"=="mysql" set "DO_MYSQL=1"
   )
   if !DO_PHP!==0 if !DO_PGSQL!==0 if !DO_MYSQL!==0 set "DO_PHP=1" & set "DO_PGSQL=1"
+)
+REM Parse -b <branch> for code install when run.php is missing
+set "PREV="
+for %%a in (%*) do (
+  if "!PREV!"=="-b" set "BRANCH=%%a"
+  set "PREV=%%a"
 )
 
 REM Read weline.env (optional)
@@ -124,6 +131,40 @@ REM 安装后：将 php 与 pgsql 的目录写入用户 PATH（与 Linux/Mac 一
 if exist "%PHP_DIR%\php.exe" call :add_path "%PHP_DIR%"
 if exist "%SERVER%\pgsql\bin\psql.exe" call :add_path "%SERVER%\pgsql\bin"
 
+REM 若 setup\server_installer\run.php 不存在，说明代码未安装：按 -b 指定分支拉取，未指定则 master
+if not exist "%ROOT%\setup\server_installer\run.php" (
+  where git >nul 2>&1
+  if errorlevel 1 (
+    set "CECHO_MSG=Git not found. Installing Git..." & call :cecho Yellow ""
+    call :install_git
+    set "PATH=%PATH%;%ProgramFiles%\Git\cmd;%ProgramFiles(x86)%\Git\cmd"
+    where git >nul 2>&1
+    if errorlevel 1 (
+      set "CECHO_MSG=Git install failed. Install from https://git-scm.com/download/win then re-run." & call :cecho Red ""
+      exit /b 1
+    )
+  )
+  set "CECHO_MSG=run.php not found. Installing framework code from gitee (branch: %BRANCH%)..." & call :cecho Yellow ""
+  set "REPO_URL=https://gitee.com/aiweline/WelineFramework.git"
+  if exist "%ROOT%\.git" (
+    git -C "%ROOT%" fetch origin 2>nul
+    git -C "%ROOT%" checkout %BRANCH% 2>nul || git -C "%ROOT%" pull origin %BRANCH% 2>nul
+  ) else (
+    git clone -b %BRANCH% %REPO_URL% "%ROOT%\temp_clone_weline" 2>nul
+    if not exist "%ROOT%\temp_clone_weline\setup\server_installer\run.php" (
+      set "CECHO_MSG=Clone failed or branch invalid. Manual: git clone -b %BRANCH% %REPO_URL% ." & call :cecho Red ""
+      exit /b 1
+    )
+    robocopy "%ROOT%\temp_clone_weline" "%ROOT%" /E /NFL /NDL /NJH /NJS /NC /NS >nul 2>&1
+    rd /s /q "%ROOT%\temp_clone_weline" 2>nul
+  )
+  if not exist "%ROOT%\setup\server_installer\run.php" (
+    set "CECHO_MSG=Code install failed. Ensure run.php exists at setup\server_installer\run.php" & call :cecho Red ""
+    exit /b 1
+  )
+  set "CECHO_MSG=Code installed (branch: %BRANCH%)." & call :cecho Green ""
+)
+
 call :cecho Cyan "========== Run installer =========="
 set "USE_PHP=php"
 set "HAVE_PHP="
@@ -145,6 +186,26 @@ endlocal
 exit /b 0
 
 REM ---- Subroutines ----
+:install_git
+REM Windows: 优先 winget，其次 Chocolatey
+where winget >nul 2>&1
+if not errorlevel 1 (
+  winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements 2>nul
+  if not errorlevel 1 (
+    set "PATH=%PATH%;%ProgramFiles%\Git\cmd;%ProgramFiles(x86)%\Git\cmd"
+    goto :eof
+  )
+)
+where choco >nul 2>&1
+if not errorlevel 1 (
+  choco install git -y 2>nul
+  if not errorlevel 1 (
+    set "PATH=%PATH%;%ProgramFiles%\Git\cmd;%ProgramFiles(x86)%\Git\cmd"
+    goto :eof
+  )
+)
+exit /b 1
+
 :cecho
 set "CECHO_C=%~1"
 if not "%~2"=="" set "CECHO_MSG=%~2"
