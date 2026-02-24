@@ -34,7 +34,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
     clt_label=$(softwareupdate -l 2>&1 | grep -E '\*.*Command Line Tools' | head -1 | sed -E 's/^[[:space:]]*\* Label: *//' | tr -d '\n')
     if [[ -n "$clt_label" ]]; then
       echo "正在安装: $clt_label"
-      if sudo softwareupdate -i "$clt_label" -v; then
+      if sudo softwareupdate -i "$clt_label"; then
         clt_installed=true
       fi
     fi
