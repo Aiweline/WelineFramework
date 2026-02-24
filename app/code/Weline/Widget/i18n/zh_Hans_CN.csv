@@ -2,6 +2,9 @@
 "✓ 部件注册表已刷新完成。","✓ 部件注册表已刷新完成。"
 位置：generated/widgets.php,位置：generated/widgets.php
 "✖ 写入部件注册表失败。","✖ 写入部件注册表失败。"
+"✓ ParamSchema 注册表已刷新完成。","✓ ParamSchema 注册表已刷新完成。"
+位置：generated/param_schemas.php,位置：generated/param_schemas.php
+"✖ 写入 ParamSchema 注册表失败。","✖ 写入 ParamSchema 注册表失败。"
 刷新失败：%{1},刷新失败：%{1}
 "部件注册表：%{1} 个类型，共 %{2} 个部件","部件注册表：%{1} 个类型，共 %{2} 个部件"
 文件：generated/widgets.php,文件：generated/widgets.php
@@ -159,6 +162,11 @@ FAQ部件,FAQ部件
 说明,说明
 获取详情失败,获取详情失败
 加载失败,加载失败
+简体中文,简体中文
+输入简体中文值,输入简体中文值
+"不支持的 operation: %{op}","不支持的 operation: %{op}"
+"无效的 data 参数","无效的 data 参数"
+保存配置,保存配置
 编辑器首页,编辑器首页
 访问编辑器,访问编辑器
 保存页面,保存页面

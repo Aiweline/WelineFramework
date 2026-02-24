@@ -15,9 +15,10 @@
                 <item name="monitor" title="服务器监控" url="backend/server/server-monitor" class="bi-speedometer2" sort="0"/>
                 <item name="manager" title="服务器实例" url="backend/server/server-manager" class="bi-server" sort="1"/>
                 <item name="attack-log" title="攻击日志" url="backend/server/server-monitor/attack-log" class="bi-shield-exclamation" sort="2"/>
-                <item name="ssl" title="SSL证书管理" url="backend/server/ssl-certificate" class="bi-shield-lock" sort="3"/>
-                <item name="optimization" title="性能优化指南" url="backend/server/optimization-guide" class="bi-lightning-charge" sort="4"/>
-                <item name="api-doc" title="API文档" url="backend/server/server-monitor/api-doc" class="bi-book" sort="5"/>
+                <item name="security-rules" title="安全规则" url="backend/server/server-monitor/security-rules" class="bi-shield-check" sort="3"/>
+                <item name="ssl" title="SSL证书管理" url="backend/server/ssl-certificate" class="bi-shield-lock" sort="4"/>
+                <item name="optimization" title="性能优化指南" url="backend/server/optimization-guide" class="bi-lightning-charge" sort="5"/>
+                <item name="api-doc" title="API文档" url="backend/server/server-monitor/api-doc" class="bi-book" sort="6"/>
             </item>
         </item>
     </menu>

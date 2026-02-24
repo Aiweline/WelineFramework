@@ -1325,7 +1325,6 @@ class AiGenerate extends BackendController
         } catch (\Throwable $e) {
             // 捕获 Exception 与 Error（含 ParseError），避免未捕获导致连接直接断开、前端只显示「连接中断或服务器错误」
             $cleanMsg = preg_replace('/\x1b\[[0-9;]*m/', '', $e->getMessage());
-            @file_put_contents(sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pagebuilder_ai_debug.log', json_encode(['when' => 'catch', 'message' => $cleanMsg, 'file' => $e->getFile(), 'line' => $e->getLine(), 'class' => get_class($e), 'timestamp' => (int)(microtime(true) * 1000)]) . "\n", FILE_APPEND | LOCK_EX);
             $this->logAgentDebug('AiGenerate::componentStream catch', 'exception', ['message' => $cleanMsg, 'file' => $e->getFile(), 'line' => $e->getLine(), 'class' => get_class($e)]);
             $sse->sendEvent('error', [
                 'message' => $cleanMsg
@@ -2418,21 +2417,10 @@ PROMPT;
     }
 
     /**
-     * 统一写 AI 解析调试日志（便于后续切换为 Debug::env / agent_log）
+     * 预留：AI 解析调试日志（已关闭写文件，如需调试可改为 Debug::env + agent_log）
      */
     private function logAgentDebug(string $location, string $message, array $data = []): void
     {
-        $logPath = (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log';
-        if (!is_dir(dirname($logPath))) {
-            return;
-        }
-        @file_put_contents($logPath, json_encode([
-            'hypothesisId' => 'JSON',
-            'location' => $location,
-            'message' => $message,
-            'data' => $data,
-            'timestamp' => (int) (microtime(true) * 1000),
-        ]) . "\n", FILE_APPEND | LOCK_EX);
     }
 
     /**

@@ -258,6 +258,9 @@ class Env extends DataObject
 
     private static $user = '';
 
+    /** 合并 DB 后的 cache 配置缓存，进程/请求内只合并一次，setConfig('cache') 时清空；WLS 下由 StateManager 按请求重置 */
+    private static $mergedCacheConfig = null;
+
     /**
      * @DESC         |私有化克隆函数
      *
@@ -655,7 +658,101 @@ class Env extends DataObject
             return $this->config;
         }
 
-        return $this->config[$name] ?? $default;
+        $value = $this->config[$name] ?? $default;
+        // 缓存配置以数据库为准：一次性合并 DB 后缓存，避免重复读取（reload 等场景会多次 getConfig('cache')）
+        if ($name === 'cache' && is_array($value)) {
+            if (self::$mergedCacheConfig !== null) {
+                return self::$mergedCacheConfig;
+            }
+            self::$mergedCacheConfig = $this->mergeCacheStatusFromDb($value);
+            return self::$mergedCacheConfig;
+        }
+        return $value;
+    }
+
+    /**
+     * 从数据库合并缓存开关状态（后台 admin/system/cache 配置为准）
+     * 仅当 CacheManager 模块存在且表可读时合并，避免强依赖
+     *
+     * @param array $cacheConfig 当前 cache 配置（来自 env.php）
+     * @return array 合并后的 cache 配置，status 以 DB 为准
+     */
+    private function mergeCacheStatusFromDb(array $cacheConfig): array
+    {
+        if (!class_exists(\Weline\CacheManager\Model\Cache::class)) {
+            return $cacheConfig;
+        }
+        static $merging = false;
+        if ($merging) {
+            return $cacheConfig;
+        }
+        $merging = true;
+        try {
+            /** @var \Weline\CacheManager\Model\Cache $cacheModel */
+            $cacheModel = ObjectManager::getInstance(\Weline\CacheManager\Model\Cache::class);
+            $collection = $cacheModel->select()->fetch();
+            $items = $collection ? $collection->getItems() : [];
+            if (!$collection || !$items) {
+                return $cacheConfig;
+            }
+            $status = $cacheConfig['status'] ?? [];
+            foreach ($items as $item) {
+                $identity = $item->getData('identity');
+                if ($identity !== null && $identity !== '') {
+                    $status[$identity] = (int)$item->getData('status');
+                }
+            }
+            $cacheConfig['status'] = $status;
+        } catch (\Throwable $e) {
+            // 表不存在或未安装时忽略，继续使用 env 配置
+        } finally {
+            $merging = false;
+        }
+        return $cacheConfig;
+    }
+
+    /**
+     * 获取数据，对 cache/status/* 以数据库为准（后台配置覆盖 env）
+     */
+    public function getData(string $key = '', $index = null): mixed
+    {
+        if ($key !== '' && str_starts_with($key, 'cache/status/')) {
+            $identity = substr($key, strlen('cache/status/'));
+            if ($identity !== '') {
+                if (self::$mergedCacheConfig !== null && array_key_exists($identity, self::$mergedCacheConfig['status'] ?? [])) {
+                    $v = (int)self::$mergedCacheConfig['status'][$identity];
+                    return $index !== null ? [$v][$index] ?? null : $v;
+                }
+                $fromDb = $this->getCacheStatusByIdentityFromDb($identity);
+                if ($fromDb !== null) {
+                    return $index !== null ? [$fromDb][$index] ?? null : $fromDb;
+                }
+            }
+        }
+        return parent::getData($key, $index);
+    }
+
+    /**
+     * 从数据库读取单个 identity 的缓存开关状态
+     *
+     * @return int|null 1 启用 0 禁用，不存在或未安装时返回 null
+     */
+    private function getCacheStatusByIdentityFromDb(string $identity): ?int
+    {
+        if (!class_exists(\Weline\CacheManager\Model\Cache::class)) {
+            return null;
+        }
+        try {
+            /** @var \Weline\CacheManager\Model\Cache $cacheModel */
+            $cacheModel = ObjectManager::getInstance(\Weline\CacheManager\Model\Cache::class);
+            $model = $cacheModel->where('identity', $identity)->find()->fetch();
+            if ($model && $model->getId()) {
+                return (int)$model->getData('status');
+            }
+        } catch (\Throwable $e) {
+            // 表不存在或未安装时忽略
+        }
+        return null;
     }
 
     public function getTheme()
@@ -679,7 +776,9 @@ class Env extends DataObject
         if ($key === 'maintenance') {
             $this->setMaintenanceFlag((bool) $value);
         }
-        
+        if ($key === 'cache') {
+            self::$mergedCacheConfig = null;
+        }
         // 如果键包含点，则处理嵌套设置
         if (str_contains($key, '.')) {
             $keys = explode('.', $key);

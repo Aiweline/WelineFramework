@@ -42,7 +42,10 @@ class AiPublish implements CronTaskInterface
         return '0 8,20 * * *';
     }
 
-    public function execute(): string
+    /**
+     * @param callable|null $onProgress 可选，用于 SSE 实时推送。签名 function(string $event, array $data): void
+     */
+    public function execute(?callable $onProgress = null): string
     {
         /** @var TrendSiteQuota $quotaModel */
         $quotaModel = ObjectManager::getInstance(TrendSiteQuota::class);
@@ -52,6 +55,11 @@ class AiPublish implements CronTaskInterface
         $published = 0;
         $locale = TrendsConfig::get(TrendsConfig::KEY_DEFAULT_LANGUAGE, 'en_US');
         $asDraft = TrendsConfig::publishAsDraft();
+        $modeText = $hasTrendSource ? __('趋势增长词模式') : __('画像关键词兜底模式');
+
+        if ($onProgress) {
+            $onProgress('start', ['mode' => $modeText, 'quotas_count' => count($quotas)]);
+        }
 
         foreach ($quotas as $quota) {
             $siteId = (int)$quota->getData(TrendSiteQuota::fields_SITE_ID);
@@ -92,16 +100,26 @@ class AiPublish implements CronTaskInterface
                     ->fetch()
                     ->getItems();
 
+                $idx = 0;
+                $total = count($logs);
                 foreach ($logs as $log) {
                     $keyword = (string)$log->getData(TrendingKeywordLog::fields_KEYWORD);
                     $logId = (int)$log->getData(TrendingKeywordLog::fields_ID);
-
+                    if ($onProgress) {
+                        $onProgress('article_start', ['keyword' => $keyword, 'index' => $idx + 1, 'total' => $total]);
+                    }
                     try {
                         if ($this->publishByKeyword($keyword, $siteId, $categoryId, $profileId, $locale, $asDraft)) {
                             $log->setData(TrendingKeywordLog::fields_USED_AT, date('Y-m-d H:i:s'))->save();
                             $published++;
+                            if ($onProgress) {
+                                $onProgress('article_done', ['keyword' => $keyword, 'published' => $published]);
+                            }
                         }
                     } catch (\Throwable $e) {
+                        if ($onProgress) {
+                            $onProgress('article_error', ['keyword' => $keyword, 'error' => $e->getMessage()]);
+                        }
                         trigger_error(
                             __('Blog AI 发文失败（关键词 %{keyword}，log_id %{log_id}）：%{error}', [
                                 'keyword' => $keyword,
@@ -112,6 +130,7 @@ class AiPublish implements CronTaskInterface
                         );
                         continue;
                     }
+                    $idx++;
                 }
             } else {
                 /** @var TrendProfile $profile */
@@ -126,13 +145,23 @@ class AiPublish implements CronTaskInterface
                     continue;
                 }
                 $keywords = array_slice($keywords, 0, $need);
+                $total = count($keywords);
 
-                foreach ($keywords as $keyword) {
+                foreach ($keywords as $idx => $keyword) {
+                    if ($onProgress) {
+                        $onProgress('article_start', ['keyword' => $keyword, 'index' => $idx + 1, 'total' => $total]);
+                    }
                     try {
                         if ($this->publishByKeyword($keyword, $siteId, $categoryId, $profileId, $locale, $asDraft)) {
                             $published++;
+                            if ($onProgress) {
+                                $onProgress('article_done', ['keyword' => $keyword, 'published' => $published]);
+                            }
                         }
                     } catch (\Throwable $e) {
+                        if ($onProgress) {
+                            $onProgress('article_error', ['keyword' => $keyword, 'error' => $e->getMessage()]);
+                        }
                         trigger_error(
                             __('Blog AI 发文失败（关键词 %{keyword}，log_id %{log_id}）：%{error}', [
                                 'keyword' => (string)$keyword,
@@ -147,7 +176,80 @@ class AiPublish implements CronTaskInterface
             }
         }
 
-        return __('自动发文完成：本次发布 %{count} 篇', ['count' => $published]);
+        $result = __('自动发文完成：本次发布 %{count} 篇', ['count' => $published]);
+        if ($onProgress) {
+            $onProgress('done', ['published' => $published, 'result' => $result]);
+        }
+        return $result;
+    }
+
+    /**
+     * 当本次发布 0 篇时，返回友好说明（供前端 Toast 展示）
+     */
+    public static function getZeroPublishHint(): string
+    {
+        $quotaModel = ObjectManager::getInstance(TrendSiteQuota::class);
+        $quotas = $quotaModel->clear()->select()->fetch()->getItems();
+        if (empty($quotas)) {
+            return __('请先在「趋势站点配额」中配置：站点、画像、每日篇数、默认分类。');
+        }
+        $hasTrendSource = TrendsConfig::useSerpApi() || TrendsConfig::useOfficialApi();
+        $todayStart = date('Y-m-d 00:00:00');
+        $hints = [];
+        foreach ($quotas as $quota) {
+            $siteId = (int)$quota->getData(TrendSiteQuota::fields_SITE_ID);
+            $profileId = (int)$quota->getData(TrendSiteQuota::fields_PROFILE_ID);
+            $perDay = (int)$quota->getData(TrendSiteQuota::fields_ARTICLES_PER_DAY);
+            $categoryId = (int)$quota->getData(TrendSiteQuota::fields_DEFAULT_CATEGORY_ID);
+            if ($categoryId <= 0) {
+                $hints[] = __('配额未设置默认分类');
+                continue;
+            }
+            $cat = ObjectManager::getInstance(Category::class);
+            $cat->clear()->load($categoryId);
+            if (!$cat->getId() || (int)$cat->getData(Category::fields_SITE_ID) !== $siteId) {
+                $hints[] = __('默认分类不存在或不属于该站点');
+                continue;
+            }
+            $postModel = ObjectManager::getInstance(PostModel::class);
+            $already = $postModel->clear()
+                ->where(PostModel::fields_SITE_ID, $siteId)
+                ->where(PostModel::fields_TREND_PROFILE_ID, $profileId)
+                ->where(PostModel::fields_CREATED_AT, $todayStart, '>=')
+                ->count();
+            $need = max(0, $perDay - $already);
+            if ($need <= 0) {
+                $hints[] = __('今日该配额已发满，明日再试');
+                continue;
+            }
+            if ($hasTrendSource) {
+                $logModel = ObjectManager::getInstance(TrendingKeywordLog::class);
+                $logsCount = $logModel->clear()
+                    ->where(TrendingKeywordLog::fields_PROFILE_ID, $profileId)
+                    ->where(TrendingKeywordLog::fields_USED_AT, null, 'IS')
+                    ->count();
+                if ($logsCount <= 0) {
+                    $hints[] = __('当前无未使用的增长词，请先运行「趋势同步」或明日再试');
+                }
+            } else {
+                $profile = ObjectManager::getInstance(TrendProfile::class);
+                $profile->clear()->load($profileId);
+                if (!$profile->getId()) {
+                    $hints[] = __('画像不存在');
+                } elseif ((int)$profile->getData(TrendProfile::fields_IS_ACTIVE) !== 1) {
+                    $hints[] = __('请启用画像');
+                } else {
+                    $keywords = $profile->getKeywordsArray();
+                    if (empty($keywords)) {
+                        $hints[] = __('请在该画像中配置关键词');
+                    }
+                }
+            }
+        }
+        if (!empty($hints)) {
+            return __('可能原因：') . implode('；', array_unique($hints));
+        }
+        return __('请检查 AI 服务配置或稍后重试。');
     }
 
     private function publishByKeyword(

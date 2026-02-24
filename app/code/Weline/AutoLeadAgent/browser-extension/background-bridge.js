@@ -268,6 +268,12 @@ function onTabRemoved(tabId) {
   }
 }
 
+// 模型预估内存（MB），用于预检
+const MODEL_SIZE_ESTIMATES = {
+  'gemma-3-270m': 150, 'SmolLM2-360M': 200, 'Qwen2.5-0.5B': 300,
+  'Qwen3-0.6B': 400, 'Llama-3.2-1B': 600, 'Qwen2.5-1.5B': 900,
+};
+
 // 自动加载模型（从 chrome.storage 读取配置，仅在首次需要时调用）
 async function autoLoadModel() {
   try {
@@ -281,6 +287,24 @@ async function autoLoadModel() {
     if (modelId !== data.ala_model_id) {
       chrome.storage.local.set({ ala_model_id: modelId });
     }
+
+    // 内存预检（仅 Chromium 支持，可选）：在加载前估算所需内存
+    let estimatedMB = 300;
+    for (const [key, mb] of Object.entries(MODEL_SIZE_ESTIMATES)) {
+      if (modelId && modelId.includes(key)) { estimatedMB = mb; break; }
+    }
+    if (typeof globalThis !== "undefined" && globalThis.performance?.memory) {
+      const usedMB = globalThis.performance.memory.usedJSHeapSize / (1024 * 1024);
+      const limitMB = globalThis.performance.memory.jsHeapSizeLimit / (1024 * 1024);
+      const availableMB = limitMB - usedMB;
+      const requiredMB = estimatedMB * 2.5;
+      if (availableMB < requiredMB) {
+        console.warn("[BG] 内存不足，跳过自动加载:", "可用", Math.round(availableMB), "MB, 需要约", Math.round(requiredMB), "MB");
+        broadcastModelEvent("load_error", { error: `内存不足：需要约 ${Math.round(requiredMB)}MB，当前可用 ${Math.round(availableMB)}MB。请选择更小的模型或关闭其他标签页。` });
+        return;
+      }
+    }
+
     console.log("[BG] Auto-loading model (first target page appeared):", modelId);
     currentModelState.isLoading = true;
     broadcastModelEvent("loading", { modelId });
@@ -294,6 +318,10 @@ async function autoLoadModel() {
     currentModelState.isLoading = false;
     console.error("[BG] Auto-load failed:", err);
     broadcastModelEvent("load_error", { error: err.message });
+    // 加载失败后尝试卸载 offscreen 中的残留，释放内存
+    try {
+      await sendToOffscreen({ type: "MODEL_UNLOAD" }, 10000);
+    } catch (_) { /* ignore */ }
   }
 }
 

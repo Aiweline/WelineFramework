@@ -11,33 +11,31 @@ declare(strict_types=1);
 
 namespace Weline\Widget\Observer;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Widget\Service\ParamSchemaRegistry;
 use Weline\Widget\Service\WidgetRegistry;
 
 /**
  * 模块安装后事件监听器
- * 监听模块安装事件，自动收集部件并生成注册表
+ * 监听模块安装事件，自动收集部件与 ParamSchema 并生成注册表
  */
 class ModuleInstallAfter implements ObserverInterface
 {
-    /**
-     * 处理模块安装后事件
-     *
-     * @param Event $event
-     * @return void
-     */
     public function execute(Event &$event): void
     {
         try {
             /** @var WidgetRegistry $registry */
             $registry = ObjectManager::getInstance(WidgetRegistry::class);
-            
-            // 刷新部件注册表
             $registry->refresh();
+
+            /** @var ParamSchemaRegistry $paramSchemaRegistry */
+            $paramSchemaRegistry = ObjectManager::getInstance(ParamSchemaRegistry::class);
+            $paramSchemaRegistry->refresh();
         } catch (\Exception $e) {
-            error_log("模块安装后收集部件注册表时出错: " . $e->getMessage());
+            Env::log_error('WidgetObserver', '模块安装后收集注册表时出错: ' . $e->getMessage());
         }
     }
 }

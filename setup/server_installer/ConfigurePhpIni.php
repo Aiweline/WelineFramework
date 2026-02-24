@@ -192,6 +192,9 @@ final class ConfigurePhpIni
             $content
         );
 
+        // 日志路径：统一指向 var/log/php/
+        $content = $this->configureLogPaths($content);
+
         file_put_contents($iniPath, $content);
 
         // 真实检测：用 php -m 取实际已加载扩展，注释掉未加载的 extension= 行
@@ -242,5 +245,46 @@ final class ConfigurePhpIni
             $loaded[strtolower($line)] = true;
         }
         return $loaded;
+    }
+
+    /**
+     * 将 PHP 所有日志路径统一配置到 var/log/php/ 下，并确保目录存在。
+     */
+    private function configureLogPaths(string $content): string
+    {
+        $logDir = $this->projectRoot . '/var/log/php';
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0755, true);
+        }
+
+        $directives = [
+            'error_log' => $logDir . '/php_errors.log',
+            'mail.log'  => $logDir . '/mail.log',
+        ];
+
+        foreach ($directives as $key => $path) {
+            $escaped = preg_quote($key, '/');
+            $pathValue = str_replace('\\', '/', $path);
+
+            // 取消注释并替换值，或直接替换已有值
+            $content = preg_replace(
+                '/^\s*;?\s*' . $escaped . '\s*=.*$/m',
+                $key . ' = "' . $pathValue . '"',
+                $content,
+                1,
+                $count
+            );
+            if ($count === 0) {
+                $content = preg_replace('/(\[PHP\])/', '$1' . "\n" . $key . ' = "' . $pathValue . '"' . "\n", $content, 1);
+            }
+        }
+
+        // log_errors = On
+        $content = preg_replace('/^\s*;?\s*log_errors\s*=.*$/m', 'log_errors = On', $content, 1, $count);
+        if ($count === 0) {
+            $content = preg_replace('/(\[PHP\])/', '$1' . "\nlog_errors = On\n", $content, 1);
+        }
+
+        return $content;
     }
 }

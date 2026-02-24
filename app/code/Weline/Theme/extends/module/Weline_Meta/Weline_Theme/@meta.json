@@ -1,0 +1,56 @@
+{
+  "meta": {
+    "scan_paths": [
+      "Weline_Theme::view/theme/",
+      "Weline_Theme::view/widget/"
+    ],
+    "theme": {
+      "default": "Weline_Theme",
+      "name": "主题命名空间",
+      "description": "主题与部件元数据，仅扫描 view/theme 与 view/widget，不扫描全模块",
+      "frontend": {
+        "default": "前端",
+        "name": "前端",
+        "description": "前端主题与部件",
+        "layout": {
+          "name": "布局",
+          "description": "布局命名空间",
+          "options": {},
+          "values": [],
+          "default": "default",
+          "type": "select",
+          "required": true,
+          "placeholder": "请选择布局",
+          "show": true
+        },
+        "partials": {
+          "name": "部件",
+          "description": "部件命名空间",
+          "options": {},
+          "values": [],
+          "default": "default",
+          "type": "select",
+          "required": true,
+          "placeholder": "请选择部件",
+          "show": true
+        }
+      },
+      "backend": {
+        "default": "后端",
+        "name": "后端",
+        "description": "后端主题",
+        "layout": {
+          "name": "布局",
+          "description": "布局命名空间",
+          "options": {},
+          "values": [],
+          "default": "default",
+          "type": "select",
+          "required": true,
+          "placeholder": "请选择布局",
+          "show": true
+        }
+      }
+    }
+  }
+}

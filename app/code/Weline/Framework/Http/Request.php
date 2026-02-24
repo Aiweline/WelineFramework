@@ -166,19 +166,16 @@ class Request extends Request\RequestAbstract implements RequestInterface
 
     public function getParam(string $key, mixed $default = '', string $filter = '')
     {
+        $filterType = $filter ?: gettype($default);
         if ($result = $this->getData($key)) {
-            return $result;
+            return RequestFilter::filter($filterType, $result);
         }
-        
+
         // 使用 ParameterBag 获取参数
         $data = $this->getParameterBag()->get($key, $default);
-        
+
         # 如果设置了过滤器，则进行过滤，否则直接使用默认值的类型进行过滤
-        if ($filter) {
-            $data = RequestFilter::filter($filter, $data);
-        } else {
-            $data = RequestFilter::filter(gettype($default), $data);
-        }
+        $data = RequestFilter::filter($filterType, $data);
         return $this->checkResult($key, $data);
     }
 

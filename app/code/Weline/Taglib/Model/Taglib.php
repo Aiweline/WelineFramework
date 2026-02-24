@@ -57,7 +57,22 @@ class Taglib extends Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-
+        if (!$setup->tableExist()) {
+            return;
+        }
+        // 旧表可能缺少 json 列，需补加
+        if (!$setup->hasField(self::fields_JSON)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_JSON,
+                    self::fields_DESCRIPTION,
+                    TableInterface::column_type_TEXT,
+                    0,
+                    '',
+                    'Taglib数据'
+                )
+                ->alter();
+        }
     }
 
     /**

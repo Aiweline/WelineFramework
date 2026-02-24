@@ -34,18 +34,30 @@ class Cache extends \Weline\Admin\Controller\BaseController
     public function postStatus()
     {
         $identity = $this->request->getParam('identity');
-        $cache    = ($this->request->getParam('cache') === 'false') ? 0 : 1;
-        /**@var \Weline\CacheManager\Model\Cache $cacheModel */
+        if ($identity === null || $identity === '') {
+            return $this->fetchJson(['code' => 403, 'msg' => __('参数 identity 不能为空'), 'data' => null]);
+        }
+        $identity = (string) $identity;
+        $cache = ($this->request->getParam('cache') === 'false') ? 0 : 1;
+        /** @var \Weline\CacheManager\Model\Cache $cacheModel */
         $cacheModel = ObjectManager::getInstance(\Weline\CacheManager\Model\Cache::class);
         try {
+            // 只允许数据库中已存在的 identity，防止任意 key 写入 env.php
+            $exists = $cacheModel->where('identity', $identity)->find()->fetch();
+            if (!$exists || !$exists->getId()) {
+                return $this->fetchJson(['code' => 403, 'msg' => __('该缓存项不存在或无权修改'), 'data' => null]);
+            }
             $cacheModel->where('identity', $identity)->update(['status' => $cache])->fetch();
+            // 以数据库为准合并当前 env 的 cache 配置，再写回 env.php，保持与后台一致
             $cacheEnv           = Env::getInstance()->getConfig('cache');
             $status             = $cacheEnv['status'] ?? [];
             $status[$identity]  = $cache;
             $cacheEnv['status'] = $status;
-            Env::getInstance()->setConfig('cache', $cacheEnv);
+            if (!Env::getInstance()->setConfig('cache', $cacheEnv)) {
+                return $this->fetchJson(['code' => 500, 'msg' => __('env 配置写入失败，请检查 app/etc/env.php 权限'), 'data' => $cache]);
+            }
         } catch (\Exception $exception) {
-            return $this->fetchJson(['code' => 403, 'msg' => $exception->getMessage(), 'data' => $cache]);
+            return $this->fetchJson(['code' => 403, 'msg' => $exception->getMessage(), 'data' => null]);
         }
         return $this->fetchJson(['code' => 200, 'msg' => __('操作成功！'), 'data' => $cache]);
     }

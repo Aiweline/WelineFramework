@@ -273,7 +273,18 @@ async function handleLoad(id, payload) {
       payload: 'Model loaded successfully',
     });
   } catch (error) {
+    // 加载失败时显式清理资源，便于 GC 回收，避免内存残留
     isLoading = false;
+    generator = null;
+    tokenizer = null;
+    currentModelId = null;
+    pipeline = null;
+    // 通知加载失败，便于 UI 和 background 更新状态
+    self.postMessage({
+      type: 'progress',
+      id,
+      payload: { status: 'error', message: error.message || String(error), progress: 0 },
+    });
     throw error;
   }
 }

@@ -8,8 +8,10 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeLayoutVersion;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Service\EditorLockService;
 use Weline\Theme\Service\PreviewTokenService;
+use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Service\ThemeCacheGenerator;
 use Weline\Theme\Service\ThemeLayoutService;
 use Weline\Theme\Service\ThemeLayoutVersionService;
@@ -213,9 +215,9 @@ class ThemeEditor extends BackendController
     public function getWidgets()
     {
         $pageType = $this->request->getParam('page_type', null);
-        
-        // 如果传入了页面类型，则按页面类型过滤部件
-        $widgets = $this->layoutService->getAvailableWidgets($pageType);
+        $filterOptions = ['area' => 'backend'];
+
+        $widgets = $this->layoutService->getAvailableWidgets($pageType, $filterOptions);
 
         return $this->fetchJson([
             'success' => true,
@@ -470,8 +472,9 @@ class ThemeEditor extends BackendController
         }
 
         try {
-            // 获取要删除的部件信息（在删除前）
-            $widget = $this->themeLayout->clearQuery()->load($layoutId);
+            // 获取要删除的部件信息（在删除前）。不对 clearQuery() 链式调用 load()，避免 clearQuery() 返回 Query 时在 Query 上调用 load() 导致致命错误。
+            $this->themeLayout->load($layoutId);
+            $widget = $this->themeLayout;
             $slotId = $widget->getData('slot_id');
             $pageType = $widget->getData('page_type');
             $area = $widget->getData('area');
@@ -486,6 +489,11 @@ class ThemeEditor extends BackendController
             
             // 尝试删除部件（如果记录存在）
             $result = $recordExists ? $this->layoutService->deleteWidget($layoutId) : true;
+            
+            // 删除后清除插槽渲染缓存，否则 getOriginalSlotContent 会读到旧 layout 缓存，返回仍含已删部件的内容
+            if ($result) {
+                ObjectManager::getInstance(SlotRendererService::class)->clearCache();
+            }
             
             $response = [
                 'success' => $result,
@@ -503,7 +511,7 @@ class ThemeEditor extends BackendController
             }
             
             return $this->fetchJson($response);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -904,53 +912,38 @@ class ThemeEditor extends BackendController
             ]);
         }
 
-        // 获取部件元数据
-        $registry = $this->widgetRegistry->getRegistry();
-        $widgetMeta = null;
-
-        foreach ($registry as $key => $widget) {
-            if ($widget['module'] === $widgetModule && $widget['code'] === $widgetCode) {
-                $widgetMeta = $widget;
-                break;
-            }
-        }
-
-        if (!$widgetMeta) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('部件不存在'),
-            ]);
-        }
-
-        $template = $widgetMeta['template'] ?? '';
-        if (!$template) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('部件无模板'),
-            ]);
-        }
-
-        try {
-            // 渲染部件
-            $html = $this->fetchTagHtml($template, $config);
-
-            return $this->fetchJson([
-                'success' => true,
-                'html' => $html,
-                'widget' => [
-                    'code' => $widgetCode,
-                    'module' => $widgetModule,
-                    'name' => $widgetMeta['name'] ?? $widgetCode,
-                    'slot' => $widgetMeta['slot'] ?? null,
-                    'is_container' => $widgetMeta['is_container'] ?? false,
+        $eventData = [
+            'data' => [
+                'operation' => 'preview',
+                'params' => [
+                    'widget_module' => $widgetModule,
+                    'widget_code' => $widgetCode,
+                    'config' => $config,
+                    'area' => 'frontend',
                 ],
-            ]);
-        } catch (\Exception $e) {
+            ],
+        ];
+        $this->getEventManager()->dispatch('Weline_Widget::query', $eventData);
+        $html = $eventData['data']['result'] ?? '';
+        $err = $eventData['data']['error'] ?? null;
+        if ($err !== null && $err !== '') {
             return $this->fetchJson([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => $err,
             ]);
         }
+        $widgetMeta = $this->findWidgetMetaByModuleAndCode($widgetModule, $widgetCode);
+        return $this->fetchJson([
+            'success' => true,
+            'html' => is_string($html) ? $html : '',
+            'widget' => [
+                'code' => $widgetCode,
+                'module' => $widgetModule,
+                'name' => $widgetMeta['name'] ?? $widgetCode,
+                'slot' => $widgetMeta['slot'] ?? null,
+                'is_container' => $widgetMeta['is_container'] ?? false,
+            ],
+        ]);
     }
 
     /**
@@ -968,17 +961,7 @@ class ThemeEditor extends BackendController
             ]);
         }
 
-        // 获取部件元数据
-        $registry = $this->widgetRegistry->getRegistry();
-        $widgetMeta = null;
-
-        foreach ($registry as $key => $widget) {
-            if ($widget['module'] === $widgetModule && $widget['code'] === $widgetCode) {
-                $widgetMeta = $widget;
-                break;
-            }
-        }
-
+        $widgetMeta = $this->findWidgetMetaByModuleAndCode($widgetModule, $widgetCode);
         if (!$widgetMeta) {
             return $this->fetchJson([
                 'success' => false,
@@ -986,37 +969,69 @@ class ThemeEditor extends BackendController
             ]);
         }
 
-        $template = $widgetMeta['template'] ?? '';
-        if (!$template) {
-            // 返回默认占位符
+        $eventData = [
+            'data' => [
+                'operation' => 'preview',
+                'params' => [
+                    'widget_module' => $widgetModule,
+                    'widget_code' => $widgetCode,
+                    'config' => [],
+                    'area' => 'frontend',
+                ],
+            ],
+        ];
+        $this->getEventManager()->dispatch('Weline_Widget::query', $eventData);
+        $html = $eventData['data']['result'] ?? '';
+        $err = $eventData['data']['error'] ?? null;
+        if ($err !== null && $err !== '') {
             return $this->fetchJson([
                 'success' => true,
-                'html' => '<div class="widget-preview-placeholder">' . htmlspecialchars((string)($widgetMeta['name'] ?? $widgetCode ?? '')) . '</div>',
+                'html' => '<div class="widget-preview-error">' . htmlspecialchars((string)$err) . '</div>',
                 'widget' => $widgetMeta,
             ]);
         }
+        return $this->fetchJson([
+            'success' => true,
+            'html' => is_string($html) ? $html : '<div class="widget-preview-placeholder">' . htmlspecialchars((string)($widgetMeta['name'] ?? $widgetCode ?? '')) . '</div>',
+            'widget' => $widgetMeta,
+        ]);
+    }
 
-        try {
-            // 使用默认参数渲染预览
-            $defaultConfig = [];
-            foreach ($widgetMeta['params'] ?? [] as $key => $param) {
-                $defaultConfig[$key] = $param['default'] ?? '';
-            }
+    /**
+     * 获取已安装语言列表（含 SVG 国旗）
+     *
+     * 通过 Weline_I18n::query 查询器获取，由 I18n 模块统一提供。
+     *
+     * @return array JSON 响应 { success, locales: [ { code, name, flag }, ... ] }
+     */
+    public function getInstalledLocales()
+    {
+        $eventData = [
+            'data' => [
+                'operation' => 'getInstalledLocales',
+                'params' => [],
+            ],
+        ];
+        $this->getEventManager()->dispatch('Weline_I18n::query', $eventData);
 
-            $html = $this->fetchTagHtml($template, $defaultConfig);
-
+        $error = $eventData['data']['error'] ?? '';
+        if ($error !== '') {
             return $this->fetchJson([
-                'success' => true,
-                'html' => $html,
-                'widget' => $widgetMeta,
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => true,
-                'html' => '<div class="widget-preview-error">' . htmlspecialchars((string)$e->getMessage()) . '</div>',
-                'widget' => $widgetMeta,
+                'success' => false,
+                'message' => $error,
+                'locales' => [],
             ]);
         }
+
+        $locales = $eventData['data']['result'] ?? [];
+        if (!is_array($locales)) {
+            $locales = [];
+        }
+
+        return $this->fetchJson([
+            'success' => true,
+            'locales' => $locales,
+        ]);
     }
 
     /**
@@ -1052,14 +1067,22 @@ class ThemeEditor extends BackendController
         $widgetCode = $widgetLayout->getData('widget_code');
         $area = $widgetLayout->getData('area') ?: 'frontend';
         
-        // 使用 ThemeData 获取参数定义（自动从 WidgetRegistry 和 Meta 两个来源获取）
-        $params = ThemeData::getWidgetParamDefinitionsWithRegistry(
-            $widgetModule,
-            $widgetCode,
-            $this->widgetRegistry,
-            $area
-        );
-        
+        // 通过 Weline_Widget::query 获取参数定义
+        $eventData = [
+            'data' => [
+                'operation' => 'getParamDefinitions',
+                'params' => [
+                    'widget_module' => $widgetModule,
+                    'widget_code' => $widgetCode,
+                    'area' => $area,
+                ],
+            ],
+        ];
+        $this->getEventManager()->dispatch('Weline_Widget::query', $eventData);
+        $params = $eventData['data']['result'] ?? [];
+        if (!is_array($params)) {
+            $params = [];
+        }
         if (empty($params)) {
             return $this->fetchJson([
                 'success' => false,
@@ -1067,19 +1090,26 @@ class ThemeEditor extends BackendController
             ]);
         }
         
-        // 使用 ThemeData 获取参数值（支持多语言）
-        $config = ThemeData::getWidgetParams($widgetModule, $widgetCode, $locale, $area);
-        
-        // 返回参数定义和当前配置
+        $identify = ThemeData::getWidgetIdentify($widgetModule, $widgetCode, $area);
+
+        // 以 layout 已保存配置为 base（保证选择器等非翻译字段刷新后回填正确）
+        $config = $widgetLayout->getWidgetConfig();
+        if (!is_array($config)) {
+            $config = [];
+        }
+
+        // 按 locale 合并可翻译路径（顶级 + 数组子字段）到 base
+        $config = ThemeData::mergeTranslatedPaths($config, $params, $identify, $locale);
+
         return $this->fetchJson([
             'success' => true,
             'data' => [
                 'layout_id' => $layoutId,
                 'widget_module' => $widgetModule,
                 'widget_code' => $widgetCode,
-                'params' => $params,  // 参数定义（含多语言标记）
-                'config' => $config,  // 当前配置值（已支持多语言）
-                'locale' => $locale,  // 当前语言
+                'params' => $params,
+                'config' => $config,
+                'locale' => $locale,
             ],
         ]);
     }
@@ -1126,15 +1156,40 @@ class ThemeEditor extends BackendController
         $area = $widgetLayout->getData('area') ?: 'frontend';
         
         try {
-            // 使用 ThemeData 保存参数（含多语言）
-            ThemeData::setWidgetParams($widgetModule, $widgetCode, $configData, $locale, $area);
-            
-            // 仅在默认语言（locale=null）时，更新 m_theme_layout.config 字段（用于向后兼容）
-            if ($locale === null) {
-                $widgetLayout->setData('config', json_encode($configData));
-                $widgetLayout->save();
+            // 获取参数定义以识别可翻译路径
+            $eventData = [
+                'data' => [
+                    'operation' => 'getParamDefinitions',
+                    'params' => [
+                        'widget_module' => $widgetModule,
+                        'widget_code' => $widgetCode,
+                        'area' => $area,
+                    ],
+                ],
+            ];
+            $this->getEventManager()->dispatch('Weline_Widget::query', $eventData);
+            $paramDefs = $eventData['data']['result'] ?? [];
+            if (!is_array($paramDefs)) {
+                $paramDefs = [];
             }
-            
+
+            $identify = ThemeData::getWidgetIdentify($widgetModule, $widgetCode, $area);
+
+            // 分离路径 key（如 slides.0.title）与普通 key，同时写入翻译存储
+            $normalConfig = ThemeData::saveTranslatablePaths($configData, $paramDefs, $identify, $locale);
+
+            if ($locale === null) {
+                // 默认语言：将完整普通 config 写入 m_theme_layout.config
+                $widgetLayout->setData('config', json_encode($normalConfig));
+                $widgetLayout->save();
+
+                // 普通（非路径、非翻译）参数也写入 ThemeData 以保持兼容
+                ThemeData::setWidgetParams($widgetModule, $widgetCode, $normalConfig, null, $area);
+            } else {
+                // 特定语言：只写翻译层（普通可翻译字段）
+                ThemeData::setWidgetParams($widgetModule, $widgetCode, $normalConfig, $locale, $area);
+            }
+
             return $this->fetchJson([
                 'success' => true,
                 'message' => $locale ? __('已保存 %{locale} 语言的配置', ['locale' => $locale]) : __('配置已保存'),
@@ -1329,8 +1384,11 @@ class ThemeEditor extends BackendController
         $defaultConfig['preview_mode'] = true;
 
         try {
-            $html = $this->getTemplate()->fetchHtml($template, $defaultConfig);
-            return $this->sanitizeWidgetPreviewHtml($html);
+            $templateObj = $this->getTemplate();
+            // WLS 下 Template 单例 _data 会跨请求残留，渲染前清空，避免上一部件数据污染当前预览
+            $templateObj->unsetData();
+            $html = $templateObj->fetchHtml($template, $defaultConfig);
+            return $this->sanitizeWidgetPreviewHtml(is_string($html) ? $html : '');
         } catch (\Exception $e) {
             return '<div class="widget-preview-error">' . htmlspecialchars((string)$e->getMessage()) . '</div>';
         }
@@ -1425,11 +1483,32 @@ class ThemeEditor extends BackendController
             return null;
         }
 
-        // 从注册表获取部件元数据
-        // 注册表结构是 type -> code -> widget_data
-        $registry = $this->widgetRegistry->getRegistry();
-        $widgetMeta = null;
+        $eventData = [
+            'data' => [
+                'operation' => 'preview',
+                'params' => [
+                    'widget_module' => $widgetModule,
+                    'widget_code' => $widgetCode,
+                    'config' => array_merge($layoutData['config'] ?? [], $config),
+                    'area' => 'frontend',
+                ],
+            ],
+        ];
+        $this->getEventManager()->dispatch('Weline_Widget::query', $eventData);
+        $html = $eventData['data']['result'] ?? null;
+        $err = $eventData['data']['error'] ?? null;
+        if ($err !== null && $err !== '') {
+            return '<div class="widget-preview-error">' . htmlspecialchars((string)$err) . '</div>';
+        }
+        return is_string($html) ? $html : '<div class="widget-preview-placeholder">' . htmlspecialchars((string)$widgetCode) . '</div>';
+    }
 
+    /**
+     * 按 module + code 从注册表查找部件元数据
+     */
+    private function findWidgetMetaByModuleAndCode(string $widgetModule, string $widgetCode): ?array
+    {
+        $registry = $this->widgetRegistry->getRegistry();
         foreach ($registry as $type => $typeWidgets) {
             if (!is_array($typeWidgets)) {
                 continue;
@@ -1438,47 +1517,12 @@ class ThemeEditor extends BackendController
                 if (!is_array($widget)) {
                     continue;
                 }
-                if (isset($widget['module']) && isset($widget['code']) &&
-                    $widget['module'] === $widgetModule && $widget['code'] === $widgetCode) {
-                    $widgetMeta = $widget;
-                    break 2;
+                if (($widget['module'] ?? '') === $widgetModule && ($widget['code'] ?? '') === $widgetCode) {
+                    return $widget;
                 }
             }
         }
-
-        if (!$widgetMeta) {
-            return '<div class="widget-preview-placeholder">' . htmlspecialchars((string)$widgetCode) . '</div>';
-        }
-
-        $template = $widgetMeta['template'] ?? '';
-        if (!$template) {
-            return '<div class="widget-preview-placeholder">' . htmlspecialchars((string)($widgetMeta['name'] ?? $widgetCode)) . '</div>';
-        }
-
-        // 合并保存的配置和传入的配置（传入配置优先）
-        $savedConfig = $layoutData['config'] ?? [];
-        $finalConfig = array_merge($savedConfig, $config);
-
-        // 处理特殊默认值
-        foreach ($widgetMeta['params'] ?? [] as $key => $param) {
-            if (!isset($finalConfig[$key]) || $finalConfig[$key] === '') {
-                $defaultValue = $param['default'] ?? '';
-                if (($key === 'end_date' || $key === 'countdown_end') && empty($defaultValue)) {
-                    $defaultValue = date('Y-m-d H:i:s', time() + 86400);
-                }
-                if ($defaultValue !== '') {
-                    $finalConfig[$key] = $defaultValue;
-                }
-            }
-        }
-        $finalConfig['preview_mode'] = true;
-
-        try {
-            $html = $this->getTemplate()->fetchHtml($template, $finalConfig);
-            return $this->sanitizeWidgetPreviewHtml($html);
-        } catch (\Exception $e) {
-            return '<div class="widget-preview-error">' . htmlspecialchars((string)$e->getMessage()) . '</div>';
-        }
+        return null;
     }
 
     /**
@@ -1667,7 +1711,6 @@ class ThemeEditor extends BackendController
         // 返回编译后的布局（在 iframe 中渲染）
         $templatePath = "Weline_Theme::theme/frontend/layouts/{$layoutType}/{$layoutOption}.phtml";
         $html = $this->fetch($templatePath);
-        
         // 注入编辑模式的 CSS 和 JS
         $html = $this->injectEditorModeAssets($html);
         
@@ -1682,7 +1725,7 @@ class ThemeEditor extends BackendController
         // 使用框架的静态资源获取方法
         $cssUrl = $this->getTemplate()->fetchTagSource('statics', 'Weline_Theme::css/editor-mode.css');
         $jsUrl = $this->getTemplate()->fetchTagSource('statics', 'Weline_Theme::js/editor-mode.js');
-        
+
         // 编辑模式 CSS
         $editorCss = <<<HTML
 <!-- Theme Editor Mode CSS -->
@@ -2093,6 +2136,9 @@ HTML;
 
         try {
             $result = $this->versionService->restoreOriginal($themeId, $pageType);
+
+            // 清除插槽渲染服务的布局缓存，否则 WLS 常驻进程会继续返回旧 draft 缓存，预览无法恢复为空白
+            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
 
             $backupVersion = $result['backup_version'];
             $newVersion = $result['new_version'];

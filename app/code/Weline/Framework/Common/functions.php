@@ -124,6 +124,45 @@ if (!function_exists('w_split_by_capital')) {
         return array_values($arrs);
     }
 }
+
+if (!function_exists('w_snake_to_pascal')) {
+    /**
+     * snake_case / kebab-case 转 PascalCase
+     *
+     * 用于动态事件 {Module}::query 场景下，model 参数简写解析：
+     * - product -> Product
+     * - product_category -> ProductCategory
+     *
+     * @param string $str 输入字符串，支持 snake_case、kebab-case、小写
+     * @return string PascalCase 字符串
+     */
+    function w_snake_to_pascal(string $str): string
+    {
+        $str = str_replace(['_', '-'], ' ', $str);
+        return str_replace(' ', '', ucwords($str, ' '));
+    }
+}
+
+if (!function_exists('w_resolve_model_class')) {
+    /**
+     * 在已知模块下解析短 model 名为完整类名
+     *
+     * 当 dispatch(WeShop_Product::query) 时，model 可省去模块前缀，直接写 Product、product、product_category 等。
+     *
+     * @param string $module 模块名，如 WeShop_Product
+     * @param string $model 短 model 名：Product、product、product_category
+     * @return string 完整类名，如 WeShop\Product\Model\ProductCategory
+     */
+    function w_resolve_model_class(string $module, string $model): string
+    {
+        if (str_contains($model, '\\')) {
+            return $model;
+        }
+        $pascal = w_snake_to_pascal($model);
+        $namespace = str_replace('_', '\\', $module);
+        return $namespace . '\\Model\\' . $pascal;
+    }
+}
 if (!function_exists('w_var_export')) {
     /**
      * @DESC          # 打印变量
