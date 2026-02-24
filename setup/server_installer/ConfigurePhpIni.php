@@ -24,12 +24,12 @@ final class ConfigurePhpIni
     }
 
     /**
-     * 框架必需扩展（与 InstallData env.modules 一致）+ PostgreSQL 驱动，Step 1 即尝试启用。
+     * 框架必需扩展（与 InstallData env.modules 一致）+ PostgreSQL 驱动 + WLS 必需（sockets 等），Step 1 即尝试启用。
      * @return string[]
      */
     public static function getFrameworkRequiredExtensions(): array
     {
-        return ['PDO', 'exif', 'fileinfo', 'xsl', 'pdo_pgsql', 'pgsql'];
+        return ['PDO', 'exif', 'fileinfo', 'xsl', 'pdo_pgsql', 'pgsql', 'sockets', 'curl', 'mbstring'];
     }
 
     /**
