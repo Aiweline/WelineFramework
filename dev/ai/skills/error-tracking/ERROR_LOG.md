@@ -4,6 +4,49 @@
 
 ---
 
+## [2026-02-24] WLS 启动时端口检测与 SO_REUSEPORT 误判（Mac/Linux）✅ 已修复
+
+**错误类型**: 进程管理 / WLS 端口策略 / 跨平台行为
+
+**错误信息**:
+```text
+端口 445 已被占用
+使用 -r 参数强制重启（仅杀框架进程），或手动停止占用该端口的进程
+```
+
+**根本原因**:
+1. 直连模式（`SO_REUSEPORT`）下，启动前仍按 `port~port+count-1` 连续端口做占用检查，和“多 Worker 复用同一端口”的设计冲突。  
+2. 端口被**非框架进程**占用时，策略是直接报错退出，未自动跳过到可用端口段。  
+3. 启动信息文案仍提示“端口范围”，容易误导为直连模式也要占用连续端口。
+
+**解决方案**:
+1. 直连 + `SO_REUSEPORT` 时，仅检查主端口，不再检查 `port~port+count-1`。  
+2. 非显式端口（非 `-p`）被非框架进程占用时，自动选择下一个可用端口并继续启动。  
+3. Dispatcher 模式下若 Worker 连续端口段有非框架占用，自动跳到下一段可用连续端口。  
+4. 自动计算的 HTTP Redirect 端口被非框架占用时，自动跳过到下一个可用端口。  
+5. 启动面板在直连复用模式显示“同端口复用”，不再展示误导性的连续端口范围。
+
+**验证方法**:
+- `php -l app/code/Weline/Server/Console/Server/Start.php`
+- 代码路径检查：`SO_REUSEPORT` 分支、端口自适应分支、启动信息输出分支
+
+**验证结果**:
+- ✅ `Start.php` 语法检查通过
+- ✅ 直连复用路径改为单端口检查
+- ✅ 非框架占用端口存在自动跳过逻辑（主端口 / Worker 端口段 / HTTP Redirect）
+
+**预防措施**:
+1. 涉及 WLS 架构（直连/Dispatcher）时，端口检查策略必须与实际监听模型一致。  
+2. “端口占用”判断要区分框架进程与非框架进程，非框架默认不误杀、优先自动避让。  
+3. 输出文案必须与真实行为一致（复用同端口 vs 连续端口）。
+
+**相关文件**:
+- `app/code/Weline/Server/Console/Server/Start.php`
+- `dev/ai/skills/error-tracking/COMMON_ERRORS.md`
+- `dev/ai/skills/weline-server/SKILL.md`
+
+---
+
 ## [2026-02-14] AbstractModel::pagination() 参数类型 TypeError（string 传 int）✅ 已修复
 
 **错误类型**: PHP 类型 / 请求参数

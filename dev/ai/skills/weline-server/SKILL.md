@@ -503,12 +503,11 @@ cat var/log/master_health_debug.log
 ### 常见问题
 
 1. **端口被占用**：
-   - 默认 HTTPS 端口 443 被占用时，系统会自动尝试使用备用端口 9981
-   - 如果备用端口也被占用，会提示三种解决方案：
-     - 使用 `-p` 参数指定其他端口：`php bin/w server:start -p 8443`
-     - 使用 `--no-ssl` 以 HTTP 模式启动：`php bin/w server:start --no-ssl`
-     - 停止占用端口的进程：`php bin/w server:kill-port -p 443`
-   - 注意：如果显式指定了端口（如 `-p 443`），则不会自动降级，端口被占用时会直接报错
+   - 非显式端口（未传 `-p`）被**非框架进程**占用时，会自动跳到下一个可用端口继续启动（不误杀外部进程）
+   - Dispatcher 模式下，若 Worker 连续端口段存在非框架占用，会自动切换到下一段可用连续端口
+   - 自动计算的 HTTP Redirect 端口被非框架进程占用时，也会自动切换到可用端口
+   - 显式指定端口（如 `-p 443`）时保持严格模式：占用则直接报错，避免与用户明确配置不一致
+   - 如需释放框架进程占用端口，可用：`php bin/w server:kill-port -p 443`
 2. **Worker 崩溃**：检查 `var/log/error.log`
 3. **缓存不生效**：`php bin/w cache:clear`
 4. **热重载无效**：检查 `var/server/reload.flag` 文件
