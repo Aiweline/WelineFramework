@@ -40,6 +40,7 @@ class FileManager implements TaglibInterface
             'title' => true,
             'target' => true,
             'path' => true,
+            'lockPath' => false,
             'setAttr' => false,
             'value' => true,
             'vars' => false,
@@ -142,6 +143,7 @@ class FileManager implements TaglibInterface
             $fileManager
                 ->setTarget(trim($attributes['target'], '#'))
                 ->setPath($attributes['path'] ?? '')
+                ->setLockPath((bool)($attributes['lockPath'] ?? false))
                 ->setPreview((bool)($attributes['preview'] ?? true))
                 ->setValue($attributes['value'] ?? '')
                 ->setTitle($attributes['title'] ?? '')
@@ -198,10 +200,12 @@ class FileManager implements TaglibInterface
                         title='文件管理器' 
                         preview='1'
                         var='store' 
-                        path='store/logo' 
+                        path='store/logo'
+                        lockPath='1'
                         value='store.logo'
                         multi='0'
                         ext='jpg,png,gif,webp'
+                        size='1048576'
                         w='50'
                         h='50'                        
                         />"
@@ -210,15 +214,17 @@ class FileManager implements TaglibInterface
 使用方法：
 {$doc}
 参数解释：
-code：可选,指定安装的编辑器代码。例如：local
+code：可选,指定安装的编辑器代码。例如：local、elfinder、weline_media
 target：目标容器id【选择文件后会根据id回填到属性value上】
 preview: 是否预览。默认：1
-ext：必选。默认jpg,png,gif,webp格式
+ext：可选。允许的文件后缀，默认 * 表示所有类型，例如：jpg,png,gif,webp
+size：可选。允许的文件大小（字节），默认 102400（100KB），例如：1048576（1MB）
 title：可选。文件管理器标题
-path：可选。默认打开的文件路径
+path：可选。默认打开的文件路径，例如：store/logo
+lockPath：可选。是否锁定路径（不能返回上级目录），默认：0
 vars：当前变量
 value：默认当前的文件路径
-multi：可选。默认单选
+multi：可选。是否多选，默认单选
 w：可选。默认预览宽50px
 h：可选。默认预览高50px
 HTML;
