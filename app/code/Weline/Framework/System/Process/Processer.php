@@ -416,20 +416,8 @@ class Processer
                 return 0;
             }
             
-            // macOS 前端模式：使用 osascript 在独立 Terminal 窗口运行（与 Windows 行为一致）
-            // 注意：osascript 打开的 Terminal 不继承 root，低端口进程需在命令中加 sudo
-            if (!IS_WIN && \PHP_OS === 'Darwin' && $availableFunctions['exec']) {
-                $cmd = 'cd ' . \escapeshellarg(BP) . ' && ' . $pname;
-                $cmdEscaped = \str_replace(['\\', '"'], ['\\\\', '\\"'], $cmd);
-                $script = 'tell application "Terminal" to activate' . "\n"
-                    . 'tell application "Terminal" to do script "' . $cmdEscaped . '"';
-                $osascriptArg = \escapeshellarg($script);
-                @\exec('osascript -e ' . $osascriptArg . ' 2>/dev/null');
-                // osascript 无法返回子进程 PID，前端模式允许 pid=0 视为成功
-                return 0;
-            }
-            
-            // Linux/macOS(root) 前端模式：使用 proc_open（输出继承当前终端）
+            // Linux/macOS 前端模式：统一使用 proc_open（输出继承当前终端）
+            // 不再使用 macOS osascript 打开新 Terminal，避免权限链路分叉与窗口残留问题。
             // exec 替换 shell 进程，确保 proc_get_status 返回的是子进程真实 PID
             if (!IS_WIN && $availableFunctions['proc_open']) {
                 $execCommand = 'exec ' . $pname;

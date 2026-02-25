@@ -1007,6 +1007,14 @@ while (true) {
         if (\function_exists('posix_kill')) {
             // signal 0 只检查进程是否存在，不发送实际信号
             $masterAlive = @\posix_kill($masterPid, 0);
+            // macOS/Linux: 非 root 进程探测 root 进程时可能返回 EPERM（进程存在但无权限）
+            if (!$masterAlive && \function_exists('posix_get_last_error')) {
+                $errno = (int)@\posix_get_last_error();
+                $eperm = 1; // EPERM
+                if ($errno === $eperm) {
+                    $masterAlive = true;
+                }
+            }
         } elseif (!(\defined('IS_WIN') && IS_WIN)) {
             // 兜底：通过 /proc 或 kill -0 检测
             $masterAlive = @\file_exists("/proc/{$masterPid}");
