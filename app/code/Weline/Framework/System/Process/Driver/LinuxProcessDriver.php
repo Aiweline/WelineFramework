@@ -81,7 +81,7 @@ class LinuxProcessDriver extends AbstractProcessDriver
         // 方案2：回退到 ps + grep（兼容所有 Unix 系统，包括 Alpine/BusyBox 等没有 pgrep 的系统）
         $output = [];
         $this->executeCommand(
-            'ps aux 2>/dev/null | grep -F ' . \escapeshellarg($pname) . ' | grep -v grep | awk \'{print $2}\'',
+            'ps aux 2>/dev/null | grep -F -- ' . \escapeshellarg($pname) . ' | grep -v grep | awk \'{print $2}\'',
             $output
         );
         
@@ -725,7 +725,7 @@ class LinuxProcessDriver extends AbstractProcessDriver
         if (empty($pids)) {
             $output = [];
             $this->executeCommand(
-                "ps aux 2>/dev/null | grep -F " . \escapeshellarg('--name=' . $processName) . " | grep -v grep | awk '{print \$2}'",
+                "ps aux 2>/dev/null | grep -F -- " . \escapeshellarg('--name=' . $processName) . " | grep -v grep | awk '{print \$2}'",
                 $output
             );
             
