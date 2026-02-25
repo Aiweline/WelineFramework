@@ -165,11 +165,28 @@ if ($stopCode !== 0) {
 }
 
 // 11. server:start（可选步骤，失败时给出手动启动提示）
-$code = $run('bin/w server:start');
+// macOS 下使用特权端口（如 443）需要 sudo 权限
+$isMac = PHP_OS === 'Darwin';
+$serverPort = (int) ($env['SERVER_PORT'] ?? $env['server']['port'] ?? 9981);
+$needSudo = $isMac && $serverPort < 1024;
+$serverStartCmd = 'bin/w server:start';
+if ($needSudo) {
+    echo "提示：macOS 上绑定端口 {$serverPort} 需要管理员权限，将使用 sudo 启动...\n";
+    $code = 0;
+    $sudoCmd = 'sudo ' . $phpBin . ' ' . $serverStartCmd;
+    echo "执行命令：$sudoCmd\n";
+    passthru($sudoCmd, $code);
+} else {
+    $code = $run($serverStartCmd);
+}
 if ($code !== 0) {
     echo "\n";
     echo "提示：server:start 未能自动启动，您可以手动启动服务器：\n";
-    echo "  php bin/w server:start\n";
+    if ($needSudo) {
+        echo "  sudo php bin/w server:start\n";
+    } else {
+        echo "  php bin/w server:start\n";
+    }
     echo "\n";
 }
 
