@@ -416,11 +416,9 @@ class Processer
                 return 0;
             }
             
-            // macOS 前端模式：
-            // - 已是 root 时：跳过 osascript，使用 proc_open（继承 root 权限、可获取 PID、可终止子进程）
-            // - 非 root 时：使用 osascript 在独立 Terminal 窗口运行（与 Windows 行为一致）
-            $macIsRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
-            if (!IS_WIN && \PHP_OS === 'Darwin' && !$macIsRoot && $availableFunctions['exec']) {
+            // macOS 前端模式：使用 osascript 在独立 Terminal 窗口运行（与 Windows 行为一致）
+            // 注意：osascript 打开的 Terminal 不继承 root，低端口进程需在命令中加 sudo
+            if (!IS_WIN && \PHP_OS === 'Darwin' && $availableFunctions['exec']) {
                 $cmd = 'cd ' . \escapeshellarg(BP) . ' && ' . $pname;
                 $cmdEscaped = \str_replace(['\\', '"'], ['\\\\', '\\"'], $cmd);
                 $script = 'tell application "Terminal" to activate' . "\n"
@@ -432,22 +430,22 @@ class Processer
             }
             
             // Linux/macOS(root) 前端模式：使用 proc_open（输出继承当前终端）
+            // exec 替换 shell 进程，确保 proc_get_status 返回的是子进程真实 PID
             if (!IS_WIN && $availableFunctions['proc_open']) {
-                $nohupCommand = $pname . ' &';
+                $execCommand = 'exec ' . $pname;
                 $descriptorspec = [
                     0 => ['pipe', 'r'],
                     1 => STDOUT,
                     2 => STDERR,
                 ];
                 
-                // 参考 Symfony：使用 set_error_handler 捕获启动错误
                 $lastError = null;
                 \set_error_handler(function ($type, $msg) use (&$lastError) {
                     $lastError = $msg;
                     return true;
                 });
                 try {
-                    $process = \proc_open($nohupCommand, $descriptorspec, $pipes, BP);
+                    $process = \proc_open($execCommand, $descriptorspec, $pipes, BP);
                 } finally {
                     \restore_error_handler();
                 }
@@ -464,7 +462,6 @@ class Processer
                     return $pid;
                 }
                 
-                // 记录启动错误到日志
                 if ($enableLog && $lastError !== null) {
                     self::setOutput($pname, "[ERROR] proc_open failed (foreground): {$lastError}" . PHP_EOL, true);
                 }
@@ -2460,6 +2457,8 @@ class Processer
         }
         
         $killed = 0;
+        $killedPids = [];
+        $currentPid = \getmypid();
         
         // 1. 从 name_index 读取所有进程
         $nameIndex = self::readNameIndex();
@@ -2467,7 +2466,6 @@ class Processer
         
         // 2. 按前缀匹配收集 PID
         foreach ($nameIndex as $pname => $info) {
-            // 检查 pname 是否以 prefix 开头（pname 可能是 --name=weline-xxx 格式）
             $taskName = '';
             try {
                 $taskName = self::getTaskName($pname);
@@ -2483,20 +2481,36 @@ class Processer
             }
         }
         
-        // 3. 批量杀死（校验己方进程 + 记录日志 + 委托驱动）
+        // 3. 批量杀死 name_index 中的进程
         foreach ($pidsToKill as $pid => $pname) {
-            // 校验是否为己方进程
-            if (!self::isProcessManagerCreated($pid)) {
+            if ($pid === $currentPid || !self::isProcessManagerCreated($pid)) {
                 continue;
             }
-            
-            // 使用驱动杀死进程（跨平台兼容）
             $result = self::getDriver()->killProcess($pid);
-            
             if ($result) {
                 $killed++;
-                // 记录杀进程日志
+                $killedPids[$pid] = true;
                 self::logLifecycleEvent('kill', $pname, $pid, 'killed by prefix: ' . $prefix);
+            }
+        }
+        
+        // 4. 系统级兜底：通过 pgrep/ps 搜索命令行中含 --name={prefix} 的进程
+        //    解决 osascript/nohup 等启动方式导致 name_index 缺失 PID 的问题
+        if (!IS_WIN) {
+            $sysPids = self::getDriver()->findProcessesByName($prefix);
+            foreach ($sysPids as $pid) {
+                if ($pid <= 0 || $pid === $currentPid || isset($killedPids[$pid])) {
+                    continue;
+                }
+                if (!self::isWelineServerProcess($pid)) {
+                    continue;
+                }
+                $result = self::getDriver()->killProcess($pid);
+                if ($result) {
+                    $killed++;
+                    $killedPids[$pid] = true;
+                    self::logLifecycleEvent('kill', '--name=' . $prefix . '(sys)', $pid, 'killed by system search, prefix: ' . $prefix);
+                }
             }
         }
         

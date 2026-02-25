@@ -212,12 +212,34 @@ final class CodeGenerator
     {
         $varPath = trim($varPath);
         
-        // 处理管道符回退语法（如 page.local_title | page.title）
-        // 管道符 | 表示：如果第一个表达式为空则使用第二个表达式
-        if (str_contains($varPath, '|')) {
-            $parts = array_map('trim', explode('|', $varPath, 2));
+        // 排除 || 逻辑运算符，仅匹配单个 | 作为管道/默认值分隔符
+        if (preg_match('/(?<!\|)\|(?!\|)/', $varPath)) {
+            $parts = array_map('trim', preg_split('/(?<!\|)\|(?!\|)/', $varPath, 2));
             $primary = $this->parseSingleVariablePath($parts[0]);
-            $fallback = $this->parseSingleVariablePath($parts[1]);
+            $fallbackPart = $parts[1];
+            
+            // 处理 default:value 过滤器语法（如 default:"" 或 default:$var）
+            if (str_starts_with($fallbackPart, 'default:')) {
+                $defaultValue = trim(substr($fallbackPart, 8));
+                if ($defaultValue === '') {
+                    $defaultValue = "''";
+                }
+                // 引号字符串、数字、布尔/null 字面量直接使用
+                if (preg_match('/^(["\']).*\1$/', $defaultValue)
+                    || is_numeric($defaultValue)
+                    || in_array(strtolower($defaultValue), ['true', 'false', 'null'], true)) {
+                    return '(' . $primary . ' ?? ' . $defaultValue . ')';
+                }
+                // 变量引用
+                if (str_starts_with($defaultValue, '$')) {
+                    return '(' . $primary . ' ?? ' . $defaultValue . ')';
+                }
+                // 其他情况按变量路径解析
+                $fallback = $this->parseSingleVariablePath($defaultValue);
+                return '(' . $primary . ' ?? ' . $fallback . ')';
+            }
+            
+            $fallback = $this->parseSingleVariablePath($fallbackPart);
             return '(' . $primary . ' ?? ' . $fallback . ')';
         }
         
