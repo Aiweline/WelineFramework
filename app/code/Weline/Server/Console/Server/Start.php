@@ -307,10 +307,14 @@ class Start extends CommandAbstract
         //   - 适用：Windows 或不支持 SO_REUSEPORT 的系统
         //   - 架构：客户端 → Dispatcher(单进程SSL) → Worker(多进程HTTP)
         //
+        // --direct: 启用直连模式（SO_REUSEPORT，多 Worker 复用同一端口）
+        // --no-dispatcher: 禁用 Dispatcher，每个 Worker 使用独立端口
+        // --dispatcher / --force-dispatcher: 强制 Dispatcher 模式
+        $directMode = isset($args['direct']);
         $noDispatcher = isset($args['no-dispatcher']) || isset($args['no_dispatcher']);
         $forceDispatcher = isset($args['dispatcher']) || isset($args['force-dispatcher']);
-        
-        // 检测 SO_REUSEPORT 支持（Linux 3.9+）
+
+        // 检测 SO_REUSEPORT 支持（Linux 3.9+, macOS）
         $supportsReusePort = false;
         if (!IS_WIN && PHP_OS === 'Linux') {
             $release = \php_uname('r');
@@ -323,31 +327,50 @@ class Start extends CommandAbstract
         }
         
         // 决定使用哪种架构
-        // - 单 Worker：无需 Dispatcher
-        // - 多 Worker + SO_REUSEPORT：直连模式（除非强制 Dispatcher）
-        // - 多 Worker + 不支持 SO_REUSEPORT：Dispatcher 模式
-        // - --no-dispatcher：强制禁用 Dispatcher（多端口模式）
+        // 优先级：
+        //   1. 单 Worker：无需 Dispatcher（直接监听）
+        //   2. --direct：显式启用直连模式（需要 SO_REUSEPORT 支持）
+        //   3. --no-dispatcher：禁用 Dispatcher，每个 Worker 独立端口
+        //   4. 默认：Dispatcher 模式（所有平台统一，稳定可靠）
         if ($count <= 1) {
+            // 单 Worker 无需 Dispatcher
             $dispatcherEnabled = false;
-        } elseif ($noDispatcher) {
-            $dispatcherEnabled = false;
-        } elseif ($supportsReusePort && !$forceDispatcher) {
-            // Linux + SO_REUSEPORT：使用直连模式，绕过 Dispatcher
-            $dispatcherEnabled = false;
-            $this->printer->success(__('启用直连模式：%{1} 个 Worker 直接监听端口 %{2}（SO_REUSEPORT）', [$count, $port]));
-        } else {
-            // Windows 或不支持 SO_REUSEPORT：使用 Dispatcher 模式
-            $dispatcherEnabled = true;
-            if (IS_WIN) {
-                $this->printer->note(__('Windows 不支持 SO_REUSEPORT，使用 Dispatcher 模式'));
+        } elseif ($directMode) {
+            // --direct：显式请求直连模式
+            if ($supportsReusePort) {
+                $dispatcherEnabled = false;
+                $this->printer->success(__('启用直连模式：%{1} 个 Worker 直接监听端口 %{2}（SO_REUSEPORT）', [$count, $port]));
+            } else {
+                $this->printer->warning(__('当前系统不支持 SO_REUSEPORT，无法启用直连模式，回退到 Dispatcher 模式'));
+                $dispatcherEnabled = true;
             }
+        } elseif ($noDispatcher) {
+            // --no-dispatcher：每个 Worker 独立端口（无 Dispatcher，无直连）
+            $dispatcherEnabled = false;
+            $this->printer->note(__('禁用 Dispatcher，每个 Worker 使用独立端口（智能分配）'));
+        } else {
+            // 默认：Dispatcher 模式（所有平台统一）
+            $dispatcherEnabled = true;
+            $this->printer->note(__('使用 Dispatcher 模式（TCP 透传）'));
         }
         
         $workerBasePort = (int) ($config['worker_base_port'] ?? 10000);
         
-        // Dispatcher 模式下：Worker 监听内网高端口，Dispatcher 监听主端口
-        // 直连模式：所有 Worker 直接监听主端口（SO_REUSEPORT）
-        $workerPort = $dispatcherEnabled ? ($workerBasePort + $port) : $port;
+        // 计算 Worker 端口
+        // - Dispatcher 模式：Worker 监听内网高端口，Dispatcher 监听主端口
+        // - 直连模式（--direct）：所有 Worker 直接监听主端口（SO_REUSEPORT）
+        // - 独立端口模式（--no-dispatcher）：每个 Worker 使用独立端口，需智能分配
+        $useDirectMode = !$dispatcherEnabled && $supportsReusePort && $directMode;
+        if ($dispatcherEnabled) {
+            // Dispatcher 模式：Worker 使用内网高端口
+            $workerPort = $workerBasePort + $port;
+        } elseif ($useDirectMode) {
+            // 直连模式：所有 Worker 复用主端口
+            $workerPort = $port;
+        } else {
+            // 独立端口模式：Worker 使用独立端口（从 workerBasePort 开始）
+            $workerPort = $workerBasePort + $port;
+        }
         // Dispatcher 只做 TCP 透传和流量控制，不做 SSL 握手
         // SSL 握手始终由 Worker 处理（无论是否使用 Dispatcher）
         $workerSslEnabled = $sslEnabled;
@@ -408,11 +431,13 @@ class Start extends CommandAbstract
             }
         }
 
-        // Dispatcher 模式：Worker 端口段若包含非框架占用端口，自动跳到下一段可用端口
-        if ($dispatcherEnabled) {
-            $nextWorkerPort = $this->findAvailableWorkerPortBase($workerPort, $count);
+        // Dispatcher 模式或独立端口模式：Worker 端口段需智能分配
+        // - WLS 进程占用的端口：释放后分配给新进程
+        // - 非 WLS 进程占用的端口：跳过，使用下一个可用端口
+        if ($dispatcherEnabled || (!$useDirectMode && $count > 1)) {
+            $nextWorkerPort = $this->findAvailableWorkerPortBaseWithRelease($workerPort, $count);
             if ($nextWorkerPort !== $workerPort) {
-                $this->printer->warning(__('Worker 端口段 %{1}-%{2} 存在非框架占用，自动切换到 %{3}-%{4}', [
+                $this->printer->warning(__('Worker 端口段 %{1}-%{2} 存在端口占用，自动切换到 %{3}-%{4}', [
                     $workerPort,
                     $workerPort + $count - 1,
                     $nextWorkerPort,
@@ -445,13 +470,15 @@ class Start extends CommandAbstract
         }
         
         // 显示启动信息
-        $directReusePortEnabled = !$dispatcherEnabled && $supportsReusePort && $count > 1;
-        $this->showStartupInfo($instanceName, $host, $port, $count, $daemon, $config['source'], $sslEnabled, $dispatcherEnabled, $workerPort, $httpRedirectPort, $directReusePortEnabled);
+        // 使用 $useDirectMode 而非重新计算，确保与架构选择逻辑一致
+        $this->showStartupInfo($instanceName, $host, $port, $count, $daemon, $config['source'], $sslEnabled, $dispatcherEnabled, $workerPort, $httpRedirectPort, $useDirectMode);
 
         // 80/443 端口自我处理提示（特权端口、单端口建议）
-        if (!$dispatcherEnabled && !$supportsReusePort) {
-            $this->showStandardPortHints($port, $count, $sslEnabled);
-        } elseif (!$dispatcherEnabled && $supportsReusePort && $count > 1) {
+        if (!$dispatcherEnabled && !$useDirectMode && $count > 1) {
+            // 独立端口模式
+            $this->printer->note(__('提示：当前为独立端口模式，%{1} 个 Worker 分别监听端口 %{2}-%{3}。', [$count, $workerPort, $workerPort + $count - 1]));
+        } elseif ($useDirectMode && $count > 1) {
+            // 直连模式
             $this->printer->note(__('提示：当前为 SO_REUSEPORT 直连模式，多 Worker 复用同一端口 %{1}。', [$port]));
         }
 
@@ -509,7 +536,7 @@ class Start extends CommandAbstract
         $workerScript = $this->ensureWorkerScript($workerSslEnabled);
         
         // 保存实例信息（Master 将从这里读取配置并启动所有进程）
-        $this->saveInstanceInfo($instanceName, $host, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, [], $dispatcherEnabled, $workerPort, $httpRedirectPort, $frontend, $enableLog);
+        $this->saveInstanceInfo($instanceName, $host, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, [], $dispatcherEnabled, $workerPort, $httpRedirectPort, $frontend, $enableLog, $useDirectMode);
         
         // 保存实例配置（配置记忆：下次 server:start <name> 直接使用相同配置）
         $this->saveInstanceConfig($instanceName, $args, $config);
@@ -644,12 +671,17 @@ class Start extends CommandAbstract
             $fullCmd = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "' . \str_replace('"', '\"', $psCmd) . '"';
             @\exec($fullCmd . ' 2>NUL');
         } else {
-            // 输出当前进程的 euid（调试用）
-            if (\function_exists('posix_geteuid')) {
-                $euid = \posix_geteuid();
-                $this->printer->note(__('启动后台 Master (当前 euid: %{1}%{2})', [$euid, $euid === 0 ? ', root 权限将传递给子进程' : '']));
+            // macOS/Linux：如果当前是 root，显式用 sudo -n 确保后台进程也以 root 运行
+            // nohup 在某些情况下可能不正确继承 sudo 的 root 权限（如通过 passthru 启动的临时 sudo 会话）
+            // sudo -n (non-interactive) 在已有 root 权限时不需要密码
+            $isRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
+            if ($isRoot) {
+                $this->printer->note(__('以 root 权限启动后台 Master...'));
+                // 使用 sudo -E -n 保留环境变量并以 root 运行
+                $cmd = \sprintf('sudo -E -n %s %s server:start %s --master-only --name=%s', $phpBinary, \escapeshellarg($script), \escapeshellarg($instanceName), \escapeshellarg($masterName));
+            } else {
+                $cmd = \sprintf('%s %s server:start %s --master-only --name=%s', $phpBinary, \escapeshellarg($script), \escapeshellarg($instanceName), \escapeshellarg($masterName));
             }
-            $cmd = \sprintf('%s %s server:start %s --master-only --name=%s', $phpBinary, \escapeshellarg($script), \escapeshellarg($instanceName), \escapeshellarg($masterName));
             Processer::create($cmd, false);
         }
         
@@ -2103,9 +2135,83 @@ class Start extends CommandAbstract
     }
     
     /**
+     * 智能端口分配：查找可用的 Worker 连续端口段
+     * 
+     * - WLS 进程占用的端口：释放后分配给新进程
+     * - 非 WLS 进程占用的端口：跳过，使用下一个可用端口
+     * 
+     * @param int $startPort 起始端口
+     * @param int $count Worker 数量
+     * @param int $maxScan 最大扫描次数
+     * @return int 可用的起始端口
+     */
+    protected function findAvailableWorkerPortBaseWithRelease(int $startPort, int $count, int $maxScan = 500): int
+    {
+        $base = $startPort;
+        
+        for ($attempt = 0; $attempt < $maxScan; $attempt++, $base++) {
+            $hasNonFrameworkConflict = false;
+            $welinePortsToRelease = [];
+            
+            // 检查这一段端口的占用情况
+            for ($i = 0; $i < $count; $i++) {
+                $port = $base + $i;
+                
+                if (!Processer::isPortInUse($port)) {
+                    // 端口空闲，继续检查下一个
+                    continue;
+                }
+                
+                if (Processer::isPortUsedByWeline($port)) {
+                    // WLS 进程占用，记录待释放
+                    $welinePortsToRelease[] = $port;
+                } else {
+                    // 非 WLS 进程占用，跳过这一段
+                    $hasNonFrameworkConflict = true;
+                    break;
+                }
+            }
+            
+            if ($hasNonFrameworkConflict) {
+                // 有非框架进程占用，跳到下一段
+                continue;
+            }
+            
+            // 释放 WLS 占用的端口
+            foreach ($welinePortsToRelease as $portToRelease) {
+                $pid = Processer::getProcessIdByPort($portToRelease);
+                if ($pid > 0) {
+                    $this->printer->note(__('释放 WLS 进程占用的端口 %{1} (PID: %{2})...', [$portToRelease, $pid]));
+                    Processer::killByPid($pid);
+                    // 等待进程退出
+                    \usleep(100000); // 100ms
+                }
+            }
+            
+            // 再次确认端口已释放
+            $allReleased = true;
+            foreach ($welinePortsToRelease as $portToCheck) {
+                Processer::clearPortCache($portToCheck);
+                if (Processer::isPortInUse($portToCheck)) {
+                    $allReleased = false;
+                    break;
+                }
+            }
+            
+            if ($allReleased) {
+                return $base;
+            }
+            
+            // 如果释放失败，继续尝试下一段
+        }
+        
+        return $startPort;
+    }
+    
+    /**
      * 保存实例信息
      */
-    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', array $workerPids = [], bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $frontend = false, bool $enableLog = false): void
+    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', array $workerPids = [], bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $frontend = false, bool $enableLog = false, bool $useDirectMode = false): void
     {
         $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
         if (!\is_dir($instanceDir)) {
@@ -2141,11 +2247,19 @@ class Start extends CommandAbstract
             'enable_log' => $enableLog,
         ];
 
-        // 直连模式：Master 需按 linux-direct 管理（共用主端口 + reuseport）
-        if (!$dispatcherEnabled) {
+        // 设置 Master 运行模式
+        // - 直连模式（SO_REUSEPORT）：所有 Worker 共用主端口
+        // - 独立端口模式：每个 Worker 使用独立端口
+        // - Dispatcher 模式：Worker 使用内网端口，Dispatcher 监听主端口
+        if ($useDirectMode) {
             $instanceData['master_mode'] = MasterProcess::MODE_LINUX_DIRECT;
             $instanceData['main_port'] = $port;
+        } elseif (!$dispatcherEnabled) {
+            // 独立端口模式（非直连、非 Dispatcher）
+            $instanceData['master_mode'] = MasterProcess::MODE_LEGACY;
+            $instanceData['main_port'] = $workerPort;
         } else {
+            // Dispatcher 模式
             $instanceData['master_mode'] = MasterProcess::MODE_LEGACY;
             $instanceData['main_port'] = 0;
         }
@@ -2618,6 +2732,10 @@ PHP;
         if ($frontend) {
             $command .= " --frontend";
         }
+        // macOS 上 nohup 可能不正确继承 sudo 权限，使用 sudo -E -n 确保子进程以 root 运行
+        if (!IS_WIN && \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0) {
+            $command = 'sudo -E -n ' . $command;
+        }
         
         $pid = Processer::create($command, true, $frontend);
         
@@ -2728,6 +2846,10 @@ PHP;
         if ($frontend) {
             $command .= " --frontend";
         }
+        // macOS 上 nohup 可能不正确继承 sudo 权限，使用 sudo -E -n 确保子进程以 root 运行
+        if (!IS_WIN && \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0) {
+            $command = 'sudo -E -n ' . $command;
+        }
         
         // 使用进程管理器统一创建进程
         $pid = Processer::create($command, true, $frontend);
@@ -2812,6 +2934,10 @@ PHP;
         $command .= " --name={$processName}";
         if ($frontend) {
             $command .= " --frontend";
+        }
+        // macOS 上 nohup 可能不正确继承 sudo 权限，使用 sudo -E -n 确保子进程以 root 运行
+        if (!IS_WIN && \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0) {
+            $command = 'sudo -E -n ' . $command;
         }
         
         // 使用进程管理器统一创建进程
@@ -3289,6 +3415,9 @@ PHP;
                 '--ssl-key <path>' => __('SSL 私钥文件路径（启用 HTTPS）'),
                 '--http-redirect-port <port>' => __('HTTP 重定向端口（HTTPS 模式专用，默认：自动计算或 80）'),
                 '--redirect-port <port>' => __('HTTP 重定向端口（--http-redirect-port 的简写）'),
+                '--direct' => __('直连模式：多 Worker 直接监听同一端口（Linux/Mac SO_REUSEPORT）'),
+                '--no-dispatcher' => __('独立端口模式：禁用 Dispatcher，每个 Worker 使用独立端口'),
+                '--dispatcher' => __('强制 Dispatcher 模式（默认）'),
                 '--help' => __('显示帮助信息'),
             ],
             [
