@@ -198,7 +198,8 @@ class MasterResurrector
         $script = BP . 'bin' . DS . 'w';
 
         $masterName = \Weline\Server\Service\MasterProcess::getMasterProcessName($this->instanceName);
-        if (IS_WIN) {
+        $isWin = \defined('IS_WIN') ? IS_WIN : (\stripos(PHP_OS, 'WIN') === 0);
+        if ($isWin) {
             $bp = \str_replace("'", "''", BP);
             $phpBin = \str_replace("'", "''", $phpBinary);
             $scriptRel = 'bin' . DS . 'w';
