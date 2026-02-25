@@ -687,6 +687,15 @@ if [[ ! -f "$ROOT/setup/server_installer/run.php" ]]; then
     echo "ERROR: Code install failed. Ensure setup/server_installer/run.php exists." >&2
     exit 1
   fi
+  # 将项目目录权限设为当前用户（避免后续操作权限问题）
+  current_user="$(whoami)"
+  if [[ "$PLATFORM" == "linux" ]]; then
+    echo "Setting project directory ownership to current user ($current_user)..."
+    run_privileged chown -R "$current_user":"$(id -gn)" "$ROOT" 2>/dev/null || true
+  elif [[ "$PLATFORM" == "mac" ]]; then
+    echo "Setting project directory ownership to current user ($current_user)..."
+    chown -R "$current_user":"$(id -gn)" "$ROOT" 2>/dev/null || true
+  fi
   echo "Code installed (branch: $BRANCH)."
 fi
 
