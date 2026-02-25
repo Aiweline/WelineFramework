@@ -10,9 +10,30 @@ class Manager extends BackendController
 {
     public function index()
     {
-        // 使用 path 相对当前页 origin，避免端口/协议不一致导致 XHR 挂起或跨域
         $connectorUrl = $this->_url->getBackendUrlPath('media/backend/connector');
         $this->assign('connector_url', $connectorUrl);
         return $this->fetch('manager.phtml');
+    }
+
+    /**
+     * 嵌入式管理器（iframe 调用）
+     */
+    public function getIframe()
+    {
+        $connectorUrl = $this->_url->getBackendUrlPath('media/backend/connector');
+        $params = $this->request->getParams();
+        $this->assign('connector_url', $connectorUrl);
+        $this->assign('is_iframe', true);
+        $this->assign('target', $params['target'] ?? '');
+        $this->assign('multi', $params['multi'] ?? '0');
+        $this->assign('ext', $params['ext'] ?? '*');
+        $this->assign('size', $params['size'] ?? '102400');
+        $this->assign('setAttr', $params['setAttr'] ?? '');
+        $this->assign('preview', $params['preview'] ?? '1');
+        $this->assign('startPath', $params['startPath'] ?? $params['path'] ?? '');
+        $this->assign('lockPath', $params['lockPath'] ?? '0');
+        $this->assign('recommend_width', $params['recommend_width'] ?? '');
+        $this->assign('recommend_height', $params['recommend_height'] ?? '');
+        return $this->fetch('manager-iframe.phtml');
     }
 }
