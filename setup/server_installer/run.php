@@ -125,28 +125,52 @@ if (!$step5bOk) {
     exit(1);
 }
 
-// 6. setup:upgrade -f (1/2)
+// 6. 设置安装模式标志
+// 安装模式下 command:upgrade 会扫描所有模块的命令（不管是否激活），确保 setup:upgrade、server:start 等核心命令可用
+$installModeFlagDir = $projectRoot . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'process';
+$installModeFlagFile = $installModeFlagDir . DIRECTORY_SEPARATOR . 'command_install_mode.flag';
+if (!is_dir($installModeFlagDir)) {
+    @mkdir($installModeFlagDir, 0755, true);
+}
+@file_put_contents($installModeFlagFile, date('Y-m-d H:i:s') . ' - install mode enabled');
+echo "已启用安装模式：命令收集将扫描所有模块（包括未激活的模块）。\n";
+
+// 7. setup:upgrade -y (1/2)
 // 注意：command:upgrade 已集成到 setup:upgrade 中，会在 collectFrameworkRegistries 时自动执行
+// 安装模式下会扫描所有模块的命令
 $code = $run('bin/w setup:upgrade -y');
 if ($code !== 0) {
+    @unlink($installModeFlagFile); // 清除安装模式标志
     fwrite(STDERR, "ERROR: setup:upgrade (1/2) failed (exit $code). Fix the errors above and re-run install.\n");
     exit(1);
 }
 
-// 7. setup:upgrade -f (2/2)
+// 8. setup:upgrade -y (2/2)
 $code = $run('bin/w setup:upgrade -y');
 if ($code !== 0) {
+    @unlink($installModeFlagFile); // 清除安装模式标志
     fwrite(STDERR, "ERROR: setup:upgrade (2/2) failed (exit $code). Fix the errors above and re-run install.\n");
     exit(1);
 }
 
-// 8. server:stop
-$run('bin/w server:stop');
+// 9. 清除安装模式标志
+// 安装完成后，后续的 command:upgrade 将只扫描已激活的模块
+@unlink($installModeFlagFile);
+echo "安装模式已关闭。\n";
 
-// 9. server:start
+// 10. server:stop（可选步骤，失败不影响安装）
+$stopCode = $run('bin/w server:stop');
+if ($stopCode !== 0) {
+    echo "提示：server:stop 未执行（可能服务器未运行或首次安装），跳过。\n";
+}
+
+// 11. server:start（可选步骤，失败时给出手动启动提示）
 $code = $run('bin/w server:start');
 if ($code !== 0) {
-    fwrite(STDERR, "WARNING: server:start failed (exit $code). You may start the server manually.\n");
+    echo "\n";
+    echo "提示：server:start 未能自动启动，您可以手动启动服务器：\n";
+    echo "  php bin/w server:start\n";
+    echo "\n";
 }
 
 exit(0);

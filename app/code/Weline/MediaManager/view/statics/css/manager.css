@@ -364,21 +364,14 @@
     margin-bottom: 12px;
 }
 
-/* 加载动画 - 绝对定位覆盖层，不影响 .mmf-grid */
+/* 加载动画 */
 .mmf-loading {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 40px;
     color: var(--backend-color-text-secondary, #6c757d);
     font-size: 0.875rem;
-    background: var(--backend-color-bg-primary, rgba(255,255,255,0.85));
-    z-index: 10;
 }
 
 .mmf-spinner {
@@ -490,6 +483,182 @@
     gap: 8px;
 }
 
+/* 图片预览 Lightbox */
+.mmf-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 10002;
+    background: rgba(0, 0, 0, 0.92);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.mmf-lightbox.visible {
+    display: flex;
+}
+
+.mmf-lightbox-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
+    color: #fff;
+    z-index: 10;
+}
+
+.mmf-lightbox-title {
+    font-size: 0.875rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 60%;
+}
+
+.mmf-lightbox-counter {
+    font-size: 0.8rem;
+    opacity: 0.8;
+}
+
+.mmf-lightbox-close {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    font-size: 1.5rem;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mmf-lightbox-close:hover {
+    background: rgba(255,255,255,0.25);
+}
+
+.mmf-lightbox-main {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 60px 60px 120px;
+    box-sizing: border-box;
+    position: relative;
+}
+
+.mmf-lightbox-img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: var(--backend-border-radius, 6px);
+    box-shadow: 0 4px 30px rgba(0,0,0,0.5);
+    transition: opacity 0.2s;
+}
+
+.mmf-lightbox-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 48px;
+    height: 48px;
+    border: none;
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    font-size: 1.5rem;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+.mmf-lightbox-nav:hover {
+    background: rgba(255,255,255,0.25);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.mmf-lightbox-nav:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    transform: translateY(-50%);
+}
+
+.mmf-lightbox-prev {
+    left: 16px;
+}
+
+.mmf-lightbox-next {
+    right: 16px;
+}
+
+.mmf-lightbox-thumbs {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+    padding: 16px 20px 20px;
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.3) transparent;
+}
+
+.mmf-lightbox-thumbs::-webkit-scrollbar {
+    height: 6px;
+}
+
+.mmf-lightbox-thumbs::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.mmf-lightbox-thumbs::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.3);
+    border-radius: 3px;
+}
+
+.mmf-lightbox-thumb {
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+    border: 2px solid transparent;
+    border-radius: var(--backend-border-radius-sm, 4px);
+    overflow: hidden;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: all 0.15s;
+}
+
+.mmf-lightbox-thumb:hover {
+    opacity: 0.9;
+}
+
+.mmf-lightbox-thumb.active {
+    border-color: var(--backend-color-primary, #556ee6);
+    opacity: 1;
+}
+
+.mmf-lightbox-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
 /* 响应式 */
 @media (max-width: 768px) {
     .mmf-sidebar {
@@ -498,5 +667,17 @@
     }
     .mmf-grid {
         grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    }
+    .mmf-lightbox-main {
+        padding: 50px 50px 100px;
+    }
+    .mmf-lightbox-nav {
+        width: 40px;
+        height: 40px;
+        font-size: 1.2rem;
+    }
+    .mmf-lightbox-thumb {
+        width: 48px;
+        height: 48px;
     }
 }
