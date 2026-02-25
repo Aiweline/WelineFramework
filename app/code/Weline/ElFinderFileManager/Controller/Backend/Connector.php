@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Weline\ElFinderFileManager\Controller\Backend;
 
 use elFinder;
-use elFinderConnector;
 use Weline\ElFinderFileManager\Service\ConnectorOptionsBuilder;
 use Weline\FileManager\Helper\MimeTypes;
 use Weline\Framework\App\Controller\BackendController;
@@ -63,15 +62,16 @@ class Connector extends BackendController
 
     public function index()
     {
-        // #region agent log — 致命错误时在 shutdown 中写入 error_get_last()
-        $logFile = (defined('BP') ? BP : dirname(__DIR__, 6) . DS) . 'debug-beb774.log';
-        register_shutdown_function(static function () use ($logFile) {
-            $err = error_get_last();
-            if ($err !== null && isset($err['message']) && $err['message'] !== '') {
-                file_put_contents($logFile, json_encode(['sessionId' => 'beb774', 'location' => 'shutdown', 'message' => 'fatal', 'data' => $err, 'timestamp' => (int) (microtime(true) * 1000), 'hypothesisId' => 'G']) . "\n", FILE_APPEND);
+        // PHP 8.4 兼容：elFinder 使用已弃用常量 E_STRICT，拦截该 deprecation
+        $prevErrorHandler = set_error_handler(static function (int $errno, string $errstr, string $errfile, int $errline) use (&$prevErrorHandler) {
+            if ($errno === E_DEPRECATED && str_contains($errstr, 'Constant E_STRICT is deprecated')) {
+                return true;
             }
+            if ($prevErrorHandler !== null) {
+                return $prevErrorHandler($errno, $errstr, $errfile, $errline);
+            }
+            return false;
         });
-        // #endregion
         try {
             $mimes = $this->collectMimesFromExt($this->request->getParam('ext'));
             $rootPath = PUB . 'media';
@@ -131,30 +131,93 @@ class Connector extends BackendController
         // define('ELFINDER_BOX_CLIENTSECRET', '');
         // ===============================================
 
-            // run elFinder
-            $connector = new elFinderConnector(new elFinder($opts));
-            // #region agent log
-            file_put_contents($logFile, json_encode(['sessionId' => 'beb774', 'location' => 'Connector.php:index', 'message' => 'before_run', 'data' => [], 'timestamp' => (int) (microtime(true) * 1000), 'hypothesisId' => 'E']) . "\n", FILE_APPEND);
-            // #endregion
-            $connector->run();
-            // #region agent log
-            file_put_contents($logFile, json_encode(['sessionId' => 'beb774', 'location' => 'Connector.php:index', 'message' => 'after_run', 'data' => [], 'timestamp' => (int) (microtime(true) * 1000), 'hypothesisId' => 'E']) . "\n", FILE_APPEND);
-            // #endregion
-        } catch (\Throwable $e) {
-            file_put_contents($logFile, json_encode([
-                'sessionId' => 'beb774',
-                'location' => 'Connector.php:index',
-                'message' => 'throwable',
-                'data' => [
-                    'class' => get_class($e),
-                    'message' => $e->getMessage(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                ],
-                'timestamp' => (int) (microtime(true) * 1000),
-                'hypothesisId' => 'H',
-            ]) . "\n", FILE_APPEND);
-            throw $e;
+            // WLS 兼容：直接调用 elFinder::exec() 而非 elFinderConnector::run()
+            // 后者会调用 exit() 终止 Worker 进程
+            $elFinder = new elFinder($opts);
+            
+            // 解析请求参数
+            $isPost = $this->request->isPost();
+            $src = $isPost ? array_merge($_GET, $_POST) : $_GET;
+            
+            // 处理 php://input（支持 max_input_vars 超限和 XDomainRequest）
+            $maxInputVars = (!$src || isset($src['targets'])) ? ini_get('max_input_vars') : null;
+            if ((!$src || $maxInputVars) && $rawPostData = file_get_contents('php://input')) {
+                $parts = explode('&', $rawPostData);
+                if (!$src || $maxInputVars < count($parts)) {
+                    $src = [];
+                    foreach ($parts as $part) {
+                        [$key, $value] = array_pad(explode('=', $part), 2, '');
+                        $key = rawurldecode($key);
+                        if (preg_match('/^(.+?)\[([^\[\]]*)\]$/', $key, $m)) {
+                            $key = $m[1];
+                            $idx = $m[2];
+                            if (!isset($src[$key])) {
+                                $src[$key] = [];
+                            }
+                            $idx ? ($src[$key][$idx] = rawurldecode($value)) : ($src[$key][] = rawurldecode($value));
+                        } else {
+                            $src[$key] = rawurldecode($value);
+                        }
+                    }
+                }
+            }
+            
+            // 验证请求
+            if (isset($src['targets']) && $elFinder->maxTargets && count($src['targets']) > $elFinder->maxTargets) {
+                return $this->fetchJson(['error' => $elFinder->error(elFinder::ERROR_MAX_TARGTES)]);
+            }
+            
+            $cmd = $src['cmd'] ?? '';
+            
+            if (!$elFinder->loaded()) {
+                return $this->fetchJson(['error' => $elFinder->error(elFinder::ERROR_CONF, elFinder::ERROR_CONF_NO_VOL), 'debug' => $elFinder->mountErrors]);
+            }
+            
+            if (!$cmd && $isPost) {
+                return $this->fetchJson(['error' => $elFinder->error(elFinder::ERROR_UPLOAD, elFinder::ERROR_UPLOAD_TOTAL_SIZE)]);
+            }
+            
+            if (!$elFinder->commandExists($cmd)) {
+                return $this->fetchJson(['error' => $elFinder->error(elFinder::ERROR_UNKNOWN_CMD)]);
+            }
+            
+            // 收集命令参数
+            $args = [];
+            $hasFiles = false;
+            foreach ($elFinder->commandArgsList($cmd) as $name => $req) {
+                if ($name === 'FILES') {
+                    if (isset($_FILES) && !empty($_FILES)) {
+                        $hasFiles = true;
+                    } elseif ($req) {
+                        return $this->fetchJson(['error' => $elFinder->error(elFinder::ERROR_INV_PARAMS, $cmd)]);
+                    }
+                } else {
+                    $arg = $src[$name] ?? '';
+                    if (!is_array($arg) && $req !== '') {
+                        $arg = trim($arg);
+                    }
+                    if ($req && $arg === '') {
+                        return $this->fetchJson(['error' => $elFinder->error(elFinder::ERROR_INV_PARAMS, $cmd)]);
+                    }
+                    $args[$name] = $arg;
+                }
+            }
+            
+            $args['debug'] = isset($src['debug']) && $src['debug'];
+            if ($hasFiles) {
+                $args['FILES'] = $_FILES;
+            }
+            
+            // 执行命令
+            $result = $elFinder->exec($cmd, $args);
+            
+            // 关闭 session 允许并发访问
+            $elFinder->getSession()->close();
+            
+            // 返回 JSON 响应
+            return $this->fetchJson($result);
+        } finally {
+            restore_error_handler();
         }
     }
 
