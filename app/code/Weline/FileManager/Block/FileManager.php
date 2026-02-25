@@ -29,6 +29,7 @@ class FileManager extends Block
             'setAttr' => $this->getData('setAttr'),
             'close' => $this->getData('close'),
             'startPath' => $this->getData('path'),
+            'lockPath' => $this->getData('lockPath'),
             'multi' => $this->getData('multi'),
             'ext' => $this->getData('ext'),
             'size' => $this->getData('size'),

@@ -24,6 +24,16 @@ trait FileManagerTrait
         return $this->setData('path', $path);
     }
 
+    public function setLockPath(bool $lockPath): static
+    {
+        return $this->setData('lockPath', $lockPath);
+    }
+
+    public function getLockPath(): bool
+    {
+        return (bool)$this->getData('lockPath');
+    }
+
     public function setPreview(bool $preview): static
     {
         return $this->setData('preview', $preview);

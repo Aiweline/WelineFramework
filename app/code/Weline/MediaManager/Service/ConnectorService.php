@@ -91,7 +91,7 @@ class ConnectorService
         $abs = $rootPath . ($relative === '' ? '' : $relative);
         $isDir = \is_dir($abs);
 
-        $name = $relative === '' ? '/' : \basename($relative);
+        $name = $relative === '' ? 'Media Files' : \basename($relative);
         $hash = $this->encodeHash($relative);
 
         $dirRel = $relative === '' ? '' : \trim(\dirname($relative), '/.');
@@ -124,11 +124,31 @@ class ConnectorService
     private function handleOpen(array $src, string $rootPath, string $rootReal): array
     {
         $targetHash = $src['target'] ?? '';
-        [$relative, $abs] = $this->resolvePath((string) $targetHash, $rootPath, $rootReal);
+        $pathParam = $src['path'] ?? '';
+        
+        // 如果指定了 path 参数（初始路径），优先使用它
+        if ($pathParam !== '' && $targetHash === '') {
+            $pathParam = \trim(str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $pathParam), \DIRECTORY_SEPARATOR);
+            $abs = $rootPath . $pathParam;
+            
+            // 如果目录不存在，尝试创建
+            if (!\is_dir($abs)) {
+                @\mkdir($abs, 0755, true);
+            }
+            
+            if (\is_dir($abs)) {
+                $relative = $pathParam;
+            } else {
+                $relative = '';
+                $abs = $rootPath;
+            }
+        } else {
+            [$relative, $abs] = $this->resolvePath((string) $targetHash, $rootPath, $rootReal);
 
-        if (!\is_dir($abs)) {
-            $abs = $rootPath;
-            $relative = '';
+            if (!\is_dir($abs)) {
+                $abs = $rootPath;
+                $relative = '';
+            }
         }
 
         $cwd = $this->buildFileInfo($relative, $rootPath, $rootReal);
@@ -145,14 +165,28 @@ class ConnectorService
             $files[] = $this->buildFileInfo($childRel, $rootPath, $rootReal);
         }
 
-        // 简单的树结构：当前目录 + 根目录
+        // 简单的树结构：当前目录 + 根目录，以及路径上的所有父目录
         $tree = [];
         $tree[] = $this->buildFileInfo('', $rootPath, $rootReal);
+        
+        // 添加从根到当前目录的路径
+        if ($relative !== '') {
+            $parts = \explode(\DIRECTORY_SEPARATOR, $relative);
+            $currentPath = '';
+            foreach ($parts as $part) {
+                $currentPath = $currentPath === '' ? $part : $currentPath . \DIRECTORY_SEPARATOR . $part;
+                $tree[] = $this->buildFileInfo($currentPath, $rootPath, $rootReal);
+            }
+        }
+        
+        // 返回根目录的 hash，用于前端判断锁定范围
+        $rootHash = $this->encodeHash('');
 
         return [
             'cwd'   => $cwd,
             'files' => $files,
             'tree'  => $tree,
+            'root'  => $rootHash,
         ];
     }
 
