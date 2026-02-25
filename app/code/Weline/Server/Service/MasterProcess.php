@@ -1190,8 +1190,9 @@ class MasterProcess
         // Linux/Mac: 使用 Processer 统一创建（避免手写 nohup 脚本造成 PID 偏差）
         $args = \array_merge([$phpBinary], $argList);
         
-        // macOS 下绑定 1024 以下端口需要 sudo 权限
-        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024;
+        // macOS 下绑定 1024 以下端口需要 sudo 权限（已是 root 则跳过）
+        $isRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
+        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024 && !$isRoot;
         if ($needSudo) {
             \array_unshift($args, 'sudo');
         }
@@ -1488,8 +1489,9 @@ class MasterProcess
             $args[] = '--frontend';
         }
         
-        // macOS 下绑定 1024 以下端口需要 sudo 权限
-        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024;
+        // macOS 下绑定 1024 以下端口需要 sudo 权限（已是 root 则跳过）
+        $isRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
+        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024 && !$isRoot;
         if ($needSudo) {
             \array_unshift($args, 'sudo');
         }
@@ -1586,8 +1588,9 @@ class MasterProcess
         // 启动进程：统一通过 Processer::create（由驱动封装 OS 差分）
         $args = \array_merge([$phpBinary], $argList);
         
-        // macOS 下绑定 1024 以下端口需要 sudo 权限
-        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024;
+        // macOS 下绑定 1024 以下端口需要 sudo 权限（已是 root 则跳过）
+        $isRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
+        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024 && !$isRoot;
         if ($needSudo) {
             \array_unshift($args, 'sudo');
         }
@@ -1685,8 +1688,9 @@ class MasterProcess
         
         $args = \array_merge([$phpBinary], $argList);
         
-        // macOS 下绑定 1024 以下端口需要 sudo 权限
-        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $httpPort < 1024;
+        // macOS 下绑定 1024 以下端口需要 sudo 权限（已是 root 则跳过）
+        $isRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
+        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $httpPort < 1024 && !$isRoot;
         if ($needSudo) {
             \array_unshift($args, 'sudo');
         }
@@ -2162,8 +2166,9 @@ class MasterProcess
             $args[] = '--ssl-key=' . $this->sslKey;
         }
         
-        // macOS 下绑定 1024 以下端口需要 sudo 权限
-        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024;
+        // macOS 下绑定 1024 以下端口需要 sudo 权限（已是 root 则跳过）
+        $isRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
+        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024 && !$isRoot;
         $sudoPrefix = $needSudo ? 'sudo ' : '';
         
         $cmd = $sudoPrefix . $phpBinary . ' ' . \escapeshellarg($workerScript) . ' ' . \implode(' ', \array_map('escapeshellarg', $args));
