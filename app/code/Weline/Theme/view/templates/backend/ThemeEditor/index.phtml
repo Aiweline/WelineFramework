@@ -22,6 +22,14 @@ $areas = $this->getData('areas') ?: [];
 $layout = $this->getData('layout') ?: [];
 $available_widgets = $this->getData('available_widgets') ?: [];
 
+// 根据后台配置获取文件管理器连接器 URL
+$fileManagerCode = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Model\BackendUserConfig::class)->getConfig('file_manager') ?: 'weline_media';
+$fileManagerConnectorUrl = match ($fileManagerCode) {
+    'weline_media' => $this->getBackendUrl('media/backend/manager/iframe'),
+    'elfinder' => $this->getBackendUrl('elfinder/backend/connector/manager'),
+    default => $this->getBackendUrl('media/backend/manager/iframe'),
+};
+
 // 辅助：获取部件图标（闭包，避免模板多次包含时重复声明）
 $getWidgetIcon = function ($type) {
     $icons = [
@@ -56,7 +64,7 @@ $getWidgetIcon = function ($type) {
 
 <div class="theme-editor-container" id="themeEditor" 
      data-theme-id="<?= $theme_id ?>"
-     data-file-manager-connector-base="<?= $this->getBackendUrl('elfinder/backend/connector/manager') ?>" 
+     data-file-manager-connector-base="<?= $fileManagerConnectorUrl ?>" 
      data-page-type="<?= htmlspecialchars((string)($page_type ?? 'homepage')) ?>"
      data-api-base="<?= $this->getUrl('theme/backend/theme-editor') ?>"
      data-api-save-widget="<?= $this->getUrl('theme/backend/theme-editor/save-widget') ?>"
