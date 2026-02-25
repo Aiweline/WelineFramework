@@ -687,17 +687,34 @@ if [[ ! -f "$ROOT/setup/server_installer/run.php" ]]; then
     echo "ERROR: Code install failed. Ensure setup/server_installer/run.php exists." >&2
     exit 1
   fi
-  # 将项目目录权限设为当前用户（避免后续操作权限问题）
-  current_user="$(whoami)"
-  if [[ "$PLATFORM" == "linux" ]]; then
-    echo "Setting project directory ownership to current user ($current_user)..."
-    run_privileged chown -R "$current_user":"$(id -gn)" "$ROOT" 2>/dev/null || true
-  elif [[ "$PLATFORM" == "mac" ]]; then
-    echo "Setting project directory ownership to current user ($current_user)..."
-    chown -R "$current_user":"$(id -gn)" "$ROOT" 2>/dev/null || true
-  fi
   echo "Code installed (branch: $BRANCH)."
 fi
+
+# 将项目目录权限设为当前用户（避免后续操作权限问题；每次安装均执行）
+fix_project_ownership() {
+  local current_user
+  current_user="$(whoami)"
+  local current_group
+  current_group="$(id -gn)"
+  echo "Setting project directory ownership to current user ($current_user:$current_group)..."
+  if [[ "$PLATFORM" == "linux" ]]; then
+    run_privileged chown -R "$current_user":"$current_group" "$ROOT" 2>/dev/null || true
+  elif [[ "$PLATFORM" == "mac" ]]; then
+    # Mac 下需要 sudo 来修改可能由其他用户/root 创建的文件权限
+    if sudo -n true 2>/dev/null; then
+      # 已有 sudo 缓存，直接执行
+      sudo chown -R "$current_user":"$current_group" "$ROOT" 2>/dev/null || true
+    else
+      # 提示用户输入密码
+      echo "需要 sudo 权限来设置项目目录所有权（如需输入密码请输入本机登录密码）..."
+      sudo chown -R "$current_user":"$current_group" "$ROOT" 2>/dev/null || {
+        echo "WARNING: 无法设置项目目录所有权。如遇权限问题，请手动执行："
+        echo "  sudo chown -R $current_user:$current_group $ROOT"
+      }
+    fi
+  fi
+}
+fix_project_ownership
 
 echo ""
 (cd "$ROOT" && "$PHP_EXE" setup/server_installer/run.php) || exit 1
