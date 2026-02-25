@@ -1517,21 +1517,28 @@ class Start extends CommandAbstract
             return true;
         }
 
-        // 仅在交互终端中尝试自动 sudo；否则直接提示。Mac/Linux 下 passthru 或 proc_open 二有一即可。
-        $interactive = \defined('STDIN')
-            && \function_exists('posix_isatty')
-            && @\posix_isatty(STDIN);
-        if (!$interactive) {
+        // 检测是否为交互式终端（多种方式兜底）
+        $interactive = false;
+        // 方式1：posix_isatty 检测 STDIN
+        if (\defined('STDIN') && \function_exists('posix_isatty') && @\posix_isatty(STDIN)) {
+            $interactive = true;
+        }
+        // 方式2：检查 /dev/tty 是否可读（Mac/Linux 通用）
+        if (!$interactive && @\is_readable('/dev/tty')) {
+            $interactive = true;
+        }
+        // 方式3：检查 TERM 环境变量是否存在（终端环境通常设置）
+        if (!$interactive && \getenv('TERM')) {
+            $interactive = true;
+        }
+        // 如果无法确定是否交互式，尝试直接执行 sudo（sudo 自己会报错如果无法获取密码）
+        // 仅当明确判定为非交互式且无法继续时才提示
+        $canPassthru = \function_exists('passthru');
+        $canProcOpen = \function_exists('proc_open');
+        if (!$interactive && !$canPassthru && !$canProcOpen) {
             $this->printer->error(__('端口 %{1} 需要 root 权限，请使用 sudo 重新执行。', [\implode(', ', $privilegedPorts)]));
             return false;
         }
-        $canPassthru = \function_exists('passthru');
-        $canProcOpen = \function_exists('proc_open');
-        if (!$canPassthru && !$canProcOpen) {
-            $this->printer->error(__('端口 %{1} 需要 root 权限；自动 sudo 需要启用 passthru 或 proc_open，请使用 sudo 重新执行。', [\implode(', ', $privilegedPorts)]));
-            return false;
-        }
-
         $rawArgv = $_SERVER['argv'] ?? [];
         if (!\is_array($rawArgv) || empty($rawArgv)) {
             $this->printer->error(__('无法自动重启为 sudo，请手动执行：sudo php bin/w server:start ...'));
@@ -1541,12 +1548,21 @@ class Start extends CommandAbstract
         $escaped = \array_map('escapeshellarg', $parts);
         $relaunchCommand = 'sudo env WLS_SUDO_RELAUNCHED=1 ' . \implode(' ', $escaped);
 
-        $this->printer->warning(__('检测到特权端口 %{1}，将自动请求 sudo 密码并继续启动。', [\implode(', ', $privilegedPorts)]));
-        $this->printer->note(__('执行命令：%{1}', [$relaunchCommand]));
+        $this->printer->warning(__('检测到特权端口 %{1}，需要 root 权限。', [\implode(', ', $privilegedPorts)]));
+        $this->printer->note(__('将执行命令：%{1}', [$relaunchCommand]));
+
+        // 询问用户是否继续
+        echo __('是否使用 sudo 继续？[Y/n] ');
+        $input = \trim((string)@\fgets(STDIN));
+        if ($input !== '' && !\in_array(\strtolower($input), ['y', 'yes', '是', ''], true)) {
+            $this->printer->note(__('已取消。你可以手动执行：%{1}', [$relaunchCommand]));
+            return false;
+        }
+
         $exitCode = 0;
         if ($canPassthru) {
             @\passthru($relaunchCommand, $exitCode);
-        } else {
+        } elseif ($canProcOpen) {
             // passthru 被禁用时用 proc_open 继承 STDIN/STDOUT/STDERR，支持交互式输入 sudo 密码
             $proc = @\proc_open(
                 $relaunchCommand,
@@ -1560,6 +1576,11 @@ class Start extends CommandAbstract
             } else {
                 $exitCode = -1;
             }
+        } else {
+            // 两个函数都不可用，只能提示
+            $this->printer->error(__('端口 %{1} 需要 root 权限；passthru/proc_open 均不可用，请使用 sudo 重新执行：', [\implode(', ', $privilegedPorts)]));
+            $this->printer->note($relaunchCommand);
+            return false;
         }
         if ($exitCode !== 0) {
             $this->printer->error(__('sudo 执行失败，退出码：%{1}', [(string)$exitCode]));
