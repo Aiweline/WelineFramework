@@ -14,6 +14,10 @@
     var TREE = {};
     var SELECTED = [];
     var LOADING = false;
+    var ROOT_HASH = '';
+    var EXPANDED_NODES = {};
+    var STORAGE_KEY = '';
+    var START_PATH = '';
 
     /* ─── helpers ────────────────────────────────────────────────────── */
 
@@ -120,22 +124,69 @@
 
     /* ─── init ───────────────────────────────────────────────────────── */
 
-    function init(connectorUrl) {
+    function init(connectorUrl, startPath) {
         CONNECTOR = (typeof connectorUrl === 'string' ? connectorUrl : '').trim();
         if (!CONNECTOR) {
             setLoading(false);
             showError('Connector URL is not configured. Please refresh the page.');
             return;
         }
+        START_PATH = (typeof startPath === 'string' ? startPath : '').trim();
+        STORAGE_KEY = 'mmf_last_path_' + hashCode(START_PATH || '_root_');
+
         bindToolbar();
         bindDragDrop();
         bindContextMenu();
-        openDir('', true);
+
+        var lastHash = loadLastPath();
+        if (lastHash) {
+            openDir(lastHash, true);
+        } else {
+            openDir('', true);
+        }
+    }
+
+    function hashCode(str) {
+        var hash = 0;
+        for (var i = 0; i < str.length; i++) {
+            var chr = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + chr;
+            hash |= 0;
+        }
+        return 'k' + Math.abs(hash).toString(36);
+    }
+
+    function saveLastPath() {
+        if (!STORAGE_KEY || !CWD_HASH) return;
+        try {
+            var state = {
+                hash: CWD_HASH,
+                expanded: EXPANDED_NODES,
+                time: Date.now()
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (e) {}
+    }
+
+    function loadLastPath() {
+        if (!STORAGE_KEY) return null;
+        try {
+            var raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return null;
+            var state = JSON.parse(raw);
+            if (state.expanded) {
+                EXPANDED_NODES = state.expanded;
+            }
+            return state.hash || null;
+        } catch (e) {
+            return null;
+        }
     }
 
     /* ─── open directory (cmd=open) ──────────────────────────────────── */
 
     function openDir(target, isInit) {
+        saveExpandedState();
         setLoading(true);
         var params = { cmd: 'open', target: target || '' };
         if (isInit) { params.init = '1'; params.tree = '1'; }
@@ -146,6 +197,9 @@
                 setLoading(false);
                 CWD_HASH = data.cwd ? data.cwd.hash : '';
                 CWD_INFO = data.cwd || {};
+                if (isInit && CWD_HASH) {
+                    ROOT_HASH = CWD_HASH;
+                }
 
                 FILES = {};
                 if (data.files) {
@@ -153,6 +207,15 @@
                 }
 
                 if (data.tree) {
+                    var newTreeHashes = {};
+                    data.tree.forEach(function (f) {
+                        newTreeHashes[f.hash] = true;
+                    });
+                    for (var h in TREE) {
+                        if (TREE[h].phash === CWD_HASH && !newTreeHashes[h]) {
+                            delete TREE[h];
+                        }
+                    }
                     data.tree.forEach(function (f) {
                         TREE[f.hash] = f;
                         if (!FILES[f.hash]) FILES[f.hash] = f;
@@ -164,6 +227,7 @@
                 renderFiles();
                 renderPath();
                 updateStatus();
+                saveLastPath();
             } catch (e) {
                 setLoading(false);
                 showError('Invalid response: ' + (e && e.message ? e.message : String(e)));
@@ -175,6 +239,25 @@
     }
 
     /* ─── rendering ──────────────────────────────────────────────────── */
+
+    function saveExpandedState() {
+        var toggles = document.querySelectorAll('.mmf-tree-toggle.expanded');
+        toggles.forEach(function (el) {
+            var item = el.closest('.mmf-tree-item');
+            if (item) {
+                EXPANDED_NODES[item.getAttribute('data-hash')] = true;
+            }
+        });
+    }
+
+    function expandToPath(hash) {
+        EXPANDED_NODES[hash] = true;
+        var node = TREE[hash];
+        while (node && node.phash && TREE[node.phash]) {
+            EXPANDED_NODES[node.phash] = true;
+            node = TREE[node.phash];
+        }
+    }
 
     function renderTree() {
         var roots = [];
@@ -189,9 +272,12 @@
             }
         }
 
+        expandToPath(CWD_HASH);
+
         var el = qs('.mmf-tree');
         if (!el) return;
         el.innerHTML = buildTreeHtml(roots, childMap);
+        bindTreeEvents();
     }
 
     function buildTreeHtml(nodes, childMap) {
@@ -201,17 +287,102 @@
             var kids = childMap[n.hash];
             var hasKids = kids && kids.length;
             var isActive = n.hash === CWD_HASH;
+            var isExpanded = !!EXPANDED_NODES[n.hash];
+            var hasPlaceholder = n.dirs && !hasKids;
             html += '<li>';
             html += '<div class="mmf-tree-item' + (isActive ? ' active' : '') + '" data-hash="' + n.hash + '">';
-            html += '<span class="mmf-tree-toggle">' + (hasKids ? '\u25B6' : '') + '</span>';
+            html += '<span class="mmf-tree-toggle' + (isExpanded ? ' expanded' : '') + '">';
+            html += (hasKids || hasPlaceholder) ? (isExpanded ? '\u25BC' : '\u25B6') : '';
+            html += '</span>';
             html += '\uD83D\uDCC1 ' + escHtml(n.name);
             html += '</div>';
             if (hasKids) {
-                html += '<ul style="display:' + (isActive ? 'block' : 'none') + '">' + buildTreeHtml(kids, childMap) + '</ul>';
+                html += '<ul style="display:' + (isExpanded ? 'block' : 'none') + '">' + buildTreeHtml(kids, childMap) + '</ul>';
+            } else if (hasPlaceholder) {
+                html += '<ul style="display:none" class="mmf-tree-placeholder"></ul>';
             }
             html += '</li>';
         });
         return html;
+    }
+
+    function bindTreeEvents() {
+        document.querySelectorAll('.mmf-tree-toggle').forEach(function (toggle) {
+            toggle.onclick = function (e) {
+                e.stopPropagation();
+                var item = toggle.closest('.mmf-tree-item');
+                if (!item) return;
+                var hash = item.getAttribute('data-hash');
+                var ul = item.nextElementSibling;
+                if (!ul || ul.tagName !== 'UL') {
+                    ul = item.parentElement.querySelector('ul');
+                }
+
+                if (ul && ul.classList.contains('mmf-tree-placeholder')) {
+                    loadSubtree(hash, ul, toggle);
+                } else if (ul) {
+                    var isHidden = ul.style.display === 'none';
+                    ul.style.display = isHidden ? 'block' : 'none';
+                    toggle.classList.toggle('expanded', isHidden);
+                    toggle.textContent = isHidden ? '\u25BC' : '\u25B6';
+                    if (isHidden) {
+                        EXPANDED_NODES[hash] = true;
+                    } else {
+                        delete EXPANDED_NODES[hash];
+                    }
+                }
+            };
+        });
+
+        document.querySelectorAll('.mmf-tree-item').forEach(function (item) {
+            item.onclick = function (e) {
+                if (e.target.classList.contains('mmf-tree-toggle')) return;
+                var hash = item.getAttribute('data-hash');
+                openDir(hash);
+            };
+        });
+    }
+
+    function loadSubtree(parentHash, placeholder, toggle) {
+        toggle.textContent = '...';
+        api({ cmd: 'open', target: parentHash, tree: 1 }, function (err, data) {
+            if (err) {
+                toggle.textContent = '\u25B6';
+                return;
+            }
+            if (data.files) {
+                data.files.forEach(function (f) {
+                    TREE[f.hash] = f;
+                });
+            }
+            var kids = [];
+            for (var h in TREE) {
+                var f = TREE[h];
+                if (f.phash === parentHash && f.mime === 'directory') {
+                    kids.push(f);
+                }
+            }
+            kids.sort(function (a, b) { return (a.name || '').localeCompare(b.name || ''); });
+            placeholder.innerHTML = buildTreeHtml(kids, buildChildMap());
+            placeholder.classList.remove('mmf-tree-placeholder');
+            placeholder.style.display = 'block';
+            toggle.classList.add('expanded');
+            toggle.textContent = '\u25BC';
+            EXPANDED_NODES[parentHash] = true;
+            bindTreeEvents();
+        });
+    }
+
+    function buildChildMap() {
+        var childMap = {};
+        for (var h in TREE) {
+            var f = TREE[h];
+            if (f.phash && TREE[f.phash]) {
+                if (!childMap[f.phash]) childMap[f.phash] = [];
+                childMap[f.phash].push(f);
+            }
+        }
+        return childMap;
     }
 
     function renderFiles() {
@@ -293,8 +464,26 @@
         LOADING = on;
         var el = qs('.mmf-content');
         if (!el) return;
+        
+        var grid = qs('.mmf-grid', el);
+        if (!grid) {
+            grid = document.createElement('div');
+            grid.className = 'mmf-grid';
+            el.appendChild(grid);
+        }
+        
         if (on) {
-            el.innerHTML = '<div class="mmf-loading"><span class="mmf-spinner"></span>Loading...</div>';
+            grid.style.display = 'none';
+            var loadingEl = qs('.mmf-loading', el);
+            if (!loadingEl) {
+                loadingEl = document.createElement('div');
+                loadingEl.className = 'mmf-loading';
+                loadingEl.innerHTML = '<span class="mmf-spinner"></span>Loading...';
+                el.appendChild(loadingEl);
+            }
+        } else {
+            qsa('.mmf-loading', el).forEach(function(l) { l.remove(); });
+            grid.style.display = '';
         }
     }
 
@@ -319,6 +508,8 @@
                 if (!f) return;
                 if (f.mime === 'directory') {
                     openDir(hash);
+                } else if (isImageMime(f.mime)) {
+                    openLightbox(hash);
                 } else {
                     downloadFile(hash);
                 }
@@ -481,10 +672,20 @@
         if (SELECTED.length !== 1) { showError('Select one item to rename'); return; }
         var f = FILES[SELECTED[0]];
         if (!f) return;
+        var oldHash = f.hash;
+        var isDir = f.mime === 'directory';
         showDialog('Rename', 'New name', f.name, function (name) {
             if (!name || name === f.name) return;
-            api({ cmd: 'rename', target: f.hash, name: name }, function () {
+            api({ cmd: 'rename', target: oldHash, name: name }, function (data) {
                 showSuccess('Renamed');
+                if (isDir) {
+                    delete TREE[oldHash];
+                    if (data && data.added && data.added.length) {
+                        data.added.forEach(function (newFile) {
+                            TREE[newFile.hash] = newFile;
+                        });
+                    }
+                }
                 openDir(CWD_HASH);
             });
         });
@@ -494,9 +695,14 @@
 
     function deleteSelected() {
         if (!SELECTED.length) { showError('No items selected'); return; }
+        var toDelete = SELECTED.slice();
         showConfirm('Delete ' + SELECTED.length + ' item(s)?', function () {
-            api({ cmd: 'rm', targets: SELECTED }, function () {
+            api({ cmd: 'rm', targets: toDelete }, function () {
                 showSuccess('Deleted');
+                toDelete.forEach(function (hash) {
+                    delete TREE[hash];
+                    delete FILES[hash];
+                });
                 SELECTED = [];
                 openDir(CWD_HASH);
             });
@@ -533,8 +739,12 @@
         if (!menu) return;
         var f = SELECTED.length === 1 ? FILES[SELECTED[0]] : null;
         var isDir = f && f.mime === 'directory';
+        var isImage = f && isImageMime(f.mime);
 
         var html = '';
+        if (f && isImage) {
+            html += '<div class="mmf-context-item" data-action="preview">\uD83D\uDD0D Preview</div>';
+        }
         if (f && !isDir) {
             html += '<div class="mmf-context-item" data-action="download">\uD83D\uDCE5 Download</div>';
         }
@@ -558,7 +768,8 @@
             it.addEventListener('click', function () {
                 var action = it.dataset.action;
                 hideContextMenu();
-                if (action === 'download' && SELECTED.length === 1) downloadFile(SELECTED[0]);
+                if (action === 'preview' && SELECTED.length === 1) openLightbox(SELECTED[0]);
+                else if (action === 'download' && SELECTED.length === 1) downloadFile(SELECTED[0]);
                 else if (action === 'open' && SELECTED.length === 1) openDir(SELECTED[0]);
                 else if (action === 'rename') renameSelected();
                 else if (action === 'delete') deleteSelected();
@@ -569,6 +780,163 @@
     function hideContextMenu() {
         var menu = qs('.mmf-context-menu');
         if (menu) menu.classList.remove('visible');
+    }
+
+    /* ─── lightbox ───────────────────────────────────────────────────── */
+
+    var LIGHTBOX_IMAGES = [];
+    var LIGHTBOX_INDEX = 0;
+
+    function isImageMime(mime) {
+        if (!mime) return false;
+        return mime.indexOf('image/') === 0;
+    }
+
+    function getImagesInCurrentDir() {
+        var images = [];
+        for (var h in FILES) {
+            var f = FILES[h];
+            if (f.phash === CWD_HASH && isImageMime(f.mime)) {
+                images.push(f);
+            }
+        }
+        images.sort(function (a, b) {
+            return (a.name || '').localeCompare(b.name || '');
+        });
+        return images;
+    }
+
+    function openLightbox(hash) {
+        LIGHTBOX_IMAGES = getImagesInCurrentDir();
+        LIGHTBOX_INDEX = 0;
+        for (var i = 0; i < LIGHTBOX_IMAGES.length; i++) {
+            if (LIGHTBOX_IMAGES[i].hash === hash) {
+                LIGHTBOX_INDEX = i;
+                break;
+            }
+        }
+        if (!LIGHTBOX_IMAGES.length) return;
+        showLightbox();
+    }
+
+    function showLightbox() {
+        var lb = qs('.mmf-lightbox');
+        if (!lb) return;
+
+        lb.classList.add('visible');
+        updateLightboxImage();
+        renderLightboxThumbs();
+        bindLightboxEvents();
+        document.body.style.overflow = 'hidden';
+    }
+
+    function hideLightbox() {
+        var lb = qs('.mmf-lightbox');
+        if (lb) lb.classList.remove('visible');
+        document.body.style.overflow = '';
+    }
+
+    function updateLightboxImage() {
+        var f = LIGHTBOX_IMAGES[LIGHTBOX_INDEX];
+        if (!f) return;
+
+        var img = qs('.mmf-lightbox-img');
+        var title = qs('.mmf-lightbox-title');
+        var counter = qs('.mmf-lightbox-counter');
+        var prevBtn = qs('.mmf-lightbox-prev');
+        var nextBtn = qs('.mmf-lightbox-next');
+
+        if (img) {
+            img.style.opacity = '0.5';
+            var imgUrl = f.url || (f.tmb && f.tmb !== '1' ? f.tmb : '');
+            if (!imgUrl && CONNECTOR) {
+                imgUrl = CONNECTOR + '&cmd=file&target=' + encodeURIComponent(f.hash);
+            }
+            img.onload = function () { img.style.opacity = '1'; };
+            img.src = imgUrl;
+        }
+        if (title) title.textContent = f.name || '';
+        if (counter) counter.textContent = (LIGHTBOX_INDEX + 1) + ' / ' + LIGHTBOX_IMAGES.length;
+        if (prevBtn) prevBtn.disabled = LIGHTBOX_INDEX <= 0;
+        if (nextBtn) nextBtn.disabled = LIGHTBOX_INDEX >= LIGHTBOX_IMAGES.length - 1;
+
+        updateThumbActive();
+    }
+
+    function renderLightboxThumbs() {
+        var container = qs('.mmf-lightbox-thumbs');
+        if (!container) return;
+
+        var html = '';
+        LIGHTBOX_IMAGES.forEach(function (f, i) {
+            var thumbUrl = f.tmb && f.tmb !== '1' ? f.tmb : '';
+            if (!thumbUrl && CONNECTOR) {
+                thumbUrl = CONNECTOR + '&cmd=tmb&target=' + encodeURIComponent(f.hash);
+            }
+            var activeClass = i === LIGHTBOX_INDEX ? ' active' : '';
+            html += '<div class="mmf-lightbox-thumb' + activeClass + '" data-index="' + i + '">';
+            if (thumbUrl) {
+                html += '<img src="' + escAttr(thumbUrl) + '" alt="" loading="lazy">';
+            } else {
+                html += '<span style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:#333;">\uD83D\uDDBC</span>';
+            }
+            html += '</div>';
+        });
+        container.innerHTML = html;
+
+        qsa('.mmf-lightbox-thumb', container).forEach(function (el) {
+            el.onclick = function () {
+                LIGHTBOX_INDEX = parseInt(el.dataset.index, 10) || 0;
+                updateLightboxImage();
+            };
+        });
+    }
+
+    function updateThumbActive() {
+        qsa('.mmf-lightbox-thumb').forEach(function (el, i) {
+            el.classList.toggle('active', i === LIGHTBOX_INDEX);
+        });
+        var activeThumb = qs('.mmf-lightbox-thumb.active');
+        if (activeThumb) {
+            activeThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+    }
+
+    function lightboxPrev() {
+        if (LIGHTBOX_INDEX > 0) {
+            LIGHTBOX_INDEX--;
+            updateLightboxImage();
+        }
+    }
+
+    function lightboxNext() {
+        if (LIGHTBOX_INDEX < LIGHTBOX_IMAGES.length - 1) {
+            LIGHTBOX_INDEX++;
+            updateLightboxImage();
+        }
+    }
+
+    function bindLightboxEvents() {
+        var lb = qs('.mmf-lightbox');
+        if (!lb || lb._bound) return;
+        lb._bound = true;
+
+        qs('.mmf-lightbox-close', lb).onclick = hideLightbox;
+        qs('.mmf-lightbox-prev', lb).onclick = lightboxPrev;
+        qs('.mmf-lightbox-next', lb).onclick = lightboxNext;
+
+        lb.onclick = function (e) {
+            if (e.target === lb || e.target.classList.contains('mmf-lightbox-main')) {
+                hideLightbox();
+            }
+        };
+
+        document.addEventListener('keydown', function (e) {
+            if (!lb.classList.contains('visible')) return;
+            if (e.key === 'Escape') hideLightbox();
+            else if (e.key === 'ArrowLeft') lightboxPrev();
+            else if (e.key === 'ArrowRight') lightboxNext();
+        });
     }
 
     /* ─── dialogs ────────────────────────────────────────────────────── */

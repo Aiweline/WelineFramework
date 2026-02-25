@@ -100,12 +100,14 @@ class HookScanner
 
             if (!empty($docFileName)) {
                 // 检查 doc/hook/ 目录下的文档文件
-                $docFile = rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'doc' . DIRECTORY_SEPARATOR . 'hook' . DIRECTORY_SEPARATOR . $docFileName;
+                // 将文档路径中的斜杠统一为系统目录分隔符，确保跨平台兼容
+                $normalizedDocFileName = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $docFileName);
+                $docFile = rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'doc' . DIRECTORY_SEPARATOR . 'hook' . DIRECTORY_SEPARATOR . $normalizedDocFileName;
                 if (file_exists($docFile)) {
                     $hasDoc = true;
                     $docPath = 'doc/hook/' . $docFileName;
                 } else {
-                    // 配置了doc但文档不存在，抛出致命错误（在收集阶段就检测）
+                    // 配置了doc但文档不存在，抛出异常（在收集阶段就检测）
                     $errorMessage = sprintf(
                         "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
                         "【致命错误】Hook 文档文件不存在\n" .
@@ -130,8 +132,7 @@ class HookScanner
                         $basePath,
                         $docFile
                     );
-                    fwrite(STDERR, $errorMessage);
-                    exit(1);
+                    throw new \RuntimeException($errorMessage);
                 }
             }
 
@@ -163,7 +164,7 @@ class HookScanner
         // 检查 Hook 名是否包含 ::
         if (!str_contains($hookName, '::')) {
             $errorMessage = sprintf(
-                "\n\n[致命错误] Hook 名不符合命名规范\n" .
+                "\n\n【致命错误】Hook 名不符合命名规范\n" .
                 "Hook 名：%s\n" .
                 "问题：Hook 名必须包含 \"::\" 分隔符\n" .
                 "正确格式：模块名::area::type::component::position\n" .
@@ -171,8 +172,7 @@ class HookScanner
                 $hookName,
                 $basePath
             );
-            fwrite(STDERR, $errorMessage);
-            exit(1);
+            throw new \RuntimeException($errorMessage);
         }
 
         // 提取 Hook 名前缀（第一个 :: 之前的部分）
@@ -182,7 +182,7 @@ class HookScanner
         // 检查前缀是否以模块名开头
         if (!str_starts_with($prefix, $moduleName)) {
             $errorMessage = sprintf(
-                "\n\n[致命错误] Hook 名不符合命名规范\n" .
+                "\n\n【致命错误】Hook 名不符合命名规范\n" .
                 "Hook 名：%s\n" .
                 "Hook 名前缀：%s\n" .
                 "模块名：%s\n" .
@@ -195,15 +195,14 @@ class HookScanner
                 $moduleName,
                 $basePath
             );
-            fwrite(STDERR, $errorMessage);
-            exit(1);
+            throw new \RuntimeException($errorMessage);
         }
 
         // 验证 Hook 命名格式：{ModuleName}::{area}::{type}::{component}::{position}
         $pattern = '/^[A-Z][a-zA-Z0-9_]+::[a-z]+::[a-z]+::[a-z-]+::[a-z-]+$/';
         if (!preg_match($pattern, $hookName)) {
             $errorMessage = sprintf(
-                "\n\n[致命错误] Hook 名不符合命名规范\n" .
+                "\n\n【致命错误】Hook 名不符合命名规范\n" .
                 "Hook 名：%s\n" .
                 "问题：Hook 名格式不正确\n" .
                 "正确格式：{ModuleName}::{area}::{type}::{component}::{position}\n" .
@@ -216,8 +215,7 @@ class HookScanner
                 $basePath,
                 $moduleName
             );
-            fwrite(STDERR, $errorMessage);
-            exit(1);
+            throw new \RuntimeException($errorMessage);
         }
 
         return true;

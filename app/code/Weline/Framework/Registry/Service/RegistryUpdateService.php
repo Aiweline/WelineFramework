@@ -34,9 +34,10 @@ class RegistryUpdateService
      *                                - null: 自动检测（如果系统更新锁存在则跳过编译，否则执行编译）
      *                                - true: 强制编译
      *                                - false: 强制跳过编译
+     * @param bool $skipCommandUpdate 是否跳过命令更新（在 setup:upgrade 中单独更新命令时使用）
      * @return bool 是否全部成功
      */
-    public function updateAllRegistries(bool $silent = false, ?bool $autoCompile = null): bool
+    public function updateAllRegistries(bool $silent = false, ?bool $autoCompile = null, bool $skipCommandUpdate = false): bool
     {
         $allSuccess = true;
         
@@ -174,20 +175,26 @@ class RegistryUpdateService
             Env::log_warning('registry_update.log', __('Hook 注册表更新失败: %{1}', [$e->getMessage()]));
         }
         
-        try {
-            // 5. 更新命令注册表
-            if (!$silent) {
-                Env::log_info('registry_update.log', __('正在更新命令注册表...'));
+        // 5. 更新命令注册表（可跳过，在 setup:upgrade 中单独更新命令时使用）
+        if (!$skipCommandUpdate) {
+            try {
+                if (!$silent) {
+                    Env::log_info('registry_update.log', __('正在更新命令注册表...'));
+                }
+                /** @var \Weline\Framework\Console\Console\Command\Upgrade $commandUpgrade */
+                $commandUpgrade = ObjectManager::getInstance(\Weline\Framework\Console\Console\Command\Upgrade::class);
+                $commandUpgrade->execute();
+                if (!$silent) {
+                    Env::log_info('registry_update.log', __('✓ 命令注册表已更新完成。'));
+                }
+            } catch (\Exception $e) {
+                $allSuccess = false;
+                Env::log_warning('registry_update.log', __('命令注册表更新失败: %{1}', [$e->getMessage()]));
             }
-            /** @var \Weline\Framework\Console\Console\Command\Upgrade $commandUpgrade */
-            $commandUpgrade = ObjectManager::getInstance(\Weline\Framework\Console\Console\Command\Upgrade::class);
-            $commandUpgrade->execute();
+        } else {
             if (!$silent) {
-                Env::log_info('registry_update.log', __('✓ 命令注册表已更新完成。'));
+                Env::log_info('registry_update.log', __('跳过命令注册表更新（由调用方单独处理）'));
             }
-        } catch (\Exception $e) {
-            $allSuccess = false;
-            Env::log_warning('registry_update.log', __('命令注册表更新失败: %{1}', [$e->getMessage()]));
         }
         
         return $allSuccess;

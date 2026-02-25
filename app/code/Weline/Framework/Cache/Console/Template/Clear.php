@@ -15,7 +15,7 @@ use Weline\Framework\Console\CommandInterface;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
-use Weline\Framework\Console\Command\Upgrade;
+use Weline\Framework\Console\Console\Command\Upgrade;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\View\Data\DataInterface;
