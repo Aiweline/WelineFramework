@@ -20,14 +20,14 @@ use Weline\Hook\HookRegistry;
 
 /**
  * 注册表更新服务
- * 统一管理所有注册表（Extends、插件、事件、Hook）的更新操作
+ * 统一管理所有注册表（Extends、插件、事件、Hook、命令）的更新操作
  * 确保在模块状态变更时自动更新相关注册表
  */
 class RegistryUpdateService
 {
     /**
      * 更新所有注册表
-     * 包括：Extends、插件、事件、Hook
+     * 包括：Extends、插件、事件、Hook、命令
      * 
      * @param bool $silent 是否静默执行（不输出信息）
      * @param bool|null $autoCompile 是否在更新插件注册表后自动编译
@@ -172,6 +172,22 @@ class RegistryUpdateService
         } catch (\Exception $e) {
             $allSuccess = false;
             Env::log_warning('registry_update.log', __('Hook 注册表更新失败: %{1}', [$e->getMessage()]));
+        }
+        
+        try {
+            // 5. 更新命令注册表
+            if (!$silent) {
+                Env::log_info('registry_update.log', __('正在更新命令注册表...'));
+            }
+            /** @var \Weline\Framework\Console\Console\Command\Upgrade $commandUpgrade */
+            $commandUpgrade = ObjectManager::getInstance(\Weline\Framework\Console\Console\Command\Upgrade::class);
+            $commandUpgrade->execute();
+            if (!$silent) {
+                Env::log_info('registry_update.log', __('✓ 命令注册表已更新完成。'));
+            }
+        } catch (\Exception $e) {
+            $allSuccess = false;
+            Env::log_warning('registry_update.log', __('命令注册表更新失败: %{1}', [$e->getMessage()]));
         }
         
         return $allSuccess;
