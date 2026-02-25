@@ -4,6 +4,12 @@
 <div class="mmf-wrap">
     <!-- 侧边树 -->
     <div class="mmf-sidebar">
+        <div class="mmf-storage-selector">
+            <label class="mmf-storage-label"><lang>Storage</lang></label>
+            <select class="mmf-storage-select" id="mmf-storage-select">
+                <option value="local" selected><lang>Local Storage</lang></option>
+            </select>
+        </div>
         <div class="mmf-sidebar-title"><lang>Folders</lang></div>
         <ul class="mmf-tree"></ul>
     </div>
@@ -52,6 +58,45 @@
         <div class="mmf-statusbar">
             <span class="mmf-status-info"></span>
             <span class="mmf-status-size"></span>
+        </div>
+    </div>
+
+    <!-- 右侧预览面板 -->
+    <div class="mmf-preview">
+        <div class="mmf-preview-title"><lang>Preview</lang></div>
+        <div class="mmf-preview-content">
+            <div class="mmf-preview-empty">
+                <span class="mmf-preview-empty-icon">&#x1F5BC;&#xFE0F;</span>
+                <span><lang>Select a file to preview</lang></span>
+            </div>
+            <div class="mmf-preview-image" style="display:none;">
+                <img class="mmf-preview-img" src="" alt="">
+            </div>
+            <div class="mmf-preview-info" style="display:none;">
+                <div class="mmf-preview-name"></div>
+                <div class="mmf-preview-meta">
+                    <div class="mmf-preview-meta-item">
+                        <span class="mmf-preview-meta-label"><lang>Type</lang></span>
+                        <span class="mmf-preview-meta-value mmf-preview-type"></span>
+                    </div>
+                    <div class="mmf-preview-meta-item">
+                        <span class="mmf-preview-meta-label"><lang>Size</lang></span>
+                        <span class="mmf-preview-meta-value mmf-preview-size"></span>
+                    </div>
+                    <div class="mmf-preview-meta-item mmf-preview-dimensions-row" style="display:none;">
+                        <span class="mmf-preview-meta-label"><lang>Dimensions</lang></span>
+                        <span class="mmf-preview-meta-value mmf-preview-dimensions"></span>
+                    </div>
+                </div>
+                <div class="mmf-preview-actions">
+                    <button class="mmf-btn mmf-btn-primary mmf-preview-btn-open" title="Open/Preview">
+                        &#x1F50D; <lang>Preview</lang>
+                    </button>
+                    <button class="mmf-btn mmf-preview-btn-download" title="Download">
+                        &#x1F4E5; <lang>Download</lang>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 </div>

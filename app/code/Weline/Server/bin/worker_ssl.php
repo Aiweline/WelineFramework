@@ -1000,40 +1000,46 @@ while (true) {
     
     $now = \time();
     
-    // ========== 孤儿检测：定期检查 Master 是否存活 ==========
+    // ========== 孤儿检测（IPC 优先）：定期检查 Master 是否存活 ==========
     if ($masterPid > 0 && !$ipcReceivedShutdown && ($now - $lastMasterCheck) >= $masterCheckInterval) {
         $lastMasterCheck = $now;
-        $masterAlive = false;
-        if (\function_exists('posix_kill')) {
-            // signal 0 只检查进程是否存在，不发送实际信号
-            $masterAlive = @\posix_kill($masterPid, 0);
-            // macOS/Linux: 非 root 进程探测 root 进程时可能返回 EPERM（进程存在但无权限）
-            if (!$masterAlive && \function_exists('posix_get_last_error')) {
-                $errno = (int)@\posix_get_last_error();
-                $eperm = 1; // EPERM
-                if ($errno === $eperm) {
-                    $masterAlive = true;
-                }
-            }
-        } elseif (!(\defined('IS_WIN') && IS_WIN)) {
-            // 兜底：通过 /proc 或 kill -0 检测
-            $masterAlive = @\file_exists("/proc/{$masterPid}");
-            if (!$masterAlive) {
-                @\exec("kill -0 {$masterPid} 2>/dev/null", $output, $code);
-                $masterAlive = ($code === 0);
-            }
-        }
         
-        if ($masterAlive) {
+        // IPC 连接正常 → Master 存活，无需 PID 检测
+        if ($ipcClient && $ipcClient->isConnected()) {
             $masterDeadCount = 0;
         } else {
-            $masterDeadCount++;
-            $wlsLog("Master PID {$masterPid} 不可达 ({$masterDeadCount}/{$masterDeadThreshold})", 'WARN');
-            if ($masterDeadCount >= $masterDeadThreshold) {
-                // IPC 也断开 → Master 确认死亡，自行退出
-                $ipcAlso = (!$ipcClient || !$ipcClient->isConnected());
-                if ($ipcAlso) {
-                    $wlsLog("Master PID {$masterPid} 已死亡且 IPC 断开，Worker 自行退出（孤儿保护）", 'WARN');
+            // IPC 断开，用 PID 检测确认 Master 是否真的死了
+            $masterAlive = false;
+            if (\function_exists('posix_kill')) {
+                // signal 0 只检查进程是否存在，不发送实际信号
+                $masterAlive = @\posix_kill($masterPid, 0);
+                // macOS/Linux: 非 root 进程探测 root 进程时可能返回 EPERM（进程存在但无权限）
+                if (!$masterAlive && \function_exists('posix_get_last_error')) {
+                    $errno = (int)@\posix_get_last_error();
+                    $eperm = 1; // EPERM
+                    if ($errno === $eperm) {
+                        $masterAlive = true;
+                    }
+                }
+            } elseif (\defined('IS_WIN') && IS_WIN) {
+                // Windows: 使用 Processer::isRunningByPid() 检测
+                $masterAlive = \Weline\Framework\System\Process\Processer::isRunningByPid($masterPid);
+            } else {
+                // 兜底：通过 /proc 或 kill -0 检测
+                $masterAlive = @\file_exists("/proc/{$masterPid}");
+                if (!$masterAlive) {
+                    @\exec("kill -0 {$masterPid} 2>/dev/null", $output, $code);
+                    $masterAlive = ($code === 0);
+                }
+            }
+            
+            if ($masterAlive) {
+                $masterDeadCount = 0;
+            } else {
+                $masterDeadCount++;
+                $wlsLog("Master PID {$masterPid} 不可达且 IPC 断开 ({$masterDeadCount}/{$masterDeadThreshold})", 'WARN');
+                if ($masterDeadCount >= $masterDeadThreshold) {
+                    $wlsLog("Master PID {$masterPid} 已死亡，Worker 自行退出（孤儿保护）", 'WARN');
                     $gracefulExit('孤儿检测：Master 已死亡');
                 }
             }
