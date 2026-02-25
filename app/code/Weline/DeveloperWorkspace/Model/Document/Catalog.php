@@ -46,50 +46,104 @@ class Catalog extends \Weline\Framework\Database\Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // 更新提示
         $setup->getPrinting()->setup($context->getVersion());
-
-        // 确保ModelSetup关联当前模型
         $setup->putModel($this);
 
-        // 先检查表是否存在，如果不存在则先创建（install方法会创建包含所有字段的完整表结构）
         if (!$setup->tableExist()) {
             $setup->getPrinting()->note(__('表不存在，正在创建...'));
             $this->install($setup, $context);
             return;
         }
         
-        // 确保 is_system 字段存在（兼容旧版本数据库）
         if (!$setup->hasField(self::fields_is_system)) {
             $setup->getPrinting()->note(__('添加 is_system 字段...'));
             $alter = $setup->alterTable();
             $alter->addColumn(self::fields_is_system, '', 'integer', 1, 'default 0', '系统创建');
             $alter->alter();
-            $setup->getPrinting()->success(__('is_system 字段已添加'));
         }
         
-        // 修复唯一索引：移除 name 字段的唯一约束，添加联合唯一索引 (name, pid, level)
-        // 允许不同层级有重名，但同一个 level 和同一个 pid 下不允许重名
-        try {
-            // 尝试删除旧的 name 唯一索引（如果存在）
-            $setup->query("ALTER TABLE {$this->getTable()} DROP INDEX `name`;");
-            $setup->getPrinting()->success(__('已删除旧的 name 唯一索引'));
-        } catch (\Exception $e) {
-            // 索引不存在时忽略
+        // v1.2.0: 唯一索引从 (name, pid, level) 改为 (name, pid)
+        // level 不应参与唯一性约束，同一父分类下不允许同名即可
+        // 旧索引会导致 level 不一致时创建出重复分类
+        $this->migrateUniqueIndex($setup);
+    }
+    
+    /**
+     * 将唯一索引从 (name, pid, level) 迁移为 (name, pid)
+     */
+    private function migrateUniqueIndex(ModelSetup $setup): void
+    {
+        // 1. 删除旧的唯一索引（可能是 name 单字段或 name+pid+level 三字段）
+        $table = $this->getTable();
+        $dbType = $this->getConnection()->getConfigProvider()->getDbType();
+        $isPgsql = stripos($dbType, 'pgsql') !== false || stripos($dbType, 'postgres') !== false;
+        
+        foreach (['name', 'idx_unique_name_pid_level'] as $oldIndex) {
+            if (!$setup->hasIndex($oldIndex)) {
+                continue;
+            }
+            try {
+                if ($isPgsql) {
+                    $setup->query("DROP INDEX IF EXISTS \"{$oldIndex}\"");
+                } else {
+                    $setup->query("ALTER TABLE {$table} DROP INDEX `{$oldIndex}`");
+                }
+                $setup->getPrinting()->success(__('已删除旧索引: %{name}', ['name' => $oldIndex]));
+            } catch (\Exception $e) {
+                $setup->getPrinting()->warning(__('删除索引失败（可能不存在）: %{name}', ['name' => $oldIndex]));
+            }
         }
         
-        // 检查联合唯一索引是否存在
-        if (!$setup->hasIndex('idx_unique_name_pid_level')) {
-            $setup->getPrinting()->note(__('添加联合唯一索引 (name, pid, level)...'));
+        // 2. 清理重复数据：同一 (name, pid) 下只保留 ID 最小的一条
+        //    将被删除分类关联的文档迁移到保留的分类上
+        $setup->getPrinting()->note(__('清理可能存在的重复分类数据...'));
+        $allCatalogs = $this->clear()->select()->fetchArray();
+        $groups = [];
+        foreach ($allCatalogs as $cat) {
+            $key = ($cat[self::fields_NAME] ?? '') . '|||' . ($cat[self::fields_PID] ?? '0');
+            $groups[$key][] = $cat;
+        }
+        $deletedCount = 0;
+        foreach ($groups as $cats) {
+            if (count($cats) <= 1) {
+                continue;
+            }
+            usort($cats, fn($a, $b) => (int)$a[self::fields_ID] - (int)$b[self::fields_ID]);
+            $keepId = (int)$cats[0][self::fields_ID];
+            for ($i = 1; $i < count($cats); $i++) {
+                $deleteId = (int)$cats[$i][self::fields_ID];
+                // 将文档从被删除的分类迁移到保留的分类
+                try {
+                    $documentTable = (new \Weline\DeveloperWorkspace\Model\Document())->getTable();
+                    $setup->query(
+                        "UPDATE {$documentTable} SET category_id = {$keepId} WHERE category_id = {$deleteId}"
+                    );
+                    $setup->query(
+                        "UPDATE {$this->getTable()} SET pid = {$keepId} WHERE pid = {$deleteId}"
+                    );
+                } catch (\Exception $e) {
+                    // 忽略
+                }
+                $this->clear()->where(self::fields_ID, $deleteId)->delete()->fetch();
+                $deletedCount++;
+            }
+        }
+        if ($deletedCount > 0) {
+            $setup->getPrinting()->warning(__('已清理 %{count} 条重复分类', ['count' => $deletedCount]));
+        }
+        
+        // 3. 创建新的唯一索引 (name, pid)
+        if (!$setup->hasIndex('idx_unique_name_pid')) {
+            $setup->getPrinting()->note(__('添加联合唯一索引 (name, pid)...'));
             $alter = $setup->alterTable();
             $alter->addIndex(
                 TableInterface::index_type_UNIQUE,
-                'idx_unique_name_pid_level',
-                ['name', 'pid', 'level'],
-                '分类名称、父ID和层级联合唯一索引'
+                'idx_unique_name_pid',
+                ['name', 'pid'],
+                '分类名称和父ID联合唯一索引'
             );
             $alter->alter();
-            $setup->getPrinting()->success(__('联合唯一索引已添加'));
+            $setup->getPrinting()->success(__('联合唯一索引 (name, pid) 已添加'));
         }
     }
 
@@ -114,8 +168,7 @@ class Catalog extends \Weline\Framework\Database\Model
                 ->addColumn('is_active', TableInterface::column_type_INTEGER, 1, 'default 0', '是否激活')
                 ->addColumn('is_system', TableInterface::column_type_INTEGER, 1, 'default 0', '是否系统创建')
                 ->addColumn('pid', TableInterface::column_type_INTEGER, 0, '', '父目录')
-                // 添加联合唯一索引：同一个 level 和同一个 pid 下不允许重名，但不同层级可以重名
-                ->addIndex(TableInterface::index_type_UNIQUE, 'idx_unique_name_pid_level', ['name', 'pid', 'level'], '分类名称、父ID和层级联合唯一索引')
+                ->addIndex(TableInterface::index_type_UNIQUE, 'idx_unique_name_pid', ['name', 'pid'], '分类名称和父ID联合唯一索引')
                 ->create();
         }
     }
