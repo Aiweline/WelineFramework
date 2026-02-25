@@ -13,6 +13,6 @@ Register::register(
     Register::MODULE,
     'Weline_MediaManager',
     __DIR__,
-    '1.0.0',
-    '媒体管理器：图片链接裁剪、缓存及 WLS 兼容的文件浏览/上传/下载'
+    '1.2.0',
+    '媒体管理器：图片链接裁剪、缓存及 WLS 兼容的文件浏览/上传/下载，支持作为默认文件管理器'
 );

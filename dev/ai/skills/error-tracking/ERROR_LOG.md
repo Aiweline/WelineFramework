@@ -4,6 +4,80 @@
 
 ---
 
+## [2026-02-24] Worker SSL 事件循环调用不存在函数 `stream_socket_recv()` ✅ 已修复
+
+**错误类型**: 运行时函数调用 / API 误用
+
+**错误信息**:
+```text
+[WLS-SSL] Worker #2 ... 事件循环异常: Call to undefined function stream_socket_recv()
+```
+
+**根本原因**:
+`worker_ssl.php` 在延迟 SSL 分支中使用了不存在的 `stream_socket_recv()`。PHP 正确 API 为 `stream_socket_recvfrom()`（或 `fread`），因此在事件循环中持续抛出异常。
+
+**解决方案**:
+将 `worker_ssl.php` 中首包探测调用从：
+`stream_socket_recv($conn, 8, STREAM_PEEK)`
+修正为：
+`stream_socket_recvfrom($conn, 8, STREAM_PEEK)`
+
+**验证方法**:
+```bash
+php -l "e:/WelineFramework/DEV-workspace/app/code/Weline/Server/bin/worker_ssl.php"
+php bin/w s:start -r -f -frontend
+curl -I "http://127.0.0.1:9981/f7LYPUzS4UD9UL1kqkf0hzzPxyxmvT8c/USD/zh_Hans_CN/theme/backend/theme-editor"
+curl -k -I "https://127.0.0.1:9981/f7LYPUzS4UD9UL1kqkf0hzzPxyxmvT8c/USD/zh_Hans_CN/theme/backend/theme-editor"
+```
+
+**验证结果**: ✅ 成功（语法检查通过；HTTP 返回 301，HTTPS 返回业务 302；未再出现该 undefined function）
+
+**预防措施**:
+1. Stream API 使用前必须核对函数名（`stream_socket_recvfrom` / `stream_socket_enable_crypto`）。
+2. 涉及事件循环的函数替换后，必须做一次真实请求回归（HTTP + HTTPS）。
+
+**相关文件**:
+- `app/code/Weline/Server/bin/worker_ssl.php`
+
+---
+
+## [2026-02-24] Windows Dispatcher 模式下主端口明文 HTTP 未 301 到 HTTPS ✅ 已修复
+
+**错误类型**: 协议识别 / 重定向策略
+
+**错误信息**:
+```text
+访问 http://127.0.0.1:9981/...（实例为 HTTPS 模式）未自动跳转到 https://127.0.0.1:9981/...
+```
+
+**根本原因**:
+在 Windows Dispatcher 模式中，主端口请求先进入 `Dispatcher`。原逻辑仅做 TCP 透传，不在入口识别“HTTPS 模式下的明文 HTTP 请求”，导致该类请求未被统一 301。
+
+**解决方案**:
+在 `Dispatcher` 增加 HTTPS 模式下的明文 HTTP 识别与同端口 301：
+1. 初始化时读取实例文件 `ssl_enabled`，确定当前是否 HTTPS 模式；
+2. `acceptConnections()` 中在透传前先 peek 首包：
+   - TLS ClientHello（首字节 `0x16`）→ 正常透传；
+   - 明文 HTTP 方法（GET/POST/HEAD/PUT/PATCH/DELETE/OPTIONS/TRACE/CONNECT）→ 解析 Host + path，直接返回 `301 Location: https://{host}{path}`；
+3. 明确在 Dispatcher 层处理，避免依赖后端 Worker 才能重定向。
+
+**验证方法**:
+```bash
+php -l "e:/WelineFramework/DEV-workspace/app/code/Weline/Server/Dispatcher/Dispatcher.php"
+ReadLints(paths=["app/code/Weline/Server/Dispatcher/Dispatcher.php"])
+```
+
+**验证结果**: ✅ 成功（语法检查通过，lints 为 0）
+
+**预防措施**:
+1. HTTPS 场景的“明文 HTTP → HTTPS”策略必须在**入口层**（Dispatcher/Worker 入口）处理，不依赖下游透传链路。
+2. 多架构（直连 / Dispatcher）都要覆盖同一安全语义，避免平台行为不一致。
+
+**相关文件**:
+- `app/code/Weline/Server/Dispatcher/Dispatcher.php`
+
+---
+
 ## [2026-02-24] WLS 直连模式端口语义错误 + Mac 特权端口权限引导缺失 ✅ 已修复
 
 **错误类型**: WLS 进程管理 / 端口权限
