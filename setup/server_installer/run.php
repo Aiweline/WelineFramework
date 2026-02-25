@@ -126,6 +126,7 @@ if (!$step5bOk) {
 }
 
 // 6. setup:upgrade -f (1/2)
+// 注意：command:upgrade 已集成到 setup:upgrade 中，会在 collectFrameworkRegistries 时自动执行
 $code = $run('bin/w setup:upgrade -y');
 if ($code !== 0) {
     fwrite(STDERR, "ERROR: setup:upgrade (1/2) failed (exit $code). Fix the errors above and re-run install.\n");
