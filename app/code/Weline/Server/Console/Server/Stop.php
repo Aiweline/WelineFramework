@@ -302,7 +302,24 @@ class Stop extends CommandAbstract
             }
         }
 
-        // 5) 清理本实例所有进程的 PID 文件
+        // 5) 最终兜底：按所有 weline 进程前缀做系统级扫杀（pgrep/ps），
+        //    确保 osascript/nohup 等未被 name_index 跟踪的孤儿进程也被清理
+        $allPrefixes = [
+            $masterPrefix,
+            $workerPrefix,
+            $dispatcherName,
+            $redirectName,
+        ];
+        $sysKilled = 0;
+        foreach ($allPrefixes as $pfx) {
+            $sysKilled += Processer::killByProcessNamePrefix($pfx);
+        }
+        if ($sysKilled > 0) {
+            $this->printer->note(__('  系统级扫杀：额外清理 %{1} 个残留进程', [$sysKilled]));
+            $stoppedCount += $sysKilled;
+        }
+
+        // 6) 清理本实例所有进程的 PID 文件
         Processer::removePidFile('--name=' . $dispatcherName);
         Processer::removePidFile('--name=' . MasterProcess::getMasterProcessName($name));
         for ($i = 1; $i <= $count; $i++) {
