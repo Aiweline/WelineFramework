@@ -579,6 +579,14 @@ class Dispatcher
         $alive = false;
         if (\function_exists('posix_kill')) {
             $alive = @\posix_kill($this->masterPid, 0);
+            // macOS/Linux: 非 root 进程探测 root 进程时可能返回 EPERM（进程存在但无权限）
+            if (!$alive && \function_exists('posix_get_last_error')) {
+                $errno = (int)@\posix_get_last_error();
+                $eperm = 1; // EPERM
+                if ($errno === $eperm) {
+                    $alive = true;
+                }
+            }
         } elseif (!\defined('IS_WIN') || !IS_WIN) {
             $alive = @\file_exists("/proc/{$this->masterPid}");
             if (!$alive) {
