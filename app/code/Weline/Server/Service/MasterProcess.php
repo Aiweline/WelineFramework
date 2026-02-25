@@ -559,12 +559,29 @@ class MasterProcess
         $this->startupPhase = true;
         self::clearServiceException($this->instanceName);
         $masterPid = \getmypid();
+        
+        // 检查进程权限（用于调试特权端口问题）
+        $euid = \function_exists('posix_geteuid') ? (int)\posix_geteuid() : -1;
+        $isRoot = $euid === 0;
+        
         $this->log('========================================');
         $this->log(__('Master 进程启动'), 'success');
         $this->log(__('  PID: %{1}', [$masterPid]));
+        $this->log(__('  euid: %{1}%{2}', [$euid, $isRoot ? ' (root)' : '']));
         $this->log(__('  内存使用: %{1} MB', [\round(\memory_get_usage(true) / 1024 / 1024, 2)]));
         $this->log(__('  启动时间: %{1}', [\date('Y-m-d H:i:s')]));
         $this->log('========================================');
+        
+        // macOS/Linux：检查是否需要特权端口权限
+        if (!IS_WIN && $euid !== 0) {
+            $port = (int)($this->config['port'] ?? 0);
+            $httpRedirectPort = $this->httpRedirectWorker['port'] ?? 0;
+            $needsPrivilege = ($port > 0 && $port < 1024) || ($httpRedirectPort > 0 && $httpRedirectPort < 1024);
+            if ($needsPrivilege) {
+                $this->log(__('警告：需要绑定特权端口 (<1024) 但当前进程不是 root (euid: %{1})！', [$euid]), 'error');
+                $this->log(__('请使用 sudo php bin/w server:start 启动服务器'), 'error');
+            }
+        }
         
         // ========== 阶段 0: 启动 IPC 控制服务器 ==========
         $this->log(__('[阶段 0/6] 启动 IPC 控制服务器...'));
