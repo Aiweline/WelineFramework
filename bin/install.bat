@@ -164,6 +164,9 @@ if not exist "%ROOT%\setup\server_installer\run.php" (
     set "CECHO_MSG=Code install failed. Ensure run.php exists at setup\server_installer\run.php" & call :cecho Red ""
     exit /b 1
   )
+  REM 确保当前用户对项目目录有完全控制权限（避免后续操作权限问题）
+  set "CECHO_MSG=Setting project directory permissions for current user..." & call :cecho Gray ""
+  icacls "%ROOT%" /grant:r "%USERNAME%":(OI)(CI)F /T /Q >nul 2>&1
   set "CECHO_MSG=Code installed (branch: %BRANCH%)." & call :cecho Green ""
 )
 
