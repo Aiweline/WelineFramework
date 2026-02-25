@@ -17,6 +17,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Taglib\Cache\TaglibCacheFactory;
 use Weline\Taglib\TaglibInterface;
+use Weline\Taglib\TaglibRegistry;
 
 class Collect implements CommandInterface
 {
@@ -222,6 +223,15 @@ class Collect implements CommandInterface
         }
 
         $this->cache->set($cache_key, $modules_tags);
+
+        /** @var TaglibRegistry $registry */
+        $registry = ObjectManager::getInstance(TaglibRegistry::class);
+        if ($registry->saveRegistry($module_tags)) {
+            $this->printing->success(__('标签注册表已保存到 %{1}', [TaglibRegistry::REGISTRY_FILE]));
+        } else {
+            $this->printing->warning(__('标签注册表保存失败'));
+        }
+
         $this->printing->success(__('共收集到 %{1} 个标签', [$totalTags]));
     }
 
