@@ -3,11 +3,15 @@
 <base href="@backend-url('/')">
 <script>
     $(function () {
-        $('.table-responsive').responsiveTable({
-            addDisplayAllBtn: 'btn btn-secondary',
-            addfocusbtn: true,
-            i18n: {focus: __('聚焦'), display: __('展示'), displayAll: __('全部展示')}
-        });
-        $('.btn-toolbar [data-toggle=dropdown]').attr('data-bs-toggle', "dropdown");
+        if (typeof $.fn.responsiveTable !== 'undefined' && $('.table-responsive').length > 0) {
+            $('.table-responsive').responsiveTable({
+                addDisplayAllBtn: 'btn btn-secondary',
+                addfocusbtn: true,
+                i18n: {focus: __('聚焦'), display: __('展示'), displayAll: __('全部展示')}
+            });
+        }
+        if ($('.btn-toolbar [data-toggle=dropdown]').length > 0) {
+            $('.btn-toolbar [data-toggle=dropdown]').attr('data-bs-toggle', "dropdown");
+        }
     });
 </script>

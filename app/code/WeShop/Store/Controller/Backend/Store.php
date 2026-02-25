@@ -59,6 +59,8 @@ class Store extends BackendController
         # 获取所有网站列表
         $websites = $this->website->select()->fetchArray();
         $this->assign('websites', $websites);
+        # 新增时提供空的 store 对象，避免模板中 store.image 等属性引用报错
+        $this->assign('store', ['image' => '']);
         return $this->fetch('form');
     }
 

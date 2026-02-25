@@ -122,7 +122,20 @@
         return '\uD83D\uDCC4';
     }
 
+    function getThumbnailUrl(f) {
+        if (!f || f.mime === 'directory') return null;
+        if (f.tmb && f.tmb !== '1') {
+            return f.tmb;
+        }
+        if (f.tmb === '1' && CONNECTOR) {
+            return CONNECTOR + (CONNECTOR.indexOf('?') >= 0 ? '&' : '?') + 'cmd=tmb&target=' + encodeURIComponent(f.hash);
+        }
+        return null;
+    }
+
     /* ─── init ───────────────────────────────────────────────────────── */
+
+    var CURRENT_STORAGE = 'local';
 
     function init(connectorUrl, startPath) {
         CONNECTOR = (typeof connectorUrl === 'string' ? connectorUrl : '').trim();
@@ -137,6 +150,8 @@
         bindToolbar();
         bindDragDrop();
         bindContextMenu();
+        bindPreviewPanel();
+        loadStorages();
 
         var lastHash = loadLastPath();
         if (lastHash) {
@@ -144,6 +159,41 @@
         } else {
             openDir('', true);
         }
+    }
+
+    function loadStorages() {
+        var select = qs('#mmf-storage-select');
+        if (!select || !CONNECTOR) return;
+
+        var url = CONNECTOR + (CONNECTOR.indexOf('?') >= 0 ? '&' : '?') + 'cmd=storages';
+        fetch(url)
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data.storages && Array.isArray(data.storages)) {
+                    select.innerHTML = '';
+                    data.storages.forEach(function(s) {
+                        var opt = document.createElement('option');
+                        opt.value = s.name;
+                        opt.textContent = s.display_name || s.name;
+                        if (s.is_default) {
+                            opt.selected = true;
+                            CURRENT_STORAGE = s.name;
+                        }
+                        select.appendChild(opt);
+                    });
+                }
+            })
+            .catch(function(e) {
+                console.warn('Failed to load storages:', e);
+            });
+
+        select.addEventListener('change', function() {
+            CURRENT_STORAGE = this.value;
+            SELECTED.length = 0;
+            FILES = {};
+            CWD_HASH = '';
+            openDir('', true);
+        });
     }
 
     function hashCode(str) {
@@ -189,6 +239,9 @@
         saveExpandedState();
         setLoading(true);
         var params = { cmd: 'open', target: target || '' };
+        if (CURRENT_STORAGE && CURRENT_STORAGE !== 'local') {
+            params.storage = CURRENT_STORAGE;
+        }
         if (isInit) { params.init = '1'; params.tree = '1'; }
         else { params.tree = '1'; }
 
@@ -227,6 +280,7 @@
                 renderFiles();
                 renderPath();
                 updateStatus();
+                updatePreviewPanel();
                 saveLastPath();
             } catch (e) {
                 setLoading(false);
@@ -413,10 +467,11 @@
         items.forEach(function (f) {
             var isDir = f.mime === 'directory';
             var sel = SELECTED.indexOf(f.hash) >= 0;
+            var thumbUrl = getThumbnailUrl(f);
             html += '<div class="mmf-item' + (sel ? ' selected' : '') + '" data-hash="' + f.hash + '" data-mime="' + (f.mime || '') + '">';
             html += '<div class="mmf-item-icon">';
-            if (f.tmb && f.tmb !== '1') {
-                html += '<img src="' + escAttr(f.tmb) + '" alt="" loading="lazy">';
+            if (thumbUrl) {
+                html += '<img src="' + escAttr(thumbUrl) + '" alt="" loading="lazy" onerror="this.parentNode.innerHTML=\'<span class=mmf-icon-placeholder>' + fileIcon(f.mime, isDir) + '</span>\'">';
             } else {
                 html += '<span class="mmf-icon-placeholder">' + fileIcon(f.mime, isDir) + '</span>';
             }
@@ -538,6 +593,123 @@
         qsa('.mmf-item').forEach(function (el) {
             el.classList.toggle('selected', SELECTED.indexOf(el.dataset.hash) >= 0);
         });
+        updatePreviewPanel();
+    }
+
+    /* ─── preview panel ───────────────────────────────────────────────── */
+
+    function updatePreviewPanel() {
+        var emptyEl = qs('.mmf-preview-empty');
+        var imageEl = qs('.mmf-preview-image');
+        var infoEl = qs('.mmf-preview-info');
+
+        if (!emptyEl || !imageEl || !infoEl) return;
+
+        if (SELECTED.length !== 1) {
+            emptyEl.style.display = '';
+            imageEl.style.display = 'none';
+            infoEl.style.display = 'none';
+            return;
+        }
+
+        var f = FILES[SELECTED[0]];
+        if (!f) {
+            emptyEl.style.display = '';
+            imageEl.style.display = 'none';
+            infoEl.style.display = 'none';
+            return;
+        }
+
+        emptyEl.style.display = 'none';
+        infoEl.style.display = '';
+
+        var nameEl = qs('.mmf-preview-name');
+        var typeEl = qs('.mmf-preview-type');
+        var sizeEl = qs('.mmf-preview-size');
+        var dimensionsRow = qs('.mmf-preview-dimensions-row');
+        var dimensionsEl = qs('.mmf-preview-dimensions');
+        var btnOpen = qs('.mmf-preview-btn-open');
+        var btnDownload = qs('.mmf-preview-btn-download');
+
+        if (nameEl) nameEl.textContent = f.name || '';
+        if (typeEl) typeEl.textContent = f.mime === 'directory' ? 'Folder' : (f.mime || 'Unknown');
+        if (sizeEl) sizeEl.textContent = f.mime === 'directory' ? '—' : humanSize(f.size);
+
+        if (isImageMime(f.mime)) {
+            imageEl.style.display = '';
+            var img = qs('.mmf-preview-img');
+            if (img) {
+                var thumbUrl = getThumbnailUrl(f) || '';
+                img.src = thumbUrl;
+                img.onload = function () {
+                    if (dimensionsRow && dimensionsEl) {
+                        dimensionsRow.style.display = '';
+                        dimensionsEl.textContent = img.naturalWidth + ' × ' + img.naturalHeight;
+                    }
+                };
+                img.onerror = function () {
+                    if (dimensionsRow) dimensionsRow.style.display = 'none';
+                };
+            }
+            if (btnOpen) {
+                btnOpen.innerHTML = '&#x1F50D; Preview';
+                btnOpen.style.display = '';
+            }
+        } else {
+            imageEl.style.display = 'none';
+            if (dimensionsRow) dimensionsRow.style.display = 'none';
+            if (f.mime === 'directory') {
+                if (btnOpen) {
+                    btnOpen.innerHTML = '&#x1F4C2; Open';
+                    btnOpen.style.display = '';
+                }
+            } else {
+                if (btnOpen) btnOpen.style.display = 'none';
+            }
+        }
+
+        if (btnDownload) {
+            btnDownload.style.display = f.mime === 'directory' ? 'none' : '';
+        }
+    }
+
+    function bindPreviewPanel() {
+        var imageEl = qs('.mmf-preview-image');
+        var btnOpen = qs('.mmf-preview-btn-open');
+        var btnDownload = qs('.mmf-preview-btn-download');
+
+        if (imageEl) {
+            imageEl.onclick = function () {
+                if (SELECTED.length === 1) {
+                    var f = FILES[SELECTED[0]];
+                    if (f && isImageMime(f.mime)) {
+                        openLightbox(SELECTED[0]);
+                    }
+                }
+            };
+        }
+
+        if (btnOpen) {
+            btnOpen.onclick = function () {
+                if (SELECTED.length === 1) {
+                    var f = FILES[SELECTED[0]];
+                    if (!f) return;
+                    if (f.mime === 'directory') {
+                        openDir(SELECTED[0]);
+                    } else if (isImageMime(f.mime)) {
+                        openLightbox(SELECTED[0]);
+                    }
+                }
+            };
+        }
+
+        if (btnDownload) {
+            btnDownload.onclick = function () {
+                if (SELECTED.length === 1) {
+                    downloadFile(SELECTED[0]);
+                }
+            };
+        }
     }
 
     /* ─── toolbar ────────────────────────────────────────────────────── */
@@ -848,8 +1020,10 @@
 
         if (img) {
             img.style.opacity = '0.5';
-            var imgUrl = f.url || (f.tmb && f.tmb !== '1' ? f.tmb : '');
-            if (!imgUrl && CONNECTOR) {
+            var imgUrl = '';
+            if (f.url) {
+                imgUrl = f.url;
+            } else if (CONNECTOR) {
                 imgUrl = CONNECTOR + (CONNECTOR.indexOf('?') >= 0 ? '&' : '?') + 'cmd=file&target=' + encodeURIComponent(f.hash);
             }
             img.onload = function () { img.style.opacity = '1'; };
