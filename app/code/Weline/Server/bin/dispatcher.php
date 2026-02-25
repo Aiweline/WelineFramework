@@ -36,6 +36,7 @@ if ($workerCount <= 0) {
 $processName = '';
 $isFrontend = false;
 $controlPort = 0;
+$masterPid = 0;
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
         $processName = \substr($arg, 7);
@@ -43,6 +44,8 @@ foreach ($argv as $arg) {
         $isFrontend = true;
     } elseif (\str_starts_with($arg, '--control-port=')) {
         $controlPort = (int)\substr($arg, 15);
+    } elseif (\str_starts_with($arg, '--master-pid=')) {
+        $masterPid = (int)\substr($arg, 13);
     }
 }
 
@@ -216,5 +219,10 @@ $dispatcherLog("Dispatcher 启动，监听 tcp://{$host}:{$port}，Worker 端口
 
 // 连接 IPC 控制通道
 $dispatcher->connectIpc($controlPort);
+
+// 传入 Master PID 用于孤儿检测
+if ($masterPid > 0) {
+    $dispatcher->setMasterPid($masterPid);
+}
 
 $dispatcher->run();

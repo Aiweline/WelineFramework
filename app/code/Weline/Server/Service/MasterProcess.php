@@ -1262,20 +1262,16 @@ class MasterProcess
         }
         $argList[] = $processNameFlag;
         $argList[] = '--reuseport';  // 关键：启用 SO_REUSEPORT
+        $argList[] = '--master-pid=' . \getmypid();
         
         if ($this->frontend) {
             $argList[] = '--frontend';
         }
 
         // Linux/Mac: 使用 Processer 统一创建（避免手写 nohup 脚本造成 PID 偏差）
+        // 注意：特权端口权限由 Master 在启动阶段通过 ensurePrivilegedPortPermission() 统一提权，
+        // 子进程继承 Master 的 root 权限，无需在此处加 sudo
         $args = \array_merge([$phpBinary], $argList);
-
-        // macOS 下绑定 1024 以下端口需要 sudo 权限（已是 root 则跳过）
-        $isRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
-        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024 && !$isRoot;
-        if ($needSudo) {
-            \array_unshift($args, 'sudo');
-        }
         
         $command = \implode(' ', \array_map('escapeshellarg', $args));
         $pid = Processer::create($command, true, $this->frontend);
@@ -1535,6 +1531,7 @@ class MasterProcess
         
         // 构建参数数组（TCP 透传模式：不需要 SSL 证书）
         // 参数格式: <host> <port> <worker_base_port> <worker_count> <instance_name>
+        $masterPid = \getmypid();
         $argList = [
             $dispatcherScript,
             $host,
@@ -1547,6 +1544,7 @@ class MasterProcess
         if ($this->controlPort > 0) {
             $argList[] = '--control-port=' . $this->controlPort;
         }
+        $argList[] = '--master-pid=' . $masterPid;
         // 前台模式标记
         if ($this->frontend) {
             $argList[] = '--frontend';
@@ -1565,15 +1563,9 @@ class MasterProcess
         if ($this->controlPort > 0) {
             $args[] = '--control-port=' . $this->controlPort;
         }
+        $args[] = '--master-pid=' . $masterPid;
         if ($this->frontend) {
             $args[] = '--frontend';
-        }
-        
-        // macOS 下绑定 1024 以下端口需要 sudo 权限（已是 root 则跳过）
-        $isRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
-        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024 && !$isRoot;
-        if ($needSudo) {
-            \array_unshift($args, 'sudo');
         }
         
         $command = \implode(' ', \array_map('escapeshellarg', $args));
@@ -1654,6 +1646,7 @@ class MasterProcess
         if ($this->controlPort > 0) {
             $argList[] = '--control-port=' . $this->controlPort;
         }
+        $argList[] = '--master-pid=' . \getmypid();
         // 前台模式标记（Worker 可据此决定输出方式）
         if ($this->frontend) {
             $argList[] = '--frontend';
@@ -1667,13 +1660,6 @@ class MasterProcess
         
         // 启动进程：统一通过 Processer::create（由驱动封装 OS 差分）
         $args = \array_merge([$phpBinary], $argList);
-        
-        // macOS 下绑定 1024 以下端口需要 sudo 权限（已是 root 则跳过）
-        $isRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
-        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024 && !$isRoot;
-        if ($needSudo) {
-            \array_unshift($args, 'sudo');
-        }
         
         $command = \implode(' ', \array_map('escapeshellarg', $args));
         $pid = Processer::create($command, true, $this->frontend);
@@ -1762,18 +1748,12 @@ class MasterProcess
         if ($this->controlPort > 0) {
             $argList[] = '--control-port=' . $this->controlPort;
         }
+        $argList[] = '--master-pid=' . \getmypid();
         if ($this->frontend) {
             $argList[] = '--frontend';
         }
         
         $args = \array_merge([$phpBinary], $argList);
-        
-        // macOS 下绑定 1024 以下端口需要 sudo 权限（已是 root 则跳过）
-        $isRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
-        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $httpPort < 1024 && !$isRoot;
-        if ($needSudo) {
-            \array_unshift($args, 'sudo');
-        }
         
         $command = \implode(' ', \array_map('escapeshellarg', $args));
         
@@ -2237,6 +2217,7 @@ class MasterProcess
             '--instance=' . $this->instanceName,
             '--maintenance',
             '--control-port=' . $this->controlPort,
+            '--master-pid=' . \getmypid(),
         ];
         
         if ($this->sslCert) {
@@ -2246,12 +2227,7 @@ class MasterProcess
             $args[] = '--ssl-key=' . $this->sslKey;
         }
         
-        // macOS 下绑定 1024 以下端口需要 sudo 权限（已是 root 则跳过）
-        $isRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
-        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024 && !$isRoot;
-        $sudoPrefix = $needSudo ? 'sudo ' : '';
-        
-        $cmd = $sudoPrefix . $phpBinary . ' ' . \escapeshellarg($workerScript) . ' ' . \implode(' ', \array_map('escapeshellarg', $args));
+        $cmd = $phpBinary . ' ' . \escapeshellarg($workerScript) . ' ' . \implode(' ', \array_map('escapeshellarg', $args));
         
         $pid = Processer::create($cmd, false);
         if ($pid > 0) {
