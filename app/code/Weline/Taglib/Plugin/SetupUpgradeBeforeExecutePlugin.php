@@ -17,6 +17,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Taglib\Cache\TaglibCacheFactory;
 use Weline\Taglib\TaglibInterface;
+use Weline\Taglib\TaglibRegistry;
 
 /**
  * Setup升级执行前插件
@@ -216,5 +217,10 @@ class SetupUpgradeBeforeExecutePlugin
         
         // 保存到缓存
         $cache->set($cache_key, $modules_tags);
+
+        // 保存标签配置到 generated/taglibs.php
+        /** @var TaglibRegistry $registry */
+        $registry = ObjectManager::getInstance(TaglibRegistry::class);
+        $registry->saveRegistry($module_tags);
     }
 }
