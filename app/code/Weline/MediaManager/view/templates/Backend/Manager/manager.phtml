@@ -44,7 +44,8 @@
 
         <!-- 文件列表 -->
         <div class="mmf-content">
-            <div class="mmf-grid"></div>
+            <div class="mmf-grid" style="display:none;"></div>
+            <div class="mmf-loading"><span class="mmf-spinner"></span><lang>Loading...</lang></div>
         </div>
 
         <!-- 状态栏 -->
@@ -70,11 +71,26 @@
     </div>
 </div>
 
+<!-- 图片预览 Lightbox -->
+<div class="mmf-lightbox">
+    <div class="mmf-lightbox-header">
+        <span class="mmf-lightbox-title"></span>
+        <span class="mmf-lightbox-counter"></span>
+        <button class="mmf-lightbox-close" title="Close">&times;</button>
+    </div>
+    <div class="mmf-lightbox-main">
+        <button class="mmf-lightbox-nav mmf-lightbox-prev" title="Previous">&#10094;</button>
+        <img class="mmf-lightbox-img" src="" alt="">
+        <button class="mmf-lightbox-nav mmf-lightbox-next" title="Next">&#10095;</button>
+    </div>
+    <div class="mmf-lightbox-thumbs"></div>
+</div>
+
 <!-- 隐藏上传 input -->
 <input type="file" id="mmf-file-input" multiple style="display:none">
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        WelineMediaManager.init('{{$connector_url}}');
+        WelineMediaManager.init('{{$connector_url}}', '{{$start_path|default:""}}');
     });
 </script>

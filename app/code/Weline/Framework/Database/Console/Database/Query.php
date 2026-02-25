@@ -63,7 +63,7 @@ class Query extends CommandAbstract
                 '-l, --limit' => '限制返回行数（默认100）',
                 '-f, --format' => '输出格式：table（默认）, json, csv',
                 '-c, --connection' => '指定数据库连接名',
-                '--no-confirm' => '跳过危险操作确认（UPDATE/DELETE/DROP等）',
+                '-y, --yes, --no-confirm' => '跳过危险操作确认（UPDATE/DELETE/DROP等）',
             ],
             [
                 'php bin/w database:query "SELECT * FROM m_w_theme LIMIT 5"' => '查询主题表',
@@ -103,7 +103,7 @@ class Query extends CommandAbstract
         $limit = (int)($args['limit'] ?? $args['l'] ?? 100);
         $format = $args['format'] ?? $args['f'] ?? 'table';
         $connectionName = $args['connection'] ?? $args['c'] ?? null;
-        $noConfirm = isset($args['no-confirm']);
+        $noConfirm = isset($args['no-confirm']) || isset($args['yes']) || isset($args['y']);
 
         // 检测危险操作
         $dangerousPatterns = [

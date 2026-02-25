@@ -47,12 +47,12 @@ return [
     'WeShop_Cart::frontend::partials::cart::items-before' => [
         'name' => __('购物车商品列表前'),
         'description' => __('在购物车商品列表前渲染内容，可用于添加提示信息、横幅广告。'),
-        'doc' => 'hook/cart/before_items.md',
+        'doc' => 'frontend/partials/cart/items-before.md',
     ],
     'WeShop_Cart::frontend::partials::cart::items-after' => [
         'name' => __('购物车商品列表后'),
         'description' => __('在购物车商品列表后渲染内容，可用于推荐商品、关联商品。'),
-        'doc' => 'hook/cart/after_items.md',
+        'doc' => 'frontend/partials/cart/items-after.md',
     ],
     'WeShop_Cart::frontend::partials::cart::item-before' => [
         'name' => __('购物车单个商品前'),
@@ -62,7 +62,7 @@ return [
     'WeShop_Cart::frontend::partials::cart::item-after' => [
         'name' => __('购物车单个商品后'),
         'description' => __('在购物车每个商品后渲染内容，可用于添加赠品、促销信息等。'),
-        'doc' => 'hook/cart/after_item.md',
+        'doc' => 'frontend/partials/cart/item-after.md',
     ],
     'WeShop_Cart::frontend::partials::cart::continue-shopping' => [
         'name' => __('继续购物按钮'),
@@ -107,7 +107,7 @@ return [
     'WeShop_Cart::frontend::partials::cart::sidebar' => [
         'name' => __('购物车侧边栏扩展'),
         'description' => __('购物车页面侧边栏扩展区域，可用于展示促销信息、推荐商品等。'),
-        'doc' => 'hook/cart/sidebar.md',
+        'doc' => 'frontend/partials/cart/sidebar-ext.md',
     ],
     'WeShop_Cart::frontend::partials::cart::empty' => [
         'name' => __('空购物车状态'),
@@ -129,12 +129,12 @@ return [
     'WeShop_Cart::frontend::partials::mini-cart::items-before' => [
         'name' => __('迷你购物车商品列表前'),
         'description' => __('在迷你购物车商品列表前渲染内容，如免邮提示。'),
-        'doc' => 'hook/mini_cart/before_items.md',
+        'doc' => 'frontend/partials/mini-cart/items-before.md',
     ],
     'WeShop_Cart::frontend::partials::mini-cart::items-after' => [
         'name' => __('迷你购物车商品列表后'),
         'description' => __('在迷你购物车商品列表后渲染内容，如推荐商品。'),
-        'doc' => 'hook/mini_cart/after_items.md',
+        'doc' => 'frontend/partials/mini-cart/items-after.md',
     ],
     'WeShop_Cart::frontend::partials::mini-cart::footer-before' => [
         'name' => __('迷你购物车底部之前'),
