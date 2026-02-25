@@ -578,8 +578,9 @@ class MasterProcess
             $httpRedirectPort = $this->httpRedirectWorker['port'] ?? 0;
             $needsPrivilege = ($port > 0 && $port < 1024) || ($httpRedirectPort > 0 && $httpRedirectPort < 1024);
             if ($needsPrivilege) {
-                $this->log(__('警告：需要绑定特权端口 (<1024) 但当前进程不是 root (euid: %{1})！', [$euid]), 'error');
-                $this->log(__('请使用 sudo php bin/w server:start 启动服务器'), 'error');
+                $this->log(__('错误：需要绑定特权端口 (<1024) 但当前进程不是 root (euid: %{1})！', [$euid]), 'error');
+                $this->log(__('拒绝继续启动，避免后续子进程在非 root 下反复重启。'), 'error');
+                throw new \RuntimeException((string)__('特权端口启动失败：Master 进程必须以 root 身份运行。请使用 sudo php bin/w server:start'));
             }
         }
         
