@@ -1553,10 +1553,6 @@ class Start extends CommandAbstract
         if ((int)\posix_geteuid() === 0) {
             return true;
         }
-        if (\getenv('WLS_SUDO_RELAUNCHED') === '1') {
-            // 已经尝试过 sudo，避免死循环
-            return true;
-        }
 
         $privilegedPorts = [];
         if ($mainPort > 0 && $mainPort < 1024) {
@@ -1599,7 +1595,7 @@ class Start extends CommandAbstract
         }
         $parts = \array_merge([PHP_BINARY], $rawArgv);
         $escaped = \array_map('escapeshellarg', $parts);
-        $relaunchCommand = 'sudo env WLS_SUDO_RELAUNCHED=1 ' . \implode(' ', $escaped);
+        $relaunchCommand = 'sudo ' . \implode(' ', $escaped);
 
         $this->printer->warning(__('检测到特权端口 %{1}，需要 root 权限。', [\implode(', ', $privilegedPorts)]));
         $this->printer->note(__('将执行命令：%{1}', [$relaunchCommand]));
@@ -1668,9 +1664,6 @@ class Start extends CommandAbstract
         if (\function_exists('posix_geteuid') && (int)\posix_geteuid() === 0) {
             return true;
         }
-        if (\getenv('WLS_SUDO_RELAUNCHED') === '1') {
-            return true;
-        }
         
         // 尝试绑定端口测试权限
         $testSocket = @\stream_socket_server(
@@ -1708,7 +1701,7 @@ class Start extends CommandAbstract
         }
         $parts = \array_merge([PHP_BINARY], $rawArgv);
         $escaped = \array_map('escapeshellarg', $parts);
-        $relaunchCommand = 'sudo env WLS_SUDO_RELAUNCHED=1 ' . \implode(' ', $escaped);
+        $relaunchCommand = 'sudo ' . \implode(' ', $escaped);
         
         $this->printer->note(__('将执行命令：%{1}', [$relaunchCommand]));
         
