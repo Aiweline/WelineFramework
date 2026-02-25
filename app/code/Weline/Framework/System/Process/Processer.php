@@ -416,8 +416,11 @@ class Processer
                 return 0;
             }
             
-            // macOS 前端模式：每个子进程在独立 Terminal 窗口中运行（与 Windows 行为一致）
-            if (!IS_WIN && \PHP_OS === 'Darwin' && $availableFunctions['exec']) {
+            // macOS 前端模式：
+            // - 已是 root 时：跳过 osascript，使用 proc_open（继承 root 权限、可获取 PID、可终止子进程）
+            // - 非 root 时：使用 osascript 在独立 Terminal 窗口运行（与 Windows 行为一致）
+            $macIsRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
+            if (!IS_WIN && \PHP_OS === 'Darwin' && !$macIsRoot && $availableFunctions['exec']) {
                 $cmd = 'cd ' . \escapeshellarg(BP) . ' && ' . $pname;
                 $cmdEscaped = \str_replace(['\\', '"'], ['\\\\', '\\"'], $cmd);
                 $script = 'tell application "Terminal" to activate' . "\n"
@@ -428,7 +431,7 @@ class Processer
                 return 0;
             }
             
-            // Linux 前端模式：使用 proc_open（输出继承当前终端）
+            // Linux/macOS(root) 前端模式：使用 proc_open（输出继承当前终端）
             if (!IS_WIN && $availableFunctions['proc_open']) {
                 $nohupCommand = $pname . ' &';
                 $descriptorspec = [
