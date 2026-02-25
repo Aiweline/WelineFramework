@@ -3631,6 +3631,11 @@ PHP;
             'bin_dir' => \dirname(__DIR__, 2) . DS . 'bin' . DS,
         ]);
         
+        // Linux/Mac 非 root 绑定特权端口时，自动触发 sudo 密码输入并重启当前命令
+        if (!$this->ensurePrivilegedPortPermission($serverConfig->port, $serverConfig->httpRedirectPort, $sslEnabled)) {
+            return true;
+        }
+        
         // 获取最优策略
         $strategy = $this->getOptimalStrategy();
         
