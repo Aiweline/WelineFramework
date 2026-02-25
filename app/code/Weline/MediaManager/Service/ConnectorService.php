@@ -28,6 +28,7 @@ class ConnectorService
             'rm'     => $this->handleRemove($src, $rootPath, $rootReal),
             'upload' => $this->handleUpload($src, $rootPath, $rootReal),
             'file'   => $this->handleFile($src, $rootPath, $rootReal),
+            'tmb'    => $this->handleTmb($src, $rootPath, $rootReal),
             default  => ['error' => 'Unknown command: ' . $cmd],
         };
     }
@@ -460,6 +461,40 @@ class ConnectorService
         }
 
         return ['added' => $added];
+    }
+
+    /**
+     * tmb 命令：返回缩略图（直接输出原图，前端用 CSS 控制缩放）
+     */
+    private function handleTmb(array $src, string $rootPath, string $rootReal): array
+    {
+        $target = (string) ($src['target'] ?? '');
+        [$relative, $abs] = $this->resolvePath($target, $rootPath, $rootReal);
+        if (!\is_file($abs)) {
+            return ['error' => 'File not found'];
+        }
+
+        $mime = $this->detectMime($abs);
+        if (!\str_starts_with($mime, 'image/')) {
+            return ['error' => 'Not an image'];
+        }
+
+        $fp = @\fopen($abs, 'rb');
+        if ($fp === false) {
+            return ['error' => 'Cannot open file'];
+        }
+
+        $info = $this->buildFileInfo($relative, $rootPath, $rootReal);
+        $info['size'] = @\filesize($abs) ?: 0;
+
+        return [
+            'pointer' => $fp,
+            'info'    => $info,
+            'header'  => [
+                'Content-Type: ' . $mime,
+                'Cache-Control: public, max-age=86400',
+            ],
+        ];
     }
 
     /**
