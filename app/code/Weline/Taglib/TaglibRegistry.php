@@ -12,11 +12,11 @@ namespace Weline\Taglib;
 
 /**
  * 标签库注册表管理
- * 管理 generated/taglibs.php 文件的读取
+ * 管理 generated/taglibs.php 文件的读写
  */
 class TaglibRegistry
 {
-    private const REGISTRY_FILE = BP . 'generated' . DIRECTORY_SEPARATOR . 'taglibs.php';
+    public const REGISTRY_FILE = BP . 'generated' . DIRECTORY_SEPARATOR . 'taglibs.php';
 
     private ?array $cachedRegistry = null;
     private ?int $cachedFileMtime = null;
@@ -70,5 +70,48 @@ class TaglibRegistry
     {
         $registry = $this->getRegistry();
         return $registry['tags'] ?? [];
+    }
+
+    /**
+     * 保存标签注册表到 generated/taglibs.php
+     *
+     * @param array $tags 标签数据
+     * @return bool
+     */
+    public function saveRegistry(array $tags): bool
+    {
+        $registry = ['tags' => $tags];
+
+        $content = "<?php\n\ndeclare(strict_types=1);\n\n";
+        $content .= "/*\n";
+        $content .= " * 本文件由标签库收集器自动生成，请勿手动修改\n";
+        $content .= " * 生成时间: " . date('Y-m-d H:i:s') . "\n";
+        $content .= " */\n\n";
+        $content .= "return " . w_var_export($registry, true) . ";\n";
+
+        $dir = dirname(self::REGISTRY_FILE);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        $result = file_put_contents(self::REGISTRY_FILE, $content, LOCK_EX);
+
+        if ($result !== false) {
+            $this->cachedRegistry = $registry;
+            $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * 获取注册表文件路径
+     *
+     * @return string
+     */
+    public static function getRegistryFilePath(): string
+    {
+        return self::REGISTRY_FILE;
     }
 }

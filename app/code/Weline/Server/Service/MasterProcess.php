@@ -671,6 +671,18 @@ class MasterProcess
             \pcntl_signal(SIGHUP, [$this, 'handleSignal']);
             \pcntl_signal(SIGUSR1, [$this, 'handleSignal']);
             $this->log(__('  已注册 pcntl 信号: SIGTERM, SIGINT, SIGHUP, SIGUSR1'));
+            
+            // Mac/Linux 安全网：进程异常退出（fatal error 等）时确保子进程被清理
+            \register_shutdown_function(function () {
+                if (!$this->cleanedUp) {
+                    $this->log(__('Mac/Linux 安全网：检测到进程退出但未完成清理，执行紧急清理...'), 'warning');
+                    $this->signalAllChildren(\SIGTERM);
+                    // 给子进程短暂的时间优雅退出
+                    \usleep(500000); // 500ms
+                    $this->cleanup();
+                }
+            });
+            $this->log(__('  Mac/Linux 模式：已注册 register_shutdown_function 安全网'));
         } else {
             // Windows: 使用 sapi_windows_set_ctrl_handler 捕获 Ctrl+C（PHP 7.4+）
             // 注意：register_shutdown_function 在 Windows 上 Ctrl+C 时不会被调用！
@@ -797,6 +809,8 @@ class MasterProcess
                 $this->log(__('收到终止信号 (%{1})，准备停止...', [$signo]));
                 $this->shouldStopFlag = true;
                 $this->running = false;
+                // Mac/Linux: 立即向所有子进程转发终止信号，确保子进程不会变成孤儿
+                $this->signalAllChildren($signo);
                 break;
             case SIGHUP:
                 $this->log(__('收到重载信号 (SIGHUP)，发起滚动重启...'));
@@ -807,6 +821,72 @@ class MasterProcess
                 $this->logStatus();
                 break;
         }
+    }
+    
+    /**
+     * 向所有已知子进程发送 POSIX 信号（Mac/Linux 专用）
+     *
+     * 收集 Worker、Dispatcher、HTTP 重定向的 PID，通过 posix_kill 直接发送。
+     * 比 Processer::destroy()（需读 PID 文件）更快、更可靠，
+     * 确保 Master 异常退出时子进程也能收到终止信号。
+     */
+    protected function signalAllChildren(int $signo = \SIGTERM): void
+    {
+        if (!\function_exists('posix_kill')) {
+            return;
+        }
+        
+        $childPids = $this->collectChildPids();
+        if (empty($childPids)) {
+            return;
+        }
+        
+        $signalName = match ($signo) {
+            \SIGTERM => 'SIGTERM',
+            \SIGINT  => 'SIGINT',
+            \SIGKILL => 'SIGKILL',
+            default  => (string) $signo,
+        };
+        
+        foreach ($childPids as $label => $pid) {
+            $sent = @\posix_kill($pid, $signo);
+            if ($sent) {
+                $this->log(__('  已向 %{1} (PID: %{2}) 发送 %{3}', [$label, $pid, $signalName]));
+            }
+        }
+    }
+    
+    /**
+     * 收集所有子进程 PID（Worker + Dispatcher + HTTP 重定向）
+     *
+     * @return array<string, int> [label => pid]
+     */
+    protected function collectChildPids(): array
+    {
+        $pids = [];
+        
+        foreach ($this->workers as $workerId => $worker) {
+            $pid = (int) ($worker['pid'] ?? 0);
+            if ($pid > 0) {
+                $pids["Worker #{$workerId}"] = $pid;
+            }
+        }
+        
+        if ($this->dispatcher !== null) {
+            $pid = (int) ($this->dispatcher['pid'] ?? 0);
+            if ($pid > 0) {
+                $pids['Dispatcher'] = $pid;
+            }
+        }
+        
+        if ($this->httpRedirectWorker !== null) {
+            $pid = (int) ($this->httpRedirectWorker['pid'] ?? 0);
+            if ($pid > 0) {
+                $pids['HTTP Redirect'] = $pid;
+            }
+        }
+        
+        return $pids;
     }
     
     /**
@@ -1189,10 +1269,9 @@ class MasterProcess
 
         // Linux/Mac: 使用 Processer 统一创建（避免手写 nohup 脚本造成 PID 偏差）
         $args = \array_merge([$phpBinary], $argList);
-        
-        // macOS 下绑定 1024 以下端口需要 sudo 权限（已是 root 则跳过）
-        $isRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
-        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024 && !$isRoot;
+
+        // macOS 下绑定 1024 以下端口需要 sudo（前端模式 osascript Terminal 不继承 root）
+        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024;
         if ($needSudo) {
             \array_unshift($args, 'sudo');
         }
@@ -1489,9 +1568,8 @@ class MasterProcess
             $args[] = '--frontend';
         }
         
-        // macOS 下绑定 1024 以下端口需要 sudo 权限（已是 root 则跳过）
-        $isRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
-        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024 && !$isRoot;
+        // macOS 下绑定 1024 以下端口需要 sudo（前端模式 osascript Terminal 不继承 root）
+        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024;
         if ($needSudo) {
             \array_unshift($args, 'sudo');
         }
@@ -1588,9 +1666,8 @@ class MasterProcess
         // 启动进程：统一通过 Processer::create（由驱动封装 OS 差分）
         $args = \array_merge([$phpBinary], $argList);
         
-        // macOS 下绑定 1024 以下端口需要 sudo 权限（已是 root 则跳过）
-        $isRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
-        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024 && !$isRoot;
+        // macOS 下绑定 1024 以下端口需要 sudo（前端模式 osascript Terminal 不继承 root）
+        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024;
         if ($needSudo) {
             \array_unshift($args, 'sudo');
         }
@@ -1688,9 +1765,8 @@ class MasterProcess
         
         $args = \array_merge([$phpBinary], $argList);
         
-        // macOS 下绑定 1024 以下端口需要 sudo 权限（已是 root 则跳过）
-        $isRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
-        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $httpPort < 1024 && !$isRoot;
+        // macOS 下绑定 1024 以下端口需要 sudo（前端模式 osascript Terminal 不继承 root）
+        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $httpPort < 1024;
         if ($needSudo) {
             \array_unshift($args, 'sudo');
         }
@@ -2166,9 +2242,8 @@ class MasterProcess
             $args[] = '--ssl-key=' . $this->sslKey;
         }
         
-        // macOS 下绑定 1024 以下端口需要 sudo 权限（已是 root 则跳过）
-        $isRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
-        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024 && !$isRoot;
+        // macOS 下绑定 1024 以下端口需要 sudo（前端模式 osascript Terminal 不继承 root）
+        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024;
         $sudoPrefix = $needSudo ? 'sudo ' : '';
         
         $cmd = $sudoPrefix . $phpBinary . ' ' . \escapeshellarg($workerScript) . ' ' . \implode(' ', \array_map('escapeshellarg', $args));
@@ -2634,14 +2709,19 @@ class MasterProcess
         $this->log(__('  内存使用: %{1} MB', [\round(\memory_get_usage(true) / 1024 / 1024, 2)]));
         $this->log('========================================');
         
-        // 0. 通过控制通道广播 shutdown 命令（优雅退出）
+        // 0. Mac/Linux: 先通过 posix_kill 直接向所有子进程发送 SIGTERM（最快路径）
+        if (!\defined('IS_WIN') || !IS_WIN) {
+            $this->signalAllChildren(\SIGTERM);
+        }
+        
+        // 0.1 通过控制通道广播 shutdown 命令（优雅退出）
         if ($this->controlServer) {
             $this->controlServer->broadcast(ControlMessage::shutdown('master_cleanup'));
             // 给子进程时间收到消息
             \usleep(500000); // 500ms
         }
         
-        // 1. 杀死所有 Worker 进程（兜底：如果控制通道 shutdown 不生效）
+        // 1. 杀死所有 Worker 进程（兜底：如果控制通道 shutdown 和信号都不生效）
         $isDirectMode = ($this->mode === self::MODE_LINUX_DIRECT);
         $killedWorkers = 0;
         foreach ($this->workers as $workerId => $worker) {
