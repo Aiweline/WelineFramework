@@ -770,7 +770,9 @@ abstract class QueryAst implements QueryInterface
 
     public function group(string $fields): QueryInterface
     {
-        $this->group_by = 'GROUP BY ' . $fields;
+        // 只存储字段列表，不包含 GROUP BY 关键字
+        // GROUP BY 关键字在编译 SQL 时添加
+        $this->group_by = $fields;
         // 更新 AST
         $this->updateAstGroup($this->group_by);
         return $this;

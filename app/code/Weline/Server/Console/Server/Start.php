@@ -439,6 +439,11 @@ class Start extends CommandAbstract
             return;
         }
         
+        // Linux/macOS 下检测 socket 权限（即使高端口也可能因系统安全设置需要 sudo）
+        if (!$this->ensureUnixSocketPermission($host, $port)) {
+            return;
+        }
+        
         // 显示启动信息
         $directReusePortEnabled = !$dispatcherEnabled && $supportsReusePort && $count > 1;
         $this->showStartupInfo($instanceName, $host, $port, $count, $daemon, $config['source'], $sslEnabled, $dispatcherEnabled, $workerPort, $httpRedirectPort, $directReusePortEnabled);
@@ -1288,7 +1293,15 @@ class Start extends CommandAbstract
             return (int) $workerCount;
         }
         
-        // 智能模式：根据 CPU 核心数和工作模式计算
+        // 智能模式：根据环境、CPU 核心数和工作模式计算
+        $deployMode = Env::getInstance()->getConfig('deploy') ?? 'dev';
+        
+        // 开发环境：固定 2 个 Worker，便于调试且节省资源
+        if ($deployMode === 'dev') {
+            return 2;
+        }
+        
+        // 生产环境：根据 CPU 核心数和工作模式计算
         $cpuCount = $this->getCpuCoreCount();
         
         // 根据工作模式计算
@@ -1582,6 +1595,112 @@ class Start extends CommandAbstract
             $this->printer->note($relaunchCommand);
             return false;
         }
+        if ($exitCode !== 0) {
+            $this->printer->error(__('sudo 执行失败，退出码：%{1}', [(string)$exitCode]));
+        }
+        return false;
+    }
+    
+    /**
+     * Linux/macOS 下检测 socket 绑定权限，必要时询问用户使用 sudo。
+     * 
+     * 某些情况下即使高端口也可能需要权限：
+     * - macOS：防火墙、沙盒、SIP 保护等
+     * - Linux：SELinux、AppArmor、容器沙盒等
+     * 
+     * 此方法在启动前尝试绑定端口，失败时提示用户使用 sudo。
+     *
+     * @return bool true=可继续执行；false=当前进程应终止
+     */
+    protected function ensureUnixSocketPermission(string $host, int $port): bool
+    {
+        // Windows 不需要此检测
+        if (IS_WIN) {
+            return true;
+        }
+        
+        // 仅 Linux 和 macOS 需要此检测
+        if (PHP_OS !== 'Darwin' && PHP_OS !== 'Linux') {
+            return true;
+        }
+        
+        // 已是 root 或已 sudo 重启过，无需检测
+        if (\function_exists('posix_geteuid') && (int)\posix_geteuid() === 0) {
+            return true;
+        }
+        if (\getenv('WLS_SUDO_RELAUNCHED') === '1') {
+            return true;
+        }
+        
+        // 尝试绑定端口测试权限
+        $testSocket = @\stream_socket_server(
+            "tcp://{$host}:{$port}",
+            $errno,
+            $errstr,
+            STREAM_SERVER_BIND
+        );
+        
+        if ($testSocket) {
+            @\fclose($testSocket);
+            return true;
+        }
+        
+        // 绑定失败，检查是否为权限问题
+        $isPermissionError = \stripos($errstr, 'permission') !== false 
+            || \stripos($errstr, 'denied') !== false
+            || $errno === 13; // EACCES
+        
+        if (!$isPermissionError) {
+            // 非权限问题（如端口已占用），不触发 sudo
+            return true;
+        }
+        
+        // 权限问题，询问用户是否使用 sudo
+        $platform = PHP_OS === 'Darwin' ? 'macOS' : 'Linux';
+        $this->printer->warning(__('%{1} 检测到 socket 权限问题：%{2}', [$platform, $errstr]));
+        $this->printer->note(__('端口 %{1} 绑定需要更高权限（可能由防火墙或系统安全设置引起）。', [$port]));
+        
+        // 构建 sudo 重启命令
+        $rawArgv = $_SERVER['argv'] ?? [];
+        if (!\is_array($rawArgv) || empty($rawArgv)) {
+            $this->printer->error(__('无法自动重启为 sudo，请手动执行：sudo php bin/w server:start ...'));
+            return false;
+        }
+        $parts = \array_merge([PHP_BINARY], $rawArgv);
+        $escaped = \array_map('escapeshellarg', $parts);
+        $relaunchCommand = 'sudo env WLS_SUDO_RELAUNCHED=1 ' . \implode(' ', $escaped);
+        
+        $this->printer->note(__('将执行命令：%{1}', [$relaunchCommand]));
+        
+        echo __('是否使用 sudo 继续？[Y/n] ');
+        $input = \trim((string)@\fgets(STDIN));
+        if ($input !== '' && !\in_array(\strtolower($input), ['y', 'yes', '是', ''], true)) {
+            $this->printer->note(__('已取消。你可以手动执行：%{1}', [$relaunchCommand]));
+            return false;
+        }
+        
+        $exitCode = 0;
+        if (\function_exists('passthru')) {
+            @\passthru($relaunchCommand, $exitCode);
+        } elseif (\function_exists('proc_open')) {
+            $proc = @\proc_open(
+                $relaunchCommand,
+                [0 => STDIN, 1 => STDOUT, 2 => STDERR],
+                $pipes,
+                null,
+                null
+            );
+            if (\is_resource($proc)) {
+                $exitCode = (int) \proc_close($proc);
+            } else {
+                $exitCode = -1;
+            }
+        } else {
+            $this->printer->error(__('passthru/proc_open 均不可用，请手动执行：'));
+            $this->printer->note($relaunchCommand);
+            return false;
+        }
+        
         if ($exitCode !== 0) {
             $this->printer->error(__('sudo 执行失败，退出码：%{1}', [(string)$exitCode]));
         }
@@ -3171,7 +3290,7 @@ PHP;
                 __('配置优先级') => __('命令行参数 > 已保存实例配置 > env.servers.[name] > env.server > 默认值'),
                 __('多实例支持') => __('可同时运行多个命名实例，每个实例使用不同端口。首次指定 -p 后配置会自动记住，下次直接用实例名启动'),
                 __('配置记忆') => __('首次 server:start api -p 8443 会保存配置，之后 server:start api 自动使用端口 8443'),
-                __('智能模式') => __('worker_count 设为 "auto" 时根据 CPU 核心数和模式自动计算'),
+                __('智能模式') => __('worker_count 设为 "auto" 时：开发环境固定 2 个 Worker，生产环境根据 CPU 核心数自动计算'),
                 __('事件循环') => __('自动选择最优：Event 扩展 > stream_select'),
                 __('多进程') => __('优先级：proc_open > pcntl_fork > exec'),
                 __('HTTPS 支持') => __('自动检测 app/etc/ 下的证书，或手动指定 --ssl-cert 和 --ssl-key'),
