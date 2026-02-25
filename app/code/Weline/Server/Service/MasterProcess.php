@@ -1186,9 +1186,16 @@ class MasterProcess
         if ($this->frontend) {
             $argList[] = '--frontend';
         }
-        
+
         // Linux/Mac: 使用 Processer 统一创建（避免手写 nohup 脚本造成 PID 偏差）
         $args = \array_merge([$phpBinary], $argList);
+        
+        // macOS 下绑定 1024 以下端口需要 sudo 权限
+        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024;
+        if ($needSudo) {
+            \array_unshift($args, 'sudo');
+        }
+        
         $command = \implode(' ', \array_map('escapeshellarg', $args));
         $pid = Processer::create($command, true, $this->frontend);
         if ($pid > 0) {
@@ -1480,6 +1487,13 @@ class MasterProcess
         if ($this->frontend) {
             $args[] = '--frontend';
         }
+        
+        // macOS 下绑定 1024 以下端口需要 sudo 权限
+        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024;
+        if ($needSudo) {
+            \array_unshift($args, 'sudo');
+        }
+        
         $command = \implode(' ', \array_map('escapeshellarg', $args));
         $pid = Processer::create($command, false, $this->frontend);
         if ($pid > 0) {
@@ -1571,6 +1585,13 @@ class MasterProcess
         
         // 启动进程：统一通过 Processer::create（由驱动封装 OS 差分）
         $args = \array_merge([$phpBinary], $argList);
+        
+        // macOS 下绑定 1024 以下端口需要 sudo 权限
+        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024;
+        if ($needSudo) {
+            \array_unshift($args, 'sudo');
+        }
+        
         $command = \implode(' ', \array_map('escapeshellarg', $args));
         $pid = Processer::create($command, true, $this->frontend);
         if ($pid > 0) {
@@ -1663,6 +1684,13 @@ class MasterProcess
         }
         
         $args = \array_merge([$phpBinary], $argList);
+        
+        // macOS 下绑定 1024 以下端口需要 sudo 权限
+        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $httpPort < 1024;
+        if ($needSudo) {
+            \array_unshift($args, 'sudo');
+        }
+        
         $command = \implode(' ', \array_map('escapeshellarg', $args));
         
         $pid = Processer::create($command, false, $this->frontend);
@@ -2134,7 +2162,11 @@ class MasterProcess
             $args[] = '--ssl-key=' . $this->sslKey;
         }
         
-        $cmd = $phpBinary . ' ' . \escapeshellarg($workerScript) . ' ' . \implode(' ', \array_map('escapeshellarg', $args));
+        // macOS 下绑定 1024 以下端口需要 sudo 权限
+        $needSudo = !IS_WIN && \PHP_OS === 'Darwin' && $port < 1024;
+        $sudoPrefix = $needSudo ? 'sudo ' : '';
+        
+        $cmd = $sudoPrefix . $phpBinary . ' ' . \escapeshellarg($workerScript) . ' ' . \implode(' ', \array_map('escapeshellarg', $args));
         
         $pid = Processer::create($cmd, false);
         if ($pid > 0) {

@@ -341,12 +341,15 @@ env.server,env.server
 "提示：HTTP 标准端口 80 通常单进程监听；当前 Worker 数 %{1} 将占用端口 %{2}-%{3}。若只需 80，请 -c 1。","提示：HTTP 标准端口 80 通常单进程监听；当前 Worker 数 %{1} 将占用端口 %{2}-%{3}。若只需 80，请 -c 1。"
 "提示：HTTPS 标准端口 443 通常单进程监听；当前 Worker 数 %{1} 将占用端口 %{2}-%{3}。若只需 443，请 -c 1。","提示：HTTPS 标准端口 443 通常单进程监听；当前 Worker 数 %{1} 将占用端口 %{2}-%{3}。若只需 443，请 -c 1。"
 "端口 %{1} 需要 root 权限，请使用 sudo 重新执行。","端口 %{1} 需要 root 权限，请使用 sudo 重新执行。"
-"端口 %{1} 需要 root 权限；自动 sudo 需要启用 passthru 或 proc_open，请使用 sudo 重新执行。","端口 %{1} 需要 root 权限；自动 sudo 需要启用 passthru 或 proc_open，请使用 sudo 重新执行。"
-"检测到特权端口 %{1}，将自动请求 sudo 密码并继续启动。","检测到特权端口 %{1}，将自动请求 sudo 密码并继续启动。"
-执行命令：%{1},执行命令：%{1}
+"检测到特权端口 %{1}，需要 root 权限。","检测到特权端口 %{1}，需要 root 权限。"
+将执行命令：%{1},将执行命令：%{1}
+"是否使用 sudo 继续？[Y/n]","是否使用 sudo 继续？[Y/n]"
+已取消。你可以手动执行：%{1},已取消。你可以手动执行：%{1}
+"端口 %{1} 需要 root 权限；passthru/proc_open 均不可用，请使用 sudo 重新执行：","端口 %{1} 需要 root 权限；passthru/proc_open 均不可用，请使用 sudo 重新执行："
 "sudo 执行失败，退出码：%{1}","sudo 执行失败，退出码：%{1}"
 "%{1} 检测到 socket 权限问题：%{2}","%{1} 检测到 socket 权限问题：%{2}"
 "端口 %{1} 绑定需要更高权限（可能由防火墙或系统安全设置引起）。","端口 %{1} 绑定需要更高权限（可能由防火墙或系统安全设置引起）。"
+"passthru/proc_open 均不可用，请手动执行：","passthru/proc_open 均不可用，请手动执行："
 访问地址,访问地址
 前端,前端
 后端,后端
@@ -1280,6 +1283,9 @@ LiteSSL,LiteSSL
 "Weline Server 未运行","Weline Server 未运行"
 "Weline Server 正在运行，Master PID：%{1}","Weline Server 正在运行，Master PID：%{1}"
 "Weline Server 已停止","Weline Server 已停止"
+"端口 %{1} 需要 root 权限；自动 sudo 需要启用 passthru 或 proc_open，请使用 sudo 重新执行。","端口 %{1} 需要 root 权限；自动 sudo 需要启用 passthru 或 proc_open，请使用 sudo 重新执行。"
+"检测到特权端口 %{1}，将自动请求 sudo 密码并继续启动。","检测到特权端口 %{1}，将自动请求 sudo 密码并继续启动。"
+执行命令：%{1},执行命令：%{1}
 "默认 HTTPS 端口 443 被占用！","默认 HTTPS 端口 443 被占用！"
 "4. 或查看占用端口的进程：netstat -ano | findstr :443 (Windows) 或 lsof -i :443 (Linux/Mac)","4. 或查看占用端口的进程：netstat -ano | findstr :443 (Windows) 或 lsof -i :443 (Linux/Mac)"
 "默认 %{1} 端口被占用！","默认 %{1} 端口被占用！"

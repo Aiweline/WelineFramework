@@ -772,7 +772,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $registryService = ObjectManager::getInstance(RegistryUpdateService::class);
             $this->printing->note(__('正在更新所有注册表...'));
             // 传入 false 强制跳过自动编译（升级流程中会在后面统一编译一次）
-            $ok = $registryService->updateAllRegistries(false, false);
+            // 跳过命令更新（第三个参数 true），因为 setup:upgrade 会在后面第 961-964 行单独执行 command:upgrade
+            $ok = $registryService->updateAllRegistries(false, false, true);
             if ($ok) {
                 $this->printing->success(__('✓ 所有注册表已更新完成。'));
             } else {
@@ -1046,7 +1047,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         Env::getInstance()->getModuleList(true);
         /** @var RegistryUpdateService $registryService */
         $registryService = ObjectManager::getInstance(RegistryUpdateService::class);
-        $registryService->updateAllRegistries(true, false);
+        // 跳过命令更新，因为前面第 961-964 行已经单独执行过 command:upgrade
+        $registryService->updateAllRegistries(true, false, true);
         Register::runPendingRegistrations();
         Register::clearRegisterPhase();
         $modules = Env::getInstance()->getModuleList();
