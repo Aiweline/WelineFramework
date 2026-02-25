@@ -52,6 +52,15 @@ class ControlClient
 
     /** 上次重连尝试时间 */
     private float $lastReconnectTime = 0.0;
+    
+    /** 连续重连失败次数 */
+    private int $reconnectFailCount = 0;
+    
+    /** 最大连续重连失败次数（超过后标记为不可恢复，触发孤儿保护） */
+    private int $maxReconnectFails = 30;
+    
+    /** 是否已放弃重连（Master 可能已永久退出） */
+    private bool $reconnectAbandoned = false;
 
     /** 注册信息（用于重连后自动重新注册） */
     private ?array $registerInfo = null;
@@ -384,6 +393,11 @@ class ControlClient
         if ($this->receivedShutdown) {
             return false;
         }
+        
+        // 已放弃重连（超过最大重连次数）
+        if ($this->reconnectAbandoned) {
+            return false;
+        }
 
         $now = \microtime(true);
         if (($now - $this->lastReconnectTime) < $this->reconnectInterval) {
@@ -391,12 +405,20 @@ class ControlClient
         }
         $this->lastReconnectTime = $now;
 
-        $this->ipcLog("[IPC-{$this->selfTag}] RECONNECT 尝试重连 Master {$this->host}:{$this->port}...");
+        $this->ipcLog("[IPC-{$this->selfTag}] RECONNECT 尝试重连 Master {$this->host}:{$this->port} (失败次数: {$this->reconnectFailCount}/{$this->maxReconnectFails})...");
 
         if (!$this->connect($this->host, $this->port)) {
+            $this->reconnectFailCount++;
+            if ($this->reconnectFailCount >= $this->maxReconnectFails) {
+                $this->reconnectAbandoned = true;
+                $this->ipcLog("[IPC-{$this->selfTag}] RECONNECT 连续 {$this->reconnectFailCount} 次重连失败，放弃重连（Master 可能已永久退出）");
+            }
             return false;
         }
 
+        // 重连成功，重置计数
+        $this->reconnectFailCount = 0;
+        
         // 重连成功，重新注册
         if ($this->registerInfo) {
             $this->ipcLog("[IPC-{$this->selfTag}] RECONNECT 重连成功，重新注册...");
@@ -414,6 +436,14 @@ class ControlClient
         }
 
         return true;
+    }
+    
+    /**
+     * 是否已放弃重连（Master 可能已永久退出）
+     */
+    public function isReconnectAbandoned(): bool
+    {
+        return $this->reconnectAbandoned;
     }
 
     /**

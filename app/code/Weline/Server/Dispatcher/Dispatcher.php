@@ -189,6 +189,14 @@ class Dispatcher
     private bool $ipcReceivedShutdown = false;
     
     /**
+     * Master PID（用于孤儿检测）
+     */
+    private int $masterPid = 0;
+    
+    private int $lastMasterPidCheck = 0;
+    private int $masterDeadCount = 0;
+    
+    /**
      * 硬编码维护页响应（纯内存，不依赖框架/文件系统）
      */
     private string $fallbackMaintenancePage = '';
@@ -329,6 +337,14 @@ class Dispatcher
             return \get_resource_id($socket);
         }
         return 0;
+    }
+    
+    /**
+     * 设置 Master PID（用于孤儿检测）
+     */
+    public function setMasterPid(int $pid): void
+    {
+        $this->masterPid = $pid;
     }
     
     /**
@@ -493,6 +509,9 @@ class Dispatcher
                 $this->checkMasterHeartbeat();
             }
             
+            // 孤儿检测：定期检查 Master PID 是否存活
+            $this->checkMasterPidAlive();
+            
             // Worker 健康探活（定期检查黑名单中的 Worker 是否已恢复）
             $this->probeWorkerHealth();
             
@@ -540,6 +559,44 @@ class Dispatcher
             } else {
                 $this->masterMissingCount = 0;
             }
+        }
+    }
+    
+    /**
+     * 通过 posix_kill 直接检测 Master PID 是否存活（孤儿保护）
+     */
+    private function checkMasterPidAlive(): void
+    {
+        if ($this->masterPid <= 0 || $this->ipcReceivedShutdown) {
+            return;
+        }
+        $now = \time();
+        if (($now - $this->lastMasterPidCheck) < 5) {
+            return;
+        }
+        $this->lastMasterPidCheck = $now;
+        
+        $alive = false;
+        if (\function_exists('posix_kill')) {
+            $alive = @\posix_kill($this->masterPid, 0);
+        } elseif (!\defined('IS_WIN') || !IS_WIN) {
+            $alive = @\file_exists("/proc/{$this->masterPid}");
+            if (!$alive) {
+                @\exec("kill -0 {$this->masterPid} 2>/dev/null", $output, $code);
+                $alive = ($code === 0);
+            }
+        }
+        
+        if ($alive) {
+            $this->masterDeadCount = 0;
+            return;
+        }
+        
+        $this->masterDeadCount++;
+        $this->log("Master PID {$this->masterPid} 不可达 ({$this->masterDeadCount}/3)", 'WARN');
+        if ($this->masterDeadCount >= 3 && (!$this->ipcClient || !$this->ipcClient->isConnected())) {
+            $this->log("Master PID {$this->masterPid} 已死亡且 IPC 断开，Dispatcher 自行退出（孤儿保护）", 'ERROR');
+            $this->running = false;
         }
     }
     
