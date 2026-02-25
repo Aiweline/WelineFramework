@@ -19,6 +19,7 @@ declare(strict_types=1);
 namespace Weline\Server\IPC;
 
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\Service\MasterProcess;
@@ -194,6 +195,12 @@ class MasterResurrector
      */
     private function startMaster(): bool
     {
+        // Unix 权限门禁：若实例使用特权端口（<1024），非 root 子进程不允许复活 Master。
+        // 否则会出现“部分进程正常，后续进程无权限”的链路污染。
+        if (!$this->canResurrectWithCurrentPrivilege()) {
+            return false;
+        }
+
         $phpBinary = \defined('PHP_BINARY') ? PHP_BINARY : 'php';
         $script = BP . 'bin' . DS . 'w';
 
@@ -220,6 +227,39 @@ class MasterResurrector
         );
 
         Processer::create($cmd, false);
+        return true;
+    }
+
+    /**
+     * 当前权限是否允许执行 Master 复活
+     */
+    private function canResurrectWithCurrentPrivilege(): bool
+    {
+        $isWin = \defined('IS_WIN') ? IS_WIN : (\stripos(PHP_OS, 'WIN') === 0);
+        if ($isWin || !\function_exists('posix_geteuid')) {
+            return true;
+        }
+
+        $instanceFile = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $this->instanceName . '.json';
+        if (!\is_file($instanceFile)) {
+            return true;
+        }
+
+        $raw = @\file_get_contents($instanceFile);
+        $data = \is_string($raw) ? \json_decode($raw, true) : null;
+        if (!\is_array($data)) {
+            return true;
+        }
+
+        $mainPort = (int)($data['port'] ?? 0);
+        $sslEnabled = (bool)($data['ssl_enabled'] ?? false);
+        $redirectPort = (int)($data['http_redirect_port'] ?? 0);
+        $needsPrivileged = ($mainPort > 0 && $mainPort < 1024)
+            || ($sslEnabled && $redirectPort > 0 && $redirectPort < 1024);
+
+        if ($needsPrivileged && (int)\posix_geteuid() !== 0) {
+            return false;
+        }
         return true;
     }
 }
