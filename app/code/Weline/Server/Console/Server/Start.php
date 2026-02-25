@@ -644,6 +644,11 @@ class Start extends CommandAbstract
             $fullCmd = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "' . \str_replace('"', '\"', $psCmd) . '"';
             @\exec($fullCmd . ' 2>NUL');
         } else {
+            // 输出当前进程的 euid（调试用）
+            if (\function_exists('posix_geteuid')) {
+                $euid = \posix_geteuid();
+                $this->printer->note(__('启动后台 Master (当前 euid: %{1}%{2})', [$euid, $euid === 0 ? ', root 权限将传递给子进程' : '']));
+            }
             $cmd = \sprintf('%s %s server:start %s --master-only --name=%s', $phpBinary, \escapeshellarg($script), \escapeshellarg($instanceName), \escapeshellarg($masterName));
             Processer::create($cmd, false);
         }
