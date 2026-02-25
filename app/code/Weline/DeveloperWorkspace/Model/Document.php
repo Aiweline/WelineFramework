@@ -34,6 +34,8 @@ class Document extends \Weline\Framework\Database\Model
     public const fields_FILE_NAME = 'file_name';
     public const fields_IS_AUTO_IMPORTED = 'is_auto_imported';
     public const fields_SORT_ORDER = 'sort_order';
+    public const fields_FILE_MTIME = 'file_mtime';
+    public const fields_UPDATED_AT = 'updated_at';
 
     /**
      * @inheritDoc
@@ -85,6 +87,14 @@ class Document extends \Weline\Framework\Database\Model
                 $alter->addColumn(self::fields_SORT_ORDER, '', TableInterface::column_type_INTEGER, 11, 'default 0', '排序');
             }
             
+            if (!$setup->hasField(self::fields_FILE_MTIME)) {
+                $alter->addColumn(self::fields_FILE_MTIME, '', TableInterface::column_type_INTEGER, 11, 'default 0', '源文件修改时间戳');
+            }
+            
+            if (!$setup->hasField(self::fields_UPDATED_AT)) {
+                $alter->addColumn(self::fields_UPDATED_AT, '', TableInterface::column_type_DATETIME, 0, 'null', '记录更新时间');
+            }
+            
             // 添加唯一索引：module_name + file_path，防止重复导入
             // 注意：如果索引已存在，addIndex 会忽略或报错（取决于数据库）
             // 这里使用 try-catch 来忽略已存在的索引
@@ -119,6 +129,8 @@ class Document extends \Weline\Framework\Database\Model
                 ->addColumn(self::fields_FILE_NAME, TableInterface::column_type_VARCHAR, 200, '', '文件名')
                 ->addColumn(self::fields_IS_AUTO_IMPORTED, TableInterface::column_type_INTEGER, 1, 'default 0', '是否自动导入')
                 ->addColumn(self::fields_SORT_ORDER, TableInterface::column_type_INTEGER, 0, 'default 0', '排序')
+                ->addColumn(self::fields_FILE_MTIME, TableInterface::column_type_INTEGER, 11, 'default 0', '源文件修改时间戳')
+                ->addColumn(self::fields_UPDATED_AT, TableInterface::column_type_DATETIME, 0, 'null', '记录更新时间')
                 // 添加唯一索引：module_name + file_path，防止重复导入
                 ->addIndex('UNIQUE', 'idx_module_file_unique', [self::fields_MODULE_NAME, self::fields_FILE_PATH], '模块文件唯一索引')
                 ->create();

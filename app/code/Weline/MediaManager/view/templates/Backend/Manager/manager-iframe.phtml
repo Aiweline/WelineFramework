@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+    <title>@lang{媒体文件管理器}</title>
+    <css>Weline_MediaManager::css/manager.css</css>
+    <js:part name="escape-unescape-string"/>
+    <js:part name="file-size-to-string"/>
+    <style>
+        html, body { height: 100%; margin: 0; }
+        .mmf-wrap { height: calc(100vh - 60px); min-height: 400px; }
+        .mmf-recommend-hint { padding: 6px 10px; background: #e7f3ff; border-bottom: 1px solid #dee2e6; font-size: 13px; }
+    </style>
+</head>
+<body>
+<php>
+// 计算可读的文件大小
+$sizeLimit = $this->getData('size') ?: 102400;
+$sizeAlias = \Weline\FileManager\Helper\Image::getSize($sizeLimit);
+$extLimit = $this->getData('ext') ?: '*';
+</php>
+<div class="mmf-constraints-hint" style="padding: 8px 10px; background: #f8f9fa; border-bottom: 1px solid #dee2e6; font-size: 13px; display: flex; flex-wrap: wrap; gap: 15px;">
+    <notempty name="recommend_width">
+    <notempty name="recommend_height">
+    <span style="color: #0d6efd;"><i class="ri-image-line"></i> @lang{建议尺寸：}{{recommend_width}} × {{recommend_height}}</span>
+    </notempty>
+    </notempty>
+    <if condition="extLimit !== '*'">
+    <span style="color: #198754;"><i class="ri-file-type-line"></i> @lang{允许类型：}<?= $extLimit ?></span>
+    </if>
+    <span style="color: #6c757d;"><i class="ri-upload-cloud-line"></i> @lang{大小限制：}<?= $sizeAlias ?></span>
+</div>
+
+<div class="mmf-wrap">
+    <!-- 侧边树 -->
+    <div class="mmf-sidebar">
+        <div class="mmf-sidebar-title"><lang>Folders</lang></div>
+        <ul class="mmf-tree"></ul>
+    </div>
+
+    <!-- 主区域 -->
+    <div class="mmf-main">
+        <!-- 工具栏 -->
+        <div class="mmf-toolbar">
+            <button class="mmf-btn mmf-btn-primary" id="mmf-btn-upload" title="@lang{Upload}">
+                &#x2B06; <lang>Upload</lang>
+            </button>
+            <button class="mmf-btn" id="mmf-btn-newfolder" title="@lang{New Folder}">
+                &#x1F4C1; <lang>New Folder</lang>
+            </button>
+            <span class="mmf-toolbar-sep"></span>
+            <button class="mmf-btn" id="mmf-btn-rename" title="@lang{Rename}">
+                &#x270F;&#xFE0F; <lang>Rename</lang>
+            </button>
+            <button class="mmf-btn" id="mmf-btn-download" title="@lang{Download}">
+                &#x1F4E5; <lang>Download</lang>
+            </button>
+            <button class="mmf-btn mmf-btn-danger" id="mmf-btn-delete" title="@lang{Delete}">
+                &#x1F5D1;&#xFE0F; <lang>Delete</lang>
+            </button>
+            <span class="mmf-toolbar-sep"></span>
+            <button class="mmf-btn mmf-btn-primary" id="mmf-btn-select" title="@lang{Select}">
+                &#x2714;&#xFE0F; <lang>Select</lang>
+            </button>
+            <button class="mmf-btn" id="mmf-btn-refresh" title="@lang{Refresh}">
+                &#x1F504; <lang>Refresh</lang>
+            </button>
+            <div class="mmf-path"></div>
+        </div>
+
+        <!-- 上传区 -->
+        <div class="mmf-upload-drop"><lang>Drop files here to upload</lang></div>
+        <div class="mmf-upload-progress">
+            <div class="mmf-progress-bar-wrap"><div class="mmf-progress-bar"></div></div>
+            <div class="mmf-progress-text">0%</div>
+        </div>
+
+        <!-- 文件列表 -->
+        <div class="mmf-content">
+            <div class="mmf-grid" style="display:none;"></div>
+            <div class="mmf-loading"><span class="mmf-spinner"></span><lang>Loading...</lang></div>
+        </div>
+
+        <!-- 状态栏 -->
+        <div class="mmf-statusbar">
+            <span class="mmf-status-info"></span>
+            <span class="mmf-status-size"></span>
+        </div>
+    </div>
+</div>
+
+<!-- 右键菜单 -->
+<div class="mmf-context-menu"></div>
+
+<!-- 对话框 -->
+<div class="mmf-dialog-overlay">
+    <div class="mmf-dialog">
+        <div class="mmf-dialog-title"></div>
+        <input type="text" class="mmf-dialog-input">
+        <div class="mmf-dialog-actions">
+            <button class="mmf-btn mmf-dialog-cancel"><lang>Cancel</lang></button>
+            <button class="mmf-btn mmf-btn-primary mmf-dialog-ok"><lang>OK</lang></button>
+        </div>
+    </div>
+</div>
+
+<!-- 隐藏上传 input -->
+<input type="file" id="mmf-file-input" multiple style="display:none">
+
+<js>Weline_MediaManager::js/manager-iframe.js</js>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var config = {
+            connectorUrl: '{{connector_url}}',
+            target: '{{target}}',
+            multi: '{{multi}}' === '1' || '{{multi}}' === 'true',
+            ext: '{{ext}}',
+            size: parseInt('{{size}}') || 102400,
+            setAttr: '{{setAttr}}',
+            preview: '{{preview}}' === '1',
+            startPath: '{{startPath}}' || '',
+            lockPath: '{{lockPath}}' === '1' || '{{lockPath}}' === 'true',
+            i18n: {
+                connectorNotConfigured: '@lang{连接器URL未配置}',
+                invalidResponse: '@lang{响应无效}',
+                cannotAccessOutsidePath: '@lang{不能访问指定路径以外的目录}',
+                fileSizeExceeded: '@lang{文件 "%{name}" 超过大小限制（最大：%{size}）}',
+                fileTypeNotAllowed: '@lang{文件类型 "%{ext}" 不允许。允许的类型：%{allowed}}',
+                noValidFiles: '@lang{没有可上传的有效文件}',
+                uploadComplete: '@lang{上传完成}',
+                folderCreated: '@lang{文件夹已创建}',
+                selectOneToRename: '@lang{请选择一个项目进行重命名}',
+                renamed: '@lang{重命名成功}',
+                noItemsSelected: '@lang{未选择任何项目}',
+                confirmDelete: '@lang{确定删除 %{count} 个项目？}',
+                deleted: '@lang{删除成功}',
+                pleaseSelectFile: '@lang{请至少选择一个文件}',
+                pleaseSelectValidFiles: '@lang{请选择有效的文件}',
+                newFolder: '@lang{新建文件夹}',
+                folderName: '@lang{文件夹名称}',
+                untitled: '@lang{未命名}',
+                rename: '@lang{重命名}',
+                newName: '@lang{新名称}',
+                confirm: '@lang{确认}',
+                cancel: '@lang{取消}',
+                ok: '@lang{确定}',
+                requestTimeout: '@lang{请求超时}',
+                invalidJson: '@lang{响应JSON格式无效}',
+                networkError: '@lang{网络错误}',
+                itemsCount: '@lang{%{count} 个项目}',
+                selectedCount: '@lang{已选择 %{count} 个}',
+                ctxSelect: '@lang{选择}',
+                ctxDownload: '@lang{下载}',
+                ctxOpen: '@lang{打开}',
+                ctxRename: '@lang{重命名}',
+                ctxDelete: '@lang{删除}',
+                loading: '@lang{加载中...}',
+                noFiles: '@lang{暂无文件}'
+            }
+        };
+        WelineMediaManagerIframe.init(config);
+    });
+</script>
+</body>
+</html>

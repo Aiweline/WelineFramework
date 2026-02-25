@@ -61,9 +61,20 @@ class FormKey
         }
         $this->_session->setData(self::form_key_paths, implode(',', $this->_key_paths));
         if($name) {
-            return $this->_session->getData(self::key_name.'_'.$name);
+            $key = $this->_session->getData(self::key_name.'_'.$name);
+            if ($key === null) {
+                $key = Text::rand_str();
+                $this->_session->setData(self::key_name.'_'.$name, $key);
+            }
+            return $key;
         }
-        return $this->_session->getData(self::key_name);
+        $key = $this->_session->getData(self::key_name);
+        if ($key === null) {
+            $key = $this->_key ?: Text::rand_str();
+            $this->_session->setData(self::key_name, $key);
+            $this->_key = $key;
+        }
+        return $key;
     }
 
     public function getHtml(string $path, string $name = ''): string

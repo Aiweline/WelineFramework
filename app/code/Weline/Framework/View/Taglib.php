@@ -726,10 +726,19 @@ class Taglib
                 $name_arr = explode('|', $name, 2); // 只分割第一个 |，避免分割 ||
                 $name = $name_arr[0];
                 if (isset($name_arr[1])) {
-                    if (w_get_string_between_quotes($name_arr[1])) {
-                        $default = $name_arr[1];
+                    $filterPart = $name_arr[1];
+                    // 处理 default:value 过滤器语法，如 default:"" 或 default:$var
+                    if (str_starts_with($filterPart, 'default:')) {
+                        $defaultValue = substr($filterPart, 8); // 去掉 'default:' 前缀
+                        if ($defaultValue !== '' && w_get_string_between_quotes($defaultValue)) {
+                            $default = $defaultValue;
+                        } elseif ($defaultValue !== '') {
+                            $default = $this->varParser($defaultValue);
+                        }
+                    } elseif (w_get_string_between_quotes($filterPart)) {
+                        $default = $filterPart;
                     } else {
-                        $default = $this->varParser($name_arr[1]);
+                        $default = $this->varParser($filterPart);
                     }
                 }
             }

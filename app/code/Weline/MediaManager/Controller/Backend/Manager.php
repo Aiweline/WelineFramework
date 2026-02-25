@@ -10,17 +10,20 @@ class Manager extends BackendController
 {
     public function index()
     {
-        $connectorUrl = $this->_url->getBackendUrlPath('media/backend/connector');
+        $startPath = $this->request->getParam('startPath') ?? $this->request->getParam('path') ?? '';
+        $connectorUrl = $this->_url->getBackendUrl('media/backend/connector');
         $this->assign('connector_url', $connectorUrl);
+        $this->assign('start_path', $startPath);
         return $this->fetch('manager.phtml');
     }
 
     /**
      * 嵌入式管理器（iframe 调用）
+     * @return string 渲染后的HTML内容
      */
     public function getIframe()
     {
-        $connectorUrl = $this->_url->getBackendUrlPath('media/backend/connector');
+        $connectorUrl = $this->_url->getBackendUrl('media/backend/connector');
         $params = $this->request->getParams();
         $this->assign('connector_url', $connectorUrl);
         $this->assign('is_iframe', true);

@@ -81,6 +81,43 @@ class Upgrade extends CommandAbstract
     }
 
     /**
+     * 安装模式标志文件路径
+     * 安装模式下会扫描所有模块的命令（不管是否激活），确保核心命令可用
+     */
+    public const INSTALL_MODE_FLAG = BP . 'var' . DS . 'process' . DS . 'command_install_mode.flag';
+    
+    /**
+     * 设置安装模式
+     * 安装模式下 command:upgrade 会扫描所有模块的命令，不仅仅是已激活的模块
+     * 
+     * @param bool $enabled 是否启用安装模式
+     * @return void
+     */
+    public static function setInstallMode(bool $enabled): void
+    {
+        $flagDir = dirname(self::INSTALL_MODE_FLAG);
+        if (!is_dir($flagDir)) {
+            @mkdir($flagDir, 0755, true);
+        }
+        
+        if ($enabled) {
+            @file_put_contents(self::INSTALL_MODE_FLAG, date('Y-m-d H:i:s'));
+        } else {
+            @unlink(self::INSTALL_MODE_FLAG);
+        }
+    }
+    
+    /**
+     * 检查是否处于安装模式
+     * 
+     * @return bool
+     */
+    public static function isInstallMode(): bool
+    {
+        return is_file(self::INSTALL_MODE_FLAG);
+    }
+
+    /**
      * @DESC         |执行
      *
      * @Author       秋枫雁飞
@@ -107,7 +144,13 @@ class Upgrade extends CommandAbstract
             }
         }
 
-        $commands = $this->scan();
+        // 检查是否处于安装模式
+        $installMode = self::isInstallMode();
+        if ($installMode) {
+            $this->printer->note(__('安装模式：扫描所有模块命令（包括未激活的模块）'));
+        }
+
+        $commands = $this->scan($installMode);
         // 注册命令别名
         $commands = $this->registerAliases($commands);
         /**@var $file \Weline\Framework\System\File\Io\File */
@@ -130,11 +173,12 @@ class Upgrade extends CommandAbstract
      *
      * 参数区：
      *
+     * @param bool $installMode 是否为安装模式（扫描所有模块，不仅仅是已激活的）
      * @return array
      */
-    public function scan(): array
+    public function scan(bool $installMode = false): array
     {
-        return $this->getDirFileCommand();
+        return $this->getDirFileCommand($installMode);
     }
 
     /**
@@ -147,17 +191,23 @@ class Upgrade extends CommandAbstract
      *
      * 参数区：
      *
+     * @param bool $installMode 是否为安装模式（扫描所有模块，不仅仅是已激活的）
      * @return array
      * @throws \ReflectionException
      */
-    private function getDirFileCommand(): array
+    private function getDirFileCommand(bool $installMode = false): array
     {
         $commands = [];
         $processedClasses = [];
         $processedFiles = [];
 
         # 模组命令
-        $active_modules = Env::getInstance()->getActiveModules();
+        // 安装模式下扫描所有模块，正常模式下只扫描已激活的模块
+        if ($installMode) {
+            $active_modules = $this->scanAllModules();
+        } else {
+            $active_modules = Env::getInstance()->getActiveModules();
+        }
         unset($active_modules['Weline_Framework']);
         foreach ($active_modules as $module_name => $module) {
             $pattern = $module['base_path'] . 'Console' . DS . '*';
@@ -409,6 +459,67 @@ class Upgrade extends CommandAbstract
         }
         
         return $commands;
+    }
+    
+    /**
+     * 扫描所有模块（不管是否激活）
+     * 用于安装模式下收集所有模块的命令
+     * 
+     * @return array 模块列表，格式与 Env::getActiveModules() 相同
+     */
+    private function scanAllModules(): array
+    {
+        $modules = [];
+        $codePath = BP . 'app' . DS . 'code' . DS;
+        
+        if (!is_dir($codePath)) {
+            return $modules;
+        }
+        
+        // 扫描 app/code 下的所有 Vendor/Module 目录
+        $vendors = @scandir($codePath);
+        if (!$vendors) {
+            return $modules;
+        }
+        
+        foreach ($vendors as $vendor) {
+            if ($vendor === '.' || $vendor === '..') {
+                continue;
+            }
+            $vendorPath = $codePath . $vendor . DS;
+            if (!is_dir($vendorPath)) {
+                continue;
+            }
+            
+            $moduleDirs = @scandir($vendorPath);
+            if (!$moduleDirs) {
+                continue;
+            }
+            
+            foreach ($moduleDirs as $moduleName) {
+                if ($moduleName === '.' || $moduleName === '..') {
+                    continue;
+                }
+                $modulePath = $vendorPath . $moduleName . DS;
+                $registerFile = $modulePath . 'register.php';
+                
+                // 必须有 register.php 才是有效模块
+                if (!is_file($registerFile)) {
+                    continue;
+                }
+                
+                $fullModuleName = $vendor . '_' . $moduleName;
+                $modules[$fullModuleName] = [
+                    'name' => $fullModuleName,
+                    'base_path' => $modulePath,
+                    'namespace_path' => $vendor . '\\' . $moduleName,
+                    'version' => '0.0.0',
+                    'description' => '',
+                ];
+            }
+        }
+        
+        return $modules;
     }
     
     /**
