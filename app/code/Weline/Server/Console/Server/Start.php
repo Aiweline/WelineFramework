@@ -136,12 +136,25 @@ class Start extends CommandAbstract
         }
         
         // --frontend / -frontend：前台运行（不后台）
+        // 兼容：部分参数解析器可能不会把 -frontend 解析为 args['frontend']，
+        // 因此额外从原始 argv 兜底识别，避免误走后台路径。
         $frontend = isset($args['frontend']);
         if (!$frontend) {
             foreach ($args as $key => $val) {
                 if (\is_int($key) && ($val === '--frontend' || $val === '-frontend')) {
                     $frontend = true;
                     break;
+                }
+            }
+        }
+        if (!$frontend) {
+            $rawArgv = $_SERVER['argv'] ?? [];
+            if (\is_array($rawArgv)) {
+                foreach ($rawArgv as $raw) {
+                    if ($raw === '--frontend' || $raw === '-frontend') {
+                        $frontend = true;
+                        break;
+                    }
                 }
             }
         }
@@ -671,17 +684,7 @@ class Start extends CommandAbstract
             $fullCmd = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "' . \str_replace('"', '\"', $psCmd) . '"';
             @\exec($fullCmd . ' 2>NUL');
         } else {
-            // macOS/Linux：如果当前是 root，显式用 sudo -n 确保后台进程也以 root 运行
-            // nohup 在某些情况下可能不正确继承 sudo 的 root 权限（如通过 passthru 启动的临时 sudo 会话）
-            // sudo -n (non-interactive) 在已有 root 权限时不需要密码
-            $isRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
-            if ($isRoot) {
-                $this->printer->note(__('以 root 权限启动后台 Master...'));
-                // 使用 sudo -E -n 保留环境变量并以 root 运行
-                $cmd = \sprintf('sudo -E -n %s %s server:start %s --master-only --name=%s', $phpBinary, \escapeshellarg($script), \escapeshellarg($instanceName), \escapeshellarg($masterName));
-            } else {
-                $cmd = \sprintf('%s %s server:start %s --master-only --name=%s', $phpBinary, \escapeshellarg($script), \escapeshellarg($instanceName), \escapeshellarg($masterName));
-            }
+            $cmd = \sprintf('%s %s server:start %s --master-only --name=%s', $phpBinary, \escapeshellarg($script), \escapeshellarg($instanceName), \escapeshellarg($masterName));
             Processer::create($cmd, false);
         }
         
@@ -2732,11 +2735,6 @@ PHP;
         if ($frontend) {
             $command .= " --frontend";
         }
-        // macOS 上 nohup 可能不正确继承 sudo 权限，使用 sudo -E -n 确保子进程以 root 运行
-        if (!IS_WIN && \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0) {
-            $command = 'sudo -E -n ' . $command;
-        }
-        
         $pid = Processer::create($command, true, $frontend);
         
         if ($pid > 0) {
@@ -2846,11 +2844,6 @@ PHP;
         if ($frontend) {
             $command .= " --frontend";
         }
-        // macOS 上 nohup 可能不正确继承 sudo 权限，使用 sudo -E -n 确保子进程以 root 运行
-        if (!IS_WIN && \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0) {
-            $command = 'sudo -E -n ' . $command;
-        }
-        
         // 使用进程管理器统一创建进程
         $pid = Processer::create($command, true, $frontend);
         
@@ -2935,11 +2928,6 @@ PHP;
         if ($frontend) {
             $command .= " --frontend";
         }
-        // macOS 上 nohup 可能不正确继承 sudo 权限，使用 sudo -E -n 确保子进程以 root 运行
-        if (!IS_WIN && \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0) {
-            $command = 'sudo -E -n ' . $command;
-        }
-        
         // 使用进程管理器统一创建进程
         $pid = Processer::create($command, true, $frontend);
         
@@ -3359,26 +3347,26 @@ PHP;
         $urlRestFrontend = rtrim($baseUrl, '/') . '/' . ($restFrontendPrefix !== '' ? $restFrontendPrefix . '/' : '');
 
         echo "\n";
-        $usageLines = [
-            __('╔══════════════════════════════════════════════════════════════╗'),
-            __('║                      使用说明                                  ║'),
-            __('╠══════════════════════════════════════════════════════════════╣'),
-            __('║  前台/首页：%{1}  ║', [$urlFrontend]),
-            __('║  后台入口：%{1}  ║', [$urlBackend]),
-            __('║  后台 REST 接口：%{1}  ║', [$urlRestBackend]),
-            __('║  前台 REST 接口：%{1}  ║', [$urlRestFrontend]),
-            __('╠══════════════════════════════════════════════════════════════╣'),
-            __('║  测试请求：curl %{1}  ║', [$testUrl]),
-            __('║  查看状态：php bin/w server:status %{1}                    ║', [$instanceName]),
-            __('║  停止服务：php bin/w server:stop %{1}                      ║', [$instanceName]),
-            __('║  压力测试：php bin/w server:benchmark                       ║'),
-            __('║  优化指南：php bin/w server:doc                             ║'),
-            __('╚══════════════════════════════════════════════════════════════╝'),
-        ];
-
-        foreach ($usageLines as $line) {
-            $this->printer->note($line);
-        }
+        $this->printer->title(__('使用说明'), '═');
+        
+        // 访问地址
+        $this->printer->keyValue([
+            __('前台/首页') => $urlFrontend,
+            __('后台入口') => $urlBackend,
+            __('后台 REST 接口') => $urlRestBackend,
+            __('前台 REST 接口') => $urlRestFrontend,
+        ], '→', 18);
+        
+        $this->printer->separator('─');
+        
+        // 常用命令
+        $this->printer->keyValue([
+            __('测试请求') => 'curl ' . $testUrl,
+            __('查看状态') => 'php bin/w server:status ' . $instanceName,
+            __('停止服务') => 'php bin/w server:stop ' . $instanceName,
+            __('压力测试') => 'php bin/w server:benchmark',
+            __('优化指南') => 'php bin/w server:doc',
+        ], '→', 18);
     }
     
     /**
