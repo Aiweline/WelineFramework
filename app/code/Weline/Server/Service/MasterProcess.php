@@ -2944,11 +2944,8 @@ class MasterProcess
         
         $this->log(__('已停止 %{1} 个 Worker 进程', [$killedWorkers]));
         
-        // 4. Windows 上额外处理：如果 Master 被强制终止，尝试通过进程树杀死子进程
-        // 注意：Dispatcher 和 HTTP 重定向在 Windows 上不是 Master 的直接子进程，
-        // 所以上面的端口/PID 方式应该已经处理了。这里作为最后的保险措施。
-        if (IS_WIN) {
-            // 验证所有进程是否已停止
+        // 4. Windows/macOS 兜底：验证所有子进程是否已停止，未停止的强制杀死
+        if (IS_WIN || \PHP_OS === 'Darwin') {
             $stillRunning = [];
             if ($dispatcherPort !== null && $dispatcherPort > 0 && Processer::isPortInUse($dispatcherPort)) {
                 $stillRunning[] = "Dispatcher (端口: {$dispatcherPort})";
@@ -2956,16 +2953,20 @@ class MasterProcess
             if ($httpRedirectPort !== null && $httpRedirectPort > 0 && Processer::isPortInUse($httpRedirectPort)) {
                 $stillRunning[] = "HTTP 重定向 (端口: {$httpRedirectPort})";
             }
+            foreach ($this->workers as $wid => $worker) {
+                $wPort = $worker['port'] ?? 0;
+                if ($wPort > 0 && Processer::isPortInUse($wPort)) {
+                    $stillRunning[] = "Worker #{$wid} (端口: {$wPort})";
+                }
+            }
             if (!empty($stillRunning)) {
                 $this->log(__('警告：以下进程仍在运行: %{1}', [\implode(', ', $stillRunning)]), 'warning');
-                // 再次尝试强制杀死
                 foreach ($stillRunning as $proc) {
                     if (\preg_match('/端口:\s*(\d+)/', $proc, $m)) {
                         $port = (int)$m[1];
                         $pid = Processer::getProcessIdByPort($port);
                         if ($pid > 0 && Processer::isRunningByPid($pid)) {
-                            // 使用进程树杀死（Windows 上会杀死所有子进程）
-                            Processer::killByPid($pid);
+                            Processer::killProcessTreeByPid($pid, true);
                             $this->log(__('  强制停止进程 (PID: %{1}, 端口: %{2})', [$pid, $port]));
                         }
                     }
