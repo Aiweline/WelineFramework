@@ -612,6 +612,20 @@ class Start extends CommandAbstract
             $this->printer->error(__('实例文件无效'));
             return;
         }
+        // master-only 权限门禁（Unix）：
+        // 避免子进程/复活链路在非 root 下拉起 Master，导致后续子进程绑定 80/443 失败。
+        if (!IS_WIN && \function_exists('posix_geteuid')) {
+            $mainPort = (int)($data['port'] ?? 0);
+            $redirectPort = (int)($data['http_redirect_port'] ?? 0);
+            $sslEnabledFlag = (bool)($data['ssl_enabled'] ?? false);
+            $needsPrivileged = ($mainPort > 0 && $mainPort < 1024)
+                || ($sslEnabledFlag && $redirectPort > 0 && $redirectPort < 1024);
+            if ($needsPrivileged && (int)\posix_geteuid() !== 0) {
+                $this->printer->error(__('master-only 启动被拒绝：特权端口需要 root 权限。'));
+                $this->printer->note(__('请使用 sudo php bin/w server:start %{1}', [$instanceName]));
+                return;
+            }
+        }
         $sslEnabled = (bool)($data['ssl_enabled'] ?? false);
         $dispatcherEnabled = (bool)($data['dispatcher_enabled'] ?? false);
         // Dispatcher 只做 TCP 透传，SSL 握手始终由 Worker 处理
