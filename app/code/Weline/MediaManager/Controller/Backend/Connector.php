@@ -84,11 +84,15 @@ class Connector extends BackendController
         $info = $result['info'] ?? [];
         $volume = $result['volume'] ?? null;
 
+        $contentType = 'application/octet-stream';
+        $cacheControl = '';
         if (!empty($result['header'])) {
             $headers = \is_array($result['header']) ? $result['header'] : [$result['header']];
             foreach ($headers as $h) {
-                if (!\headers_sent()) {
-                    \header($h);
+                if (\str_starts_with($h, 'Content-Type:')) {
+                    $contentType = \trim(\substr($h, 13));
+                } elseif (\str_starts_with($h, 'Cache-Control:')) {
+                    $cacheControl = \trim(\substr($h, 14));
                 }
             }
         }
@@ -123,6 +127,37 @@ class Connector extends BackendController
 
         $fileName = $info['name'] ?? \basename($tmpFile);
 
+        if (\str_starts_with($contentType, 'image/')) {
+            $this->handleInlineImageResponse($tmpFile, $contentType, $cacheControl);
+        }
+
         throw new DownloadException($tmpFile, $fileName, true);
+    }
+
+    /**
+     * 图片内联响应（直接显示图片，不触发下载）
+     */
+    private function handleInlineImageResponse(string $tmpFile, string $contentType, string $cacheControl = ''): void
+    {
+        $fileSize = @\filesize($tmpFile) ?: 0;
+        $headers = [
+            'Content-Type' => $contentType,
+            'Content-Length' => (string) $fileSize,
+            'Content-Disposition' => 'inline',
+        ];
+        if ($cacheControl) {
+            $headers['Cache-Control'] = $cacheControl;
+        }
+
+        $content = @\file_get_contents($tmpFile);
+        @\unlink($tmpFile);
+
+        if ($content === false) {
+            throw new ResponseTerminateException(500, \json_encode(['error' => 'Cannot read temp file']), [
+                'Content-Type' => 'application/json; charset=utf-8',
+            ]);
+        }
+
+        throw new ResponseTerminateException(200, $content, $headers);
     }
 }
