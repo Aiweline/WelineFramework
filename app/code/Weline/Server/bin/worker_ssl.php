@@ -1190,7 +1190,7 @@ while (true) {
                 // 同端口 HTTP→HTTPS 重定向：peek 首包判断是否为明文 HTTP，是则 301 后关闭
                 \stream_set_blocking($conn, true);
                 \stream_set_timeout($conn, 2, 0);
-                $peek = @\stream_socket_recv($conn, 8, \STREAM_PEEK);
+                $peek = @\stream_socket_recvfrom($conn, 8, \STREAM_PEEK);
                 \stream_set_blocking($conn, false);
                 if ($peek !== false && $peek !== '' && \strlen($peek) >= 4) {
                     $firstByte = \ord($peek[0]);

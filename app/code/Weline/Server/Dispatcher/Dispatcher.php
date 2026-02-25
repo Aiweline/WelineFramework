@@ -67,6 +67,11 @@ class Dispatcher
      * 监听端口
      */
     private int $port;
+
+    /**
+     * 当前实例是否启用 HTTPS（用于同端口 HTTP→HTTPS 301）
+     */
+    private bool $httpsEnabled = false;
     
     /**
      * 活跃的客户端连接
@@ -219,6 +224,7 @@ class Dispatcher
         $this->instanceName = $instanceName;
         $this->processName = $processName;
         $this->port = $port;
+        $this->httpsEnabled = $this->detectHttpsEnabled($instanceName);
         $this->startTime = \time();
         $this->lastMasterCheck = \time();
         
@@ -244,6 +250,19 @@ class Dispatcher
         
         // 注册信号处理
         $this->registerSignals();
+    }
+
+    /**
+     * 读取实例配置判断是否 HTTPS 模式
+     */
+    private function detectHttpsEnabled(string $instanceName): bool
+    {
+        $instanceFile = BP . 'var' . DS . 'server' . DS . 'instances' . DS . $instanceName . '.json';
+        if (!\is_file($instanceFile)) {
+            return false;
+        }
+        $instData = @\json_decode((string)\file_get_contents($instanceFile), true);
+        return \is_array($instData) && !empty($instData['ssl_enabled']);
     }
     
     /**
@@ -693,6 +712,12 @@ class Dispatcher
             if (@\socket_getpeername($clientSocket, $addr)) {
                 $clientIp = $addr;
             }
+
+            // HTTPS 模式：主端口收到明文 HTTP 时，直接返回 301 到 https://同主机同路径
+            if ($this->httpsEnabled && $this->handlePlainHttpRedirect($clientSocket, $connId, $clientIp)) {
+                $accepted++;
+                continue;
+            }
             
             // 攻击探测（在建立 Worker 连接前）
             // 本地与可信回源 IP 白名单，跳过攻击检测
@@ -754,6 +779,114 @@ class Dispatcher
             
             $accepted++;
         } while ($accepted < $maxAcceptPerLoop);
+    }
+
+    /**
+     * HTTPS 模式下识别并处理明文 HTTP 请求，返回同端口 https 301
+     *
+     * @return bool true=已处理并关闭连接；false=非明文 HTTP，继续走 TCP 透传
+     */
+    private function handlePlainHttpRedirect($clientSocket, int $connId, string $clientIp): bool
+    {
+        $peek = '';
+        $peekLen = @\socket_recv($clientSocket, $peek, 8, \MSG_PEEK);
+        if ($peekLen === false || $peekLen <= 0 || $peek === '') {
+            return false;
+        }
+
+        $firstByte = \ord($peek[0]);
+        // TLS ClientHello 首字节通常是 0x16，不需要重定向
+        if ($firstByte === 0x16) {
+            return false;
+        }
+
+        $head = \strtoupper($peek);
+        $isPlainHttp = \str_starts_with($head, 'GET ')
+            || \str_starts_with($head, 'POST ')
+            || \str_starts_with($head, 'HEAD ')
+            || \str_starts_with($head, 'PUT ')
+            || \str_starts_with($head, 'PATCH ')
+            || \str_starts_with($head, 'DELETE ')
+            || \str_starts_with($head, 'OPTIONS ')
+            || \str_starts_with($head, 'TRACE ')
+            || \str_starts_with($head, 'CONNECT ');
+        if (!$isPlainHttp) {
+            return false;
+        }
+
+        // 非阻塞读取请求头，短超时（约 300ms），避免 Windows 下阻塞整条 accept 导致大批请求排队
+        @\socket_set_nonblock($clientSocket);
+        $raw = '';
+        $readDeadline = \microtime(true) + 0.3;
+        while (\strpos($raw, "\r\n\r\n") === false && \strlen($raw) < 65536) {
+            if (\microtime(true) >= $readDeadline) {
+                @\socket_close($clientSocket);
+                return true;
+            }
+            $read = [$clientSocket];
+            $w = $e = [];
+            $n = @\socket_select($read, $w, $e, 0, 50000); // 50ms
+            if ($n > 0 && \in_array($clientSocket, $read, true)) {
+                $chunk = '';
+                $nr = @\socket_recv($clientSocket, $chunk, 8192, 0);
+                if ($nr === false || $nr <= 0) {
+                    break;
+                }
+                $raw .= $chunk;
+            }
+        }
+        if (\strpos($raw, "\r\n\r\n") === false) {
+            @\socket_close($clientSocket);
+            return true;
+        }
+        $target = '/';
+        if (\preg_match('/^\w+\s+(\S+)\s+/i', $raw, $m)) {
+            $target = (string)$m[1];
+            if ($target === '') {
+                $target = '/';
+            }
+        }
+        // 绝对 URL 场景保留 path+query；相对 URL 直接使用
+        if (\preg_match('/^https?:\/\//i', $target)) {
+            $path = (string)(\parse_url($target, \PHP_URL_PATH) ?? '/');
+            $query = (string)(\parse_url($target, \PHP_URL_QUERY) ?? '');
+            $target = $query !== '' ? "{$path}?{$query}" : $path;
+        }
+        if ($target === '' || $target[0] !== '/') {
+            $target = '/' . \ltrim($target, '/');
+        }
+
+        $redirectHost = "127.0.0.1:{$this->port}";
+        if (\preg_match('/\r\nHost:\s*([^\r\n]+)/i', $raw, $h)) {
+            $redirectHost = \trim((string)$h[1]);
+        }
+        if (!\str_contains($redirectHost, ':') && $this->port !== 443) {
+            $redirectHost .= ':' . $this->port;
+        }
+        $redirectUrl = "https://{$redirectHost}{$target}";
+
+        $response = "HTTP/1.1 301 Moved Permanently\r\n"
+            . "Location: {$redirectUrl}\r\n"
+            . "Content-Length: 0\r\n"
+            . "Connection: close\r\n\r\n";
+        $toWrite = \strlen($response);
+        $written = 0;
+        $writeDeadline = \microtime(true) + 0.2;
+        while ($written < $toWrite && \microtime(true) < $writeDeadline) {
+            $write = [$clientSocket];
+            $r = $e = [];
+            $n = @\socket_select($r, $write, $e, 0, 50000);
+            if ($n > 0 && \in_array($clientSocket, $write, true)) {
+                $nw = @\socket_send($clientSocket, \substr($response, $written), $toWrite - $written, 0);
+                if ($nw === false || $nw <= 0) {
+                    break;
+                }
+                $written += $nw;
+            }
+        }
+        @\socket_close($clientSocket);
+        $this->log("HTTP->HTTPS 301: {$clientIp} (connId: {$connId}) => {$redirectUrl}", 'ROUTE');
+        return true;
     }
     
     /**
