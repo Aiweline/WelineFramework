@@ -5,10 +5,33 @@ declare(strict_types=1);
 namespace Weline\MediaManager\Service;
 
 use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\MediaManager\Helper\MimeTypes;
+use Weline\Storage\Service\StorageManager;
 
 class ConnectorService
 {
+    private ?ThumbnailService $thumbnailService = null;
+    private ?StorageManager $storageManager = null;
+    
+    private function getThumbnailService(): ThumbnailService
+    {
+        if ($this->thumbnailService === null) {
+            $this->thumbnailService = ObjectManager::getInstance(ThumbnailService::class);
+        }
+        return $this->thumbnailService;
+    }
+    
+    private function getStorageManager(): ?StorageManager
+    {
+        if ($this->storageManager === null) {
+            if (\class_exists(StorageManager::class)) {
+                $this->storageManager = ObjectManager::getInstance(StorageManager::class);
+            }
+        }
+        return $this->storageManager;
+    }
+
     /**
      * 文件管理引擎：解析请求并执行 open/mkdir/rename/rm/upload/file 等命令
      */
@@ -21,16 +44,50 @@ class ConnectorService
         $cmd = $src['cmd'] ?? 'open';
 
         return match ($cmd) {
-            'open'   => $this->handleOpen($src, $rootPath, $rootReal),
-            'tree'   => $this->handleTree($src, $rootPath, $rootReal),
-            'mkdir'  => $this->handleMkdir($src, $rootPath, $rootReal),
-            'rename' => $this->handleRename($src, $rootPath, $rootReal),
-            'rm'     => $this->handleRemove($src, $rootPath, $rootReal),
-            'upload' => $this->handleUpload($src, $rootPath, $rootReal),
-            'file'   => $this->handleFile($src, $rootPath, $rootReal),
-            'tmb'    => $this->handleTmb($src, $rootPath, $rootReal),
-            default  => ['error' => 'Unknown command: ' . $cmd],
+            'open'    => $this->handleOpen($src, $rootPath, $rootReal),
+            'tree'    => $this->handleTree($src, $rootPath, $rootReal),
+            'mkdir'   => $this->handleMkdir($src, $rootPath, $rootReal),
+            'rename'  => $this->handleRename($src, $rootPath, $rootReal),
+            'rm'      => $this->handleRemove($src, $rootPath, $rootReal),
+            'upload'  => $this->handleUpload($src, $rootPath, $rootReal),
+            'file'    => $this->handleFile($src, $rootPath, $rootReal),
+            'tmb'     => $this->handleTmb($src, $rootPath, $rootReal),
+            'storages' => $this->handleStorages(),
+            default   => ['error' => 'Unknown command: ' . $cmd],
         };
+    }
+    
+    /**
+     * 获取可用存储源列表
+     */
+    private function handleStorages(): array
+    {
+        $storages = [
+            [
+                'name' => 'local',
+                'display_name' => __('本地存储'),
+                'driver' => 'local',
+                'is_default' => true,
+            ],
+        ];
+        
+        $storageManager = $this->getStorageManager();
+        if ($storageManager !== null) {
+            try {
+                $list = $storageManager->getStorageList();
+                foreach ($list as $item) {
+                    $storages[] = [
+                        'name' => $item['name'],
+                        'display_name' => $item['info']['display_name'] ?? $item['name'],
+                        'driver' => $item['driver'],
+                        'is_default' => $item['is_default'] ?? false,
+                    ];
+                }
+            } catch (\Throwable $e) {
+            }
+        }
+        
+        return ['storages' => $storages];
     }
 
     private function normalizeRootPath(array $opts): string
@@ -77,7 +134,7 @@ class ConnectorService
     {
         $relative = $hash === '' ? '' : ($this->decodeHash($hash) ?? '');
         $relative = \trim($relative, "/\\");
-        $abs = $rootPath . ($relative === '' ? '' : $relative . \DIRECTORY_SEPARATOR);
+        $abs = $rootPath . $relative;
         $real = \realpath($abs) ?: $abs;
 
         if (!\str_starts_with($real, $rootReal)) {
@@ -96,7 +153,6 @@ class ConnectorService
         $name = $relative === '' ? 'Media Files' : \basename($relative);
         $hash = $this->encodeHash($relative);
 
-        // 根目录自身没有父级；其他所有条目（包括根下的直接子项）都指向父目录 hash
         if ($relative === '') {
             $phash = null;
         } else {
@@ -108,7 +164,7 @@ class ConnectorService
         $size = $isDir ? 0 : ((@\filesize($abs)) ?: 0);
         $ts   = @\filemtime($abs) ?: \time();
 
-        return [
+        $info = [
             'hash'  => $hash,
             'name'  => $name,
             'phash' => $phash,
@@ -116,6 +172,12 @@ class ConnectorService
             'size'  => $size,
             'ts'    => $ts,
         ];
+        
+        if (!$isDir && $this->getThumbnailService()->isPreviewable($mime)) {
+            $info['tmb'] = '1';
+        }
+        
+        return $info;
     }
 
     private function detectMime(string $path): string
@@ -464,35 +526,55 @@ class ConnectorService
     }
 
     /**
-     * tmb 命令：返回缩略图（直接输出原图，前端用 CSS 控制缩放）
+     * tmb 命令：返回缩略图（使用 ThumbnailService 按需生成）
      */
     private function handleTmb(array $src, string $rootPath, string $rootReal): array
     {
         $target = (string) ($src['target'] ?? '');
-        [$relative, $abs] = $this->resolvePath($target, $rootPath, $rootReal);
+        
+        try {
+            [$relative, $abs] = $this->resolvePath($target, $rootPath, $rootReal);
+        } catch (\Throwable $e) {
+            return ['error' => 'Invalid target: ' . $e->getMessage()];
+        }
+        
         if (!\is_file($abs)) {
-            return ['error' => 'File not found'];
+            return ['error' => 'File not found: ' . $abs];
         }
 
         $mime = $this->detectMime($abs);
-        if (!\str_starts_with($mime, 'image/')) {
-            return ['error' => 'Not an image'];
+        $thumbService = $this->getThumbnailService();
+        
+        if (!$thumbService->isPreviewable($mime)) {
+            return ['error' => 'Not a previewable file, mime: ' . $mime];
         }
 
-        $fp = @\fopen($abs, 'rb');
-        if ($fp === false) {
-            return ['error' => 'Cannot open file'];
+        $thumbPath = $thumbService->getOrGenerate($abs);
+        if ($thumbPath === null) {
+            $fp = @\fopen($abs, 'rb');
+            if ($fp === false) {
+                return ['error' => 'Cannot open file'];
+            }
+            $thumbMime = $mime;
+            $thumbSize = @\filesize($abs) ?: 0;
+        } else {
+            $fp = @\fopen($thumbPath, 'rb');
+            if ($fp === false) {
+                return ['error' => 'Cannot open thumbnail'];
+            }
+            $thumbMime = \str_ends_with($thumbPath, '.webp') ? 'image/webp' : 'image/jpeg';
+            $thumbSize = @\filesize($thumbPath) ?: 0;
         }
 
         $info = $this->buildFileInfo($relative, $rootPath, $rootReal);
-        $info['size'] = @\filesize($abs) ?: 0;
+        $info['size'] = $thumbSize;
 
         return [
             'pointer' => $fp,
             'info'    => $info,
             'header'  => [
-                'Content-Type: ' . $mime,
-                'Cache-Control: public, max-age=86400',
+                'Content-Type: ' . $thumbMime,
+                'Cache-Control: public, max-age=604800',
             ],
         ];
     }

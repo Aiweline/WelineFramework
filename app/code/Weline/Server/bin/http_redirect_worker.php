@@ -241,36 +241,47 @@ while (true) {
         $gracefulExit('收到 IPC shutdown 命令');
     }
     
-    // ========== 孤儿检测 ==========
+    // ========== 孤儿检测（IPC 优先） ==========
     $now = \time();
     if ($masterPid > 0 && !$ipcReceivedShutdown && ($now - $lastMasterCheck) >= $masterCheckInterval) {
         $lastMasterCheck = $now;
-        $masterAlive = false;
-        if (\function_exists('posix_kill')) {
-            $masterAlive = @\posix_kill($masterPid, 0);
-            // macOS/Linux: 非 root 进程探测 root 进程时可能返回 EPERM（进程存在但无权限）
-            if (!$masterAlive && \function_exists('posix_get_last_error')) {
-                $errno = (int)@\posix_get_last_error();
-                $eperm = 1; // EPERM
-                if ($errno === $eperm) {
-                    $masterAlive = true;
-                }
-            }
-        } elseif (!(\defined('IS_WIN') && IS_WIN)) {
-            $masterAlive = @\file_exists("/proc/{$masterPid}");
-            if (!$masterAlive) {
-                @\exec("kill -0 {$masterPid} 2>/dev/null", $output, $code);
-                $masterAlive = ($code === 0);
-            }
-        }
-        if ($masterAlive) {
+        
+        // IPC 连接正常 → Master 存活，无需 PID 检测
+        if ($ipcClient && $ipcClient->isConnected()) {
             $masterDeadCount = 0;
         } else {
-            $masterDeadCount++;
-            $redirectLog("Master PID {$masterPid} 不可达 ({$masterDeadCount}/{$masterDeadThreshold})", 'WARN');
-            if ($masterDeadCount >= $masterDeadThreshold && (!$ipcClient || !$ipcClient->isConnected())) {
-                $redirectLog("Master PID {$masterPid} 已死亡且 IPC 断开，自行退出（孤儿保护）", 'WARN');
-                $gracefulExit('孤儿检测：Master 已死亡');
+            // IPC 断开，用 PID 检测确认 Master 是否真的死了
+            $masterAlive = false;
+            if (\function_exists('posix_kill')) {
+                $masterAlive = @\posix_kill($masterPid, 0);
+                // macOS/Linux: 非 root 进程探测 root 进程时可能返回 EPERM（进程存在但无权限）
+                if (!$masterAlive && \function_exists('posix_get_last_error')) {
+                    $errno = (int)@\posix_get_last_error();
+                    $eperm = 1; // EPERM
+                    if ($errno === $eperm) {
+                        $masterAlive = true;
+                    }
+                }
+            } elseif (\defined('IS_WIN') && IS_WIN) {
+                // Windows: 使用 Processer::isRunningByPid() 检测
+                $masterAlive = \Weline\Framework\System\Process\Processer::isRunningByPid($masterPid);
+            } else {
+                $masterAlive = @\file_exists("/proc/{$masterPid}");
+                if (!$masterAlive) {
+                    @\exec("kill -0 {$masterPid} 2>/dev/null", $output, $code);
+                    $masterAlive = ($code === 0);
+                }
+            }
+            
+            if ($masterAlive) {
+                $masterDeadCount = 0;
+            } else {
+                $masterDeadCount++;
+                $redirectLog("Master PID {$masterPid} 不可达且 IPC 断开 ({$masterDeadCount}/{$masterDeadThreshold})", 'WARN');
+                if ($masterDeadCount >= $masterDeadThreshold) {
+                    $redirectLog("Master PID {$masterPid} 已死亡，自行退出（孤儿保护）", 'WARN');
+                    $gracefulExit('孤儿检测：Master 已死亡');
+                }
             }
         }
     }

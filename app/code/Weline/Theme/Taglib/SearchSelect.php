@@ -129,7 +129,7 @@ class SearchSelect implements TaglibInterface
             
             // 触发按钮/输入框
             $html[] = '  <div class="w-search-select-trigger" id="<?= htmlspecialchars($Taglib__id) ?>_trigger">';
-            $html[] = '    <input type="text" class="w-search-select-input" id="<?= htmlspecialchars($Taglib__id) ?>_input" placeholder="' . htmlspecialchars($placeholder) . '" autocomplete="off" ' . $disabledAttr . '>';
+            $html[] = '    <input type="text" class="w-search-select-input" id="<?= htmlspecialchars($Taglib__id) ?>_input" placeholder="<?= htmlspecialchars($Taglib__placeholder) ?>" autocomplete="off" ' . $disabledAttr . '>';
             $html[] = '    <span class="w-search-select-display" id="<?= htmlspecialchars($Taglib__id) ?>_display"></span>';
             if ($clearable) {
                 $html[] = '    <span class="w-search-select-clear" id="<?= htmlspecialchars($Taglib__id) ?>_clear" title="' . $t_clear . '">&times;</span>';

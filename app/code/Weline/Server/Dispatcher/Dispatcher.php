@@ -565,6 +565,9 @@ class Dispatcher
     /**
      * 通过 posix_kill 直接检测 Master PID 是否存活（孤儿保护）
      */
+    /**
+     * 孤儿检测（IPC 优先）：定期检查 Master 是否存活
+     */
     private function checkMasterPidAlive(): void
     {
         if ($this->masterPid <= 0 || $this->ipcReceivedShutdown) {
@@ -576,6 +579,13 @@ class Dispatcher
         }
         $this->lastMasterPidCheck = $now;
         
+        // IPC 连接正常 → Master 存活，无需 PID 检测
+        if ($this->ipcClient && $this->ipcClient->isConnected()) {
+            $this->masterDeadCount = 0;
+            return;
+        }
+        
+        // IPC 断开，用 PID 检测确认 Master 是否真的死了
         $alive = false;
         if (\function_exists('posix_kill')) {
             $alive = @\posix_kill($this->masterPid, 0);
@@ -587,7 +597,10 @@ class Dispatcher
                     $alive = true;
                 }
             }
-        } elseif (!\defined('IS_WIN') || !IS_WIN) {
+        } elseif (\defined('IS_WIN') && IS_WIN) {
+            // Windows: 使用 Processer::isRunningByPid() 检测
+            $alive = Processer::isRunningByPid($this->masterPid);
+        } else {
             $alive = @\file_exists("/proc/{$this->masterPid}");
             if (!$alive) {
                 @\exec("kill -0 {$this->masterPid} 2>/dev/null", $output, $code);
@@ -601,9 +614,9 @@ class Dispatcher
         }
         
         $this->masterDeadCount++;
-        $this->log("Master PID {$this->masterPid} 不可达 ({$this->masterDeadCount}/3)", 'WARN');
-        if ($this->masterDeadCount >= 3 && (!$this->ipcClient || !$this->ipcClient->isConnected())) {
-            $this->log("Master PID {$this->masterPid} 已死亡且 IPC 断开，Dispatcher 自行退出（孤儿保护）", 'ERROR');
+        $this->log("Master PID {$this->masterPid} 不可达且 IPC 断开 ({$this->masterDeadCount}/3)", 'WARN');
+        if ($this->masterDeadCount >= 3) {
+            $this->log("Master PID {$this->masterPid} 已死亡，Dispatcher 自行退出（孤儿保护）", 'ERROR');
             $this->running = false;
         }
     }

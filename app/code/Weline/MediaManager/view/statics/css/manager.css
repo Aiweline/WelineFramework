@@ -26,6 +26,44 @@
     flex-shrink: 0;
 }
 
+/* Storage selector */
+.mmf-storage-selector {
+    padding: var(--backend-spacing-sm, 8px) var(--backend-spacing-md, 16px);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+.mmf-storage-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--backend-color-text-secondary, #6c757d);
+    margin-bottom: 4px;
+}
+
+.mmf-storage-select {
+    width: 100%;
+    padding: 6px 10px;
+    font-size: 0.875rem;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-sm, 4px);
+    background: var(--backend-color-bg-primary, #fff);
+    color: var(--backend-color-text-primary, #212529);
+    cursor: pointer;
+    transition: border-color 0.15s ease-in-out;
+}
+
+.mmf-storage-select:hover {
+    border-color: var(--backend-color-primary, #0d6efd);
+}
+
+.mmf-storage-select:focus {
+    outline: none;
+    border-color: var(--backend-color-primary, #0d6efd);
+    box-shadow: 0 0 0 2px var(--backend-color-primary-alpha, rgba(13, 110, 253, 0.25));
+}
+
 .mmf-sidebar-title {
     padding: var(--backend-spacing-sm, 8px) var(--backend-spacing-md, 16px);
     font-weight: 600;
@@ -659,11 +697,142 @@
     object-fit: cover;
 }
 
+/* 右侧预览面板 */
+.mmf-preview {
+    width: 280px;
+    min-width: 220px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-left: 1px solid var(--backend-color-border-default, #dee2e6);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.mmf-preview-title {
+    padding: var(--backend-spacing-sm, 8px) var(--backend-spacing-md, 16px);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--backend-color-text-secondary, #6c757d);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    user-select: none;
+}
+
+.mmf-preview-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.mmf-preview-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    text-align: center;
+    font-size: 0.8125rem;
+}
+
+.mmf-preview-empty-icon {
+    font-size: 3rem;
+    opacity: 0.4;
+    margin-bottom: 12px;
+}
+
+.mmf-preview-image {
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--backend-color-bg-primary, #fff);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    min-height: 180px;
+    max-height: 280px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.mmf-preview-image:hover {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+}
+
+.mmf-preview-img {
+    max-width: 100%;
+    max-height: 240px;
+    object-fit: contain;
+    border-radius: var(--backend-border-radius, 6px);
+    box-shadow: var(--backend-card-shadow, 0 0 13px 0 rgba(74, 53, 107, 0.08));
+}
+
+.mmf-preview-info {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.mmf-preview-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+    word-break: break-all;
+    line-height: 1.4;
+}
+
+.mmf-preview-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.mmf-preview-meta-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8125rem;
+}
+
+.mmf-preview-meta-label {
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.mmf-preview-meta-value {
+    color: var(--backend-color-text-primary, #212529);
+    font-weight: 500;
+}
+
+.mmf-preview-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.mmf-preview-actions .mmf-btn {
+    width: 100%;
+    justify-content: center;
+}
+
 /* 响应式 */
+@media (max-width: 1024px) {
+    .mmf-preview {
+        width: 220px;
+        min-width: 180px;
+    }
+}
+
 @media (max-width: 768px) {
     .mmf-sidebar {
         width: 180px;
         min-width: 140px;
+    }
+    .mmf-preview {
+        display: none;
     }
     .mmf-grid {
         grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));

@@ -243,13 +243,15 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                 }
                             }
                             $currentLocal = (string)$currentLocal;
+                            $localPlaceholder = __('请选择或搜索地区码...');
+                            $localValue = htmlspecialchars($currentLocal);
                             ?>
                             <w:theme:search-select
                                 id="local"
                                 name="local"
-                                options="<?= $localOptionsStr ?>"
-                                value="<?= htmlspecialchars($currentLocal) ?>"
-                                placeholder="<?= __('请选择或搜索地区码...') ?>"
+                                options="{{localOptionsStr}}"
+                                value="{{localValue}}"
+                                placeholder="{{localPlaceholder}}"
                                 clearable="true"
                                 class="form-control"
                             />
