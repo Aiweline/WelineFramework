@@ -63,13 +63,27 @@ class TaglibRegistry
 
     /**
      * 获取标签列表
+     * 自动从 class 字段动态加载 callback 闭包
      *
      * @return array
      */
     public function getTags(): array
     {
         $registry = $this->getRegistry();
-        return $registry['tags'] ?? [];
+        $tags = $registry['tags'] ?? [];
+
+        // 动态加载 callback（闭包无法被 var_export，所以运行时从 class 获取）
+        foreach ($tags as $tagName => &$tagConfig) {
+            if (!isset($tagConfig['callback']) && isset($tagConfig['class'])) {
+                $class = $tagConfig['class'];
+                if (class_exists($class) && method_exists($class, 'callback')) {
+                    $tagConfig['callback'] = $class::callback();
+                }
+            }
+        }
+        unset($tagConfig);
+
+        return $tags;
     }
 
     /**
@@ -80,7 +94,15 @@ class TaglibRegistry
      */
     public function saveRegistry(array $tags): bool
     {
-        $registry = ['tags' => $tags];
+        // 排除 callback 字段，因为闭包无法被 var_export 正确导出
+        // 运行时通过 class 字段动态调用 callback() 方法获取闭包
+        $tagsForExport = [];
+        foreach ($tags as $tagName => $tagConfig) {
+            $tagsForExport[$tagName] = $tagConfig;
+            unset($tagsForExport[$tagName]['callback']);
+        }
+
+        $registry = ['tags' => $tagsForExport];
 
         $content = "<?php\n\ndeclare(strict_types=1);\n\n";
         $content .= "/*\n";
