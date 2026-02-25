@@ -39,6 +39,8 @@ class ConnectorOptionsBuilder
                 : null;
         };
 
+        // Windows 下 hash 与 Linux 不同，禁用 Trash 避免 hash 不匹配错误
+        // 若需启用 Trash，需动态计算 trashHash 或在首次挂载后获取
         return [
             'debug' => DEBUG,
             'local' => $local,
@@ -48,17 +50,6 @@ class ConnectorOptionsBuilder
                     'path' => rtrim($rootPath, '/') . '/',
                     'startPath' => $startPath,
                     'URL' => rtrim($rootUrl, '/') . '/',
-                    'trashHash' => 't1_Lw',
-                    'uploadDeny' => ['all'],
-                    'uploadAllow' => $mimes,
-                    'uploadOrder' => ['deny', 'allow'],
-                    'accessControl' => $accessControl,
-                ],
-                [
-                    'id' => '1',
-                    'driver' => 'Trash',
-                    'path' => rtrim($rootPath, '/') . '/.trash/',
-                    'tmbURL' => rtrim($rootUrl, '/') . '/.trash/.tmb/',
                     'uploadDeny' => ['all'],
                     'uploadAllow' => $mimes,
                     'uploadOrder' => ['deny', 'allow'],

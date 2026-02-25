@@ -514,3 +514,5 @@ cat var/log/master_health_debug.log
 5. **热重载无效**：检查 `var/server/reload.flag` 文件
 6. **Mac/Linux 非 root 绑定 80/443 失败**：`server:start` 会在命令入口检测特权端口（<1024），自动触发 `sudo` 重新执行并提示输入密码；若非交互终端则提示手动 `sudo` 启动。
 7. **直连模式端口语义**：SO_REUSEPORT 直连下多个 Worker 共用主端口（不是 `port + i`）；若出现 Worker 绑定到 444/445 等递增端口，说明模式实现异常，应检查 `MasterProcess` 初始化与启动路径。
+8. **HTTPS 主端口访问 http:// 不跳转（Windows Dispatcher）**：在 Dispatcher 入口识别协议；当实例为 HTTPS 且请求为明文 HTTP 时，直接返回同端口 `301 Location: https://host:port/path`，不要只依赖 HTTP Redirect 独立端口。
+9. **Worker 循环报 `undefined function stream_socket_recv`**：`worker_ssl.php` 需使用 `stream_socket_recvfrom(..., STREAM_PEEK)`，不要调用不存在的 `stream_socket_recv()`；修复后重启并用 HTTP/HTTPS 各请求一次确认。

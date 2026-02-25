@@ -1517,12 +1517,18 @@ class Start extends CommandAbstract
             return true;
         }
 
-        // 仅在交互终端中尝试自动 sudo；否则直接提示
+        // 仅在交互终端中尝试自动 sudo；否则直接提示。Mac/Linux 下 passthru 或 proc_open 二有一即可。
         $interactive = \defined('STDIN')
             && \function_exists('posix_isatty')
             && @\posix_isatty(STDIN);
-        if (!$interactive || !\function_exists('passthru')) {
+        if (!$interactive) {
             $this->printer->error(__('端口 %{1} 需要 root 权限，请使用 sudo 重新执行。', [\implode(', ', $privilegedPorts)]));
+            return false;
+        }
+        $canPassthru = \function_exists('passthru');
+        $canProcOpen = \function_exists('proc_open');
+        if (!$canPassthru && !$canProcOpen) {
+            $this->printer->error(__('端口 %{1} 需要 root 权限；自动 sudo 需要启用 passthru 或 proc_open，请使用 sudo 重新执行。', [\implode(', ', $privilegedPorts)]));
             return false;
         }
 
@@ -1538,7 +1544,23 @@ class Start extends CommandAbstract
         $this->printer->warning(__('检测到特权端口 %{1}，将自动请求 sudo 密码并继续启动。', [\implode(', ', $privilegedPorts)]));
         $this->printer->note(__('执行命令：%{1}', [$relaunchCommand]));
         $exitCode = 0;
-        @\passthru($relaunchCommand, $exitCode);
+        if ($canPassthru) {
+            @\passthru($relaunchCommand, $exitCode);
+        } else {
+            // passthru 被禁用时用 proc_open 继承 STDIN/STDOUT/STDERR，支持交互式输入 sudo 密码
+            $proc = @\proc_open(
+                $relaunchCommand,
+                [0 => STDIN, 1 => STDOUT, 2 => STDERR],
+                $pipes,
+                null,
+                null
+            );
+            if (\is_resource($proc)) {
+                $exitCode = (int) \proc_close($proc);
+            } else {
+                $exitCode = -1;
+            }
+        }
         if ($exitCode !== 0) {
             $this->printer->error(__('sudo 执行失败，退出码：%{1}', [(string)$exitCode]));
         }
