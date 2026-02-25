@@ -567,6 +567,16 @@ if ($deferSsl) {
     ];
 }
 
+// 特权端口权限检查（macOS/Linux）
+if (\PHP_OS !== 'WINNT' && $port < 1024) {
+    $euid = \function_exists('posix_geteuid') ? (int)\posix_geteuid() : -1;
+    if ($euid !== 0 && $euid !== -1) {
+        $wlsLog("错误：尝试绑定特权端口 {$port} 但当前进程不是 root (euid: {$euid})", 'ERROR');
+        $wlsLog("请使用 sudo php bin/w server:start 启动服务器", 'ERROR');
+        exit(1);
+    }
+}
+
 // 方案1a：SO_REUSEPORT + 延迟 SSL（同端口 HTTP→HTTPS 重定向，与方案2b 行为一致）
 if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket_create')) {
     $wlsLog("使用 SO_REUSEPORT + 延迟 SSL，监听 tcp://{$host}:{$port}（同端口 HTTP→HTTPS 重定向）", 'INFO');
