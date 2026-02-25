@@ -20,11 +20,14 @@ $instanceName = $argv[4] ?? 'default';
 // 解析命令行参数
 $processName = '';
 $controlPort = 0;
+$masterPid = 0;
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
         $processName = \substr($arg, 7);
     } elseif (\str_starts_with($arg, '--control-port=')) {
         $controlPort = (int)\substr($arg, 15);
+    } elseif (\str_starts_with($arg, '--master-pid=')) {
+        $masterPid = (int)\substr($arg, 13);
     }
 }
 
@@ -222,6 +225,12 @@ if (\function_exists('pcntl_signal')) {
     });
 }
 
+// ========== 孤儿检测：Master PID 存活检查 ==========
+$lastMasterCheck = \time();
+$masterCheckInterval = 5;
+$masterDeadCount = 0;
+$masterDeadThreshold = 3;
+
 while (true) {
     if (\function_exists('pcntl_signal_dispatch')) {
         \pcntl_signal_dispatch();
@@ -230,6 +239,32 @@ while (true) {
     // 检查 shutdown
     if ($ipcReceivedShutdown) {
         $gracefulExit('收到 IPC shutdown 命令');
+    }
+    
+    // ========== 孤儿检测 ==========
+    $now = \time();
+    if ($masterPid > 0 && !$ipcReceivedShutdown && ($now - $lastMasterCheck) >= $masterCheckInterval) {
+        $lastMasterCheck = $now;
+        $masterAlive = false;
+        if (\function_exists('posix_kill')) {
+            $masterAlive = @\posix_kill($masterPid, 0);
+        } elseif (!(\defined('IS_WIN') && IS_WIN)) {
+            $masterAlive = @\file_exists("/proc/{$masterPid}");
+            if (!$masterAlive) {
+                @\exec("kill -0 {$masterPid} 2>/dev/null", $output, $code);
+                $masterAlive = ($code === 0);
+            }
+        }
+        if ($masterAlive) {
+            $masterDeadCount = 0;
+        } else {
+            $masterDeadCount++;
+            $redirectLog("Master PID {$masterPid} 不可达 ({$masterDeadCount}/{$masterDeadThreshold})", 'WARN');
+            if ($masterDeadCount >= $masterDeadThreshold && (!$ipcClient || !$ipcClient->isConnected())) {
+                $redirectLog("Master PID {$masterPid} 已死亡且 IPC 断开，自行退出（孤儿保护）", 'WARN');
+                $gracefulExit('孤儿检测：Master 已死亡');
+            }
+        }
     }
     
     // IPC 重连

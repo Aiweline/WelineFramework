@@ -42,12 +42,18 @@ foreach ($argv as $arg) {
         $controlPort = (int)\substr($arg, 15);
     } elseif ($arg === '--maintenance') {
         $isMaintenanceWorker = true;
+    } elseif (\str_starts_with($arg, '--master-pid=')) {
+        $masterPid = (int)\substr($arg, 13);
     }
 }
 
 // IPC 控制端口（未显式传入时从实例文件推算）
 if (!isset($controlPort)) {
     $controlPort = 0;
+}
+// Master PID（用于孤儿检测）
+if (!isset($masterPid) || $masterPid <= 0) {
+    $masterPid = 0;
 }
 // 是否为维护 Worker
 if (!isset($isMaintenanceWorker)) {
@@ -966,6 +972,12 @@ if (\function_exists('pcntl_signal')) {
 $consecutiveErrors = 0;
 $maxConsecutiveErrors = 100; // 连续 100 次错误才考虑重启（给予足够的恢复机会）
 
+// ========== 孤儿检测：Master PID 存活检查 ==========
+$lastMasterCheck = \time();
+$masterCheckInterval = 5; // 每 5 秒检查一次
+$masterDeadCount = 0;     // Master 连续不可达计数
+$masterDeadThreshold = 3; // 连续 3 次（15 秒）确认 Master 死亡后自行退出
+
 // 事件循环（Workerman 模式：外层 try-catch 防止意外退出）
 while (true) {
     try {
@@ -977,6 +989,38 @@ while (true) {
     $flushLog(false);
     
     $now = \time();
+    
+    // ========== 孤儿检测：定期检查 Master 是否存活 ==========
+    if ($masterPid > 0 && !$ipcReceivedShutdown && ($now - $lastMasterCheck) >= $masterCheckInterval) {
+        $lastMasterCheck = $now;
+        $masterAlive = false;
+        if (\function_exists('posix_kill')) {
+            // signal 0 只检查进程是否存在，不发送实际信号
+            $masterAlive = @\posix_kill($masterPid, 0);
+        } elseif (!(\defined('IS_WIN') && IS_WIN)) {
+            // 兜底：通过 /proc 或 kill -0 检测
+            $masterAlive = @\file_exists("/proc/{$masterPid}");
+            if (!$masterAlive) {
+                @\exec("kill -0 {$masterPid} 2>/dev/null", $output, $code);
+                $masterAlive = ($code === 0);
+            }
+        }
+        
+        if ($masterAlive) {
+            $masterDeadCount = 0;
+        } else {
+            $masterDeadCount++;
+            $wlsLog("Master PID {$masterPid} 不可达 ({$masterDeadCount}/{$masterDeadThreshold})", 'WARN');
+            if ($masterDeadCount >= $masterDeadThreshold) {
+                // IPC 也断开 → Master 确认死亡，自行退出
+                $ipcAlso = (!$ipcClient || !$ipcClient->isConnected());
+                if ($ipcAlso) {
+                    $wlsLog("Master PID {$masterPid} 已死亡且 IPC 断开，Worker 自行退出（孤儿保护）", 'WARN');
+                    $gracefulExit('孤儿检测：Master 已死亡');
+                }
+            }
+        }
+    }
     
     // ========== IPC 控制通道处理 ==========
     // 如果有 IPC 客户端且连接断开了，尝试重连
