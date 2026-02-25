@@ -22,6 +22,7 @@ class ConnectorService
 
         return match ($cmd) {
             'open'   => $this->handleOpen($src, $rootPath, $rootReal),
+            'tree'   => $this->handleTree($src, $rootPath, $rootReal),
             'mkdir'  => $this->handleMkdir($src, $rootPath, $rootReal),
             'rename' => $this->handleRename($src, $rootPath, $rootReal),
             'rm'     => $this->handleRemove($src, $rootPath, $rootReal),
@@ -94,8 +95,13 @@ class ConnectorService
         $name = $relative === '' ? 'Media Files' : \basename($relative);
         $hash = $this->encodeHash($relative);
 
-        $dirRel = $relative === '' ? '' : \trim(\dirname($relative), '/.');
-        $phash = $dirRel === '' ? null : $this->encodeHash($dirRel);
+        // 根目录自身没有父级；其他所有条目（包括根下的直接子项）都指向父目录 hash
+        if ($relative === '') {
+            $phash = null;
+        } else {
+            $dirRel = \trim(\dirname(\str_replace('\\', '/', $relative)), '/.');
+            $phash = $this->encodeHash($dirRel);
+        }
 
         $mime = $isDir ? 'directory' : $this->detectMime($abs);
         $size = $isDir ? 0 : ((@\filesize($abs)) ?: 0);
@@ -119,6 +125,151 @@ class ConnectorService
             return $mimes[0];
         }
         return 'application/octet-stream';
+    }
+
+    /**
+     * 构建目录树：只加载指定目录的直接子目录（懒加载，不递归）
+     * 同时加载当前路径上的所有父目录及其同级目录
+     */
+    private function buildDirectoryTree(string $currentRelative, string $rootPath, string $rootReal): array
+    {
+        $tree = [];
+        $visited = [];
+        
+        // 1. 添加根目录
+        $rootInfo = $this->buildFileInfo('', $rootPath, $rootReal);
+        $rootInfo['dirs'] = $this->hasSubDirs('', $rootPath) ? 1 : 0;
+        $tree[] = $rootInfo;
+        $visited[''] = true;
+        
+        // 2. 加载根目录的直接子目录
+        $rootDirs = $this->getDirectChildren('', $rootPath, $rootReal, true);
+        foreach ($rootDirs as $dir) {
+            if (!isset($visited[$dir['_rel']])) {
+                $tree[] = $dir;
+                $visited[$dir['_rel']] = true;
+            }
+        }
+        
+        // 3. 如果有当前路径，加载路径上每一级的同级目录
+        if ($currentRelative !== '') {
+            $parts = \explode('/', \str_replace('\\', '/', $currentRelative));
+            $pathSoFar = '';
+            
+            foreach ($parts as $part) {
+                $pathSoFar = $pathSoFar === '' ? $part : $pathSoFar . '/' . $part;
+                
+                // 确保当前路径在树中
+                if (!isset($visited[$pathSoFar])) {
+                    $info = $this->buildFileInfo($pathSoFar, $rootPath, $rootReal);
+                    $info['dirs'] = $this->hasSubDirs($pathSoFar, $rootPath) ? 1 : 0;
+                    $tree[] = $info;
+                    $visited[$pathSoFar] = true;
+                }
+                
+                // 加载当前路径的直接子目录
+                $childDirs = $this->getDirectChildren($pathSoFar, $rootPath, $rootReal, true);
+                foreach ($childDirs as $dir) {
+                    if (!isset($visited[$dir['_rel']])) {
+                        $tree[] = $dir;
+                        $visited[$dir['_rel']] = true;
+                    }
+                }
+            }
+        }
+        
+        // 移除临时字段
+        foreach ($tree as &$item) {
+            unset($item['_rel']);
+        }
+        
+        return $tree;
+    }
+
+    /**
+     * 获取目录的直接子目录（只返回目录，不递归）
+     */
+    private function getDirectChildren(string $relative, string $rootPath, string $rootReal, bool $onlyDirs = false): array
+    {
+        $result = [];
+        $abs = $rootPath . ($relative === '' ? '' : $relative);
+        $entries = @\scandir($abs) ?: [];
+        
+        foreach ($entries as $entry) {
+            if ($entry === '.' || $entry === '..' || $entry[0] === '.') {
+                continue;
+            }
+            $childRel = \trim(($relative === '' ? '' : $relative . '/') . $entry, '/');
+            $childAbs = $rootPath . $childRel;
+            
+            if ($onlyDirs && !\is_dir($childAbs)) {
+                continue;
+            }
+            
+            $info = $this->buildFileInfo($childRel, $rootPath, $rootReal);
+            $info['_rel'] = $childRel;
+            
+            // 标记是否有子目录（用于前端显示展开箭头）
+            if (\is_dir($childAbs)) {
+                $info['dirs'] = $this->hasSubDirs($childRel, $rootPath) ? 1 : 0;
+            }
+            
+            $result[] = $info;
+        }
+        
+        return $result;
+    }
+
+    /**
+     * 检查目录是否有子目录
+     */
+    private function hasSubDirs(string $relative, string $rootPath): bool
+    {
+        $abs = $rootPath . ($relative === '' ? '' : $relative);
+        $entries = @\scandir($abs) ?: [];
+        
+        foreach ($entries as $entry) {
+            if ($entry === '.' || $entry === '..' || $entry[0] === '.') {
+                continue;
+            }
+            if (\is_dir($abs . \DIRECTORY_SEPARATOR . $entry)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * 懒加载：获取指定目录的直接子目录
+     */
+    private function handleTree(array $src, string $rootPath, string $rootReal): array
+    {
+        $targetHash = $src['target'] ?? '';
+        
+        if ($targetHash === '') {
+            return ['error' => 'Target required'];
+        }
+        
+        try {
+            [$relative, $abs] = $this->resolvePath($targetHash, $rootPath, $rootReal);
+        } catch (\Throwable $e) {
+            return ['error' => $e->getMessage()];
+        }
+        
+        if (!\is_dir($abs)) {
+            return ['error' => 'Directory not found'];
+        }
+        
+        // 只获取直接子目录
+        $tree = $this->getDirectChildren($relative, $rootPath, $rootReal, true);
+        
+        // 移除临时字段
+        foreach ($tree as &$item) {
+            unset($item['_rel']);
+        }
+        
+        return ['tree' => $tree];
     }
 
     private function handleOpen(array $src, string $rootPath, string $rootReal): array
@@ -165,19 +316,8 @@ class ConnectorService
             $files[] = $this->buildFileInfo($childRel, $rootPath, $rootReal);
         }
 
-        // 简单的树结构：当前目录 + 根目录，以及路径上的所有父目录
-        $tree = [];
-        $tree[] = $this->buildFileInfo('', $rootPath, $rootReal);
-        
-        // 添加从根到当前目录的路径
-        if ($relative !== '') {
-            $parts = \explode(\DIRECTORY_SEPARATOR, $relative);
-            $currentPath = '';
-            foreach ($parts as $part) {
-                $currentPath = $currentPath === '' ? $part : $currentPath . \DIRECTORY_SEPARATOR . $part;
-                $tree[] = $this->buildFileInfo($currentPath, $rootPath, $rootReal);
-            }
-        }
+        // 构建目录树：只加载根目录的直接子目录，以及当前路径上的父目录
+        $tree = $this->buildDirectoryTree($relative, $rootPath, $rootReal);
         
         // 返回根目录的 hash，用于前端判断锁定范围
         $rootHash = $this->encodeHash('');

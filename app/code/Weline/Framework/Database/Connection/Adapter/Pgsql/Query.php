@@ -354,6 +354,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 
     /**
      * 🔧 重写：完全按照 PostgreSQL 语法处理 GROUP BY
+     * 注意：$this->group_by 只存储字段列表，不包含 GROUP BY 关键字
+     * GROUP BY 关键字在 buildSelectForPgsql() 中添加
      */
     public function group(string $fields): QueryInterface
     {
@@ -377,7 +379,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             }
             $formattedFields[] = $field;
         }
-        $this->group_by = 'GROUP BY ' . implode(', ', $formattedFields);
+        // 只存储字段列表，不包含 GROUP BY 关键字
+        $this->group_by = implode(', ', $formattedFields);
         return $this;
     }
 
@@ -626,15 +629,16 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $joins   = $this->buildJoinsForPgsql();
         $wheres  = $this->buildWheresForPgsql();
         $order   = $this->buildOrderForPgsql();
-        // 🔧 修复：如果 AST 中的 group 已经包含 "GROUP BY"，则直接使用，否则添加
+        // 构建 GROUP BY 子句
+        // 注意：$this->ast['group'] 只包含字段列表，不包含 GROUP BY 关键字
         $groupBy = '';
         if (isset($this->ast['group']) && $this->ast['group']) {
             $groupValue = trim($this->ast['group']);
+            // 移除可能存在的 GROUP BY 前缀（兼容旧代码）
             if (stripos($groupValue, 'GROUP BY') === 0) {
-                // 已经包含 "GROUP BY"，直接使用
-                $groupBy = $this->normalizeSql($groupValue);
-            } else {
-                // 不包含 "GROUP BY"，添加它
+                $groupValue = trim(substr($groupValue, 8));
+            }
+            if ($groupValue) {
                 $groupBy = 'GROUP BY ' . $this->normalizeSql($groupValue);
             }
         }
