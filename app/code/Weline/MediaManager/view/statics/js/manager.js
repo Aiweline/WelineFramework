@@ -850,7 +850,7 @@
             img.style.opacity = '0.5';
             var imgUrl = f.url || (f.tmb && f.tmb !== '1' ? f.tmb : '');
             if (!imgUrl && CONNECTOR) {
-                imgUrl = CONNECTOR + '&cmd=file&target=' + encodeURIComponent(f.hash);
+                imgUrl = CONNECTOR + (CONNECTOR.indexOf('?') >= 0 ? '&' : '?') + 'cmd=file&target=' + encodeURIComponent(f.hash);
             }
             img.onload = function () { img.style.opacity = '1'; };
             img.src = imgUrl;
@@ -871,7 +871,7 @@
         LIGHTBOX_IMAGES.forEach(function (f, i) {
             var thumbUrl = f.tmb && f.tmb !== '1' ? f.tmb : '';
             if (!thumbUrl && CONNECTOR) {
-                thumbUrl = CONNECTOR + '&cmd=tmb&target=' + encodeURIComponent(f.hash);
+                thumbUrl = CONNECTOR + (CONNECTOR.indexOf('?') >= 0 ? '&' : '?') + 'cmd=tmb&target=' + encodeURIComponent(f.hash);
             }
             var activeClass = i === LIGHTBOX_INDEX ? ' active' : '';
             html += '<div class="mmf-lightbox-thumb' + activeClass + '" data-index="' + i + '">';
