@@ -245,29 +245,6 @@ class MasterProcess
     }
     
     /**
-     * 为命令添加 sudo 前缀（如果当前是 root 且非 Windows）
-     * 
-     * macOS 上通过 passthru('sudo ...') 启动的 PHP 进程，其 nohup 子进程可能不继承 root 权限。
-     * 使用 sudo -E -n 确保后台进程也以 root 运行：
-     *   -E: 保留当前环境变量
-     *   -n: non-interactive，不提示密码（已是 root 时不需要）
-     * 
-     * @param string $command 原始命令
-     * @return string 带或不带 sudo 前缀的命令
-     */
-    protected function wrapWithSudoIfRoot(string $command): string
-    {
-        if (IS_WIN) {
-            return $command;
-        }
-        $isRoot = \function_exists('posix_geteuid') && (int)\posix_geteuid() === 0;
-        if ($isRoot) {
-            return 'sudo -E -n ' . $command;
-        }
-        return $command;
-    }
-    
-    /**
      * 设置主监听端口（Linux 模式下所有 Worker 共用此端口）
      * 
      * @param int $port 主端口
@@ -1309,11 +1286,9 @@ class MasterProcess
         }
 
         // Linux/Mac: 使用 Processer 统一创建（避免手写 nohup 脚本造成 PID 偏差）
-        // macOS 上 nohup 可能不正确继承 sudo 权限，使用 wrapWithSudoIfRoot 确保子进程以 root 运行
         $args = \array_merge([$phpBinary], $argList);
         
         $command = \implode(' ', \array_map('escapeshellarg', $args));
-        $command = $this->wrapWithSudoIfRoot($command);
         $pid = Processer::create($command, true, $this->frontend);
         if ($pid > 0) {
             \usleep(300000); // 300ms
@@ -1609,7 +1584,6 @@ class MasterProcess
         }
         
         $command = \implode(' ', \array_map('escapeshellarg', $args));
-        $command = $this->wrapWithSudoIfRoot($command);
         $pid = Processer::create($command, false, $this->frontend);
         if ($pid > 0) {
             return $pid;
@@ -1700,11 +1674,9 @@ class MasterProcess
         }
         
         // 启动进程：统一通过 Processer::create（由驱动封装 OS 差分）
-        // macOS 上 nohup 可能不正确继承 sudo 权限，使用 wrapWithSudoIfRoot 确保子进程以 root 运行
         $args = \array_merge([$phpBinary], $argList);
         
         $command = \implode(' ', \array_map('escapeshellarg', $args));
-        $command = $this->wrapWithSudoIfRoot($command);
         $pid = Processer::create($command, true, $this->frontend);
         if ($pid > 0) {
             \usleep(200000);
@@ -1799,7 +1771,6 @@ class MasterProcess
         $args = \array_merge([$phpBinary], $argList);
         
         $command = \implode(' ', \array_map('escapeshellarg', $args));
-        $command = $this->wrapWithSudoIfRoot($command);
         
         $pid = Processer::create($command, false, $this->frontend);
         
@@ -2272,7 +2243,6 @@ class MasterProcess
         }
         
         $cmd = $phpBinary . ' ' . \escapeshellarg($workerScript) . ' ' . \implode(' ', \array_map('escapeshellarg', $args));
-        $cmd = $this->wrapWithSudoIfRoot($cmd);
         
         $pid = Processer::create($cmd, false);
         if ($pid > 0) {
