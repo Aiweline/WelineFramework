@@ -375,10 +375,11 @@ class Docs extends FrontendController
                 return false;
             }
             
-            // 检查文件扩展名，只允许.md文件
+            // 检查文件扩展名，只允许文档文件格式
             $fileExtension = strtolower(pathinfo($realFullPath, PATHINFO_EXTENSION));
-            if ($fileExtension !== 'md') {
-                $this->lastError = "只允许读取.md格式的文档文件，当前文件扩展名：{$fileExtension}";
+            $allowedExtensions = ['md', 'markdown', 'txt'];
+            if (!in_array($fileExtension, $allowedExtensions)) {
+                $this->lastError = "只允许读取文档格式的文件（" . implode(', ', $allowedExtensions) . "），当前文件扩展名：{$fileExtension}";
                 return false;
             }
             

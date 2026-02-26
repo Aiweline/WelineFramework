@@ -15,6 +15,7 @@ use Weline\Framework\App\State;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\StateManager;
 
 class Parser
 {
@@ -34,6 +35,33 @@ class Parser
      * @var bool
      */
     protected static bool $isLoadingWords = false;
+    
+    /**
+     * 当前加载的语言（用于判断是否需要重新加载）
+     * @var string|null
+     */
+    protected static ?string $loadedLang = null;
+    
+    /**
+     * WLS 状态管理注册（请求级数据，需跨请求重置）
+     */
+    private static bool $stateRegistered = false;
+    
+    private static function ensureStateRegistered(): void
+    {
+        if (self::$stateRegistered) {
+            return;
+        }
+        self::$stateRegistered = true;
+        
+        StateManager::registerResetCallback('Parser::reset', static function () {
+            self::$loaded = false;
+            self::$words = [];
+            self::$usedWords = [];
+            self::$isLoadingWords = false;
+            self::$loadedLang = null;
+        });
+    }
 
     /**
      * @DESC         # 翻译解析函数
@@ -135,9 +163,21 @@ class Parser
 
     public static function getWords()
     {
+        // 确保 WLS 状态管理已注册
+        self::ensureStateRegistered();
+        
         // 防止循环调用：如果正在加载翻译文件，直接返回空数组或已加载的词
         if (self::$isLoadingWords) {
             return self::$words ?? [];
+        }
+        
+        // 获取当前请求的语言
+        $currentLang = State::getLangLocal();
+        
+        // WLS 模式下：检查语言是否变化，如果变化需要重新加载词典
+        if (self::$loaded && self::$loadedLang !== null && self::$loadedLang !== $currentLang) {
+            self::$loaded = false;
+            self::$words = [];
         }
         
         // 仅加载一次翻译到对象self::$words
@@ -157,12 +197,17 @@ class Parser
                 try {
                     /**@var Request $request */
                     $request = ObjectManager::getInstance(Request::class);
-                    $modules = $request->getModules();
-                    $modules[] = $request->getModuleName();
+                    $modules = $request->getModules() ?: [];
+                    $moduleName = $request->getModuleName();
+                    if (!empty($moduleName)) {
+                        $modules[] = $moduleName;
+                    }
+                    // 过滤空值
+                    $modules = array_filter($modules, fn($m) => !empty($m));
                 } catch (\Exception $e) {
                     // 如果无法获取模块名，继续使用总词典
                 }
-                $lang = State::getLangLocal();
+                $lang = $currentLang;
                 // 缓存键包含所有模块名，用于区分不同模块组合
                 $modules_key = !empty($modules) ? '_' . implode('_', $modules) : '';
                 $cache_key = 'phrase_locale_words_' . $lang . $modules_key;
@@ -195,14 +240,23 @@ class Parser
                             if (isset($all_words_data[$lang])) {
                                 $lang_words = $all_words_data[$lang];
                                 
-                                // 遍历所有关联模块，加载它们的词
-                                foreach ($modules as $module_name) {
-                                    $full_module_name = self::getFullModuleName($module_name);
-                                    // 尝试完整模块名和简短模块名
-                                    if (isset($lang_words[$full_module_name]) && is_array($lang_words[$full_module_name])) {
-                                        $all_words = array_merge($all_words, $lang_words[$full_module_name]);
-                                    } elseif (isset($lang_words[$module_name]) && is_array($lang_words[$module_name])) {
-                                        $all_words = array_merge($all_words, $lang_words[$module_name]);
+                                // 如果没有指定模块（如编译期），加载所有模块的词
+                                if (empty($modules)) {
+                                    foreach ($lang_words as $module_name => $module_words_data) {
+                                        if (is_array($module_words_data)) {
+                                            $all_words = array_merge($all_words, $module_words_data);
+                                        }
+                                    }
+                                } else {
+                                    // 遍历所有关联模块，加载它们的词
+                                    foreach ($modules as $module_name) {
+                                        $full_module_name = self::getFullModuleName($module_name);
+                                        // 尝试完整模块名和简短模块名
+                                        if (isset($lang_words[$full_module_name]) && is_array($lang_words[$full_module_name])) {
+                                            $all_words = array_merge($all_words, $lang_words[$full_module_name]);
+                                        } elseif (isset($lang_words[$module_name]) && is_array($lang_words[$module_name])) {
+                                            $all_words = array_merge($all_words, $lang_words[$module_name]);
+                                        }
                                     }
                                 }
                             }
@@ -213,13 +267,22 @@ class Parser
                                 try {
                                     $lang_words = (array)include $words_file;
                                     // 语言文件格式：['Weline_I18n' => [...], 'Weline_Cdn' => [...], ...]
-                                    // 遍历所有关联模块，加载它们的词
-                                    foreach ($modules as $module_name) {
-                                        $full_module_name = self::getFullModuleName($module_name);
-                                        if (isset($lang_words[$full_module_name]) && is_array($lang_words[$full_module_name])) {
-                                            $all_words = array_merge($all_words, $lang_words[$full_module_name]);
-                                        } elseif (isset($lang_words[$module_name]) && is_array($lang_words[$module_name])) {
-                                            $all_words = array_merge($all_words, $lang_words[$module_name]);
+                                    if (empty($modules)) {
+                                        // 加载所有模块的词
+                                        foreach ($lang_words as $module_name => $module_words_data) {
+                                            if (is_array($module_words_data)) {
+                                                $all_words = array_merge($all_words, $module_words_data);
+                                            }
+                                        }
+                                    } else {
+                                        // 遍历所有关联模块，加载它们的词
+                                        foreach ($modules as $module_name) {
+                                            $full_module_name = self::getFullModuleName($module_name);
+                                            if (isset($lang_words[$full_module_name]) && is_array($lang_words[$full_module_name])) {
+                                                $all_words = array_merge($all_words, $lang_words[$full_module_name]);
+                                            } elseif (isset($lang_words[$module_name]) && is_array($lang_words[$module_name])) {
+                                                $all_words = array_merge($all_words, $lang_words[$module_name]);
+                                            }
                                         }
                                     }
                                 } catch (Exception $e) {
@@ -234,13 +297,22 @@ class Parser
                             try {
                                 $lang_words = (array)include $words_file;
                                 // 语言文件格式：['Weline_I18n' => [...], 'Weline_Cdn' => [...], ...]
-                                // 遍历所有关联模块，加载它们的词
-                                foreach ($modules as $module_name) {
-                                    $full_module_name = self::getFullModuleName($module_name);
-                                    if (isset($lang_words[$full_module_name]) && is_array($lang_words[$full_module_name])) {
-                                        $all_words = array_merge($all_words, $lang_words[$full_module_name]);
-                                    } elseif (isset($lang_words[$module_name]) && is_array($lang_words[$module_name])) {
-                                        $all_words = array_merge($all_words, $lang_words[$module_name]);
+                                if (empty($modules)) {
+                                    // 加载所有模块的词
+                                    foreach ($lang_words as $module_name => $module_words_data) {
+                                        if (is_array($module_words_data)) {
+                                            $all_words = array_merge($all_words, $module_words_data);
+                                        }
+                                    }
+                                } else {
+                                    // 遍历所有关联模块，加载它们的词
+                                    foreach ($modules as $module_name) {
+                                        $full_module_name = self::getFullModuleName($module_name);
+                                        if (isset($lang_words[$full_module_name]) && is_array($lang_words[$full_module_name])) {
+                                            $all_words = array_merge($all_words, $lang_words[$full_module_name]);
+                                        } elseif (isset($lang_words[$module_name]) && is_array($lang_words[$module_name])) {
+                                            $all_words = array_merge($all_words, $lang_words[$module_name]);
+                                        }
                                     }
                                 }
                             } catch (Exception $e) {
@@ -259,6 +331,7 @@ class Parser
                 self::$isLoadingWords = false;
             }
             self::$loaded = true;
+            self::$loadedLang = $currentLang;
         }
         return self::$words ?? [];
     }

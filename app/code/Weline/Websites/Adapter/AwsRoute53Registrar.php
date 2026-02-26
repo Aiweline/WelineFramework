@@ -59,6 +59,7 @@ class AwsRoute53Registrar implements DomainRegistrarInterface
                 'label' => __('区域'),
                 'type' => 'select',
                 'required' => true,
+                'default' => 'us-east-1',
                 'options' => [
                     ['value' => 'us-east-1', 'label' => 'US East (N. Virginia)'],
                     ['value' => 'us-west-2', 'label' => 'US West (Oregon)'],
@@ -66,6 +67,24 @@ class AwsRoute53Registrar implements DomainRegistrarInterface
                     ['value' => 'ap-northeast-1', 'label' => 'Asia Pacific (Tokyo)'],
                     ['value' => 'ap-southeast-1', 'label' => 'Asia Pacific (Singapore)'],
                 ],
+            ],
+        ];
+    }
+
+    public function getConfigHelp(): array
+    {
+        return [
+            'help_url' => 'https://console.aws.amazon.com/iam/home#/security_credentials',
+            'help_title' => __('AWS Route53 配置获取指南'),
+            'help_steps' => [
+                __('1. 登录 AWS 控制台：https://console.aws.amazon.com'),
+                __('2. 进入 IAM 服务 → 用户 → 选择或创建用户'),
+                __('3. 在「安全凭证」选项卡中，点击「创建访问密钥」'),
+                __('4. 选择「应用程序外部使用」，创建密钥'),
+                __('5. 将「访问密钥 ID」填入上方「Access Key ID」字段'),
+                __('6. 将「秘密访问密钥」填入上方「Secret Access Key」字段'),
+                __('7. 确保该用户具有 Route53Domains 和 Route53 的完整权限'),
+                __('8. 区域选择 us-east-1（Route53 域名注册仅支持此区域）'),
             ],
         ];
     }

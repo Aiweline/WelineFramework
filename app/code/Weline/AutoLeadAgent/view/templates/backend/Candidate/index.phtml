@@ -1,7 +1,7 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
 /** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
 
 use Weline\AutoLeadAgent\Model\LeadCandidate;
 
@@ -11,23 +11,7 @@ $page = $this->getData('page') ?? 1;
 $limit = $this->getData('limit') ?? 20;
 $totalPages = $this->getData('total_pages') ?? 1;
 ?>
-<!DOCTYPE html>
-<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= __('潜在客户') ?></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-@template(Weline_Admin::common/page/loading.phtml)
-<div id="layout-wrapper">
-    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
-    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <div class="row">
+<div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                             <h4 class="mb-sm-0"><?= __('潜在客户') ?></h4>
@@ -102,14 +86,3 @@ $totalPages = $this->getData('total_pages') ?? 1;
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        @template(Weline_Admin::common/footer.phtml)
-    </div>
-</div>
-
-@template(Weline_Admin::common/vendor-scripts.phtml)
-</body>
-</html>
-

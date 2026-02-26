@@ -23,6 +23,11 @@ use Weline\Framework\System\Text;
 
 class Login extends \Weline\Framework\App\Controller\BackendController
 {
+    /**
+     * 登录页不使用布局系统，使用独立完整的模板
+     */
+    protected ?string $layoutType = null;
+    
     protected BackendUser $adminUser;
     private Data $helper;
     private MessageManager $messageManager;

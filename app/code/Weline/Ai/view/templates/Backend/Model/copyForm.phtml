@@ -5,31 +5,12 @@
  * @var $this \Weline\Framework\View\Template
  * @var $model \Weline\Ai\Model\AiModel
  */
-/**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
 
 use Weline\Ai\Model\AiModel;
 
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 $model = $this->getData('model');
 $isIframe = $this->request->getGet('isIframe');
 ?>
-<!DOCTYPE html>
-<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= __('复制模型: %{1}', $model->getModelName()) ?></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-
-<!-- 开始 页面 -->
-<div id="layout-wrapper">
-    <!-- ============================================================== -->
-    <!-- 开始 主要内容 -->
-    <!-- ============================================================== -->
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
 
 <div class="model-copy-container">
     <div class="card">
@@ -118,7 +99,6 @@ $isIframe = $this->request->getGet('isIframe');
                         </div>
                         
                         <?php 
-                        // 解析配置JSON
                         $config = [];
                         if ($model->getConfigJson()) {
                             $configJson = $model->getConfigJson();
@@ -246,143 +226,140 @@ $isIframe = $this->request->getGet('isIframe');
 <!-- SweetAlert2 JS -->
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
-document.getElementById('copy-form').addEventListener('submit', function(e) {
-    e.preventDefault();
+(function() {
+    'use strict';
     
-    // 验证必填字段
-    const modelName = document.getElementById('model_name').value.trim();
-    const modelCode = document.getElementById('model_code').value.trim();
-    
-    if (!modelName) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('请输入新模型名称') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('请输入新模型名称') ?>');
-        }
-        document.getElementById('model_name').focus();
-        return false;
-    }
-    
-    if (!modelCode) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('请输入新模型代码') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('请输入新模型代码') ?>');
-        }
-        document.getElementById('model_code').focus();
-        return false;
-    }
-    
-    // 验证模型代码格式（允许字母、数字、点号、下划线、中划线）
-    const codePattern = /^[a-zA-Z0-9._-]+$/;
-    if (!codePattern.test(modelCode)) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('格式错误') ?>',
-                text: '<?= __('模型代码只能包含字母、数字、点号(.)、下划线(_)和中划线(-)') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('模型代码只能包含字母、数字、点号(.)、下划线(_)和中划线(-)') ?>');
-        }
-        document.getElementById('model_code').focus();
-        return false;
-    }
-    
-    const btn = this.querySelector('button[type="submit"]');
-    const originalHtml = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('复制中...') ?>';
-    
-    const formData = new FormData(this);
-    
-    fetch('<?= $this->getBackendUrl('*/backend/model/copy') ?>', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
+    document.getElementById('copy-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        var modelName = document.getElementById('model_name').value.trim();
+        var modelCode = document.getElementById('model_code').value.trim();
+        
+        if (!modelName) {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('复制成功') ?>',
-                    text: '<?= __('模型已成功复制') ?>',
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => {
-                    // 关闭 offcanvas
-                    window.parent.bootstrap.Offcanvas.getInstance(window.frameElement.closest('.offcanvas')).hide();
-                    // 刷新父页面
-                    setTimeout(() => {
-                        window.parent.location.reload();
-                    }, 500);
-                });
-            } else {
-                console.log('<?= __('复制成功！') ?>');
-                // 关闭 offcanvas
-                window.parent.bootstrap.Offcanvas.getInstance(window.frameElement.closest('.offcanvas')).hide();
-                // 刷新父页面
-                setTimeout(() => {
-                    window.parent.location.reload();
-                }, 500);
-            }
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('复制失败') ?>',
-                    text: data.message,
+                    icon: 'warning',
+                    title: '<?= __('提示') ?>',
+                    text: '<?= __('请输入新模型名称') ?>',
                     confirmButtonText: '<?= __('确定') ?>'
                 });
             } else {
-                console.error('<?= __('复制失败：') ?>' + data.message);
+                console.error('<?= __('请输入新模型名称') ?>');
+            }
+            document.getElementById('model_name').focus();
+            return false;
+        }
+        
+        if (!modelCode) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('提示') ?>',
+                    text: '<?= __('请输入新模型代码') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('请输入新模型代码') ?>');
+            }
+            document.getElementById('model_code').focus();
+            return false;
+        }
+        
+        var codePattern = /^[a-zA-Z0-9._-]+$/;
+        if (!codePattern.test(modelCode)) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('格式错误') ?>',
+                    text: '<?= __('模型代码只能包含字母、数字、点号(.)、下划线(_)和中划线(-)') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('模型代码只能包含字母、数字、点号(.)、下划线(_)和中划线(-)') ?>');
+            }
+            document.getElementById('model_code').focus();
+            return false;
+        }
+        
+        var btn = this.querySelector('button[type="submit"]');
+        var originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('复制中...') ?>';
+        
+        var formData = new FormData(this);
+        
+        fetch('<?= $this->getBackendUrl('*/backend/model/copy') ?>', {
+            method: 'POST',
+            body: formData
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.success) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('复制成功') ?>',
+                        text: '<?= __('模型已成功复制') ?>',
+                        timer: 2000,
+                        showConfirmButton: false
+                    }).then(function() {
+                        window.parent.bootstrap.Offcanvas.getInstance(window.frameElement.closest('.offcanvas')).hide();
+                        setTimeout(function() {
+                            window.parent.location.reload();
+                        }, 500);
+                    });
+                } else {
+                    console.log('<?= __('复制成功！') ?>');
+                    window.parent.bootstrap.Offcanvas.getInstance(window.frameElement.closest('.offcanvas')).hide();
+                    setTimeout(function() {
+                        window.parent.location.reload();
+                    }, 500);
+                }
+            } else {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('复制失败') ?>',
+                        text: data.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('复制失败：') ?>' + data.message);
+                }
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        })
+        .catch(function(error) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('请求失败') ?>',
+                    text: error.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('请求失败：') ?>' + error.message);
             }
             btn.disabled = false;
             btn.innerHTML = originalHtml;
-        }
-    })
-    .catch(error => {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('请求失败') ?>',
-                text: error.message,
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('请求失败：') ?>' + error.message);
-        }
-        btn.disabled = false;
-        btn.innerHTML = originalHtml;
+        });
+        
+        return false;
     });
     
-    return false;
-});
-
-// 自动选中模型名称输入框内容
-document.getElementById('model_name').select();
+    document.getElementById('model_name').select();
+})();
 </script>
 
 <style>
 .model-copy-container .card {
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    border: 1px solid #e9ecef;
+    border: 1px solid var(--backend-color-border);
 }
 
 .model-copy-container .table th {
-    background-color: #f8f9fa;
+    background-color: var(--backend-color-card-header-bg);
     font-weight: 600;
 }
 
@@ -392,17 +369,7 @@ document.getElementById('model_name').select();
 }
 
 .model-copy-container .form-control:focus {
-    border-color: #80bdff;
-    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+    border-color: var(--backend-color-primary);
+    box-shadow: 0 0 0 0.2rem var(--backend-color-primary-light);
 }
 </style>
-
-            </div><!-- container-fluid -->
-        </div><!-- page-content -->
-    </div><!-- main-content -->
-</div><!-- layout-wrapper -->
-
-@template(Weline_Admin::common/footer.phtml)
-</body>
-</html>
-

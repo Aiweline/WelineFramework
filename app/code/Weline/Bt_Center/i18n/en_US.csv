@@ -34,6 +34,8 @@ AWS,AWS
 请输入备注信息,"Please enter description"
 保存,Save
 返回列表,"Back to List"
+保存失败,保存失败
+请求失败,请求失败
 宝塔服务器列表,"Baota Server List"
 新增服务器,"Add Server"
 全部平台,"All Platforms"
@@ -49,7 +51,11 @@ ID,ID
 暂无服务器,"No servers"
 编辑,Edit
 删除,Delete
+确认删除,确认删除
 确定要删除这个服务器吗？,"Are you sure you want to delete this server?"
+确定删除,确定删除
+取消,取消
+删除失败,删除失败
 宝塔管理,"Baota Management"
 宝塔服务器,"Baota Server"
 服务器名称或标识,"Server name or identifier"

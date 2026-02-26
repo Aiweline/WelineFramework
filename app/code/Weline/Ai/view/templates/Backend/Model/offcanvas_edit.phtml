@@ -36,23 +36,128 @@ if (empty($providerConfig) && !empty($config)) {
     $providerConfig = $config;
 }
 ?>
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $title ?></title>
-    <!-- Bootstrap CSS 本地文件 -->
-    <link href="@static(Weline_Frontend::assets/css/bootstrap.min.css)" rel="stylesheet">
-    <!-- Bootstrap Icons -->
-    <link href="@static(Weline_Admin::assets/css/icons.min.css)" rel="stylesheet">
-</head>
-<body>
+
+<style>
+.weline-ai-model-edit-offcanvas {
+    background-color: var(--backend-color-body-bg, #fff);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    padding: 0.75rem;
+}
+
+.weline-ai-offcanvas-title-bar {
+    padding: 0.5rem 0.75rem;
+    background-color: var(--backend-color-card-bg, #f8f9fa);
+    border-bottom: 2px solid var(--backend-color-border, #dee2e6);
+    margin: -0.75rem -0.75rem 0.75rem -0.75rem;
+}
+
+.weline-ai-offcanvas-title-bar h5 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #495057);
+}
+
+.weline-ai-model-edit-offcanvas .form-label.required::after {
+    content: ' *';
+    color: var(--backend-color-danger, red);
+}
+
+.weline-ai-model-edit-offcanvas .card-header h6 {
+    color: var(--backend-color-text-primary, #495057);
+    font-weight: 600;
+    margin-bottom: 0;
+    font-size: 0.875rem;
+}
+
+.weline-ai-model-edit-offcanvas .card {
+    border: 1px solid var(--backend-color-border, #dee2e6);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.weline-ai-model-edit-offcanvas .card-header {
+    background-color: var(--backend-color-card-bg, #f8f9fa);
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--backend-color-border, #dee2e6);
+}
+
+.weline-ai-model-edit-offcanvas .card-body {
+    padding: 0.75rem;
+}
+
+.weline-ai-model-edit-offcanvas .form-text {
+    font-size: 0.8rem;
+    color: var(--backend-color-text-muted, #6c757d);
+    margin-top: 0.15rem;
+}
+
+.weline-ai-model-edit-offcanvas .form-control,
+.weline-ai-model-edit-offcanvas .form-select {
+    font-size: 0.875rem;
+    padding: 0.375rem 0.5rem;
+}
+
+.weline-ai-model-edit-offcanvas .form-label {
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+}
+
+.weline-ai-model-edit-offcanvas .form-control[readonly] {
+    background-color: var(--backend-color-bg-secondary, #e9ecef);
+    cursor: not-allowed;
+}
+
+.weline-ai-model-edit-offcanvas .card-header .badge {
+    font-size: 0.7rem;
+    font-weight: normal;
+    vertical-align: middle;
+}
+
+.weline-ai-model-edit-offcanvas .row.g-2 {
+    --bs-gutter-x: 0.5rem;
+    --bs-gutter-y: 0.5rem;
+}
+
+.weline-ai-model-edit-offcanvas .row.g-2 > [class*='col-'] > .card {
+    height: 100%;
+}
+
+.weline-ai-model-edit-offcanvas .form-range {
+    height: 1.25rem;
+}
+
+.weline-ai-model-test-panel {
+    display: none;
+    position: fixed;
+    right: 20px;
+    bottom: 100px;
+    width: 400px;
+    background: var(--backend-color-card-bg, white);
+    border: 1px solid var(--backend-color-border, #dee2e6);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1050;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.weline-ai-model-test-btn {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    padding: 8px 16px;
+    font-size: 14px;
+    border-radius: 20px;
+    z-index: 1040;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+</style>
 
 <!-- 模型编辑表单 -->
-<div class="model-edit-offcanvas">
+<div class="weline-ai-model-edit-offcanvas">
     <!-- 表单标题 -->
-    <div class="offcanvas-title-bar">
+    <div class="weline-ai-offcanvas-title-bar">
         <h5 class="mb-0">
             <i class="bi bi-cpu me-2"></i><?= $title ?>
         </h5>
@@ -92,15 +197,12 @@ if (empty($providerConfig) && !empty($config)) {
                                         </label>
                                         <?php $isReadonly = $isEdit && !$model->getData('is_copy'); ?>
                                         <?php if ($isReadonly): ?>
-                                            <!-- 原始模型：只读显示 -->
                                             <input type="text" 
                                                    class="form-control" 
                                                    value="<?= $model->getData('supplier') ?>" 
-                                                   readonly
-                                                   style="background-color: #e9ecef; cursor: not-allowed;">
+                                                   readonly>
                                             <input type="hidden" name="supplier" value="<?= $model->getData('supplier') ?>">
                                         <?php else: ?>
-                                            <!-- 复制模型/新建：可编辑 -->
                                             <input type="text" 
                                                    class="form-control" 
                                                    id="supplier" 
@@ -125,7 +227,7 @@ if (empty($providerConfig) && !empty($config)) {
                                                name="model_code" 
                                                value="<?= $model ? $model->getData('model_code') : '' ?>" 
                                                required
-                                               <?= $isEdit && !$model->getData('is_copy') ? 'readonly style="background-color: #e9ecef;"' : '' ?>
+                                               <?= $isEdit && !$model->getData('is_copy') ? 'readonly' : '' ?>
                                                placeholder="<?= __('例如：gpt-3.5-turbo') ?>">
                                         <div class="form-text"><?= __('模型的唯一标识符') ?></div>
                                     </div>
@@ -198,7 +300,7 @@ if (empty($providerConfig) && !empty($config)) {
                 <!-- 提供商配置卡片 -->
                 <div class="col-12">
                     <div class="card">
-                        <div class="card-header" style="cursor: pointer;" onclick="toggleProviderConfig()">
+                        <div class="card-header" style="cursor: pointer;" onclick="window.WelineAiModelEdit.toggleProviderConfig()">
                             <h6 class="mb-0">
                                 <i class="bi bi-chevron-right" id="providerConfigIcon" style="transition: transform 0.3s;"></i>
                                 <i class="bi bi-gear me-2"></i><?= __('提供商配置') ?> <small class="text-muted">(<?= __('可选') ?>)</small>
@@ -227,18 +329,15 @@ if (empty($providerConfig) && !empty($config)) {
   "timeout": 30,
   "max_retries": 3
 }'><?php
-// 优先使用provider_config，如果没有则使用config
 $displayConfig = $providerConfig;
 if (empty($displayConfig) && !empty($config)) {
     $displayConfig = $config;
 }
 
 if (!empty($displayConfig)) {
-    // 如果是数组，转换为JSON
     if (is_array($displayConfig)) {
         echo json_encode($displayConfig, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     } else if (is_string($displayConfig)) {
-        // 如果是JSON字符串，尝试解析并格式化
         $decoded = json_decode($displayConfig, true);
         if (json_last_error() === JSON_ERROR_NONE) {
             echo json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -273,7 +372,6 @@ if (!empty($displayConfig)) {
                                     <?= __('最大令牌数') ?>
                                 </label>
                                 <?php 
-                                    // 智能推荐默认值：如果为空或0，使用4096作为推荐值
                                     $maxTokens = $model ? $model->getData('max_tokens') : 4096;
                                     $maxTokens = empty($maxTokens) || $maxTokens == 0 ? 4096 : $maxTokens;
                                 ?>
@@ -297,7 +395,6 @@ if (!empty($displayConfig)) {
                                     <?= __('每令牌成本') ?>
                                 </label>
                                 <?php 
-                                    // 智能推荐默认值：如果为空或0，使用0.0015作为推荐值（GPT-3.5-turbo标准价格）
                                     $costPerToken = $model ? $model->getData('cost_per_token') : 0.0015;
                                     $costPerToken = empty($costPerToken) || $costPerToken == 0 ? 0.0015 : $costPerToken;
                                 ?>
@@ -428,9 +525,7 @@ if (!empty($displayConfig)) {
                                             <?= __('状态') ?>
                                         </label>
                                         <?php 
-                                        // 启用条件：供应商连通性成功；若存在自配置，则自配置连通性也必须成功
                                         $providerOk = (($model ? $model->getData('provider_test_status') : 'pending') === 'success');
-                                        // 判断是否存在自配置api_key
                                         $hasSelfConfig = false;
                                         $providerCfgRaw = $model ? $model->getData('provider_config') : '';
                                         if (!empty($providerCfgRaw)) {
@@ -495,446 +590,9 @@ if (!empty($displayConfig)) {
     </form>
 </div>
 
-<!-- JavaScript -->
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // 初始化配置值
-    const modelConfig = <?= $model ? json_encode($model->getConfig()) : '{}' ?>;
-    
-    // 设置配置参数的值
-    if (modelConfig.temperature !== undefined) {
-        document.getElementById('config_temperature').value = modelConfig.temperature;
-        document.getElementById('tempValue').textContent = modelConfig.temperature;
-    }
-    if (modelConfig.top_p !== undefined) {
-        document.getElementById('config_top_p').value = modelConfig.top_p;
-        document.getElementById('topPValue').textContent = modelConfig.top_p;
-    }
-    if (modelConfig.timeout !== undefined) {
-        const timeoutInput = document.getElementById('config_timeout');
-        if (timeoutInput) {
-            timeoutInput.value = modelConfig.timeout;
-        }
-    }
-    
-    // 表单验证
-    const form = document.getElementById('modelEditForm');
-    
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        // 显示加载状态
-        const submitBtn = form.querySelector('button[type="submit"]');
-        const originalText = submitBtn.innerHTML;
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + '<?= __('保存中...') ?>';
-        
-        // 同步API密钥到JSON配置
-        const apiKeyInput = document.getElementById('api_key_input');
-        const providerConfigTextarea = document.getElementById('provider_config_json');
-        
-        if (apiKeyInput && apiKeyInput.value.trim() && providerConfigTextarea) {
-            try {
-                // 获取现有配置
-                let config = {};
-                if (providerConfigTextarea.value.trim()) {
-                    config = JSON.parse(providerConfigTextarea.value);
-                }
-                
-                // 更新API密钥
-                config.api_key = apiKeyInput.value.trim();
-                
-                // 写回textarea
-                providerConfigTextarea.value = JSON.stringify(config, null, 2);
-            } catch (e) {
-                console.error('同步API密钥到JSON配置失败:', e);
-            }
-        }
-        
-        // 验证提供商配置JSON
-        if (providerConfigTextarea && providerConfigTextarea.value.trim()) {
-            try {
-                JSON.parse(providerConfigTextarea.value);
-            } catch (e) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('格式错误') ?>',
-                        text: '<?= __('提供商配置JSON格式错误，请检查语法') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('提供商配置JSON格式错误，请检查语法') ?>');
-                }
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = originalText;
-                return;
-            }
-        }
-        
-        // 提交表单
-        const formData = new FormData(form);
-        
-        fetch(form.action, {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        })
-        .then(response => {
-            // 尝试获取响应文本
-            return response.text().then(text => {
-                try {
-                    return JSON.parse(text);
-                } catch (e) {
-                    console.error('服务器返回非JSON响应:', text.substring(0, 200));
-                    throw new Error('服务器返回的不是有效的JSON格式');
-                }
-            });
-        })
-        .then(data => {
-            if (data.success) {
-                // 显示成功消息
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '<?= __('保存成功') ?>',
-                        text: '<?= __('模型已成功保存') ?>',
-                        timer: 2000,
-                        showConfirmButton: false
-                    }).then(() => {
-                        // 通知父窗口刷新页面（因为我们在 iframe 中）
-                        if (window.parent) {
-                            window.parent.location.reload();
-                        } else {
-                            window.location.reload();
-                        }
-                    });
-                } else {
-                    console.log('<?= __('保存成功！') ?>');
-                    // 通知父窗口刷新页面（因为我们在 iframe 中）
-                    if (window.parent) {
-                        window.parent.location.reload();
-                    } else {
-                        window.location.reload();
-                    }
-                }
-            } else {
-                // 显示错误消息
-                let errorMsg = '<?= __('保存失败：') ?>' + (data.message || '<?= __('未知错误') ?>');
-                if (data.error) {
-                    errorMsg += '\n\n' + '<?= __('详细错误：') ?>' + data.error;
-                }
-                console.error('Save failed:', data);
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('保存失败') ?>',
-                        html: errorMsg.replace(/\n/g, '<br>'),
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error(errorMsg);
-                }
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('保存失败') ?>',
-                    html: '<?= __('请稍后重试') ?><br><br><?= __('错误：') ?>' + error.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('保存失败，请稍后重试') ?>' + '\n\n' + '<?= __('错误：') ?>' + error.message);
-            }
-        })
-        .finally(() => {
-            // 恢复按钮状态
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalText;
-        });
-    });
-    
-    // 模型测试功能
-    <?php if ($isEdit): ?>
-    const testModelBtn = document.getElementById('testModelBtn');
-    if (testModelBtn) {
-        testModelBtn.addEventListener('click', function() {
-            const prompt = document.getElementById('test_prompt').value.trim();
-            const modelId = <?= $model->getId() ?>;
-            // 兼容：改为以模型代码为唯一键
-            const modelCodeInput = document.getElementById('model_code');
-            const modelCode = modelCodeInput ? modelCodeInput.value : '<?= $model ? addslashes($model->getData('model_code')) : '' ?>';
-            
-            if (!prompt) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: '<?= __('提示') ?>',
-                        text: '<?= __('请输入测试提示词') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('请输入测试提示词') ?>');
-                }
-                return;
-            }
-            
-            // 禁用按钮并显示加载状态
-            testModelBtn.disabled = true;
-            testModelBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> ' + '<?= __('测试中...') ?>';
-            
-            // 隐藏之前的结果
-            document.getElementById('testResult').style.display = 'none';
-            
-            // 发送测试请求
-            const formData = new FormData();
-    // 改为传递模型代码，避免依赖数据库ID
-    formData.append('model_code', modelCode);
-            formData.append('prompt', prompt);
-            
-            fetch('<?= $this->getBackendUrl("*/backend/model/testConnection") ?>', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                // 恢复按钮状态
-                testModelBtn.disabled = false;
-                testModelBtn.innerHTML = '<i class="bi bi-play-circle"></i> ' + '<?= __('测试模型') ?>';
-                
-                // 显示结果
-                const resultDiv = document.getElementById('testResult');
-                const resultContent = document.getElementById('testResultContent');
-                
-                if (data && data.data && data.data.results) {
-                    const r = data.data.results;
-                    const s = r.self_config || {};
-                    const p = r.provider_account || {};
-                    const sBadge = s.tested ? (s.success ? '<span class="badge bg-success">成功</span>' : '<span class="badge bg-danger">失败</span>') : '<span class="badge bg-secondary">未测</span>';
-                    const pBadge = p.tested ? (p.success ? '<span class="badge bg-success">成功</span>' : '<span class="badge bg-danger">失败</span>') : '<span class="badge bg-secondary">未测</span>';
-                    resultContent.innerHTML = `
-                        <div class="row g-2">
-                            <div class="col-12">
-                                <div class="alert alert-${(s.success ? 'success' : (s.tested ? 'danger' : 'secondary'))} py-1 px-2 mb-2">
-                                    <small class="fw-bold">自配置</small> ${sBadge}<br>
-                                    ${s.tested ? (`<small class="text-muted">耗时：</small><code>${s.duration || 0} ms</code><br>` +
-                                    `<small class=\"text-muted\">消息：</small>${(s.message || '')}<br>` +
-                                    `<div class=\"alert alert-light py-1 px-2 mb-0\" style=\"white-space: pre-wrap; font-size: 0.875rem; max-height: 160px; overflow-y: auto;\">${(s.response || '')}</div>`) : ''}
-                                </div>
-                            </div>
-                            <div class="col-12">
-                                <div class="alert alert-${(p.success ? 'success' : (p.tested ? 'danger' : 'secondary'))} py-1 px-2 mb-2">
-                                    <small class="fw-bold">供应商账户</small> ${pBadge} ${p.account_name ? ` <span class=\"badge bg-info\">${p.account_name}</span>` : ''}<br>
-                                    ${p.tested ? (`<small class=\"text-muted\">耗时：</small><code>${p.duration || 0} ms</code><br>` +
-                                    `<small class=\"text-muted\">消息：</small>${(p.message || '')}<br>` +
-                                    `<div class=\"alert alert-light py-1 px-2 mb-0\" style=\"white-space: pre-wrap; font-size: 0.875rem; max-height: 160px; overflow-y: auto;\">${(p.response || '')}</div>`) : ''}
-                                </div>
-                            </div>
-                        </div>`;
-                    // 刷新父页面以更新列表的“连通性”状态徽章
-                    try { if (window.parent && window.parent !== window) { window.parent.location.reload(); } } catch (e) {}
-                } else if (data.success) {
-                    resultContent.innerHTML = `
-                        <div class="alert alert-success py-1 px-2 mb-2">
-                            <small><strong>${__('成功')}!</strong> ${data.message}</small>
-                        </div>`;
-                    try { if (window.parent && window.parent !== window) { window.parent.location.reload(); } } catch (e) {}
-                } else {
-                    resultContent.innerHTML = `
-                        <div class="alert alert-danger py-1 px-2 mb-2">
-                            <small><strong>${__('失败')}!</strong> ${data.message}</small>
-                        </div>
-                        ${data.error ? `<div class="alert alert-warning py-1 px-2 mb-0"><small>${data.error}</small></div>` : ''}
-                    `;
-                }
-                
-                resultDiv.style.display = 'block';
-                
-                // 滚动到结果区域
-                resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            })
-            .catch(error => {
-                // 恢复按钮状态
-                testModelBtn.disabled = false;
-                testModelBtn.innerHTML = '<i class="bi bi-play-circle"></i> ' + __('测试模型');
-                
-                // 显示错误
-                const resultDiv = document.getElementById('testResult');
-                const resultContent = document.getElementById('testResultContent');
-                
-                resultContent.innerHTML = `
-                    <div class="alert alert-danger py-1 px-2">
-                        <small><strong>${__('网络错误')}!</strong> ${error.message}</small>
-                    </div>
-                `;
-                
-                resultDiv.style.display = 'block';
-            });
-        });
-    }
-    
-    // 切换测试面板
-    const toggleTestPanel = document.getElementById('toggleTestPanel');
-    const testModelPanel = document.getElementById('testModelPanel');
-    const closeTestPanel = document.getElementById('closeTestPanel');
-    
-    if (toggleTestPanel && testModelPanel) {
-        toggleTestPanel.addEventListener('click', function() {
-            testModelPanel.style.display = testModelPanel.style.display === 'none' ? 'block' : 'none';
-        });
-    }
-    
-    if (closeTestPanel && testModelPanel) {
-        closeTestPanel.addEventListener('click', function() {
-            testModelPanel.style.display = 'none';
-        });
-    }
-    <?php endif; ?>
-});
-
-// 切换提供商配置手风琴
-function toggleProviderConfig() {
-    const body = document.getElementById('providerConfigBody');
-    const icon = document.getElementById('providerConfigIcon');
-    
-    if (body.style.display === 'none') {
-        body.style.display = 'block';
-        icon.classList.remove('bi-chevron-right');
-        icon.classList.add('bi-chevron-down');
-        icon.style.transform = 'rotate(0deg)';
-    } else {
-        body.style.display = 'none';
-        icon.classList.remove('bi-chevron-down');
-        icon.classList.add('bi-chevron-right');
-        icon.style.transform = 'rotate(0deg)';
-    }
-}
-</script>
-
-<style>
-.model-edit-offcanvas {
-    background-color: #fff;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    padding: 0.75rem;
-}
-
-.offcanvas-title-bar {
-    padding: 0.5rem 0.75rem;
-    background-color: #f8f9fa;
-    border-bottom: 2px solid #dee2e6;
-    margin: -0.75rem -0.75rem 0.75rem -0.75rem;
-}
-
-.offcanvas-title-bar h5 {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #495057;
-}
-
-.form-label.required::after {
-    content: ' *';
-    color: red;
-}
-
-.card-header h6 {
-    color: #495057;
-    font-weight: 600;
-    margin-bottom: 0;
-    font-size: 0.875rem;
-}
-
-.card {
-    border: 1px solid #dee2e6;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-}
-
-.card-header {
-    background-color: #f8f9fa;
-    padding: 0.5rem 0.75rem;
-    border-bottom: 1px solid #dee2e6;
-}
-
-.card-body {
-    padding: 0.75rem;
-}
-
-.form-text {
-    font-size: 0.8rem;
-    color: #6c757d;
-    margin-top: 0.15rem;
-}
-
-.form-control, .form-select {
-    font-size: 0.875rem;
-    padding: 0.375rem 0.5rem;
-}
-
-.form-label {
-    font-size: 0.875rem;
-    margin-bottom: 0.25rem;
-}
-
-/* 只读字段样式 */
-.form-control[readonly] {
-    background-color: #e9ecef;
-    cursor: not-allowed;
-}
-
-.form-select[style*="pointer-events: none"] {
-    cursor: not-allowed;
-}
-
-/* 分组标题 */
-.card-header .badge {
-    font-size: 0.7rem;
-    font-weight: normal;
-    vertical-align: middle;
-}
-
-/* 紧凑间距 */
-.mb-2 {
-    margin-bottom: 0.5rem !important;
-}
-
-.row.g-2 {
-    --bs-gutter-x: 0.5rem;
-    --bs-gutter-y: 0.5rem;
-}
-
-/* 卡片等高 */
-.row.g-2 > [class*='col-'] > .card {
-    height: 100%;
-}
-
-/* 滑块样式 */
-.form-range {
-    height: 1.25rem;
-}
-
-/* 按钮组 */
-.d-grid button {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.875rem;
-}
-
-/* 减少卡片间的间距 */
-.card:last-child {
-    margin-bottom: 0;
-}
-</style>
-
 <?php if ($isEdit): ?>
 <!-- 浮动测试按钮和面板 -->
-<div id="testModelPanel" style="display: none; position: fixed; right: 20px; bottom: 100px; width: 400px; background: white; border: 1px solid #dee2e6; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1050; max-height: 600px; overflow-y: auto;">
+<div id="testModelPanel" class="weline-ai-model-test-panel">
     <div class="card-header bg-success text-white d-flex justify-content-between align-items-center" style="padding: 12px 16px;">
         <span><i class="bi bi-play-circle me-2"></i><?= __('模型测试') ?></span>
         <button type="button" class="btn-close btn-close-white" id="closeTestPanel" style="opacity: 1;"></button>
@@ -964,11 +622,269 @@ function toggleProviderConfig() {
 <!-- 浮动测试按钮 -->
 <button type="button" 
         id="toggleTestPanel" 
-        class="btn btn-success shadow"
-        style="position: fixed; right: 20px; bottom: 20px; padding: 8px 16px; font-size: 14px; border-radius: 20px; z-index: 1040; display: flex; align-items: center; gap: 6px;">
+        class="btn btn-success shadow weline-ai-model-test-btn">
     <i class="mdi mdi-test-tube"></i> <span>测试</span>
 </button>
 <?php endif; ?>
 
-</body>
-</html>
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
+<script>
+(function() {
+    'use strict';
+
+    var modelConfig = <?= $model ? json_encode($model->getConfig()) : '{}' ?>;
+
+    window.WelineAiModelEdit = {
+        toggleProviderConfig: function() {
+            var body = document.getElementById('providerConfigBody');
+            var icon = document.getElementById('providerConfigIcon');
+            
+            if (body.style.display === 'none') {
+                body.style.display = 'block';
+                icon.classList.remove('bi-chevron-right');
+                icon.classList.add('bi-chevron-down');
+            } else {
+                body.style.display = 'none';
+                icon.classList.remove('bi-chevron-down');
+                icon.classList.add('bi-chevron-right');
+            }
+        },
+
+        init: function() {
+            // 设置配置参数的值
+            if (modelConfig.temperature !== undefined) {
+                document.getElementById('config_temperature').value = modelConfig.temperature;
+                document.getElementById('tempValue').textContent = modelConfig.temperature;
+            }
+            if (modelConfig.top_p !== undefined) {
+                document.getElementById('config_top_p').value = modelConfig.top_p;
+                document.getElementById('topPValue').textContent = modelConfig.top_p;
+            }
+            if (modelConfig.timeout !== undefined) {
+                var timeoutInput = document.getElementById('config_timeout');
+                if (timeoutInput) {
+                    timeoutInput.value = modelConfig.timeout;
+                }
+            }
+
+            this.initForm();
+            this.initTestPanel();
+        },
+
+        initForm: function() {
+            var form = document.getElementById('modelEditForm');
+            if (!form) return;
+            
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                var submitBtn = form.querySelector('button[type="submit"]');
+                var originalText = submitBtn.innerHTML;
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span><?= __('保存中...') ?>';
+                
+                var apiKeyInput = document.getElementById('api_key_input');
+                var providerConfigTextarea = document.getElementById('provider_config_json');
+                
+                if (apiKeyInput && apiKeyInput.value.trim() && providerConfigTextarea) {
+                    try {
+                        var config = {};
+                        if (providerConfigTextarea.value.trim()) {
+                            config = JSON.parse(providerConfigTextarea.value);
+                        }
+                        config.api_key = apiKeyInput.value.trim();
+                        providerConfigTextarea.value = JSON.stringify(config, null, 2);
+                    } catch (e) {
+                        console.error('同步API密钥到JSON配置失败:', e);
+                    }
+                }
+                
+                if (providerConfigTextarea && providerConfigTextarea.value.trim()) {
+                    try {
+                        JSON.parse(providerConfigTextarea.value);
+                    } catch (e) {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'error',
+                                title: '<?= __('格式错误') ?>',
+                                text: '<?= __('提供商配置JSON格式错误，请检查语法') ?>',
+                                confirmButtonText: '<?= __('确定') ?>'
+                            });
+                        }
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalText;
+                        return;
+                    }
+                }
+                
+                var formData = new FormData(form);
+                
+                fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(function(response) {
+                    return response.text().then(function(text) {
+                        try {
+                            return JSON.parse(text);
+                        } catch (e) {
+                            throw new Error('服务器返回的不是有效的JSON格式');
+                        }
+                    });
+                })
+                .then(function(data) {
+                    if (data.success) {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'success',
+                                title: '<?= __('保存成功') ?>',
+                                text: '<?= __('模型已成功保存') ?>',
+                                timer: 2000,
+                                showConfirmButton: false
+                            }).then(function() {
+                                if (window.parent) {
+                                    window.parent.location.reload();
+                                } else {
+                                    window.location.reload();
+                                }
+                            });
+                        } else {
+                            if (window.parent) {
+                                window.parent.location.reload();
+                            } else {
+                                window.location.reload();
+                            }
+                        }
+                    } else {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'error',
+                                title: '<?= __('保存失败') ?>',
+                                html: (data.message || '<?= __('未知错误') ?>'),
+                                confirmButtonText: '<?= __('确定') ?>'
+                            });
+                        }
+                    }
+                })
+                .catch(function(error) {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('保存失败') ?>',
+                            html: '<?= __('请稍后重试') ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    }
+                })
+                .finally(function() {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                });
+            });
+        },
+
+        initTestPanel: function() {
+            <?php if ($isEdit): ?>
+            var testModelBtn = document.getElementById('testModelBtn');
+            var toggleTestPanel = document.getElementById('toggleTestPanel');
+            var testModelPanel = document.getElementById('testModelPanel');
+            var closeTestPanel = document.getElementById('closeTestPanel');
+            
+            if (toggleTestPanel && testModelPanel) {
+                toggleTestPanel.addEventListener('click', function() {
+                    testModelPanel.style.display = testModelPanel.style.display === 'none' ? 'block' : 'none';
+                });
+            }
+            
+            if (closeTestPanel && testModelPanel) {
+                closeTestPanel.addEventListener('click', function() {
+                    testModelPanel.style.display = 'none';
+                });
+            }
+            
+            if (testModelBtn) {
+                testModelBtn.addEventListener('click', function() {
+                    var prompt = document.getElementById('test_prompt').value.trim();
+                    var modelCodeInput = document.getElementById('model_code');
+                    var modelCode = modelCodeInput ? modelCodeInput.value : '<?= $model ? addslashes($model->getData('model_code')) : '' ?>';
+                    
+                    if (!prompt) {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: '<?= __('提示') ?>',
+                                text: '<?= __('请输入测试提示词') ?>',
+                                confirmButtonText: '<?= __('确定') ?>'
+                            });
+                        }
+                        return;
+                    }
+                    
+                    testModelBtn.disabled = true;
+                    testModelBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> <?= __('测试中...') ?>';
+                    
+                    document.getElementById('testResult').style.display = 'none';
+                    
+                    var formData = new FormData();
+                    formData.append('model_code', modelCode);
+                    formData.append('prompt', prompt);
+                    
+                    fetch('<?= $this->getBackendUrl("*/backend/model/testConnection") ?>', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        testModelBtn.disabled = false;
+                        testModelBtn.innerHTML = '<i class="bi bi-play-circle"></i> <?= __('测试模型') ?>';
+                        
+                        var resultDiv = document.getElementById('testResult');
+                        var resultContent = document.getElementById('testResultContent');
+                        
+                        if (data && data.data && data.data.results) {
+                            var r = data.data.results;
+                            var s = r.self_config || {};
+                            var p = r.provider_account || {};
+                            var sBadge = s.tested ? (s.success ? '<span class="badge bg-success">成功</span>' : '<span class="badge bg-danger">失败</span>') : '<span class="badge bg-secondary">未测</span>';
+                            var pBadge = p.tested ? (p.success ? '<span class="badge bg-success">成功</span>' : '<span class="badge bg-danger">失败</span>') : '<span class="badge bg-secondary">未测</span>';
+                            resultContent.innerHTML = '<div class="row g-2"><div class="col-12"><div class="alert alert-' + (s.success ? 'success' : (s.tested ? 'danger' : 'secondary')) + ' py-1 px-2 mb-2"><small class="fw-bold">自配置</small> ' + sBadge + '<br>' + (s.tested ? ('<small class="text-muted">耗时：</small><code>' + (s.duration || 0) + ' ms</code><br><small class="text-muted">消息：</small>' + (s.message || '') + '</div>') : '') + '</div><div class="col-12"><div class="alert alert-' + (p.success ? 'success' : (p.tested ? 'danger' : 'secondary')) + ' py-1 px-2 mb-2"><small class="fw-bold">供应商账户</small> ' + pBadge + (p.account_name ? ' <span class="badge bg-info">' + p.account_name + '</span>' : '') + '<br>' + (p.tested ? ('<small class="text-muted">耗时：</small><code>' + (p.duration || 0) + ' ms</code><br><small class="text-muted">消息：</small>' + (p.message || '') + '</div>') : '') + '</div></div>';
+                            try { if (window.parent && window.parent !== window) { window.parent.location.reload(); } } catch (e) {}
+                        } else if (data.success) {
+                            resultContent.innerHTML = '<div class="alert alert-success py-1 px-2 mb-2"><small><strong>成功!</strong> ' + data.message + '</small></div>';
+                            try { if (window.parent && window.parent !== window) { window.parent.location.reload(); } } catch (e) {}
+                        } else {
+                            resultContent.innerHTML = '<div class="alert alert-danger py-1 px-2 mb-2"><small><strong>失败!</strong> ' + data.message + '</small></div>';
+                        }
+                        
+                        resultDiv.style.display = 'block';
+                        resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    })
+                    .catch(function(error) {
+                        testModelBtn.disabled = false;
+                        testModelBtn.innerHTML = '<i class="bi bi-play-circle"></i> <?= __('测试模型') ?>';
+                        
+                        var resultDiv = document.getElementById('testResult');
+                        var resultContent = document.getElementById('testResultContent');
+                        
+                        resultContent.innerHTML = '<div class="alert alert-danger py-1 px-2"><small><strong>网络错误!</strong> ' + error.message + '</small></div>';
+                        
+                        resultDiv.style.display = 'block';
+                    });
+                });
+            }
+            <?php endif; ?>
+        }
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        window.WelineAiModelEdit.init();
+    });
+})();
+</script>

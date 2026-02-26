@@ -1,7 +1,9 @@
 <?php
 /**
- * 站点发文配额 Offcanvas 表单（iframe 内加载）
+ * 站点发文配额 Offcanvas 表单
+ * 内容模板 - 由 default.blank 布局包装
  *
+ * @var \Weline\Framework\View\Template $this
  * @var \GuoLaiRen\Blog\Model\TrendSiteQuota|null $quota
  * @var array $sites
  * @var array $profiles
@@ -13,25 +15,9 @@ $sites             = $this->getData('sites') ?? [];
 $profiles          = $this->getData('profiles') ?? [];
 $categoriesBySite  = $this->getData('categoriesBySite') ?? [];
 $isEdit            = $quota && $quota->getId();
-$title             = $isEdit ? __('编辑站点发文配额') : __('新建站点发文配额');
 $currentSiteId     = $quota ? (int)$quota->getData('site_id') : 0;
 $currentCategoryId = $quota ? (int)$quota->getData('default_category_id') : 0;
 ?>
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $title ?></title>
-    <link href="@static(Weline_Frontend::assets/css/bootstrap.min.css)" rel="stylesheet">
-    <link href="@static(Weline_Admin::assets/css/icons.min.css)" rel="stylesheet">
-    <style>
-        body { padding: 1rem; background: #fff; }
-    </style>
-</head>
-<body>
-
-<template>Weline_Component::message.phtml</template>
 
 <form id="offcanvasForm" action="<?= htmlspecialchars($action) ?>" method="post">
     <div class="mb-3">
@@ -81,6 +67,8 @@ $currentCategoryId = $quota ? (int)$quota->getData('default_category_id') : 0;
 
 <script>
 (function() {
+    'use strict';
+    
     var categoriesBySite = <?= json_encode($categoriesBySite) ?>;
     var siteSelect       = document.getElementById('site_id');
     var categorySelect   = document.getElementById('default_category_id');
@@ -108,6 +96,3 @@ $currentCategoryId = $quota ? (int)$quota->getData('default_category_id') : 0;
     }
 })();
 </script>
-
-</body>
-</html>

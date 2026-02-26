@@ -2,40 +2,20 @@
 /**
  * 敏感内容检测页面模板
  */
-/**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 ?>
-<!DOCTYPE html>
-<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title>敏感内容检测</title>
-    <style>
-        .highlight-marked {
-            background-color: #ffeb3b;
-            padding: 2px 4px;
-            border-radius: 3px;
-        }
-        .accordion-button:not(.collapsed) {
-            background-color: #f8f9fa;
-        }
-    </style>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+<style>
+    .desens-detect-highlight-marked {
+        background-color: var(--backend-color-warning-bg, #ffeb3b);
+        padding: 2px 4px;
+        border-radius: 3px;
+    }
+    .desens-detect-accordion-button:not(.collapsed) {
+        background-color: var(--backend-color-bg-secondary, #f8f9fa);
+    }
+</style>
 
-@template(Weline_Admin::common/page/loading.phtml)
-
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-
-                <div class='row'>
+<!-- 页面标题 -->
+<div class='row'>
                     <div class='col-12'>
                         <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
                             <h4 class='mb-sm-0'>
@@ -193,12 +173,6 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     </div>
                 </div>
 
-            </div>
-        </div>
-    </div>
-
-</div>
-
 <!-- 检测中弹窗 -->
 <div class="modal fade" id="detectLoadingModal" tabindex="-1" aria-hidden="true" data-bs-keyboard="false" data-bs-backdrop="static">
   <div class="modal-dialog modal-dialog-centered">
@@ -224,11 +198,11 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
   </div>
 </div>
 
-@template(Weline_Admin::common/right-sidebar.phtml)
-@template(Weline_Admin::common/footer.phtml)
-
 <script>
-// 全局变量
+(function() {
+    'use strict';
+    
+    // 模块内变量
 let allModels = [];
 let detectionData = null;
 let rewriteData = null;
@@ -1136,8 +1110,5 @@ function showErrorInModal(errorMessage, showFallbackOption = false) {
     } catch(e) {}
 }
 
-// 删除重复的 markSensitiveContent 函数定义，使用原有的更完善版本
+})();
 </script>
-
-</body>
-</html>

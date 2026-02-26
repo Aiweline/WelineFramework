@@ -487,7 +487,23 @@ class AiService
             return __('无法选择合适的AI模型，请检查模型配置');
         }
         
-        return __('无法选择合适的AI模型。原因：%{1}。请前往后台 AI 模块配置默认模型。', [implode('；', $reasons)]);
+        // 生成带链接的错误提示
+        /** @var \Weline\Framework\Http\Url $urlBuilder */
+        $urlBuilder = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
+        $configUrl = $urlBuilder->getBackendUrl('ai/backend/defaultmodel');
+        $modelListUrl = $urlBuilder->getBackendUrl('ai/backend/model');
+        $providerUrl = $urlBuilder->getBackendUrl('ai/backend/provider');
+        
+        $linkHtml = '<div class="ai-config-links" style="margin-top: 10px;">'
+            . '<a href="' . $configUrl . '" class="btn btn-sm btn-primary me-2" target="_blank">'
+            . '<i class="mdi mdi-star-settings me-1"></i>' . __('配置默认模型') . '</a>'
+            . '<a href="' . $modelListUrl . '" class="btn btn-sm btn-outline-secondary me-2" target="_blank">'
+            . '<i class="mdi mdi-robot me-1"></i>' . __('模型列表') . '</a>'
+            . '<a href="' . $providerUrl . '" class="btn btn-sm btn-outline-secondary" target="_blank">'
+            . '<i class="mdi mdi-account-key me-1"></i>' . __('供应商账户') . '</a>'
+            . '</div>';
+        
+        return __('无法选择合适的AI模型。原因：%{1}', [implode('；', $reasons)]) . $linkHtml;
     }
 
     /**
@@ -1100,11 +1116,33 @@ class AiService
 
         // 3. 注入供应商账户配置（base_url、api_key、proxy 等）
         $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::fields_MODEL_CODE));
+        Env::log('ai_agent_debug.log', sprintf(
+            '[executeAgent] modelCode=%s, providerCode=%s',
+            $model->getData(AiModel::fields_MODEL_CODE),
+            $providerCode ?: 'null'
+        ), 'DEBUG');
+        
         if ($providerCode) {
             $account = $this->accountService->getAvailableAccount($providerCode);
+            Env::log('ai_agent_debug.log', sprintf(
+                '[executeAgent] getAvailableAccount(%s) = %s',
+                $providerCode,
+                $account ? 'ID=' . $account->getId() : 'null'
+            ), 'DEBUG');
+            
             if ($account) {
                 $this->injectAccountConfig($model, $account);
+                $configAfterInject = $model->getConfig();
+                Env::log('ai_agent_debug.log', sprintf(
+                    '[executeAgent] after injectAccountConfig: objId=%d, api_key=%s',
+                    spl_object_id($model),
+                    isset($configAfterInject['api_key']) ? (empty($configAfterInject['api_key']) ? '(empty)' : '...' . substr($configAfterInject['api_key'], -4)) : '(not set)'
+                ), 'DEBUG');
+            } else {
+                Env::log('ai_agent_debug.log', '[executeAgent] NO ACCOUNT FOUND - api_key will not be injected!', 'WARNING');
             }
+        } else {
+            Env::log('ai_agent_debug.log', '[executeAgent] NO PROVIDER CODE - cannot get account!', 'WARNING');
         }
 
         // 4. 合并 provider config
@@ -1262,11 +1300,13 @@ class AiService
         $userId = $params['user_id'] ?? null;
         $isBackend = $params['is_backend'] ?? true;
 
+        // 传递已注入配置的 model 实例，避免 ConfigResolver 重新从数据库加载
         return $configResolver->resolveConfig(
             $model->getModelCode(),
             $params['user_config'] ?? [],
             $userId ? (int)$userId : null,
-            $isBackend
+            $isBackend,
+            $model  // 传递已注入账户配置的模型实例
         );
     }
 }

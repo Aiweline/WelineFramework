@@ -519,12 +519,33 @@ class Cli extends CliAbstract
         foreach ($recommendCommands as $recommendCommand) {
             $commands = array_merge($commands, $recommendCommand);
         }
-        if (count($commands) === 1 && $command = $commands[0]) {
-            foreach ($command as $c => $data) {
+        
+        if (count($commands) === 1 && $singleCmd = $commands[0]) {
+            foreach ($singleCmd as $c => $data) {
                 if (is_array($data) && isset($data['class'])) {
                     return ['class' => $data['class'], 'command' => $c, 'data' => $data];
                 }
             }
+        }
+        
+        // 当有多个匹配时，检查是否有且仅有一个命令的段数与用户输入段数相同（精确段数匹配）
+        $inputSegCount = count(explode(':', $command));
+        $exactSegMatches = [];
+        foreach ($commands as $cmdItem) {
+            if (!is_array($cmdItem)) {
+                continue;
+            }
+            foreach ($cmdItem as $c => $data) {
+                if (is_array($data) && isset($data['class'])) {
+                    $cmdSegCount = count(explode(':', $c));
+                    if ($cmdSegCount === $inputSegCount) {
+                        $exactSegMatches[] = ['class' => $data['class'], 'command' => $c, 'data' => $data];
+                    }
+                }
+            }
+        }
+        if (count($exactSegMatches) === 1) {
+            return $exactSegMatches[0];
         }
         
         // 多个匹配但都指向同一命令类（主命令+别名）时，直接执行

@@ -1,141 +1,89 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+/**
+ * 网站管理（内容模板）
+ * 
+ * 由布局系统自动包裹 HTML 框架
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
 ?>
-<!DOCTYPE html>
-<!--
- *@Author       秋枫雁飞
- *@Email        aiweline@qq.com
- *@Forum        https://bbs.aiweline.com
- *@DESC         后台共用头部
--->
-<html lang="en" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    <w:template>Weline_Admin::common/head.phtml</w:template>
-    <!-- jvectormap -->
-    <link href="@static(Weline_Admin::assets/libs/jqvmap/jqvmap.min.css)" rel="stylesheet"/>
-    <title><lang>Weline Admin 管理面板</lang></title>
-    <style>
-        .badge {
-            font-size: 0.75rem;
-            padding: 0.25em 0.5em;
-        }
-    </style>
-</head>
+<style>
+.badge {
+    font-size: 0.75rem;
+    padding: 0.25em 0.5em;
+}
+</style>
 
-<!--<body data-sidebar="dark" data-topbar='colored' data-layout='horizontal'>-->
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-<!-- <body data-layout="horizontal" data-topbar="dark"> -->
-<!--加载中组件 开始-->
-<w:template>Weline_Admin::common/page/loading.phtml</w:template>
-<!-- 开始 页面 -->
-<div id="layout-wrapper">
+<!-- 页面标题 -->
+<div class='row'>
+    <div class='col-12'>
+        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+            <h4 class='mb-sm-0'>
+                <lang>面板</lang>
+            </h4>
 
-    <!--页头工具条 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <!--页头工具条 结束-->
+            <div class='page-title-right'>
+                <ol class='breadcrumb m-0'>
+                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
+                            <lang>后台</lang>
+                        </a></li>
+                    <li class='breadcrumb-item active'>
+                        <lang>面板</lang>
+                    </li>
+                </ol>
+            </div>
 
-    <!-- ========== Topnav Start ========== -->
-    <!--页头菜单栏 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    <!--页头菜单栏 结束-->
-
-    <!-- ========== Left Sidebar Start ========== -->
-    <!--左侧菜单栏 开始-->
-    <w:template>Weline_Admin::common/left-sidebar.phtml</w:template>
-    <!--左侧菜单栏 结束-->
-
-
-    <!-- ============================================================== -->
-    <!-- Start right Content here -->
-    <!-- ============================================================== -->
-    <div class='main-content'>
-        <div class='page-content'>
-            <div class='container-fluid'>
-                <div class='row'>
-                    <!--消息-->
-                    <template>Weline_Component::message.phtml</template>
-                </div>
-                <!-- start page title -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'>
-                                <lang>面板</lang>
-                            </h4>
-
-                            <div class='page-title-right'>
-                                <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
-                                            <lang>后台</lang>
-                                        </a></li>
-                                    <li class='breadcrumb-item active'>
-                                        <lang>面板</lang>
-                                    </li>
-                                </ol>
-                            </div>
-
-                        </div>
-                    </div>
-                </div>
-                <!-- end page title -->
-                <!-- start page message -->
-                <div class='row'>
-                    <template>Weline_Component::message.phtml</template>
-                </div>
-                <!-- end message -->
-                <div class="card">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between mb-3">
-                            <h4 class="card-title">网站列表</h4>
-                            <div class="d-flex gap-2">
-                                <form id="search-form" method="get" action="<?= $this->getUrl('*/admin/website') ?>" class="d-flex gap-2">
-                                    <input type="text" id="search-input" name="search" class="form-control" placeholder="搜索名称、代码或URL" 
-                                           value="<?= htmlspecialchars($search ?? '') ?>" style="width: 250px;">
-                                    <button type="submit" class="btn btn-outline-primary">
-                                        <i class="mdi mdi-magnify"></i> 搜索
-                                    </button>
-                                    <?php if (!empty($search)): ?>
-                                        <a href="<?= $this->getUrl('*/admin/website') ?>" class="btn btn-outline-secondary" id="clear-search">
-                                            <i class="mdi mdi-close"></i> 清除
-                                        </a>
-                                    <?php endif; ?>
-                                </form>
-                                <block class='Weline\Component\Block\OffCanvas'
-                                       cache='0'
-                                       id='add_result_modal'
-                                       action='*/admin/website/add'
-                                       title='添加网站'
-                                       close-button-show='1'
-                                       close-button-text='关闭'
-                                       direction='right'
-                                       class-names='w-75 h-100'
-                                       off-canvas-body-style=''
-                                       target-button-text='添加网站'
-                                       icon='mdi mdi-plus'
-                                       target-button-class='btn btn-primary'
-                                       target-tag='a'
-                                       save='1'
-                                />
-                            </div>
-                        </div>
-
-                        <div id="website-table-container">
-                            <?= $this->fetch('Weline_Websites::templates/Admin/Website/table.phtml') ?>
-                        </div>
-                    </div>
-                </div>
-            </div> <!-- container-fluid -->
         </div>
-        <!-- End Page-content -->
     </div>
-    <!-- end main content-->
-
 </div>
-<!-- END layout-wrapper -->
-<!--右边栏-->
-@template(Weline_Admin::common/right-sidebar.phtml)
+
+<!-- 消息 -->
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<!-- 网站列表 -->
+<div class="card">
+    <div class="card-body">
+        <div class="d-flex justify-content-between mb-3">
+            <h4 class="card-title"><lang>网站列表</lang></h4>
+            <div class="d-flex gap-2">
+                <form id="search-form" method="get" action="<?= $this->getUrl('*/admin/website') ?>" class="d-flex gap-2">
+                    <input type="text" id="search-input" name="search" class="form-control" placeholder="<?= __('搜索名称、代码或URL') ?>" 
+                           value="<?= htmlspecialchars($search ?? '') ?>" style="width: 250px;">
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="mdi mdi-magnify"></i> <lang>搜索</lang>
+                    </button>
+                    <?php if (!empty($search)): ?>
+                        <a href="<?= $this->getUrl('*/admin/website') ?>" class="btn btn-outline-secondary" id="clear-search">
+                            <i class="mdi mdi-close"></i> <lang>清除</lang>
+                        </a>
+                    <?php endif; ?>
+                </form>
+                <block class='Weline\Component\Block\OffCanvas'
+                       cache='0'
+                       id='add_result_modal'
+                       action='*/admin/website/add'
+                       title='添加网站'
+                       close-button-show='1'
+                       close-button-text='关闭'
+                       direction='right'
+                       class-names='w-75 h-100'
+                       off-canvas-body-style=''
+                       target-button-text='添加网站'
+                       icon='mdi mdi-plus'
+                       target-button-class='btn btn-primary'
+                       target-tag='a'
+                       save='1'
+                />
+            </div>
+        </div>
+
+        <div id="website-table-container">
+            <?= $this->fetch('Weline_Websites::templates/Admin/Website/table.phtml') ?>
+        </div>
+    </div>
+</div>
 
 <!-- Table Editable plugin -->
 <script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
@@ -143,35 +91,32 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 <script src='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.js)'></script>
 <!-- Sweet Alerts js -->
 <script src="@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)"></script>
-@template(Weline_Admin::common/footer.phtml)
 <js:part name="w-delete"/>
+
 <script>
-// 异步搜索功能
 (function() {
-    let searchTimeout = null;
-    const searchForm = document.getElementById('search-form');
-    const searchInput = document.getElementById('search-input');
-    const tableContainer = document.getElementById('website-table-container');
-    const clearSearchBtn = document.getElementById('clear-search');
-    const searchUrl = '<?= $this->getUrl('*/admin/website') ?>';
+    'use strict';
     
-    // 执行异步搜索
+    var searchTimeout = null;
+    var searchForm = document.getElementById('search-form');
+    var searchInput = document.getElementById('search-input');
+    var tableContainer = document.getElementById('website-table-container');
+    var clearSearchBtn = document.getElementById('clear-search');
+    var searchUrl = '<?= $this->getUrl('*/admin/website') ?>';
+    
     function performSearch() {
         if (!searchForm || !tableContainer) return;
         
-        const searchValue = searchInput ? searchInput.value.trim() : '';
+        var searchValue = searchInput ? searchInput.value.trim() : '';
         
-        // 显示加载状态
-        tableContainer.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">加载中...</span></div><p class="mt-3">正在搜索...</p></div>';
+        tableContainer.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden"><?= __('加载中...') ?></span></div><p class="mt-3"><?= __('正在搜索...') ?></p></div>';
         
-        // 构建 AJAX URL
-        const params = new URLSearchParams();
+        var params = new URLSearchParams();
         if (searchValue) {
             params.append('search', searchValue);
         }
-        const ajaxUrl = searchUrl + (params.toString() ? '?' + params.toString() : '');
+        var ajaxUrl = searchUrl + (params.toString() ? '?' + params.toString() : '');
         
-        // 发送 AJAX 请求
         fetch(ajaxUrl, {
             method: 'GET',
             headers: {
@@ -189,18 +134,16 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 return JSON.parse(text);
             } catch (e) {
                 console.error('JSON parse error:', e, text);
-                throw new Error('服务器返回的不是有效的JSON数据');
+                throw new Error('<?= __('服务器返回的不是有效的JSON数据') ?>');
             }
         })
         .then(function(data) {
             if (data.success) {
-                // 更新表格内容
                 tableContainer.innerHTML = data.html;
                 
-                // 执行新插入的 script 标签（用于初始化 OffCanvas 等组件）
-                const scripts = tableContainer.querySelectorAll('script');
+                var scripts = tableContainer.querySelectorAll('script');
                 scripts.forEach(function(oldScript) {
-                    const newScript = document.createElement('script');
+                    var newScript = document.createElement('script');
                     Array.from(oldScript.attributes).forEach(function(attr) {
                         newScript.setAttribute(attr.name, attr.value);
                     });
@@ -208,16 +151,14 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     oldScript.parentNode.replaceChild(newScript, oldScript);
                 });
                 
-                // 更新清除按钮显示状态
-                const currentClearBtn = document.getElementById('clear-search');
+                var currentClearBtn = document.getElementById('clear-search');
                 if (searchValue) {
-                    // 如果有搜索值，显示清除按钮
                     if (!currentClearBtn) {
-                        const btn = document.createElement('a');
+                        var btn = document.createElement('a');
                         btn.href = searchUrl;
                         btn.className = 'btn btn-outline-secondary';
                         btn.id = 'clear-search';
-                        btn.innerHTML = '<i class="mdi mdi-close"></i> 清除';
+                        btn.innerHTML = '<i class="mdi mdi-close"></i> <?= __('清除') ?>';
                         searchForm.appendChild(btn);
                         btn.addEventListener('click', function(e) {
                             e.preventDefault();
@@ -226,54 +167,47 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                         });
                     }
                 } else {
-                    // 如果没有搜索值，移除清除按钮
                     if (currentClearBtn && currentClearBtn.parentNode) {
                         currentClearBtn.parentNode.removeChild(currentClearBtn);
                     }
                 }
                 
-                // 重新初始化 w-delete 功能
                 if (typeof window.initWDelete === 'function') {
                     window.initWDelete();
                 } else {
-                    // 如果 w-delete 还没有初始化，尝试重新加载脚本
-                    const wDeleteScript = document.querySelector('script[src*="w-delete"]');
+                    var wDeleteScript = document.querySelector('script[src*="w-delete"]');
                     if (wDeleteScript) {
-                        const newScript = document.createElement('script');
+                        var newScript = document.createElement('script');
                         newScript.src = wDeleteScript.src;
                         document.body.appendChild(newScript);
                     }
                 }
             } else {
-                tableContainer.innerHTML = '<div class="alert alert-danger">搜索失败: ' + (data.message || '未知错误') + '</div>';
+                tableContainer.innerHTML = '<div class="alert alert-danger"><?= __('搜索失败') ?>: ' + (data.message || '<?= __('未知错误') ?>') + '</div>';
             }
         })
         .catch(function(error) {
             console.error('Search error:', error);
-            tableContainer.innerHTML = '<div class="alert alert-danger">搜索出错，请刷新页面重试</div>';
+            tableContainer.innerHTML = '<div class="alert alert-danger"><?= __('搜索出错，请刷新页面重试') ?></div>';
         });
     }
     
-    // 初始化
     document.addEventListener('DOMContentLoaded', function() {
         if (!searchForm || !searchInput) return;
         
-        // 阻止表单默认提交
         searchForm.addEventListener('submit', function(e) {
             e.preventDefault();
             clearTimeout(searchTimeout);
             performSearch();
         });
         
-        // 输入框输入时自动搜索（防抖）
         searchInput.addEventListener('input', function() {
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(function() {
                 performSearch();
-            }, 500); // 输入后500ms才搜索
+            }, 500);
         });
         
-        // 回车键立即搜索
         searchInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -282,7 +216,6 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
             }
         });
         
-        // 清除按钮点击事件
         if (clearSearchBtn) {
             clearSearchBtn.addEventListener('click', function(e) {
                 e.preventDefault();
@@ -293,5 +226,3 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     });
 })();
 </script>
-</body>
-</html>

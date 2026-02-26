@@ -5,33 +5,11 @@
  * @var array $desensitization_adapter
  * @var array $rewrite_adapter
  */
-/**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
-
 $desensitizationAdapter = $this->desensitization_adapter ?? null;
 $rewriteAdapter = $this->rewrite_adapter ?? null;
 ?>
-<!DOCTYPE html>
-<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title>模块配置</title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-
-@template(Weline_Admin::common/page/loading.phtml)
-
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-
-                <div class='row'>
+<!-- 页面标题 -->
+<div class='row'>
                     <div class='col-12'>
                         <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
                             <h4 class='mb-sm-0'>
@@ -268,12 +246,6 @@ $rewriteAdapter = $this->rewrite_adapter ?? null;
                     </div>
                 </div>
 
-            </div>
-        </div>
-    </div>
-
-</div>
-
 <!-- 等待弹窗：规则更新中 -->
 <div class="modal fade" id="updateRulesModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -292,12 +264,12 @@ $rewriteAdapter = $this->rewrite_adapter ?? null;
     </div>
 </div>
 
-@template(Weline_Admin::common/right-sidebar.phtml)
-@template(Weline_Admin::common/footer.phtml)
-
 <script>
-// 模型数据存储
-let allModels = [];
+(function() {
+    'use strict';
+    
+    // 模型数据存储
+    var allModels = [];
 
 // Debounce实现
 function debounce(func, delay) {
@@ -622,8 +594,6 @@ function updateRules(platform) {
         // 不中途关闭，保留给用户查看
     });
 }
+
+})();
 </script>
-
-</body>
-</html>
-

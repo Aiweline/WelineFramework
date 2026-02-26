@@ -4,47 +4,35 @@ declare(strict_types=1);
 
 namespace Weline\Saas\Service;
 
-use Weline\Cdn\Model\Account as CdnAccount;
-use Weline\Cdn\Model\Domain as CdnDomain;
-use Weline\Cdn\Service\AdapterResolver as CdnAdapterResolver;
-use Weline\Cdn\Service\AccountManager as CdnAccountManager;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Saas\Model\ProvisioningOrder;
 use Weline\Saas\Model\ProvisioningStep;
 use Weline\Server\Service\SslCertificateService;
-use Weline\Websites\Service\DomainPurchaseService;
 
 /**
  * 一站式配置编排：购买域名 → 绑定 DNS → 绑定 CDN → 申请 SSL
  *
  * 默认 DNS/CDN 跟随购买域名的供应商；若选择不同 CDN 供应商则自动切换 DNS 到该供应商。
+ *
+ * 模块间通信使用 w_query() 统一查询器，不直接依赖 Cdn/Websites 模块的服务类。
  */
 class DomainProvisioningService
 {
     private ProvisioningOrder $orderModel;
     private ProvisioningStep $stepModel;
-    private DomainPurchaseService $domainPurchaseService;
-    private CdnAdapterResolver $cdnAdapterResolver;
-    private CdnAccountManager $cdnAccountManager;
     private SslCertificateService $sslCertificateService;
     private EventsManager $eventsManager;
 
     public function __construct(
         ProvisioningOrder $orderModel,
         ProvisioningStep $stepModel,
-        DomainPurchaseService $domainPurchaseService,
-        CdnAdapterResolver $cdnAdapterResolver,
-        CdnAccountManager $cdnAccountManager,
         SslCertificateService $sslCertificateService,
         EventsManager $eventsManager
     ) {
         $this->orderModel = $orderModel;
         $this->stepModel = $stepModel;
-        $this->domainPurchaseService = $domainPurchaseService;
-        $this->cdnAdapterResolver = $cdnAdapterResolver;
-        $this->cdnAccountManager = $cdnAccountManager;
         $this->sslCertificateService = $sslCertificateService;
         $this->eventsManager = $eventsManager;
     }
@@ -108,7 +96,10 @@ class DomainProvisioningService
                 'auto_create_site' => $autoCreateSite,
             ],
         ];
-        $result = $this->domainPurchaseService->createAndProcessOrder($registrarAccountId, $items);
+        $result = w_query('websites', 'purchaseDomain', [
+            'account_id' => $registrarAccountId,
+            'items'      => $items,
+        ]);
 
         if (!($result['success'] ?? false)) {
             $order->setData(ProvisioningOrder::fields_STATUS, ProvisioningOrder::STATUS_FAILED);
@@ -245,19 +236,23 @@ class DomainProvisioningService
             ];
         }
 
-        $adapter = $this->cdnAdapterResolver->getAdapter($vendor);
-        if (!$adapter) {
+        $adapterInfo = w_query('cdn', 'getAdapterInfo', ['adapter' => $vendor]);
+        if ($adapterInfo === null) {
             $order->setData(ProvisioningOrder::fields_STATUS, ProvisioningOrder::STATUS_FAILED);
             $order->setData(ProvisioningOrder::fields_ERROR_MESSAGE, __('CDN 适配器不存在：%{1}', [$vendor]));
             $order->save();
             return ['success' => false, 'message' => __('CDN 适配器不存在：%{1}', [$vendor])];
         }
 
-        $account = $this->cdnAccountManager->getDefaultAccount($vendor);
-        if (!$account || (int) $account->getData(CdnAccount::fields_ACCOUNT_ID) !== $accountId) {
-            $account = ObjectManager::getInstance(CdnAccount::class)->reset()->load($accountId);
+        $accountInfo = w_query('cdn', 'getAccount', ['account_id' => $accountId]);
+        if ($accountInfo === null) {
+            $defaultAccount = w_query('cdn', 'getDefaultAccount', ['adapter' => $vendor]);
+            if ($defaultAccount !== null && (int)$defaultAccount['account_id'] !== $accountId) {
+                $accountId = (int)$defaultAccount['account_id'];
+                $accountInfo = $defaultAccount;
+            }
         }
-        if (!$account || !$account->getId()) {
+        if ($accountInfo === null) {
             $order->setData(ProvisioningOrder::fields_STATUS, ProvisioningOrder::STATUS_FAILED);
             $order->setData(ProvisioningOrder::fields_ERROR_MESSAGE, __('CDN 账户不存在'));
             $order->save();
@@ -271,36 +266,18 @@ class DomainProvisioningService
         $order->save();
 
         try {
-            $credentials = $account->getCredentialsArray();
-            $zoneInfo = $adapter->ensureZone($domain, $credentials);
-            $zoneId = $zoneInfo['zone_id'] ?? '';
+            $zoneResult = w_query('cdn', 'ensureZone', [
+                'domain'     => $domain,
+                'account_id' => $accountId,
+            ]);
+
+            if (!($zoneResult['success'] ?? false)) {
+                throw new \RuntimeException($zoneResult['message'] ?? __('ensureZone 失败'));
+            }
+
+            $zoneId = $zoneResult['zone_id'] ?? '';
             if ($zoneId === '') {
                 throw new \RuntimeException(__('ensureZone 未返回 zone_id'));
-            }
-
-            $siteId = (int) $order->getData(ProvisioningOrder::fields_WEBSITE_ID);
-            if ($siteId <= 0) {
-                $siteId = 1;
-            }
-
-            $cdnDomainModel = ObjectManager::getInstance(CdnDomain::class);
-            $existing = $cdnDomainModel->reset()->where(CdnDomain::fields_DOMAIN_NAME, $domain)->find()->fetch();
-            if ($existing->getData(CdnDomain::fields_DOMAIN_ID)) {
-                $existing->setData(CdnDomain::fields_ZONE_ID, $zoneId);
-                $existing->setData(CdnDomain::fields_ACCOUNT_ID, $accountId);
-                $existing->setData(CdnDomain::fields_ADAPTER, $vendor);
-                $existing->save();
-            } else {
-                $newDomain = ObjectManager::getInstance(CdnDomain::class);
-                $newDomain->clearData();
-                $newDomain->setData(CdnDomain::fields_SITE_ID, $siteId);
-                $newDomain->setData(CdnDomain::fields_ADAPTER, $vendor);
-                $newDomain->setData(CdnDomain::fields_ZONE_ID, $zoneId);
-                $newDomain->setData(CdnDomain::fields_DOMAIN_NAME, $domain);
-                $newDomain->setData(CdnDomain::fields_ACCOUNT_ID, $accountId);
-                $newDomain->setData(CdnDomain::fields_INHERIT_DEFAULT, 0);
-                $newDomain->setData(CdnDomain::fields_ENABLED, 1);
-                $newDomain->save();
             }
 
             $this->recordStep($orderId, ProvisioningOrder::STEP_CDN, 'success', $vendor, $accountId, ['zone_id' => $zoneId]);
@@ -361,6 +338,95 @@ class DomainProvisioningService
         $order->setData(ProvisioningOrder::fields_ERROR_MESSAGE, $msg);
         $order->save();
         return ['success' => false, 'message' => $msg];
+    }
+
+    /**
+     * 在 CDN 绑定完成后，自动将域名 NS 切换到 CDN 供应商提供的 NS
+     *
+     * 支持 GName 等域名商通过适配器的 modifyDns() 方法切换 NS。
+     *
+     * @param int $orderId 配置订单 ID
+     * @param array $nameServers CDN 供应商返回的 NS 列表
+     * @return array{success: bool, message: string}
+     */
+    public function switchNameservers(int $orderId, array $nameServers): array
+    {
+        $order = clone $this->orderModel;
+        $order->load($orderId);
+        if (!$order->getOrderId()) {
+            return ['success' => false, 'message' => __('配置订单不存在')];
+        }
+
+        $domain = $order->getDomain();
+        $registrarAccountId = (int) $order->getData(ProvisioningOrder::fields_REGISTRAR_ACCOUNT_ID);
+
+        if ($registrarAccountId <= 0) {
+            return ['success' => false, 'message' => __('域名商账号未配置')];
+        }
+
+        $nsString = \implode(',', $nameServers);
+
+        try {
+            $result = w_query('websites', 'modifyDns', [
+                'account_id'  => $registrarAccountId,
+                'domain'      => $domain,
+                'nameservers' => $nsString,
+            ]);
+            $this->recordStep($orderId, 'ns_switch', ($result['success'] ?? false) ? 'success' : 'failed', '', $registrarAccountId, $result);
+            return $result;
+        } catch (\Throwable $e) {
+            $this->recordStep($orderId, 'ns_switch', 'failed', '', $registrarAccountId, [], $e->getMessage());
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * 获取当前服务器的公网 IPv4 地址
+     */
+    public function getPublicIp(): string
+    {
+        $endpoints = [
+            'https://api-ipv4.ip.sb/ip',
+            'https://api.ipify.org',
+            'https://checkip.amazonaws.com',
+            'https://ifconfig.me/ip',
+        ];
+
+        foreach ($endpoints as $url) {
+            $ip = $this->fetchUrl($url);
+            if ($ip !== null) {
+                $ip = \trim($ip);
+                if (\filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                    return $ip;
+                }
+                if (\preg_match('/(\d{1,3}\.){3}\d{1,3}/', $ip, $m)) {
+                    return $m[0];
+                }
+            }
+        }
+
+        return '';
+    }
+
+    private function fetchUrl(string $url): ?string
+    {
+        try {
+            $ch = \curl_init($url);
+            \curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 10,
+                CURLOPT_CONNECTTIMEOUT => 5,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => false,
+                CURLOPT_USERAGENT => 'Weline-Provisioning/1.0',
+            ]);
+            $body = \curl_exec($ch);
+            $errno = \curl_errno($ch);
+            \curl_close($ch);
+            return ($errno === 0 && \is_string($body)) ? $body : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

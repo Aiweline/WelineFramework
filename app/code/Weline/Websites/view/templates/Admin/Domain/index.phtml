@@ -1,10 +1,12 @@
 <?php
 /**
- * 域名管理主页 - Tab 布局
+ * 域名管理主页 - Tab 布局（内容模板）
  *
  * Tab1: 域名商管理
  * Tab2: 域名购买
  * Tab3+: 由 Hook 注入（如 Server 模块的证书管理）
+ *
+ * 由布局系统自动包裹 HTML 框架
  *
  * @var \Weline\Framework\View\Template $this
  * @var array $adapter_options 适配器选项列表
@@ -14,167 +16,158 @@
  * @var string $active_tab 当前激活的 Tab
  */
 
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 $activeTab = $active_tab ?? 'registrar';
 ?>
-<!DOCTYPE html>
-<html lang="en" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    <w:template>Weline_Admin::common/head.phtml</w:template>
-    <title><?= __('域名服务') ?> - <?= __('Weline Admin 管理面板') ?></title>
-    <style>
-        .domain-tabs-nav {
-            display: flex;
-            gap: 4px;
-            border-bottom: 2px solid var(--bs-border-color, #dee2e6);
-            padding-bottom: 0;
-            margin-bottom: 1.5rem;
-            flex-wrap: wrap;
-        }
-        .domain-tab {
-            padding: 10px 20px;
-            border: none;
-            border-bottom: 2px solid transparent;
-            margin-bottom: -2px;
-            background: transparent;
-            color: var(--bs-secondary, #6c757d);
-            font-weight: 500;
-            transition: all 0.2s;
-            border-radius: 4px 4px 0 0;
-        }
-        .domain-tab:hover {
-            color: var(--bs-primary, #556ee6);
-            background: var(--bs-light, #f8f9fa);
-        }
-        .domain-tab.active {
-            color: var(--bs-primary, #556ee6);
-            border-bottom-color: var(--bs-primary, #556ee6);
-            background: transparent;
-        }
-        .account-card {
-            border: 1px solid var(--bs-border-color, #dee2e6);
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 0.75rem;
-            transition: box-shadow 0.2s;
-        }
-        .account-card:hover {
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .status-badge {
-            font-size: 0.75rem;
-            padding: 0.2em 0.6em;
-            border-radius: 4px;
-        }
-    </style>
-</head>
+<style>
+.domain-tabs-nav {
+    display: flex;
+    gap: 4px;
+    border-bottom: 2px solid var(--backend-color-border-default, #dee2e6);
+    padding-bottom: 0;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+.domain-tab {
+    padding: 10px 20px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    background: transparent;
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-weight: 500;
+    transition: all 0.2s;
+    border-radius: 4px 4px 0 0;
+}
+.domain-tab:hover {
+    color: var(--backend-color-primary, #556ee6);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+.domain-tab.active {
+    color: var(--backend-color-primary, #556ee6);
+    border-bottom-color: var(--backend-color-primary, #556ee6);
+    background: transparent;
+}
+.account-card {
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    transition: box-shadow 0.2s;
+}
+.account-card:hover {
+    box-shadow: var(--backend-shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+}
+.status-badge {
+    font-size: 0.75rem;
+    padding: 0.2em 0.6em;
+    border-radius: 4px;
+}
+</style>
 
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-<w:template>Weline_Admin::common/page/loading.phtml</w:template>
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    <w:template>Weline_Admin::common/left-sidebar.phtml</w:template>
-
-    <div class='main-content'>
-        <div class='page-content'>
-            <div class='container-fluid'>
-                <div class='row'>
-                    <template>Weline_Component::message.phtml</template>
-                </div>
-                <!-- 页面标题 -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'>
-                                <i class="mdi mdi-domain me-1"></i>
-                                <?= __('域名服务') ?>
-                            </h4>
-                            <div class='page-title-right'>
-                                <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'><a href='javascript:void(0);'><?= __('后台') ?></a></li>
-                                    <li class='breadcrumb-item'><a href='javascript:void(0);'><?= __('网站服务') ?></a></li>
-                                    <li class='breadcrumb-item active'><?= __('域名服务') ?></li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tab 导航 -->
-                <div class="card">
-                    <div class="card-body">
-                        <nav class='domain-tabs-nav' role='tablist'>
-                            <button class='btn domain-tab <?= $activeTab === 'registrar' ? 'active' : '' ?>'
-                                    type='button'
-                                    id='domain-registrar-tab'
-                                    data-bs-toggle='tab'
-                                    data-bs-target='#domain-registrar'
-                                    role='tab'
-                                    aria-controls='domain-registrar'
-                                    aria-selected='<?= $activeTab === 'registrar' ? 'true' : 'false' ?>'>
-                                <i class="mdi mdi-store me-1"></i>
-                                <span class='d-none d-sm-inline-block'><?= __('域名商管理') ?></span>
-                            </button>
-                            <button class='btn domain-tab <?= $activeTab === 'purchase' ? 'active' : '' ?>'
-                                    type='button'
-                                    id='domain-purchase-tab'
-                                    data-bs-toggle='tab'
-                                    data-bs-target='#domain-purchase'
-                                    role='tab'
-                                    aria-controls='domain-purchase'
-                                    aria-selected='<?= $activeTab === 'purchase' ? 'true' : 'false' ?>'>
-                                <i class="mdi mdi-cart me-1"></i>
-                                <span class='d-none d-sm-inline-block'><?= __('域名购买') ?></span>
-                            </button>
-                            <!-- Hook: 其他模块注入的 Tab 按钮 -->
-                            <w:hook>Weline_Websites::backend::partials::domain::tabs</w:hook>
-                        </nav>
-
-                        <!-- Tab 内容 -->
-                        <div class='tab-content'>
-                            <!-- Tab1: 域名商管理 -->
-                            <div class='tab-pane fade <?= $activeTab === 'registrar' ? 'show active' : '' ?>'
-                                 id='domain-registrar'
-                                 role='tabpanel'
-                                 aria-labelledby='domain-registrar-tab'>
-                                <?= $this->fetch('Weline_Websites::templates/Admin/Domain/registrar_tab.phtml') ?>
-                            </div>
-
-                            <!-- Tab2: 域名购买 -->
-                            <div class='tab-pane fade <?= $activeTab === 'purchase' ? 'show active' : '' ?>'
-                                 id='domain-purchase'
-                                 role='tabpanel'
-                                 aria-labelledby='domain-purchase-tab'>
-                                <?= $this->fetch('Weline_Websites::templates/Admin/Domain/purchase_tab.phtml') ?>
-                            </div>
-
-                            <!-- Hook: 其他模块注入的 Tab 内容 -->
-                            <w:hook>Weline_Websites::backend::partials::domain::tabs-content</w:hook>
-                        </div>
-                    </div>
-                </div>
+<!-- 页面标题 -->
+<div class='row'>
+    <div class='col-12'>
+        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+            <h4 class='mb-sm-0'>
+                <i class="mdi mdi-domain me-1"></i>
+                <?= __('域名服务') ?>
+            </h4>
+            <div class='page-title-right'>
+                <ol class='breadcrumb m-0'>
+                    <li class='breadcrumb-item'><a href='javascript:void(0);'><?= __('后台') ?></a></li>
+                    <li class='breadcrumb-item'><a href='javascript:void(0);'><?= __('网站服务') ?></a></li>
+                    <li class='breadcrumb-item active'><?= __('域名服务') ?></li>
+                </ol>
             </div>
         </div>
     </div>
 </div>
 
-@template(Weline_Admin::common/right-sidebar.phtml)
+<!-- 消息 -->
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<!-- Tab 导航 -->
+<div class="card">
+    <div class="card-body">
+        <nav class='domain-tabs-nav' role='tablist'>
+            <button class='btn domain-tab <?= $activeTab === 'registrar' ? 'active' : '' ?>'
+                    type='button'
+                    id='domain-registrar-tab'
+                    data-bs-toggle='tab'
+                    data-bs-target='#domain-registrar'
+                    role='tab'
+                    aria-controls='domain-registrar'
+                    aria-selected='<?= $activeTab === 'registrar' ? 'true' : 'false' ?>'>
+                <i class="mdi mdi-store me-1"></i>
+                <span class='d-none d-sm-inline-block'><?= __('域名商管理') ?></span>
+            </button>
+            <button class='btn domain-tab <?= $activeTab === 'purchase' ? 'active' : '' ?>'
+                    type='button'
+                    id='domain-purchase-tab'
+                    data-bs-toggle='tab'
+                    data-bs-target='#domain-purchase'
+                    role='tab'
+                    aria-controls='domain-purchase'
+                    aria-selected='<?= $activeTab === 'purchase' ? 'true' : 'false' ?>'>
+                <i class="mdi mdi-cart me-1"></i>
+                <span class='d-none d-sm-inline-block'><?= __('域名购买') ?></span>
+            </button>
+            <!-- Hook: 其他模块注入的 Tab 按钮 -->
+            <w:hook>Weline_Websites::backend::partials::domain::tabs</w:hook>
+        </nav>
+
+        <!-- Tab 内容 -->
+        <div class='tab-content'>
+            <!-- Tab1: 域名商管理 -->
+            <div class='tab-pane fade <?= $activeTab === 'registrar' ? 'show active' : '' ?>'
+                 id='domain-registrar'
+                 role='tabpanel'
+                 aria-labelledby='domain-registrar-tab'>
+                <?= $this->fetch('Weline_Websites::templates/Admin/Domain/registrar_tab.phtml') ?>
+            </div>
+
+            <!-- Tab2: 域名购买 -->
+            <div class='tab-pane fade <?= $activeTab === 'purchase' ? 'show active' : '' ?>'
+                 id='domain-purchase'
+                 role='tabpanel'
+                 aria-labelledby='domain-purchase-tab'>
+                <?= $this->fetch('Weline_Websites::templates/Admin/Domain/purchase_tab.phtml') ?>
+            </div>
+
+            <!-- Hook: 其他模块注入的 Tab 内容 -->
+            <w:hook>Weline_Websites::backend::partials::domain::tabs-content</w:hook>
+        </div>
+    </div>
+</div>
+
 <script src="@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)"></script>
-@template(Weline_Admin::common/footer.phtml)
 
 <script>
-// 全局 Toast 通知
-function showToast(message, type) {
-    type = type || 'info';
-    var bgColor = {success: '#34c38f', error: '#f46a6a', warning: '#f1b44c', info: '#556ee6'}[type] || '#556ee6';
-    var toast = document.createElement('div');
-    toast.textContent = message;
-    toast.style.cssText = 'position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:6px;font-size:14px;z-index:10000;color:#fff;background:' + bgColor + ';box-shadow:0 4px 12px rgba(0,0,0,0.15);animation:slideInRight 0.3s ease;';
-    document.body.appendChild(toast);
-    setTimeout(function() { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; }, 2500);
-    setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
-}
+(function() {
+    'use strict';
+    
+    function showToast(message, type) {
+        type = type || 'info';
+        if (typeof AdminToast !== 'undefined') {
+            AdminToast[type] ? AdminToast[type](message) : AdminToast.info(message);
+            return;
+        }
+        var bgColor = {
+            success: 'var(--backend-color-success, #34c38f)', 
+            error: 'var(--backend-color-danger, #f46a6a)', 
+            warning: 'var(--backend-color-warning, #f1b44c)', 
+            info: 'var(--backend-color-primary, #556ee6)'
+        }[type] || 'var(--backend-color-primary, #556ee6)';
+        var toast = document.createElement('div');
+        toast.textContent = message;
+        toast.style.cssText = 'position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:6px;font-size:14px;z-index:10000;color:#fff;background:' + bgColor + ';box-shadow:var(--backend-shadow-lg);animation:slideInRight 0.3s ease;';
+        document.body.appendChild(toast);
+        setTimeout(function() { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; }, 2500);
+        setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
+    }
+    
+    window.showToast = showToast;
+})();
 </script>
-</body>
-</html>

@@ -15,6 +15,7 @@ namespace Weline\Ai\Helper;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 错误消息辅助类
@@ -60,45 +61,34 @@ class ErrorMessageHelper
      */
     private static function getConfigUrl(?string $configType, array $params): string
     {
-        $env = Env::getInstance();
+        /** @var Url $urlService */
+        $urlService = ObjectManager::getInstance(Url::class);
         
-        // 获取基础URL（优先从配置获取，否则从请求获取）
-        $baseUrl = $env->getConfig('base_url') ?? '';
-        if (empty($baseUrl) && isset($_SERVER['HTTP_HOST'])) {
-            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-            $baseUrl = $protocol . '://' . $_SERVER['HTTP_HOST'];
+        // 根据配置类型确定路由路径（不需要 /index，因为 index 是默认 action）
+        $routePath = match ($configType) {
+            'provider' => 'ai/backend/provider',
+            'apikey' => 'ai/backend/api-key',
+            'model' => 'ai/backend/model',
+            default => 'ai/backend/provider',
+        };
+        
+        // 使用框架的 URL 服务生成后台 URL（包含正确的后台密钥、货币、语言）
+        $url = $urlService->getBackendUrl($routePath);
+        
+        // 如果有额外参数，添加到 URL
+        $queryParams = [];
+        if (!empty($params['provider_code'])) {
+            $queryParams['provider_code'] = $params['provider_code'];
+        }
+        if (!empty($params['model_code'])) {
+            $queryParams['model_code'] = $params['model_code'];
         }
         
-        // 获取后台路径（使用新的 area_routes 配置）
-        $adminPath = $env::getAreaRoutePrefix('backend') ?? 'admin';
-        
-        switch ($configType) {
-            case 'provider':
-                // 供应商账户配置页面
-                $url = rtrim($baseUrl, '/') . '/' . $adminPath . '/ai/provider/index';
-                // 如果指定了供应商代码，可以添加参数
-                if (!empty($params['provider_code'])) {
-                    $url .= '?provider_code=' . urlencode($params['provider_code']);
-                }
-                return $url;
-                
-            case 'apikey':
-                // API密钥配置页面
-                return rtrim($baseUrl, '/') . '/' . $adminPath . '/ai/apikey/index';
-                
-            case 'model':
-                // 模型配置页面
-                $url = rtrim($baseUrl, '/') . '/' . $adminPath . '/ai/model/index';
-                // 如果指定了模型代码，可以添加参数
-                if (!empty($params['model_code'])) {
-                    $url .= '?model_code=' . urlencode($params['model_code']);
-                }
-                return $url;
-                
-            default:
-                // 默认返回供应商账户配置页面
-                return rtrim($baseUrl, '/') . '/' . $adminPath . '/ai/provider/index';
+        if (!empty($queryParams)) {
+            $url .= (str_contains($url, '?') ? '&' : '?') . http_build_query($queryParams);
         }
+        
+        return $url;
     }
 
     /**

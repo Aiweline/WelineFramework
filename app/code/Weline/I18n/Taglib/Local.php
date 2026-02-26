@@ -15,11 +15,23 @@ namespace Weline\I18n\Taglib;
 use TheSeer\Tokenizer\Exception;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\StateManager;
 use Weline\Framework\View\Taglib;
 
 class Local implements \Weline\Taglib\TaglibInterface
 {
-    private static $ids = [];
+    private static array $ids = [];
+    private static bool $stateRegistered = false;
+    
+    private static function ensureStateRegistered(): void
+    {
+        if (!self::$stateRegistered) {
+            StateManager::registerStaticResets(self::class, [
+                'ids' => [],
+            ]);
+            self::$stateRegistered = true;
+        }
+    }
 
     /**
      * @inheritDoc
@@ -66,6 +78,7 @@ class Local implements \Weline\Taglib\TaglibInterface
      */
     static function callback(): callable
     {
+        self::ensureStateRegistered();
         $ids = &self::$ids;
         return function ($tag_key, $config, $tag_data, $attributes) use (&$ids) {
             # 这里可以做任何处理，然后返回对应处理后的内容

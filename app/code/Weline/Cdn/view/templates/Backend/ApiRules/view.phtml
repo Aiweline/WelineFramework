@@ -4,346 +4,217 @@
  *
  * @var \Weline\Framework\View\Template $this
  */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 
 $rule = $this->getData('rule');
 if (!$rule || !$rule->getId()) {
-    // 如果没有规则，重定向到列表页
     header('Location: ' . $this->getBackendUrl('*/backend/api-rules/index'));
     exit;
 }
 ?>
-<!DOCTYPE html>
-<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= __('API规则详情') ?></title>
-    <style>
-        .rule-detail-card {
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            background: #fff;
-        }
-        .rule-detail-item {
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #f0f0f0;
-        }
-        .rule-detail-item:last-child {
-            border-bottom: none;
-        }
-        .rule-detail-label {
-            font-weight: 600;
-            color: #666;
-            margin-bottom: 5px;
-        }
-        .rule-detail-value {
-            color: #333;
-            word-break: break-all;
-        }
-        .code-block {
-            background: #f5f5f5;
-            padding: 15px;
-            border-radius: 4px;
-            font-family: monospace;
-            font-size: 12px;
-            overflow-x: auto;
-        }
-    </style>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
-@template(Weline_Admin::common/page/loading.phtml)
+<!-- 消息提示 -->
+<div class='row mb-3'>
+    <template>Weline_Component::message.phtml</template>
+</div>
 
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
+<!-- 返回按钮 -->
+<div class="mb-3">
+    <a href="<?= $this->getBackendUrl('*/backend/api-rules/index') ?>" class="btn btn-secondary">
+        <i class="mdi mdi-arrow-left"></i> <?= __('返回列表') ?>
+    </a>
+</div>
 
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <!-- 页面标题 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0">
-                                <i class="mdi mdi-eye text-primary"></i> <?= __('API规则详情') ?>
-                            </h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('admin') ?>"><?= __('首页') ?></a></li>
-                                    <li class="breadcrumb-item"><?= __('CDN管理') ?></li>
-                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('*/backend/api-rules/index') ?>"><?= __('API规则管理') ?></a></li>
-                                    <li class="breadcrumb-item active"><?= __('规则详情') ?></li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 消息提示 -->
-                <div class='row'>
-                    <template>Weline_Component::message.phtml</template>
-                </div>
-
-                <!-- 返回按钮 -->
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <a href="<?= $this->getBackendUrl('*/backend/api-rules/index') ?>" class="btn btn-secondary">
-                            <i class="mdi mdi-arrow-left"></i> <?= __('返回列表') ?>
-                        </a>
-                    </div>
-                </div>
-
-                <!-- 规则详情 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <div class="rule-detail-card">
-                                    <!-- 基本信息 -->
-                                    <div class="rule-detail-item">
-                                        <div class="rule-detail-label"><?= __('模块') ?></div>
-                                        <div class="rule-detail-value">
-                                            <span class="badge bg-primary"><?= htmlspecialchars($rule->getData('module')) ?></span>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="rule-detail-item">
-                                        <div class="rule-detail-label"><?= __('类名') ?></div>
-                                        <div class="rule-detail-value code-block"><?= htmlspecialchars($rule->getData('class')) ?></div>
-                                    </div>
-                                    
-                                    <div class="rule-detail-item">
-                                        <div class="rule-detail-label"><?= __('方法名') ?></div>
-                                        <div class="rule-detail-value code-block"><?= htmlspecialchars($rule->getData('method')) ?>()</div>
-                                    </div>
-                                    
-                                    <div class="rule-detail-item">
-                                        <div class="rule-detail-label"><?= __('路由路径') ?></div>
-                                        <div class="rule-detail-value code-block"><?= htmlspecialchars($rule->getData('route')) ?></div>
-                                    </div>
-                                    
-                                    <div class="rule-detail-item">
-                                        <div class="rule-detail-label"><?= __('触发方式') ?></div>
-                                        <div class="rule-detail-value">
-                                            <?php
-                                            $trigger = $rule->getData('trigger');
-                                            $triggerClass = $trigger === 'realtime' ? 'badge-trigger-realtime' : 'badge-trigger-cron';
-                                            $triggerText = $trigger === 'realtime' ? __('实时推送') : __('定时推送');
-                                            ?>
-                                            <span class="badge badge-trigger <?= $triggerClass ?>"><?= $triggerText ?></span>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="rule-detail-item">
-                                        <div class="rule-detail-label"><?= __('启用状态') ?></div>
-                                        <div class="rule-detail-value">
-                                            <?php if ($rule->getData('enabled')): ?>
-                                                <span class="badge bg-success"><?= __('已启用') ?></span>
-                                            <?php else: ?>
-                                                <span class="badge bg-secondary"><?= __('已禁用') ?></span>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                    
-                                    <?php if ($rule->getData('description')): ?>
-                                    <div class="rule-detail-item">
-                                        <div class="rule-detail-label"><?= __('描述') ?></div>
-                                        <div class="rule-detail-value"><?= htmlspecialchars($rule->getData('description')) ?></div>
-                                    </div>
-                                    <?php endif; ?>
-                                    
-                                    <!-- Cloudflare规则表达式 -->
-                                    <div class="rule-detail-item">
-                                        <div class="rule-detail-label"><?= __('规则表达式（Cloudflare格式）') ?></div>
-                                        <div class="rule-detail-value code-block"><?= htmlspecialchars($rule->getData('expression')) ?></div>
-                                    </div>
-                                    
-                                    <!-- Cloudflare动作配置 -->
-                                    <div class="rule-detail-item">
-                                        <div class="rule-detail-label"><?= __('动作配置（Cloudflare格式）') ?></div>
-                                        <div class="rule-detail-value code-block">
-                                            <pre><?= htmlspecialchars(json_encode($rule->getActionArray(), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) ?></pre>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- 时间信息 -->
-                                    <div class="rule-detail-item">
-                                        <div class="rule-detail-label"><?= __('创建时间') ?></div>
-                                        <div class="rule-detail-value"><?= htmlspecialchars($rule->getData('created_at')) ?></div>
-                                    </div>
-                                    
-                                    <div class="rule-detail-item">
-                                        <div class="rule-detail-label"><?= __('更新时间') ?></div>
-                                        <div class="rule-detail-value"><?= htmlspecialchars($rule->getData('updated_at')) ?></div>
-                                    </div>
-                                </div>
-                                
-                                <!-- 操作按钮 -->
-                                <div class="text-end">
-                                    <button type="button" class="btn btn-primary" onclick="toggleRule(<?= $rule->getId() ?>, <?= $rule->getData('enabled') ? 'false' : 'true' ?>)">
-                                        <i class="mdi mdi-<?= $rule->getData('enabled') ? 'toggle-switch-off' : 'toggle-switch' ?>"></i> 
-                                        <?= $rule->getData('enabled') ? __('禁用规则') : __('启用规则') ?>
-                                    </button>
-                                    <button type="button" class="btn btn-danger" onclick="deleteRule(<?= $rule->getId() ?>)">
-                                        <i class="mdi mdi-delete"></i> <?= __('删除规则') ?>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+<!-- 规则详情 -->
+<div class="card">
+    <div class="card-body">
+        <div class="border rounded p-4" style="background: var(--backend-color-card-bg);">
+            <!-- 基本信息 -->
+            <div class="border-bottom pb-3 mb-3">
+                <div class="text-muted small text-uppercase mb-1"><?= __('模块') ?></div>
+                <span class="badge bg-primary"><?= htmlspecialchars($rule->getData('module')) ?></span>
+            </div>
+            
+            <div class="border-bottom pb-3 mb-3">
+                <div class="text-muted small text-uppercase mb-1"><?= __('类名') ?></div>
+                <div class="p-2 rounded font-monospace small" style="background: var(--backend-color-bg-secondary);"><?= htmlspecialchars($rule->getData('class')) ?></div>
+            </div>
+            
+            <div class="border-bottom pb-3 mb-3">
+                <div class="text-muted small text-uppercase mb-1"><?= __('方法名') ?></div>
+                <div class="p-2 rounded font-monospace small" style="background: var(--backend-color-bg-secondary);"><?= htmlspecialchars($rule->getData('method')) ?>()</div>
+            </div>
+            
+            <div class="border-bottom pb-3 mb-3">
+                <div class="text-muted small text-uppercase mb-1"><?= __('路由路径') ?></div>
+                <div class="p-2 rounded font-monospace small" style="background: var(--backend-color-bg-secondary);"><?= htmlspecialchars($rule->getData('route')) ?></div>
+            </div>
+            
+            <div class="border-bottom pb-3 mb-3">
+                <div class="text-muted small text-uppercase mb-1"><?= __('触发方式') ?></div>
+                <?php
+                $trigger = $rule->getData('trigger');
+                $triggerClass = $trigger === 'realtime' ? 'bg-warning text-dark' : 'bg-info';
+                $triggerText = $trigger === 'realtime' ? __('实时推送') : __('定时推送');
+                ?>
+                <span class="badge <?= $triggerClass ?>"><?= $triggerText ?></span>
+            </div>
+            
+            <div class="border-bottom pb-3 mb-3">
+                <div class="text-muted small text-uppercase mb-1"><?= __('启用状态') ?></div>
+                <?php if ($rule->getData('enabled')): ?>
+                    <span class="badge bg-success"><?= __('已启用') ?></span>
+                <?php else: ?>
+                    <span class="badge bg-secondary"><?= __('已禁用') ?></span>
+                <?php endif; ?>
+            </div>
+            
+            <?php if ($rule->getData('description')): ?>
+            <div class="border-bottom pb-3 mb-3">
+                <div class="text-muted small text-uppercase mb-1"><?= __('描述') ?></div>
+                <div><?= htmlspecialchars($rule->getData('description')) ?></div>
+            </div>
+            <?php endif; ?>
+            
+            <!-- Cloudflare规则表达式 -->
+            <div class="border-bottom pb-3 mb-3">
+                <div class="text-muted small text-uppercase mb-1"><?= __('规则表达式（Cloudflare格式）') ?></div>
+                <div class="p-2 rounded font-monospace small" style="background: var(--backend-color-bg-secondary);"><?= htmlspecialchars($rule->getData('expression')) ?></div>
+            </div>
+            
+            <!-- Cloudflare动作配置 -->
+            <div class="border-bottom pb-3 mb-3">
+                <div class="text-muted small text-uppercase mb-1"><?= __('动作配置（Cloudflare格式）') ?></div>
+                <div class="p-2 rounded font-monospace small" style="background: var(--backend-color-bg-secondary);">
+                    <pre class="mb-0"><?= htmlspecialchars(json_encode($rule->getActionArray(), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) ?></pre>
                 </div>
             </div>
+            
+            <!-- 时间信息 -->
+            <div class="border-bottom pb-3 mb-3">
+                <div class="text-muted small text-uppercase mb-1"><?= __('创建时间') ?></div>
+                <div><?= htmlspecialchars($rule->getData('created_at')) ?></div>
+            </div>
+            
+            <div class="pb-3 mb-3">
+                <div class="text-muted small text-uppercase mb-1"><?= __('更新时间') ?></div>
+                <div><?= htmlspecialchars($rule->getData('updated_at')) ?></div>
+            </div>
+        </div>
+        
+        <!-- 操作按钮 -->
+        <div class="text-end mt-3">
+            <button type="button" class="btn btn-primary" onclick="window.CdnApiRuleDetailManager.toggleRule(<?= $rule->getId() ?>, <?= $rule->getData('enabled') ? 'false' : 'true' ?>)">
+                <i class="mdi mdi-<?= $rule->getData('enabled') ? 'toggle-switch-off' : 'toggle-switch' ?>"></i> 
+                <?= $rule->getData('enabled') ? __('禁用规则') : __('启用规则') ?>
+            </button>
+            <button type="button" class="btn btn-danger" onclick="window.CdnApiRuleDetailManager.deleteRule(<?= $rule->getId() ?>)">
+                <i class="mdi mdi-delete"></i> <?= __('删除规则') ?>
+            </button>
         </div>
     </div>
 </div>
 
-@template(Weline_Admin::common/footer.phtml)
-
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-<script>
-function toggleRule(ruleId, enabled) {
-    fetch('<?= $this->getBackendUrl('*/backend/api-rules/toggle') ?>', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-        },
-        body: JSON.stringify({
-            id: ruleId,
-            enabled: enabled ? 1 : 0
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('成功') ?>',
-                    text: data.message,
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => window.location.reload());
-            } else {
-                console.log(data.message);
-                window.location.reload();
-            }
-        } else {
-            if (typeof Swal !== 'undefined') {
+<js:part>
+(function() {
+    'use strict';
+    
+    var toggleUrl = '<?= $this->getBackendUrl('*/backend/api-rules/toggle') ?>';
+    var deleteUrl = '<?= $this->getBackendUrl('*/backend/api-rules/delete') ?>';
+    var indexUrl = '<?= $this->getBackendUrl('*/backend/api-rules/index') ?>';
+    
+    window.CdnApiRuleDetailManager = {
+        toggleRule: function(ruleId, enabled) {
+            fetch(toggleUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    id: ruleId,
+                    enabled: enabled ? 1 : 0
+                })
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('成功') ?>',
+                        text: data.message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    }).then(function() { window.location.reload(); });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('操作失败') ?>',
+                        text: data.message || '<?= __('操作失败') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                }
+            })
+            .catch(function(error) {
                 Swal.fire({
                     icon: 'error',
                     title: '<?= __('操作失败') ?>',
-                    text: data.message || '<?= __('操作失败') ?>',
+                    text: '<?= __('请重试') ?>',
                     confirmButtonText: '<?= __('确定') ?>'
                 });
-            } else {
-                console.error(data.message || '<?= __('操作失败') ?>');
-            }
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('操作失败') ?>',
-                text: '<?= __('请重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
             });
-        } else {
-            console.error('<?= __('操作失败') ?>');
-        }
-    });
-}
-
-function deleteRule(ruleId) {
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            title: '<?= __('确认删除') ?>',
-            text: '<?= __('确定要删除这条规则吗？') ?>',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: '<?= __("确定删除") ?>',
-            cancelButtonText: '<?= __("取消") ?>',
-            confirmButtonColor: '#d33'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                performDelete(ruleId);
-            }
-        });
-    } else {
-        if (!confirm('<?= __('确定要删除这条规则吗？') ?>')) {
-            return;
-        }
-        performDelete(ruleId);
-    }
-}
-
-function performDelete(ruleId) {
-    fetch('<?= $this->getBackendUrl('*/backend/api-rules/delete') ?>', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
         },
-        body: JSON.stringify({
-            id: ruleId
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('成功') ?>',
-                    text: data.message,
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => {
-                    window.location.href = '<?= $this->getBackendUrl('*/backend/api-rules/index') ?>';
-                });
-            } else {
-                console.log(data.message);
-                window.location.href = '<?= $this->getBackendUrl('*/backend/api-rules/index') ?>';
-            }
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('删除失败') ?>',
-                    text: data.message || '<?= __('删除失败') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error(data.message || '<?= __('删除失败') ?>');
-            }
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        if (typeof Swal !== 'undefined') {
+        
+        deleteRule: function(ruleId) {
             Swal.fire({
-                icon: 'error',
-                title: '<?= __('删除失败') ?>',
-                text: '<?= __('请重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
+                title: '<?= __('确认删除') ?>',
+                text: '<?= __('确定要删除这条规则吗？') ?>',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '<?= __("确定删除") ?>',
+                cancelButtonText: '<?= __("取消") ?>',
+                confirmButtonColor: '#d33'
+            }).then(function(result) {
+                if (result.isConfirmed) {
+                    fetch(deleteUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify({ id: ruleId })
+                    })
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        if (data.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: '<?= __('成功') ?>',
+                                text: data.message,
+                                timer: 2000,
+                                showConfirmButton: false
+                            }).then(function() {
+                                window.location.href = indexUrl;
+                            });
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: '<?= __('删除失败') ?>',
+                                text: data.message || '<?= __('删除失败') ?>',
+                                confirmButtonText: '<?= __('确定') ?>'
+                            });
+                        }
+                    })
+                    .catch(function(error) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('删除失败') ?>',
+                            text: '<?= __('请重试') ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    });
+                }
             });
-        } else {
-            console.error('<?= __('删除失败') ?>');
         }
-    });
-}
-</script>
-
-</body>
-</html>
+    };
+})();
+</js:part>

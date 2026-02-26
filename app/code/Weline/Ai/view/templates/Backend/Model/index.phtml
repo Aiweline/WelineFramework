@@ -7,1375 +7,1201 @@
  * @var int $total
  */
 /**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 ?>
-<!DOCTYPE html>
-<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><lang>AI模型管理</lang></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-
-<!--页头工具条 开始-->
-@template(Weline_Admin::common/page/loading.phtml)
-<!--页头工具条 结束-->
-
-<!-- 开始 页面 -->
-<div id="layout-wrapper">
-
-    <!--页头工具条 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <!--页头工具条 结束-->
-
-    <!-- ========== Topnav Start ========== -->
-    <!--页头菜单栏 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    <!--页头菜单栏 结束-->
-
-    <!-- ========== Left Sidebar Start ========== -->
-    <!--左侧菜单栏 开始-->
-    @template(Weline_Admin::common/left-sidebar.phtml)
-    <!--左侧菜单栏 结束-->
-
-    <!-- ============================================================== -->
-    <!-- 开始 主要内容 -->
-    <!-- ============================================================== -->
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-
-                <!-- 页面标题 -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'>
-                                <i class="mdi mdi-robot me-2"></i>
-                                <lang>AI模型管理</lang>
-                            </h4>
-                            <div class='page-title-right'>
-                                <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>AI助手</lang></a></li>
-                                    <li class='breadcrumb-item active'><lang>AI模型</lang></li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <!-- 页面标题结束 -->
-
-                <!-- 按钮操作栏 -->
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <!-- 批量操作区域 -->
-                            <div id="bulkActions" style="display: none;">
-                                <span class="me-2 text-muted">
-                                    <lang>已选择</lang> <strong id="selectedCount">0</strong> <lang>个模型</lang>
-                                </span>
-                                <div class="btn-group">
-                                    <button type="button" class="btn btn-sm btn-info" onclick="bulkTestConnection()">
-                                        <i class="mdi mdi-wifi me-1"></i><lang>批量测试</lang>
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-success" onclick="bulkActivate()">
-                                        <i class="mdi mdi-check-circle me-1"></i><lang>批量激活</lang>
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-warning" onclick="bulkDeactivate()">
-                                        <i class="mdi mdi-cancel me-1"></i><lang>批量禁用</lang>
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-danger" onclick="bulkDelete()">
-                                        <i class="mdi mdi-delete me-1"></i><lang>批量删除</lang>
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <!-- 右侧按钮 -->
-                            <div class="d-flex gap-2">
-                                <button type="button" class="btn btn-success" onclick="collectModels()">
-                                    <i class="mdi mdi-download me-1"></i>
-                                    <lang>收集模型</lang>
-                                </button>
-                                <a href="<?= $this->getBackendUrl('*/backend/defaultModel') ?>" class="btn btn-primary">
-                                    <i class="mdi mdi-star me-1"></i>
-                                    <lang>默认模型管理</lang>
-                                </a>
-                                <button type="button" class="btn btn-danger" onclick="clearAllModels()">
-                                    <i class="mdi mdi-trash-can-outline me-1"></i>
-                                    <lang>清空模型表</lang>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <!-- 按钮操作栏结束 -->
-
-                <!-- 筛选条件卡片 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card mb-3">
-                            <div class="card-header">
-                                <h5 class="mb-0">
-                                    <i class="mdi mdi-filter me-2"></i>
-                                    <lang>筛选条件</lang>
-                                </h5>
-                            </div>
-                            <div class="card-body">
-                                <form id="filterForm" class="row g-3" onsubmit="applyFilters(); return false;">
-                                    <div class="col-md-3">
-                                        <label class="form-label"><lang>供应商</lang></label>
-                                        <select class="form-select" id="vendorFilter" name="vendor">
-                                            <option value=""><lang>全部</lang></option>
-                                            <?php foreach ($vendors as $vendor): ?>
-                                                <option value="<?= $vendor ?>"><?= $vendor ?></option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-                                    
-                                    <div class="col-md-3">
-                                        <label class="form-label"><lang>状态</lang></label>
-                                        <select class="form-select" id="statusFilter" name="status">
-                                            <option value=""><lang>全部</lang></option>
-                                            <option value="1"><lang>激活</lang></option>
-                                            <option value="0"><lang>未激活</lang></option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div class="col-md-4">
-                                        <label class="form-label"><lang>搜索</lang></label>
-                                        <input type="text" class="form-control" id="searchInput" name="search" placeholder="<?= __('模型名称或代码') ?>">
-                                    </div>
-                                    
-                                    <div class="col-md-2 d-flex align-items-end">
-                                        <div class="btn-group w-100">
-                                            <button type="submit" class="btn btn-primary">
-                                                <i class="mdi mdi-magnify"></i> <lang>筛选</lang>
-                                            </button>
-                                            <button type="button" class="btn btn-secondary" onclick="resetFilters()">
-                                                <i class="mdi mdi-refresh"></i> <lang>重置</lang>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <!-- 筛选条件卡片结束 -->
-
-                <!-- 模型列表卡片 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h3 class="card-title">
-                                    <i class="mdi mdi-robot me-2"></i>
-                                    <lang>模型列表</lang>
-                                    <span class="badge bg-primary ms-2"><?= $total ?></span>
-                                </h3>
-                            </div>
-                            <div class="card-body">
-                                <?php if (empty($models)): ?>
-                                    <div class="alert alert-info">
-                                        <i class="mdi mdi-information me-2"></i>
-                                        <lang>暂无数据，请点击"收集模型"按钮来扫描和导入模型配置。</lang>
-                                    </div>
-                                <?php else: ?>
-                                    <div class="table-responsive">
-                                        <table class="table table-bordered table-striped table-hover">
-                                            <thead>
-                                                <tr>
-                                                    <th width="50">
-                                                        <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
-                                                    </th>
-                                                    <th width="60"><lang>ID</lang></th>
-                                                    <th><lang>模型名称</lang></th>
-                                                    <th><lang>供应商</lang></th>
-                                                    <th><lang>模型代码</lang></th>
-                                                    <th><lang>版本</lang></th>
-                                                    <th width="100"><lang>类型</lang></th>
-                                                    <th><lang>输入价格</lang></th>
-                                                    <th><lang>输出价格</lang></th>
-                                                    <th width="100"><lang>自配置状态</lang></th>
-                                                    <th width="100"><lang>自配置连通性</lang></th>
-                                                    <th width="100"><lang>供应商连通性</lang></th>
-                                                    <th width="100"><lang>状态</lang></th>
-                                                    <th width="100"><lang>默认</lang></th>
-                                                    <th width="250"><lang>操作</lang></th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="modelTable">
-                                                <?php foreach ($models as $model): ?>
-                                                    <tr data-model-id="<?= $model['id'] ?? '' ?>">
-                                                        <td>
-                                                            <input type="checkbox" class="model-checkbox" value="<?= $model['id'] ?? '' ?>" onchange="updateBulkActions()">
-                                                        </td>
-                                                        <td><?= $model['id'] ?? '' ?></td>
-                                                        <td>
-                                                            <strong><?= $model['name'] ?? '' ?></strong>
-                                                        </td>
-                                                        <td>
-                                                            <span class="badge bg-info"><?= $model['vendor'] ?? '' ?></span>
-                                                        </td>
-                                                        <td>
-                                                            <code><?= $model['model_code'] ?? '' ?></code>
-                                                        </td>
-                                                        <td><?= $model['version'] ?? '' ?></td>
-                                                        <td>
-                                                            <?php if (!empty($model['is_copied'])): ?>
-                                                                <span class="badge bg-warning text-dark">
-                                                                    <i class="mdi mdi-content-copy"></i> <lang>复制</lang>
-                                                                </span>
-                                                            <?php else: ?>
-                                                                <span class="badge bg-secondary">
-                                                                    <i class="mdi mdi-source-branch"></i> <lang>原始</lang>
-                                                                </span>
-                                                            <?php endif; ?>
-                                                        </td>
-                                                        <td>$<?= number_format((float)($model['token_price_input'] ?? 0), 6) ?>/1K</td>
-                                                        <td>$<?= number_format((float)($model['token_price_output'] ?? 0), 6) ?>/1K</td>
-                                                        <td>
-                                                            <?php if (!empty($model['has_api_key'])): ?>
-                                                                <span class="badge bg-success" title="<?= __('已配置自配置密钥') ?>">
-                                                                    <i class="mdi mdi-check-circle"></i> <lang>已自配置</lang>
-                                                                </span>
-                                                            <?php else: ?>
-                                                                <span class="badge bg-warning text-dark" title="<?= __('未配置自配置密钥') ?>">
-                                                                    <i class="mdi mdi-alert-circle"></i> <lang>未自配置</lang>
-                                                                </span>
-                                                            <?php endif; ?>
-                                                        </td>
-                                                        <td>
-                                                            <?php 
-                                                            // 自配置连通性状态
-                                                            $selfConfigTestStatus = $model['self_config_test_status'] ?? 'pending';
-                                                            if ($selfConfigTestStatus === 'success'): ?>
-                                                                <span class="badge bg-success" title="<?= __('自配置连通性测试通过') ?>">
-                                                                    <i class="mdi mdi-check-circle"></i> <lang>通过</lang>
-                                                                </span>
-                                                            <?php elseif ($selfConfigTestStatus === 'failed'): ?>
-                                                                <span class="badge bg-danger" title="<?= __('自配置连通性测试失败') ?>">
-                                                                    <i class="mdi mdi-close-circle"></i> <lang>失败</lang>
-                                                                </span>
-                                                            <?php elseif (!empty($model['has_api_key'])): ?>
-                                                                <span class="badge bg-warning" title="<?= __('自配置连通性待测试') ?>">
-                                                                    <i class="mdi mdi-wifi"></i> <lang>待测试</lang>
-                                                                </span>
-                                                            <?php else: ?>
-                                                                <span class="badge bg-secondary" title="<?= __('无自配置') ?>">
-                                                                    <i class="mdi mdi-minus"></i> <lang>无配置</lang>
-                                                                </span>
-                                                            <?php endif; ?>
-                                                        </td>
-                                                        <td>
-                                                            <?php 
-                                                            // 供应商连通性状态
-                                                            $providerTestStatus = $model['provider_test_status'] ?? 'pending';
-                                                            if ($providerTestStatus === 'success'): ?>
-                                                                <span class="badge bg-success" title="<?= __('供应商连通性测试通过') ?>">
-                                                                    <i class="mdi mdi-check-circle"></i> <lang>通过</lang>
-                                                                </span>
-                                                            <?php elseif ($providerTestStatus === 'failed'): ?>
-                                                                <span class="badge bg-danger" title="<?= __('供应商连通性测试失败') ?>">
-                                                                    <i class="mdi mdi-close-circle"></i> <lang>失败</lang>
-                                                                </span>
-                                                            <?php else: ?>
-                                                                <span class="badge bg-info" title="<?= __('供应商连通性待测试') ?>">
-                                                                    <i class="mdi mdi-wifi"></i> <lang>待测试</lang>
-                                                                </span>
-                                                            <?php endif; ?>
-                                                        </td>
-                                                        <td>
-                                                            <?php if (!empty($model['is_active'])): ?>
-                                                                <span class="badge bg-success"><lang>激活</lang></span>
-                                                            <?php else: ?>
-                                                                <span class="badge bg-secondary"><lang>未激活</lang></span>
-                                                            <?php endif; ?>
-                                                        </td>
-                                                        <td>
-                                                            <?php if (!empty($model['is_default'])): ?>
-                                                                <span class="badge bg-primary"><lang>是</lang></span>
-                                                            <?php else: ?>
-                                                                -
-                                                            <?php endif; ?>
-                                                        </td>
-                                                        <td>
-                                                            <div class="btn-group btn-group-sm">
-                                                                <block class='Weline\Component\Block\OffCanvas'
-                                                                       template='Weline_Component::off-canvas.phtml'
-                                                                       cache='0'
-                                                                       id='model_detail'
-                                                                       action="*/backend/model/detailOffcanvas"
-                                                                       target-tag="button"
-                                                                       vars="model"
-                                                                       action-params="{id: model.id}"
-                                                                       target-button-class='btn btn-outline-primary'
-                                                                       icon='mdi mdi-eye'
-                                                                       title='<?= __("模型详情") ?>'
-                                                                       close-button-show='1'
-                                                                       close-button-text='<?= __("关闭") ?>'
-                                                                       target-button-text=''
-                                                                       direction='right'
-                                                                       class-names='w-75'
-                                                                       flush='1'
-                                                                       flush-button-text='刷新'
-                                                                       off-canvas-body-style=''
-                                                                />
-                                                                <block class='Weline\Component\Block\OffCanvas'
-                                                                       template='Weline_Component::off-canvas.phtml'
-                                                                       cache='0'
-                                                                       id='model_edit'
-                                                                       action="*/backend/model/editOffcanvas"
-                                                                       target-tag="button"
-                                                                       vars="model"
-                                                                       action-params="{id: model.id}"
-                                                                       target-button-class='btn btn-outline-info'
-                                                                       icon='mdi mdi-pencil'
-                                                                       title='<?= __("编辑模型") ?>'
-                                                                       close-button-show='1'
-                                                                       close-button-text='<?= __("关闭") ?>'
-                                                                       target-button-text=''
-                                                                       direction='right'
-                                                                       class-names='w-50'
-                                                                       flush='1'
-                                                                       save='1'
-                                                                       flush-button-text='刷新'
-                                                                       off-canvas-body-style=''
-                                                                />
-                                                                <!-- 连通测试按钮 -->
-                                                                <button type="button" 
-                                                                        class="btn btn-outline-success" 
-                                                                        onclick="testModelConnection('<?= $model['model_code'] ?? '' ?>')" 
-                                                                        title="<?= __('连通测试') ?>">
-                                                                    <i class="mdi mdi-wifi"></i>
-                                                                </button>
-                                                                <!-- 自配置连通测试按钮 -->
-                                                                <?php if (!empty($model['has_api_key'])): ?>
-                                                                <button type="button" 
-                                                                        class="btn btn-outline-warning" 
-                                                                        onclick="testSelfConfigConnection('<?= $model['model_code'] ?? '' ?>')" 
-                                                                        title="<?= __('自配置连通测试') ?>">
-                                                                    <i class="mdi mdi-cog"></i>
-                                                                </button>
-                                                                <?php endif; ?>
-                                                                <?php 
-                                                                // 启用条件：
-                                                                // 1) 供应商连通性测试成功（代表存在可用供应商账户且测试通过）
-                                                                // 2) 若存在自配置API密钥，则自配置连通性测试也必须成功
-                                                                $providerOk = (($model['provider_test_status'] ?? 'pending') === 'success');
-                                                                $hasSelfConfig = !empty($model['has_api_key']);
-                                                                $selfOk = !$hasSelfConfig || (($model['self_config_test_status'] ?? 'pending') === 'success');
-                                                                $canActivate = $providerOk && $selfOk;
-                                                                $disableReason = '';
-                                                                if (!$providerOk) {
-                                                                    $disableReason = '供应商连通性未通过';
-                                                                } elseif ($hasSelfConfig && !$selfOk) {
-                                                                    $disableReason = '自配置连通性未通过';
-                                                                }
-                                                                $isActive = !empty($model['is_active']);
-                                                                $titleText = $isActive ? '停用' : ($canActivate ? '激活' : ('无法激活: ' . $disableReason));
-                                                                ?>
-                                                                <?php
-                                                                $onclick = $isActive
-                                                                    ? "toggleStatusByCode('" . ($model['model_code'] ?? '') . "')"
-                                                                    : ($canActivate
-                                                                        ? "toggleStatusByCode('" . ($model['model_code'] ?? '') . "')"
-                                                                        : 'showActivateBlocked(this)');
-                                                                ?>
-                                                                <button type="button"
-                                                                        class="btn btn-outline-<?= $isActive ? 'warning' : ($canActivate ? 'success' : 'secondary') ?>"
-                                                                        title="<?= htmlspecialchars($titleText, ENT_QUOTES) ?>"
-                                                                        data-reason="<?= htmlspecialchars($disableReason, ENT_QUOTES) ?>"
-                                                                        <?= (!$canActivate && !$isActive) ? 'disabled' : '' ?>
-                                                                        onclick="<?= $onclick ?>">
-                                                                    <i class="mdi mdi-<?= $isActive ? 'pause' : 'play' ?>"></i>
-                                                                </button>
-                                                                <block class='Weline\Component\Block\OffCanvas'
-                                                                       template='Weline_Component::off-canvas.phtml'
-                                                                       cache='0'
-                                                                       id='model_copy'
-                                                                       action="*/backend/model/copyForm"
-                                                                       target-tag="button"
-                                                                       vars="model"
-                                                                       action-params="{id: model.id}"
-                                                                       target-button-class='btn btn-outline-secondary'
-                                                                       icon='mdi mdi-content-copy'
-                                                                       title='复制模型'
-                                                                       close-button-show='1'
-                                                                       close-button-text='<?= __("关闭") ?>'
-                                                                       target-button-text=''
-                                                                       direction='right'
-                                                                       class-names='w-50'
-                                                                       flush='1'
-                                                                       save='1'
-                                                                       flush-button-text='<?= __("刷新") ?>'
-                                                                       off-canvas-body-style=''
-                                                                />
-                                                                <?php if (!empty($model['is_copied'])): ?>
-                                                                <button type="button" class="btn btn-outline-danger" 
-                                                                        onclick="deleteModel(<?= $model['id'] ?? 0 ?>, '<?= $model['model_code'] ?? '' ?>', <?= !empty($model['is_copied']) ? 'true' : 'false' ?>)" 
-                                                                        title="<?= __('删除') ?>">
-                                                                    <i class="mdi mdi-delete"></i>
-                                                                </button>
-                                                                <?php else: ?>
-                                                                <button type="button" class="btn btn-outline-danger" 
-                                                                        disabled
-                                                                        title="<?= __('原始模型不能删除') ?>">
-                                                                    <i class="mdi mdi-delete-off"></i>
-                                                                </button>
-                                                                <?php endif; ?>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                <?php endforeach; ?>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <!-- 模型列表卡片结束 -->
-
-<script>
-// 批量选择功能
-function toggleSelectAll() {
-    const selectAll = document.getElementById('selectAll');
-    const checkboxes = document.querySelectorAll('.model-checkbox');
-    checkboxes.forEach(cb => {
-        cb.checked = selectAll.checked;
-    });
-    updateBulkActions();
-}
-
-function updateBulkActions() {
-    const checkboxes = document.querySelectorAll('.model-checkbox:checked');
-    const count = checkboxes.length;
-    const bulkActions = document.getElementById('bulkActions');
-    const selectedCount = document.getElementById('selectedCount');
-    
-    if (count > 0) {
-        bulkActions.style.display = 'block';
-        selectedCount.textContent = count;
-    } else {
-        bulkActions.style.display = 'none';
-    }
-}
-
-function getSelectedIds() {
-    const checkboxes = document.querySelectorAll('.model-checkbox:checked');
-    return Array.from(checkboxes).map(cb => cb.value);
-}
-
-// 批量激活
-function bulkActivate() {
-    const ids = getSelectedIds();
-    if (ids.length === 0) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('请先选择要激活的模型') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('请先选择要激活的模型') ?>');
-        }
-        return;
-    }
-    
-    if (!confirm('<?= __('确定要激活选中的 {count} 个模型吗？', ['count' => "' + ids.length + '"]) ?>'.replace('{count}', ids.length))) {
-        return;
-    }
-    
-    fetch('<?= $this->getBackendUrl('*/backend/model/bulkActivate') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ids: ids})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('成功') ?>',
-                    text: data.message,
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => location.reload());
-            } else {
-                console.log(data.message);
-                location.reload();
-            }
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('操作失败') ?>',
-                    text: data.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('操作失败：') ?>' + data.message);
-            }
-        }
-    });
-}
-
-// 批量禁用
-function bulkDeactivate() {
-    const ids = getSelectedIds();
-    if (ids.length === 0) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('请先选择要禁用的模型') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('请先选择要禁用的模型') ?>');
-        }
-        return;
-    }
-    
-    if (!confirm('<?= __('确定要禁用选中的模型吗？') ?>')) {
-        return;
-    }
-    
-    fetch('<?= $this->getBackendUrl('*/backend/model/bulkDeactivate') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ids: ids})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('成功') ?>',
-                    text: data.message,
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => location.reload());
-            } else {
-                console.log(data.message);
-                location.reload();
-            }
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('操作失败') ?>',
-                    text: data.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('操作失败：') ?>' + data.message);
-            }
-        }
-    });
-}
-
-// 批量删除
-function bulkDelete() {
-    const ids = getSelectedIds();
-    if (ids.length === 0) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('请先选择要删除的模型') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('请先选择要删除的模型') ?>');
-        }
-        return;
-    }
-    
-    if (!confirm('<?= __('确定要删除选中的模型吗？此操作不可恢复！\n注意：只能删除复制的模型，原始模型无法删除。') ?>')) {
-        return;
-    }
-    
-    fetch('<?= $this->getBackendUrl('*/backend/model/bulkDelete') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ids: ids})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('成功') ?>',
-                    text: data.message,
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => location.reload());
-            } else {
-                console.log(data.message);
-                location.reload();
-            }
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('操作失败') ?>',
-                    text: data.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('操作失败：') ?>' + data.message);
-            }
-        }
-    });
-}
-
-// 批量测试连接
-function bulkTestConnection() {
-    const ids = getSelectedIds();
-    if (ids.length === 0) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('请先选择要测试的模型') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('请先选择要测试的模型') ?>');
-        }
-        return;
-    }
-    
-    // 创建进度弹窗
-    const progressModal = createProgressModal();
-    progressModal.show();
-    
-    // 更新进度文本
-    updateProgress(progressModal, `开始测试 ${ids.length} 个模型...`);
-    
-    fetch('<?= $this->getBackendUrl('*/backend/model/batchTestConnection') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({model_ids: ids})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // 显示测试结果
-            showTestResults(data.results, data.summary);
-            progressModal.hide();
-            
-            // 刷新页面以更新连接状态
-            setTimeout(() => location.reload(), 3000);
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('测试失败') ?>',
-                    text: data.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('测试失败：') ?>' + data.message);
-            }
-            progressModal.hide();
-        }
-    })
-    .catch(error => {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('请求失败') ?>',
-                text: error.message,
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('请求失败：') ?>' + error.message);
-        }
-        progressModal.hide();
-    });
-}
-
-// 创建进度弹窗
-function createProgressModal() {
-    const modalHtml = `
-        <div class="modal fade" id="progressModal" tabindex="-1">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-body text-center py-4">
-                        <div class="spinner-border text-primary mb-3" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                        <h5 id="progressText">正在测试...</h5>
-                        <p class="text-muted mb-0" id="progressDetail">请稍候，正在测试模型连接</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // 如果已存在则移除
-    const existingModal = document.getElementById('progressModal');
-    if (existingModal) {
-        existingModal.remove();
-    }
-    
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    return new bootstrap.Modal(document.getElementById('progressModal'), {
-        backdrop: 'static',
-        keyboard: false
-    });
-}
-
-// 更新进度文本
-function updateProgress(modal, text, detail = '') {
-    const progressText = document.getElementById('progressText');
-    const progressDetail = document.getElementById('progressDetail');
-    if (progressText) progressText.textContent = text;
-    if (progressDetail) progressDetail.textContent = detail;
-}
-
-// 显示测试结果
-function showTestResults(results, summary) {
-    let resultHtml = `
-        <div class="modal fade" id="testResultModal" tabindex="-1">
-            <div class="modal-dialog modal-lg modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">批量测试结果</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="alert alert-info mb-3">
-                            <strong>测试统计：</strong>
-                            总计 ${summary.total} 个，
-                            成功 <span class="text-success">${summary.success}</span> 个，
-                            失败 <span class="text-danger">${summary.failed}</span> 个
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>模型</th>
-                                        <th>状态</th>
-                                        <th>消息</th>
-                                        <th>耗时</th>
-                                    </tr>
-                                </thead>
-                                <tbody>`;
-    
-    results.forEach(result => {
-        const statusClass = result.success ? 'success' : 'danger';
-        const statusText = result.success ? '成功' : '失败';
-        const duration = result.duration ? `${result.duration}ms` : '-';
-        
-        resultHtml += `
-            <tr>
-                <td>${result.model_name || result.model_code}</td>
-                <td><span class="badge bg-${statusClass}">${statusText}</span></td>
-                <td>${result.message}</td>
-                <td>${duration}</td>
-            </tr>`;
-    });
-    
-    resultHtml += `
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
-                    </div>
-                </div>
-            </div>
-        </div>`;
-    
-    // 如果已存在则移除
-    const existingModal = document.getElementById('testResultModal');
-    if (existingModal) {
-        existingModal.remove();
-    }
-    
-    document.body.insertAdjacentHTML('beforeend', resultHtml);
-    const resultModal = new bootstrap.Modal(document.getElementById('testResultModal'));
-    resultModal.show();
-}
-
-// 清空模型表
-function clearAllModels() {
-    // 第一次确认 - 使用更醒目的提示
-    const firstConfirm = confirm('<?= __('🚨 危险操作警告！') ?>\n\n' +
-        '<?= __('您即将执行以下操作：') ?>\n' +
-        '• <?= __('删除所有AI模型数据') ?>\n' +
-        '• <?= __('包括原始模型和复制模型') ?>\n' +
-        '• <?= __('包括所有配置和测试记录') ?>\n' +
-        '• <?= __('此操作不可恢复！') ?>\n\n' +
-        '<?= __('确定要继续吗？') ?>');
-    
-    if (!firstConfirm) {
-        return;
-    }
-    
-    // 第二次确认 - 输入确认文本
-    const confirmText = prompt('<?= __('⚠️ 最终确认') ?>\n\n' +
-        '<?= __('为了确保您了解此操作的严重性，') ?>\n' +
-        '<?= __('请输入以下文本以确认：') ?>\n\n' +
-        'CLEAR ALL MODELS\n\n' +
-        '<?= __('（区分大小写）') ?>');
-    
-    if (confirmText !== 'CLEAR ALL MODELS') {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('确认文本不正确') ?>',
-                html: '<?= __('操作已取消') ?><br><br><?= __('请确保输入：') ?>CLEAR ALL MODELS<br><?= __('（区分大小写）') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('❌ 确认文本不正确，操作已取消') ?>');
-        }
-        return;
-    }
-    
-    fetch('<?= $this->getBackendUrl('*/backend/model/clearAll') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'}
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('成功') ?>',
-                    text: data.message,
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => location.reload());
-            } else {
-                console.log(data.message);
-                location.reload();
-            }
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('操作失败') ?>',
-                    text: data.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('操作失败：') ?>' + data.message);
-            }
-        }
-    });
-}
-
-// 删除单个模型
-function deleteModel(modelId, modelCode) {
-    if (!modelCode || modelCode.startsWith('weline_')) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('原始模型不能删除，只能删除复制的模型') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('原始模型不能删除，只能删除复制的模型') ?>');
-        }
-        return;
-    }
-    
-    if (!confirm('<?= __('确定要删除模型吗？此操作不可恢复！') ?>')) {
-        return;
-    }
-    
-    fetch('<?= $this->getBackendUrl('*/backend/model/delete') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({id: modelId})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('成功') ?>',
-                    text: data.message || '<?= __('删除成功') ?>',
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => location.reload());
-            } else {
-                console.log(data.message || '<?= __('删除成功') ?>');
-                location.reload();
-            }
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('删除失败') ?>',
-                    text: data.message || '<?= __('删除失败') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error(data.message || '<?= __('删除失败') ?>');
-            }
-        }
-    })
-    .catch(error => {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('错误') ?>',
-                text: '<?= __('删除失败，请重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('删除失败，请重试') ?>');
-        }
-    });
-}
-
-function collectModels() {
-    const btn = event.target.closest('button');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('收集中...') ?>';
-
-    fetch('<?= $this->getBackendUrl('*/backend/model/collect') ?>', {
-        method: 'POST'
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('收集成功') ?>',
-                    text: data.message,
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => location.reload());
-            } else {
-                console.log('<?= __('收集成功！') ?>' + '\n' + data.message);
-                location.reload();
-            }
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('收集失败') ?>',
-                    text: data.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('收集失败：') ?>' + data.message);
-            }
-        }
-    })
-    .catch(error => {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('请求失败') ?>',
-                text: error.message,
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('请求失败：') ?>' + error.message);
-        }
-    })
-    .finally(() => {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="mdi mdi-download"></i> <?= __('收集模型') ?>';
-    });
-}
-
-function toggleStatusByCode(modelCode) {
-    fetch('<?= $this->getBackendUrl('*/backend/model/toggleStatus') ?>', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: 'model_code=' + encodeURIComponent(modelCode)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            location.reload();
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('操作失败') ?>',
-                    text: data.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('操作失败：') ?>' + data.message);
-            }
-        }
-    });
-}
-
-function deleteModel(modelId, modelCode, isCopied) {
-    if (!isCopied) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('原始模型不能删除，只能删除复制的模型') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('原始模型不能删除，只能删除复制的模型') ?>');
-        }
-        return;
-    }
-    
-    if (!confirm('<?= __('确定要删除模型') ?> ' + modelCode + ' <?= __('吗？') ?>')) {
-        return;
-    }
-
-    // 使用 fetch 发送 DELETE 请求
-    fetch('<?= $this->getBackendUrl('*/backend/model/delete') ?>?id=' + modelId, {
-        method: 'DELETE',
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // 删除成功，刷新页面
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('成功') ?>',
-                    text: data.message || '<?= __('删除成功') ?>',
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => window.location.reload());
-            } else {
-                console.log(data.message || '<?= __('删除成功') ?>');
-                window.location.reload();
-            }
-        } else {
-            // 删除失败，显示错误消息
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('删除失败') ?>',
-                    text: data.message || '<?= __('删除失败') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error(data.message || '<?= __('删除失败') ?>');
-            }
-        }
-    })
-    .catch(error => {
-        console.error('<?= __('删除失败:') ?>', error);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('错误') ?>',
-                text: '<?= __('删除失败，请重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('删除失败，请重试') ?>');
-        }
-    });
-}
-
-function applyFilters() {
-    const vendor = document.getElementById('vendorFilter').value;
-    const status = document.getElementById('statusFilter').value;
-    const search = document.getElementById('searchInput').value;
-
-    const params = new URLSearchParams();
-    if (vendor) params.append('vendor', vendor);
-    if (status) params.append('status', status);
-    if (search) params.append('search', search);
-
-    window.location.href = '<?= $this->getBackendUrl('*/backend/model') ?>?' + params.toString();
-}
-
-function resetFilters() {
-    window.location.href = '<?= $this->getBackendUrl('*/backend/model') ?>';
-}
-
-// 测试模型连通性
-function testModelConnection(modelCode) {
-    if (!modelCode) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('模型代码不能为空') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('模型代码不能为空') ?>');
-        }
-        return;
-    }
-    
-    const btn = event.target.closest('button');
-    const originalHtml = btn.innerHTML;
-    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i>';
-    btn.disabled = true;
-    
-    // 显示测试中弹窗
-    const testModal = createTestModal();
-    document.body.appendChild(testModal);
-    
-    fetch('<?= $this->getBackendUrl('*/backend/model/testConnection') ?>', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ model_code: modelCode })
-    })
-    .then(response => response.json())
-    .then(data => {
-        btn.innerHTML = originalHtml;
-        btn.disabled = false;
-        
-        // 移除测试弹窗
-        document.body.removeChild(testModal);
-        
-        if (data && data.data && data.data.results) {
-            const r = data.data.results;
-            const s = r.self_config || {};
-            const p = r.provider_account || {};
-            const sStatus = s.tested ? (s.success ? '<span class="badge bg-success">成功</span>' : '<span class="badge bg-danger">失败</span>') : '<span class="badge bg-secondary">未测</span>';
-            const pStatus = p.tested ? (p.success ? '<span class="badge bg-success">成功</span>' : '<span class="badge bg-danger">失败</span>') : '<span class="badge bg-secondary">未测</span>';
-            const html = `
-自配置结果：${sStatus}\n` + (s.tested ? `消息：${s.message || ''}\n耗时：${s.duration || 0}ms\n响应：${(s.response || '').toString().slice(0,500)}\n\n` : '\n') +
-`供应商账户结果：${pStatus}\n` + (p.tested ? `消息：${p.message || ''}\n耗时：${p.duration || 0}ms\n账户：${p.account_name || ''}\n响应：${(p.response || '').toString().slice(0,500)}` : '');
-            const __ok = !!data.success;
-            let __retryName = null;
-            if (!__ok) {
-                __retryName = '__retry_test_' + Date.now();
-                window[__retryName] = function() { testModelConnection(modelCode); };
-            }
-            showResultModal(__ok ? 'success' : 'error', '连通测试结果', html, __ok, __retryName);
-        } else if (data.success) {
-            showResultModal('success', '连通测试成功', data.message || '', true);
-        } else {
-            const fnName = '__retry_test_' + Date.now();
-            window[fnName] = function() { testModelConnection(modelCode); };
-            showResultModal('error', '连通测试失败', data.message, false, fnName);
-        }
-    })
-    .catch(error => {
-        btn.innerHTML = originalHtml;
-        btn.disabled = false;
-        
-        // 移除测试弹窗
-        document.body.removeChild(testModal);
-        
-        console.error('Error:', error);
-        const fnName = '__retry_test_' + Date.now();
-        window[fnName] = function() { testModelConnection(modelCode); };
-        showResultModal('error', '连通测试失败', __('测试失败: 网络错误'), false, fnName);
-    });
-}
-
-// 测试自配置连通性
-function testSelfConfigConnection(modelCode) {
-    if (!modelCode) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('模型代码不能为空') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('模型代码不能为空') ?>');
-        }
-        return;
-    }
-    
-    const btn = event.target.closest('button');
-    const originalHtml = btn.innerHTML;
-    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i>';
-    btn.disabled = true;
-    
-    // 显示测试中弹窗
-    const testModal = createTestModal();
-    document.body.appendChild(testModal);
-    
-    fetch('<?= $this->getBackendUrl('*/backend/model/testSelfConfig') ?>', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ model_code: modelCode })
-    })
-    .then(response => response.json())
-    .then(data => {
-        btn.innerHTML = originalHtml;
-        btn.disabled = false;
-        
-        // 移除测试弹窗
-        document.body.removeChild(testModal);
-        
-        if (data.success) {
-            const message = data.data ? 
-                `${data.message}\n\n响应时间: ${data.data.duration}ms\n响应内容: ${data.data.response}` : 
-                data.message;
-            showResultModal('success', '自配置连通测试成功', message, true);
-        } else {
-            const fnName = '__retry_self_' + Date.now();
-            window[fnName] = function() { testSelfConfigConnection(modelCode); };
-            showResultModal('error', '自配置连通测试失败', data.message, false, fnName);
-        }
-    })
-    .catch(error => {
-        btn.innerHTML = originalHtml;
-        btn.disabled = false;
-        
-        // 移除测试弹窗
-        document.body.removeChild(testModal);
-        
-        console.error('Error:', error);
-        const fnName = '__retry_self_' + Date.now();
-        window[fnName] = function() { testSelfConfigConnection(modelCode); };
-        showResultModal('error', '自配置连通测试失败', __('测试失败: 网络错误'), false, fnName);
-    });
-}
-
-// 创建测试中弹窗
-function createTestModal() {
-    const modal = document.createElement('div');
-    modal.className = 'modal fade show';
-    modal.style.display = 'block';
-    modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
-    modal.innerHTML = `
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-body text-center">
-                    <div class="spinner-border text-primary mb-3" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <h5>正在测试连通性...</h5>
-                    <p class="text-muted">请稍候，正在连接AI服务</p>
-                </div>
-            </div>
-        </div>
-    `;
-    return modal;
-}
-
-// 显示结果弹窗
-function showResultModal(type, title, message, refreshOnClose = false, retryFnName = null, retryLabel = __('重试')) {
-    const modal = document.createElement('div');
-    modal.className = 'modal fade show';
-    modal.style.display = 'block';
-    modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
-    if (refreshOnClose) {
-        modal.setAttribute('data-refresh-on-close', '1');
-    }
-    const uid = 'retryBtn_' + Date.now();
-    const retryButtonHtml = retryFnName ? `<button type="button" class="btn btn-outline-primary" id="${uid}">${retryLabel}</button>` : '';
-    modal.innerHTML = `
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="mdi mdi-${type === 'success' ? 'check-circle text-success' : 'alert-circle text-danger'}"></i>
-                        ${title}
-                    </h5>
-                    <button type="button" class="btn-close" onclick="closeResultModal(this)"></button>
-                </div>
-                <div class="modal-body">
-                    <pre style="white-space: pre-wrap; font-size: 14px;">${message}</pre>
-                </div>
-                <div class="modal-footer">
-                    ${retryButtonHtml}
-                    <button type="button" class="btn btn-primary" onclick="closeResultModal(this)">确定</button>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
-    if (retryFnName && typeof window[retryFnName] === 'function') {
-        const btn = modal.querySelector('#' + uid);
-        if (btn) {
-            btn.addEventListener('click', function() {
-                try { window[retryFnName](); } catch (e) {}
-                closeResultModal(btn);
-            });
-        }
-    }
-}
-
-// 关闭结果弹窗
-function closeResultModal(btn) {
-    const modal = btn.closest('.modal');
-    const shouldRefresh = modal && modal.getAttribute('data-refresh-on-close') === '1';
-    document.body.removeChild(modal);
-    if (shouldRefresh) {
-        window.location.reload();
-    }
-}
-</script>
-<script>
-function showActivateBlocked(btn) {
-    try {
-        const reason = btn.getAttribute('data-reason') || '<?= __('条件不足') ?>';
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('无法激活') ?>',
-                text: reason,
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('无法激活: ') ?>' + reason);
-        }
-    } catch (e) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('无法激活') ?>',
-                text: '<?= __('条件不足') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('无法激活') ?>');
-        }
-    }
-}
-</script>
-
+<!-- 页面标题 -->
+<div class='row'>
+    <div class='col-12'>
+        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+            <h4 class='mb-sm-0'>
+                <i class="mdi mdi-robot me-2"></i>
+                <lang>AI模型管理</lang>
+            </h4>
+            <div class='page-title-right'>
+                <ol class='breadcrumb m-0'>
+                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>AI助手</lang></a></li>
+                    <li class='breadcrumb-item active'><lang>AI模型</lang></li>
+                </ol>
             </div>
         </div>
     </div>
-    <!-- 主要内容结束 -->
-
 </div>
-<!-- 页面结束 -->
+<!-- 页面标题结束 -->
 
-<!-- 页脚 -->
-@template(Weline_Admin::common/footer.phtml)
+<!-- 按钮操作栏 -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <!-- 批量操作区域 -->
+            <div id="bulkActions" style="display: none;">
+                <span class="me-2 text-muted">
+                    <lang>已选择</lang> <strong id="selectedCount">0</strong> <lang>个模型</lang>
+                </span>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-sm btn-info" onclick="bulkTestConnection()">
+                        <i class="mdi mdi-wifi me-1"></i><lang>批量测试</lang>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-success" onclick="bulkActivate()">
+                        <i class="mdi mdi-check-circle me-1"></i><lang>批量激活</lang>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-warning" onclick="bulkDeactivate()">
+                        <i class="mdi mdi-cancel me-1"></i><lang>批量禁用</lang>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-danger" onclick="bulkDelete()">
+                        <i class="mdi mdi-delete me-1"></i><lang>批量删除</lang>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 右侧按钮 -->
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-success" onclick="collectModels()">
+                    <i class="mdi mdi-download me-1"></i>
+                    <lang>收集模型</lang>
+                </button>
+                <a href="<?= $this->getBackendUrl('*/backend/defaultModel') ?>" class="btn btn-primary">
+                    <i class="mdi mdi-star me-1"></i>
+                    <lang>默认模型管理</lang>
+                </a>
+                <button type="button" class="btn btn-danger" onclick="clearAllModels()">
+                    <i class="mdi mdi-trash-can-outline me-1"></i>
+                    <lang>清空模型表</lang>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- 按钮操作栏结束 -->
+
+<!-- 筛选条件卡片 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="mdi mdi-filter me-2"></i>
+                    <lang>筛选条件</lang>
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="filterForm" class="row g-3" onsubmit="applyFilters(); return false;">
+                    <div class="col-md-3">
+                        <label class="form-label"><lang>供应商</lang></label>
+                        <select class="form-select" id="vendorFilter" name="vendor">
+                            <option value=""><lang>全部</lang></option>
+                            <?php foreach ($vendors as $vendor): ?>
+                                <option value="<?= $vendor ?>"><?= $vendor ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label"><lang>状态</lang></label>
+                        <select class="form-select" id="statusFilter" name="status">
+                            <option value=""><lang>全部</lang></option>
+                            <option value="1"><lang>激活</lang></option>
+                            <option value="0"><lang>未激活</lang></option>
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <label class="form-label"><lang>搜索</lang></label>
+                        <input type="text" class="form-control" id="searchInput" name="search" placeholder="<?= __('模型名称或代码') ?>">
+                    </div>
+                    
+                    <div class="col-md-2 d-flex align-items-end">
+                        <div class="btn-group w-100">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="mdi mdi-magnify"></i> <lang>筛选</lang>
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="resetFilters()">
+                                <i class="mdi mdi-refresh"></i> <lang>重置</lang>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- 筛选条件卡片结束 -->
+
+<!-- 模型列表卡片 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="mdi mdi-robot me-2"></i>
+                    <lang>模型列表</lang>
+                    <span class="badge bg-primary ms-2"><?= $total ?></span>
+                </h3>
+            </div>
+            <div class="card-body">
+                <?php if (empty($models)): ?>
+                    <div class="alert alert-info">
+                        <i class="mdi mdi-information me-2"></i>
+                        <lang>暂无数据，请点击"收集模型"按钮来扫描和导入模型配置。</lang>
+                    </div>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th width="50">
+                                        <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                                    </th>
+                                    <th width="60"><lang>ID</lang></th>
+                                    <th><lang>模型名称</lang></th>
+                                    <th><lang>供应商</lang></th>
+                                    <th><lang>模型代码</lang></th>
+                                    <th><lang>版本</lang></th>
+                                    <th width="100"><lang>类型</lang></th>
+                                    <th><lang>输入价格</lang></th>
+                                    <th><lang>输出价格</lang></th>
+                                    <th width="100"><lang>自配置状态</lang></th>
+                                    <th width="100"><lang>自配置连通性</lang></th>
+                                    <th width="100"><lang>供应商连通性</lang></th>
+                                    <th width="100"><lang>状态</lang></th>
+                                    <th width="100"><lang>默认</lang></th>
+                                    <th width="250"><lang>操作</lang></th>
+                                </tr>
+                            </thead>
+                            <tbody id="modelTable">
+                                <?php foreach ($models as $model): ?>
+                                    <tr data-model-id="<?= $model['id'] ?? '' ?>">
+                                        <td>
+                                            <input type="checkbox" class="model-checkbox" value="<?= $model['id'] ?? '' ?>" onchange="updateBulkActions()">
+                                        </td>
+                                        <td><?= $model['id'] ?? '' ?></td>
+                                        <td>
+                                            <strong><?= $model['name'] ?? '' ?></strong>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info"><?= $model['vendor'] ?? '' ?></span>
+                                        </td>
+                                        <td>
+                                            <code><?= $model['model_code'] ?? '' ?></code>
+                                        </td>
+                                        <td><?= $model['version'] ?? '' ?></td>
+                                        <td>
+                                            <?php if (!empty($model['is_copied'])): ?>
+                                                <span class="badge bg-warning text-dark">
+                                                    <i class="mdi mdi-content-copy"></i> <lang>复制</lang>
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge bg-secondary">
+                                                    <i class="mdi mdi-source-branch"></i> <lang>原始</lang>
+                                                </span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>$<?= number_format((float)($model['token_price_input'] ?? 0), 6) ?>/1K</td>
+                                        <td>$<?= number_format((float)($model['token_price_output'] ?? 0), 6) ?>/1K</td>
+                                        <td>
+                                            <?php if (!empty($model['has_api_key'])): ?>
+                                                <span class="badge bg-success" title="<?= __('已配置自配置密钥') ?>">
+                                                    <i class="mdi mdi-check-circle"></i> <lang>已自配置</lang>
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge bg-warning text-dark" title="<?= __('未配置自配置密钥') ?>">
+                                                    <i class="mdi mdi-alert-circle"></i> <lang>未自配置</lang>
+                                                </span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php 
+                                            $selfConfigTestStatus = $model['self_config_test_status'] ?? 'pending';
+                                            if ($selfConfigTestStatus === 'success'): ?>
+                                                <span class="badge bg-success" title="<?= __('自配置连通性测试通过') ?>">
+                                                    <i class="mdi mdi-check-circle"></i> <lang>通过</lang>
+                                                </span>
+                                            <?php elseif ($selfConfigTestStatus === 'failed'): ?>
+                                                <span class="badge bg-danger" title="<?= __('自配置连通性测试失败') ?>">
+                                                    <i class="mdi mdi-close-circle"></i> <lang>失败</lang>
+                                                </span>
+                                            <?php elseif (!empty($model['has_api_key'])): ?>
+                                                <span class="badge bg-warning" title="<?= __('自配置连通性待测试') ?>">
+                                                    <i class="mdi mdi-wifi"></i> <lang>待测试</lang>
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge bg-secondary" title="<?= __('无自配置') ?>">
+                                                    <i class="mdi mdi-minus"></i> <lang>无配置</lang>
+                                                </span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php 
+                                            $providerTestStatus = $model['provider_test_status'] ?? 'pending';
+                                            if ($providerTestStatus === 'success'): ?>
+                                                <span class="badge bg-success" title="<?= __('供应商连通性测试通过') ?>">
+                                                    <i class="mdi mdi-check-circle"></i> <lang>通过</lang>
+                                                </span>
+                                            <?php elseif ($providerTestStatus === 'failed'): ?>
+                                                <span class="badge bg-danger" title="<?= __('供应商连通性测试失败') ?>">
+                                                    <i class="mdi mdi-close-circle"></i> <lang>失败</lang>
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge bg-info" title="<?= __('供应商连通性待测试') ?>">
+                                                    <i class="mdi mdi-wifi"></i> <lang>待测试</lang>
+                                                </span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php if (!empty($model['is_active'])): ?>
+                                                <span class="badge bg-success"><lang>激活</lang></span>
+                                            <?php else: ?>
+                                                <span class="badge bg-secondary"><lang>未激活</lang></span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php if (!empty($model['is_default'])): ?>
+                                                <span class="badge bg-primary"><lang>是</lang></span>
+                                            <?php else: ?>
+                                                -
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <block class='Weline\Component\Block\OffCanvas'
+                                                       template='Weline_Component::off-canvas.phtml'
+                                                       cache='0'
+                                                       id='model_detail'
+                                                       action="*/backend/model/detailOffcanvas"
+                                                       target-tag="button"
+                                                       vars="model"
+                                                       action-params="{id: model.id}"
+                                                       target-button-class='btn btn-outline-primary'
+                                                       icon='mdi mdi-eye'
+                                                       title='<?= __("模型详情") ?>'
+                                                       close-button-show='1'
+                                                       close-button-text='<?= __("关闭") ?>'
+                                                       target-button-text=''
+                                                       direction='right'
+                                                       class-names='w-75'
+                                                       flush='1'
+                                                       flush-button-text='刷新'
+                                                       off-canvas-body-style=''
+                                                />
+                                                <block class='Weline\Component\Block\OffCanvas'
+                                                       template='Weline_Component::off-canvas.phtml'
+                                                       cache='0'
+                                                       id='model_edit'
+                                                       action="*/backend/model/editOffcanvas"
+                                                       target-tag="button"
+                                                       vars="model"
+                                                       action-params="{id: model.id}"
+                                                       target-button-class='btn btn-outline-info'
+                                                       icon='mdi mdi-pencil'
+                                                       title='<?= __("编辑模型") ?>'
+                                                       close-button-show='1'
+                                                       close-button-text='<?= __("关闭") ?>'
+                                                       target-button-text=''
+                                                       direction='right'
+                                                       class-names='w-50'
+                                                       flush='1'
+                                                       save='1'
+                                                       flush-button-text='刷新'
+                                                       off-canvas-body-style=''
+                                                />
+                                                <!-- 连通测试按钮 -->
+                                                <button type="button" 
+                                                        class="btn btn-outline-success" 
+                                                        onclick="testModelConnection('<?= $model['model_code'] ?? '' ?>')" 
+                                                        title="<?= __('连通测试') ?>">
+                                                    <i class="mdi mdi-wifi"></i>
+                                                </button>
+                                                <!-- 自配置连通测试按钮 -->
+                                                <?php if (!empty($model['has_api_key'])): ?>
+                                                <button type="button" 
+                                                        class="btn btn-outline-warning" 
+                                                        onclick="testSelfConfigConnection('<?= $model['model_code'] ?? '' ?>')" 
+                                                        title="<?= __('自配置连通测试') ?>">
+                                                    <i class="mdi mdi-cog"></i>
+                                                </button>
+                                                <?php endif; ?>
+                                                <?php 
+                                                $providerOk = (($model['provider_test_status'] ?? 'pending') === 'success');
+                                                $hasSelfConfig = !empty($model['has_api_key']);
+                                                $selfOk = !$hasSelfConfig || (($model['self_config_test_status'] ?? 'pending') === 'success');
+                                                $canActivate = $providerOk && $selfOk;
+                                                $disableReason = '';
+                                                if (!$providerOk) {
+                                                    $disableReason = '供应商连通性未通过';
+                                                } elseif ($hasSelfConfig && !$selfOk) {
+                                                    $disableReason = '自配置连通性未通过';
+                                                }
+                                                $isActive = !empty($model['is_active']);
+                                                $titleText = $isActive ? '停用' : ($canActivate ? '激活' : ('无法激活: ' . $disableReason));
+                                                ?>
+                                                <?php
+                                                $onclick = $isActive
+                                                    ? "toggleStatusByCode('" . ($model['model_code'] ?? '') . "')"
+                                                    : ($canActivate
+                                                        ? "toggleStatusByCode('" . ($model['model_code'] ?? '') . "')"
+                                                        : 'showActivateBlocked(this)');
+                                                ?>
+                                                <button type="button"
+                                                        class="btn btn-outline-<?= $isActive ? 'warning' : ($canActivate ? 'success' : 'secondary') ?>"
+                                                        title="<?= htmlspecialchars($titleText, ENT_QUOTES) ?>"
+                                                        data-reason="<?= htmlspecialchars($disableReason, ENT_QUOTES) ?>"
+                                                        <?= (!$canActivate && !$isActive) ? 'disabled' : '' ?>
+                                                        onclick="<?= $onclick ?>">
+                                                    <i class="mdi mdi-<?= $isActive ? 'pause' : 'play' ?>"></i>
+                                                </button>
+                                                <block class='Weline\Component\Block\OffCanvas'
+                                                       template='Weline_Component::off-canvas.phtml'
+                                                       cache='0'
+                                                       id='model_copy'
+                                                       action="*/backend/model/copyForm"
+                                                       target-tag="button"
+                                                       vars="model"
+                                                       action-params="{id: model.id}"
+                                                       target-button-class='btn btn-outline-secondary'
+                                                       icon='mdi mdi-content-copy'
+                                                       title='复制模型'
+                                                       close-button-show='1'
+                                                       close-button-text='<?= __("关闭") ?>'
+                                                       target-button-text=''
+                                                       direction='right'
+                                                       class-names='w-50'
+                                                       flush='1'
+                                                       save='1'
+                                                       flush-button-text='<?= __("刷新") ?>'
+                                                       off-canvas-body-style=''
+                                                />
+                                                <?php if (!empty($model['is_copied'])): ?>
+                                                <button type="button" class="btn btn-outline-danger" 
+                                                        onclick="deleteModel(<?= $model['id'] ?? 0 ?>, '<?= $model['model_code'] ?? '' ?>', <?= !empty($model['is_copied']) ? 'true' : 'false' ?>)" 
+                                                        title="<?= __('删除') ?>">
+                                                    <i class="mdi mdi-delete"></i>
+                                                </button>
+                                                <?php else: ?>
+                                                <button type="button" class="btn btn-outline-danger" 
+                                                        disabled
+                                                        title="<?= __('原始模型不能删除') ?>">
+                                                    <i class="mdi mdi-delete-off"></i>
+                                                </button>
+                                                <?php endif; ?>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- 模型列表卡片结束 -->
+
 <!-- SweetAlert2 CSS -->
 <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
 <!-- SweetAlert2 JS -->
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 
-</body>
-</html>
+<script>
+(function() {
+    'use strict';
+
+    // 批量选择功能
+    window.toggleSelectAll = function() {
+        const selectAll = document.getElementById('selectAll');
+        const checkboxes = document.querySelectorAll('.model-checkbox');
+        checkboxes.forEach(cb => {
+            cb.checked = selectAll.checked;
+        });
+        updateBulkActions();
+    };
+
+    window.updateBulkActions = function() {
+        const checkboxes = document.querySelectorAll('.model-checkbox:checked');
+        const count = checkboxes.length;
+        const bulkActions = document.getElementById('bulkActions');
+        const selectedCount = document.getElementById('selectedCount');
+        
+        if (count > 0) {
+            bulkActions.style.display = 'block';
+            selectedCount.textContent = count;
+        } else {
+            bulkActions.style.display = 'none';
+        }
+    };
+
+    function getSelectedIds() {
+        const checkboxes = document.querySelectorAll('.model-checkbox:checked');
+        return Array.from(checkboxes).map(cb => cb.value);
+    }
+
+    // 批量激活
+    window.bulkActivate = function() {
+        const ids = getSelectedIds();
+        if (ids.length === 0) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('提示') ?>',
+                    text: '<?= __('请先选择要激活的模型') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('请先选择要激活的模型') ?>');
+            }
+            return;
+        }
+        
+        if (!confirm('<?= __('确定要激活选中的模型吗？') ?>')) {
+            return;
+        }
+        
+        fetch('<?= $this->getBackendUrl('*/backend/model/bulkActivate') ?>', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ids: ids})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('成功') ?>',
+                        text: data.message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    }).then(() => location.reload());
+                } else {
+                    console.log(data.message);
+                    location.reload();
+                }
+            } else {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('操作失败') ?>',
+                        text: data.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('操作失败：') ?>' + data.message);
+                }
+            }
+        });
+    };
+
+    // 批量禁用
+    window.bulkDeactivate = function() {
+        const ids = getSelectedIds();
+        if (ids.length === 0) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('提示') ?>',
+                    text: '<?= __('请先选择要禁用的模型') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('请先选择要禁用的模型') ?>');
+            }
+            return;
+        }
+        
+        if (!confirm('<?= __('确定要禁用选中的模型吗？') ?>')) {
+            return;
+        }
+        
+        fetch('<?= $this->getBackendUrl('*/backend/model/bulkDeactivate') ?>', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ids: ids})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('成功') ?>',
+                        text: data.message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    }).then(() => location.reload());
+                } else {
+                    console.log(data.message);
+                    location.reload();
+                }
+            } else {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('操作失败') ?>',
+                        text: data.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('操作失败：') ?>' + data.message);
+                }
+            }
+        });
+    };
+
+    // 批量删除
+    window.bulkDelete = function() {
+        const ids = getSelectedIds();
+        if (ids.length === 0) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('提示') ?>',
+                    text: '<?= __('请先选择要删除的模型') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('请先选择要删除的模型') ?>');
+            }
+            return;
+        }
+        
+        if (!confirm('<?= __('确定要删除选中的模型吗？此操作不可恢复！\n注意：只能删除复制的模型，原始模型无法删除。') ?>')) {
+            return;
+        }
+        
+        fetch('<?= $this->getBackendUrl('*/backend/model/bulkDelete') ?>', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ids: ids})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('成功') ?>',
+                        text: data.message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    }).then(() => location.reload());
+                } else {
+                    console.log(data.message);
+                    location.reload();
+                }
+            } else {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('操作失败') ?>',
+                        text: data.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('操作失败：') ?>' + data.message);
+                }
+            }
+        });
+    };
+
+    // 批量测试连接
+    window.bulkTestConnection = function() {
+        const ids = getSelectedIds();
+        if (ids.length === 0) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('提示') ?>',
+                    text: '<?= __('请先选择要测试的模型') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('请先选择要测试的模型') ?>');
+            }
+            return;
+        }
+        
+        var progressModal = createProgressModal();
+        progressModal.show();
+        
+        updateProgress(progressModal, '开始测试 ' + ids.length + ' 个模型...');
+        
+        fetch('<?= $this->getBackendUrl('*/backend/model/batchTestConnection') ?>', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({model_ids: ids})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showTestResults(data.results, data.summary);
+                progressModal.hide();
+                setTimeout(() => location.reload(), 3000);
+            } else {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('测试失败') ?>',
+                        text: data.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('测试失败：') ?>' + data.message);
+                }
+                progressModal.hide();
+            }
+        })
+        .catch(error => {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('请求失败') ?>',
+                    text: error.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('请求失败：') ?>' + error.message);
+            }
+            progressModal.hide();
+        });
+    };
+
+    // 创建进度弹窗
+    function createProgressModal() {
+        var modalHtml = '<div class="modal fade" id="progressModal" tabindex="-1">' +
+            '<div class="modal-dialog modal-dialog-centered">' +
+            '<div class="modal-content">' +
+            '<div class="modal-body text-center py-4">' +
+            '<div class="spinner-border text-primary mb-3" role="status">' +
+            '<span class="visually-hidden">Loading...</span>' +
+            '</div>' +
+            '<h5 id="progressText">正在测试...</h5>' +
+            '<p class="text-muted mb-0" id="progressDetail">请稍候，正在测试模型连接</p>' +
+            '</div></div></div></div>';
+        
+        var existingModal = document.getElementById('progressModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        return new bootstrap.Modal(document.getElementById('progressModal'), {
+            backdrop: 'static',
+            keyboard: false
+        });
+    }
+
+    // 更新进度文本
+    function updateProgress(modal, text, detail) {
+        var progressText = document.getElementById('progressText');
+        var progressDetail = document.getElementById('progressDetail');
+        if (progressText) progressText.textContent = text;
+        if (progressDetail) progressDetail.textContent = detail || '';
+    }
+
+    // 显示测试结果
+    function showTestResults(results, summary) {
+        var resultHtml = '<div class="modal fade" id="testResultModal" tabindex="-1">' +
+            '<div class="modal-dialog modal-lg modal-dialog-centered">' +
+            '<div class="modal-content">' +
+            '<div class="modal-header">' +
+            '<h5 class="modal-title">批量测试结果</h5>' +
+            '<button type="button" class="btn-close" data-bs-dismiss="modal"></button>' +
+            '</div>' +
+            '<div class="modal-body">' +
+            '<div class="alert alert-info mb-3">' +
+            '<strong>测试统计：</strong> 总计 ' + summary.total + ' 个，成功 <span class="text-success">' + summary.success + '</span> 个，失败 <span class="text-danger">' + summary.failed + '</span> 个' +
+            '</div>' +
+            '<div class="table-responsive">' +
+            '<table class="table table-sm"><thead><tr><th>模型</th><th>状态</th><th>消息</th><th>耗时</th></tr></thead><tbody>';
+        
+        results.forEach(function(result) {
+            var statusClass = result.success ? 'success' : 'danger';
+            var statusText = result.success ? '成功' : '失败';
+            var duration = result.duration ? (result.duration + 'ms') : '-';
+            
+            resultHtml += '<tr>' +
+                '<td>' + (result.model_name || result.model_code) + '</td>' +
+                '<td><span class="badge bg-' + statusClass + '">' + statusText + '</span></td>' +
+                '<td>' + result.message + '</td>' +
+                '<td>' + duration + '</td>' +
+                '</tr>';
+        });
+        
+        resultHtml += '</tbody></table></div></div>' +
+            '<div class="modal-footer">' +
+            '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>' +
+            '</div></div></div></div>';
+        
+        var existingModal = document.getElementById('testResultModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        document.body.insertAdjacentHTML('beforeend', resultHtml);
+        var resultModal = new bootstrap.Modal(document.getElementById('testResultModal'));
+        resultModal.show();
+    }
+
+    // 清空模型表
+    window.clearAllModels = function() {
+        var firstConfirm = confirm('<?= __('🚨 危险操作警告！') ?>\n\n' +
+            '<?= __('您即将执行以下操作：') ?>\n' +
+            '• <?= __('删除所有AI模型数据') ?>\n' +
+            '• <?= __('包括原始模型和复制模型') ?>\n' +
+            '• <?= __('包括所有配置和测试记录') ?>\n' +
+            '• <?= __('此操作不可恢复！') ?>\n\n' +
+            '<?= __('确定要继续吗？') ?>');
+        
+        if (!firstConfirm) {
+            return;
+        }
+        
+        var confirmText = prompt('<?= __('⚠️ 最终确认') ?>\n\n' +
+            '<?= __('为了确保您了解此操作的严重性，') ?>\n' +
+            '<?= __('请输入以下文本以确认：') ?>\n\n' +
+            'CLEAR ALL MODELS\n\n' +
+            '<?= __('（区分大小写）') ?>');
+        
+        if (confirmText !== 'CLEAR ALL MODELS') {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('确认文本不正确') ?>',
+                    html: '<?= __('操作已取消') ?><br><br><?= __('请确保输入：') ?>CLEAR ALL MODELS<br><?= __('（区分大小写）') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('❌ 确认文本不正确，操作已取消') ?>');
+            }
+            return;
+        }
+        
+        fetch('<?= $this->getBackendUrl('*/backend/model/clearAll') ?>', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('成功') ?>',
+                        text: data.message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    }).then(() => location.reload());
+                } else {
+                    console.log(data.message);
+                    location.reload();
+                }
+            } else {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('操作失败') ?>',
+                        text: data.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('操作失败：') ?>' + data.message);
+                }
+            }
+        });
+    };
+
+    // 删除单个模型
+    window.deleteModel = function(modelId, modelCode, isCopied) {
+        if (!isCopied) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('提示') ?>',
+                    text: '<?= __('原始模型不能删除，只能删除复制的模型') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('原始模型不能删除，只能删除复制的模型') ?>');
+            }
+            return;
+        }
+        
+        if (!confirm('<?= __('确定要删除模型') ?> ' + modelCode + ' <?= __('吗？') ?>')) {
+            return;
+        }
+
+        fetch('<?= $this->getBackendUrl('*/backend/model/delete') ?>?id=' + modelId, {
+            method: 'DELETE',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('成功') ?>',
+                        text: data.message || '<?= __('删除成功') ?>',
+                        timer: 2000,
+                        showConfirmButton: false
+                    }).then(() => window.location.reload());
+                } else {
+                    console.log(data.message || '<?= __('删除成功') ?>');
+                    window.location.reload();
+                }
+            } else {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('删除失败') ?>',
+                        text: data.message || '<?= __('删除失败') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error(data.message || '<?= __('删除失败') ?>');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('<?= __('删除失败:') ?>', error);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('错误') ?>',
+                    text: '<?= __('删除失败，请重试') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('删除失败，请重试') ?>');
+            }
+        });
+    };
+
+    window.collectModels = function() {
+        var btn = event.target.closest('button');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('收集中...') ?>';
+
+        fetch('<?= $this->getBackendUrl('*/backend/model/collect') ?>', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('收集成功') ?>',
+                        text: data.message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    }).then(() => location.reload());
+                } else {
+                    console.log('<?= __('收集成功！') ?>\n' + data.message);
+                    location.reload();
+                }
+            } else {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('收集失败') ?>',
+                        text: data.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('收集失败：') ?>' + data.message);
+                }
+            }
+        })
+        .catch(error => {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('请求失败') ?>',
+                    text: error.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('请求失败：') ?>' + error.message);
+            }
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="mdi mdi-download"></i> <?= __('收集模型') ?>';
+        });
+    };
+
+    window.toggleStatusByCode = function(modelCode) {
+        fetch('<?= $this->getBackendUrl('*/backend/model/toggleStatus') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'model_code=' + encodeURIComponent(modelCode)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('操作失败') ?>',
+                        text: data.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('操作失败：') ?>' + data.message);
+                }
+            }
+        });
+    };
+
+    window.applyFilters = function() {
+        var vendor = document.getElementById('vendorFilter').value;
+        var status = document.getElementById('statusFilter').value;
+        var search = document.getElementById('searchInput').value;
+
+        var params = new URLSearchParams();
+        if (vendor) params.append('vendor', vendor);
+        if (status) params.append('status', status);
+        if (search) params.append('search', search);
+
+        window.location.href = '<?= $this->getBackendUrl('*/backend/model') ?>?' + params.toString();
+    };
+
+    window.resetFilters = function() {
+        window.location.href = '<?= $this->getBackendUrl('*/backend/model') ?>';
+    };
+
+    // 测试模型连通性
+    window.testModelConnection = function(modelCode) {
+        if (!modelCode) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('提示') ?>',
+                    text: '<?= __('模型代码不能为空') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('模型代码不能为空') ?>');
+            }
+            return;
+        }
+        
+        var btn = event.target.closest('button');
+        var originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i>';
+        btn.disabled = true;
+        
+        var testModal = createTestModal();
+        document.body.appendChild(testModal);
+        
+        fetch('<?= $this->getBackendUrl('*/backend/model/testConnection') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ model_code: modelCode })
+        })
+        .then(response => response.json())
+        .then(data => {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+            document.body.removeChild(testModal);
+            
+            if (data && data.data && data.data.results) {
+                var r = data.data.results;
+                var s = r.self_config || {};
+                var p = r.provider_account || {};
+                var sStatus = s.tested ? (s.success ? '<span class="badge bg-success">成功</span>' : '<span class="badge bg-danger">失败</span>') : '<span class="badge bg-secondary">未测</span>';
+                var pStatus = p.tested ? (p.success ? '<span class="badge bg-success">成功</span>' : '<span class="badge bg-danger">失败</span>') : '<span class="badge bg-secondary">未测</span>';
+                var html = '自配置结果：' + sStatus + '\n' + 
+                    (s.tested ? '消息：' + (s.message || '') + '\n耗时：' + (s.duration || 0) + 'ms\n响应：' + ((s.response || '').toString().slice(0,500)) + '\n\n' : '\n') +
+                    '供应商账户结果：' + pStatus + '\n' + 
+                    (p.tested ? '消息：' + (p.message || '') + '\n耗时：' + (p.duration || 0) + 'ms\n账户：' + (p.account_name || '') + '\n响应：' + ((p.response || '').toString().slice(0,500)) : '');
+                var __ok = !!data.success;
+                var __retryName = null;
+                if (!__ok) {
+                    __retryName = '__retry_test_' + Date.now();
+                    window[__retryName] = function() { testModelConnection(modelCode); };
+                }
+                showResultModal(__ok ? 'success' : 'error', '连通测试结果', html, __ok, __retryName);
+            } else if (data.success) {
+                showResultModal('success', '连通测试成功', data.message || '', true);
+            } else {
+                var fnName = '__retry_test_' + Date.now();
+                window[fnName] = function() { testModelConnection(modelCode); };
+                showResultModal('error', '连通测试失败', data.message, false, fnName);
+            }
+        })
+        .catch(error => {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+            document.body.removeChild(testModal);
+            
+            console.error('Error:', error);
+            var fnName = '__retry_test_' + Date.now();
+            window[fnName] = function() { testModelConnection(modelCode); };
+            showResultModal('error', '连通测试失败', '<?= __('测试失败: 网络错误') ?>', false, fnName);
+        });
+    };
+
+    // 测试自配置连通性
+    window.testSelfConfigConnection = function(modelCode) {
+        if (!modelCode) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('提示') ?>',
+                    text: '<?= __('模型代码不能为空') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('模型代码不能为空') ?>');
+            }
+            return;
+        }
+        
+        var btn = event.target.closest('button');
+        var originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i>';
+        btn.disabled = true;
+        
+        var testModal = createTestModal();
+        document.body.appendChild(testModal);
+        
+        fetch('<?= $this->getBackendUrl('*/backend/model/testSelfConfig') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ model_code: modelCode })
+        })
+        .then(response => response.json())
+        .then(data => {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+            document.body.removeChild(testModal);
+            
+            if (data.success) {
+                var message = data.data ? 
+                    data.message + '\n\n响应时间: ' + data.data.duration + 'ms\n响应内容: ' + data.data.response : 
+                    data.message;
+                showResultModal('success', '自配置连通测试成功', message, true);
+            } else {
+                var fnName = '__retry_self_' + Date.now();
+                window[fnName] = function() { testSelfConfigConnection(modelCode); };
+                showResultModal('error', '自配置连通测试失败', data.message, false, fnName);
+            }
+        })
+        .catch(error => {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+            document.body.removeChild(testModal);
+            
+            console.error('Error:', error);
+            var fnName = '__retry_self_' + Date.now();
+            window[fnName] = function() { testSelfConfigConnection(modelCode); };
+            showResultModal('error', '自配置连通测试失败', '<?= __('测试失败: 网络错误') ?>', false, fnName);
+        });
+    };
+
+    // 创建测试中弹窗
+    function createTestModal() {
+        var modal = document.createElement('div');
+        modal.className = 'modal fade show';
+        modal.style.display = 'block';
+        modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+        modal.innerHTML = '<div class="modal-dialog modal-dialog-centered">' +
+            '<div class="modal-content">' +
+            '<div class="modal-body text-center">' +
+            '<div class="spinner-border text-primary mb-3" role="status">' +
+            '<span class="visually-hidden">Loading...</span>' +
+            '</div>' +
+            '<h5>正在测试连通性...</h5>' +
+            '<p class="text-muted">请稍候，正在连接AI服务</p>' +
+            '</div></div></div>';
+        return modal;
+    }
+
+    // 显示结果弹窗
+    function showResultModal(type, title, message, refreshOnClose, retryFnName, retryLabel) {
+        retryLabel = retryLabel || '<?= __('重试') ?>';
+        var modal = document.createElement('div');
+        modal.className = 'modal fade show';
+        modal.style.display = 'block';
+        modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+        if (refreshOnClose) {
+            modal.setAttribute('data-refresh-on-close', '1');
+        }
+        var uid = 'retryBtn_' + Date.now();
+        var retryButtonHtml = retryFnName ? '<button type="button" class="btn btn-outline-primary" id="' + uid + '">' + retryLabel + '</button>' : '';
+        modal.innerHTML = '<div class="modal-dialog modal-dialog-centered">' +
+            '<div class="modal-content">' +
+            '<div class="modal-header">' +
+            '<h5 class="modal-title">' +
+            '<i class="mdi mdi-' + (type === 'success' ? 'check-circle text-success' : 'alert-circle text-danger') + '"></i> ' + title +
+            '</h5>' +
+            '<button type="button" class="btn-close" onclick="closeResultModal(this)"></button>' +
+            '</div>' +
+            '<div class="modal-body">' +
+            '<pre style="white-space: pre-wrap; font-size: 14px;">' + message + '</pre>' +
+            '</div>' +
+            '<div class="modal-footer">' +
+            retryButtonHtml +
+            '<button type="button" class="btn btn-primary" onclick="closeResultModal(this)">确定</button>' +
+            '</div></div></div>';
+        document.body.appendChild(modal);
+        if (retryFnName && typeof window[retryFnName] === 'function') {
+            var btn = modal.querySelector('#' + uid);
+            if (btn) {
+                btn.addEventListener('click', function() {
+                    try { window[retryFnName](); } catch (e) {}
+                    closeResultModal(btn);
+                });
+            }
+        }
+    }
+
+    // 关闭结果弹窗
+    window.closeResultModal = function(btn) {
+        var modal = btn.closest('.modal');
+        var shouldRefresh = modal && modal.getAttribute('data-refresh-on-close') === '1';
+        document.body.removeChild(modal);
+        if (shouldRefresh) {
+            window.location.reload();
+        }
+    };
+
+    window.showActivateBlocked = function(btn) {
+        try {
+            var reason = btn.getAttribute('data-reason') || '<?= __('条件不足') ?>';
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('无法激活') ?>',
+                    text: reason,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('无法激活: ') ?>' + reason);
+            }
+        } catch (e) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('无法激活') ?>',
+                    text: '<?= __('条件不足') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('无法激活') ?>');
+            }
+        }
+    };
+})();
+</script>

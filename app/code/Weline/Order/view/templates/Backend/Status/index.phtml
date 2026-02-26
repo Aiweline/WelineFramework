@@ -1,252 +1,213 @@
 <?php
 /**
- * 订单状态管理页面
+ * 订单状态管理页面（内容模板）
+ * 由布局系统自动包裹 HTML 框架
  */
 ?>
-@template(Weline_Admin::common/header.phtml)
+<!-- 页面标题 -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-flex justify-content-between align-items-center">
+            <h4 class="page-title">
+                <i class="mdi mdi-flag me-2"></i><lang>订单状态管理</lang>
+            </h4>
+            <a href="<?= $this->getBackendUrl('order/backend/status/edit') ?>" class="btn btn-primary">
+                <i class="mdi mdi-plus me-2"></i><?= __('新建状态') ?>
+            </a>
+        </div>
+    </div>
+</div>
 
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h4 class="card-title mb-0">
-                        <i class="mdi mdi-flag me-2"></i><?= __('订单状态管理') ?>
-                    </h4>
-                    <a href="<?= $this->getBackendUrl('order/backend/status/edit') ?>" class="btn btn-primary">
-                        <i class="mdi mdi-plus me-2"></i><?= __('新建状态') ?>
-                    </a>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-striped table-hover">
-                            <thead>
+<!-- 消息 -->
+<div class="row">
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<!-- 状态列表 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th><?= __('状态代码') ?></th>
+                                <th><?= __('状态名称') ?></th>
+                                <th><?= __('颜色') ?></th>
+                                <th><?= __('图标') ?></th>
+                                <th><?= __('是否系统') ?></th>
+                                <th><?= __('是否启用') ?></th>
+                                <th><?= __('排序') ?></th>
+                                <th><?= __('操作') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($statuses)): ?>
                                 <tr>
-                                    <th><?= __('状态代码') ?></th>
-                                    <th><?= __('状态名称') ?></th>
-                                    <th><?= __('颜色') ?></th>
-                                    <th><?= __('图标') ?></th>
-                                    <th><?= __('是否系统') ?></th>
-                                    <th><?= __('是否启用') ?></th>
-                                    <th><?= __('排序') ?></th>
-                                    <th><?= __('操作') ?></th>
+                                    <td colspan="8" class="text-center text-muted">
+                                        <?= __('暂无状态') ?>
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                <?php if (empty($statuses)): ?>
+                            <?php else: ?>
+                                <?php foreach ($statuses as $status): ?>
                                     <tr>
-                                        <td colspan="8" class="text-center text-muted">
-                                            <?= __('暂无状态') ?>
+                                        <td><code><?= htmlspecialchars($status->getData('code')) ?></code></td>
+                                        <td>
+                                            <?php
+                                            $statusService = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Order\Service\OrderStatusService::class);
+                                            $translatedName = $statusService->getStatusName($status->getData('code'));
+                                            ?>
+                                            <?= htmlspecialchars($translatedName) ?>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-<?= htmlspecialchars($status->getData('color') ?? 'secondary') ?>">
+                                                <?= htmlspecialchars($status->getData('color') ?? 'secondary') ?>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <?php if ($status->getData('icon')): ?>
+                                                <i class="<?= htmlspecialchars($status->getData('icon')) ?>"></i>
+                                            <?php else: ?>
+                                                <span class="text-muted">-</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php if ($status->isSystem()): ?>
+                                                <span class="badge bg-info"><?= __('系统') ?></span>
+                                            <?php else: ?>
+                                                <span class="text-muted">-</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php if ($status->isActive()): ?>
+                                                <span class="badge bg-success"><?= __('启用') ?></span>
+                                            <?php else: ?>
+                                                <span class="badge bg-secondary"><?= __('禁用') ?></span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td><?= htmlspecialchars($status->getData('sort_order')) ?></td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="<?= $this->getBackendUrl('order/backend/status/edit', ['id' => $status->getId()]) ?>" 
+                                                   class="btn btn-primary" title="<?= __('编辑') ?>">
+                                                    <i class="mdi mdi-pencil"></i>
+                                                </a>
+                                                <?php if (!$status->isSystem()): ?>
+                                                    <button type="button" 
+                                                            class="btn btn-danger weline-order-delete-status"
+                                                            data-id="<?= $status->getId() ?>"
+                                                            data-code="<?= htmlspecialchars($status->getData('code')) ?>"
+                                                            title="<?= __('删除') ?>">
+                                                        <i class="mdi mdi-delete"></i>
+                                                    </button>
+                                                <?php endif; ?>
+                                                <button type="button" 
+                                                        class="btn btn-<?= $status->isActive() ? 'warning' : 'success' ?> weline-order-toggle-status"
+                                                        data-id="<?= $status->getId() ?>"
+                                                        title="<?= $status->isActive() ? __('禁用') : __('启用') ?>">
+                                                    <i class="mdi mdi-<?= $status->isActive() ? 'close' : 'check' ?>"></i>
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
-                                <?php else: ?>
-                                    <?php foreach ($statuses as $status): ?>
-                                        <tr>
-                                            <td><code><?= htmlspecialchars($status->getData('code')) ?></code></td>
-                                            <td>
-                                                <?php
-                                                // 使用OrderStatusService获取翻译后的名称
-                                                $statusService = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Order\Service\OrderStatusService::class);
-                                                $translatedName = $statusService->getStatusName($status->getData('code'));
-                                                ?>
-                                                <?= htmlspecialchars($translatedName) ?>
-                                            </td>
-                                            <td>
-                                                <span class="badge bg-<?= htmlspecialchars($status->getData('color') ?? 'secondary') ?>">
-                                                    <?= htmlspecialchars($status->getData('color') ?? 'secondary') ?>
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <?php if ($status->getData('icon')): ?>
-                                                    <i class="<?= htmlspecialchars($status->getData('icon')) ?>"></i>
-                                                <?php else: ?>
-                                                    <span class="text-muted">-</span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td>
-                                                <?php if ($status->isSystem()): ?>
-                                                    <span class="badge bg-info"><?= __('系统') ?></span>
-                                                <?php else: ?>
-                                                    <span class="text-muted">-</span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td>
-                                                <?php if ($status->isActive()): ?>
-                                                    <span class="badge bg-success"><?= __('启用') ?></span>
-                                                <?php else: ?>
-                                                    <span class="badge bg-secondary"><?= __('禁用') ?></span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td><?= htmlspecialchars($status->getData('sort_order')) ?></td>
-                                            <td>
-                                                <div class="btn-group btn-group-sm">
-                                                    <a href="<?= $this->getBackendUrl('order/backend/status/edit', ['id' => $status->getId()]) ?>" 
-                                                       class="btn btn-primary" title="<?= __('编辑') ?>">
-                                                        <i class="mdi mdi-pencil"></i>
-                                                    </a>
-                                                    <?php if (!$status->isSystem()): ?>
-                                                        <button type="button" 
-                                                                class="btn btn-danger delete-status"
-                                                                data-id="<?= $status->getId() ?>"
-                                                                data-code="<?= htmlspecialchars($status->getData('code')) ?>"
-                                                                title="<?= __('删除') ?>">
-                                                            <i class="mdi mdi-delete"></i>
-                                                        </button>
-                                                    <?php endif; ?>
-                                                    <button type="button" 
-                                                            class="btn btn-<?= $status->isActive() ? 'warning' : 'success' ?> toggle-status"
-                                                            data-id="<?= $status->getId() ?>"
-                                                            title="<?= $status->isActive() ? __('禁用') : __('启用') ?>">
-                                                        <i class="mdi mdi-<?= $status->isActive() ? 'close' : 'check' ?>"></i>
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // 切换启用状态
-    document.querySelectorAll('.toggle-status').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            const id = this.getAttribute('data-id');
-            
-            fetch('<?= $this->getBackendUrl("order/backend/status/toggle") ?>', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: 'id=' + encodeURIComponent(id)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload();
-                } else {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'error',
-                            title: '<?= __('操作失败') ?>',
-                            text: data.message || '<?= __('操作失败') ?>',
-                            confirmButtonText: '<?= __('确定') ?>'
-                        });
-                    } else {
-                        console.error(data.message || '<?= __('操作失败') ?>');
-                    }
+(function() {
+    'use strict';
+    
+    function performDelete(id) {
+        fetch('<?= $this->getBackendUrl("order/backend/status/delete") ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'id=' + encodeURIComponent(id)
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.success) {
+                if (typeof AdminToast !== 'undefined') {
+                    AdminToast.success('<?= __('状态已删除') ?>');
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('操作失败') ?>',
-                        text: '<?= __('请重试') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
+                setTimeout(function() { location.reload(); }, 1500);
+            } else {
+                if (typeof AdminToast !== 'undefined') {
+                    AdminToast.error(data.message || '<?= __('删除失败') ?>');
+                }
+            }
+        })
+        .catch(function(error) {
+            console.error('Error:', error);
+            if (typeof AdminToast !== 'undefined') {
+                AdminToast.error('<?= __('删除失败，请重试') ?>');
+            }
+        });
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // 切换启用状态
+        document.querySelectorAll('.weline-order-toggle-status').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var id = this.getAttribute('data-id');
+                
+                fetch('<?= $this->getBackendUrl("order/backend/status/toggle") ?>', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: 'id=' + encodeURIComponent(id)
+                })
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        if (typeof AdminToast !== 'undefined') {
+                            AdminToast.error(data.message || '<?= __('操作失败') ?>');
+                        }
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Error:', error);
+                    if (typeof AdminToast !== 'undefined') {
+                        AdminToast.error('<?= __('操作失败，请重试') ?>');
+                    }
+                });
+            });
+        });
+        
+        // 删除状态
+        document.querySelectorAll('.weline-order-delete-status').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var id = this.getAttribute('data-id');
+                var code = this.getAttribute('data-code');
+                
+                if (typeof AdminConfirm !== 'undefined') {
+                    AdminConfirm.show({
+                        title: '<?= __('确认删除') ?>',
+                        message: '<?= __('确定要删除状态') ?> ' + code + ' <?= __('吗？') ?>',
+                        confirmText: '<?= __('确定删除') ?>',
+                        cancelText: '<?= __('取消') ?>',
+                        type: 'danger',
+                        onConfirm: function() {
+                            performDelete(id);
+                        }
                     });
                 } else {
-                    console.error('<?= __('操作失败') ?>');
+                    performDelete(id);
                 }
             });
         });
     });
-    
-    // 删除状态
-    document.querySelectorAll('.delete-status').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            const id = this.getAttribute('data-id');
-            const code = this.getAttribute('data-code');
-            
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    title: '<?= __('确认删除') ?>',
-                    text: '<?= __('确定要删除状态 %{code} 吗？') ?>'.replace('%{code}', code),
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonText: '<?= __("确定删除") ?>',
-                    cancelButtonText: '<?= __("取消") ?>',
-                    confirmButtonColor: '#d33'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        performDelete(id);
-                    }
-                });
-            } else {
-                if (!confirm('<?= __('确定要删除状态 %{code} 吗？') ?>'.replace('%{code}', code))) {
-                    return;
-                }
-                performDelete(id);
-            }
-        });
-    });
-});
-
-function performDelete(id) {
-    fetch('<?= $this->getBackendUrl("order/backend/status/delete") ?>', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: 'id=' + encodeURIComponent(id)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('成功') ?>',
-                    text: '<?= __('状态已删除') ?>',
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => location.reload());
-            } else {
-                location.reload();
-            }
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('删除失败') ?>',
-                    text: data.message || '<?= __('删除失败') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error(data.message || '<?= __('删除失败') ?>');
-            }
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('删除失败') ?>',
-                text: '<?= __('请重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('删除失败') ?>');
-        }
-    });
-}
-        });
-    });
-});
+})();
 </script>
-
-@template(Weline_Admin::common/footer.phtml)
-

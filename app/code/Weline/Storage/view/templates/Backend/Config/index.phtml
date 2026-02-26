@@ -1,0 +1,140 @@
+<?php
+/**
+ * @var \Weline\Storage\Controller\Backend\Config $this
+ * @var array $configs
+ * @var array $drivers
+ * @var array $statusOptions
+ */
+$configs = $this->getData('configs') ?: [];
+$drivers = $this->getData('drivers') ?: [];
+$statusOptions = $this->getData('statusOptions') ?: [];
+?>
+<w:backend:card>
+    <w:slot:header>
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><?= __('存储配置') ?></h5>
+            <a href="<?= $this->getUrl('storage/backend/config/add') ?>" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-lg"></i> <?= __('新增配置') ?>
+            </a>
+        </div>
+    </w:slot:header>
+    <w:slot:body>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th><?= __('ID') ?></th>
+                        <th><?= __('标识') ?></th>
+                        <th><?= __('显示名称') ?></th>
+                        <th><?= __('驱动') ?></th>
+                        <th><?= __('默认') ?></th>
+                        <th><?= __('状态') ?></th>
+                        <th><?= __('创建时间') ?></th>
+                        <th><?= __('操作') ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($configs)): ?>
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            <?= __('暂无存储配置') ?>
+                        </td>
+                    </tr>
+                    <?php else: ?>
+                    <?php foreach ($configs as $config): ?>
+                    <tr data-id="<?= $config['config_id'] ?>">
+                        <td><?= $config['config_id'] ?></td>
+                        <td><code><?= htmlspecialchars($config['name']) ?></code></td>
+                        <td><?= htmlspecialchars($config['display_name'] ?? $config['name']) ?></td>
+                        <td>
+                            <span class="badge bg-secondary"><?= $drivers[$config['driver']] ?? $config['driver'] ?></span>
+                        </td>
+                        <td>
+                            <?php if ($config['is_default']): ?>
+                            <span class="badge bg-success"><?= __('是') ?></span>
+                            <?php else: ?>
+                            <button type="button" class="btn btn-link btn-sm p-0 btn-set-default" data-id="<?= $config['config_id'] ?>">
+                                <?= __('设为默认') ?>
+                            </button>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if ($config['status']): ?>
+                            <span class="badge bg-success"><?= __('启用') ?></span>
+                            <?php else: ?>
+                            <span class="badge bg-danger"><?= __('禁用') ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= $config['created_at'] ?? '-' ?></td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="<?= $this->getUrl('storage/backend/config/edit', ['id' => $config['config_id']]) ?>" class="btn btn-outline-primary" title="<?= __('编辑') ?>">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <button type="button" class="btn btn-outline-danger btn-delete" data-id="<?= $config['config_id'] ?>" title="<?= __('删除') ?>">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </w:slot:body>
+</w:backend:card>
+
+<script type="module">
+import { AdminToast } from '<?= $this->getStaticUrl('Weline_Admin/js/admin-toast.js') ?>';
+
+document.querySelectorAll('.btn-delete').forEach(btn => {
+    btn.addEventListener('click', async function() {
+        if (!confirm('<?= __('确定要删除此存储配置吗？') ?>')) {
+            return;
+        }
+        
+        const id = this.dataset.id;
+        try {
+            const res = await fetch('<?= $this->getUrl('storage/backend/config/delete') ?>', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'id=' + encodeURIComponent(id)
+            });
+            const data = await res.json();
+            
+            if (data.code === 200) {
+                AdminToast.success(data.msg);
+                this.closest('tr').remove();
+            } else {
+                AdminToast.error(data.msg);
+            }
+        } catch (e) {
+            AdminToast.error('<?= __('操作失败') ?>');
+        }
+    });
+});
+
+document.querySelectorAll('.btn-set-default').forEach(btn => {
+    btn.addEventListener('click', async function() {
+        const id = this.dataset.id;
+        try {
+            const res = await fetch('<?= $this->getUrl('storage/backend/config/setDefault') ?>', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'id=' + encodeURIComponent(id)
+            });
+            const data = await res.json();
+            
+            if (data.code === 200) {
+                AdminToast.success(data.msg);
+                location.reload();
+            } else {
+                AdminToast.error(data.msg);
+            }
+        } catch (e) {
+            AdminToast.error('<?= __('操作失败') ?>');
+        }
+    });
+});
+</script>

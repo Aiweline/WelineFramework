@@ -18,6 +18,76 @@ var ConfigUIRenderer = (function () {
     function getEl(id) { return document.getElementById(id); }
 
     /**
+     * 获取设备可用内存（MB）
+     * 优先使用 navigator.deviceMemory，fallback 到 performance.memory
+     * @returns {number} 可用内存 MB，默认返回 4096（4GB）
+     */
+    function getDeviceMemoryMB() {
+        // navigator.deviceMemory 返回设备 RAM 大小（GB），但仅支持部分浏览器且可能被舍入
+        if (typeof navigator !== 'undefined' && navigator.deviceMemory) {
+            var deviceMemGB = navigator.deviceMemory;
+            console.log('[ConfigUIRenderer] 设备内存:', deviceMemGB, 'GB');
+            return deviceMemGB * 1024; // 转换为 MB
+        }
+        
+        // performance.memory (仅 Chrome 支持)
+        if (typeof performance !== 'undefined' && performance.memory) {
+            var jsHeapLimit = performance.memory.jsHeapSizeLimit;
+            var limitMB = jsHeapLimit / (1024 * 1024);
+            console.log('[ConfigUIRenderer] JS 堆上限:', limitMB.toFixed(0), 'MB');
+            // JS 堆上限通常是系统内存的一部分，估算设备内存约为堆限制的 2-4 倍
+            return limitMB * 2;
+        }
+        
+        // 默认假设 4GB
+        console.log('[ConfigUIRenderer] 无法检测设备内存，默认 4GB');
+        return 4096;
+    }
+
+    /**
+     * 获取模型所需的最小内存（MB）
+     * 考虑模型大小 + 加载时的额外开销（约 2.5 倍）
+     * @param {number} modelSizeMB 模型大小 MB
+     * @returns {number} 所需内存 MB
+     */
+    function getRequiredMemoryMB(modelSizeMB) {
+        if (!modelSizeMB || modelSizeMB <= 0) return 0;
+        // 加载模型时需要的内存约为模型大小的 2.5 倍（模型本身 + 中间状态 + 推理缓存）
+        return Math.ceil(modelSizeMB * 2.5);
+    }
+
+    /**
+     * 检查模型是否超出内存限制
+     * @param {number} modelSizeMB 模型大小 MB
+     * @param {number} deviceMemoryMB 设备内存 MB
+     * @returns {Object} { exceeded: boolean, required: number, available: number, message: string }
+     */
+    function checkMemoryLimit(modelSizeMB, deviceMemoryMB) {
+        var requiredMB = getRequiredMemoryMB(modelSizeMB);
+        // 预留 30% 内存给系统和其他应用
+        var availableMB = deviceMemoryMB * 0.7;
+        var exceeded = requiredMB > availableMB;
+        
+        return {
+            exceeded: exceeded,
+            required: requiredMB,
+            available: availableMB,
+            message: exceeded 
+                ? '此模型需要约 ' + Math.ceil(requiredMB / 1024 * 10) / 10 + ' GB 内存，超出设备可用内存（约 ' + Math.ceil(availableMB / 1024 * 10) / 10 + ' GB）'
+                : ''
+        };
+    }
+
+    // 缓存设备内存值
+    var cachedDeviceMemory = null;
+    function getCachedDeviceMemory() {
+        if (cachedDeviceMemory === null) {
+            cachedDeviceMemory = getDeviceMemoryMB();
+        }
+        return cachedDeviceMemory;
+    }
+
+    /**
      * 渲染模型列表
      */
     function renderModelList(models, onModelSelect) {
@@ -45,12 +115,21 @@ var ConfigUIRenderer = (function () {
             return;
         }
 
+        // 获取设备内存（缓存）
+        var deviceMemoryMB = getCachedDeviceMemory();
+        console.log('[ConfigUIRenderer] 设备内存:', deviceMemoryMB, 'MB');
+
         models.forEach(function (m) {
             var modelId = m.id || m.name || '';
+            var modelSizeMB = m.estimated_size_mb || m._sizeMB || 0;
 
             // 检查模型是否支持 WebLLM/ONNX 格式
             var isSupported = typeof HFModelManager !== 'undefined' && HFModelManager.isModelSupportedForWebLLM ?
                 HFModelManager.isModelSupportedForWebLLM(modelId) : true;
+
+            // 检查内存限制
+            var memoryCheck = checkMemoryLimit(modelSizeMB, deviceMemoryMB);
+            var exceedsMemory = memoryCheck.exceeded;
 
             // 检查模型是否已下载
             var isDownloaded = false;
@@ -62,6 +141,12 @@ var ConfigUIRenderer = (function () {
             var tr = document.createElement('tr');
             tr.className = 'hf-model-row';
             tr.setAttribute('data-model-id', modelId);
+            
+            // 如果超出内存，添加视觉提示
+            if (exceedsMemory) {
+                tr.classList.add('table-secondary');
+                tr.style.opacity = '0.7';
+            }
 
             var tdName = document.createElement('td');
             tdName.style.width = '20%';
@@ -102,9 +187,13 @@ var ConfigUIRenderer = (function () {
             var tdAction = document.createElement('td');
             tdAction.className = 'text-center';
 
-            // 根据支持状态和下载状态显示不同的按钮
+            // 根据支持状态、内存限制和下载状态显示不同的按钮
             if (!isSupported) {
                 tdAction.innerHTML = '<button class="btn btn-sm btn-outline-secondary" disabled title="该模型不支持 WebLLM/ONNX 格式">不支持</button>';
+            } else if (exceedsMemory) {
+                // 超出内存限制
+                tdAction.innerHTML = '<button class="btn btn-sm btn-outline-danger" disabled title="' + memoryCheck.message + '">' +
+                    '<i class="mdi mdi-memory me-1"></i>内存不足</button>';
             } else if (isDownloaded) {
                 tdAction.innerHTML = '<span class="badge bg-success"><i class="mdi mdi-check"></i> 已下载</span>';
             } else {
@@ -117,7 +206,14 @@ var ConfigUIRenderer = (function () {
             tr.appendChild(tdAction);
 
             tr.addEventListener('click', function () {
+                // 不支持的模型或超出内存的模型不允许选择
                 if (!isSupported) return;
+                if (exceedsMemory) {
+                    if (typeof ConfigUtils !== 'undefined') {
+                        ConfigUtils.safeToast('warning', memoryCheck.message);
+                    }
+                    return;
+                }
 
                 // 高亮选中行
                 var rows = listBody.querySelectorAll('.hf-model-row');
@@ -205,8 +301,19 @@ var ConfigUIRenderer = (function () {
      * 更新下载进度 UI
      */
     function updateDownloadProgress(state) {
+        console.log('[ConfigUIRenderer] 更新下载进度:', JSON.stringify({
+            isDownloading: state.isDownloading,
+            progress: state.progress,
+            currentFile: state.currentFile,
+            downloadedSize: state.downloadedSize,
+            totalSize: state.totalSize
+        }));
+        
         var modal = document.getElementById('hf-download-modal');
-        if (!modal) return;
+        if (!modal) {
+            console.warn('[ConfigUIRenderer] 下载弹窗元素不存在');
+            return;
+        }
 
         // 兼容不同版本的 Bootstrap
         if (state.isDownloading && !modal.classList.contains('show')) {

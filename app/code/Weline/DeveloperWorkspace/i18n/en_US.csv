@@ -83,7 +83,7 @@ API文档管理,API文档管理
 "模块 %{name} 的开发文档","模块 %{name} 的开发文档"
 "扫描完成: 文档 %{scanned} 个, 新增 %{new} 个, 更新 %{updated} 个","ScanComplete: Document %{scanned} , new %{new} , updated %{updated} "
 正在清理不存在的文档和分类...,"CleaningNon-existentDocuments and categories..."
-"跳过深层目录（超过2层）: %{path}","跳过深层目录（超过2层）: %{path}"
+"跳过深层目录（超过6层）: %{path}","跳过深层目录（超过6层）: %{path}"
 "无法获取文件时间: %{path}","无法获取文件时间: %{path}"
 "分类变更: %{path}","分类变更: %{path}"
 "无法读取文件: %{path}","Unable to readFile: %{path}"
@@ -113,7 +113,6 @@ API文档管理,API文档管理
 模组事件,模组事件
 WelineFramework插件功能,WelineFramework插件功能
 开发,Development
-"Weline Admin 管理面板","Weline Admin Management Panel"
 管理开发文档,"ManagementDevelopment Documentation"
 "开发文档编辑器 有新的开发文档时可以随时编辑","Development DocumentationEditor When there is a newDevelopment documentationCan at any timeEdit"
 保存,Save
@@ -189,15 +188,6 @@ jstree实例不可用，请刷新页面重试,"jstreeInstanceNot available, plea
 层级,Level
 系统分类不允许修改名称,"System categoryNot allowedModifyName"
 这是系统分类，部分字段不允许修改,"This isSystem category, someFieldsNot allowedModify"
-你确定要操作么？,"Are you sure you want to proceed?"
-操作后你将无法恢复！,Operation后你将无法恢复！
-是的，我确定要删除！,是的，我确定要Delete！
-不要，取消吧！,"No, cancel!"
-已删除！,已Delete！
-文章已经被删除了！,文章已经被Delete了！
-好的,好的
-删除提示！,DeleteTip！
-文章删除失败，请重试！,"ArticleDeleteFailed, please retry！"
 编写和管理开发文档,"Write andManagementDevelopment Documentation"
 API文档,API文档
 目录管理,DirectoryManagement
@@ -222,13 +212,16 @@ API文档,API文档
 错误,Error
 jstree库未加载，请刷新页面重试,"jstree library not loaded, please refresh page and retry"
 全部文档,AllDocument
-暂无分类，请先,"NoCategory, please first"
-创建分类,CreateCategory
-分类树加载失败,"Category treeLoadFailed"
-重试,Retry
-初始化分类树失败,"InitializeCategory treeFailed"
-刷新页面,RefreshPage
 该分类下暂无文档,该分类下暂无文档
+你确定要操作么？,"Are you sure you want to proceed?"
+操作后你将无法恢复！,Operation后你将无法恢复！
+是的，我确定要删除！,是的，我确定要Delete！
+不要，取消吧！,"No, cancel!"
+已删除！,已Delete！
+文章已经被删除了！,文章已经被Delete了！
+好的,好的
+删除提示！,DeleteTip！
+文章删除失败，请重试！,"ArticleDeleteFailed, please retry！"
 开发文档管理器,"Development DocumentationManager"
 系统,System
 新建文档,NewDocument
@@ -245,8 +238,6 @@ jstree库未加载，请刷新页面重试,"jstree library not loaded, please re
 开启沙盒,OpenSandbox
 关闭沙盒请在Cookie中删除或者设置：w_sandbox值。示例：,"To close sandbox, please delete or set w_sandbox value in Cookie. Example:"
 关闭沙盒,CloseSandbox
-"沙盒环境管-Weline Admin 管理面板","Sandbox Environment Management-Weline Admin Management Panel"
-配置沙盒启动Key,"ConfigureSandbox Start Key"
 设置开启沙盒环境的Key,Settings开启沙盒环境的Key
 "设置开启沙盒环境的Key，一旦设置后，前端启用沙盒环境则需要特定的Key,才能启用。","Settings开启沙盒环境的Key，一旦Settings后，前端启用沙盒环境则需要特定的Key,才能启用。"
 沙盒Key,"Sandbox Key"
@@ -391,6 +382,16 @@ Header值,Header值
 返回文档列表,BackDocumentList
 返回网站,返回网站
 请从左侧选择分类查看文档,"Please fromLeftSelectCategoryViewDocument"
+"Weline Admin 管理面板","Weline Admin Management Panel"
+暂无分类，请先,"NoCategory, please first"
+创建分类,CreateCategory
+分类树加载失败,"Category treeLoadFailed"
+重试,Retry
+初始化分类树失败,"InitializeCategory treeFailed"
+刷新页面,RefreshPage
+"沙盒环境管-Weline Admin 管理面板","Sandbox Environment Management-Weline Admin Management Panel"
+配置沙盒启动Key,"ConfigureSandbox Start Key"
+"跳过深层目录（超过2层）: %{path}","跳过深层目录（超过2层）: %{path}"
 "is_system 字段已添加","is_system Field added"
 "已删除旧的 name 唯一索引","Deleted old name Unique index"
 "添加联合唯一索引 (name, pid, level)...","AddUnion unique index (name, pid, level)..."

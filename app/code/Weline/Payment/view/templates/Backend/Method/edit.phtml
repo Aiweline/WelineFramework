@@ -1,229 +1,218 @@
 <?php
 /**
- * 支付方式编辑页面
+ * 支付方式编辑页面（内容模板）
+ * 由布局系统自动包裹 HTML 框架
  */
 ?>
-@template(Weline_Admin::common/header.phtml)
+<!-- 页面标题 -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box">
+            <h4 class="page-title">
+                <i class="mdi mdi-pencil me-2"></i><lang>编辑支付方式</lang>
+            </h4>
+        </div>
+    </div>
+</div>
 
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h4 class="card-title mb-0">
-                        <i class="mdi mdi-pencil me-2"></i><?= __('编辑支付方式') ?>
-                    </h4>
-                </div>
-                <div class="card-body">
-                    <form id="payment-method-form" method="post" action="<?= $this->getUrl('*/backend/method/save') ?>">
-                        <input type="hidden" name="code" value="<?= htmlspecialchars($method->getData('code')) ?>">
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label"><?= __('支付方式代码') ?></label>
-                                    <input type="text" class="form-control" 
-                                           value="<?= htmlspecialchars($method->getData('code')) ?>" 
-                                           disabled>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label"><?= __('支付方式名称') ?></label>
-                                    <input type="text" class="form-control" 
-                                           value="<?= htmlspecialchars($method->getData('name')) ?>" 
-                                           disabled>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label"><?= __('是否启用') ?></label>
-                                    <select name="is_active" class="form-select">
-                                        <option value="1" <?= $method->isActive() ? 'selected' : '' ?>><?= __('启用') ?></option>
-                                        <option value="0" <?= !$method->isActive() ? 'selected' : '' ?>><?= __('禁用') ?></option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label"><?= __('排序') ?></label>
-                                    <input type="number" name="sort_order" class="form-control" 
-                                           value="<?= htmlspecialchars($method->getData('sort_order')) ?>" 
-                                           min="0">
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <?php if (!empty($configFields)): ?>
+<!-- 消息 -->
+<div class="row">
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<!-- 编辑表单 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-0">
+                    <i class="mdi mdi-pencil me-2"></i><?= __('编辑支付方式') ?>
+                </h4>
+            </div>
+            <div class="card-body">
+                <form id="weline-payment-method-form" method="post" action="<?= $this->getUrl('*/backend/method/save') ?>">
+                    <input type="hidden" name="code" value="<?= htmlspecialchars($method->getData('code')) ?>">
+                    
+                    <div class="row">
+                        <div class="col-md-6">
                             <div class="mb-3">
-                                <h5><?= __('支付配置') ?></h5>
-                                <div class="card">
-                                    <div class="card-body">
-                                        <?php
-                                        $config = $method->getConfigData();
-                                        foreach ($configFields as $fieldName => $fieldConfig):
-                                        ?>
-                                            <div class="mb-3">
-                                                <label class="form-label">
-                                                    <?= htmlspecialchars($fieldConfig['label'] ?? $fieldName) ?>
-                                                    <?php if (!empty($fieldConfig['required'])): ?>
-                                                        <span class="text-danger">*</span>
-                                                    <?php endif; ?>
-                                                </label>
-                                                
-                                                <?php if (($fieldConfig['type'] ?? 'text') === 'textarea'): ?>
-                                                    <textarea name="config[<?= htmlspecialchars($fieldName) ?>]" 
-                                                              class="form-control" 
-                                                              rows="3"
-                                                              <?= !empty($fieldConfig['required']) ? 'required' : '' ?>><?= htmlspecialchars($config[$fieldName] ?? $fieldConfig['default'] ?? '') ?></textarea>
-                                                <?php elseif (($fieldConfig['type'] ?? 'text') === 'select'): ?>
-                                                    <select name="config[<?= htmlspecialchars($fieldName) ?>]" 
-                                                            class="form-select"
-                                                            <?= !empty($fieldConfig['required']) ? 'required' : '' ?>>
-                                                        <?php foreach (($fieldConfig['options'] ?? []) as $optionValue => $optionLabel): ?>
-                                                            <option value="<?= htmlspecialchars($optionValue) ?>" 
-                                                                    <?= ($config[$fieldName] ?? $fieldConfig['default'] ?? '') == $optionValue ? 'selected' : '' ?>>
-                                                                <?= htmlspecialchars($optionLabel) ?>
-                                                            </option>
-                                                        <?php endforeach; ?>
-                                                    </select>
-                                                <?php else: ?>
-                                                    <input type="<?= htmlspecialchars($fieldConfig['type'] ?? 'text') ?>" 
-                                                           name="config[<?= htmlspecialchars($fieldName) ?>]" 
-                                                           class="form-control" 
-                                                           value="<?= htmlspecialchars($config[$fieldName] ?? $fieldConfig['default'] ?? '') ?>"
-                                                           <?= !empty($fieldConfig['required']) ? 'required' : '' ?>>
+                                <label class="form-label"><?= __('支付方式代码') ?></label>
+                                <input type="text" class="form-control" 
+                                       value="<?= htmlspecialchars($method->getData('code')) ?>" 
+                                       disabled>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label"><?= __('支付方式名称') ?></label>
+                                <input type="text" class="form-control" 
+                                       value="<?= htmlspecialchars($method->getData('name')) ?>" 
+                                       disabled>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label"><?= __('是否启用') ?></label>
+                                <select name="is_active" class="form-select">
+                                    <option value="1" <?= $method->isActive() ? 'selected' : '' ?>><?= __('启用') ?></option>
+                                    <option value="0" <?= !$method->isActive() ? 'selected' : '' ?>><?= __('禁用') ?></option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label"><?= __('排序') ?></label>
+                                <input type="number" name="sort_order" class="form-control" 
+                                       value="<?= htmlspecialchars($method->getData('sort_order')) ?>" 
+                                       min="0">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <?php if (!empty($configFields)): ?>
+                        <div class="mb-3">
+                            <h5><?= __('支付配置') ?></h5>
+                            <div class="card">
+                                <div class="card-body">
+                                    <?php
+                                    $config = $method->getConfigData();
+                                    foreach ($configFields as $fieldName => $fieldConfig):
+                                    ?>
+                                        <div class="mb-3">
+                                            <label class="form-label">
+                                                <?= htmlspecialchars($fieldConfig['label'] ?? $fieldName) ?>
+                                                <?php if (!empty($fieldConfig['required'])): ?>
+                                                    <span class="text-danger">*</span>
                                                 <?php endif; ?>
-                                                
-                                                <?php if (!empty($fieldConfig['description'])): ?>
-                                                    <small class="form-text text-muted">
-                                                        <?= htmlspecialchars($fieldConfig['description']) ?>
-                                                    </small>
-                                                <?php endif; ?>
+                                            </label>
+                                            
+                                            <?php if (($fieldConfig['type'] ?? 'text') === 'textarea'): ?>
+                                                <textarea name="config[<?= htmlspecialchars($fieldName) ?>]" 
+                                                          class="form-control" 
+                                                          rows="3"
+                                                          <?= !empty($fieldConfig['required']) ? 'required' : '' ?>><?= htmlspecialchars($config[$fieldName] ?? $fieldConfig['default'] ?? '') ?></textarea>
+                                            <?php elseif (($fieldConfig['type'] ?? 'text') === 'select'): ?>
+                                                <select name="config[<?= htmlspecialchars($fieldName) ?>]" 
+                                                        class="form-select"
+                                                        <?= !empty($fieldConfig['required']) ? 'required' : '' ?>>
+                                                    <?php foreach (($fieldConfig['options'] ?? []) as $optionValue => $optionLabel): ?>
+                                                        <option value="<?= htmlspecialchars($optionValue) ?>" 
+                                                                <?= ($config[$fieldName] ?? $fieldConfig['default'] ?? '') == $optionValue ? 'selected' : '' ?>>
+                                                            <?= htmlspecialchars($optionLabel) ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            <?php else: ?>
+                                                <input type="<?= htmlspecialchars($fieldConfig['type'] ?? 'text') ?>" 
+                                                       name="config[<?= htmlspecialchars($fieldName) ?>]" 
+                                                       class="form-control" 
+                                                       value="<?= htmlspecialchars($config[$fieldName] ?? $fieldConfig['default'] ?? '') ?>"
+                                                       <?= !empty($fieldConfig['required']) ? 'required' : '' ?>>
+                                            <?php endif; ?>
+                                            
+                                            <?php if (!empty($fieldConfig['description'])): ?>
+                                                <small class="form-text text-muted">
+                                                    <?= htmlspecialchars($fieldConfig['description']) ?>
+                                                </small>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <!-- 支持的优惠方式 -->
+                    <?php if (!empty($allDiscountActions)): ?>
+                        <div class="mb-3">
+                            <h5><?= __('支持的优惠方式') ?></h5>
+                            <div class="card">
+                                <div class="card-body">
+                                    <p class="text-muted">
+                                        <?= __('选择此支付方式支持的优惠方式。如果未选择任何项，则默认支持所有优惠方式。') ?>
+                                    </p>
+                                    <div class="row">
+                                        <?php foreach ($allDiscountActions as $actionCode => $actionInfo): ?>
+                                            <div class="col-md-6 mb-2">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" 
+                                                           type="checkbox" 
+                                                           name="supported_discount_actions[]" 
+                                                           value="<?= htmlspecialchars($actionCode) ?>"
+                                                           id="discount_action_<?= htmlspecialchars($actionCode) ?>"
+                                                           <?= in_array($actionCode, $supportedActions ?? [], true) ? 'checked' : '' ?>>
+                                                    <label class="form-check-label" for="discount_action_<?= htmlspecialchars($actionCode) ?>">
+                                                        <strong><?= htmlspecialchars($actionInfo['name'] ?? $actionCode) ?></strong>
+                                                        <?php if (!empty($actionInfo['description'])): ?>
+                                                            <br><small class="text-muted"><?= htmlspecialchars($actionInfo['description']) ?></small>
+                                                        <?php endif; ?>
+                                                    </label>
+                                                </div>
                                             </div>
                                         <?php endforeach; ?>
                                     </div>
+                                    <?php if (empty($allDiscountActions)): ?>
+                                        <p class="text-muted"><?= __('暂无可用的优惠方式。请确保营销模块已正确安装。') ?></p>
+                                    <?php endif; ?>
                                 </div>
                             </div>
-                        <?php endif; ?>
-                        
-                        <!-- 支持的优惠方式 -->
-                        <?php if (!empty($allDiscountActions)): ?>
-                            <div class="mb-3">
-                                <h5><?= __('支持的优惠方式') ?></h5>
-                                <div class="card">
-                                    <div class="card-body">
-                                        <p class="text-muted">
-                                            <?= __('选择此支付方式支持的优惠方式。如果未选择任何项，则默认支持所有优惠方式。') ?>
-                                        </p>
-                                        <div class="row">
-                                            <?php foreach ($allDiscountActions as $actionCode => $actionInfo): ?>
-                                                <div class="col-md-6 mb-2">
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" 
-                                                               type="checkbox" 
-                                                               name="supported_discount_actions[]" 
-                                                               value="<?= htmlspecialchars($actionCode) ?>"
-                                                               id="discount_action_<?= htmlspecialchars($actionCode) ?>"
-                                                               <?= in_array($actionCode, $supportedActions ?? [], true) ? 'checked' : '' ?>>
-                                                        <label class="form-check-label" for="discount_action_<?= htmlspecialchars($actionCode) ?>">
-                                                            <strong><?= htmlspecialchars($actionInfo['name'] ?? $actionCode) ?></strong>
-                                                            <?php if (!empty($actionInfo['description'])): ?>
-                                                                <br><small class="text-muted"><?= htmlspecialchars($actionInfo['description']) ?></small>
-                                                            <?php endif; ?>
-                                                        </label>
-                                                    </div>
-                                                </div>
-                                            <?php endforeach; ?>
-                                        </div>
-                                        <?php if (empty($allDiscountActions)): ?>
-                                            <p class="text-muted"><?= __('暂无可用的优惠方式。请确保营销模块已正确安装。') ?></p>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-                        
-                        <div class="mt-3">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="mdi mdi-content-save me-2"></i><?= __('保存') ?>
-                            </button>
-                            <a href="<?= $this->getUrl('*/backend/method/index') ?>" class="btn btn-secondary">
-                                <i class="mdi mdi-arrow-left me-2"></i><?= __('返回') ?>
-                            </a>
                         </div>
-                    </form>
-                </div>
+                    <?php endif; ?>
+                    
+                    <div class="mt-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="mdi mdi-content-save me-2"></i><?= __('保存') ?>
+                        </button>
+                        <a href="<?= $this->getUrl('*/backend/method/index') ?>" class="btn btn-secondary">
+                            <i class="mdi mdi-arrow-left me-2"></i><?= __('返回') ?>
+                        </a>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 </div>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('payment-method-form');
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        const formData = new FormData(form);
-        
-        fetch(form.action, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '<?= __('成功') ?>',
-                        text: data.message || '<?= __('保存成功') ?>',
-                        timer: 2000,
-                        showConfirmButton: false
-                    }).then(() => {
+(function() {
+    'use strict';
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        var form = document.getElementById('weline-payment-method-form');
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            var formData = new FormData(form);
+            
+            fetch(form.action, {
+                method: 'POST',
+                body: formData
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    if (typeof AdminToast !== 'undefined') {
+                        AdminToast.success(data.message || '<?= __('保存成功') ?>');
+                    }
+                    setTimeout(function() {
                         location.href = '<?= $this->getUrl("*/backend/method/index") ?>';
-                    });
+                    }, 1500);
                 } else {
-                    console.log(data.message || '<?= __('保存成功') ?>');
-                    location.href = '<?= $this->getUrl("*/backend/method/index") ?>';
+                    if (typeof AdminToast !== 'undefined') {
+                        AdminToast.error(data.message || '<?= __('保存失败') ?>');
+                    }
                 }
-            } else {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('保存失败') ?>',
-                        text: data.message || '<?= __('保存失败') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error(data.message || '<?= __('保存失败') ?>');
+            })
+            .catch(function(error) {
+                console.error('Error:', error);
+                if (typeof AdminToast !== 'undefined') {
+                    AdminToast.error('<?= __('保存失败，请重试') ?>');
                 }
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('保存失败') ?>',
-                    text: '<?= __('请重试') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('保存失败') ?>');
-            }
+            });
         });
     });
-});
+})();
 </script>
-
-@template(Weline_Admin::common/footer.phtml)
-

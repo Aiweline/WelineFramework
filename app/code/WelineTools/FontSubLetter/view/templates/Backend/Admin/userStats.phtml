@@ -1,328 +1,331 @@
 <?php
 /**
- * 用户统计页面
+ * 用户统计页面（内容模板）
  */
 ?>
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>用户统计 - 字体子集管理后台</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        .stats-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        .stats-card h3 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-        }
-        .chart-container {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-        .user-card {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-        .user-avatar {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 20px;
-        }
-        .progress-custom {
-            height: 8px;
-            border-radius: 4px;
-        }
-    </style>
-</head>
-<body class="bg-light">
-    <div class="container-fluid">
-        <!-- 页面标题 -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h1 class="h3 mb-0">
-                            <i class="bi bi-people"></i> 用户统计
-                        </h1>
-                        <p class="text-muted">分析用户上传行为和活跃度</p>
-                    </div>
-                    <a href="<?= $this->getUrl('fontsubletter/backend/admin/index') ?>" class="btn btn-outline-primary">
-                        <i class="bi bi-arrow-left"></i> 返回管理后台
-                    </a>
-                </div>
+<!-- 页面标题 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h4 class="mb-0">
+                    <i class="bi bi-people"></i> <lang>用户统计</lang>
+                </h4>
+                <p class="text-muted mb-0"><lang>分析用户上传行为和活跃度</lang></p>
             </div>
+            <a href="<?= $this->getUrl('fontsubletter/backend/admin/index') ?>" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-left"></i> <lang>返回管理后台</lang>
+            </a>
         </div>
+    </div>
+</div>
 
-        <!-- 统计卡片 -->
-        <div class="row mb-4">
-            <div class="col-md-3">
-                <div class="stats-card">
-                    <h3><?= count($userStats) ?></h3>
-                    <p><i class="bi bi-people"></i> 总用户数</p>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stats-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
-                    <h3><?= count($activeUsers) ?></h3>
-                    <p><i class="bi bi-person-check"></i> 活跃用户</p>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stats-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
-                    <h3><?= $this->getAverageUploads($userStats) ?></h3>
-                    <p><i class="bi bi-upload"></i> 平均上传数</p>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stats-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
-                    <h3><?= $this->getTopUser($userStats) ?></h3>
-                    <p><i class="bi bi-trophy"></i> 最高上传</p>
-                </div>
-            </div>
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<style>
+.fsl-stats-card {
+    background: linear-gradient(135deg, var(--backend-color-primary) 0%, var(--backend-color-primary-dark, #5a6fd6) 100%);
+    color: var(--backend-color-light);
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+.fsl-stats-card h3 {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+}
+.fsl-stats-card.pink {
+    background: linear-gradient(135deg, var(--backend-color-danger) 0%, #f5576c 100%);
+}
+.fsl-stats-card.blue {
+    background: linear-gradient(135deg, var(--backend-color-info) 0%, #00f2fe 100%);
+}
+.fsl-stats-card.green {
+    background: linear-gradient(135deg, var(--backend-color-success) 0%, #38f9d7 100%);
+}
+.fsl-chart-container {
+    background: var(--backend-color-card-bg);
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 2px 10px var(--backend-color-shadow);
+    margin-bottom: 20px;
+}
+.fsl-user-card {
+    background: var(--backend-color-card-bg);
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 2px 10px var(--backend-color-shadow);
+    margin-bottom: 20px;
+}
+.fsl-user-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--backend-color-primary) 0%, var(--backend-color-primary-dark, #5a6fd6) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--backend-color-light);
+    font-weight: bold;
+    font-size: 20px;
+}
+.fsl-progress-custom {
+    height: 8px;
+    border-radius: 4px;
+}
+</style>
+
+<!-- 统计卡片 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="fsl-stats-card">
+            <h3><?= count($userStats) ?></h3>
+            <p><i class="bi bi-people"></i> <lang>总用户数</lang></p>
         </div>
-
-        <!-- 图表区域 -->
-        <div class="row mb-4">
-            <div class="col-md-8">
-                <div class="chart-container">
-                    <h5><i class="bi bi-graph-up"></i> 用户上传趋势（最近30天）</h5>
-                    <canvas id="dailyChart" height="200"></canvas>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="chart-container">
-                    <h5><i class="bi bi-pie-chart"></i> 用户活跃度分布</h5>
-                    <canvas id="activityChart" height="200"></canvas>
-                </div>
-            </div>
+    </div>
+    <div class="col-md-3">
+        <div class="fsl-stats-card pink">
+            <h3><?= count($activeUsers) ?></h3>
+            <p><i class="bi bi-person-check"></i> <lang>活跃用户</lang></p>
         </div>
+    </div>
+    <div class="col-md-3">
+        <div class="fsl-stats-card blue">
+            <h3><?= $this->getAverageUploads($userStats) ?></h3>
+            <p><i class="bi bi-upload"></i> <lang>平均上传数</lang></p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="fsl-stats-card green">
+            <h3><?= $this->getTopUser($userStats) ?></h3>
+            <p><i class="bi bi-trophy"></i> <lang>最高上传</lang></p>
+        </div>
+    </div>
+</div>
 
-        <!-- 活跃用户排行 -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="chart-container">
-                    <h5><i class="bi bi-star"></i> 活跃用户排行（最近7天）</h5>
-                    <div class="row">
-                        <?php foreach ($activeUsers as $index => $user): ?>
-                            <div class="col-md-6 col-lg-4">
-                                <div class="user-card">
-                                    <div class="d-flex align-items-center">
-                                        <div class="user-avatar me-3">
-                                            <?= $user['user_id'] ?>
-                                        </div>
-                                        <div class="flex-grow-1">
-                                            <h6 class="mb-1">用户 <?= $user['user_id'] ?></h6>
-                                            <p class="text-muted mb-2">最近7天上传 <?= $user['recent_count'] ?> 次</p>
-                                            <div class="progress progress-custom">
-                                                <?php 
-                                                $maxCount = max(array_column($activeUsers, 'recent_count'));
-                                                $percentage = $maxCount > 0 ? ($user['recent_count'] / $maxCount) * 100 : 0;
-                                                ?>
-                                                <div class="progress-bar" style="width: <?= $percentage ?>%"></div>
-                                            </div>
-                                        </div>
-                                        <div class="ms-3">
-                                            <?php if ($index < 3): ?>
-                                                <span class="badge bg-warning"><?= $index + 1 ?></span>
-                                            <?php else: ?>
-                                                <span class="badge bg-secondary"><?= $index + 1 ?></span>
-                                            <?php endif; ?>
-                                        </div>
+<!-- 图表区域 -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="fsl-chart-container">
+            <h5><i class="bi bi-graph-up"></i> <lang>用户上传趋势（最近30天）</lang></h5>
+            <canvas id="dailyChart" height="200"></canvas>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="fsl-chart-container">
+            <h5><i class="bi bi-pie-chart"></i> <lang>用户活跃度分布</lang></h5>
+            <canvas id="activityChart" height="200"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- 活跃用户排行 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="fsl-chart-container">
+            <h5><i class="bi bi-star"></i> <lang>活跃用户排行（最近7天）</lang></h5>
+            <div class="row">
+                <?php foreach ($activeUsers as $index => $user): ?>
+                    <div class="col-md-6 col-lg-4">
+                        <div class="fsl-user-card">
+                            <div class="d-flex align-items-center">
+                                <div class="fsl-user-avatar me-3">
+                                    <?= $user['user_id'] ?>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1"><lang>用户</lang> <?= $user['user_id'] ?></h6>
+                                    <p class="text-muted mb-2"><lang>最近7天上传</lang> <?= $user['recent_count'] ?> <lang>次</lang></p>
+                                    <div class="progress fsl-progress-custom">
+                                        <?php 
+                                        $maxCount = max(array_column($activeUsers, 'recent_count'));
+                                        $percentage = $maxCount > 0 ? ($user['recent_count'] / $maxCount) * 100 : 0;
+                                        ?>
+                                        <div class="progress-bar" style="width: <?= $percentage ?>%"></div>
                                     </div>
                                 </div>
+                                <div class="ms-3">
+                                    <?php if ($index < 3): ?>
+                                        <span class="badge bg-warning"><?= $index + 1 ?></span>
+                                    <?php else: ?>
+                                        <span class="badge bg-secondary"><?= $index + 1 ?></span>
+                                    <?php endif; ?>
+                                </div>
                             </div>
-                        <?php endforeach; ?>
+                        </div>
                     </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 用户详细统计 -->
-        <div class="row">
-            <div class="col-12">
-                <div class="chart-container">
-                    <h5><i class="bi bi-table"></i> 用户详细统计</h5>
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead class="table-dark">
-                                <tr>
-                                    <th>排名</th>
-                                    <th>用户ID</th>
-                                    <th>上传次数</th>
-                                    <th>总文件大小</th>
-                                    <th>平均文件大小</th>
-                                    <th>活跃度</th>
-                                    <th>最近活动</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php 
-                                $rank = 1;
-                                foreach ($userStats as $user): 
-                                    $avgSize = $user['upload_count'] > 0 ? $user['total_size'] / $user['upload_count'] : 0;
-                                    $activityLevel = $this->getActivityLevel($user['upload_count']);
-                                ?>
-                                    <tr>
-                                        <td>
-                                            <?php if ($rank <= 3): ?>
-                                                <span class="badge bg-warning"><?= $rank ?></span>
-                                            <?php else: ?>
-                                                <span class="badge bg-secondary"><?= $rank ?></span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td>
-                                            <div class="d-flex align-items-center">
-                                                <div class="user-avatar me-2" style="width: 30px; height: 30px; font-size: 12px;">
-                                                    <?= $user['user_id'] ?>
-                                                </div>
-                                                用户 <?= $user['user_id'] ?>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <span class="badge bg-primary"><?= number_format($user['upload_count']) ?></span>
-                                        </td>
-                                        <td><?= $this->formatFileSize($user['total_size']) ?></td>
-                                        <td><?= $this->formatFileSize($avgSize) ?></td>
-                                        <td>
-                                            <?php
-                                            $activityClass = match($activityLevel) {
-                                                'high' => 'bg-success',
-                                                'medium' => 'bg-warning',
-                                                'low' => 'bg-secondary'
-                                            };
-                                            $activityText = match($activityLevel) {
-                                                'high' => '高活跃',
-                                                'medium' => '中活跃',
-                                                'low' => '低活跃'
-                                            };
-                                            ?>
-                                            <span class="badge <?= $activityClass ?>"><?= $activityText ?></span>
-                                        </td>
-                                        <td>
-                                            <div class="progress progress-custom">
-                                                <?php 
-                                                $maxUploads = max(array_column($userStats, 'upload_count'));
-                                                $percentage = $maxUploads > 0 ? ($user['upload_count'] / $maxUploads) * 100 : 0;
-                                                ?>
-                                                <div class="progress-bar" style="width: <?= $percentage ?>%"></div>
-                                            </div>
-                                            <small class="text-muted"><?= $percentage ?>%</small>
-                                        </td>
-                                    </tr>
-                                <?php 
-                                    $rank++;
-                                endforeach; 
-                                ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <?php endforeach; ?>
             </div>
         </div>
     </div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<!-- 用户详细统计 -->
+<div class="row">
+    <div class="col-12">
+        <div class="fsl-chart-container">
+            <h5><i class="bi bi-table"></i> <lang>用户详细统计</lang></h5>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th><lang>排名</lang></th>
+                            <th><lang>用户ID</lang></th>
+                            <th><lang>上传次数</lang></th>
+                            <th><lang>总文件大小</lang></th>
+                            <th><lang>平均文件大小</lang></th>
+                            <th><lang>活跃度</lang></th>
+                            <th><lang>最近活动</lang></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php 
+                        $rank = 1;
+                        foreach ($userStats as $user): 
+                            $avgSize = $user['upload_count'] > 0 ? $user['total_size'] / $user['upload_count'] : 0;
+                            $activityLevel = $this->getActivityLevel($user['upload_count']);
+                        ?>
+                            <tr>
+                                <td>
+                                    <?php if ($rank <= 3): ?>
+                                        <span class="badge bg-warning"><?= $rank ?></span>
+                                    <?php else: ?>
+                                        <span class="badge bg-secondary"><?= $rank ?></span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="fsl-user-avatar me-2" style="width: 30px; height: 30px; font-size: 12px;">
+                                            <?= $user['user_id'] ?>
+                                        </div>
+                                        <lang>用户</lang> <?= $user['user_id'] ?>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-primary"><?= number_format($user['upload_count']) ?></span>
+                                </td>
+                                <td><?= $this->formatFileSize($user['total_size']) ?></td>
+                                <td><?= $this->formatFileSize($avgSize) ?></td>
+                                <td>
+                                    <?php
+                                    $activityClass = match($activityLevel) {
+                                        'high' => 'bg-success',
+                                        'medium' => 'bg-warning',
+                                        'low' => 'bg-secondary'
+                                    };
+                                    $activityText = match($activityLevel) {
+                                        'high' => __('高活跃'),
+                                        'medium' => __('中活跃'),
+                                        'low' => __('低活跃')
+                                    };
+                                    ?>
+                                    <span class="badge <?= $activityClass ?>"><?= $activityText ?></span>
+                                </td>
+                                <td>
+                                    <div class="progress fsl-progress-custom">
+                                        <?php 
+                                        $maxUploads = max(array_column($userStats, 'upload_count'));
+                                        $percentage = $maxUploads > 0 ? ($user['upload_count'] / $maxUploads) * 100 : 0;
+                                        ?>
+                                        <div class="progress-bar" style="width: <?= $percentage ?>%"></div>
+                                    </div>
+                                    <small class="text-muted"><?= round($percentage) ?>%</small>
+                                </td>
+                            </tr>
+                        <?php 
+                            $rank++;
+                        endforeach; 
+                        ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
 
-    <script>
-        // 每日上传趋势图
-        const dailyData = {
-            labels: [
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+(function() {
+    'use strict';
+
+    // 每日上传趋势图
+    var dailyData = {
+        labels: [
+            <?php foreach ($dailyStats as $stat): ?>
+                '<?= $stat['date'] ?>',
+            <?php endforeach; ?>
+        ],
+        datasets: [{
+            label: '<?= __('上传数量') ?>',
+            data: [
                 <?php foreach ($dailyStats as $stat): ?>
-                    '<?= $stat['date'] ?>',
+                    <?= $stat['count'] ?>,
                 <?php endforeach; ?>
             ],
-            datasets: [{
-                label: '上传数量',
-                data: [
-                    <?php foreach ($dailyStats as $stat): ?>
-                        <?= $stat['count'] ?>,
-                    <?php endforeach; ?>
-                ],
-                borderColor: 'rgb(75, 192, 192)',
-                backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                tension: 0.1
-            }]
-        };
+            borderColor: 'rgb(75, 192, 192)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            tension: 0.1
+        }]
+    };
 
-        const dailyCtx = document.getElementById('dailyChart').getContext('2d');
-        new Chart(dailyCtx, {
-            type: 'line',
-            data: dailyData,
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true
-                    }
+    var dailyCtx = document.getElementById('dailyChart').getContext('2d');
+    new Chart(dailyCtx, {
+        type: 'line',
+        data: dailyData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
                 }
             }
-        });
+        }
+    });
 
-        // 用户活跃度分布图
-        const activityData = {
-            labels: ['高活跃用户', '中活跃用户', '低活跃用户'],
-            datasets: [{
-                data: [
-                    <?php
-                    $highCount = 0;
-                    $mediumCount = 0;
-                    $lowCount = 0;
-                    foreach ($userStats as $user) {
-                        $level = $this->getActivityLevel($user['upload_count']);
-                        switch ($level) {
-                            case 'high': $highCount++; break;
-                            case 'medium': $mediumCount++; break;
-                            case 'low': $lowCount++; break;
-                        }
-                    }
-                    echo "$highCount, $mediumCount, $lowCount";
-                    ?>
-                ],
-                backgroundColor: [
-                    '#28a745',
-                    '#ffc107',
-                    '#6c757d'
-                ]
-            }]
-        };
-
-        const activityCtx = document.getElementById('activityChart').getContext('2d');
-        new Chart(activityCtx, {
-            type: 'doughnut',
-            data: activityData,
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom'
+    // 用户活跃度分布图
+    var activityData = {
+        labels: ['<?= __('高活跃用户') ?>', '<?= __('中活跃用户') ?>', '<?= __('低活跃用户') ?>'],
+        datasets: [{
+            data: [
+                <?php
+                $highCount = 0;
+                $mediumCount = 0;
+                $lowCount = 0;
+                foreach ($userStats as $user) {
+                    $level = $this->getActivityLevel($user['upload_count']);
+                    switch ($level) {
+                        case 'high': $highCount++; break;
+                        case 'medium': $mediumCount++; break;
+                        case 'low': $lowCount++; break;
                     }
                 }
+                echo "$highCount, $mediumCount, $lowCount";
+                ?>
+            ],
+            backgroundColor: [
+                '#28a745',
+                '#ffc107',
+                '#6c757d'
+            ]
+        }]
+    };
+
+    var activityCtx = document.getElementById('activityChart').getContext('2d');
+    new Chart(activityCtx, {
+        type: 'doughnut',
+        data: activityData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
             }
-        });
-    </script>
-</body>
-</html>
+        }
+    });
+})();
+</script>

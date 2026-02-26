@@ -48,6 +48,12 @@ class AgentConfig extends AbstractModel
     public const CONFIG_HF_MODEL_ID = 'hf_model_id';
     public const CONFIG_HF_MODEL_ENABLED = 'hf_model_enabled';
     public const CONFIG_HF_MODEL_CACHE_SIZE = 'hf_model_cache_size';
+    
+    // HuggingFace API 网络配置
+    public const CONFIG_HF_USE_MIRROR = 'hf_use_mirror';
+    public const CONFIG_HF_MIRROR_URL = 'hf_mirror_url';
+    public const CONFIG_HF_PROXY_ENABLED = 'hf_proxy_enabled';
+    public const CONFIG_HF_PROXY_URL = 'hf_proxy_url';
 
     // 关键词生成策略
     public const KEYWORD_STRATEGY_AUTO = 'auto';
@@ -95,6 +101,10 @@ class AgentConfig extends AbstractModel
             self::CONFIG_HF_MODEL_ID => '',
             self::CONFIG_HF_MODEL_ENABLED => false,
             self::CONFIG_HF_MODEL_CACHE_SIZE => 10240, // MB (最大默认值)
+            self::CONFIG_HF_USE_MIRROR => false,
+            self::CONFIG_HF_MIRROR_URL => 'https://hf-mirror.com',
+            self::CONFIG_HF_PROXY_ENABLED => false,
+            self::CONFIG_HF_PROXY_URL => '', // 格式: http://host:port 或 socks5://host:port
         ];
     }
 

@@ -291,8 +291,10 @@ class Config extends BackendController
             $limit = (int)($this->request->getGet('limit', 50));
             $task = $this->request->getGet('task', 'text-generation'); // 默认搜索文本生成任务
 
-            // 调用 Hugging Face API 搜索模型
-            $url = 'https://huggingface.co/api/models';
+            // 调用 Hugging Face API 搜索模型（支持镜像）
+            $baseUrl = $this->getHuggingFaceBaseUrl();
+            $url = $baseUrl . '/api/models';
+            
             // 当没有关键词时，默认返回该任务类型下下载量最高的模型列表
             $params = [
                 'limit' => $limit,
@@ -308,20 +310,10 @@ class Config extends BackendController
 
             $ch = curl_init($url . '?' . http_build_query($params));
             
-            // 检测环境
-            $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
-            $host = $_SERVER['HTTP_HOST'] ?? '';
-            $isDev = stripos($host, 'localhost') !== false || 
-                     stripos($host, '127.0.0.1') !== false ||
-                     getenv('APP_ENV') === 'development';
-            
-            // 决定是否禁用 SSL 验证
-            $disableSslVerify = $isWindows || $isDev;
-            
             $curlOptions = [
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_TIMEOUT => 30,
-                CURLOPT_CONNECTTIMEOUT => 10,
+                CURLOPT_CONNECTTIMEOUT => 15,
                 CURLOPT_FOLLOWLOCATION => true,
                 CURLOPT_MAXREDIRS => 3,
                 CURLOPT_HTTPHEADER => [
@@ -330,52 +322,8 @@ class Config extends BackendController
                 ],
             ];
             
-            // SSL 配置
-            if ($disableSslVerify) {
-                // 开发环境或 Windows 环境禁用 SSL 验证
-                $curlOptions[CURLOPT_SSL_VERIFYPEER] = false;
-                $curlOptions[CURLOPT_SSL_VERIFYHOST] = 0;
-            } else {
-                // 生产环境启用 SSL 验证，尝试设置 CA 证书路径
-                $curlOptions[CURLOPT_SSL_VERIFYPEER] = true;
-                $curlOptions[CURLOPT_SSL_VERIFYHOST] = 2;
-                
-                // 尝试查找 CA 证书包
-                $caPaths = [
-                    ini_get('curl.cainfo'),
-                    ini_get('openssl.cafile'),
-                    '/etc/ssl/certs/ca-certificates.crt', // Debian/Ubuntu
-                    '/etc/pki/tls/certs/ca-bundle.crt',   // CentOS/RHEL
-                    '/usr/local/etc/openssl/cert.pem',     // macOS (Homebrew)
-                    '/etc/ssl/cert.pem',                   // macOS (系统)
-                ];
-                
-                if ($isWindows) {
-                    $caPaths = array_merge($caPaths, [
-                        getenv('WINDIR') . '\\System32\\curl-ca-bundle.crt',
-                        getenv('WINDIR') . '\\System32\\ca-bundle.crt',
-                        getenv('LOCALAPPDATA') . '\\cacert.pem',
-                    ]);
-                }
-                
-                $caBundlePath = null;
-                foreach ($caPaths as $caPath) {
-                    if ($caPath && file_exists($caPath)) {
-                        $caBundlePath = $caPath;
-                        break;
-                    }
-                }
-                
-                if ($caBundlePath) {
-                    $curlOptions[CURLOPT_CAINFO] = $caBundlePath;
-                } else {
-                    // 如果找不到 CA 证书包，在非生产环境禁用验证
-                    if (getenv('APP_ENV') !== 'production') {
-                        $curlOptions[CURLOPT_SSL_VERIFYPEER] = false;
-                        $curlOptions[CURLOPT_SSL_VERIFYHOST] = 0;
-                    }
-                }
-            }
+            // 应用网络配置（代理、SSL等）
+            $this->configureCurlNetworkOptions($curlOptions);
             
             curl_setopt_array($ch, $curlOptions);
 
@@ -518,27 +466,28 @@ class Config extends BackendController
                 ]);
             }
 
-            // 调用 Hugging Face API 获取模型信息
+            // 调用 Hugging Face API 获取模型信息（支持镜像）
             // 注意：模型名称中的斜杠不应该被编码，直接使用即可
             // urlencode 会将斜杠编码为 %2F，导致 API 返回 400 错误 "repo name includes an url-encoded slash"
             // 只编码每个部分，但保留斜杠
+            $baseUrl = $this->getHuggingFaceBaseUrl();
             $encodedModelId = implode('/', array_map('urlencode', explode('/', $modelId)));
-            $url = 'https://huggingface.co/api/models/' . $encodedModelId;
+            $url = $baseUrl . '/api/models/' . $encodedModelId;
             
             $ch = curl_init($url);
             $curlOptions = [
                 CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT => 10,
+                CURLOPT_TIMEOUT => 15,
+                CURLOPT_CONNECTTIMEOUT => 10,
                 CURLOPT_HTTPHEADER => [
                     'User-Agent: WelineFramework-AutoLeadAgent/1.0',
+                    'Accept: application/json',
                 ],
             ];
-            // 开发环境下（本地 127.0.0.1 / localhost）关闭 SSL 验证
-            $host = $_SERVER['HTTP_HOST'] ?? '';
-            if (stripos($host, 'localhost') !== false || stripos($host, '127.0.0.1') !== false) {
-                $curlOptions[CURLOPT_SSL_VERIFYPEER] = false;
-                $curlOptions[CURLOPT_SSL_VERIFYHOST] = false;
-            }
+            
+            // 应用网络配置（代理、SSL等）
+            $this->configureCurlNetworkOptions($curlOptions);
+            
             curl_setopt_array($ch, $curlOptions);
 
             $response = curl_exec($ch);
@@ -632,6 +581,10 @@ class Config extends BackendController
             $modelId = $this->request->getPost('model_id', '');
             $enabled = $this->request->getPost('enabled', false);
             $cacheSize = (int)($this->request->getPost('cache_size', 10240));
+            $useMirror = $this->request->getPost('use_mirror', null);
+            $mirrorUrl = $this->request->getPost('mirror_url', null);
+            $proxyEnabled = $this->request->getPost('proxy_enabled', null);
+            $proxyUrl = $this->request->getPost('proxy_url', null);
 
             // 如果 getPost 未取到，尝试从 JSON body 读取
             if (empty($modelId)) {
@@ -640,6 +593,10 @@ class Config extends BackendController
                     $modelId = $jsonBody['model_id'] ?? '';
                     $enabled = $jsonBody['enabled'] ?? false;
                     $cacheSize = (int)($jsonBody['cache_size'] ?? 10240);
+                    $useMirror = $jsonBody['use_mirror'] ?? $useMirror;
+                    $mirrorUrl = $jsonBody['mirror_url'] ?? $mirrorUrl;
+                    $proxyEnabled = $jsonBody['proxy_enabled'] ?? $proxyEnabled;
+                    $proxyUrl = $jsonBody['proxy_url'] ?? $proxyUrl;
                 }
             }
 
@@ -667,6 +624,22 @@ class Config extends BackendController
                 AgentConfig::CONFIG_HF_MODEL_ENABLED => $enabled ? '1' : '0',
                 AgentConfig::CONFIG_HF_MODEL_CACHE_SIZE => (string)$cacheSize,
             ];
+            
+            // 网络配置（镜像和代理）- 仅当前端传递了这些参数时才保存
+            if ($useMirror !== null) {
+                $useMirrorBool = $useMirror === '1' || $useMirror === 'true' || $useMirror === true || $useMirror === 1;
+                $configs[AgentConfig::CONFIG_HF_USE_MIRROR] = $useMirrorBool ? '1' : '0';
+            }
+            if ($mirrorUrl !== null) {
+                $configs[AgentConfig::CONFIG_HF_MIRROR_URL] = trim($mirrorUrl);
+            }
+            if ($proxyEnabled !== null) {
+                $proxyEnabledBool = $proxyEnabled === '1' || $proxyEnabled === 'true' || $proxyEnabled === true || $proxyEnabled === 1;
+                $configs[AgentConfig::CONFIG_HF_PROXY_ENABLED] = $proxyEnabledBool ? '1' : '0';
+            }
+            if ($proxyUrl !== null) {
+                $configs[AgentConfig::CONFIG_HF_PROXY_URL] = trim($proxyUrl);
+            }
 
             $configService->setConfigs($configs);
 
@@ -684,6 +657,72 @@ class Config extends BackendController
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('保存模型配置失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 保存网络配置（镜像和代理）
+     */
+    #[Acl(
+        'Weline_AutoLeadAgent::config_save_network',
+        '保存网络配置',
+        'mdi-cloud-outline',
+        '保存 HuggingFace API 网络配置（镜像和代理）'
+    )]
+    public function saveNetworkConfig(): string
+    {
+        if (!$this->request->isPost()) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('仅支持POST请求'),
+            ]);
+        }
+
+        try {
+            /** @var ConfigService $configService */
+            $configService = ObjectManager::getInstance(ConfigService::class);
+
+            // 从 JSON body 读取
+            $jsonBody = json_decode($this->request->getBodyParams(false) ?: '{}', true);
+            if (!is_array($jsonBody)) {
+                $jsonBody = [];
+            }
+
+            $useMirror = $jsonBody['use_mirror'] ?? $this->request->getPost('use_mirror', false);
+            $mirrorUrl = $jsonBody['mirror_url'] ?? $this->request->getPost('mirror_url', 'https://hf-mirror.com');
+            $proxyEnabled = $jsonBody['proxy_enabled'] ?? $this->request->getPost('proxy_enabled', false);
+            $proxyUrl = $jsonBody['proxy_url'] ?? $this->request->getPost('proxy_url', '');
+
+            // 处理布尔值
+            $useMirrorBool = $useMirror === '1' || $useMirror === 'true' || $useMirror === true || $useMirror === 1;
+            $proxyEnabledBool = $proxyEnabled === '1' || $proxyEnabled === 'true' || $proxyEnabled === true || $proxyEnabled === 1;
+
+            // 保存配置
+            $configs = [
+                AgentConfig::CONFIG_HF_USE_MIRROR => $useMirrorBool ? '1' : '0',
+                AgentConfig::CONFIG_HF_MIRROR_URL => trim($mirrorUrl),
+                AgentConfig::CONFIG_HF_PROXY_ENABLED => $proxyEnabledBool ? '1' : '0',
+                AgentConfig::CONFIG_HF_PROXY_URL => trim($proxyUrl),
+            ];
+
+            $configService->setConfigs($configs);
+
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('网络配置保存成功'),
+                'data' => [
+                    'use_mirror' => $useMirrorBool,
+                    'mirror_url' => trim($mirrorUrl),
+                    'proxy_enabled' => $proxyEnabledBool,
+                    'proxy_url' => trim($proxyUrl),
+                ],
+            ]);
+
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('保存网络配置失败：%{1}', [$e->getMessage()]),
             ]);
         }
     }
@@ -1127,6 +1166,113 @@ class Config extends BackendController
      * @param string $baseDir 基础目录（用于计算相对路径）
      * @param array &$files 文件列表（引用传递）
      */
+    /**
+     * 获取 HuggingFace API 的基础 URL
+     * 支持镜像站点配置
+     */
+    private function getHuggingFaceBaseUrl(): string
+    {
+        /** @var ConfigService $configService */
+        $configService = ObjectManager::getInstance(ConfigService::class);
+        
+        $useMirror = $configService->getConfig(AgentConfig::CONFIG_HF_USE_MIRROR, false);
+        
+        if ($useMirror) {
+            $mirrorUrl = $configService->getConfig(
+                AgentConfig::CONFIG_HF_MIRROR_URL, 
+                'https://hf-mirror.com'
+            );
+            return rtrim($mirrorUrl, '/');
+        }
+        
+        return 'https://huggingface.co';
+    }
+    
+    /**
+     * 配置 curl 请求的网络选项（代理、SSL等）
+     */
+    private function configureCurlNetworkOptions(array &$curlOptions): void
+    {
+        /** @var ConfigService $configService */
+        $configService = ObjectManager::getInstance(ConfigService::class);
+        
+        // 检测环境
+        $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+        $host = $_SERVER['HTTP_HOST'] ?? '';
+        $isDev = stripos($host, 'localhost') !== false || 
+                 stripos($host, '127.0.0.1') !== false ||
+                 getenv('APP_ENV') === 'development';
+        
+        // 代理配置
+        $proxyEnabled = $configService->getConfig(AgentConfig::CONFIG_HF_PROXY_ENABLED, false);
+        if ($proxyEnabled) {
+            $proxyUrl = $configService->getConfig(AgentConfig::CONFIG_HF_PROXY_URL, '');
+            if (!empty($proxyUrl)) {
+                $curlOptions[CURLOPT_PROXY] = $proxyUrl;
+                // 如果是 socks5 代理
+                if (str_starts_with($proxyUrl, 'socks5://')) {
+                    $curlOptions[CURLOPT_PROXYTYPE] = CURLPROXY_SOCKS5;
+                    $curlOptions[CURLOPT_PROXY] = substr($proxyUrl, 9);
+                } elseif (str_starts_with($proxyUrl, 'socks5h://')) {
+                    $curlOptions[CURLOPT_PROXYTYPE] = CURLPROXY_SOCKS5_HOSTNAME;
+                    $curlOptions[CURLOPT_PROXY] = substr($proxyUrl, 10);
+                }
+            }
+        } else {
+            // 尝试从环境变量读取代理
+            $envProxy = getenv('HTTPS_PROXY') ?: getenv('https_proxy') ?: getenv('HTTP_PROXY') ?: getenv('http_proxy');
+            if ($envProxy) {
+                $curlOptions[CURLOPT_PROXY] = $envProxy;
+            }
+        }
+        
+        // SSL 配置
+        $disableSslVerify = $isWindows || $isDev;
+        
+        if ($disableSslVerify) {
+            $curlOptions[CURLOPT_SSL_VERIFYPEER] = false;
+            $curlOptions[CURLOPT_SSL_VERIFYHOST] = 0;
+        } else {
+            $curlOptions[CURLOPT_SSL_VERIFYPEER] = true;
+            $curlOptions[CURLOPT_SSL_VERIFYHOST] = 2;
+            
+            // 尝试查找 CA 证书包
+            $caPaths = [
+                ini_get('curl.cainfo'),
+                ini_get('openssl.cafile'),
+                '/etc/ssl/certs/ca-certificates.crt',
+                '/etc/pki/tls/certs/ca-bundle.crt',
+                '/usr/local/etc/openssl/cert.pem',
+                '/etc/ssl/cert.pem',
+            ];
+            
+            if ($isWindows) {
+                $caPaths = array_merge($caPaths, [
+                    getenv('WINDIR') . '\\System32\\curl-ca-bundle.crt',
+                    getenv('WINDIR') . '\\System32\\ca-bundle.crt',
+                    getenv('LOCALAPPDATA') . '\\cacert.pem',
+                ]);
+            }
+            
+            $caBundlePath = null;
+            foreach ($caPaths as $caPath) {
+                if ($caPath && file_exists($caPath)) {
+                    $caBundlePath = $caPath;
+                    break;
+                }
+            }
+            
+            if ($caBundlePath) {
+                $curlOptions[CURLOPT_CAINFO] = $caBundlePath;
+            } else {
+                if (getenv('APP_ENV') !== 'production') {
+                    $curlOptions[CURLOPT_SSL_VERIFYPEER] = false;
+                    $curlOptions[CURLOPT_SSL_VERIFYHOST] = 0;
+                }
+            }
+        }
+    }
+    
     private function scanDirectoryRecursive(string $dir, string $baseDir, array &$files): void
     {
         if (!is_dir($dir)) {

@@ -4,240 +4,182 @@
  * 
  * @var array $rules
  */
-/**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
-
 $rules = $this->rules ?? [];
 ?>
-<!DOCTYPE html>
-<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title>脱敏规则管理</title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-
-<!--页头工具条 开始-->
-@template(Weline_Admin::common/page/loading.phtml)
-<!--页头工具条 结束-->
-
-<!-- 开始 页面 -->
-<div id="layout-wrapper">
-
-    <!--页头工具条 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <!--页头工具条 结束-->
-
-    <!-- ========== Topnav Start ========== -->
-    <!--页头菜单栏 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    <!--页头菜单栏 结束-->
-
-    <!-- ========== Left Sidebar Start ========== -->
-    <!--左侧菜单栏 开始-->
-    @template(Weline_Admin::common/left-sidebar.phtml)
-    <!--左侧菜单栏 结束-->
-
-    <!-- ============================================================== -->
-    <!-- 开始 主要内容 -->
-    <!-- ============================================================== -->
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-
-                <!-- 页面标题 -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'>
-                                <i class="mdi mdi-shield-lock me-2"></i>
-                                <lang>脱敏规则管理</lang>
-                            </h4>
-                            <div class='page-title-right'>
-                                <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'><a href='javascript: void(0);'>数据脱敏</a></li>
-                                    <li class='breadcrumb-item active'>脱敏规则</li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <!-- 页面标题结束 -->
-
-                <!-- start page message -->
-                <div class='row'>
-                    <template>Weline_Component::message.phtml</template>
-                </div>
-                <!-- end message -->
-
-                <!-- 按钮操作栏 -->
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <div class="d-flex justify-content-end">
-                            <button type="button" class="btn btn-success" onclick="showAddModal()">
-                                <i class="mdi mdi-plus-circle me-1"></i>
-                                <lang>添加规则</lang>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 规则列表表格 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h3 class="card-title">
-                                    <i class="mdi mdi-table me-2"></i>
-                                    <lang>脱敏规则列表</lang>
-                                </h3>
-                            </div>
-                            <div class="card-body">
-                                <div class="table-responsive">
-                                    <table class="table table-bordered table-striped table-hover">
-                                        <thead>
-                                            <tr>
-                                                <th>ID</th>
-                                                <th>规则名称</th>
-                                                <th>规则类型</th>
-                                                <th>匹配模式</th>
-                                                <th>替换内容</th>
-                                                <th>优先级</th>
-                                                <th>状态</th>
-                                                <th>创建时间</th>
-                                                <th>操作</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php if (!empty($rules)): ?>
-                                                <?php foreach ($rules as $rule): ?>
-                                                    <tr>
-                                                        <td><?= $rule->getRuleId() ?></td>
-                                                        <td><?= htmlspecialchars($rule->getName()) ?></td>
-                                                        <td><span class="badge bg-info"><?= htmlspecialchars($rule->getType()) ?></span></td>
-                                                        <td><code class="text-dark"><?= htmlspecialchars(mb_substr($rule->getPattern(), 0, 50)) ?><?= mb_strlen($rule->getPattern()) > 50 ? '...' : '' ?></code></td>
-                                                        <td><code class="text-success"><?= htmlspecialchars(mb_substr($rule->getReplacement(), 0, 30)) ?><?= mb_strlen($rule->getReplacement()) > 30 ? '...' : '' ?></code></td>
-                                                        <td><?= $rule->getPriority() ?></td>
-                                                        <td>
-                                                            <?php if ($rule->getIsActive()): ?>
-                                                                <span class="badge bg-success">启用</span>
-                                                            <?php else: ?>
-                                                                <span class="badge bg-secondary">禁用</span>
-                                                            <?php endif; ?>
-                                                        </td>
-                                                        <td><?= $rule->getCreatedAt() ?></td>
-                                                        <td>
-                                                            <div class="btn-group btn-group-sm">
-                                                                <button type="button" class="btn btn-outline-primary" 
-                                                                        onclick="editRule(<?= $rule->getRuleId() ?>)">
-                                                                    <i class="mdi mdi-pencil"></i>
-                                                                </button>
-                                                                <button type="button" class="btn btn-outline-info" 
-                                                                        onclick="testRule('<?= htmlspecialchars($rule->getPattern()) ?>', '<?= htmlspecialchars($rule->getReplacement()) ?>')">
-                                                                    <i class="mdi mdi-test-tube"></i>
-                                                                </button>
-                                                                <button type="button" class="btn btn-outline-warning" 
-                                                                        onclick="toggleRule(<?= $rule->getRuleId() ?>)">
-                                                                    <i class="mdi mdi-toggle-switch"></i>
-                                                                </button>
-                                                                <button type="button" class="btn btn-outline-danger" 
-                                                                        onclick="deleteRule(<?= $rule->getRuleId() ?>)">
-                                                                    <i class="mdi mdi-delete"></i>
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                <?php endforeach; ?>
-                                            <?php else: ?>
-                                                <tr>
-                                                    <td colspan="9" class="text-center text-muted py-4">
-                                                        <i class="mdi mdi-information-outline me-2"></i>
-                                                        暂无规则数据
-                                                    </td>
-                                                </tr>
-                                            <?php endif; ?>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
+<!-- 页面标题 -->
+<div class='row'>
+    <div class='col-12'>
+        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+            <h4 class='mb-sm-0'>
+                <i class="mdi mdi-shield-lock me-2"></i>
+                <lang>脱敏规则管理</lang>
+            </h4>
+            <div class='page-title-right'>
+                <ol class='breadcrumb m-0'>
+                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>数据脱敏</lang></a></li>
+                    <li class='breadcrumb-item active'><lang>脱敏规则</lang></li>
+                </ol>
             </div>
-            <!-- container-fluid -->
         </div>
-        <!-- End Page-content -->
     </div>
-    <!-- end main content-->
-
 </div>
-<!-- END layout-wrapper -->
 
-<!-- 右侧设置面板 -->
-@template(Weline_Admin::common/right-sidebar.phtml)
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
 
-<!-- 底部JavaScript -->
-@template(Weline_Admin::common/footer.phtml)
+<!-- 按钮操作栏 -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="d-flex justify-content-end">
+            <button type="button" class="btn btn-success" id="desens-rule-add-btn">
+                <i class="mdi mdi-plus-circle me-1"></i>
+                <lang>添加规则</lang>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 规则列表表格 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="mdi mdi-table me-2"></i>
+                    <lang>脱敏规则列表</lang>
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th><lang>规则名称</lang></th>
+                                <th><lang>规则类型</lang></th>
+                                <th><lang>匹配模式</lang></th>
+                                <th><lang>替换内容</lang></th>
+                                <th><lang>优先级</lang></th>
+                                <th><lang>状态</lang></th>
+                                <th><lang>创建时间</lang></th>
+                                <th><lang>操作</lang></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (!empty($rules)): ?>
+                                <?php foreach ($rules as $rule): ?>
+                                    <tr>
+                                        <td><?= $rule->getRuleId() ?></td>
+                                        <td><?= htmlspecialchars($rule->getName()) ?></td>
+                                        <td><span class="badge bg-info"><?= htmlspecialchars($rule->getType()) ?></span></td>
+                                        <td><code class="text-dark"><?= htmlspecialchars(mb_substr($rule->getPattern(), 0, 50)) ?><?= mb_strlen($rule->getPattern()) > 50 ? '...' : '' ?></code></td>
+                                        <td><code class="text-success"><?= htmlspecialchars(mb_substr($rule->getReplacement(), 0, 30)) ?><?= mb_strlen($rule->getReplacement()) > 30 ? '...' : '' ?></code></td>
+                                        <td><?= $rule->getPriority() ?></td>
+                                        <td>
+                                            <?php if ($rule->getIsActive()): ?>
+                                                <span class="badge bg-success"><lang>启用</lang></span>
+                                            <?php else: ?>
+                                                <span class="badge bg-secondary"><lang>禁用</lang></span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td><?= $rule->getCreatedAt() ?></td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <button type="button" class="btn btn-outline-primary desens-rule-edit-btn" 
+                                                        data-id="<?= $rule->getRuleId() ?>">
+                                                    <i class="mdi mdi-pencil"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-outline-info desens-rule-test-btn" 
+                                                        data-pattern="<?= htmlspecialchars($rule->getPattern()) ?>" 
+                                                        data-replacement="<?= htmlspecialchars($rule->getReplacement()) ?>">
+                                                    <i class="mdi mdi-test-tube"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-outline-warning desens-rule-toggle-btn" 
+                                                        data-id="<?= $rule->getRuleId() ?>">
+                                                    <i class="mdi mdi-toggle-switch"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-outline-danger desens-rule-delete-btn" 
+                                                        data-id="<?= $rule->getRuleId() ?>">
+                                                    <i class="mdi mdi-delete"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td colspan="9" class="text-center text-muted py-4">
+                                        <i class="mdi mdi-information-outline me-2"></i>
+                                        <lang>暂无规则数据</lang>
+                                    </td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- 添加/编辑规则模态框 -->
-<div class="modal fade" id="ruleModal" tabindex="-1" role="dialog" aria-labelledby="ruleModalLabel" aria-hidden="true">
+<div class="modal fade" id="desensRuleModal" tabindex="-1" role="dialog" aria-labelledby="desensRuleModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="ruleModalLabel">添加脱敏规则</h5>
+                <h5 class="modal-title" id="desensRuleModalLabel"><lang>添加脱敏规则</lang></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form id="ruleForm">
-                    <input type="hidden" id="rule_id" name="rule_id" value="">
+                <form id="desensRuleForm">
+                    <input type="hidden" id="desens-rule-id" name="rule_id" value="">
                     <div class="mb-3">
-                        <label for="name" class="form-label">规则名称 <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="name" name="name" required>
+                        <label for="desens-rule-name" class="form-label"><lang>规则名称</lang> <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="desens-rule-name" name="name" required>
                     </div>
                     <div class="mb-3">
-                        <label for="type" class="form-label">规则类型 <span class="text-danger">*</span></label>
-                        <select class="form-select" id="type" name="type" required>
-                            <option value="">请选择</option>
-                            <option value="email">邮箱</option>
-                            <option value="phone">手机号</option>
-                            <option value="id_card">身份证号</option>
-                            <option value="bank_card">银行卡号</option>
-                            <option value="credit_card">信用卡号</option>
-                            <option value="name">姓名</option>
-                            <option value="custom">自定义</option>
+                        <label for="desens-rule-type" class="form-label"><lang>规则类型</lang> <span class="text-danger">*</span></label>
+                        <select class="form-select" id="desens-rule-type" name="type" required>
+                            <option value=""><?= __('请选择') ?></option>
+                            <option value="email"><?= __('邮箱') ?></option>
+                            <option value="phone"><?= __('手机号') ?></option>
+                            <option value="id_card"><?= __('身份证号') ?></option>
+                            <option value="bank_card"><?= __('银行卡号') ?></option>
+                            <option value="credit_card"><?= __('信用卡号') ?></option>
+                            <option value="name"><?= __('姓名') ?></option>
+                            <option value="custom"><?= __('自定义') ?></option>
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label for="pattern" class="form-label">匹配模式（正则表达式）<span class="text-danger">*</span></label>
-                        <input type="text" class="form-control font-monospace" id="pattern" name="pattern" required
-                               placeholder='例如: /(\d{3})\d{4}(\d{4})/'>
-                        <small class="form-text text-muted">使用正则表达式匹配敏感信息</small>
+                        <label for="desens-rule-pattern" class="form-label"><lang>匹配模式（正则表达式）</lang><span class="text-danger">*</span></label>
+                        <input type="text" class="form-control font-monospace" id="desens-rule-pattern" name="pattern" required
+                               placeholder='<?= __('例如: /(\\d{3})\\d{4}(\\d{4})/') ?>'>
+                        <small class="form-text text-muted"><?= __('使用正则表达式匹配敏感信息') ?></small>
                     </div>
                     <div class="mb-3">
-                        <label for="replacement" class="form-label">替换内容 <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control font-monospace" id="replacement" name="replacement" required
-                               placeholder='例如: $1****$2'>
-                        <small class="form-text text-muted">使用$1, $2等占位符保留部分内容</small>
+                        <label for="desens-rule-replacement" class="form-label"><lang>替换内容</lang> <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control font-monospace" id="desens-rule-replacement" name="replacement" required
+                               placeholder='<?= __('例如: $1****$2') ?>'>
+                        <small class="form-text text-muted"><?= __('使用$1, $2等占位符保留部分内容') ?></small>
                     </div>
                     <div class="mb-3">
-                        <label for="description" class="form-label">规则描述</label>
-                        <textarea class="form-control" id="description" name="description" rows="2"></textarea>
+                        <label for="desens-rule-description" class="form-label"><lang>规则描述</lang></label>
+                        <textarea class="form-control" id="desens-rule-description" name="description" rows="2"></textarea>
                     </div>
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="priority" class="form-label">优先级</label>
-                                <input type="number" class="form-control" id="priority" name="priority" value="0" min="0">
-                                <small class="form-text text-muted">数值越大，优先级越高</small>
+                                <label for="desens-rule-priority" class="form-label"><lang>优先级</lang></label>
+                                <input type="number" class="form-control" id="desens-rule-priority" name="priority" value="0" min="0">
+                                <small class="form-text text-muted"><?= __('数值越大，优先级越高') ?></small>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <div class="form-check form-switch mt-4">
-                                    <input class="form-check-input" type="checkbox" id="is_active" name="is_active" checked>
-                                    <label class="form-check-label" for="is_active">启用规则</label>
+                                    <input class="form-check-input" type="checkbox" id="desens-rule-is-active" name="is_active" checked>
+                                    <label class="form-check-label" for="desens-rule-is-active"><lang>启用规则</lang></label>
                                 </div>
                             </div>
                         </div>
@@ -245,174 +187,237 @@ $rules = $this->rules ?? [];
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="button" class="btn btn-primary" onclick="saveRule()">保存规则</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><lang>取消</lang></button>
+                <button type="button" class="btn btn-primary" id="desens-rule-save-btn"><lang>保存规则</lang></button>
             </div>
         </div>
     </div>
 </div>
 
 <!-- 测试规则模态框 -->
-<div class="modal fade" id="testModal" tabindex="-1" role="dialog">
+<div class="modal fade" id="desensTestModal" tabindex="-1" role="dialog">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">测试规则</h5>
+                <h5 class="modal-title"><lang>测试规则</lang></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label for="test_content" class="form-label">测试内容 <span class="text-danger">*</span></label>
-                    <textarea class="form-control" id="test_content" rows="3" placeholder="请输入要测试的内容"></textarea>
+                    <label for="desens-test-content" class="form-label"><lang>测试内容</lang> <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="desens-test-content" rows="3" placeholder="<?= __('请输入要测试的内容') ?>"></textarea>
                 </div>
-                <div id="testResult" class="mt-3"></div>
+                <div id="desensTestResult" class="mt-3"></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
-                <button type="button" class="btn btn-primary" onclick="executeTest()">执行测试</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><lang>关闭</lang></button>
+                <button type="button" class="btn btn-primary" id="desens-execute-test-btn"><lang>执行测试</lang></button>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-let currentPattern = '';
-let currentReplacement = '';
-
-function showAddModal() {
-    document.getElementById('ruleForm').reset();
-    document.getElementById('rule_id').value = '';
-    document.getElementById('ruleModalLabel').textContent = '添加脱敏规则';
-    const modal = new bootstrap.Modal(document.getElementById('ruleModal'));
-    modal.show();
-}
-
-function editRule(ruleId) {
-    // 加载规则数据并显示编辑模态框
-    fetch('<?= $this->getBackendUrl('*/backend/rule/edit') ?>?rule_id=' + ruleId)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const rule = data.data;
-                document.getElementById('rule_id').value = rule.rule_id;
-                document.getElementById('name').value = rule.name;
-                document.getElementById('type').value = rule.type;
-                document.getElementById('pattern').value = rule.pattern;
-                document.getElementById('replacement').value = rule.replacement;
-                document.getElementById('description').value = rule.description || '';
-                document.getElementById('priority').value = rule.priority || 0;
-                document.getElementById('is_active').checked = rule.is_active == 1;
-                document.getElementById('ruleModalLabel').textContent = '编辑脱敏规则';
-                const modal = new bootstrap.Modal(document.getElementById('ruleModal'));
-                modal.show();
-            } else {
-                alert(data.message || '加载规则失败');
-            }
-        });
-}
-
-function saveRule() {
-    const form = document.getElementById('ruleForm');
-    const formData = new FormData(form);
-    const url = formData.get('rule_id') ? 
-        '<?= $this->getBackendUrl('*/backend/rule/edit') ?>' : 
-        '<?= $this->getBackendUrl('*/backend/rule/add') ?>';
+(function() {
+    'use strict';
     
-    fetch(url, {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('保存成功');
-            location.reload();
-        } else {
-            alert(data.message || '保存失败');
-        }
-    });
-}
-
-function deleteRule(ruleId) {
-    if (!confirm('确定要删除这条规则吗？')) return;
+    var currentPattern = '';
+    var currentReplacement = '';
+    var ruleModal = null;
+    var testModal = null;
     
-    fetch('<?= $this->getBackendUrl('*/backend/rule/delete') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({rule_id: ruleId})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('删除成功');
-            location.reload();
-        } else {
-            alert(data.message || '删除失败');
+    function initModals() {
+        var ruleModalEl = document.getElementById('desensRuleModal');
+        var testModalEl = document.getElementById('desensTestModal');
+        if (ruleModalEl) {
+            ruleModal = new bootstrap.Modal(ruleModalEl);
         }
-    });
-}
-
-function toggleRule(ruleId) {
-    fetch('<?= $this->getBackendUrl('*/backend/rule/toggle') ?>?rule_id=' + ruleId)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                location.reload();
-            } else {
-                alert(data.message || '操作失败');
-            }
-        });
-}
-
-function testRule(pattern, replacement) {
-    currentPattern = pattern;
-    currentReplacement = replacement;
-    document.getElementById('test_content').value = '';
-    document.getElementById('testResult').innerHTML = '';
-    const modal = new bootstrap.Modal(document.getElementById('testModal'));
-    modal.show();
-}
-
-function executeTest() {
-    const testContent = document.getElementById('test_content').value;
-    if (!testContent) {
-        alert('请输入测试内容');
-        return;
+        if (testModalEl) {
+            testModal = new bootstrap.Modal(testModalEl);
+        }
     }
     
-    fetch('<?= $this->getBackendUrl('*/backend/rule/test') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            pattern: currentPattern,
-            replacement: currentReplacement,
-            test_content: testContent
+    function showAddModal() {
+        document.getElementById('desensRuleForm').reset();
+        document.getElementById('desens-rule-id').value = '';
+        document.getElementById('desensRuleModalLabel').textContent = '<?= __('添加脱敏规则') ?>';
+        ruleModal.show();
+    }
+    
+    function editRule(ruleId) {
+        fetch('<?= $this->getBackendUrl('*/backend/rule/edit') ?>?rule_id=' + ruleId)
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    var rule = data.data;
+                    document.getElementById('desens-rule-id').value = rule.rule_id;
+                    document.getElementById('desens-rule-name').value = rule.name;
+                    document.getElementById('desens-rule-type').value = rule.type;
+                    document.getElementById('desens-rule-pattern').value = rule.pattern;
+                    document.getElementById('desens-rule-replacement').value = rule.replacement;
+                    document.getElementById('desens-rule-description').value = rule.description || '';
+                    document.getElementById('desens-rule-priority').value = rule.priority || 0;
+                    document.getElementById('desens-rule-is-active').checked = rule.is_active == 1;
+                    document.getElementById('desensRuleModalLabel').textContent = '<?= __('编辑脱敏规则') ?>';
+                    ruleModal.show();
+                } else {
+                    if (typeof AdminToast !== 'undefined') {
+                        AdminToast.error(data.message || '<?= __('加载规则失败') ?>');
+                    }
+                }
+            });
+    }
+    
+    function saveRule() {
+        var form = document.getElementById('desensRuleForm');
+        var formData = new FormData(form);
+        var ruleId = formData.get('rule_id');
+        var url = ruleId ? 
+            '<?= $this->getBackendUrl('*/backend/rule/edit') ?>' : 
+            '<?= $this->getBackendUrl('*/backend/rule/add') ?>';
+        
+        fetch(url, {
+            method: 'POST',
+            body: formData
         })
-    })
-    .then(response => response.json())
-    .then(data => {
-        const resultDiv = document.getElementById('testResult');
-        if (data.success) {
-            resultDiv.innerHTML = `
-                <div class="alert alert-success">
-                    <strong>测试成功</strong>
-                    <div class="mt-2">
-                        <strong>结果：</strong><br>
-                        <code class="d-block bg-light p-2 mt-1">${data.data.result}</code>
-                    </div>
-                </div>
-            `;
-        } else {
-            resultDiv.innerHTML = `
-                <div class="alert alert-danger">
-                    <strong>测试失败</strong><br>
-                    ${data.message || '未知错误'}
-                </div>
-            `;
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.success) {
+                if (typeof AdminToast !== 'undefined') {
+                    AdminToast.success('<?= __('保存成功') ?>');
+                }
+                location.reload();
+            } else {
+                if (typeof AdminToast !== 'undefined') {
+                    AdminToast.error(data.message || '<?= __('保存失败') ?>');
+                }
+            }
+        });
+    }
+    
+    function deleteRule(ruleId) {
+        if (typeof AdminConfirm !== 'undefined') {
+            AdminConfirm.show('<?= __('确定要删除这条规则吗？') ?>', function() {
+                doDeleteRule(ruleId);
+            });
+        } else if (confirm('<?= __('确定要删除这条规则吗？') ?>')) {
+            doDeleteRule(ruleId);
         }
+    }
+    
+    function doDeleteRule(ruleId) {
+        fetch('<?= $this->getBackendUrl('*/backend/rule/delete') ?>', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({rule_id: ruleId})
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.success) {
+                if (typeof AdminToast !== 'undefined') {
+                    AdminToast.success('<?= __('删除成功') ?>');
+                }
+                location.reload();
+            } else {
+                if (typeof AdminToast !== 'undefined') {
+                    AdminToast.error(data.message || '<?= __('删除失败') ?>');
+                }
+            }
+        });
+    }
+    
+    function toggleRule(ruleId) {
+        fetch('<?= $this->getBackendUrl('*/backend/rule/toggle') ?>?rule_id=' + ruleId)
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    if (typeof AdminToast !== 'undefined') {
+                        AdminToast.error(data.message || '<?= __('操作失败') ?>');
+                    }
+                }
+            });
+    }
+    
+    function showTestModal(pattern, replacement) {
+        currentPattern = pattern;
+        currentReplacement = replacement;
+        document.getElementById('desens-test-content').value = '';
+        document.getElementById('desensTestResult').innerHTML = '';
+        testModal.show();
+    }
+    
+    function executeTest() {
+        var testContent = document.getElementById('desens-test-content').value;
+        if (!testContent) {
+            if (typeof AdminToast !== 'undefined') {
+                AdminToast.warning('<?= __('请输入测试内容') ?>');
+            }
+            return;
+        }
+        
+        fetch('<?= $this->getBackendUrl('*/backend/rule/test') ?>', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                pattern: currentPattern,
+                replacement: currentReplacement,
+                test_content: testContent
+            })
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            var resultDiv = document.getElementById('desensTestResult');
+            if (data.success) {
+                resultDiv.innerHTML = 
+                    '<div class="alert alert-success">' +
+                        '<strong><?= __('测试成功') ?></strong>' +
+                        '<div class="mt-2">' +
+                            '<strong><?= __('结果') ?>：</strong><br>' +
+                            '<code class="d-block bg-light p-2 mt-1">' + data.data.result + '</code>' +
+                        '</div>' +
+                    '</div>';
+            } else {
+                resultDiv.innerHTML = 
+                    '<div class="alert alert-danger">' +
+                        '<strong><?= __('测试失败') ?></strong><br>' +
+                        (data.message || '<?= __('未知错误') ?>') +
+                    '</div>';
+            }
+        });
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        initModals();
+        
+        document.getElementById('desens-rule-add-btn').addEventListener('click', showAddModal);
+        document.getElementById('desens-rule-save-btn').addEventListener('click', saveRule);
+        document.getElementById('desens-execute-test-btn').addEventListener('click', executeTest);
+        
+        document.querySelectorAll('.desens-rule-edit-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                editRule(this.getAttribute('data-id'));
+            });
+        });
+        
+        document.querySelectorAll('.desens-rule-delete-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                deleteRule(this.getAttribute('data-id'));
+            });
+        });
+        
+        document.querySelectorAll('.desens-rule-toggle-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                toggleRule(this.getAttribute('data-id'));
+            });
+        });
+        
+        document.querySelectorAll('.desens-rule-test-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                showTestModal(this.getAttribute('data-pattern'), this.getAttribute('data-replacement'));
+            });
+        });
     });
-}
+})();
 </script>
-
-</body>
-</html>

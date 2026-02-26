@@ -4,328 +4,246 @@
  *
  * @var \Weline\Framework\View\Template $this
  */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 
 $account = $this->getData('account');
 $adapters = $this->getData('adapters') ?: [];
 $isEdit = $account && $account->getData('account_id');
 $credentials = $account ? $account->getCredentialsArray() : [];
-$isIframe = $this->request->getGet('isIframe') === 'true';
 $originToken = (string)($this->getData('originToken') ?? '');
 ?>
-<!DOCTYPE html>
-<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= $isEdit ? __('编辑账户') : __('添加账户') ?></title>
-    <?php if ($isIframe): ?>
-    <style>
-        body {
-            padding: 20px;
-            background: transparent;
-        }
-        .container-fluid {
-            padding: 0;
-        }
-    </style>
-    <?php endif; ?>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
-<?php if (!$isIframe): ?>
-@template(Weline_Admin::common/page/loading.phtml)
+<!-- 消息提示 -->
+<div class='row mb-3'>
+    <template>Weline_Component::message.phtml</template>
+</div>
 
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <!-- 页面标题 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0">
-                                <i class="mdi mdi-<?= $isEdit ? 'pencil' : 'plus' ?> text-primary"></i> 
-                                <?= $isEdit ? __('编辑账户') : __('添加账户') ?>
-                            </h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="@backend-url('admin')"><?= __('首页') ?></a></li>
-                                    <li class="breadcrumb-item"><a href="@backend-url('*/backend/account/index')"><?= __('账户管理') ?></a></li>
-                                    <li class="breadcrumb-item active"><?= $isEdit ? __('编辑') : __('添加') ?></li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
+<!-- 表单 -->
+<div class="card">
+    <div class="card-body">
+        <form id="accountForm" method="post" action="@backend-url('*/backend/account/save')">
+            <input type="hidden" name="id" value="<?= ($account && $account->getData('account_id')) ? (string)$account->getData('account_id') : '' ?>">
+            
+            <div class="row mb-3">
+                <label class="col-md-2 col-form-label"><?= __('适配器') ?> <span class="text-danger">*</span></label>
+                <div class="col-md-10">
+                    <select name="adapter" id="adapterSelect" class="form-select" required>
+                        <option value=""><?= __('请选择适配器') ?></option>
+                        <?php foreach ($adapters as $adapterCode => $adapterInstance): ?>
+                            <option value="<?= $adapterCode ?>" 
+                                    data-adapter-name="<?= htmlspecialchars((string)($adapterInstance->getAdapterName() ?? '')) ?>"
+                                    <?= ($account && $account->getData('adapter') === $adapterCode) ? 'selected' : '' ?>>
+                                <?= htmlspecialchars((string)($adapterInstance->getAdapterName() ?? '')) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
-
-                <!-- 消息提示 -->
-                <div class='row'>
-                    <template>Weline_Component::message.phtml</template>
-                </div>
-<?php else: ?>
-<div class="container-fluid">
-<?php endif; ?>
-
-                <!-- 表单 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <form id="accountForm" method="post" action="@backend-url('*/backend/account/save')">
-                                    <input type="hidden" name="id" value="<?= ($account && $account->getData('account_id')) ? (string)$account->getData('account_id') : '' ?>">
-                                    
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('适配器') ?> <span class="text-danger">*</span></label>
-                                        <div class="col-md-10">
-                                            <select name="adapter" id="adapterSelect" class="form-select" required>
-                                                <option value=""><?= __('请选择适配器') ?></option>
-                                                <?php foreach ($adapters as $adapterCode => $adapterInstance): ?>
-                                                    <option value="<?= $adapterCode ?>" 
-                                                            data-adapter-name="<?= htmlspecialchars((string)($adapterInstance->getAdapterName() ?? '')) ?>"
-                                                            <?= ($account && $account->getData('adapter') === $adapterCode) ? 'selected' : '' ?>>
-                                                        <?= htmlspecialchars((string)($adapterInstance->getAdapterName() ?? '')) ?>
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('账户名称') ?> <span class="text-danger">*</span></label>
-                                        <div class="col-md-10">
-                                            <input type="text" name="name" id="accountNameInput" class="form-control" 
-                                                   value="<?= htmlspecialchars($account && $account->getData('name') ? (string)$account->getData('name') : '') ?>" 
-                                                   required>
-                                        </div>
-                                    </div>
-
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('描述') ?></label>
-                                        <div class="col-md-10">
-                                            <textarea name="description" class="form-control" rows="3"><?= htmlspecialchars($account && $account->getData('description') ? (string)$account->getData('description') : '') ?></textarea>
-                                        </div>
-                                    </div>
-
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('状态') ?></label>
-                                        <div class="col-md-10">
-                                            <select name="status" class="form-select">
-                                                <option value="active" <?= ($account && $account->getData('status') === 'active') ? 'selected' : '' ?>>
-                                                    <?= __('激活') ?>
-                                                </option>
-                                                <option value="inactive" <?= ($account && $account->getData('status') === 'inactive') ? 'selected' : '' ?>>
-                                                    <?= __('未激活') ?>
-                                                </option>
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('凭据配置') ?></label>
-                                        <div class="col-md-10">
-                                            <div class="card">
-                                                <div class="card-body">
-                                                    <p class="text-muted mb-3">
-                                                        <?= __('请根据选择的适配器配置相应的凭据。例如Cloudflare需要API Token。') ?>
-                                                    </p>
-                                                    <div id="adapterPermissionsInfo" style="display: none;">
-                                                        <div class="alert alert-info mb-3">
-                                                            <i class="mdi mdi-information"></i>
-                                                            <strong><?= __('Cloudflare API Token 权限要求：') ?></strong>
-                                                            <ul class="mb-0 mt-2">
-                                                                <li><code>Zone:Read</code> - <?= __('读取Zone信息') ?></li>
-                                                                <li><code>Zone:Cache Purge:Edit</code> - <?= __('清理缓存') ?></li>
-                                                                <li><code>Zone:Cache Rules:Read</code> - <?= __('读取缓存规则') ?></li>
-                                                                <li><code>Zone:Cache Rules:Edit</code> - <?= __('编辑缓存规则') ?></li>
-                                                            </ul>
-                                                            <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" class="btn btn-sm btn-outline-primary mt-2">
-                                                                <i class="mdi mdi-open-in-new"></i> <?= __('前往Cloudflare创建Token') ?>
-                                                            </a>
-                                                        </div>
-                                                    </div>
-                                                    <div id="credentialsConfig">
-                                                        <div class="mb-3">
-                                                            <label class="form-label"><?= __('API Token') ?></label>
-                                                            <input type="text" name="credentials[api_token]" 
-                                                                   id="apiTokenInput"
-                                                                   class="form-control" 
-                                                                   value="<?= htmlspecialchars($credentials['api_token'] ?? '') ?>"
-                                                                   placeholder="<?= __('请输入API Token') ?>">
-                                                        </div>
-                                                        <div class="mb-3">
-                                                            <label class="form-label"><?= __('Account ID') ?></label>
-                                                            <input type="text" name="credentials[account_id]"
-                                                                   class="form-control"
-                                                                   value="<?= htmlspecialchars($credentials['account_id'] ?? '') ?>"
-                                                                   placeholder="<?= __('请输入Account ID（Cloudflare）') ?>">
-                                                            <small class="form-text text-muted"><?= __('Cloudflare Zone 创建需要 Account ID') ?></small>
-                                                        </div>
-                                                    </div>
-                                                    <div class="mb-3">
-                                                        <label class="form-label"><?= __('回源 Origin Token（只读）') ?></label>
-                                                        <input type="text" class="form-control" readonly
-                                                               value="<?= htmlspecialchars($originToken) ?>"
-                                                               placeholder="<?= __('请在 app/etc/env.php 的 server.origin_token 中配置') ?>">
-                                                        <small class="form-text text-muted"><?= __('CDN 回源时可通过自定义 Header 传递该 Token，在源站进行校验。') ?></small>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><?= __('默认账户') ?></label>
-                                        <div class="col-md-10">
-                                            <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" name="is_default" value="1" 
-                                                       id="isDefault" <?= ($account && $account->getData('is_default')) ? 'checked' : '' ?>>
-                                                <label class="form-check-label" for="isDefault">
-                                                    <?= __('设置为该适配器的默认账户') ?>
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="row">
-                                        <div class="col-md-10 offset-md-2">
-                                            <?php if (!$isIframe): ?>
-                                            <button type="submit" class="btn btn-primary">
-                                                <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
-                                            </button>
-                                            <a href="@backend-url('*/backend/account/index')" class="btn btn-secondary">
-                                                <i class="mdi mdi-close"></i> <?= __('取消') ?>
-                                            </a>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-<?php if (!$isIframe): ?>
             </div>
-        </div>
-        @template(Weline_Admin::common/footer.phtml)
+
+            <div class="row mb-3">
+                <label class="col-md-2 col-form-label"><?= __('账户名称') ?> <span class="text-danger">*</span></label>
+                <div class="col-md-10">
+                    <input type="text" name="name" id="accountNameInput" class="form-control" 
+                           value="<?= htmlspecialchars($account && $account->getData('name') ? (string)$account->getData('name') : '') ?>" 
+                           required>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <label class="col-md-2 col-form-label"><?= __('描述') ?></label>
+                <div class="col-md-10">
+                    <textarea name="description" class="form-control" rows="3"><?= htmlspecialchars($account && $account->getData('description') ? (string)$account->getData('description') : '') ?></textarea>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <label class="col-md-2 col-form-label"><?= __('状态') ?></label>
+                <div class="col-md-10">
+                    <select name="status" class="form-select">
+                        <option value="active" <?= ($account && $account->getData('status') === 'active') ? 'selected' : '' ?>>
+                            <?= __('激活') ?>
+                        </option>
+                        <option value="inactive" <?= ($account && $account->getData('status') === 'inactive') ? 'selected' : '' ?>>
+                            <?= __('未激活') ?>
+                        </option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <label class="col-md-2 col-form-label"><?= __('凭据配置') ?></label>
+                <div class="col-md-10">
+                    <div class="card">
+                        <div class="card-body">
+                            <p class="text-muted mb-3">
+                                <?= __('请根据选择的适配器配置相应的凭据。例如Cloudflare需要API Token。') ?>
+                            </p>
+                            <div id="adapterPermissionsInfo" style="display: none;">
+                                <div class="alert alert-info mb-3">
+                                    <i class="mdi mdi-information"></i>
+                                    <strong><?= __('Cloudflare API Token 权限要求：') ?></strong>
+                                    <ul class="mb-0 mt-2">
+                                        <li><code>Zone:Read</code> - <?= __('读取Zone信息') ?></li>
+                                        <li><code>Zone:Cache Purge:Edit</code> - <?= __('清理缓存') ?></li>
+                                        <li><code>Zone:Cache Rules:Read</code> - <?= __('读取缓存规则') ?></li>
+                                        <li><code>Zone:Cache Rules:Edit</code> - <?= __('编辑缓存规则') ?></li>
+                                    </ul>
+                                    <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" class="btn btn-sm btn-outline-primary mt-2">
+                                        <i class="mdi mdi-open-in-new"></i> <?= __('前往Cloudflare创建Token') ?>
+                                    </a>
+                                </div>
+                            </div>
+                            <div id="credentialsConfig">
+                                <div class="mb-3">
+                                    <label class="form-label"><?= __('API Token') ?></label>
+                                    <input type="text" name="credentials[api_token]" 
+                                           id="apiTokenInput"
+                                           class="form-control" 
+                                           value="<?= htmlspecialchars($credentials['api_token'] ?? '') ?>"
+                                           placeholder="<?= __('请输入API Token') ?>">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label"><?= __('Account ID') ?></label>
+                                    <input type="text" name="credentials[account_id]"
+                                           class="form-control"
+                                           value="<?= htmlspecialchars($credentials['account_id'] ?? '') ?>"
+                                           placeholder="<?= __('请输入Account ID（Cloudflare）') ?>">
+                                    <small class="form-text text-muted"><?= __('Cloudflare Zone 创建需要 Account ID') ?></small>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label"><?= __('回源 Origin Token（只读）') ?></label>
+                                <input type="text" class="form-control" readonly
+                                       value="<?= htmlspecialchars($originToken) ?>"
+                                       placeholder="<?= __('请在 app/etc/env.php 的 server.origin_token 中配置') ?>">
+                                <small class="form-text text-muted"><?= __('CDN 回源时可通过自定义 Header 传递该 Token，在源站进行校验。') ?></small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <label class="col-md-2 col-form-label"><?= __('默认账户') ?></label>
+                <div class="col-md-10">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="is_default" value="1" 
+                               id="isDefault" <?= ($account && $account->getData('is_default')) ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="isDefault">
+                            <?= __('设置为该适配器的默认账户') ?>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-10 offset-md-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
+                    </button>
+                    <a href="@backend-url('*/backend/account/index')" class="btn btn-secondary">
+                        <i class="mdi mdi-close"></i> <?= __('取消') ?>
+                    </a>
+                </div>
+            </div>
+        </form>
     </div>
 </div>
-<?php else: ?>
-</div>
-<?php endif; ?>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-<script>
-// 适配器选择变化时自动填充账户名称和显示权限说明
-document.getElementById('adapterSelect')?.addEventListener('change', function() {
-    const adapterSelect = this;
-    const accountNameInput = document.getElementById('accountNameInput');
-    const selectedOption = adapterSelect.options[adapterSelect.selectedIndex];
-    const permissionsInfo = document.getElementById('adapterPermissionsInfo');
+<js:part>
+(function() {
+    'use strict';
     
-    // 显示或隐藏权限说明（如果是Cloudflare）
-    if (permissionsInfo) {
+    var indexUrl = '<?php echo $this->getBackendUrl('*/backend/account/index'); ?>';
+    
+    var adapterSelect = document.getElementById('adapterSelect');
+    var accountNameInput = document.getElementById('accountNameInput');
+    var permissionsInfo = document.getElementById('adapterPermissionsInfo');
+    var accountForm = document.getElementById('accountForm');
+    
+    function updatePermissionsInfo() {
+        if (!adapterSelect || !permissionsInfo) return;
+        
+        var selectedOption = adapterSelect.options[adapterSelect.selectedIndex];
+        
         if (selectedOption && selectedOption.value === 'cloudflare') {
             permissionsInfo.style.display = 'block';
         } else {
             permissionsInfo.style.display = 'none';
         }
-    }
-    
-    // 如果选择了适配器且账户名称为空，则自动填充
-    if (selectedOption && selectedOption.value && accountNameInput) {
-        const adapterName = selectedOption.getAttribute('data-adapter-name');
-        if (adapterName && (!accountNameInput.value || accountNameInput.value.trim() === '')) {
-            accountNameInput.value = adapterName;
-        }
-    }
-});
-
-// 页面加载时检查当前选中的适配器
-document.addEventListener('DOMContentLoaded', function() {
-    const adapterSelect = document.getElementById('adapterSelect');
-    if (adapterSelect && adapterSelect.value === 'cloudflare') {
-        const permissionsInfo = document.getElementById('adapterPermissionsInfo');
-        if (permissionsInfo) {
-            permissionsInfo.style.display = 'block';
-        }
-    }
-});
-
-<?php if (!$isIframe): ?>
-// 表单提交（非 iframe 模式）
-document.getElementById('accountForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const formData = new FormData(this);
-    
-    fetch(this.action, {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?php echo __('成功'); ?>',
-                    text: data.message,
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => {
-                    if (data.redirect) {
-                        window.location.href = data.redirect;
-                    } else {
-                        window.location.href = '<?php echo $this->getBackendUrl('*/backend/account/index'); ?>';
-                    }
-                });
-            } else {
-                console.log(data.message);
-                if (data.redirect) {
-                    window.location.href = data.redirect;
-                } else {
-                    window.location.href = '<?php echo $this->getBackendUrl('*/backend/account/index'); ?>';
-                }
-            }
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?php echo __('保存失败'); ?>',
-                    text: data.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?php echo __('保存失败：'); ?>' + data.message);
+        
+        if (selectedOption && selectedOption.value && accountNameInput) {
+            var adapterName = selectedOption.getAttribute('data-adapter-name');
+            if (adapterName && (!accountNameInput.value || accountNameInput.value.trim() === '')) {
+                accountNameInput.value = adapterName;
             }
         }
-    })
-    .catch(error => {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?php echo __('请求失败'); ?>',
-                text: error.message,
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?php echo __('请求失败：'); ?>' + error.message);
+    }
+    
+    if (adapterSelect) {
+        adapterSelect.addEventListener('change', updatePermissionsInfo);
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        if (adapterSelect && adapterSelect.value === 'cloudflare') {
+            updatePermissionsInfo();
         }
     });
-});
-<?php endif; ?>
-</script>
-
-<?php if (!$isIframe): ?>
-</body>
-</html>
-<?php endif; ?>
-
+    
+    if (accountForm) {
+        accountForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            var formData = new FormData(this);
+            
+            fetch(this.action, {
+                method: 'POST',
+                body: formData
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?php echo __('成功'); ?>',
+                            text: data.message,
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(function() {
+                            window.location.href = data.redirect || indexUrl;
+                        });
+                    } else {
+                        AdminToast.success(data.message);
+                        setTimeout(function() {
+                            window.location.href = data.redirect || indexUrl;
+                        }, 1500);
+                    }
+                } else {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?php echo __('保存失败'); ?>',
+                            text: data.message,
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        AdminToast.error(data.message);
+                    }
+                }
+            })
+            .catch(function(error) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?php echo __('请求失败'); ?>',
+                        text: error.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    AdminToast.error(error.message);
+                }
+            });
+        });
+    }
+})();
+</js:part>

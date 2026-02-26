@@ -1211,17 +1211,28 @@ class Url implements UrlInterface
         $pure_uri = ltrim($pure_uri, '/');
         $data['uri'] = $pure_uri;
         # 新增逻辑结束
-        if ($data['all_match']) {
-            $match_url = $data['website_url'] . ($has_area ? $area : '') . '/' . $data['currency'] . '/' . $data['language'];
-            self::$parserMatchs[$match_url] = $data;
-        }
-        # 解析缓存
-        self::$parserCache[$url] = $data;
+        
         self::$parserServer['ORIGIN_REQUEST_URI'] = $uri;
         // 统一使用 pure_uri（已移除区域、货币、语言前缀的纯路由）
         // 后台区域通过 WELINE_AREA=backend 识别，不需要在 REQUEST_URI 中保留 admin/ 前缀
         self::$parserServer['REQUEST_URI'] = '/' . ltrim($pure_uri, '/');
+        // 关键修复：用 URL 解析出的语言/货币更新 $parserServer
+        // 初始化时 $parserServer 从 Cookie 获取默认值，但 URL 路径中的语言/货币优先级更高
+        // 如果不更新，State::getLang() 读取 $_SERVER 时会得到 Cookie 值而非 URL 值
+        if (!empty($data['language'])) {
+            self::$parserServer['WELINE_USER_LANG'] = $data['language'];
+        }
+        if (!empty($data['currency'])) {
+            self::$parserServer['WELINE_USER_CURRENCY'] = $data['currency'];
+        }
         $data['server'] = self::$parserServer;
+        
+        # 解析缓存（必须在更新 $parserServer 后缓存，确保 server 字段包含正确的语言/货币）
+        if ($data['all_match']) {
+            $match_url = $data['website_url'] . ($has_area ? $area : '') . '/' . $data['currency'] . '/' . $data['language'];
+            self::$parserMatchs[$match_url] = $data;
+        }
+        self::$parserCache[$url] = $data;
         if ($key) {
             return $data[$key] ?? '';
         }

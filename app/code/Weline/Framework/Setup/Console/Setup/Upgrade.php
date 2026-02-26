@@ -532,10 +532,66 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     private function completeUpgrade(array $args = []): void
     {
-        // 生成优化缓存（类映射和 PSR-4 映射）
-        $this->generateOptimizationCache($args);
+        // 检查是否跳过后台优化或强制同步执行
+        $skipBackgroundOptimize = isset($args['skip-background-optimize']) || isset($args['sync']);
+        
+        if ($skipBackgroundOptimize) {
+            // 同步执行优化缓存生成
+            $this->generateOptimizationCache($args);
+        } else {
+            // 后台异步执行优化缓存生成（不占用升级时间）
+            $this->startBackgroundOptimize($args);
+        }
         
         $this->printing->success(__('系统升级完成！'));
+    }
+    
+    /**
+     * 在后台启动优化缓存生成任务
+     * 
+     * 使用 Processer::create() 创建后台进程执行 setup:background-optimize 命令。
+     * 这样可以避免类映射、PSR-4 映射和反射编译占用升级主流程时间。
+     *
+     * @param array $args 命令参数
+     * @return void
+     */
+    private function startBackgroundOptimize(array $args = []): void
+    {
+        $this->printing->note(__('正在启动后台优化任务...'));
+        
+        $phpBin = PHP_BINARY ?: 'php';
+        $binW = BP . 'bin' . DIRECTORY_SEPARATOR . 'w';
+        
+        // 构建命令（命令名根据类名自动转换为 setup:backgroundoptimize）
+        $cmd = '"' . $phpBin . '" "' . $binW . '" setup:backgroundoptimize';
+        
+        // 传递跳过反射编译参数
+        if (isset($args['skip-reflection-compile']) || isset($args['skip-reflect'])) {
+            $cmd .= ' --skip-reflection-compile';
+        }
+        
+        // 添加进程名标识
+        $processName = 'weline-setup-background-optimize-' . time();
+        $cmd .= ' --name=' . $processName;
+        
+        try {
+            // 使用进程管理器在后台启动任务（非阻塞）
+            $pid = \Weline\Framework\System\Process\Processer::create($cmd, false);
+            
+            if ($pid > 0) {
+                $this->printing->success(__('✓ 后台优化任务已启动 (PID: %{1})', [$pid]));
+                $this->printing->note(__('  优化内容：类映射缓存、PSR-4 映射、反射编译'));
+                $this->printing->note(__('  日志文件：var/log/setup_background_optimize.log'));
+            } else {
+                // 启动失败，回退到同步执行
+                $this->printing->warning(__('后台任务启动失败，改为同步执行...'));
+                $this->generateOptimizationCache($args);
+            }
+        } catch (\Throwable $e) {
+            // 启动失败，回退到同步执行
+            $this->printing->warning(__('后台任务启动异常: %{1}，改为同步执行...', [$e->getMessage()]));
+            $this->generateOptimizationCache($args);
+        }
     }
     
     /**
@@ -2014,6 +2070,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '-s, --skip-env-check' => '跳过环境依赖检测',
                 '-f, --force' => '强制升级（跳过环境依赖检测）',
                 '--skip-reflection-compile, --skip-reflect' => __('跳过反射元数据与编译型工厂生成（可事后执行 reflection:compile）'),
+                '--skip-background-optimize' => __('禁用后台优化任务，改为同步执行（等待缓存生成完成）'),
+                '--sync' => __('同上，--skip-background-optimize 的简写'),
                 '-h, --help' => '显示帮助信息',
             ],
             [],
@@ -2027,8 +2085,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '升级指定模块的模型' => 'php bin/w setup:upgrade --model -m Weline_Demo',
                 '热更新 WLS 服务器' => 'php bin/w setup:upgrade --hot',
                 __('跳过反射编译（加快 s:up）') => 'php bin/w setup:upgrade --skip-reflection-compile',
+                __('同步执行优化（等待完成）') => 'php bin/w setup:upgrade --sync',
             ],
-            'php bin/w setup:upgrade [--model|--route|--hot] [-m|--module=<模块名>]'
+            'php bin/w setup:upgrade [--model|--route|--hot|--sync] [-m|--module=<模块名>]'
         );
     }
 

@@ -876,77 +876,7 @@ html[data-theme="dark"] .component-tag.ai-cyan,
     padding: 0.2rem 0.5rem;
 }
 
-/* 全屏预览弹窗样式 */
-.swal2-fullscreen-preview-popup {
-    max-width: 95vw !important;
-    max-height: 95vh !important;
-}
-
-.swal2-fullscreen-preview-popup .swal2-html-container {
-    margin: 0 !important;
-    padding: 0 !important;
-    max-height: none !important;
-}
-
-.swal2-fullscreen-preview-popup .swal2-close {
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    z-index: 200;
-    background: rgba(255,255,255,0.9);
-    border-radius: 50%;
-    width: 36px;
-    height: 36px;
-    font-size: 24px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-}
-
-.swal2-fullscreen-preview-popup .swal2-close:hover {
-    background: #fff;
-    color: #dc3545;
-}
-
-/* 全屏预览独立遮罩（不影响工坊弹窗） */
-.ai-fullscreen-preview-open {
-    overflow: hidden;
-}
-.ai-fullscreen-preview-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 10050;
-    background: rgba(10, 10, 10, 0.85);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.ai-fullscreen-preview-overlay .ai-fullscreen-preview-popup {
-    width: 95vw;
-    height: 95vh;
-    background: #0f0f12;
-    border-radius: 8px;
-    box-shadow: 0 8px 30px rgba(0,0,0,0.4);
-    padding: 10px;
-    position: relative;
-}
-.ai-fullscreen-preview-overlay .ai-fullscreen-preview-close {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    z-index: 110;
-}
-.ai-fullscreen-preview-overlay .ai-fullscreen-preview-toolbar {
-    position: absolute;
-    top: 12px;
-    right: 60px;
-    z-index: 110;
-    display: flex;
-    gap: 8px;
-}
-.ai-fullscreen-preview-overlay .ai-fullscreen-preview-body {
-    position: relative;
-    width: 100%;
-    height: 100%;
-}
+/* 全屏预览样式由 JavaScript 动态注入（见 openFullscreenPreview 函数） */
 </style>
 
 <!-- 组件面板 -->
@@ -2464,10 +2394,7 @@ function _buildWorkshopHtml(s) {
             <button class="ai-ws-console-tab" onclick="_wsPreviewTab('colors',this)"><i class="mdi mdi-palette"></i> <?= __('颜色') ?></button>
         </div>
         <div id="ai-ws-tab-preview" style="background:#fff;min-height:280px;max-height:400px;overflow:auto;position:relative;">
-            <button type="button" class="ai-ws-btn-secondary" data-ai-action="refresh-preview" style="position:absolute;right:8px;top:8px;z-index:2;padding:4px 10px;font-size:11px;" title="<?= __('从服务器重新拉取当前草稿预览') ?>">
-                <i class="mdi mdi-refresh"></i> <?= __('刷新预览') ?>
-            </button>
-            <button type="button" class="ai-ws-btn-secondary" data-ai-action="fullscreen-preview" style="position:absolute;right:90px;top:8px;z-index:2;padding:4px 10px;font-size:11px;">
+            <button type="button" class="ai-ws-btn-secondary" data-ai-action="fullscreen-preview" style="position:absolute;right:8px;top:8px;z-index:2;padding:4px 10px;font-size:11px;">
                 <i class="mdi mdi-fullscreen"></i> <?= __('全屏预览') ?>
             </button>
             <iframe id="ai-ws-preview-iframe" class="ai-ws-preview-frame" style="border:none;width:100%;min-height:280px;" srcdoc=""></iframe>
@@ -3057,7 +2984,8 @@ async function generateComponentWithAgent(params) {
             style: params.style,
             fields: params.fields,
             reference_component: params.referenceComponent,
-            reference_code: ''
+            reference_code: '',
+            language: document.documentElement.lang || '<?= $this->request->getUserLanguage() ?>'
         };
         const paramsBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(streamParams))));
 
@@ -3526,20 +3454,27 @@ async function _workshopRefine() {
         if (!component) throw new Error('<?= __('无组件数据') ?>');
 
         const region = component.region || _aiWorkshop.params?.region || 'content';
-        const refineToken = _aiWorkshop.result?.refine_token || '';
-
-        // 流式微调参数（SSE）：有 refine_token 时只传 token，不传整份 template_content；传 draft_id 便于后端更新草稿，未保存前可反复预览/微调
+        
+        // 简化微调参数：优先使用组件 ID，后端自动获取模板内容
+        // 添加语言参数，让 AI 生成对应语言的内容
         const refineParams = {
             adjustment_prompt: input,
             category: region,
-            code: component.code || '',
-            style_code: component.style_code || component.templateCode || currentStyleCode
+            language: document.documentElement.lang || '<?= $this->request->getUserLanguage() ?>'
         };
-        if (refineToken) {
-            refineParams.refine_token = refineToken;
-        } else {
-            refineParams.template_content = component.phtml_code || '';
+        
+        // 优先传 component_id（最简洁），其次是 code，最后是 template_content
+        const componentId = _aiWorkshop.result?.component_id || component.id || 0;
+        if (componentId) {
+            refineParams.component_id = componentId;
+        } else if (component.code) {
+            refineParams.code = component.code;
+            refineParams.style_code = component.style_code || component.templateCode || currentStyleCode;
+        } else if (component.phtml_code) {
+            // 最后备选：直接传模板内容
+            refineParams.template_content = component.phtml_code;
         }
+        
         const draftId = _aiWorkshop.result?.draft_id || 0;
         if (draftId) refineParams.draft_id = draftId;
 
@@ -3596,10 +3531,23 @@ async function _workshopRefine() {
                 finish(true);
             });
 
+            // 处理服务端发送的 error 事件（正常的 SSE 错误事件）
             eventSource.addEventListener('error', e => {
                 const d = safeParseJson(e.data);
                 finish(false, new Error(d?.message || '<?= __('微调失败') ?>'));
             });
+            
+            // 处理网络错误（HTTP 404/500 等）或连接断开
+            eventSource.onerror = (e) => {
+                // 如果 readyState 是 CLOSED 且没有收到任何数据，可能是 404
+                if (eventSource.readyState === EventSource.CLOSED) {
+                    const errorMsg = '<?= __('微调请求失败：无法连接服务端（可能是 404 或网络问题）。请检查服务器是否正常运行。') ?>';
+                    _refineLogLine('✗ ' + errorMsg, '#ef4444');
+                    finish(false, new Error(errorMsg));
+                } else if (eventSource.readyState === EventSource.CONNECTING) {
+                    _refineLogLine('↻ <?= __('连接断开，正在重连...') ?>', '#fbbf24');
+                }
+            };
         });
 
         if (!streamResult?.success) throw new Error(streamResult?.message || '<?= __('微调失败') ?>');
@@ -4016,7 +3964,8 @@ async function generateComponentWithAi(params) {
             style: params.style,
             fields: params.fields,
             reference_component: params.referenceComponent,
-            reference_code: referenceCode
+            reference_code: referenceCode,
+            language: document.documentElement.lang || '<?= $this->request->getUserLanguage() ?>'
         };
         const paramsBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(streamParams))));
         
@@ -4228,7 +4177,7 @@ function showStreamError(errorMessage, errorTip, params) {
 function updateStreamStatus(message, progress) {
     const statusEl = document.getElementById('ai-gen-status');
     const progressEl = document.getElementById('ai-gen-progress');
-    if (statusEl) statusEl.textContent = message;
+    if (statusEl) statusEl.innerHTML = message;
     if (progressEl) progressEl.style.width = progress + '%';
 }
 
@@ -4449,7 +4398,41 @@ window.openFullscreenPreview = function openFullscreenPreview() {
     if (!targetDoc.getElementById('ai-fullscreen-preview-styles')) {
         const styleEl = targetDoc.createElement('style');
         styleEl.id = 'ai-fullscreen-preview-styles';
-        styleEl.textContent = '.ai-fullscreen-preview-open{overflow:hidden}.ai-fullscreen-preview-overlay{position:fixed;inset:0;z-index:99999;background:rgba(10,10,10,0.85);display:flex;align-items:center;justify-content:center}.ai-fullscreen-preview-overlay .ai-fullscreen-preview-popup{width:95vw;height:95vh;background:#0f0f12;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,0.4);padding:10px;position:relative}.ai-fullscreen-preview-overlay .ai-fullscreen-preview-close{position:absolute;top:12px;right:12px;z-index:110}.ai-fullscreen-preview-overlay .ai-fullscreen-preview-toolbar{position:absolute;top:12px;right:60px;z-index:110;display:flex;gap:8px}.ai-fullscreen-preview-overlay .ai-fullscreen-preview-body{position:relative;width:100%;height:100%}';
+        styleEl.textContent = `
+.ai-fullscreen-preview-open{overflow:hidden}
+.ai-fullscreen-preview-overlay{position:fixed;inset:0;z-index:99999;background:rgba(10,10,10,0.92);display:flex;align-items:center;justify-content:center}
+.ai-fullscreen-preview-overlay .ai-fullscreen-preview-popup{width:95vw;height:95vh;background:var(--backend-color-body-bg,#0f0f12);border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,0.4);padding:10px;position:relative}
+.ai-fullscreen-preview-overlay .ai-fullscreen-preview-close{position:absolute;top:12px;right:12px;z-index:110}
+.ai-fullscreen-preview-overlay .ai-fullscreen-preview-toolbar{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:110;display:flex;gap:0}
+.ai-fullscreen-preview-overlay .ai-fullscreen-preview-body{position:relative;width:100%;height:100%;padding-top:50px}
+
+/* 设备切换按钮组 */
+.ai-preview-device-switcher{display:flex;gap:0;background:var(--backend-color-card-bg,#1e1e2e);border-radius:8px;padding:4px;border:1px solid var(--backend-color-border-default,#333)}
+.ai-preview-device-btn{display:flex;align-items:center;gap:6px;padding:8px 16px;border:none;background:transparent;color:var(--backend-color-text-muted,#888);font-size:13px;cursor:pointer;border-radius:6px;transition:all .2s;white-space:nowrap}
+.ai-preview-device-btn:hover{color:var(--backend-color-text-primary,#ccc);background:var(--backend-color-hover-bg,rgba(102,126,234,.1))}
+.ai-preview-device-btn.active{background:var(--backend-color-primary,#667eea);color:#fff;font-weight:600}
+.ai-preview-device-btn i{font-size:16px}
+
+/* 预览容器 */
+.ai-preview-container{width:100%;height:100%;display:flex;justify-content:center;align-items:center;background:var(--backend-color-sidebar-bg,#1a1a2e);border-radius:8px;overflow:auto;padding:20px}
+.ai-preview-device-frame{position:relative;background:var(--backend-color-card-bg,#2d2d3d);border-radius:24px;padding:12px;box-shadow:0 8px 32px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.05);transition:all .3s ease}
+.ai-preview-device-notch{display:none;position:absolute;top:6px;left:50%;transform:translateX(-50%);background:var(--backend-color-body-bg,#1a1a2e);border-radius:10px;z-index:5}
+
+/* 手机模式 */
+.ai-preview-device-mobile .ai-preview-device-frame{width:395px;height:calc(100% - 40px);max-height:812px;border-radius:36px;padding:16px 8px}
+.ai-preview-device-mobile .ai-preview-device-notch{display:block;width:120px;height:24px;top:8px}
+.ai-preview-device-mobile #fullscreen-preview-iframe{width:375px;height:100%;border-radius:0;border:none;background:#fff}
+
+/* iPad模式 */
+.ai-preview-device-tablet .ai-preview-device-frame{width:810px;height:calc(100% - 40px);max-height:1080px;border-radius:24px;padding:16px}
+.ai-preview-device-tablet .ai-preview-device-notch{display:none}
+.ai-preview-device-tablet #fullscreen-preview-iframe{width:768px;height:100%;border-radius:0;border:none;background:#fff}
+
+/* PC模式 */
+.ai-preview-device-desktop .ai-preview-device-frame{width:calc(100% - 40px);height:calc(100% - 40px);border-radius:8px;padding:0;background:transparent;box-shadow:none}
+.ai-preview-device-desktop .ai-preview-device-notch{display:none}
+.ai-preview-device-desktop #fullscreen-preview-iframe{width:100%;height:100%;border-radius:4px;border:none;background:#fff;box-shadow:0 4px 20px rgba(0,0,0,0.2)}
+`;
         targetDoc.head.appendChild(styleEl);
     }
     const overlay = targetDoc.createElement('div');
@@ -4458,22 +4441,30 @@ window.openFullscreenPreview = function openFullscreenPreview() {
     overlay.innerHTML = `
         <div class="ai-fullscreen-preview-popup">
             <div class="ai-fullscreen-preview-toolbar">
-                <button type="button" class="btn btn-sm btn-light" onclick="window.setPreviewDevice('desktop')" title="<?= __('桌面') ?>">
-                    <i class="mdi mdi-monitor"></i>
-                </button>
-                <button type="button" class="btn btn-sm btn-light" onclick="window.setPreviewDevice('tablet')" title="<?= __('平板') ?>">
-                    <i class="mdi mdi-tablet"></i>
-                </button>
-                <button type="button" class="btn btn-sm btn-light" onclick="window.setPreviewDevice('mobile')" title="<?= __('手机') ?>">
-                    <i class="mdi mdi-cellphone"></i>
-                </button>
+                <div class="ai-preview-device-switcher">
+                    <button type="button" class="ai-preview-device-btn" data-device="mobile" onclick="window.setPreviewDevice('mobile')" title="<?= __('手机') ?>">
+                        <i class="mdi mdi-cellphone"></i>
+                        <span><?= __('手机') ?></span>
+                    </button>
+                    <button type="button" class="ai-preview-device-btn" data-device="tablet" onclick="window.setPreviewDevice('tablet')" title="<?= __('iPad') ?>">
+                        <i class="mdi mdi-tablet"></i>
+                        <span><?= __('iPad') ?></span>
+                    </button>
+                    <button type="button" class="ai-preview-device-btn active" data-device="desktop" onclick="window.setPreviewDevice('desktop')" title="<?= __('PC') ?>">
+                        <i class="mdi mdi-monitor"></i>
+                        <span><?= __('PC') ?></span>
+                    </button>
+                </div>
             </div>
             <button type="button" class="btn btn-sm btn-light ai-fullscreen-preview-close" onclick="window.closeFullscreenPreview()" aria-label="<?= __('关闭') ?>" title="<?= __('关闭') ?>">
                 <i class="mdi mdi-close"></i>
             </button>
             <div class="ai-fullscreen-preview-body">
-                <div id="fullscreen-preview-container" style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: flex-start; background: #e0e0e0; padding: 20px; overflow: auto;">
-                    <iframe id="fullscreen-preview-iframe" style="width: 100%; height: 100%; border: none; background: #fff; box-shadow: 0 4px 20px rgba(0,0,0,0.15); border-radius: 4px;"></iframe>
+                <div id="fullscreen-preview-container" class="ai-preview-container ai-preview-device-desktop">
+                    <div class="ai-preview-device-frame">
+                        <div class="ai-preview-device-notch"></div>
+                        <iframe id="fullscreen-preview-iframe"></iframe>
+                    </div>
                 </div>
             </div>
         </div>
@@ -4504,43 +4495,23 @@ window.closeFullscreenPreview = function closeFullscreenPreview() {
 // 设置预览设备尺寸（挂到 window 供全屏遮罩内按钮调用）
 window.setPreviewDevice = function setPreviewDevice(device) {
     const doc = window.__aiFullscreenPreviewDoc || document;
-    const iframe = doc.getElementById('fullscreen-preview-iframe');
     const container = doc.getElementById('fullscreen-preview-container');
-    if (!iframe || !container) return;
+    if (!container) return;
     
     // 移除所有设备按钮的激活状态
-    container.parentElement.querySelectorAll('.btn-light').forEach(btn => {
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-light');
+    doc.querySelectorAll('.ai-preview-device-btn').forEach(btn => {
+        btn.classList.remove('active');
     });
     
     // 激活当前设备按钮
-    const deviceIcons = { desktop: 'mdi-monitor', tablet: 'mdi-tablet', mobile: 'mdi-cellphone' };
-    const activeBtn = container.parentElement.querySelector(`.mdi.${deviceIcons[device]}`);
+    const activeBtn = doc.querySelector(`.ai-preview-device-btn[data-device="${device}"]`);
     if (activeBtn) {
-        activeBtn.closest('button').classList.remove('btn-light');
-        activeBtn.closest('button').classList.add('btn-primary');
+        activeBtn.classList.add('active');
     }
     
-    // 设置尺寸
-    switch (device) {
-        case 'mobile':
-            iframe.style.width = '375px';
-            iframe.style.maxWidth = '375px';
-            iframe.style.height = '667px';
-            break;
-        case 'tablet':
-            iframe.style.width = '768px';
-            iframe.style.maxWidth = '768px';
-            iframe.style.height = '100%';
-            break;
-        case 'desktop':
-        default:
-            iframe.style.width = '100%';
-            iframe.style.maxWidth = '100%';
-            iframe.style.height = '100%';
-            break;
-    }
+    // 移除所有设备 class 并添加当前设备 class
+    container.classList.remove('ai-preview-device-mobile', 'ai-preview-device-tablet', 'ai-preview-device-desktop');
+    container.classList.add(`ai-preview-device-${device}`);
 }
 
 // 切换 JSON 导出区域显示/隐藏

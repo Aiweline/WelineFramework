@@ -1,29 +1,13 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
 /** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
 
 $task = $this->getData('task');
 $candidates = $this->getData('candidates') ?? [];
 $candidate_pagination = $this->getData('candidate_pagination') ?? '';
 ?>
-<!DOCTYPE html>
-<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= __('任务详情') ?> - <?= __('自动寻客管理') ?></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? '' ?>>
-@template(Weline_Admin::common/page/loading.phtml)
-<div id="layout-wrapper">
-    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
-    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <div class="row">
+<div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                             <h4 class="mb-sm-0"><?= __('任务详情') ?> #<?= $task->getId() ?></h4>
@@ -450,14 +434,3 @@ $candidate_pagination = $this->getData('candidate_pagination') ?? '';
                     </div>
                 </div>
             </div>
-            </div>
-        </div>
-    </div>
-
-    @template(Weline_Admin::common/footer.phtml)
-</div>
-
-@template(Weline_Admin::common/vendor-scripts.phtml)
-</body>
-</html>
-

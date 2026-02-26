@@ -30,6 +30,60 @@
         }
 
         /**
+         * 显示下载进度弹窗
+         */
+        function showDownloadProgressModal(modelId) {
+            var modal = document.getElementById('hf-download-modal');
+            if (!modal) {
+                console.warn('[HFModelConfig] 下载进度弹窗元素不存在');
+                return;
+            }
+
+            // 更新弹窗标题
+            var titleEl = modal.querySelector('.modal-title');
+            if (titleEl && modelId) {
+                var shortName = modelId.split('/').pop() || modelId;
+                titleEl.innerHTML = '<i class="mdi mdi-download text-primary me-2"></i>下载模型: ' + shortName;
+            }
+
+            // 重置进度条
+            var totalBar = document.getElementById('hf-download-progress-bar');
+            var fileBar = document.getElementById('hf-download-file-progress-bar');
+            var progressText = document.getElementById('hf-download-progress-text');
+            var fileText = document.getElementById('hf-download-progress-file');
+            
+            if (totalBar) { totalBar.style.width = '0%'; totalBar.textContent = '0%'; }
+            if (fileBar) { fileBar.style.width = '0%'; }
+            if (progressText) { progressText.textContent = '准备下载...'; }
+            if (fileText) { fileText.textContent = '当前文件: 等待开始...'; }
+
+            // 隐藏关闭按钮（下载中不允许关闭）
+            var footer = document.getElementById('hf-download-modal-footer');
+            if (footer) footer.style.display = 'none';
+
+            // 显示弹窗
+            try {
+                if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                    var bsModal;
+                    if (typeof bootstrap.Modal.getOrCreateInstance === 'function') {
+                        bsModal = bootstrap.Modal.getOrCreateInstance(modal);
+                    } else {
+                        bsModal = bootstrap.Modal.getInstance(modal) || new bootstrap.Modal(modal);
+                    }
+                    bsModal.show();
+                    console.log('[HFModelConfig] 下载进度弹窗已显示');
+                } else if (typeof $ !== 'undefined' && typeof $.fn.modal !== 'undefined') {
+                    $(modal).modal('show');
+                    console.log('[HFModelConfig] 下载进度弹窗已显示 (jQuery)');
+                } else {
+                    console.warn('[HFModelConfig] 无法显示弹窗：Bootstrap 或 jQuery 不可用');
+                }
+            } catch (e) {
+                console.error('[HFModelConfig] 显示下载弹窗失败:', e);
+            }
+        }
+
+        /**
          * 检测模型是否已下载，如果已下载则自动加载
          */
         function checkAndAutoLoadModel(modelId) {
@@ -457,9 +511,14 @@
 
                 saveBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> 下载中...';
 
+                // 主动显示下载进度弹窗
+                showDownloadProgressModal(selectedModelId);
+
                 try {
                     // 开始流式下载
                     await ConfigDownloadManager.startDownload(selectedModelId, function (state) {
+                        // 确保弹窗显示并更新进度
+                        state.isDownloading = true;
                         ConfigUIRenderer.updateDownloadProgress(state);
                         console.log('[HFModelConfig] 下载进度:', state.progress.toFixed(2) + '%', state.currentFile);
                     });
@@ -481,9 +540,9 @@
                     }
                 } finally {
                     // 恢复按钮状态
-                    allButtons.forEach(function (item, index) {
-                        if (originalButtonStates[index]) {
-                            item.btn.disabled = originalButtonStates[index].disabled;
+                    originalButtonStates.forEach(function (item) {
+                        if (item && item.btn) {
+                            item.btn.disabled = item.disabled;
                         }
                     });
 
@@ -511,6 +570,9 @@
         if (searchBtn) searchBtn.addEventListener('click', searchModels);
         if (saveBtn) saveBtn.addEventListener('click', saveModelConfig);
         if (refreshBtn) refreshBtn.addEventListener('click', () => loadModelInfo(selectedModelId));
+        
+        // 网络配置（镜像和代理）
+        bindNetworkConfigEvents();
 
         if (searchInput) {
             searchInput.addEventListener('keydown', function (e) {
@@ -574,6 +636,105 @@
                 }
             }, 500);
         }, 1500);
+    }
+
+    /**
+     * 绑定网络配置事件（镜像和代理）
+     */
+    function bindNetworkConfigEvents() {
+        var useMirrorCheckbox = document.getElementById('hf_use_mirror');
+        var mirrorUrlGroup = document.getElementById('hf_mirror_url_group');
+        var mirrorUrlInput = document.getElementById('hf_mirror_url');
+        var proxyEnabledCheckbox = document.getElementById('hf_proxy_enabled');
+        var proxyUrlGroup = document.getElementById('hf_proxy_url_group');
+        var proxyUrlInput = document.getElementById('hf_proxy_url');
+        
+        if (!useMirrorCheckbox && !proxyEnabledCheckbox) return;
+        
+        // 镜像开关切换
+        if (useMirrorCheckbox && mirrorUrlGroup) {
+            useMirrorCheckbox.addEventListener('change', function() {
+                mirrorUrlGroup.style.display = this.checked ? '' : 'none';
+                saveNetworkConfig();
+            });
+        }
+        
+        // 代理开关切换
+        if (proxyEnabledCheckbox && proxyUrlGroup) {
+            proxyEnabledCheckbox.addEventListener('change', function() {
+                proxyUrlGroup.style.display = this.checked ? '' : 'none';
+                saveNetworkConfig();
+            });
+        }
+        
+        // 镜像 URL 输入框失焦保存
+        if (mirrorUrlInput) {
+            mirrorUrlInput.addEventListener('blur', function() {
+                saveNetworkConfig();
+            });
+        }
+        
+        // 代理 URL 输入框失焦保存
+        if (proxyUrlInput) {
+            proxyUrlInput.addEventListener('blur', function() {
+                saveNetworkConfig();
+            });
+        }
+        
+        /**
+         * 保存网络配置到后端
+         */
+        function saveNetworkConfig() {
+            var useMirror = useMirrorCheckbox ? useMirrorCheckbox.checked : false;
+            var mirrorUrl = mirrorUrlInput ? mirrorUrlInput.value.trim() : 'https://hf-mirror.com';
+            var proxyEnabled = proxyEnabledCheckbox ? proxyEnabledCheckbox.checked : false;
+            var proxyUrl = proxyUrlInput ? proxyUrlInput.value.trim() : '';
+            
+            var url = ConfigUtils.buildUrl('save-network-config');
+            var postBody = JSON.stringify({
+                use_mirror: useMirror ? '1' : '0',
+                mirror_url: mirrorUrl,
+                proxy_enabled: proxyEnabled ? '1' : '0',
+                proxy_url: proxyUrl
+            });
+            
+            console.log('[HFModelConfig] 保存网络配置:', url, postBody);
+            
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: postBody
+            })
+            .then(function(res) { 
+                console.log('[HFModelConfig] 响应状态:', res.status);
+                return res.text(); 
+            })
+            .then(function(text) {
+                console.log('[HFModelConfig] 响应内容:', text);
+                var data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    console.error('[HFModelConfig] JSON 解析失败:', e, text);
+                    ConfigUtils.safeToast('error', '网络配置保存失败：响应格式错误');
+                    return;
+                }
+                if (data.success) {
+                    console.log('[HFModelConfig] 网络配置已保存成功');
+                    ConfigUtils.safeToast('success', '网络配置已保存');
+                } else {
+                    console.error('[HFModelConfig] 网络配置保存失败:', data.message);
+                    ConfigUtils.safeToast('error', data.message || '网络配置保存失败');
+                }
+            })
+            .catch(function(err) {
+                console.error('[HFModelConfig] 网络配置保存错误:', err);
+                ConfigUtils.safeToast('error', '网络配置保存失败：' + err.message);
+            });
+        }
     }
 
     /**

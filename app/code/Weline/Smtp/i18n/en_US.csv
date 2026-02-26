@@ -25,7 +25,6 @@ Smtp测试邮件地址未录入！,Smtp测试邮件地址未录入！
 发送,发送
 请个输入端口,请个输入端口
 请个Smtp用户密码,请个Smtp用户密码
-"Weline Admin 管理面板","Weline Admin 管理面板"
 Smtp邮件服务配置,Smtp邮件服务配置
 系统,系统
 Smtp邮件服务配置测试,Smtp邮件服务配置测试
@@ -46,6 +45,7 @@ ID,ID
 阅读,阅读
 邮件发送记录管理器,邮件发送记录管理器
 操作,Operation
+"Weline Admin 管理面板","Weline Admin 管理面板"
 "SMTP 发送测试","SMTP 发送测试"
 请输入主机名,请输入主机名
 请输入邮箱地址,请输入邮箱地址

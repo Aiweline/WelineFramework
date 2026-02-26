@@ -1,7 +1,5 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
-/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 
 use Weline\Async\Model\SyncHost;
 
@@ -12,22 +10,6 @@ $projectStatus = $this->getData('projectStatus');
 $backendBase = $this->getBackendUrl('async/backend/host');
 $createUrl = $this->getBackendUrl('async/backend/host/form');
 ?>
-<!DOCTYPE html>
-<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= __('同步主机管理') ?></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-@template(Weline_Admin::common/page/loading.phtml)
-<div id="layout-wrapper">
-    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
-    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
                 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -187,11 +169,6 @@ $createUrl = $this->getBackendUrl('async/backend/host/form');
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Offcanvas 主机配置侧边栏 -->
 <div class="offcanvas offcanvas-end" tabindex="-1" id="hostOffcanvas" aria-labelledby="hostOffcanvasLabel" style="width: 90%; max-width: 600px;">
     <div class="offcanvas-header">
@@ -243,9 +220,13 @@ $createUrl = $this->getBackendUrl('async/backend/host/form');
     </div>
 </div>
 
+<js:part>
 <script>
-// 确保在全局作用域中定义
-window.currentHostId = null;
+(function() {
+    'use strict';
+    
+    // 确保在全局作用域中定义
+    window.currentHostId = null;
 window.currentMappingId = null;
 
 // SSH密钥文件选择函数（必须在全局作用域中，因为offcanvas是动态加载的）
@@ -1701,6 +1682,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+})();
 </script>
 
 <style>
@@ -1745,5 +1727,4 @@ document.addEventListener('DOMContentLoaded', function() {
     background: var(--scrollbar-thumb-hover, #a2adb7);
 }
 </style>
-
-@template(Weline_Admin::common/footer.phtml)
+</js:part>

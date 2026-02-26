@@ -1,10 +1,15 @@
 <?php
-/** @var array $configs */
+/**
+ * Trends 配置 - 索引页面
+ * 内容模板 - 由布局系统自动包裹
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $configs
+ */
 $configs = $this->getData('configs') ?? [];
 $apiType = $configs['guolairen_blog_trends_api_type'] ?? 'none';
 $growthComparison = $configs['guolairen_blog_trends_growth_comparison'] ?? 'both';
 ?>
-<w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
 
 <div class="row">
     <div class="col-12">
@@ -220,5 +225,3 @@ $growthComparison = $configs['guolairen_blog_trends_growth_comparison'] ?? 'both
     });
 })();
 </script>
-
-<w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>

@@ -6,31 +6,12 @@
  * @var array $websites
  * @var array $backups
  */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
 
 $websites = $websites ?? [];
 $backups = $backups ?? [];
 ?>
-<!DOCTYPE html>
-<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><lang>网站备份</lang></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-
-@template(Weline_Admin::common/page/loading.phtml)
-
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <!-- 页面标题 -->
+<!-- 页面标题 -->
                 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -158,76 +139,5 @@ $backups = $backups ?? [];
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    @template(Weline_Admin::common/footer.phtml)
-</div>
-
-<!-- SweetAlert2 CSS -->
 <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-<script>
-function createBackup(event) {
-    event.preventDefault();
-    const formData = new FormData(event.target);
-    
-    fetch('<?= $this->getBackendUrl('*/backend/backup/create') ?>', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showPageMessage('success', data.message);
-            setTimeout(() => {
-                location.reload();
-            }, 1000);
-        } else {
-            showPageMessage('error', data.message);
-        }
-    })
-    .catch(error => {
-        showPageMessage('error', '<?= __('创建备份失败') ?>');
-    });
-}
-
-function downloadBackup(filename) {
-    // TODO: 实现下载功能
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            icon: 'info',
-            title: '<?= __('下载备份') ?>',
-            text: filename,
-            timer: 2000,
-            showConfirmButton: false
-        });
-    } else {
-        console.log('<?= __('下载备份：') ?>' + filename);
-    }
-}
-
-function deleteBackup(filename) {
-    if (!confirm('<?= __('确定要删除这个备份吗？') ?>')) {
-        return;
-    }
-    // TODO: 实现删除功能
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            icon: 'info',
-            title: '<?= __('删除备份') ?>',
-            text: filename,
-            timer: 2000,
-            showConfirmButton: false
-        });
-    } else {
-        console.log('<?= __('删除备份：') ?>' + filename);
-    }
-}
-</script>
-
-</body>
-</html>
-

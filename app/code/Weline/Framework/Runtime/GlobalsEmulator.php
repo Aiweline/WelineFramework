@@ -193,10 +193,15 @@ class GlobalsEmulator
         // 重要：不设置 WELINE_IS_BACKEND，让 CheckFullPageCache 知道 URL 尚未解析
         // 这样 CheckFullPageCache 会跳过检查，等待 url_parsed_after 事件再处理
         // $server['WELINE_IS_BACKEND'] = false;  // 故意不设置
-        $server['WELINE_USER_LANG'] = '';
-        $server['WELINE_USER_CURRENCY'] = '';
-        $server['WELINE_WEBSITE_ID'] = '';
-        $server['WELINE_WEBSITE_CODE'] = '';
+        
+        // 重要：不设置 WELINE_USER_LANG/WELINE_USER_CURRENCY 为空字符串！
+        // 空字符串会导致 ?? 运算符无法回退到默认值。
+        // 这些变量应该由 Url::parser() 根据 URL 路径或 Cookie 设置。
+        // 不在此设置，让 syncFromServer() 的 ?? 能正确使用默认值。
+        // $server['WELINE_USER_LANG'] = '';     // 不设置
+        // $server['WELINE_USER_CURRENCY'] = ''; // 不设置
+        // $server['WELINE_WEBSITE_ID'] = '';    // 不设置
+        // $server['WELINE_WEBSITE_CODE'] = '';  // 不设置
         $server['WELINE_WEBSITE_URL'] = '';
         // URL 解析标志 - 初始为 false，Url::parser() 完成后设置为 true
         $server['WELINE_URL_PARSED'] = false;

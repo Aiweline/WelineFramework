@@ -1,7 +1,7 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
 /** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
 
 use Weline\Shipping\Model\Carrier;
 
@@ -12,22 +12,7 @@ $id = $carrier ? $carrier->getId() : null;
 $backendBase = $this->getBackendUrl('shipping/backend/carrier');
 $saveUrl = $this->getBackendUrl('shipping/backend/carrier/save');
 ?>
-<!DOCTYPE html>
-<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= $isEdit ? __('编辑快递公司') : __('新增快递公司') ?></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-@template(Weline_Admin::common/page/loading.phtml)
-<div id="layout-wrapper">
-    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
-    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <div class="row">
+<div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                             <h4 class="mb-sm-0"><?= $isEdit ? __('编辑快递公司') : __('新增快递公司') ?></h4>
@@ -178,24 +163,3 @@ $saveUrl = $this->getBackendUrl('shipping/backend/carrier/save');
                         </div>
                     </div>
                 </div>
-
-            </div>
-        </div>
-
-        @template(Weline_Admin::common/footer.phtml)
-    </div>
-</div>
-
-@template(Weline_Admin::common/vendor-scripts.phtml)
-<script>
-    // 根据类型切换显示API配置区域
-    document.getElementById('carrier_type').addEventListener('change', function() {
-        const isApi = this.value === '<?= Carrier::TYPE_API ?>';
-        document.getElementById('api_config_section').style.display = isApi ? 'block' : 'none';
-        document.getElementById('api_method_section').style.display = isApi ? 'block' : 'none';
-        document.getElementById('api_config_json_section').style.display = isApi ? 'block' : 'none';
-    });
-</script>
-</body>
-</html>
-

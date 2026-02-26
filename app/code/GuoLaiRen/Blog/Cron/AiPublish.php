@@ -53,12 +53,19 @@ class AiPublish implements CronTaskInterface
         $hasTrendSource = TrendsConfig::useSerpApi() || TrendsConfig::useOfficialApi();
         $todayStart = date('Y-m-d 00:00:00');
         $published = 0;
+        $errors = []; // 收集错误信息
         $locale = TrendsConfig::get(TrendsConfig::KEY_DEFAULT_LANGUAGE, 'en_US');
         $asDraft = TrendsConfig::publishAsDraft();
         $modeText = $hasTrendSource ? __('趋势增长词模式') : __('画像关键词兜底模式');
 
         if ($onProgress) {
             $onProgress('start', ['mode' => $modeText, 'quotas_count' => count($quotas)]);
+        }
+
+        if (empty($quotas)) {
+            if ($onProgress) {
+                $onProgress('skip', ['reason' => '无配额记录']);
+            }
         }
 
         foreach ($quotas as $quota) {
@@ -68,12 +75,24 @@ class AiPublish implements CronTaskInterface
             $categoryId = (int)$quota->getData(TrendSiteQuota::fields_DEFAULT_CATEGORY_ID);
 
             if ($categoryId <= 0) {
+                if ($onProgress) {
+                    $onProgress('skip', ['reason' => '配额未设置默认分类', 'site_id' => $siteId, 'profile_id' => $profileId]);
+                }
                 continue;
             }
 
             $cat = ObjectManager::getInstance(Category::class);
             $cat->clear()->load($categoryId);
-            if (!$cat->getId() || (int)$cat->getData(Category::fields_SITE_ID) !== $siteId) {
+            if (!$cat->getId()) {
+                if ($onProgress) {
+                    $onProgress('skip', ['reason' => '默认分类不存在', 'category_id' => $categoryId]);
+                }
+                continue;
+            }
+            if ((int)$cat->getData(Category::fields_SITE_ID) !== $siteId) {
+                if ($onProgress) {
+                    $onProgress('skip', ['reason' => '默认分类不属于该站点', 'category_id' => $categoryId, 'category_site_id' => $cat->getData(Category::fields_SITE_ID), 'quota_site_id' => $siteId]);
+                }
                 continue;
             }
 
@@ -85,7 +104,14 @@ class AiPublish implements CronTaskInterface
                 ->count();
             $need = max(0, $perDay - $already);
             if ($need <= 0) {
+                if ($onProgress) {
+                    $onProgress('skip', ['reason' => '今日已发满', 'site_id' => $siteId, 'profile_id' => $profileId, 'per_day' => $perDay, 'already' => $already]);
+                }
                 continue;
+            }
+
+            if ($onProgress) {
+                $onProgress('quota_info', ['site_id' => $siteId, 'profile_id' => $profileId, 'per_day' => $perDay, 'already' => $already, 'need' => $need, 'category_id' => $categoryId]);
             }
 
             if ($hasTrendSource) {
@@ -117,14 +143,16 @@ class AiPublish implements CronTaskInterface
                             }
                         }
                     } catch (\Throwable $e) {
+                        $errorMsg = $this->extractCleanError($e->getMessage());
+                        $errors[] = $errorMsg;
                         if ($onProgress) {
-                            $onProgress('article_error', ['keyword' => $keyword, 'error' => $e->getMessage()]);
+                            $onProgress('article_error', ['keyword' => $keyword, 'error' => $errorMsg]);
                         }
                         trigger_error(
                             __('Blog AI 发文失败（关键词 %{keyword}，log_id %{log_id}）：%{error}', [
                                 'keyword' => $keyword,
                                 'log_id' => (string)$logId,
-                                'error' => $e->getMessage(),
+                                'error' => $errorMsg,
                             ]),
                             E_USER_WARNING
                         );
@@ -136,16 +164,32 @@ class AiPublish implements CronTaskInterface
                 /** @var TrendProfile $profile */
                 $profile = ObjectManager::getInstance(TrendProfile::class);
                 $profile->clear()->load($profileId);
-                if (!$profile->getId() || (int)$profile->getData(TrendProfile::fields_IS_ACTIVE) !== 1) {
+                if (!$profile->getId()) {
+                    if ($onProgress) {
+                        $onProgress('skip', ['reason' => '画像不存在', 'profile_id' => $profileId]);
+                    }
+                    continue;
+                }
+                if ((int)$profile->getData(TrendProfile::fields_IS_ACTIVE) !== 1) {
+                    if ($onProgress) {
+                        $onProgress('skip', ['reason' => '画像未启用', 'profile_id' => $profileId, 'is_active' => $profile->getData(TrendProfile::fields_IS_ACTIVE)]);
+                    }
                     continue;
                 }
 
                 $keywords = array_values(array_unique($profile->getKeywordsArray()));
                 if (empty($keywords)) {
+                    if ($onProgress) {
+                        $onProgress('skip', ['reason' => '画像无关键词', 'profile_id' => $profileId, 'raw_keywords' => $profile->getData(TrendProfile::fields_KEYWORDS)]);
+                    }
                     continue;
                 }
                 $keywords = array_slice($keywords, 0, $need);
                 $total = count($keywords);
+                
+                if ($onProgress) {
+                    $onProgress('fallback_keywords', ['profile_id' => $profileId, 'keywords_count' => $total, 'keywords' => $keywords]);
+                }
 
                 foreach ($keywords as $idx => $keyword) {
                     if ($onProgress) {
@@ -159,14 +203,16 @@ class AiPublish implements CronTaskInterface
                             }
                         }
                     } catch (\Throwable $e) {
+                        $errorMsg = $this->extractCleanError($e->getMessage());
+                        $errors[] = $errorMsg;
                         if ($onProgress) {
-                            $onProgress('article_error', ['keyword' => $keyword, 'error' => $e->getMessage()]);
+                            $onProgress('article_error', ['keyword' => $keyword, 'error' => $errorMsg]);
                         }
                         trigger_error(
                             __('Blog AI 发文失败（关键词 %{keyword}，log_id %{log_id}）：%{error}', [
                                 'keyword' => (string)$keyword,
                                 'log_id' => 'fallback',
-                                'error' => $e->getMessage(),
+                                'error' => $errorMsg,
                             ]),
                             E_USER_WARNING
                         );
@@ -177,10 +223,33 @@ class AiPublish implements CronTaskInterface
         }
 
         $result = __('自动发文完成：本次发布 %{count} 篇', ['count' => $published]);
+        
+        // 如果发布 0 篇且有错误，附加错误提示
+        if ($published === 0 && !empty($errors)) {
+            $uniqueErrors = array_unique($errors);
+            $hint = __('可能原因：') . implode('；', $uniqueErrors);
+            $result .= "\n" . $hint;
+        } elseif ($published === 0) {
+            $result .= "\n" . self::getZeroPublishHint();
+        }
+        
         if ($onProgress) {
-            $onProgress('done', ['published' => $published, 'result' => $result]);
+            $onProgress('done', [
+                'published' => $published,
+                'result' => $result,
+                'errors' => array_unique($errors)
+            ]);
         }
         return $result;
+    }
+    
+    /**
+     * 清理错误信息中的 ANSI 颜色代码
+     */
+    private function extractCleanError(string $message): string
+    {
+        // 移除 ANSI 颜色代码 (如 \033[34m 或 [34m)
+        return trim(preg_replace('/\x1b\[[0-9;]*m|\[[0-9;]*m/', '', $message));
     }
 
     /**
@@ -188,6 +257,12 @@ class AiPublish implements CronTaskInterface
      */
     public static function getZeroPublishHint(): string
     {
+        // 首先检查 AI 模型配置
+        $aiHint = self::checkAiModelConfig();
+        if ($aiHint) {
+            return $aiHint;
+        }
+        
         $quotaModel = ObjectManager::getInstance(TrendSiteQuota::class);
         $quotas = $quotaModel->clear()->select()->fetch()->getItems();
         if (empty($quotas)) {
@@ -250,6 +325,61 @@ class AiPublish implements CronTaskInterface
             return __('可能原因：') . implode('；', array_unique($hints));
         }
         return __('请检查 AI 服务配置或稍后重试。');
+    }
+    
+    /**
+     * 检查 AI 模型配置是否正常
+     * @return string|null 返回错误提示（含 HTML 链接），如果正常则返回 null
+     */
+    private static function checkAiModelConfig(): ?string
+    {
+        try {
+            /** @var \Weline\Ai\Service\DefaultModelManager $defaultModelManager */
+            $defaultModelManager = ObjectManager::getInstance(\Weline\Ai\Service\DefaultModelManager::class);
+            
+            // 检查全局默认模型
+            $globalDefault = $defaultModelManager->getDefaultModelForService(
+                \Weline\Ai\Service\DefaultModelManager::SERVICE_TYPE_DEFAULT
+            );
+            
+            // 生成配置链接
+            /** @var \Weline\Framework\Http\Url $urlBuilder */
+            $urlBuilder = ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
+            $configUrl = $urlBuilder->getBackendUrl('ai/backend/defaultmodel');
+            $modelListUrl = $urlBuilder->getBackendUrl('ai/backend/model');
+            $providerUrl = $urlBuilder->getBackendUrl('ai/backend/provider');
+            
+            $linkHtml = '<div class="ai-config-links" style="margin-top: 10px;">'
+                . '<a href="' . $configUrl . '" class="btn btn-sm btn-primary me-2" target="_blank">'
+                . '<i class="mdi mdi-star-settings me-1"></i>' . __('配置默认模型') . '</a>'
+                . '<a href="' . $modelListUrl . '" class="btn btn-sm btn-outline-secondary me-2" target="_blank">'
+                . '<i class="mdi mdi-robot me-1"></i>' . __('模型列表') . '</a>'
+                . '<a href="' . $providerUrl . '" class="btn btn-sm btn-outline-secondary" target="_blank">'
+                . '<i class="mdi mdi-account-key me-1"></i>' . __('供应商账户') . '</a>'
+                . '</div>';
+            
+            if (!$globalDefault || !$globalDefault->getId()) {
+                return __('未配置 AI 默认模型') . $linkHtml;
+            }
+            
+            // 检查模型是否有效
+            /** @var \Weline\Ai\Model\AiModel $aiModel */
+            $aiModel = ObjectManager::getInstance(\Weline\Ai\Model\AiModel::class);
+            $modelCode = $globalDefault->getData(\Weline\Ai\Model\AiDefaultModel::fields_MODEL_CODE);
+            $model = $aiModel->clear()->where(\Weline\Ai\Model\AiModel::fields_MODEL_CODE, $modelCode)->find()->fetch();
+            
+            if (!$model->getId()) {
+                return __('AI 默认模型配置无效（模型代码 %{1} 不存在）', [$modelCode]) . $linkHtml;
+            }
+            
+            if ((int)$model->getData(\Weline\Ai\Model\AiModel::fields_IS_ACTIVE) !== 1) {
+                return __('AI 默认模型 "%{1}" 未激活', [$model->getData(\Weline\Ai\Model\AiModel::fields_NAME)]) . $linkHtml;
+            }
+            
+            return null;
+        } catch (\Throwable $e) {
+            return __('AI 模型配置检查失败：%{1}', [$e->getMessage()]);
+        }
     }
 
     private function publishByKeyword(

@@ -7,241 +7,211 @@
  * @var array $recent_users
  * @var array $links
  */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 
 $stats = $stats ?? [];
 $recentUsers = $recent_users ?? [];
 $links = $links ?? [];
 $sandboxKey = $sandbox_key ?? '';
 ?>
-<!DOCTYPE html>
-<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><lang>API集成</lang></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+<!-- 页面标题 -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0 font-size-18"><lang>API集成</lang></h4>
+        </div>
+    </div>
+</div>
 
-@template(Weline_Admin::common/page/loading.phtml)
+<!-- 消息提示区域 -->
+<div class='row'>
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
 
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <!-- 页面标题 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0 font-size-18"><lang>API集成</lang></h4>
-                        </div>
+<!-- 数据概览 -->
+<div class="row">
+    <div class="col-xl-3 col-md-6">
+        <div class="card mini-stat bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <h5 class="text-uppercase text-white-50"><lang>API用户</lang></h5>
+                        <h4 class="mb-0"><?= (int)($stats['total_users'] ?? 0) ?></h4>
                     </div>
-                </div>
-
-                <!-- 消息提示区域 -->
-                <div class='row'>
-                    <div class="col-12">
-                        <template>Weline_Component::message.phtml</template>
-                    </div>
-                </div>
-
-                <!-- 数据概览 -->
-                <div class="row">
-                    <div class="col-xl-3 col-md-6">
-                        <div class="card mini-stat bg-primary text-white">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <div>
-                                        <h5 class="text-uppercase text-white-50"><lang>API用户</lang></h5>
-                                        <h4 class="mb-0"><?= (int)($stats['total_users'] ?? 0) ?></h4>
-                                    </div>
-                                    <div class="mini-stat-icon">
-                                        <i class="mdi mdi-account-key display-4"></i>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-xl-3 col-md-6">
-                        <div class="card mini-stat bg-success text-white">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <div>
-                                        <h5 class="text-uppercase text-white-50"><lang>启用用户</lang></h5>
-                                        <h4 class="mb-0"><?= (int)($stats['enabled_users'] ?? 0) ?></h4>
-                                    </div>
-                                    <div class="mini-stat-icon">
-                                        <i class="mdi mdi-shield-check display-4"></i>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-xl-3 col-md-6">
-                        <div class="card mini-stat bg-warning text-white">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <div>
-                                        <h5 class="text-uppercase text-white-50"><lang>沙盒账户</lang></h5>
-                                        <h4 class="mb-0"><?= (int)($stats['sandbox_users'] ?? 0) ?></h4>
-                                    </div>
-                                    <div class="mini-stat-icon">
-                                        <i class="mdi mdi-flask-outline display-4"></i>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-xl-3 col-md-6">
-                        <div class="card mini-stat bg-info text-white">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <div>
-                                        <h5 class="text-uppercase text-white-50"><lang>活跃令牌</lang></h5>
-                                        <h4 class="mb-0"><?= (int)($stats['active_tokens'] ?? 0) ?></h4>
-                                    </div>
-                                    <div class="mini-stat-icon">
-                                        <i class="mdi mdi-key-chain display-4"></i>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 快速操作 -->
-                <div class="row">
-                    <div class="col-xl-8">
-                        <div class="card">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center justify-content-between mb-3">
-                                    <div>
-                                        <h4 class="card-title mb-0"><lang>快速操作</lang></h4>
-                                        <p class="text-muted mb-0"><lang>日常的 API 管理入口</lang></p>
-                                    </div>
-                                    <div class="text-end">
-                                        <?php if (!empty($sandboxKey)): ?>
-                                            <span class="badge bg-success"><lang>沙盒密钥</lang>: <?= htmlspecialchars($sandboxKey) ?></span>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                                <div class="d-flex flex-wrap gap-2">
-                                    <a href="<?= htmlspecialchars($links['user_add'] ?? '#') ?>" class="btn btn-primary">
-                                        <i class="mdi mdi-plus-circle me-1"></i><lang>新建API用户</lang>
-                                    </a>
-                                    <a href="<?= htmlspecialchars($links['user_list'] ?? '#') ?>" class="btn btn-outline-primary">
-                                        <i class="mdi mdi-account-cog-outline me-1"></i><lang>管理API用户</lang>
-                                    </a>
-                                    <a href="<?= htmlspecialchars($links['api_docs'] ?? '#') ?>" class="btn btn-outline-secondary" target="_blank" rel="noopener">
-                                        <i class="mdi mdi-file-document-outline me-1"></i><lang>打开API文档</lang>
-                                    </a>
-                                    <?php if (!empty($links['api_docs_sandbox']) && ($links['api_docs_sandbox'] !== $links['api_docs'])): ?>
-                                        <a href="<?= htmlspecialchars($links['api_docs_sandbox']) ?>" class="btn btn-outline-warning" target="_blank" rel="noopener">
-                                            <i class="mdi mdi-flask-outline me-1"></i><lang>沙盒调试</lang>
-                                        </a>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-xl-4">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                <h4 class="card-title mb-3"><lang>集成提示</lang></h4>
-                                <ul class="list-unstyled mb-0 text-muted">
-                                    <li class="mb-2">
-                                        <i class="mdi mdi-check-circle text-success me-2"></i>
-                                        <lang>API用户需分配角色方可访问接口</lang>
-                                    </li>
-                                    <li class="mb-2">
-                                        <i class="mdi mdi-check-circle text-success me-2"></i>
-                                        <lang>沙盒账户默认强制使用沙盒数据库</lang>
-                                    </li>
-                                    <li class="mb-2">
-                                        <i class="mdi mdi-check-circle text-success me-2"></i>
-                                        <lang>文档中的在线调试会自动携带登录令牌</lang>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 最新API用户 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center justify-content-between mb-3">
-                                    <div>
-                                        <h4 class="card-title mb-0"><lang>最近创建的API用户</lang></h4>
-                                        <p class="text-muted mb-0"><lang>快速查看最新的授权账号</lang></p>
-                                    </div>
-                                    <a href="<?= htmlspecialchars($links['user_list'] ?? '#') ?>" class="btn btn-sm btn-outline-secondary">
-                                        <lang>查看全部</lang>
-                                    </a>
-                                </div>
-                                <div class="table-responsive">
-                                    <table class="table align-middle table-nowrap mb-0">
-                                        <thead class="table-light">
-                                        <tr>
-                                            <th>ID</th>
-                                            <th><lang>用户名</lang></th>
-                                            <th><lang>邮箱</lang></th>
-                                            <th><lang>状态</lang></th>
-                                            <th><lang>沙盒</lang></th>
-                                            <th><lang>创建时间</lang></th>
-                                        </tr>
-                                        </thead>
-                                        <tbody>
-                                        <?php if (!empty($recentUsers)): ?>
-                                            <?php foreach ($recentUsers as $user): ?>
-                                                <tr>
-                                                    <td><?= (int)($user['user_id'] ?? 0) ?></td>
-                                                    <td><?= htmlspecialchars($user['username'] ?? '-') ?></td>
-                                                    <td><?= htmlspecialchars($user['email'] ?? '-') ?></td>
-                                                    <td>
-                                                        <?php if (!empty($user['is_enabled'])): ?>
-                                                            <span class="badge bg-success"><lang>启用</lang></span>
-                                                        <?php else: ?>
-                                                            <span class="badge bg-secondary"><lang>禁用</lang></span>
-                                                        <?php endif; ?>
-                                                    </td>
-                                                    <td>
-                                                        <?php if (!empty($user['is_sandbox'])): ?>
-                                                            <span class="badge bg-warning text-dark"><lang>沙盒</lang></span>
-                                                        <?php else: ?>
-                                                            <span class="badge bg-light text-muted"><lang>正式</lang></span>
-                                                        <?php endif; ?>
-                                                    </td>
-                                                    <td><?= htmlspecialchars($user['created_at'] ?? '-') ?></td>
-                                                </tr>
-                                            <?php endforeach; ?>
-                                        <?php else: ?>
-                                            <tr>
-                                                <td colspan="6" class="text-center text-muted">
-                                                    <lang>暂无API用户，立即创建第一个吧。</lang>
-                                                </td>
-                                            </tr>
-                                        <?php endif; ?>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="mini-stat-icon">
+                        <i class="mdi mdi-account-key display-4"></i>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-
-    @template(Weline_Admin::common/footer.phtml)
+    <div class="col-xl-3 col-md-6">
+        <div class="card mini-stat bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <h5 class="text-uppercase text-white-50"><lang>启用用户</lang></h5>
+                        <h4 class="mb-0"><?= (int)($stats['enabled_users'] ?? 0) ?></h4>
+                    </div>
+                    <div class="mini-stat-icon">
+                        <i class="mdi mdi-shield-check display-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card mini-stat bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <h5 class="text-uppercase text-white-50"><lang>沙盒账户</lang></h5>
+                        <h4 class="mb-0"><?= (int)($stats['sandbox_users'] ?? 0) ?></h4>
+                    </div>
+                    <div class="mini-stat-icon">
+                        <i class="mdi mdi-flask-outline display-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card mini-stat bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <h5 class="text-uppercase text-white-50"><lang>活跃令牌</lang></h5>
+                        <h4 class="mb-0"><?= (int)($stats['active_tokens'] ?? 0) ?></h4>
+                    </div>
+                    <div class="mini-stat-icon">
+                        <i class="mdi mdi-key-chain display-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
-</body>
-</html>
+<!-- 快速操作 -->
+<div class="row">
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div>
+                        <h4 class="card-title mb-0"><lang>快速操作</lang></h4>
+                        <p class="text-muted mb-0"><lang>日常的 API 管理入口</lang></p>
+                    </div>
+                    <div class="text-end">
+                        <?php if (!empty($sandboxKey)): ?>
+                            <span class="badge bg-success"><lang>沙盒密钥</lang>: <?= htmlspecialchars($sandboxKey) ?></span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="<?= htmlspecialchars($links['user_add'] ?? '#') ?>" class="btn btn-primary">
+                        <i class="mdi mdi-plus-circle me-1"></i><lang>新建API用户</lang>
+                    </a>
+                    <a href="<?= htmlspecialchars($links['user_list'] ?? '#') ?>" class="btn btn-outline-primary">
+                        <i class="mdi mdi-account-cog-outline me-1"></i><lang>管理API用户</lang>
+                    </a>
+                    <a href="<?= htmlspecialchars($links['api_docs'] ?? '#') ?>" class="btn btn-outline-secondary" target="_blank" rel="noopener">
+                        <i class="mdi mdi-file-document-outline me-1"></i><lang>打开API文档</lang>
+                    </a>
+                    <?php if (!empty($links['api_docs_sandbox']) && ($links['api_docs_sandbox'] !== $links['api_docs'])): ?>
+                        <a href="<?= htmlspecialchars($links['api_docs_sandbox']) ?>" class="btn btn-outline-warning" target="_blank" rel="noopener">
+                            <i class="mdi mdi-flask-outline me-1"></i><lang>沙盒调试</lang>
+                        </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h4 class="card-title mb-3"><lang>集成提示</lang></h4>
+                <ul class="list-unstyled mb-0 text-muted">
+                    <li class="mb-2">
+                        <i class="mdi mdi-check-circle text-success me-2"></i>
+                        <lang>API用户需分配角色方可访问接口</lang>
+                    </li>
+                    <li class="mb-2">
+                        <i class="mdi mdi-check-circle text-success me-2"></i>
+                        <lang>沙盒账户默认强制使用沙盒数据库</lang>
+                    </li>
+                    <li class="mb-2">
+                        <i class="mdi mdi-check-circle text-success me-2"></i>
+                        <lang>文档中的在线调试会自动携带登录令牌</lang>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
 
+<!-- 最新API用户 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div>
+                        <h4 class="card-title mb-0"><lang>最近创建的API用户</lang></h4>
+                        <p class="text-muted mb-0"><lang>快速查看最新的授权账号</lang></p>
+                    </div>
+                    <a href="<?= htmlspecialchars($links['user_list'] ?? '#') ?>" class="btn btn-sm btn-outline-secondary">
+                        <lang>查看全部</lang>
+                    </a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table align-middle table-nowrap mb-0">
+                        <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th><lang>用户名</lang></th>
+                            <th><lang>邮箱</lang></th>
+                            <th><lang>状态</lang></th>
+                            <th><lang>沙盒</lang></th>
+                            <th><lang>创建时间</lang></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php if (!empty($recentUsers)): ?>
+                            <?php foreach ($recentUsers as $user): ?>
+                                <tr>
+                                    <td><?= (int)($user['user_id'] ?? 0) ?></td>
+                                    <td><?= htmlspecialchars($user['username'] ?? '-') ?></td>
+                                    <td><?= htmlspecialchars($user['email'] ?? '-') ?></td>
+                                    <td>
+                                        <?php if (!empty($user['is_enabled'])): ?>
+                                            <span class="badge bg-success"><lang>启用</lang></span>
+                                        <?php else: ?>
+                                            <span class="badge bg-secondary"><lang>禁用</lang></span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if (!empty($user['is_sandbox'])): ?>
+                                            <span class="badge bg-warning text-dark"><lang>沙盒</lang></span>
+                                        <?php else: ?>
+                                            <span class="badge bg-light text-muted"><lang>正式</lang></span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?= htmlspecialchars($user['created_at'] ?? '-') ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <tr>
+                                <td colspan="6" class="text-center text-muted">
+                                    <lang>暂无API用户，立即创建第一个吧。</lang>
+                                </td>
+                            </tr>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

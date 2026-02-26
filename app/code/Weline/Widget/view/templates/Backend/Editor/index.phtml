@@ -1,59 +1,12 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
 $page = $this->getData('page');
 $widgets = $this->getData('widgets') ?? [];
 $widgetsByType = $this->getData('widgetsByType') ?? [];
 $allowedTypes = $this->getData('allowedTypes') ?? [];
 ?>
-<!DOCTYPE html>
-<!--
- *@Author       秋枫雁飞
- *@Email        aiweline@qq.com
- *@Forum        https://bbs.aiweline.com
- *@DESC         可视化编辑器
--->
-<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= $page_title ?? __('可视化编辑器') ?></title>
-    <link rel="stylesheet" href="<?= $this->getStaticUrl('Weline_Widget::css/editor.css') ?>">
-</head>
-
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-
-<!--页头工具条 开始-->
-@template(Weline_Admin::common/page/loading.phtml)
-<!--页头工具条 结束-->
-
-<!-- 开始 页面 -->
-<div id="layout-wrapper">
-
-    <!--页头工具条 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <!--页头工具条 结束-->
-
-    <!-- ========== Topnav Start ========== -->
-    <!--页头菜单栏 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    <!--页头菜单栏 结束-->
-
-    <!-- ========== Left Sidebar Start ========== -->
-    <!--左侧菜单栏 开始-->
-    @template(Weline_Admin::common/left-sidebar.phtml)
-    <!--左侧菜单栏 结束-->
-
-    <!-- ============================================================== -->
-    <!-- Start right Content here -->
-    <!-- ============================================================== -->
-    <div class="main-content">
-
-        <div class='page-content'>
-            <div class="container-fluid">
-                
-                <!-- 页面标题 -->
+<!-- 页面标题 -->
                 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -185,58 +138,3 @@ $allowedTypes = $this->getData('allowedTypes') ?? [];
                         </div>
                     </div>
                 </div>
-
-            </div>
-        </div>
-
-        <!-- 页脚 -->
-        @template(Weline_Admin::common/footer.phtml)
-
-    </div>
-    <!-- end main content-->
-
-</div>
-<!-- END layout-wrapper -->
-
-<!-- 代码编辑器模态框 -->
-<div class="modal fade" id="code-editor-modal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><?= __('编辑代码') ?></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <textarea class="form-control" id="code-editor" rows="20" 
-                          placeholder='<w:widget type="header" name="default" />'></textarea>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" id="code-editor-save"><?= __('保存') ?></button>
-            </div>
-        </div>
-    </div>
-</div>
-
-@template(Weline_Admin::common/footer.phtml)
-<script src="<?= $this->getStaticUrl('Weline_Widget::js/editor.js') ?>"></script>
-<script>
-    // 初始化编辑器
-    document.addEventListener('DOMContentLoaded', function() {
-        if (typeof WidgetEditor !== 'undefined') {
-            const editor = new WidgetEditor({
-                pageId: <?= $pageId ?>,
-                pageContent: <?= json_encode($pageContent, JSON_UNESCAPED_UNICODE) ?>,
-                widgets: <?= json_encode($widgets, JSON_UNESCAPED_UNICODE) ?>,
-                saveUrl: '<?= $this->getUrlBuilder()->getBackendUrl('widget/backend/editor/save') ?>',
-                previewUrl: '<?= $this->getUrlBuilder()->getBackendUrl('widget/backend/preview/widget') ?>'
-            });
-            widgetEditor = editor;
-            editor.init();
-        }
-    });
-</script>
-
-</body>
-</html>
-
