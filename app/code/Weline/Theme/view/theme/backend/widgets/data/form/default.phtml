@@ -1,0 +1,687 @@
+<?php
+/**
+ * 表单部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {data-form}
+ * @widget.name {数据表单}
+ * @widget.description {后台通用表单部件，支持多种输入类型、验证、分组}
+ * @widget.type {data}
+ * @widget.area {backend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["default", "dashboard"]}
+ * 
+ * @param title {default="表单",type="string",label="表单标题"}
+ * @param action {default="",type="string",label="提交地址"}
+ * @param method {default="POST",type="select",label="提交方法",options={GET:"GET",POST:"POST",PUT:"PUT",DELETE:"DELETE"}}
+ * @param fields {default=[],type="array",label="字段配置"}
+ * @param groups {default=[],type="array",label="字段分组"}
+ * @param submit_text {default="保存",type="string",label="提交按钮文字"}
+ * @param cancel_text {default="取消",type="string",label="取消按钮文字"}
+ * @param cancel_url {default="",type="string",label="取消跳转地址"}
+ * @param show_cancel {default=true,type="bool",label="显示取消按钮"}
+ * @param ajax {default=false,type="bool",label="AJAX提交"}
+ * @param layout {default="vertical",type="select",label="布局",options={vertical:"垂直",horizontal:"水平",inline:"内联"}}
+ */
+
+$title = $this->getData('title') ?? '';
+$action = $this->getData('action') ?? '';
+$method = strtoupper($this->getData('method') ?? 'POST');
+$fields = $this->getData('fields') ?? [];
+$groups = $this->getData('groups') ?? [];
+$submitText = $this->getData('submit_text') ?? __('保存');
+$cancelText = $this->getData('cancel_text') ?? __('取消');
+$cancelUrl = $this->getData('cancel_url') ?? '';
+$showCancel = (bool)($this->getData('show_cancel') ?? true);
+$ajax = (bool)($this->getData('ajax') ?? false);
+$layout = $this->getData('layout') ?? 'vertical';
+$formData = $this->getData('form_data') ?? [];
+
+$widgetId = 'backend-data-form-' . uniqid();
+
+$renderField = function($field) use ($formData, $layout) {
+    $name = $field['name'] ?? '';
+    $type = $field['type'] ?? 'text';
+    $label = $field['label'] ?? $name;
+    $placeholder = $field['placeholder'] ?? '';
+    $required = !empty($field['required']);
+    $disabled = !empty($field['disabled']);
+    $readonly = !empty($field['readonly']);
+    $hint = $field['hint'] ?? '';
+    $options = $field['options'] ?? [];
+    $value = $formData[$name] ?? ($field['default'] ?? '');
+    $class = $field['class'] ?? '';
+    $attrs = $field['attrs'] ?? [];
+    
+    $fieldId = 'field-' . $name . '-' . uniqid();
+    $isHorizontal = $layout === 'horizontal';
+    
+    $attrString = '';
+    foreach ($attrs as $k => $v) {
+        $attrString .= ' ' . htmlspecialchars($k) . '="' . htmlspecialchars($v) . '"';
+    }
+    
+    ob_start();
+    ?>
+    <div class="backend-form-group <?= $isHorizontal ? 'backend-form-group--horizontal' : '' ?> <?= $required ? 'backend-form-group--required' : '' ?>">
+        <?php if ($label): ?>
+        <label class="backend-form-label" for="<?= $fieldId ?>">
+            <?= htmlspecialchars($label) ?>
+            <?php if ($required): ?><span class="backend-form-required">*</span><?php endif; ?>
+        </label>
+        <?php endif; ?>
+        
+        <div class="backend-form-control-wrapper">
+            <?php 
+            switch ($type):
+                case 'textarea': ?>
+                    <textarea 
+                        id="<?= $fieldId ?>"
+                        name="<?= htmlspecialchars($name) ?>"
+                        class="backend-form-control backend-form-textarea <?= htmlspecialchars($class) ?>"
+                        placeholder="<?= htmlspecialchars($placeholder) ?>"
+                        <?= $required ? 'required' : '' ?>
+                        <?= $disabled ? 'disabled' : '' ?>
+                        <?= $readonly ? 'readonly' : '' ?>
+                        <?= $attrString ?>
+                    ><?= htmlspecialchars((string)$value) ?></textarea>
+                <?php break;
+                
+                case 'select': ?>
+                    <select 
+                        id="<?= $fieldId ?>"
+                        name="<?= htmlspecialchars($name) ?>"
+                        class="backend-form-control backend-form-select <?= htmlspecialchars($class) ?>"
+                        <?= $required ? 'required' : '' ?>
+                        <?= $disabled ? 'disabled' : '' ?>
+                        <?= $attrString ?>
+                    >
+                        <?php if ($placeholder): ?>
+                        <option value=""><?= htmlspecialchars($placeholder) ?></option>
+                        <?php endif; ?>
+                        <?php foreach ($options as $optValue => $optLabel): ?>
+                        <option value="<?= htmlspecialchars((string)$optValue) ?>" <?= $value == $optValue ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($optLabel) ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                <?php break;
+                
+                case 'checkbox': ?>
+                    <label class="backend-form-checkbox">
+                        <input 
+                            type="checkbox"
+                            id="<?= $fieldId ?>"
+                            name="<?= htmlspecialchars($name) ?>"
+                            value="1"
+                            <?= $value ? 'checked' : '' ?>
+                            <?= $disabled ? 'disabled' : '' ?>
+                            <?= $attrString ?>
+                        >
+                        <span class="backend-form-checkbox-text"><?= htmlspecialchars($placeholder ?: $label) ?></span>
+                    </label>
+                <?php break;
+                
+                case 'radio': ?>
+                    <div class="backend-form-radio-group">
+                        <?php foreach ($options as $optValue => $optLabel): ?>
+                        <label class="backend-form-radio">
+                            <input 
+                                type="radio"
+                                name="<?= htmlspecialchars($name) ?>"
+                                value="<?= htmlspecialchars((string)$optValue) ?>"
+                                <?= $value == $optValue ? 'checked' : '' ?>
+                                <?= $disabled ? 'disabled' : '' ?>
+                            >
+                            <span class="backend-form-radio-text"><?= htmlspecialchars($optLabel) ?></span>
+                        </label>
+                        <?php endforeach; ?>
+                    </div>
+                <?php break;
+                
+                case 'file': ?>
+                    <input 
+                        type="file"
+                        id="<?= $fieldId ?>"
+                        name="<?= htmlspecialchars($name) ?>"
+                        class="backend-form-control backend-form-file <?= htmlspecialchars($class) ?>"
+                        <?= $required ? 'required' : '' ?>
+                        <?= $disabled ? 'disabled' : '' ?>
+                        <?= $attrString ?>
+                    >
+                <?php break;
+                
+                case 'hidden': ?>
+                    <input 
+                        type="hidden"
+                        name="<?= htmlspecialchars($name) ?>"
+                        value="<?= htmlspecialchars((string)$value) ?>"
+                    >
+                <?php break;
+                
+                case 'number':
+                case 'email':
+                case 'password':
+                case 'url':
+                case 'date':
+                case 'datetime-local':
+                case 'time':
+                case 'color':
+                default: ?>
+                    <input 
+                        type="<?= htmlspecialchars($type === 'text' || !in_array($type, ['number', 'email', 'password', 'url', 'date', 'datetime-local', 'time', 'color']) ? 'text' : $type) ?>"
+                        id="<?= $fieldId ?>"
+                        name="<?= htmlspecialchars($name) ?>"
+                        value="<?= htmlspecialchars((string)$value) ?>"
+                        class="backend-form-control <?= htmlspecialchars($class) ?>"
+                        placeholder="<?= htmlspecialchars($placeholder) ?>"
+                        <?= $required ? 'required' : '' ?>
+                        <?= $disabled ? 'disabled' : '' ?>
+                        <?= $readonly ? 'readonly' : '' ?>
+                        <?= $attrString ?>
+                    >
+                <?php break;
+            endswitch;
+            ?>
+            
+            <?php if ($hint): ?>
+            <div class="backend-form-hint"><?= htmlspecialchars($hint) ?></div>
+            <?php endif; ?>
+            
+            <div class="backend-form-error" data-error-for="<?= htmlspecialchars($name) ?>"></div>
+        </div>
+    </div>
+    <?php
+    return ob_get_clean();
+};
+?>
+
+<div class="backend-data-form-container" id="<?= $widgetId ?>">
+    <?php if ($title): ?>
+    <div class="backend-data-form-header">
+        <h4 class="backend-data-form-title"><?= htmlspecialchars($title) ?></h4>
+    </div>
+    <?php endif; ?>
+    
+    <form class="backend-data-form backend-data-form--<?= htmlspecialchars($layout) ?>" 
+          action="<?= htmlspecialchars($action) ?>" 
+          method="<?= $method === 'GET' ? 'GET' : 'POST' ?>"
+          <?= $ajax ? 'data-ajax-form' : '' ?>>
+        
+        <csrf/>
+        
+        <?php if ($method !== 'GET' && $method !== 'POST'): ?>
+        <input type="hidden" name="_method" value="<?= htmlspecialchars($method) ?>">
+        <?php endif; ?>
+        
+        <div class="backend-data-form-body">
+            <?php if (!empty($groups)): ?>
+                <?php foreach ($groups as $group): 
+                    $groupLabel = $group['label'] ?? '';
+                    $groupFields = $group['fields'] ?? [];
+                    $groupCollapsible = !empty($group['collapsible']);
+                    $groupCollapsed = !empty($group['collapsed']);
+                ?>
+                <fieldset class="backend-form-fieldset <?= $groupCollapsible ? 'backend-form-fieldset--collapsible' : '' ?> <?= $groupCollapsed ? 'backend-form-fieldset--collapsed' : '' ?>">
+                    <?php if ($groupLabel): ?>
+                    <legend class="backend-form-legend" <?= $groupCollapsible ? 'data-toggle-fieldset' : '' ?>>
+                        <?= htmlspecialchars($groupLabel) ?>
+                        <?php if ($groupCollapsible): ?>
+                        <i class="ri-arrow-down-s-line backend-form-fieldset-icon"></i>
+                        <?php endif; ?>
+                    </legend>
+                    <?php endif; ?>
+                    
+                    <div class="backend-form-fieldset-content">
+                        <?php foreach ($groupFields as $fieldName): 
+                            foreach ($fields as $field) {
+                                if (($field['name'] ?? '') === $fieldName) {
+                                    echo $renderField($field);
+                                    break;
+                                }
+                            }
+                        endforeach; ?>
+                    </div>
+                </fieldset>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <?php foreach ($fields as $field): 
+                    if (($field['type'] ?? '') !== 'hidden'):
+                        echo $renderField($field);
+                    endif;
+                endforeach; ?>
+            <?php endif; ?>
+            
+            <?php foreach ($fields as $field): 
+                if (($field['type'] ?? '') === 'hidden'):
+                    echo $renderField($field);
+                endif;
+            endforeach; ?>
+        </div>
+        
+        <div class="backend-data-form-footer">
+            <button type="submit" class="backend-form-btn backend-form-btn--primary">
+                <i class="ri-save-line"></i>
+                <?= htmlspecialchars($submitText) ?>
+            </button>
+            
+            <?php if ($showCancel): ?>
+            <a href="<?= htmlspecialchars($cancelUrl) ?>" class="backend-form-btn backend-form-btn--secondary">
+                <?= htmlspecialchars($cancelText) ?>
+            </a>
+            <?php endif; ?>
+        </div>
+    </form>
+</div>
+
+<style>
+/* ============================================
+   组件：Backend Data Form
+   模块：Weline_Theme
+   前缀：backend-data-form- / backend-form-
+   ============================================ */
+
+.backend-data-form-container {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-md, 8px);
+    box-shadow: var(--backend-card-shadow, 0 0 13px 0 rgba(74, 53, 107, 0.05));
+    overflow: hidden;
+}
+
+/* 头部 */
+.backend-data-form-header {
+    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 24px);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+.backend-data-form-title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+}
+
+/* 表单主体 */
+.backend-data-form-body {
+    padding: var(--backend-spacing-lg, 24px);
+}
+
+/* 表单组 */
+.backend-form-group {
+    margin-bottom: var(--backend-spacing-md, 20px);
+}
+
+.backend-form-group--horizontal {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--backend-spacing-md, 16px);
+}
+
+.backend-form-group--horizontal .backend-form-label {
+    flex: 0 0 150px;
+    padding-top: 8px;
+    text-align: right;
+}
+
+.backend-form-group--horizontal .backend-form-control-wrapper {
+    flex: 1;
+}
+
+/* 标签 */
+.backend-form-label {
+    display: block;
+    margin-bottom: var(--backend-spacing-xs, 6px);
+    font-weight: 500;
+    font-size: 0.875rem;
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.backend-form-required {
+    color: var(--backend-color-danger, #f46a6a);
+    margin-left: 2px;
+}
+
+/* 控件容器 */
+.backend-form-control-wrapper {
+    position: relative;
+}
+
+/* 输入控件 */
+.backend-form-control {
+    width: 100%;
+    padding: var(--backend-spacing-sm, 10px) var(--backend-spacing-md, 14px);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-input-bg, #fff);
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 0.9375rem;
+    transition: all 0.2s ease;
+}
+
+.backend-form-control:focus {
+    outline: none;
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: var(--backend-focus-ring, 0 0 0 3px rgba(85, 110, 230, 0.1));
+}
+
+.backend-form-control:disabled {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.backend-form-control::placeholder {
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+/* 文本域 */
+.backend-form-textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+/* 下拉框 */
+.backend-form-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236c757d' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 40px;
+}
+
+/* 复选框 & 单选框 */
+.backend-form-checkbox,
+.backend-form-radio {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-sm, 8px);
+    cursor: pointer;
+    font-size: 0.9375rem;
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.backend-form-checkbox input,
+.backend-form-radio input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--backend-color-primary, #556ee6);
+}
+
+.backend-form-radio-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--backend-spacing-md, 16px);
+}
+
+/* 提示文字 */
+.backend-form-hint {
+    margin-top: var(--backend-spacing-xs, 4px);
+    font-size: 0.8125rem;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+/* 错误信息 */
+.backend-form-error {
+    margin-top: var(--backend-spacing-xs, 4px);
+    font-size: 0.8125rem;
+    color: var(--backend-color-danger, #f46a6a);
+    display: none;
+}
+
+.backend-form-error:not(:empty) {
+    display: block;
+}
+
+.backend-form-control.is-invalid {
+    border-color: var(--backend-color-danger, #f46a6a);
+}
+
+/* 字段集 */
+.backend-form-fieldset {
+    margin: 0 0 var(--backend-spacing-lg, 24px);
+    padding: 0;
+    border: none;
+}
+
+.backend-form-legend {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-sm, 8px);
+    width: 100%;
+    padding: var(--backend-spacing-sm, 12px) 0;
+    margin-bottom: var(--backend-spacing-md, 16px);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+.backend-form-fieldset--collapsible .backend-form-legend {
+    cursor: pointer;
+}
+
+.backend-form-fieldset--collapsible .backend-form-legend:hover {
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.backend-form-fieldset-icon {
+    margin-left: auto;
+    transition: transform 0.2s;
+}
+
+.backend-form-fieldset--collapsed .backend-form-fieldset-icon {
+    transform: rotate(-90deg);
+}
+
+.backend-form-fieldset--collapsed .backend-form-fieldset-content {
+    display: none;
+}
+
+/* 表单底部 */
+.backend-data-form-footer {
+    display: flex;
+    gap: var(--backend-spacing-sm, 12px);
+    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 24px);
+    border-top: 1px solid var(--backend-color-border-light, #e9ecef);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+
+/* 按钮 */
+.backend-form-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--backend-spacing-xs, 6px);
+    padding: var(--backend-spacing-sm, 10px) var(--backend-spacing-lg, 20px);
+    border: none;
+    border-radius: var(--backend-border-radius, 6px);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.backend-form-btn--primary {
+    background: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.backend-form-btn--primary:hover {
+    background: var(--backend-color-primary-hover, #4857d4);
+}
+
+.backend-form-btn--secondary {
+    background: var(--backend-color-card-bg, #fff);
+    color: var(--backend-color-text-secondary, #6c757d);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+}
+
+.backend-form-btn--secondary:hover {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+/* 内联布局 */
+.backend-data-form--inline .backend-data-form-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--backend-spacing-md, 16px);
+}
+
+.backend-data-form--inline .backend-form-group {
+    margin-bottom: 0;
+    flex: 0 0 auto;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .backend-form-group--horizontal {
+        flex-direction: column;
+    }
+    
+    .backend-form-group--horizontal .backend-form-label {
+        text-align: left;
+        flex: none;
+    }
+    
+    .backend-data-form-footer {
+        flex-direction: column;
+    }
+    
+    .backend-form-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+</style>
+
+<script>
+(function() {
+    'use strict';
+    
+    var widgetId = '<?= $widgetId ?>';
+    var container = document.getElementById(widgetId);
+    if (!container) return;
+    
+    var form = container.querySelector('form');
+    if (!form) return;
+    
+    var isAjaxForm = form.hasAttribute('data-ajax-form');
+    
+    // 字段集折叠
+    container.querySelectorAll('[data-toggle-fieldset]').forEach(function(legend) {
+        legend.addEventListener('click', function() {
+            var fieldset = this.closest('.backend-form-fieldset');
+            if (fieldset) {
+                fieldset.classList.toggle('backend-form-fieldset--collapsed');
+            }
+        });
+    });
+    
+    // 显示错误
+    function showError(fieldName, message) {
+        var errorEl = container.querySelector('[data-error-for="' + fieldName + '"]');
+        var inputEl = container.querySelector('[name="' + fieldName + '"]');
+        if (errorEl) {
+            errorEl.textContent = message;
+        }
+        if (inputEl) {
+            inputEl.classList.add('is-invalid');
+        }
+    }
+    
+    // 清除错误
+    function clearErrors() {
+        container.querySelectorAll('.backend-form-error').forEach(function(el) {
+            el.textContent = '';
+        });
+        container.querySelectorAll('.is-invalid').forEach(function(el) {
+            el.classList.remove('is-invalid');
+        });
+    }
+    
+    // AJAX 提交
+    if (isAjaxForm) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            clearErrors();
+            
+            var formData = new FormData(form);
+            var submitBtn = form.querySelector('[type="submit"]');
+            var originalText = submitBtn ? submitBtn.innerHTML : '';
+            
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> <?= __("提交中...") ?>';
+            }
+            
+            fetch(form.action, {
+                method: form.method,
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    if (typeof AdminToast !== 'undefined') {
+                        AdminToast.success(data.message || '<?= __("保存成功") ?>');
+                    }
+                    if (data.redirect) {
+                        setTimeout(function() {
+                            window.location.href = data.redirect;
+                        }, 1000);
+                    }
+                } else {
+                    if (typeof AdminToast !== 'undefined') {
+                        AdminToast.error(data.message || '<?= __("保存失败") ?>');
+                    }
+                    if (data.errors) {
+                        for (var fieldName in data.errors) {
+                            showError(fieldName, data.errors[fieldName]);
+                        }
+                    }
+                }
+            })
+            .catch(function(error) {
+                if (typeof AdminToast !== 'undefined') {
+                    AdminToast.error('<?= __("网络错误，请重试") ?>');
+                }
+                console.error('Form submit error:', error);
+            })
+            .finally(function() {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                }
+            });
+        });
+    }
+    
+    // 暴露 API
+    window.BackendDataForm = window.BackendDataForm || {};
+    window.BackendDataForm[widgetId] = {
+        getForm: function() { return form; },
+        showError: showError,
+        clearErrors: clearErrors,
+        getData: function() { return new FormData(form); },
+        setData: function(data) {
+            for (var key in data) {
+                var input = form.querySelector('[name="' + key + '"]');
+                if (input) {
+                    if (input.type === 'checkbox') {
+                        input.checked = !!data[key];
+                    } else {
+                        input.value = data[key];
+                    }
+                }
+            }
+        }
+    };
+    
+})();
+</script>

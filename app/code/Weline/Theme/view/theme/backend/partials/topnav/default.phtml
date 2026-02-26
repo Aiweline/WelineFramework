@@ -1,0 +1,22 @@
+<?php
+/**
+ * 片段：Backend Topnav - 默认风格
+ *
+ * 后端管理界面的顶部导航菜单（水平布局时显示）
+ * 字段
+ * @meta.name {default="Backend Topnav顶部导航",name="Topnav顶部导航片段",description="Topnav顶部导航片段，用于描述片段的名称"}
+ * @meta.description {default="后端管理界面的顶部导航菜单（水平布局时显示）",name="顶部导航",description="后端管理界面的顶部导航菜单，用于描述片段的用途"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置额外CSS类"}
+ *
+ * 参数配置说明：
+ * - Partials 自己的 meta 数据：通过 $meta 或 $this->getData('meta') 访问
+ * - Layout 的 meta 数据：通过 $layout 或 $this->getData('layout') 访问
+ */
+/** @var \Weline\Framework\View\Template $this */
+$meta = $this->getData('meta') ?? [];
+$layout = $this->getData('layout') ?? [];
+$class = $meta['class'] ?? '';
+?>
+<!-- ========== Topnav Start ========== -->
+<w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+<!-- ========== Topnav End ========== -->

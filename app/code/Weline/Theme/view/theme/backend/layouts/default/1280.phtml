@@ -1,0 +1,84 @@
+<!--
+布局：后端 - 1280px 宽度布局
+
+后端1280px最大宽度布局，内容居中显示，适合标准显示器
+字段
+@meta.name {default="后端1280px布局",name="后端1280px布局",description="后端1280px布局，用于描述布局的名称"}
+@meta.description {default="后端1280px最大宽度布局，内容居中显示",name="后端1280px最大宽度布局，内容居中显示",description="后端1280px最大宽度布局，内容居中显示，用于描述布局的用途"}
+@param.title {default="",name="页面标题",description="页面标题，用于设置页面标题"}
+@param.content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+@param.showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
+@param.showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
+@param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+
+参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+-->
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<head>
+    <w:hook>Weline_Theme::backend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="backend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::backend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::backend::layouts::default::1280::head-after</w:hook>
+</head>
+<body>
+    <w:hook>Weline_Theme::backend::layouts::default::1280::body-start</w:hook>
+    
+    <if condition="meta.showHeader">
+        <w:hook>Weline_Theme::backend::layouts::base::header-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="backend" type="header" default-option="default"/>
+        <w:hook>Weline_Theme::backend::layouts::base::header-after</w:hook>
+    </if>
+    
+    <div class="backend-layout-1280 <?= htmlspecialchars($meta['class'] ?? '') ?>">
+        <main class="backend-main-content" id="main-content">
+            <if condition="contentTemplate">
+                <?php echo $this->fetch($this->getData("contentTemplate")); ?>
+                <else/>
+                {{meta.content}}
+            </if>
+        </main>
+    </div>
+    
+    <if condition="meta.showFooter">
+        <w:hook>Weline_Theme::backend::layouts::base::footer-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="backend" type="footer" default-option="default"/>
+        <w:hook>Weline_Theme::backend::layouts::base::footer-after</w:hook>
+    </if>
+    
+    <w:hook>Weline_Theme::backend::layouts::default::1280::body-end</w:hook>
+</body>
+</html>
+
+<style>
+/* 1280px 宽度布局样式 */
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.backend-layout-1280 {
+    max-width: 1280px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 0 var(--backend-spacing-lg, 20px);
+    flex: 1;
+}
+
+.backend-layout-1280 .backend-main-content {
+    padding: var(--backend-spacing-lg, 24px) 0;
+}
+
+@media (max-width: 1280px) {
+    .backend-layout-1280 {
+        padding: 0 var(--backend-spacing-md, 15px);
+    }
+}
+</style>
