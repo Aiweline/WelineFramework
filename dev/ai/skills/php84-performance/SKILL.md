@@ -1,29 +1,133 @@
 ---
 name: php84-performance
-description: PHP 8.4+ 高性能写法与最佳实践。编写或更新属性、getter/setter、Model 字段、属性访问器、数组遍历查找、延迟加载对象、资源 ID 获取时必选。覆盖 Property Hooks、Lazy Objects、array_find/array_any/array_all、非对称可见性、get_resource_id()、spl_object_id()。禁止 (int)$resource 强制转换。框架参考 Php84.php、Php84PropertyHooksExample.php。
+description: PHP 8.4+ 高性能写法与严格类型最佳实践。所有 PHP 代码必须符合 PHP 8.4 严格模式！覆盖严格类型、null 安全、Property Hooks、Lazy Objects、array_find/array_any/array_all、非对称可见性、get_resource_id()、spl_object_id()。禁止传 null 给非 nullable 参数，禁止 (int)$resource 强制转换。
 globs:
   - "**/*.php"
 alwaysApply: false
 ---
 
-# PHP 8.4+ 高性能写法（Weline Framework）
+# PHP 8.4+ 高性能写法与严格类型（Weline Framework）
 
-编写或修改 **属性**、**getter/setter**、**Model 字段**、**数组查找/遍历**、**延迟加载** 相关代码时，**必须**采用本技能中的 PHP 8.4+ 高性能写法，并优先使用框架已有封装。
+**所有 PHP 代码必须符合 PHP 8.4 严格模式！** 编写任何 PHP 代码时都必须遵循本技能中的约束。
 
 ---
 
 ## 何时触发本技能（必选场景）
 
-- **编写属性**、**更新属性**、**定义类属性**
-- **getter/setter**、**访问器**、**属性封装**
-- **Model 字段**、**实体属性**、**数据验证**、**默认值**
-- **trim、格式化、邮箱验证、价格/金额、日期属性**
-- **数组查找**、**foreach 找第一个**、**是否存在/全部满足**
+- **编写任何 PHP 代码**（PHP 8.4 是当前运行环境）
+- **字符串函数调用**（trim、htmlspecialchars、strtolower 等）
+- **数组操作**（foreach、array_map、in_array 等）
+- **属性定义**、**getter/setter**、**访问器**
+- **Model 字段**、**实体属性**、**数据验证**
 - **延迟加载**、**Lazy Object**、**按需初始化**
-- **只读属性**、**计算属性**、**懒加载关联**
-- **资源 ID 获取**、**流资源**、**Socket 连接**、**文件句柄**
-- **(int)$resource**、**get_resource_id**、**spl_object_id**
-- **PHP 8.4**、**性能优化**、**高性能写法**
+- **资源 ID 获取**、**流资源**、**Socket 连接**
+- **PHP 8.4**、**性能优化**、**严格类型**、**null 安全**
+
+---
+
+## 〇、PHP 8.4 严格类型约束（最重要！）
+
+**PHP 8.4 对类型检查更严格**，传递 `null` 给非 nullable 参数会报 Deprecated 警告或 TypeError。以下规则必须遵守：
+
+### 0.1 字符串函数参数必须非 null
+
+```php
+// ❌ 错误：$var 可能为 null
+$result = trim($var);
+$safe = htmlspecialchars($text);
+$lower = strtolower($str);
+
+// ✅ 正确：使用 null 合并运算符
+$result = trim($var ?? '');
+$safe = htmlspecialchars($text ?? '');
+$lower = strtolower($str ?? '');
+```
+
+### 0.2 数组访问前检查
+
+```php
+// ❌ 错误：数组键可能不存在
+$value = $arr['key'];
+foreach ($items as $item) { ... }
+
+// ✅ 正确：使用 null 合并
+$value = $arr['key'] ?? '';
+$value = $arr['key'] ?? null;
+foreach (($items ?? []) as $item) { ... }
+```
+
+### 0.3 方法链调用前检查
+
+```php
+// ❌ 错误：$obj 可能为 null
+$name = $obj->getName();
+
+// ✅ 正确：null 安全运算符或提前检查
+$name = $obj?->getName() ?? '';
+// 或
+if ($obj !== null) {
+    $name = $obj->getName();
+}
+```
+
+### 0.4 循环内的变量初始化
+
+```php
+// ❌ 错误：$line 在循环外未定义
+$line = trim($line);  // 如果不在 foreach 内，$line 可能是 null
+
+// ✅ 正确：确保变量来源正确
+foreach ($lines as $line) {
+    $line = trim($line ?? '');
+    // ...
+}
+```
+
+### 0.5 常见需要 null 安全的函数
+
+| 函数 | 正确写法 |
+|------|----------|
+| `trim($str)` | `trim($str ?? '')` |
+| `htmlspecialchars($str)` | `htmlspecialchars($str ?? '')` |
+| `strtolower($str)` | `strtolower($str ?? '')` |
+| `strtoupper($str)` | `strtoupper($str ?? '')` |
+| `strlen($str)` | `strlen($str ?? '')` |
+| `substr($str, ...)` | `substr($str ?? '', ...)` |
+| `explode($sep, $str)` | `explode($sep, $str ?? '')` |
+| `preg_match($pat, $str)` | `preg_match($pat, $str ?? '')` |
+| `json_decode($json)` | `json_decode($json ?? '{}')` |
+| `count($arr)` | `count($arr ?? [])` |
+| `array_keys($arr)` | `array_keys($arr ?? [])` |
+| `in_array($v, $arr)` | `in_array($v, $arr ?? [])` |
+
+### 0.6 AI 生成代码约束
+
+当生成包含 PHP 代码的组件或模板时，必须：
+
+1. **php_variables 只允许简单赋值**：
+   ```php
+   // ✅ 正确
+   $title = $getConfig('hero.title', '欢迎');
+   $items = $getConfig('nav.items', '');
+   
+   // ❌ 禁止 - 控制结构不属于 php_variables
+   foreach ($items as $item) { ... }
+   if (empty($line)) continue;
+   ```
+
+2. **控制结构放在 html_content 中**：
+   ```php
+   // 在 html_content 中使用 foreach/if
+   <?php foreach (($items ?? []) as $item): ?>
+       <li><?= htmlspecialchars($item['name'] ?? '') ?></li>
+   <?php endforeach; ?>
+   ```
+
+3. **字符串函数始终使用 null 合并**：
+   ```php
+   $line = trim($line ?? '');
+   $text = htmlspecialchars($value ?? '');
+   ```
 
 ---
 
@@ -273,18 +377,93 @@ $socketId = \spl_object_id($socket);  // Socket 是对象，用 spl_object_id
 
 ---
 
-## 七、快速检查清单（写属性/数组/性能时自检）
+## 七、快速检查清单（写任何 PHP 代码时自检）
+
+### 7.1 严格类型检查（最重要）
+
+| 场景 | 检查项 | 正确做法 |
+|------|--------|----------|
+| 字符串函数 | 参数可能为 null？ | 使用 `$str ?? ''` |
+| 数组访问 | 键可能不存在？ | 使用 `$arr['key'] ?? ''` |
+| foreach | 变量可能不是数组？ | 使用 `($arr ?? [])` |
+| 方法调用 | 对象可能为 null？ | 使用 `$obj?->method()` |
+| 控制语句 | continue/break 在循环内？ | 确保在 foreach/while/for 内 |
+
+### 7.2 属性与性能
 
 | 场景           | 优先做法 |
 |----------------|----------|
-| 属性要 trim/默认值/验证 | PHP 8.4+ 用 Property Hooks；否则 getter/setter |
+| 属性要 trim/默认值/验证 | PHP 8.4+ 用 Property Hooks |
 | 只读或计算属性 | Property Hooks 仅 get |
 | 关联懒加载     | Property Hooks 仅 get + 内部 null 检查加载 |
 | 找第一个/键/任意/全部 | `Php84::arrayFind` / `arrayFindKey` / `arrayAny` / `arrayAll` |
 | 延迟创建对象   | `ObjectManager::getLazyInstance()` 或 `Php84::createLazyObject` |
 | 只读对外、内部可写 | PHP 8.4+ `public private(set)` 等非对称可见性 |
+| 获取资源 ID | 使用 `get_resource_id()` 或 `spl_object_id()` |
+
+### 7.3 AI 生成代码自检
+
+| 字段 | 禁止内容 | 允许内容 |
+|------|----------|----------|
+| php_variables | if/foreach/while/for/continue/break/{} | 简单赋值：`$var = ...;` |
+| html_content | 注释、内联样式 | PHP 控制结构、htmlspecialchars |
+| js_content | PHP 标签、var、全局函数 | const/let、箭头函数、IIFE |
+| css_content | 硬编码颜色、通用类名 | 主题变量、组件前缀类名 |
 
 **规范引用**：
 
 - 属性与高性能写法示例：`app/code/Weline/Framework/Support/Php84PropertyHooksExample.php`
 - 兼容封装与 Lazy/数组：`app/code/Weline/Framework/Support/Php84.php`
+
+---
+
+## 八、常见错误与修复
+
+### 8.1 trim(): Passing null to parameter #1
+
+```php
+// ❌ 错误代码
+$line = trim($line);  // $line 可能是 null
+
+// ✅ 修复
+$line = trim($line ?? '');
+```
+
+### 8.2 'continue' not in the 'loop' context
+
+```php
+// ❌ 错误代码（continue 不在循环内）
+$lines = explode("\n", $text);
+$line = trim($line);
+if (empty($line)) continue;  // Fatal Error!
+
+// ✅ 修复（需要 foreach）
+$lines = explode("\n", $text ?? '');
+foreach ($lines as $line) {
+    $line = trim($line ?? '');
+    if (empty($line)) continue;
+    // ...
+}
+```
+
+### 8.3 Cannot use object as array
+
+```php
+// ❌ 错误代码
+$value = $obj['key'];  // $obj 是对象不是数组
+
+// ✅ 修复
+$value = $obj->key ?? '';
+// 或
+$value = is_array($obj) ? ($obj['key'] ?? '') : ($obj->key ?? '');
+```
+
+### 8.4 Argument must be of type string, null given
+
+```php
+// ❌ 错误代码
+htmlspecialchars($config['title']);  // 可能不存在
+
+// ✅ 修复
+htmlspecialchars($config['title'] ?? '');
+```

@@ -4,6 +4,72 @@
 
 ---
 
+## [2026-02-25] WLS 模式下语言/货币在请求间不稳定 ✅ 已修复
+
+**错误类型**: WLS 状态泄漏 / 空字符串 vs unset
+
+**错误现象**:
+```text
+URL: /f7LYPUzS4UD9UL1kqkf0hzzPxyxmvT8c/USD/zh_Hans_CN/media/backend/manager
+刷新页面：中文 → 英文 → 中文 → 英文...（交替出现）
+```
+
+**根本原因**:
+多处代码将 `$_SERVER['WELINE_USER_LANG']` 设为**空字符串** `''` 而非 `unset`。
+空字符串 `''` 与 `null`/`unset` 不同——`??` 运算符不会将空字符串视为"未设置"。
+
+```php
+// 问题代码
+$_SERVER['WELINE_USER_LANG'] = '';  // 设为空字符串
+
+// 后续代码无法正确回退
+$lang = $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';  // 得到 ''，不是 'zh_Hans_CN'
+```
+
+**涉及文件**:
+1. `RequestContext::resetWelineVars()` - 将变量设为空字符串
+2. `GlobalsEmulator::buildServerArray()` - 初始化时设为空字符串
+3. `WlsRuntime::processUrlParse()` - 设置空字符串默认值
+
+**解决方案**:
+```php
+// 修复：使用 unset 而非赋空字符串
+// RequestContext::resetWelineVars()
+unset($_SERVER['WELINE_USER_LANG']);
+unset($_SERVER['WELINE_USER_CURRENCY']);
+unset($_SERVER['WELINE_WEBSITE_ID']);
+unset($_SERVER['WELINE_WEBSITE_CODE']);
+unset($_SERVER['WELINE_WEBSITE_URL']);
+
+// GlobalsEmulator::buildServerArray()
+// 不设置 WELINE_USER_LANG/WELINE_USER_CURRENCY，让 URL 解析器设置
+
+// WlsRuntime::processUrlParse()
+// 移除空字符串默认值逻辑
+```
+
+**验证方法**:
+```bash
+php bin/w server:reload
+# 多次刷新页面，语言应保持稳定
+```
+
+**验证结果**: ✅ 成功
+
+**预防措施**:
+1. WLS 模式下，使用 `unset()` 而非赋空字符串来"重置"变量
+2. 依赖 `??` 运算符回退默认值时，确保变量是 `unset` 状态而非空字符串
+3. 新增 WELINE_* 变量时，检查 `RequestContext::resetWelineVars()` 和 `GlobalsEmulator`
+
+**相关技能**: `weline-routing`（URL 结构与解析）、`weline-server`（状态管理）
+
+**相关文件**:
+- `app/code/Weline/Framework/Runtime/RequestContext.php`
+- `app/code/Weline/Framework/Runtime/GlobalsEmulator.php`
+- `app/code/Weline/Framework/Runtime/WlsRuntime.php`
+
+---
+
 ## [2026-02-24] Worker SSL 事件循环调用不存在函数 `stream_socket_recv()` ✅ 已修复
 
 **错误类型**: 运行时函数调用 / API 误用

@@ -1,7 +1,24 @@
 ---
 name: friendly-notifications
-description: Implements user-friendly notifications and dialogs in Weline Framework. Use when showing messages, confirmations, alerts, or any user feedback. CRITICAL - Never use native alert()/confirm()/prompt()! Always use AdminToast, FrontendToast, or custom modal dialogs.
+description: |
+  Implements user-friendly notifications and dialogs in Weline Framework. 
+  CRITICAL - NEVER use native alert()/confirm()/prompt()! Always use BackendToast/BackendConfirm.
+  
+  MUST use when:
+  - Showing any message, notification, toast, tip, hint to user
+  - Asking user for confirmation (delete, submit, dangerous action)
+  - Showing success/error/warning/info feedback
+  - Any user prompt or dialog
+  
+  Keywords: 
+  提示, 通知, 消息, 弹窗, 弹出, 对话框, 确认, 警告, 错误提示, 成功提示,
+  toast, notification, message, alert, confirm, prompt, dialog, modal,
+  popup, popover, snackbar, feedback, warning, error message, success message,
+  用户提示, 操作确认, 删除确认, 提交确认, 保存成功, 保存失败, 操作成功, 操作失败,
+  BackendToast, BackendConfirm, AdminToast, AdminConfirm, FrontendToast
 globs:
+  - "**/*.js"
+  - "**/*.phtml"
 alwaysApply: false
 ---
 
@@ -26,11 +43,84 @@ alwaysApply: false
 
 ## 推荐方案
 
+### 框架内置组件（推荐优先使用）
+
+#### BackendToast（后台专用，推荐）⭐
+
+后台页面已在 `head.phtml` 中统一引入 `BackendToast`，可直接使用：
+
+**文件位置：** `Weline_Theme::theme/backend/assets/js/backend-components.js`
+
+```javascript
+// 成功提示
+BackendToast.success('保存成功');
+BackendToast.success('删除成功', 2000);  // 自定义显示时间（毫秒）
+
+// 错误提示
+BackendToast.error('保存失败');
+BackendToast.error('网络错误：' + error.message);
+
+// 警告提示
+BackendToast.warning('请填写必填项');
+
+// 信息提示
+BackendToast.info('正在处理...');
+
+// 永不自动消失（duration = 0）
+BackendToast.info('请等待处理完成...', 0);
+```
+
+> **向后兼容**：`AdminToast` 仍可使用（是 `BackendToast` 的别名），但**新代码推荐使用 `BackendToast`**。
+
+#### BackendConfirm（后台专用，替代 confirm）⭐
+
+后台页面已在 `head.phtml` 中统一引入 `BackendConfirm`，返回 Promise：
+
+```javascript
+// 基本确认（Promise 风格，推荐）
+BackendConfirm.show('确认删除这 3 个项目吗？此操作不可恢复。').then(confirmed => {
+    if (confirmed) {
+        doDelete();
+        BackendToast.success('删除成功');
+    }
+});
+
+// 带自定义选项
+BackendConfirm.show('确认提交审核吗？', {
+    title: '提交确认',
+    confirmText: '提交',
+    cancelText: '稍后',
+    type: 'warning'  // warning, danger, info, success
+}).then(confirmed => {
+    if (confirmed) {
+        submitForReview();
+    }
+});
+
+// 危险操作示例
+BackendConfirm.show('确认清空所有缓存数据吗？此操作将影响系统性能。', {
+    title: '清空数据',
+    type: 'danger',
+    confirmText: '清空'
+}).then(confirmed => {
+    if (confirmed) {
+        clearAllCache();
+        BackendToast.success('缓存已清空');
+    }
+});
+```
+
+> **向后兼容**：`AdminConfirm` 仍可使用（是 `BackendConfirm` 的别名），但**新代码推荐使用 `BackendConfirm`**。
+
+#### FrontendToast（前台需自行实现）
+
+前台暂无内置 Toast 组件，可参考以下实现或使用第三方库。
+
 ### 1. Toast 提示（非阻塞式消息）
 用于简短的成功/失败/信息提示。
 
 ```javascript
-// 显示 Toast 提示
+// 显示 Toast 提示（自定义实现示例）
 function showToast(message, type = 'info', duration = 3000) {
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
@@ -417,11 +507,13 @@ showConfirmDialog({
 
 ## 相关技能 (Related Skills)
 
-- `theme-development` - **主题开发必读**：AdminToast 和 AdminConfirm 使用示例
+- `theme-development` - **主题开发必读**：BackendToast 和 BackendConfirm 使用示例
 - `weline-routing` - 控制器路由规范，API 返回响应时配合使用
 - `module-development` - 模块开发工作流，创建用户交互功能时必须使用友好提示
 
 ## 相关文件
 
+- **后台全局组件**: `app/code/Weline/Theme/view/theme/backend/assets/js/backend-components.js`（BackendToast、BackendConfirm 定义）
+- **后台 head 引入**: `app/code/Weline/Admin/view/templates/common/head.phtml`（统一加载全局组件）
 - 主题编辑器 Toast 实现: `app/code/Weline/Theme/view/statics/js/theme-editor.js`
 - 孤儿部件确认示例: `app/code/Weline/Theme/Observer/LayoutSlotRenderer.php`

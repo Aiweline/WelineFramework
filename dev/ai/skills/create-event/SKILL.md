@@ -1,6 +1,15 @@
 ---
 name: create-event
-description: Creates events and observers in Weline Framework. MUST use when user mentions event, 事件, observer, 观察者, dispatch, 触发事件, event.php, event.xml, EventsManager, ObserverInterface. Covers event naming convention (Weline_ModuleName::type::event_name), event.php convention files, event.xml observer registration, and inter-module communication patterns. 事件命名规范, 事件规约, 创建事件, 监听事件, 事件通知.
+description: |
+  Creates events and observers in Weline Framework.
+  
+  MUST use when:
+  - Creating events or observers
+  - Using EventsManager::dispatch()
+  - Registering event.xml observers
+  - Inter-module communication
+  
+  Keywords: event, 事件, observer, 观察者, dispatch, 触发事件, event.php, event.xml, EventsManager, ObserverInterface, 事件命名规范, 事件规约, 创建事件, 监听事件, 事件通知
 globs:
   - "**/event.php"
   - "**/Observer/**/*.php"
@@ -8,500 +17,369 @@ globs:
 alwaysApply: false
 ---
 
-# 事件创建技能
-## 概述
+# 事件系统技能
 
-鏈妧鑳芥寚瀵煎浣曞湪 Weline Framework 涓寜鐓ф鏋惰瀹氬垱寤轰簨浠讹紝纭繚浜嬩欢鍖呭惈瀹屾暣鐨勮绾﹀拰鏂囨。锛岀鍚堟鏋舵爣鍑嗐€?
-## 浣曟椂浣跨敤
+## 何时使用
 
-褰撶敤鎴烽渶瑕侊細
-- 鍒涘缓鏂扮殑浜嬩欢
-- 涓烘ā鍧楁坊鍔犱簨浠舵敮鎸?- 瀹炵幇妯″潡闂寸殑浜嬩欢閫氫俊
-- 鎵╁睍绯荤粺鐨勪簨浠跺姛鑳?
-## 浜嬩欢鍒涘缓瑕佹眰
+- 创建新的事件
+- 实现事件观察者
+- 使用 `EventsManager::dispatch()` 触发事件
+- 跨模块**通知型**通信（某事发生了、请响应这个动作）
 
-鏍规嵁妗嗘灦瑙勫畾锛屽垱寤轰簨浠跺繀椤诲寘鍚互涓嬪唴瀹癸細
+## ⚠️ 事件 vs 查询器：优先使用查询器！
 
-### 1. 浜嬩欢瑙勭害鏂囦欢 (event.php)
+**模块间查询/获取数据时，禁止使用事件！必须使用 `QueryProviderInterface` 统一查询器！**
 
-**浣嶇疆**锛氭ā鍧楁牴鐩綍涓嬬殑 event.php 鏂囦欢
+| 场景 | 正确做法 | 错误做法 |
+|------|----------|----------|
+| 从其他模块**读数据** | `FrameworkQueryService::execute(provider, operation)` | ❌ 创建事件 + 观察者 |
+| 让其他模块**做 CRUD** | `FrameworkQueryService::execute(provider, operation)` | ❌ 创建事件 + 观察者 |
+| 某事**发生后通知** | ✅ dispatch 事件 | - |
+| 多模块需**协作响应** | ✅ dispatch 事件 + 多观察者 | - |
 
-**瑕佹眰**锛?- 蹇呴』瀛樺湪锛屽惁鍒欑郴缁熶細鍙戝嚭璀﹀憡
-- 瀹氫箟浜嬩欢鍚嶇О銆佹弿杩般€佺増鏈€佺被鍨嬨€佹暟鎹绾︾瓑淇℃伅
-- 浜嬩欢鍚嶅繀椤荤鍚堝懡鍚嶈鑼?
-### 2. 浜嬩欢鏂囨。鏂囦欢
+> 详见技能 `unified-query-provider`
 
-**浣嶇疆**锛歚doc/event/ 鐩綍涓嬶紝鎸変簨浠剁被鍨嬪垎绫?
-**瑕佹眰**锛?- 蹇呴』瀛樺湪锛屽惁鍒欑郴缁熶細鍙戝嚭璀﹀憡
-- 鏂囨。璺緞鍦?event.php 涓€氳繃 doc 瀛楁鎸囧畾
-- 寤鸿鎸変簨浠剁被鍨嬪垎绫伙細domain/銆乣integration/銆乣application/
+---
 
-### 3. 浜嬩欢瑙傚療鑰呴厤缃?(鍙€?
+## 1. 事件命名规范
 
-**浣嶇疆**锛歚etc/event.xml 鏂囦欢
+### 标准格式
 
-**瑕佹眰**锛?- 濡傛灉浜嬩欢闇€瑕佽瀵熻€咃紝闇€瑕佸湪 event.xml 涓敞鍐?- 瑙傚療鑰呯被蹇呴』瀹炵幇 ObserverInterface 鎺ュ彛
+```
+模块名::事件类型::事件名称
+```
 
-## 浜嬩欢鍛藉悕瑙勮寖
+**事件类型**：
+- `domain` - 领域事件（业务领域内）
+- `integration` - 集成事件（跨模块/系统）
+- `application` - 应用事件（应用层）
 
-### 鏍囧噯鏍煎紡
+**示例**：
+```
+Weline_MediaManager::integration::supported_preview_formats
+Weline_Seo::domain::subject_created
+Weline_Admin::application::login_success
+```
 
-\\\
-妯″潡鍚?:浜嬩欢绫诲瀷::浜嬩欢鍚嶇О
-\\\
+### 简化格式（兼容）
 
-**绀轰緥**锛?- Weline_Seo::domain::subject_created - 棰嗗煙浜嬩欢
-- Weline_Seo::integration::task_enqueued - 闆嗘垚浜嬩欢
-- Weline_Seo::application::trend_sync_completed - 搴旂敤浜嬩欢
+```
+模块名::事件名称
+```
 
-### 绠€鍖栨牸寮忥紙鍏煎鏃х増鏈級
+**示例**：
+```
+Weline_Admin::msg
+```
 
-\\\
-妯″潡鍚?:浜嬩欢鍚嶇О
-\\\
+---
 
-**绀轰緥**锛?- Weline_Admin::msg - 绯荤粺娑堟伅閫氱煡
+## 2. EventsManager::dispatch() 用法
 
-### 鍛藉悕瑙勫垯
+### 方法签名
 
-1. **蹇呴』鍖呭惈 :: 鍒嗛殧绗?*锛氫簨浠跺悕蹇呴』鍖呭惈 :: 鍒嗛殧绗︼紝鍚﹀垯绯荤粺浼氳嚧鍛介敊璇€€鍑?2. **鍓嶇紑蹇呴』鍖归厤妯″潡鍚?*锛氫簨浠跺悕鍓嶇紑锛坄:: 涔嬪墠鐨勯儴鍒嗭級蹇呴』浠ユā鍧楀悕寮€澶?3. **鏀寔瀛愭ā鍧?*锛氬彲浠ヤ娇鐢?妯″潡鍚峗瀛愭ā鍧?:浜嬩欢鍚峘 鏍煎紡
-4. **鐗规畩澶勭悊**锛?   - Framework_ 寮€澶寸殑浜嬩欢瑙嗕负 Weline_Framework 妯″潡鐨勪簨浠?   - App:: 寮€澶寸殑浜嬩欢瑙嗕负 Weline_Framework 妯″潡鐨勪簨浠?   - 鍔ㄦ€佷簨浠讹紙鍖呭惈 {}锛夎烦杩囬獙璇?
-## 浜嬩欢绫诲瀷
+```php
+public function dispatch(string $eventName, mixed &$data = []): static
+```
 
-### Domain Events (棰嗗煙浜嬩欢)
+### ⚠️ CRITICAL 规则
 
-- **瀹氫箟**锛氫笟鍔￠鍩熷唴鐨勪簨浠讹紝琛ㄧず涓氬姟鐘舵€佺殑鍙樺寲
-- **鐗圭偣**锛氫笌涓氬姟閫昏緫绱у瘑鐩稿叧锛岄€氬父鍦ㄩ鍩熸ā鍨嬪唴閮ㄨЕ鍙?- **绀轰緥**锛歚subject_created銆乣keywords_extracted銆乣suggestion_generated
+**1. dispatch 第二参数必须为变量（引用传递）**
 
-### Integration Events (闆嗘垚浜嬩欢)
+```php
+// ✅ 正确：使用变量
+$eventData = ['data' => ['title' => '标题', 'content' => '内容']];
+$eventsManager->dispatch('Weline_Admin::msg', $eventData);
 
-- **瀹氫箟**锛氳法妯″潡/绯荤粺鐨勪簨浠讹紝鐢ㄤ簬妯″潡闂撮€氫俊
-- **鐗圭偣**锛氱敤浜庤В鑰︽ā鍧椾緷璧栵紝瀹炵幇妯″潡闂村崗浣?- **绀轰緥**锛歚feed_collect銆乣task_enqueued銆乣task_completed
+// ❌ 错误：传递字面量数组
+$eventsManager->dispatch('Weline_Admin::msg', ['data' => [...]]);
+```
 
-### Application Events (搴旂敤浜嬩欢)
+**2. 事件数据必须放在 `'data'` 键下**
 
-- **瀹氫箟**锛氬簲鐢ㄥ眰浜嬩欢锛岄€氬父涓庣郴缁熸搷浣滅浉鍏?- **鐗圭偣**锛氱敤浜庡簲鐢ㄥ眰闈㈢殑閫氱煡鍜屽崗璋?- **绀轰緥**锛歚trend_sync_completed銆乣url_push_completed
+```php
+// ✅ 正确
+$eventData = [
+    'data' => [
+        'title' => '标题',
+        'content' => '内容',
+    ]
+];
+$eventsManager->dispatch('Weline_Module::event_name', $eventData);
 
-## 鍒涘缓姝ラ
+// Observer 中获取
+public function execute(Event &$event): void
+{
+    $data = $event->getData('data');
+    $title = $data['title'];
+}
+```
 
-### 姝ラ 1锛氬垱寤轰簨浠惰绾︽枃浠?(event.php)
+**3. 事件须在依赖它的代码之前触发**
 
-鍦ㄦā鍧楁牴鐩綍鍒涘缓鎴栫紪杈?event.php 鏂囦欢锛?
-\\\php
+```php
+// ✅ 正确：先触发事件，再使用数据
+$eventData = ['data' => ['formats' => []]];
+$eventsManager->dispatch('Weline_MediaManager::integration::supported_preview_formats', $eventData);
+$formats = $eventData['data']['formats'];  // Observer 可能已修改
+
+// ❌ 错误：先使用数据，后触发事件
+$formats = [];
+$eventsManager->dispatch('...', $eventData);  // 太晚了
+```
+
+---
+
+## 3. event.php 规约文件
+
+**位置**：`app/code/Vendor/Module/event.php`
+
+### 完整格式
+
+```php
 <?php
-
-/*
- * 鏈枃浠剁敱 绉嬫灚闆侀 缂栧啓锛屾墍鏈夎В閲婃潈褰扐iweline鎵€鏈夈€? * 閭锛歛iweline@qq.com
- * 缃戝潃锛歛iweline.com
- * 璁哄潧锛歨ttps://bbs.aiweline.com
- */
-
-/**
- * 妯″潡鍚?妯″潡浜嬩欢瑙勭害
- * 
- * 鎸夌収鍥介檯鏍囧噯璁捐鐨勪簨浠跺绾︼紝浣跨敤浜嬩欢瑙ｈ€︽ā鍧楅棿渚濊禆
- * 
- * 浜嬩欢鍛藉悕瑙勮寖锛? * - 鏍煎紡锛氭ā鍧楀悕::浜嬩欢绫诲瀷::浜嬩欢鍚嶇О
- * - 绀轰緥锛氭ā鍧楀悕::domain::subject_created
- * 
- * 浜嬩欢绫诲瀷锛? * - domain: 棰嗗煙浜嬩欢锛圖omain Events锛? 涓氬姟棰嗗煙鍐呯殑浜嬩欢
- * - integration: 闆嗘垚浜嬩欢锛圛ntegration Events锛? 璺ㄦā鍧?绯荤粺鐨勪簨浠? * - application: 搴旂敤浜嬩欢锛圓pplication Events锛? 搴旂敤灞備簨浠? */
-
 return [
-    // ========== Domain Events (棰嗗煙浜嬩欢) ==========
-    
-    /**
-     * 浜嬩欢鍚嶇О锛堢ず渚嬶級
-     * 浜嬩欢鎻忚堪
-     */
-    '妯″潡鍚?:domain::浜嬩欢鍚嶇О' => [
-        'name' => __('浜嬩欢鏄剧ず鍚嶇О'),
-        'description' => __('浜嬩欢璇︾粏鎻忚堪锛岃鏄庝綍鏃惰Е鍙戜互鍙婄敤閫斻€?),
-        'doc' => 'domain/浜嬩欢鍚嶇О.md',  // 鏂囨。璺緞锛岀浉瀵逛簬 doc/event/ 鐩綍
-        'version' => '1.0.0',           // 璇箟鍖栫増鏈彿
-        'type' => 'domain',             // 浜嬩欢绫诲瀷锛歞omain, integration, application
-        'data_contract' => [            // 鏁版嵁濂戠害瀹氫箟
-            'field_name' => [
-                'type' => 'integer|string|array|object|mixed',
-                'required' => true|false,
-                'description' => '瀛楁璇存槑',
-                'default' => '榛樿鍊硷紙鍙€夛級',
-            ],
-            // ... 鏇村瀛楁
-        ],
+    // 简单事件
+    'Weline_Admin::msg' => [
+        'name' => __('系统消息通知'),
+        'description' => __('用于跨模块发送系统消息通知'),
+        'doc' => '系统消息通知.md',  // 相对于 doc/event/ 目录
     ],
-
-    // ========== Integration Events (闆嗘垚浜嬩欢) ==========
     
-    '妯″潡鍚?:integration::浜嬩欢鍚嶇О' => [
-        'name' => __('浜嬩欢鏄剧ず鍚嶇О'),
-        'description' => __('浜嬩欢璇︾粏鎻忚堪'),
-        'doc' => 'integration/浜嬩欢鍚嶇О.md',
+    // 完整事件定义
+    'Weline_MediaManager::integration::supported_preview_formats' => [
+        'name' => __('支持的预览格式'),
+        'description' => __('允许其他模块注册可预览的文件格式'),
+        'doc' => 'integration/supported_preview_formats.md',
         'version' => '1.0.0',
         'type' => 'integration',
         'data_contract' => [
-            // 鏁版嵁濂戠害
+            'formats' => [
+                'type' => 'array',
+                'required' => true,
+                'description' => 'MIME 类型数组（引用传递）',
+            ],
         ],
     ],
-
-    // ========== Application Events (搴旂敤浜嬩欢) ==========
     
-    '妯″潡鍚?:application::浜嬩欢鍚嶇О' => [
-        'name' => __('浜嬩欢鏄剧ず鍚嶇О'),
-        'description' => __('浜嬩欢璇︾粏鎻忚堪'),
-        'doc' => 'application/浜嬩欢鍚嶇О.md',
-        'version' => '1.0.0',
-        'type' => 'application',
-        'data_contract' => [
-            // 鏁版嵁濂戠害
-        ],
+    // 动态事件（使用 {} 占位符）
+    'Framework_View::{position}' => [
+        'name' => __('视图位置事件'),
+        'description' => __('在指定位置触发的视图事件'),
     ],
 ];
-\\\
+```
 
-### 姝ラ 2锛氬垱寤轰簨浠舵枃妗ｆ枃浠?
-鍦?doc/event/ 鐩綍涓嬪垱寤烘枃妗ｆ枃浠讹紝鎸変簨浠剁被鍨嬪垎绫伙細
+---
 
-**鏂囦欢璺緞**锛歚doc/event/domain/浜嬩欢鍚嶇О.md锛堟牴鎹簨浠剁被鍨嬮€夋嫨鐩綍锛?
-**鏂囨。妯℃澘**锛?
-\\\markdown
-# 妯″潡鍚?:domain::浜嬩欢鍚嶇О - 浜嬩欢鏄剧ず鍚嶇О
+## 4. event.xml 观察者注册
 
-## 浜嬩欢璇存槑
+**位置**：`app/code/Vendor/Module/etc/event.xml`
 
-浜嬩欢鐨勮缁嗚鏄庯紝鍖呮嫭浣曟椂瑙﹀彂銆佺敤閫旂瓑銆?
-## 浜嬩欢绫诲瀷
+```xml
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    
+    <event name="Weline_Admin::msg">
+        <observer 
+            name="Weline_Admin::system_notification" 
+            instance="Weline\Admin\Observer\SystemNotificationObserver" 
+            disabled="false" 
+            shared="true" 
+            sort="0"/>
+    </event>
+    
+    <!-- 多个观察者监听同一事件 -->
+    <event name="Weline_Framework_App::backend_controller_init_after">
+        <observer name="Weline_Admin::backend_controller_init_after" 
+                  instance="Weline\Admin\Observer\BackendControllerInitAfter" 
+                  sort="0"/>
+        <observer name="Weline_Admin::menu_access_log" 
+                  instance="Weline\Admin\Observer\MenuAccessLogObserver" 
+                  sort="10"/>
+    </event>
+</config>
+```
 
-**Domain Event锛堥鍩熶簨浠讹級** - 涓氬姟棰嗗煙鍐呯殑浜嬩欢
+### 属性说明
 
-锛堟垨 Integration Event / Application Event锛?
-## 瑙﹀彂鏃舵満
+| 属性 | 说明 | 默认值 |
+|------|------|--------|
+| `name` | 观察者唯一名称（格式：`模块名::观察者名`） | **必需** |
+| `instance` | 观察者类的完整类名 | **必需** |
+| `disabled` | 是否禁用 | `false` |
+| `shared` | 是否共享实例 | `true` |
+| `sort` | 执行顺序（数字越小越优先） | `10000` |
 
-璇存槑浜嬩欢鍦ㄤ粈涔堟儏鍐典笅瑙﹀彂锛岄€氬父鍦ㄥ摢涓柟娉曟垨娴佺▼涓€?
-## 鏁版嵁鏍煎紡
+---
 
-\\\php
-[
-    'field_name' => type,  // 蹇呴渶/鍙€夛細瀛楁璇存槑
-    // ... 鏇村瀛楁
-]
-\\\
+## 5. Observer 实现
 
-## 鍙敤鏁版嵁
+### 接口
 
-### 蹇呴渶瀛楁
+```php
+interface ObserverInterface
+{
+    public function execute(Event &$event): void;
+}
+```
 
-- \ield_name\ (type) - 瀛楁璇存槑
+### 实现示例
 
-### 鍙€夊瓧娈?
-- \ield_name\ (type) - 瀛楁璇存槑
+```php
+<?php
+declare(strict_types=1);
 
-## 浣跨敤鍦烘櫙
-
-- 鍦烘櫙1璇存槑
-- 鍦烘櫙2璇存槑
-- 鍦烘櫙3璇存槑
-
-## 浣跨敤鏂规硶
-
-### 鍦?event.xml 涓敞鍐岃瀵熻€?
-\\\xml
-<event name="妯″潡鍚?:domain::浜嬩欢鍚嶇О">
-    <observer name="妯″潡鍚?:瑙傚療鑰呭悕绉? 
-              instance="鍛藉悕绌洪棿\Observer\瑙傚療鑰呯被" 
-              disabled="false" 
-              shared="true" 
-              sort="10"/>
-</event>
-\\\
-
-### 鍒涘缓瑙傚療鑰呯被
-
-\\\php
-namespace 鍛藉悕绌洪棿\Observer;
+namespace Weline\Admin\Observer;
 
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 
-class 瑙傚療鑰呯被 implements ObserverInterface
+class SystemNotificationObserver implements ObserverInterface
 {
-    public function execute(Event &): void
+    public function execute(Event &$event): void
     {
-         = ->getData();
-        // 澶勭悊閫昏緫
+        // 获取事件数据（使用 'data' 键）
+        $data = $event->getData('data');
+        
+        $title = $data['title'] ?? '';
+        $content = $data['content'] ?? '';
+        
+        // 处理业务逻辑...
+        
+        // 可以修改事件数据（会回写到调用方）
+        $event->setData('result', 'success');
     }
 }
-\\\
-
-## 浣跨敤绀轰緥
-
-### 绀轰緥锛氬叿浣撲娇鐢ㄥ満鏅?
-\\\php
-// 绀轰緥浠ｇ爜
-\\\
-
-## 娉ㄦ剰浜嬮」
-
-- 娉ㄦ剰浜嬮」1
-- 娉ㄦ剰浜嬮」2
-- 娉ㄦ剰浜嬮」3
-
-## 鐩稿叧浜嬩欢
-
-- \妯″潡鍚?:domain::鐩稿叧浜嬩欢\ - 鐩稿叧浜嬩欢璇存槑
-\\\
-
-### 姝ラ 3锛氬湪浠ｇ爜涓Е鍙戜簨浠讹紙鍙€夛級
-
-濡傛灉闇€瑕佽Е鍙戜簨浠讹紝鍦ㄤ唬鐮佷腑浣跨敤 EventsManager锛?
-\\\php
-use Weline\Framework\Event\EventsManager;
-use Weline\Framework\Manager\ObjectManager;
-
-// 鑾峰彇浜嬩欢绠＄悊鍣?/** @var EventsManager  */
- = ObjectManager::getInstance(EventsManager::class);
-
-// 瑙﹀彂浜嬩欢
- = [
-    'field_name' => ,
-    // ... 鏇村鏁版嵁
-];
-->dispatch('妯″潡鍚?:domain::浜嬩欢鍚嶇О', );
-\\\
-
-### 姝ラ 4锛氭敞鍐岃瀵熻€咃紙鍙€夛級
-
-濡傛灉闇€瑕佺洃鍚簨浠讹紝鍦?etc/event.xml 涓敞鍐岃瀵熻€咃細
-
-\\\xml
-<?xml version="1.0" encoding="UTF-8"?>
-<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
-        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
-        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
-    <event name="妯″潡鍚?:domain::浜嬩欢鍚嶇О">
-        <observer name="妯″潡鍚?:瑙傚療鑰呭悕绉? 
-                  instance="鍛藉悕绌洪棿\Observer\瑙傚療鑰呯被" 
-                  disabled="false" 
-                  shared="true" 
-                  sort="10"/>
-    </event>
-</config>
-\\\
-
-## 鏁版嵁濂戠害瑙勮寖
-
-### 瀛楁绫诲瀷
-
-- integer - 鏁存暟
-- string - 瀛楃涓?- rray - 鏁扮粍
-- object - 瀵硅薄
-- mixed - 娣峰悎绫诲瀷
-- ool - 甯冨皵鍊?- loat - 娴偣鏁?
-### 瀛楁瀹氫箟鏍煎紡
-
-\\\php
-'field_name' => [
-    'type' => 'integer',           // 瀛楁绫诲瀷
-    'required' => true,            // 鏄惁蹇呴渶
-    'description' => '瀛楁璇存槑',   // 瀛楁鎻忚堪
-    'default' => '榛樿鍊?,         // 榛樿鍊硷紙鍙€夛級
-]
-\\\
-
-## 楠岃瘉妫€鏌?
-绯荤粺浼氬湪鏋勫缓浜嬩欢娉ㄥ唽琛ㄦ椂鑷姩妫€鏌ワ細
-
-1. **瑙勭害鏂囦欢妫€鏌?*锛氭鏌ユ槸鍚﹀瓨鍦?event.php 鏂囦欢
-2. **鏂囨。鏂囦欢妫€鏌?*锛氭鏌?doc/event/ 鐩綍涓嬫槸鍚﹀瓨鍦ㄥ搴旂殑鏂囨。鏂囦欢
-3. **鍛藉悕瑙勮寖妫€鏌?*锛氶獙璇佷簨浠跺悕鏄惁绗﹀悎鍛藉悕瑙勮寖
-4. **鍐茬獊妫€鏌?*锛氭鏌ヤ簨浠跺悕鏄惁涓庡叾浠栨ā鍧楀啿绐?
-濡傛灉缂哄皯瑙勭害鎴栨枃妗ｏ紝绯荤粺浼氳褰曡鍛婁俊鎭紝浣嗕笉浼氶樆姝㈡敞鍐岃〃鐨勬瀯寤恒€?
-## 鏈€浣冲疄璺?
-### 1. 浜嬩欢鍛藉悕
-
-- 浣跨敤娓呮櫚銆佹弿杩版€х殑浜嬩欢鍚嶇О
-- 閬靛惊 妯″潡鍚?:浜嬩欢绫诲瀷::浜嬩欢鍚嶇О 鏍煎紡
-- 浣跨敤灏忓啓瀛楁瘝鍜屼笅鍒掔嚎缁勫悎浜嬩欢鍚嶇О閮ㄥ垎
-
-### 2. 浜嬩欢绫诲瀷閫夋嫨
-
-- **Domain Events**锛氱敤浜庝笟鍔￠鍩熷唴鐨勭姸鎬佸彉鍖?- **Integration Events**锛氱敤浜庤法妯″潡閫氫俊
-- **Application Events**锛氱敤浜庡簲鐢ㄥ眰鎿嶄綔閫氱煡
-
-### 3. 鏁版嵁濂戠害
-
-- 鏄庣‘瀹氫箟鎵€鏈夊瓧娈电殑绫诲瀷鍜屾槸鍚﹀繀闇€
-- 鎻愪緵娓呮櫚鐨勫瓧娈垫弿杩?- 涓哄彲閫夊瓧娈垫彁渚涢粯璁ゅ€?
-### 4. 鏂囨。缂栧啓
-
-- 璇︾粏璇存槑浜嬩欢鐨勮Е鍙戞椂鏈?- 鎻愪緵瀹屾暣鐨勪娇鐢ㄧず渚?- 鍒楀嚭鎵€鏈変娇鐢ㄥ満鏅?- 璇存槑娉ㄦ剰浜嬮」鍜岀浉鍏充簨浠?
-### 5. 鐗堟湰绠＄悊
-
-- 浣跨敤璇箟鍖栫増鏈彿锛圫emantic Versioning锛?- 閲嶅ぇ鍙樻洿鏃跺崌绾т富鐗堟湰鍙?- 鍚戝悗鍏煎鐨勫彉鏇村崌绾ф鐗堟湰鍙?- 淇bug鏃跺崌绾т慨璁㈢増鏈彿
-
-## 甯歌閿欒
-
-### 閿欒 1锛氫簨浠跺悕缂哄皯 :: 鍒嗛殧绗?
-**閿欒绀轰緥**锛?\\\php
-'妯″潡鍚峗event_name' => [...]
-\\\
-
-**姝ｇ‘鏍煎紡**锛?\\\php
-'妯″潡鍚?:domain::event_name' => [...]
-\\\
-
-### 閿欒 2锛氫簨浠跺悕鍓嶇紑涓嶅尮閰嶆ā鍧楀悕
-
-**閿欒绀轰緥**锛?\\\php
-// 鍦?Weline_Seo 妯″潡涓?'OtherModule::domain::event_name' => [...]
-\\\
-
-**姝ｇ‘鏍煎紡**锛?\\\php
-// 鍦?Weline_Seo 妯″潡涓?'Weline_Seo::domain::event_name' => [...]
-\\\
-
-### 閿欒 3锛氱己灏戣绾︽枃浠?
-**闂**锛氭病鏈夊垱寤?event.php 鏂囦欢
-
-**瑙ｅ喅**锛氬湪妯″潡鏍圭洰褰曞垱寤?event.php 鏂囦欢骞跺畾涔変簨浠?
-### 閿欒 4锛氱己灏戞枃妗ｆ枃浠?
-**闂**锛氬湪 event.php 涓寚瀹氫簡 doc 瀛楁锛屼絾鏂囨。鏂囦欢涓嶅瓨鍦?
-**瑙ｅ喅**锛氬湪 doc/event/ 鐩綍涓嬪垱寤哄搴旂殑鏂囨。鏂囦欢
-
-### 閿欒 5锛氭枃妗ｈ矾寰勪笉姝ｇ‘
-
-**闂**锛歚doc 瀛楁鎸囧畾鐨勮矾寰勪笌瀹為檯鏂囦欢璺緞涓嶅尮閰?
-**瑙ｅ喅**锛氱‘淇?doc 瀛楁鐨勮矾寰勭浉瀵逛簬 doc/event/ 鐩綍锛屼緥濡?domain/event_name.md
-
-## 绀轰緥锛氬畬鏁寸殑浜嬩欢鍒涘缓
-
-### 绀轰緥 1锛氬垱寤洪鍩熶簨浠?
-**1. 鍒涘缓 event.php**锛?
-\\\php
-<?php
-
-return [
-    'Weline_Product::domain::product_created' => [
-        'name' => __('浜у搧鍒涘缓'),
-        'description' => __('褰撲骇鍝佽鍒涘缓鏃惰Е鍙戯紝鍏佽鍏朵粬妯″潡鐩戝惉骞跺鐞嗕骇鍝佸垱寤洪€昏緫銆?),
-        'doc' => 'domain/product_created.md',
-        'version' => '1.0.0',
-        'type' => 'domain',
-        'data_contract' => [
-            'product_id' => ['type' => 'integer', 'required' => true, 'description' => '浜у搧ID'],
-            'sku' => ['type' => 'string', 'required' => true, 'description' => '浜у搧SKU'],
-            'name' => ['type' => 'string', 'required' => true, 'description' => '浜у搧鍚嶇О'],
-            'price' => ['type' => 'float', 'required' => false, 'description' => '浜у搧浠锋牸'],
-        ],
-    ],
-];
-\\\
-
-**2. 鍒涘缓鏂囨。鏂囦欢** doc/event/domain/product_created.md锛?
-\\\markdown
-# Weline_Product::domain::product_created - 浜у搧鍒涘缓
-
-## 浜嬩欢璇存槑
-
-褰撲骇鍝佽鍒涘缓鏃惰Е鍙戯紝鍏佽鍏朵粬妯″潡鐩戝惉骞跺鐞嗕骇鍝佸垱寤洪€昏緫銆?
-## 浜嬩欢绫诲瀷
-
-**Domain Event锛堥鍩熶簨浠讹級** - 涓氬姟棰嗗煙鍐呯殑浜嬩欢
-
-## 瑙﹀彂鏃舵満
-
-鍦ㄤ骇鍝佷繚瀛樺埌鏁版嵁搴撳悗瑙﹀彂锛岄€氬父鍦?Product::save() 鏂规硶涓€?
-## 鏁版嵁鏍煎紡
-
-\\\php
-[
-    'product_id' => int,    // 蹇呴渶锛氫骇鍝両D
-    'sku' => string,        // 蹇呴渶锛氫骇鍝丼KU
-    'name' => string,       // 蹇呴渶锛氫骇鍝佸悕绉?    'price' => float,       // 鍙€夛細浜у搧浠锋牸
-]
-\\\
-
-## 浣跨敤鍦烘櫙
-
-- 浜у搧鍒涘缓鍚庡彂閫侀€氱煡
-- 鍚屾浜у搧淇℃伅鍒板閮ㄧ郴缁?- 瑙﹀彂搴撳瓨鍒濆鍖?- 璁板綍浜у搧鍒涘缓鏃ュ織
-
-## 浣跨敤鏂规硶
-
-### 鍦?event.xml 涓敞鍐岃瀵熻€?
-\\\xml
-<event name="Weline_Product::domain::product_created">
-    <observer name="Weline_Notification::product_created" 
-              instance="Weline\Notification\Observer\ProductCreatedObserver" 
-              disabled="false" 
-              shared="true" 
-              sort="10"/>
-</event>
-\\\
-
-## 娉ㄦ剰浜嬮」
-
-- 浜у搧宸蹭繚瀛樺埌鏁版嵁搴?- 浜嬩欢鏁版嵁鍖呭惈瀹屾暣鐨勪骇鍝佷俊鎭?- 寤鸿鍦ㄨ瀵熻€呬腑杩涜寮傛鎿嶄綔锛岄伩鍏嶉樆濉炰富娴佺▼
-\\\
-
-**3. 鍦ㄤ唬鐮佷腑瑙﹀彂浜嬩欢**锛?
-\\\php
-use Weline\Framework\Event\EventsManager;
-use Weline\Framework\Manager\ObjectManager;
-
-// 鍦ㄤ骇鍝佷繚瀛樺悗
- = ObjectManager::getInstance(EventsManager::class);
-->dispatch('Weline_Product::domain::product_created', [
-    'product_id' => ->getId(),
-    'sku' => ->getSku(),
-    'name' => ->getName(),
-    'price' => ->getPrice(),
-]);
-\\\
-
-## 妫€鏌ユ竻鍗?
-鍒涘缓浜嬩欢鏃讹紝纭繚瀹屾垚浠ヤ笅妫€鏌ワ細
-
-- [ ] 鍒涘缓浜?event.php 鏂囦欢
-- [ ] 浜嬩欢鍚嶇鍚堝懡鍚嶈鑼冿紙鍖呭惈 :: 鍒嗛殧绗︼級
-- [ ] 浜嬩欢鍚嶅墠缂€鍖归厤妯″潡鍚?- [ ] 瀹氫箟浜嗗畬鏁寸殑鏁版嵁濂戠害
-- [ ] 鍒涘缓浜嗘枃妗ｆ枃浠讹紙doc/event/ 鐩綍涓嬶級
-- [ ] 鏂囨。璺緞鍦?event.php 涓纭寚瀹?- [ ] 鏂囨。鍐呭瀹屾暣锛堝寘鎷鏄庛€佹暟鎹牸寮忋€佷娇鐢ㄧず渚嬬瓑锛?- [ ] 濡傛灉闇€瑕佸湪浠ｇ爜涓Е鍙戯紝宸插疄鐜拌Е鍙戦€昏緫
-- [ ] 濡傛灉闇€瑕佽瀵熻€咃紝宸插湪 event.xml 涓敞鍐?- [ ] 杩愯浜?module:upgrade 鍛戒护鏇存柊娉ㄥ唽琛?
-## CRITICAL：触发事件必须用变量传值
-
-`EventsManager::dispatch(string $eventName, mixed &$data = [])` 的第二个参数是**引用**（`&$data`）。PHP 8+ 规定：引用参数不能接收数组字面量，只能接收变量。
-
-- **错误**：`$eventsManager->dispatch('Event::name', ['key' => $value]);` → 报错 "Argument #2 ($data) could not be passed by reference"
-- **正确**：`$eventData = ['key' => $value]; $eventsManager->dispatch('Event::name', $eventData);`
-
-生成或审查触发事件的代码时，必须确保第二个参数是变量，不能是 `[...]` 字面量。
-
-## 事件系统错误预防（必读）
-
-### 1. dispatch 必须用变量传参（见上）
-
-### 2. 事件数据必须包装在 `'data'` 键下
-
-Observer 通过 `$event->getData('data')` 获取数据，因此传递的数据需放在 `'data'` 键下。
-
-```php
-$eventData = ['data' => ['category_id' => $id, 'product_ids' => $productIds]];
-$eventsManager->dispatch('Module::event_name', $eventData);
-// Observer: $data = $event->getData('data');
 ```
 
-### 3. 事件必须在依赖它的代码之前触发
+---
 
-若 Hook 等依赖某事件的执行结果，须在渲染/执行依赖方**之前** dispatch（例如在控制器中先 dispatch，再 fetch 模板）。
+## 6. 完整开发流程
 
-### 4. 定义了监听必须确保事件被触发
+### Step 1: 定义事件规约 (event.php)
 
-在 `etc/event.xml` 中注册了 observer 后，须在代码中某处调用 `$eventsManager->dispatch('Module::action_after', $eventData)`，否则监听永不生效。
+```php
+<?php
+// app/code/Vendor/Module/event.php
+return [
+    'Vendor_Module::domain::order_created' => [
+        'name' => __('订单创建事件'),
+        'description' => __('订单创建后触发'),
+        'type' => 'domain',
+        'doc' => 'domain/order_created.md',
+    ],
+];
+```
 
-## 鐩稿叧璧勬簮
+### Step 2: 触发事件
 
-- [妗嗘灦浜嬩欢鏂囨。](../../app/code/Weline/Framework/doc/2-蹇€熷紑濮?08-浜嬩欢.md)
-- [浜嬩欢绯荤粺璁捐鏂囨。](../../app/code/Weline/Seo/doc/浜嬩欢绯荤粺璁捐鏂囨。.md)
-- [EventRegistry 婧愮爜](../../app/code/Weline/Framework/Event/EventRegistry.php)
-- [EventScanner 婧愮爜](../../app/code/Weline/Framework/Event/EventScanner.php)
+```php
+// 在 Service 或 Controller 中
+$eventData = [
+    'data' => [
+        'order_id' => $order->getId(),
+        'order' => $order,
+    ]
+];
+$this->eventsManager->dispatch('Vendor_Module::domain::order_created', $eventData);
+```
+
+### Step 3: 创建观察者类
+
+```php
+<?php
+// app/code/Vendor/Module/Observer/OrderCreatedObserver.php
+namespace Vendor\Module\Observer;
+
+use Weline\Framework\Event\Event;
+use Weline\Framework\Event\ObserverInterface;
+
+class OrderCreatedObserver implements ObserverInterface
+{
+    public function execute(Event &$event): void
+    {
+        $data = $event->getData('data');
+        $orderId = $data['order_id'];
+        
+        // 处理订单创建后逻辑
+    }
+}
+```
+
+### Step 4: 注册观察者 (event.xml)
+
+```xml
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <event name="Vendor_Module::domain::order_created">
+        <observer 
+            name="Vendor_Module::order_created_handler" 
+            instance="Vendor\Module\Observer\OrderCreatedObserver"/>
+    </event>
+</config>
+```
+
+### Step 5: 刷新缓存
+
+```bash
+php bin/w cache:clear
+```
+
+---
+
+## 7. 事件类型对比
+
+| 类型 | 用途 | 示例 |
+|------|------|------|
+| **Domain** | 业务领域内事件 | `order_created`, `product_saved` |
+| **Integration** | 跨模块集成事件 | `feed_collect`, `task_enqueued` |
+| **Application** | 应用层事件 | `login_success`, `cache_cleared` |
+
+---
+
+## 8. 常见错误
+
+### 错误 1：dispatch 第二参数不是变量
+
+```php
+// ❌ 错误
+$eventsManager->dispatch('Event::name', ['data' => []]);
+
+// ✅ 正确
+$eventData = ['data' => []];
+$eventsManager->dispatch('Event::name', $eventData);
+```
+
+### 错误 2：数据未放在 'data' 键下
+
+```php
+// ❌ 错误
+$eventData = ['order_id' => 123];
+
+// ✅ 正确
+$eventData = ['data' => ['order_id' => 123]];
+```
+
+### 错误 3：event.xml 注册但未 dispatch
+
+如果在 `event.xml` 中注册了 observer，必须在代码中某处 dispatch 该事件，否则 observer 永远不会执行。
+
+---
+
+## 9. 相关文件
+
+| 文件 | 位置 |
+|------|------|
+| 事件规约 | `模块/event.php` |
+| 观察者注册 | `模块/etc/event.xml` |
+| 观察者类 | `模块/Observer/*.php` |
+| 事件文档 | `模块/doc/event/*.md` |
+| 生成的事件配置 | `generated/events.php` |
+
+---
+
+**最后更新**: 2026-02-25
+**版本**: 2.0.0

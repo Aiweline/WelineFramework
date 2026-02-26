@@ -1,8 +1,25 @@
 ---
 name: code-generation-standards
-description: Code generation standards for Weline Framework. Use when creating PHP files, controllers, models, services, or any code. Covers namespace conventions, dependency injection, method naming, and framework patterns. CRITICAL for all code generation!
+description: |
+  Code generation standards for Weline Framework. CRITICAL for all code generation!
+  
+  Use when:
+  - Creating PHP files, controllers, models, services, blocks
+  - Writing frontend code (CSS, JS, templates) - MUST also read theme-development skill!
+  - Creating modules or any code
+  
+  Frontend/CSS/JS 必须同时参考 theme-development 技能！
+  - 写 CSS → theme-development（主题变量、禁止硬编码颜色、CSS 命名空间）
+  - 写 JS → theme-development（IIFE 闭包、禁止全局变量）
+  - 写组件 → theme-development（独立作用域）
+  
+  Keywords: PHP, 代码生成, 模块, module, controller, model, service, block,
+  CSS, JS, JavaScript, 前端, frontend, 模板, template, .phtml
 globs:
   - "**/*.php"
+  - "**/view/**/*.phtml"
+  - "**/view/**/*.js"
+  - "**/view/**/*.css"
 alwaysApply: false
 ---
 
@@ -39,6 +56,21 @@ This skill ensures all generated code follows Weline Framework standards and bes
 3. **Always follow the module structure** defined below
 4. **Always use framework's ObjectManager** for dependency injection
 5. **Always include `declare(strict_types=1);`**
+6. **Always follow PHP 8.4 strict type rules** - See `php84-performance` skill
+
+### 🔥 PHP 8.4 严格类型要求（必须遵守）
+
+框架运行在 PHP 8.4 上，必须遵守严格类型约束：
+
+| 场景 | ❌ 错误 | ✅ 正确 |
+|------|---------|---------|
+| 字符串函数 | `trim($var)` | `trim($var ?? '')` |
+| 数组访问 | `$arr['key']` | `$arr['key'] ?? ''` |
+| foreach | `foreach ($items as $item)` | `foreach (($items ?? []) as $item)` |
+| htmlspecialchars | `htmlspecialchars($text)` | `htmlspecialchars($text ?? '')` |
+| 方法调用 | `$obj->method()` | `$obj?->method() ?? ''` |
+
+**详细规范见 `php84-performance` 技能。**
 
 ### 编译期内联标签（如 @lang）
 

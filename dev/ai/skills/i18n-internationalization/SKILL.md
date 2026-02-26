@@ -11,87 +11,87 @@ alwaysApply: false
 
 This skill guides you through implementing internationalization in Weline Framework using the `__()` translation function and `<lang>` template tags.
 
-## 🔔 TRIGGER: When to Use This Skill
+Last Updated: 2026-02-25
+Version: 2.0
+
+## 触发条件
 
 **ALWAYS use this skill when:**
-- User mentions "翻译" (translation)
-- User mentions "多语言" (multilingual)
-- User mentions "国际化" (internationalization)
-- User mentions "i18n"
-- User mentions "语言切换" (language switching)
-- User mentions text that needs to display in multiple languages
-- Creating or modifying user-facing text in any module
-- Adding new features with labels, messages, or UI text
+- 用户提到"翻译" (translation)
+- 用户提到"多语言" (multilingual)
+- 用户提到"国际化" (internationalization)
+- 用户提到"i18n"
+- 用户提到"语言切换" (language switching)
+- 创建或修改任何用户可见文本
+- 添加带有标签、消息或UI文本的新功能
 
+## 核心原则：所有用户可见文本必须使用 i18n
 
-## 鈿狅笍 CRITICAL: All User-Facing Text Must Use i18n
+**所有用户可见文本必须使用国际化，包括但不限于：**
 
-**EVERY user-facing text MUST use internationalization, including but not limited to:**
+- ✅ **所有提示和提示信息** (prompts, hints)
+- ✅ **所有按钮文本** (button labels)
+- ✅ **所有表单标签** (form labels)
+- ✅ **所有错误消息** (error messages)
+- ✅ **所有成功消息** (success messages)
+- ✅ **所有警告消息** (warning messages)
+- ✅ **所有通知消息** (notifications)
+- ✅ **所有工具提示** (tooltips)
+- ✅ **所有占位符文本** (placeholder text)
+- ✅ **所有表头** (table headers)
+- ✅ **所有菜单项** (menu items)
+- ✅ **所有页面标题** (page titles)
+- ✅ **所有帮助文本** (help text)
+- ✅ **所有验证消息** (validation messages)
+- ✅ **所有确认对话框** (confirmation dialogs)
+- ✅ **所有状态文本** (status text)
 
-- 鉁?**All prompts and hints** (鎻愮ず淇℃伅銆佹彁绀鸿瘝銆佹彁绀烘枃鏈?
-- 鉁?**All button labels** (鎸夐挳鏂囨湰銆佹寜閽爣绛?
-- 鉁?**All form labels** (琛ㄥ崟鏍囩銆佽緭鍏ユ鏍囩)
-- 鉁?**All error messages** (閿欒娑堟伅銆侀敊璇彁绀?
-- 鉁?**All success messages** (鎴愬姛娑堟伅銆佹垚鍔熸彁绀?
-- 鉁?**All warning messages** (璀﹀憡娑堟伅銆佽鍛婃彁绀?
-- 鉁?**All notification messages** (閫氱煡娑堟伅銆侀€氱煡鎻愮ず)
-- 鉁?**All tooltips** (宸ュ叿鎻愮ず銆佹偓鍋滄彁绀?
-- 鉁?**All placeholder text** (鍗犱綅绗︽枃鏈€佽緭鍏ユ彁绀?
-- 鉁?**All table headers** (琛ㄥご銆佸垪鏍囬)
-- 鉁?**All menu items** (鑿滃崟椤广€佸鑸」)
-- 鉁?**All page titles** (椤甸潰鏍囬)
-- 鉁?**All help text** (甯姪鏂囨湰銆佽鏄庢枃鏈?
-- 鉁?**All validation messages** (楠岃瘉娑堟伅銆佹牎楠屾彁绀?
-- 鉁?**All confirmation dialogs** (纭瀵硅瘽妗嗐€佺‘璁ゆ彁绀?
-- 鉁?**All status text** (鐘舵€佹枃鏈€佺姸鎬佹彁绀?
+**规则：如果用户可见，就必须国际化！**
 
-**Rule: If it's visible to the user, it MUST be internationalized!**
+**永远不要硬编码任何语言的用户可见文本！**
 
-**Never hardcode any user-facing text in any language!**
+## 快速开始
 
+### 翻译函数：`__()`
 
-## Quick Start
+`__()` 函数是核心翻译函数，在 PHP、JavaScript 和模板中都可用。
 
-### Translation Function: `__()`
-
-The `__()` function is the core translation function available in PHP, JavaScript, and templates.
-
-**Function Signature:**
+**函数签名：**
 ```php
 function __(string $words, array|string|int $args = ''): string
 ```
 
-**Basic Usage:**
+**基本用法：**
 ```php
-// Simple translation
+// 简单翻译
 echo __('用户管理');
-// Output: 用户管理 (Chinese) or User Management (English)
+// 输出：用户管理（中文）或 User Management（英文）
 
-// With parameters
+// 带参数
 echo __('欢迎 %{}!', $username);
 echo __('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count]);
 ```
 
-## File Structure
+## 文件结构
 
-### Translation Files Location
+### 翻译文件位置
 
-Translation files are placed in the module's `i18n/` directory:
+翻译文件放在模块的 `i18n/` 目录下：
 
 ```
 app/code/YourModule/
 ├── i18n/
-│   ├── zh_Hans_CN.csv     # Chinese translation (default)
-│   └── en_US.csv          # English translation
+│   ├── zh_Hans_CN.csv     # 中文翻译（默认）
+│   └── en_US.csv          # 英文翻译
 ├── Controller/
 └── ...
 ```
 
-**Important**: Always use `zh_Hans_CN.csv` for Chinese, not `zh_CN.csv`.
+**重要**：中文必须使用 `zh_Hans_CN.csv`，不是 `zh_CN.csv`。
 
-### CSV File Format
+### CSV 文件格式
 
-Translation files use CSV format with double quotes:
+翻译文件使用带双引号的 CSV 格式：
 
 ```csv
 "源文本","翻译文本"
@@ -100,24 +100,24 @@ Translation files use CSV format with double quotes:
 "用户 %{name} 有 %{count} 条消息","用户 %{name} 有 %{count} 条消息"
 ```
 
-**Chinese file (zh_Hans_CN.csv):**
-- Source text and translation are usually the same
-- Placeholders remain unchanged
+**中文文件 (zh_Hans_CN.csv):**
+- 源文本和翻译通常相同
+- 占位符保持不变
 
-**English file (en_US.csv):**
-- Provides English translations
-- Placeholders remain unchanged
+**英文文件 (en_US.csv):**
+- 提供英文翻译
+- 占位符保持不变
 
-## Usage in PHP
+## PHP 中的用法
 
-### Basic Translation
+### 基本翻译
 
 ```php
-// Simple translation
+// 简单翻译
 $title = __('用户管理');
 $this->assign('title', $title);
 
-// In controllers
+// 在控制器中
 public function index()
 {
     $this->assign('title', __('用户管理'));
@@ -126,30 +126,30 @@ public function index()
 }
 ```
 
-### With Placeholders
+### 带占位符
 
-**1. Generic placeholder `%{}` (single parameter):**
+**1. 通用占位符 `%{}`（单个参数）：**
 ```php
 echo __('欢迎 %{}!', $username);
-// Output: 欢迎 John!
+// 输出：欢迎 John!
 ```
 
-**2. Numeric placeholders `%{1}`, `%{2}`, ... (multiple parameters):**
+**2. 数字占位符 `%{1}`, `%{2}`, ...（多个参数）：**
 ```php
 echo __('用户 %{1} 在 %{2} 登录', [$username, $loginTime]);
-// Output: 用户 John 在 2025-01-26 登录
+// 输出：用户 John 在 2025-01-26 登录
 ```
 
-**3. Named placeholders `%{name}`, `%{count}`, ... (recommended):**
+**3. 命名占位符 `%{name}`, `%{count}`, ...（推荐）：**
 ```php
 echo __('用户 %{name} 有 %{count} 条消息', [
     'name' => $username,
     'count' => $messageCount
 ]);
-// Output: 用户 John 有 5 条消息
+// 输出：用户 John 有 5 条消息
 ```
 
-### In Controllers
+### 在控制器中
 
 ```php
 namespace YourModule\Controller;
@@ -174,7 +174,7 @@ class Index extends BackendController
 }
 ```
 
-### In Models
+### 在模型中
 
 ```php
 public function validate()
@@ -189,169 +189,147 @@ public function validate()
 }
 ```
 
-## Usage in Templates
+## 模板中的用法
 
-### 鈿狅笍 IMPORTANT: Priority Rule for Templates
+### 重要：模板中的优先规则
 
-**When translating in templates, ALWAYS prioritize tag form (`<lang>`) over PHP function (`__()`) when there are NO dynamic parameters.**
+**在模板中翻译时，当没有动态参数时，始终优先使用标签形式（`<lang>`）而不是 PHP 函数（`__()`）。**
 
-**Rule:**
-- 鉁?**No dynamic parameters** 鈫?Use `<lang>` tag (compiled at build time, better performance)
-- 鉁?**Has dynamic parameters** 鈫?Use `<lang>` tag with `args` attribute or PHP `__()` function
-- 鉂?**Never use PHP `__()` function when no parameters are needed**
+**规则：**
+- ✅ **无动态参数** → 使用 `<lang>` 标签（编译时翻译，性能更好）
+- ✅ **有动态参数** → 使用带 `args` 属性的 `<lang>` 标签或 PHP `__()` 函数
+- ❌ **不需要参数时不要使用 PHP `__()`**
 
-**Why?**
-- `<lang>` tags are translated at compile time (no runtime overhead)
-- Cleaner, more semantic template code
-- Better performance for static text
-- Consistent with framework best practices
-
-**Examples:**
+**示例：**
 ```html
-<!-- 鉁?CORRECT: No parameters, use <lang> tag -->
-<h1><lang>鐢ㄦ埛绠＄悊</lang></h1>
-<button><lang>淇濆瓨</lang></button>
+<!-- ✅ 正确：无参数，使用 <lang> 标签 -->
+<h1><lang>用户管理</lang></h1>
+<button><lang>保存</lang></button>
 
-<!-- 鉂?WRONG: No parameters, but using PHP function -->
-<h1><?= __('鐢ㄦ埛绠＄悊') ?></h1>
-<button><?= __('淇濆瓨') ?></button>
-
-<!-- 鉁?CORRECT: Has parameters, use <lang> with args -->
-<p><lang args="$username">娆㈣繋 %{}!</lang></p>
-
-<!-- 鉁?ALSO CORRECT: Has parameters, can use PHP function -->
-<p><?= __('娆㈣繋 %{}!', $username) ?></p>
-```
-
-
-### Using PHP Function
-
-```php
-<?php /** @var \Weline\Framework\View\Template $this */ ?>
-
+<!-- ❌ 错误：无参数，但使用 PHP 函数 -->
 <h1><?= __('用户管理') ?></h1>
-<p><?= __('欢迎 %{}!', $username) ?></p>
-<p><?= __('用户 %{name} 有 %{count} 条消息', [
-    'name' => $username,
-    'count' => $message_count
-]) ?></p>
-
 <button><?= __('保存') ?></button>
+
+<!-- ✅ 正确：有参数，使用带 args 的 <lang> -->
+<p><lang args="$username">欢迎 %{}!</lang></p>
+
+<!-- ✅ 也正确：有参数，可以使用 PHP 函数 -->
+<p><?= __('欢迎 %{}!', $username) ?></p>
 ```
 
-### Using `<lang>` Tag (Recommended)
+### 使用 `<lang>` 标签（推荐）
 
-**Basic usage:**
+**基本用法：**
 ```html
 <h1><lang>用户管理</lang></h1>
 <p><lang>欢迎使用系统</lang></p>
 ```
 
-**With parameters using `args` attribute:**
+**带 `args` 属性的参数：**
 ```html
-<!-- Single parameter -->
+<!-- 单个参数 -->
 <p><lang args="'John'">欢迎 %{}!</lang></p>
 
-<!-- Array parameters -->
+<!-- 数组参数 -->
 <p><lang args="['John', 5]">用户 %{1} 有 %{2} 条消息</lang></p>
 
-<!-- Named parameters (recommended) -->
+<!-- 命名参数（推荐） -->
 <p><lang args="['name' => $username, 'count' => $message_count]">
     用户 %{name} 有 %{count} 条消息
 </lang></p>
 
-<!-- Using template variables -->
+<!-- 使用模板变量 -->
 <p><lang args="$username">欢迎 %{}!</lang></p>
 ```
 
-**Auto variable recognition (smart feature):**
+**自动变量识别（智能功能）：**
 ```html
 <?php $min = 8; $max = 20; ?>
 <lang>密码长度必须在 %{min} 到 %{max} 个字符之间</lang>
-<!-- Automatically uses $min and $max variables -->
+<!-- 自动使用 $min 和 $max 变量 -->
 ```
 
-### Using `@lang()` Format
+### 使用 `@lang()` 格式
 
 ```html
-<!-- Basic -->
+<!-- 基本 -->
 <title>@lang(网站维护中...)</title>
 
-<!-- With parameters -->
+<!-- 带参数 -->
 <p>@lang(欢迎 %{}!, 'John')</p>
 <p>@lang(用户 %{1} 有 %{2} 条消息, ['John', 5])</p>
 <p>@lang(用户 %{name} 有 %{count} 条消息, ['name' => 'John', 'count' => 5])</p>
 ```
 
-### Using `@lang{}` Format
+### 使用 `@lang{}` 格式
 
 ```html
-<!-- Basic -->
+<!-- 基本 -->
 <span>@lang{返回首页}</span>
 
-<!-- With parameters -->
+<!-- 带参数 -->
 <p>@lang{欢迎 %{}!, 'John'}</p>
 <p>@lang{用户 %{name} 有 %{count} 条消息, ['name' => 'John', 'count' => 5]}</p>
 ```
 
-### In HTML Attributes
+### 在 HTML 属性中
 
 ```html
 <input type="text" placeholder="<?= __('请输入用户名') ?>" />
 <button title="<?= __('点击保存') ?>"><?= __('保存') ?></button>
 
-<!-- Or using lang tag -->
+<!-- 或使用 lang 标签 -->
 <input type="text" placeholder="<lang>请输入用户名</lang>" />
 ```
 
-## Usage in JavaScript
+## JavaScript 中的用法
 
-The `__()` function is automatically injected into pages and can be used directly in JavaScript.
+`__()` 函数会自动注入到页面中，可以直接在 JavaScript 中使用。
 
-### Basic Usage
+### 基本用法
 
 ```javascript
-// Simple translation
+// 简单翻译
 console.log(__('用户管理'));
 document.getElementById('title').innerText = __('用户管理');
 ```
 
-### With Placeholders
+### 带占位符
 
-**1. Generic placeholder:**
+**1. 通用占位符：**
 ```javascript
 console.log(__('欢迎 %{}!', username));
-// Output: 欢迎 John!
+// 输出：欢迎 John!
 ```
 
-**2. Array parameters:**
+**2. 数组参数：**
 ```javascript
 console.log(__('用户 %{1} 有 %{2} 条消息', [username, count]));
-// Output: 用户 John 有 5 条消息
+// 输出：用户 John 有 5 条消息
 ```
 
-**3. Object parameters (recommended):**
+**3. 对象参数（推荐）：**
 ```javascript
 console.log(__('用户 %{name} 有 %{count} 条消息', {
     name: username,
     count: messageCount
 }));
-// Output: 用户 John 有 5 条消息
+// 输出：用户 John 有 5 条消息
 ```
 
-### In Event Handlers
+### 在事件处理程序中
 
 ```javascript
-// Button click
+// 按钮点击
 button.addEventListener('click', function() {
     if (confirm(__('确定要删除 %{count} 项吗？', {
         count: selectedItems.length
     }))) {
-        // Delete operation
+        // 删除操作
     }
 });
 
-// AJAX callbacks
+// AJAX 回调
 $.ajax({
     url: '/api/users',
     success: function(data) {
@@ -363,87 +341,38 @@ $.ajax({
         showError(__('加载失败，请稍后重试'));
     }
 });
-
-// Form validation
-function validateForm() {
-    let errors = [];
-    
-    if (!username) {
-        errors.push(__('字段 %{field} 不能为空', {
-            field: __('用户名')
-        }));
-    }
-    
-    if (password.length < 8) {
-        errors.push(__('密码长度不能少于 %{min} 位', {
-            min: 8
-        }));
-    }
-    
-    if (errors.length > 0) {
-        alert(__('发现 %{count} 个错误：\n%{errors}', {
-            count: errors.length,
-            errors: errors.join('\n')
-        }));
-        return false;
-    }
-    
-    return true;
-}
 ```
 
-### In Template Scripts
+## 占位符格式
 
-```html
-<script>
-    // Simple translation
-    var title = '<?= __('用户管理') ?>';
-    
-    // With parameters
-    function showWelcome(name) {
-        alert('<?= __('欢迎 %{}!') ?>'.replace('%{}', name));
-    }
-    
-    // Using framework's __() function
-    function showUserInfo(name, count) {
-        return __('用户 %{name} 有 %{count} 条消息', {
-            name: name,
-            count: count
-        });
-    }
-</script>
-```
+### 对比表
 
-## Placeholder Formats
+| 格式 | 参数类型 | 使用场景 | 示例 |
+|------|---------|---------|------|
+| `%{}` | String/Number | 单个参数 | `__('欢迎 %{}!', $name)` |
+| `%{1}`, `%{2}` | Array | 多个参数，固定顺序 | `__('用户 %{1} 有 %{2} 条消息', [$name, $count])` |
+| `%{name}`, `%{count}` | Object/Assoc Array | 多个参数，语义化（推荐） | `__('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count])` |
 
-### Comparison Table
+### ⚠️ 严重错误：永远不要使用 `%1`, `%2` 格式（不带大括号）
 
-| Format | Parameter Type | Use Case | Example |
-|--------|---------------|----------|---------|
-| `%{}` | String/Number | Single parameter | `__('欢迎 %{}!', $name)` |
-| `%{1}`, `%{2}` | Array | Multiple parameters, fixed order | `__('用户 %{1} 有 %{2} 条消息', [$name, $count])` |
-| `%{name}`, `%{count}` | Object/Assoc Array | Multiple parameters, semantic (recommended) | `__('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count])` |
-
-### ⚠️ CRITICAL ERROR: NEVER Use `%1`, `%2` Format (Without Braces)
-
-**❌ WRONG - This is a common mistake:**
+**❌ 错误 - 这是常见错误：**
 ```php
-// WRONG! Missing braces {}
+// 错误！缺少大括号 {}
 __('加载失败：%1', $error);
 __('共 %1 个站点，第 %2/%3 页', [$total, $page, $pages]);
 __('百度返回错误：%1 - %2', [$error, $message]);
 ```
 
-**✅ CORRECT - Always use braces `{}`:**
+**✅ 正确 - 始终使用大括号 `{}`：**
 ```php
-// Single parameter - use %{1}
+// 单个参数 - 使用 %{1}
 __('加载失败：%{1}', $error);
 
-// Multiple parameters (array) - use %{1}, %{2}, %{3}
+// 多个参数（数组）- 使用 %{1}, %{2}, %{3}
 __('共 %{1} 个站点，第 %{2}/%{3} 页', [$total, $page, $pages]);
 __('百度返回错误：%{1} - %{2}', [$error, $message]);
 
-// RECOMMENDED: Named parameters for better clarity
+// 推荐：命名参数更清晰
 __('加载失败：%{error}', ['error' => $error]);
 __('共 %{total} 个站点，第 %{page}/%{pages} 页', [
     'total' => $total,
@@ -452,264 +381,196 @@ __('共 %{total} 个站点，第 %{page}/%{pages} 页', [
 ]);
 ```
 
-**Why this matters:**
-- `%1`, `%2` (without braces) is NOT a valid placeholder in Weline Framework
-- Framework will NOT replace these with parameter values
-- Translation will display literal `%1`, `%2` text to users
-- Must use `%{1}`, `%{2}` with braces for numeric placeholders
+**为什么这很重要：**
+- `%1`, `%2`（不带大括号）在 Weline Framework 中不是有效的占位符
+- 框架不会用参数值替换这些
+- 翻译会向用户显示字面的 `%1`, `%2` 文本
+- 必须使用带大括号的 `%{1}`, `%{2}` 作为数字占位符
 
-**Migration pattern:**
+**迁移模式：**
 ```php
-// Before (WRONG)          → After (CORRECT)
+// 之前（错误）          → 之后（正确）
 __('错误：%1', $msg)      → __('错误：%{1}', $msg)
 __('用户 %1 有 %2 条', [$name, $count]) 
                           → __('用户 %{1} 有 %{2} 条', [$name, $count])
 
-// Better: Use named placeholders
+// 更好：使用命名占位符
 __('错误：%1', $msg)      → __('错误：%{error}', ['error' => $msg])
-__('用户 %1 有 %2 条', [$name, $count])
-                          → __('用户 %{name} 有 %{count} 条', [
-                                'name' => $name,
-                                'count' => $count
-                            ])
 ```
 
-**Note:** `%{}` (empty braces) is valid ONLY for single unnamed parameter:
-```php
-// Valid for single parameter
-__('欢迎 %{}!', $username);
-// But %{1} is clearer and more consistent
-__('欢迎 %{1}!', $username);
-```
+## 常见场景
 
-#
-
-## Common Scenarios Requiring i18n
-
-### Form Elements
+### 表单元素
 ```html
-<!-- 鉁?CORRECT -->
-<label><lang>鐢ㄦ埛鍚?/lang></label>
-<input type="text" placeholder="<lang>璇疯緭鍏ョ敤鎴峰悕</lang>" />
-<button><lang>鎻愪氦</lang></button>
-<small><lang>鐢ㄦ埛鍚嶉暱搴︿负3-20涓瓧绗?/lang></small>
+<!-- ✅ 正确 -->
+<label><lang>用户名</lang></label>
+<input type="text" placeholder="<lang>请输入用户名</lang>" />
+<button><lang>提交</lang></button>
+<small><lang>用户名长度为3-20个字符</lang></small>
 
-<!-- 鉂?WRONG -->
-<label>鐢ㄦ埛鍚?/label>
-<input type="text" placeholder="璇疯緭鍏ョ敤鎴峰悕" />
-<button>鎻愪氦</button>
-<small>鐢ㄦ埛鍚嶉暱搴︿负3-20涓瓧绗?/small>
+<!-- ❌ 错误 -->
+<label>用户名</label>
+<input type="text" placeholder="请输入用户名" />
+<button>提交</button>
+<small>用户名长度为3-20个字符</small>
 ```
 
-### Messages and Notifications
+### 消息和通知
 ```php
-// 鉁?CORRECT
-$this->messageManager->addSuccess(__('鎿嶄綔鎴愬姛'));
-$this->messageManager->addError(__('鎿嶄綔澶辫触锛?{error}', ['error' => $error]));
-$this->messageManager->addWarning(__('璇锋敞鎰忥細%{message}', ['message' => $msg]));
+// ✅ 正确
+$this->messageManager->addSuccess(__('操作成功'));
+$this->messageManager->addError(__('操作失败：%{error}', ['error' => $error]));
+$this->messageManager->addWarning(__('请注意：%{message}', ['message' => $msg]));
 
-// 鉂?WRONG
-$this->messageManager->addSuccess('鎿嶄綔鎴愬姛');
-$this->messageManager->addError('鎿嶄綔澶辫触锛? . $error);
+// ❌ 错误
+$this->messageManager->addSuccess('操作成功');
+$this->messageManager->addError('操作失败：' . $error);
 ```
 
-### Tooltips and Titles
+### 工具提示和标题
 ```html
-<!-- 鉁?CORRECT -->
-<span title="<lang>鐐瑰嚮鏌ョ湅璇︽儏</lang>"><lang>璇︽儏</lang></span>
-<a href="#" title="<lang>缂栬緫鐢ㄦ埛淇℃伅</lang>"><lang>缂栬緫</lang></a>
+<!-- ✅ 正确 -->
+<span title="<lang>点击查看详情</lang>"><lang>详情</lang></span>
+<a href="#" title="<lang>编辑用户信息</lang>"><lang>编辑</lang></a>
 
-<!-- 鉂?WRONG -->
-<span title="鐐瑰嚮鏌ョ湅璇︽儏">璇︽儏</span>
-<a href="#" title="缂栬緫鐢ㄦ埛淇℃伅">缂栬緫</a>
+<!-- ❌ 错误 -->
+<span title="点击查看详情">详情</span>
+<a href="#" title="编辑用户信息">编辑</a>
 ```
 
-### Table Headers
+### 表头
 ```html
-<!-- 鉁?CORRECT -->
-<th><lang>鐢ㄦ埛鍚?/lang></th>
-<th><lang>閭</lang></th>
-<th><lang>鎿嶄綔</lang></th>
+<!-- ✅ 正确 -->
+<th><lang>用户名</lang></th>
+<th><lang>邮箱</lang></th>
+<th><lang>操作</lang></th>
 
-<!-- 鉂?WRONG -->
-<th>鐢ㄦ埛鍚?/th>
-<th>閭</th>
-<th>鎿嶄綔</th>
+<!-- ❌ 错误 -->
+<th>用户名</th>
+<th>邮箱</th>
+<th>操作</th>
 ```
 
-### Validation Messages
+### 验证消息
 ```php
-// 鉁?CORRECT
+// ✅ 正确
 if (empty($username)) {
-    throw new \Exception(__('鐢ㄦ埛鍚嶄笉鑳戒负绌?));
+    throw new \Exception(__('用户名不能为空'));
 }
 if (strlen($password) < 8) {
-    throw new \Exception(__('瀵嗙爜闀垮害涓嶈兘灏戜簬 %{min} 浣?, ['min' => 8]));
+    throw new \Exception(__('密码长度不能少于 %{min} 位', ['min' => 8]));
 }
 
-// 鉂?WRONG
+// ❌ 错误
 if (empty($username)) {
-    throw new \Exception('鐢ㄦ埛鍚嶄笉鑳戒负绌?);
+    throw new \Exception('用户名不能为空');
 }
 ```
 
-### Confirmation Dialogs
+### 确认对话框
 ```javascript
-// 鉁?CORRECT
-if (confirm(__('纭畾瑕佸垹闄?%{count} 椤瑰悧锛?, {count: selectedItems.length}))) {
-    // Delete operation
+// ✅ 正确
+if (confirm(__('确定要删除 %{count} 项吗？', {count: selectedItems.length}))) {
+    // 删除操作
 }
 
-// 鉂?WRONG
-if (confirm('纭畾瑕佸垹闄?' + selectedItems.length + ' 椤瑰悧锛?)) {
-    // Delete operation
+// ❌ 错误
+if (confirm('确定要删除' + selectedItems.length + '项吗？')) {
+    // 删除操作
 }
 ```
 
+## 反模式：不要这样做
 
-## ❌ ANTI-PATTERNS: What NOT to Do
+### 永远不要硬编码语言检查
 
-### NEVER Hardcode Language Checks
-
-**❌ WRONG - Hardcoding language detection:**
+**❌ 错误 - 硬编码语言检测：**
 ```php
-// This is TERRIBLE! Never do this!
+// 这很糟糕！永远不要这样做！
 $lang = State::getLangLocal();
 $isEnglish = str_starts_with($lang, 'en');
 return $isEnglish ? 'Free Shipping' : __('免运费');
 ```
 
-**✅ CORRECT - Use `__()` function only:**
+**✅ 正确 - 只使用 `__()` 函数：**
 ```php
-// Simple and clean - let the i18n system handle translation
+// 简单干净 - 让 i18n 系统处理翻译
 return __('免运费');
 ```
 
-**Why is hardcoding bad?**
-- Duplicates translation logic across codebase
-- Hard to maintain when adding new languages
-- Bypasses the centralized i18n system
-- Creates inconsistent behavior
+### 永远不要跳过翻译文件
 
-### NEVER Skip Translation Files
+**❌ 错误：**
+- 只使用 `__()` 而不创建翻译 CSV 文件
+- 假设中文"会工作"而不需要 zh_Hans_CN.csv
 
-**❌ WRONG:**
-- Only using `__()` without creating translation CSV files
-- Assuming Chinese will "just work" without zh_Hans_CN.csv
+**✅ 正确：**
+1. 在代码中使用 `__('中文文本')`
+2. 创建 `i18n/en_US.csv` 包含英文翻译
+3. 创建 `i18n/zh_Hans_CN.csv` 包含中文（源=翻译）
+4. 运行 `php bin/w i18n:collect` 收集翻译
 
-**✅ CORRECT:**
-1. Use `__('中文文本')` in code
-2. Create `i18n/en_US.csv` with English translations
-3. Create `i18n/zh_Hans_CN.csv` with Chinese (source = translation)
-4. Run `php bin/w i18n:collect` to collect translations
+## 最佳实践
 
-## Best Practices
+1. **所有用户可见文本必须使用 i18n** - 没有例外！
+2. **在模板中，静态文本优先使用 `<lang>` 标签**
+3. **在 Hook 模板中使用 `<?= __() ?>`** - Hook 模板可能在初始翻译后加载
+4. **始终使用 `__()` 函数**用于 PHP 代码中的所有用户可见文本
+5. **代码中使用中文**，在 CSV 文件中提供翻译
+6. **使用命名占位符**以提高清晰度和可维护性
+7. **保持文本完整** - 不要拆分句子
+8. **添加新翻译文本后运行 `i18n:collect`**：`php bin/w i18n:collect`
+9. **实现后在多种语言中测试**
+10. **更新翻译文件后清除缓存**：`php bin/w cache:flush -a`
 
-1. **⚠️ CRITICAL: ALL user-facing text MUST use i18n** - No exceptions!
-   - Every prompt, hint, button, label, message, tooltip, placeholder, etc.
-   - Never hardcode any user-facing text in any language
-   - Always ask: "Is this visible to the user?" → If yes, use i18n
+## 常见问题
 
-2. **In templates, use `<?= __() ?>` for runtime translation in hook templates**
-   - Hook templates may load after initial translation, so use PHP function
-   - Regular templates can use `<lang>` tag for compile-time translation
-   
-   ```html
-   <!-- In hook templates (view/hooks/) - use PHP function -->
-   <h1><?= __('用户管理') ?></h1>
-   
-   <!-- In regular templates - can use <lang> tag -->
-   <h1><lang>用户管理</lang></h1>
-   ```
+### 翻译不工作
 
-3. **Always use `__()` function** for all user-facing text in PHP code
-4. **Use Chinese in code**, provide translations in CSV files
-5. **Use named placeholders** for clarity and maintainability
-6. **Keep text complete** - don't split sentences
-7. **Run `i18n:collect`** after adding new translation text: `php bin/w i18n:collect`
-8. **Test in multiple languages** after implementation
-9. **Clear cache** after updating translation files: `php bin/w cache:flush -a`
-10. **Delete compiled templates** when translation changes: Remove `view/tpl/` folders
+- 检查翻译文件是否存在于 `i18n/` 目录中
+- 验证 CSV 格式（双引号，逗号分隔）
+- 清除缓存：`php bin/w cache:flush -a`
+- 检查 CSV 文件中是否存在翻译条目
+- **运行 `i18n:collect` 命令**收集所有翻译：`php bin/w i18n:collect`
 
-## Common Issues
+### 占位符未替换
 
-### Translation Not Working
+- 验证占位符格式（`%{}`、`%{1}`、`%{name}`）
+- 检查参数传递是否正确
+- 确保所有语言文件中的占位符一致
 
-- Check translation files exist in `i18n/` directory
-- Verify CSV format (double quotes, comma-separated)
-- Clear cache: `php bin/w cache:flush -a`
-- Check translation entry exists in CSV file
-- **Run `i18n:collect` command** to collect all translations: `php bin/w i18n:collect`
+### JavaScript `__()` 函数未定义
 
-### Placeholders Not Replaced
+- 确保框架 JavaScript 文件已加载
+- 检查浏览器控制台是否有错误
+- 验证框架是否正确初始化
 
-- Verify placeholder format (`%{}`, `%{1}`, `%{name}`)
-- Check parameter passing is correct
-- Ensure placeholders are consistent in all language files
+### CSV 格式错误
 
-### JavaScript `__()` Function Undefined
+- CSV 文件必须使用双引号包裹文本
+- 逗号分隔两列，没有额外逗号
+- 每行一个翻译对，没有换行
 
-- Ensure framework JavaScript files are loaded
-- Check browser console for errors
-- Verify framework is properly initialized
+### Hook 模板中翻译不工作
 
-### CSV Format Errors
-
-- CSV files must use double quotes around text
-- Comma-separated two columns, no extra commas
-- One translation pair per line, no line breaks
-
-### Translation Not Working in Hook Templates
-
-When using translations in hook templates (e.g., `view/hooks/`), the module's translations may not be loaded. Add these lines at the top of your hook template:
+在 Hook 模板（如 `view/hooks/`）中使用翻译时，模块的翻译可能未加载。在 Hook 模板顶部添加这些行：
 
 ```php
-// Add module to request chain for translation loading
+// 将模块添加到请求链以加载翻译
 $this->request->addModule('YourModule_Name');
-// Force reload translations (module may be added after initial translation load)
+// 强制重新加载翻译（模块可能在初始翻译加载后添加）
 \Weline\Framework\Phrase\Parser::$loaded = false;
 ```
 
-### Creating i18n CSV Files Programmatically
+## 完整工作流程
 
-When creating i18n files via scripts, use PHP to avoid encoding issues:
-
-```php
-<?php
-// create_i18n.php
-$enUS = <<<'CSV'
-"源文本","English Translation"
-"保存","Save"
-"删除","Delete"
-CSV;
-
-$zhHansCN = <<<'CSV'
-"源文本","源文本"
-"保存","保存"
-"删除","删除"
-CSV;
-
-$dir = 'app/code/YourModule/i18n';
-if (!is_dir($dir)) {
-    mkdir($dir, 0755, true);
-}
-
-file_put_contents($dir . '/en_US.csv', $enUS);
-file_put_contents($dir . '/zh_Hans_CN.csv', $zhHansCN);
-echo "i18n files created!\n";
-```
-
-Run with: `php create_i18n.php`
-
-## Complete Workflow for Adding Translations
-
-### Step 1: Use `__()` in Your Code
+### 步骤 1：在代码中使用 `__()`
 
 ```php
-// In PHP classes (Controllers, Models, Services, etc.)
+// 在 PHP 类中（控制器、模型、服务等）
 public function getName(): string
 {
-    return __('配送方式');  // Chinese source text
+    return __('配送方式');  // 中文源文本
 }
 
 public function getOptions(): array
@@ -721,35 +582,35 @@ public function getOptions(): array
 }
 ```
 
-### Step 2: Create Translation Files
+### 步骤 2：创建翻译文件
 
-Create `app/code/YourModule/i18n/en_US.csv`:
+创建 `app/code/YourModule/i18n/en_US.csv`：
 ```csv
 "配送方式","Shipping"
 "免运费","Free Shipping"
 "次日达","Next Day Delivery"
 ```
 
-Create `app/code/YourModule/i18n/zh_Hans_CN.csv`:
+创建 `app/code/YourModule/i18n/zh_Hans_CN.csv`：
 ```csv
 "配送方式","配送方式"
 "免运费","免运费"
 "次日达","次日达"
 ```
 
-### Step 3: Collect Translations
+### 步骤 3：收集翻译
 
 ```bash
 php bin/w i18n:collect
 ```
 
-### Step 4: Clear Cache
+### 步骤 4：清除缓存
 
 ```bash
 php bin/w cache:flush -a
 ```
 
-### Step 5: Delete Compiled Templates (if needed)
+### 步骤 5：删除编译模板（如需要）
 
 ```bash
 # PowerShell
@@ -759,32 +620,22 @@ Remove-Item -Path "app/code/YourModule/view/tpl" -Recurse -Force
 rm -rf app/code/YourModule/view/tpl
 ```
 
-### Step 6: Test
+### 步骤 6：测试
 
-Test in browser with different language URLs:
-- Chinese: `http://localhost/CNY/zh_Hans_CN/your-page`
-- English: `http://localhost/CNY/en_US/your-page`
+在浏览器中使用不同语言 URL 测试：
+- 中文：`http://localhost/CNY/zh_Hans_CN/your-page`
+- 英文：`http://localhost/CNY/en_US/your-page`
 
-Or use CLI:
+或使用 CLI：
 ```bash
 php bin/w http:req "/CNY/en_US/your-page" "YourSearchTerm" -n=5
 ```
 
-## Reference Files
+## 参考文件
 
-- Translation Function: `app/code/Weline/Framework/Common/functions.php`
-- Translation Guide: `app/code/Weline/Framework/doc/3-开发/01-翻译函数使用指南.md`
-- Placeholder Guide: `app/code/Weline/Framework/doc/i18n-placeholder-usage.md`
-- Lang Tag Guide: `app/code/Weline/Framework/doc/4-内置标签/01-lang标签使用指南.md`
-- I18n Module: `app/code/Weline/I18n/doc/README.md`
-- Phrase Parser: `app/code/Weline/Framework/Phrase/Parser.php`
-
-
-
-
-
-
-
-
-
-
+- 翻译函数：`app/code/Weline/Framework/Common/functions.php`
+- 翻译指南：`app/code/Weline/Framework/doc/3-开发/01-翻译函数使用指南.md`
+- 占位符指南：`app/code/Weline/Framework/doc/i18n-placeholder-usage.md`
+- Lang 标签指南：`app/code/Weline/Framework/doc/4-内置标签/01-lang标签使用指南.md`
+- I18n 模块：`app/code/Weline/I18n/doc/README.md`
+- Phrase 解析器：`app/code/Weline/Framework/Phrase/Parser.php`

@@ -1,6 +1,11 @@
 ---
 description: |
-  以下场景必须主动读取并执行对应技能。触发词: 修复错误后、做完了、完成了、创建计划、写计划、plan、task、修改了进程、WLS、static、StateManager、更新技能
+  以下场景必须主动读取并执行对应技能。
+  触发词: 修复错误后、做完了、完成了、创建计划、写计划、plan、task、修改了进程、WLS、static、StateManager、更新技能、
+  **CSS、样式、颜色、color、背景、border、shadow、暗色、dark、亮色、light、JS、JavaScript、组件、闭包、前端、.phtml**
+  **提示、通知、消息、弹窗、确认、toast、alert、confirm、dialog、notification、message、warning、error提示、成功提示**
+  **模块间查询、跨模块、模块间通信、模块间数据、w_query、FrameworkQueryService、QueryProvider、从其他模块、调用其他模块**
+  **inter-module、cross-module、module query、call another module、get data from module、query from module**
 alwaysApply: true
 ---
 
@@ -15,5 +20,10 @@ alwaysApply: true
 | 新增 static 或修改 WLS/Runtime/State | `weline-server`（状态管理章节） |
 | 用户说「更新技能/架构图/记录更改」 | 更新相关 SKILL.md |
 | **新增/修改规则或技能**（添加规则、新增技能、编辑 .cursor） | `cursor-as-reference`，在 `dev/ai/rules`、`dev/ai/skills` 下操作 |
+| **写 CSS/样式/颜色/背景/边框/阴影** ⭐ | `theme-development`，禁止硬编码颜色，必须使用主题变量 |
+| **写 JS/JavaScript/闭包/组件** ⭐ | `theme-development`，必须使用 IIFE 闭包，禁止全局污染 |
+| **写前端/模板/.phtml** ⭐ | `theme-development`，模板标签语法、暗色模式兼容、CSS/JS 独立作用域 |
+| **用户提示/通知/确认/弹窗** ⭐⭐ | `friendly-notifications`，**禁止 alert/confirm/prompt！** 必须用 BackendToast/BackendConfirm |
+| **模块间查询/通信** ⭐ | `unified-query-provider`，使用 `w_query()` 或 `FrameworkQueryService`，禁止为查询创建独立事件 |
 
 **映射详情与触发词**：`dev/ai/skills/skill-trigger-reminders/SKILL.md`
