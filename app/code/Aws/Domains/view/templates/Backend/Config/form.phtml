@@ -1,6 +1,6 @@
 <?php
 /**
- * AWS 配置表单
+ * AWS 配置表单（内容模板）
  *
  * @var \Weline\Framework\View\Template $this
  */
@@ -13,26 +13,30 @@ $regions = $regions ?? [];
 $isEdit = $config && $config->getId();
 ?>
 
-@template(Weline_Admin::common/head.phtml)
-
-<div class="page-content">
-    <div class="container-fluid">
-        <div class="row mb-3">
-            <div class="col-12 d-flex justify-content-between align-items-center">
-                <h4 class="mb-0">
-                    <?php if ($isEdit): ?>
-                        <lang>编辑 AWS 配置</lang>
-                    <?php else: ?>
-                        <lang>新增 AWS 配置</lang>
-                    <?php endif; ?>
-                </h4>
-                <a href="<?= $this->getBackendUrl('aws/backend/config/index') ?>" class="btn btn-secondary">
-                    <i class="mdi mdi-arrow-left me-1"></i>
-                    <lang>返回列表</lang>
-                </a>
-            </div>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-0">
+                <?php if ($isEdit): ?>
+                    <lang>编辑 AWS 配置</lang>
+                <?php else: ?>
+                    <lang>新增 AWS 配置</lang>
+                <?php endif; ?>
+            </h4>
+            <a href="<?= $this->getBackendUrl('aws/backend/config/index') ?>" class="btn btn-secondary">
+                <i class="mdi mdi-arrow-left me-1"></i>
+                <lang>返回列表</lang>
+            </a>
         </div>
+    </div>
+</div>
 
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<div class="row">
+    <div class="col-12">
         <div class="card">
             <div class="card-body">
                 <form id="configForm">
@@ -139,38 +143,50 @@ $isEdit = $config && $config->getId();
 </div>
 
 <script>
-document.getElementById('configForm').addEventListener('submit', function(e) {
-    e.preventDefault();
+(function() {
+    'use strict';
+    
+    document.getElementById('configForm').addEventListener('submit', function(e) {
+        e.preventDefault();
 
-    const form = this;
-    const submitBtn = document.getElementById('submitBtn');
-    const originalText = submitBtn.innerHTML;
+        var form = this;
+        var submitBtn = document.getElementById('submitBtn');
+        var originalText = submitBtn.innerHTML;
 
-    submitBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i> <?= __('保存中...') ?>';
-    submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i> <?= __('保存中...') ?>';
+        submitBtn.disabled = true;
 
-    const formData = new FormData(form);
+        var formData = new FormData(form);
 
-    fetch('<?= $this->getBackendUrl('aws/backend/config/save') ?>', {
-        method: 'POST',
-        body: formData
-    })
-    .then(res => res.json())
-    .then(data => {
-        submitBtn.innerHTML = originalText;
-        submitBtn.disabled = false;
+        fetch('<?= $this->getBackendUrl('aws/backend/config/save') ?>', {
+            method: 'POST',
+            body: formData
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
 
-        if (data.success) {
-            alert('<?= __('保存成功') ?>');
-            window.location.href = '<?= $this->getBackendUrl('aws/backend/config/index') ?>';
-        } else {
-            alert(data.message || '<?= __('保存失败') ?>');
-        }
-    })
-    .catch(err => {
-        submitBtn.innerHTML = originalText;
-        submitBtn.disabled = false;
-        alert('<?= __('请求失败') ?>: ' + err.message);
+            if (data.success) {
+                if (typeof AdminToast !== 'undefined') {
+                    AdminToast.success('<?= __('保存成功') ?>');
+                }
+                setTimeout(function() {
+                    window.location.href = '<?= $this->getBackendUrl('aws/backend/config/index') ?>';
+                }, 1000);
+            } else {
+                if (typeof AdminToast !== 'undefined') {
+                    AdminToast.error(data.message || '<?= __('保存失败') ?>');
+                }
+            }
+        })
+        .catch(function(err) {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+            if (typeof AdminToast !== 'undefined') {
+                AdminToast.error('<?= __('请求失败') ?>: ' + err.message);
+            }
+        });
     });
-});
+})();
 </script>
