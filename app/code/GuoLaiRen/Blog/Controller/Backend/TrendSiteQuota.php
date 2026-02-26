@@ -297,11 +297,12 @@ class TrendSiteQuota extends BackendController
         }
     }
 
-    // ─── Offcanvas 新建/编辑（iframe 内加载） ───
+    // ─── Offcanvas 新建/编辑（iframe 内加载，使用空白布局） ───
 
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::trend_site_quota_create', '新建配额(Offcanvas)', '', '', 'GuoLaiRen_Blog::trend_site_quota')]
     public function getOffcanvasCreate(): string
     {
+        $this->layoutType = 'default.blank';
         $this->assign('quota', null);
         $this->assign('action', $this->request->getUrlBuilder()->getBackendUrl('blog/backend/trend-site-quota/offcanvas-create'));
         $this->assign('sites', $this->getSiteOptions());
@@ -325,6 +326,7 @@ class TrendSiteQuota extends BackendController
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::trend_site_quota_edit', '编辑配额(Offcanvas)', '', '', 'GuoLaiRen_Blog::trend_site_quota')]
     public function getOffcanvasEdit(): string
     {
+        $this->layoutType = 'default.blank';
         $id    = (int)$this->request->getGet('id', 0);
         $quota = clone $this->quotaModel;
         $quota->clear()->load($id);

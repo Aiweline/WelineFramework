@@ -6,233 +6,204 @@
  * @var array $rules
  * @var array $models
  */
-/**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
-
 $methods = $this->methods ?? [];
 $rules = $this->rules ?? [];
 $models = $this->models ?? [];
 ?>
-<!DOCTYPE html>
-<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title>脱敏测试</title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+<!-- 页面标题 -->
+<div class='row'>
+    <div class='col-12'>
+        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+            <h4 class='mb-sm-0'>
+                <i class="mdi mdi-test-tube me-2"></i>
+                <lang>脱敏测试</lang>
+            </h4>
+        </div>
+    </div>
+</div>
 
-@template(Weline_Admin::common/page/loading.phtml)
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
 
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'>
-                                <i class="mdi mdi-test-tube me-2"></i>
-                                <lang>脱敏测试</lang>
-                            </h4>
-                        </div>
+<!-- 测试输入区域 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="mdi mdi-file-document-edit me-2"></i>
+                    <lang>测试输入</lang>
+                </h3>
+            </div>
+            <div class="card-body">
+                <form id="desensTestForm">
+                    <div class="mb-3">
+                        <label class="form-label"><lang>测试内容</lang> <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="desens-test-content" name="content" rows="5" 
+                                  placeholder="<?= __('请输入需要测试的内容，例如：我的邮箱是test@example.com，电话13812345678') ?>"></textarea>
                     </div>
-                </div>
 
-                <div class='row'>
-                    <template>Weline_Component::message.phtml</template>
-                </div>
-
-                <!-- 测试输入区域 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h3 class="card-title">
-                                    <i class="mdi mdi-file-document-edit me-2"></i>
-                                    测试输入
-                                </h3>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label"><lang>脱敏方法</lang></label>
+                                <select class="form-select" id="desens-test-method" name="method">
+                                    <?php foreach ($methods as $key => $info): ?>
+                                        <option value="<?= $key ?>"><?= $info['description'] ?></option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
-                            <div class="card-body">
-                                <form id="testForm">
-                                    <div class="mb-3">
-                                        <label class="form-label">测试内容 <span class="text-danger">*</span></label>
-                                        <textarea class="form-control" id="content" name="content" rows="5" 
-                                                  placeholder="请输入需要测试的内容，例如：我的邮箱是test@example.com，电话13812345678"></textarea>
-                                    </div>
+                        </div>
 
-                                    <div class="row">
-                                        <div class="col-md-4">
-                                            <div class="mb-3">
-                                                <label class="form-label">脱敏方法</label>
-                                                <select class="form-select" id="method" name="method" onchange="toggleAIOptions()">
-                                                    <?php foreach ($methods as $key => $info): ?>
-                                                        <option value="<?= $key ?>"><?= $info['description'] ?></option>
-                                                    <?php endforeach; ?>
-                                                </select>
-                                            </div>
+                        <div class="col-md-4">
+                            <div class="mb-3" id="desens-test-model-options" style="display: none;">
+                                <label class="form-label"><lang>AI模型</lang></label>
+                                <select class="form-select" id="desens-test-model-code" name="model_code">
+                                    <option value=""><?= __('使用默认模型') ?></option>
+                                    <?php foreach ($models as $model): ?>
+                                        <option value="<?= $model['code'] ?>">
+                                            <?= $model['name'] ?> (<?= $model['supplier'] ?>)
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label"><lang>选择规则</lang></label>
+                                <div style="max-height: 150px; overflow-y: auto; border: 1px solid var(--backend-color-border); padding: 10px; border-radius: 4px;">
+                                    <?php foreach ($rules as $rule): ?>
+                                        <div class="form-check form-check-sm">
+                                            <input class="form-check-input" type="checkbox" 
+                                                   name="rule_types[]" value="<?= $rule['type'] ?>" 
+                                                   id="rule_<?= $rule['type'] ?>" checked>
+                                            <label class="form-check-label" for="rule_<?= $rule['type'] ?>">
+                                                <?= $rule['name'] ?>
+                                            </label>
                                         </div>
-
-                                        <div class="col-md-4">
-                                            <div class="mb-3" id="modelOptions" style="display: none;">
-                                                <label class="form-label">AI模型</label>
-                                                <select class="form-select" id="model_code" name="model_code">
-                                                    <option value="">使用默认模型</option>
-                                                    <?php foreach ($models as $model): ?>
-                                                        <option value="<?= $model['code'] ?>">
-                                                            <?= $model['name'] ?> (<?= $model['supplier'] ?>)
-                                                        </option>
-                                                    <?php endforeach; ?>
-                                                </select>
-                                            </div>
-                                        </div>
-
-                                        <div class="col-md-4">
-                                            <div class="mb-3">
-                                                <label class="form-label">选择规则</label>
-                                                <div style="max-height: 150px; overflow-y: auto; border: 1px solid #dee2e6; padding: 10px; border-radius: 4px;">
-                                                    <?php foreach ($rules as $rule): ?>
-                                                        <div class="form-check form-check-sm">
-                                                            <input class="form-check-input" type="checkbox" 
-                                                                   name="rule_types[]" value="<?= $rule['type'] ?>" 
-                                                                   id="rule_<?= $rule['type'] ?>" checked>
-                                                            <label class="form-check-label" for="rule_<?= $rule['type'] ?>">
-                                                                <?= $rule['name'] ?>
-                                                            </label>
-                                                        </div>
-                                                    <?php endforeach; ?>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="text-end">
-                                        <button type="button" class="btn btn-primary" onclick="executeTest()">
-                                            <i class="mdi mdi-play-circle me-1"></i>
-                                            <lang>执行测试</lang>
-                                        </button>
-                                    </div>
-                                </form>
+                                    <?php endforeach; ?>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- 测试结果 -->
-                <div class="row mt-3">
-                    <div class="col-12">
-                        <div class="card" id="resultCard" style="display: none;">
-                            <div class="card-header">
-                                <h3 class="card-title">
-                                    <i class="mdi mdi-check-circle me-2"></i>
-                                    测试结果
-                                </h3>
-                            </div>
-                            <div class="card-body" id="resultContent">
-                                <!-- 结果将在这里显示 -->
-                            </div>
-                        </div>
+                    <div class="text-end">
+                        <button type="button" class="btn btn-primary" id="desens-test-execute-btn">
+                            <i class="mdi mdi-play-circle me-1"></i>
+                            <lang>执行测试</lang>
+                        </button>
                     </div>
-                </div>
-
+                </form>
             </div>
         </div>
     </div>
-
 </div>
 
-@template(Weline_Admin::common/right-sidebar.phtml)
-@template(Weline_Admin::common/footer.phtml)
+<!-- 测试结果 -->
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="card" id="desens-test-result-card" style="display: none;">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="mdi mdi-check-circle me-2"></i>
+                    <lang>测试结果</lang>
+                </h3>
+            </div>
+            <div class="card-body" id="desens-test-result-content">
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
-function toggleAIOptions() {
-    const method = document.getElementById('method').value;
-    const modelOptions = document.getElementById('modelOptions');
-    if (method === 'ai') {
-        modelOptions.style.display = 'block';
-    } else {
-        modelOptions.style.display = 'none';
-    }
-}
-
-function executeTest() {
-    const content = document.getElementById('content').value;
-    if (!content) {
-        alert('请输入测试内容');
-        return;
-    }
-
-    const form = document.getElementById('testForm');
-    const formData = new FormData(form);
-    const method = formData.get('method');
+(function() {
+    'use strict';
     
-    const data = {
-        content: content,
-        method: method
-    };
-
-    // 添加选中的规则类型
-    const ruleTypes = [];
-    formData.getAll('rule_types[]').forEach(type => ruleTypes.push(type));
-    if (ruleTypes.length > 0) {
-        data.options = {rule_types: ruleTypes};
-    }
-
-    // 如果是AI方法，添加model_code
-    if (method === 'ai') {
-        data.model_code = formData.get('model_code');
-    }
-
-    const resultCard = document.getElementById('resultCard');
-    const resultContent = document.getElementById('resultContent');
+    var methodSelect = document.getElementById('desens-test-method');
+    var modelOptions = document.getElementById('desens-test-model-options');
     
-    resultContent.innerHTML = '<div class="text-center py-4"><i class="mdi mdi-loading mdi-spin me-2"></i>正在测试...</div>';
-    resultCard.style.display = 'block';
-
-    fetch('<?= $this->getBackendUrl('*/backend/test/execute') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(data)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            const result = data.data;
-            const html = `
-                <div class="alert alert-success">
-                    <strong>测试完成</strong> - 执行时间: ${result.execution_time}
-                </div>
-                
-                <div class="row">
-                    <div class="col-md-6">
-                        <h5><i class="mdi mdi-file-document me-2"></i>原内容</h5>
-                        <div class="p-3 bg-light rounded">
-                            <pre style="white-space: pre-wrap; word-wrap: break-word;">${result.original}</pre>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <h5><i class="mdi mdi-shield-lock me-2"></i>脱敏后</h5>
-                        <div class="p-3 bg-success bg-opacity-10 rounded">
-                            <pre style="white-space: pre-wrap; word-wrap: break-word;">${result.desensitized}</pre>
-                        </div>
-                    </div>
-                </div>
-            `;
-            resultContent.innerHTML = html;
+    function toggleAIOptions() {
+        if (methodSelect.value === 'ai') {
+            modelOptions.style.display = 'block';
         } else {
-            resultContent.innerHTML = `<div class="alert alert-danger">测试失败: ${data.message}</div>`;
+            modelOptions.style.display = 'none';
         }
-    })
-    .catch(error => {
-        resultContent.innerHTML = `<div class="alert alert-danger">测试失败: ${error.message}</div>`;
-    });
-}
-</script>
+    }
+    
+    methodSelect.addEventListener('change', toggleAIOptions);
+    
+    document.getElementById('desens-test-execute-btn').addEventListener('click', function() {
+        var content = document.getElementById('desens-test-content').value;
+        if (!content) {
+            if (typeof AdminToast !== 'undefined') {
+                AdminToast.warning('<?= __('请输入测试内容') ?>');
+            }
+            return;
+        }
 
-</body>
-</html>
+        var form = document.getElementById('desensTestForm');
+        var formData = new FormData(form);
+        var method = formData.get('method');
+        
+        var data = {
+            content: content,
+            method: method
+        };
+
+        var ruleTypes = [];
+        formData.getAll('rule_types[]').forEach(function(type) {
+            ruleTypes.push(type);
+        });
+        if (ruleTypes.length > 0) {
+            data.options = {rule_types: ruleTypes};
+        }
+
+        if (method === 'ai') {
+            data.model_code = formData.get('model_code');
+        }
+
+        var resultCard = document.getElementById('desens-test-result-card');
+        var resultContent = document.getElementById('desens-test-result-content');
+        
+        resultContent.innerHTML = '<div class="text-center py-4"><i class="mdi mdi-loading mdi-spin me-2"></i><?= __('正在测试...') ?></div>';
+        resultCard.style.display = 'block';
+
+        fetch('<?= $this->getBackendUrl('*/backend/test/execute') ?>', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.success) {
+                var result = data.data;
+                resultContent.innerHTML = 
+                    '<div class="alert alert-success">' +
+                        '<strong><?= __('测试完成') ?></strong> - <?= __('执行时间') ?>: ' + result.execution_time +
+                    '</div>' +
+                    '<div class="row">' +
+                        '<div class="col-md-6">' +
+                            '<h5><i class="mdi mdi-file-document me-2"></i><?= __('原内容') ?></h5>' +
+                            '<div class="p-3 bg-light rounded">' +
+                                '<pre style="white-space: pre-wrap; word-wrap: break-word;">' + result.original + '</pre>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="col-md-6">' +
+                            '<h5><i class="mdi mdi-shield-lock me-2"></i><?= __('脱敏后') ?></h5>' +
+                            '<div class="p-3 bg-success bg-opacity-10 rounded">' +
+                                '<pre style="white-space: pre-wrap; word-wrap: break-word;">' + result.desensitized + '</pre>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>';
+            } else {
+                resultContent.innerHTML = '<div class="alert alert-danger"><?= __('测试失败') ?>: ' + data.message + '</div>';
+            }
+        })
+        .catch(function(error) {
+            resultContent.innerHTML = '<div class="alert alert-danger"><?= __('测试失败') ?>: ' + error.message + '</div>';
+        });
+    });
+})();
+</script>

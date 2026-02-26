@@ -2122,11 +2122,14 @@ class Taglib
                     function ($tag_key, $config, $tag_data, $attributes) use ($template) {
                         switch ($tag_key) {
                             case 'tag':
-                                $data = $this->varParser(str_replace(' ', '', $tag_data[2]));
+                                $data = trim(str_replace(' ', '', $tag_data[2]));
+                                // 如果以引号开头，保持原样；如果以 $ 开头，解析变量；否则当作字符串字面量
                                 if (str_starts_with($data, '"') || str_starts_with($data, "'")) {
                                     return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $data . ')' . self::PHP_CLOSE_TAG;
-                                } else {
+                                } elseif (str_starts_with($data, '$') || str_contains($data, '{{')) {
                                     return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $this->varParser($data) . ')' . self::PHP_CLOSE_TAG;
+                                } else {
+                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl("' . $data . '")' . self::PHP_CLOSE_TAG;
                                 }
                             // no break
                             case 'tag-start':
@@ -2134,11 +2137,14 @@ class Taglib
                             case 'tag-end':
                                 return ')' . self::PHP_CLOSE_TAG;
                             default:
-                                $data = str_replace(' ', '', $tag_data[1]);
+                                $data = trim(str_replace(' ', '', $tag_data[1]));
+                                // 如果以引号开头，保持原样；如果以 $ 开头，解析变量；否则当作字符串字面量
                                 if (str_starts_with($data, '"') || str_starts_with($data, "'")) {
                                     return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $data . ')' . self::PHP_CLOSE_TAG;
-                                } else {
+                                } elseif (str_starts_with($data, '$') || str_contains($data, '{{')) {
                                     return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $this->varParser($data) . ')' . self::PHP_CLOSE_TAG;
+                                } else {
+                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl("' . $data . '")' . self::PHP_CLOSE_TAG;
                                 }
                         }
                     }
@@ -2151,11 +2157,14 @@ class Taglib
                     function ($tag_key, $config, $tag_data, $attributes) use ($template) {
                         switch ($tag_key) {
                             case 'tag':
-                                $data = $this->varParser(str_replace(' ', '', $tag_data[2]));
+                                $data = trim(str_replace(' ', '', $tag_data[2]));
+                                // 如果以引号开头，保持原样；如果以 $ 开头，解析变量；否则当作字符串字面量
                                 if (str_starts_with($data, '"') || str_starts_with($data, "'")) {
                                     return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $data . ')' . self::PHP_CLOSE_TAG;
-                                } else {
+                                } elseif (str_starts_with($data, '$') || str_contains($data, '{{')) {
                                     return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $this->varParser($data) . ')' . self::PHP_CLOSE_TAG;
+                                } else {
+                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl("' . $data . '")' . self::PHP_CLOSE_TAG;
                                 }
                             // no break
                             case 'tag-start':
@@ -2163,11 +2172,14 @@ class Taglib
                             case 'tag-end':
                                 return ')' . self::PHP_CLOSE_TAG;
                             default:
-                                $data = str_replace(' ', '', $tag_data[1]);
+                                $data = trim(str_replace(' ', '', $tag_data[1]));
+                                // 如果以引号开头，保持原样；如果以 $ 开头，解析变量；否则当作字符串字面量
                                 if (str_starts_with($data, '"') || str_starts_with($data, "'")) {
                                     return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $data . ')' . self::PHP_CLOSE_TAG;
-                                } else {
+                                } elseif (str_starts_with($data, '$') || str_contains($data, '{{')) {
                                     return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $this->varParser($data) . ')' . self::PHP_CLOSE_TAG;
+                                } else {
+                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl("' . $data . '")' . self::PHP_CLOSE_TAG;
                                 }
                         }
                     }
@@ -2180,11 +2192,14 @@ class Taglib
                     function ($tag_key, $config, $tag_data, $attributes) use ($template) {
                         switch ($tag_key) {
                             case 'tag':
-                                $data = $this->varParser(str_replace(' ', '', $tag_data[2]));
+                                $data = trim(str_replace(' ', '', $tag_data[2]));
+                                // 如果以引号开头，保持原样；如果以 $ 开头，解析变量；否则当作字符串字面量
                                 if (str_starts_with($data, '"') || str_starts_with($data, "'")) {
                                     return self::PHP_OPEN_TAG . '=$this->getBackendApi(' . $data . ')' . self::PHP_CLOSE_TAG;
-                                } else {
+                                } elseif (str_starts_with($data, '$') || str_contains($data, '{{')) {
                                     return self::PHP_OPEN_TAG . '=$this->getBackendApi(' . $this->varParser($data) . ')' . self::PHP_CLOSE_TAG;
+                                } else {
+                                    return self::PHP_OPEN_TAG . '=$this->getBackendApi("' . $data . '")' . self::PHP_CLOSE_TAG;
                                 }
                             // no break
                             case 'tag-start':
@@ -2192,11 +2207,14 @@ class Taglib
                             case 'tag-end':
                                 return ')' . self::PHP_CLOSE_TAG;
                             default:
-                                $data = str_replace(' ', '', $tag_data[1]);
+                                $data = trim(str_replace(' ', '', $tag_data[1]));
+                                // 如果以引号开头，保持原样；如果以 $ 开头，解析变量；否则当作字符串字面量
                                 if (str_starts_with($data, '"') || str_starts_with($data, "'")) {
                                     return self::PHP_OPEN_TAG . '=$this->getBackendApi(' . $data . ')' . self::PHP_CLOSE_TAG;
-                                } else {
+                                } elseif (str_starts_with($data, '$') || str_contains($data, '{{')) {
                                     return self::PHP_OPEN_TAG . '=$this->getBackendApi(' . $this->varParser($data) . ')' . self::PHP_CLOSE_TAG;
+                                } else {
+                                    return self::PHP_OPEN_TAG . '=$this->getBackendApi("' . $data . '")' . self::PHP_CLOSE_TAG;
                                 }
                         }
                     }

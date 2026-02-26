@@ -1,7 +1,7 @@
 <css>Weline_MediaManager::css/manager.css</css>
 <js>Weline_MediaManager::js/manager.js</js>
 
-<div class="mmf-wrap">
+<div class="mmf-wrap<notempty name="is_iframe"> mmf-iframe-mode</notempty>">
     <!-- 侧边树 -->
     <div class="mmf-sidebar">
         <div class="mmf-storage-selector">
@@ -38,8 +38,13 @@
             <button class="mmf-btn" id="mmf-btn-refresh" title="Refresh">
                 &#x1F504; <lang>Refresh</lang>
             </button>
-            <div class="mmf-path"></div>
+            <notempty name="is_iframe">
+            <button class="mmf-btn mmf-btn-primary" id="mmf-btn-select" title="Select" style="margin-left:auto;">
+                &#x2714; <lang>Select</lang>
+            </button>
+            </notempty>
         </div>
+        <div class="mmf-path"></div>
 
         <!-- 上传区 -->
         <div class="mmf-upload-drop"><lang>Drop files here to upload</lang></div>
@@ -59,6 +64,20 @@
             <span class="mmf-status-info"></span>
             <span class="mmf-status-size"></span>
         </div>
+        
+        <notempty name="is_iframe">
+        <!-- iframe 模式下的多选工具栏 -->
+        <div class="mmf-select-bar" id="mmf-select-bar" style="display:none;">
+            <div class="mmf-select-bar-left">
+                <span class="mmf-select-count"><lang>已选择</lang> <span id="mmf-select-count-num">0</span> <lang>个文件</lang></span>
+            </div>
+            <div class="mmf-select-bar-right">
+                <button class="mmf-btn" id="mmf-btn-clear-select"><lang>取消全选</lang></button>
+                <button class="mmf-btn" id="mmf-btn-cancel"><lang>取消</lang></button>
+                <button class="mmf-btn mmf-btn-primary" id="mmf-btn-confirm-select"><lang>确认选择</lang></button>
+            </div>
+        </div>
+        </notempty>
     </div>
 
     <!-- 右侧预览面板 -->
@@ -136,6 +155,53 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        WelineMediaManager.init('{{$connector_url}}', '{{$start_path|default:""}}');
+        WelineMediaManager.init('{{$connector_url}}', '{{$start_path|default:""}}', {
+            isIframe: '{{$is_iframe|default:"0"}}' === '1' || '{{$is_iframe|default:"0"}}' === 'true',
+            target: '{{$target|default:""}}',
+            multi: '{{$multi|default:"0"}}' === '1' || '{{$multi|default:"0"}}' === 'true',
+            ext: '{{$ext|default:"*"}}',
+            size: parseInt('{{$size|default:"102400"}}') || 102400,
+            lockPath: '{{$lock_path|default:"0"}}' === '1' || '{{$lock_path|default:"0"}}' === 'true',
+            i18n: {
+                connectorNotConfigured: '@lang{连接器URL未配置，请刷新页面}',
+                requestTimeout: '@lang{请求超时，服务器可能繁忙}',
+                invalidJson: '@lang{响应JSON格式无效}',
+                networkError: '@lang{网络错误}',
+                invalidResponse: '@lang{响应无效}',
+                itemsCount: '@lang{%{count} 个项目}',
+                selectedCount: '@lang{已选择 %{count} 个}',
+                selectOneToRename: '@lang{请选择一个项目进行重命名}',
+                noItemsSelected: '@lang{未选择任何项目}',
+                pleaseSelectFile: '@lang{请至少选择一个文件}',
+                pleaseSelectValidFiles: '@lang{请选择有效的文件（非文件夹）}',
+                confirmDelete: '@lang{确定删除 %{count} 个项目？}',
+                deleted: '@lang{删除成功}',
+                renamed: '@lang{重命名成功}',
+                uploadComplete: '@lang{上传完成}',
+                folderCreated: '@lang{文件夹已创建}',
+                fileSizeExceeded: '@lang{文件 "%{name}" 超过大小限制（最大：%{size}）}',
+                fileTypeNotAllowed: '@lang{文件类型 "%{ext}" 不允许。允许的类型：%{allowed}}',
+                cannotAccessOutsidePath: '@lang{不能访问指定路径以外的目录}',
+                folder: '@lang{文件夹}',
+                unknown: '@lang{未知}',
+                newFolder: '@lang{新建文件夹}',
+                folderName: '@lang{文件夹名称}',
+                untitled: '@lang{未命名}',
+                rename: '@lang{重命名}',
+                newName: '@lang{新名称}',
+                confirm: '@lang{确认}',
+                noFiles: '@lang{暂无文件}',
+                loading: '@lang{加载中...}',
+                preview: '@lang{预览}',
+                open: '@lang{打开}',
+                download: '@lang{下载}',
+                delete: '@lang{删除}',
+                exitSelectionMode: '@lang{退出选择模式}',
+                clearSelection: '@lang{清除选择}',
+                confirmSelection: '@lang{确认选择}',
+                selectionMode: '@lang{选择模式}',
+                selectFiles: '@lang{选择文件}'
+            }
+        });
     });
 </script>

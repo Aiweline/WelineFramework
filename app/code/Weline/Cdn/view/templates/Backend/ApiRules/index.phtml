@@ -4,465 +4,299 @@
  *
  * @var \Weline\Framework\View\Template $this
  */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 
 $groupedRules = $this->getData('groupedRules') ?: [];
 $rules = $this->getData('rules') ?: [];
 $module = $this->getData('module') ?: '';
 $trigger = $this->getData('trigger') ?: '';
 ?>
-<!DOCTYPE html>
-<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= __('API规则管理') ?></title>
-    <style>
-        .rule-item {
-            border: 1px solid #e0e0e0;
-            border-radius: 4px;
-            padding: 15px;
-            margin-bottom: 15px;
-            background: #fff;
-        }
-        .rule-item:hover {
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .rule-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        .rule-title {
-            font-weight: 600;
-            color: #333;
-        }
-        .rule-meta {
-            font-size: 12px;
-            color: #666;
-            margin-top: 5px;
-        }
-        .rule-expression {
-            background: #f5f5f5;
-            padding: 10px;
-            border-radius: 4px;
-            font-family: monospace;
-            font-size: 12px;
-            margin: 10px 0;
-            word-break: break-all;
-        }
-        .rule-action {
-            background: #f0f7ff;
-            padding: 10px;
-            border-radius: 4px;
-            font-family: monospace;
-            font-size: 12px;
-            margin: 10px 0;
-        }
-        .badge-trigger {
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 500;
-        }
-        .badge-trigger-cron {
-            background: #e3f2fd;
-            color: #1976d2;
-        }
-        .badge-trigger-realtime {
-            background: #fff3e0;
-            color: #f57c00;
-        }
-    </style>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
-@template(Weline_Admin::common/page/loading.phtml)
+<!-- 消息提示 -->
+<div class='row mb-3'>
+    <template>Weline_Component::message.phtml</template>
+</div>
 
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <!-- 页面标题 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0">
-                                <i class="mdi mdi-code-tags text-primary"></i> <?= __('API规则管理') ?>
-                            </h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('admin') ?>"><?= __('首页') ?></a></li>
-                                    <li class="breadcrumb-item"><?= __('CDN管理') ?></li>
-                                    <li class="breadcrumb-item active"><?= __('API规则管理') ?></li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 消息提示 -->
-                <div class='row'>
-                    <template>Weline_Component::message.phtml</template>
-                </div>
-
-                <!-- 操作栏 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <div class="row mb-3">
-                                    <div class="col-md-3">
-                                        <label class="form-label"><?= __('模块筛选') ?></label>
-                                        <select id="moduleFilter" class="form-select" onchange="filterRules()">
-                                            <option value=""><?= __('全部模块') ?></option>
-                                            <?php
-                                            $modules = array_unique(array_column($rules, 'module'));
-                                            foreach ($modules as $moduleName):
-                                            ?>
-                                                <option value="<?= htmlspecialchars($moduleName) ?>" 
-                                                        <?= $module === $moduleName ? 'selected' : '' ?>>
-                                                    <?= htmlspecialchars($moduleName) ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label"><?= __('触发方式') ?></label>
-                                        <select id="triggerFilter" class="form-select" onchange="filterRules()">
-                                            <option value=""><?= __('全部') ?></option>
-                                            <option value="cron" <?= $trigger === 'cron' ? 'selected' : '' ?>><?= __('定时推送') ?></option>
-                                            <option value="realtime" <?= $trigger === 'realtime' ? 'selected' : '' ?>><?= __('实时推送') ?></option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6 text-end">
-                                        <button type="button" class="btn btn-primary" onclick="collectRules()">
-                                            <i class="mdi mdi-refresh"></i> <?= __('重新收集规则') ?>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 规则列表 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <h5 class="card-title mb-4">
-                                    <i class="mdi mdi-list"></i> <?= __('规则列表') ?>
-                                    <span class="badge bg-primary ms-2"><?= count($rules) ?></span>
-                                </h5>
-
-                                <?php if (empty($rules)): ?>
-                                    <div class="alert alert-info">
-                                        <i class="mdi mdi-information"></i> 
-                                        <?= __('暂无规则。请运行 setup:upgrade 收集规则，或点击"重新收集规则"按钮。') ?>
-                                    </div>
-                                <?php else: ?>
-                                    <?php foreach ($groupedRules as $moduleName => $moduleRules): ?>
-                                        <div class="mb-4">
-                                            <h6 class="text-primary mb-3">
-                                                <i class="mdi mdi-package-variant"></i> <?= htmlspecialchars($moduleName) ?>
-                                                <span class="badge bg-secondary ms-2"><?= count($moduleRules) ?></span>
-                                            </h6>
-                                            
-                                            <?php foreach ($moduleRules as $rule): ?>
-                                                <div class="rule-item">
-                                                    <div class="rule-header">
-                                                        <div>
-                                                            <div class="rule-title">
-                                                                <?= htmlspecialchars($rule->getData('class')) ?>::<?= htmlspecialchars($rule->getData('method')) ?>()
-                                                            </div>
-                                                            <div class="rule-meta">
-                                                                <span class="me-3">
-                                                                    <i class="mdi mdi-route"></i> 
-                                                                    <?= htmlspecialchars($rule->getData('route')) ?>
-                                                                </span>
-                                                                <span class="me-3">
-                                                                    <i class="mdi mdi-package"></i> 
-                                                                    <?= htmlspecialchars($rule->getData('module')) ?>
-                                                                </span>
-                                                                <span class="badge badge-trigger badge-trigger-<?= $rule->getData('trigger') ?>">
-                                                                    <?= $rule->getData('trigger') === 'realtime' ? __('实时推送') : __('定时推送') ?>
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                        <div>
-                                                            <div class="form-check form-switch">
-                                                                <input class="form-check-input" type="checkbox" 
-                                                                       id="rule_<?= $rule->getId() ?>"
-                                                                       <?= $rule->getData('enabled') ? 'checked' : '' ?>
-                                                                       onchange="toggleRule(<?= $rule->getId() ?>, this.checked)">
-                                                                <label class="form-check-label" for="rule_<?= $rule->getId() ?>">
-                                                                    <?= __('启用') ?>
-                                                                </label>
-                                                            </div>
-                                                            <button type="button" class="btn btn-sm btn-info mt-2" 
-                                                                    onclick="viewRule(<?= $rule->getId() ?>)">
-                                                                <i class="mdi mdi-eye"></i> <?= __('详情') ?>
-                                                            </button>
-                                                            <button type="button" class="btn btn-sm btn-danger mt-2" 
-                                                                    onclick="deleteRule(<?= $rule->getId() ?>)">
-                                                                <i class="mdi mdi-delete"></i> <?= __('删除') ?>
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <?php if ($rule->getData('description')): ?>
-                                                        <div class="mb-2">
-                                                            <strong><?= __('描述') ?>:</strong> 
-                                                            <?= htmlspecialchars($rule->getData('description')) ?>
-                                                        </div>
-                                                    <?php endif; ?>
-                                                    
-                                                    <div class="rule-expression">
-                                                        <strong><?= __('表达式') ?>:</strong><br>
-                                                        <?= htmlspecialchars($rule->getData('expression')) ?>
-                                                    </div>
-                                                    
-                                                    <div class="rule-action">
-                                                        <strong><?= __('动作') ?>:</strong><br>
-                                                        <pre><?= htmlspecialchars(json_encode($rule->getActionArray(), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) ?></pre>
-                                                    </div>
-                                                </div>
-                                            <?php endforeach; ?>
-                                        </div>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+<!-- 操作栏 -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <label class="form-label"><?= __('模块筛选') ?></label>
+                <select id="moduleFilter" class="form-select" onchange="window.CdnApiRulesManager.filterRules()">
+                    <option value=""><?= __('全部模块') ?></option>
+                    <?php
+                    $modules = array_unique(array_column($rules, 'module'));
+                    foreach ($modules as $moduleName):
+                    ?>
+                        <option value="<?= htmlspecialchars($moduleName) ?>" 
+                                <?= $module === $moduleName ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($moduleName) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label"><?= __('触发方式') ?></label>
+                <select id="triggerFilter" class="form-select" onchange="window.CdnApiRulesManager.filterRules()">
+                    <option value=""><?= __('全部') ?></option>
+                    <option value="cron" <?= $trigger === 'cron' ? 'selected' : '' ?>><?= __('定时推送') ?></option>
+                    <option value="realtime" <?= $trigger === 'realtime' ? 'selected' : '' ?>><?= __('实时推送') ?></option>
+                </select>
+            </div>
+            <div class="col-md-6 text-end d-flex align-items-end justify-content-end">
+                <button type="button" class="btn btn-primary" onclick="window.CdnApiRulesManager.collectRules()">
+                    <i class="mdi mdi-refresh"></i> <?= __('重新收集规则') ?>
+                </button>
             </div>
         </div>
     </div>
 </div>
 
-@template(Weline_Admin::common/footer.phtml)
+<!-- 规则列表 -->
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title mb-4">
+            <i class="mdi mdi-list"></i> <?= __('规则列表') ?>
+            <span class="badge bg-primary ms-2"><?= count($rules) ?></span>
+        </h5>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-<script>
-function filterRules() {
-    const module = document.getElementById('moduleFilter').value;
-    const trigger = document.getElementById('triggerFilter').value;
-    const params = new URLSearchParams();
-    if (module) params.append('module', module);
-    if (trigger) params.append('trigger', trigger);
-    window.location.href = '<?= $this->getBackendUrl('*/backend/api-rules/index') ?>' + (params.toString() ? '?' + params.toString() : '');
-}
+        <?php if (empty($rules)): ?>
+            <div class="alert alert-info">
+                <i class="mdi mdi-information"></i> 
+                <?= __('暂无规则。请运行 setup:upgrade 收集规则，或点击"重新收集规则"按钮。') ?>
+            </div>
+        <?php else: ?>
+            <?php foreach ($groupedRules as $moduleName => $moduleRules): ?>
+                <div class="mb-4">
+                    <h6 class="text-primary mb-3">
+                        <i class="mdi mdi-package-variant"></i> <?= htmlspecialchars($moduleName) ?>
+                        <span class="badge bg-secondary ms-2"><?= count($moduleRules) ?></span>
+                    </h6>
+                    
+                    <?php foreach ($moduleRules as $rule): ?>
+                        <div class="border rounded p-3 mb-3" style="background: var(--backend-color-card-bg);">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <div class="fw-bold">
+                                        <?= htmlspecialchars($rule->getData('class')) ?>::<?= htmlspecialchars($rule->getData('method')) ?>()
+                                    </div>
+                                    <div class="small text-muted mt-1">
+                                        <span class="me-3">
+                                            <i class="mdi mdi-route"></i> 
+                                            <?= htmlspecialchars($rule->getData('route')) ?>
+                                        </span>
+                                        <span class="me-3">
+                                            <i class="mdi mdi-package"></i> 
+                                            <?= htmlspecialchars($rule->getData('module')) ?>
+                                        </span>
+                                        <span class="badge <?= $rule->getData('trigger') === 'realtime' ? 'bg-warning text-dark' : 'bg-info' ?>">
+                                            <?= $rule->getData('trigger') === 'realtime' ? __('实时推送') : __('定时推送') ?>
+                                        </span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" 
+                                               id="rule_<?= $rule->getId() ?>"
+                                               <?= $rule->getData('enabled') ? 'checked' : '' ?>
+                                               onchange="window.CdnApiRulesManager.toggleRule(<?= $rule->getId() ?>, this.checked)">
+                                        <label class="form-check-label" for="rule_<?= $rule->getId() ?>">
+                                            <?= __('启用') ?>
+                                        </label>
+                                    </div>
+                                    <div class="btn-group btn-group-sm mt-2">
+                                        <button type="button" class="btn btn-info" 
+                                                onclick="window.CdnApiRulesManager.viewRule(<?= $rule->getId() ?>)">
+                                            <i class="mdi mdi-eye"></i> <?= __('详情') ?>
+                                        </button>
+                                        <button type="button" class="btn btn-danger" 
+                                                onclick="window.CdnApiRulesManager.deleteRule(<?= $rule->getId() ?>)">
+                                            <i class="mdi mdi-delete"></i> <?= __('删除') ?>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <?php if ($rule->getData('description')): ?>
+                                <div class="mt-2">
+                                    <strong><?= __('描述') ?>:</strong> 
+                                    <?= htmlspecialchars($rule->getData('description')) ?>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <div class="mt-2 p-2 rounded font-monospace small" style="background: var(--backend-color-bg-secondary);">
+                                <strong><?= __('表达式') ?>:</strong><br>
+                                <?= htmlspecialchars($rule->getData('expression')) ?>
+                            </div>
+                            
+                            <div class="mt-2 p-2 rounded font-monospace small" style="background: var(--backend-color-bg-tertiary, #f0f7ff);">
+                                <strong><?= __('动作') ?>:</strong><br>
+                                <pre class="mb-0"><?= htmlspecialchars(json_encode($rule->getActionArray(), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) ?></pre>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    </div>
+</div>
 
-function collectRules() {
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            title: '<?= __('确认收集规则') ?>',
-            text: '<?= __('确定要重新收集规则吗？这将扫描所有Api和Controller目录。') ?>',
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonText: '<?= __("确定收集") ?>',
-            cancelButtonText: '<?= __("取消") ?>'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                performCollect();
-            }
-        });
-    } else {
-        if (!confirm('<?= __('确定要重新收集规则吗？这将扫描所有Api和Controller目录。') ?>')) {
-            return;
-        }
-        performCollect();
-    }
-}
-
-function performCollect() {
-    fetch('<?= $this->getBackendUrl('*/backend/api-rules/collect') ?>', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('成功') ?>',
-                    text: data.message,
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => window.location.reload());
-            } else {
-                console.log(data.message);
-                window.location.reload();
-            }
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('收集失败') ?>',
-                    text: data.message || '<?= __('收集失败') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error(data.message || '<?= __('收集失败') ?>');
-            }
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('收集失败') ?>',
-                text: '<?= __('请重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('收集失败') ?>');
-        }
-    });
-}
-
-function toggleRule(ruleId, enabled) {
-    fetch('<?= $this->getBackendUrl('*/backend/api-rules/toggle') ?>', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
+<js:part>
+(function() {
+    'use strict';
+    
+    var indexUrl = '<?= $this->getBackendUrl('*/backend/api-rules/index') ?>';
+    var collectUrl = '<?= $this->getBackendUrl('*/backend/api-rules/collect') ?>';
+    var toggleUrl = '<?= $this->getBackendUrl('*/backend/api-rules/toggle') ?>';
+    var viewUrl = '<?= $this->getBackendUrl('*/backend/api-rules/view') ?>';
+    var deleteUrl = '<?= $this->getBackendUrl('*/backend/api-rules/delete') ?>';
+    
+    window.CdnApiRulesManager = {
+        filterRules: function() {
+            var module = document.getElementById('moduleFilter').value;
+            var trigger = document.getElementById('triggerFilter').value;
+            var params = new URLSearchParams();
+            if (module) params.append('module', module);
+            if (trigger) params.append('trigger', trigger);
+            window.location.href = indexUrl + (params.toString() ? '?' + params.toString() : '');
         },
-        body: JSON.stringify({
-            id: ruleId,
-            enabled: enabled ? 1 : 0
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // 可以显示成功提示
-        } else {
-            if (typeof Swal !== 'undefined') {
+        
+        collectRules: function() {
+            Swal.fire({
+                title: '<?= __('确认收集规则') ?>',
+                text: '<?= __('确定要重新收集规则吗？这将扫描所有Api和Controller目录。') ?>',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: '<?= __("确定收集") ?>',
+                cancelButtonText: '<?= __("取消") ?>'
+            }).then(function(result) {
+                if (result.isConfirmed) {
+                    fetch(collectUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        if (data.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: '<?= __('成功') ?>',
+                                text: data.message,
+                                timer: 2000,
+                                showConfirmButton: false
+                            }).then(function() { window.location.reload(); });
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: '<?= __('收集失败') ?>',
+                                text: data.message || '<?= __('收集失败') ?>',
+                                confirmButtonText: '<?= __('确定') ?>'
+                            });
+                        }
+                    })
+                    .catch(function(error) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('收集失败') ?>',
+                            text: '<?= __('请重试') ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    });
+                }
+            });
+        },
+        
+        toggleRule: function(ruleId, enabled) {
+            fetch(toggleUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    id: ruleId,
+                    enabled: enabled ? 1 : 0
+                })
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (!data.success) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('操作失败') ?>',
+                        text: data.message || '<?= __('操作失败') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                    document.getElementById('rule_' + ruleId).checked = !enabled;
+                }
+            })
+            .catch(function(error) {
                 Swal.fire({
                     icon: 'error',
                     title: '<?= __('操作失败') ?>',
-                    text: data.message || '<?= __('操作失败') ?>',
+                    text: '<?= __('请重试') ?>',
                     confirmButtonText: '<?= __('确定') ?>'
                 });
-            } else {
-                console.error(data.message || '<?= __('操作失败') ?>');
-            }
-            // 恢复状态
-            document.getElementById('rule_' + ruleId).checked = !enabled;
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('操作失败') ?>',
-                text: '<?= __('请重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
+                document.getElementById('rule_' + ruleId).checked = !enabled;
             });
-        } else {
-            console.error('<?= __('操作失败') ?>');
-        }
-        document.getElementById('rule_' + ruleId).checked = !enabled;
-    });
-}
-
-function viewRule(ruleId) {
-    window.location.href = '<?= $this->getBackendUrl('*/backend/api-rules/view') ?>?id=' + ruleId;
-}
-
-function deleteRule(ruleId) {
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            title: '<?= __('确认删除') ?>',
-            text: '<?= __('确定要删除这条规则吗？') ?>',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: '<?= __("确定删除") ?>',
-            cancelButtonText: '<?= __("取消") ?>',
-            confirmButtonColor: '#d33'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                performDelete(ruleId);
-            }
-        });
-    } else {
-        if (!confirm('<?= __('确定要删除这条规则吗？') ?>')) {
-            return;
-        }
-        performDelete(ruleId);
-    }
-}
-
-function performDelete(ruleId) {
-    fetch('<?= $this->getBackendUrl('*/backend/api-rules/delete') ?>', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
         },
-        body: JSON.stringify({
-            id: ruleId
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('成功') ?>',
-                    text: data.message,
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => window.location.reload());
-            } else {
-                console.log(data.message);
-                window.location.reload();
-            }
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('删除失败') ?>',
-                    text: data.message || '<?= __('删除失败') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error(data.message || '<?= __('删除失败') ?>');
-            }
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        if (typeof Swal !== 'undefined') {
+        
+        viewRule: function(ruleId) {
+            window.location.href = viewUrl + '?id=' + ruleId;
+        },
+        
+        deleteRule: function(ruleId) {
             Swal.fire({
-                icon: 'error',
-                title: '<?= __('删除失败') ?>',
-                text: '<?= __('请重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
+                title: '<?= __('确认删除') ?>',
+                text: '<?= __('确定要删除这条规则吗？') ?>',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '<?= __("确定删除") ?>',
+                cancelButtonText: '<?= __("取消") ?>',
+                confirmButtonColor: '#d33'
+            }).then(function(result) {
+                if (result.isConfirmed) {
+                    fetch(deleteUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify({ id: ruleId })
+                    })
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        if (data.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: '<?= __('成功') ?>',
+                                text: data.message,
+                                timer: 2000,
+                                showConfirmButton: false
+                            }).then(function() { window.location.reload(); });
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: '<?= __('删除失败') ?>',
+                                text: data.message || '<?= __('删除失败') ?>',
+                                confirmButtonText: '<?= __('确定') ?>'
+                            });
+                        }
+                    })
+                    .catch(function(error) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('删除失败') ?>',
+                            text: '<?= __('请重试') ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    });
+                }
             });
-        } else {
-            console.error('<?= __('删除失败') ?>');
         }
-    });
-}
-</script>
-
-</body>
-</html>
+    };
+})();
+</js:part>

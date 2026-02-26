@@ -1,227 +1,210 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-/**@var \Weline\Currency\Model\Currency $currency */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+/**
+ * 货币表单页面（内容模板）
+ * 
+ * 只包含页面内容，由布局系统自动包裹 HTML 框架
+ * 布局由 BackendController::$layoutType = 'default.default' 控制
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var \Weline\Currency\Model\Currency $currency
+ */
 $currency = $currency ?? \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Currency\Model\Currency::class);
 $isEdit = $currency->getId() > 0;
 ?>
-<!DOCTYPE html>
-<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= $isEdit ? __('编辑货币') : __('添加货币') ?></title>
-</head>
-
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-
-@template(Weline_Admin::common/page/loading.phtml)
-
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class='page-content'>
-            <div class='container-fluid'>
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'>
-                                <lang>货币管理</lang> > <?= $isEdit ? __('编辑货币') : __('添加货币') ?>
-                            </h4>
-                            <div class='page-title-right'>
-                                <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>系统</lang></a></li>
-                                    <li class='breadcrumb-item'><a href="@backend-url('currency/backend/currency/index')"><lang>货币管理</lang></a></li>
-                                    <li class='breadcrumb-item active'><?= $isEdit ? __('编辑货币') : __('添加货币') ?></li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class='row'>
-                    <template>Weline_Component::message.phtml</template>
-                </div>
-
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='card'>
-                            <div class='card-body'>
-                                <h4 class='card-title'><?= $isEdit ? __('编辑货币') : __('添加货币') ?></h4>
-                                
-                                <form class='needs-validation' novalidate action="<?= $action ?>" method="post">
-                                    <?php if ($isEdit): ?>
-                                        <input type='hidden' name='currency_id' value='<?= $currency->getId() ?>'>
-                                    <?php endif; ?>
-
-                                    <div class='row'>
-                                        <div class='col-md-6'>
-                                            <div class='mb-3'>
-                                                <label class='form-label'><lang>货币代码</lang> <span class='text-danger'>*</span></label>
-                                                <input type='text' class='form-control' name='code' 
-                                                       value='<?= htmlspecialchars($currency->getCode()) ?>' 
-                                                       maxlength='3' required <?= $isEdit ? 'readonly' : '' ?>>
-                                                <div class='form-text'><lang>3位大写字母（ISO 4217标准），如：USD, CNY</lang></div>
-                                            </div>
-                                        </div>
-                                        <div class='col-md-6'>
-                                            <div class='mb-3'>
-                                                <label class='form-label'><lang>货币名称</lang> <span class='text-danger'>*</span></label>
-                                                <input type='text' class='form-control' name='name' 
-                                                       value='<?= htmlspecialchars($currency->getName()) ?>' required>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class='row'>
-                                        <div class='col-md-6'>
-                                            <div class='mb-3'>
-                                                <label class='form-label'><lang>汇率</lang> <span class='text-danger'>*</span></label>
-                                                <input type='number' class='form-control' name='rate' 
-                                                       value='<?= $currency->getRate() ?>' step='0.0001' min='0' required>
-                                                <div class='form-text'><lang>相对于基准货币的汇率</lang></div>
-                                            </div>
-                                        </div>
-                                        <div class='col-md-6'>
-                                            <div class='mb-3'>
-                                                <label class='form-label'><lang>货币符号</lang> <span class='text-danger'>*</span></label>
-                                                <input type='text' class='form-control' name='symbol' 
-                                                       value='<?= htmlspecialchars($currency->getSymbol()) ?>' required>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class='row'>
-                                        <div class='col-md-6'>
-                                            <div class='mb-3'>
-                                                <label class='form-label'><lang>符号位置</lang></label>
-                                                <select class='form-select' name='position'>
-                                                    <option value='left' <?= $currency->getPosition() === 'left' ? 'selected' : '' ?>><lang>左侧</lang></option>
-                                                    <option value='right' <?= $currency->getPosition() === 'right' ? 'selected' : '' ?>><lang>右侧</lang></option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <div class='col-md-6'>
-                                            <div class='mb-3'>
-                                                <label class='form-label'><lang>货币图标</lang></label>
-                                                <input type='text' class='form-control' name='icon' 
-                                                       value='<?= htmlspecialchars($currency->getIcon() ?? '') ?>' 
-                                                       placeholder='<?= __('Unicode符号或图标路径') ?>'>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class='row'>
-                                        <div class='col-md-4'>
-                                            <div class='mb-3'>
-                                                <label class='form-label'><lang>千分位分隔符</lang></label>
-                                                <input type='text' class='form-control' name='thousand_separator' 
-                                                       value='<?= htmlspecialchars($currency->getThousandSeparator()) ?>' 
-                                                       maxlength='1' required>
-                                            </div>
-                                        </div>
-                                        <div class='col-md-4'>
-                                            <div class='mb-3'>
-                                                <label class='form-label'><lang>小数分隔符</lang></label>
-                                                <input type='text' class='form-control' name='decimal_separator' 
-                                                       value='<?= htmlspecialchars($currency->getDecimalSeparator()) ?>' 
-                                                       maxlength='1' required>
-                                            </div>
-                                        </div>
-                                        <div class='col-md-4'>
-                                            <div class='mb-3'>
-                                                <label class='form-label'><lang>格式</lang></label>
-                                                <input type='text' class='form-control' name='format' 
-                                                       value='<?= htmlspecialchars($currency->getFormat()) ?>' 
-                                                       placeholder='2,0' required>
-                                                <div class='form-text'><lang>格式：小数位数,整数位数</lang></div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class='row'>
-                                        <div class='col-md-6'>
-                                            <div class='mb-3'>
-                                                <label class='form-label'><lang>基准货币</lang></label>
-                                                <input type='text' class='form-control' name='base_currency' 
-                                                       value='<?= htmlspecialchars($currency->getBaseCurrency()) ?>' 
-                                                       maxlength='3' required>
-                                                <div class='form-text'><lang>基准货币代码（3位大写字母）</lang></div>
-                                            </div>
-                                        </div>
-                                        <div class='col-md-6'>
-                                            <div class='mb-3'>
-                                                <label class='form-label'><lang>状态</lang></label>
-                                                <select class='form-select' name='status'>
-                                                    <option value='1' <?= $currency->getStatus() ? 'selected' : '' ?>><lang>启用</lang></option>
-                                                    <option value='0' <?= !$currency->getStatus() ? 'selected' : '' ?>><lang>禁用</lang></option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class='mb-3'>
-                                        <label class='form-label'><lang>格式化预览</lang></label>
-                                        <div class='alert alert-info' id='formatPreview'>
-                                            <lang>输入金额后显示预览</lang>
-                                        </div>
-                                        <input type='number' class='form-control' id='previewAmount' 
-                                               value='1234.56' step='0.01' oninput='updatePreview()'>
-                                    </div>
-
-                                    <div class='mb-3'>
-                                        <button type='submit' class='btn btn-primary'><lang>保存</lang></button>
-                                        <a href="@backend-url('currency/backend/currency/index')" class='btn btn-secondary'><lang>取消</lang></a>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+<!-- 页面标题 -->
+<div class='row'>
+    <div class='col-12'>
+        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+            <h4 class='mb-sm-0'>
+                <lang>货币管理</lang> > <?= $isEdit ? __('编辑货币') : __('添加货币') ?>
+            </h4>
+            <div class='page-title-right'>
+                <ol class='breadcrumb m-0'>
+                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>系统</lang></a></li>
+                    <li class='breadcrumb-item'><a href="@backend-url('currency/backend/currency/index')"><lang>货币管理</lang></a></li>
+                    <li class='breadcrumb-item active'><?= $isEdit ? __('编辑货币') : __('添加货币') ?></li>
+                </ol>
             </div>
         </div>
     </div>
 </div>
 
-@template(Weline_Admin::common/footer.phtml)
+<!-- 消息 -->
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<!-- 货币表单 -->
+<div class='row'>
+    <div class='col-12'>
+        <div class='card'>
+            <div class='card-body'>
+                <h4 class='card-title'><?= $isEdit ? __('编辑货币') : __('添加货币') ?></h4>
+                
+                <form class='needs-validation' novalidate action="<?= $action ?>" method="post">
+                    <?php if ($isEdit): ?>
+                        <input type='hidden' name='currency_id' value='<?= $currency->getId() ?>'>
+                    <?php endif; ?>
+
+                    <div class='row'>
+                        <div class='col-md-6'>
+                            <div class='mb-3'>
+                                <label class='form-label'><lang>货币代码</lang> <span class='text-danger'>*</span></label>
+                                <input type='text' class='form-control' name='code' 
+                                       value='<?= htmlspecialchars($currency->getCode()) ?>' 
+                                       maxlength='3' required <?= $isEdit ? 'readonly' : '' ?>>
+                                <div class='form-text'><lang>3位大写字母（ISO 4217标准），如：USD, CNY</lang></div>
+                            </div>
+                        </div>
+                        <div class='col-md-6'>
+                            <div class='mb-3'>
+                                <label class='form-label'><lang>货币名称</lang> <span class='text-danger'>*</span></label>
+                                <input type='text' class='form-control' name='name' 
+                                       value='<?= htmlspecialchars($currency->getName()) ?>' required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class='row'>
+                        <div class='col-md-6'>
+                            <div class='mb-3'>
+                                <label class='form-label'><lang>汇率</lang> <span class='text-danger'>*</span></label>
+                                <input type='number' class='form-control' name='rate' 
+                                       value='<?= $currency->getRate() ?>' step='0.0001' min='0' required>
+                                <div class='form-text'><lang>相对于基准货币的汇率</lang></div>
+                            </div>
+                        </div>
+                        <div class='col-md-6'>
+                            <div class='mb-3'>
+                                <label class='form-label'><lang>货币符号</lang> <span class='text-danger'>*</span></label>
+                                <input type='text' class='form-control' name='symbol' 
+                                       value='<?= htmlspecialchars($currency->getSymbol()) ?>' required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class='row'>
+                        <div class='col-md-6'>
+                            <div class='mb-3'>
+                                <label class='form-label'><lang>符号位置</lang></label>
+                                <select class='form-select' name='position'>
+                                    <option value='left' <?= $currency->getPosition() === 'left' ? 'selected' : '' ?>><lang>左侧</lang></option>
+                                    <option value='right' <?= $currency->getPosition() === 'right' ? 'selected' : '' ?>><lang>右侧</lang></option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class='col-md-6'>
+                            <div class='mb-3'>
+                                <label class='form-label'><lang>货币图标</lang></label>
+                                <input type='text' class='form-control' name='icon' 
+                                       value='<?= htmlspecialchars($currency->getIcon() ?? '') ?>' 
+                                       placeholder='<?= __('Unicode符号或图标路径') ?>'>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class='row'>
+                        <div class='col-md-4'>
+                            <div class='mb-3'>
+                                <label class='form-label'><lang>千分位分隔符</lang></label>
+                                <input type='text' class='form-control' name='thousand_separator' 
+                                       value='<?= htmlspecialchars($currency->getThousandSeparator()) ?>' 
+                                       maxlength='1' required>
+                            </div>
+                        </div>
+                        <div class='col-md-4'>
+                            <div class='mb-3'>
+                                <label class='form-label'><lang>小数分隔符</lang></label>
+                                <input type='text' class='form-control' name='decimal_separator' 
+                                       value='<?= htmlspecialchars($currency->getDecimalSeparator()) ?>' 
+                                       maxlength='1' required>
+                            </div>
+                        </div>
+                        <div class='col-md-4'>
+                            <div class='mb-3'>
+                                <label class='form-label'><lang>格式</lang></label>
+                                <input type='text' class='form-control' name='format' 
+                                       value='<?= htmlspecialchars($currency->getFormat()) ?>' 
+                                       placeholder='2,0' required>
+                                <div class='form-text'><lang>格式：小数位数,整数位数</lang></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class='row'>
+                        <div class='col-md-6'>
+                            <div class='mb-3'>
+                                <label class='form-label'><lang>基准货币</lang></label>
+                                <input type='text' class='form-control' name='base_currency' 
+                                       value='<?= htmlspecialchars($currency->getBaseCurrency()) ?>' 
+                                       maxlength='3' required>
+                                <div class='form-text'><lang>基准货币代码（3位大写字母）</lang></div>
+                            </div>
+                        </div>
+                        <div class='col-md-6'>
+                            <div class='mb-3'>
+                                <label class='form-label'><lang>状态</lang></label>
+                                <select class='form-select' name='status'>
+                                    <option value='1' <?= $currency->getStatus() ? 'selected' : '' ?>><lang>启用</lang></option>
+                                    <option value='0' <?= !$currency->getStatus() ? 'selected' : '' ?>><lang>禁用</lang></option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class='mb-3'>
+                        <label class='form-label'><lang>格式化预览</lang></label>
+                        <div class='alert alert-info' id='formatPreview'>
+                            <lang>输入金额后显示预览</lang>
+                        </div>
+                        <input type='number' class='form-control' id='previewAmount' 
+                               value='1234.56' step='0.01' oninput='WelineCurrencyForm.updatePreview()'>
+                    </div>
+
+                    <div class='mb-3'>
+                        <button type='submit' class='btn btn-primary'><lang>保存</lang></button>
+                        <a href="@backend-url('currency/backend/currency/index')" class='btn btn-secondary'><lang>取消</lang></a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
-function updatePreview() {
-    const amount = parseFloat(document.getElementById('previewAmount').value) || 0;
-    const symbol = document.querySelector('[name="symbol"]').value || '';
-    const position = document.querySelector('[name="position"]').value || 'left';
-    const icon = document.querySelector('[name="icon"]').value || symbol;
-    const thousandSep = document.querySelector('[name="thousand_separator"]').value || ',';
-    const decimalSep = document.querySelector('[name="decimal_separator"]').value || '.';
-    const format = document.querySelector('[name="format"]').value || '2,0';
+(function() {
+    'use strict';
     
-    const formats = format.split(',');
-    const decimals = parseInt(formats[0]) || 2;
-    
-    const formatted = amount.toFixed(decimals).replace('.', decimalSep).replace(/\B(?=(\d{3})+(?!\d))/g, thousandSep);
-    const display = position === 'right' ? formatted + icon : icon + formatted;
-    
-    document.getElementById('formatPreview').textContent = display;
-}
-
-// 页面加载时更新预览
-document.addEventListener('DOMContentLoaded', function() {
-    updatePreview();
-    
-    // 监听相关字段变化
-    ['symbol', 'position', 'icon', 'thousand_separator', 'decimal_separator', 'format'].forEach(function(field) {
-        const input = document.querySelector('[name="' + field + '"]');
-        if (input) {
-            input.addEventListener('input', updatePreview);
-            input.addEventListener('change', updatePreview);
+    window.WelineCurrencyForm = {
+        updatePreview: function() {
+            var amount = parseFloat(document.getElementById('previewAmount').value) || 0;
+            var symbol = document.querySelector('[name="symbol"]').value || '';
+            var position = document.querySelector('[name="position"]').value || 'left';
+            var icon = document.querySelector('[name="icon"]').value || symbol;
+            var thousandSep = document.querySelector('[name="thousand_separator"]').value || ',';
+            var decimalSep = document.querySelector('[name="decimal_separator"]').value || '.';
+            var format = document.querySelector('[name="format"]').value || '2,0';
+            
+            var formats = format.split(',');
+            var decimals = parseInt(formats[0]) || 2;
+            
+            var formatted = amount.toFixed(decimals).replace('.', decimalSep).replace(/\B(?=(\d{3})+(?!\d))/g, thousandSep);
+            var display = position === 'right' ? formatted + icon : icon + formatted;
+            
+            document.getElementById('formatPreview').textContent = display;
         }
+    };
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        WelineCurrencyForm.updatePreview();
+        
+        ['symbol', 'position', 'icon', 'thousand_separator', 'decimal_separator', 'format'].forEach(function(field) {
+            var input = document.querySelector('[name="' + field + '"]');
+            if (input) {
+                input.addEventListener('input', WelineCurrencyForm.updatePreview);
+                input.addEventListener('change', WelineCurrencyForm.updatePreview);
+            }
+        });
     });
-});
+})();
 </script>
-
-</body>
-</html>
-

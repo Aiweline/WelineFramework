@@ -5,17 +5,18 @@ declare(strict_types=1);
 namespace Weline\MediaManager\Block;
 
 use Weline\FileManager\Block\FileManager;
-use Weline\FileManager\Helper\Image;
 
 class WelineMedia extends FileManager
 {
     protected string $_template = 'Weline_MediaManager::weline-media.phtml';
+    
     public function render(): string
     {
+        $params = $this->getParams();
         if ($this->request->isBackend()) {
-            $connector = $this->request->getUrlBuilder()->getBackendUrl('media/backend/manager/iframe', $this->getParams(), true);
+            $connector = $this->request->getUrlBuilder()->getBackendUrl('media/backend/manager/iframe', $params, true);
         } else {
-            $connector = $this->request->getUrlBuilder()->getUrl('media/frontend/manager/iframe', $this->getParams(), true);
+            $connector = $this->request->getUrlBuilder()->getUrl('media/frontend/manager/iframe', $params, true);
         }
         $this->assign('connector', $connector);
         return parent::render();

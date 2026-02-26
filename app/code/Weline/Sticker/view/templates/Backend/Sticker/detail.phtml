@@ -4,8 +4,7 @@
  *
  * @var \Weline\Framework\View\Template $this
  */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
 
 $targetModule = $this->getData('target_module') ?: '';
 $targetFile = $this->getData('target_file') ?: '';
@@ -17,49 +16,7 @@ $stickerContent = $this->getData('sticker_content') ?: '';
 $sourceContent = $this->getData('source_content') ?: '';
 $sourceFilePath = $this->getData('source_file_path') ?: '';
 ?>
-<!DOCTYPE html>
-<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= __('Sticker详情') ?></title>
-    <style>
-        .code-block {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            padding: 15px;
-            max-height: 400px;
-            overflow-y: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-        .action-badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            margin-right: 5px;
-        }
-        .action-replace { background: #ffc107; color: #000; }
-        .action-before { background: #28a745; color: #fff; }
-        .action-after { background: #17a2b8; color: #fff; }
-    </style>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-
-@template(Weline_Admin::common/page/loading.phtml)
-
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <!-- 页面标题 -->
+<!-- 页面标题 -->
                 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -224,12 +181,3 @@ $sourceFilePath = $this->getData('source_file_path') ?: '';
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-@template(Weline_Admin::common/footer.phtml)
-</body>
-</html>
-

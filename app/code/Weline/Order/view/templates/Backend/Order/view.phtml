@@ -1,7 +1,8 @@
 <?php
-/** @var \Weline\Framework\View\Template $this */
-/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+/**
+ * 订单详情 - 内容模板
+ * @var \Weline\Framework\View\Template $this
+ */
 
 use Weline\Order\Model\Order;
 use Weline\Order\Model\OrderItem;
@@ -23,304 +24,284 @@ if (!$order) {
 $orderData = is_object($order) ? $order->getData() : $order;
 $orderId = $orderData[Order::fields_ID] ?? 0;
 ?>
-<!DOCTYPE html>
-<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= __('订单详情') ?> - <?= htmlspecialchars($orderData[Order::fields_ORDER_NUMBER] ?? '') ?></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-@template(Weline_Admin::common/page/loading.phtml)
-<div id="layout-wrapper">
-    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
-    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0"><?= __('订单详情') ?> - <?= htmlspecialchars($orderData[Order::fields_ORDER_NUMBER] ?? '') ?></h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="@backend-url('admin/index/index')"><?= __('系统') ?></a></li>
-                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('order/backend/order/index') ?>"><?= __('订单管理') ?></a></li>
-                                    <li class="breadcrumb-item active"><?= __('订单详情') ?></li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-12">
-                        <!-- Hook: 订单详情页之前 -->
-                        <w:hook name="Weline_Order::backend::order::view::before"/>
-                        
-                        <!-- 订单基本信息 -->
-                        <div class="card mb-3">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0"><?= __('订单基本信息') ?></h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <table class="table table-borderless">
-                                            <tr>
-                                                <th width="150"><?= __('订单号') ?>:</th>
-                                                <td><?= htmlspecialchars($orderData[Order::fields_ORDER_NUMBER] ?? '') ?></td>
-                                            </tr>
-                                            <tr>
-                                                <th><?= __('订单状态') ?>:</th>
-                                                <td>
-                                                    <?php
-                                                    $status = $orderData[Order::fields_STATUS] ?? '';
-                                                    // 使用Order模型的状态方法（内部已使用事件机制）
-                                                    $statusText = Order::getStatusLabel($status);
-                                                    $statusClass = Order::getStatusClassByCode($status);
-                                                    ?>
-                                                    <span class="badge bg-<?= $statusClass ?>"><?= htmlspecialchars($statusText) ?></span>
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <th><?= __('客户姓名') ?>:</th>
-                                                <td><?= htmlspecialchars($orderData[Order::fields_CUSTOMER_NAME] ?? '') ?></td>
-                                            </tr>
-                                            <tr>
-                                                <th><?= __('客户邮箱') ?>:</th>
-                                                <td><?= htmlspecialchars($orderData[Order::fields_CUSTOMER_EMAIL] ?? '') ?></td>
-                                            </tr>
-                                            <tr>
-                                                <th><?= __('客户电话') ?>:</th>
-                                                <td><?= htmlspecialchars($orderData[Order::fields_CUSTOMER_PHONE] ?? '') ?></td>
-                                            </tr>
-                                        </table>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <table class="table table-borderless">
-                                            <tr>
-                                                <th width="150"><?= __('订单总额') ?>:</th>
-                                                <td><strong><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::fields_GRAND_TOTAL] ?? 0), 2) ?></strong></td>
-                                            </tr>
-                                            <tr>
-                                                <th><?= __('商品小计') ?>:</th>
-                                                <td><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::fields_SUBTOTAL] ?? 0), 2) ?></td>
-                                            </tr>
-                                            <tr>
-                                                <th><?= __('运费') ?>:</th>
-                                                <td><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::fields_SHIPPING_AMOUNT] ?? 0), 2) ?></td>
-                                            </tr>
-                                            <tr>
-                                                <th><?= __('税费') ?>:</th>
-                                                <td><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::fields_TAX_AMOUNT] ?? 0), 2) ?></td>
-                                            </tr>
-                                            <tr>
-                                                <th><?= __('折扣') ?>:</th>
-                                                <td><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::fields_DISCOUNT_AMOUNT] ?? 0), 2) ?></td>
-                                            </tr>
-                                            <tr>
-                                                <th><?= __('创建时间') ?>:</th>
-                                                <td><?= $orderData[Order::fields_CREATED_AT] ?? '' ?></td>
-                                            </tr>
-                                        </table>
-                                    </div>
-                                </div>
-                                
-                                <!-- 状态转换 -->
-                                <?php if (!empty($availableTransitions)): ?>
-                                    <div class="mt-3">
-                                        <h6><?= __('状态操作') ?>:</h6>
-                                        <form method="post" action="<?= $this->getBackendUrl('order/backend/order/updateStatus') ?>" class="d-inline">
-                                            <input type="hidden" name="order_id" value="<?= $orderId ?>">
-                                            <select name="status" class="form-select d-inline-block" style="width: auto;">
-                                                <?php foreach ($availableTransitions as $transition): ?>
-                                                    <option value="<?= htmlspecialchars($transition) ?>"><?= htmlspecialchars(Order::getStatusLabel($transition)) ?></option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                            <input type="text" name="comment" class="form-control d-inline-block" style="width: 200px;" placeholder="<?= __('备注') ?>">
-                                            <button type="submit" class="btn btn-primary btn-sm"><?= __('更新状态') ?></button>
-                                        </form>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-
-                        <!-- 订单项 -->
-                        <div class="card mb-3">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0"><?= __('订单项') ?></h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="table-responsive">
-                                    <table class="table table-bordered">
-                                        <thead>
-                                            <tr>
-                                                <th><?= __('商品名称') ?></th>
-                                                <th><?= __('SKU') ?></th>
-                                                <th><?= __('数量') ?></th>
-                                                <th><?= __('单价') ?></th>
-                                                <th><?= __('行总计') ?></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php if (empty($items)): ?>
-                                                <tr>
-                                                    <td colspan="5" class="text-center"><?= __('暂无订单项') ?></td>
-                                                </tr>
-                                            <?php else: ?>
-                                                <?php foreach ($items as $item): ?>
-                                                    <?php
-                                                    $itemData = is_object($item) ? $item->getData() : $item;
-                                                    ?>
-                                                    <tr>
-                                                        <td><?= htmlspecialchars($itemData[OrderItem::fields_PRODUCT_NAME] ?? '') ?></td>
-                                                        <td><?= htmlspecialchars($itemData[OrderItem::fields_PRODUCT_SKU] ?? '') ?></td>
-                                                        <td><?= number_format((float)($itemData[OrderItem::fields_QTY_ORDERED] ?? 0), 2) ?></td>
-                                                        <td><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($itemData[OrderItem::fields_PRICE] ?? 0), 2) ?></td>
-                                                        <td><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($itemData[OrderItem::fields_ROW_TOTAL] ?? 0), 2) ?></td>
-                                                    </tr>
-                                                <?php endforeach; ?>
-                                            <?php endif; ?>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 支付记录 -->
-                        <div class="card mb-3">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0"><?= __('支付记录') ?></h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="table-responsive">
-                                    <table class="table table-bordered">
-                                        <thead>
-                                            <tr>
-                                                <th><?= __('支付方式') ?></th>
-                                                <th><?= __('支付金额') ?></th>
-                                                <th><?= __('交易ID') ?></th>
-                                                <th><?= __('状态') ?></th>
-                                                <th><?= __('支付时间') ?></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php if (empty($payments)): ?>
-                                                <tr>
-                                                    <td colspan="5" class="text-center"><?= __('暂无支付记录') ?></td>
-                                                </tr>
-                                            <?php else: ?>
-                                                <?php foreach ($payments as $payment): ?>
-                                                    <?php
-                                                    $paymentData = is_object($payment) ? $payment->getData() : $payment;
-                                                    ?>
-                                                    <tr>
-                                                        <td><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::fields_PAYMENT_METHOD] ?? '') ?></td>
-                                                        <td><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($paymentData[\Weline\Order\Model\OrderPayment::fields_AMOUNT] ?? 0), 2) ?></td>
-                                                        <td><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::fields_TRANSACTION_ID] ?? '') ?></td>
-                                                        <td><span class="badge bg-success"><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::fields_STATUS] ?? '') ?></span></td>
-                                                        <td><?= $paymentData[\Weline\Order\Model\OrderPayment::fields_PAID_AT] ?? '' ?></td>
-                                                    </tr>
-                                                <?php endforeach; ?>
-                                            <?php endif; ?>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 发货记录 -->
-                        <div class="card mb-3">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0"><?= __('发货记录') ?></h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="table-responsive">
-                                    <table class="table table-bordered">
-                                        <thead>
-                                            <tr>
-                                                <th><?= __('物流单号') ?></th>
-                                                <th><?= __('承运商') ?></th>
-                                                <th><?= __('状态') ?></th>
-                                                <th><?= __('发货时间') ?></th>
-                                                <th><?= __('送达时间') ?></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php if (empty($shipments)): ?>
-                                                <tr>
-                                                    <td colspan="5" class="text-center"><?= __('暂无发货记录') ?></td>
-                                                </tr>
-                                            <?php else: ?>
-                                                <?php foreach ($shipments as $shipment): ?>
-                                                    <?php
-                                                    $shipmentData = is_object($shipment) ? $shipment->getData() : $shipment;
-                                                    ?>
-                                                    <tr>
-                                                        <td><?= htmlspecialchars($shipmentData[\Weline\Order\Model\OrderShipment::fields_TRACKING_NUMBER] ?? '') ?></td>
-                                                        <td><?= htmlspecialchars($shipmentData[\Weline\Order\Model\OrderShipment::fields_CARRIER] ?? '') ?></td>
-                                                        <td><span class="badge bg-info"><?= htmlspecialchars($shipmentData[\Weline\Order\Model\OrderShipment::fields_STATUS] ?? '') ?></span></td>
-                                                        <td><?= $shipmentData[\Weline\Order\Model\OrderShipment::fields_SHIPPED_AT] ?? '' ?></td>
-                                                        <td><?= $shipmentData[\Weline\Order\Model\OrderShipment::fields_DELIVERED_AT] ?? '' ?></td>
-                                                    </tr>
-                                                <?php endforeach; ?>
-                                            <?php endif; ?>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 订单历史 -->
-                        <div class="card mb-3">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0"><?= __('订单历史') ?></h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="table-responsive">
-                                    <table class="table table-bordered">
-                                        <thead>
-                                            <tr>
-                                                <th><?= __('状态') ?></th>
-                                                <th><?= __('备注') ?></th>
-                                                <th><?= __('是否通知客户') ?></th>
-                                                <th><?= __('时间') ?></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php if (empty($history)): ?>
-                                                <tr>
-                                                    <td colspan="4" class="text-center"><?= __('暂无历史记录') ?></td>
-                                                </tr>
-                                            <?php else: ?>
-                                                <?php foreach ($history as $h): ?>
-                                                    <?php
-                                                    $hData = is_object($h) ? $h->getData() : $h;
-                                                    ?>
-                                                    <tr>
-                                                        <td><?= htmlspecialchars($hData[\Weline\Order\Model\OrderHistory::fields_STATUS] ?? '') ?></td>
-                                                        <td><?= htmlspecialchars($hData[\Weline\Order\Model\OrderHistory::fields_COMMENT] ?? '') ?></td>
-                                                        <td><?= !empty($hData[\Weline\Order\Model\OrderHistory::fields_IS_CUSTOMER_NOTIFIED]) ? __('是') : __('否') ?></td>
-                                                        <td><?= $hData[\Weline\Order\Model\OrderHistory::fields_CREATED_AT] ?? '' ?></td>
-                                                    </tr>
-                                                <?php endforeach; ?>
-                                            <?php endif; ?>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Hook: 订单详情页之后 -->
-                        <w:hook name="Weline_Order::backend::order::view::after"/>
-                    </div>
-                </div>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><?= __('订单详情') ?> - <?= htmlspecialchars($orderData[Order::fields_ORDER_NUMBER] ?? '') ?></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="@backend-url('admin/index/index')"><?= __('系统') ?></a></li>
+                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('order/backend/order/index') ?>"><?= __('订单管理') ?></a></li>
+                    <li class="breadcrumb-item active"><?= __('订单详情') ?></li>
+                </ol>
             </div>
         </div>
     </div>
 </div>
-@template(Weline_Admin::common/footer.phtml)
-</body>
-</html>
 
+<div class="row">
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <!-- Hook: 订单详情页之前 -->
+        <w:hook name="Weline_Order::backend::order::view::before"/>
+        
+        <!-- 订单基本信息 -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><?= __('订单基本信息') ?></h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-borderless">
+                            <tr>
+                                <th width="150"><?= __('订单号') ?>:</th>
+                                <td><?= htmlspecialchars($orderData[Order::fields_ORDER_NUMBER] ?? '') ?></td>
+                            </tr>
+                            <tr>
+                                <th><?= __('订单状态') ?>:</th>
+                                <td>
+                                    <?php
+                                    $status = $orderData[Order::fields_STATUS] ?? '';
+                                    $statusText = Order::getStatusLabel($status);
+                                    $statusClass = Order::getStatusClassByCode($status);
+                                    ?>
+                                    <span class="badge bg-<?= $statusClass ?>"><?= htmlspecialchars($statusText) ?></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th><?= __('客户姓名') ?>:</th>
+                                <td><?= htmlspecialchars($orderData[Order::fields_CUSTOMER_NAME] ?? '') ?></td>
+                            </tr>
+                            <tr>
+                                <th><?= __('客户邮箱') ?>:</th>
+                                <td><?= htmlspecialchars($orderData[Order::fields_CUSTOMER_EMAIL] ?? '') ?></td>
+                            </tr>
+                            <tr>
+                                <th><?= __('客户电话') ?>:</th>
+                                <td><?= htmlspecialchars($orderData[Order::fields_CUSTOMER_PHONE] ?? '') ?></td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table table-borderless">
+                            <tr>
+                                <th width="150"><?= __('订单总额') ?>:</th>
+                                <td><strong><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::fields_GRAND_TOTAL] ?? 0), 2) ?></strong></td>
+                            </tr>
+                            <tr>
+                                <th><?= __('商品小计') ?>:</th>
+                                <td><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::fields_SUBTOTAL] ?? 0), 2) ?></td>
+                            </tr>
+                            <tr>
+                                <th><?= __('运费') ?>:</th>
+                                <td><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::fields_SHIPPING_AMOUNT] ?? 0), 2) ?></td>
+                            </tr>
+                            <tr>
+                                <th><?= __('税费') ?>:</th>
+                                <td><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::fields_TAX_AMOUNT] ?? 0), 2) ?></td>
+                            </tr>
+                            <tr>
+                                <th><?= __('折扣') ?>:</th>
+                                <td><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::fields_DISCOUNT_AMOUNT] ?? 0), 2) ?></td>
+                            </tr>
+                            <tr>
+                                <th><?= __('创建时间') ?>:</th>
+                                <td><?= $orderData[Order::fields_CREATED_AT] ?? '' ?></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- 状态转换 -->
+                <?php if (!empty($availableTransitions)): ?>
+                    <div class="mt-3">
+                        <h6><?= __('状态操作') ?>:</h6>
+                        <form method="post" action="<?= $this->getBackendUrl('order/backend/order/updateStatus') ?>" class="d-inline">
+                            <input type="hidden" name="order_id" value="<?= $orderId ?>">
+                            <select name="status" class="form-select d-inline-block" style="width: auto;">
+                                <?php foreach ($availableTransitions as $transition): ?>
+                                    <option value="<?= htmlspecialchars($transition) ?>"><?= htmlspecialchars(Order::getStatusLabel($transition)) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <input type="text" name="comment" class="form-control d-inline-block" style="width: 200px;" placeholder="<?= __('备注') ?>">
+                            <button type="submit" class="btn btn-primary btn-sm"><?= __('更新状态') ?></button>
+                        </form>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- 订单项 -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><?= __('订单项') ?></h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th><?= __('商品名称') ?></th>
+                                <th><?= __('SKU') ?></th>
+                                <th><?= __('数量') ?></th>
+                                <th><?= __('单价') ?></th>
+                                <th><?= __('行总计') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($items)): ?>
+                                <tr>
+                                    <td colspan="5" class="text-center"><?= __('暂无订单项') ?></td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($items as $item): ?>
+                                    <?php
+                                    $itemData = is_object($item) ? $item->getData() : $item;
+                                    ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($itemData[OrderItem::fields_PRODUCT_NAME] ?? '') ?></td>
+                                        <td><?= htmlspecialchars($itemData[OrderItem::fields_PRODUCT_SKU] ?? '') ?></td>
+                                        <td><?= number_format((float)($itemData[OrderItem::fields_QTY_ORDERED] ?? 0), 2) ?></td>
+                                        <td><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($itemData[OrderItem::fields_PRICE] ?? 0), 2) ?></td>
+                                        <td><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($itemData[OrderItem::fields_ROW_TOTAL] ?? 0), 2) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 支付记录 -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><?= __('支付记录') ?></h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th><?= __('支付方式') ?></th>
+                                <th><?= __('支付金额') ?></th>
+                                <th><?= __('交易ID') ?></th>
+                                <th><?= __('状态') ?></th>
+                                <th><?= __('支付时间') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($payments)): ?>
+                                <tr>
+                                    <td colspan="5" class="text-center"><?= __('暂无支付记录') ?></td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($payments as $payment): ?>
+                                    <?php
+                                    $paymentData = is_object($payment) ? $payment->getData() : $payment;
+                                    ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::fields_PAYMENT_METHOD] ?? '') ?></td>
+                                        <td><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($paymentData[\Weline\Order\Model\OrderPayment::fields_AMOUNT] ?? 0), 2) ?></td>
+                                        <td><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::fields_TRANSACTION_ID] ?? '') ?></td>
+                                        <td><span class="badge bg-success"><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::fields_STATUS] ?? '') ?></span></td>
+                                        <td><?= $paymentData[\Weline\Order\Model\OrderPayment::fields_PAID_AT] ?? '' ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 发货记录 -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><?= __('发货记录') ?></h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th><?= __('物流单号') ?></th>
+                                <th><?= __('承运商') ?></th>
+                                <th><?= __('状态') ?></th>
+                                <th><?= __('发货时间') ?></th>
+                                <th><?= __('送达时间') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($shipments)): ?>
+                                <tr>
+                                    <td colspan="5" class="text-center"><?= __('暂无发货记录') ?></td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($shipments as $shipment): ?>
+                                    <?php
+                                    $shipmentData = is_object($shipment) ? $shipment->getData() : $shipment;
+                                    ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($shipmentData[\Weline\Order\Model\OrderShipment::fields_TRACKING_NUMBER] ?? '') ?></td>
+                                        <td><?= htmlspecialchars($shipmentData[\Weline\Order\Model\OrderShipment::fields_CARRIER] ?? '') ?></td>
+                                        <td><span class="badge bg-info"><?= htmlspecialchars($shipmentData[\Weline\Order\Model\OrderShipment::fields_STATUS] ?? '') ?></span></td>
+                                        <td><?= $shipmentData[\Weline\Order\Model\OrderShipment::fields_SHIPPED_AT] ?? '' ?></td>
+                                        <td><?= $shipmentData[\Weline\Order\Model\OrderShipment::fields_DELIVERED_AT] ?? '' ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 订单历史 -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><?= __('订单历史') ?></h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th><?= __('状态') ?></th>
+                                <th><?= __('备注') ?></th>
+                                <th><?= __('是否通知客户') ?></th>
+                                <th><?= __('时间') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($history)): ?>
+                                <tr>
+                                    <td colspan="4" class="text-center"><?= __('暂无历史记录') ?></td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($history as $h): ?>
+                                    <?php
+                                    $hData = is_object($h) ? $h->getData() : $h;
+                                    ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($hData[\Weline\Order\Model\OrderHistory::fields_STATUS] ?? '') ?></td>
+                                        <td><?= htmlspecialchars($hData[\Weline\Order\Model\OrderHistory::fields_COMMENT] ?? '') ?></td>
+                                        <td><?= !empty($hData[\Weline\Order\Model\OrderHistory::fields_IS_CUSTOMER_NOTIFIED]) ? __('是') : __('否') ?></td>
+                                        <td><?= $hData[\Weline\Order\Model\OrderHistory::fields_CREATED_AT] ?? '' ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Hook: 订单详情页之后 -->
+        <w:hook name="Weline_Order::backend::order::view::after"/>
+    </div>
+</div>

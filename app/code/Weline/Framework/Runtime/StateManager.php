@@ -513,6 +513,11 @@ class StateManager
             }
         });
         
+        // LanguageCache::$staticCache — 请求内语言缓存
+        // 语言列表在进程级别应该保持稳定，但为避免语言配置变更后不生效，
+        // 在 cache:clear 或特定事件时应清理（这里不做请求级重置，仅注册以备将来需要）
+        // 注意：语言列表是进程级缓存，不需要每请求重置
+        
         // ========== 5. 请求级对象实例清理 ==========
         // FPM 下 Response 每次请求都是新实例。
         // WLS 下 ObjectManager 缓存的 Response 可能残留上个请求的 body/headers。

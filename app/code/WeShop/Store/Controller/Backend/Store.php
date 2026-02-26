@@ -53,6 +53,8 @@ class Store extends BackendController
     #[Acl('WeShop_Store::add_page', '店铺添加', 'mdi mdi-pen-plus', '店铺添加')]
     public function getAdd()
     {
+        $isIframe = $this->request->getGet('isIframe') || $this->request->getPost('isIframe');
+        
         $this->assign('action', $this->_url->getCurrentUrl());
         # 所有已安装区域
         $this->assign('locals', self::getLocals());
@@ -61,6 +63,7 @@ class Store extends BackendController
         $this->assign('websites', $websites);
         # 新增时提供空的 store 对象，避免模板中 store.image 等属性引用报错
         $this->assign('store', ['image' => '']);
+        $this->assign('isIframe', $isIframe);
         return $this->fetch('form');
     }
 
@@ -79,9 +82,21 @@ class Store extends BackendController
     public function postAdd()
     {
         $data = $this->request->getPost();
+        $isIframe = $this->request->getGet('isIframe') || $this->request->getPost('isIframe');
+        
         try {
             $this->store->setModelFieldsData($data)
                 ->save();
+            
+            // 如果是 iframe 模式，重定向到 offcanvas 成功页面
+            if ($isIframe) {
+                $this->redirect('component/offcanvas/success', [
+                    'msg' => __('添加成功！'),
+                    'time' => 2,
+                    'reload' => 1
+                ]);
+                return;
+            }
             
             // 如果是 AJAX 请求，返回 JSON
             if ($this->request->isAjax() || $this->request->getHeader('X-Requested-With') === 'XMLHttpRequest') {
@@ -96,6 +111,16 @@ class Store extends BackendController
             $this->getMessageManager()->addSuccess(__('添加成功！'));
             $this->redirect('*/backend/store/edit', ['id' => $this->store->getId()]);
         } catch (\Exception $e) {
+            // 如果是 iframe 模式，重定向到 offcanvas 错误页面
+            if ($isIframe) {
+                $this->redirect('component/offcanvas/error', [
+                    'msg' => __('添加商铺出现问题！') . ': ' . $e->getMessage(),
+                    'time' => 5,
+                    'reload' => 0
+                ]);
+                return;
+            }
+            
             // 如果是 AJAX 请求，返回 JSON
             if ($this->request->isAjax() || $this->request->getHeader('X-Requested-With') === 'XMLHttpRequest') {
                 return $this->fetchJson([
@@ -114,6 +139,8 @@ class Store extends BackendController
     #[Acl('WeShop_Store::edit', '店铺编辑', 'ri-edit-2-fill', '店铺编辑')]
     public function edit()
     {
+        $isIframe = $this->request->getGet('isIframe') || $this->request->getPost('isIframe');
+        
         if ($this->request->isGet()) {
             $id = $this->request->getGet('id');
             if (!$id) {
@@ -129,6 +156,7 @@ class Store extends BackendController
             $this->assign('websites', $websites);
             $this->assign('action', $this->_url->getCurrentUrl());
             $this->assign('store', $store);
+            $this->assign('isIframe', $isIframe);
             return $this->fetch('form');
         }
         if (!$this->request->isPost()) {
@@ -149,6 +177,16 @@ class Store extends BackendController
             $this->store->setModelFieldsData($data)
                 ->save();
             
+            // 如果是 iframe 模式，重定向到 offcanvas 成功页面
+            if ($isIframe) {
+                $this->redirect('component/offcanvas/success', [
+                    'msg' => __('编辑商铺成功！'),
+                    'time' => 2,
+                    'reload' => 1
+                ]);
+                return;
+            }
+            
             // 如果是 AJAX 请求，返回 JSON
             if ($this->request->isAjax() || $this->request->getHeader('X-Requested-With') === 'XMLHttpRequest') {
                 return $this->fetchJson([
@@ -162,6 +200,16 @@ class Store extends BackendController
             $this->getMessageManager()->addSuccess(__('编辑商铺成功！'));
             $this->redirect('*/backend/store/edit', ['id' => $this->store->getId()]);
         } catch (\Exception $e) {
+            // 如果是 iframe 模式，重定向到 offcanvas 错误页面
+            if ($isIframe) {
+                $this->redirect('component/offcanvas/error', [
+                    'msg' => __('编辑商铺出现问题！') . ': ' . $e->getMessage(),
+                    'time' => 5,
+                    'reload' => 0
+                ]);
+                return;
+            }
+            
             // 如果是 AJAX 请求，返回 JSON
             if ($this->request->isAjax() || $this->request->getHeader('X-Requested-With') === 'XMLHttpRequest') {
                 return $this->fetchJson([

@@ -302,8 +302,8 @@ class PreviewRenderer
             // 5. 设置自定义错误处理器
             $errorMessage = '';
             set_error_handler(function ($errno, $errstr, $errfile, $errline) use (&$errorMessage) {
-                // 忽略 Notice 和 Warning
-                if ($errno == E_NOTICE || $errno == E_WARNING) {
+                // 忽略 Notice、Warning 和 Deprecated 警告，仅记录严重错误
+                if ($errno == E_NOTICE || $errno == E_WARNING || $errno == E_DEPRECATED || $errno == E_USER_DEPRECATED) {
                     return true;
                 }
                 $errorMessage = "{$errstr} (line {$errline})";
@@ -387,7 +387,8 @@ class PreviewRenderer
             file_put_contents($comFile, $compiledContent);
             $errorMessage = '';
             set_error_handler(function ($errno, $errstr, $errfile, $errline) use (&$errorMessage) {
-                if ($errno == E_NOTICE || $errno == E_WARNING) {
+                // 忽略 Notice、Warning 和 Deprecated 警告，仅记录严重错误
+                if ($errno == E_NOTICE || $errno == E_WARNING || $errno == E_DEPRECATED || $errno == E_USER_DEPRECATED) {
                     return true;
                 }
                 $errorMessage = "{$errstr} (line {$errline})";

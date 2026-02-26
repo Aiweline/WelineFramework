@@ -59,6 +59,7 @@ class AliyunDomainRegistrar implements DomainRegistrarInterface
                 'label' => __('区域'),
                 'type' => 'select',
                 'required' => false,
+                'default' => 'cn-hangzhou',
                 'options' => [
                     ['value' => 'cn-hangzhou', 'label' => __('华东1（杭州）')],
                     ['value' => 'cn-shanghai', 'label' => __('华东2（上海）')],
@@ -66,6 +67,24 @@ class AliyunDomainRegistrar implements DomainRegistrarInterface
                     ['value' => 'cn-shenzhen', 'label' => __('华南1（深圳）')],
                     ['value' => 'ap-southeast-1', 'label' => __('亚太东南（新加坡）')],
                 ],
+            ],
+        ];
+    }
+
+    public function getConfigHelp(): array
+    {
+        return [
+            'help_url' => 'https://ram.console.aliyun.com/manage/ak',
+            'help_title' => __('阿里云域名配置获取指南'),
+            'help_steps' => [
+                __('1. 登录阿里云控制台：https://www.aliyun.com'),
+                __('2. 右上角头像 → 「AccessKey 管理」'),
+                __('3. 建议创建子用户 AccessKey（更安全），或使用主账号 AccessKey'),
+                __('4. 点击「创建 AccessKey」，完成手机验证'),
+                __('5. 将「AccessKey ID」填入上方对应字段'),
+                __('6. 将「AccessKey Secret」填入上方对应字段（仅创建时显示一次，请妥善保存）'),
+                __('7. 如使用子用户，需授予「AliyunDomainFullAccess」权限'),
+                __('8. 区域可保持默认（华东1-杭州）'),
             ],
         ];
     }

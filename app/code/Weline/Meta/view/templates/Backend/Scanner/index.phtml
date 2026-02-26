@@ -1,7 +1,8 @@
 <?php
-/** @var \Weline\Framework\View\Template $this */
-/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+/**
+ * 元数据扫描器 - 内容模板
+ * @var \Weline\Framework\View\Template $this
+ */
 
 $scanAction = $this->getBackendUrl('meta/backend/scanner/scan');
 $directAction = $this->getBackendUrl('meta/backend/scanner/scanDirect');
@@ -11,213 +12,194 @@ $defaultPath = $request->getPost('scan_path', 'Weline_Theme::view/theme/frontend
 $defaultNamespace = $request->getPost('namespace', 'theme');
 $strictMode = (bool)$request->getPost('strict_mode', true);
 ?>
-<!DOCTYPE html>
-<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= __('元数据扫描器') ?></title>
-    <style>
-        .scan-card-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 16px;
-        }
-    </style>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-@template(Weline_Admin::common/page/loading.phtml)
-<div id="layout-wrapper">
-    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
-    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0"><?= __('元数据扫描器') ?></h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="<?= $backToList ?>"><?= __('元数据管理') ?></a></li>
-                                    <li class="breadcrumb-item active"><?= __('扫描器') ?></li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+<style>
+    .scan-card-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 16px;
+    }
+</style>
 
-                <div class="row">
-                    <div class="col-12">
-                        <template>Weline_Component::message.phtml</template>
-                    </div>
-                </div>
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><?= __('元数据扫描器') ?></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="<?= $backToList ?>"><?= __('元数据管理') ?></a></li>
+                    <li class="breadcrumb-item active"><?= __('扫描器') ?></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
 
-                <div class="row g-4 mb-4">
-                    <div class="col-xl-4 col-md-6">
-                        <div class="card border shadow-sm h-100">
-                            <div class="card-body d-flex">
-                                <div class="scan-card-icon bg-soft-primary d-flex align-items-center justify-content-center me-3">
-                                    <i class="mdi mdi-radar text-primary fs-3"></i>
-                                </div>
-                                <div>
-                                    <h5><?= __('事件扫描') ?></h5>
-                                    <p class="text-muted mb-0 small">
-                                        <?= __('触发 Weline_Meta::scan_path 事件，允许其他模块接管扫描逻辑。适合批量任务。') ?>
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-xl-4 col-md-6">
-                        <div class="card border shadow-sm h-100">
-                            <div class="card-body d-flex">
-                                <div class="scan-card-icon bg-soft-success d-flex align-items-center justify-content-center me-3">
-                                    <i class="mdi mdi-ray-start-arrow text-success fs-3"></i>
-                                </div>
-                                <div>
-                                    <h5><?= __('直接扫描') ?></h5>
-                                    <p class="text-muted mb-0 small">
-                                        <?= __('直接使用服务类解析 PHTML 文件，实时返回成功/失败结果。') ?>
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-xl-4 col-md-12">
-                        <div class="card border shadow-sm h-100">
-                            <div class="card-body d-flex">
-                                <div class="scan-card-icon bg-soft-warning d-flex align-items-center justify-content-center me-3">
-                                    <i class="mdi mdi-information-outline text-warning fs-3"></i>
-                                </div>
-                                <div>
-                                    <h5><?= __('使用提示') ?></h5>
-                                    <ul class="text-muted small ps-3 mb-0">
-                                        <li><?= __('扫描路径格式：Module::path，例如 Weline_Theme::view/theme') ?></li>
-                                        <li><?= __('命名空间将写入 w_meta.namespace 字段') ?></li>
-                                        <li><?= __('严格模式下缺少关键字段会直接中断') ?></li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+<div class="row">
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
 
-                <div class="row g-4">
-                    <div class="col-xl-6">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center justify-content-between mb-3">
-                                    <div>
-                                        <h4 class="card-title mb-1"><?= __('触发事件扫描') ?></h4>
-                                        <p class="text-muted mb-0 small">
-                                            <?= __('由事件监听者负责消费扫描任务，适合在线队列或自定义处理。') ?>
-                                        </p>
-                                    </div>
-                                    <span class="badge bg-light text-dark"><?= __('异步/队列友好') ?></span>
-                                </div>
-                                <form action="<?= $scanAction ?>" method="post" class="needs-validation" novalidate>
-                                    <div class="mb-3">
-                                        <label class="form-label"><?= __('扫描路径') ?></label>
-                                        <input type="text" class="form-control" required name="scan_path"
-                                               value="<?= htmlspecialchars($defaultPath) ?>"
-                                               placeholder="Weline_Theme::view/theme/frontend/components">
-                                        <div class="invalid-feedback"><?= __('请输入合法路径') ?></div>
-                                    </div>
-                                    <div class="row g-3">
-                                        <div class="col-md-7">
-                                            <label class="form-label"><?= __('命名空间') ?></label>
-                                            <input type="text" class="form-control" name="namespace"
-                                                   value="<?= htmlspecialchars($defaultNamespace) ?>" required>
-                                        </div>
-                                        <div class="col-md-5">
-                                            <label class="form-label"><?= __('严格模式') ?></label>
-                                            <select class="form-select" name="strict_mode">
-                                                <option value="1" <?= $strictMode ? 'selected' : '' ?>><?= __('开启') ?></option>
-                                                <option value="0" <?= !$strictMode ? 'selected' : '' ?>><?= __('关闭') ?></option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div class="d-flex justify-content-between align-items-center mt-4">
-                                        <button type="submit" class="btn btn-primary">
-                                            <i class="ri-radar-line me-1"></i><?= __('提交扫描任务') ?>
-                                        </button>
-                                        <a href="<?= $backToList ?>" class="btn btn-link text-muted">
-                                            <i class="ri-arrow-left-line me-1"></i><?= __('返回列表') ?>
-                                        </a>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-xl-6">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center justify-content-between mb-3">
-                                    <div>
-                                        <h4 class="card-title mb-1"><?= __('立即扫描并返回结果') ?></h4>
-                                        <p class="text-muted mb-0 small"><?= __('适合调试阶段快速验证 @meta 标记是否生效。') ?></p>
-                                    </div>
-                                    <span class="badge bg-soft-success text-success"><?= __('实时结果') ?></span>
-                                </div>
-                                <form action="<?= $directAction ?>" method="post" class="needs-validation" novalidate>
-                                    <div class="mb-3">
-                                        <label class="form-label"><?= __('扫描路径') ?></label>
-                                        <input type="text" class="form-control" required name="scan_path"
-                                               value="<?= htmlspecialchars($defaultPath) ?>">
-                                        <div class="invalid-feedback"><?= __('请输入合法路径') ?></div>
-                                    </div>
-                                    <div class="row g-3">
-                                        <div class="col-md-7">
-                                            <label class="form-label"><?= __('命名空间') ?></label>
-                                            <input type="text" class="form-control" name="namespace"
-                                                   value="<?= htmlspecialchars($defaultNamespace) ?>" required>
-                                        </div>
-                                        <div class="col-md-5">
-                                            <label class="form-label"><?= __('严格模式') ?></label>
-                                            <select class="form-select" name="strict_mode">
-                                                <option value="1"><?= __('开启（严格）') ?></option>
-                                                <option value="0"><?= __('关闭（宽松）') ?></option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div class="alert alert-info d-flex align-items-center mt-3" role="alert">
-                                        <i class="ri-information-line fs-4 me-2"></i>
-                                        <div>
-                                            <?= __('直接扫描会立即解析所有 PHTML 文件，并展示成功/失败清单。执行时间与文件数量相关。') ?>
-                                        </div>
-                                    </div>
-                                    <div class="d-flex justify-content-between align-items-center mt-4">
-                                        <button type="submit" class="btn btn-success">
-                                            <i class="ri-play-circle-line me-1"></i><?= __('立即扫描') ?>
-                                        </button>
-                                        <a href="<?= $backToList ?>" class="btn btn-link text-muted">
-                                            <i class="ri-database-2-line me-1"></i><?= __('查看元数据') ?>
-                                        </a>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
+<div class="row g-4 mb-4">
+    <div class="col-xl-4 col-md-6">
+        <div class="card border shadow-sm h-100">
+            <div class="card-body d-flex">
+                <div class="scan-card-icon bg-soft-primary d-flex align-items-center justify-content-center me-3">
+                    <i class="mdi mdi-radar text-primary fs-3"></i>
+                </div>
+                <div>
+                    <h5><?= __('事件扫描') ?></h5>
+                    <p class="text-muted mb-0 small">
+                        <?= __('触发 Weline_Meta::scan_path 事件，允许其他模块接管扫描逻辑。适合批量任务。') ?>
+                    </p>
                 </div>
             </div>
         </div>
-        @template(Weline_Admin::common/footer.phtml)
+    </div>
+    <div class="col-xl-4 col-md-6">
+        <div class="card border shadow-sm h-100">
+            <div class="card-body d-flex">
+                <div class="scan-card-icon bg-soft-success d-flex align-items-center justify-content-center me-3">
+                    <i class="mdi mdi-ray-start-arrow text-success fs-3"></i>
+                </div>
+                <div>
+                    <h5><?= __('直接扫描') ?></h5>
+                    <p class="text-muted mb-0 small">
+                        <?= __('直接使用服务类解析 PHTML 文件，实时返回成功/失败结果。') ?>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4 col-md-12">
+        <div class="card border shadow-sm h-100">
+            <div class="card-body d-flex">
+                <div class="scan-card-icon bg-soft-warning d-flex align-items-center justify-content-center me-3">
+                    <i class="mdi mdi-information-outline text-warning fs-3"></i>
+                </div>
+                <div>
+                    <h5><?= __('使用提示') ?></h5>
+                    <ul class="text-muted small ps-3 mb-0">
+                        <li><?= __('扫描路径格式：Module::path，例如 Weline_Theme::view/theme') ?></li>
+                        <li><?= __('命名空间将写入 w_meta.namespace 字段') ?></li>
+                        <li><?= __('严格模式下缺少关键字段会直接中断') ?></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
-<script>
-    (function () {
-        document.querySelectorAll('form.needs-validation').forEach(form => {
-            form.addEventListener('submit', function (event) {
-                if (!form.checkValidity()) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                }
-                form.classList.add('was-validated');
-            }, false);
-        });
-    })();
-</script>
-</body>
-</html>
 
+<div class="row g-4">
+    <div class="col-xl-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div>
+                        <h4 class="card-title mb-1"><?= __('触发事件扫描') ?></h4>
+                        <p class="text-muted mb-0 small">
+                            <?= __('由事件监听者负责消费扫描任务，适合在线队列或自定义处理。') ?>
+                        </p>
+                    </div>
+                    <span class="badge bg-light text-dark"><?= __('异步/队列友好') ?></span>
+                </div>
+                <form action="<?= $scanAction ?>" method="post" class="needs-validation" novalidate>
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('扫描路径') ?></label>
+                        <input type="text" class="form-control" required name="scan_path"
+                               value="<?= htmlspecialchars($defaultPath) ?>"
+                               placeholder="Weline_Theme::view/theme/frontend/components">
+                        <div class="invalid-feedback"><?= __('请输入合法路径') ?></div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-7">
+                            <label class="form-label"><?= __('命名空间') ?></label>
+                            <input type="text" class="form-control" name="namespace"
+                                   value="<?= htmlspecialchars($defaultNamespace) ?>" required>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label"><?= __('严格模式') ?></label>
+                            <select class="form-select" name="strict_mode">
+                                <option value="1" <?= $strictMode ? 'selected' : '' ?>><?= __('开启') ?></option>
+                                <option value="0" <?= !$strictMode ? 'selected' : '' ?>><?= __('关闭') ?></option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="ri-radar-line me-1"></i><?= __('提交扫描任务') ?>
+                        </button>
+                        <a href="<?= $backToList ?>" class="btn btn-link text-muted">
+                            <i class="ri-arrow-left-line me-1"></i><?= __('返回列表') ?>
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div>
+                        <h4 class="card-title mb-1"><?= __('立即扫描并返回结果') ?></h4>
+                        <p class="text-muted mb-0 small"><?= __('适合调试阶段快速验证 @meta 标记是否生效。') ?></p>
+                    </div>
+                    <span class="badge bg-soft-success text-success"><?= __('实时结果') ?></span>
+                </div>
+                <form action="<?= $directAction ?>" method="post" class="needs-validation" novalidate>
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('扫描路径') ?></label>
+                        <input type="text" class="form-control" required name="scan_path"
+                               value="<?= htmlspecialchars($defaultPath) ?>">
+                        <div class="invalid-feedback"><?= __('请输入合法路径') ?></div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-7">
+                            <label class="form-label"><?= __('命名空间') ?></label>
+                            <input type="text" class="form-control" name="namespace"
+                                   value="<?= htmlspecialchars($defaultNamespace) ?>" required>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label"><?= __('严格模式') ?></label>
+                            <select class="form-select" name="strict_mode">
+                                <option value="1"><?= __('开启（严格）') ?></option>
+                                <option value="0"><?= __('关闭（宽松）') ?></option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="alert alert-info d-flex align-items-center mt-3" role="alert">
+                        <i class="ri-information-line fs-4 me-2"></i>
+                        <div>
+                            <?= __('直接扫描会立即解析所有 PHTML 文件，并展示成功/失败清单。执行时间与文件数量相关。') ?>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-4">
+                        <button type="submit" class="btn btn-success">
+                            <i class="ri-play-circle-line me-1"></i><?= __('立即扫描') ?>
+                        </button>
+                        <a href="<?= $backToList ?>" class="btn btn-link text-muted">
+                            <i class="ri-database-2-line me-1"></i><?= __('查看元数据') ?>
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    
+    document.querySelectorAll('form.needs-validation').forEach(function(form) {
+        form.addEventListener('submit', function(event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        }, false);
+    });
+})();
+</script>

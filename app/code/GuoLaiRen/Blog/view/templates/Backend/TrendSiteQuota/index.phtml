@@ -1,16 +1,21 @@
 <?php
-/** @var array $quotas */
-/** @var array $profileNames */
-/** @var array $siteNames */
-/** @var array $categoryNames */
-/** @var mixed $pagination */
+/**
+ * 站点发文配额 - 索引页面
+ * 内容模板 - 由布局系统自动包裹
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $quotas
+ * @var array $profileNames
+ * @var array $siteNames
+ * @var array $categoryNames
+ * @var mixed $pagination
+ */
 $quotas = $this->getData('quotas') ?? [];
 $profileNames = $this->getData('profileNames') ?? [];
 $siteNames = $this->getData('siteNames') ?? [];
 $categoryNames = $this->getData('categoryNames') ?? [];
 $pagination = $this->getData('pagination');
 ?>
-<w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
 
 <div class="row">
     <div class="col-12">
@@ -165,5 +170,3 @@ $pagination = $this->getData('pagination');
     });
 })();
 </script>
-
-<w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>

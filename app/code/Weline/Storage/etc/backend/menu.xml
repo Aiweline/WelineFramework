@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config>
+    <menu>
+        <item name="system" title="系统" source="Weline_Backend::system">
+            <children>
+                <item name="storage" title="存储配置" source="Weline_Storage::storage_config" action="storage/backend/config" sort="60"/>
+            </children>
+        </item>
+    </menu>
+</config>

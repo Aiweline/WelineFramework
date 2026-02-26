@@ -1,47 +1,63 @@
 <?php
 /**
  * 开发者工具 - 索引页面
+ * 内容模板 - 由布局系统自动包裹
  *
  * @var $this \Weline\Framework\View\Template
  */
 ?>
-
-<?= $this->getChildHtml('Weline_Admin::Backend/page-layout/main-content-before.phtml') ?>
-
-<div class="sz-page-header">
-    <h1 class="sz-page-title">
-        <i class="mdi mdi-code-braces"></i>
-        开发者工具
-    </h1>
-    <p class="sz-page-subtitle">AI API调试和开发工具集</p>
-</div>
-
-<div class="sz-card">
-    <div class="sz-card-body">
-        <div class="sz-empty-state">
-            <i class="mdi mdi-toolbox-outline sz-empty-icon"></i>
-            <h3>功能开发中</h3>
-            <p class="text-muted">开发者工具功能正在开发中，敬请期待...</p>
-            <div class="mt-4">
-                <a href="<?= $this->getBackendUrl('*/backend/index') ?>" class="btn btn-primary">
-                    <i class="mdi mdi-arrow-left"></i> 返回首页
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
-
-<?= $this->getChildHtml('Weline_Admin::Backend/page-layout/main-content-after.phtml') ?>
-
 <style>
-.sz-empty-state {
+.sz-developer-tools-empty-state {
     text-align: center;
     padding: 60px 20px;
 }
-.sz-empty-icon {
+.sz-developer-tools-empty-icon {
     font-size: 80px;
-    color: #ddd;
+    color: var(--backend-color-text-muted, #6c757d);
     margin-bottom: 20px;
 }
 </style>
 
+<!-- start page title -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0">
+                <i class="mdi mdi-code-braces"></i>
+                <lang>开发者工具</lang>
+            </h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('ai/backend/index') ?>"><lang>AI管理</lang></a></li>
+                    <li class="breadcrumb-item active"><lang>开发者工具</lang></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end page title -->
+
+<!-- start page message -->
+<div class="row">
+    <template>Weline_Component::message.phtml</template>
+</div>
+<!-- end message -->
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="sz-developer-tools-empty-state">
+                    <i class="mdi mdi-toolbox-outline sz-developer-tools-empty-icon"></i>
+                    <h3><lang>功能开发中</lang></h3>
+                    <p class="text-muted"><lang>开发者工具功能正在开发中，敬请期待...</lang></p>
+                    <div class="mt-4">
+                        <a href="<?= $this->getBackendUrl('ai/backend/index') ?>" class="btn btn-primary">
+                            <i class="mdi mdi-arrow-left"></i> <lang>返回首页</lang>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,13 +1,18 @@
 <?php
-/** @var \GuoLaiRen\Blog\Model\Post|null $post */
-/** @var array $categories 分类列表 */
-/** @var array $sites 站点列表 */
+/**
+ * 博客文章表单 - 内容模板
+ * 由布局系统自动包裹
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var \GuoLaiRen\Blog\Model\Post|null $post
+ * @var array $categories 分类列表
+ * @var array $sites 站点列表
+ */
 $post = $this->getData('post');
 $categories = $this->getData('categories') ?? [];
 $sites = $this->getData('sites') ?? [];
 $isEdit = $post && $post->getId();
 ?>
-<w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
 
 <!-- start page title -->
 <div class="row">
@@ -914,5 +919,3 @@ function removeDarkModeStyles(editor) {
     }
 }
 </script>
-
-<w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>

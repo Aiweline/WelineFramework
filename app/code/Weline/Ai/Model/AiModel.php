@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Model;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Framework\Setup\Data\Context;
@@ -334,6 +335,23 @@ class AiModel extends Model
     public function getConfig(): array
     {
         $config = $this->getData(self::fields_CONFIG);
+        
+        // 调试日志
+        $objId = spl_object_id($this);
+        Env::log('ai_model_debug.log', sprintf(
+            '[AiModel::getConfig] objId=%d, modelCode=%s, config_type=%s, api_key=%s',
+            $objId,
+            $this->getData(self::fields_MODEL_CODE) ?? 'unknown',
+            gettype($config),
+            is_string($config) 
+                ? (($decoded = json_decode($config, true)) && isset($decoded['api_key']) 
+                    ? (empty($decoded['api_key']) ? '(empty)' : '...' . substr($decoded['api_key'], -4)) 
+                    : '(not set)')
+                : (is_array($config) && isset($config['api_key']) 
+                    ? (empty($config['api_key']) ? '(empty)' : '...' . substr($config['api_key'], -4)) 
+                    : '(not set)')
+        ), 'DEBUG');
+        
         if (is_string($config)) {
             $decoded = json_decode($config, true);
             return is_array($decoded) ? $decoded : [];

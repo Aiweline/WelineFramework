@@ -61,4 +61,14 @@
     <!-- @see Weline\Server\Cron\AttackSignalMonitor -->
     <!-- @see Weline\Server\Service\AttackSignalFileService -->
     
+    <!-- ========== PageBuilder 快速建站事件观察者 ========== -->
+    
+    <!--注册 SSL 证书服务能力-->
+    <event name="GuoLaiRen_PageBuilder::quickbuild::query_services">
+        <observer name="Weline_Server::register_quickbuild_services" 
+                  instance="Weline\Server\Observer\RegisterQuickBuildServices"
+                  disabled="false"
+                  shared="true" sort="40"/>
+    </event>
+    
 </config>

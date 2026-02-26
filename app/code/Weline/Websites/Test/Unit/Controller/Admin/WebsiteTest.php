@@ -26,7 +26,7 @@ class WebsiteTest extends TestCore
     private Website $controller;
     private WebsiteModel $websiteModel;
 
-    protected function setUp(): void
+    public function setUp(): void
     {
         parent::setUp();
         

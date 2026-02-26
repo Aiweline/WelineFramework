@@ -86,6 +86,18 @@ var ConfigDownloadManager = (function () {
             downloadState.currentFileProgress = 0;
             downloadState.cancelled = false;
             downloadState.downloadPort = null;
+            downloadState.progress = 0;
+            downloadState.totalSize = 0;
+            downloadState.currentFile = '';
+            downloadState.downloadSpeed = 0;
+            downloadState.lastUpdateTime = Date.now();
+            downloadState.lastDownloadedSize = 0;
+
+            // 初始化时立即触发一次进度回调
+            if (onProgress) {
+                console.log('[DownloadManager] 初始化进度回调');
+                onProgress(downloadState);
+            }
 
             // 用于存储 cleanup 回调
             var cleanupCallback = null;
@@ -93,6 +105,13 @@ var ConfigDownloadManager = (function () {
             // 设置监听器处理来自 content script 的下载消息
             var messageHandler = function (event) {
                 if (event.source !== window) return;
+                
+                // 调试：记录所有消息
+                if (event.data && (event.data.type === 'AUTOLEADAGENT_DOWNLOAD_MESSAGE' || event.data.type === 'AUTOLEADAGENT_RESPONSE')) {
+                    console.log('[DownloadManager] 收到消息:', JSON.stringify(event.data).substring(0, 500));
+                }
+                
+                // 处理下载专用消息
                 if (event.data && event.data.type === 'AUTOLEADAGENT_DOWNLOAD_MESSAGE') {
                     // 检查是否已取消
                     if (downloadState.cancelled) {
@@ -106,17 +125,131 @@ var ConfigDownloadManager = (function () {
                         cleanupCallback = null;
                     });
                 }
+                
+                // 兼容处理：AUTOLEADAGENT_RESPONSE 也可能包含下载进度
+                if (event.data && event.data.type === 'AUTOLEADAGENT_RESPONSE' && event.data.action === 'HF_DOWNLOAD_MODEL') {
+                    var responseData = event.data.data || event.data.payload || {};
+                    
+                    // 如果响应中包含进度信息
+                    if (responseData.progress !== undefined || responseData.downloaded !== undefined) {
+                        downloadState.progress = responseData.progress || 0;
+                        downloadState.downloadedSize = responseData.downloaded || downloadState.downloadedSize;
+                        downloadState.totalSize = responseData.total || downloadState.totalSize;
+                        downloadState.currentFile = responseData.filename || responseData.currentFile || downloadState.currentFile;
+                        
+                        console.log('[DownloadManager] RESPONSE 进度:', downloadState.progress, '%');
+                        if (onProgress) onProgress(downloadState);
+                    }
+                    
+                    // 如果下载完成
+                    if (responseData.success === true && responseData.complete === true) {
+                        console.log('[DownloadManager] RESPONSE 下载完成');
+                        downloadState.isDownloading = false;
+                        downloadState.progress = 100;
+                        if (onProgress) onProgress(downloadState);
+                        window.removeEventListener('message', messageHandler);
+                        resolve({ success: true, modelId: modelId });
+                    }
+                    
+                    // 如果下载失败
+                    if (responseData.success === false || responseData.error) {
+                        console.error('[DownloadManager] RESPONSE 下载失败:', responseData.error || responseData.message);
+                        downloadState.isDownloading = false;
+                        window.removeEventListener('message', messageHandler);
+                        reject(new Error(responseData.error || responseData.message || '下载失败'));
+                    }
+                }
             };
             window.addEventListener('message', messageHandler);
 
-            // 发送下载请求到 content script
-            // content.js 会处理此请求并建立 Port 连接到后台
+            // 发送模型加载请求（加载过程中会自动下载模型）
+            // 使用 MODEL_LOAD_REQUEST 类型，background 会处理并在 offscreen 中下载+加载模型
+            var downloadRequestId = 'download_' + Date.now();
+            console.log('[DownloadManager] 发送 MODEL_LOAD_REQUEST, requestId:', downloadRequestId);
             window.postMessage({
-                type: 'AUTOLEADAGENT_REQUEST',
-                action: 'HF_DOWNLOAD_MODEL',
-                payload: { modelId: modelId },
-                requestId: 'download_' + Date.now()
+                type: 'MODEL_LOAD_REQUEST',
+                modelId: modelId,
+                requestId: downloadRequestId
             }, '*');
+            
+            // 同时监听模型加载进度事件（从 background 通过 content script 转发）
+            var progressHandler = function(event) {
+                if (event.source !== window) return;
+                if (!event.data) return;
+                
+                // content script 转发的进度消息: AUTOLEADAGENT_MODEL_LOAD_PROGRESS
+                if (event.data.type === 'AUTOLEADAGENT_MODEL_LOAD_PROGRESS') {
+                    var payload = event.data.payload || {};
+                    console.log('[DownloadManager] 收到加载进度:', JSON.stringify(payload));
+                    
+                    // 更新下载状态
+                    if (payload.progress !== undefined) {
+                        downloadState.progress = payload.progress;
+                    }
+                    if (payload.file) {
+                        downloadState.currentFile = payload.file;
+                    }
+                    if (payload.loaded !== undefined && payload.total !== undefined) {
+                        downloadState.downloadedSize = payload.loaded;
+                        downloadState.totalSize = payload.total;
+                        if (payload.total > 0) {
+                            downloadState.progress = (payload.loaded / payload.total) * 100;
+                        }
+                    }
+                    if (payload.status === 'download') {
+                        downloadState.currentFile = payload.name || payload.file || '';
+                    }
+                    
+                    if (onProgress) onProgress(downloadState);
+                }
+                
+                // content script 转发的模型事件: AUTOLEADAGENT_MODEL_EVENT
+                if (event.data.type === 'AUTOLEADAGENT_MODEL_EVENT') {
+                    console.log('[DownloadManager] 收到模型事件:', event.data.event, event.data.data);
+                    
+                    if (event.data.event === 'loaded') {
+                        // 模型加载完成
+                        console.log('[DownloadManager] 模型加载完成');
+                        clearTimeout(downloadTimeout);
+                        downloadState.isDownloading = false;
+                        downloadState.progress = 100;
+                        if (onProgress) onProgress(downloadState);
+                        window.removeEventListener('message', progressHandler);
+                        window.removeEventListener('message', messageHandler);
+                        resolve({ success: true, modelId: modelId });
+                    } else if (event.data.event === 'load_error') {
+                        console.error('[DownloadManager] 模型加载失败:', event.data.data);
+                        clearTimeout(downloadTimeout);
+                        downloadState.isDownloading = false;
+                        window.removeEventListener('message', progressHandler);
+                        window.removeEventListener('message', messageHandler);
+                        reject(new Error(event.data.data && event.data.data.error || '模型加载失败'));
+                    } else if (event.data.event === 'loading') {
+                        console.log('[DownloadManager] 模型正在加载...');
+                    }
+                }
+                
+                // MODEL_LOAD_RESPONSE 是 MODEL_LOAD_REQUEST 的直接响应
+                if (event.data.type === 'MODEL_LOAD_RESPONSE') {
+                    console.log('[DownloadManager] 收到加载响应:', event.data);
+                    if (event.data.error) {
+                        console.error('[DownloadManager] 加载错误:', event.data.error);
+                        // 不在这里 reject，等待 MODEL_EVENT 的 load_error
+                    }
+                }
+            };
+            window.addEventListener('message', progressHandler);
+            
+            // 设置超时（5分钟）
+            var downloadTimeout = setTimeout(function() {
+                if (downloadState.isDownloading) {
+                    console.warn('[DownloadManager] 下载超时');
+                    downloadState.isDownloading = false;
+                    window.removeEventListener('message', progressHandler);
+                    window.removeEventListener('message', messageHandler);
+                    reject(new Error('下载超时，请检查网络连接'));
+                }
+            }, 300000);
         });
     }
 

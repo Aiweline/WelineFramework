@@ -1131,6 +1131,7 @@ class AiGenerate extends BackendController
             $fieldsInput = trim($input['fields'] ?? '');
             $referenceComponent = $input['reference_component'] ?? '';
             $referenceCode = $input['reference_code'] ?? '';
+            $language = $input['language'] ?? State::getLang() ?: 'zh_Hans_CN';
             
             if (empty($name) || empty($description)) {
                 $sse->sendEvent('error', ['message' => __('组件名称和描述不能为空')]);
@@ -1141,7 +1142,8 @@ class AiGenerate extends BackendController
             $sse->sendEvent('start', [
                 'message' => __('开始生成组件...'),
                 'name' => $name,
-                'region' => $region
+                'region' => $region,
+                'language' => $language
             ]);
             
             // 生成组件代码
@@ -1150,8 +1152,8 @@ class AiGenerate extends BackendController
             // 解析配置字段
             $configFields = $this->parseConfigFields($fieldsInput, $componentCode);
             
-            // 构建AI提示词
-            $prompt = $this->buildComponentPrompt($name, $description, $region, $style, $configFields, $referenceCode);
+            // 构建AI提示词（包含语言要求）
+            $prompt = $this->buildComponentPrompt($name, $description, $region, $style, $configFields, $referenceCode, $language);
             
             $sse->sendEvent('prompt', [
                 'message' => __('提示词已构建'),
@@ -1161,7 +1163,7 @@ class AiGenerate extends BackendController
             
             // 流式调用 AI 生成
             $aiService = ObjectManager::getInstance(AiService::class);
-            $locale = State::getLang() ?: 'zh_Hans_CN';
+            $locale = $language;
             
             $fullContent = '';
             $chunkCount = 0;
@@ -1279,24 +1281,31 @@ class AiGenerate extends BackendController
             try {
                 $generator = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::class);
                 $fixedCode = $generator->prepareTemplateForPreview($phtmlCode);
-                $refineToken = 'pb_refine_' . bin2hex(random_bytes(8));
-                $refineDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pb_refine';
-                if (!is_dir($refineDir)) {
-                    mkdir($refineDir, 0770, true);
-                }
-                $refinePath = $refineDir . DIRECTORY_SEPARATOR . $refineToken . '.phtml';
-                file_put_contents($refinePath, $fixedCode);
-                $paths = $this->session->getData('pagebuilder_refine_paths') ?: [];
-                $paths[$refineToken] = ['path' => $refinePath, 'created' => time()];
-                $this->session->setData('pagebuilder_refine_paths', $paths);
-                $renderer = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer::class);
-                $renderResult = $renderer->renderFromFile($refinePath);
-                if ($renderResult['success'] && !empty($renderResult['html'])) {
-                    $preview = '<!DOCTYPE html><html><head><meta charset="UTF-8">';
-                    $preview .= '<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:#f5f5f5;}</style>';
-                    $preview .= '</head><body>' . $renderResult['html'] . '</body></html>';
+                
+                // 语法检查：防止崩溃 WLS Worker
+                $syntaxCheckResult = $this->checkTemplateSyntax($fixedCode);
+                if (!$syntaxCheckResult['valid']) {
+                    $preview = $this->generateFallbackPreview($phtmlCode, '预览渲染失败: ' . $syntaxCheckResult['error']);
                 } else {
-                    $preview = $this->generateFallbackPreview($phtmlCode, $renderResult['error'] ?? '渲染失败');
+                    $refineToken = 'pb_refine_' . bin2hex(random_bytes(8));
+                    $refineDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pb_refine';
+                    if (!is_dir($refineDir)) {
+                        mkdir($refineDir, 0770, true);
+                    }
+                    $refinePath = $refineDir . DIRECTORY_SEPARATOR . $refineToken . '.phtml';
+                    file_put_contents($refinePath, $fixedCode);
+                    $paths = $this->session->getData('pagebuilder_refine_paths') ?: [];
+                    $paths[$refineToken] = ['path' => $refinePath, 'created' => time()];
+                    $this->session->setData('pagebuilder_refine_paths', $paths);
+                    $renderer = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer::class);
+                    $renderResult = $renderer->renderFromFile($refinePath);
+                    if ($renderResult['success'] && !empty($renderResult['html'])) {
+                        $preview = '<!DOCTYPE html><html><head><meta charset="UTF-8">';
+                        $preview .= '<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:#f5f5f5;}</style>';
+                        $preview .= '</head><body>' . $renderResult['html'] . '</body></html>';
+                    } else {
+                        $preview = $this->generateFallbackPreview($phtmlCode, $renderResult['error'] ?? '渲染失败');
+                    }
                 }
             } catch (\Throwable $e) {
                 $preview = $this->generateFallbackPreview($phtmlCode, $e->getMessage());
@@ -1714,7 +1723,7 @@ class AiGenerate extends BackendController
     /**
      * 构建组件生成提示词
      */
-    private function buildComponentPrompt(string $name, string $description, string $region, string $style, array $configFields, string $referenceCode = ''): string
+    private function buildComponentPrompt(string $name, string $description, string $region, string $style, array $configFields, string $referenceCode = '', string $language = ''): string
     {
         $fieldsJson = json_encode($configFields, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         
@@ -1729,11 +1738,11 @@ class AiGenerate extends BackendController
         
         // 如果有参考组件代码，使用参考模式
         if (!empty($referenceCode)) {
-            return $this->buildReferenceBasedPrompt($name, $description, $region, $style, $styleGuide, $configFields, $referenceCode);
+            return $this->buildReferenceBasedPrompt($name, $description, $region, $style, $styleGuide, $configFields, $referenceCode, $language);
         }
         
         // 使用框架模式的提示词
-        return $this->buildFrameworkBasedPrompt($name, $description, $region, $style, $styleGuide, $configFields);
+        return $this->buildFrameworkBasedPrompt($name, $description, $region, $style, $styleGuide, $configFields, $language);
     }
     
     /**
@@ -1747,7 +1756,8 @@ class AiGenerate extends BackendController
         string $region, 
         string $style,
         string $styleGuide,
-        array $configFields
+        array $configFields,
+        string $language = ''
     ): string {
         $fieldsJson = json_encode($configFields, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         $region = strtolower($region);
@@ -1834,6 +1844,28 @@ class AiGenerate extends BackendController
 
 ⚠️ 只返回 JSON 对象，不要有任何前后解释文字或代码围栏。
 PROMPT;
+
+        // 添加语言要求
+        if (!empty($language)) {
+            $languageMap = [
+                'zh_Hans_CN' => '简体中文',
+                'zh-CN' => '简体中文',
+                'zh_CN' => '简体中文',
+                'zh' => '中文',
+                'en_US' => 'English',
+                'en' => 'English',
+                'ja_JP' => '日本語',
+                'ja' => '日本語',
+                'ko_KR' => '한국어',
+                'ko' => '한국어',
+            ];
+            $languageName = $languageMap[$language] ?? $language;
+            $prompt .= "\n\n# 语言要求（CRITICAL）\n";
+            $prompt .= "- **目标语言**：{$languageName}\n";
+            $prompt .= "- **所有用户可见文本**（按钮文字、标题、描述、占位符、示例内容等）必须使用 **{$languageName}** 语言\n";
+            $prompt .= "- 代码注释、技术标识符（变量名、CSS类名）保持英文\n";
+            $prompt .= "- 示例：如果目标语言是「简体中文」，按钮应该是「了解更多」而不是「Learn More」\n";
+        }
 
         return $prompt;
     }
@@ -2271,7 +2303,8 @@ CONSTRAINT;
         string $style,
         string $styleGuide,
         array $configFields, 
-        string $referenceCode
+        string $referenceCode,
+        string $language = ''
     ): string {
         $fieldsJson = json_encode($configFields, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         
@@ -2356,6 +2389,28 @@ CONSTRAINT;
 
 ⚠️ 只返回 JSON 对象，不要有任何前后解释文字或代码围栏。
 PROMPT;
+
+        // 添加语言要求
+        if (!empty($language)) {
+            $languageMap = [
+                'zh_Hans_CN' => '简体中文',
+                'zh-CN' => '简体中文',
+                'zh_CN' => '简体中文',
+                'zh' => '中文',
+                'en_US' => 'English',
+                'en' => 'English',
+                'ja_JP' => '日本語',
+                'ja' => '日本語',
+                'ko_KR' => '한국어',
+                'ko' => '한국어',
+            ];
+            $languageName = $languageMap[$language] ?? $language;
+            $prompt .= "\n\n# 语言要求（CRITICAL）\n";
+            $prompt .= "- **目标语言**：{$languageName}\n";
+            $prompt .= "- **所有用户可见文本**（按钮文字、标题、描述、占位符、示例内容等）必须使用 **{$languageName}** 语言\n";
+            $prompt .= "- 代码注释、技术标识符（变量名、CSS类名）保持英文\n";
+            $prompt .= "- 示例：如果目标语言是「简体中文」，按钮应该是「了解更多」而不是「Learn More」\n";
+        }
 
         return $prompt;
     }
@@ -2825,6 +2880,7 @@ PROMPT;
             $fieldsInput = trim($input['fields'] ?? '');
             $referenceComponent = $input['reference_component'] ?? '';
             $referenceCode = $input['reference_code'] ?? '';
+            $language = $input['language'] ?? State::getLang() ?: 'zh_Hans_CN';
 
             if (empty($name) || empty($description)) {
                 $sse->sendEvent('error', ['message' => __('组件名称和描述不能为空')]);
@@ -2861,6 +2917,7 @@ PROMPT;
                 [
                     'category' => $region,
                     'style_code' => $styleCode,
+                    'language' => $language,
                     'timeout' => 0, // 不限制单次 curl 超时，智能体多轮迭代依靠心跳保活
                     'max_tokens' => 16000, // 组件 JSON 可能较长，提高上限降低截断率
                 ],
@@ -3140,5 +3197,32 @@ PROMPT;
         $entityFileManager->syncEntityFile($component);
 
         return $component;
+    }
+    
+    /**
+     * 检查模板代码的 PHP 语法
+     * 
+     * @param string $code 模板代码
+     * @return array ['valid' => bool, 'error' => string]
+     */
+    private function checkTemplateSyntax(string $code): array
+    {
+        $tempFile = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pb_syntax_check_' . bin2hex(random_bytes(8)) . '.php';
+        file_put_contents($tempFile, $code);
+        
+        $output = [];
+        $returnCode = 0;
+        exec('php -l ' . escapeshellarg($tempFile) . ' 2>&1', $output, $returnCode);
+        
+        @unlink($tempFile);
+        
+        if ($returnCode !== 0) {
+            $errorMsg = implode("\n", $output);
+            $errorMsg = preg_replace('/in\s+' . preg_quote($tempFile, '/') . '/i', '', $errorMsg);
+            $errorMsg = preg_replace('/\s+on\s+line\s+\d+/', '', $errorMsg);
+            return ['valid' => false, 'error' => trim($errorMsg)];
+        }
+        
+        return ['valid' => true, 'error' => ''];
     }
 }

@@ -4,157 +4,133 @@
  * 
  * @var array $logs
  */
-/**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
-
 $logs = $this->logs ?? [];
 ?>
-<!DOCTYPE html>
-<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title>脱敏记录</title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+<!-- 页面标题 -->
+<div class='row'>
+    <div class='col-12'>
+        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+            <h4 class='mb-sm-0'>
+                <i class="mdi mdi-file-document-edit me-2"></i>
+                <lang>脱敏记录</lang>
+            </h4>
+        </div>
+    </div>
+</div>
 
-@template(Weline_Admin::common/page/loading.phtml)
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
 
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'>
-                                <i class="mdi mdi-file-document-edit me-2"></i>
-                                <lang>脱敏记录</lang>
-                            </h4>
-                        </div>
+<!-- 筛选条件 -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <form id="filterForm" class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label"><lang>脱敏方法</lang></label>
+                        <select class="form-select" name="method">
+                            <option value=""><lang>全部</lang></option>
+                            <option value="regex"><lang>正则脱敏</lang></option>
+                            <option value="ai"><lang>AI脱敏</lang></option>
+                            <option value="custom"><lang>自定义</lang></option>
+                        </select>
                     </div>
-                </div>
-
-                <div class='row'>
-                    <template>Weline_Component::message.phtml</template>
-                </div>
-
-                <!-- 筛选条件 -->
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <form id="filterForm" class="row g-3">
-                                    <div class="col-md-3">
-                                        <label class="form-label">脱敏方法</label>
-                                        <select class="form-select" name="method">
-                                            <option value="">全部</option>
-                                            <option value="regex">正则脱敏</option>
-                                            <option value="ai">AI脱敏</option>
-                                            <option value="custom">自定义</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label">日期范围</label>
-                                        <input type="date" class="form-control" name="start_date">
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label">至</label>
-                                        <input type="date" class="form-control" name="end_date">
-                                    </div>
-                                    <div class="col-md-3 d-flex align-items-end">
-                                        <button type="button" class="btn btn-primary" onclick="filterLogs()">
-                                            <i class="mdi mdi-magnify"></i> 筛选
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
+                    <div class="col-md-3">
+                        <label class="form-label"><lang>日期范围</lang></label>
+                        <input type="date" class="form-control" name="start_date">
                     </div>
-                </div>
-
-                <!-- 记录列表 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h3 class="card-title">脱敏记录列表</h3>
-                            </div>
-                            <div class="card-body">
-                                <div class="table-responsive">
-                                    <table class="table table-bordered table-striped">
-                                        <thead>
-                                            <tr>
-                                                <th>ID</th>
-                                                <th>原内容</th>
-                                                <th>脱敏后</th>
-                                                <th>方法</th>
-                                                <th>执行时间</th>
-                                                <th>创建时间</th>
-                                                <th>操作</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php if (!empty($logs)): ?>
-                                                <?php foreach ($logs as $log): ?>
-                                                    <tr>
-                                                        <td><?= $log->getLogId() ?></td>
-                                                        <td><code><?= htmlspecialchars(mb_substr($log->getOriginalContent(), 0, 50)) ?><?= mb_strlen($log->getOriginalContent()) > 50 ? '...' : '' ?></code></td>
-                                                        <td><code class="text-success"><?= htmlspecialchars(mb_substr($log->getDesensitizedContent(), 0, 50)) ?><?= mb_strlen($log->getDesensitizedContent()) > 50 ? '...' : '' ?></code></td>
-                                                        <td><span class="badge bg-info"><?= $log->getMethod() ?></span></td>
-                                                        <td><?= number_format($log->getExecutionTime(), 4) ?>s</td>
-                                                        <td><?= $log->getCreatedAt() ?></td>
-                                                        <td>
-                                                            <button type="button" class="btn btn-sm btn-outline-primary" 
-                                                                    onclick="viewDetail(<?= $log->getLogId() ?>)">
-                                                                <i class="mdi mdi-eye"></i>
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                <?php endforeach; ?>
-                                            <?php else: ?>
-                                                <tr>
-                                                    <td colspan="7" class="text-center text-muted py-4">
-                                                        <i class="mdi mdi-information-outline me-2"></i>
-                                                        暂无记录
-                                                    </td>
-                                                </tr>
-                                            <?php endif; ?>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="col-md-3">
+                        <label class="form-label"><lang>至</lang></label>
+                        <input type="date" class="form-control" name="end_date">
                     </div>
-                </div>
-
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="button" class="btn btn-primary" id="desens-log-filter-btn">
+                            <i class="mdi mdi-magnify"></i> <lang>筛选</lang>
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
-
 </div>
 
-@template(Weline_Admin::common/right-sidebar.phtml)
-@template(Weline_Admin::common/footer.phtml)
+<!-- 记录列表 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><lang>脱敏记录列表</lang></h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th><lang>原内容</lang></th>
+                                <th><lang>脱敏后</lang></th>
+                                <th><lang>方法</lang></th>
+                                <th><lang>执行时间</lang></th>
+                                <th><lang>创建时间</lang></th>
+                                <th><lang>操作</lang></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (!empty($logs)): ?>
+                                <?php foreach ($logs as $log): ?>
+                                    <tr>
+                                        <td><?= $log->getLogId() ?></td>
+                                        <td><code><?= htmlspecialchars(mb_substr($log->getOriginalContent(), 0, 50)) ?><?= mb_strlen($log->getOriginalContent()) > 50 ? '...' : '' ?></code></td>
+                                        <td><code class="text-success"><?= htmlspecialchars(mb_substr($log->getDesensitizedContent(), 0, 50)) ?><?= mb_strlen($log->getDesensitizedContent()) > 50 ? '...' : '' ?></code></td>
+                                        <td><span class="badge bg-info"><?= $log->getMethod() ?></span></td>
+                                        <td><?= number_format($log->getExecutionTime(), 4) ?>s</td>
+                                        <td><?= $log->getCreatedAt() ?></td>
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-outline-primary desens-log-view-btn" 
+                                                    data-id="<?= $log->getLogId() ?>">
+                                                <i class="mdi mdi-eye"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted py-4">
+                                        <i class="mdi mdi-information-outline me-2"></i>
+                                        <lang>暂无记录</lang>
+                                    </td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
-function filterLogs() {
-    const form = document.getElementById('filterForm');
-    const formData = new FormData(form);
-    const params = new URLSearchParams(formData).toString();
-    window.location.href = window.location.pathname + '?' + params;
-}
-
-function viewDetail(logId) {
-    // 加载详情并显示
-    alert('详情功能待实现: ' + logId);
-}
+(function() {
+    'use strict';
+    
+    document.getElementById('desens-log-filter-btn').addEventListener('click', function() {
+        var form = document.getElementById('filterForm');
+        var formData = new FormData(form);
+        var params = new URLSearchParams(formData).toString();
+        window.location.href = window.location.pathname + '?' + params;
+    });
+    
+    document.querySelectorAll('.desens-log-view-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var logId = this.getAttribute('data-id');
+            if (typeof AdminToast !== 'undefined') {
+                AdminToast.info('<?= __('详情功能待实现') ?>: ' + logId);
+            } else {
+                console.log('详情功能待实现: ' + logId);
+            }
+        });
+    });
+})();
 </script>
-
-</body>
-</html>

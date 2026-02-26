@@ -1,190 +1,190 @@
 <?php
 /**
- * PageBuilder 网站管理页面
+ * PageBuilder 网站管理页面 - 内容模板
+ * 由布局系统自动包裹
  * 
  * 集成 Weline\Websites 模块，提供网站管理功能
  *
  * @var \Weline\Framework\View\Template $this
  */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
-
 $title = $this->getData('title') ?: __('PageBuilder网站管理');
 $websites = $this->getData('websites') ?: [];
 $pagination = $this->getData('pagination') ?: '';
 $search = $this->getData('search') ?: '';
 ?>
-<!DOCTYPE html>
-<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= htmlspecialchars($title) ?></title>
-    <style>
-        .badge {
-            font-size: 0.75rem;
-            padding: 0.25em 0.5em;
-        }
-        
-        .usage-guide {
-            background: #f8f9fa;
-            border-left: 4px solid #667eea;
-            padding: 16px 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-        
-        .usage-guide-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            user-select: none;
-        }
-        
-        .usage-guide-header h6 {
-            margin: 0;
-            color: #333;
-            font-weight: 600;
-        }
-        
-        .usage-guide-body {
-            margin-top: 12px;
-            display: none;
-        }
-        
-        .usage-guide-body.show {
-            display: block;
-        }
-        
-        .usage-guide-body ul {
-            margin: 8px 0 0 0;
-            padding-left: 20px;
-            color: #666;
-        }
-        
-        .usage-guide-body li {
-            margin-bottom: 6px;
-            font-size: 0.9rem;
-        }
-    </style>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
-@template(Weline_Admin::common/page/loading.phtml)
+<style>
+    .pagebuilder-website-badge {
+        font-size: 0.75rem;
+        padding: 0.25em 0.5em;
+    }
+    
+    .pagebuilder-website-usage-guide {
+        background: var(--backend-color-card-bg, #fff);
+        border: 1px solid var(--backend-color-border-default, #dee2e6);
+        border-left: 4px solid var(--backend-color-primary, #556ee6);
+        padding: 16px 20px;
+        border-radius: var(--backend-border-radius-md, 8px);
+        margin-bottom: 20px;
+        box-shadow: var(--backend-card-shadow, 0 0 13px 0 rgba(74, 53, 107, 0.05));
+    }
+    
+    .pagebuilder-website-usage-guide-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        user-select: none;
+        transition: color 0.2s ease;
+    }
+    
+    .pagebuilder-website-usage-guide-header:hover h6 {
+        color: var(--backend-color-primary, #556ee6);
+    }
+    
+    .pagebuilder-website-usage-guide-header h6 {
+        margin: 0;
+        color: var(--backend-color-text-primary, #212529);
+        font-weight: 600;
+        transition: color 0.2s ease;
+    }
+    
+    .pagebuilder-website-usage-guide-header i {
+        color: var(--backend-color-text-secondary, #6c757d);
+        transition: transform 0.3s ease, color 0.2s ease;
+    }
+    
+    .pagebuilder-website-usage-guide-header:hover i {
+        color: var(--backend-color-primary, #556ee6);
+    }
+    
+    .pagebuilder-website-usage-guide-body {
+        margin-top: 12px;
+        display: none;
+    }
+    
+    .pagebuilder-website-usage-guide-body.show {
+        display: block;
+    }
+    
+    .pagebuilder-website-usage-guide-body p {
+        color: var(--backend-color-text-primary, #212529);
+    }
+    
+    .pagebuilder-website-usage-guide-body ul {
+        margin: 8px 0 0 0;
+        padding-left: 20px;
+        color: var(--backend-color-text-secondary, #6c757d);
+    }
+    
+    .pagebuilder-website-usage-guide-body li {
+        margin-bottom: 6px;
+        font-size: 0.9rem;
+        color: var(--backend-color-text-secondary, #6c757d);
+    }
+    
+    .pagebuilder-website-usage-guide-body li strong {
+        color: var(--backend-color-text-primary, #212529);
+    }
+</style>
 
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <!-- 页面标题 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0 font-size-18">
-                                <i class="mdi mdi-web me-2"></i>
-                                <?= htmlspecialchars($title) ?>
-                            </h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item">
-                                        <a href="<?= $this->getUrl('*/backend/page') ?>"><lang>页面管理</lang></a>
-                                    </li>
-                                    <li class="breadcrumb-item active"><lang>网站管理</lang></li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 消息区域 -->
-                <div class='row'>
-                    <div class="col-12">
-                        <template>Weline_Component::message.phtml</template>
-                    </div>
-                </div>
-
-                <!-- 使用指南区域 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="usage-guide">
-                            <div class="usage-guide-header" onclick="toggleUsageGuide()">
-                                <h6>
-                                    <i class="mdi mdi-help-circle-outline me-2"></i>
-                                    <lang>使用指南</lang>
-                                </h6>
-                                <i class="mdi mdi-chevron-down" id="usage-guide-icon"></i>
-                            </div>
-                            <div class="usage-guide-body" id="usage-guide-body">
-                                <p class="mb-2"><strong><lang>关于网站管理</lang></strong></p>
-                                <ul>
-                                    <li><strong><lang>网站</lang>：</strong><lang>代表一个独立的站点，拥有独立的域名、语言、货币等配置</lang></li>
-                                    <li><strong><lang>网站代码</lang>：</strong><lang>唯一标识符，用于程序中识别网站，如 default、en_us 等</lang></li>
-                                    <li><strong><lang>关联语言和货币</lang>：</strong><lang>配置该网站支持的语言和货币选项</lang></li>
-                                    <li><strong><lang>SEO账户绑定</lang>：</strong><lang>绑定后可自动提交sitemap到搜索引擎</lang></li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 网站列表 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between mb-3">
-                                    <h4 class="card-title"><lang>网站列表</lang></h4>
-                                    <div class="d-flex gap-2">
-                                        <form id="search-form" method="get" action="<?= $this->getBackendUrl('*/backend/websiteManagement') ?>" class="d-flex gap-2">
-                                            <input type="text" id="search-input" name="search" class="form-control" placeholder="<?= __('搜索名称、代码或URL') ?>" 
-                                                   value="<?= htmlspecialchars($search) ?>" style="width: 250px;">
-                                            <button type="submit" class="btn btn-outline-primary">
-                                                <i class="mdi mdi-magnify"></i> <lang>搜索</lang>
-                                            </button>
-                                            <?php if (!empty($search)): ?>
-                                                <a href="<?= $this->getBackendUrl('*/backend/websiteManagement') ?>" class="btn btn-outline-secondary" id="clear-search">
-                                                    <i class="mdi mdi-close"></i> <lang>清除</lang>
-                                                </a>
-                                            <?php endif; ?>
-                                        </form>
-                                        <block class='Weline\Component\Block\OffCanvas'
-                                               cache='0'
-                                               id='add_result_modal'
-                                               action='*/backend/websiteManagement/add'
-                                               title='添加网站'
-                                               close-button-show='1'
-                                               close-button-text='关闭'
-                                               direction='right'
-                                               class-names='w-75 h-100'
-                                               off-canvas-body-style=''
-                                               target-button-text='添加网站'
-                                               icon='mdi mdi-plus'
-                                               target-button-class='btn btn-primary'
-                                               target-tag='a'
-                                               save='1'
-                                        />
-                                    </div>
-                                </div>
-
-                                <div id="website-table-container">
-                                    <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/WebsiteManagement/table.phtml') ?>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
+<!-- 页面标题 -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0 font-size-18">
+                <i class="mdi mdi-web me-2"></i>
+                <?= htmlspecialchars($title) ?>
+            </h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item">
+                        <a href="<?= $this->getUrl('*/backend/page') ?>"><lang>页面管理</lang></a>
+                    </li>
+                    <li class="breadcrumb-item active"><lang>网站管理</lang></li>
+                </ol>
             </div>
         </div>
     </div>
-
 </div>
 
-@template(Weline_Admin::common/right-sidebar.phtml)
+<!-- 消息区域 -->
+<div class='row'>
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
+
+<!-- 使用指南区域 -->
+<div class="row">
+    <div class="col-12">
+        <div class="pagebuilder-website-usage-guide">
+            <div class="pagebuilder-website-usage-guide-header" id="pagebuilder-website-usage-guide-toggle">
+                <h6>
+                    <i class="mdi mdi-help-circle-outline me-2"></i>
+                    <lang>使用指南</lang>
+                </h6>
+                <i class="mdi mdi-chevron-down" id="pagebuilder-website-usage-guide-icon" style="transition: transform 0.3s ease;"></i>
+            </div>
+            <div class="pagebuilder-website-usage-guide-body" id="pagebuilder-website-usage-guide-body">
+                <p class="mb-2"><strong><lang>关于网站管理</lang></strong></p>
+                <ul>
+                    <li><strong><lang>网站</lang>：</strong><lang>代表一个独立的站点，拥有独立的域名、语言、货币等配置</lang></li>
+                    <li><strong><lang>网站代码</lang>：</strong><lang>唯一标识符，用于程序中识别网站，如 default、en_us 等</lang></li>
+                    <li><strong><lang>关联语言和货币</lang>：</strong><lang>配置该网站支持的语言和货币选项</lang></li>
+                    <li><strong><lang>SEO账户绑定</lang>：</strong><lang>绑定后可自动提交sitemap到搜索引擎</lang></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 网站列表 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-3">
+                    <h4 class="card-title"><lang>网站列表</lang></h4>
+                    <div class="d-flex gap-2">
+                        <form id="pagebuilder-website-search-form" method="get" action="<?= $this->getBackendUrl('*/backend/websiteManagement') ?>" class="d-flex gap-2">
+                            <input type="text" id="pagebuilder-website-search-input" name="search" class="form-control" placeholder="<?= __('搜索名称、代码或URL') ?>" 
+                                   value="<?= htmlspecialchars($search) ?>" style="width: 250px;">
+                            <button type="submit" class="btn btn-outline-primary">
+                                <i class="mdi mdi-magnify"></i> <lang>搜索</lang>
+                            </button>
+                            <?php if (!empty($search)): ?>
+                                <a href="<?= $this->getBackendUrl('*/backend/websiteManagement') ?>" class="btn btn-outline-secondary" id="pagebuilder-website-clear-search">
+                                    <i class="mdi mdi-close"></i> <lang>清除</lang>
+                                </a>
+                            <?php endif; ?>
+                        </form>
+                        <block class='Weline\Component\Block\OffCanvas'
+                               cache='0'
+                               id='add_result_modal'
+                               action='*/backend/websiteManagement/add'
+                               title='添加网站'
+                               close-button-show='1'
+                               close-button-text='关闭'
+                               direction='right'
+                               class-names='w-75 h-100'
+                               off-canvas-body-style=''
+                               target-button-text='添加网站'
+                               icon='mdi mdi-plus'
+                               target-button-class='btn btn-primary'
+                               target-tag='a'
+                               save='1'
+                        />
+                    </div>
+                </div>
+
+                <div id="pagebuilder-website-table-container">
+                    <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/WebsiteManagement/table.phtml') ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Table Editable plugin -->
 <script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
@@ -192,42 +192,48 @@ $search = $this->getData('search') ?: '';
 <script src='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.js)'></script>
 <!-- Sweet Alerts js -->
 <script src="@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)"></script>
-@template(Weline_Admin::common/footer.phtml)
 <js:part name="w-delete"/>
 
 <script>
-// 切换使用指南
-function toggleUsageGuide() {
-    const body = document.getElementById('usage-guide-body');
-    const icon = document.getElementById('usage-guide-icon');
-    body.classList.toggle('show');
-    icon.style.transform = body.classList.contains('show') ? 'rotate(180deg)' : 'rotate(0deg)';
-}
-
-// 异步搜索功能
 (function() {
-    let searchTimeout = null;
-    const searchForm = document.getElementById('search-form');
-    const searchInput = document.getElementById('search-input');
-    const tableContainer = document.getElementById('website-table-container');
-    const clearSearchBtn = document.getElementById('clear-search');
-    const searchUrl = '<?= $this->getBackendUrl('*/backend/websiteManagement') ?>';
+    'use strict';
+    
+    // 切换使用指南
+    var usageGuideToggle = document.getElementById('pagebuilder-website-usage-guide-toggle');
+    if (usageGuideToggle) {
+        usageGuideToggle.addEventListener('click', function() {
+            var body = document.getElementById('pagebuilder-website-usage-guide-body');
+            var icon = document.getElementById('pagebuilder-website-usage-guide-icon');
+            if (body && icon) {
+                body.classList.toggle('show');
+                icon.style.transform = body.classList.contains('show') ? 'rotate(180deg)' : 'rotate(0deg)';
+            }
+        });
+    }
+
+    // 异步搜索功能
+    var searchTimeout = null;
+    var searchForm = document.getElementById('pagebuilder-website-search-form');
+    var searchInput = document.getElementById('pagebuilder-website-search-input');
+    var tableContainer = document.getElementById('pagebuilder-website-table-container');
+    var clearSearchBtn = document.getElementById('pagebuilder-website-clear-search');
+    var searchUrl = '<?= $this->getBackendUrl('*/backend/websiteManagement') ?>';
     
     // 执行异步搜索
     function performSearch() {
         if (!searchForm || !tableContainer) return;
         
-        const searchValue = searchInput ? searchInput.value.trim() : '';
+        var searchValue = searchInput ? searchInput.value.trim() : '';
         
         // 显示加载状态
         tableContainer.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden"><?= __("加载中...") ?></span></div><p class="mt-3"><?= __("正在搜索...") ?></p></div>';
         
         // 构建 AJAX URL
-        const params = new URLSearchParams();
+        var params = new URLSearchParams();
         if (searchValue) {
             params.append('search', searchValue);
         }
-        const ajaxUrl = searchUrl + (params.toString() ? '?' + params.toString() : '');
+        var ajaxUrl = searchUrl + (params.toString() ? '?' + params.toString() : '');
         
         // 发送 AJAX 请求
         fetch(ajaxUrl, {
@@ -256,9 +262,9 @@ function toggleUsageGuide() {
                 tableContainer.innerHTML = data.html;
                 
                 // 执行新插入的 script 标签
-                const scripts = tableContainer.querySelectorAll('script');
+                var scripts = tableContainer.querySelectorAll('script');
                 scripts.forEach(function(oldScript) {
-                    const newScript = document.createElement('script');
+                    var newScript = document.createElement('script');
                     Array.from(oldScript.attributes).forEach(function(attr) {
                         newScript.setAttribute(attr.name, attr.value);
                     });
@@ -267,13 +273,13 @@ function toggleUsageGuide() {
                 });
                 
                 // 更新清除按钮显示状态
-                const currentClearBtn = document.getElementById('clear-search');
+                var currentClearBtn = document.getElementById('pagebuilder-website-clear-search');
                 if (searchValue) {
                     if (!currentClearBtn) {
-                        const btn = document.createElement('a');
+                        var btn = document.createElement('a');
                         btn.href = searchUrl;
                         btn.className = 'btn btn-outline-secondary';
-                        btn.id = 'clear-search';
+                        btn.id = 'pagebuilder-website-clear-search';
                         btn.innerHTML = '<i class="mdi mdi-close"></i> <?= __("清除") ?>';
                         searchForm.appendChild(btn);
                         btn.addEventListener('click', function(e) {
@@ -341,5 +347,3 @@ function toggleUsageGuide() {
     });
 })();
 </script>
-</body>
-</html>

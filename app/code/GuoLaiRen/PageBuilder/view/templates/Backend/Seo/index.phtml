@@ -1,14 +1,12 @@
 <?php
 /**
- * PageBuilder SEO 管理页面
+ * PageBuilder SEO 管理页面 - 内容模板
+ * 由布局系统自动包裹
  * 
  * 集成SEO模块，提供SEO账户管理和站点绑定
  *
  * @var \Weline\Framework\View\Template $this
  */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
-
 $title = $this->getData('title') ?: __('PageBuilder SEO管理');
 $module = $this->getData('module') ?: '';
 $scope = $this->getData('scope') ?: '';
@@ -20,17 +18,12 @@ $sitemap_index_file = $this->getData('sitemap_index_file');
 $sitemap_providers = $this->getData('sitemap_providers') ?: [];
 $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
 ?>
-<!DOCTYPE html>
-<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= htmlspecialchars($title) ?></title>
-    
-    <!-- SweetAlert2 - 从本地加载 -->
-    <link rel="stylesheet" href="@static(Weline_Admin::libs/sweetalert2/11/sweetalert2.min.css)">
-    <script src="@static(Weline_Admin::libs/sweetalert2/11/sweetalert2.all.min.js)"></script>
-    
-    <style>
+
+<!-- SweetAlert2 - 从本地加载 -->
+<link rel="stylesheet" href="@static(Weline_Admin::libs/sweetalert2/11/sweetalert2.min.css)">
+<script src="@static(Weline_Admin::libs/sweetalert2/11/sweetalert2.all.min.js)"></script>
+
+<style>
         /* ================================================================
            手风琴样式 - 使用主题 CSS 变量适配亮色/暗色模式
            ================================================================ */
@@ -963,45 +956,33 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
             color: #e9ecef;
         }
     </style>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
-@template(Weline_Admin::common/page/loading.phtml)
+<!-- 页面标题 -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0 font-size-18">
+                <i class="mdi mdi-chart-line me-2"></i>
+                <?= htmlspecialchars($title) ?>
+            </h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item">
+                        <a href="<?= $this->getUrl('pagebuilder/backend/page') ?>"><lang>页面管理</lang></a>
+                    </li>
+                    <li class="breadcrumb-item active"><lang>SEO管理</lang></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
 
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <!-- 页面标题 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0 font-size-18">
-                                <i class="mdi mdi-chart-line me-2"></i>
-                                <?= htmlspecialchars($title) ?>
-                            </h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item">
-                                        <a href="<?= $this->getUrl('pagebuilder/backend/page') ?>"><lang>页面管理</lang></a>
-                                    </li>
-                                    <li class="breadcrumb-item active"><lang>SEO管理</lang></li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 消息区域 -->
-                <div class='row'>
-                    <div class="col-12">
-                        <template>Weline_Component::message.phtml</template>
-                    </div>
-                </div>
+<!-- 消息区域 -->
+<div class='row'>
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
 
                 <!-- 使用指南区域 -->
                 <div class="row">
@@ -1387,12 +1368,6 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
                     </div>
                 </div>
 
-            </div>
-        </div>
-    </div>
-
-</div>
-
 <!-- SEO账户 Offcanvas -->
 <div class="offcanvas offcanvas-end" tabindex="-1" id="accountOffcanvas" style="width: 700px; max-width: 90vw;">
     <div class="offcanvas-header border-bottom">
@@ -1445,9 +1420,10 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
     </div>
 </div>
 
-@template(Weline_Admin::common/footer.phtml)
-
 <script>
+(function() {
+'use strict';
+
 // 国际化翻译
 const i18n = {
     // 通用
@@ -2755,7 +2731,21 @@ document.getElementById('accountOffcanvas')?.addEventListener('hidden.bs.offcanv
     }
 });
 
-</script>
+// ==================== 暴露到全局（供 onclick 调用） ====================
+window.toggleUsageGuide = toggleUsageGuide;
+window.toggleAccordion = toggleAccordion;
+window.toggleAccountWebsites = toggleAccountWebsites;
+window.loadAccountForm = loadAccountForm;
+window.deleteAccount = deleteAccount;
+window.generateSitemap = generateSitemap;
+window.toggleSitemapChildren = toggleSitemapChildren;
+window.toggleModuleFiles = toggleModuleFiles;
+window.saveAccountWebsiteBindings = saveAccountWebsiteBindings;
+window.loadAccountWebsiteBinding = loadAccountWebsiteBinding;
+window.unbindWebsiteFromAccount = unbindWebsiteFromAccount;
+window.resetWebsiteConfig = resetWebsiteConfig;
+window.saveWebsiteConfig = saveWebsiteConfig;
+window.clearAccountWebsiteSelections = clearAccountWebsiteSelections;
 
-</body>
-</html>
+})();
+</script>

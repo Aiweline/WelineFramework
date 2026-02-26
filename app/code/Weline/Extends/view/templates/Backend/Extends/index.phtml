@@ -1,510 +1,429 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 ?>
-<!DOCTYPE html>
-<!--
- *@Author       秋枫雁飞
- *@Email        aiweline@qq.com
- *@Forum        https://bbs.aiweline.com
- *@DESC         扩展管理页面
--->
-<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
 
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title>
-        <?= $title ?? __('扩展管理') ?>
-    </title>
-</head>
+<!-- start page title -->
+<div class='row'>
+    <div class='col-12'>
+        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+            <h4 class='mb-sm-0'>
+                <?= $title ?? __('扩展管理') ?>
+            </h4>
 
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+            <div class='page-title-right'>
+                <ol class='breadcrumb m-0'>
+                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
+                            <lang>系统配置</lang>
+                        </a></li>
+                    <li class='breadcrumb-item'>
+                        <a href="@backend-url('*/backend/extends')">
+                            <lang>扩展管理</lang>
+                        </a>
+                    </li>
+                </ol>
+            </div>
 
-<!--页头工具条 开始-->
-@template(Weline_Admin::common/page/loading.phtml)
-<!--页头工具条 结束-->
-
-<!-- 开始 页面 -->
-<div id="layout-wrapper">
-
-    <!--页头工具条 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <!--页头工具条 结束-->
-
-    <!-- ========== Topnav Start ========== -->
-    <!--页头菜单栏 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    <!--页头菜单栏 结束-->
-
-    <!-- ========== Left Sidebar Start ========== -->
-    <!--左侧菜单栏 开始-->
-    @template(Weline_Admin::common/left-sidebar.phtml)
-    <!--左侧菜单栏 结束-->
-
-    <!-- ============================================================== -->
-    <!-- Start right Content here -->
-    <!-- ============================================================== -->
-    <div class="main-content">
-
-        <div class='page-content'>
-            <div class='container-fluid'>
-                <!-- start page title -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'>
-                                <?= $title ?? __('扩展管理') ?>
-                            </h4>
-
-                            <div class='page-title-right'>
-                                <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
-                                            <lang>系统配置</lang>
-                                        </a></li>
-                                    <li class='breadcrumb-item'>
-                                        <a href="@backend-url('*/backend/extends')">
-                                            <lang>扩展管理</lang>
-                                        </a>
-                                    </li>
-                                </ol>
-                            </div>
-
-                        </div>
-                    </div>
-                </div>
-                <!-- end page title -->
-                <!-- start page message -->
-                <div class='row'>
-                    <template>Weline_Component::message.phtml</template>
-                </div> <!-- end message -->
-                
-                <!-- 页面操作按钮 -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='card'>
-                            <div class='card-body'>
-                                <div class="page-actions d-flex gap-2 mb-3">
-                                    <a href="@backend-url('*/backend/extends/refresh')" class="btn btn-warning">
-                                        <i class="mdi mdi-refresh"></i> <lang>刷新注册表</lang>
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 统计卡片 -->
-                <?php
-                $stats = $this->getData('stats') ?? [];
-                ?>
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='card'>
-                            <div class='card-body'>
-                                <div class="stats-cards">
-                                    <div class="card">
-                                        <div class="card-content">
-                                            <div class="card-title"><lang>总模块数</lang></div>
-                                            <div class="card-value"><?= $stats['total_modules'] ?? 0 ?></div>
-                                        </div>
-                                    </div>
-                                    <div class="card">
-                                        <div class="card-content">
-                                            <div class="card-title"><lang>有扩展定义的模块</lang></div>
-                                            <div class="card-value"><?= $stats['modules_with_extends'] ?? 0 ?></div>
-                                        </div>
-                                    </div>
-                                    <div class="card">
-                                        <div class="card-content">
-                                            <div class="card-title"><lang>被扩展的模块</lang></div>
-                                            <div class="card-value"><?= $stats['modules_extended_by_others'] ?? 0 ?></div>
-                                        </div>
-                                    </div>
-                                    <div class="card">
-                                        <div class="card-content">
-                                            <div class="card-title"><lang>Sticker 扩展数</lang></div>
-                                            <div class="card-value text-primary"><?= $stats['sticker_extensions_count'] ?? 0 ?></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 扩展列表 -->
-                <?php
-                $extends = $this->getData('extends') ?? [];
-                $searchKeyword = $this->request->getGet('search', '');
-                ?>
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='card'>
-                            <div class='card-body'>
-                                <!-- 搜索过滤 -->
-                                <div class='row align-items-center mb-3'>
-                                    <div class='col-md-4'>
-                                        <block class='Weline\Component\Block\Form\Search'
-                                               id='extends-search' 
-                                               action='*/backend/extends/index' 
-                                               method='get'
-                                               keyword='search' 
-                                               value='<?= htmlspecialchars($searchKeyword) ?>'
-                                               placeholder='<lang>请输入模块名或扩展点关键词回车搜索</lang>'></block>
-                                    </div>
-                                    <div class='col-md-8 text-end'>
-                                        <?php if (!empty($searchKeyword)): ?>
-                                            <a href="@backend-url('*/backend/extends/index')" class="btn btn-sm btn-outline-secondary">
-                                                <i class="mdi mdi-close"></i> <lang>清除搜索</lang>
-                                            </a>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                                
-                                <?php if (empty($extends)): ?>
-                                    <div class="empty-state">
-                                        <i class="mdi mdi-puzzle-outline"></i>
-                                        <h3><lang>暂无扩展信息</lang></h3>
-                                        <p><lang>系统中还没有定义任何扩展点或扩展关系。</lang></p>
-                                    </div>
-                                <?php else: ?>
-                                    <div class="table-container">
-                                        <div class='table-responsive mb-0' data-pattern='priority-columns'>
-                                            <table class='table table-striped table-bordered'>
-                                                <thead>
-                                                    <tr>
-                                                        <th><lang>模块名</lang></th>
-                                                        <th><lang>扩展定义</lang></th>
-                                                        <th><lang>被扩展统计</lang></th>
-                                                        <th><lang>Sticker 扩展</lang></th>
-                                                        <th><lang>操作</lang></th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    <?php 
-                                                    $displayCount = 0;
-                                                    foreach ($extends as $moduleName => $data): 
-                                                        // 搜索过滤
-                                                        if (!empty($searchKeyword)) {
-                                                            $searchLower = strtolower($searchKeyword);
-                                                            $moduleNameLower = strtolower($moduleName);
-                                                            $extendsDef = $data['extends'] ?? [];
-                                                            $extendedBy = $data['extended_by'] ?? [];
-                                                            
-                                                            // 检查模块名是否匹配
-                                                            $matchModuleName = strpos($moduleNameLower, $searchLower) !== false;
-                                                            
-                                                            // 检查扩展点是否匹配
-                                                            $matchExtendPoints = false;
-                                                            if (!empty($extendsDef['extends'])) {
-                                                                foreach ($extendsDef['extends'] as $extendName => $extendConfig) {
-                                                                    if (stripos($extendName, $searchKeyword) !== false || 
-                                                                        stripos($extendConfig['description'] ?? '', $searchKeyword) !== false) {
-                                                                        $matchExtendPoints = true;
-                                                                        break;
-                                                                    }
-                                                                }
-                                                            }
-                                                            
-                                                            // 如果都不匹配，跳过
-                                                            if (!$matchModuleName && !$matchExtendPoints) {
-                                                                continue;
-                                                            }
-                                                        }
-                                                        $displayCount++;
-                                                        
-                                                        $extendsDef = $data['extends'] ?? [];
-                                                        $extendedBy = $data['extended_by'] ?? [];
-                                                        $completeness = $data['completeness'] ?? [];
-                                                        
-                                                        // 统计被扩展数量
-                                                        $totalExtendedBy = 0;
-                                                        $stickerExtensions = 0;
-                                                        $moduleExtensions = 0;
-                                                        $themeExtensions = 0;
-                                                        
-                                                        foreach ($extendedBy as $sourceModule => $extensions) {
-                                                            $totalExtendedBy += count($extensions);
-                                                            foreach ($extensions as $extension) {
-                                                                if (($extension['is_sticker_extension'] ?? false) === true) {
-                                                                    $stickerExtensions++;
-                                                                } elseif (($extension['type'] ?? '') === 'module') {
-                                                                    $moduleExtensions++;
-                                                                } elseif (($extension['type'] ?? '') === 'theme') {
-                                                                    $themeExtensions++;
-                                                                }
-                                                            }
-                                                        }
-                                                        ?>
-                                                        <tr>
-                                                            <td>
-                                                                <div class="d-flex align-items-center gap-2">
-                                                                    <strong class="text-dark"><?= htmlspecialchars($moduleName) ?></strong>
-                                                                    <?php if (!empty($completeness['errors'])): ?>
-                                                                        <span class="badge bg-danger" title="<lang>有错误</lang>"><lang>错误</lang></span>
-                                                                    <?php endif; ?>
-                                                                    <?php if (!empty($completeness['warnings'])): ?>
-                                                                        <span class="badge bg-warning text-dark" title="<lang>有警告</lang>"><lang>警告</lang></span>
-                                                                    <?php endif; ?>
-                                                                </div>
-                                                            </td>
-                                                            <td>
-                                                                <?php if (!empty($extendsDef)): ?>
-                                                                    <div class="extends-def">
-                                                                        <div class="extend-type">
-                                                                            <span class="badge badge-info"><?= $extendsDef['type'] ?? 'unknown' ?></span>
-                                                                        </div>
-                                                                        <div class="extend-points">
-                                                                            <?php
-                                                                            $extendPoints = $extendsDef['extends'] ?? [];
-                                                                            $pointCount = count($extendPoints);
-                                                                            ?>
-                                                                            <small><?= $pointCount ?> <lang>个扩展点</lang></small>
-                                                                        </div>
-                                                                    </div>
-                                                                <?php else: ?>
-                                                                    <span class="text-muted"><lang>无扩展定义</lang></span>
-                                                                <?php endif; ?>
-                                                            </td>
-                                                            <td>
-                                                                <div class="extension-stats">
-                                                                    <span class="stat-item">
-                                                                        <i class="mdi mdi-puzzle"></i> <lang>总计</lang>: <?= $totalExtendedBy ?>
-                                                                    </span>
-                                                                    <?php if ($moduleExtensions > 0): ?>
-                                                                        <span class="stat-item">
-                                                                            <i class="mdi mdi-cube"></i> <lang>模块</lang>: <?= $moduleExtensions ?>
-                                                                        </span>
-                                                                    <?php endif; ?>
-                                                                    <?php if ($themeExtensions > 0): ?>
-                                                                        <span class="stat-item">
-                                                                            <i class="mdi mdi-theme-light-dark"></i> <lang>主题</lang>: <?= $themeExtensions ?>
-                                                                        </span>
-                                                                    <?php endif; ?>
-                                                                </div>
-                                                            </td>
-                                                            <td>
-                                                                <?php if ($stickerExtensions > 0): ?>
-                                                                    <span class="badge badge-primary">
-                                                                        <i class="mdi mdi-sticker"></i> <?= $stickerExtensions ?> <lang>个 Sticker</lang>
-                                                                    </span>
-                                                                <?php else: ?>
-                                                                    <span class="text-muted"><lang>无 Sticker 扩展</lang></span>
-                                                                <?php endif; ?>
-                                                            </td>
-                                                            <td>
-                                                                <div class="actions d-flex gap-2">
-                                                                    <block class='Weline\Component\Block\OffCanvas'
-                                                                           template='Weline_Component::off-canvas.phtml'
-                                                                           cache='0'
-                                                                           id='off_canvas_extends_detail_<?= md5($moduleName) ?>'
-                                                                           action='*/backend/extends/moduleDetail'
-                                                                           action-params='{module: "<?= htmlspecialchars($moduleName, ENT_QUOTES) ?>"}'
-                                                                           title='<lang>模块扩展详情</lang>: <?= htmlspecialchars($moduleName) ?>'
-                                                                           close-button-show='1'
-                                                                           close-button-text='<lang>关闭</lang>'
-                                                                           direction='right'
-                                                                           class-names='w-75'
-                                                                           off-canvas-body-style=''
-                                                                           target-button-text='<lang>详情</lang>'
-                                                                           target-button-class='btn btn-sm btn-outline-primary'
-                                                                           target-tag='button'
-                                                                           save='0'
-                                                                    />
-                                                                    <?php if ($stickerExtensions > 0): ?>
-                                                                        <block class='Weline\Component\Block\OffCanvas'
-                                                                               template='Weline_Component::off-canvas.phtml'
-                                                                               cache='0'
-                                                                               id='off_canvas_extends_sticker_<?= md5($moduleName) ?>'
-                                                                               action='*/backend/extends/moduleDetail'
-                                                                               action-params='{module: "<?= htmlspecialchars($moduleName, ENT_QUOTES) ?>", anchor: "sticker"}'
-                                                                               title='<lang>Sticker 扩展详情</lang>: <?= htmlspecialchars($moduleName) ?>'
-                                                                               close-button-show='1'
-                                                                               close-button-text='<lang>关闭</lang>'
-                                                                               direction='right'
-                                                                               class-names='w-75'
-                                                                               off-canvas-body-style=''
-                                                                               target-button-text='Sticker'
-                                                                               target-button-class='btn btn-sm btn-outline-info'
-                                                                               target-tag='button'
-                                                                               save='0'
-                                                                        />
-                                                                    <?php endif; ?>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                        
-                                                        <!-- 展开的详细信息 -->
-                                                        <?php if (!empty($completeness['warnings']) || !empty($completeness['errors'])): ?>
-                                                            <tr class="completeness-row">
-                                                                <td colspan="5">
-                                                                    <div class="completeness-info">
-                                                                        <?php if (!empty($completeness['errors'])): ?>
-                                                                            <div class="alert alert-danger">
-                                                                                <strong><lang>错误</lang>：</strong>
-                                                                                <ul>
-                                                                                    <?php foreach ($completeness['errors'] as $error): ?>
-                                                                                        <li><?= htmlspecialchars($error) ?></li>
-                                                                                    <?php endforeach; ?>
-                                                                                </ul>
-                                                                            </div>
-                                                                        <?php endif; ?>
-                                                                        
-                                                                        <?php if (!empty($completeness['warnings'])): ?>
-                                                                            <div class="alert alert-warning">
-                                                                                <strong><lang>警告</lang>：</strong>
-                                                                                <ul>
-                                                                                    <?php foreach ($completeness['warnings'] as $warning): ?>
-                                                                                        <li><?= htmlspecialchars($warning) ?></li>
-                                                                                    <?php endforeach; ?>
-                                                                                </ul>
-                                                                            </div>
-                                                                        <?php endif; ?>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        <?php endif; ?>
-                                                    <?php endforeach; ?>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                    <?php if (!empty($searchKeyword) && $displayCount === 0): ?>
-                                        <div class="empty-state">
-                                            <i class="mdi mdi-magnify"></i>
-                                            <h3><lang>未找到匹配的扩展</lang></h3>
-                                            <p><lang>搜索关键词</lang>："<?= htmlspecialchars($searchKeyword) ?>" <lang>没有找到匹配的模块或扩展点</lang>。</p>
-                                        </div>
-                                    <?php endif; ?>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div> <!-- end col -->
-                </div> <!-- end row -->
-            </div> <!-- container-fluid -->
         </div>
-        <!-- End Page-content -->
     </div>
-    <!-- end main content-->
-
 </div>
-<!-- END layout-wrapper -->
-<!--右边栏-->
-@template(Weline_Admin::common/right-sidebar.phtml)
+<!-- end page title -->
 
+<!-- start page message -->
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+<!-- end message -->
+
+<!-- 页面操作按钮 -->
+<div class='row'>
+    <div class='col-12'>
+        <div class='card'>
+            <div class='card-body'>
+                <div class="page-actions d-flex gap-2 mb-3">
+                    <a href="@backend-url('*/backend/extends/refresh')" class="btn btn-warning">
+                        <i class="mdi mdi-refresh"></i> <lang>刷新注册表</lang>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 统计卡片 -->
+<?php
+$stats = $this->getData('stats') ?? [];
+?>
+<div class='row'>
+    <div class='col-12'>
+        <div class='card'>
+            <div class='card-body'>
+                <div class="weline-extends-stats-cards">
+                    <div class="weline-extends-stat-card">
+                        <div class="weline-extends-stat-content">
+                            <div class="weline-extends-stat-title"><lang>总模块数</lang></div>
+                            <div class="weline-extends-stat-value"><?= $stats['total_modules'] ?? 0 ?></div>
+                        </div>
+                    </div>
+                    <div class="weline-extends-stat-card">
+                        <div class="weline-extends-stat-content">
+                            <div class="weline-extends-stat-title"><lang>有扩展定义的模块</lang></div>
+                            <div class="weline-extends-stat-value"><?= $stats['modules_with_extends'] ?? 0 ?></div>
+                        </div>
+                    </div>
+                    <div class="weline-extends-stat-card">
+                        <div class="weline-extends-stat-content">
+                            <div class="weline-extends-stat-title"><lang>被扩展的模块</lang></div>
+                            <div class="weline-extends-stat-value"><?= $stats['modules_extended_by_others'] ?? 0 ?></div>
+                        </div>
+                    </div>
+                    <div class="weline-extends-stat-card">
+                        <div class="weline-extends-stat-content">
+                            <div class="weline-extends-stat-title"><lang>Sticker 扩展数</lang></div>
+                            <div class="weline-extends-stat-value weline-extends-text-primary"><?= $stats['sticker_extensions_count'] ?? 0 ?></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 扩展列表 -->
+<?php
+$extends = $this->getData('extends') ?? [];
+$searchKeyword = $this->request->getGet('search', '');
+?>
+<div class='row'>
+    <div class='col-12'>
+        <div class='card'>
+            <div class='card-body'>
+                <!-- 搜索过滤 -->
+                <div class='row align-items-center mb-3'>
+                    <div class='col-md-4'>
+                        <block class='Weline\Component\Block\Form\Search'
+                               id='extends-search' 
+                               action='*/backend/extends/index' 
+                               method='get'
+                               keyword='search' 
+                               value='<?= htmlspecialchars($searchKeyword) ?>'
+                               placeholder='<lang>请输入模块名或扩展点关键词回车搜索</lang>'></block>
+                    </div>
+                    <div class='col-md-8 text-end'>
+                        <?php if (!empty($searchKeyword)): ?>
+                            <a href="@backend-url('*/backend/extends/index')" class="btn btn-sm btn-outline-secondary">
+                                <i class="mdi mdi-close"></i> <lang>清除搜索</lang>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                
+                <?php if (empty($extends)): ?>
+                    <div class="weline-extends-empty-state">
+                        <i class="mdi mdi-puzzle-outline"></i>
+                        <h3><lang>暂无扩展信息</lang></h3>
+                        <p><lang>系统中还没有定义任何扩展点或扩展关系。</lang></p>
+                    </div>
+                <?php else: ?>
+                    <div class="weline-extends-table-container">
+                        <div class='table-responsive mb-0' data-pattern='priority-columns'>
+                            <table class='table table-striped table-bordered'>
+                                <thead>
+                                    <tr>
+                                        <th><lang>模块名</lang></th>
+                                        <th><lang>扩展定义</lang></th>
+                                        <th><lang>被扩展统计</lang></th>
+                                        <th><lang>Sticker 扩展</lang></th>
+                                        <th><lang>操作</lang></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php 
+                                    $displayCount = 0;
+                                    foreach ($extends as $moduleName => $data): 
+                                        // 搜索过滤
+                                        if (!empty($searchKeyword)) {
+                                            $searchLower = strtolower($searchKeyword);
+                                            $moduleNameLower = strtolower($moduleName);
+                                            $extendsDef = $data['extends'] ?? [];
+                                            $extendedBy = $data['extended_by'] ?? [];
+                                            
+                                            // 检查模块名是否匹配
+                                            $matchModuleName = strpos($moduleNameLower, $searchLower) !== false;
+                                            
+                                            // 检查扩展点是否匹配
+                                            $matchExtendPoints = false;
+                                            if (!empty($extendsDef['extends'])) {
+                                                foreach ($extendsDef['extends'] as $extendName => $extendConfig) {
+                                                    if (stripos($extendName, $searchKeyword) !== false || 
+                                                        stripos($extendConfig['description'] ?? '', $searchKeyword) !== false) {
+                                                        $matchExtendPoints = true;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                            
+                                            // 如果都不匹配，跳过
+                                            if (!$matchModuleName && !$matchExtendPoints) {
+                                                continue;
+                                            }
+                                        }
+                                        $displayCount++;
+                                        
+                                        $extendsDef = $data['extends'] ?? [];
+                                        $extendedBy = $data['extended_by'] ?? [];
+                                        $completeness = $data['completeness'] ?? [];
+                                        
+                                        // 统计被扩展数量
+                                        $totalExtendedBy = 0;
+                                        $stickerExtensions = 0;
+                                        $moduleExtensions = 0;
+                                        $themeExtensions = 0;
+                                        
+                                        foreach ($extendedBy as $sourceModule => $extensions) {
+                                            $totalExtendedBy += count($extensions);
+                                            foreach ($extensions as $extension) {
+                                                if (($extension['is_sticker_extension'] ?? false) === true) {
+                                                    $stickerExtensions++;
+                                                } elseif (($extension['type'] ?? '') === 'module') {
+                                                    $moduleExtensions++;
+                                                } elseif (($extension['type'] ?? '') === 'theme') {
+                                                    $themeExtensions++;
+                                                }
+                                            }
+                                        }
+                                        ?>
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <strong class="text-dark"><?= htmlspecialchars($moduleName) ?></strong>
+                                                    <?php if (!empty($completeness['errors'])): ?>
+                                                        <span class="badge bg-danger" title="<lang>有错误</lang>"><lang>错误</lang></span>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($completeness['warnings'])): ?>
+                                                        <span class="badge bg-warning text-dark" title="<lang>有警告</lang>"><lang>警告</lang></span>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <?php if (!empty($extendsDef)): ?>
+                                                    <div class="weline-extends-def">
+                                                        <div class="weline-extends-type">
+                                                            <span class="badge badge-info"><?= $extendsDef['type'] ?? 'unknown' ?></span>
+                                                        </div>
+                                                        <div class="weline-extends-points">
+                                                            <?php
+                                                            $extendPoints = $extendsDef['extends'] ?? [];
+                                                            $pointCount = count($extendPoints);
+                                                            ?>
+                                                            <small><?= $pointCount ?> <lang>个扩展点</lang></small>
+                                                        </div>
+                                                    </div>
+                                                <?php else: ?>
+                                                    <span class="text-muted"><lang>无扩展定义</lang></span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <div class="weline-extends-extension-stats">
+                                                    <span class="weline-extends-stat-item">
+                                                        <i class="mdi mdi-puzzle"></i> <lang>总计</lang>: <?= $totalExtendedBy ?>
+                                                    </span>
+                                                    <?php if ($moduleExtensions > 0): ?>
+                                                        <span class="weline-extends-stat-item">
+                                                            <i class="mdi mdi-cube"></i> <lang>模块</lang>: <?= $moduleExtensions ?>
+                                                        </span>
+                                                    <?php endif; ?>
+                                                    <?php if ($themeExtensions > 0): ?>
+                                                        <span class="weline-extends-stat-item">
+                                                            <i class="mdi mdi-theme-light-dark"></i> <lang>主题</lang>: <?= $themeExtensions ?>
+                                                        </span>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <?php if ($stickerExtensions > 0): ?>
+                                                    <span class="badge badge-primary">
+                                                        <i class="mdi mdi-sticker"></i> <?= $stickerExtensions ?> <lang>个 Sticker</lang>
+                                                    </span>
+                                                <?php else: ?>
+                                                    <span class="text-muted"><lang>无 Sticker 扩展</lang></span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <div class="actions d-flex gap-2">
+                                                    <block class='Weline\Component\Block\OffCanvas'
+                                                           template='Weline_Component::off-canvas.phtml'
+                                                           cache='0'
+                                                           id='off_canvas_extends_detail_<?= md5($moduleName) ?>'
+                                                           action='*/backend/extends/moduleDetail'
+                                                           action-params='{module: "<?= htmlspecialchars($moduleName, ENT_QUOTES) ?>"}'
+                                                           title='<lang>模块扩展详情</lang>: <?= htmlspecialchars($moduleName) ?>'
+                                                           close-button-show='1'
+                                                           close-button-text='<lang>关闭</lang>'
+                                                           direction='right'
+                                                           class-names='w-75'
+                                                           off-canvas-body-style=''
+                                                           target-button-text='<lang>详情</lang>'
+                                                           target-button-class='btn btn-sm btn-outline-primary'
+                                                           target-tag='button'
+                                                           save='0'
+                                                    />
+                                                    <?php if ($stickerExtensions > 0): ?>
+                                                        <block class='Weline\Component\Block\OffCanvas'
+                                                               template='Weline_Component::off-canvas.phtml'
+                                                               cache='0'
+                                                               id='off_canvas_extends_sticker_<?= md5($moduleName) ?>'
+                                                               action='*/backend/extends/moduleDetail'
+                                                               action-params='{module: "<?= htmlspecialchars($moduleName, ENT_QUOTES) ?>", anchor: "sticker"}'
+                                                               title='<lang>Sticker 扩展详情</lang>: <?= htmlspecialchars($moduleName) ?>'
+                                                               close-button-show='1'
+                                                               close-button-text='<lang>关闭</lang>'
+                                                               direction='right'
+                                                               class-names='w-75'
+                                                               off-canvas-body-style=''
+                                                               target-button-text='Sticker'
+                                                               target-button-class='btn btn-sm btn-outline-info'
+                                                               target-tag='button'
+                                                               save='0'
+                                                        />
+                                                    <?php endif; ?>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        
+                                        <!-- 展开的详细信息 -->
+                                        <?php if (!empty($completeness['warnings']) || !empty($completeness['errors'])): ?>
+                                            <tr class="weline-extends-completeness-row">
+                                                <td colspan="5">
+                                                    <div class="weline-extends-completeness-info">
+                                                        <?php if (!empty($completeness['errors'])): ?>
+                                                            <div class="alert alert-danger">
+                                                                <strong><lang>错误</lang>：</strong>
+                                                                <ul>
+                                                                    <?php foreach ($completeness['errors'] as $error): ?>
+                                                                        <li><?= htmlspecialchars($error) ?></li>
+                                                                    <?php endforeach; ?>
+                                                                </ul>
+                                                            </div>
+                                                        <?php endif; ?>
+                                                        
+                                                        <?php if (!empty($completeness['warnings'])): ?>
+                                                            <div class="alert alert-warning">
+                                                                <strong><lang>警告</lang>：</strong>
+                                                                <ul>
+                                                                    <?php foreach ($completeness['warnings'] as $warning): ?>
+                                                                        <li><?= htmlspecialchars($warning) ?></li>
+                                                                    <?php endforeach; ?>
+                                                                </ul>
+                                                            </div>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <?php endif; ?>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <?php if (!empty($searchKeyword) && $displayCount === 0): ?>
+                        <div class="weline-extends-empty-state">
+                            <i class="mdi mdi-magnify"></i>
+                            <h3><lang>未找到匹配的扩展</lang></h3>
+                            <p><lang>搜索关键词</lang>："<?= htmlspecialchars($searchKeyword) ?>" <lang>没有找到匹配的模块或扩展点</lang>。</p>
+                        </div>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<js:part>
 <style>
-.stats-cards {
+.weline-extends-stats-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 20px;
     margin-bottom: 30px;
 }
 
-.stats-cards .card {
-    border: 1px solid var(--bs-border-color, #dee2e6);
+.weline-extends-stat-card {
+    border: 1px solid var(--backend-color-border, #dee2e6);
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 4px var(--backend-color-shadow-light, rgba(0,0,0,0.1));
     padding: 20px;
+    background: var(--backend-color-card-bg, #fff);
     transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 }
 
-.stats-cards .card:hover {
-    border-color: var(--bs-primary, #0d6efd);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+.weline-extends-stat-card:hover {
+    border-color: var(--backend-color-primary, #0d6efd);
+    box-shadow: 0 4px 8px var(--backend-color-shadow, rgba(0,0,0,0.15));
 }
 
-.card-content {
+.weline-extends-stat-content {
     text-align: center;
 }
 
-.card-title {
-    color: #666;
+.weline-extends-stat-title {
+    color: var(--backend-color-text-muted, #666);
     font-size: 14px;
     margin-bottom: 10px;
 }
 
-.card-value {
+.weline-extends-stat-value {
     font-size: 32px;
     font-weight: bold;
-    color: #333;
+    color: var(--backend-color-text-primary, #333);
 }
 
-.card-value.text-primary {
-    color: #007bff;
+.weline-extends-text-primary {
+    color: var(--backend-color-primary, #007bff);
 }
 
-.table-container {
+.weline-extends-table-container {
     overflow-x: auto;
 }
 
-
-.extends-def {
+.weline-extends-def {
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-.extension-stats {
+.weline-extends-extension-stats {
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-.stat-item {
+.weline-extends-stat-item {
     display: flex;
     align-items: center;
     gap: 4px;
     font-size: 12px;
-    color: #666;
+    color: var(--backend-color-text-muted, #666);
 }
 
-.actions {
-    display: flex;
-    gap: 4px;
-}
-
-.completeness-row td {
-    background-color: #f9f9f9;
+.weline-extends-completeness-row td {
+    background-color: var(--backend-color-bg-light, #f9f9f9);
     padding: 0;
 }
 
-.completeness-info {
+.weline-extends-completeness-info {
     padding: 15px;
 }
 
-.alert {
-    margin: 0;
-    padding: 10px;
-    border-radius: 4px;
-    margin-bottom: 10px;
-}
-
-.alert:last-child {
-    margin-bottom: 0;
-}
-
-.empty-state {
+.weline-extends-empty-state {
     text-align: center;
     padding: 60px 20px;
-    color: #666;
+    color: var(--backend-color-text-muted, #666);
 }
 
-.empty-state i {
+.weline-extends-empty-state i {
     font-size: 64px;
-    color: #ddd;
+    color: var(--backend-color-text-disabled, #ddd);
     margin-bottom: 20px;
 }
-
-.badge {
-    display: inline-block;
-    padding: 2px 8px;
-    font-size: 12px;
-    font-weight: 500;
-    border-radius: 12px;
-}
 </style>
-
-@template(Weline_Admin::common/footer.phtml)
-</body>
-</html>
+</js:part>

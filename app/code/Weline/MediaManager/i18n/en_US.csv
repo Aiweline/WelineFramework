@@ -11,58 +11,74 @@
 本地存储,本地存储
 允许的文件类型：,允许的文件类型：
 允许的文件大小：,允许的文件大小：
+Storage,Storage
+"Local Storage","Local Storage"
 Folders,Folders
 Upload,Upload
 "New Folder","New Folder"
 Rename,Rename
 Download,Download
 Delete,Delete
-Select,Select
 Refresh,Refresh
+Select,Select
 "Drop files here to upload","Drop files here to upload"
 Loading...,Loading...
+已选择,已选择
+个文件,个文件
+取消全选,取消全选
+取消,取消
+确认选择,确认选择
+Preview,Preview
+"Select a file to preview","Select a file to preview"
+Type,Type
+Size,Size
+Dimensions,Dimensions
 Cancel,Cancel
 OK,OK
-媒体文件管理器,媒体文件管理器
-建议尺寸：,建议尺寸：
-允许类型：,允许类型：
-大小限制：,大小限制：
-连接器URL未配置,连接器URL未配置
+连接器URL未配置，请刷新页面,连接器URL未配置，请刷新页面
+请求超时，服务器可能繁忙,请求超时，服务器可能繁忙
+响应JSON格式无效,响应JSON格式无效
+网络错误,网络错误
 响应无效,响应无效
-不能访问指定路径以外的目录,不能访问指定路径以外的目录
-没有可上传的有效文件,没有可上传的有效文件
-上传完成,上传完成
-文件夹已创建,文件夹已创建
+%{count,%{count
+"已选择 %{count","已选择 %{count"
 请选择一个项目进行重命名,请选择一个项目进行重命名
-重命名成功,重命名成功
 未选择任何项目,未选择任何项目
+请至少选择一个文件,请至少选择一个文件
+请选择有效的文件（非文件夹）,请选择有效的文件（非文件夹）
 "确定删除 %{count","确定删除 %{count"
 删除成功,删除成功
-请至少选择一个文件,请至少选择一个文件
-请选择有效的文件,请选择有效的文件
+重命名成功,重命名成功
+上传完成,上传完成
+文件夹已创建,文件夹已创建
+不能访问指定路径以外的目录,不能访问指定路径以外的目录
+文件夹,文件夹
+未知,未知
 新建文件夹,新建文件夹
 文件夹名称,文件夹名称
 未命名,未命名
 重命名,重命名
 新名称,新名称
 确认,确认
-取消,取消
+暂无文件,暂无文件
+加载中...,加载中...
+预览,预览
+打开,Open
+下载,下载
+删除,删除
+退出选择模式,"Exit Selection Mode"
+清除选择,"Clear Selection"
+选择模式,"Selection Mode"
+选择文件,"Select Files"
+媒体文件管理器,媒体文件管理器
+建议尺寸：,建议尺寸：
+允许类型：,允许类型：
+大小限制：,大小限制：
+连接器URL未配置,连接器URL未配置
+没有可上传的有效文件,没有可上传的有效文件
+请选择有效的文件,请选择有效的文件
 确定,确定
 请求超时,请求超时
-响应JSON格式无效,响应JSON格式无效
-网络错误,网络错误
-%{count,%{count
-"已选择 %{count","已选择 %{count"
 选择,选择
-下载,下载
-打开,打开
-删除,删除
-加载中...,加载中...
-暂无文件,暂无文件
-Storage,Storage
-"Local Storage","Local Storage"
-Preview,Preview
-"Select a file to preview","Select a file to preview"
-Type,Type
-Size,Size
-Dimensions,Dimensions
+超出大小,超出大小
+类型不允许,类型不允许

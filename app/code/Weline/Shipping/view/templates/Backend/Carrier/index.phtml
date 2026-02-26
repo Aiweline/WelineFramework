@@ -1,7 +1,7 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
 /** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
 
 use Weline\Shipping\Model\Carrier;
 
@@ -16,23 +16,7 @@ $isActive = $this->getData('is_active');
 $backendBase = $this->getBackendUrl('shipping/backend/carrier');
 $createUrl = $this->getBackendUrl('shipping/backend/carrier/edit');
 ?>
-<!DOCTYPE html>
-<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= __('快递公司') ?></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-@template(Weline_Admin::common/page/loading.phtml)
-<div id="layout-wrapper">
-    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
-    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <div class="row">
+<div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                             <h4 class="mb-sm-0"><?= __('快递公司') ?></h4>
@@ -195,16 +179,3 @@ $createUrl = $this->getBackendUrl('shipping/backend/carrier/edit');
                         </div>
                     </div>
                 </div>
-
-            </div>
-        </div>
-
-        @template(Weline_Admin::common/footer.phtml)
-    </div>
-</div>
-
-@template(Weline_Admin::common/vendor-scripts.phtml)
-</body>
-</html>
-
-

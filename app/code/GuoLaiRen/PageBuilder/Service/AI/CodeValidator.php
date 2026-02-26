@@ -20,8 +20,6 @@ class CodeValidator
             'message' => '反引号 ` 会导致模板语法错误',
             'context' => 'all',
         ],
-        // php_tag_in_html 已移除：phtml 模板中允许使用 PHP 标签（<?php if/foreach 等）
-        // AI 组件通过 php_variables 字段声明默认变量，html_content 中使用 PHP 条件判断是正常模式
         'this_usage' => [
             'pattern' => '/\$this\s*->/',
             'message' => '禁止直接使用$this，请使用$getConfig函数',
@@ -52,6 +50,16 @@ class CodeValidator
             'message' => '禁止使用文件操作函数',
             'context' => 'php_variables',
         ],
+        'continue_break' => [
+            'pattern' => '/\b(?:continue|break)\s*(?:\d+\s*)?;/',
+            'message' => 'php_variables 禁止使用 continue/break 语句（仅支持简单赋值，不支持循环控制）',
+            'context' => 'php_variables',
+        ],
+        'foreach_while_for' => [
+            'pattern' => '/\b(?:foreach|while|for)\s*\(/',
+            'message' => 'php_variables 禁止使用循环语句（foreach/while/for）',
+            'context' => 'php_variables',
+        ],
         'global_selector' => [
             'pattern' => '/^\s*(?:body|html|div|span|p|a|ul|li|h[1-6])\s*\{/m',
             'message' => 'CSS禁止使用全局选择器，必须使用#componentId前缀',
@@ -62,6 +70,37 @@ class CodeValidator
             'message' => 'js_content 中禁止使用 $componentId，请使用 component 或 component.id',
             'context' => 'js_content',
         ],
+        'js_var_keyword' => [
+            'pattern' => '/\bvar\s+\w/',
+            'message' => 'js_content 中禁止使用 var 声明变量（会提升作用域），请使用 const 或 let',
+            'context' => 'js_content',
+        ],
+        'js_function_declaration' => [
+            'pattern' => '/\bfunction\s+\w+\s*\(/',
+            'message' => 'js_content 中禁止使用 function 声明函数（会污染作用域），请使用 const xxx = () => {} 或 const xxx = function() {}',
+            'context' => 'js_content',
+        ],
+        'js_window_assignment' => [
+            'pattern' => '/\bwindow\s*\.\s*\w+\s*=/',
+            'message' => 'js_content 中禁止给 window 挂属性（全局污染），请使用局部变量',
+            'context' => 'js_content',
+        ],
+        'js_document_query' => [
+            'pattern' => '/\bdocument\s*\.\s*(?:querySelector|querySelectorAll|getElementById|getElementsByClassName)\s*\(/',
+            'message' => 'js_content 中禁止使用 document.querySelector 等全局选择器，请使用 component.querySelector 限定在组件内',
+            'context' => 'js_content',
+        ],
+    ];
+    
+    /**
+     * CSS 通用类名黑名单（容易污染全局）
+     */
+    private const GENERIC_CSS_CLASSES = [
+        'card', 'title', 'header', 'footer', 'content', 'wrapper', 'container',
+        'item', 'list', 'row', 'col', 'box', 'panel', 'section', 'main',
+        'nav', 'menu', 'btn', 'button', 'link', 'text', 'icon', 'image',
+        'form', 'input', 'label', 'group', 'active', 'disabled', 'hidden',
+        'show', 'hide', 'open', 'close', 'toggle', 'dropdown', 'modal',
     ];
 
     /**
@@ -186,11 +225,25 @@ class CodeValidator
             }
         }
 
-        // 验证CSS
-        if (!empty($data['css_extra'])) {
-            $cssResult = $this->validateCss($data['css_extra']);
-            if (!$cssResult['valid']) {
-                $warnings = array_merge($warnings, $cssResult['warnings']);
+        // 验证CSS（css_extra 和 css_content）
+        $cssFields = ['css_extra', 'css_content', 'css_responsive'];
+        foreach ($cssFields as $cssField) {
+            if (!empty($data[$cssField])) {
+                $cssResult = $this->validateCss($data[$cssField]);
+                if (!empty($cssResult['errors'])) {
+                    $errors = array_merge($errors, array_map(fn($e) => "[{$cssField}] {$e}", $cssResult['errors']));
+                }
+                if (!empty($cssResult['warnings'])) {
+                    $warnings = array_merge($warnings, array_map(fn($w) => "[{$cssField}] {$w}", $cssResult['warnings']));
+                }
+            }
+        }
+        
+        // 验证JS
+        if (!empty($data['js_content'])) {
+            $jsResult = $this->validateJsContent($data['js_content']);
+            if (!empty($jsResult['errors'])) {
+                $errors = array_merge($errors, $jsResult['errors']);
             }
         }
 
@@ -454,28 +507,79 @@ class CodeValidator
      */
     public function validateCss(string $css): array
     {
+        $errors = [];
         $warnings = [];
 
         $openBraces = substr_count($css, '{');
         $closeBraces = substr_count($css, '}');
         if ($openBraces !== $closeBraces) {
-            $warnings[] = 'CSS大括号不匹配';
+            $errors[] = 'CSS大括号不匹配';
         }
 
         $globalSelectors = ['body', 'html', '*'];
         foreach ($globalSelectors as $selector) {
             if (preg_match('/(?:^|\s|,)' . preg_quote($selector, '/') . '\s*\{/', $css)) {
-                $warnings[] = "CSS使用了全局选择器 '{$selector}'，建议使用组件ID前缀";
+                $errors[] = "CSS使用了全局选择器 '{$selector}'，必须使用组件ID前缀 #componentId";
             }
         }
 
         if (!preg_match('/#[a-zA-Z]/', $css) && strlen($css) > 50) {
-            $warnings[] = 'CSS样式建议使用#componentId前缀进行作用域隔离';
+            $errors[] = 'CSS样式必须使用 #<?= $componentId ?> 前缀进行作用域隔离';
+        }
+        
+        // 检查是否使用了通用类名（容易污染全局）
+        $genericClassesUsed = [];
+        foreach (self::GENERIC_CSS_CLASSES as $genericClass) {
+            // 匹配 .card { 或 .card, 或 .card:hover 等
+            if (preg_match('/\.' . preg_quote($genericClass, '/') . '\b(?![a-z0-9_-])/i', $css)) {
+                $genericClassesUsed[] = '.' . $genericClass;
+            }
+        }
+        if (!empty($genericClassesUsed)) {
+            $errors[] = 'CSS 使用了通用类名（会污染全局）：' . implode(', ', array_slice($genericClassesUsed, 0, 5)) . 
+                       '。请使用组件唯一前缀，如 .pb-{组件代码}-{元素名}';
         }
 
         return [
-            'valid' => true,
+            'valid' => empty($errors),
+            'errors' => $errors,
             'warnings' => $warnings,
+        ];
+    }
+
+    /**
+     * 验证JS代码（作用域隔离）
+     */
+    public function validateJsContent(string $js): array
+    {
+        $errors = [];
+        
+        if (empty(trim($js))) {
+            return ['valid' => true, 'errors' => []];
+        }
+        
+        // 检查禁止模式
+        $prohibitedResult = $this->checkProhibitedPatterns($js, 'js_content');
+        if (!$prohibitedResult['valid']) {
+            $errors = array_merge($errors, array_map(fn($e) => "[js_content] {$e}", $prohibitedResult['errors']));
+        }
+        
+        // 检查是否有未使用 const/let 声明的顶层变量赋值
+        // 例如 myVar = 1; 会创建全局变量
+        if (preg_match('/(?:^|;\s*|\n\s*)([a-zA-Z_]\w*)\s*=\s*[^=]/m', $js, $matches)) {
+            // 排除对象属性赋值（如 obj.prop = 或 component.innerHTML =）
+            $varName = $matches[1];
+            if (!in_array($varName, ['component', 'this'])) {
+                // 检查该变量是否在之前用 const/let 声明过
+                if (!preg_match('/\b(?:const|let)\s+' . preg_quote($varName, '/') . '\b/', $js)) {
+                    $errors[] = "[js_content] 变量 '{$varName}' 未用 const/let 声明，可能创建全局变量。请使用 const {$varName} = ...";
+                }
+            }
+        }
+        
+        return [
+            'valid' => empty($errors),
+            'errors' => $errors,
         ];
     }
 

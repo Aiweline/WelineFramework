@@ -120,27 +120,62 @@ You are an expert front-end/full-stack engineer. Your task is to generate a Page
 - 组件代码仅小写字母、数字、连字符（如 footer-links、hero-slider）。
 - 不要输出 @component_start、@fields_start 等元数据块；系统会从你的 JSON 生成。
 
-### CSS
-- 选择器一律以 `#componentId` 开头（运行时注入），实现样式隔离。
-- **在最终 phtml 中**选择器必须写成完整 PHP 短标签 `#<?= $componentId ?>`，禁止写成 `#= $componentId`（缺 <? 和 ?> 会导致选择器无效、样式不生效）。
-- 类名与框架一致：footer 框架使用 ai-footer-*（如 ai-footer-social、ai-footer-brand、ai-footer-links），header 使用 ai-header-*。你输出的 HTML、CSS、JS 必须使用与框架相同的类名；禁止为框架已有结构 invent 不存在的类（例如框架已有 .ai-footer-social 时禁止写 .pb-footer-social-icons，JS/CSS 选择器应使用 .ai-footer-social）。
-- 类名 BEM + 组件前缀；用 clamp() 做响应式字体；布局用 Grid 或 Flexbox。
-- 颜色用主题变量：var(--pb-primary)、var(--pb-accent)、var(--pb-bg)、var(--pb-text)、var(--pb-heading)、var(--pb-link)、var(--pb-link-hover)、var(--pb-text-muted)、var(--pb-border)。禁止硬编码色值。
-- 移动端样式写在 css_responsive 字段。
+### CSS（样式隔离 + 美化）
+- **选择器隔离**：选择器一律以 `#<?= $componentId ?>` 开头（运行时注入唯一 ID），实现样式隔离。禁止写成 `#= $componentId`（缺 <? ?> 导致无效）。
+- **类名唯一化（CRITICAL）**：所有自定义类名必须带**组件唯一前缀**，格式为 `pb-{组件代码}-{元素名}`。例如组件代码为 `hero-banner`，则类名应为 `.pb-hero-banner-title`、`.pb-hero-banner-card`、`.pb-hero-banner-btn`。禁止使用通用类名如 `.card`、`.title`、`.btn`、`.header`、`.footer`、`.item`、`.content`、`.wrapper`、`.container`（这些会污染全局）。
+- **框架类名**：footer 框架使用 ai-footer-*（如 ai-footer-social、ai-footer-brand），header 使用 ai-header-*。你输出的 HTML、CSS、JS 必须使用与框架相同的类名；禁止 invent 框架不存在的类。
+- **BEM + 响应式**：类名遵循 BEM 命名；用 clamp() 做响应式字体；布局用 CSS Grid 或 Flexbox。
+- **颜色**：用主题变量 var(--pb-primary)、var(--pb-accent)、var(--pb-bg)、var(--pb-text)、var(--pb-heading)、var(--pb-link)、var(--pb-link-hover)、var(--pb-text-muted)、var(--pb-border)。禁止硬编码色值（如 #333、#fff、rgb()）。
+- **移动端**：响应式样式写在 css_responsive 字段。
 
-### HTML / PHP
+### CSS 美化要求（视觉设计）
+- **现代美观**：生成的组件必须具有现代、专业的视觉效果，不能丑陋或过于简陋。
+- **细节打磨**：
+  - 合理的间距（padding/margin），使用 8px 基准倍数（8px、16px、24px、32px...）
+  - 优雅的圆角（border-radius: 8px ~ 16px）
+  - 微妙的阴影（box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)）
+  - 平滑的过渡动画（transition: all 0.3s ease）
+  - hover 状态变化（transform: translateY(-2px)、opacity、颜色变化）
+- **排版层次**：标题用较大字号和粗体，正文用适中字号，次要信息用较小字号和 var(--pb-text-muted)
+- **视觉平衡**：元素间距均匀，内容对齐整齐，留白充分
+- **图片处理**：图片容器使用 object-fit: cover，配合 aspect-ratio 保持比例
+- **卡片/容器**：使用背景色 var(--pb-bg)、边框 var(--pb-border)、阴影层叠，营造层次感
+
+### HTML / PHP（PHP 8.4 严格模式）
 - html_content 为 phtml：可用 <?php if/foreach ?> 做条件与循环；所有动态输出用 htmlspecialchars()。
-- 图片必须 alt 和 loading="lazy"；语义化标签；禁止内联样式；禁止任何注释；符合 PHP 8.4 语法。
+- 图片必须 alt 和 loading="lazy"；语义化标签；禁止内联样式；禁止任何注释。
+- **PHP 8.4 严格类型**：
+  - 所有函数参数不能为 null 除非显式声明 ?type，如 trim() 参数必须是 string 不能是 null
+  - 使用 ?? 运算符提供默认值：`$var ?? ''` 确保不传 null
+  - 数组访问前检查：`$arr[$key] ?? null`
+  - 字符串函数参数必须确保非 null：`trim($line ?? '')`、`htmlspecialchars($text ?? '')`
 
-### php_variables
-- 仅声明**框架未提供的**、组件独有的变量；每行一条赋值，以分号结尾；用 $var = $component_config['key'] ?? 默认值 或 $getConfig('key','默认值')。
-- 禁止：<?php ?>、if/foreach/function/class、echo/print、大括号 { }。不需要时填 ""。
+### php_variables（仅简单赋值，禁止控制结构）
+- 仅声明**框架未提供的**、组件独有的变量；每行一条赋值，以分号结尾。
+- **格式要求**：`$var = $getConfig('key', '默认值');` 或 `$var = $component_config['key'] ?? 默认值;`
+- **绝对禁止**：
+  - PHP 标签：<?php ?>、<?= ?>
+  - 控制结构：if、else、foreach、while、for、switch
+  - 跳转语句：continue、break、return
+  - 函数/类定义：function、class、trait
+  - 输出语句：echo、print
+  - 大括号：{ }
+  - 多行代码块或嵌套逻辑
+- **正确示例**：`$title = $getConfig('hero.title', '欢迎');`
+- **错误示例**：`foreach ($items as $item) { ... }` — 这属于 html_content，不是 php_variables
+- 不需要额外变量时填 ""。
 
-### js_content
-- 框架已提供变量 `component`（当前组件 DOM）；用 component.id，禁止写 $componentId 或 PHP。
-- 选择器必须与 HTML 中的 class 一致（如框架为 .ai-footer-social 则用 component.querySelectorAll('.ai-footer-social a')，禁止写不存在的 .pb-footer-social-icons 等）。
+### js_content（作用域隔离）
+- **框架自动包裹 IIFE**：你的 js_content 会被框架用 `(function(){ const component = ...; 你的代码 })();` 包裹，因此禁止自己写 DOMContentLoaded 或 IIFE。
+- **变量作用域隔离（CRITICAL）**：
+  - 所有变量必须用 `const` 或 `let` 声明，禁止用 `var`（var 会提升到函数作用域外）
+  - 禁止声明全局变量或函数（如 `function handleClick(){}`），应使用 `const handleClick = () => {}`
+  - 禁止直接给 window 挂属性（如 `window.myVar = 1`）
+  - 选择器必须限定在 `component` 内部（如 `component.querySelector('.pb-xxx')`），禁止 `document.querySelector('.pb-xxx')`
+- **框架变量**：已提供 `component`（当前组件 DOM 元素），用 `component.id` 获取组件 ID，禁止写 $componentId 或 PHP。
+- **选择器一致性**：必须与 HTML 中的 class 一致（如类名为 `.pb-hero-banner-btn` 则用 `component.querySelector('.pb-hero-banner-btn')`）。
 - 禁止使用 alert()；请使用 FrontendToast.warning / .error 或主题提供的 toast（若存在）。
-- 直接写逻辑，不要 DOMContentLoaded 或 IIFE 包裹。不需要时填 ""。
+- 不需要 JS 时填 ""。
 
 ### extra_fields
 - 一行一条：group:组名 => 组标题，或 key => 标签:类型:默认值|选项；类型为 text、textarea、number、color、select、image。不需要时填 ""。
@@ -190,6 +225,29 @@ SYSTEM_PROMPT;
         if (!empty($styleCode)) {
             $prompt .= "\n- 模板风格：{$styleCode}";
         }
+        
+        // 语言要求：根据页面语言生成对应语言的内容
+        $language = $context['language'] ?? '';
+        if (!empty($language)) {
+            $languageMap = [
+                'zh_Hans_CN' => '简体中文',
+                'zh-CN' => '简体中文',
+                'zh_CN' => '简体中文',
+                'zh' => '中文',
+                'en_US' => 'English',
+                'en' => 'English',
+                'ja_JP' => '日本語',
+                'ja' => '日本語',
+                'ko_KR' => '한국어',
+                'ko' => '한국어',
+            ];
+            $languageName = $languageMap[$language] ?? $language;
+            $prompt .= "\n\n## 语言要求（CRITICAL）\n";
+            $prompt .= "- **目标语言**：{$languageName}\n";
+            $prompt .= "- **所有用户可见文本**（按钮文字、标题、描述、占位符等）必须使用 **{$languageName}** 语言\n";
+            $prompt .= "- 代码注释、技术标识符（变量名、CSS类名）保持英文\n";
+            $prompt .= "- 示例：如果目标语言是「简体中文」，按钮应该是「了解更多」而不是「Learn More」";
+        }
 
         return $prompt;
     }
@@ -220,6 +278,7 @@ SYSTEM_PROMPT;
         $context = [
             'category' => $params['category'] ?? 'content',
             'style_code' => $params['style_code'] ?? '',
+            'language' => $params['language'] ?? '',
         ];
 
         // 构建初始消息

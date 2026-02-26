@@ -4,8 +4,6 @@
  *
  * @var \Weline\Framework\View\Template $this
  */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 
 $logs = $this->getData('logs') ?: [];
 $total = (int)$this->getData('total');
@@ -21,536 +19,254 @@ $attackTypes = $this->getData('attackTypes') ?: [];
 $statuses = $this->getData('statuses') ?: [];
 $stats = $this->getData('stats') ?: [];
 ?>
-<!DOCTYPE html>
-<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= __('攻击日志管理') ?></title>
-    <style>
-        /* 页面布局优化 */
-        .attack-log-page {
-            padding: 20px;
-        }
-        
-        /* 页面标题区域 */
-        .page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid var(--w-border-color, #e9ecef);
-        }
-        
-        .page-title {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin: 0;
-        }
-        
-        .page-title i {
-            font-size: 24px;
-            color: #dc3545;
-        }
-        
-        .page-title h4 {
-            margin: 0;
-            font-size: 20px;
-            font-weight: 600;
-            color: var(--w-text-color, #212529);
-        }
-        
-        /* 统计卡片 */
-        .stats-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-        
-        .stat-card {
-            background: var(--w-card-bg, #fff);
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }
-        
-        .stat-card .stat-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            color: #fff;
-        }
-        
-        .stat-card .stat-icon.danger { background: linear-gradient(135deg, #dc3545, #ff6b6b); }
-        .stat-card .stat-icon.warning { background: linear-gradient(135deg, #ffc107, #ffdd57); color: #333; }
-        .stat-card .stat-icon.info { background: linear-gradient(135deg, #17a2b8, #4ecdc4); }
-        .stat-card .stat-icon.primary { background: linear-gradient(135deg, #007bff, #6c8cff); }
-        
-        .stat-card .stat-content h3 {
-            margin: 0;
-            font-size: 24px;
-            font-weight: 700;
-            color: var(--w-text-color, #212529);
-        }
-        
-        .stat-card .stat-content p {
-            margin: 4px 0 0;
-            color: var(--w-text-muted-color, #6c757d);
-            font-size: 13px;
-        }
-        
-        /* 操作栏 */
-        .action-toolbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 20px;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
-        
-        .action-toolbar-left {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-        
-        .action-toolbar-right {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        
-        /* 搜索表单 */
-        .search-form {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-        
-        .search-form .form-control,
-        .search-form .form-select {
-            min-width: 130px;
-        }
-        
-        /* 卡片样式 */
-        .log-card {
-            background: var(--w-card-bg, #fff);
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-        }
-        
-        .log-card .card-body {
-            padding: 0;
-        }
-        
-        /* 表格样式 */
-        .log-table {
-            margin: 0;
-        }
-        
-        .log-table thead th {
-            background-color: var(--w-table-header-bg, #f8f9fa);
-            font-weight: 600;
-            color: var(--w-text-color, #495057);
-            padding: 12px 16px;
-            border-bottom: 2px solid var(--w-border-color, #dee2e6);
-            white-space: nowrap;
-        }
-        
-        .log-table tbody td {
-            padding: 12px 16px;
-            vertical-align: middle;
-            border-bottom: 1px solid var(--w-border-color, #e9ecef);
-        }
-        
-        .log-table tbody tr:hover {
-            background-color: var(--w-table-hover-bg, #f8f9fa);
-        }
-        
-        /* 状态标签 */
-        .status-badge.active { background-color: #dc3545 !important; }
-        .status-badge.recovered { background-color: #28a745 !important; }
-        .status-badge.failed { background-color: #6c757d !important; }
-        
-        /* 攻击类型标签 */
-        .attack-type-badge {
-            font-size: 11px;
-            padding: 4px 8px;
-        }
-        
-        /* 操作按钮组 */
-        .action-buttons {
-            display: flex;
-            gap: 6px;
-            flex-wrap: wrap;
-        }
-        
-        .action-buttons .btn {
-            padding: 4px 10px;
-            font-size: 12px;
-            white-space: nowrap;
-        }
-        
-        /* 空状态 */
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--w-text-muted-color, #6c757d);
-        }
-        
-        .empty-state i {
-            font-size: 64px;
-            color: var(--w-border-color, #dee2e6);
-            margin-bottom: 16px;
-            display: block;
-        }
-        
-        .empty-state h5 {
-            color: var(--w-text-color, #495057);
-            margin-bottom: 8px;
-        }
-        
-        /* 分页样式 */
-        .pagination-wrapper {
-            padding: 20px;
-            border-top: 1px solid var(--w-border-color, #e9ecef);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 16px;
-        }
-        
-        .pagination-info {
-            color: var(--w-text-muted-color, #6c757d);
-            font-size: 14px;
-        }
-        
-        /* 响应式设计 */
-        @media (max-width: 768px) {
-            .attack-log-page {
-                padding: 15px;
-            }
-            
-            .page-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 16px;
-            }
-            
-            .stats-row {
-                grid-template-columns: 1fr 1fr;
-            }
-            
-            .action-toolbar {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .action-toolbar-right {
-                width: 100%;
-            }
-            
-            .search-form {
-                width: 100%;
-            }
-            
-            .search-form .form-control,
-            .search-form .form-select {
-                flex: 1;
-                min-width: 0;
-            }
-            
-            .log-table {
-                font-size: 13px;
-            }
-            
-            .log-table thead th,
-            .log-table tbody td {
-                padding: 8px 12px;
-            }
-        }
-    </style>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
-@template(Weline_Admin::common/page/loading.phtml)
-
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <div class="attack-log-page">
-                    <!-- 页面标题 -->
-                    <div class="page-header">
-                        <div class="page-title">
-                            <i class="mdi mdi-shield-alert"></i>
-                            <h4><?= __('攻击日志管理') ?></h4>
-                        </div>
-                        <div class="page-title-right">
-                            <ol class="breadcrumb m-0">
-                                <li class="breadcrumb-item"><a href="@backend-url('admin')"><?= __('首页') ?></a></li>
-                                <li class="breadcrumb-item"><?= __('CDN管理') ?></li>
-                                <li class="breadcrumb-item active"><?= __('攻击日志') ?></li>
-                            </ol>
-                        </div>
-                    </div>
-
-                    <!-- 统计卡片 -->
-                    <div class="stats-row">
-                        <div class="stat-card">
-                            <div class="stat-icon danger">
-                                <i class="mdi mdi-alert-circle"></i>
-                            </div>
-                            <div class="stat-content">
-                                <h3><?= $stats['active'] ?? 0 ?></h3>
-                                <p><?= __('进行中的攻击') ?></p>
-                            </div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-icon warning">
-                                <i class="mdi mdi-calendar-today"></i>
-                            </div>
-                            <div class="stat-content">
-                                <h3><?= $stats['today'] ?? 0 ?></h3>
-                                <p><?= __('今日攻击') ?></p>
-                            </div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-icon info">
-                                <i class="mdi mdi-calendar-week"></i>
-                            </div>
-                            <div class="stat-content">
-                                <h3><?= $stats['week'] ?? 0 ?></h3>
-                                <p><?= __('本周攻击') ?></p>
-                            </div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-icon primary">
-                                <i class="mdi mdi-calendar-month"></i>
-                            </div>
-                            <div class="stat-content">
-                                <h3><?= $stats['month'] ?? 0 ?></h3>
-                                <p><?= __('本月攻击') ?></p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 消息提示 -->
-                    <div class='row mb-3'>
-                        <template>Weline_Component::message.phtml</template>
-                    </div>
-
-                    <!-- 操作栏 -->
-                    <div class="action-toolbar">
-                        <div class="action-toolbar-left">
-                            <button type="button" class="btn btn-outline-danger" onclick="batchDelete()">
-                                <i class="mdi mdi-delete-sweep"></i> <?= __('批量删除') ?>
-                            </button>
-                            <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#cleanupModal">
-                                <i class="mdi mdi-broom"></i> <?= __('清理历史') ?>
-                            </button>
-                            <a href="@backend-url('*/backend/attackLog/export')?status=<?= urlencode($status) ?>&attack_type=<?= urlencode($attackType) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>" 
-                               class="btn btn-outline-success">
-                                <i class="mdi mdi-download"></i> <?= __('导出CSV') ?>
-                            </a>
-                        </div>
-                        <div class="action-toolbar-right">
-                            <form method="get" class="search-form">
-                                <input type="text" 
-                                       name="search" 
-                                       class="form-control form-control-sm" 
-                                       placeholder="<?= __('搜索域名或IP') ?>" 
-                                       value="<?= htmlspecialchars($search) ?>">
-                                <select name="status" class="form-select form-select-sm">
-                                    <option value=""><?= __('所有状态') ?></option>
-                                    <?php foreach ($statuses as $key => $label): ?>
-                                        <option value="<?= $key ?>" <?= $status === $key ? 'selected' : '' ?>>
-                                            <?= $label ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                                <select name="attack_type" class="form-select form-select-sm">
-                                    <option value=""><?= __('所有类型') ?></option>
-                                    <?php foreach ($attackTypes as $key => $label): ?>
-                                        <option value="<?= $key ?>" <?= $attackType === $key ? 'selected' : '' ?>>
-                                            <?= $label ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                                <input type="date" 
-                                       name="date_from" 
-                                       class="form-control form-control-sm" 
-                                       value="<?= htmlspecialchars($dateFrom) ?>"
-                                       placeholder="<?= __('开始日期') ?>">
-                                <input type="date" 
-                                       name="date_to" 
-                                       class="form-control form-control-sm" 
-                                       value="<?= htmlspecialchars($dateTo) ?>"
-                                       placeholder="<?= __('结束日期') ?>">
-                                <button type="submit" class="btn btn-sm btn-primary">
-                                    <i class="mdi mdi-magnify"></i> <?= __('搜索') ?>
-                                </button>
-                                <a href="@backend-url('*/backend/attackLog/index')" class="btn btn-sm btn-secondary">
-                                    <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
-                                </a>
-                            </form>
-                        </div>
-                    </div>
-
-                    <!-- 日志列表卡片 -->
-                    <div class="log-card card">
-                        <div class="card-body">
-                            <?php if (empty($logs)): ?>
-                                <div class="empty-state">
-                                    <i class="mdi mdi-shield-check-outline"></i>
-                                    <h5><?= __('暂无攻击日志') ?></h5>
-                                    <p><?= __('系统正常运行中，未检测到攻击') ?></p>
-                                </div>
-                            <?php else: ?>
-                                <div class="table-responsive">
-                                    <table class="table log-table">
-                                        <thead>
-                                            <tr>
-                                                <th style="width: 40px;">
-                                                    <input type="checkbox" class="form-check-input" id="selectAll" onclick="toggleSelectAll()">
-                                                </th>
-                                                <th style="width: 60px;"><?= __('ID') ?></th>
-                                                <th><?= __('域名') ?></th>
-                                                <th style="width: 100px;"><?= __('攻击类型') ?></th>
-                                                <th style="width: 120px;"><?= __('攻击者IP') ?></th>
-                                                <th style="width: 80px;"><?= __('次数') ?></th>
-                                                <th style="width: 80px;"><?= __('状态') ?></th>
-                                                <th style="width: 100px;"><?= __('持续时间') ?></th>
-                                                <th style="width: 150px;"><?= __('开始时间') ?></th>
-                                                <th style="width: 150px;"><?= __('操作') ?></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php foreach ($logs as $log): ?>
-                                                <tr>
-                                                    <td>
-                                                        <input type="checkbox" class="form-check-input log-checkbox" value="<?= $log->getId() ?>">
-                                                    </td>
-                                                    <td><?= $log->getId() ?></td>
-                                                    <td>
-                                                        <strong><?= htmlspecialchars($log->getData('domain')) ?></strong>
-                                                    </td>
-                                                    <td>
-                                                        <span class="badge bg-secondary attack-type-badge">
-                                                            <?= $log->getAttackTypeLabel() ?>
-                                                        </span>
-                                                    </td>
-                                                    <td>
-                                                        <code><?= htmlspecialchars($log->getData('attacker_ip') ?: '-') ?></code>
-                                                    </td>
-                                                    <td>
-                                                        <span class="badge bg-danger"><?= $log->getData('attack_count') ?></span>
-                                                    </td>
-                                                    <td>
-                                                        <?php
-                                                        $statusVal = $log->getData('status');
-                                                        $statusClass = match($statusVal) {
-                                                            'active' => 'active',
-                                                            'recovered' => 'recovered',
-                                                            default => 'failed'
-                                                        };
-                                                        ?>
-                                                        <span class="badge status-badge <?= $statusClass ?>">
-                                                            <?= $log->getStatusLabel() ?>
-                                                        </span>
-                                                    </td>
-                                                    <td>
-                                                        <small class="text-muted"><?= $log->getDurationFormatted() ?></small>
-                                                    </td>
-                                                    <td>
-                                                        <small class="text-muted">
-                                                            <?= $log->getData('started_at') ?>
-                                                        </small>
-                                                    </td>
-                                                    <td>
-                                                        <div class="action-buttons">
-                                                            <a href="@backend-url('*/backend/attackLog/detail')?id=<?= $log->getId() ?>" 
-                                                               class="btn btn-sm btn-info"
-                                                               title="<?= __('查看详情') ?>">
-                                                                <i class="mdi mdi-eye"></i>
-                                                            </a>
-                                                            <button type="button" 
-                                                                    class="btn btn-sm btn-danger" 
-                                                                    onclick="deleteLog(<?= $log->getId() ?>)"
-                                                                    title="<?= __('删除') ?>">
-                                                                <i class="mdi mdi-delete"></i>
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            <?php endforeach; ?>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-                        
-                        <!-- 分页 -->
-                        <?php if ($totalPages > 1): ?>
-                            <div class="pagination-wrapper">
-                                <div class="pagination-info">
-                                    <?= __('共 %{1} 条记录，第 %{2}/%{3} 页', [$total, $page, $totalPages]) ?>
-                                </div>
-                                <nav>
-                                    <ul class="pagination justify-content-center mb-0">
-                                        <?php if ($page > 1): ?>
-                                            <li class="page-item">
-                                                <a class="page-link" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>&attack_type=<?= urlencode($attackType) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>">
-                                                    <i class="mdi mdi-chevron-left"></i>
-                                                </a>
-                                            </li>
-                                        <?php endif; ?>
-                                        <?php 
-                                        $startPage = max(1, $page - 2);
-                                        $endPage = min($totalPages, $page + 2);
-                                        for ($i = $startPage; $i <= $endPage; $i++): 
-                                        ?>
-                                            <li class="page-item <?= $i === $page ? 'active' : '' ?>">
-                                                <a class="page-link" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>&attack_type=<?= urlencode($attackType) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>">
-                                                    <?= $i ?>
-                                                </a>
-                                            </li>
-                                        <?php endfor; ?>
-                                        <?php if ($page < $totalPages): ?>
-                                            <li class="page-item">
-                                                <a class="page-link" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>&attack_type=<?= urlencode($attackType) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>">
-                                                    <i class="mdi mdi-chevron-right"></i>
-                                                </a>
-                                            </li>
-                                        <?php endif; ?>
-                                    </ul>
-                                </nav>
-                            </div>
-                        <?php endif; ?>
-                    </div>
+<!-- 统计卡片 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body d-flex align-items-center gap-3">
+                <div class="rounded-3 p-3" style="background: linear-gradient(135deg, #dc3545, #ff6b6b);">
+                    <i class="mdi mdi-alert-circle text-white" style="font-size: 24px;"></i>
+                </div>
+                <div>
+                    <h3 class="mb-0"><?= $stats['active'] ?? 0 ?></h3>
+                    <p class="text-muted mb-0"><?= __('进行中的攻击') ?></p>
                 </div>
             </div>
         </div>
-        @template(Weline_Admin::common/footer.phtml)
     </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body d-flex align-items-center gap-3">
+                <div class="rounded-3 p-3" style="background: linear-gradient(135deg, #ffc107, #ffdd57);">
+                    <i class="mdi mdi-calendar-today" style="font-size: 24px; color: #333;"></i>
+                </div>
+                <div>
+                    <h3 class="mb-0"><?= $stats['today'] ?? 0 ?></h3>
+                    <p class="text-muted mb-0"><?= __('今日攻击') ?></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body d-flex align-items-center gap-3">
+                <div class="rounded-3 p-3" style="background: linear-gradient(135deg, #17a2b8, #4ecdc4);">
+                    <i class="mdi mdi-calendar-week text-white" style="font-size: 24px;"></i>
+                </div>
+                <div>
+                    <h3 class="mb-0"><?= $stats['week'] ?? 0 ?></h3>
+                    <p class="text-muted mb-0"><?= __('本周攻击') ?></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body d-flex align-items-center gap-3">
+                <div class="rounded-3 p-3" style="background: linear-gradient(135deg, #007bff, #6c8cff);">
+                    <i class="mdi mdi-calendar-month text-white" style="font-size: 24px;"></i>
+                </div>
+                <div>
+                    <h3 class="mb-0"><?= $stats['month'] ?? 0 ?></h3>
+                    <p class="text-muted mb-0"><?= __('本月攻击') ?></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 消息提示 -->
+<div class='row mb-3'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<!-- 操作栏 -->
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
+    <div class="d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-outline-danger" onclick="window.CdnAttackLogManager.batchDelete()">
+            <i class="mdi mdi-delete-sweep"></i> <?= __('批量删除') ?>
+        </button>
+        <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#cleanupModal">
+            <i class="mdi mdi-broom"></i> <?= __('清理历史') ?>
+        </button>
+        <a href="@backend-url('*/backend/attackLog/export')?status=<?= urlencode($status) ?>&attack_type=<?= urlencode($attackType) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>" 
+           class="btn btn-outline-success">
+            <i class="mdi mdi-download"></i> <?= __('导出CSV') ?>
+        </a>
+    </div>
+    <form method="get" class="d-flex gap-2 flex-wrap">
+        <input type="text" 
+               name="search" 
+               class="form-control form-control-sm" 
+               placeholder="<?= __('搜索域名或IP') ?>" 
+               value="<?= htmlspecialchars($search) ?>"
+               style="min-width: 130px;">
+        <select name="status" class="form-select form-select-sm" style="min-width: 130px;">
+            <option value=""><?= __('所有状态') ?></option>
+            <?php foreach ($statuses as $key => $label): ?>
+                <option value="<?= $key ?>" <?= $status === $key ? 'selected' : '' ?>>
+                    <?= $label ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+        <select name="attack_type" class="form-select form-select-sm" style="min-width: 130px;">
+            <option value=""><?= __('所有类型') ?></option>
+            <?php foreach ($attackTypes as $key => $label): ?>
+                <option value="<?= $key ?>" <?= $attackType === $key ? 'selected' : '' ?>>
+                    <?= $label ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+        <input type="date" 
+               name="date_from" 
+               class="form-control form-control-sm" 
+               value="<?= htmlspecialchars($dateFrom) ?>"
+               placeholder="<?= __('开始日期') ?>">
+        <input type="date" 
+               name="date_to" 
+               class="form-control form-control-sm" 
+               value="<?= htmlspecialchars($dateTo) ?>"
+               placeholder="<?= __('结束日期') ?>">
+        <button type="submit" class="btn btn-sm btn-primary">
+            <i class="mdi mdi-magnify"></i> <?= __('搜索') ?>
+        </button>
+        <a href="@backend-url('*/backend/attackLog/index')" class="btn btn-sm btn-secondary">
+            <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
+        </a>
+    </form>
+</div>
+
+<!-- 日志列表卡片 -->
+<div class="card">
+    <div class="card-body p-0">
+        <?php if (empty($logs)): ?>
+            <div class="text-center py-5">
+                <i class="mdi mdi-shield-check-outline d-block" style="font-size: 64px; color: var(--backend-color-border);"></i>
+                <h5 class="mt-3"><?= __('暂无攻击日志') ?></h5>
+                <p class="text-muted"><?= __('系统正常运行中，未检测到攻击') ?></p>
+            </div>
+        <?php else: ?>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width: 40px;">
+                                <input type="checkbox" class="form-check-input" id="selectAll" onclick="window.CdnAttackLogManager.toggleSelectAll()">
+                            </th>
+                            <th style="width: 60px;"><?= __('ID') ?></th>
+                            <th><?= __('域名') ?></th>
+                            <th style="width: 100px;"><?= __('攻击类型') ?></th>
+                            <th style="width: 120px;"><?= __('攻击者IP') ?></th>
+                            <th style="width: 80px;"><?= __('次数') ?></th>
+                            <th style="width: 80px;"><?= __('状态') ?></th>
+                            <th style="width: 100px;"><?= __('持续时间') ?></th>
+                            <th style="width: 150px;"><?= __('开始时间') ?></th>
+                            <th style="width: 150px;"><?= __('操作') ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($logs as $log): ?>
+                            <tr>
+                                <td>
+                                    <input type="checkbox" class="form-check-input log-checkbox" value="<?= $log->getId() ?>">
+                                </td>
+                                <td><?= $log->getId() ?></td>
+                                <td>
+                                    <strong><?= htmlspecialchars($log->getData('domain')) ?></strong>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">
+                                        <?= $log->getAttackTypeLabel() ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <code><?= htmlspecialchars($log->getData('attacker_ip') ?: '-') ?></code>
+                                </td>
+                                <td>
+                                    <span class="badge bg-danger"><?= $log->getData('attack_count') ?></span>
+                                </td>
+                                <td>
+                                    <?php
+                                    $statusVal = $log->getData('status');
+                                    $statusClass = match($statusVal) {
+                                        'active' => 'bg-danger',
+                                        'recovered' => 'bg-success',
+                                        default => 'bg-secondary'
+                                    };
+                                    ?>
+                                    <span class="badge <?= $statusClass ?>">
+                                        <?= $log->getStatusLabel() ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <small class="text-muted"><?= $log->getDurationFormatted() ?></small>
+                                </td>
+                                <td>
+                                    <small class="text-muted">
+                                        <?= $log->getData('started_at') ?>
+                                    </small>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="@backend-url('*/backend/attackLog/detail')?id=<?= $log->getId() ?>" 
+                                           class="btn btn-info"
+                                           title="<?= __('查看详情') ?>">
+                                            <i class="mdi mdi-eye"></i>
+                                        </a>
+                                        <button type="button" 
+                                                class="btn btn-danger" 
+                                                onclick="window.CdnAttackLogManager.deleteLog(<?= $log->getId() ?>)"
+                                                title="<?= __('删除') ?>">
+                                            <i class="mdi mdi-delete"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
+    
+    <!-- 分页 -->
+    <?php if ($totalPages > 1): ?>
+        <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <div class="text-muted">
+                <?= __('共 %{1} 条记录，第 %{2}/%{3} 页', [$total, $page, $totalPages]) ?>
+            </div>
+            <nav>
+                <ul class="pagination mb-0">
+                    <?php if ($page > 1): ?>
+                        <li class="page-item">
+                            <a class="page-link" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>&attack_type=<?= urlencode($attackType) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>">
+                                <i class="mdi mdi-chevron-left"></i>
+                            </a>
+                        </li>
+                    <?php endif; ?>
+                    <?php 
+                    $startPage = max(1, $page - 2);
+                    $endPage = min($totalPages, $page + 2);
+                    for ($i = $startPage; $i <= $endPage; $i++): 
+                    ?>
+                        <li class="page-item <?= $i === $page ? 'active' : '' ?>">
+                            <a class="page-link" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>&attack_type=<?= urlencode($attackType) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>">
+                                <?= $i ?>
+                            </a>
+                        </li>
+                    <?php endfor; ?>
+                    <?php if ($page < $totalPages): ?>
+                        <li class="page-item">
+                            <a class="page-link" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>&attack_type=<?= urlencode($attackType) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>">
+                                <i class="mdi mdi-chevron-right"></i>
+                            </a>
+                        </li>
+                    <?php endif; ?>
+                </ul>
+            </nav>
+        </div>
+    <?php endif; ?>
 </div>
 
 <!-- 清理历史模态框 -->
@@ -577,94 +293,121 @@ $stats = $this->getData('stats') ?: [];
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-danger" onclick="cleanupLogs()"><?= __('确认清理') ?></button>
+                <button type="button" class="btn btn-danger" onclick="window.CdnAttackLogManager.cleanupLogs()"><?= __('确认清理') ?></button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-<script>
-const deleteUrl = '<?= $this->getBackendUrl("*/backend/attackLog/delete") ?>';
-const batchDeleteUrl = '<?= $this->getBackendUrl("*/backend/attackLog/batchDelete") ?>';
-const cleanupUrl = '<?= $this->getBackendUrl("*/backend/attackLog/cleanup") ?>';
-
-function toggleSelectAll() {
-    const selectAll = document.getElementById('selectAll');
-    const checkboxes = document.querySelectorAll('.log-checkbox');
-    checkboxes.forEach(cb => cb.checked = selectAll.checked);
-}
-
-function getSelectedIds() {
-    const checkboxes = document.querySelectorAll('.log-checkbox:checked');
-    return Array.from(checkboxes).map(cb => cb.value);
-}
-
-function deleteLog(id) {
-    Swal.fire({
-        title: '<?= __("确定删除？") ?>',
-        text: '<?= __("此操作不可恢复！") ?>',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#dc3545',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: '<?= __("确定删除") ?>',
-        cancelButtonText: '<?= __("取消") ?>'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            fetch(deleteUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'id=' + id
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '<?= __("成功") ?>',
-                        text: data.message,
-                        timer: 1500,
-                        showConfirmButton: false
-                    }).then(() => location.reload());
-                } else {
-                    Swal.fire({ icon: 'error', title: '<?= __("失败") ?>', text: data.message });
-                }
-            });
-        }
-    });
-}
-
-function batchDelete() {
-    const ids = getSelectedIds();
-    if (ids.length === 0) {
-        Swal.fire({ icon: 'warning', title: '<?= __("请先选择要删除的日志") ?>' });
-        return;
+<js:part>
+(function() {
+    'use strict';
+    
+    var deleteUrl = '<?= $this->getBackendUrl("*/backend/attackLog/delete") ?>';
+    var batchDeleteUrl = '<?= $this->getBackendUrl("*/backend/attackLog/batchDelete") ?>';
+    var cleanupUrl = '<?= $this->getBackendUrl("*/backend/attackLog/cleanup") ?>';
+    
+    function getSelectedIds() {
+        var checkboxes = document.querySelectorAll('.log-checkbox:checked');
+        return Array.from(checkboxes).map(function(cb) { return cb.value; });
     }
     
-    Swal.fire({
-        title: '<?= __("确定批量删除？") ?>',
-        text: '<?= __("将删除 ") ?>' + ids.length + '<?= __(" 条日志，此操作不可恢复！") ?>',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#dc3545',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: '<?= __("确定删除") ?>',
-        cancelButtonText: '<?= __("取消") ?>'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            const formData = new FormData();
-            ids.forEach(id => formData.append('ids[]', id));
+    window.CdnAttackLogManager = {
+        toggleSelectAll: function() {
+            var selectAll = document.getElementById('selectAll');
+            var checkboxes = document.querySelectorAll('.log-checkbox');
+            checkboxes.forEach(function(cb) { cb.checked = selectAll.checked; });
+        },
+        
+        deleteLog: function(id) {
+            Swal.fire({
+                title: '<?= __("确定删除？") ?>',
+                text: '<?= __("此操作不可恢复！") ?>',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: '<?= __("确定删除") ?>',
+                cancelButtonText: '<?= __("取消") ?>'
+            }).then(function(result) {
+                if (result.isConfirmed) {
+                    fetch(deleteUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: 'id=' + id
+                    })
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        if (data.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: '<?= __("成功") ?>',
+                                text: data.message,
+                                timer: 1500,
+                                showConfirmButton: false
+                            }).then(function() { location.reload(); });
+                        } else {
+                            Swal.fire({ icon: 'error', title: '<?= __("失败") ?>', text: data.message });
+                        }
+                    });
+                }
+            });
+        },
+        
+        batchDelete: function() {
+            var ids = getSelectedIds();
+            if (ids.length === 0) {
+                Swal.fire({ icon: 'warning', title: '<?= __("请先选择要删除的日志") ?>' });
+                return;
+            }
             
-            fetch(batchDeleteUrl, {
+            Swal.fire({
+                title: '<?= __("确定批量删除？") ?>',
+                text: '<?= __("将删除 ") ?>' + ids.length + '<?= __(" 条日志，此操作不可恢复！") ?>',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: '<?= __("确定删除") ?>',
+                cancelButtonText: '<?= __("取消") ?>'
+            }).then(function(result) {
+                if (result.isConfirmed) {
+                    var formData = new FormData();
+                    ids.forEach(function(id) { formData.append('ids[]', id); });
+                    
+                    fetch(batchDeleteUrl, {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        if (data.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: '<?= __("成功") ?>',
+                                text: data.message,
+                                timer: 1500,
+                                showConfirmButton: false
+                            }).then(function() { location.reload(); });
+                        } else {
+                            Swal.fire({ icon: 'error', title: '<?= __("失败") ?>', text: data.message });
+                        }
+                    });
+                }
+            });
+        },
+        
+        cleanupLogs: function() {
+            var days = document.getElementById('cleanupDays').value;
+            
+            fetch(cleanupUrl, {
                 method: 'POST',
-                body: formData
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'days=' + days
             })
-            .then(response => response.json())
-            .then(data => {
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                bootstrap.Modal.getInstance(document.getElementById('cleanupModal')).hide();
                 if (data.success) {
                     Swal.fire({
                         icon: 'success',
@@ -672,40 +415,12 @@ function batchDelete() {
                         text: data.message,
                         timer: 1500,
                         showConfirmButton: false
-                    }).then(() => location.reload());
+                    }).then(function() { location.reload(); });
                 } else {
                     Swal.fire({ icon: 'error', title: '<?= __("失败") ?>', text: data.message });
                 }
             });
         }
-    });
-}
-
-function cleanupLogs() {
-    const days = document.getElementById('cleanupDays').value;
-    
-    fetch(cleanupUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'days=' + days
-    })
-    .then(response => response.json())
-    .then(data => {
-        bootstrap.Modal.getInstance(document.getElementById('cleanupModal')).hide();
-        if (data.success) {
-            Swal.fire({
-                icon: 'success',
-                title: '<?= __("成功") ?>',
-                text: data.message,
-                timer: 1500,
-                showConfirmButton: false
-            }).then(() => location.reload());
-        } else {
-            Swal.fire({ icon: 'error', title: '<?= __("失败") ?>', text: data.message });
-        }
-    });
-}
-</script>
-
-</body>
-</html>
+    };
+})();
+</js:part>

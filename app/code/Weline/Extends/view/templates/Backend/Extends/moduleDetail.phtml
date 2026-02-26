@@ -1,260 +1,6 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
-?>
-<!DOCTYPE html>
-<!--
- *@Author       秋枫雁飞
- *@Email        aiweline@qq.com
- *@Forum        https://bbs.aiweline.com
- *@DESC         模块扩展详情页面（用于 OffCanvas iframe）
--->
-<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= $title ?? __('模块扩展详情') ?></title>
-    <style>
-        body {
-            padding: 20px;
-            background: #f8f9fa;
-        }
-        .module-overview {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-            padding: 20px;
-        }
-        .module-header {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-        }
-        .module-icon {
-            font-size: 48px;
-            color: #007bff;
-        }
-        .module-info h2 {
-            margin: 0 0 10px 0;
-            color: #333;
-        }
-        .module-badges {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .stat-card {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        .stat-icon {
-            font-size: 32px;
-            color: #007bff;
-        }
-        .stat-content {
-            flex: 1;
-        }
-        .stat-value {
-            font-size: 24px;
-            font-weight: bold;
-            color: #333;
-        }
-        .stat-label {
-            color: #666;
-            font-size: 14px;
-        }
-        .tab-container {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        .tab-header {
-            display: flex;
-            background: #f8f9fa;
-            border-bottom: 1px solid #dee2e6;
-            flex-wrap: wrap;
-        }
-        .tab-button {
-            padding: 15px 20px;
-            border: none;
-            background: none;
-            cursor: pointer;
-            font-size: 14px;
-            color: #6c757d;
-            border-bottom: 2px solid transparent;
-            transition: all 0.2s;
-        }
-        .tab-button:hover {
-            color: #007bff;
-        }
-        .tab-button.active {
-            color: #007bff;
-            border-bottom-color: #007bff;
-            background: white;
-        }
-        .tab-content {
-            display: none;
-            padding: 20px;
-        }
-        .tab-content.active {
-            display: block;
-        }
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: #666;
-        }
-        .empty-state i {
-            font-size: 48px;
-            color: #ddd;
-            margin-bottom: 15px;
-        }
-        .extends-definition {
-            max-width: none;
-        }
-        .definition-header {
-            display: flex;
-            gap: 30px;
-            margin-bottom: 30px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            flex-wrap: wrap;
-        }
-        .extends-points h4 {
-            margin-bottom: 20px;
-            color: #333;
-        }
-        .extend-point {
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            overflow: hidden;
-        }
-        .point-header {
-            background: #f8f9fa;
-            padding: 15px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        .point-header h5 {
-            margin: 0;
-            color: #333;
-        }
-        .point-badges {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-        .point-details {
-            padding: 20px;
-        }
-        .point-details p {
-            margin-bottom: 15px;
-            color: #666;
-        }
-        .point-path,
-        .point-interface {
-            margin-bottom: 10px;
-        }
-        .point-path code,
-        .point-interface code {
-            background: #f1f3f4;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 12px;
-        }
-        .extended-by-summary {
-            margin-bottom: 20px;
-        }
-        .summary-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-        }
-        .summary-item {
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .summary-label {
-            color: #666;
-        }
-        .summary-value {
-            font-weight: bold;
-            color: #007bff;
-        }
-        .source-module {
-            margin-bottom: 30px;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        .source-module h4 {
-            margin: 0;
-            padding: 15px 20px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #dee2e6;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        .source-module .count {
-            font-size: 14px;
-            color: #666;
-            font-weight: normal;
-        }
-        .extensions-table {
-            overflow-x: auto;
-        }
-        .table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .table th,
-        .table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #dee2e6;
-        }
-        .table th {
-            background: #f8f9fa;
-            font-weight: 600;
-        }
-        .table code {
-            font-size: 12px;
-            background: #f1f3f4;
-            padding: 2px 4px;
-            border-radius: 3px;
-        }
-        .table .small {
-            font-size: 11px;
-        }
-    </style>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
-<?php
 $module = $this->getData('module') ?? '';
 $moduleExtends = $this->getData('module_extends') ?? [];
 $extendedBy = $this->getData('extended_by') ?? [];
@@ -266,14 +12,14 @@ $anchor = $this->request->getParam('anchor', '');
 ?>
 
 <!-- 模块信息概览 -->
-<div class="module-overview">
-    <div class="module-header">
-        <div class="module-icon">
+<div class="weline-module-detail-overview">
+    <div class="weline-module-detail-header">
+        <div class="weline-module-detail-icon">
             <i class="mdi mdi-cube-outline"></i>
         </div>
-        <div class="module-info">
+        <div class="weline-module-detail-info">
             <h2><?= htmlspecialchars($module) ?></h2>
-            <div class="module-badges">
+            <div class="weline-module-detail-badges">
                 <?php if (!empty($moduleExtends)): ?>
                     <span class="badge bg-info text-white"><lang>提供扩展点</lang></span>
                 <?php endif; ?>
@@ -292,87 +38,87 @@ $anchor = $this->request->getParam('anchor', '');
 </div>
 
 <!-- 统计信息 -->
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-icon">
+<div class="weline-module-detail-stats-grid">
+    <div class="weline-module-detail-stat-card">
+        <div class="weline-module-detail-stat-icon">
             <i class="mdi mdi-puzzle"></i>
         </div>
-        <div class="stat-content">
-            <div class="stat-value"><?= count($moduleExtends['extends'] ?? []) ?></div>
-            <div class="stat-label"><lang>扩展点数</lang></div>
+        <div class="weline-module-detail-stat-content">
+            <div class="weline-module-detail-stat-value"><?= count($moduleExtends['extends'] ?? []) ?></div>
+            <div class="weline-module-detail-stat-label"><lang>扩展点数</lang></div>
         </div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon">
+    <div class="weline-module-detail-stat-card">
+        <div class="weline-module-detail-stat-icon">
             <i class="mdi mdi-sticker"></i>
         </div>
-        <div class="stat-content">
-            <div class="stat-value"><?= count($stickerExtensions) ?></div>
-            <div class="stat-label"><lang>Sticker 扩展</lang></div>
+        <div class="weline-module-detail-stat-content">
+            <div class="weline-module-detail-stat-value"><?= count($stickerExtensions) ?></div>
+            <div class="weline-module-detail-stat-label"><lang>Sticker 扩展</lang></div>
         </div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon">
+    <div class="weline-module-detail-stat-card">
+        <div class="weline-module-detail-stat-icon">
             <i class="mdi mdi-cube"></i>
         </div>
-        <div class="stat-content">
-            <div class="stat-value"><?= count($extendedBy['module_extensions'] ?? []) ?></div>
-            <div class="stat-label"><lang>模块扩展</lang></div>
+        <div class="weline-module-detail-stat-content">
+            <div class="weline-module-detail-stat-value"><?= count($extendedBy['module_extensions'] ?? []) ?></div>
+            <div class="weline-module-detail-stat-label"><lang>模块扩展</lang></div>
         </div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon">
+    <div class="weline-module-detail-stat-card">
+        <div class="weline-module-detail-stat-icon">
             <i class="mdi mdi-theme-light-dark"></i>
         </div>
-        <div class="stat-content">
-            <div class="stat-value"><?= count($extendedBy['theme_extensions'] ?? []) ?></div>
-            <div class="stat-label"><lang>主题扩展</lang></div>
+        <div class="weline-module-detail-stat-content">
+            <div class="weline-module-detail-stat-value"><?= count($extendedBy['theme_extensions'] ?? []) ?></div>
+            <div class="weline-module-detail-stat-label"><lang>主题扩展</lang></div>
         </div>
     </div>
 </div>
 
 <!-- 详细标签页 -->
-<div class="tab-container">
-    <div class="tab-header">
-        <button class="tab-button <?= empty($anchor) || $anchor !== 'sticker' ? 'active' : '' ?>" data-tab="extends-definition"><lang>扩展定义</lang></button>
-        <button class="tab-button" data-tab="extended-by"><lang>被扩展信息</lang></button>
+<div class="weline-module-detail-tab-container">
+    <div class="weline-module-detail-tab-header">
+        <button class="weline-module-detail-tab-button <?= empty($anchor) || $anchor !== 'sticker' ? 'active' : '' ?>" data-tab="extends-definition"><lang>扩展定义</lang></button>
+        <button class="weline-module-detail-tab-button" data-tab="extended-by"><lang>被扩展信息</lang></button>
         <?php if ($hasStickerExtensions): ?>
-            <button class="tab-button <?= $anchor === 'sticker' ? 'active' : '' ?>" data-tab="sticker-extensions"><lang>Sticker 扩展</lang></button>
+            <button class="weline-module-detail-tab-button <?= $anchor === 'sticker' ? 'active' : '' ?>" data-tab="sticker-extensions"><lang>Sticker 扩展</lang></button>
         <?php endif; ?>
-        <button class="tab-button" data-tab="module-extensions"><lang>模块扩展</lang></button>
-        <button class="tab-button" data-tab="theme-extensions"><lang>主题扩展</lang></button>
+        <button class="weline-module-detail-tab-button" data-tab="module-extensions"><lang>模块扩展</lang></button>
+        <button class="weline-module-detail-tab-button" data-tab="theme-extensions"><lang>主题扩展</lang></button>
     </div>
 
     <!-- 扩展定义 -->
-    <div class="tab-content <?= empty($anchor) || $anchor !== 'sticker' ? 'active' : '' ?>" id="extends-definition">
+    <div class="weline-module-detail-tab-content <?= empty($anchor) || $anchor !== 'sticker' ? 'active' : '' ?>" id="extends-definition">
         <?php if (empty($moduleExtends)): ?>
-            <div class="empty-state">
+            <div class="weline-module-detail-empty-state">
                 <i class="mdi mdi-puzzle-outline"></i>
                 <h3><lang>无扩展定义</lang></h3>
                 <p><lang>该模块没有定义任何扩展点</lang>。</p>
             </div>
         <?php else: ?>
-            <div class="extends-definition">
-                <div class="definition-header">
-                    <div class="def-type">
+            <div class="weline-module-detail-extends-definition">
+                <div class="weline-module-detail-definition-header">
+                    <div class="weline-module-detail-def-type">
                         <strong><lang>扩展类型</lang>：</strong>
                         <span class="badge bg-info text-white"><?= htmlspecialchars($moduleExtends['type'] ?? 'unknown') ?></span>
                     </div>
                     <?php if (!empty($moduleExtends['documentation'])): ?>
-                        <div class="def-doc">
+                        <div class="weline-module-detail-def-doc">
                             <strong><lang>文档</lang>：</strong>
                             <code><?= htmlspecialchars($moduleExtends['documentation']) ?></code>
                         </div>
                     <?php endif; ?>
                 </div>
 
-                <div class="extends-points">
+                <div class="weline-module-detail-extends-points">
                     <h4><lang>扩展点列表</lang></h4>
                     <?php foreach ($moduleExtends['extends'] ?? [] as $pointName => $pointConfig): ?>
-                        <div class="extend-point">
-                            <div class="point-header">
+                        <div class="weline-module-detail-extend-point">
+                            <div class="weline-module-detail-point-header">
                                 <h5><?= htmlspecialchars($pointName) ?></h5>
-                                <div class="point-badges">
+                                <div class="weline-module-detail-point-badges">
                                     <?php 
                                     $type = $pointConfig['type'] ?? '';
                                     if (is_array($type)) {
@@ -395,18 +141,18 @@ $anchor = $this->request->getParam('anchor', '');
                                     <?php endif; ?>
                                 </div>
                             </div>
-                            <div class="point-details">
+                            <div class="weline-module-detail-point-details">
                                 <?php if (!empty($pointConfig['description'])): ?>
                                     <p><?= htmlspecialchars($pointConfig['description']) ?></p>
                                 <?php endif; ?>
                                 <?php if (!empty($pointConfig['path'])): ?>
-                                    <div class="point-path">
+                                    <div class="weline-module-detail-point-path">
                                         <strong><lang>路径</lang>：</strong>
                                         <code><?= htmlspecialchars($pointConfig['path']) ?></code>
                                     </div>
                                 <?php endif; ?>
                                 <?php if (!empty($pointConfig['interface'])): ?>
-                                    <div class="point-interface">
+                                    <div class="weline-module-detail-point-interface">
                                         <strong><lang>接口</lang>：</strong>
                                         <code><?= htmlspecialchars($pointConfig['interface']) ?></code>
                                     </div>
@@ -420,7 +166,7 @@ $anchor = $this->request->getParam('anchor', '');
     </div>
 
     <!-- 被扩展信息 -->
-    <div class="tab-content" id="extended-by">
+    <div class="weline-module-detail-tab-content" id="extended-by">
         <?php
         $totalExtended = 0;
         foreach ($extendedBy as $typeExtensions) {
@@ -433,31 +179,31 @@ $anchor = $this->request->getParam('anchor', '');
         ?>
         
         <?php if ($totalExtended === 0): ?>
-            <div class="empty-state">
+            <div class="weline-module-detail-empty-state">
                 <i class="mdi mdi-arrow-down"></i>
                 <h3><lang>没有被扩展</lang></h3>
                 <p><lang>该模块没有被其他模块扩展</lang>。</p>
             </div>
         <?php else: ?>
-            <div class="extended-by-summary">
+            <div class="weline-module-detail-extended-by-summary">
                 <h4><lang>扩展概览</lang></h4>
-                <div class="summary-stats">
+                <div class="weline-module-detail-summary-stats">
                     <?php if ($hasStickerExtensions): ?>
-                        <div class="summary-item">
-                            <span class="summary-label"><lang>Sticker 扩展</lang>：</span>
-                            <span class="summary-value"><?= count($stickerExtensions) ?> <lang>个</lang></span>
+                        <div class="weline-module-detail-summary-item">
+                            <span class="weline-module-detail-summary-label"><lang>Sticker 扩展</lang>：</span>
+                            <span class="weline-module-detail-summary-value"><?= count($stickerExtensions) ?> <lang>个</lang></span>
                         </div>
                     <?php endif; ?>
                     <?php if ($hasModuleExtensions): ?>
-                        <div class="summary-item">
-                            <span class="summary-label"><lang>模块扩展</lang>：</span>
-                            <span class="summary-value"><?= count($extendedBy['module_extensions'] ?? []) ?> <lang>个</lang></span>
+                        <div class="weline-module-detail-summary-item">
+                            <span class="weline-module-detail-summary-label"><lang>模块扩展</lang>：</span>
+                            <span class="weline-module-detail-summary-value"><?= count($extendedBy['module_extensions'] ?? []) ?> <lang>个</lang></span>
                         </div>
                     <?php endif; ?>
                     <?php if ($hasThemeExtensions): ?>
-                        <div class="summary-item">
-                            <span class="summary-label"><lang>主题扩展</lang>：</span>
-                            <span class="summary-value"><?= count($extendedBy['theme_extensions'] ?? []) ?> <lang>个</lang></span>
+                        <div class="weline-module-detail-summary-item">
+                            <span class="weline-module-detail-summary-label"><lang>主题扩展</lang>：</span>
+                            <span class="weline-module-detail-summary-value"><?= count($extendedBy['theme_extensions'] ?? []) ?> <lang>个</lang></span>
                         </div>
                     <?php endif; ?>
                 </div>
@@ -467,8 +213,8 @@ $anchor = $this->request->getParam('anchor', '');
 
     <!-- Sticker 扩展 -->
     <?php if ($hasStickerExtensions): ?>
-        <div class="tab-content <?= $anchor === 'sticker' ? 'active' : '' ?>" id="sticker-extensions">
-            <div class="extensions-list">
+        <div class="weline-module-detail-tab-content <?= $anchor === 'sticker' ? 'active' : '' ?>" id="sticker-extensions">
+            <div class="weline-module-detail-extensions-list">
                 <?php 
                 $stickerBySource = [];
                 foreach ($stickerExtensions as $extension) {
@@ -481,20 +227,20 @@ $anchor = $this->request->getParam('anchor', '');
                 ?>
                 
                 <?php if (empty($stickerBySource)): ?>
-                    <div class="empty-state">
+                    <div class="weline-module-detail-empty-state">
                         <i class="mdi mdi-sticker"></i>
                         <h3><lang>无 Sticker 扩展</lang></h3>
                         <p><lang>该模块没有 Sticker 扩展</lang>。</p>
                     </div>
                 <?php else: ?>
                     <?php foreach ($stickerBySource as $sourceModule => $extensions): ?>
-                        <div class="source-module">
+                        <div class="weline-module-detail-source-module">
                             <h4>
                                 <i class="mdi mdi-cube"></i>
                                 <?= htmlspecialchars($sourceModule) ?>
-                                <span class="count"><?= count($extensions) ?> <lang>个 Sticker</lang></span>
+                                <span class="weline-module-detail-count"><?= count($extensions) ?> <lang>个 Sticker</lang></span>
                             </h4>
-                            <div class="extensions-table">
+                            <div class="weline-module-detail-extensions-table">
                                 <table class="table">
                                     <thead>
                                         <tr>
@@ -534,23 +280,23 @@ $anchor = $this->request->getParam('anchor', '');
     <?php endif; ?>
 
     <!-- 模块扩展 -->
-    <div class="tab-content" id="module-extensions">
+    <div class="weline-module-detail-tab-content" id="module-extensions">
         <?php if (empty($extendedBy['module_extensions'] ?? [])): ?>
-            <div class="empty-state">
+            <div class="weline-module-detail-empty-state">
                 <i class="mdi mdi-cube"></i>
                 <h3><lang>无模块扩展</lang></h3>
                 <p><lang>该模块没有被其他模块扩展</lang>。</p>
             </div>
         <?php else: ?>
-            <div class="extensions-list">
+            <div class="weline-module-detail-extensions-list">
                 <?php foreach ($extendedBy['module_extensions'] ?? [] as $sourceModule => $extensions): ?>
-                    <div class="source-module">
+                    <div class="weline-module-detail-source-module">
                         <h4>
                             <i class="mdi mdi-cube"></i>
                             <?= htmlspecialchars($sourceModule) ?>
-                            <span class="count"><?= count($extensions) ?> <lang>个扩展</lang></span>
+                            <span class="weline-module-detail-count"><?= count($extensions) ?> <lang>个扩展</lang></span>
                         </h4>
-                        <div class="extensions-table">
+                        <div class="weline-module-detail-extensions-table">
                             <table class="table">
                                 <thead>
                                     <tr>
@@ -583,29 +329,29 @@ $anchor = $this->request->getParam('anchor', '');
     </div>
 
     <!-- 主题扩展 -->
-    <div class="tab-content" id="theme-extensions">
+    <div class="weline-module-detail-tab-content" id="theme-extensions">
         <?php if (empty($extendedBy['theme_extensions'] ?? [])): ?>
-            <div class="empty-state">
+            <div class="weline-module-detail-empty-state">
                 <i class="mdi mdi-theme-light-dark"></i>
                 <h3><lang>无主题扩展</lang></h3>
                 <p><lang>该模块没有被主题扩展</lang>。</p>
             </div>
         <?php else: ?>
-            <div class="extensions-list">
+            <div class="weline-module-detail-extensions-list">
                 <?php foreach ($extendedBy['theme_extensions'] ?? [] as $sourceModule => $extensions): ?>
-                    <div class="source-module">
+                    <div class="weline-module-detail-source-module">
                         <h4>
                             <i class="mdi mdi-theme-light-dark"></i>
                             <?= htmlspecialchars($sourceModule) ?>
-                            <span class="count"><?= count($extensions) ?> 个扩展</span>
+                            <span class="weline-module-detail-count"><?= count($extensions) ?> <lang>个扩展</lang></span>
                         </h4>
-                        <div class="extensions-table">
+                        <div class="weline-module-detail-extensions-table">
                             <table class="table">
                                 <thead>
                                     <tr>
-                                        <th>扩展文件</th>
-                                        <th>扩展类型</th>
-                                        <th>扩展点</th>
+                                        <th><lang>扩展文件</lang></th>
+                                        <th><lang>扩展类型</lang></th>
+                                        <th><lang>扩展点</lang></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -632,40 +378,317 @@ $anchor = $this->request->getParam('anchor', '');
     </div>
 </div>
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // 标签页切换
-    const tabButtons = document.querySelectorAll('.tab-button');
-    const tabContents = document.querySelectorAll('.tab-content');
-    
-    tabButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            const targetTab = this.getAttribute('data-tab');
-            
-            // 移除所有活动状态
-            tabButtons.forEach(btn => btn.classList.remove('active'));
-            tabContents.forEach(content => content.classList.remove('active'));
-            
-            // 激活当前标签
-            this.classList.add('active');
-            const targetContent = document.getElementById(targetTab);
-            if (targetContent) {
-                targetContent.classList.add('active');
-            }
+<js:part>
+<style>
+.weline-module-detail-overview {
+    background: var(--backend-color-card-bg, #fff);
+    border-radius: 8px;
+    box-shadow: 0 2px 4px var(--backend-color-shadow-light, rgba(0,0,0,0.1));
+    margin-bottom: 20px;
+    padding: 20px;
+}
+
+.weline-module-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.weline-module-detail-icon {
+    font-size: 48px;
+    color: var(--backend-color-primary, #007bff);
+}
+
+.weline-module-detail-info h2 {
+    margin: 0 0 10px 0;
+    color: var(--backend-color-text-primary, #333);
+}
+
+.weline-module-detail-badges {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.weline-module-detail-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.weline-module-detail-stat-card {
+    background: var(--backend-color-card-bg, #fff);
+    border-radius: 8px;
+    box-shadow: 0 2px 4px var(--backend-color-shadow-light, rgba(0,0,0,0.1));
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.weline-module-detail-stat-icon {
+    font-size: 32px;
+    color: var(--backend-color-primary, #007bff);
+}
+
+.weline-module-detail-stat-content {
+    flex: 1;
+}
+
+.weline-module-detail-stat-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: var(--backend-color-text-primary, #333);
+}
+
+.weline-module-detail-stat-label {
+    color: var(--backend-color-text-muted, #666);
+    font-size: 14px;
+}
+
+.weline-module-detail-tab-container {
+    background: var(--backend-color-card-bg, #fff);
+    border-radius: 8px;
+    box-shadow: 0 2px 4px var(--backend-color-shadow-light, rgba(0,0,0,0.1));
+    overflow: hidden;
+}
+
+.weline-module-detail-tab-header {
+    display: flex;
+    background: var(--backend-color-bg-light, #f8f9fa);
+    border-bottom: 1px solid var(--backend-color-border, #dee2e6);
+    flex-wrap: wrap;
+}
+
+.weline-module-detail-tab-button {
+    padding: 15px 20px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--backend-color-text-muted, #6c757d);
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.weline-module-detail-tab-button:hover {
+    color: var(--backend-color-primary, #007bff);
+}
+
+.weline-module-detail-tab-button.active {
+    color: var(--backend-color-primary, #007bff);
+    border-bottom-color: var(--backend-color-primary, #007bff);
+    background: var(--backend-color-card-bg, #fff);
+}
+
+.weline-module-detail-tab-content {
+    display: none;
+    padding: 20px;
+}
+
+.weline-module-detail-tab-content.active {
+    display: block;
+}
+
+.weline-module-detail-empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--backend-color-text-muted, #666);
+}
+
+.weline-module-detail-empty-state i {
+    font-size: 48px;
+    color: var(--backend-color-text-disabled, #ddd);
+    margin-bottom: 15px;
+}
+
+.weline-module-detail-definition-header {
+    display: flex;
+    gap: 30px;
+    margin-bottom: 30px;
+    padding: 20px;
+    background: var(--backend-color-bg-light, #f8f9fa);
+    border-radius: 8px;
+    flex-wrap: wrap;
+}
+
+.weline-module-detail-extends-points h4 {
+    margin-bottom: 20px;
+    color: var(--backend-color-text-primary, #333);
+}
+
+.weline-module-detail-extend-point {
+    border: 1px solid var(--backend-color-border, #dee2e6);
+    border-radius: 8px;
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+.weline-module-detail-point-header {
+    background: var(--backend-color-bg-light, #f8f9fa);
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.weline-module-detail-point-header h5 {
+    margin: 0;
+    color: var(--backend-color-text-primary, #333);
+}
+
+.weline-module-detail-point-badges {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.weline-module-detail-point-details {
+    padding: 20px;
+}
+
+.weline-module-detail-point-details p {
+    margin-bottom: 15px;
+    color: var(--backend-color-text-muted, #666);
+}
+
+.weline-module-detail-point-path,
+.weline-module-detail-point-interface {
+    margin-bottom: 10px;
+}
+
+.weline-module-detail-point-path code,
+.weline-module-detail-point-interface code {
+    background: var(--backend-color-bg-light, #f1f3f4);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.weline-module-detail-extended-by-summary {
+    margin-bottom: 20px;
+}
+
+.weline-module-detail-summary-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.weline-module-detail-summary-item {
+    padding: 15px;
+    background: var(--backend-color-bg-light, #f8f9fa);
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.weline-module-detail-summary-label {
+    color: var(--backend-color-text-muted, #666);
+}
+
+.weline-module-detail-summary-value {
+    font-weight: bold;
+    color: var(--backend-color-primary, #007bff);
+}
+
+.weline-module-detail-source-module {
+    margin-bottom: 30px;
+    border: 1px solid var(--backend-color-border, #dee2e6);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.weline-module-detail-source-module h4 {
+    margin: 0;
+    padding: 15px 20px;
+    background: var(--backend-color-bg-light, #f8f9fa);
+    border-bottom: 1px solid var(--backend-color-border, #dee2e6);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.weline-module-detail-count {
+    font-size: 14px;
+    color: var(--backend-color-text-muted, #666);
+    font-weight: normal;
+}
+
+.weline-module-detail-extensions-table {
+    overflow-x: auto;
+}
+
+.weline-module-detail-extensions-table .table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.weline-module-detail-extensions-table .table th,
+.weline-module-detail-extensions-table .table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--backend-color-border, #dee2e6);
+}
+
+.weline-module-detail-extensions-table .table th {
+    background: var(--backend-color-bg-light, #f8f9fa);
+    font-weight: 600;
+}
+
+.weline-module-detail-extensions-table .table code {
+    font-size: 12px;
+    background: var(--backend-color-bg-light, #f1f3f4);
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+.weline-module-detail-extensions-table .table .small {
+    font-size: 11px;
+}
+</style>
+
+(function() {
+    'use strict';
+
+    function initTabs() {
+        var tabButtons = document.querySelectorAll('.weline-module-detail-tab-button');
+        var tabContents = document.querySelectorAll('.weline-module-detail-tab-content');
+        
+        tabButtons.forEach(function(button) {
+            button.addEventListener('click', function() {
+                var targetTab = this.getAttribute('data-tab');
+                
+                tabButtons.forEach(function(btn) { btn.classList.remove('active'); });
+                tabContents.forEach(function(content) { content.classList.remove('active'); });
+                
+                this.classList.add('active');
+                var targetContent = document.getElementById(targetTab);
+                if (targetContent) {
+                    targetContent.classList.add('active');
+                }
+            });
         });
-    });
-    
-    // 如果有 anchor 参数，滚动到对应标签
-    <?php if ($anchor === 'sticker'): ?>
-        const stickerTab = document.getElementById('sticker-extensions');
+        
+        <?php if ($anchor === 'sticker'): ?>
+        var stickerTab = document.getElementById('sticker-extensions');
         if (stickerTab) {
-            setTimeout(() => {
+            setTimeout(function() {
                 stickerTab.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }, 100);
         }
-    <?php endif; ?>
-});
-</script>
+        <?php endif; ?>
+    }
 
-</body>
-</html>
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initTabs);
+    } else {
+        initTabs();
+    }
+})();
+</js:part>

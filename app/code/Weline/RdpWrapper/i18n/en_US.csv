@@ -92,15 +92,6 @@ IP地址,"IP Address"
 "跨网段连接需要进行端口映射或使用 VPN","Cross-subnet connections require port forwarding or VPN"
 同一用户账户不能同时在多处登录，建议为每人创建独立账户,"Same account cannot login from multiple places. Create separate accounts for each person."
 多人同时连接会消耗更多系统资源（CPU、内存），请根据硬件配置合理分配用户数,"Multiple connections consume more resources (CPU, RAM). Allocate users based on hardware."
-添加远程用户,"Add Remote User"
-"创建后将作为 Windows 登录用户名","Will be used as the Windows login username"
-密码,Password
-授予管理员权限,"Grant Administrator Privileges"
-管理员可以安装软件和修改系统设置，普通用户仅能使用已安装的程序,"Administrators can install software and modify system settings. Standard users can only use installed programs."
-取消,Cancel
-创建用户,"Create User"
-重置密码,"Reset Password"
-新密码,"New Password"
 Windows,Windows
 非Windows系统,"Non-Windows System"
 支持,Supported
@@ -114,7 +105,16 @@ Windows,Windows
 异常,Abnormal
 已启用,已启用
 未启用,"Not Enabled"
+重置密码,"Reset Password"
 删除,删除
+添加远程用户,"Add Remote User"
+"创建后将作为 Windows 登录用户名","Will be used as the Windows login username"
+密码,Password
+授予管理员权限,"Grant Administrator Privileges"
+管理员可以安装软件和修改系统设置，普通用户仅能使用已安装的程序,"Administrators can install software and modify system settings. Standard users can only use installed programs."
+取消,Cancel
+创建用户,"Create User"
+新密码,"New Password"
 3-20位，字母开头，允许字母数字下划线,"3-20 chars, starts with letter, allows letters/numbers/underscores"
 至少8位，包含大小写字母和数字,"At least 8 chars, including uppercase, lowercase and numbers"
 可选，用于标识用户身份,"Optional, used to identify the user"

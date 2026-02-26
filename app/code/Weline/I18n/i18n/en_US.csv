@@ -335,9 +335,6 @@ i18n国际化,"i18n Internationalization"
 更新全球数据,"Update Global Data"
 暂无国家数据,"No country data"
 "请点击""更新全球数据""按钮来更新国家数据。","请点击""更新全球数据""按钮来更新国家数据。"
-"Weline Admin 管理面板","Weline Admin Management Panel"
-测试结果,测试结果
-测试失败,测试失败
 i18n国际化>国家>地区>词典,"i18n Internationalization > Countries > Regions > Dictionary"
 地区,Region
 词典,Dictionary
@@ -363,9 +360,9 @@ i18n国际化>国家>地区>词典,"i18n Internationalization > Countries > Regi
 收集时间,"Collection Time"
 翻译时间,"Translation Time"
 删除,Delete
-区域,Locale
 i18n国际化国家列表,"i18n Internationalization Country List"
 国际化支持：查看和安装国家.,"Internationalization Support: View and install countries."
+区域,Locale
 词典管理,"Dictionary Management"
 地区列表,"Region List"
 排序,Sort
@@ -413,6 +410,19 @@ AI驱动,"AI Driven"
 更新时间,"Update time"
 暂无翻译数据,"No translation data"
 "请点击""收集词典""按钮从框架中收集词汇，或手动添加翻译","Please click the Collect Dictionary"" button to collect vocabulary from the framework"
+请前往i18n模块收集词语后重试！或者开启实时收集词语功能！,"Please go to the i18n module to collect words and try again! Or enable real-time word collection feature!"
+填写正确！,"Filled correctly!"
+请输入关键词,"Please enter keywords"
+国际化支持：翻译管理多种语言词典,"Internationalization Support: Translation management for multiple language dictionaries"
+语言代码,"Language Code"
+语言名,"Language Name"
+是否禁用,"Is Disabled"
+国际化支持：翻译管理多种语言词典.,"Internationalization Support: Translation management for multiple language dictionaries."
+国旗,"National Flag"
+I18n翻译,"I18n Translation"
+"Weline Admin 管理面板","Weline Admin Management Panel"
+测试结果,测试结果
+测试失败,测试失败
 编辑翻译,"Edit Translation"
 更新翻译,"Update Translation"
 正在收集真实翻译词汇...,"Collecting real translation vocabulary..."
@@ -449,16 +459,6 @@ AI驱动,"AI Driven"
 请先选择要导出的语言,请先选择要导出的语言
 请选择CSV格式的文件,请选择CSV格式的文件
 请选择要操作的区域,"Please select locales to operate"
-请前往i18n模块收集词语后重试！或者开启实时收集词语功能！,"Please go to the i18n module to collect words and try again! Or enable real-time word collection feature!"
-填写正确！,"Filled correctly!"
-请输入关键词,"Please enter keywords"
-I18n翻译,"I18n Translation"
-国际化支持：翻译管理多种语言词典,"Internationalization Support: Translation management for multiple language dictionaries"
-语言代码,"Language Code"
-语言名,"Language Name"
-是否禁用,"Is Disabled"
-国际化支持：翻译管理多种语言词典.,"Internationalization Support: Translation management for multiple language dictionaries."
-国旗,"National Flag"
 Weline_I18n:语言包读取,"Weline_I18n: Language Pack Read"
 Weline_I18n:语言包Locals读取,"Weline_I18n: Language Pack Locals Read"
 Weline_I18n:语言包Locals翻译词典读取,"Weline_I18n: Language Pack Locals Translation Dictionary Read"

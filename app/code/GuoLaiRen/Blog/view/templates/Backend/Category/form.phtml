@@ -1,12 +1,15 @@
 <?php
 /**
- * 博客分类编辑/新建表单模板
+ * 博客分类编辑/新建表单模板 - 内容模板
+ * 由布局系统自动包裹
  *
  * 变量：
  * - $category       Category|null  分类对象（编辑时）
  * - $action         string         表单提交地址
  * - $parent_options array          父级分类选项
  * - $sites          array          站点列表
+ *
+ * @var \Weline\Framework\View\Template $this
  */
 
 use GuoLaiRen\Blog\Model\Category;
@@ -14,7 +17,6 @@ use GuoLaiRen\Blog\Model\Category;
 $isEdit = $category && $category->getId();
 $sites = $this->getData('sites') ?? [];
 ?>
-<w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
 
 <!-- start page title -->
 <div class="row">
@@ -254,5 +256,3 @@ document.getElementById('site_id')?.addEventListener('change', function() {
     // 目前父级分类列表在页面加载时已经根据当前站点过滤了
 });
 </script>
-
-<w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>
