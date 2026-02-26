@@ -242,10 +242,13 @@ class Partials extends Block
             return '';
         }
         
-        // 1. 获取全局 Template 实例的 meta 数据（layout 的 meta）
+        // 1. 获取全局 Template 实例的 meta 数据（layout 的 meta）和 theme 数据
         $template = Template::getInstance();
         $layoutMeta = $template->getData('meta') ?? [];
-        
+        $themeData = $template->getData('theme') ?? [];
+        $colorsData = $template->getData('colors') ?? [];
+        $contentTemplate = $template->getData('contentTemplate') ?? null;
+
         // 2. 加载 partials 的 meta 数据
         $scope = $this->resolveScope($area);
         $metaIdentify = "partials.{$type}";
@@ -272,6 +275,14 @@ class Partials extends Block
         $data['meta'] = $partialsMeta;
         // layout 的 meta（供 partials 访问）
         $data['layout'] = $layoutMeta;
+        // theme 数据（由 ControllerFetchFileBefore Observer 设置，包含 layoutType、layoutOption 等）
+        $data['theme'] = $themeData;
+        // colors 数据（主题颜色配置）
+        $data['colors'] = $colorsData;
+        // contentTemplate（原始内容模板路径）
+        if ($contentTemplate) {
+            $data['contentTemplate'] = $contentTemplate;
+        }
         
         // 4. 设置其他数据
         foreach ($data as $key => $value) {
