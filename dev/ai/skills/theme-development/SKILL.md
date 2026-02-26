@@ -1,6 +1,22 @@
 ---
 name: theme-development
-description: Theme development for Weline Framework. Use when developing frontend/backend themes, writing CSS/styles, using CSS variables, dark/light mode adaptation, loading JS modules, generating URLs, calling APIs, using Toast notifications. Covers CSS variable system, theme skeleton, dark mode, light mode adaptation, JavaScript module loading, theme URL generation, API requests. 主题, theme, template, 前端开发, CSS, 样式, 暗色模式, 亮色模式, dark mode, light mode, CSS变量, 颜色, 背景色, 边框, 阴影.
+description: |
+  Theme/Frontend/CSS/JS development for Weline Framework. CRITICAL - All CSS MUST use theme variables!
+  
+  MUST use when:
+  - Writing CSS styles (background, color, border, shadow, etc.)
+  - Dark/light mode adaptation (暗色模式, 亮色模式, dark mode, light mode)
+  - Developing frontend/backend themes
+  - Creating UI components (组件, component, widget)
+  - Loading JS modules
+  - Using Toast notifications
+  
+  Keywords: CSS, 样式, style, 颜色, color, background, 背景, border, 边框, shadow, 阴影, 
+  主题, theme, 前端, frontend, 后台, backend, 组件, component, widget, 部件,
+  暗色, dark, 亮色, light, 模式, mode, CSS变量, CSS variable, var(--,
+  JavaScript, JS, 闭包, closure, IIFE, 作用域, scope, 污染, pollution,
+  .phtml, .css, .js, 模板, template, 视图, view, 样式表, stylesheet,
+  card, table, form, input, button, modal, offcanvas, toast, alert
 globs:
   - "**/view/**/*.phtml"
   - "**/view/**/*.js"
@@ -8,6 +24,8 @@ globs:
   - "**/theme/**/*"
   - "**/colors/**/*.css"
   - "**/variables/**/*.css"
+  - "**/statics/**/*.css"
+  - "**/statics/**/*.js"
 alwaysApply: false
 ---
 
@@ -19,6 +37,8 @@ alwaysApply: false
 - ✅ 开发主题相关功能（前台/后台）
 - ✅ **编写 CSS 样式（必须使用主题变量！）**
 - ✅ **适配暗色模式（dark mode）和亮色模式（light mode）**
+- ✅ **开发 UI 组件（组件必须独立作用域！）**
+- ✅ **编写 JavaScript（必须使用闭包！）**
 - ✅ 加载 JavaScript 模块
 - ✅ 生成主题 URL
 - ✅ 调用后端 API
@@ -33,7 +53,111 @@ alwaysApply: false
 
 ---
 
+## ⚠️ 硬性禁止（违反必须修正）
+
+### 1. 禁止私自定义颜色值
+
+```css
+/* ❌ 绝对禁止 - 硬编码颜色 */
+.my-element { background: #fff; color: #333; border: 1px solid #dee2e6; }
+.my-element { background: white; color: black; }
+.my-element { background: rgb(255,255,255); }
+.my-element { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+
+/* ✅ 必须使用主题变量 */
+.my-element { 
+    background: var(--backend-color-card-bg, #fff);
+    color: var(--backend-color-text-primary, #333);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    box-shadow: var(--backend-shadow-sm);
+}
+```
+
+### 2. 禁止全局 JavaScript
+
+```javascript
+/* ❌ 绝对禁止 - 全局变量/函数污染 */
+var myData = [];
+function handleClick() { ... }
+let config = {};
+
+/* ✅ 必须使用 IIFE 闭包 */
+(function() {
+    'use strict';
+    var myData = [];
+    function handleClick() { ... }
+    // 如需暴露到全局，显式挂载到 window
+    window.MyModule = { handleClick };
+})();
+```
+
+### 3. 禁止通用 CSS 类名
+
+```css
+/* ❌ 绝对禁止 - 通用类名会污染全局 */
+.card { ... }
+.header { ... }
+.item { ... }
+.active { ... }
+
+/* ✅ 必须使用组件前缀/命名空间 */
+.weline-media-card { ... }
+.store-form-header { ... }
+.product-list-item { ... }
+.my-component--active { ... }
+```
+
+---
+
 ## 0. 主题 CSS 变量系统 ⭐⭐⭐ 【强制遵守】
+
+### 0.0 变量命名规范 ⭐⭐⭐ 【核心规则】
+
+**后端和前端使用不同的变量命名前缀，禁止混用！**
+
+| 区域 | 变量前缀 | 示例 | 定义位置 |
+|------|----------|------|----------|
+| **后端 (Backend)** | `--backend-color-*`<br>`--backend-spacing-*`<br>`--backend-font-*`<br>`--backend-border-*`<br>`--backend-shadow-*` | `--backend-color-primary`<br>`--backend-color-card-bg`<br>`--backend-spacing-md` | `Weline_Theme::theme/backend/variables/*.css`<br>`Weline_Theme::theme/backend/colors/*.css` |
+| **前端 (Frontend)** | `--color-*`<br>`--spacing-*`<br>`--font-*` | `--color-primary`<br>`--color-bg-primary`<br>`--spacing-md` | `Weline_Theme::theme/frontend/variables/*.css`<br>`Weline_Theme::theme/frontend/colors/*.css` |
+
+**禁止的错误写法：**
+
+```css
+/* ❌ 后端代码使用短变量名（前端格式）— 这些变量在后端不存在！ */
+.my-backend-card {
+    background: var(--card-bg);        /* 错误！后端没有 --card-bg */
+    color: var(--text-color);           /* 错误！后端没有 --text-color */
+    border: 1px solid var(--border-color); /* 错误！后端没有 --border-color */
+}
+
+/* ✅ 后端代码使用正确的后端变量名 */
+.my-backend-card {
+    background: var(--backend-color-card-bg, #fff);
+    color: var(--backend-color-text-primary, #212529);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+}
+```
+
+**后端变量文件结构：**
+
+```
+app/code/Weline/Theme/view/theme/backend/
+├── colors/
+│   ├── _default.css    # 默认/亮色主题颜色
+│   ├── _dark.css       # 暗色主题颜色（通过 [data-layout-mode="dark"] 选择器生效）
+│   └── _light.css      # 亮色主题颜色
+└── variables/
+    ├── _colors.css     # 颜色变量（:root 定义）
+    ├── _spacing.css    # 间距变量
+    ├── _borders.css    # 边框变量
+    ├── _shadows.css    # 阴影变量
+    └── _typography.css # 字体变量
+```
+
+**需要新增变量时：**
+- 禁止在模块 CSS 中私自定义新变量
+- 必须先询问开发者是否可以新增变量
+- 如确需新增，应添加到 `Weline_Theme::theme/backend/variables/` 下的对应文件中
 
 ### 0.1 核心原则
 
@@ -378,6 +502,276 @@ app/code/Weline/Theme/view/theme/backend/
 - [ ] **状态色**：使用 `--backend-color-success/danger/warning/info`
 - [ ] **悬停效果**：使用变量而非硬编码颜色
 - [ ] **焦点状态**：使用 `--backend-focus-ring`
+
+---
+
+## 0.9 CSS 命名空间规范 ⭐⭐⭐ 【强制】
+
+**所有组件的 CSS 必须使用唯一前缀，避免样式污染其他组件。**
+
+### 命名规范
+
+1. **组件前缀**：`<模块名>-<组件名>-<元素>`
+2. **BEM 风格**：`块__元素--修饰符`
+3. **唯一 ID**：`#<模块名>-<组件名>-<实例>`
+
+```css
+/* ✅ 正确 - 使用组件前缀 */
+.weline-media-container { ... }
+.weline-media-grid { ... }
+.weline-media-item { ... }
+.weline-media-item--selected { ... }
+.weline-media-item__thumbnail { ... }
+.weline-media-item__title { ... }
+
+/* ✅ 正确 - 模块级前缀 */
+.store-form-card { ... }
+.store-form-input { ... }
+.store-form-button { ... }
+
+/* ❌ 错误 - 通用类名会污染全局 */
+.container { ... }
+.grid { ... }
+.item { ... }
+.selected { ... }
+```
+
+### 组件样式模板
+
+```css
+/* ============================================
+   组件：Weline Media Manager
+   模块：Weline_MediaManager
+   前缀：weline-media-
+   ============================================ */
+
+/* 容器 */
+.weline-media-container {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-md, 8px);
+}
+
+/* 网格布局 */
+.weline-media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: var(--backend-spacing-md, 16px);
+}
+
+/* 项目 */
+.weline-media-item {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border: 2px solid transparent;
+    border-radius: var(--backend-border-radius, 6px);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.weline-media-item:hover {
+    border-color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-media-item--selected {
+    border-color: var(--backend-color-primary, #556ee6);
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+}
+
+/* 子元素 */
+.weline-media-item__thumbnail {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+}
+
+.weline-media-item__title {
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 0.875rem;
+    padding: var(--backend-spacing-xs, 4px);
+}
+```
+
+---
+
+## 0.10 JavaScript 闭包规范 ⭐⭐⭐ 【强制】
+
+**所有组件的 JavaScript 必须使用 IIFE 闭包，避免全局变量污染。**
+
+### 基础闭包模板
+
+```javascript
+/**
+ * 组件：Weline Media Manager
+ * 模块：Weline_MediaManager
+ */
+(function() {
+    'use strict';
+    
+    // ========== 私有变量（不会污染全局） ==========
+    var selectedItems = [];
+    var config = {
+        maxSelect: 10,
+        allowedTypes: ['image/png', 'image/jpeg']
+    };
+    
+    // ========== 私有函数 ==========
+    function handleItemClick(e) {
+        var item = e.currentTarget;
+        var itemId = item.dataset.id;
+        toggleSelection(itemId);
+    }
+    
+    function toggleSelection(itemId) {
+        var index = selectedItems.indexOf(itemId);
+        if (index === -1) {
+            selectedItems.push(itemId);
+        } else {
+            selectedItems.splice(index, 1);
+        }
+        updateUI();
+    }
+    
+    function updateUI() {
+        document.querySelectorAll('.weline-media-item').forEach(function(item) {
+            var isSelected = selectedItems.includes(item.dataset.id);
+            item.classList.toggle('weline-media-item--selected', isSelected);
+        });
+    }
+    
+    // ========== 初始化 ==========
+    function init() {
+        document.querySelectorAll('.weline-media-item').forEach(function(item) {
+            item.addEventListener('click', handleItemClick);
+        });
+    }
+    
+    // ========== 公开 API（仅在必要时暴露） ==========
+    window.WelineMediaManager = {
+        init: init,
+        getSelected: function() { return selectedItems.slice(); },
+        clearSelection: function() { 
+            selectedItems = []; 
+            updateUI(); 
+        }
+    };
+    
+    // ========== DOM Ready ==========
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+    
+})();
+```
+
+### jQuery 组件模板
+
+```javascript
+/**
+ * 组件：Store Form
+ * 模块：WeShop_Store
+ */
+(function($) {
+    'use strict';
+    
+    // 私有变量
+    var $form = null;
+    var isSubmitting = false;
+    
+    // 私有函数
+    function validateForm() {
+        // 验证逻辑
+        return true;
+    }
+    
+    function handleSubmit(e) {
+        if (isSubmitting) return false;
+        if (!validateForm()) {
+            e.preventDefault();
+            return false;
+        }
+        isSubmitting = true;
+        showLoading();
+    }
+    
+    // 初始化
+    function init() {
+        $form = $('#storeForm');
+        $form.on('submit', handleSubmit);
+    }
+    
+    // DOM Ready
+    $(document).ready(init);
+    
+})(jQuery);
+```
+
+### 模板内嵌 JavaScript（.phtml）
+
+```html
+<script>
+(function() {
+    'use strict';
+    
+    // 从 PHP 获取配置（仅在闭包内使用）
+    var config = <?= json_encode([
+        'apiUrl' => $this->getBackendUrl('*/api/save'),
+        'itemId' => $item->getId()
+    ]) ?>;
+    
+    // 私有函数
+    function saveItem(data) {
+        fetch(config.apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(result) {
+            if (result.success) {
+                BackendToast.success('保存成功');
+            } else {
+                BackendToast.error(result.message || '保存失败');
+            }
+        })
+        .catch(function(error) {
+            BackendToast.error('网络错误');
+        });
+    }
+    
+    // 事件绑定（在闭包内）
+    document.getElementById('saveBtn').addEventListener('click', function() {
+        saveItem({ id: config.itemId, name: document.getElementById('name').value });
+    });
+    
+})();
+</script>
+```
+
+### 禁止的写法
+
+```javascript
+/* ❌ 绝对禁止 - 全局变量 */
+var selectedItems = [];
+let config = {};
+const API_URL = '/api/save';
+
+/* ❌ 绝对禁止 - 全局函数 */
+function handleClick() { ... }
+function saveData() { ... }
+
+/* ❌ 绝对禁止 - 未使用闭包的事件绑定 */
+document.getElementById('btn').onclick = function() {
+    // 这里的 this 和变量可能被污染
+};
+
+/* ❌ 绝对禁止 - 直接在全局暴露对象 */
+MyModule = { ... }; // 没有 var/let/const
+
+/* ✅ 正确 - 显式挂载到 window */
+window.MyModule = { ... };
+```
 
 ---
 
@@ -730,7 +1124,7 @@ window.Weline = {
 | **URL 权限** | ❌ 禁止生成后台 URL | ✅ 可生成所有类型 URL |
 | **跨区域访问** | ✅ 登录后可加载 `url-backend` | ❌ 后台不需要加载前台模块 |
 | **侧边栏** | ❌ 无 `Weline.Sidebar` | ✅ 有 `Weline.Sidebar` |
-| **Toast/Confirm** | ❌ 需自定义实现 | ✅ 内置 `AdminToast`、`AdminConfirm` |
+| **Toast/Confirm** | ❌ 需自定义实现 | ✅ 内置 `BackendToast`、`BackendConfirm`（别名 `AdminToast`、`AdminConfirm`） |
 
 **关键原则：**
 - ✅ **前台 → 前台 URL**：允许，使用 `url-frontend` 模块
@@ -1036,12 +1430,12 @@ Weline.Api.request('/backend/theme-editor/save-widget', {
     })
 }).then(response => {
     if (response.success) {
-        AdminToast.success('保存成功');
+        BackendToast.success('保存成功');
     } else {
-        AdminToast.error('保存失败: ' + response.message);
+        BackendToast.error('保存失败: ' + response.message);
     }
 }).catch(error => {
-    AdminToast.error('请求失败: ' + error.message);
+    BackendToast.error('请求失败: ' + error.message);
 });
 
 // GET 请求
@@ -1068,11 +1462,11 @@ fetch('/backend/theme-editor/save-widget', {
 .then(response => response.json())
 .then(data => {
     if (data.success) {
-        AdminToast.success('保存成功');
+        BackendToast.success('保存成功');
     }
 })
 .catch(error => {
-    AdminToast.error('请求失败');
+    BackendToast.error('请求失败');
 });
 ```
 
@@ -1080,37 +1474,41 @@ fetch('/backend/theme-editor/save-widget', {
 
 ## 5. 友好通知与确认对话框（与 friendly-notifications 技能配合）
 
-### 5.1 后台 Toast 通知（AdminToast）⭐
+### 5.1 后台 Toast 通知（BackendToast）⭐
 
 **仅在后台可用**，前台需要自定义实现。
+
+**文件位置：** `Weline_Theme::theme/backend/assets/js/backend-components.js`（已在 head.phtml 统一引入）
 
 ```javascript
 // 成功提示（3秒自动消失）
-AdminToast.success('保存成功');
+BackendToast.success('保存成功');
 
 // 警告提示
-AdminToast.warning('请先选择主题');
+BackendToast.warning('请先选择主题');
 
 // 错误提示
-AdminToast.error('保存失败，请重试');
+BackendToast.error('保存失败，请重试');
 
 // 信息提示
-AdminToast.info('数据加载中...');
+BackendToast.info('数据加载中...');
 
 // 自定义持续时间（5秒）
-AdminToast.success('操作完成', 5000);
+BackendToast.success('操作完成', 5000);
 
 // 永不自动消失（duration = 0）
-AdminToast.info('请等待处理完成...', 0);
+BackendToast.info('请等待处理完成...', 0);
 ```
 
-### 5.2 后台确认对话框（AdminConfirm）⭐
+> **向后兼容**：`AdminToast` 仍可使用（是 `BackendToast` 的别名），但**新代码推荐使用 `BackendToast`**。
+
+### 5.2 后台确认对话框（BackendConfirm）⭐
 
 **仅在后台可用**，前台需要自定义实现。
 
 ```javascript
-// 基础确认对话框
-AdminConfirm.show('确定要删除这个部件吗？').then(confirmed => {
+// 基础确认对话框（返回 Promise）
+BackendConfirm.show('确定要删除这个部件吗？').then(confirmed => {
     if (confirmed) {
         // 用户点击"确定"
         deleteWidget();
@@ -1121,11 +1519,11 @@ AdminConfirm.show('确定要删除这个部件吗？').then(confirmed => {
 });
 
 // 自定义选项
-AdminConfirm.show('此操作不可恢复，确定继续吗？', {
+BackendConfirm.show('此操作不可恢复，确定继续吗？', {
     title: '危险操作',
     confirmText: '删除',
     cancelText: '放弃',
-    type: 'danger'
+    type: 'danger'  // warning, danger, info, success
 }).then(confirmed => {
     if (confirmed) {
         performDangerousAction();
@@ -1133,9 +1531,11 @@ AdminConfirm.show('此操作不可恢复，确定继续吗？', {
 });
 ```
 
+> **向后兼容**：`AdminConfirm` 仍可使用（是 `BackendConfirm` 的别名），但**新代码推荐使用 `BackendConfirm`**。
+
 ### 5.3 前台通知实现
 
-前台**没有内置** `AdminToast` 和 `AdminConfirm`，需要自定义实现：
+前台**没有内置** `BackendToast` 和 `BackendConfirm`，需要自定义实现：
 
 ```javascript
 // 前台自定义 Toast
@@ -1196,7 +1596,11 @@ alert('操作成功');
 confirm('确定删除吗？');
 prompt('请输入名称');
 
-// ✅ 后台使用
+// ✅ 后台使用（推荐新名称）
+BackendToast.success('操作成功');
+BackendConfirm.show('确定删除吗？');
+
+// ✅ 后台使用（兼容旧名称）
 AdminToast.success('操作成功');
 AdminConfirm.show('确定删除吗？');
 
@@ -1256,18 +1660,18 @@ window.__WelineThemeConfig = <?= json_encode([
             })
         }).then(data => {
             if (data.success) {
-                AdminToast.success('部件保存成功');
+                BackendToast.success('部件保存成功');
             } else {
-                AdminToast.error('保存失败: ' + data.message);
+                BackendToast.error('保存失败: ' + data.message);
             }
         }).catch(error => {
-            AdminToast.error('请求失败，请检查网络');
+            BackendToast.error('请求失败，请检查网络');
         });
     }
     
     // 4. 删除部件（带确认）
     function deleteWidget(widgetId) {
-        AdminConfirm.show('确定要删除此部件吗？此操作不可恢复。', {
+        BackendConfirm.show('确定要删除此部件吗？此操作不可恢复。', {
             title: '确认删除',
             confirmText: '删除',
             cancelText: '取消'
@@ -1279,11 +1683,11 @@ window.__WelineThemeConfig = <?= json_encode([
                 body: JSON.stringify({ layout_id: widgetId })
             }).then(data => {
                 if (data.success) {
-                    AdminToast.success('删除成功');
+                    BackendToast.success('删除成功');
                     // 刷新页面或更新UI
                     location.reload();
                 } else {
-                    AdminToast.error('删除失败: ' + data.message);
+                    BackendToast.error('删除失败: ' + data.message);
                 }
             });
         });
@@ -1291,15 +1695,15 @@ window.__WelineThemeConfig = <?= json_encode([
     
     // 5. 加载部件列表
     function loadWidgets() {
-        AdminToast.info('加载中...', 1000);
-        
+        BackendToast.info('加载中...', 1000);
+
         Weline.Api.request(`${apiUrls.getWidgets}?theme_id=${themeId}`, {
             method: 'GET'
         }).then(data => {
             if (data.success) {
                 renderWidgets(data.widgets);
             } else {
-                AdminToast.error('加载失败');
+                BackendToast.error('加载失败');
             }
         });
     }
@@ -1376,14 +1780,14 @@ class InjectThemeScript implements ObserverInterface
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                AdminToast.success('删除成功，页面即将刷新...');
+                BackendToast.success('删除成功，页面即将刷新...');
                 setTimeout(() => location.reload(), 1000);
             } else {
-                AdminToast.error('删除失败: ' + data.message);
+                BackendToast.error('删除失败: ' + data.message);
             }
         })
         .catch(() => {
-            AdminToast.error('请求失败，请检查网络');
+            BackendToast.error('请求失败，请检查网络');
         });
     };
 })();
@@ -1406,8 +1810,8 @@ JS;
 ```javascript
 // 后台代码（backend）
 if (Weline.config.theme.area === 'backend') {
-    // 可以使用 AdminToast、AdminConfirm
-    AdminToast.success('保存成功');
+    // 可以使用 BackendToast、BackendConfirm（或兼容的 AdminToast、AdminConfirm）
+    BackendToast.success('保存成功');
     
     // 可以生成所有类型 URL
     const adminUrl = window.getBackendUrl('admin/dashboard');
@@ -1427,7 +1831,7 @@ if (Weline.config.theme.area === 'frontend') {
 ❌ **错误做法：**
 ```javascript
 // 前台使用后台专属功能
-AdminToast.success('成功'); // ❌ 前台没有 AdminToast
+BackendToast.success('成功'); // ❌ 前台没有 BackendToast/AdminToast
 
 // 前台生成后台 URL
 const adminUrl = window.getBackendUrl('admin/...'); // ❌ 未登录禁止
@@ -1470,6 +1874,11 @@ Weline.Api.request(...); // 可能工作，但不推荐
 
 ✅ **正确做法：**
 ```javascript
+// 推荐新名称
+BackendToast.success('保存成功');
+BackendConfirm.show('确定删除吗？').then(confirmed => { ... });
+
+// 兼容旧名称（仍可使用）
 AdminToast.success('保存成功');
 AdminConfirm.show('确定删除吗？').then(confirmed => { ... });
 ```
@@ -1487,13 +1896,13 @@ confirm('确定删除吗？'); // 禁止使用
 Weline.Api.request(url, options)
     .then(data => {
         if (data.success) {
-            AdminToast.success(data.message);
+            BackendToast.success(data.message);
         } else {
-            AdminToast.error('操作失败: ' + data.message);
+            BackendToast.error('操作失败: ' + data.message);
         }
     })
     .catch(error => {
-        AdminToast.error('网络错误，请重试');
+        BackendToast.error('网络错误，请重试');
         console.error('API Error:', error);
     });
 ```
@@ -1543,9 +1952,9 @@ if (Weline.config.theme.isLoggedIn) {
 
 ## 8. 常见问题
 
-### Q1: 前台可以使用 AdminToast 吗？
+### Q1: 前台可以使用 BackendToast 吗？
 
-**不可以。** `AdminToast` 和 `AdminConfirm` 是后台专属工具，前台需要自定义实现。
+**不可以。** `BackendToast` 和 `BackendConfirm`（及其别名 `AdminToast`、`AdminConfirm`）是后台专属工具，前台需要自定义实现。
 
 参考 `friendly-notifications` 技能创建前台友好通知组件。
 
@@ -1714,6 +2123,7 @@ if ($this->canInstallThemeNow($args)) {
 
 ## 10. 参考文件
 
-- 核心 theme.js: `app/code/Weline/Theme/view/theme/backend/assets/js/theme.js`
-- 默认主题工具: `app/design/Weline/default/backend/assets/js/theme.js`
+- 核心 theme.js: `app/code/Weline/Theme/view/theme/backend/assets/js/theme.js`（Weline 对象、模块加载器）
+- **后台全局组件**: `app/code/Weline/Theme/view/theme/backend/assets/js/backend-components.js`（BackendToast、BackendConfirm）
+- 后台 head 引入: `app/code/Weline/Admin/view/templates/common/head.phtml`（统一加载全局 JS）
 - 主题编辑器: `app/code/Weline/Theme/view/statics/js/theme-editor.js`

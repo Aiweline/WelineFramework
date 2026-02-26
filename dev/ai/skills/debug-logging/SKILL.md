@@ -327,6 +327,80 @@ Debug::env('item', false, 100);     // 改为调试 id=100
 
 ---
 
+## Env 日志方法（框架级日志）
+
+除了 `agent_log()` 用于调试外，框架还提供 `Env::log_*` 方法用于生产环境日志记录：
+
+### 方法签名
+
+```php
+// 通用日志方法
+Env::log(
+    string $filename,        // 日志文件名（不含路径，自动添加 .log）
+    string $content,         // 日志消息内容
+    string $level = 'INFO',  // 日志级别: INFO, ERROR, WARNING, NOTICE, DEBUG, QUERY
+    bool $compact = true,    // true=紧凑单行格式, false=详细多行格式
+    bool $append = true,     // true=追加, false=覆盖
+    int $debug_level = 0     // 回溯深度（0=立即调用者）
+): bool
+
+// 便捷方法（PSR-3 风格）
+Env::log_error(string $filename, string $message): bool
+Env::log_warning(string $filename, string $message): bool
+Env::log_info(string $filename, string $message): bool
+Env::log_debug(string $filename, string $message): bool
+Env::log_notice(string $filename, string $message): bool
+
+// SQL 查询日志
+Env::sql_log(string $filename, string $sql, bool $compact = true): bool
+```
+
+### 日志文件位置
+
+| 日志类型 | 默认路径 | 用途 |
+|----------|----------|------|
+| 错误日志 | `var/log/error.log` | `Env::log_error()` |
+| 异常日志 | `var/log/exception.log` | 异常记录 |
+| 警告日志 | `var/log/warning.log` | `Env::log_warning()` |
+| 通知日志 | `var/log/notice.log` | `Env::log_notice()` |
+| 调试日志 | `var/log/debug.log` | `Env::log_debug()` / `Debug::log()` |
+| Agent 调试 | `.cursor/debug.log` | `agent_log()` |
+| WLS 日志 | `var/log/wls.log` | WLS 请求/错误日志 |
+| WLS 性能 | `var/log/wls_timing.log` | WLS 性能监控 |
+
+### 使用示例
+
+```php
+use Weline\Framework\App\Env;
+
+// 记录错误
+Env::log_error('my_module', '操作失败：' . $e->getMessage());
+
+// 记录警告
+Env::log_warning('my_module', '配置缺失，使用默认值');
+
+// 记录调试信息
+Env::log_debug('my_module', 'SQL: ' . $sql);
+
+// 通用日志（自定义级别）
+Env::log('custom_module', '处理完成', 'INFO', true, true, 0);
+```
+
+### 禁止使用
+
+```php
+// ❌ 禁止
+error_log('错误信息');
+echo "debug: " . $var;
+print_r($data);
+
+// ✅ 正确
+Env::log_error('module_name', '错误信息');
+Env::log_debug('module_name', '调试信息');
+```
+
+---
+
 ## 相关技能
 
 - `error-learning` - 错误自学习
@@ -336,5 +410,5 @@ Debug::env('item', false, 100);     // 改为调试 id=100
 ---
 
 **创建日期**: 2026-02-04
-**最后更新**: 2026-02-04
-**版本**: 2.0.0（新增精确过滤功能）
+**最后更新**: 2026-02-25
+**版本**: 2.1.0（新增 Env::log_* 方法文档）

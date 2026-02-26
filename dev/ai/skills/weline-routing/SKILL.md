@@ -1,12 +1,26 @@
 ---
 name: weline-routing
-description: Weline Framework routing standards and URL generation. Use when creating controllers, defining routes, generating URLs, calling backend APIs, or fixing 404/405 routing errors. Covers HTTP method prefixes (get/post/put/delete), URL generation ($this->getUrl), and RESTful conventions.
+description: |
+  Weline Framework routing standards, URL structure, and URL generation.
+  
+  MUST use when:
+  - Creating controllers, defining routes, generating URLs
+  - Fixing 404/405 routing errors or language/currency parsing issues
+  - Working with URL structure: /<backendKey>/<currency>/<language>/<module>/<controller>/<action>
+  - Understanding WELINE_USER_LANG, WELINE_USER_CURRENCY, $_SERVER parsing
+  - WLS state management for URL-related variables
+  
+  Keywords: URL, 路由, 路由解析, URL结构, 语言, 货币, currency, language, locale,
+  WELINE_USER_LANG, WELINE_USER_CURRENCY, Url::parser, getUrl, getBackendUrl,
+  404, 405, 路由错误, backend, frontend, rest_api, area, 区域
 globs:
   - "**/Controller/**/*.php"
+  - "**/Http/Url.php"
+  - "**/Runtime/WlsRuntime.php"
 alwaysApply: false
 ---
 
-# Weline Framework 路由规范技能 (Routing Standards Skill)
+# Weline Framework 路由与 URL 解析技能
 
 ## 何时使用此技能
 
@@ -17,14 +31,158 @@ alwaysApply: false
 - ✅ 前端调用后端 API（fetch/ajax）
 - ✅ 修复路由解析错误（404/405）
 - ✅ 重构现有控制器方法
+- ✅ **URL 语言/货币不稳定或解析错误**
+- ✅ **WLS 模式下 WELINE_* 变量问题**
+- ✅ **理解 URL 结构和区域判断**
 
 **相互参照：**
 - 创建控制器 → 参考 `module-development` + `weline-routing`
 - 生成URL → 参考 `weline-routing`
 - 用户提示 → 参考 `friendly-notifications`
+- WLS 状态问题 → 参考 `weline-server`（状态管理章节）
 
 ## 目的
 确保控制器方法命名和路由生成遵循 Weline Framework 的路由约定，避免 HTTP 方法冲突和路由解析错误。
+
+---
+
+## URL 结构（重要！）
+
+### Weline URL 完整结构
+
+```
+https://domain.com/<backendKey>/<currency>/<language>/<module>/<area>/<controller>/<action>
+```
+
+**示例：**
+```
+https://127.0.0.1:9981/f7LYPUzS4UD9UL1kqkf0hzzPxyxmvT8c/USD/zh_Hans_CN/media/backend/manager
+                      │                                  │   │          │     │       │
+                      │                                  │   │          │     │       └─ 控制器: Manager
+                      │                                  │   │          │     └─ 区域: backend
+                      │                                  │   │          └─ 模块: media (Weline_MediaManager)
+                      │                                  │   └─ 语言: zh_Hans_CN
+                      │                                  └─ 货币: USD
+                      └─ 后台访问密钥 (env.php 配置)
+```
+
+### URL 段解析规则
+
+| 段位置 | 内容 | 识别规则 | 设置到 |
+|--------|------|----------|--------|
+| 第1段 | 后台密钥 | 匹配 `env.php` 中的 `backend_router` | `WELINE_AREA=backend` |
+| 第2段 | 货币 | 3 位大写字母（USD, CNY, EUR...） | `WELINE_USER_CURRENCY` |
+| 第3段 | 语言 | 格式 `xx_Xxxx_XX`（如 `zh_Hans_CN`） | `WELINE_USER_LANG` |
+| 第4段 | 模块 | 模块路由标识 | `REQUEST_URI` |
+| 第5段 | 区域 | `backend` / `frontend` | `WELINE_AREA` 确认 |
+| 第6段+ | 控制器/动作 | 路由解析 | `REQUEST_URI` |
+
+### 货币识别规则
+
+```php
+// 货币代码必须满足:
+strlen($code) === 3 && ctype_upper($code)
+// 示例: USD, CNY, EUR, JPY, GBP
+```
+
+### 语言识别规则
+
+```php
+// 语言代码必须满足:
+strlen($code) > 3 && strlen($code) <= 10 
+    && ctype_lower(substr($code, 0, 2))  // 前两位小写
+    && $code[2] === '_'                   // 第三位是下划线
+// 示例: zh_Hans_CN, en_US, ja_JP
+```
+
+### 区域（Area）类型
+
+| 区域值 | 说明 | 路由前缀 |
+|--------|------|----------|
+| `frontend` | 前台 PC 页面 | 无或网站前缀 |
+| `backend` | 后台管理 | `/<backendKey>/` |
+| `rest_frontend` | 前台 REST API | `/api/` |
+| `rest_backend` | 后台 REST API | `/<backendKey>/api/` |
+
+---
+
+## URL 解析流程（WLS 模式）
+
+### 解析时序
+
+```
+1. WlsRuntime::handle()
+   │
+   ├─ RequestContext::init()          # 初始化请求上下文
+   │     └─ syncFromServer()          # 从 $_SERVER 同步 WELINE_* 变量
+   │
+   ├─ GlobalsEmulator::emulate()      # 模拟 $_GET/$_POST/$_COOKIE/$_SERVER
+   │
+   ├─ Url::parser()                   # 核心 URL 解析
+   │     ├─ 检测后台密钥 → WELINE_AREA
+   │     ├─ 检测货币 → WELINE_USER_CURRENCY
+   │     ├─ 检测语言 → WELINE_USER_LANG
+   │     └─ 解析纯路由 → REQUEST_URI
+   │
+   └─ processUrlParse()               # 将解析结果写入 $_SERVER 和 RequestContext
+```
+
+### 关键变量来源
+
+| 变量 | 来源优先级 |
+|------|-----------|
+| `WELINE_USER_LANG` | URL 路径 > Cookie > 网站默认 > `zh_Hans_CN` |
+| `WELINE_USER_CURRENCY` | URL 路径 > Cookie > 网站默认 > `CNY` |
+| `WELINE_AREA` | URL 路径解析（后台密钥/API前缀） |
+| `WELINE_WEBSITE_ID` | URL 路径匹配网站配置 |
+
+---
+
+## WLS 状态管理（URL 相关）⚠️
+
+### 必须重置的 URL 相关变量
+
+在 WLS 模式下，以下 URL 相关变量**必须在请求结束后重置**，否则会导致跨请求污染：
+
+| 类 | 变量 | 重置方式 | 说明 |
+|----|------|----------|------|
+| `Url` | `$parserServer` | `StateManager` | URL 解析结果缓存 |
+| `Url` | `$parserCache` | `StateManager` | URL 缓存 |
+| `Url` | `$parserLanguages` | `StateManager` | 语言代码缓存 |
+| `Url` | `$parserCurrencies` | `StateManager` | 货币代码缓存 |
+| `RequestContext` | `$_userLang` | `resetWelineVars()` | 当前用户语言 |
+| `RequestContext` | `$_userCurrency` | `resetWelineVars()` | 当前用户货币 |
+
+### 常见问题：语言/货币不稳定
+
+**症状：** 刷新页面时语言或货币在不同值之间交替切换。
+
+**根本原因：** `$_SERVER['WELINE_USER_LANG']` 被设为**空字符串**而非 `unset`，导致 `??` 运算符无法回退到默认值。
+
+**错误代码：**
+```php
+// ❌ 错误：设为空字符串
+$_SERVER['WELINE_USER_LANG'] = '';
+
+// 后续代码无法正确回退
+$lang = $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';  // 得到 ''，不是 'zh_Hans_CN'
+```
+
+**正确做法：**
+```php
+// ✅ 正确：unset 变量
+unset($_SERVER['WELINE_USER_LANG']);
+
+// 后续代码正确回退
+$lang = $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';  // 得到 'zh_Hans_CN'
+```
+
+**修复位置：**
+- `RequestContext::resetWelineVars()` - 使用 `unset()` 而非赋空字符串
+- `GlobalsEmulator::buildServerArray()` - 不设置 `WELINE_USER_LANG`/`WELINE_USER_CURRENCY`
+- `WlsRuntime::processUrlParse()` - 不设置空字符串默认值
+
+---
 
 ## Weline Framework 路由规则
 
@@ -581,8 +739,93 @@ fetch('/backend/theme-editor/remove-orphan-widgets', {
 - 前端JS: `app/code/Weline/Theme/view/statics/js/theme-editor.js`
 - 模板: `app/code/Weline/Theme/view/templates/Backend/ThemeEditor/index.phtml`
 
+### Q5: 语言/货币在请求间不稳定（WLS 模式）？
+
+**症状：**
+```
+刷新页面：中文 → 英文 → 中文 → 英文...
+URL 明确包含语言: /backendKey/USD/zh_Hans_CN/...
+```
+
+**根本原因：**
+WLS 模式下 `$_SERVER['WELINE_USER_LANG']` 被重置为空字符串 `''` 而非 `unset`，
+导致 `??` 运算符无法回退到默认值。
+
+**检查清单：**
+1. `RequestContext::resetWelineVars()` 中是否使用 `unset($_SERVER['WELINE_USER_LANG'])`？
+2. `GlobalsEmulator::buildServerArray()` 中是否**不**设置 `WELINE_USER_LANG`？
+3. `WlsRuntime::processUrlParse()` 中是否移除了空字符串默认值逻辑？
+
+**修复方法：**
+```php
+// RequestContext::resetWelineVars()
+// ❌ 错误
+$_SERVER['WELINE_USER_LANG'] = '';
+
+// ✅ 正确
+unset($_SERVER['WELINE_USER_LANG']);
+```
+
+**历史案例（2026-02-25）：**
+语言在 `zh_Hans_CN` 和 `en_US` 之间交替。原因是多处代码将 `WELINE_USER_LANG` 设为空字符串。
+修复：在 `RequestContext`、`GlobalsEmulator`、`WlsRuntime` 中使用 `unset` 而非赋空字符串。
+
+### Q6: 如何正确获取当前语言/货币？
+
+**在控制器/视图中：**
+```php
+// 推荐：使用 State 类
+$lang = \Weline\Framework\App\State::getLang();
+$currency = \Weline\Framework\App\State::getCurrency();
+
+// 或使用 RequestContext
+$lang = \Weline\Framework\Runtime\RequestContext::locale();
+$currency = \Weline\Framework\Runtime\RequestContext::currency();
+```
+
+**State::getLang() 内部优先级：**
+1. `$_SERVER['WELINE_USER_LANG']`（URL 路径解析设置）
+2. `$_COOKIE['WELINE_USER_LANG']`（Cookie 存储）
+3. `$_COOKIE['WELINE-WEBSITE-LANG']`（网站默认）
+4. `'zh_Hans_CN'`（硬编码默认值）
+
+### Q7: URL 中的语言是如何被解析的？
+
+**URL 示例：**
+```
+/f7LYPUzS4UD9UL1kqkf0hzzPxyxmvT8c/USD/zh_Hans_CN/media/backend/manager
+```
+
+**解析流程（Url::parser）：**
+1. 检测后台密钥 `f7LY...` → `WELINE_AREA = 'backend'`
+2. 检测 `USD`（3位大写）→ `detectCurrency()` → `WELINE_USER_CURRENCY = 'USD'`
+3. 检测 `zh_Hans_CN`（格式匹配）→ `detectLanguage()` → `WELINE_USER_LANG = 'zh_Hans_CN'`
+4. 剩余路径 `/media/backend/manager` → `REQUEST_URI`
+
+**detectLanguage() 检测逻辑：**
+```php
+// 格式检查
+strlen($code) > 3 && strlen($code) <= 10 
+    && ctype_lower(substr($code, 0, 2))  // zh
+    && $code[2] === '_'                   // _
+
+// 数据库/缓存验证
+$languageCache->checkLanguage($code);  // 查询语言是否存在
+```
+
+---
+
 ## 参考资料
 
 - Weline Framework 路由文档
 - RESTful API 设计规范
 - HTTP 方法语义
+
+---
+
+## 更新日志
+
+| 日期 | 更新内容 |
+|------|----------|
+| 2026-02-25 | 添加 URL 结构、语言/货币解析、WLS 状态管理章节 |
+| 2026-01-29 | 添加 JSON 数据获取、依赖注入相关 Q&A |
