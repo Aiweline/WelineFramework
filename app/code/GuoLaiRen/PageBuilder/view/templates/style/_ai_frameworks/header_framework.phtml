@@ -37,11 +37,11 @@
  * cta.url => 按钮链接:text:#contact
  * 
  * group:style => 样式设置
- * style.bg_color => 背景颜色:color:#0a0a0f
+ * style.bg_color => 背景颜色:color:#0f0f1a
  * style.text_color => 文字颜色:color:#ffffff
- * style.link_color => 链接颜色:color:#b8b8d0
- * style.link_hover_color => 链接悬停颜色:color:#7c3aed
- * style.accent_color => 强调色:color:#7c3aed
+ * style.link_color => 链接颜色:color:#a0a0b8
+ * style.link_hover_color => 链接悬停颜色:color:#6366f1
+ * style.accent_color => 强调色:color:#6366f1
  * 
  * {{EXTRA_FIELDS}}
  * 
@@ -58,7 +58,8 @@ $getConfig = function($key, $default = '') use ($config) {
     return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
 };
 
-$componentId = 'ai-header-' . uniqid();
+$componentId = 'header-' . substr(uniqid(), -8);
+$cls = $componentId;
 
 // Logo配置
 $showLogo = $getConfig('logo.display', 'yes') !== 'no';
@@ -80,7 +81,6 @@ if ($page) {
     }
 }
 
-// 如果没有真实子页面，则不显示导航
 if (empty($navItems)) {
     $showNav = false;
 }
@@ -91,71 +91,74 @@ $ctaText = $getConfig('cta.text', 'Get Started');
 $ctaUrl = $getConfig('cta.url', '#contact');
 
 // 样式配置
-$bgColor = $getConfig('style.bg_color', '#0a0a0f');
+$bgColor = $getConfig('style.bg_color', '#0f0f1a');
 $textColor = $getConfig('style.text_color', '#ffffff');
-$linkColor = $getConfig('style.link_color', '#b8b8d0');
-$linkHoverColor = $getConfig('style.link_hover_color', '#7c3aed');
-$accentColor = $getConfig('style.accent_color', '#7c3aed');
+$linkColor = $getConfig('style.link_color', '#a0a0b8');
+$linkHoverColor = $getConfig('style.link_hover_color', '#6366f1');
+$accentColor = $getConfig('style.accent_color', '#6366f1');
 
 // ===== AI生成的额外PHP变量 =====
-// 使用try-catch包装AI生成的代码，防止错误中断渲染
 try {
     {{PHP_VARIABLES}}
 } catch (\Throwable $e) {
-    // 静默处理AI生成代码的错误，记录日志
     error_log('[AI Component Error] ' . $componentId . ': ' . $e->getMessage());
 }
 ?>
 
-<!-- AI生成的CSS样式 -->
 <style>
-/* === 组件主题色变量（继承全局主题，可被组件配置覆盖） === */
 #<?= $componentId ?> {
-    --pb-primary: <?= htmlspecialchars($accentColor) ?>;
-    --pb-bg: <?= htmlspecialchars($bgColor) ?>;
-    --pb-text: <?= htmlspecialchars($textColor) ?>;
-    --pb-heading: <?= htmlspecialchars($textColor) ?>;
-    --pb-accent: <?= htmlspecialchars($accentColor) ?>;
-    --pb-link: <?= htmlspecialchars($linkColor) ?>;
-    --pb-link-hover: <?= htmlspecialchars($linkHoverColor) ?>;
-    --pb-border: color-mix(in srgb, <?= htmlspecialchars($textColor) ?> 15%, transparent);
+    --header-primary: <?= htmlspecialchars($accentColor) ?>;
+    --header-bg: <?= htmlspecialchars($bgColor) ?>;
+    --header-text: <?= htmlspecialchars($textColor) ?>;
+    --header-link: <?= htmlspecialchars($linkColor) ?>;
+    --header-link-hover: <?= htmlspecialchars($linkHoverColor) ?>;
+    --header-border: rgba(255, 255, 255, 0.1);
 
-    background: var(--pb-bg);
-    color: var(--pb-text);
+    background: var(--header-bg);
+    color: var(--header-text);
+    position: relative;
+    z-index: 1000;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-#<?= $componentId ?> .ai-header-container {
+#<?= $componentId ?> .<?= $cls ?>-container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 0 20px;
-    height: 80px;
+    padding: 0 24px;
+    height: 72px;
     display: flex;
     align-items: center;
     justify-content: space-between;
 }
 
-#<?= $componentId ?> .ai-header-logo {
+#<?= $componentId ?> .<?= $cls ?>-logo {
     display: flex;
     align-items: center;
     gap: 12px;
-    font-size: 1.25rem;
+    font-size: 1.375rem;
     font-weight: 700;
-    color: var(--pb-text);
+    color: var(--header-text);
     text-decoration: none;
+    transition: opacity 0.2s ease;
 }
 
-#<?= $componentId ?> .ai-header-logo img {
+#<?= $componentId ?> .<?= $cls ?>-logo:hover {
+    opacity: 0.85;
+}
+
+#<?= $componentId ?> .<?= $cls ?>-logo img {
     height: <?= $logoWidth ?>px;
     width: auto;
+    object-fit: contain;
 }
 
-#<?= $componentId ?> .ai-header-nav {
+#<?= $componentId ?> .<?= $cls ?>-nav {
     display: flex;
     align-items: center;
-    gap: 32px;
+    gap: 40px;
 }
 
-#<?= $componentId ?> .ai-header-nav-links {
+#<?= $componentId ?> .<?= $cls ?>-nav-links {
     display: flex;
     list-style: none;
     margin: 0;
@@ -163,36 +166,53 @@ try {
     gap: 32px;
 }
 
-#<?= $componentId ?> .ai-header-nav-link {
-    color: var(--pb-link);
-    font-size: 0.95rem;
+#<?= $componentId ?> .<?= $cls ?>-nav-link {
+    color: var(--header-link);
+    font-size: 0.9375rem;
     font-weight: 500;
     text-decoration: none;
-    transition: color 0.3s ease;
+    transition: color 0.2s ease;
+    position: relative;
 }
 
-#<?= $componentId ?> .ai-header-nav-link:hover,
-#<?= $componentId ?> .ai-header-nav-link.active {
-    color: var(--pb-link-hover);
+#<?= $componentId ?> .<?= $cls ?>-nav-link::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: var(--header-primary);
+    transition: width 0.25s ease;
 }
 
-#<?= $componentId ?> .ai-header-cta {
-    padding: 10px 20px;
-    background: var(--pb-accent);
+#<?= $componentId ?> .<?= $cls ?>-nav-link:hover,
+#<?= $componentId ?> .<?= $cls ?>-nav-link.active {
+    color: var(--header-link-hover);
+}
+
+#<?= $componentId ?> .<?= $cls ?>-nav-link:hover::after,
+#<?= $componentId ?> .<?= $cls ?>-nav-link.active::after {
+    width: 100%;
+}
+
+#<?= $componentId ?> .<?= $cls ?>-cta {
+    padding: 10px 22px;
+    background: var(--header-primary);
     color: #ffffff;
     font-size: 0.9rem;
     font-weight: 600;
     border-radius: 8px;
     text-decoration: none;
-    transition: all 0.3s ease;
+    transition: all 0.25s ease;
 }
 
-#<?= $componentId ?> .ai-header-cta:hover {
+#<?= $componentId ?> .<?= $cls ?>-cta:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 20px color-mix(in srgb, var(--pb-accent) 40%, transparent);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
 }
 
-#<?= $componentId ?> .ai-header-toggle {
+#<?= $componentId ?> .<?= $cls ?>-toggle {
     display: none;
     flex-direction: column;
     gap: 5px;
@@ -202,68 +222,69 @@ try {
     border: none;
 }
 
-#<?= $componentId ?> .ai-header-toggle span {
-    width: 24px;
+#<?= $componentId ?> .<?= $cls ?>-toggle span {
+    width: 22px;
     height: 2px;
-    background: <?= htmlspecialchars($textColor) ?>;
+    background: var(--header-text);
+    border-radius: 1px;
     transition: all 0.3s ease;
 }
 
-/* 响应式 */
+{{CSS_EXTRA}}
+
 @media (max-width: 992px) {
-    #<?= $componentId ?> .ai-header-nav {
+    #<?= $componentId ?> .<?= $cls ?>-nav {
         position: fixed;
-        top: 80px;
+        top: 72px;
         left: 0;
         right: 0;
         bottom: 0;
-        background: <?= htmlspecialchars($bgColor) ?>;
+        background: var(--header-bg);
         flex-direction: column;
         justify-content: flex-start;
-        padding: 40px 20px;
+        padding: 32px 24px;
         transform: translateX(100%);
         transition: transform 0.3s ease;
+        gap: 24px;
     }
     
-    #<?= $componentId ?> .ai-header-nav.active {
+    #<?= $componentId ?> .<?= $cls ?>-nav.active {
         transform: translateX(0);
     }
     
-    #<?= $componentId ?> .ai-header-nav-links {
+    #<?= $componentId ?> .<?= $cls ?>-nav-links {
         flex-direction: column;
         width: 100%;
         gap: 0;
     }
     
-    #<?= $componentId ?> .ai-header-nav-link {
+    #<?= $componentId ?> .<?= $cls ?>-nav-link {
         display: block;
-        padding: 16px 0;
-        font-size: 1.1rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 14px 0;
+        font-size: 1rem;
+        border-bottom: 1px solid var(--header-border);
     }
     
-    #<?= $componentId ?> .ai-header-cta {
-        margin-top: 24px;
+    #<?= $componentId ?> .<?= $cls ?>-nav-link::after {
+        display: none;
+    }
+    
+    #<?= $componentId ?> .<?= $cls ?>-cta {
         width: 100%;
         text-align: center;
-        padding: 16px;
+        padding: 14px;
     }
     
-    #<?= $componentId ?> .ai-header-toggle {
+    #<?= $componentId ?> .<?= $cls ?>-toggle {
         display: flex;
     }
 }
-
-/* AI生成的额外CSS */
-{{CSS_EXTRA}}
 </style>
 
-<!-- Header HTML结构 -->
-<header id="<?= $componentId ?>" class="ai-component ai-header">
-    <div class="ai-header-container">
-        <!-- Logo -->
+<header id="<?= $componentId ?>">
+    <div class="<?= $cls ?>-container">
         <?php if ($showLogo): ?>
-        <a href="/" class="ai-header-logo">
+        <a href="/" class="<?= $cls ?>-logo">
             <?php if ($logoImage): ?>
                 <img src="<?= htmlspecialchars($logoImage) ?>" alt="<?= htmlspecialchars($logoText) ?>" loading="lazy">
             <?php endif; ?>
@@ -271,45 +292,40 @@ try {
         </a>
         <?php endif; ?>
         
-        <!-- Mobile Toggle -->
-        <button class="ai-header-toggle" onclick="this.classList.toggle('active'); document.querySelector('#<?= $componentId ?> .ai-header-nav').classList.toggle('active');" aria-label="Toggle navigation">
+        <button class="<?= $cls ?>-toggle" onclick="this.classList.toggle('active'); document.querySelector('#<?= $componentId ?> .<?= $cls ?>-nav').classList.toggle('active');" aria-label="Toggle navigation">
             <span></span>
             <span></span>
             <span></span>
         </button>
         
-        <!-- Navigation -->
         <?php if ($showNav): ?>
-        <nav class="ai-header-nav">
-            <ul class="ai-header-nav-links">
+        <nav class="<?= $cls ?>-nav">
+            <ul class="<?= $cls ?>-nav-links">
                 <?php foreach ($navItems as $index => $navItem): ?>
                     <?php 
                     $navHref = $navItem['href'] ?? '#';
                     $navText = $navItem['text'] ?? '';
                     $isActive = $index === 0;
                     ?>
-                    <li><a href="<?= htmlspecialchars($navHref) ?>" class="ai-header-nav-link <?= $isActive ? 'active' : '' ?>"><?= htmlspecialchars($navText) ?></a></li>
+                    <li><a href="<?= htmlspecialchars($navHref) ?>" class="<?= $cls ?>-nav-link <?= $isActive ? 'active' : '' ?>"><?= htmlspecialchars($navText) ?></a></li>
                 <?php endforeach; ?>
             </ul>
             
             <?php if ($showCta): ?>
-            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="ai-header-cta"><?= htmlspecialchars($ctaText) ?></a>
+            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="<?= $cls ?>-cta"><?= htmlspecialchars($ctaText) ?></a>
             <?php endif; ?>
         </nav>
         <?php endif; ?>
         
-        <!-- AI生成的额外HTML -->
         {{HTML_EXTRA}}
     </div>
 </header>
 
-<!-- AI生成的JavaScript -->
 <?php 
 $_jsPlaceholder = <<<'JSEOF'
 {{JS_CONTENT}}
 JSEOF;
 $jsContent = trim($_jsPlaceholder);
-// 检查是否有有效的JS内容（非空且不是未替换的占位符）
 $_hasValidJs = !empty($jsContent) && strpos($jsContent, '{{') !== 0 && strlen($jsContent) > 5;
 if ($_hasValidJs): 
 ?>

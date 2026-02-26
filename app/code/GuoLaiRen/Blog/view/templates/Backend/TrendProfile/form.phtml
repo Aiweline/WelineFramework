@@ -1,11 +1,16 @@
 <?php
-/** @var \GuoLaiRen\Blog\Model\TrendProfile|null $profile */
+/**
+ * 关键词画像表单 - 内容模板
+ * 由布局系统自动包裹
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var \GuoLaiRen\Blog\Model\TrendProfile|null $profile
+ */
 $profile = $this->getData('profile');
 $action = $this->getData('action');
 $isEdit = $profile && $profile->getId();
 $keywordsStr = $profile ? implode(', ', $profile->getKeywordsArray()) : '';
 ?>
-<w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
 
 <div class="row">
     <div class="col-12">
@@ -59,5 +64,3 @@ $keywordsStr = $profile ? implode(', ', $profile->getKeywordsArray()) : '';
         </div>
     </div>
 </div>
-
-<w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>

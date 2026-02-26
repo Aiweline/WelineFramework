@@ -53,6 +53,15 @@ interface DomainRegistrarInterface
     public function getConfigFields(): array;
 
     /**
+     * 获取配置帮助信息
+     *
+     * 返回配置获取的说明，包括获取地址和步骤说明。
+     *
+     * @return array{help_url: string, help_title: string, help_steps: array<string>}
+     */
+    public function getConfigHelp(): array;
+
+    /**
      * 测试 API 连接
      *
      * @param array $credentials API 凭据配置

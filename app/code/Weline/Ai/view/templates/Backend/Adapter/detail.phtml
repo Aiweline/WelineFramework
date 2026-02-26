@@ -9,65 +9,57 @@
  * @var array $examples
  */
 /**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 ?>
-<!DOCTYPE html>
-<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><lang>适配器详情</lang></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
-<!--页头工具条 开始-->
-@template(Weline_Admin::common/page/loading.phtml)
-<!--页头工具条 结束-->
+<style>
+.weline-adapter-detail-container .card {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 1px solid var(--backend-color-border);
+}
 
-<!-- 开始 页面 -->
-<div id="layout-wrapper">
+.weline-adapter-detail-container .card-header {
+    background-color: var(--backend-color-card-bg);
+    border-bottom: 1px solid var(--backend-color-border);
+}
 
-    <!--页头工具条 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <!--页头工具条 结束-->
+.weline-adapter-detail-container pre {
+    border-radius: 4px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-size: 12px;
+    background: var(--backend-color-bg);
+}
 
-    <!-- ========== Topnav Start ========== -->
-    <!--页头菜单栏 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    <!--页头菜单栏 结束-->
+.weline-adapter-detail-container .table th {
+    background-color: var(--backend-color-card-bg);
+    font-weight: 600;
+}
 
-    <!-- ========== Left Sidebar Start ========== -->
-    <!--左侧菜单栏 开始-->
-    @template(Weline_Admin::common/left-sidebar.phtml)
-    <!--左侧菜单栏 结束-->
+.weline-adapter-detail-container .table td {
+    vertical-align: middle;
+}
+</style>
 
-    <!-- ============================================================== -->
-    <!-- 开始 主要内容 -->
-    <!-- ============================================================== -->
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
+<!-- 页面标题 -->
+<div class='row'>
+    <div class='col-12'>
+        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+            <h4 class='mb-sm-0'>
+                <i class="mdi mdi-puzzle me-2"></i>
+                <lang>适配器详情</lang>
+            </h4>
+            <div class='page-title-right'>
+                <ol class='breadcrumb m-0'>
+                    <li class='breadcrumb-item'><a href='<?= $this->_url->getBackendUrl('*/backend/adapter') ?>'><lang>场景适配器</lang></a></li>
+                    <li class='breadcrumb-item active'><lang>详情</lang></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- 页面标题结束 -->
 
-                <!-- 页面标题 -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'>
-                                <i class="mdi mdi-puzzle me-2"></i>
-                                <lang>适配器详情</lang>
-                            </h4>
-                            <div class='page-title-right'>
-                                <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'><a href='<?= $this->_url->getBackendUrl('*/backend/adapter') ?>'><lang>场景适配器</lang></a></li>
-                                    <li class='breadcrumb-item active'><lang>详情</lang></li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <!-- 页面标题结束 -->
-
-<div class="adapter-detail-container">
+<div class="weline-adapter-detail-container">
     <!-- 基本信息 -->
     <div class="card mb-3">
         <div class="card-header">
@@ -123,7 +115,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     <?php endforeach; ?>
                 </div>
             <?php else: ?>
-                <pre class="bg-light p-3"><?= json_encode($supportedModels, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
+                <pre class="p-3"><?= json_encode($supportedModels, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
             <?php endif; ?>
         </div>
     </div>
@@ -136,7 +128,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
             <h5><?= __('参数模板') ?></h5>
         </div>
         <div class="card-body">
-            <pre class="bg-light p-3"><?= json_encode($paramTemplate, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
+            <pre class="p-3"><?= json_encode($paramTemplate, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
         </div>
     </div>
     <?php endif; ?>
@@ -148,7 +140,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
             <h5><?= __('使用示例') ?></h5>
         </div>
         <div class="card-body">
-            <pre class="bg-light p-3"><?= json_encode($examples, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
+            <pre class="p-3"><?= json_encode($examples, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
         </div>
     </div>
     <?php endif; ?>
@@ -202,12 +194,12 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
             <lang>返回列表</lang>
         </a>
         <?php if ($adapter->getData('is_active')): ?>
-            <button type="button" class="btn btn-warning" onclick="toggleStatus(<?= $adapter->getId() ?>)">
+            <button type="button" class="btn btn-warning" onclick="WelineAdapter.toggleStatus(<?= $adapter->getId() ?>)">
                 <i class="mdi mdi-power me-1"></i>
                 <lang>禁用</lang>
             </button>
         <?php else: ?>
-            <button type="button" class="btn btn-success" onclick="toggleStatus(<?= $adapter->getId() ?>)">
+            <button type="button" class="btn btn-success" onclick="WelineAdapter.toggleStatus(<?= $adapter->getId() ?>)">
                 <i class="mdi mdi-power me-1"></i>
                 <lang>启用</lang>
             </button>
@@ -215,122 +207,91 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     </div>
 </div>
 
-<style>
-.adapter-detail-container .card {
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    border: 1px solid #e9ecef;
-}
-
-.adapter-detail-container .card-header {
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #e9ecef;
-}
-
-.adapter-detail-container pre {
-    border-radius: 4px;
-    max-height: 300px;
-    overflow-y: auto;
-    font-size: 12px;
-}
-
-.adapter-detail-container .table th {
-    background-color: #f8f9fa;
-    font-weight: 600;
-}
-
-.adapter-detail-container .table td {
-    vertical-align: middle;
-}
-</style>
-
-            </div><!-- container-fluid -->
-        </div><!-- page-content -->
-    </div><!-- main-content -->
-</div><!-- layout-wrapper -->
-
-@template(Weline_Admin::common/footer.phtml)
-
 <!-- SweetAlert2 CSS -->
 <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
 <!-- SweetAlert2 JS -->
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-<script>
-// 切换适配器状态
-function toggleStatus(id) {
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            title: '<?= __('确认切换状态') ?>',
-            text: '<?= __('确定要切换适配器状态吗？') ?>',
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonText: '<?= __("确定切换") ?>',
-            cancelButtonText: '<?= __("取消") ?>'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                performToggleStatus(id);
-            }
-        });
-    } else {
-        if (!confirm('<?= __('确定要切换适配器状态吗？') ?>')) {
-            return;
-        }
-        performToggleStatus(id);
-    }
-}
 
-function performToggleStatus(id) {
-    fetch('<?= $this->_url->getBackendUrl('*/backend/adapter/toggleStatus') ?>', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            id: id
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
+<script>
+(function() {
+    'use strict';
+    
+    var WelineAdapter = {
+        toggleStatus: function(id) {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('成功') ?>',
-                    text: '<?= __('状态已切换') ?>',
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => location.reload());
-            } else {
-                location.reload();
-            }
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('操作失败') ?>',
-                    text: data.message || '<?= __('未知错误') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
+                    title: '<?= __('确认切换状态') ?>',
+                    text: '<?= __('确定要切换适配器状态吗？') ?>',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: '<?= __("确定切换") ?>',
+                    cancelButtonText: '<?= __("取消") ?>'
+                }).then(function(result) {
+                    if (result.isConfirmed) {
+                        WelineAdapter.performToggleStatus(id);
+                    }
                 });
             } else {
-                console.error('<?= __('操作失败：') ?>' + (data.message || '<?= __('未知错误') ?>'));
+                if (!confirm('<?= __('确定要切换适配器状态吗？') ?>')) {
+                    return;
+                }
+                WelineAdapter.performToggleStatus(id);
             }
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('网络错误') ?>',
-                text: '<?= __('请稍后重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
+        },
+        
+        performToggleStatus: function(id) {
+            fetch('<?= $this->_url->getBackendUrl('*/backend/adapter/toggleStatus') ?>', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    id: id
+                })
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: '<?= __('状态已切换') ?>',
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(function() { location.reload(); });
+                    } else {
+                        location.reload();
+                    }
+                } else {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('操作失败') ?>',
+                            text: data.message || '<?= __('未知错误') ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('<?= __('操作失败：') ?>' + (data.message || '<?= __('未知错误') ?>'));
+                    }
+                }
+            })
+            .catch(function(error) {
+                console.error('Error:', error);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('网络错误') ?>',
+                        text: '<?= __('请稍后重试') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('网络错误，请稍后重试') ?>');
+                }
             });
-        } else {
-            console.error('<?= __('网络错误，请稍后重试') ?>');
         }
-    });
-}
+    };
+    
+    window.WelineAdapter = WelineAdapter;
+})();
 </script>
-
-</body>
-</html>
-

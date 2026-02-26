@@ -12,6 +12,33 @@
          icon="mdi mdi-file-document-multiple" 
          order="40"/>
     
+    <!-- 快速建站父级菜单 -->
+    <add source="GuoLaiRen_PageBuilder::quick_build" 
+         name="quick_build" 
+         title="快速建站" 
+         action=""
+         parent="GuoLaiRen_PageBuilder::menu_page_management" 
+         icon="mdi mdi-rocket-launch" 
+         order="5"/>
+
+    <!-- 新建站点向导 -->
+    <add source="GuoLaiRen_PageBuilder::quick_build_wizard" 
+         name="quick_build_wizard" 
+         title="新建站点" 
+         action="pagebuilder/backend/quickBuild/wizard"
+         parent="GuoLaiRen_PageBuilder::quick_build" 
+         icon="mdi mdi-creation" 
+         order="10"/>
+
+    <!-- 配置订单状态 -->
+    <add source="GuoLaiRen_PageBuilder::quick_build_orders" 
+         name="quick_build_orders" 
+         title="配置订单" 
+         action="pagebuilder/backend/quickBuild/orders"
+         parent="GuoLaiRen_PageBuilder::quick_build" 
+         icon="mdi mdi-clipboard-list" 
+         order="20"/>
+
     <!-- 网站构建器子菜单 -->
     <add source="GuoLaiRen_PageBuilder::page_builder" 
          name="page_builder" 
@@ -65,6 +92,15 @@
          parent="GuoLaiRen_PageBuilder::website_management" 
          icon="mdi mdi-shield-account" 
          order="20"/>
+
+    <!-- 域名管理子菜单 -->
+    <add source="GuoLaiRen_PageBuilder::domain_management" 
+         name="domain_management" 
+         title="域名管理" 
+         action="pagebuilder/backend/domainManagement/index"
+         parent="GuoLaiRen_PageBuilder::website_management" 
+         icon="mdi mdi-dns" 
+         order="30"/>
     
     <!-- 配置子菜单 -->
     <add source="GuoLaiRen_PageBuilder::config" 

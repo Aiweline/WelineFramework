@@ -1,263 +1,189 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+/**
+ * 产品管理 - 内容模板
+ * @var \Weline\Framework\View\Template $this
+ */
 ?>
-<!DOCTYPE html>
-<!--
- *@Author       秋枫雁飞
- *@Email        aiweline@qq.com
- *@Forum        https://bbs.aiweline.com
- *@DESC         后台共用头部
--->
-<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<link href="@static(WeShop_Product::css/product.css)" rel="stylesheet" type="text/css"/>
 
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <!-- jquery.mCustomScrollbar 插件 -->
-    <link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
-    <!-- Responsive Table css -->
-    <link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet'
-          type='text/css'/>
-    <!-- Sweet Alert-->
-    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-    <link href='@static(WeShop_Product::css/product.css)' rel='stylesheet' type='text/css'/>
+<!-- start page title -->
+<div class='row'>
+    <div class='col-12'>
+        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+            <h4 class='mb-sm-0'>
+                <lang>店铺 > 产品管理</lang>
+            </h4>
 
-    <title>
-        <?= __('Weline Admin 管理面板') ?>
-    </title>
-</head>
+            <div class='page-title-right'>
+                <ol class='breadcrumb m-0'>
+                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
+                            <lang>系统配置</lang>
+                        </a></li>
+                    <li class='breadcrumb-item'><a href="@backend-url('*/backend/store')">
+                            <lang>店铺</lang>
+                        </a>
+                    </li>
+                    <li class='breadcrumb-item'>
+                        <a href="@backend-url('*/backend/product')">
+                            <lang>产品</lang>
+                        </a>
+                    </li>
+                </ol>
+            </div>
 
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+        </div>
+    </div>
+</div>
+<!-- end page title -->
 
-<!--页头工具条 开始-->
-@template(Weline_Admin::common/page/loading.phtml)
-<!--页头工具条 结束-->
+<!-- start page message -->
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+<!-- end message -->
 
-<!-- <body data-layout="horizontal" data-topbar="dark"> -->
-
-<!-- 开始 页面 -->
-<div id="layout-wrapper">
-
-
-    <!--页头工具条 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <!--页头工具条 结束-->
-
-    <!-- ========== Topnav Start ========== -->
-    <!--页头菜单栏 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    <!--页头菜单栏 结束-->
-
-    <!-- ========== Left Sidebar Start ========== -->
-    <!--左侧菜单栏 开始-->
-    @template(Weline_Admin::common/left-sidebar.phtml)
-    <!--左侧菜单栏 结束-->
-
-
-    <!-- ============================================================== -->
-    <!-- Start right Content here -->
-    <!-- ============================================================== -->
-    <div class="main-content">
-
-        <div class='page-content'>
-            <div class='container-fluid'>
-                <!-- start page title -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'>
-                                <lang>店铺 > 产品管理</lang>
-                            </h4>
-
-                            <div class='page-title-right'>
-                                <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
-                                            <lang>系统配置</lang>
-                                        </a></li>
-                                    <li class='breadcrumb-item'><a href="@backend-url('*/backend/store')">
-                                            <lang>店铺</lang>
-                                        </a>
-                                    </li>
-                                    <li class='breadcrumb-item'>
-                                        <a href="@backend-url('*/backend/product')">
-                                            <lang>产品</lang>
-                                        </a>
-                                    </li>
-                                </ol>
-                            </div>
-
+<div class='row'>
+    <div class='col-12'>
+        <div class='card'>
+            <div class='card-body'>
+                <h4 class='card-title'>
+                    <lang>产品管理</lang>
+                </h4>
+                <p class='card-title-desc'>
+                    <lang>管理产品</lang>
+                </p>
+                <div class='table-rep-plugin'>
+                    <!-- search form -->
+                    <div class='row align-items-center'>
+                        <div class='col-3'>
+                            <block class='Weline\Component\Block\Form\Search'
+                                   id='entity-product-search' action='*/backend/product' method='get'
+                                   keyword='search' value=''
+                                   placeholder='请输入产品关键词回车搜索'></block>
+                        </div>
+                        <div class='col-9'>
+                            <block class='Weline\Component\Block\OffCanvas'
+                                   template='Weline_Component::off-canvas.phtml'
+                                   cache='0'
+                                   id='offcanvasRightproductForm'
+                                   action="*/backend/product/add"
+                                   submit-button-text='保存'
+                                   flush='1'
+                                   target-button-text='新增产品'
+                                   target-button-class='btn btn-primary'
+                                   title='新增产品'
+                                   save="1"
+                                   close-button-show='1'
+                                   close-button-text='关闭'
+                                   direction='right'
+                                   class-names='w-75'
+                                   off-canvas-body-style=''/>
                         </div>
                     </div>
-                </div>
-                <!-- end page title -->
-                <!-- start page message -->
-                <div class='row'>
-                    <template>Weline_Component::message.phtml</template>
-                </div> <!-- end message -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='card'>
-                            <div class='card-body'>
-                                <h4 class='card-title'>
-                                    <lang>产品管理</lang>
-                                </h4>
-                                <p class='card-title-desc'>
-                                    <lang>管理产品</lang>
-                                </p>
-                                <div class='table-rep-plugin'>
-                                    <!-- search form -->
-                                    <div class='row align-items-center'>
-                                        <div class='col-3'>
-                                            <block class='Weline\Component\Block\Form\Search'
-                                                   id='entity-product-search' action='*/backend/product' method='get'
-                                                   keyword='search' value=''
-                                                   placeholder='请输入产品关键词回车搜索'></block>
-                                        </div>
-                                        <div class='col-9'>
+                    <!-- end search form -->
+                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
+                        <table id='tech-companies-1' class='table table-striped table-bordered'>
+                            <thead>
+                            <tr>
+                                <th data-priority='3'>
+                                    <?= __('ID') ?>
+                                </th>
+                                <th data-priority='3'>
+                                    <?= __('图片') ?>
+                                </th>
+                                <th data-priority='3'>
+                                    <?= __('名称') ?>
+                                </th>
+                                <th data-priority='1'>
+                                    <?= __('SKU') ?>
+                                </th>
+                                <th data-priority='3'>
+                                    <?= __('创建时间') ?>
+                                </th>
+                                <th data-priority='3'>
+                                    <?= __('更新时间') ?>
+                                </th>
+                                <th data-priority='3'>
+                                    <?= __('操作') ?>
+                                </th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <foreach name="products" item="product" key="key">
+                                <tr>
+                                    <td class='co-name'>{{product.product_id}}</td>
+                                    <td class='co-name'>
+                                        <file-view id="product-image-view" type="image" vars="product"
+                                                   value="product.image"/>
+                                    </td>
+                                    <td class='co-name'>
+                                        <local
+                                                model="WeShop\Product\Model\Product\LocalDescription"
+                                                field="name" id="product.product_id"
+                                                name="product-title">
+                                            {{product.local_name|product.name}}
+                                        </local>
+                                    </td>
+                                    <td>{{product.sku}}</td>
+                                    <td class='co-name'>
+                                        <if condition="product.status"><span
+                                                    class="text-success">启用</span>
+                                            <else/>
+                                            <span class="text-danger">禁用</span>
+                                        </if>
+                                    </td>
+                                    <td class='co-name'>{{product.create_time}}</td>
+                                    <td class='co-name'>{{product.update_time}}</td>
+                                    <td class='co-name'>
+                                        <div class="d-flex gap-2">
                                             <block class='Weline\Component\Block\OffCanvas'
                                                    template='Weline_Component::off-canvas.phtml'
-                                                   cache='0'
-                                                   id='offcanvasRightproductForm'
-                                                   action="*/backend/product/add"
-                                                   submit-button-text='保存'
-                                                   flush='1'
-                                                   target-button-text='新增产品'
-                                                   target-button-class='btn btn-primary'
-                                                   title='新增产品'
+                                                   target-tag='button'
+                                                   target-button-class="btn btn-info"
+                                                   cache='0' id='off_canvas_product_edit'
+                                                   action="*/backend/product/edit" vars="product"
+                                                   action-params="{product_id: product.product_id}"
+                                                   submit-button-text='保存' target-button-text='修改'
+                                                   title='编辑产品' close-button-show='1'
                                                    save="1"
-                                                   close-button-show='1'
-                                                   close-button-text='关闭'
-                                                   direction='right'
-                                                   class-names='w-75'
-                                                   off-canvas-body-style=''/>
+                                                   close-button-text='关闭' direction='right'
+                                                   class-names='w-75' off-canvas-body-style=''/>
+                                            <if condition="product.parent_id == 0">
+                                                <?php $childrenCount = $product['children_count'] ?? ($product->getData('children_count') ?? 0); ?>
+                                                <?php if ($childrenCount > 0): ?>
+                                                    <button class="btn btn-secondary btn-product-links"
+                                                            data-bs-toggle="modal"
+                                                            data-bs-target="#productLinksModal"
+                                                            data-product-id="<?= $product['product_id'] ?? $product->getData('product_id') ?>"
+                                                            data-product-name="<?= htmlspecialchars($product['local_name'] ?? $product['name'] ?? $product->getData('name')) ?>"
+                                                            data-children-count="<?= $childrenCount ?>">
+                                                        <i class="bx bx-link"></i>
+                                                        <lang>关联</lang>
+                                                        <span class="badge bg-info ms-1"><?= $childrenCount ?></span>
+                                                    </button>
+                                                <?php endif; ?>
+                                                <button class="btn btn-danger" w-ajax="@backend-url('*/backend/product/delete',
+                                                ['product_id'=>$product['product_id']])"
+                                                        w-delete="true"
+                                                        w-msg="@lang{你确定要删除么？}"
+                                                        w-method="post">
+                                                    <lang>删除</lang>
+                                                </button>
+                                            </if>
                                         </div>
-                                    </div>
-                                    <!-- end search form -->
-                                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
-                                        <table id='tech-companies-1' class='table table-striped table-bordered'>
-                                            <thead>
-                                            <tr>
-                                                <th data-priority='3'>
-                                                    <?= __('ID') ?>
-                                                </th>
-                                                <th data-priority='3'>
-                                                    <?= __('图片') ?>
-                                                </th>
-                                                <th data-priority='3'>
-                                                    <?= __('名称') ?>
-                                                </th>
-                                                <th data-priority='1'>
-                                                    <?= __('SKU') ?>
-                                                </th>
-                                                <th data-priority='3'>
-                                                    <?= __('创建时间') ?>
-                                                </th>
-                                                <th data-priority='3'>
-                                                    <?= __('更新时间') ?>
-                                                </th>
-                                                <th data-priority='3'>
-                                                    <?= __('操作') ?>
-                                                </th>
-                                            </tr>
-                                            </thead>
-                                            <tbody>
-                                            <foreach name="products" item="product" key="key">
-                                                <tr>
-                                                    <td class='co-name'>{{product.product_id}}</td>
-                                                    <td class='co-name'>
-                                                        <file-view id="product-image-view" type="image" vars="product"
-                                                                   value="product.image"/>
-                                                    </td>
-                                                    <td class='co-name'>
-                                                        <local
-                                                                model="WeShop\Product\Model\Product\LocalDescription"
-                                                                field="name" id="product.product_id"
-                                                                name="product-title">
-                                                            {{product.local_name|product.name}}
-                                                        </local>
-                                                    </td>
-                                                    <td>{{product.sku}}</td>
-                                                    <td class='co-name'>
-                                                        <if condition="product.status"><span
-                                                                    class="text-success">启用</span>
-                                                            <else/>
-                                                            <span class="text-danger">禁用</span>
-                                                        </if>
-                                                    </td>
-                                                    <td class='co-name'>{{product.create_time}}</td>
-                                                    <td class='co-name'>{{product.update_time}}</td>
-                                                    <td class='co-name'>
-                                                        <div class="d-flex gap-2">
-                                                            <block class='Weline\Component\Block\OffCanvas'
-                                                                   template='Weline_Component::off-canvas.phtml'
-                                                                   target-tag='button'
-                                                                   target-button-class="btn btn-info"
-                                                                   cache='0' id='off_canvas_product_edit'
-                                                                   action="*/backend/product/edit" vars="product"
-                                                                   action-params="{product_id: product.product_id}"
-                                                                   submit-button-text='保存' target-button-text='修改'
-                                                                   title='编辑产品' close-button-show='1'
-                                                                   save="1"
-                                                                   close-button-text='关闭' direction='right'
-                                                                   class-names='w-75' off-canvas-body-style=''/>
-                                                            <if condition="product.parent_id == 0">
-                                                                <?php $childrenCount = $product['children_count'] ?? ($product->getData('children_count') ?? 0); ?>
-                                                                <?php if ($childrenCount > 0): ?>
-                                                                    <button class="btn btn-secondary btn-product-links"
-                                                                            data-bs-toggle="modal"
-                                                                            data-bs-target="#productLinksModal"
-                                                                            data-product-id="<?= $product['product_id'] ?? $product->getData('product_id') ?>"
-                                                                            data-product-name="<?= htmlspecialchars($product['local_name'] ?? $product['name'] ?? $product->getData('name')) ?>"
-                                                                            data-children-count="<?= $childrenCount ?>">
-                                                                        <i class="bx bx-link"></i>
-                                                                        <lang>关联</lang>
-                                                                        <span class="badge bg-info ms-1"><?= $childrenCount ?></span>
-                                                                    </button>
-                                                                <?php endif; ?>
-                                                                <button class="btn btn-danger" w-ajax="@backend-url('*/backend/product/delete',
-                                                                ['product_id'=>$product['product_id']])"
-                                                                        w-delete="true"
-                                                                        w-msg="@lang{你确定要删除么？}"
-                                                                        w-method="post">
-                                                                    <lang>删除</lang>
-                                                                </button>
-                                                            </if>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            </foreach>
-                                            </tbody>
-                                        </table>
-                                        {{pagination}}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div> <!-- end col -->
-                </div> <!-- end row -->
-            </div> <!-- container-fluid -->
+                                    </td>
+                                </tr>
+                            </foreach>
+                            </tbody>
+                        </table>
+                        {{pagination}}
+                    </div>
+                </div>
+            </div>
         </div>
-        <!-- End Page-content -->
-    </div>
-    <!-- end main content-->
+    </div> <!-- end col -->
+</div> <!-- end row -->
 
-</div>
-<!-- END layout-wrapper -->
-<!--右边栏-->
-@template(Weline_Admin::common/right-sidebar.phtml)
-
-<!-- Table Editable plugin -->
-<script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
-<script src="@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)"></script>
-<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
-<!-- Responsive Table js -->
-<script src='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.js)'></script>
-<!-- Sweet Alerts js -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-
-<!-- Init js -->
-<script src='@static(Weline_Admin::assets/js/pages/table-responsive.init.js)'></script>
 <!-- 产品关联弹窗 -->
 <div id='productLinksModal' class='modal fade' tabindex='-1' aria-labelledby='productLinksModalLabel' aria-hidden='true'>
     <div class='modal-dialog modal-xl'>
@@ -312,7 +238,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                             <p class="mt-2"><lang>正在加载子产品...</lang></p>
                         </div>
                         <div id="children-empty" class="text-center py-4 d-none">
-                            <i class="bx bx-package" style="font-size: 48px; color: #ccc;"></i>
+                            <i class="bx bx-package" style="font-size: 48px; color: var(--backend-color-text-secondary);"></i>
                             <p class="mt-2 text-muted"><lang>暂无子产品</lang></p>
                         </div>
                         <div class="table-responsive d-none" id="children-table-wrapper">
@@ -338,7 +264,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     <!-- 组产品内容（预留） -->
                     <div class="tab-pane fade" id="grouped-content" role="tabpanel">
                         <div class="text-center py-4">
-                            <i class="bx bx-layer" style="font-size: 48px; color: #ccc;"></i>
+                            <i class="bx bx-layer" style="font-size: 48px; color: var(--backend-color-text-secondary);"></i>
                             <p class="mt-2 text-muted"><lang>组产品功能即将上线</lang></p>
                         </div>
                     </div>
@@ -346,7 +272,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     <!-- 绑定产品内容（预留） -->
                     <div class="tab-pane fade" id="bundle-content" role="tabpanel">
                         <div class="text-center py-4">
-                            <i class="bx bx-cube" style="font-size: 48px; color: #ccc;"></i>
+                            <i class="bx bx-cube" style="font-size: 48px; color: var(--backend-color-text-secondary);"></i>
                             <p class="mt-2 text-muted"><lang>绑定产品功能即将上线</lang></p>
                         </div>
                     </div>
@@ -354,7 +280,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     <!-- 关联产品内容（预留） -->
                     <div class="tab-pane fade" id="related-content" role="tabpanel">
                         <div class="text-center py-4">
-                            <i class="bx bx-link-alt" style="font-size: 48px; color: #ccc;"></i>
+                            <i class="bx bx-link-alt" style="font-size: 48px; color: var(--backend-color-text-secondary);"></i>
                             <p class="mt-2 text-muted"><lang>关联产品功能即将上线</lang></p>
                         </div>
                     </div>
@@ -406,148 +332,159 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     <lang>保存更改</lang>
                 </button>
             </div>
-        </div><!-- /.modal-content -->
-    </div><!-- /.modal-dialog -->
+        </div>
+    </div>
 </div>
-<script>
-    // 产品关联弹窗逻辑
-    $('#productLinksModal').on('show.bs.modal', function (event) {
-        const button = $(event.relatedTarget);
-        const productId = button.data('product-id');
-        const productName = button.data('product-name');
-        const childrenCount = button.data('children-count');
-        
-        // 设置产品名称
-        $('#productLinksName').text(productName);
-        $('#children-count-badge').text(childrenCount);
-        
-        // 重置状态
-        $('#children-loading').removeClass('d-none');
-        $('#children-empty').addClass('d-none');
-        $('#children-table-wrapper').addClass('d-none');
-        $('#children-table-body').empty();
-        
-        // 加载子产品
-        loadChildren(productId);
-    });
-    
-    function loadChildren(productId) {
-        $.ajax({
-            url: '@backend-url("*/backend/product/getChildren")',
-            data: { product_id: productId },
-            success: function(res) {
-                $('#children-loading').addClass('d-none');
-                
-                if (res.items && res.items.length > 0) {
-                    $('#children-table-wrapper').removeClass('d-none');
-                    
-                    let tbody = '';
-                    res.items.forEach(function(product) {
-                        const statusHtml = product.status == 1 
-                            ? '<span class="badge bg-success">' + __('启用') + '</span>'
-                            : '<span class="badge bg-danger">' + __('禁用') + '</span>';
-                        
-                        const imageHtml = product.image 
-                            ? '<img src="' + product.image + '" alt="" style="width: 50px; height: 50px; object-fit: cover;" class="rounded">'
-                            : '<div style="width: 50px; height: 50px; background: #f5f5f5;" class="rounded d-flex align-items-center justify-content-center"><i class="bx bx-image text-muted"></i></div>';
-                        
-                        tbody += `
-                            <tr>
-                                <td>${product.product_id}</td>
-                                <td>${imageHtml}</td>
-                                <td>${product.local_name || product.name}</td>
-                                <td><code>${product.sku}</code></td>
-                                <td>¥${parseFloat(product.price || 0).toFixed(2)}</td>
-                                <td>${product.stock || 0}</td>
-                                <td>${statusHtml}</td>
-                                <td>
-                                    <a href="@backend-url('*/backend/product/edit')?product_id=${product.product_id}" 
-                                       class="btn btn-sm btn-outline-primary" target="_blank">
-                                        <i class="bx bx-edit"></i>
-                                    </a>
-                                </td>
-                            </tr>
-                        `;
-                    });
-                    
-                    $('#children-table-body').html(tbody);
-                } else {
-                    $('#children-empty').removeClass('d-none');
-                }
-            },
-            error: function() {
-                $('#children-loading').addClass('d-none');
-                $('#children-empty').removeClass('d-none').find('p').text(__('加载失败，请重试'));
-            }
-        });
-    }
-    
-    $('#optionConfig').on('show.bs.modal', function (event) {
-        showLoading();
-        // 触发的按钮
-        let button = event.relatedTarget
-        let product_code = button.getproduct('data-code')
-        let entity_id = button.getproduct('data-entity_id')
-        $.ajax({
-            url: '@backend-url("*/backend/product/option/search")?entity_id={entity_id}&product_code={product_code}'.replace
-            ('{entity_id}', entity_id).replace('{product_code}', product_code)
-            , success: (res) => {
-                let productOption = $('#productOption')
-                productOption.empty()
-                let options = res['option']
-                if (options) {
-                    for (let option in options) {
-                        console.log()
-                        productOption.append()
-                    }
-                }
-                productOption.append('')
-                console.log(res)
-            }
-        })
-        hideLoading();
-    })
-    $("*[w-ajax]").on('click', function (event) {
-        event.preventDefault()
-        const target = $(this)
-        let reload = target.data('reload')
-        let action = target.attr('w-ajax')
-        if (action.indexOf('?') < 0) {
-            action += '?isAjax=true'
-        } else {
-            action += '&isAjax=true'
-        }
-        let data = target.data()
-        $.ajax({
-            url: action,
-            data: data,
-            success: (res) => {
-                if (res.status !== 200) {
-                    Swal.fire({
-                        title: res.title,
-                        text: res.message,
-                        icon: 'error',
-                        confirmButtonText: '@lang{好的}'
-                    })
-                } else {
-                    Swal.fire({
-                        title: res.title,
-                        text: __('操作成功!'),
-                        icon: 'success',
-                        confirmButtonText: '@lang{好的}'
-                    })
-                }
-                if (reload) {
-                    location.reload()
-                }
-            }, error: function (res) {
-                console.log(res)
-            }
-        })
-    })
-</script>
+
 <js:part name="w-delete"></js:part>
-<!-- 配置项弹窗 -->
-@template(Weline_Admin::common/footer.phtml)
-</body>
-</html>
+
+<script>
+(function() {
+    'use strict';
+    
+    var WeShopProduct = {
+        backendUrl: '<?= $this->getBackendUrl('*/backend/product') ?>',
+        
+        loadChildren: function(productId) {
+            $.ajax({
+                url: '<?= $this->getBackendUrl('*/backend/product/getChildren') ?>',
+                data: { product_id: productId },
+                success: function(res) {
+                    $('#children-loading').addClass('d-none');
+                    
+                    if (res.items && res.items.length > 0) {
+                        $('#children-table-wrapper').removeClass('d-none');
+                        
+                        var tbody = '';
+                        res.items.forEach(function(product) {
+                            var statusHtml = product.status == 1 
+                                ? '<span class="badge bg-success">' + __('启用') + '</span>'
+                                : '<span class="badge bg-danger">' + __('禁用') + '</span>';
+                            
+                            var imageHtml = product.image 
+                                ? '<img src="' + product.image + '" alt="" style="width: 50px; height: 50px; object-fit: cover;" class="rounded">'
+                                : '<div style="width: 50px; height: 50px; background: var(--backend-color-bg-secondary);" class="rounded d-flex align-items-center justify-content-center"><i class="bx bx-image text-muted"></i></div>';
+                            
+                            tbody += '<tr>' +
+                                '<td>' + product.product_id + '</td>' +
+                                '<td>' + imageHtml + '</td>' +
+                                '<td>' + (product.local_name || product.name) + '</td>' +
+                                '<td><code>' + product.sku + '</code></td>' +
+                                '<td>¥' + parseFloat(product.price || 0).toFixed(2) + '</td>' +
+                                '<td>' + (product.stock || 0) + '</td>' +
+                                '<td>' + statusHtml + '</td>' +
+                                '<td>' +
+                                    '<a href="<?= $this->getBackendUrl('*/backend/product/edit') ?>?product_id=' + product.product_id + '" ' +
+                                       'class="btn btn-sm btn-outline-primary" target="_blank">' +
+                                        '<i class="bx bx-edit"></i>' +
+                                    '</a>' +
+                                '</td>' +
+                            '</tr>';
+                        });
+                        
+                        $('#children-table-body').html(tbody);
+                    } else {
+                        $('#children-empty').removeClass('d-none');
+                    }
+                },
+                error: function() {
+                    $('#children-loading').addClass('d-none');
+                    $('#children-empty').removeClass('d-none').find('p').text(__('加载失败，请重试'));
+                }
+            });
+        },
+        
+        init: function() {
+            var self = this;
+            
+            // 产品关联弹窗逻辑
+            $('#productLinksModal').on('show.bs.modal', function (event) {
+                var button = $(event.relatedTarget);
+                var productId = button.data('product-id');
+                var productName = button.data('product-name');
+                var childrenCount = button.data('children-count');
+                
+                $('#productLinksName').text(productName);
+                $('#children-count-badge').text(childrenCount);
+                
+                $('#children-loading').removeClass('d-none');
+                $('#children-empty').addClass('d-none');
+                $('#children-table-wrapper').addClass('d-none');
+                $('#children-table-body').empty();
+                
+                self.loadChildren(productId);
+            });
+            
+            // 配置项弹窗
+            $('#optionConfig').on('show.bs.modal', function (event) {
+                showLoading();
+                var button = event.relatedTarget;
+                var product_code = button.getAttribute('data-code');
+                var entity_id = button.getAttribute('data-entity_id');
+                $.ajax({
+                    url: '<?= $this->getBackendUrl('*/backend/product/option/search') ?>?entity_id=' + entity_id + '&product_code=' + product_code,
+                    success: function(res) {
+                        var productOption = $('#productOption');
+                        productOption.empty();
+                        var options = res['option'];
+                        if (options) {
+                            for (var option in options) {
+                                productOption.append('');
+                            }
+                        }
+                        productOption.append('');
+                    }
+                });
+                hideLoading();
+            });
+            
+            // w-ajax 点击处理
+            $("*[w-ajax]").on('click', function (event) {
+                event.preventDefault();
+                var target = $(this);
+                var reload = target.data('reload');
+                var action = target.attr('w-ajax');
+                if (action.indexOf('?') < 0) {
+                    action += '?isAjax=true';
+                } else {
+                    action += '&isAjax=true';
+                }
+                var data = target.data();
+                $.ajax({
+                    url: action,
+                    data: data,
+                    success: function(res) {
+                        if (res.status !== 200) {
+                            Swal.fire({
+                                title: res.title,
+                                text: res.message,
+                                icon: 'error',
+                                confirmButtonText: '<?= __('好的') ?>'
+                            });
+                        } else {
+                            Swal.fire({
+                                title: res.title,
+                                text: __('操作成功!'),
+                                icon: 'success',
+                                confirmButtonText: '<?= __('好的') ?>'
+                            });
+                        }
+                        if (reload) {
+                            location.reload();
+                        }
+                    },
+                    error: function(res) {
+                        console.log(res);
+                    }
+                });
+            });
+        }
+    };
+    
+    window.WeShopProduct = WeShopProduct;
+    
+    $(document).ready(function() {
+        WeShopProduct.init();
+    });
+})();
+</script>

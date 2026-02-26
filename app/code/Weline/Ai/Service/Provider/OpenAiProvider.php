@@ -14,6 +14,7 @@ namespace Weline\Ai\Service\Provider;
 
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Helper\ErrorMessageHelper;
+use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Http\Sse\SseContext;
 
@@ -60,10 +61,20 @@ class OpenAiProvider implements ProviderInterface
     {
         $config = $model->getConfig();
         
+        // 调试日志
+        Env::log('ai_provider_debug.log', sprintf(
+            '[OpenAiProvider::generate] model->getConfig() api_key=%s',
+            isset($config['api_key']) ? (empty($config['api_key']) ? '(empty)' : '...' . substr($config['api_key'], -4)) : '(not set)'
+        ), 'DEBUG');
+        
         // 合并provider_config（优先）
         $providerConfig = $model->getData('provider_config');
         if (!empty($providerConfig)) {
             $providerData = is_string($providerConfig) ? json_decode($providerConfig, true) : $providerConfig;
+            Env::log('ai_provider_debug.log', sprintf(
+                '[OpenAiProvider::generate] provider_config api_key=%s',
+                isset($providerData['api_key']) ? (empty($providerData['api_key']) ? '(empty)' : '...' . substr($providerData['api_key'], -4)) : '(not set)'
+            ), 'DEBUG');
             if (is_array($providerData)) {
                 foreach ($providerData as $k => $v) {
                     if ($v !== '' && $v !== null) {
@@ -72,6 +83,11 @@ class OpenAiProvider implements ProviderInterface
                 }
             }
         }
+        
+        Env::log('ai_provider_debug.log', sprintf(
+            '[OpenAiProvider::generate] final config api_key=%s',
+            isset($config['api_key']) ? (empty($config['api_key']) ? '(empty)' : '...' . substr($config['api_key'], -4)) : '(not set)'
+        ), 'DEBUG');
         
         $apiKey = $this->getApiKey($config);
         
@@ -189,10 +205,21 @@ class OpenAiProvider implements ProviderInterface
     {
         $config = $model->getConfig();
 
+        // 调试日志
+        Env::log('ai_provider_debug.log', sprintf(
+            '[OpenAiProvider::generateStreamFull] objId=%d, model->getConfig() api_key=%s',
+            spl_object_id($model),
+            isset($config['api_key']) ? (empty($config['api_key']) ? '(empty)' : '...' . substr($config['api_key'], -4)) : '(not set)'
+        ), 'DEBUG');
+
         // 合并 provider_config
         $providerConfig = $model->getData('provider_config');
         if (!empty($providerConfig)) {
             $providerData = is_string($providerConfig) ? json_decode($providerConfig, true) : $providerConfig;
+            Env::log('ai_provider_debug.log', sprintf(
+                '[OpenAiProvider::generateStreamFull] provider_config api_key=%s',
+                isset($providerData['api_key']) ? (empty($providerData['api_key']) ? '(empty)' : '...' . substr($providerData['api_key'], -4)) : '(not set)'
+            ), 'DEBUG');
             if (is_array($providerData)) {
                 foreach ($providerData as $k => $v) {
                     if ($v !== '' && $v !== null) {
@@ -201,6 +228,11 @@ class OpenAiProvider implements ProviderInterface
                 }
             }
         }
+
+        Env::log('ai_provider_debug.log', sprintf(
+            '[OpenAiProvider::generateStreamFull] final config api_key=%s',
+            isset($config['api_key']) ? (empty($config['api_key']) ? '(empty)' : '...' . substr($config['api_key'], -4)) : '(not set)'
+        ), 'DEBUG');
 
         $apiKey = $this->getApiKey($config);
         if (empty($apiKey)) {

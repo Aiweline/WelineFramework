@@ -5,28 +5,10 @@
  * @var \Weline\Framework\View\Template $this
  */
 /** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
 $websites = $this->getData('websites') ?: [];
 ?>
-<!DOCTYPE html>
-<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= __('Terraform批量绑定') ?></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-
-@template(Weline_Admin::common/page/loading.phtml)
-
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <div class="row">
+<div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                             <h4 class="mb-sm-0">
@@ -171,112 +153,3 @@ $websites = $this->getData('websites') ?: [];
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-        @template(Weline_Admin::common/footer.phtml)
-    </div>
-</div>
-
-<script>
-Weline.declare('api');
-(function(){
-    const form = document.getElementById('terraformBatchForm');
-    const submitBtn = document.getElementById('batchSubmitBtn');
-    const resultCard = document.getElementById('batchResultCard');
-    const resultBox = document.getElementById('batchResult');
-    const submitUrl = "<?= $this->getBackendUrl('*/backend/domain/batch-bind') ?>";
-
-    function collectPayload(override = 0) {
-        const fd = new FormData(form);
-        const payload = {};
-        const websiteIds = [];
-        fd.forEach((val, key) => {
-            if (key === 'website_ids[]') {
-                websiteIds.push(val);
-                return;
-            }
-            payload[key] = val;
-        });
-        payload.website_ids = websiteIds;
-        payload.override = override;
-        return payload;
-    }
-
-    const tSummary = <?= json_encode(__('批次完成：共 %{total} 个，成功 %{success} 个，失败 %{failed} 个，跳过 %{skipped} 个')) ?>;
-
-    function renderResult(summary, zones, nameServers) {
-        resultCard.style.display = 'block';
-        const total = summary.total || 0;
-        const success = summary.success || 0;
-        const failed = summary.failed || 0;
-        const skipped = summary.skipped || 0;
-        let html = '';
-        const summaryText = tSummary
-            .replace('%{total}', total)
-            .replace('%{success}', success)
-            .replace('%{failed}', failed)
-            .replace('%{skipped}', skipped);
-        html += '<div class="alert alert-success mb-2">' + summaryText + '</div>';
-        if (zones && Object.keys(zones).length) {
-            html += '<div class="mb-2"><strong><?= __('Zone ID') ?></strong></div>';
-            html += '<ul class="mb-2">';
-            Object.keys(zones).forEach(domain => {
-                html += '<li>' + domain + ' : ' + zones[domain] + '</li>';
-            });
-            html += '</ul>';
-        }
-        if (nameServers && Object.keys(nameServers).length) {
-            html += '<div class="mb-2"><strong><?= __('Name Servers') ?></strong></div>';
-            html += '<ul>';
-            Object.keys(nameServers).forEach(domain => {
-                html += '<li>' + domain + ' : ' + (nameServers[domain] || []).join(', ') + '</li>';
-            });
-            html += '</ul>';
-        }
-        resultBox.innerHTML = html;
-    }
-
-    function submitBatch(override = 0) {
-        submitBtn.disabled = true;
-        AdminToast.info('<?= __('正在执行，请稍候...') ?>', 3000);
-        const payload = collectPayload(override);
-        Weline.Api.request(submitUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        }).then(res => {
-            submitBtn.disabled = false;
-            if (res && res.need_confirm) {
-                AdminConfirm.show(res.message || '<?= __('检测到已绑定域名，是否继续替换？') ?>', {
-                    title: '<?= __('确认替换') ?>',
-                    confirmText: '<?= __('确认') ?>',
-                    cancelText: '<?= __('取消') ?>',
-                    type: 'danger'
-                }).then(confirmed => {
-                    if (confirmed) {
-                        submitBatch(1);
-                    }
-                });
-                return;
-            }
-            if (res && res.success) {
-                AdminToast.success(res.message || '<?= __('批量绑定成功') ?>');
-                renderResult(res.summary || {}, res.zones || {}, res.name_servers || {});
-            } else {
-                AdminToast.error((res && res.message) ? res.message : '<?= __('执行失败，请检查输入') ?>');
-            }
-        }).catch(() => {
-            submitBtn.disabled = false;
-            AdminToast.error('<?= __('请求失败，请稍后重试') ?>');
-        });
-    }
-
-    form.addEventListener('submit', function(e){
-        e.preventDefault();
-        submitBatch(0);
-    });
-})();
-</script>
-
-</body>
-</html>

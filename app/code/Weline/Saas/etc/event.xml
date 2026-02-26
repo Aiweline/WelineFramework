@@ -16,4 +16,30 @@
                   disabled="false"
                   shared="true" sort="20"/>
     </event>
+    
+    <!-- ========== PageBuilder 快速建站事件观察者 ========== -->
+    
+    <!--注册一站式配置服务能力-->
+    <event name="GuoLaiRen_PageBuilder::quickbuild::query_services">
+        <observer name="Weline_Saas::register_quickbuild_services" 
+                  instance="Weline\Saas\Observer\RegisterQuickBuildServices"
+                  disabled="false"
+                  shared="true" sort="50"/>
+    </event>
+    
+    <!--启动一站式配置流程-->
+    <event name="GuoLaiRen_PageBuilder::quickbuild::start_provisioning">
+        <observer name="Weline_Saas::handle_start_provisioning" 
+                  instance="Weline\Saas\Observer\HandleStartProvisioning"
+                  disabled="false"
+                  shared="true" sort="10"/>
+    </event>
+    
+    <!--提供配置订单列表-->
+    <event name="GuoLaiRen_PageBuilder::quickbuild::query_provisioning_orders">
+        <observer name="Weline_Saas::provide_provisioning_orders" 
+                  instance="Weline\Saas\Observer\ProvideProvisioningOrders"
+                  disabled="false"
+                  shared="true" sort="10"/>
+    </event>
 </config>

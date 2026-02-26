@@ -165,7 +165,6 @@ ID,ID
 优惠券代码,"Coupon Code"
 折扣值,"Discount Value"
 使用次数,"Usage Count"
-营销规则管理,营销规则管理
 营销规则,"Marketing Rule"
 后台,后台
 营销,营销
@@ -177,6 +176,7 @@ ID,ID
 禁用,禁用
 规则名称,"Rule Name"
 优先级,Priority
+营销规则管理,营销规则管理
 营销规则列表,"Marketing Rule List"
 市场营销,Marketing
 优惠券管理,"Coupon Management"

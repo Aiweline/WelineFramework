@@ -1,10 +1,14 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Cms\Model\FormSubmission $submission */
+/**
+ * CMS表单提交详情 - 内容模板
+ * 由布局系统自动包裹
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var \Weline\Cms\Model\FormSubmission $submission
+ */
 $submission = $this->getData('submission');
 $page = $this->getData('page');
 ?>
-<w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
 
 <!-- start page title -->
 <div class="row">
@@ -196,5 +200,4 @@ $page = $this->getData('page');
     </div>
 </div>
 
-<w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>
 

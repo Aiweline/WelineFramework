@@ -45,8 +45,6 @@ class Request extends CommandAbstract
         // 获取其他参数
         $isBackend = isset($args['b']) || isset($args['backend']);
         $isApiBackend = isset($args['api']) || isset($args['api-backend']);
-        $username = $args['username'] ?? $args['u'] ?? 'admin';
-        $password = $args['password'] ?? $args['p'] ?? 'admin';
         $cookieFile = $args['cookie'] ?? $args['c'] ?? '';
         $saveCookie = isset($args['save-cookie']) || isset($args['s']);
         $filter = $args['filter'] ?? '';
@@ -57,16 +55,43 @@ class Request extends CommandAbstract
         $body = $args['data'] ?? $args['d'] ?? '';
         $overridePort = isset($args['port']) || isset($args['P']) ? (int)($args['port'] ?? $args['P']) : null;
         $overrideHttps = isset($args['https']) ? true : null;
+        $isSse = isset($args['sse']) || isset($args['S']);
+        $sessionId = $args['session'] ?? $args['sid'] ?? '';
 
         // 检查是否是不需要登录的页面（如登录页、静态资源等）
         $noLoginRequired = $this->isPublicPath($path, $isBackend);
         
-        // 如果访问后台或API，自动处理登录
+        // 如果访问后台或API，需要处理登录态
         if (($isBackend || $isApiBackend) && !$noLoginRequired) {
             // 使用默认cookie文件路径
             $defaultCookieFile = BP . 'var' . DIRECTORY_SEPARATOR . 'http_request_cookies.txt';
             if (empty($cookieFile)) {
                 $cookieFile = $defaultCookieFile;
+            }
+            
+            // 如果提供了 session ID，直接使用
+            if ($sessionId) {
+                $this->printer->note(__('使用指定的 Session ID: %{1}...', [substr($sessionId, 0, 16)]));
+                $this->writeSessionToCookieFile($sessionId, $cookieFile);
+            } else {
+                // 尝试从 session 文件中查找有效的后台登录态
+                $foundSession = $this->findValidBackendSession();
+                if ($foundSession) {
+                    $this->printer->success(__('找到有效的后台登录 Session: %{1}... (用户: %{2})', [
+                        substr($foundSession['session_id'], 0, 16),
+                        $foundSession['username']
+                    ]));
+                    $this->writeSessionToCookieFile($foundSession['session_id'], $cookieFile);
+                } else {
+                    $this->printer->error(__('未找到有效的后台登录 Session'));
+                    $this->printer->note(__(''));
+                    $this->printer->note(__('请先在浏览器中登录后台，然后重试。'));
+                    $this->printer->note(__(''));
+                    $this->printer->note(__('其他选项：'));
+                    $this->printer->note(__('  --sid=<WELINE_SESSID>  手动指定 Session ID'));
+                    $this->printer->note(__('  --port=<端口>          指定 Worker 端口（从浏览器响应头获取）'));
+                    return;
+                }
             }
         }
 
@@ -88,6 +113,12 @@ class Request extends CommandAbstract
             return;
         }
         
+        // SSE 模式：使用流式请求
+        if ($isSse) {
+            $this->sendSseRequest($url, $method, $headers, $body, $verifyTls, $cookieFile);
+            return;
+        }
+        
         // 发送HTTP请求（使用Guzzle）
         $response = $this->sendGuzzleRequest($url, $method, $headers, $body, $verifyTls, $cookieFile, $saveCookie);
         
@@ -96,37 +127,17 @@ class Request extends CommandAbstract
             return;
         }
 
-        // 检查是否返回了登录页面（cookie过期）
+        // 检查是否返回了登录页面（session 过期或 Worker 不匹配）
         if (($isBackend || $isApiBackend) && !$noLoginRequired) {
             if ($this->isLoginPage($response['body'])) {
-                $this->printer->warning(__('Cookie已过期，正在重新登录...'));
-                
-                // 删除旧的cookie文件
-                if (file_exists($cookieFile)) {
-                    @unlink($cookieFile);
-                }
-                
-                // 执行自动登录
-                $newCookieFile = $this->performLogin($username, $password, $isBackend, $verifyTls);
-                if (!$newCookieFile) {
-                    $this->printer->error(__('重新登录失败！无法访问受保护的资源。'));
-                    return;
-                }
-                
-                // 使用新cookie重新请求
-                $this->printer->note(__('登录成功，正在重新请求...'));
-                $response = $this->sendGuzzleRequest($url, $method, $headers, $body, $verifyTls, $newCookieFile, true);
-                
-                if ($response === false) {
-                    $this->printer->error(__('重新请求失败！'));
-                    return;
-                }
-                
-                // 再次检查是否还是登录页面
-                if ($this->isLoginPage($response['body'])) {
-                    $this->printer->error(__('登录后仍然返回登录页面，请检查用户权限或路由配置！'));
-                    return;
-                }
+                $this->printer->error(__('Session 无效或 Worker 路由不匹配'));
+                $this->printer->note(__(''));
+                $this->printer->note(__('WLS 多 Worker 环境下，Session 可能绑定到特定 Worker。'));
+                $this->printer->note(__('解决方案：'));
+                $this->printer->note(__('  1. 在浏览器中重新登录后台'));
+                $this->printer->note(__('  2. 使用 --port 参数指定 Worker 端口（从浏览器响应头 X-Weline-Route-Hint 获取）'));
+                $this->printer->note(__('     示例: php bin/w http:req <path> -b --port=19982'));
+                return;
             }
         }
 
@@ -213,6 +224,110 @@ class Request extends CommandAbstract
     }
 
     /**
+     * 从 session 文件中查找有效的后台登录态
+     * @return array|null ['session_id' => string, 'username' => string, 'user_id' => int] 或 null
+     */
+    private function findValidBackendSession(): ?array
+    {
+        $sessionDir = BP . 'var' . DIRECTORY_SEPARATOR . 'session';
+        if (!is_dir($sessionDir)) {
+            return null;
+        }
+        
+        // 获取所有 session 文件，按修改时间倒序排列（最新的优先）
+        $sessionFiles = [];
+        foreach (scandir($sessionDir) as $file) {
+            if ($file === '.' || $file === '..') {
+                continue;
+            }
+            $filePath = $sessionDir . DIRECTORY_SEPARATOR . $file;
+            if (is_file($filePath)) {
+                $sessionFiles[] = [
+                    'path' => $filePath,
+                    'session_id' => $file,
+                    'mtime' => filemtime($filePath)
+                ];
+            }
+        }
+        
+        // 按修改时间倒序排列
+        usort($sessionFiles, fn($a, $b) => $b['mtime'] <=> $a['mtime']);
+        
+        // 只检查最近的 50 个 session 文件（避免扫描过多文件）
+        $sessionFiles = array_slice($sessionFiles, 0, 50);
+        
+        foreach ($sessionFiles as $sessionFile) {
+            $content = @file_get_contents($sessionFile['path']);
+            if (!$content) {
+                continue;
+            }
+            
+            // 检查是否是后台类型且已登录
+            // Session 格式：PHP serialize，包含 type=backend, WF_BACKEND_USER, WF_BACKEND_USER_ID
+            if (!str_contains($content, '"backend"') && !str_contains($content, 's:7:"backend"')) {
+                continue;
+            }
+            
+            // 检查是否有登录用户
+            if (!str_contains($content, 'WF_BACKEND_USER_ID')) {
+                continue;
+            }
+            
+            // 尝试解析 session 数据
+            $sessionData = @unserialize($content);
+            if (!is_array($sessionData)) {
+                continue;
+            }
+            
+            // 验证是后台 session 且已登录
+            if (($sessionData['type'] ?? '') !== 'backend') {
+                continue;
+            }
+            
+            $userId = $sessionData['WF_BACKEND_USER_ID'] ?? null;
+            $username = $sessionData['WF_BACKEND_USER'] ?? null;
+            
+            if (!$userId || !$username) {
+                continue;
+            }
+            
+            // 检查 session 是否过期（假设 24 小时内有效）
+            $maxAge = 24 * 3600;
+            if ((time() - $sessionFile['mtime']) > $maxAge) {
+                continue;
+            }
+            
+            return [
+                'session_id' => $sessionFile['session_id'],
+                'username' => $username,
+                'user_id' => $userId
+            ];
+        }
+        
+        return null;
+    }
+    
+    /**
+     * 将 session ID 写入 cookie 文件（Guzzle FileCookieJar 格式）
+     */
+    private function writeSessionToCookieFile(string $sessionId, string $cookieFile): void
+    {
+        $cookieData = [[
+            'Name' => 'WELINE_SESSID',
+            'Value' => $sessionId,
+            'Domain' => '127.0.0.1',
+            'Path' => '/',
+            'Max-Age' => null,
+            'Expires' => time() + 86400,
+            'Secure' => true,
+            'Discard' => false,
+            'HttpOnly' => true,
+            'SameSite' => 'Lax'
+        ]];
+        file_put_contents($cookieFile, json_encode($cookieData));
+    }
+
+    /**
      * 检查响应内容是否是登录页面
      */
     private function isLoginPage(string $content): bool
@@ -233,253 +348,6 @@ class Request extends CommandAbstract
         
         return false;
     }
-
-    /**
-     * 执行登录获取Session
-     */
-    private function performLogin(string $username, string $password, bool $isBackend, bool $verifyTls): string|false
-    {
-        // 如果没有提供用户名密码，使用默认值
-        if (!$username || !$password) {
-            $this->printer->note(__('未提供登录凭据，使用默认账号尝试登录...'));
-            $username = $username ?: 'admin';
-            $password = $password ?: 'admin';
-        }
-        
-        $env = Env::getInstance();
-        $serverConfig = $env->get('server') ?? [];
-        $host = $serverConfig['host'] ?? '127.0.0.1';
-        $port = $serverConfig['port'] ?? '9981';
-        $useHttps = \array_key_exists('https', $serverConfig)
-            ? (bool) $serverConfig['https']
-            : ((int)$port === 443);
-        $scheme = $useHttps ? 'https' : 'http';
-        $backendPrefix = $env::getAreaRoutePrefix('backend') ?? '';
-        
-        // 构建登录URL
-        $loginPageUrl = "{$scheme}://{$host}:{$port}/{$backendPrefix}/admin/login";
-        $loginPostUrl = $loginPageUrl . '/post';
-        
-        $this->printer->note(__('正在登录: %{1}', [$username]));
-        
-        // 创建cookie文件到var目录
-        $varPath = BP . 'var';
-        if (!is_dir($varPath)) {
-            mkdir($varPath, 0755, true);
-        }
-        $cookieFile = $varPath . '/http_request_cookies.txt';
-        
-        // 第一步：访问登录页面获取form_key
-        $this->printer->note(__('正在获取登录页面: %{1}', [$loginPageUrl]));
-        
-        // 使用Guzzle HTTP客户端，禁用代理
-        // 关键修复：使用 FileCookieJar 从一开始就共享 cookie
-        try {
-            // 创建共享的 FileCookieJar - GET 和 POST 都使用同一个
-            $cookieJar = new \GuzzleHttp\Cookie\FileCookieJar($cookieFile, true);
-            
-            $client = new \GuzzleHttp\Client([
-                'timeout' => 30,
-                'connect_timeout' => 10,
-                'verify' => false,
-                'cookies' => $cookieJar, // 使用 FileCookieJar 而非 true
-                'allow_redirects' => true,
-                'proxy' => false, // 禁用代理
-                'http_errors' => false // 不抛出HTTP错误异常
-            ]);
-            
-            $response = $client->get($loginPageUrl, [
-                'headers' => [
-                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language' => 'zh-CN,zh;q=0.9,en;q=0.8'
-                ]
-            ]);
-            
-            $loginPage = $response->getBody()->getContents();
-            $httpCode = $response->getStatusCode();
-            $totalTime = 0;
-            $receivedBytes = strlen($loginPage);
-            $error = '';
-            
-        } catch (\Exception $e) {
-            $loginPage = '';
-            $httpCode = 0;
-            $totalTime = 0;
-            $receivedBytes = 0;
-            $error = $e->getMessage();
-        }
-        
-        $this->printer->note(__('HTTP状态码: %{1}, 耗时: %{2}秒', [$httpCode, round($totalTime, 2)]));
-        $this->printer->note(__('接收数据长度: %{1} 字节', [strlen($loginPage)]));
-        
-        // 检查是否完全失败（没有收到任何数据）
-        if (($loginPage === false || empty($loginPage)) && $httpCode == 0) {
-            $this->printer->error(__('无法访问登录页面: %{1}', [$error ?: '未知错误']));
-            $this->printer->note(__('请确认开发服务器是否已启动（php bin/w server:start -b）'));
-            if (file_exists($cookieFile)) {
-                unlink($cookieFile);
-            }
-            return false;
-        }
-        
-        // 即使有错误（如超时），只要收到了数据就继续
-        if ($error && !empty($loginPage)) {
-            $this->printer->warning(__('登录页面请求警告: %{1}', [$error]));
-            $this->printer->note(__('但已收到 %{1} 字节数据，尝试继续...', [strlen($loginPage)]));
-        } elseif (!empty($loginPage)) {
-            $this->printer->success(__('成功访问登录页面，已收到 %{1} 字节', [strlen($loginPage)]));
-        } else {
-            $this->printer->error(__('登录页面返回空内容！'));
-            $this->printer->note(__('HTTP状态码: %{1}, 错误: %{2}', [$httpCode, $error ?: '无']));
-            if (file_exists($cookieFile)) {
-                unlink($cookieFile);
-            }
-            return false;
-        }
-        
-        // 提取form_key
-        $formKey = '';
-        // 尝试多种form_key格式
-        if (preg_match('/name=["\']form_key["\'].*?value=["\'](.*?)["\']/is', $loginPage, $matches)) {
-            $formKey = $matches[1];
-            $this->printer->success(__('成功获取form_key: %{1}', [substr($formKey, 0, 16) . '...']));
-        } elseif (preg_match('/value=["\'](.*?)["\'].*?name=["\']form_key["\']/is', $loginPage, $matches)) {
-            $formKey = $matches[1];
-            $this->printer->success(__('成功获取form_key: %{1}', [substr($formKey, 0, 16) . '...']));
-        } elseif (preg_match('/<INPUT[^>]*name=["\']form_key["\'][^>]*value=["\'](.*?)["\'][^>]*>/is', $loginPage, $matches)) {
-            $formKey = $matches[1];
-            $this->printer->success(__('成功获取form_key: %{1}', [substr($formKey, 0, 16) . '...']));
-                        } else {
-            $this->printer->error(__('未找到form_key，无法进行登录！'));
-            $this->printer->note(__('页面内容片段: %{1}', [substr($loginPage, 0, 500) . '...']));
-            $this->printer->note(__('请检查登录页面是否正常加载'));
-            if (file_exists($cookieFile)) {
-                unlink($cookieFile);
-            }
-            return false;
-        }
-        
-        // 准备登录数据
-        $loginData = http_build_query([
-            'username' => $username,
-            'password' => $password,
-            'form_key' => $formKey,
-            'remember' => '1'
-        ]);
-        
-        // 第二步：发送登录请求（使用Guzzle HTTP客户端）
-        $this->printer->note(__('正在提交登录信息到: %{1}', [$loginPostUrl]));
-        
-        try {
-            // 重用之前的 cookieJar（如果存在），否则从文件加载
-            if (!isset($cookieJar)) {
-                $cookieJar = new \GuzzleHttp\Cookie\FileCookieJar($cookieFile, true);
-            }
-            
-            $client = new \GuzzleHttp\Client([
-                'timeout' => 30,
-                'connect_timeout' => 10,
-                'verify' => false,
-                'cookies' => $cookieJar,
-                'allow_redirects' => true,
-                'proxy' => false, // 禁用代理
-                'http_errors' => false // 不抛出HTTP错误异常
-            ]);
-            
-            $response = $client->post($loginPostUrl, [
-                'headers' => [
-                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language' => 'zh-CN,zh;q=0.9,en;q=0.8',
-                    'Content-Type' => 'application/x-www-form-urlencoded'
-                ],
-                'form_params' => [
-                    'username' => $username,
-                    'password' => $password,
-                    'form_key' => $formKey,
-                    'remember' => '1'
-                ],
-                'allow_redirects' => false  // 禁用自动重定向，手动处理
-            ]);
-            
-            $statusCode = $response->getStatusCode();
-            $redirectCount = 0;
-            $error = '';
-            
-            // 处理重定向
-            if ($statusCode >= 300 && $statusCode < 400) {
-                $location = $response->getHeaderLine('Location');
-                
-                // 跟随重定向
-                if ($location) {
-                    $response = $client->get($location, [
-                        'headers' => [
-                            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                            'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                        ]
-                    ]);
-                    $statusCode = $response->getStatusCode();
-                }
-            }
-            
-        } catch (\Exception $e) {
-            $statusCode = 0;
-            $redirectCount = 0;
-            $error = $e->getMessage();
-        }
-        
-        $this->printer->note(__('登录响应状态码: %{1}, 重定向次数: %{2}', [$statusCode, $redirectCount]));
-        
-        // 检查登录是否成功
-        if ($statusCode === 200) {
-            // 检查响应内容是否包含登录成功标识
-            $responseBody = $response->getBody()->getContents();
-            
-            if (strpos($responseBody, '登录成功') !== false || 
-                strpos($responseBody, 'dashboard') !== false ||
-                strpos($responseBody, 'admin') !== false ||
-                strpos($responseBody, '后台') !== false) {
-                $this->printer->success(__('登录成功！'));
-                return $cookieFile;
-            }
-        }
-        
-        // 即使请求失败或超时，也检查cookie是否已生成
-        if (file_exists($cookieFile) && filesize($cookieFile) > 0) {
-            $cookieContent = file_get_contents($cookieFile);
-            
-            // 检查是否包含session cookie
-            if (strpos($cookieContent, 'WELINE_SESSID') !== false || 
-                strpos($cookieContent, 'session') !== false) {
-                $this->printer->success(__('登录成功！（已获取到Session Cookie）'));
-                $this->printer->note(__('Cookie已保存到: %{1}', [$cookieFile]));
-                if ($error) {
-                    $this->printer->warning(__('提示：登录过程中发生超时，但cookie已成功获取'));
-                }
-                return $cookieFile;
-            }
-        }
-        
-        if ($response === false) {
-            $this->printer->error(__('登录请求失败: %{1}', [$error]));
-            if (file_exists($cookieFile)) {
-                unlink($cookieFile);
-            }
-            return false;
-        }
-        
-        $this->printer->error(__('登录失败！状态码: %{1}', [$statusCode]));
-        $this->printer->note(__('请检查用户名和密码是否正确'));
-        
-        // 清理失败的cookie文件
-        if (file_exists($cookieFile)) {
-            unlink($cookieFile);
-        }
-        
-        return false;
-    }
-
     /**
      * 构建完整的URL
      * 
@@ -767,6 +635,231 @@ class Request extends CommandAbstract
     }
 
     /**
+     * 发送 SSE (Server-Sent Events) 请求
+     * 实时输出服务器推送的事件流
+     */
+    private function sendSseRequest(
+        string $url,
+        string $method,
+        array $headers,
+        string $body,
+        bool $verifyTls,
+        string $cookieFile
+    ): void {
+        $this->printer->note(__('SSE 模式：开始接收事件流...'));
+        $this->printer->printing($this->printer->colorize('═══════════════════════════════════════════════════════════', 'cyan'));
+        
+        try {
+            // 准备 cookie jar
+            $cookieJar = null;
+            if ($cookieFile && file_exists($cookieFile)) {
+                $cookieJar = new \GuzzleHttp\Cookie\FileCookieJar($cookieFile, true);
+            }
+            
+            $options = [
+                'timeout' => 0, // 无超时，SSE 是长连接
+                'connect_timeout' => 30,
+                'verify' => $verifyTls,
+                'proxy' => false,
+                'http_errors' => false,
+                'allow_redirects' => false, // SSE 不跟随重定向
+                'stream' => true, // 关键：启用流式响应
+                'headers' => array_merge($headers, [
+                    'Accept' => 'text/event-stream',
+                    'Cache-Control' => 'no-cache',
+                ])
+            ];
+            
+            if ($cookieJar) {
+                $options['cookies'] = $cookieJar;
+            }
+            
+            // POST 请求体
+            if (!empty($body) && in_array($method, ['POST', 'PUT', 'PATCH'])) {
+                $options['body'] = $body;
+            }
+            
+            $client = new \GuzzleHttp\Client();
+            $response = $client->request($method, $url, $options);
+            
+            $statusCode = $response->getStatusCode();
+            $this->printer->note(__('HTTP 状态码: %{1}', [$statusCode]));
+            
+            // 处理重定向
+            if ($statusCode >= 300 && $statusCode < 400) {
+                $location = $response->getHeaderLine('Location');
+                if ($location) {
+                    // 检查是否是登录页面重定向
+                    if (str_contains($location, '/login') || str_contains($location, 'login')) {
+                        $this->printer->error(__('Session 无效或 Worker 路由不匹配'));
+                        $this->printer->note(__(''));
+                        $this->printer->note(__('WLS 多 Worker 环境下，Session 可能绑定到特定 Worker。'));
+                        $this->printer->note(__('解决方案：'));
+                        $this->printer->note(__('  1. 在浏览器中重新登录后台'));
+                        $this->printer->note(__('  2. 使用 --port 参数指定 Worker 端口'));
+                        return;
+                    }
+                    // 跟随重定向（只跟随一次）
+                    $this->printer->note(__('跟随重定向: %{1}', [$location]));
+                    // 构建完整 URL
+                    if (!str_starts_with($location, 'http')) {
+                        $parsedUrl = parse_url($url);
+                        $location = ($parsedUrl['scheme'] ?? 'https') . '://' . ($parsedUrl['host'] ?? '127.0.0.1');
+                        if (!empty($parsedUrl['port'])) {
+                            $location .= ':' . $parsedUrl['port'];
+                        }
+                        $location .= $response->getHeaderLine('Location');
+                    }
+                    // 重新请求
+                    $response = $client->request($method, $location, $options);
+                    $statusCode = $response->getStatusCode();
+                    $this->printer->note(__('重定向后状态码: %{1}', [$statusCode]));
+                }
+            }
+            
+            // 检查 Content-Type 是否为 SSE
+            $contentType = $response->getHeaderLine('Content-Type');
+            
+            // 如果返回的是 HTML（可能是登录页或错误页），不进行流式处理
+            if (str_contains($contentType, 'text/html')) {
+                $bodyContent = $response->getBody()->getContents();
+                if ($this->isLoginPage($bodyContent)) {
+                    $this->printer->error(__('Session 无效或 Worker 路由不匹配'));
+                    $this->printer->note(__(''));
+                    $this->printer->note(__('WLS 多 Worker 环境下，Session 可能绑定到特定 Worker。'));
+                    $this->printer->note(__('解决方案：'));
+                    $this->printer->note(__('  1. 在浏览器中重新登录后台'));
+                    $this->printer->note(__('  2. 使用 --port 参数指定 Worker 端口'));
+                    return;
+                }
+                // 不是登录页面，直接输出内容
+                $this->printer->warning(__('响应 Content-Type 为 text/html，非 SSE 流'));
+                $this->printer->printing($bodyContent);
+                return;
+            }
+            
+            // 检查是否是 event-stream
+            if (!str_contains($contentType, 'text/event-stream')) {
+                $this->printer->warning(__('响应 Content-Type 为 %{1}，非标准 SSE (text/event-stream)', [$contentType]));
+            }
+            
+            // 获取响应流
+            $stream = $response->getBody();
+            $buffer = '';
+            $eventCount = 0;
+            $startTime = microtime(true);
+            
+            $this->printer->printing('');
+            
+            // 实时读取 SSE 事件流
+            while (!$stream->eof()) {
+                $chunk = $stream->read(1024);
+                if ($chunk === '') {
+                    usleep(10000); // 10ms
+                    continue;
+                }
+                
+                $buffer .= $chunk;
+                
+                // 处理缓冲区中的完整事件（以双换行分隔）
+                while (($pos = strpos($buffer, "\n\n")) !== false) {
+                    $eventData = substr($buffer, 0, $pos);
+                    $buffer = substr($buffer, $pos + 2);
+                    
+                    if (trim($eventData) === '') {
+                        continue;
+                    }
+                    
+                    $eventCount++;
+                    $this->parseSseEvent($eventData, $eventCount);
+                }
+            }
+            
+            // 处理剩余数据
+            if (trim($buffer) !== '') {
+                $eventCount++;
+                $this->parseSseEvent($buffer, $eventCount);
+            }
+            
+            $duration = round((microtime(true) - $startTime) * 1000, 2);
+            
+            $this->printer->printing('');
+            $this->printer->printing($this->printer->colorize('═══════════════════════════════════════════════════════════', 'cyan'));
+            $this->printer->success(__('SSE 流结束，共接收 %{1} 个事件，耗时 %{2} ms', [$eventCount, $duration]));
+            
+        } catch (\Exception $e) {
+            $this->printer->error(__('SSE 请求失败: %{1}', [$e->getMessage()]));
+        }
+    }
+    
+    /**
+     * 解析并输出单个 SSE 事件
+     */
+    private function parseSseEvent(string $eventData, int $eventCount): void
+    {
+        $lines = explode("\n", $eventData);
+        $event = 'message';
+        $data = '';
+        $id = '';
+        
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+            
+            if (str_starts_with($line, 'event:')) {
+                $event = trim(substr($line, 6));
+            } elseif (str_starts_with($line, 'data:')) {
+                $data .= ($data !== '' ? "\n" : '') . trim(substr($line, 5));
+            } elseif (str_starts_with($line, 'id:')) {
+                $id = trim(substr($line, 3));
+            } elseif (str_starts_with($line, ':')) {
+                // 注释行，忽略
+                continue;
+            }
+        }
+        
+        // 根据事件类型使用不同颜色输出
+        $eventColor = match($event) {
+            'start' => 'cyan',
+            'done' => 'green',
+            'error', 'article_error' => 'red',
+            'skip' => 'yellow',
+            'article_start' => 'blue',
+            'article_done' => 'green',
+            'quota_info', 'fallback_keywords' => 'magenta',
+            default => 'white'
+        };
+        
+        // 格式化输出
+        $timestamp = date('H:i:s');
+        $eventLabel = $this->printer->colorize("[{$event}]", $eventColor);
+        
+        // 尝试解析 JSON 数据
+        $decoded = json_decode($data, true);
+        if (is_array($decoded)) {
+            $dataStr = json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        } else {
+            $dataStr = $data;
+        }
+        
+        $this->printer->printing(sprintf('%s %s %s', 
+            $this->printer->colorize($timestamp, 'gray'),
+            $eventLabel,
+            ''
+        ));
+        
+        if ($dataStr !== '') {
+            // 缩进数据内容
+            $dataLines = explode("\n", $dataStr);
+            foreach ($dataLines as $dataLine) {
+                $this->printer->printing('    ' . $dataLine);
+            }
+        }
+    }
+    
+    /**
      * 执行并发请求
      */
     private function executeConcurrentRequests(
@@ -945,7 +1038,11 @@ class Request extends CommandAbstract
                 'verify' => $verifyTls,
                 'proxy' => false,
                 'http_errors' => false,
-                'allow_redirects' => true
+                'allow_redirects' => [
+                    'max' => 5,
+                    'strict' => false,
+                    'track_redirects' => true
+                ]
             ];
             
             // 处理headers
@@ -1222,12 +1319,10 @@ class Request extends CommandAbstract
             'http:request',
             $this->tip(),
             [
-                '-b, -backend' => '指定为后端路径（使用admin密钥，默认为前端路径）',
+                '-b, -backend' => '指定为后端路径（自动从 session 文件获取登录态）',
                 '-api, -api-backend' => '指定为API后端路径（使用api_admin密钥）',
-                '--login, -l' => '自动登录后台（需配合-u和-p使用）',
-                '-u, --username=<用户名>' => '登录用户名（默认：admin）',
-                '-p, --password=<密码>' => '登录密码（默认：admin123456）',
                 '-c, --cookie=<文件>' => '使用指定的cookie文件',
+                '--session, --sid=<ID>' => '手动指定 WELINE_SESSID（从浏览器复制）',
                 '-s, --save-cookie' => '保存cookie到文件',
                 'filter=<关键词>' => '搜索并提取包含关键词的内容及其上下文',
                 '-n=<行数>' => '指定提取的上下文行数（默认3行）',
@@ -1237,6 +1332,7 @@ class Request extends CommandAbstract
                 '-d, data=<数据>' => '发送POST/PUT数据',
                 '-P, --port=<端口>' => '指定服务器端口（覆盖env.server.port）',
                 '--https' => '强制使用HTTPS协议（覆盖env.server.https）',
+                '-S, --sse' => '启用 SSE (Server-Sent Events) 模式，实时输出事件流',
                 '-C, --concurrent' => '启用并发请求模式（需配合-t使用）',
                 '-t, --times=<次数>' => '并发请求次数（默认1次）',
                 '-h, --help' => '显示帮助信息',
@@ -1246,15 +1342,14 @@ class Request extends CommandAbstract
             ],
             [
                 '测试前端首页' => 'php bin/w http:request /',
-                '自动登录并测试后端' => 'php bin/w http:request admin/dashboard -b --login -u=admin -p=123456',
-                '使用已有cookie访问后台' => 'php bin/w http:request admin/dashboard -b -c=cookies.txt',
-                '测试API接口（自动登录）' => 'php bin/w http:request rest/v1/data -api --login -u=admin -p=123456',
+                '测试后台（自动获取登录态）' => 'php bin/w http:request admin/dashboard -b',
+                '测试 SSE 接口' => 'php bin/w http:request blog/backend/post/trigger-ai-publish-sse -b --sse',
+                '手动指定 Session' => 'php bin/w http:request admin/dashboard -b --sid=<WELINE_SESSID>',
                 '搜索响应中的特定内容' => 'php bin/w http:request / filter=welcome',
                 '搜索并显示上下5行' => 'php bin/w http:request / filter=welcome -n=5',
                 '发送POST请求' => 'php bin/w http:request api/data -m=POST -d=\'{"key":"value"}\'',
                 '添加自定义请求头' => 'php bin/w http:request / -H="User-Agent: CustomBot"',
                 '并发测试100次' => 'php bin/w http:request / -C -t=100',
-                '并发压测后台（带登录）' => 'php bin/w http:request admin/dashboard -b -C -t=50 -c=cookies.txt',
             ],
             'php bin/w http:request <path> [选项]'
         );

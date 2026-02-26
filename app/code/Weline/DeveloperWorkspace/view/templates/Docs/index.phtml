@@ -1798,8 +1798,19 @@ if ($document && $document->getId()) {
                             'plugins': []
                         }).on('ready.jstree', function() {
                             // jstree初始化完成
-                            // 如果有当前分类ID，自动选中
-                            if (currentCatalogId) {
+                            // 检查 URL 是否有 search 参数
+                            const urlParams = new URLSearchParams(window.location.search);
+                            const searchKeyword = urlParams.get('search');
+                            if (searchKeyword) {
+                                // 设置搜索框的值
+                                const searchInput = document.getElementById('search-input');
+                                if (searchInput) {
+                                    searchInput.value = searchKeyword;
+                                }
+                                // 执行搜索
+                                searchDocuments(searchKeyword);
+                            } else if (currentCatalogId) {
+                                // 如果有当前分类ID，自动选中
                                 selectCatalog(currentCatalogId);
                             }
                         }).on('select_node.jstree', function(e, data) {
