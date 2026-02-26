@@ -21,6 +21,24 @@
          icon="mdi mdi-dns-outline"
          order="10"/>
 
+    <!-- 域名注册 -->
+    <add source="Aws_Domains::domain_register"
+         name="aws_domain_register"
+         title="域名注册"
+         action="aws/backend/domain/register"
+         parent="Aws_Domains::domains_management"
+         icon="mdi mdi-cart-plus"
+         order="20"/>
+
+    <!-- 域名供应商 -->
+    <add source="Aws_Domains::domain_provider"
+         name="aws_domain_provider"
+         title="域名供应商"
+         action="ai/backend/provider"
+         parent="Aws_Domains::domains_management"
+         icon="mdi mdi-account-key"
+         order="30"/>
+
     <!-- 域名可用性检查 -->
     <add source="Aws_Domains::domain_check"
          name="aws_domain_check"
@@ -28,16 +46,7 @@
          action="aws/backend/domain/check"
          parent="Aws_Domains::domains_management"
          icon="mdi mdi-magnify"
-         order="20"/>
-
-    <!-- 购买域名 -->
-    <add source="Aws_Domains::domain_register"
-         name="aws_domain_register"
-         title="购买域名"
-         action="aws/backend/domain/register"
-         parent="Aws_Domains::domains_management"
-         icon="mdi mdi-cart-plus"
-         order="30"/>
+         order="40"/>
 
     <!-- 操作记录 -->
     <add source="Aws_Domains::operation_log"
@@ -46,7 +55,7 @@
          action="aws/backend/operation/index"
          parent="Aws_Domains::domains_management"
          icon="mdi mdi-history"
-         order="40"/>
+         order="50"/>
 
     <!-- AWS配置 -->
     <add source="Aws_Domains::config"
@@ -55,5 +64,5 @@
          action="aws/backend/config/index"
          parent="Aws_Domains::domains_management"
          icon="mdi mdi-cog-outline"
-         order="50"/>
+         order="60"/>
 </menus>
