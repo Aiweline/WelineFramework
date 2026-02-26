@@ -1,134 +1,109 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $title ?? __('定时任务状态') ?></title>
-    <css>Weline_Admin::css/bootstrap.min.css</css>
-    <css>Weline_Admin::css/admin.css</css>
-    <style>
-        .cron-output {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 20px 0;
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            line-height: 1.5;
-            white-space: pre-wrap;
-            max-height: 600px;
-            overflow-y: auto;
-        }
-        .btn-refresh {
-            background: linear-gradient(45deg, #007bff, #0056b3);
-            border: none;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
-            font-weight: bold;
-            transition: all 0.3s ease;
-        }
-        .btn-refresh:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-            color: white;
-        }
-    </style>
-</head>
-<body>
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-12">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h1 class="h3 mb-0"><?= $title ?? __('定时任务状态') ?></h1>
-                    <div class="btn-group">
-                        <button type="button" class="btn btn-refresh" onclick="location.reload()">
-                            <i class="fas fa-sync-alt"></i> <?= __('刷新状态') ?>
-                        </button>
-                        <a href="<?= $this->getUrl('*/cachecleanup/index') ?>" class="btn btn-secondary">
-                            <i class="fas fa-arrow-left"></i> <?= __('返回缓存清理') ?>
-                        </a>
-                    </div>
-                </div>
+<?php
+/**
+ * 定时任务状态 - 内容模板
+ * @var \Weline\Framework\View\Template $this
+ */
+?>
+<style>
+    .weline-cron-output {
+        background: var(--backend-color-card-bg-secondary, #f8f9fa);
+        border: 1px solid var(--backend-color-border, #dee2e6);
+        border-radius: 8px;
+        padding: 20px;
+        margin: 20px 0;
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        max-height: 600px;
+        overflow-y: auto;
+    }
+    .weline-cron-btn-refresh {
+        background: linear-gradient(45deg, #007bff, #0056b3);
+        border: none;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 5px;
+        font-weight: bold;
+        transition: all 0.3s ease;
+    }
+    .weline-cron-btn-refresh:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        color: white;
+    }
+</style>
 
-                <!-- 定时任务状态说明 -->
-                <div class="alert alert-info">
-                    <h5><i class="fas fa-info-circle"></i> <?= __('定时任务说明') ?></h5>
-                    <ul class="mb-0">
-                        <li><strong><?= __('缓存清理任务：') ?></strong><?= __('每10分钟自动清理过期的缓存文件') ?></li>
-                        <li><strong><?= __('执行时间：') ?></strong><code>*/10 * * * *</code> (<?= __('每10分钟') ?>)</li>
-                        <li><strong><?= __('清理策略：') ?></strong><?= __('删除7天前的过期缓存文件') ?></li>
-                        <li><strong><?= __('安全机制：') ?></strong><?= __('只清理过期文件，不影响正在使用的缓存') ?></li>
-                    </ul>
-                </div>
-
-                <!-- 定时任务输出 -->
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">
-                            <i class="fas fa-terminal"></i> <?= __('定时任务列表') ?>
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="cron-output"><?= htmlspecialchars($cronOutput ?? __('暂无定时任务信息')) ?></div>
-                    </div>
-                </div>
-
-                <!-- 操作说明 -->
-                <div class="card mt-4">
-                    <div class="card-header">
-                        <h5 class="mb-0">
-                            <i class="fas fa-cogs"></i> <?= __('操作说明') ?>
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <h6><?= __('命令行操作：') ?></h6>
-                                <ul class="list-unstyled">
-                                    <li><code>php bin/w cron:task:listing</code> - <?= __('查看所有定时任务') ?></li>
-                                    <li><code>php bin/w cron:task:run cache_cleanup</code> - <?= __('手动执行缓存清理任务') ?></li>
-                                    <li><code>php bin/w cache:flush</code> - <?= __('直接清理过期缓存') ?></li>
-                                </ul>
-                            </div>
-                            <div class="col-md-6">
-                                <h6><?= __('系统管理：') ?></h6>
-                                <ul class="list-unstyled">
-                                    <li><code>php bin/w cron:install</code> - <?= __('安装系统定时任务') ?></li>
-                                    <li><code>php bin/w cron:exist</code> - <?= __('检查定时任务是否存在') ?></li>
-                                    <li><code>php bin/w cron:remove</code> - <?= __('移除系统定时任务') ?></li> 
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 mb-0"><?= $title ?? __('定时任务状态') ?></h1>
+            <div class="btn-group">
+                <button type="button" class="btn weline-cron-btn-refresh" onclick="location.reload()">
+                    <i class="fas fa-sync-alt"></i> <?= __('刷新状态') ?>
+                </button>
+                <a href="<?= $this->getUrl('*/cachecleanup/index') ?>" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> <?= __('返回缓存清理') ?>
+                </a>
             </div>
         </div>
     </div>
+</div>
 
-    <js>Weline_Admin::js/jquery.min.js</js>
-    <js>Weline_Admin::js/bootstrap.bundle.min.js</js>
-    <script>
-        // 自动刷新功能
-        let autoRefresh = false;
-        
-        function toggleAutoRefresh() {
-            autoRefresh = !autoRefresh;
-            if (autoRefresh) {
-                setInterval(() => {
-                    location.reload();
-                }, 30000); // 每30秒刷新一次
-                showMessage('info', __('已开启自动刷新，每30秒刷新一次'));
-            } else {
-                showMessage('info', __('已关闭自动刷新'));
-            }
-        }
-        
-        // 页面加载完成后的初始化
-        $(document).ready(function() {
-            // 可以在这里添加其他初始化逻辑
-        });
-    </script>
-</body>
-</html>
+<div class="row">
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
+
+<!-- 定时任务状态说明 -->
+<div class="alert alert-info">
+    <h5><i class="fas fa-info-circle"></i> <?= __('定时任务说明') ?></h5>
+    <ul class="mb-0">
+        <li><strong><?= __('缓存清理任务：') ?></strong><?= __('每10分钟自动清理过期的缓存文件') ?></li>
+        <li><strong><?= __('执行时间：') ?></strong><code>*/10 * * * *</code> (<?= __('每10分钟') ?>)</li>
+        <li><strong><?= __('清理策略：') ?></strong><?= __('删除7天前的过期缓存文件') ?></li>
+        <li><strong><?= __('安全机制：') ?></strong><?= __('只清理过期文件，不影响正在使用的缓存') ?></li>
+    </ul>
+</div>
+
+<!-- 定时任务输出 -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-terminal"></i> <?= __('定时任务列表') ?>
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="weline-cron-output"><?= htmlspecialchars($cronOutput ?? __('暂无定时任务信息')) ?></div>
+    </div>
+</div>
+
+<!-- 操作说明 -->
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-cogs"></i> <?= __('操作说明') ?>
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6><?= __('命令行操作：') ?></h6>
+                <ul class="list-unstyled">
+                    <li><code>php bin/w cron:task:listing</code> - <?= __('查看所有定时任务') ?></li>
+                    <li><code>php bin/w cron:task:run cache_cleanup</code> - <?= __('手动执行缓存清理任务') ?></li>
+                    <li><code>php bin/w cache:flush</code> - <?= __('直接清理过期缓存') ?></li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h6><?= __('系统管理：') ?></h6>
+                <ul class="list-unstyled">
+                    <li><code>php bin/w cron:install</code> - <?= __('安装系统定时任务') ?></li>
+                    <li><code>php bin/w cron:exist</code> - <?= __('检查定时任务是否存在') ?></li>
+                    <li><code>php bin/w cron:remove</code> - <?= __('移除系统定时任务') ?></li> 
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>

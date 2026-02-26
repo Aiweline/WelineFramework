@@ -6,11 +6,29 @@
 华北2（北京）,"North China 2 (Beijing)"
 华南1（深圳）,"South China 1 (Shenzhen)"
 亚太东南（新加坡）,"Asia Pacific Southeast (Singapore)"
+阿里云域名配置获取指南,阿里云域名配置获取指南
+"1. 登录阿里云控制台：https://www.aliyun.com","1. 登录阿里云控制台：https://www.aliyun.com"
+"2. 右上角头像 → 「AccessKey 管理」","2. 右上角头像 → 「AccessKey 管理」"
+"3. 建议创建子用户 AccessKey（更安全），或使用主账号 AccessKey","3. 建议创建子用户 AccessKey（更安全），或使用主账号 AccessKey"
+"4. 点击「创建 AccessKey」，完成手机验证","4. 点击「创建 AccessKey」，完成手机验证"
+"5. 将「AccessKey ID」填入上方对应字段","5. 将「AccessKey ID」填入上方对应字段"
+"6. 将「AccessKey Secret」填入上方对应字段（仅创建时显示一次，请妥善保存）","6. 将「AccessKey Secret」填入上方对应字段（仅创建时显示一次，请妥善保存）"
+"7. 如使用子用户，需授予「AliyunDomainFullAccess」权限","7. 如使用子用户，需授予「AliyunDomainFullAccess」权限"
+"8. 区域可保持默认（华东1-杭州）","8. 区域可保持默认（华东1-杭州）"
 "AccessKey ID 和 AccessKey Secret 不能为空","AccessKey ID and AccessKey Secret cannot be empty"
 "阿里云域名适配器尚未完成 API 对接，请稍后再试。","Aliyun domain adapter API integration not yet complete. Please try again later."
 "Amazon Web Services Route 53 域名注册服务，支持域名注册、DNS 管理和健康检查。","Amazon Web Services Route 53 domain registration service, supporting domain registration, DNS management, and health checks."
 "Access Key ID","Access Key ID"
 "Secret Access Key","Secret Access Key"
+"AWS Route53 配置获取指南","AWS Route53 配置获取指南"
+"1. 登录 AWS 控制台：https://console.aws.amazon.com","1. 登录 AWS 控制台：https://console.aws.amazon.com"
+"2. 进入 IAM 服务 → 用户 → 选择或创建用户","2. 进入 IAM 服务 → 用户 → 选择或创建用户"
+"3. 在「安全凭证」选项卡中，点击「创建访问密钥」","3. 在「安全凭证」选项卡中，点击「创建访问密钥」"
+"4. 选择「应用程序外部使用」，创建密钥","4. 选择「应用程序外部使用」，创建密钥"
+"5. 将「访问密钥 ID」填入上方「Access Key ID」字段","5. 将「访问密钥 ID」填入上方「Access Key ID」字段"
+"6. 将「秘密访问密钥」填入上方「Secret Access Key」字段","6. 将「秘密访问密钥」填入上方「Secret Access Key」字段"
+"7. 确保该用户具有 Route53Domains 和 Route53 的完整权限","7. 确保该用户具有 Route53Domains 和 Route53 的完整权限"
+"8. 区域选择 us-east-1（Route53 域名注册仅支持此区域）","8. 区域选择 us-east-1（Route53 域名注册仅支持此区域）"
 "API Key 和 Secret 不能为空","API Key and Secret cannot be empty"
 "AWS Route53 适配器尚未完成 API 对接，请稍后再试。","AWS Route53 adapter API integration not yet complete. Please try again later."
 "Microsoft Azure 域名注册与 DNS 管理服务，支持域名注册和 Azure DNS Zone 管理。","Microsoft Azure domain registration and DNS management service, supporting domain registration and Azure DNS Zone management."
@@ -18,8 +36,55 @@
 "客户端密钥 (Client Secret)","Client Secret"
 "订阅 ID (Subscription ID)","Subscription ID"
 "租户 ID (Tenant ID)","Tenant ID"
+"Azure DNS 配置获取指南","Azure DNS 配置获取指南"
+"1. 登录 Azure 门户：https://portal.azure.com","1. 登录 Azure 门户：https://portal.azure.com"
+"2. 进入「Azure Active Directory」→「应用注册」→「新注册」","2. 进入「Azure Active Directory」→「应用注册」→「新注册」"
+"3. 创建应用后，在「概述」页面获取：","3. 创建应用后，在「概述」页面获取："
+"- 应用程序(客户端) ID → 填入「客户端 ID」","- 应用程序(客户端) ID → 填入「客户端 ID」"
+"- 目录(租户) ID → 填入「租户 ID」","- 目录(租户) ID → 填入「租户 ID」"
+"4. 在「证书和密码」→「新客户端密码」创建密钥","4. 在「证书和密码」→「新客户端密码」创建密钥"
+"- 复制密钥值 → 填入「客户端密钥」（仅显示一次）","- 复制密钥值 → 填入「客户端密钥」（仅显示一次）"
+"5. 进入「订阅」，复制订阅 ID → 填入「订阅 ID」","5. 进入「订阅」，复制订阅 ID → 填入「订阅 ID」"
+"6. 在订阅的「访问控制(IAM)」中，为应用分配「DNS Zone 参与者」角色","6. 在订阅的「访问控制(IAM)」中，为应用分配「DNS Zone 参与者」角色"
 "Client ID 和 Client Secret 不能为空","Client ID and Client Secret cannot be empty"
 "Azure DNS 适配器尚未完成 API 对接，请稍后再试。","Azure DNS adapter API integration not yet complete. Please try again later."
+"GName 域名注册商，支持域名注册、续费、转入、DNS 管理和 DNSSEC 配置。","GName 域名注册商，支持域名注册、续费、转入、DNS 管理和 DNSSEC 配置。"
+"APP ID","APP ID"
+"GName 平台分配的 APP ID","GName 平台分配的 APP ID"
+"APP Key","APP Key"
+"API 域名","API 域名"
+"默认联系人模板 ID","默认联系人模板 ID"
+注册域名时使用的联系人模板（可选）,注册域名时使用的联系人模板（可选）
+"GName API 配置获取指南","GName API 配置获取指南"
+【前置条件】,【前置条件】
+"1. 注册 GName 账号：https://www.gname.com/register","1. 注册 GName 账号：https://www.gname.com/register"
+"2. 升级为经销商账号：https://www.gname.com/agent","2. 升级为经销商账号：https://www.gname.com/agent"
+"3. 签署 API 服务协议（企业/平台必需）","3. 签署 API 服务协议（企业/平台必需）"
+"- 联系商务邮箱：business@gname.com","- 联系商务邮箱：business@gname.com"
+"- 或提交工单：https://www.gname.com/user#/wt_add","- 或提交工单：https://www.gname.com/user#/wt_add"
+"- 或拨打热线：+65-65189986","- 或拨打热线：+65-65189986"
+"【获取 API 凭证】","【获取 API 凭证】"
+"4. 登录后进入「控制中心」→「API 管理」","4. 登录后进入「控制中心」→「API 管理」"
+"5. 协议签署完成后可查看 APP ID 和 APP Key","5. 协议签署完成后可查看 APP ID 和 APP Key"
+"6. 将 APP ID 填入上方「APP ID」字段","6. 将 APP ID 填入上方「APP ID」字段"
+"7. 将 APP Key 填入上方「APP Key」字段","7. 将 APP Key 填入上方「APP Key」字段"
+"8. API 域名保持默认（www.gname.com）即可","8. API 域名保持默认（www.gname.com）即可"
+"GName API 连接失败：%{1}","GName API 连接失败：%{1}"
+未知错误,未知错误
+域名可注册,域名可注册
+域名为溢价域名,域名为溢价域名
+域名不可注册,域名不可注册
+域名注册提交成功,域名注册提交成功
+溢价域名，需确认金额后再提交,溢价域名，需确认金额后再提交
+域名注册失败,域名注册失败
+获取域名详情失败,获取域名详情失败
+"DNS 修改成功","DNS 修改成功"
+"DNS 修改失败","DNS 修改失败"
+"GName APP ID 不能为空","GName APP ID 不能为空"
+"GName APP Key 不能为空","GName APP Key 不能为空"
+"GName API 请求失败：%{1}","GName API 请求失败：%{1}"
+网络错误,网络错误
+"GName API 响应解析失败","GName API 响应解析失败"
 获取域名商列表失败：%{error},"Failed to get registrar list: %{error}"
 获取账号列表失败：%{error},"Failed to get account list: %{error}"
 域名商渠道和账号名称不能为空,"Registrar provider and account name are required"
@@ -87,6 +152,56 @@
 网站保存后触发，可用于更新缓存、通知等相关操作。,网站保存后触发，可用于更新缓存、通知等相关操作。
 域名购买成功,"Domain Purchase Success"
 "域名购买成功后触发，可用于通知、自动 DNS 解析、证书申请等后续操作。数据包含 domain、order_id、website_id、auto_create_site。","Triggered after a domain is successfully purchased. Can be used for notifications, auto DNS resolution, certificate requests, etc. Data includes domain, order_id, website_id, auto_create_site."
+"Websites 查询器不支持的操作：%{1}","Websites 查询器不支持的操作：%{1}"
+域名与网站查询,域名与网站查询
+提供域名注册商、账号管理、域名列表、可用性检查、购买等能力,提供域名注册商、账号管理、域名列表、可用性检查、购买等能力
+获取所有可用的域名注册商适配器,获取所有可用的域名注册商适配器
+获取已配置的注册商账号列表,获取已配置的注册商账号列表
+按状态过滤,按状态过滤
+创建或更新注册商账号,创建或更新注册商账号
+"账号 ID（更新时必填）","账号 ID（更新时必填）"
+注册商代码,注册商代码
+账号名称,"Account Name"
+"API Key","API Key"
+"API Secret","API Secret"
+额外配置,"Extra Config"
+状态,Status
+删除注册商账号,删除注册商账号
+"账号 ID","账号 ID"
+"通过注册商 API 获取域名列表","通过注册商 API 获取域名列表"
+检查域名可用性,"Check domain availability"
+域名数组,域名数组
+购买域名,购买域名
+购买项数组,购买项数组
+测试注册商账号连接,测试注册商账号连接
+获取注册商的配置字段定义,获取注册商的配置字段定义
+获取注册商完整信息（含配置字段、帮助说明、默认值）,获取注册商完整信息（含配置字段、帮助说明、默认值）
+"修改域名 DNS/NS 记录","修改域名 DNS/NS 记录"
+域名,Domain
+"NS 列表，逗号分隔","NS 列表，逗号分隔"
+注册商代码和账号名称不能为空,注册商代码和账号名称不能为空
+未找到注册商适配器：%{1},未找到注册商适配器：%{1}
+账号不存在：%{1},账号不存在：%{1}
+更新,更新
+创建,创建
+账号%{1}成功,账号%{1}成功
+保存账号失败：%{1},保存账号失败：%{1}
+保存失败：%{1},保存失败：%{1}
+"账号 ID 无效","账号 ID 无效"
+账号已删除,账号已删除
+删除失败：%{1},删除失败：%{1}
+获取域名列表失败：%{1},"Get domain list failed: %{1}"
+检查可用性失败：%{1},检查可用性失败：%{1}
+参数不完整,参数不完整
+域名购买异常：%{1},域名购买异常：%{1}
+未找到适配器,未找到适配器
+连接成功,"Connection successful"
+获取配置字段失败：%{1},获取配置字段失败：%{1}
+获取注册商信息失败：%{1},获取注册商信息失败：%{1}
+"账号 ID、域名和 NS 列表不能为空","账号 ID、域名和 NS 列表不能为空"
+未找到适配器：%{1},未找到适配器：%{1}
+"域名商 %{1} 不支持 NS 切换","域名商 %{1} 不支持 NS 切换"
+"修改 DNS 失败：%{1}","修改 DNS 失败：%{1}"
 "域名商适配器扩展点，用于接入第三方域名注册商 API（如 GoDaddy、Namecheap 等）。适配器实现域名可用性检查、购买和管理功能。","Domain registrar adapter extension point for integrating third-party domain registrar APIs (e.g., GoDaddy, Namecheap). Adapters implement domain availability checking, purchasing, and management."
 "域名商适配器实现类，在模块的 extends/module/Weline_Websites/Registrar/ 目录下创建PHP文件","Domain registrar adapter implementation class. Create a PHP file in the module's extends/module/Weline_Websites/Registrar/ directory."
 "必须实现 DomainRegistrarInterface 接口","Must implement DomainRegistrarInterface interface"
@@ -96,9 +211,7 @@
 返回适配器版本,"Returns adapter version"
 返回适配器所需的配置字段定义,"Returns adapter required configuration field definitions"
 "测试 API 连通性","Test API connectivity"
-检查域名可用性,"Check domain availability"
 批量检查域名可用性,"Batch check domain availability"
-购买域名,购买域名
 获取已有域名列表,"Get existing domain list"
 获取域名详情,"Get domain detail"
 "GoDaddy、Namecheap、Dynadot 等域名商适配器可通过此扩展点接入","GoDaddy, Namecheap, Dynadot and other registrar adapters can be integrated through this extension point"
@@ -109,11 +222,9 @@
 域名购买条目表,"Domain Purchase Item Table"
 条目ID,"Item ID"
 订单ID,"Order ID"
-域名,Domain
 购买年限,"Purchase Years"
 绑定站点ID,"Bound Site ID"
 是否自动建站,"Auto-create Site"
-状态,Status
 失败原因,"Error Message"
 价格,Price
 币种,Currency
@@ -132,11 +243,11 @@
 描述,Description
 域名商账号表,"Registrar Account Table"
 账号ID,"Account ID"
-账号名称,"Account Name"
-"API Key","API Key"
-"API Secret","API Secret"
 额外配置JSON,"Extra Config JSON"
-获取域名列表失败：%{1},"Get domain list failed: %{1}"
+域名注册服务,域名注册服务
+"通过 GName 等域名商注册和管理域名","通过 GName 等域名商注册和管理域名"
+"DNS 管理","DNS 管理"
+"域名 NS 切换和 DNS 记录管理","域名 NS 切换和 DNS 记录管理"
 "回退 HTTPS 状态失败：%{1}","Rollback HTTPS status failed: %{1}"
 "同步 HTTPS 状态失败：%{1}","Sync HTTPS status failed: %{1}"
 更新证书状态失败：%{1},"Update certificate status failed: %{1}"
@@ -153,7 +264,6 @@
 "HTTPS 证书无效，已自动回退 HTTP","HTTPS certificate invalid, automatically rolled back to HTTP"
 "HTTP %{1}","HTTP %{1}"
 域名服务,"Domain Service"
-"Weline Admin 管理面板","Weline Admin Panel"
 后台,Backend
 网站服务,"Website Service"
 域名商管理,"Registrar Management"
@@ -209,7 +319,6 @@
 留空表示不修改（编辑时）,"Leave empty to keep unchanged (when editing)"
 如：us-east-1、cn-hangzhou,"e.g. us-east-1, cn-hangzhou"
 启用,Enable
-额外配置,"Extra Config"
 "如：{""tenant_id"": ""xxx""}","如：{""tenant_id"": ""xxx""}"
 保存,Save
 添加域名商账号,"Add Registrar Account"
@@ -220,7 +329,6 @@
 确定删除,确定删除
 删除失败,"Delete failed"
 正在测试连接...,"Testing connection..."
-连接成功,"Connection successful"
 连接失败,"Connection failed"
 测试失败,"Test failed"
 选择域名,"Select Domain"
@@ -242,6 +350,15 @@
 SEO账户管理请前往：,SEO账户管理请前往：
 "SEO管理 > 账户管理","SEO管理 > 账户管理"
 面板,Panel
+网站列表,网站列表
+搜索,搜索
+清除,清除
+搜索名称、代码或URL,搜索名称、代码或URL
+加载中...,加载中...
+正在搜索...,正在搜索...
+服务器返回的不是有效的JSON数据,服务器返回的不是有效的JSON数据
+搜索失败,搜索失败
+搜索出错，请刷新页面重试,搜索出错，请刷新页面重试
 网站备份,网站备份
 提示,提示
 网站备份功能正在开发中，敬请期待。,网站备份功能正在开发中，敬请期待。
@@ -259,21 +376,31 @@ SEO账户管理请前往：,SEO账户管理请前往：
 大小,大小
 下载,下载
 暂无备份文件,暂无备份文件
-创建备份失败,创建备份失败
-下载备份,下载备份
-下载备份：,下载备份：
-确定要删除这个备份吗？,确定要删除这个备份吗？
-删除备份,删除备份
-删除备份：,删除备份：
 网站维护模式,网站维护模式
 开启维护模式后，前台将显示维护页面，但后台仍可正常访问。,开启维护模式后，前台将显示维护页面，但后台仍可正常访问。
-网站列表,网站列表
 网站ID,网站ID
 维护模式,维护模式
 暂无网站,暂无网站
 维护中,维护中
 关闭维护模式,关闭维护模式
 开启维护模式,开启维护模式
+检查域名可用性失败：%{1},检查域名可用性失败：%{1}
+查询域名列表失败：%{1},查询域名列表失败：%{1}
+域名商类型和账号名称不能为空,域名商类型和账号名称不能为空
+域名商适配器不存在：%{1},域名商适配器不存在：%{1}
+账号更新成功,账号更新成功
+账号创建成功,账号创建成功
+适配器不存在：%{1},适配器不存在：%{1}
+查询配置字段失败：%{1},查询配置字段失败：%{1}
+查询域名商账号失败：%{1},查询域名商账号失败：%{1}
+查询域名商类型失败：%{1},查询域名商类型失败：%{1}
+"Weline Admin 管理面板","Weline Admin Panel"
+创建备份失败,创建备份失败
+下载备份,下载备份
+下载备份：,下载备份：
+确定要删除这个备份吗？,确定要删除这个备份吗？
+删除备份,删除备份
+删除备份：,删除备份：
 开启,开启
 关闭,关闭
 确定要,确定要

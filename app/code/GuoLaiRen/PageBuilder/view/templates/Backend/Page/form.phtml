@@ -1,6 +1,11 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
-/**@var \GuoLaiRen\PageBuilder\Model\Page $page */
+/**
+ * PageBuilder 页面表单 - 内容模板
+ * 由布局系统自动包裹
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var \GuoLaiRen\PageBuilder\Model\Page $page
+ */
 $page = $this->getData('page');
 $isEdit = $page && $page->getId();
 $selectedLocales = $this->getData('selected_locales') ?? [];
@@ -32,7 +37,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
     $selectedLocales[] = $pageDefaultLocale;
 }
 ?>
-<w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
+
 <!-- CSS控制local翻译标签显示 -->
 <style>
     <?php if (($i18n_enabled ?? '0') !== '1'): ?>
@@ -5944,5 +5949,3 @@ window.openFrontendPreview = function() {
     console.log('🌐 打开前端预览:', previewUrl);
 };
 </script>
-
-<w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>

@@ -1,6 +1,9 @@
 <?php
 /**
- * 访问日志列表页面
+ * 访问日志列表页面（内容模板）
+ * 
+ * 只包含页面内容，由布局系统自动包裹 HTML 框架
+ * 布局由 BackendController::$layoutType = 'default.default' 控制
  *
  * @var \Weline\Framework\View\Template $this
  * @var array $logs
@@ -10,9 +13,6 @@
  * @var int $total_pages
  * @var string $keyword
  */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
-
 $logs = $logs ?? [];
 $total = (int)($total ?? 0);
 $page = (int)($page ?? 1);
@@ -20,127 +20,99 @@ $limit = (int)($limit ?? 20);
 $totalPages = (int)($total_pages ?? 0);
 $keyword = $keyword ?? '';
 ?>
-<!DOCTYPE html>
-<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><lang>访问日志</lang></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+<!-- 页面标题 -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0 font-size-18"><lang>访问日志</lang></h4>
+        </div>
+    </div>
+</div>
 
-@template(Weline_Admin::common/page/loading.phtml)
+<!-- 消息提示区域 -->
+<div class='row'>
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
 
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
+<!-- 提示信息 -->
+<div class="row">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <i class="mdi mdi-information me-2"></i>
+            <strong><lang>提示</lang>:</strong> <lang>访问日志功能正在开发中，敬请期待。</lang>
+        </div>
+    </div>
+</div>
 
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <!-- 页面标题 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0 font-size-18"><lang>访问日志</lang></h4>
+<!-- 搜索 -->
+<div class="row">
+    <div class="col-xl-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="get" action="<?= $this->getBackendUrl('*/backend/access-log') ?>" class="row g-3">
+                    <div class="col-md-9">
+                        <label class="form-label"><lang>关键词</lang></label>
+                        <input type="text" class="form-control" name="keyword" value="<?= htmlspecialchars($keyword) ?>" 
+                               placeholder="<?= __('搜索IP地址或URL') ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="mdi mdi-magnify me-2"></i><lang>搜索</lang>
+                            </button>
+                            <a href="<?= $this->getBackendUrl('*/backend/access-log') ?>" class="btn btn-secondary">
+                                <i class="mdi mdi-refresh me-2"></i><lang>重置</lang>
+                            </a>
                         </div>
                     </div>
-                </div>
-
-                <!-- 消息提示区域 -->
-                <div class='row'>
-                    <div class="col-12">
-                        <template>Weline_Component::message.phtml</template>
-                    </div>
-                </div>
-
-                <!-- 提示信息 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="alert alert-info">
-                            <i class="mdi mdi-information me-2"></i>
-                            <strong><lang>提示</lang>:</strong> <lang>访问日志功能正在开发中，敬请期待。</lang>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 搜索 -->
-                <div class="row">
-                    <div class="col-xl-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <form method="get" action="<?= $this->getBackendUrl('*/backend/access-log') ?>" class="row g-3">
-                                    <div class="col-md-9">
-                                        <label class="form-label"><lang>关键词</lang></label>
-                                        <input type="text" class="form-control" name="keyword" value="<?= htmlspecialchars($keyword) ?>" 
-                                               placeholder="<?= __('搜索IP地址或URL') ?>">
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label">&nbsp;</label>
-                                        <div>
-                                            <button type="submit" class="btn btn-primary">
-                                                <i class="mdi mdi-magnify me-2"></i><lang>搜索</lang>
-                                            </button>
-                                            <a href="<?= $this->getBackendUrl('*/backend/access-log') ?>" class="btn btn-secondary">
-                                                <i class="mdi mdi-refresh me-2"></i><lang>重置</lang>
-                                            </a>
-                                        </div>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 日志列表 -->
-                <div class="row">
-                    <div class="col-xl-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <h4 class="card-title mb-4"><lang>日志列表</lang></h4>
-                                
-                                <?php if (!empty($logs)): ?>
-                                <div class="table-responsive">
-                                    <table class="table table-hover table-striped align-middle table-nowrap mb-0">
-                                        <thead class="table-light">
-                                            <tr>
-                                                <th><lang>时间</lang></th>
-                                                <th><lang>IP地址</lang></th>
-                                                <th><lang>URL</lang></th>
-                                                <th><lang>状态码</lang></th>
-                                                <th><lang>User Agent</lang></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php foreach ($logs as $log): ?>
-                                            <tr>
-                                                <td><?= $log['time'] ?? '-' ?></td>
-                                                <td><?= htmlspecialchars($log['ip'] ?? '-') ?></td>
-                                                <td><?= htmlspecialchars($log['url'] ?? '-') ?></td>
-                                                <td><?= $log['status_code'] ?? '-' ?></td>
-                                                <td><?= htmlspecialchars($log['user_agent'] ?? '-') ?></td>
-                                            </tr>
-                                            <?php endforeach; ?>
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <?php else: ?>
-                                <div class="text-center text-muted py-5">
-                                    <i class="mdi mdi-file-document-outline" style="font-size: 48px;"></i>
-                                    <p class="mt-3"><lang>暂无访问日志记录</lang></p>
-                                </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                </form>
             </div>
         </div>
     </div>
-
-    @template(Weline_Admin::common/footer.phtml)
 </div>
 
-</body>
-</html>
-
+<!-- 日志列表 -->
+<div class="row">
+    <div class="col-xl-12">
+        <div class="card">
+            <div class="card-body">
+                <h4 class="card-title mb-4"><lang>日志列表</lang></h4>
+                
+                <?php if (!empty($logs)): ?>
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped align-middle table-nowrap mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th><lang>时间</lang></th>
+                                <th><lang>IP地址</lang></th>
+                                <th><lang>URL</lang></th>
+                                <th><lang>状态码</lang></th>
+                                <th><lang>User Agent</lang></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($logs as $log): ?>
+                            <tr>
+                                <td><?= $log['time'] ?? '-' ?></td>
+                                <td><?= htmlspecialchars($log['ip'] ?? '-') ?></td>
+                                <td><?= htmlspecialchars($log['url'] ?? '-') ?></td>
+                                <td><?= $log['status_code'] ?? '-' ?></td>
+                                <td><?= htmlspecialchars($log['user_agent'] ?? '-') ?></td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php else: ?>
+                <div class="text-center text-muted py-5">
+                    <i class="mdi mdi-file-document-outline" style="font-size: 48px;"></i>
+                    <p class="mt-3"><lang>暂无访问日志记录</lang></p>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>

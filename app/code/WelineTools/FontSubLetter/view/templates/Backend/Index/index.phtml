@@ -1,882 +1,677 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $title ?> - <?= $subtitle ?></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
-    <style>
-        .upload-area {
-            border: 2px dashed #dee2e6;
-            border-radius: 8px;
-            padding: 40px;
-            text-align: center;
-            transition: all 0.3s ease;
-            cursor: pointer;
-        }
-        .upload-area:hover {
-            border-color: #007bff;
-            background-color: #f8f9fa;
-        }
-        .upload-area.dragover {
-            border-color: #28a745;
-            background-color: #d4edda;
-        }
-        .character-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
-            gap: 5px;
-            max-height: 300px;
-            overflow-y: auto;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            padding: 10px;
-        }
-        .character-item {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 40px;
-            height: 40px;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            font-size: 16px;
-        }
-        .character-item:hover {
-            background-color: #e9ecef;
-        }
-        .character-item.selected {
-            background-color: #007bff;
-            color: white;
-            border-color: #007bff;
-        }
-        .progress-container {
-            display: none;
-        }
-        .file-info {
-            background-color: #f8f9fa;
-            border-radius: 4px;
-            padding: 15px;
-            margin-top: 15px;
-        }
-        .storage-info {
-            background-color: #e7f3ff;
-            border: 1px solid #b3d9ff;
-            border-radius: 4px;
-            padding: 10px;
-            margin-bottom: 15px;
-            font-size: 0.9em;
-        }
-        .storage-controls {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-        .storage-controls .btn {
-            font-size: 0.8em;
-            padding: 4px 8px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container-fluid py-4">
-        <div class="row">
-            <div class="col-12">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h1 class="h3 mb-0">
-                        <i class="bi bi-fonts"></i>
-                        <?= $title ?>
-                        <small class="text-muted"><?= $subtitle ?></small>
-                    </h1>
-                    <a href="<?= $this->getUrl('*/list') ?>" class="btn btn-outline-secondary">
-                        <i class="bi bi-list"></i> <?= __('处理记录') ?>
-                    </a>
+<?php
+/**
+ * 字体子集工具主页（内容模板）
+ */
+?>
+<!-- 页面标题 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">
+                <i class="bi bi-fonts"></i>
+                <?= $title ?>
+                <small class="text-muted"><?= $subtitle ?></small>
+            </h4>
+            <a href="<?= $this->getUrl('*/list') ?>" class="btn btn-outline-secondary">
+                <i class="bi bi-list"></i> <?= __('处理记录') ?>
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<style>
+.fsl-upload-area {
+    border: 2px dashed var(--backend-color-border);
+    border-radius: 8px;
+    padding: 40px;
+    text-align: center;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    background-color: var(--backend-color-card-bg);
+}
+.fsl-upload-area:hover {
+    border-color: var(--backend-color-primary);
+    background-color: var(--backend-color-hover-bg);
+}
+.fsl-upload-area.dragover {
+    border-color: var(--backend-color-success);
+    background-color: var(--backend-color-success-light, rgba(40, 167, 69, 0.1));
+}
+.fsl-character-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+    gap: 5px;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--backend-color-border);
+    border-radius: 4px;
+    padding: 10px;
+    background-color: var(--backend-color-card-bg);
+}
+.fsl-character-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--backend-color-border);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 16px;
+    background-color: var(--backend-color-card-bg);
+    color: var(--backend-color-text-primary);
+}
+.fsl-character-item:hover {
+    background-color: var(--backend-color-hover-bg);
+}
+.fsl-character-item.selected {
+    background-color: var(--backend-color-primary);
+    color: var(--backend-color-light);
+    border-color: var(--backend-color-primary);
+}
+.fsl-progress-container {
+    display: none;
+}
+.fsl-file-info {
+    background-color: var(--backend-color-hover-bg);
+    border-radius: 4px;
+    padding: 15px;
+    margin-top: 15px;
+}
+.fsl-storage-info {
+    background-color: var(--backend-color-info-light, rgba(23, 162, 184, 0.1));
+    border: 1px solid var(--backend-color-info);
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 15px;
+    font-size: 0.9em;
+}
+.fsl-storage-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+.fsl-storage-controls .btn {
+    font-size: 0.8em;
+    padding: 4px 8px;
+}
+</style>
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- 上传区域 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-upload"></i> <lang>上传字体文件</lang>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="fsl-upload-area" id="uploadArea">
+                    <i class="bi bi-cloud-upload display-4 text-muted"></i>
+                    <p class="mt-3 mb-2"><lang>拖拽字体文件到此处或点击选择文件</lang></p>
+                    <p class="text-muted small">
+                        <lang>支持格式</lang>: TTF, OTF, WOFF, WOFF2 | 
+                        <lang>最大文件大小</lang>: 100MB
+                    </p>
+                    <input type="file" id="fontFile" accept=".ttf,.otf,.woff,.woff2" style="display: none;">
+                </div>
+
+                <div class="fsl-progress-container" id="progressContainer">
+                    <div class="progress mb-3">
+                        <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <p class="text-center mb-0" id="progressText"><lang>上传中...</lang></p>
+                </div>
+
+                <div class="fsl-file-info" id="fileInfo" style="display: none;">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong><lang>文件名</lang>:</strong> <span id="fileName"></span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong><lang>格式</lang>:</strong> <span id="fileFormat"></span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong><lang>大小</lang>:</strong> <span id="fileSize"></span>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <button type="button" class="btn btn-primary" id="extractBtn">
+                            <i class="bi bi-search"></i> <lang>提取字符</lang>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="row">
-            <div class="col-lg-8">
-                <!-- 上传区域 -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">
-                            <i class="bi bi-upload"></i> <?= __('上传字体文件') ?>
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="upload-area" id="uploadArea">
-                            <i class="bi bi-cloud-upload display-4 text-muted"></i>
-                            <p class="mt-3 mb-2"><?= __('拖拽字体文件到此处或点击选择文件') ?></p>
-                            <p class="text-muted small">
-                                <?= __('支持格式') ?>: <?= __('TTF, OTF, WOFF, WOFF2') ?> | 
-                                <?= __('最大文件大小') ?>: <?= __('100MB') ?>
-                            </p>
-                            <input type="file" id="fontFile" accept=".ttf,.otf,.woff,.woff2" style="display: none;">
-                        </div>
-
-                        <div class="progress-container" id="progressContainer">
-                            <div class="progress mb-3">
-                                <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%"></div>
-                            </div>
-                            <p class="text-center mb-0" id="progressText"><?= __('上传中...') ?></p>
-                        </div>
-
-                        <div class="file-info" id="fileInfo" style="display: none;">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <strong><?= __('文件名') ?>:</strong> <span id="fileName"></span>
-                                </div>
-                                <div class="col-md-3">
-                                    <strong><?= __('格式') ?>:</strong> <span id="fileFormat"></span>
-                                </div>
-                                <div class="col-md-3">
-                                    <strong><?= __('大小') ?>:</strong> <span id="fileSize"></span>
-                                </div>
-                            </div>
-                            <div class="mt-3">
-                                <button type="button" class="btn btn-primary" id="extractBtn">
-                                    <i class="bi bi-search"></i> <?= __('提取字符') ?>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 字符选择区域 -->
-                <div class="card mb-4" id="characterCard" style="display: none;">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">
-                            <i class="bi bi-list-check"></i> <?= __('选择字符') ?>
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <!-- 本地存储信息和控制 -->
-                        <div class="storage-info" id="storageInfo" style="display: none;">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <i class="bi bi-info-circle"></i>
-                                    <span id="storageStatus"><?= __('检测到本地存储数据') ?></span>
-                                </div>
-                                <div class="storage-controls">
-                                    <button type="button" class="btn btn-sm btn-outline-primary" id="loadStorageBtn">
-                                        <i class="bi bi-download"></i> <?= __('加载') ?>
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-outline-success" id="saveStorageBtn">
-                                        <i class="bi bi-save"></i> <?= __('保存') ?>
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-outline-warning" id="clearStorageBtn">
-                                        <i class="bi bi-trash"></i> <?= __('清理') ?>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <button type="button" class="btn btn-sm btn-outline-primary me-2" id="selectAllBtn">
-                                <?= __('全选') ?>
-                            </button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary me-2" id="deselectAllBtn">
-                                <?= __('取消全选') ?>
-                            </button>
-                            <button type="button" class="btn btn-sm btn-outline-info me-2" id="addToCustomBtn">
-                                <i class="bi bi-plus-circle"></i> <?= __('添加到自定义') ?>
-                            </button>
-                            <span class="text-muted">
-                                <?= __('已选择') ?>: <span id="selectedCount">0</span> <?= __('个字符') ?>
-                            </span>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="customChars" class="form-label">
-                                <?= __('自定义字符') ?>
-                                <button type="button" class="btn btn-sm btn-outline-secondary ms-2" id="clearCustomBtn">
-                                    <i class="bi bi-x-circle"></i> <?= __('清空') ?>
-                                </button>
-                            </label>
-                            <textarea class="form-control" id="customChars" rows="3" 
-                                      placeholder="<?= __('请输入要包含的字符，或从上方选择字符后点击"添加到自定义"') ?>"></textarea>
-                            <div class="form-text">
-                                <?= __('自定义字符会与选中的字符合并生成字体子集') ?>
-                            </div>
-                        </div>
-
-                        <div class="character-grid" id="characterGrid"></div>
-
-                        <div class="mt-3">
-                            <button type="button" class="btn btn-success" id="generateBtn">
-                                <i class="bi bi-gear"></i> <?= __('生成字体') ?>
-                            </button>
-                        </div>
-                    </div>
-                </div>
+        <!-- 字符选择区域 -->
+        <div class="card mb-4" id="characterCard" style="display: none;">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-list-check"></i> <lang>选择字符</lang>
+                </h5>
             </div>
-
-            <div class="col-lg-4">
-                <!-- 使用说明 -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">
-                            <i class="bi bi-info-circle"></i> <?= __('使用说明') ?>
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <ol class="mb-0">
-                            <li><?= __('1. 上传字体文件') ?></li>
-                            <li><?= __('2. 提取字体中的字符') ?></li>
-                            <li><?= __('3. 选择需要的字符') ?></li>
-                            <li><?= __('4. 生成子集字体并下载') ?></li>
-                        </ol>
-                    </div>
-                </div>
-
-                <!-- 本地存储说明 -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">
-                            <i class="bi bi-device-hdd"></i> <?= __('本地存储功能') ?>
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <ul class="list-unstyled mb-0">
-                            <li><i class="bi bi-check-circle text-success"></i> <?= __('自动保存自定义字符') ?></li>
-                            <li><i class="bi bi-check-circle text-success"></i> <?= __('记住选中的字符子集') ?></li>
-                            <li><i class="bi bi-check-circle text-success"></i> <?= __('下次访问自动恢复') ?></li>
-                            <li><i class="bi bi-check-circle text-success"></i> <?= __('支持手动保存和清理') ?></li>
-                            <li><i class="bi bi-check-circle text-success"></i> <?= __('数据仅存储在浏览器中') ?></li>
-                        </ul>
+            <div class="card-body">
+                <!-- 本地存储信息和控制 -->
+                <div class="fsl-storage-info" id="storageInfo" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="bi bi-info-circle"></i>
+                            <span id="storageStatus"><lang>检测到本地存储数据</lang></span>
+                        </div>
+                        <div class="fsl-storage-controls">
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="loadStorageBtn">
+                                <i class="bi bi-download"></i> <lang>加载</lang>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-success" id="saveStorageBtn">
+                                <i class="bi bi-save"></i> <lang>保存</lang>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-warning" id="clearStorageBtn">
+                                <i class="bi bi-trash"></i> <lang>清理</lang>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                <!-- 功能特性 -->
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">
-                            <i class="bi bi-star"></i> <?= __('功能特性') ?>
-                        </h5>
+                <div class="mb-3">
+                    <button type="button" class="btn btn-sm btn-outline-primary me-2" id="selectAllBtn">
+                        <lang>全选</lang>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary me-2" id="deselectAllBtn">
+                        <lang>取消全选</lang>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-info me-2" id="addToCustomBtn">
+                        <i class="bi bi-plus-circle"></i> <lang>添加到自定义</lang>
+                    </button>
+                    <span class="text-muted">
+                        <lang>已选择</lang>: <span id="selectedCount">0</span> <lang>个字符</lang>
+                    </span>
+                </div>
+
+                <div class="mb-3">
+                    <label for="customChars" class="form-label">
+                        <lang>自定义字符</lang>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-2" id="clearCustomBtn">
+                            <i class="bi bi-x-circle"></i> <lang>清空</lang>
+                        </button>
+                    </label>
+                    <textarea class="form-control" id="customChars" rows="3" 
+                              placeholder="<?= __('请输入要包含的字符，或从上方选择字符后点击"添加到自定义"') ?>"></textarea>
+                    <div class="form-text">
+                        <lang>自定义字符会与选中的字符合并生成字体子集</lang>
                     </div>
-                    <div class="card-body">
-                        <ul class="list-unstyled mb-0">
-                            <li><i class="bi bi-check-circle text-success"></i> <?= __('支持多种字体格式') ?></li>
-                            <li><i class="bi bi-check-circle text-success"></i> <?= __('智能字符提取') ?></li>
-                            <li><i class="bi bi-check-circle text-success"></i> <?= __('可视化字符选择') ?></li>
-                            <li><i class="bi bi-check-circle text-success"></i> <?= __('高效字体压缩') ?></li>
-                            <li><i class="bi bi-check-circle text-success"></i> <?= __('一键下载') ?></li>
-                        </ul>
-                    </div>
+                </div>
+
+                <div class="fsl-character-grid" id="characterGrid"></div>
+
+                <div class="mt-3">
+                    <button type="button" class="btn btn-success" id="generateBtn">
+                        <i class="bi bi-gear"></i> <lang>生成字体</lang>
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- SweetAlert2 CSS -->
-    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-    <!-- SweetAlert2 JS -->
-    <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-    <script>
-        let currentRecordId = null;
-        let selectedCharacters = new Set();
-        let allCharacters = [];
-        const STORAGE_KEY = 'font_subset_data';
+    <div class="col-lg-4">
+        <!-- 使用说明 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-info-circle"></i> <lang>使用说明</lang>
+                </h5>
+            </div>
+            <div class="card-body">
+                <ol class="mb-0">
+                    <li><lang>上传字体文件</lang></li>
+                    <li><lang>提取字体中的字符</lang></li>
+                    <li><lang>选择需要的字符</lang></li>
+                    <li><lang>生成子集字体并下载</lang></li>
+                </ol>
+            </div>
+        </div>
 
-        // 本地存储管理类
-        class LocalStorageManager {
-            constructor() {
-                this.storageKey = STORAGE_KEY;
-            }
+        <!-- 本地存储说明 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-device-hdd"></i> <lang>本地存储功能</lang>
+                </h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li><i class="bi bi-check-circle text-success"></i> <lang>自动保存自定义字符</lang></li>
+                    <li><i class="bi bi-check-circle text-success"></i> <lang>记住选中的字符子集</lang></li>
+                    <li><i class="bi bi-check-circle text-success"></i> <lang>下次访问自动恢复</lang></li>
+                    <li><i class="bi bi-check-circle text-success"></i> <lang>支持手动保存和清理</lang></li>
+                    <li><i class="bi bi-check-circle text-success"></i> <lang>数据仅存储在浏览器中</lang></li>
+                </ul>
+            </div>
+        </div>
 
-            // 保存数据
-            save(data) {
-                try {
-                    const storageData = {
-                        customChars: data.customChars || '',
-                        selectedChars: data.selectedChars || [],
-                        timestamp: Date.now(),
-                        recordId: currentRecordId
-                    };
-                    localStorage.setItem(this.storageKey, JSON.stringify(storageData));
-                    this.showStorageInfo('数据已保存到本地存储');
-                    return true;
-                } catch (error) {
-                    console.error('保存到本地存储失败:', error);
-                    this.showStorageInfo('保存失败: ' + error.message, 'danger');
-                    return false;
-                }
-            }
+        <!-- 功能特性 -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-star"></i> <lang>功能特性</lang>
+                </h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li><i class="bi bi-check-circle text-success"></i> <lang>支持多种字体格式</lang></li>
+                    <li><i class="bi bi-check-circle text-success"></i> <lang>智能字符提取</lang></li>
+                    <li><i class="bi bi-check-circle text-success"></i> <lang>可视化字符选择</lang></li>
+                    <li><i class="bi bi-check-circle text-success"></i> <lang>高效字体压缩</lang></li>
+                    <li><i class="bi bi-check-circle text-success"></i> <lang>一键下载</lang></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
 
-            // 加载数据
-            load() {
-                try {
-                    const data = localStorage.getItem(this.storageKey);
-                    if (data) {
-                        const parsedData = JSON.parse(data);
-                        return parsedData;
-                    }
-                    return null;
-                } catch (error) {
-                    console.error('从本地存储加载失败:', error);
-                    return null;
-                }
-            }
+<script>
+(function() {
+    'use strict';
+    
+    var currentRecordId = null;
+    var selectedCharacters = new Set();
+    var allCharacters = [];
+    var STORAGE_KEY = 'font_subset_data';
 
-            // 清理数据
-            clear() {
-                try {
-                    localStorage.removeItem(this.storageKey);
-                    this.showStorageInfo('本地存储数据已清理');
-                    return true;
-                } catch (error) {
-                    console.error('清理本地存储失败:', error);
-                    this.showStorageInfo('清理失败: ' + error.message, 'danger');
-                    return false;
-                }
-            }
+    // 本地存储管理类
+    function LocalStorageManager() {
+        this.storageKey = STORAGE_KEY;
+    }
 
-            // 检查是否有存储数据
-            hasData() {
-                const data = this.load();
-                return data !== null;
-            }
-
-            // 显示存储信息
-            showStorageInfo(message, type = 'info') {
-                const storageInfo = document.getElementById('storageInfo');
-                const storageStatus = document.getElementById('storageStatus');
-                
-                storageStatus.textContent = message;
-                storageInfo.className = `storage-info alert alert-${type}`;
-                storageInfo.style.display = 'block';
-                
-                // 3秒后自动隐藏
-                setTimeout(() => {
-                    storageInfo.style.display = 'none';
-                }, 3000);
-            }
+    LocalStorageManager.prototype.save = function(data) {
+        try {
+            var storageData = {
+                customChars: data.customChars || '',
+                selectedChars: data.selectedChars || [],
+                timestamp: Date.now(),
+                recordId: currentRecordId
+            };
+            localStorage.setItem(this.storageKey, JSON.stringify(storageData));
+            this.showStorageInfo('<?= __('数据已保存到本地存储') ?>');
+            return true;
+        } catch (error) {
+            console.error('保存到本地存储失败:', error);
+            this.showStorageInfo('<?= __('保存失败') ?>: ' + error.message, 'danger');
+            return false;
         }
+    };
 
-        const storageManager = new LocalStorageManager();
-
-        // 页面加载时检查本地存储
-        document.addEventListener('DOMContentLoaded', () => {
-            if (storageManager.hasData()) {
-                const storageInfo = document.getElementById('storageInfo');
-                storageInfo.style.display = 'block';
-                document.getElementById('storageStatus').textContent = '检测到本地存储数据，可以加载使用';
-            }
-        });
-
-        // 上传区域事件
-        document.getElementById('uploadArea').addEventListener('click', () => {
-            document.getElementById('fontFile').click();
-        });
-
-        document.getElementById('uploadArea').addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.currentTarget.classList.add('dragover');
-        });
-
-        document.getElementById('uploadArea').addEventListener('dragleave', (e) => {
-            e.currentTarget.classList.remove('dragover');
-        });
-
-        document.getElementById('uploadArea').addEventListener('drop', (e) => {
-            e.preventDefault();
-            e.currentTarget.classList.remove('dragover');
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                handleFileUpload(files[0]);
-            }
-        });
-
-        document.getElementById('fontFile').addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                handleFileUpload(e.target.files[0]);
-            }
-        });
-
-        // 文件上传处理
-        function handleFileUpload(file) {
-            const formData = new FormData();
-            formData.append('font_file', file);
-
-            showProgress();
-            
-            console.log('开始上传文件:', file.name);
-            
-            fetch('<?= $this->getUrl("*/backend/upload") ?>', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                console.log('上传响应状态:', response.status);
-                return response.json();
-            })
-            .then(data => {
-                console.log('上传响应数据:', data);
-                hideProgress();
-                if (data.code === 200) {
-                    showFileInfo(data.data);
-                    currentRecordId = data.data.id;
-                    console.log('设置currentRecordId:', currentRecordId);
-                } else {
-                    console.error('上传失败:', data.msg);
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'error',
-                            title: '<?= __('上传失败') ?>',
-                            text: data.msg,
-                            confirmButtonText: '<?= __('确定') ?>'
-                        });
-                    } else {
-                        console.error(data.msg);
-                    }
-                }
-            })
-            .catch(error => {
-                console.error('上传异常:', error);
-                hideProgress();
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('上传失败') ?>',
-                        text: error.message,
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('上传失败') ?>: ' + error.message);
-                }
-            });
-        }
-
-        // 显示进度条
-        function showProgress() {
-            document.getElementById('progressContainer').style.display = 'block';
-            document.getElementById('progressBar').style.width = '0%';
-            document.getElementById('progressText').textContent = '<?= __('上传中...') ?>';
-        }
-
-        // 隐藏进度条
-        function hideProgress() {
-            document.getElementById('progressContainer').style.display = 'none';
-        }
-
-        // 显示文件信息
-        function showFileInfo(fileInfo) {
-            document.getElementById('fileName').textContent = fileInfo.filename;
-            document.getElementById('fileFormat').textContent = fileInfo.format.toUpperCase();
-            document.getElementById('fileSize').textContent = fileInfo.size;
-            document.getElementById('fileInfo').style.display = 'block';
-        }
-
-        // 提取字符
-        document.getElementById('extractBtn').addEventListener('click', () => {
-            console.log('点击提取按钮，currentRecordId:', currentRecordId);
-            
-            if (!currentRecordId) {
-                console.error('currentRecordId为空，提示用户上传文件');
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: '<?= __('提示') ?>',
-                        text: '<?= __('请先上传字体文件') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('请先上传字体文件') ?>');
-                }
-                return;
-            }
-
-            showProgress();
-            document.getElementById('progressText').textContent = '<?= __('提取字符中...') ?>';
-
-            console.log('开始提取字符，记录ID:', currentRecordId);
-
-            fetch(`<?= $this->getUrl("*/backend/extract") ?>?record_id=${currentRecordId}`)
-            .then(response => {
-                console.log('提取响应状态:', response.status);
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log('提取响应数据:', data);
-                hideProgress();
-                
-                if (data.code === 200) {
-                    if (data.data && data.data.characters && Array.isArray(data.data.characters)) {
-                        showCharacterGrid(data.data.characters);
-                    } else {
-                        console.error('字符数据格式错误:', data.data);
-                        if (typeof Swal !== 'undefined') {
-                            Swal.fire({
-                                icon: 'error',
-                                title: '<?= __('格式错误') ?>',
-                                text: '<?= __('字符数据格式错误') ?>',
-                                confirmButtonText: '<?= __('确定') ?>'
-                            });
-                        } else {
-                            console.error('<?= __('字符数据格式错误') ?>');
-                        }
-                    }
-                } else {
-                    console.error('提取失败:', data.msg);
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'error',
-                            title: '<?= __('提取失败') ?>',
-                            text: data.msg || '<?= __('提取失败') ?>',
-                            confirmButtonText: '<?= __('确定') ?>'
-                        });
-                    } else {
-                        console.error(data.msg || '<?= __('提取失败') ?>');
-                    }
-                }
-            })
-            .catch(error => {
-                console.error('提取异常:', error);
-                hideProgress();
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('提取失败') ?>',
-                        text: error.message,
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('提取失败') ?>: ' + error.message);
-                }
-            });
-        });
-
-        // 显示字符网格
-        function showCharacterGrid(characters) {
-            console.log('显示字符网格，字符数量:', characters.length);
-            
-            if (!Array.isArray(characters) || characters.length === 0) {
-                console.error('字符数据无效:', characters);
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: '<?= __('提示') ?>',
-                        text: '<?= __('没有可显示的字符') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('没有可显示的字符') ?>');
-                }
-                return;
-            }
-
-            allCharacters = characters;
-            const grid = document.getElementById('characterGrid');
-            grid.innerHTML = '';
-
-            // 创建字体预览样式
-            const fontUrl = `<?= $this->getUrl("*/backend/download") ?>?record_id=${currentRecordId}&preview=1`;
-            const fontFamily = 'CustomFont_' + currentRecordId;
-            
-            console.log('字体URL:', fontUrl);
-            console.log('字体族名:', fontFamily);
-            
-            // 添加字体样式到页面
-            const style = document.createElement('style');
-            style.textContent = `
-                @font-face {
-                    font-family: '${fontFamily}';
-                    src: url('${fontUrl}') format('opentype');
-                    font-weight: normal;
-                    font-style: normal;
-                }
-                .character-item {
-                    font-family: '${fontFamily}', sans-serif !important;
-                }
-            `;
-            document.head.appendChild(style);
-
-            let validCharacters = 0;
-            characters.forEach((char, index) => {
-                if (char && typeof char === 'object' && char.value !== undefined && char.code !== undefined) {
-                    const item = document.createElement('div');
-                    item.className = 'character-item';
-                    item.textContent = char.value;
-                    item.dataset.code = char.code;
-                    item.style.fontFamily = `'${fontFamily}', sans-serif`;
-                    item.addEventListener('click', () => toggleCharacter(char.code, char.value));
-                    grid.appendChild(item);
-                    validCharacters++;
-                } else {
-                    console.warn('跳过无效字符:', char, '索引:', index);
-                }
-            });
-
-            console.log('有效字符数量:', validCharacters);
-            
-            if (validCharacters > 0) {
-                document.getElementById('characterCard').style.display = 'block';
-                updateSelectedCount();
-            } else {
-                console.error('没有有效的字符可以显示');
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: '<?= __('提示') ?>',
-                        text: '<?= __('没有有效的字符可以显示') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('没有有效的字符可以显示') ?>');
-                }
-            }
-        }
-
-        // 切换字符选择
-        function toggleCharacter(code, value) {
-            const item = document.querySelector(`[data-code="${code}"]`);
-            if (selectedCharacters.has(code)) {
-                selectedCharacters.delete(code);
-                item.classList.remove('selected');
-            } else {
-                selectedCharacters.add(code);
-                item.classList.add('selected');
-            }
-            updateSelectedCount();
-        }
-
-        // 更新选择计数
-        function updateSelectedCount() {
-            document.getElementById('selectedCount').textContent = selectedCharacters.size;
-        }
-
-        // 全选
-        document.getElementById('selectAllBtn').addEventListener('click', () => {
-            document.querySelectorAll('.character-item').forEach(item => {
-                const code = item.dataset.code;
-                selectedCharacters.add(code);
-                item.classList.add('selected');
-            });
-            updateSelectedCount();
-        });
-
-        // 取消全选
-        document.getElementById('deselectAllBtn').addEventListener('click', () => {
-            selectedCharacters.clear();
-            document.querySelectorAll('.character-item').forEach(item => {
-                item.classList.remove('selected');
-            });
-            updateSelectedCount();
-        });
-
-        // 添加到自定义字符
-        document.getElementById('addToCustomBtn').addEventListener('click', () => {
-            if (selectedCharacters.size === 0) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: '<?= __('提示') ?>',
-                        text: '<?= __('请先选择字符') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('请先选择字符') ?>');
-                }
-                return;
-            }
-
-            const customCharsTextarea = document.getElementById('customChars');
-            const currentCustomChars = customCharsTextarea.value;
-            
-            // 获取选中的字符值
-            const selectedCharValues = Array.from(selectedCharacters).map(code => {
-                const char = allCharacters.find(c => c.code == code);
-                return char ? char.value : String.fromCharCode(code);
-            });
-
-            // 合并到自定义字符区域
-            const newCustomChars = currentCustomChars + selectedCharValues.join('');
-            customCharsTextarea.value = newCustomChars;
-            
-            storageManager.showStorageInfo('已添加 ' + selectedCharValues.length + ' 个字符到自定义区域');
-        });
-
-        // 清空自定义字符
-        document.getElementById('clearCustomBtn').addEventListener('click', () => {
-            if (confirm('<?= __('确定要清空自定义字符吗？') ?>')) {
-                document.getElementById('customChars').value = '';
-                storageManager.showStorageInfo('自定义字符已清空');
-            }
-        });
-
-        // 加载本地存储数据
-        document.getElementById('loadStorageBtn').addEventListener('click', () => {
-            const data = storageManager.load();
+    LocalStorageManager.prototype.load = function() {
+        try {
+            var data = localStorage.getItem(this.storageKey);
             if (data) {
-                // 加载自定义字符
-                if (data.customChars) {
-                    document.getElementById('customChars').value = data.customChars;
-                }
+                return JSON.parse(data);
+            }
+            return null;
+        } catch (error) {
+            console.error('从本地存储加载失败:', error);
+            return null;
+        }
+    };
 
-                // 加载选中的字符（如果字符网格已显示）
-                if (data.selectedChars && data.selectedChars.length > 0 && allCharacters.length > 0) {
-                    selectedCharacters.clear();
-                    data.selectedChars.forEach(code => {
-                        selectedCharacters.add(code);
-                        const item = document.querySelector(`[data-code="${code}"]`);
-                        if (item) {
-                            item.classList.add('selected');
-                        }
-                    });
-                    updateSelectedCount();
-                }
+    LocalStorageManager.prototype.clear = function() {
+        try {
+            localStorage.removeItem(this.storageKey);
+            this.showStorageInfo('<?= __('本地存储数据已清理') ?>');
+            return true;
+        } catch (error) {
+            console.error('清理本地存储失败:', error);
+            this.showStorageInfo('<?= __('清理失败') ?>: ' + error.message, 'danger');
+            return false;
+        }
+    };
 
-                storageManager.showStorageInfo('数据加载成功');
+    LocalStorageManager.prototype.hasData = function() {
+        return this.load() !== null;
+    };
+
+    LocalStorageManager.prototype.showStorageInfo = function(message, type) {
+        type = type || 'info';
+        var storageInfo = document.getElementById('storageInfo');
+        var storageStatus = document.getElementById('storageStatus');
+        
+        storageStatus.textContent = message;
+        storageInfo.className = 'fsl-storage-info alert alert-' + type;
+        storageInfo.style.display = 'block';
+        
+        setTimeout(function() {
+            storageInfo.style.display = 'none';
+        }, 3000);
+    };
+
+    var storageManager = new LocalStorageManager();
+
+    // 页面加载时检查本地存储
+    document.addEventListener('DOMContentLoaded', function() {
+        if (storageManager.hasData()) {
+            var storageInfo = document.getElementById('storageInfo');
+            storageInfo.style.display = 'block';
+            document.getElementById('storageStatus').textContent = '<?= __('检测到本地存储数据，可以加载使用') ?>';
+        }
+    });
+
+    // 上传区域事件
+    document.getElementById('uploadArea').addEventListener('click', function() {
+        document.getElementById('fontFile').click();
+    });
+
+    document.getElementById('uploadArea').addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.currentTarget.classList.add('dragover');
+    });
+
+    document.getElementById('uploadArea').addEventListener('dragleave', function(e) {
+        e.currentTarget.classList.remove('dragover');
+    });
+
+    document.getElementById('uploadArea').addEventListener('drop', function(e) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('dragover');
+        var files = e.dataTransfer.files;
+        if (files.length > 0) {
+            handleFileUpload(files[0]);
+        }
+    });
+
+    document.getElementById('fontFile').addEventListener('change', function(e) {
+        if (e.target.files.length > 0) {
+            handleFileUpload(e.target.files[0]);
+        }
+    });
+
+    // 文件上传处理
+    function handleFileUpload(file) {
+        var formData = new FormData();
+        formData.append('font_file', file);
+
+        showProgress();
+        
+        fetch('<?= $this->getUrl("*/backend/upload") ?>', {
+            method: 'POST',
+            body: formData
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            hideProgress();
+            if (data.code === 200) {
+                showFileInfo(data.data);
+                currentRecordId = data.data.id;
             } else {
-                storageManager.showStorageInfo('没有找到存储数据', 'warning');
+                AdminToast.error(data.msg || '<?= __('上传失败') ?>');
             }
+        })
+        .catch(function(error) {
+            hideProgress();
+            AdminToast.error('<?= __('上传失败') ?>: ' + error.message);
         });
+    }
 
-        // 保存到本地存储
-        document.getElementById('saveStorageBtn').addEventListener('click', () => {
-            const customChars = document.getElementById('customChars').value;
-            const selectedChars = Array.from(selectedCharacters);
+    function showProgress() {
+        document.getElementById('progressContainer').style.display = 'block';
+        document.getElementById('progressBar').style.width = '0%';
+        document.getElementById('progressText').textContent = '<?= __('上传中...') ?>';
+    }
+
+    function hideProgress() {
+        document.getElementById('progressContainer').style.display = 'none';
+    }
+
+    function showFileInfo(fileInfo) {
+        document.getElementById('fileName').textContent = fileInfo.filename;
+        document.getElementById('fileFormat').textContent = fileInfo.format.toUpperCase();
+        document.getElementById('fileSize').textContent = fileInfo.size;
+        document.getElementById('fileInfo').style.display = 'block';
+    }
+
+    // 提取字符
+    document.getElementById('extractBtn').addEventListener('click', function() {
+        if (!currentRecordId) {
+            AdminToast.warning('<?= __('请先上传字体文件') ?>');
+            return;
+        }
+
+        showProgress();
+        document.getElementById('progressText').textContent = '<?= __('提取字符中...') ?>';
+
+        fetch('<?= $this->getUrl("*/backend/extract") ?>?record_id=' + currentRecordId)
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            hideProgress();
             
-            const data = {
-                customChars: customChars,
-                selectedChars: selectedChars
-            };
-
-            if (storageManager.save(data)) {
-                storageManager.showStorageInfo('数据保存成功');
-            }
-        });
-
-        // 清理本地存储
-        document.getElementById('clearStorageBtn').addEventListener('click', () => {
-            if (confirm('<?= __('确定要清理本地存储数据吗？此操作不可恢复。') ?>')) {
-                if (storageManager.clear()) {
-                    // 清空界面数据
-                    document.getElementById('customChars').value = '';
-                    selectedCharacters.clear();
-                    document.querySelectorAll('.character-item').forEach(item => {
-                        item.classList.remove('selected');
-                    });
-                    updateSelectedCount();
-                    
-                    // 隐藏存储信息
-                    document.getElementById('storageInfo').style.display = 'none';
-                }
-            }
-        });
-
-        // 生成字体
-        document.getElementById('generateBtn').addEventListener('click', () => {
-            if (!currentRecordId) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: '<?= __('提示') ?>',
-                        text: '<?= __('请先上传字体文件') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
+            if (data.code === 200) {
+                if (data.data && data.data.characters && Array.isArray(data.data.characters)) {
+                    showCharacterGrid(data.data.characters);
                 } else {
-                    console.error('<?= __('请先上传字体文件') ?>');
+                    AdminToast.error('<?= __('字符数据格式错误') ?>');
                 }
-                return;
+            } else {
+                AdminToast.error(data.msg || '<?= __('提取失败') ?>');
+            }
+        })
+        .catch(function(error) {
+            hideProgress();
+            AdminToast.error('<?= __('提取失败') ?>: ' + error.message);
+        });
+    });
+
+    // 显示字符网格
+    function showCharacterGrid(characters) {
+        if (!Array.isArray(characters) || characters.length === 0) {
+            AdminToast.warning('<?= __('没有可显示的字符') ?>');
+            return;
+        }
+
+        allCharacters = characters;
+        var grid = document.getElementById('characterGrid');
+        grid.innerHTML = '';
+
+        var fontUrl = '<?= $this->getUrl("*/backend/download") ?>?record_id=' + currentRecordId + '&preview=1';
+        var fontFamily = 'CustomFont_' + currentRecordId;
+        
+        var style = document.createElement('style');
+        style.textContent = '@font-face { font-family: "' + fontFamily + '"; src: url("' + fontUrl + '") format("opentype"); } .fsl-character-item { font-family: "' + fontFamily + '", sans-serif !important; }';
+        document.head.appendChild(style);
+
+        var validCharacters = 0;
+        characters.forEach(function(char) {
+            if (char && typeof char === 'object' && char.value !== undefined && char.code !== undefined) {
+                var item = document.createElement('div');
+                item.className = 'fsl-character-item';
+                item.textContent = char.value;
+                item.dataset.code = char.code;
+                item.style.fontFamily = '"' + fontFamily + '", sans-serif';
+                item.addEventListener('click', function() { toggleCharacter(char.code, char.value); });
+                grid.appendChild(item);
+                validCharacters++;
+            }
+        });
+
+        if (validCharacters > 0) {
+            document.getElementById('characterCard').style.display = 'block';
+            updateSelectedCount();
+        } else {
+            AdminToast.warning('<?= __('没有有效的字符可以显示') ?>');
+        }
+    }
+
+    function toggleCharacter(code) {
+        var item = document.querySelector('[data-code="' + code + '"]');
+        if (selectedCharacters.has(code)) {
+            selectedCharacters.delete(code);
+            item.classList.remove('selected');
+        } else {
+            selectedCharacters.add(code);
+            item.classList.add('selected');
+        }
+        updateSelectedCount();
+    }
+
+    function updateSelectedCount() {
+        document.getElementById('selectedCount').textContent = selectedCharacters.size;
+    }
+
+    // 全选
+    document.getElementById('selectAllBtn').addEventListener('click', function() {
+        document.querySelectorAll('.fsl-character-item').forEach(function(item) {
+            var code = item.dataset.code;
+            selectedCharacters.add(code);
+            item.classList.add('selected');
+        });
+        updateSelectedCount();
+    });
+
+    // 取消全选
+    document.getElementById('deselectAllBtn').addEventListener('click', function() {
+        selectedCharacters.clear();
+        document.querySelectorAll('.fsl-character-item').forEach(function(item) {
+            item.classList.remove('selected');
+        });
+        updateSelectedCount();
+    });
+
+    // 添加到自定义字符
+    document.getElementById('addToCustomBtn').addEventListener('click', function() {
+        if (selectedCharacters.size === 0) {
+            AdminToast.warning('<?= __('请先选择字符') ?>');
+            return;
+        }
+
+        var customCharsTextarea = document.getElementById('customChars');
+        var currentCustomChars = customCharsTextarea.value;
+        
+        var selectedCharValues = Array.from(selectedCharacters).map(function(code) {
+            var char = allCharacters.find(function(c) { return c.code == code; });
+            return char ? char.value : String.fromCharCode(code);
+        });
+
+        customCharsTextarea.value = currentCustomChars + selectedCharValues.join('');
+        storageManager.showStorageInfo('<?= __('已添加') ?> ' + selectedCharValues.length + ' <?= __('个字符到自定义区域') ?>');
+    });
+
+    // 清空自定义字符
+    document.getElementById('clearCustomBtn').addEventListener('click', function() {
+        if (confirm('<?= __('确定要清空自定义字符吗？') ?>')) {
+            document.getElementById('customChars').value = '';
+            storageManager.showStorageInfo('<?= __('自定义字符已清空') ?>');
+        }
+    });
+
+    // 加载本地存储数据
+    document.getElementById('loadStorageBtn').addEventListener('click', function() {
+        var data = storageManager.load();
+        if (data) {
+            if (data.customChars) {
+                document.getElementById('customChars').value = data.customChars;
             }
 
-            const customChars = document.getElementById('customChars').value.trim();
-            const selectedCharsArray = Array.from(selectedCharacters);
-            
-            // 检查是否有自定义输入或选择的字符
-            if (selectedCharsArray.length === 0 && !customChars) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: '<?= __('提示') ?>',
-                        text: '<?= __('请选择要包含的字符或输入自定义字符') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('请选择要包含的字符或输入自定义字符') ?>');
-                }
-                return;
-            }
-
-            let allChars = selectedCharsArray;
-            
-            if (customChars) {
-                const customCharCodes = Array.from(customChars).map(char => char.charCodeAt(0));
-                allChars = allChars.concat(customCharCodes);
-            }
-
-            // 自动保存当前状态
-            const data = {
-                customChars: customChars,
-                selectedChars: selectedCharsArray
-            };
-            storageManager.save(data);
-
-            showProgress();
-            document.getElementById('progressText').textContent = '<?= __('生成字体中...') ?>';
-
-            const formData = new FormData();
-            formData.append('record_id', currentRecordId);
-            formData.append('selected_chars', JSON.stringify(allChars));
-
-            fetch('<?= $this->getUrl("*/backend/generate") ?>', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                hideProgress();
-                if (data.code === 200) {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: '<?= __('成功') ?>',
-                            text: '<?= __('子集字体生成成功') ?>',
-                            timer: 2000,
-                            showConfirmButton: false
-                        });
-                    } else {
-                        console.log('<?= __('子集字体生成成功') ?>');
+            if (data.selectedChars && data.selectedChars.length > 0 && allCharacters.length > 0) {
+                selectedCharacters.clear();
+                data.selectedChars.forEach(function(code) {
+                    selectedCharacters.add(code);
+                    var item = document.querySelector('[data-code="' + code + '"]');
+                    if (item) {
+                        item.classList.add('selected');
                     }
-                    // 可以添加下载链接
-                    const downloadUrl = `<?= $this->getUrl("*/backend/download") ?>?record_id=${currentRecordId}`;
-                    window.open(downloadUrl, '_blank');
-                } else {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'error',
-                            title: '<?= __('生成失败') ?>',
-                            text: data.msg,
-                            confirmButtonText: '<?= __('确定') ?>'
-                        });
-                    } else {
-                        console.error(data.msg);
-                    }
-                }
-            })
-            .catch(error => {
-                hideProgress();
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('生成失败') ?>',
-                        text: error.message,
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('生成失败') ?>: ' + error.message);
-                }
-            });
+                });
+                updateSelectedCount();
+            }
+
+            storageManager.showStorageInfo('<?= __('数据加载成功') ?>');
+        } else {
+            storageManager.showStorageInfo('<?= __('没有找到存储数据') ?>', 'warning');
+        }
+    });
+
+    // 保存到本地存储
+    document.getElementById('saveStorageBtn').addEventListener('click', function() {
+        var customChars = document.getElementById('customChars').value;
+        var selectedChars = Array.from(selectedCharacters);
+        
+        storageManager.save({
+            customChars: customChars,
+            selectedChars: selectedChars
         });
-    </script>
-</body>
-</html>
+    });
+
+    // 清理本地存储
+    document.getElementById('clearStorageBtn').addEventListener('click', function() {
+        if (confirm('<?= __('确定要清理本地存储数据吗？此操作不可恢复。') ?>')) {
+            if (storageManager.clear()) {
+                document.getElementById('customChars').value = '';
+                selectedCharacters.clear();
+                document.querySelectorAll('.fsl-character-item').forEach(function(item) {
+                    item.classList.remove('selected');
+                });
+                updateSelectedCount();
+                document.getElementById('storageInfo').style.display = 'none';
+            }
+        }
+    });
+
+    // 生成字体
+    document.getElementById('generateBtn').addEventListener('click', function() {
+        if (!currentRecordId) {
+            AdminToast.warning('<?= __('请先上传字体文件') ?>');
+            return;
+        }
+
+        var customChars = document.getElementById('customChars').value.trim();
+        var selectedCharsArray = Array.from(selectedCharacters);
+        
+        if (selectedCharsArray.length === 0 && !customChars) {
+            AdminToast.warning('<?= __('请选择要包含的字符或输入自定义字符') ?>');
+            return;
+        }
+
+        var allChars = selectedCharsArray;
+        
+        if (customChars) {
+            var customCharCodes = Array.from(customChars).map(function(char) { return char.charCodeAt(0); });
+            allChars = allChars.concat(customCharCodes);
+        }
+
+        storageManager.save({
+            customChars: customChars,
+            selectedChars: selectedCharsArray
+        });
+
+        showProgress();
+        document.getElementById('progressText').textContent = '<?= __('生成字体中...') ?>';
+
+        var formData = new FormData();
+        formData.append('record_id', currentRecordId);
+        formData.append('selected_chars', JSON.stringify(allChars));
+
+        fetch('<?= $this->getUrl("*/backend/generate") ?>', {
+            method: 'POST',
+            body: formData
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            hideProgress();
+            if (data.code === 200) {
+                AdminToast.success('<?= __('子集字体生成成功') ?>');
+                var downloadUrl = '<?= $this->getUrl("*/backend/download") ?>?record_id=' + currentRecordId;
+                window.open(downloadUrl, '_blank');
+            } else {
+                AdminToast.error(data.msg || '<?= __('生成失败') ?>');
+            }
+        })
+        .catch(function(error) {
+            hideProgress();
+            AdminToast.error('<?= __('生成失败') ?>: ' + error.message);
+        });
+    });
+})();
+</script>

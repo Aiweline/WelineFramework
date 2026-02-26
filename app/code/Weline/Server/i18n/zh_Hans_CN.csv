@@ -742,6 +742,7 @@ DDoS攻击,DDoS攻击
 信号,信号
 "WLS 重载：已通知 %{1}/%{2} 个 Worker（%{3}，%{4}）","WLS 重载：已通知 %{1}/%{2} 个 Worker（%{3}，%{4}）"
 "WLS 重载：所有通知方式均失败，请检查 WLS 是否运行中","WLS 重载：所有通知方式均失败，请检查 WLS 是否运行中"
+"SSL 证书服务","SSL 证书服务"
 "高性能异步常驻内存服务器，支持 HTTP/WebSocket/TCP/UDP 协议，支持多实例管理、服务器监控、攻击日志、证书管理 Hook 集成","高性能异步常驻内存服务器，支持 HTTP/WebSocket/TCP/UDP 协议，支持多实例管理、服务器监控、攻击日志、证书管理 Hook 集成"
 "Windows 上需要 proc_open 或 exec 函数来启动多进程，请检查 disable_functions 配置","Windows 上需要 proc_open 或 exec 函数来启动多进程，请检查 disable_functions 配置"
 "缺少 sockets 扩展","缺少 sockets 扩展"

@@ -31,6 +31,7 @@ use Weline\Framework\App\Debug;
 use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Service\Query\FrameworkQueryService;
 use Weline\Framework\View\Cache\ViewCache;
 
 # obj 模型实例化方法
@@ -161,6 +162,49 @@ if (!function_exists('w_resolve_model_class')) {
         $pascal = w_snake_to_pascal($model);
         $namespace = str_replace('_', '\\', $module);
         return $namespace . '\\Model\\' . $pascal;
+    }
+}
+
+if (!function_exists('w_query')) {
+    /**
+     * 统一查询器全局函数
+     *
+     * 对应前端 JS 的 window.w_query()，用于模块间数据查询。
+     * 内部调用 FrameworkQueryService::execute()，由 QueryProviderRegistry 中已注册的查询器处理。
+     *
+     * @param string $provider  提供者标识（如 crud、widget、websites、saas）或 framework（introspect）
+     * @param string $operation 操作名
+     * @param array  $params    操作参数
+     * @param string $area      frontend|backend，默认 backend
+     * @return mixed 查询结果
+     * @throws \InvalidArgumentException 参数错误
+     * @throws \RuntimeException 查询被拒绝或执行失败
+     *
+     * @example
+     * // 查询 Widget 列表
+     * $widgets = w_query('widget', 'getAvailableList', ['page_type' => 'homepage']);
+     *
+     * // 查询域名列表
+     * $domains = w_query('websites', 'getDomainList', ['account_id' => 123]);
+     *
+     * // 使用 CRUD 通用查询
+     * $products = w_query('crud', 'list', [
+     *     'model' => 'WeShop\\Product\\Model\\Product',
+     *     'page' => 1,
+     *     'page_size' => 20,
+     * ]);
+     *
+     * // 查询所有已注册的 provider
+     * $providers = w_query('framework', 'introspect', ['what' => 'providers']);
+     *
+     * // 查询某 provider 的所有 operation
+     * $ops = w_query('framework', 'introspect', ['what' => 'operations', 'provider' => 'widget']);
+     */
+    function w_query(string $provider, string $operation, array $params = [], string $area = 'backend'): mixed
+    {
+        /** @var FrameworkQueryService $queryService */
+        $queryService = ObjectManager::getInstance(FrameworkQueryService::class);
+        return $queryService->execute($provider, $operation, $params, $area);
     }
 }
 if (!function_exists('w_var_export')) {

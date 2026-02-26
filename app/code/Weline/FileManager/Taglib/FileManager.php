@@ -81,14 +81,14 @@ class FileManager implements TaglibInterface
             if (!empty($attributes['code'])) {
                 $userConfigFileManager = $attributes['code'];
             } else {
-                # 检查是否有配置默认的文件管理器
-                $userConfigFileManager = ObjectManager::getInstance(BackendUserConfig::class)->getConfig('file_manager') ?: 'local';
+                # 检查是否有配置默认的文件管理器，默认使用 weline_media
+                $userConfigFileManager = ObjectManager::getInstance(BackendUserConfig::class)->getConfig('file_manager') ?: 'weline_media';
             }
             $cacheKey = json_encode(func_get_args()) . $userConfigFileManager;
             /**@var CacheInterface $cache */
             $cache = ObjectManager::getInstance(FileManagerCacheFactory::class);
             $result = $cache->get($cacheKey);
-            if ($result and ($userConfigFileManager !== 'local')) {
+            if ($result) {
                 return $result;
             }
             /**@var Scan $fileScan $ */
@@ -114,25 +114,22 @@ class FileManager implements TaglibInterface
                     }
                 }
             }
-            if (count($fileManagers) > 1 and $userConfigFileManager === 'local') {
-                /**@var \Weline\FileManager\FileManager $fileManager */
-                $fileManager = array_pop($fileManagers);
-                $userConfigFileManager = $fileManager::name();
-            } else {
-                if (!isset($fileManagers[$userConfigFileManager])) {
+            if (!isset($fileManagers[$userConfigFileManager])) {
+                # 指定的文件管理器不存在，尝试使用 weline_media，否则使用第一个可用的
+                if (isset($fileManagers['weline_media'])) {
+                    $fileManager = $fileManagers['weline_media'];
+                } else {
                     if (!CLI) {
                         ObjectManager::getInstance(MessageManager::class)->addWarning(__('所指定的文件管理器不存在! 文件管理器名：%{1}', $userConfigFileManager));
                     }
-                    # 使用第一个文件管理器作为默认的文件管理器
-                    /**@var \Weline\FileManager\FileManager $fileManager */
                     $fileManager = array_pop($fileManagers);
-                    if (!CLI) {
+                    if (!CLI && $fileManager) {
                         ObjectManager::getInstance(MessageManager::class)->addWarning(__('使用：%{1} 文件管理器代替。', $fileManager::name()));
                     }
-                } else {
-                    /**@var \Weline\FileManager\FileManager $fileManager */
-                    $fileManager = $fileManagers[$userConfigFileManager];
                 }
+            } else {
+                /**@var \Weline\FileManager\FileManager $fileManager */
+                $fileManager = $fileManagers[$userConfigFileManager];
             }
             if (!isset($attributes['target'])) {
                 throw new \Exception(__('缺少目标ID。文档：%{1}', self::document()));

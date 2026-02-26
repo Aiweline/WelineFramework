@@ -807,8 +807,16 @@ class I18n
             }
         }
         self::$local_words = $locals_words;
-        // 恢复原始内存限制
-        ini_set('memory_limit', $_prevMemLimit ?: '128M');
+        // 恢复原始内存限制（确保不低于当前内存使用量）
+        $restoreLimit = $_prevMemLimit ?: '128M';
+        $currentUsage = memory_get_usage(true);
+        $restoreLimitBytes = $this->parseMemoryLimit($restoreLimit);
+        if ($restoreLimitBytes > 0 && $restoreLimitBytes < $currentUsage) {
+            // 原始限制低于当前使用量，保持 512M 或设为当前使用量的 1.5 倍
+            $restoreLimit = max($restoreLimitBytes, (int)($currentUsage * 1.5));
+            $restoreLimit = ceil($restoreLimit / 1024 / 1024) . 'M';
+        }
+        @ini_set('memory_limit', $restoreLimit);
         return $locals_words;
     }
 
@@ -845,6 +853,28 @@ class I18n
             }
         } catch (\Exception $e) {}
         return 'Weline_' . $module_name;
+    }
+
+    private function parseMemoryLimit(string $limit): int
+    {
+        $limit = trim($limit);
+        if ($limit === '-1') {
+            return -1;
+        }
+        $value = (int)$limit;
+        $unit = strtoupper(substr($limit, -1));
+        switch ($unit) {
+            case 'G':
+                $value *= 1024 * 1024 * 1024;
+                break;
+            case 'M':
+                $value *= 1024 * 1024;
+                break;
+            case 'K':
+                $value *= 1024;
+                break;
+        }
+        return $value;
     }
 
     public function getCountries(string $display_local_code = 'zh_Hans_CN'): array

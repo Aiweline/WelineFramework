@@ -540,10 +540,13 @@ class RequestContext
      * 
      * 在请求结束时调用，避免 WLS 下跨请求污染
      * 同时重置 $_SERVER 中的对应值，确保下一个请求不会继承旧状态
+     * 
+     * 重要：必须 unset $_SERVER 变量而非设为空字符串，
+     *       否则 syncFromServer() 中的 ?? 运算符无法正确回退到默认值
      */
     public static function resetWelineVars(): void
     {
-        // 重置静态变量
+        // 重置静态变量到默认值
         self::$_area = self::AREA_FRONTEND;
         self::$_areaRoute = '';
         self::$_websiteId = 0;
@@ -552,15 +555,16 @@ class RequestContext
         self::$_userLang = 'zh_Hans_CN';
         self::$_userCurrency = 'CNY';
         
-        // 同步重置 $_SERVER 中的 WELINE_* 变量
+        // 重置 $_SERVER 中的 WELINE_* 变量
+        // 注意：使用 unset 而非赋空字符串，确保 syncFromServer() 的 ?? 运算符能正确工作
         $_SERVER['WELINE_AREA'] = self::AREA_FRONTEND;
         $_SERVER['WELINE_AREA_ROUTE'] = '';
         $_SERVER['WELINE_IS_BACKEND'] = false;
-        $_SERVER['WELINE_WEBSITE_ID'] = '';
-        $_SERVER['WELINE_WEBSITE_CODE'] = '';
-        $_SERVER['WELINE_WEBSITE_URL'] = '';
-        $_SERVER['WELINE_USER_LANG'] = '';
-        $_SERVER['WELINE_USER_CURRENCY'] = '';
+        unset($_SERVER['WELINE_WEBSITE_ID']);
+        unset($_SERVER['WELINE_WEBSITE_CODE']);
+        unset($_SERVER['WELINE_WEBSITE_URL']);
+        unset($_SERVER['WELINE_USER_LANG']);
+        unset($_SERVER['WELINE_USER_CURRENCY']);
     }
     
     // =============== 便捷方法（保持向后兼容） ===============

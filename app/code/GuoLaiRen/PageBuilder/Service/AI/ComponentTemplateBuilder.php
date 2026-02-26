@@ -148,14 +148,14 @@ class ComponentTemplateBuilder
      */
     public function buildPhpCode(array $spec): string
     {
-        $code = $spec['metadata']['code'] ?? 'ai-component';
-        $prefix = str_replace('-', '_', $code);
+        $code = $spec['metadata']['code'] ?? 'component';
+        $category = $spec['metadata']['category'] ?? 'content';
         
         $php = <<<PHP
 // ========================================
 // 组件初始化
 // ========================================
-\$componentId = '{$prefix}_' . uniqid();
+\$componentId = '{$category}-' . substr(uniqid(), -8);
 
 \$page = \$this->getData('page');
 \$styleSettings = \$this->getData('style') ?: \$this->getData('style_settings') ?: [];
@@ -322,11 +322,9 @@ PHP;
         }
         
         // 添加 HTML 内容
-        $template .= "<!-- AI 生成组件开始: <?= \$componentId ?> -->\n";
-        $template .= "<section id=\"<?= \$componentId ?>\" class=\"ai-component ai-{$code}\">\n";
+        $template .= "<section id=\"<?= \$componentId ?>\">\n";
         $template .= $this->indentHtml($htmlContent, 4);
         $template .= "\n</section>\n";
-        $template .= "<!-- AI 生成组件结束: <?= \$componentId ?> -->\n";
         
         return $template;
     }
@@ -351,19 +349,17 @@ PHP;
     private function getDefaultHtmlStructure(): string
     {
         return <<<HTML
-<!-- AI 生成组件开始: <?= \$componentId ?> -->
-<section id="<?= \$componentId ?>" class="ai-component">
-    <div class="ai-component-inner">
+<section id="<?= \$componentId ?>">
+    <div class="<?= \$componentId ?>-inner">
         <?php if (!empty(\$title)): ?>
-        <h2 class="ai-component-title"><?= htmlspecialchars(\$title) ?></h2>
+        <h2 class="<?= \$componentId ?>-title"><?= htmlspecialchars(\$title) ?></h2>
         <?php endif; ?>
         
         <?php if (!empty(\$description)): ?>
-        <p class="ai-component-description"><?= htmlspecialchars(\$description) ?></p>
+        <p class="<?= \$componentId ?>-description"><?= htmlspecialchars(\$description) ?></p>
         <?php endif; ?>
     </div>
 </section>
-<!-- AI 生成组件结束: <?= \$componentId ?> -->
 HTML;
     }
     
@@ -379,33 +375,37 @@ HTML;
     color: <?= htmlspecialchars(\$textColor ?? '#333333') ?>;
     padding: <?= htmlspecialchars(\$padding ?? '40') ?>px 20px;
     width: 100%;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-#<?= \$componentId ?> .ai-component-inner {
+#<?= \$componentId ?> .<?= \$componentId ?>-inner {
     max-width: 1200px;
     margin: 0 auto;
     text-align: center;
 }
 
-#<?= \$componentId ?> .ai-component-title {
-    font-size: 32px;
+#<?= \$componentId ?> .<?= \$componentId ?>-title {
+    font-size: clamp(1.75rem, 4vw, 2.25rem);
     font-weight: 700;
     margin-bottom: 20px;
+    letter-spacing: -0.025em;
 }
 
-#<?= \$componentId ?> .ai-component-description {
-    font-size: 16px;
-    line-height: 1.6;
-    opacity: 0.8;
+#<?= \$componentId ?> .<?= \$componentId ?>-description {
+    font-size: 1.0625rem;
+    line-height: 1.7;
+    opacity: 0.85;
+    max-width: 640px;
+    margin: 0 auto;
 }
 
 @media (max-width: 767px) {
     #<?= \$componentId ?> {
-        padding: 30px 15px;
+        padding: 30px 16px;
     }
     
-    #<?= \$componentId ?> .ai-component-title {
-        font-size: 24px;
+    #<?= \$componentId ?> .<?= \$componentId ?>-title {
+        font-size: 1.5rem;
     }
 }
 </style>

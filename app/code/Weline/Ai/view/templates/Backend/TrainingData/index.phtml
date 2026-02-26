@@ -1,47 +1,63 @@
 <?php
 /**
  * 训练数据管理 - 索引页面
+ * 内容模板 - 由布局系统自动包裹
  *
  * @var $this \Weline\Framework\View\Template
  */
 ?>
-
-<?= $this->getChildHtml('Weline_Admin::Backend/page-layout/main-content-before.phtml') ?>
-
-<div class="sz-page-header">
-    <h1 class="sz-page-title">
-        <i class="mdi mdi-database"></i>
-        训练数据管理
-    </h1>
-    <p class="sz-page-subtitle">AI模型训练数据集管理</p>
-</div>
-
-<div class="sz-card">
-    <div class="sz-card-body">
-        <div class="sz-empty-state">
-            <i class="mdi mdi-database-outline sz-empty-icon"></i>
-            <h3>功能开发中</h3>
-            <p class="text-muted">训练数据管理功能正在开发中，敬请期待...</p>
-            <div class="mt-4">
-                <a href="<?= $this->getBackendUrl('*/backend/index') ?>" class="btn btn-primary">
-                    <i class="mdi mdi-arrow-left"></i> 返回首页
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
-
-<?= $this->getChildHtml('Weline_Admin::Backend/page-layout/main-content-after.phtml') ?>
-
 <style>
-.sz-empty-state {
+.sz-training-data-empty-state {
     text-align: center;
     padding: 60px 20px;
 }
-.sz-empty-icon {
+.sz-training-data-empty-icon {
     font-size: 80px;
-    color: #ddd;
+    color: var(--backend-color-text-muted, #6c757d);
     margin-bottom: 20px;
 }
 </style>
 
+<!-- start page title -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0">
+                <i class="mdi mdi-database"></i>
+                <lang>训练数据管理</lang>
+            </h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('ai/backend/index') ?>"><lang>AI管理</lang></a></li>
+                    <li class="breadcrumb-item active"><lang>训练数据</lang></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end page title -->
+
+<!-- start page message -->
+<div class="row">
+    <template>Weline_Component::message.phtml</template>
+</div>
+<!-- end message -->
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="sz-training-data-empty-state">
+                    <i class="mdi mdi-database-outline sz-training-data-empty-icon"></i>
+                    <h3><lang>功能开发中</lang></h3>
+                    <p class="text-muted"><lang>训练数据管理功能正在开发中，敬请期待...</lang></p>
+                    <div class="mt-4">
+                        <a href="<?= $this->getBackendUrl('ai/backend/index') ?>" class="btn btn-primary">
+                            <i class="mdi mdi-arrow-left"></i> <lang>返回首页</lang>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -245,7 +245,92 @@ class AIComponentGenerator
         $templateContent = $this->fixCommonAiTyposInTemplate($templateContent);
         $templateContent = $this->stripInvalidContinueBreakInTemplate($templateContent);
         $templateContent = $this->fixUnexpectedTokenIf($templateContent);
+        $templateContent = $this->fixOrphanedLoopVariables($templateContent);
+        $templateContent = $this->fixNullParameterCalls($templateContent);
         return $templateContent;
+    }
+    
+    /**
+     * 修复孤立的循环变量（有 $line = trim($line) 但没有 foreach 的情况）
+     * AI 有时生成不完整的循环代码，导致变量未定义
+     */
+    private function fixOrphanedLoopVariables(string $code): string
+    {
+        // 检测模式：$lines = explode/preg_split 后紧跟 $line = trim($line) 但没有 foreach
+        // 这种代码片段通常是不完整的循环，需要注释掉
+        $pattern = '/(\$lines\s*=\s*(?:explode|preg_split)\s*\([^;]+;\s*\n)(\s*\$line\s*=\s*trim\s*\(\s*\$line\s*(?:\?\?\s*[\'"][^\'"]?[\'"]\s*)?\)\s*;)/s';
+        $code = preg_replace(
+            $pattern,
+            '$1/* 以下代码缺少 foreach 循环，已自动注释 */ // $2',
+            $code
+        );
+        
+        // 移除孤立的循环体代码行（在 $lines = ... 之后、没有 foreach 包裹的行）
+        // 这些通常是：$line = trim($line); if (empty($line)) continue; $parts = explode(...) 等
+        $lines = explode("\n", $code);
+        $inOrphanedBlock = false;
+        $result = [];
+        
+        foreach ($lines as $i => $line) {
+            $trimmed = trim($line);
+            
+            // 检测孤立块的开始：$lines = explode/preg_split
+            if (preg_match('/\$lines\s*=\s*(?:explode|preg_split)\s*\(/', $trimmed)) {
+                // 检查后续几行是否有 foreach
+                $hasForEach = false;
+                for ($j = $i + 1; $j < min($i + 5, count($lines)); $j++) {
+                    if (preg_match('/foreach\s*\(\s*\$lines\s+as/', trim($lines[$j] ?? ''))) {
+                        $hasForEach = true;
+                        break;
+                    }
+                }
+                $inOrphanedBlock = !$hasForEach;
+            }
+            
+            // 检测孤立块的结束：遇到非循环相关的代码
+            if ($inOrphanedBlock) {
+                // 判断是否是孤立循环体的代码
+                if (preg_match('/^\s*\$line\s*=/', $trimmed) ||
+                    preg_match('/^\s*if\s*\(\s*empty\s*\(\s*\$line/', $trimmed) ||
+                    preg_match('/^\s*\/\*\s*continue/', $trimmed) ||
+                    preg_match('/^\s*\$parts\s*=\s*explode/', $trimmed) ||
+                    preg_match('/^\s*\$text\s*=\s*trim\s*\(\s*\$parts/', $trimmed) ||
+                    preg_match('/^\s*\$href\s*=\s*trim\s*\(\s*\$parts/', $trimmed) ||
+                    preg_match('/^\s*\$\w+Items\s*\[\]\s*=/', $trimmed)) {
+                    // 注释掉这行
+                    $result[] = preg_replace('/^(\s*)/', '$1// [orphaned] ', $line);
+                    continue;
+                } else {
+                    // 遇到其他代码，结束孤立块
+                    $inOrphanedBlock = false;
+                }
+            }
+            
+            $result[] = $line;
+        }
+        
+        return implode("\n", $result);
+    }
+    
+    /**
+     * 修复 null 参数调用（PHP 8.4 严格类型）
+     * 将 trim($var) 改为 trim($var ?? '')
+     */
+    private function fixNullParameterCalls(string $code): string
+    {
+        // 修复常见的字符串函数调用
+        $functions = ['trim', 'strtolower', 'strtoupper', 'strlen', 'htmlspecialchars'];
+        
+        foreach ($functions as $func) {
+            // 匹配 func($var) 但不匹配已有 ?? 的情况
+            $code = preg_replace(
+                '/\b' . $func . '\s*\(\s*(\$\w+)\s*\)(?!\s*\?\?)/',
+                $func . '($1 ?? \'\')',
+                $code
+            );
+        }
+        
+        return $code;
     }
     
     public function previewTemplateContent(string $templateContent): array
@@ -351,13 +436,6 @@ class AIComponentGenerator
     }
     
     /**
-     * 从完整模板中移除「仅含 continue/break」的 PHP 块，避免 Fatal: 'continue' not in the 'loop' or 'switch' context。
-     * 预览用模板可能来自 refine/直接代码，未经过 FrameworkBuilder::sanitizeAiData，故在此做防御性清洗。
-     *
-     * @param string $code 完整 phtml 源码
-     * @return string 清洗后的源码
-     */
-    /**
      * 修复 AI 生成模板中的常见笔误，避免预览语法错误与显示错误
      * - <4> 修正为 <h4>（AI 常把 h4 误写成 4）
      * - 行末 ) 后紧跟换行再 if ( 时在 ) 后补分号，避免 unexpected token "if"
@@ -367,20 +445,9 @@ class AIComponentGenerator
      */
     private function fixCommonAiTyposInTemplate(string $code): string
     {
-        // CSS 中 AI 常把 #<?= $componentId ?> 错写成 #= $componentId（缺 <? 和 ?>），导致选择器无效
-        $code = preg_replace('/#=\s*\$componentId\b/', '#<?= $componentId ?>', $code);
-        // 模板中含 ai-footer-social 时，JS 里 .pb-footer-social-icons 与框架不一致，统一为 .ai-footer-social
-        if (strpos($code, 'ai-footer-social') !== false) {
-            $code = preg_replace('/\.pb-footer-social-icons\b/', '.ai-footer-social', $code);
-        }
-        // Footer 框架使用 ai-footer-*，AI 常多写 .footer / .footer-brand / .footer-social 等，需与 HTML 一致（先替换子类再替换父类；.footer 单独出现时指根容器 .ai-footer）
-        if (strpos($code, 'ai-footer-') !== false) {
-            $code = preg_replace('/\.footer-brand-desc\b/', '.ai-footer-brand-desc', $code);
-            $code = preg_replace('/\.footer-brand-logo\b/', '.ai-footer-logo', $code);
-            $code = preg_replace('/\.footer-brand\b/', '.ai-footer-brand', $code);
-            $code = preg_replace('/\.footer-social\b/', '.ai-footer-social', $code);
-            $code = preg_replace('/\.footer(?!\-)/', '.ai-footer', $code); // .footer 且非 .footer-xxx → .ai-footer
-        }
+        // CSS 中 AI 常把 #< ?= $componentId ? > 错写成 #= $componentId（缺 PHP 标签），导致选择器无效
+        $code = preg_replace('/#=\s*\$componentId\b/', '#<' . '?= $componentId ?' . '>', $code);
+        
         // @fields_start ... @fields_end 内双星号 "* * " 修正为 "* "
         $code = preg_replace_callback(
             '/@fields_start(.*?)@fields_end/s',
@@ -393,7 +460,7 @@ class AIComponentGenerator
         $placeholder = '__PB_ALERT_' . bin2hex(random_bytes(4)) . '__';
         $code = preg_replace('/\balert\s*\(\s*/', $placeholder, $code);
         $code = str_replace($placeholder, '(typeof FrontendToast !== \'undefined\' && FrontendToast.warning ? FrontendToast.warning : alert)(', $code);
-        // <4> 且后面是 <?= 或 </h4> 的，视为 <h4> 笔误（AI 常把 h4 写成 4）
+        // <4> 且后面是 PHP 短标签或 </h4> 的，视为 <h4> 笔误（AI 常把 h4 写成 4）
         $code = preg_replace('/<4>(?=\s*<\?=|\s*<\/h4>)/i', '<h4>', $code);
         // 跨行：上一行未以 ; } { : , 结尾且下一行以 if ( 开头 → 在上一行末补 ;（覆盖 ) 或 >5 等漏写分号导致 unexpected token "if"）
         $lines = explode("\n", $code);
@@ -417,12 +484,28 @@ class AIComponentGenerator
     
     private function stripInvalidContinueBreakInTemplate(string $code): string
     {
-        // 匹配 <?php 或 <? 后仅含空白 + continue/break（可选层级）+ ; + 空白 + ?> 的整块，支持多行
+        // 1. 匹配 PHP 开标签后仅含空白 + continue/break（可选层级）+ ; + 空白 + PHP 闭标签的整块，支持多行
         $code = preg_replace(
-            '/<\?(?:php\s+)?\s*(?:continue|break)(?:\s+\d+)?\s*;\s*\?>/i',
-            '<?php /* continue/break removed */ ?>',
+            '/<\?(?:php\s+)?\s*(?:continue|break)(?:\s+\d+)?\s*;\s*\?' . '>/i',
+            '<' . '?php /* continue/break removed */ ?' . '>',
             $code
         );
+        
+        // 2. 处理 PHP 块内部的 if (...) continue/break; 语句（可能不在循环中）
+        //    支持嵌套一层括号，如 if (empty($line)) continue;
+        $code = preg_replace(
+            '/(\bif\s*\([^)]*(?:\([^)]*\)[^)]*)*\)\s*)(continue|break)(\s*(?:\d+\s*)?;)/i',
+            '$1/* $2 removed */$3',
+            $code
+        );
+        
+        // 3. 移除独立的 continue/break 行（不在 if 内的）
+        $code = preg_replace(
+            '/^(\s*)(continue|break)(\s*(?:\d+\s*)?;\s*)$/mi',
+            '$1/* $2 removed */$3',
+            $code
+        );
+        
         return $code;
     }
     
@@ -708,6 +791,7 @@ HTML;
                 [
                     'category' => $category,
                     'style_code' => $options['style_code'] ?? '',
+                    'language' => $options['language'] ?? '',
                     'refine_mode' => true,
                     'existing_code' => $existingCode,
                 ],
@@ -787,9 +871,14 @@ HTML;
         $prompt .= "4. 必须保持 @fields_start / @fields_end 字段定义块不变（除非明确要求修改）\n";
         $prompt .= "5. 只返回修改后的完整组件代码，不要包含其他说明\n";
         $prompt .= "6. 确保代码可以直接使用，符合PageBuilder组件规约\n";
-        $prompt .= "7. php_variables 只能包含简单的变量赋值，不要包含控制结构\n";
+        $prompt .= "7. php_variables 只能包含简单的变量赋值（如 \$var = \$getConfig('key', 'default');），绝对禁止 if/foreach/while/for/continue/break 等控制结构\n";
         $prompt .= "8. js_content 必须是纯JavaScript，不能包含任何PHP代码\n";
         $prompt .= "9. 如果是错误修复，必须使用工具做精准替换，避免重写整份代码\n";
+        $prompt .= "\n【PHP 8.4 严格类型约束】\n";
+        $prompt .= "- 所有字符串函数参数必须确保非 null：使用 trim(\$var ?? '') 而非 trim(\$var)\n";
+        $prompt .= "- 数组访问使用 null 合并：\$arr['key'] ?? '' 或 \$arr['key'] ?? []\n";
+        $prompt .= "- 循环前检查数组：foreach ((\$items ?? []) as \$item)\n";
+        $prompt .= "- htmlspecialchars 参数不能为 null：htmlspecialchars(\$text ?? '')\n";
         
         return $prompt;
     }
@@ -846,7 +935,7 @@ HTML;
             return trim($matches[1]);
         }
         
-        // 如果没有代码块，尝试查找 <?php 开始的内容
+        // 如果没有代码块，尝试查找 PHP 开标签开始的内容
         if (preg_match('/(<\?php.*)/s', $response, $matches)) {
             return trim($matches[1]);
         }
@@ -939,22 +1028,26 @@ HTML;
      */
     private function generateDefaultHtml(string $description, string $name, array $fields): string
     {
-        $html = "<div class=\"ai-component-content\">\n";
-        $html .= "    <h2 class=\"ai-component-title\"><?= htmlspecialchars(\$title ?? '{$name}') ?></h2>\n";
-        $html .= "    <p class=\"ai-component-desc\"><?= htmlspecialchars(\$description ?? '') ?></p>\n";
+        $phpOpen = '<' . '?php';
+        $phpShort = '<' . '?=';
+        $phpClose = '?' . '>';
+        $cls = "{$phpShort} \$componentId {$phpClose}";
         
-        // 根据字段添加 HTML
+        $html = "<div class=\"{$cls}-content\">\n";
+        $html .= "    <h2 class=\"{$cls}-title\">{$phpShort} htmlspecialchars(\$title ?? '{$name}') {$phpClose}</h2>\n";
+        $html .= "    <p class=\"{$cls}-desc\">{$phpShort} htmlspecialchars(\$description ?? '') {$phpClose}</p>\n";
+        
         foreach ($fields as $field) {
             if ($field['group'] === 'button') {
-                $html .= "    <?php if (!empty(\$text)): ?>\n";
-                $html .= "    <a href=\"<?= htmlspecialchars(\$url ?? '#') ?>\" class=\"ai-component-btn\"><?= htmlspecialchars(\$text) ?></a>\n";
-                $html .= "    <?php endif; ?>\n";
+                $html .= "    {$phpOpen} if (!empty(\$text)): {$phpClose}\n";
+                $html .= "    <a href=\"{$phpShort} htmlspecialchars(\$url ?? '#') {$phpClose}\" class=\"{$cls}-btn\">{$phpShort} htmlspecialchars(\$text) {$phpClose}</a>\n";
+                $html .= "    {$phpOpen} endif; {$phpClose}\n";
                 break;
             }
             if ($field['group'] === 'image') {
-                $html .= "    <?php if (!empty(\$src)): ?>\n";
-                $html .= "    <img src=\"<?= htmlspecialchars(\$src) ?>\" alt=\"<?= htmlspecialchars(\$alt ?? '') ?>\" class=\"ai-component-img\">\n";
-                $html .= "    <?php endif; ?>\n";
+                $html .= "    {$phpOpen} if (!empty(\$src)): {$phpClose}\n";
+                $html .= "    <img src=\"{$phpShort} htmlspecialchars(\$src) {$phpClose}\" alt=\"{$phpShort} htmlspecialchars(\$alt ?? '') {$phpClose}\" class=\"{$cls}-img\">\n";
+                $html .= "    {$phpOpen} endif; {$phpClose}\n";
                 break;
             }
         }
@@ -969,63 +1062,75 @@ HTML;
      */
     private function generateDefaultCss(string $description): string
     {
+        $phpShort = '<' . '?=';
+        $phpClose = '?' . '>';
+        $id = "{$phpShort} \$componentId {$phpClose}";
+        $cls = "{$phpShort} \$componentId {$phpClose}";
+        $bgColor = "{$phpShort} htmlspecialchars(\$bgColor ?? '#ffffff') {$phpClose}";
+        $textColor = "{$phpShort} htmlspecialchars(\$textColor ?? '#333333') {$phpClose}";
+        
         return <<<CSS
-#<?= \$componentId ?> {
-    background-color: <?= htmlspecialchars(\$bgColor ?? '#ffffff') ?>;
-    color: <?= htmlspecialchars(\$textColor ?? '#333333') ?>;
-    padding: 60px 20px;
+#{$id} {
+    background-color: {$bgColor};
+    color: {$textColor};
+    padding: 64px 24px;
     width: 100%;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-#<?= \$componentId ?> .ai-component-content {
+#{$id} .{$cls}-content {
     max-width: 1200px;
     margin: 0 auto;
     text-align: center;
 }
 
-#<?= \$componentId ?> .ai-component-title {
-    font-size: 32px;
+#{$id} .{$cls}-title {
+    font-size: clamp(1.75rem, 4vw, 2.25rem);
     font-weight: 700;
     margin-bottom: 20px;
+    letter-spacing: -0.025em;
 }
 
-#<?= \$componentId ?> .ai-component-desc {
-    font-size: 16px;
-    line-height: 1.6;
-    margin-bottom: 30px;
-    opacity: 0.8;
+#{$id} .{$cls}-desc {
+    font-size: 1.0625rem;
+    line-height: 1.7;
+    margin-bottom: 32px;
+    opacity: 0.85;
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
-#<?= \$componentId ?> .ai-component-btn {
+#{$id} .{$cls}-btn {
     display: inline-block;
-    padding: 12px 30px;
-    background: linear-gradient(90deg, #6c5ce7 0%, #a29bfe 100%);
+    padding: 12px 28px;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
     color: #ffffff;
     text-decoration: none;
     border-radius: 8px;
     font-weight: 600;
-    transition: transform 0.3s, box-shadow 0.3s;
+    transition: all 0.25s ease;
 }
 
-#<?= \$componentId ?> .ai-component-btn:hover {
+#{$id} .{$cls}-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(108, 92, 231, 0.4);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
 }
 
-#<?= \$componentId ?> .ai-component-img {
+#{$id} .{$cls}-img {
     max-width: 100%;
     height: auto;
-    border-radius: 8px;
-    margin: 20px 0;
+    border-radius: 12px;
+    margin: 24px 0;
 }
 
 @media (max-width: 767px) {
-    #<?= \$componentId ?> {
-        padding: 40px 15px;
+    #{$id} {
+        padding: 48px 20px;
     }
     
-    #<?= \$componentId ?> .ai-component-title {
-        font-size: 24px;
+    #{$id} .{$cls}-title {
+        font-size: 1.5rem;
     }
 }
 CSS;
