@@ -1,0 +1,104 @@
+<!--
+布局：后端 - 仪表盘布局
+
+后端仪表盘布局，包含侧边栏导航和主内容区
+字段
+@meta.name {default="后端仪表盘布局",name="后端仪表盘布局",description="后端仪表盘布局，用于描述布局的名称"}
+@meta.description {default="后端仪表盘布局，包含侧边栏导航和主内容区",name="后端仪表盘布局，包含侧边栏导航和主内容区",description="后端仪表盘布局，包含侧边栏导航和主内容区，用于描述布局的用途"}
+@param.title {default="",name="页面标题",description="页面标题，用于设置页面标题"}
+@param.content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+@param.sidebar {default="",name="侧边栏内容",description="侧边栏内容（导航菜单）"}
+@param.sidebarCollapsed {default=false,name="侧边栏折叠",description="侧边栏是否折叠"}
+@param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+
+参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+-->
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<head>
+    <w:hook>Weline_Theme::backend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="backend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::backend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::backend::layouts::dashboard::head-after</w:hook>
+</head>
+<body>
+    <w:hook>Weline_Theme::backend::layouts::dashboard::body-start</w:hook>
+    
+    <w:hook>Weline_Theme::backend::layouts::base::header-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="backend" type="header" default-option="default"/>
+    <w:hook>Weline_Theme::backend::layouts::base::header-after</w:hook>
+    
+    <div class="backend-dashboard <?= htmlspecialchars($meta['class'] ?? '') ?>">
+        <if condition="meta.sidebar">
+            <aside class="backend-sidebar <if condition="meta.sidebarCollapsed">collapsed</if>">
+                {{meta.sidebar}}
+            </aside>
+            <else/>
+            <w:block class="Weline\Theme\Block\Partials" area="backend" type="sidebar" default-option="default"/>
+        </if>
+        
+        <main class="backend-main-content" id="main-content">
+            <if condition="contentTemplate">
+                <?php echo $this->fetch($this->getData("contentTemplate")); ?>
+                <else/>
+                {{meta.content}}
+            </if>
+        </main>
+    </div>
+    
+    <w:hook>Weline_Theme::backend::layouts::base::footer-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="backend" type="footer" default-option="default"/>
+    <w:hook>Weline_Theme::backend::layouts::base::footer-after</w:hook>
+    
+    <w:hook>Weline_Theme::backend::layouts::dashboard::body-end</w:hook>
+</body>
+</html>
+
+<style>
+/* 仪表盘布局样式 */
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    min-height: 100vh;
+}
+
+.backend-dashboard {
+    display: flex;
+    min-height: calc(100vh - 60px);
+}
+
+.backend-sidebar {
+    width: 250px;
+    flex-shrink: 0;
+    background: var(--backend-color-sidebar-bg, #2a3042);
+    transition: width 0.3s ease;
+}
+
+.backend-sidebar.collapsed {
+    width: 70px;
+}
+
+.backend-dashboard .backend-main-content {
+    flex: 1;
+    padding: var(--backend-spacing-lg, 24px);
+    overflow-x: hidden;
+}
+
+@media (max-width: 768px) {
+    .backend-dashboard {
+        flex-direction: column;
+    }
+    
+    .backend-sidebar {
+        width: 100%;
+    }
+    
+    .backend-sidebar.collapsed {
+        width: 100%;
+    }
+}
+</style>
