@@ -359,8 +359,8 @@ class Request extends CommandAbstract
         $env = Env::getInstance();
         $serverConfig = $env->get('server') ?? [];
         
-        // 获取服务器配置
-        $host = $serverConfig['host'] ?? '127.0.0.1';
+        // 获取服务器配置（默认 0.0.0.0 监听所有网卡，支持公网访问）
+        $host = $serverConfig['host'] ?? '0.0.0.0';
         $port = (int) ($serverConfig['port'] ?? 9981);
         // 命令行 --port/-P 覆盖
         if ($overridePort !== null) {
