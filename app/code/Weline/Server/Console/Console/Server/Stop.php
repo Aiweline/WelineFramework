@@ -101,6 +101,9 @@ class Stop implements CommandInterface
                         $this->printer->error(__('停止端口监听进程失败！进程ID：%{1}', [$actualPid]));
                         if ($force) {
                             $this->printer->note(__('强制停止失败，请尝试手动停止进程。'));
+                            if (PHP_OS_FAMILY !== 'Windows') {
+                                $this->printer->note(__('Linux/Unix 上可能需要 root 权限：sudo kill -9 %{1}', [$actualPid]));
+                            }
                         } else {
                             $this->printer->note(__('请尝试使用 -f 参数强制停止或手动停止进程。'));
                         }
@@ -168,8 +171,14 @@ class Stop implements CommandInterface
                 return true;
             }
         }
-        Processer::killByPid($pid);
+        // 当 force=true 或配置信息为空时，跳过己方进程校验直接杀死
+        Processer::killByPid($pid, $force);
         usleep(500000);
+        if (Processer::isRunningByPid($pid)) {
+            // 如果还在运行，直接使用驱动层强制杀死（绕过所有校验）
+            Processer::getDriver()->killProcess($pid);
+            usleep(300000);
+        }
         return !Processer::isRunningByPid($pid);
     }
 
