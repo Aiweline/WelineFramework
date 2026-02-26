@@ -1,0 +1,22 @@
+<?php
+/**
+ * 片段：Backend Right Sidebar - 默认风格
+ *
+ * 后端管理界面的右侧设置栏
+ * 字段
+ * @meta.name {default="Backend Right Sidebar右侧设置栏",name="Right Sidebar右侧设置栏片段",description="Right Sidebar右侧设置栏片段，用于描述片段的名称"}
+ * @meta.description {default="后端管理界面的右侧设置栏（包含主题配置、布局设置等）",name="右侧设置栏",description="后端管理界面的右侧设置栏，用于描述片段的用途"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置额外CSS类"}
+ *
+ * 参数配置说明：
+ * - Partials 自己的 meta 数据：通过 $meta 或 $this->getData('meta') 访问
+ * - Layout 的 meta 数据：通过 $layout 或 $this->getData('layout') 访问
+ */
+/** @var \Weline\Framework\View\Template $this */
+$meta = $this->getData('meta') ?? [];
+$layout = $this->getData('layout') ?? [];
+$class = $meta['class'] ?? '';
+?>
+<!-- ========== Right Sidebar Start ========== -->
+<w:template>Weline_Admin::common/right-sidebar.phtml</w:template>
+<!-- ========== Right Sidebar End ========== -->

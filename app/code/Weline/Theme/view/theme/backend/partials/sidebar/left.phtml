@@ -1,0 +1,22 @@
+<?php
+/**
+ * 片段：Backend Left Sidebar - 默认风格
+ *
+ * 后端管理界面的左侧菜单栏
+ * 字段
+ * @meta.name {default="Backend Left Sidebar左侧菜单栏",name="Left Sidebar左侧菜单栏片段",description="Left Sidebar左侧菜单栏片段，用于描述片段的名称"}
+ * @meta.description {default="后端管理界面的左侧菜单栏（包含搜索、常用菜单、主菜单等）",name="左侧菜单栏",description="后端管理界面的左侧菜单栏，用于描述片段的用途"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置额外CSS类"}
+ *
+ * 参数配置说明：
+ * - Partials 自己的 meta 数据：通过 $meta 或 $this->getData('meta') 访问
+ * - Layout 的 meta 数据：通过 $layout 或 $this->getData('layout') 访问
+ */
+/** @var \Weline\Framework\View\Template $this */
+$meta = $this->getData('meta') ?? [];
+$layout = $this->getData('layout') ?? [];
+$class = $meta['class'] ?? '';
+?>
+<!-- ========== Left Sidebar Start ========== -->
+<w:template>Weline_Admin::common/left-sidebar.phtml</w:template>
+<!-- ========== Left Sidebar End ========== -->

@@ -1,0 +1,522 @@
+<?php
+/**
+ * 数据列表部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {data-list}
+ * @widget.name {数据列表}
+ * @widget.description {后台通用数据列表部件，支持分页、搜索、批量操作}
+ * @widget.type {data}
+ * @widget.area {backend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["default", "dashboard"]}
+ * 
+ * @param title {default="数据列表",type="string",label="列表标题"}
+ * @param columns {default=[],type="array",label="列配置"}
+ * @param data {default=[],type="array",label="数据源"}
+ * @param show_search {default=true,type="bool",label="显示搜索"}
+ * @param show_pagination {default=true,type="bool",label="显示分页"}
+ * @param show_batch_actions {default=false,type="bool",label="显示批量操作"}
+ * @param empty_text {default="暂无数据",type="string",label="空数据提示"}
+ * @param striped {default=true,type="bool",label="斑马纹"}
+ * @param hover {default=true,type="bool",label="悬停高亮"}
+ * @param bordered {default=false,type="bool",label="显示边框"}
+ */
+
+$title = $this->getData('title') ?? __('数据列表');
+$columns = $this->getData('columns') ?? [];
+$data = $this->getData('data') ?? [];
+$showSearch = (bool)($this->getData('show_search') ?? true);
+$showPagination = (bool)($this->getData('show_pagination') ?? true);
+$showBatchActions = (bool)($this->getData('show_batch_actions') ?? false);
+$emptyText = $this->getData('empty_text') ?? __('暂无数据');
+$striped = (bool)($this->getData('striped') ?? true);
+$hover = (bool)($this->getData('hover') ?? true);
+$bordered = (bool)($this->getData('bordered') ?? false);
+
+$currentPage = (int)($this->getData('current_page') ?? 1);
+$totalPages = (int)($this->getData('total_pages') ?? 1);
+$totalCount = (int)($this->getData('total_count') ?? count($data));
+
+$widgetId = 'backend-data-list-' . uniqid();
+
+$tableClasses = ['backend-data-list-table'];
+if ($striped) $tableClasses[] = 'backend-data-list-table--striped';
+if ($hover) $tableClasses[] = 'backend-data-list-table--hover';
+if ($bordered) $tableClasses[] = 'backend-data-list-table--bordered';
+?>
+
+<div class="backend-data-list" id="<?= $widgetId ?>">
+    <!-- 列表头部：标题、搜索、操作按钮 -->
+    <div class="backend-data-list-header">
+        <div class="backend-data-list-title">
+            <h4><?= htmlspecialchars($title) ?></h4>
+            <span class="backend-data-list-count"><?= __('共 %{1} 条', $totalCount) ?></span>
+        </div>
+        
+        <div class="backend-data-list-actions">
+            <?php if ($showSearch): ?>
+            <div class="backend-data-list-search">
+                <input type="text" 
+                       class="backend-data-list-search-input" 
+                       placeholder="<?= __('搜索...') ?>"
+                       data-search-input>
+                <i class="ri-search-line backend-data-list-search-icon"></i>
+            </div>
+            <?php endif; ?>
+            
+            <!-- 操作按钮插槽 -->
+            <div class="backend-data-list-toolbar">
+                <?= $this->getData('toolbar_html') ?? '' ?>
+            </div>
+        </div>
+    </div>
+    
+    <?php if ($showBatchActions): ?>
+    <!-- 批量操作栏 -->
+    <div class="backend-data-list-batch-bar" style="display: none;" data-batch-bar>
+        <span class="backend-data-list-batch-info">
+            <lang>已选择</lang> <span data-selected-count>0</span> <lang>项</lang>
+        </span>
+        <div class="backend-data-list-batch-actions">
+            <?= $this->getData('batch_actions_html') ?? '' ?>
+        </div>
+        <button type="button" class="backend-data-list-batch-cancel" data-clear-selection>
+            <lang>取消选择</lang>
+        </button>
+    </div>
+    <?php endif; ?>
+    
+    <!-- 表格容器 -->
+    <div class="backend-data-list-body">
+        <?php if (empty($columns)): ?>
+        <div class="backend-data-list-empty">
+            <i class="ri-table-line"></i>
+            <p><lang>请配置列信息</lang></p>
+        </div>
+        <?php elseif (empty($data)): ?>
+        <div class="backend-data-list-empty">
+            <i class="ri-inbox-line"></i>
+            <p><?= htmlspecialchars($emptyText) ?></p>
+        </div>
+        <?php else: ?>
+        <table class="<?= implode(' ', $tableClasses) ?>">
+            <thead>
+                <tr>
+                    <?php if ($showBatchActions): ?>
+                    <th class="backend-data-list-checkbox-col">
+                        <input type="checkbox" data-select-all>
+                    </th>
+                    <?php endif; ?>
+                    <?php foreach ($columns as $column): ?>
+                    <th class="<?= htmlspecialchars($column['class'] ?? '') ?>" 
+                        style="<?= htmlspecialchars($column['style'] ?? '') ?>">
+                        <?= htmlspecialchars($column['label'] ?? $column['field'] ?? '') ?>
+                        <?php if (!empty($column['sortable'])): ?>
+                        <i class="ri-arrow-up-down-line backend-data-list-sort-icon" 
+                           data-sort-field="<?= htmlspecialchars($column['field'] ?? '') ?>"></i>
+                        <?php endif; ?>
+                    </th>
+                    <?php endforeach; ?>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($data as $index => $row): ?>
+                <tr data-row-id="<?= htmlspecialchars($row['id'] ?? $index) ?>">
+                    <?php if ($showBatchActions): ?>
+                    <td class="backend-data-list-checkbox-col">
+                        <input type="checkbox" 
+                               data-row-checkbox 
+                               value="<?= htmlspecialchars($row['id'] ?? $index) ?>">
+                    </td>
+                    <?php endif; ?>
+                    <?php foreach ($columns as $column): 
+                        $field = $column['field'] ?? '';
+                        $value = $row[$field] ?? '';
+                        $renderer = $column['renderer'] ?? null;
+                    ?>
+                    <td class="<?= htmlspecialchars($column['class'] ?? '') ?>">
+                        <?php if ($renderer && is_callable($renderer)): ?>
+                            <?= $renderer($value, $row, $column) ?>
+                        <?php else: ?>
+                            <?= htmlspecialchars((string)$value) ?>
+                        <?php endif; ?>
+                    </td>
+                    <?php endforeach; ?>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php endif; ?>
+    </div>
+    
+    <?php if ($showPagination && $totalPages > 1): ?>
+    <!-- 分页 -->
+    <div class="backend-data-list-footer">
+        <div class="backend-data-list-pagination">
+            <button type="button" 
+                    class="backend-data-list-page-btn" 
+                    <?= $currentPage <= 1 ? 'disabled' : '' ?>
+                    data-page="<?= $currentPage - 1 ?>">
+                <i class="ri-arrow-left-s-line"></i>
+            </button>
+            
+            <span class="backend-data-list-page-info">
+                <?= $currentPage ?> / <?= $totalPages ?>
+            </span>
+            
+            <button type="button" 
+                    class="backend-data-list-page-btn" 
+                    <?= $currentPage >= $totalPages ? 'disabled' : '' ?>
+                    data-page="<?= $currentPage + 1 ?>">
+                <i class="ri-arrow-right-s-line"></i>
+            </button>
+        </div>
+    </div>
+    <?php endif; ?>
+</div>
+
+<style>
+/* ============================================
+   组件：Backend Data List
+   模块：Weline_Theme
+   前缀：backend-data-list-
+   ============================================ */
+
+.backend-data-list {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-md, 8px);
+    box-shadow: var(--backend-card-shadow, 0 0 13px 0 rgba(74, 53, 107, 0.05));
+    overflow: hidden;
+}
+
+/* 头部 */
+.backend-data-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 24px);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    flex-wrap: wrap;
+    gap: var(--backend-spacing-sm, 12px);
+}
+
+.backend-data-list-title {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-sm, 12px);
+}
+
+.backend-data-list-title h4 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.backend-data-list-count {
+    font-size: 0.875rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.backend-data-list-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-md, 16px);
+}
+
+/* 搜索框 */
+.backend-data-list-search {
+    position: relative;
+}
+
+.backend-data-list-search-input {
+    width: 220px;
+    padding: var(--backend-spacing-xs, 6px) var(--backend-spacing-sm, 12px);
+    padding-left: 36px;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-input-bg, #fff);
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+}
+
+.backend-data-list-search-input:focus {
+    outline: none;
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: var(--backend-focus-ring, 0 0 0 3px rgba(85, 110, 230, 0.1));
+}
+
+.backend-data-list-search-input::placeholder {
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+.backend-data-list-search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    pointer-events: none;
+}
+
+/* 批量操作栏 */
+.backend-data-list-batch-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-md, 16px);
+    padding: var(--backend-spacing-sm, 12px) var(--backend-spacing-lg, 24px);
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    border-bottom: 1px solid var(--backend-color-primary, #556ee6);
+}
+
+.backend-data-list-batch-info {
+    font-size: 0.875rem;
+    color: var(--backend-color-primary, #556ee6);
+    font-weight: 500;
+}
+
+.backend-data-list-batch-cancel {
+    margin-left: auto;
+    padding: var(--backend-spacing-xs, 4px) var(--backend-spacing-sm, 12px);
+    border: none;
+    background: transparent;
+    color: var(--backend-color-text-secondary, #6c757d);
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.backend-data-list-batch-cancel:hover {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+/* 表格 */
+.backend-data-list-body {
+    overflow-x: auto;
+}
+
+.backend-data-list-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.backend-data-list-table th {
+    padding: var(--backend-spacing-sm, 12px) var(--backend-spacing-md, 16px);
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--backend-color-text-primary, #212529);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-bottom: 2px solid var(--backend-color-border-default, #dee2e6);
+    white-space: nowrap;
+}
+
+.backend-data-list-table td {
+    padding: var(--backend-spacing-sm, 12px) var(--backend-spacing-md, 16px);
+    color: var(--backend-color-text-primary, #212529);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    font-size: 0.875rem;
+}
+
+/* 表格变体 */
+.backend-data-list-table--striped tbody tr:nth-child(even) {
+    background: var(--backend-color-bg-tertiary, rgba(0, 0, 0, 0.02));
+}
+
+.backend-data-list-table--hover tbody tr:hover {
+    background: var(--backend-color-table-bg-hover, #f8f9fa);
+}
+
+.backend-data-list-table--bordered td,
+.backend-data-list-table--bordered th {
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+/* 复选框列 */
+.backend-data-list-checkbox-col {
+    width: 40px;
+    text-align: center;
+}
+
+/* 排序图标 */
+.backend-data-list-sort-icon {
+    margin-left: var(--backend-spacing-xs, 4px);
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.backend-data-list-sort-icon:hover {
+    opacity: 1;
+}
+
+/* 空状态 */
+.backend-data-list-empty {
+    text-align: center;
+    padding: var(--backend-spacing-xl, 48px) var(--backend-spacing-md, 20px);
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+.backend-data-list-empty i {
+    font-size: 3rem;
+    opacity: 0.4;
+    margin-bottom: var(--backend-spacing-md, 16px);
+    display: block;
+}
+
+.backend-data-list-empty p {
+    margin: 0;
+    font-size: 0.9375rem;
+}
+
+/* 分页 */
+.backend-data-list-footer {
+    display: flex;
+    justify-content: center;
+    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 24px);
+    border-top: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+.backend-data-list-pagination {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-sm, 12px);
+}
+
+.backend-data-list-page-btn {
+    padding: var(--backend-spacing-xs, 6px) var(--backend-spacing-sm, 12px);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-card-bg, #fff);
+    color: var(--backend-color-text-primary, #212529);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.backend-data-list-page-btn:hover:not(:disabled) {
+    border-color: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.backend-data-list-page-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.backend-data-list-page-info {
+    font-size: 0.875rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .backend-data-list-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .backend-data-list-search-input {
+        width: 100%;
+    }
+}
+</style>
+
+<script>
+(function() {
+    'use strict';
+    
+    var widgetId = '<?= $widgetId ?>';
+    var container = document.getElementById(widgetId);
+    if (!container) return;
+    
+    var selectedIds = [];
+    
+    // 搜索功能
+    var searchInput = container.querySelector('[data-search-input]');
+    if (searchInput) {
+        var debounceTimer = null;
+        searchInput.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(function() {
+                var keyword = searchInput.value.toLowerCase().trim();
+                var rows = container.querySelectorAll('tbody tr');
+                rows.forEach(function(row) {
+                    var text = row.textContent.toLowerCase();
+                    row.style.display = text.includes(keyword) ? '' : 'none';
+                });
+            }, 300);
+        });
+    }
+    
+    // 批量选择功能
+    var selectAllCheckbox = container.querySelector('[data-select-all]');
+    var rowCheckboxes = container.querySelectorAll('[data-row-checkbox]');
+    var batchBar = container.querySelector('[data-batch-bar]');
+    var selectedCountEl = container.querySelector('[data-selected-count]');
+    var clearSelectionBtn = container.querySelector('[data-clear-selection]');
+    
+    function updateBatchBar() {
+        if (!batchBar) return;
+        batchBar.style.display = selectedIds.length > 0 ? 'flex' : 'none';
+        if (selectedCountEl) {
+            selectedCountEl.textContent = selectedIds.length;
+        }
+    }
+    
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            var isChecked = this.checked;
+            rowCheckboxes.forEach(function(cb) {
+                cb.checked = isChecked;
+                var id = cb.value;
+                var index = selectedIds.indexOf(id);
+                if (isChecked && index === -1) {
+                    selectedIds.push(id);
+                } else if (!isChecked && index !== -1) {
+                    selectedIds.splice(index, 1);
+                }
+            });
+            updateBatchBar();
+        });
+    }
+    
+    rowCheckboxes.forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            var id = this.value;
+            var index = selectedIds.indexOf(id);
+            if (this.checked && index === -1) {
+                selectedIds.push(id);
+            } else if (!this.checked && index !== -1) {
+                selectedIds.splice(index, 1);
+            }
+            
+            if (selectAllCheckbox) {
+                selectAllCheckbox.checked = selectedIds.length === rowCheckboxes.length;
+            }
+            updateBatchBar();
+        });
+    });
+    
+    if (clearSelectionBtn) {
+        clearSelectionBtn.addEventListener('click', function() {
+            selectedIds = [];
+            rowCheckboxes.forEach(function(cb) { cb.checked = false; });
+            if (selectAllCheckbox) selectAllCheckbox.checked = false;
+            updateBatchBar();
+        });
+    }
+    
+    // 暴露 API
+    window.BackendDataList = window.BackendDataList || {};
+    window.BackendDataList[widgetId] = {
+        getSelectedIds: function() { return selectedIds.slice(); },
+        clearSelection: function() {
+            if (clearSelectionBtn) clearSelectionBtn.click();
+        }
+    };
+    
+})();
+</script>
