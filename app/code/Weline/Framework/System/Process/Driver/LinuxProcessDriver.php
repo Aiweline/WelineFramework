@@ -170,10 +170,17 @@ class LinuxProcessDriver extends AbstractProcessDriver
             return false;
         }
         
+        $functions = $this->detectAvailableFunctions();
+        
         // 1. 先发送 SIGTERM（优雅终止）
-        $output = [];
-        $exitCode = 0;
-        $this->executeCommand("kill -" . self::SIGTERM . " {$pid} 2>/dev/null", $output, $exitCode);
+        // 优先使用 posix_kill（更可靠），回退到 shell 命令
+        if ($functions['posix_kill']) {
+            @\posix_kill($pid, self::SIGTERM);
+        } else {
+            $output = [];
+            $exitCode = 0;
+            $this->executeCommand("kill -" . self::SIGTERM . " {$pid} 2>/dev/null", $output, $exitCode);
+        }
         
         // 等待进程响应 SIGTERM
         $this->waitMs(300);
@@ -183,12 +190,23 @@ class LinuxProcessDriver extends AbstractProcessDriver
             return true;
         }
         
-        // 3. 进程仍在运行 -> 无论 SIGTERM 结果如何，都尝试 SIGKILL
-        //    SIGKILL 无法被捕获/忽略，即使 SIGTERM 因权限不足失败，SIGKILL 仍可能成功
-        $output = [];
-        $exitCode = 0;
-        $this->executeCommand("kill -" . self::SIGKILL . " {$pid} 2>/dev/null", $output, $exitCode);
+        // 3. 进程仍在运行 -> 尝试 SIGKILL
+        if ($functions['posix_kill']) {
+            @\posix_kill($pid, self::SIGKILL);
+        } else {
+            $output = [];
+            $exitCode = 0;
+            $this->executeCommand("kill -" . self::SIGKILL . " {$pid} 2>/dev/null", $output, $exitCode);
+        }
         $this->waitMs(100);
+        
+        // 4. 如果还在运行，尝试 pkill 按进程组杀
+        if ($this->isRunningByPid($pid)) {
+            $output = [];
+            $this->executeCommand("pkill -9 -P {$pid} 2>/dev/null", $output);
+            $this->executeCommand("kill -9 {$pid} 2>/dev/null", $output);
+            $this->waitMs(100);
+        }
         
         return !$this->isRunningByPid($pid);
     }

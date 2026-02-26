@@ -347,8 +347,30 @@ class Start implements CommandInterface
      */
     private function stopExistingServer(int $pid): bool
     {
-        Processer::killByPid($pid);
-        usleep(500000);
+        // CLI 服务器的命令行是 "php -S localhost:port"，不包含 weline- 前缀
+        // 需要直接使用驱动层杀死（绕过 weline- 前缀校验）
+        $cmdLine = Processer::getProcessCommandLine($pid);
+        $isPhpServer = $cmdLine !== '' && (
+            \stripos($cmdLine, 'php') !== false && 
+            \stripos($cmdLine, '-S') !== false
+        );
+        
+        if ($isPhpServer) {
+            // PHP CLI 服务器：直接使用驱动层杀死
+            Processer::getDriver()->killProcess($pid);
+        } else {
+            // 其他进程：使用标准方法（带己方进程校验）
+            Processer::killByPid($pid, true);
+        }
+        
+        \usleep(500000);
+        
+        if (Processer::isRunningByPid($pid)) {
+            // 如果还在运行，尝试杀死进程树
+            Processer::getDriver()->killProcessTree($pid);
+            \usleep(300000);
+        }
+        
         return !Processer::isRunningByPid($pid);
     }
 

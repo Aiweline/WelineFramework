@@ -171,14 +171,31 @@ class Stop implements CommandInterface
                 return true;
             }
         }
-        // 当 force=true 或配置信息为空时，跳过己方进程校验直接杀死
-        Processer::killByPid($pid, $force);
-        usleep(500000);
-        if (Processer::isRunningByPid($pid)) {
-            // 如果还在运行，直接使用驱动层强制杀死（绕过所有校验）
-            Processer::getDriver()->killProcess($pid);
-            usleep(300000);
+        
+        // CLI 服务器的命令行是 "php -S localhost:port"，不包含 weline- 前缀
+        // 所以需要额外验证是否是 PHP 进程，然后直接使用驱动层杀死
+        $cmdLine = Processer::getProcessCommandLine($pid);
+        $isPhpServer = $cmdLine !== '' && (
+            \stripos($cmdLine, 'php') !== false && 
+            \stripos($cmdLine, '-S') !== false
+        );
+        
+        if ($isPhpServer || $force) {
+            // PHP CLI 服务器或强制模式：直接使用驱动层杀死（绕过 weline- 前缀校验）
+            $result = Processer::getDriver()->killProcess($pid);
+            \usleep(500000);
+            
+            if (Processer::isRunningByPid($pid)) {
+                // 如果还在运行，尝试杀死进程树
+                Processer::getDriver()->killProcessTree($pid);
+                \usleep(300000);
+            }
+        } else {
+            // 普通模式：使用 Processer 的己方进程校验
+            Processer::killByPid($pid, false);
+            \usleep(500000);
         }
+        
         return !Processer::isRunningByPid($pid);
     }
 
