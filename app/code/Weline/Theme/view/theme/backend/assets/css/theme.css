@@ -2,6 +2,9 @@
  * Weline Backend Theme - 后端主题样式
  * 
  * 后端管理界面的主题样式文件
+ * 
+ * 颜色必须使用主题变量（--backend-color-*），禁止硬编码！
+ * 变量参考：Weline_Admin/doc/主题配色变量文档.md
  */
 
 /* 后端布局基础样式 */
@@ -12,8 +15,8 @@
 
 .backend-sidebar {
     width: 250px;
-    background-color: #f8f9fa;
-    border-right: 1px solid #dee2e6;
+    background-color: var(--backend-color-sidebar-bg);
+    border-right: 1px solid var(--backend-color-border-primary);
     transition: width 0.3s ease;
 }
 
@@ -23,8 +26,7 @@
 
 .backend-main-content {
     flex: 1;
-    padding: 20px;
-    background-color: #ffffff;
+    background-color: var(--backend-color-bg-primary);
 }
 
 .backend-dashboard {
@@ -36,10 +38,6 @@
 @media (max-width: 768px) {
     .backend-sidebar {
         width: 60px;
-    }
-    
-    .backend-main-content {
-        padding: 15px;
     }
 }
 
