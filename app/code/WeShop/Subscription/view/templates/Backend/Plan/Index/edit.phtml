@@ -1,159 +1,150 @@
 <?php
 /**
+ * 订阅计划编辑 - 内容模板
  * @var \Weline\Framework\View\Template $this
  * @var \WeShop\Subscription\Model\SubscriptionPlan|null $plan
  * @var array $billing_cycles
  */
-/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 
 $title = $title ?? __('新建订阅计划');
 $billing_cycles = $billing_cycles ?? [];
 $isEdit = $plan && $plan->getId();
 ?>
-<!DOCTYPE html>
-<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= $title ?></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? '' ?>>
 
-@template(Weline_Admin::common/page/loading.phtml)
+<!-- start page title -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0 font-size-18"><?= $title ?></h4>
+            <a href="<?= $this->getUrl('*/plan/index') ?>" class="btn btn-sm btn-outline-secondary">
+                <i class="mdi mdi-arrow-left"></i> <?= __('返回') ?>
+            </a>
+        </div>
+    </div>
+</div>
+<!-- end page title -->
 
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
+<!-- start page message -->
+<div class="row mb-3">
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+        <div id="page-message-container"></div>
+    </div>
+</div>
+<!-- end message -->
 
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0 font-size-18"><?= $title ?></h4>
-                            <a href="<?= $this->getUrl('*/plan/index') ?>" class="btn btn-sm btn-outline-secondary">
-                                <i class="mdi mdi-arrow-left"></i> <?= __('返回') ?>
-                            </a>
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form id="plan-form">
+                    <?php if ($isEdit): ?>
+                        <input type="hidden" name="plan_id" value="<?= $plan->getId() ?>">
+                    <?php endif; ?>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label"><?= __('计划名称') ?> <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="name" value="<?= $isEdit ? htmlspecialchars($plan->getData('name')) : '' ?>" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label"><?= __('关联产品') ?> (ID)</label>
+                            <input type="number" class="form-control" name="product_id" value="<?= $isEdit ? $plan->getData('product_id') : '0' ?>" min="0">
                         </div>
                     </div>
-                </div>
 
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <template>Weline_Component::message.phtml</template>
-                        <div id="page-message-container"></div>
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('计划描述') ?></label>
+                        <textarea class="form-control" name="description" rows="3"><?= $isEdit ? htmlspecialchars($plan->getData('description') ?? '') : '' ?></textarea>
                     </div>
-                </div>
 
-                <div class="row">
-                    <div class="col-lg-8">
-                        <div class="card">
-                            <div class="card-body">
-                                <form id="plan-form">
-                                    <?php if ($isEdit): ?>
-                                        <input type="hidden" name="plan_id" value="<?= $plan->getId() ?>">
-                                    <?php endif; ?>
-
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label"><?= __('计划名称') ?> <span class="text-danger">*</span></label>
-                                            <input type="text" class="form-control" name="name" value="<?= $isEdit ? htmlspecialchars($plan->getData('name')) : '' ?>" required>
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label"><?= __('关联产品') ?> (ID)</label>
-                                            <input type="number" class="form-control" name="product_id" value="<?= $isEdit ? $plan->getData('product_id') : '0' ?>" min="0">
-                                        </div>
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label class="form-label"><?= __('计划描述') ?></label>
-                                        <textarea class="form-control" name="description" rows="3"><?= $isEdit ? htmlspecialchars($plan->getData('description') ?? '') : '' ?></textarea>
-                                    </div>
-
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label"><?= __('订阅价格') ?> <span class="text-danger">*</span></label>
-                                            <input type="number" class="form-control" name="price" value="<?= $isEdit ? $plan->getData('price') : '0.00' ?>" step="0.01" min="0" required>
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label"><?= __('原价') ?></label>
-                                            <input type="number" class="form-control" name="original_price" value="<?= $isEdit ? $plan->getData('original_price') : '0.00' ?>" step="0.01" min="0">
-                                        </div>
-                                    </div>
-
-                                    <div class="row">
-                                        <div class="col-md-4 mb-3">
-                                            <label class="form-label"><?= __('计费周期') ?></label>
-                                            <select class="form-select" name="billing_cycle">
-                                                <?php foreach ($billing_cycles as $key => $label): ?>
-                                                    <option value="<?= $key ?>" <?= ($isEdit && $plan->getData('billing_cycle') === $key) ? 'selected' : '' ?>><?= $label ?></option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                        <div class="col-md-4 mb-3">
-                                            <label class="form-label"><?= __('计费间隔') ?></label>
-                                            <input type="number" class="form-control" name="billing_interval" value="<?= $isEdit ? $plan->getData('billing_interval') : '1' ?>" min="1">
-                                        </div>
-                                        <div class="col-md-4 mb-3">
-                                            <label class="form-label"><?= __('试用天数') ?></label>
-                                            <input type="number" class="form-control" name="trial_days" value="<?= $isEdit ? $plan->getData('trial_days') : '0' ?>" min="0">
-                                        </div>
-                                    </div>
-
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label"><?= __('排序') ?></label>
-                                            <input type="number" class="form-control" name="sort_order" value="<?= $isEdit ? $plan->getData('sort_order') : '0' ?>" min="0">
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label"><?= __('状态') ?></label>
-                                            <select class="form-select" name="status">
-                                                <option value="1" <?= ($isEdit && (int)$plan->getData('status') === 1) ? 'selected' : '' ?>><?= __('启用') ?></option>
-                                                <option value="0" <?= ($isEdit && (int)$plan->getData('status') === 0) ? 'selected' : '' ?>><?= __('停用') ?></option>
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    <div class="mt-3">
-                                        <button type="submit" class="btn btn-primary">
-                                            <i class="mdi mdi-content-save"></i> <?= __('保存成功') ?>
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label"><?= __('订阅价格') ?> <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" name="price" value="<?= $isEdit ? $plan->getData('price') : '0.00' ?>" step="0.01" min="0" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label"><?= __('原价') ?></label>
+                            <input type="number" class="form-control" name="original_price" value="<?= $isEdit ? $plan->getData('original_price') : '0.00' ?>" step="0.01" min="0">
                         </div>
                     </div>
-                </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label"><?= __('计费周期') ?></label>
+                            <select class="form-select" name="billing_cycle">
+                                <?php foreach ($billing_cycles as $key => $label): ?>
+                                    <option value="<?= $key ?>" <?= ($isEdit && $plan->getData('billing_cycle') === $key) ? 'selected' : '' ?>><?= $label ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label"><?= __('计费间隔') ?></label>
+                            <input type="number" class="form-control" name="billing_interval" value="<?= $isEdit ? $plan->getData('billing_interval') : '1' ?>" min="1">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label"><?= __('试用天数') ?></label>
+                            <input type="number" class="form-control" name="trial_days" value="<?= $isEdit ? $plan->getData('trial_days') : '0' ?>" min="0">
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label"><?= __('排序') ?></label>
+                            <input type="number" class="form-control" name="sort_order" value="<?= $isEdit ? $plan->getData('sort_order') : '0' ?>" min="0">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label"><?= __('状态') ?></label>
+                            <select class="form-select" name="status">
+                                <option value="1" <?= ($isEdit && (int)$plan->getData('status') === 1) ? 'selected' : '' ?>><?= __('启用') ?></option>
+                                <option value="0" <?= ($isEdit && (int)$plan->getData('status') === 0) ? 'selected' : '' ?>><?= __('停用') ?></option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 </div>
 
-@template(Weline_Admin::common/footer.phtml)
-
 <script>
-    document.getElementById('plan-form').addEventListener('submit', function (e) {
+(function() {
+    'use strict';
+    
+    document.getElementById('plan-form').addEventListener('submit', function(e) {
         e.preventDefault();
-        const formData = new FormData(this);
+        var formData = new FormData(this);
 
         fetch('<?= $this->getUrl('*/plan/index/save') ?>', {
             method: 'POST',
             headers: {'X-Requested-With': 'XMLHttpRequest'},
             body: new URLSearchParams(formData)
         })
-            .then(r => r.json())
-            .then(data => {
-                if (data.code === 200) {
-                    window.location.href = '<?= $this->getUrl('*/plan/index') ?>';
-                } else {
-                    alert(data.msg);
-                }
-            })
-            .catch(err => alert(err.message));
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.code === 200) {
+                window.location.href = '<?= $this->getUrl('*/plan/index') ?>';
+            } else {
+                Swal.fire({
+                    title: '<?= __('错误') ?>',
+                    text: data.msg,
+                    icon: 'error'
+                });
+            }
+        })
+        .catch(function(err) {
+            Swal.fire({
+                title: '<?= __('错误') ?>',
+                text: err.message,
+                icon: 'error'
+            });
+        });
     });
+})();
 </script>
-
-</body>
-</html>

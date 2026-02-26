@@ -1,7 +1,5 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
-/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 
 use Weline\Async\Model\SyncHost;
 use Weline\Async\Model\SyncMapping;
@@ -13,22 +11,6 @@ $backendBase = $this->getBackendUrl('async/backend/mapping');
 $createUrl = $this->getBackendUrl('async/backend/mapping/form?host_id=' . ($host ? $host->getId() : ''));
 $hostListUrl = $this->getBackendUrl('async/backend/host');
 ?>
-<!DOCTYPE html>
-<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= __('目录映射管理') ?></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-@template(Weline_Admin::common/page/loading.phtml)
-<div id="layout-wrapper">
-    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
-    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
                 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -161,15 +143,13 @@ $hostListUrl = $this->getBackendUrl('async/backend/host');
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-@template(Weline_Admin::common/footer.phtml)
+<js:part>
 <script>
-let currentHostId = <?= $host->getId() ?>;
-let currentMappingId = null;
+(function() {
+    'use strict';
+    
+    var currentHostId = <?= $host->getId() ?>;
+    var currentMappingId = null;
 
 function loadMappingForm(hostId, mappingId) {
     currentHostId = hostId;
@@ -699,6 +679,6 @@ function toggleMapping(mappingId, hostId) {
         alert('<?= __('操作失败，请稍后重试') ?>');
     });
 }
+})();
 </script>
-</body>
-</html>
+</js:part>

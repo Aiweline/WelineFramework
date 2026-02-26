@@ -1,13 +1,12 @@
 <?php
 /**
+ * 订阅详情 - 内容模板
  * @var \Weline\Framework\View\Template $this
  * @var \WeShop\Subscription\Model\Subscription $subscription
  * @var \WeShop\Subscription\Model\SubscriptionPlan $plan
  * @var array $history
  * @var array $status_options
  */
-/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 
 $title = $title ?? __('订阅详情');
 $status_options = $status_options ?? [];
@@ -38,218 +37,201 @@ $actionBadgeMap = [
 $actionOptions = \WeShop\Subscription\Model\SubscriptionHistory::getActionOptions();
 $subStatus = $subscription->getData('status');
 ?>
-<!DOCTYPE html>
-<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= $title ?></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? '' ?>>
 
-@template(Weline_Admin::common/page/loading.phtml)
+<!-- start page title -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0 font-size-18"><?= $title ?> #<?= $subscription->getId() ?></h4>
+            <div class="d-flex gap-2">
+                <a href="<?= $this->getUrl('*/subscription/index') ?>" class="btn btn-sm btn-outline-secondary">
+                    <i class="mdi mdi-arrow-left"></i> <?= __('返回') ?>
+                </a>
+                <?php if ($subscription->canPause()): ?>
+                    <button class="btn btn-sm btn-warning weshop-subscription-pause-btn" data-id="<?= $subscription->getId() ?>">
+                        <i class="mdi mdi-pause"></i> <?= __('暂停') ?>
+                    </button>
+                <?php endif; ?>
+                <?php if ($subscription->canResume()): ?>
+                    <button class="btn btn-sm btn-success weshop-subscription-resume-btn" data-id="<?= $subscription->getId() ?>">
+                        <i class="mdi mdi-play"></i> <?= __('恢复') ?>
+                    </button>
+                <?php endif; ?>
+                <?php if ($subscription->canCancel()): ?>
+                    <button class="btn btn-sm btn-danger weshop-subscription-cancel-btn" data-id="<?= $subscription->getId() ?>">
+                        <i class="mdi mdi-close-circle"></i> <?= __('取消') ?>
+                    </button>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end page title -->
 
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
+<!-- start page message -->
+<div class="row mb-3">
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+        <div id="page-message-container"></div>
+    </div>
+</div>
+<!-- end message -->
 
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0 font-size-18"><?= $title ?> #<?= $subscription->getId() ?></h4>
-                            <div class="d-flex gap-2">
-                                <a href="<?= $this->getUrl('*/subscription/index') ?>" class="btn btn-sm btn-outline-secondary">
-                                    <i class="mdi mdi-arrow-left"></i> <?= __('返回') ?>
-                                </a>
-                                <?php if ($subscription->canPause()): ?>
-                                    <button class="btn btn-sm btn-warning" onclick="pauseSubscription(<?= $subscription->getId() ?>)">
-                                        <i class="mdi mdi-pause"></i> <?= __('暂停') ?>
-                                    </button>
-                                <?php endif; ?>
-                                <?php if ($subscription->canResume()): ?>
-                                    <button class="btn btn-sm btn-success" onclick="resumeSubscription(<?= $subscription->getId() ?>)">
-                                        <i class="mdi mdi-play"></i> <?= __('恢复') ?>
-                                    </button>
-                                <?php endif; ?>
-                                <?php if ($subscription->canCancel()): ?>
-                                    <button class="btn btn-sm btn-danger" onclick="showCancelModal(<?= $subscription->getId() ?>)">
-                                        <i class="mdi mdi-close-circle"></i> <?= __('取消') ?>
-                                    </button>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
+<!-- 订阅详情 -->
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3"><?= __('订阅详情') ?></h5>
+                <table class="table table-borderless mb-0">
+                    <tr>
+                        <td class="text-muted" style="width: 140px;"><?= __('状态') ?></td>
+                        <td>
+                            <span class="badge <?= $statusBadgeMap[$subStatus] ?? 'bg-secondary' ?> font-size-14">
+                                <?= $status_options[$subStatus] ?? $subStatus ?>
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted"><?= __('客户ID') ?></td>
+                        <td><?= $subscription->getData('customer_id') ?></td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted"><?= __('订阅价格') ?></td>
+                        <td class="fw-bold"><?= $subscription->getData('currency') ?> <?= number_format((float)$subscription->getData('price'), 2) ?></td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted"><?= __('计费周期') ?></td>
+                        <td><?= $subscription->getData('billing_cycle') ?> / <?= $subscription->getData('billing_interval') ?></td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted"><?= __('支付方式') ?></td>
+                        <td><?= $subscription->getData('payment_method') ?: '-' ?></td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted"><?= __('续费次数') ?></td>
+                        <td><?= $subscription->getData('renewal_count') ?? 0 ?></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3"><?= __('当前周期') ?></h5>
+                <table class="table table-borderless mb-0">
+                    <tr>
+                        <td class="text-muted" style="width: 140px;"><?= __('当前周期') ?></td>
+                        <td><?= $subscription->getData('current_period_start') ?? '-' ?> ~ <?= $subscription->getData('current_period_end') ?? '-' ?></td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted"><?= __('下次计费') ?></td>
+                        <td><?= $subscription->getData('next_billing_at') ?? '-' ?></td>
+                    </tr>
+                    <?php if ($subscription->getData('trial_ends_at')): ?>
+                        <tr>
+                            <td class="text-muted"><?= __('试用结束时间') ?></td>
+                            <td><?= $subscription->getData('trial_ends_at') ?></td>
+                        </tr>
+                    <?php endif; ?>
+                    <tr>
+                        <td class="text-muted"><?= __('创建时间') ?></td>
+                        <td><?= $subscription->getData('created_at') ?></td>
+                    </tr>
+                    <?php if ($subscription->getData('cancelled_at')): ?>
+                        <tr>
+                            <td class="text-muted"><?= __('取消时间') ?></td>
+                            <td><?= $subscription->getData('cancelled_at') ?></td>
+                        </tr>
+                        <?php if ($subscription->getData('cancel_reason')): ?>
+                            <tr>
+                                <td class="text-muted"><?= __('取消原因') ?></td>
+                                <td><?= htmlspecialchars($subscription->getData('cancel_reason')) ?></td>
+                            </tr>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                    <?php if ($subscription->getData('paused_at')): ?>
+                        <tr>
+                            <td class="text-muted"><?= __('暂停时间') ?></td>
+                            <td><?= $subscription->getData('paused_at') ?></td>
+                        </tr>
+                    <?php endif; ?>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 关联计划 -->
+<?php if ($plan && $plan->getId()): ?>
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-3"><?= __('订阅计划') ?></h5>
+                    <table class="table table-borderless mb-0">
+                        <tr>
+                            <td class="text-muted" style="width: 140px;"><?= __('计划名称') ?></td>
+                            <td><?= htmlspecialchars($plan->getData('name')) ?></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted"><?= __('计划描述') ?></td>
+                            <td><?= htmlspecialchars($plan->getData('description') ?: '-') ?></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted"><?= __('试用天数') ?></td>
+                            <td><?= $plan->getData('trial_days') ?? 0 ?></td>
+                        </tr>
+                    </table>
                 </div>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
 
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <template>Weline_Component::message.phtml</template>
-                        <div id="page-message-container"></div>
-                    </div>
-                </div>
-
-                <!-- 订阅详情 -->
-                <div class="row">
-                    <div class="col-lg-6">
-                        <div class="card">
-                            <div class="card-body">
-                                <h5 class="card-title mb-3"><?= __('订阅详情') ?></h5>
-                                <table class="table table-borderless mb-0">
-                                    <tr>
-                                        <td class="text-muted" style="width: 140px;"><?= __('状态') ?></td>
-                                        <td>
-                                            <span class="badge <?= $statusBadgeMap[$subStatus] ?? 'bg-secondary' ?> font-size-14">
-                                                <?= $status_options[$subStatus] ?? $subStatus ?>
-                                            </span>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td class="text-muted"><?= __('客户ID') ?></td>
-                                        <td><?= $subscription->getData('customer_id') ?></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="text-muted"><?= __('订阅价格') ?></td>
-                                        <td class="fw-bold"><?= $subscription->getData('currency') ?> <?= number_format((float)$subscription->getData('price'), 2) ?></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="text-muted"><?= __('计费周期') ?></td>
-                                        <td><?= $subscription->getData('billing_cycle') ?> / <?= $subscription->getData('billing_interval') ?></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="text-muted"><?= __('支付方式') ?></td>
-                                        <td><?= $subscription->getData('payment_method') ?: '-' ?></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="text-muted"><?= __('续费次数') ?></td>
-                                        <td><?= $subscription->getData('renewal_count') ?? 0 ?></td>
-                                    </tr>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-6">
-                        <div class="card">
-                            <div class="card-body">
-                                <h5 class="card-title mb-3"><?= __('当前周期') ?></h5>
-                                <table class="table table-borderless mb-0">
-                                    <tr>
-                                        <td class="text-muted" style="width: 140px;"><?= __('当前周期') ?></td>
-                                        <td><?= $subscription->getData('current_period_start') ?? '-' ?> ~ <?= $subscription->getData('current_period_end') ?? '-' ?></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="text-muted"><?= __('下次计费') ?></td>
-                                        <td><?= $subscription->getData('next_billing_at') ?? '-' ?></td>
-                                    </tr>
-                                    <?php if ($subscription->getData('trial_ends_at')): ?>
-                                        <tr>
-                                            <td class="text-muted"><?= __('试用结束时间') ?></td>
-                                            <td><?= $subscription->getData('trial_ends_at') ?></td>
-                                        </tr>
-                                    <?php endif; ?>
-                                    <tr>
-                                        <td class="text-muted"><?= __('创建时间') ?></td>
-                                        <td><?= $subscription->getData('created_at') ?></td>
-                                    </tr>
-                                    <?php if ($subscription->getData('cancelled_at')): ?>
-                                        <tr>
-                                            <td class="text-muted"><?= __('取消时间') ?></td>
-                                            <td><?= $subscription->getData('cancelled_at') ?></td>
-                                        </tr>
-                                        <?php if ($subscription->getData('cancel_reason')): ?>
-                                            <tr>
-                                                <td class="text-muted"><?= __('取消原因') ?></td>
-                                                <td><?= htmlspecialchars($subscription->getData('cancel_reason')) ?></td>
-                                            </tr>
-                                        <?php endif; ?>
-                                    <?php endif; ?>
-                                    <?php if ($subscription->getData('paused_at')): ?>
-                                        <tr>
-                                            <td class="text-muted"><?= __('暂停时间') ?></td>
-                                            <td><?= $subscription->getData('paused_at') ?></td>
-                                        </tr>
-                                    <?php endif; ?>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 关联计划 -->
-                <?php if ($plan && $plan->getId()): ?>
-                    <div class="row">
-                        <div class="col-12">
-                            <div class="card">
-                                <div class="card-body">
-                                    <h5 class="card-title mb-3"><?= __('订阅计划') ?></h5>
-                                    <table class="table table-borderless mb-0">
-                                        <tr>
-                                            <td class="text-muted" style="width: 140px;"><?= __('计划名称') ?></td>
-                                            <td><?= htmlspecialchars($plan->getData('name')) ?></td>
-                                        </tr>
-                                        <tr>
-                                            <td class="text-muted"><?= __('计划描述') ?></td>
-                                            <td><?= htmlspecialchars($plan->getData('description') ?: '-') ?></td>
-                                        </tr>
-                                        <tr>
-                                            <td class="text-muted"><?= __('试用天数') ?></td>
-                                            <td><?= $plan->getData('trial_days') ?? 0 ?></td>
-                                        </tr>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
+<!-- 历史记录 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3"><?= __('历史记录') ?></h5>
+                <?php if (empty($history['items'])): ?>
+                    <p class="text-muted"><?= __('暂无历史记录') ?></p>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th><?= __('操作') ?></th>
+                                <th><?= __('金额') ?></th>
+                                <th><?= __('订单ID') ?></th>
+                                <th><?= __('备注') ?></th>
+                                <th><?= __('操作者') ?></th>
+                                <th><?= __('创建时间') ?></th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <?php foreach ($history['items'] as $h): ?>
+                                <tr>
+                                    <td><?= $h['history_id'] ?></td>
+                                    <td>
+                                        <span class="badge <?= $actionBadgeMap[$h['action']] ?? 'bg-secondary' ?>">
+                                            <?= $actionOptions[$h['action']] ?? $h['action'] ?>
+                                        </span>
+                                    </td>
+                                    <td><?= number_format((float)($h['amount'] ?? 0), 2) ?></td>
+                                    <td><?= $h['order_id'] ?: '-' ?></td>
+                                    <td><?= htmlspecialchars($h['note'] ?? '') ?></td>
+                                    <td><?= htmlspecialchars($h['operator'] ?? '-') ?></td>
+                                    <td><?= $h['created_at'] ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
                     </div>
                 <?php endif; ?>
-
-                <!-- 历史记录 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <h5 class="card-title mb-3"><?= __('历史记录') ?></h5>
-                                <?php if (empty($history['items'])): ?>
-                                    <p class="text-muted"><?= __('暂无历史记录') ?></p>
-                                <?php else: ?>
-                                    <div class="table-responsive">
-                                        <table class="table table-hover align-middle mb-0">
-                                            <thead class="table-light">
-                                            <tr>
-                                                <th>ID</th>
-                                                <th><?= __('操作') ?></th>
-                                                <th><?= __('金额') ?></th>
-                                                <th><?= __('订单ID') ?></th>
-                                                <th><?= __('备注') ?></th>
-                                                <th><?= __('操作者') ?></th>
-                                                <th><?= __('创建时间') ?></th>
-                                            </tr>
-                                            </thead>
-                                            <tbody>
-                                            <?php foreach ($history['items'] as $h): ?>
-                                                <tr>
-                                                    <td><?= $h['history_id'] ?></td>
-                                                    <td>
-                                                        <span class="badge <?= $actionBadgeMap[$h['action']] ?? 'bg-secondary' ?>">
-                                                            <?= $actionOptions[$h['action']] ?? $h['action'] ?>
-                                                        </span>
-                                                    </td>
-                                                    <td><?= number_format((float)($h['amount'] ?? 0), 2) ?></td>
-                                                    <td><?= $h['order_id'] ?: '-' ?></td>
-                                                    <td><?= htmlspecialchars($h['note'] ?? '') ?></td>
-                                                    <td><?= htmlspecialchars($h['operator'] ?? '-') ?></td>
-                                                    <td><?= $h['created_at'] ?></td>
-                                                </tr>
-                                            <?php endforeach; ?>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -278,61 +260,150 @@ $subStatus = $subscription->getData('status');
     </div>
 </div>
 
-@template(Weline_Admin::common/footer.phtml)
-
 <script>
-    let cancelSubscriptionId = 0;
-
-    function showCancelModal(id) {
-        cancelSubscriptionId = id;
-        new bootstrap.Modal(document.getElementById('cancelModal')).show();
-    }
-
-    document.getElementById('confirm-cancel-btn')?.addEventListener('click', function () {
-        const reason = document.getElementById('cancel-reason').value;
-        fetch('<?= $this->getUrl('*/subscription/view/cancel') ?>', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
-            body: 'id=' + cancelSubscriptionId + '&reason=' + encodeURIComponent(reason)
-        })
-            .then(r => r.json())
-            .then(data => {
+(function() {
+    'use strict';
+    
+    var WeShopSubscriptionView = {
+        cancelUrl: '<?= $this->getUrl('*/subscription/view/cancel') ?>',
+        pauseUrl: '<?= $this->getUrl('*/subscription/view/pause') ?>',
+        resumeUrl: '<?= $this->getUrl('*/subscription/view/resume') ?>',
+        cancelSubscriptionId: 0,
+        
+        showCancelModal: function(id) {
+            this.cancelSubscriptionId = id;
+            new bootstrap.Modal(document.getElementById('cancelModal')).show();
+        },
+        
+        confirmCancel: function() {
+            var self = this;
+            var reason = document.getElementById('cancel-reason').value;
+            fetch(self.cancelUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: 'id=' + self.cancelSubscriptionId + '&reason=' + encodeURIComponent(reason)
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
                 if (data.code === 200) {
                     location.reload();
                 } else {
-                    alert(data.msg);
+                    Swal.fire({
+                        title: '<?= __('错误') ?>',
+                        text: data.msg,
+                        icon: 'error'
+                    });
                 }
             });
+        },
+        
+        pauseSubscription: function(id) {
+            var self = this;
+            Swal.fire({
+                title: '<?= __('确认暂停') ?>',
+                text: '<?= __('确认暂停此订阅？') ?>',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '<?= __('确认') ?>',
+                cancelButtonText: '<?= __('取消') ?>'
+            }).then(function(result) {
+                if (result.isConfirmed) {
+                    fetch(self.pauseUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: 'id=' + id
+                    })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data.code === 200) {
+                            location.reload();
+                        } else {
+                            Swal.fire({
+                                title: '<?= __('错误') ?>',
+                                text: data.msg,
+                                icon: 'error'
+                            });
+                        }
+                    });
+                }
+            });
+        },
+        
+        resumeSubscription: function(id) {
+            var self = this;
+            Swal.fire({
+                title: '<?= __('确认恢复') ?>',
+                text: '<?= __('确认恢复此订阅？') ?>',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: '<?= __('确认') ?>',
+                cancelButtonText: '<?= __('取消') ?>'
+            }).then(function(result) {
+                if (result.isConfirmed) {
+                    fetch(self.resumeUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: 'id=' + id
+                    })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data.code === 200) {
+                            location.reload();
+                        } else {
+                            Swal.fire({
+                                title: '<?= __('错误') ?>',
+                                text: data.msg,
+                                icon: 'error'
+                            });
+                        }
+                    });
+                }
+            });
+        },
+        
+        init: function() {
+            var self = this;
+            
+            document.querySelectorAll('.weshop-subscription-cancel-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    self.showCancelModal(this.getAttribute('data-id'));
+                });
+            });
+            
+            document.querySelectorAll('.weshop-subscription-pause-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    self.pauseSubscription(this.getAttribute('data-id'));
+                });
+            });
+            
+            document.querySelectorAll('.weshop-subscription-resume-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    self.resumeSubscription(this.getAttribute('data-id'));
+                });
+            });
+            
+            var confirmCancelBtn = document.getElementById('confirm-cancel-btn');
+            if (confirmCancelBtn) {
+                confirmCancelBtn.addEventListener('click', function() {
+                    self.confirmCancel();
+                });
+            }
+        }
+    };
+    
+    window.WeShopSubscriptionView = WeShopSubscriptionView;
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        WeShopSubscriptionView.init();
     });
-
-    function pauseSubscription(id) {
-        if (!confirm('<?= __('暂停') ?>?')) return;
-        fetch('<?= $this->getUrl('*/subscription/view/pause') ?>', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
-            body: 'id=' + id
-        })
-            .then(r => r.json())
-            .then(data => {
-                if (data.code === 200) location.reload();
-                else alert(data.msg);
-            });
-    }
-
-    function resumeSubscription(id) {
-        if (!confirm('<?= __('恢复') ?>?')) return;
-        fetch('<?= $this->getUrl('*/subscription/view/resume') ?>', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
-            body: 'id=' + id
-        })
-            .then(r => r.json())
-            .then(data => {
-                if (data.code === 200) location.reload();
-                else alert(data.msg);
-            });
-    }
+})();
 </script>
-
-</body>
-</html>

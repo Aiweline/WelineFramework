@@ -514,7 +514,8 @@ class Processer
                 $pid = (int) \proc_get_status($process)['pid'];
                 
                 // Windows cmd /c start 场景：proc_get_status 可能返回 cmd.exe PID，尝试获取真实进程 PID
-                if (IS_WIN && $pid > 0 && \str_starts_with($command, 'cmd /c start')) {
+                // 仅在阻塞模式下尝试获取真实 PID，非阻塞模式直接使用当前 PID 避免卡顿
+                if ($block && IS_WIN && $pid > 0 && \str_starts_with($command, 'cmd /c start')) {
                     $realPid = self::findPhpProcessPid($pname);
                     if ($realPid > 0) {
                         $pid = $realPid;

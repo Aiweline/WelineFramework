@@ -1,7 +1,6 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
 
 /**
  * 变量：
@@ -16,105 +15,7 @@ $title = $this->getData('title') ?: __('SEO主体列表');
 $search = $this->getData('search') ?: '';
 $status = $this->getData('status');
 ?>
-<!DOCTYPE html>
-<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= htmlspecialchars($title) ?></title>
-    <style>
-        .subject-table {
-            margin-bottom: 0;
-        }
-        
-        .subject-table th {
-            font-weight: 600;
-            background: #f8f9fa;
-            border-bottom: 2px solid #dee2e6;
-        }
-        
-        .subject-table td {
-            vertical-align: middle;
-        }
-        
-        .subject-title-cell {
-            max-width: 300px;
-        }
-        
-        .subject-title-link {
-            color: #212529;
-            text-decoration: none;
-            font-weight: 500;
-        }
-        
-        .subject-title-link:hover {
-            color: #0bb197;
-        }
-        
-        .subject-url {
-            font-size: 0.85rem;
-            color: #6c757d;
-            word-break: break-all;
-        }
-        
-        .badge-status {
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-        }
-        
-        .keyword-count {
-            display: inline-flex;
-            align-items: center;
-            padding: 4px 10px;
-            background: #e3f2fd;
-            color: #1976d2;
-            border-radius: 12px;
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
-        
-        .action-buttons .btn {
-            padding: 6px 12px;
-            font-size: 0.875rem;
-        }
-        
-        .search-box {
-            background: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            margin-bottom: 20px;
-        }
-        
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #6c757d;
-        }
-        
-        .empty-state i {
-            font-size: 4rem;
-            margin-bottom: 20px;
-            opacity: 0.3;
-        }
-    </style>
-</head>
-
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-
-@template(Weline_Admin::common/page/loading.phtml)
-
-<div id="layout-wrapper">
-
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class='page-content'>
-            <div class='container-fluid'>
-                
-                <!-- 消息提示 -->
+<!-- 消息提示 -->
                 <div class='row'>
                     <div class='col-12'>
                         <template>Weline_Component::message.phtml</template>
@@ -263,14 +164,3 @@ $status = $this->getData('status');
                         </div>
                     </div>
                 </div>
-
-            </div>
-        </div>
-    </div>
-
-</div>
-
-@template(Weline_Admin::common/footer.phtml)
-
-</body>
-</html>

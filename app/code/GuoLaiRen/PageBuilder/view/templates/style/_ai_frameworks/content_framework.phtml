@@ -38,9 +38,9 @@
  * style.bg_color => 背景颜色:color:#ffffff
  * style.bg_gradient => 渐变背景:text:linear-gradient(135deg, #667eea 0%, #764ba2 100%)
  * style.bg_image => 背景图片:textarea:
- * style.text_color => 文字颜色:color:#333333
- * style.title_color => 标题颜色:color:#1a1a1a
- * style.accent_color => 强调色:color:#7c3aed
+ * style.text_color => 文字颜色:color:#374151
+ * style.title_color => 标题颜色:color:#111827
+ * style.accent_color => 强调色:color:#6366f1
  * 
  * {{EXTRA_FIELDS}}
  * 
@@ -57,7 +57,8 @@ $getConfig = function($key, $default = '') use ($config) {
     return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
 };
 
-$componentId = 'ai-content-' . uniqid();
+$componentId = 'content-' . substr(uniqid(), -8);
+$cls = $componentId;
 
 // 内容配置
 $title = $getConfig('content.title', 'Section Title');
@@ -75,9 +76,9 @@ $bgType = $getConfig('style.bg_type', 'color');
 $bgColor = $getConfig('style.bg_color', '#ffffff');
 $bgGradient = $getConfig('style.bg_gradient', 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)');
 $bgImage = $getConfig('style.bg_image', '');
-$textColor = $getConfig('style.text_color', '#333333');
-$titleColor = $getConfig('style.title_color', '#1a1a1a');
-$accentColor = $getConfig('style.accent_color', '#7c3aed');
+$textColor = $getConfig('style.text_color', '#374151');
+$titleColor = $getConfig('style.title_color', '#111827');
+$accentColor = $getConfig('style.accent_color', '#6366f1');
 
 // 计算背景样式
 $bgStyle = match($bgType) {
@@ -89,90 +90,81 @@ $bgStyle = match($bgType) {
 // 容器宽度
 $maxWidth = $containerWidth === 'full' ? '100%' : $containerWidth . 'px';
 
-// CSS 唯一前缀（防止跨模块冲突）
-$cssPrefix = 'ai-' . preg_replace('/[^a-zA-Z0-9-]/', '-', $componentId);
-
 // ===== AI生成的额外PHP变量 =====
-// 使用try-catch包装AI生成的代码，防止错误中断渲染
 try {
     {{PHP_VARIABLES}}
 } catch (\Throwable $e) {
-    // 静默处理AI生成代码的错误，记录日志
     error_log('[AI Component Error] ' . $componentId . ': ' . $e->getMessage());
 }
 ?>
 
-<!-- AI生成的CSS样式 -->
 <style>
-/* === 组件主题色变量（继承全局主题，可被组件配置覆盖） === */
 #<?= $componentId ?> {
-    /* 主题色继承链: 组件配置 > 页面主题 > 全局主题 > 默认值 */
-    --pb-primary: <?= htmlspecialchars($accentColor) ?>;
-    --pb-bg: <?= htmlspecialchars($bgColor) ?>;
-    --pb-text: <?= htmlspecialchars($textColor) ?>;
-    --pb-heading: <?= htmlspecialchars($titleColor) ?>;
-    --pb-accent: <?= htmlspecialchars($accentColor) ?>;
-    --pb-text-muted: color-mix(in srgb, <?= htmlspecialchars($textColor) ?> 70%, transparent);
-    --pb-border: color-mix(in srgb, <?= htmlspecialchars($textColor) ?> 15%, transparent);
+    --section-primary: <?= htmlspecialchars($accentColor) ?>;
+    --section-bg: <?= htmlspecialchars($bgColor) ?>;
+    --section-text: <?= htmlspecialchars($textColor) ?>;
+    --section-heading: <?= htmlspecialchars($titleColor) ?>;
+    --section-muted: color-mix(in srgb, <?= htmlspecialchars($textColor) ?> 70%, transparent);
+    --section-border: color-mix(in srgb, <?= htmlspecialchars($textColor) ?> 12%, transparent);
 
     background: <?= $bgStyle ?>;
-    color: var(--pb-text);
-    padding: <?= $paddingTop ?>px 20px <?= $paddingBottom ?>px;
+    color: var(--section-text);
+    padding: <?= $paddingTop ?>px 24px <?= $paddingBottom ?>px;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-#<?= $componentId ?> .ai-content-container {
+#<?= $componentId ?> .<?= $cls ?>-container {
     max-width: <?= $maxWidth ?>;
     margin: 0 auto;
     text-align: <?= htmlspecialchars($textAlign) ?>;
 }
 
-#<?= $componentId ?> .ai-content-header {
-    margin-bottom: 40px;
+#<?= $componentId ?> .<?= $cls ?>-header {
+    margin-bottom: 48px;
 }
 
-#<?= $componentId ?> .ai-content-subtitle {
-    font-size: 0.9rem;
+#<?= $componentId ?> .<?= $cls ?>-subtitle {
+    font-size: 0.875rem;
     font-weight: 600;
-    color: var(--pb-accent);
+    color: var(--section-primary);
     text-transform: uppercase;
-    letter-spacing: 2px;
+    letter-spacing: 0.1em;
     margin-bottom: 12px;
 }
 
-#<?= $componentId ?> .ai-content-title {
-    font-size: clamp(1.75rem, 4vw, 2.5rem);
+#<?= $componentId ?> .<?= $cls ?>-title {
+    font-size: clamp(1.875rem, 4vw, 2.75rem);
     font-weight: 700;
-    color: var(--pb-heading);
+    color: var(--section-heading);
     margin: 0 0 16px 0;
     line-height: 1.2;
+    letter-spacing: -0.025em;
 }
 
-#<?= $componentId ?> .ai-content-description {
-    font-size: 1.1rem;
-    line-height: 1.7;
-    max-width: 700px;
+#<?= $componentId ?> .<?= $cls ?>-description {
+    font-size: 1.125rem;
+    line-height: 1.75;
+    max-width: 680px;
     margin: 0 auto;
-    opacity: 0.9;
+    color: var(--section-muted);
 }
 
-#<?= $componentId ?> .ai-content-body {
-    /* AI可以覆盖这个样式 */
+#<?= $componentId ?> .<?= $cls ?>-body {
+    /* AI 内容区域 */
 }
 
-/* AI生成的额外CSS */
 {{CSS_EXTRA}}
 
-/* 响应式 */
 @media (max-width: 768px) {
     #<?= $componentId ?> {
-        padding: <?= max(40, $paddingTop / 2) ?>px 16px <?= max(40, $paddingBottom / 2) ?>px;
+        padding: <?= max(48, (int)($paddingTop * 0.6)) ?>px 20px <?= max(48, (int)($paddingBottom * 0.6)) ?>px;
     }
     
-    #<?= $componentId ?> .ai-content-header {
-        margin-bottom: 30px;
+    #<?= $componentId ?> .<?= $cls ?>-header {
+        margin-bottom: 36px;
     }
     
-    #<?= $componentId ?> .ai-content-description {
+    #<?= $componentId ?> .<?= $cls ?>-description {
         font-size: 1rem;
     }
     
@@ -180,40 +172,35 @@ try {
 }
 </style>
 
-<!-- Content HTML结构 -->
-<section id="<?= $componentId ?>" class="ai-component ai-content">
-    <div class="ai-content-container">
-        <!-- 内容头部 -->
+<section id="<?= $componentId ?>">
+    <div class="<?= $cls ?>-container">
         <?php if ($title || $subtitle || $description): ?>
-        <div class="ai-content-header">
+        <div class="<?= $cls ?>-header">
             <?php if ($subtitle): ?>
-            <div class="ai-content-subtitle"><?= htmlspecialchars($subtitle) ?></div>
+            <div class="<?= $cls ?>-subtitle"><?= htmlspecialchars($subtitle) ?></div>
             <?php endif; ?>
             
             <?php if ($title): ?>
-            <h2 class="ai-content-title"><?= htmlspecialchars($title) ?></h2>
+            <h2 class="<?= $cls ?>-title"><?= htmlspecialchars($title) ?></h2>
             <?php endif; ?>
             
             <?php if ($description): ?>
-            <p class="ai-content-description"><?= nl2br(htmlspecialchars($description)) ?></p>
+            <p class="<?= $cls ?>-description"><?= nl2br(htmlspecialchars($description)) ?></p>
             <?php endif; ?>
         </div>
         <?php endif; ?>
         
-        <!-- AI生成的主体内容 -->
-        <div class="ai-content-body">
+        <div class="<?= $cls ?>-body">
             {{HTML_CONTENT}}
         </div>
     </div>
 </section>
 
-<!-- AI生成的JavaScript -->
 <?php 
 $_jsPlaceholder = <<<'JSEOF'
 {{JS_CONTENT}}
 JSEOF;
 $jsContent = trim($_jsPlaceholder);
-// 检查是否有有效的JS内容（非空且不是未替换的占位符）
 $_hasValidJs = !empty($jsContent) && strpos($jsContent, '{{') !== 0 && strlen($jsContent) > 5;
 if ($_hasValidJs): 
 ?>

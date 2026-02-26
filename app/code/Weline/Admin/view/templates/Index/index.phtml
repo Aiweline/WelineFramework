@@ -1,79 +1,39 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+/**
+ * 后台首页 - Dashboard
+ * 
+ * 此模板仅包含页面内容部分，由布局系统自动包装完整的 HTML 结构
+ * 布局类型：default.default（由 BackendController::$layoutType 指定）
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
 ?>
-<!DOCTYPE html>
-<!--
- *@Author       秋枫雁飞
- *@Email        aiweline@qq.com
- *@Forum        https://bbs.aiweline.com
- *@DESC         后台共用头部
--->
-<html lang="en" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    <w:template>Weline_Admin::common/head.phtml</w:template>
-    <!-- jvectormap -->
-    <link href="@static(Weline_Admin::assets/libs/jqvmap/jqvmap.min.css)" rel="stylesheet"/>
-    <title><lang>Weline Admin 管理面板</lang></title>
-</head>
+<!-- jvectormap CSS -->
+<w:css>Weline_Admin::assets/libs/jqvmap/jqvmap.min.css</w:css>
 
-<!--<body data-sidebar="dark" data-topbar='colored' data-layout='horizontal'>-->
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-<!-- <body data-layout="horizontal" data-topbar="dark"> -->
-<!--加载中组件 开始-->
-<w:template>Weline_Admin::common/page/loading.phtml</w:template>
-<!-- 开始 页面 -->
-<div id="layout-wrapper">
+<!-- start page title -->
+<div class='row'>
+    <div class='col-12'>
+        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+            <h4 class='mb-sm-0'>
+                <lang>面板</lang>
+            </h4>
 
-    <!--页头工具条 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <!--页头工具条 结束-->
+            <div class='page-title-right'>
+                <ol class='breadcrumb m-0'>
+                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
+                            <lang>后台</lang>
+                        </a></li>
+                    <li class='breadcrumb-item active'>
+                        <lang>面板</lang>
+                    </li>
+                </ol>
+            </div>
 
-    <!-- ========== Topnav Start ========== -->
-    <!--页头菜单栏 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    <!--页头菜单栏 结束-->
-
-    <!-- ========== Left Sidebar Start ========== -->
-    <!--左侧菜单栏 开始-->
-    <w:template>Weline_Admin::common/left-sidebar.phtml</w:template>
-    <!--左侧菜单栏 结束-->
-
-
-    <!-- ============================================================== -->
-    <!-- Start right Content here -->
-    <!-- ============================================================== -->
-    <div class='main-content'>
-        <div class='page-content'>
-            <div class='container-fluid'>
-                <div class='row'>
-                    <!--消息-->
-                    <template>Weline_Component::message.phtml</template>
-                </div>
-                <!-- start page title -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'>
-                                <lang>面板</lang>
-                            </h4>
-
-                            <div class='page-title-right'>
-                                <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
-                                            <lang>后台</lang>
-                                        </a></li>
-                                    <li class='breadcrumb-item active'>
-                                        <lang>面板</lang>
-                                    </li>
-                                </ol>
-                            </div>
-
-                        </div>
-                    </div>
-                </div>
-                <!-- end page title -->
+        </div>
+    </div>
+</div>
+<!-- end page title -->
 
                 <!-- Tab 导航 -->
                 <div class='row'>
@@ -794,48 +754,12 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 </div>
                 <!-- Tab 内容结束 -->
 
-            </div>
-            <!-- container-fluid -->
-        </div>
-        <!-- End Page-content -->
-
-        <footer class='footer'>
-            <div class='container-fluid'>
-                <div class='row'>
-                    <div class='col-sm-6'>
-                        <script>document.write(new Date().getFullYear())</script>
-                        © Weline.
-                    </div>
-                    <div class='col-sm-6'>
-                        <div class='text-sm-end d-none d-sm-block'>
-                            Crafted with <i class='mdi mdi-heart text-danger'></i> By <a
-                                    href='https://www.aiweline.com/'>秋枫雁飞(aiweline)</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </footer>
-
-    </div>
-    <!-- end main content-->
-
-</div>
-<!-- END layout-wrapper -->
-
-<!--右边栏-->
-<w:template>Weline_Admin::common/right-sidebar.phtml</w:template>
-
 <!-- apexcharts js -->
 <w:js>Weline_Admin::assets/libs/apexcharts/apexcharts.min.js</w:js>
 
 <!-- jquery.vectormap map -->
 <w:js>Weline_Admin::assets/libs/jqvmap/jquery.vmap.min.js</w:js>
 <w:js>Weline_Admin::assets/libs/jqvmap/maps/jquery.vmap.usa.js</w:js>
-<w:js>Weline_Admin::assets/libs/jqvmap/maps/jquery.vmap.usa.js</w:js>
 
 <w:js>Weline_Admin::assets/js/pages/dashboard.init.js</w:js>
-<!--页脚-->
-<w:template>Weline_Admin::common/footer.phtml</w:template>
-</body>
-</html>
 

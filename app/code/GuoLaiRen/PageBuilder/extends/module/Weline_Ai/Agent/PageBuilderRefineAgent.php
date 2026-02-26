@@ -146,6 +146,29 @@ SYSTEM_PROMPT;
         if (!empty($styleCode)) {
             $prompt .= "\n- 模板风格：{$styleCode}";
         }
+        
+        // 语言要求：根据页面语言生成对应语言的内容
+        $language = $context['language'] ?? '';
+        if (!empty($language)) {
+            $languageMap = [
+                'zh_Hans_CN' => '简体中文',
+                'zh-CN' => '简体中文',
+                'zh_CN' => '简体中文',
+                'zh' => '中文',
+                'en_US' => 'English',
+                'en' => 'English',
+                'ja_JP' => '日本語',
+                'ja' => '日本語',
+                'ko_KR' => '한국어',
+                'ko' => '한국어',
+            ];
+            $languageName = $languageMap[$language] ?? $language;
+            $prompt .= "\n\n## 语言要求（CRITICAL）\n";
+            $prompt .= "- **目标语言**：{$languageName}\n";
+            $prompt .= "- **所有用户可见文本**（按钮文字、标题、描述、占位符等）必须使用 **{$languageName}** 语言\n";
+            $prompt .= "- 代码注释、技术标识符（变量名、CSS类名）保持英文\n";
+            $prompt .= "- 示例：如果目标语言是「简体中文」，按钮应该是「了解更多」而不是「Learn More」";
+        }
 
         return $prompt;
     }
@@ -173,6 +196,7 @@ SYSTEM_PROMPT;
         $context = [
             'category' => $params['category'] ?? 'content',
             'style_code' => $params['style_code'] ?? '',
+            'language' => $params['language'] ?? '',
         ];
 
         $messages = [

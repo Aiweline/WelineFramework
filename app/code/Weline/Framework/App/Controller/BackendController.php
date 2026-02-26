@@ -20,6 +20,13 @@ class BackendController extends PcController
 {
     protected CacheInterface $cache;
     protected BackendSession $session;
+    
+    /**
+     * 后端默认使用 default.default 布局，自动加载主题变量 CSS
+     * 格式：布局类型.布局选项（如 'default.default', 'dashboard.default', 'login.default'）
+     * 子类可覆盖此属性以使用其他布局或设为 null 禁用布局
+     */
+    protected ?string $layoutType = 'default.default';
 
     public function __init()
     {

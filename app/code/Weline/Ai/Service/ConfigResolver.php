@@ -27,19 +27,26 @@ class ConfigResolver
      * @param array $userConfig 用户提供的配置
      * @param int|null $userId 用户ID (前端用户)
      * @param bool $isBackend 是否为后端调用
+     * @param AiModel|null $existingModel 已存在的模型实例（已注入配置），避免重新从数据库加载
      * @return array 解析后的配置
      */
-    public function resolveConfig(string $modelCode, array $userConfig = [], ?int $userId = null, bool $isBackend = false): array
+    public function resolveConfig(string $modelCode, array $userConfig = [], ?int $userId = null, bool $isBackend = false, ?AiModel $existingModel = null): array
     {
         $config = [];
         
         // 1. 获取模型信息
-        // 测试场景（例如后台连通性测试）不强制要求模型为激活状态
-        $isTestMode = (bool)($userConfig['test_mode'] ?? false);
-        $model = $this->getModel($modelCode, $isTestMode);
-        if (!$model->getId()) {
-            throw new \Exception(__('模型不存在: %{code}', ['code' => $modelCode]));
+        // 如果传入了已存在的模型实例（已注入账户配置），直接使用
+        if ($existingModel !== null && $existingModel->getId()) {
+            $model = $existingModel;
+        } else {
+            // 测试场景（例如后台连通性测试）不强制要求模型为激活状态
+            $isTestMode = (bool)($userConfig['test_mode'] ?? false);
+            $model = $this->getModel($modelCode, $isTestMode);
+            if (!$model->getId()) {
+                throw new \Exception(__('模型不存在: %{code}', ['code' => $modelCode]));
+            }
         }
+        
         // 2. 获取供应商代码
         $providerCode = $model->getSupplier();
         // 3. 按优先级解析配置
@@ -59,28 +66,37 @@ class ConfigResolver
     
     /**
      * 解析后端配置
+     * 
+     * 优先级（从低到高）：
+     * 1. 模型基础配置
+     * 2. 后台默认供应商账户（api_key、base_url 等）
+     * 3. 模型关联的 provider_config
+     * 4. 用户提供的配置（最高优先级）
+     * 
+     * array_merge 中后面的值会覆盖前面的值，所以低优先级的先合并
      */
     private function resolveBackendConfig(AiModel $model, string $providerCode, array $userConfig): array
     {
-        // 优先级0: 模型的基础配置（包含 timeout 等配置项）
-        $config = $model->getConfig();
+        // 优先级1（最低）: 模型的基础配置
+        // 过滤空值，避免后续 array_merge 时用空字符串覆盖有效值
+        $config = $this->filterEmptyValues($model->getConfig());
         
-        // 优先级1: 用户提供的配置 (最高优先级)
-        if (!empty($userConfig)) {
-            $config = array_merge($config, $userConfig);
+        // 优先级2: 后台默认供应商账户（提供 api_key、base_url）
+        $defaultAccount = $this->getDefaultProviderAccount($providerCode);
+        if ($defaultAccount && $defaultAccount->getId()) {
+            $config = array_merge($config, $this->extractAccountConfig($defaultAccount));
         }
         
-        // 优先级2: 模型关联的配置
+        // 优先级3: 模型关联的 provider_config
+        // 过滤空值，避免用空 api_key 覆盖账户的有效值
         $modelProviderConfig = $model->getProviderConfig();
         if (!empty($modelProviderConfig)) {
-            $config = array_merge($config, $modelProviderConfig);
+            $config = array_merge($config, $this->filterEmptyValues($modelProviderConfig));
         }
         
-        // 优先级3: 后台默认供应商账户
-        $defaultAccount = $this->getDefaultProviderAccount($providerCode);
-        if ($defaultAccount) {
-            $accountConfig = $this->extractAccountConfig($defaultAccount);
-            $config = array_merge($config, $accountConfig);
+        // 优先级4（最高）: 用户提供的配置
+        if (!empty($userConfig)) {
+            $config = array_merge($config, $userConfig);
         }
         
         return $config;
@@ -88,43 +104,44 @@ class ConfigResolver
     
     /**
      * 解析前端配置
+     * 
+     * 优先级（从低到高）：
+     * 1. 模型基础配置
+     * 2. 后台默认供应商账户
+     * 3. 模型关联的 provider_config
+     * 4. 用户模型账户
+     * 5. 用户提供的配置（最高优先级）
      */
     private function resolveFrontendConfig(AiModel $model, string $providerCode, array $userConfig, ?int $userId): array
     {
-        // 优先级0: 模型的基础配置（包含 timeout 等配置项）
-        $config = $model->getConfig();
+        // 优先级1（最低）: 模型的基础配置
+        // 过滤空值，避免后续 array_merge 时用空字符串覆盖有效值
+        $config = $this->filterEmptyValues($model->getConfig());
         
-        // 优先级1: 用户提供的配置 (最高优先级)
-        if (!empty($userConfig)) {
-            $config = array_merge($config, $userConfig);
-            Env::log('ai_config.log', "使用用户提供的配置", 'DEBUG');
-            return $config;
-        }
-        
-        // 优先级2: 用户为模型配置的供应商账户
-        if ($userId) {
-            $userModelAccount = $this->getUserModelAccount($userId, $model->getId());
-            if ($userModelAccount) {
-                $accountConfig = $this->extractAccountConfig($userModelAccount);
-                $config = array_merge($config, $accountConfig);
-                Env::log('ai_config.log', "使用用户模型账户配置", 'DEBUG');
-                return $config;
-            }
+        // 优先级2: 后台默认供应商账户
+        $defaultAccount = $this->getDefaultProviderAccount($providerCode);
+        if ($defaultAccount && $defaultAccount->getId()) {
+            $config = array_merge($config, $this->extractAccountConfig($defaultAccount));
         }
         
         // 优先级3: 模型关联的配置
+        // 过滤空值，避免用空 api_key 覆盖账户的有效值
         $modelProviderConfig = $model->getProviderConfig();
         if (!empty($modelProviderConfig)) {
-            $config = array_merge($config, $modelProviderConfig);
-            Env::log('ai_config.log', "使用模型关联配置", 'DEBUG');
+            $config = array_merge($config, $this->filterEmptyValues($modelProviderConfig));
         }
         
-        // 优先级4: 后台默认供应商账户
-        $defaultAccount = $this->getDefaultProviderAccount($providerCode);
-        if ($defaultAccount) {
-            $accountConfig = $this->extractAccountConfig($defaultAccount);
-            $config = array_merge($config, $accountConfig);
-            Env::log('ai_config.log', "使用后台默认供应商账户", 'DEBUG');
+        // 优先级4: 用户为模型配置的供应商账户
+        if ($userId) {
+            $userModelAccount = $this->getUserModelAccount($userId, $model->getId());
+            if ($userModelAccount && $userModelAccount->getId()) {
+                $config = array_merge($config, $this->extractAccountConfig($userModelAccount));
+            }
+        }
+        
+        // 优先级5（最高）: 用户提供的配置
+        if (!empty($userConfig)) {
+            $config = array_merge($config, $userConfig);
         }
         
         return $config;
@@ -146,16 +163,40 @@ class ConfigResolver
     
     /**
      * 获取默认供应商账户
+     * 
+     * 首先尝试获取默认账户，如果没有则获取任意可用账户
+     * 可用条件：激活 + 连接成功 + 余额 > 0
      */
     private function getDefaultProviderAccount(string $providerCode): ?Account
     {
         /** @var Account $account */
         $account = ObjectManager::getInstance(Account::class);
-        return $account->where(Account::fields_PROVIDER_CODE, $providerCode)
-                      ->where(Account::fields_IS_DEFAULT, 1)
-                      ->where(Account::fields_IS_ACTIVE, 1) // 使用IS_ACTIVE字段
-                      ->find()
-                      ->fetch();
+        
+        // 首先尝试获取默认且可用的账户
+        $defaultAccount = $account->reset()
+            ->where(Account::fields_PROVIDER_CODE, $providerCode)
+            ->where(Account::fields_IS_DEFAULT, 1)
+            ->where(Account::fields_IS_ACTIVE, 1)
+            ->where(Account::fields_CONNECTION_STATUS, Account::STATUS_SUCCESS)
+            ->where(Account::fields_BALANCE, 0, '>')
+            ->find()
+            ->fetch();
+        
+        if ($defaultAccount && $defaultAccount->getId()) {
+            return $defaultAccount;
+        }
+        
+        // 如果没有默认账户，获取任意可用账户
+        $availableAccount = $account->reset()
+            ->where(Account::fields_PROVIDER_CODE, $providerCode)
+            ->where(Account::fields_IS_ACTIVE, 1)
+            ->where(Account::fields_CONNECTION_STATUS, Account::STATUS_SUCCESS)
+            ->where(Account::fields_BALANCE, 0, '>')
+            ->order(Account::fields_BALANCE, 'DESC')
+            ->find()
+            ->fetch();
+        
+        return ($availableAccount && $availableAccount->getId()) ? $availableAccount : null;
     }
     
     /**
@@ -179,20 +220,40 @@ class ConfigResolver
     {
         $config = [];
         
-        // 基本配置
-        $decryptedKey = method_exists($account, 'getDecryptedApiKey') ? $account->getDecryptedApiKey() : ($account->getData(Account::fields_API_KEY) ?? '');
+        // API 密钥
+        $decryptedKey = $account->getDecryptedApiKey();
         if (!empty($decryptedKey)) {
             $config['api_key'] = $decryptedKey;
         }
         
-        if ($account->getBaseUrl()) {
-            $config['base_url'] = $account->getBaseUrl();
+        // API 基础 URL
+        $baseUrl = $account->getData(Account::fields_BASE_URL);
+        if (!empty($baseUrl)) {
+            $config['base_url'] = $baseUrl;
         }
         
-        // 扩展配置
-        $extendedConfig = $account->getExtendedConfig();
-        if (!empty($extendedConfig)) {
-            $config = array_merge($config, $extendedConfig);
+        // API Secret（如有）
+        $apiSecret = $account->getData(Account::fields_API_SECRET);
+        if (!empty($apiSecret)) {
+            $config['api_secret'] = $apiSecret;
+        }
+        
+        // 代理配置
+        $proxyConfig = $account->getData(Account::fields_PROXY_CONFIG);
+        if (!empty($proxyConfig)) {
+            $proxyData = is_string($proxyConfig) ? json_decode($proxyConfig, true) : $proxyConfig;
+            if (is_array($proxyData) && !empty($proxyData['enabled'])) {
+                $config['proxy'] = $proxyData;
+            }
+        }
+        
+        // 额外配置（从 config 字段）
+        $extraConfig = $account->getData(Account::fields_CONFIG);
+        if (!empty($extraConfig)) {
+            $extraData = is_string($extraConfig) ? json_decode($extraConfig, true) : $extraConfig;
+            if (is_array($extraData)) {
+                $config = array_merge($config, $extraData);
+            }
         }
         
         return $config;
@@ -212,6 +273,17 @@ class ConfigResolver
             $message = __('模型 %{code} 缺少API基础URL配置', ['code' => $modelCode]);
             throw new \Exception(ErrorMessageHelper::getErrorMessageWithConfigLink($message, 'provider', ['model_code' => $modelCode]));
         }
+    }
+    
+    /**
+     * 过滤掉空值（空字符串和 null）
+     * 用于 array_merge 前过滤配置，避免用空值覆盖有效值
+     */
+    private function filterEmptyValues(array $config): array
+    {
+        return array_filter($config, function ($value) {
+            return $value !== '' && $value !== null;
+        });
     }
     
     /**

@@ -11,8 +11,6 @@
  * @var string $keyword
  * @var string $current_status
  */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 
 $users = $this->getData('users') ?: [];
 $total = (int)$this->getData('total');
@@ -22,454 +20,418 @@ $totalPages = (int)$this->getData('totalPages');
 $keyword = $this->getData('keyword') ?: '';
 $current_status = $this->getData('current_status');
 ?>
-<!DOCTYPE html>
-<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><lang>用户管理</lang></title>
-    <style>
-        .stats-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            padding: 24px;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-        }
-        .stats-card h3 {
-            font-size: 2.5rem;
-            font-weight: bold;
-            margin-bottom: 8px;
-        }
-        .stats-card p {
-            margin: 0;
-            opacity: 0.9;
-        }
-        .filter-card {
-            background: white;
-            border-radius: 12px;
-            border: none;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
-        .user-table-card {
-            background: white;
-            border-radius: 12px;
-            border: none;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
-        .btn-gradient-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            color: white;
-            transition: all 0.3s;
-        }
-        .btn-gradient-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-            color: white;
-        }
-        .table thead th {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            color: #495057;
-            font-weight: 600;
-            border-bottom: 2px solid #dee2e6;
-        }
-        .badge-status {
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #6c757d;
-        }
-        .empty-state i {
-            font-size: 72px;
-            color: #dee2e6;
-            margin-bottom: 20px;
-        }
-    </style>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
-<!--页头工具条 开始-->
-@template(Weline_Admin::common/page/loading.phtml)
-<!--页头工具条 结束-->
+<style>
+    .weline-user-stats-card {
+        background: linear-gradient(135deg, var(--backend-color-primary) 0%, var(--backend-color-primary-dark, #764ba2) 100%);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+    .weline-user-stats-card h3 {
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin-bottom: 8px;
+    }
+    .weline-user-stats-card p {
+        margin: 0;
+        opacity: 0.9;
+    }
+    .weline-user-filter-card {
+        background: var(--backend-color-card-bg);
+        border-radius: 12px;
+        border: none;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .weline-user-table-card {
+        background: var(--backend-color-card-bg);
+        border-radius: 12px;
+        border: none;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .weline-user-btn-gradient-primary {
+        background: linear-gradient(135deg, var(--backend-color-primary) 0%, var(--backend-color-primary-dark, #764ba2) 100%);
+        border: none;
+        color: white;
+        transition: all 0.3s;
+    }
+    .weline-user-btn-gradient-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        color: white;
+    }
+    .weline-user-table thead th {
+        background: linear-gradient(135deg, var(--backend-color-card-bg) 0%, var(--backend-color-border) 100%);
+        color: var(--backend-color-text-primary);
+        font-weight: 600;
+        border-bottom: 2px solid var(--backend-color-border);
+    }
+    .weline-user-badge-status {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+    .weline-user-empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: var(--backend-color-text-secondary);
+    }
+    .weline-user-empty-state i {
+        font-size: 72px;
+        color: var(--backend-color-border);
+        margin-bottom: 20px;
+    }
+</style>
 
-<!-- 开始 页面 -->
-<div id="layout-wrapper">
-
-    <!--页头工具条 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <!--页头工具条 结束-->
-
-    <!-- ========== Topnav Start ========== -->
-    <!--页头菜单栏 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    <!--页头菜单栏 结束-->
-
-    <!-- ========== Left Sidebar Start ========== -->
-    <!--左侧菜单栏 开始-->
-    @template(Weline_Admin::common/left-sidebar.phtml)
-    <!--左侧菜单栏 结束-->
-
-    <!-- 主要内容开始 -->
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <!-- 面包屑导航 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0 font-size-18">
-                                <i class="mdi mdi-account-multiple text-primary"></i> <lang>用户管理</lang>
-                            </h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><lang>AI助手</lang></a></li>
-                                    <li class="breadcrumb-item active"><lang>用户管理</lang></li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 统计卡片 -->
-                <div class="row mb-4">
-                    <div class="col-xl-12">
-                        <div class="card stats-card">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center">
-                                    <div class="flex-shrink-0 me-3">
-                                        <div class="avatar-sm">
-                                            <span class="avatar-title rounded-circle bg-soft text-white font-size-24">
-                                                <i class="mdi mdi-account-group"></i>
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <h3 class="mb-0"><?= number_format($total) ?></h3>
-                                        <p class="mb-0"><lang>总用户数</lang></p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 消息提示 -->
-                <div class='row'>
-                    <div class="col-12">
-                        <template>Weline_Component::message.phtml</template>
-                    </div>
-                </div>
-
-                <!-- 筛选和操作卡片 -->
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <div class="card filter-card">
-                            <div class="card-body">
-                                <form method="get" class="row g-3 align-items-end">
-                                    <div class="col-md-3">
-                                        <label class="form-label"><lang>状态</lang></label>
-                                        <select name="status" class="form-select">
-                                            <option value="" <?= $current_status === '' ? 'selected' : '' ?>><lang>全部状态</lang></option>
-                                            <option value="1" <?= $current_status === '1' ? 'selected' : '' ?>><lang>激活</lang></option>
-                                            <option value="0" <?= $current_status === '0' ? 'selected' : '' ?>><lang>禁用</lang></option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label"><lang>搜索</lang></label>
-                                        <div class="input-group">
-                                            <input type="text" 
-                                                   name="keyword" 
-                                                   class="form-control" 
-                                                   placeholder="<?= __('搜索用户名/邮箱...') ?>" 
-                                                   value="<?= htmlspecialchars($keyword) ?>">
-                                            <button type="submit" class="btn btn-primary">
-                                                <i class="mdi mdi-magnify"></i> <lang>搜索</lang>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3 text-end">
-                                        <a href="<?= $this->getBackendUrl('*/backend/user/form') ?>" 
-                                           class="btn btn-gradient-primary">
-                                            <i class="mdi mdi-plus-circle me-1"></i> <lang>创建用户</lang>
-                                        </a>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 用户列表卡片 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card user-table-card">
-                            <div class="card-body">
-                                <h4 class="card-title mb-4">
-                                    <i class="mdi mdi-format-list-bulleted text-primary"></i> <lang>用户列表</lang>
-                                    <span class="badge bg-primary ms-2"><?= $total ?></span>
-                                </h4>
-
-                                <?php if (empty($users)): ?>
-                                    <div class="empty-state">
-                                        <i class="mdi mdi-account-off-outline"></i>
-                                        <h4><lang>暂无用户数据</lang></h4>
-                                        <p><lang>还没有用户记录，点击上方按钮创建第一个用户</lang></p>
-                                    </div>
-                                <?php else: ?>
-                                    <div class="table-responsive">
-                                        <table class="table table-hover table-nowrap align-middle mb-0">
-                                            <thead>
-                                                <tr>
-                                                    <th width="80"><lang>ID</lang></th>
-                                                    <th><lang>用户名</lang></th>
-                                                    <th><lang>邮箱</lang></th>
-                                                    <th><lang>昵称</lang></th>
-                                                    <th width="100"><lang>状态</lang></th>
-                                                    <th width="180"><lang>创建时间</lang></th>
-                                                    <th width="150" class="text-end"><lang>操作</lang></th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <?php foreach ($users as $user): ?>
-                                                    <tr>
-                                                        <td><span class="badge bg-light text-dark"><?= $user->getData('user_id') ?></span></td>
-                                                        <td>
-                                                            <div class="d-flex align-items-center">
-                                                                <div class="avatar-xs me-2">
-                                                                    <span class="avatar-title rounded-circle bg-primary-subtle text-primary">
-                                                                        <?= mb_substr($user->getData('username') ?? 'U', 0, 1) ?>
-                                                                    </span>
-                                                                </div>
-                                                                <strong><?= htmlspecialchars($user->getData('username') ?? '-') ?></strong>
-                                                            </div>
-                                                        </td>
-                                                        <td><?= htmlspecialchars($user->getData('email') ?? '-') ?></td>
-                                                        <td><?= htmlspecialchars($user->getData('nickname') ?? '-') ?></td>
-                                                        <td>
-                                                            <?php if ($user->getData('is_active')): ?>
-                                                                <span class="badge-status bg-success-subtle text-success">
-                                                                    <i class="mdi mdi-check-circle"></i> <lang>激活</lang>
-                                                                </span>
-                                                            <?php else: ?>
-                                                                <span class="badge-status bg-danger-subtle text-danger">
-                                                                    <i class="mdi mdi-close-circle"></i> <lang>禁用</lang>
-                                                                </span>
-                                                            <?php endif; ?>
-                                                        </td>
-                                                        <td>
-                                                            <small class="text-muted">
-                                                                <?= $user->getData('created_time') ? date('Y-m-d H:i', strtotime($user->getData('created_time'))) : '-' ?>
-                                                            </small>
-                                                        </td>
-                                                        <td class="text-end">
-                                                            <div class="btn-group btn-group-sm" role="group">
-                                                                <a href="<?= $this->getBackendUrl('*/backend/user/form', ['id' => $user->getData('user_id')]) ?>" 
-                                                                   class="btn btn-outline-primary" 
-                                                                   title="<?= __('编辑') ?>">
-                                                                    <i class="mdi mdi-pencil"></i>
-                                                                </a>
-                                                                <button onclick="toggleUserStatus(<?= $user->getData('user_id') ?>)" 
-                                                                        class="btn btn-outline-<?= $user->getData('is_active') ? 'warning' : 'success' ?>" 
-                                                                        title="<?= $user->getData('is_active') ? __('禁用') : __('激活') ?>">
-                                                                    <i class="mdi mdi-<?= $user->getData('is_active') ? 'pause' : 'play' ?>"></i>
-                                                                </button>
-                                                                <button onclick="deleteUser(<?= $user->getData('user_id') ?>)" 
-                                                                        class="btn btn-outline-danger" 
-                                                                        title="<?= __('删除') ?>">
-                                                                    <i class="mdi mdi-delete"></i>
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                <?php endforeach; ?>
-                                            </tbody>
-                                        </table>
-                                    </div>
-
-                                    <!-- 分页 -->
-                                    <?php if ($totalPages > 1): ?>
-                                        <div class="row mt-4">
-                                            <div class="col-sm-12 col-md-5">
-                                                <div class="dataTables_info">
-                                                    <lang>显示</lang> <?= ($page - 1) * $pageSize + 1 ?> <lang>到</lang> 
-                                                    <?= min($page * $pageSize, $total) ?> <lang>条，共</lang> <?= $total ?> <lang>条</lang>
-                                                </div>
-                                            </div>
-                                            <div class="col-sm-12 col-md-7">
-                                                <div class="dataTables_paginate paging_simple_numbers">
-                                                    <ul class="pagination pagination-rounded justify-content-end mb-0">
-                                                        <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
-                                                            <a class="page-link" href="javascript:void(0)" onclick="changePage(<?= $page - 1 ?>)">
-                                                                <i class="mdi mdi-chevron-left"></i>
-                                                            </a>
-                                                        </li>
-
-                                                        <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
-                                                            <li class="page-item <?= $i === $page ? 'active' : '' ?>">
-                                                                <a class="page-link" href="javascript:void(0)" onclick="changePage(<?= $i ?>)"><?= $i ?></a>
-                                                            </li>
-                                                        <?php endfor; ?>
-
-                                                        <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
-                                                            <a class="page-link" href="javascript:void(0)" onclick="changePage(<?= $page + 1 ?>)">
-                                                                <i class="mdi mdi-chevron-right"></i>
-                                                            </a>
-                                                        </li>
-                                                    </ul>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    <?php endif; ?>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <!-- 用户列表卡片结束 -->
-
+<!-- 面包屑导航 -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0 font-size-18">
+                <i class="mdi mdi-account-multiple text-primary"></i> <lang>用户管理</lang>
+            </h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="javascript: void(0);"><lang>AI助手</lang></a></li>
+                    <li class="breadcrumb-item active"><lang>用户管理</lang></li>
+                </ol>
             </div>
         </div>
     </div>
-    <!-- 主要内容结束 -->
-
 </div>
-<!-- 页面结束 -->
 
-<!-- 页脚 -->
-@template(Weline_Admin::common/footer.phtml)
+<!-- 统计卡片 -->
+<div class="row mb-4">
+    <div class="col-xl-12">
+        <div class="card weline-user-stats-card">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0 me-3">
+                        <div class="avatar-sm">
+                            <span class="avatar-title rounded-circle bg-soft text-white font-size-24">
+                                <i class="mdi mdi-account-group"></i>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1">
+                        <h3 class="mb-0"><?= number_format($total) ?></h3>
+                        <p class="mb-0"><lang>总用户数</lang></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 消息提示 -->
+<div class='row'>
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
+
+<!-- 筛选和操作卡片 -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card weline-user-filter-card">
+            <div class="card-body">
+                <form method="get" class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label"><lang>状态</lang></label>
+                        <select name="status" class="form-select">
+                            <option value="" <?= $current_status === '' ? 'selected' : '' ?>><lang>全部状态</lang></option>
+                            <option value="1" <?= $current_status === '1' ? 'selected' : '' ?>><lang>激活</lang></option>
+                            <option value="0" <?= $current_status === '0' ? 'selected' : '' ?>><lang>禁用</lang></option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label"><lang>搜索</lang></label>
+                        <div class="input-group">
+                            <input type="text" 
+                                   name="keyword" 
+                                   class="form-control" 
+                                   placeholder="<?= __('搜索用户名/邮箱...') ?>" 
+                                   value="<?= htmlspecialchars($keyword) ?>">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="mdi mdi-magnify"></i> <lang>搜索</lang>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-3 text-end">
+                        <a href="<?= $this->getBackendUrl('*/backend/user/form') ?>" 
+                           class="btn weline-user-btn-gradient-primary">
+                            <i class="mdi mdi-plus-circle me-1"></i> <lang>创建用户</lang>
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 用户列表卡片 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card weline-user-table-card">
+            <div class="card-body">
+                <h4 class="card-title mb-4">
+                    <i class="mdi mdi-format-list-bulleted text-primary"></i> <lang>用户列表</lang>
+                    <span class="badge bg-primary ms-2"><?= $total ?></span>
+                </h4>
+
+                <?php if (empty($users)): ?>
+                    <div class="weline-user-empty-state">
+                        <i class="mdi mdi-account-off-outline"></i>
+                        <h4><lang>暂无用户数据</lang></h4>
+                        <p><lang>还没有用户记录，点击上方按钮创建第一个用户</lang></p>
+                    </div>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-nowrap align-middle mb-0 weline-user-table">
+                            <thead>
+                                <tr>
+                                    <th width="80"><lang>ID</lang></th>
+                                    <th><lang>用户名</lang></th>
+                                    <th><lang>邮箱</lang></th>
+                                    <th><lang>昵称</lang></th>
+                                    <th width="100"><lang>状态</lang></th>
+                                    <th width="180"><lang>创建时间</lang></th>
+                                    <th width="150" class="text-end"><lang>操作</lang></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($users as $user): ?>
+                                    <tr>
+                                        <td><span class="badge bg-light text-dark"><?= $user->getData('user_id') ?></span></td>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="avatar-xs me-2">
+                                                    <span class="avatar-title rounded-circle bg-primary-subtle text-primary">
+                                                        <?= mb_substr($user->getData('username') ?? 'U', 0, 1) ?>
+                                                    </span>
+                                                </div>
+                                                <strong><?= htmlspecialchars($user->getData('username') ?? '-') ?></strong>
+                                            </div>
+                                        </td>
+                                        <td><?= htmlspecialchars($user->getData('email') ?? '-') ?></td>
+                                        <td><?= htmlspecialchars($user->getData('nickname') ?? '-') ?></td>
+                                        <td>
+                                            <?php if ($user->getData('is_active')): ?>
+                                                <span class="weline-user-badge-status bg-success-subtle text-success">
+                                                    <i class="mdi mdi-check-circle"></i> <lang>激活</lang>
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="weline-user-badge-status bg-danger-subtle text-danger">
+                                                    <i class="mdi mdi-close-circle"></i> <lang>禁用</lang>
+                                                </span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">
+                                                <?= $user->getData('created_time') ? date('Y-m-d H:i', strtotime($user->getData('created_time'))) : '-' ?>
+                                            </small>
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <a href="<?= $this->getBackendUrl('*/backend/user/form', ['id' => $user->getData('user_id')]) ?>" 
+                                                   class="btn btn-outline-primary" 
+                                                   title="<?= __('编辑') ?>">
+                                                    <i class="mdi mdi-pencil"></i>
+                                                </a>
+                                                <button onclick="WelineUser.toggleUserStatus(<?= $user->getData('user_id') ?>)" 
+                                                        class="btn btn-outline-<?= $user->getData('is_active') ? 'warning' : 'success' ?>" 
+                                                        title="<?= $user->getData('is_active') ? __('禁用') : __('激活') ?>">
+                                                    <i class="mdi mdi-<?= $user->getData('is_active') ? 'pause' : 'play' ?>"></i>
+                                                </button>
+                                                <button onclick="WelineUser.deleteUser(<?= $user->getData('user_id') ?>)" 
+                                                        class="btn btn-outline-danger" 
+                                                        title="<?= __('删除') ?>">
+                                                    <i class="mdi mdi-delete"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 分页 -->
+                    <?php if ($totalPages > 1): ?>
+                        <div class="row mt-4">
+                            <div class="col-sm-12 col-md-5">
+                                <div class="dataTables_info">
+                                    <lang>显示</lang> <?= ($page - 1) * $pageSize + 1 ?> <lang>到</lang> 
+                                    <?= min($page * $pageSize, $total) ?> <lang>条，共</lang> <?= $total ?> <lang>条</lang>
+                                </div>
+                            </div>
+                            <div class="col-sm-12 col-md-7">
+                                <div class="dataTables_paginate paging_simple_numbers">
+                                    <ul class="pagination pagination-rounded justify-content-end mb-0">
+                                        <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+                                            <a class="page-link" href="javascript:void(0)" onclick="WelineUser.changePage(<?= $page - 1 ?>)">
+                                                <i class="mdi mdi-chevron-left"></i>
+                                            </a>
+                                        </li>
+
+                                        <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
+                                            <li class="page-item <?= $i === $page ? 'active' : '' ?>">
+                                                <a class="page-link" href="javascript:void(0)" onclick="WelineUser.changePage(<?= $i ?>)"><?= $i ?></a>
+                                            </li>
+                                        <?php endfor; ?>
+
+                                        <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+                                            <a class="page-link" href="javascript:void(0)" onclick="WelineUser.changePage(<?= $page + 1 ?>)">
+                                                <i class="mdi mdi-chevron-right"></i>
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- 用户列表卡片结束 -->
 
 <!-- SweetAlert2 CSS -->
 <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
 <!-- SweetAlert2 JS -->
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
 <script>
-function changePage(page) {
-    const url = new URL(window.location.href);
-    url.searchParams.set('p', page);
-    window.location.href = url.toString();
-}
-
-function toggleUserStatus(userId) {
-    if (!confirm('<?= __('确定要切换用户状态吗？') ?>')) {
-        return;
-    }
-
-    fetch('<?= $this->getBackendUrl('*/backend/user/toggleStatus') ?>', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
+(function() {
+    'use strict';
+    
+    var WelineUser = {
+        changePage: function(page) {
+            var url = new URL(window.location.href);
+            url.searchParams.set('p', page);
+            window.location.href = url.toString();
         },
-        body: JSON.stringify({ id: userId })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            location.reload();
-        } else {
+        
+        toggleUserStatus: function(userId) {
+            if (!confirm('<?= __('确定要切换用户状态吗？') ?>')) {
+                return;
+            }
+
+            fetch('<?= $this->getBackendUrl('*/backend/user/toggleStatus') ?>', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ id: userId })
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('操作失败') ?>',
+                            text: data.message,
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('<?= __('操作失败：') ?>' + data.message);
+                    }
+                }
+            })
+            .catch(function(error) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('操作失败') ?>',
+                        text: '<?= __('请重试') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('操作失败') ?>');
+                }
+            });
+        },
+        
+        deleteUser: function(userId) {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('操作失败') ?>',
-                    text: data.message,
-                    confirmButtonText: '<?= __('确定') ?>'
+                    title: '<?= __('确认删除') ?>',
+                    text: '<?= __('确定要删除这个用户吗？此操作不可恢复！') ?>',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: '<?= __("确定删除") ?>',
+                    cancelButtonText: '<?= __("取消") ?>',
+                    confirmButtonColor: '#d33'
+                }).then(function(result) {
+                    if (result.isConfirmed) {
+                        WelineUser.performDelete(userId);
+                    }
                 });
             } else {
-                console.error('<?= __('操作失败：') ?>' + data.message);
+                if (!confirm('<?= __('确定要删除这个用户吗？此操作不可恢复！') ?>')) {
+                    return;
+                }
+                WelineUser.performDelete(userId);
             }
-        }
-    })
-    .catch(error => {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('操作失败') ?>',
-                text: '<?= __('请重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('操作失败') ?>');
-        }
-    });
-}
-
-function deleteUser(userId) {
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            title: '<?= __('确认删除') ?>',
-            text: '<?= __('确定要删除这个用户吗？此操作不可恢复！') ?>',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: '<?= __("确定删除") ?>',
-            cancelButtonText: '<?= __("取消") ?>',
-            confirmButtonColor: '#d33'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                performDelete(userId);
-            }
-        });
-    } else {
-        if (!confirm('<?= __('确定要删除这个用户吗？此操作不可恢复！') ?>')) {
-            return;
-        }
-        performDelete(userId);
-    }
-}
-
-function performDelete(userId) {
-    fetch('<?= $this->getBackendUrl('*/backend/user/delete') ?>', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ id: userId })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('成功') ?>',
-                    text: '<?= __('用户已删除') ?>',
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => location.reload());
-            } else {
-                location.reload();
-            }
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('删除失败') ?>',
-                    text: data.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('删除失败：') ?>' + data.message);
-            }
-        }
-    })
-    .catch(error => {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('操作失败') ?>',
-                text: '<?= __('请重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
+        
+        performDelete: function(userId) {
+            fetch('<?= $this->getBackendUrl('*/backend/user/delete') ?>', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ id: userId })
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: '<?= __('用户已删除') ?>',
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(function() { location.reload(); });
+                    } else {
+                        location.reload();
+                    }
+                } else {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('删除失败') ?>',
+                            text: data.message,
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('<?= __('删除失败：') ?>' + data.message);
+                    }
+                }
+            })
+            .catch(function(error) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('操作失败') ?>',
+                        text: '<?= __('请重试') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('操作失败') ?>');
+                }
             });
-        } else {
-            console.error('<?= __('操作失败') ?>');
         }
-    });
-}
+    };
+    
+    window.WelineUser = WelineUser;
+})();
 </script>
-
-</body>
-</html>

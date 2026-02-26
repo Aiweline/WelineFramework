@@ -1,202 +1,127 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+/**
+ * 内容模板
+ * @var \Weline\Framework\View\Template $this
+ */
 ?>
-<!DOCTYPE html>
-<!--
- *@Author       秋枫雁飞
- *@Email        aiweline@qq.com
- *@Forum        https://bbs.aiweline.com
- *@DESC         后台共用头部
--->
-<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    <title><lang>角色管理</lang></title>
-    @template(Weline_Admin::common/head.phtml)
-</head>
+<!-- start page title -->
+<div class='row'>
+    <div class='col-12'>
+        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+            <h4 class='mb-sm-0'>
+                <lang>Acl权限管理</lang>
+            </h4>
 
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-
-<!--页头工具条 开始-->
-@template(Weline_Admin::common/page/loading.phtml)
-<!--页头工具条 结束-->
-
-<!-- <body data-layout="horizontal" data-topbar="dark"> -->
-
-<!-- 开始 页面 -->
-<div id="layout-wrapper">
-
-
-    <!--页头工具条 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <!--页头工具条 结束-->
-
-    <!-- ========== Topnav Start ========== -->
-    <!--页头菜单栏 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    <!--页头菜单栏 结束-->
-
-    <!-- ========== Left Sidebar Start ========== -->
-    <!--左侧菜单栏 开始-->
-    @template(Weline_Admin::common/left-sidebar.phtml)
-    <!--左侧菜单栏 结束-->
-
-
-    <!-- ============================================================== -->
-    <!-- Start right Content here -->
-    <!-- ============================================================== -->
-    <div class="main-content">
-
-        <div class='page-content'>
-            <div class='container-fluid'>
-
-                <!-- start page title -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'>
-                                <lang>Acl权限管理</lang>
-                            </h4>
-
-                            <div class='page-title-right'>
-                                <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'>
-                                        <a href='javascript: void(0);'>
-                                            <lang>系统配置</lang>
-                                        </a>
-                                    </li>
-                                    <li class='breadcrumb-item'>
-                                        <a href="@backend-url('*/backend/acl')"><lang>Acl权限管理</lang></a>
-                                    </li>
-                                    <li class='breadcrumb-item active'>
-                                        <a href="@backend-url('*/backend/acl/role')"><lang>Acl角色管理</lang></a>
-                                    </li>
-                                </ol>
-                            </div>
-
-                        </div>
-                    </div>
-                </div>
-                <!-- end page title -->
-                <!-- start page message -->
-                <div class='row'>
-                    <template>Weline_Component::message.phtml</template>
-                </div> <!-- end message -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='card'>
-                            <div class='card-body'>
-                                <h4 class='card-title'>
-                                    <lang>Acl权限管理</lang>
-                                </h4>
-                                <p class='card-title-desc'>
-                                    <lang>支持角色权限管理</lang>
-                                </p>
-                                <div class='row'>
-                                    <div class='col-6'>
-                                        <div class="col-md-6">
-                                            <block class='Weline\Component\Block\Form\Search' id='acl-search'
-                                                   action='*/backend/acl/role'
-                                                   method='get'
-                                                   keyword='search' value=''
-                                                   params=''
-                                                   placeholder='请输入搜索词'></block>
-                                        </div>
-                                    </div>
-                                    <div class='col-6'>
-                                        <button type="button" class='btn btn-primary pull-right mt-1 mb-1' data-bs-toggle="offcanvas" data-bs-target="#roleAddOffcanvas" aria-controls="roleAddOffcanvas">
-                                            <lang>添加</lang>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div class='table-rep-plugin'>
-                                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
-                                        <table id='tech-companies-1' class='table table-striped table-bordered'>
-                                            <thead>
-                                            <tr>
-                                                <th data-priority='1'>
-                                                    <lang>ID</lang>
-                                                </th>
-                                                <th data-priority='1'>角色</th>
-                                                <th data-priority='1'>描述</th>
-                                                <th data-priority='1'>创建于</th>
-                                                <th data-priority='1'>更新于</th>
-                                                <th data-priority='1'>操作</th>
-                                            </tr>
-                                            </thead>
-                                            <tbody>
-                                            <foreach name="roles" item="role" key="key">
-                                                <tr>
-                                                    <td class='co-name'>{{role.role_id}}</td>
-                                                    <td class='co-name'>{{role.role_name}}</td>
-                                                    <td class='co-name'>{{role.role_description}}</td>
-                                                    <td class='co-name'>{{role.create_time}}</td>
-                                                    <td class='co-name'>{{role.update_time}}</td>
-                                                    <td class='co-name'>
-                                                        <if condition="role.role_id !== 1">
-                                                            <div class="d-grid gap-2 d-md-flex">
-                                                                <form action="@backend-url('*/backend/acl/role/delete')" method='post'>
-                                                                    <input type='hidden' name='id' value='{{role.role_id}}'>
-                                                                    <input type='submit' class='btn btn-danger btn-sm' value='@lang{删除}'>
-                                                                </form>
-                                                                <a class='btn btn-sm btn-info' href="@backend-url('*/backend/acl/role/edit')?id={{role.role_id}}">
-                                                                    <lang>编辑</lang>
-                                                                </a>
-                                                                <a class='btn btn-sm btn-secondary' href="@backend-url('*/backend/acl/role/assign')?id={{role.role_id}}">
-                                                                    <lang>权限管理</lang>
-                                                                </a>
-                                                            </div>
-                                                        </if>
-                                                    </td>
-                                                </tr>
-                                            </foreach>
-                                            <empty name="roles">
-                                                <tr>
-                                                    <td colspan="5" class="text-center">
-                                                        <lang>暂无记录</lang>
-                                                    </td>
-                                                </tr>
-                                            </empty>
-                                            </tbody>
-                                        </table>
-                                        {{pagination}}
-                                    </div>
-                                </div>
-
-                            </div>
-                        </div>
-                    </div> <!-- end col -->
-                </div> <!-- end row -->
-            </div> <!-- container-fluid -->
-        </div>
-        <!-- End Page-content -->
-
-        <footer class="footer">
-            <div class="container-fluid">
-                <div class="row">
-                    <div class="col-sm-6">
-                        <script>document.write(new Date().getFullYear())</script>
-                        © Weline.
-                    </div>
-                    <div class="col-sm-6">
-                        <div class="text-sm-end d-none d-sm-block">
-                            Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
-                                    href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
-                        </div>
-                    </div>
-                </div>
+            <div class='page-title-right'>
+                <ol class='breadcrumb m-0'>
+                    <li class='breadcrumb-item'>
+                        <a href='javascript: void(0);'>
+                            <lang>系统配置</lang>
+                        </a>
+                    </li>
+                    <li class='breadcrumb-item'>
+                        <a href="@backend-url('*/backend/acl')"><lang>Acl权限管理</lang></a>
+                    </li>
+                    <li class='breadcrumb-item active'>
+                        <a href="@backend-url('*/backend/acl/role')"><lang>Acl角色管理</lang></a>
+                    </li>
+                </ol>
             </div>
-        </footer>
 
+        </div>
     </div>
-    <!-- end main content-->
-
 </div>
-<!-- END layout-wrapper -->
-<!--右边栏-->
-@template(Weline_Admin::common/right-sidebar.phtml)
+<!-- end page title -->
+<!-- start page message -->
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div> <!-- end message -->
+<div class='row'>
+    <div class='col-12'>
+        <div class='card'>
+            <div class='card-body'>
+                <h4 class='card-title'>
+                    <lang>Acl权限管理</lang>
+                </h4>
+                <p class='card-title-desc'>
+                    <lang>支持角色权限管理</lang>
+                </p>
+                <div class='row'>
+                    <div class='col-6'>
+                        <div class="col-md-6">
+                            <block class='Weline\Component\Block\Form\Search' id='acl-search'
+                                   action='*/backend/acl/role'
+                                   method='get'
+                                   keyword='search' value=''
+                                   params=''
+                                   placeholder='请输入搜索词'></block>
+                        </div>
+                    </div>
+                    <div class='col-6'>
+                        <button type="button" class='btn btn-primary pull-right mt-1 mb-1' data-bs-toggle="offcanvas" data-bs-target="#roleAddOffcanvas" aria-controls="roleAddOffcanvas">
+                            <lang>添加</lang>
+                        </button>
+                    </div>
+                </div>
+
+                <div class='table-rep-plugin'>
+                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
+                        <table id='tech-companies-1' class='table table-striped table-bordered'>
+                            <thead>
+                            <tr>
+                                <th data-priority='1'>
+                                    <lang>ID</lang>
+                                </th>
+                                <th data-priority='1'>角色</th>
+                                <th data-priority='1'>描述</th>
+                                <th data-priority='1'>创建于</th>
+                                <th data-priority='1'>更新于</th>
+                                <th data-priority='1'>操作</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <foreach name="roles" item="role" key="key">
+                                <tr>
+                                    <td class='co-name'>{{role.role_id}}</td>
+                                    <td class='co-name'>{{role.role_name}}</td>
+                                    <td class='co-name'>{{role.role_description}}</td>
+                                    <td class='co-name'>{{role.create_time}}</td>
+                                    <td class='co-name'>{{role.update_time}}</td>
+                                    <td class='co-name'>
+                                        <if condition="role.role_id !== 1">
+                                            <div class="d-grid gap-2 d-md-flex">
+                                                <form action="@backend-url('*/backend/acl/role/delete')" method='post'>
+                                                    <input type='hidden' name='id' value='{{role.role_id}}'>
+                                                    <input type='submit' class='btn btn-danger btn-sm' value='@lang{删除}'>
+                                                </form>
+                                                <a class='btn btn-sm btn-info' href="@backend-url('*/backend/acl/role/edit')?id={{role.role_id}}">
+                                                    <lang>编辑</lang>
+                                                </a>
+                                                <a class='btn btn-sm btn-secondary' href="@backend-url('*/backend/acl/role/assign')?id={{role.role_id}}">
+                                                    <lang>权限管理</lang>
+                                                </a>
+                                            </div>
+                                        </if>
+                                    </td>
+                                </tr>
+                            </foreach>
+                            <empty name="roles">
+                                <tr>
+                                    <td colspan="5" class="text-center">
+                                        <lang>暂无记录</lang>
+                                    </td>
+                                </tr>
+                            </empty>
+                            </tbody>
+                        </table>
+                        {{pagination}}
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div> <!-- end col -->
+</div> <!-- end row -->
 
 <!-- 添加角色 Offcanvas -->
 <div class="offcanvas offcanvas-end" tabindex="-1" id="roleAddOffcanvas" aria-labelledby="roleAddOffcanvasLabel">
@@ -238,58 +163,31 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     </div>
 </div>
 
-<!-- Table Editable plugin -->
-<script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
-<script src="@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)"></script>
-<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
-<!-- Responsive Table js -->
-<script src='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.js)'></script>
-
-<!-- Init js -->
-<script src='@static(Weline_Admin::assets/js/pages/table-responsive.init.js)'></script>
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-@template(Weline_Admin::common/footer.phtml)
 <script>
 (function() {
     'use strict';
     
-    // 获取表单和 offcanvas
-    const form = document.getElementById('roleAddForm');
-    const offcanvasElement = document.getElementById('roleAddOffcanvas');
-    const offcanvas = bootstrap.Offcanvas.getInstance(offcanvasElement) || new bootstrap.Offcanvas(offcanvasElement);
+    var form = document.getElementById('roleAddForm');
+    var offcanvasElement = document.getElementById('roleAddOffcanvas');
+    var offcanvas = bootstrap.Offcanvas.getInstance(offcanvasElement) || new bootstrap.Offcanvas(offcanvasElement);
     
-    // 表单提交处理
     form.addEventListener('submit', function(event) {
         event.preventDefault();
         event.stopPropagation();
         
-        // 验证表单
         if (!form.checkValidity()) {
             form.classList.add('was-validated');
             return;
         }
         
-        // 获取表单数据
-        const formData = new FormData(form);
-        const data = {};
-        for (let [key, value] of formData.entries()) {
-            data[key] = value;
+        var formData = new FormData(form);
+        var data = {};
+        for (var pair of formData.entries()) {
+            data[pair[0]] = pair[1];
         }
         
-        // 显示加载提示
-        Swal.fire({
-            title: '<?= __('处理中') ?>',
-            text: '<?= __('正在创建角色...') ?>',
-            allowOutsideClick: false,
-            didOpen: () => {
-                Swal.showLoading();
-            }
-        });
+        AdminToast.info('<?= __('正在创建角色...') ?>');
         
-        // 发送 AJAX 请求
         fetch('@backend-url("*/backend/acl/role/add")', {
             method: 'POST',
             headers: {
@@ -298,52 +196,29 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
             },
             body: JSON.stringify(data)
         })
-        .then(response => response.json())
-        .then(result => {
+        .then(function(response) { return response.json(); })
+        .then(function(result) {
             if (result.success) {
-                // 成功提示
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('成功') ?>',
-                    text: result.message || '<?= __('角色创建成功！') ?>',
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => {
-                    // 关闭 offcanvas
-                    offcanvas.hide();
-                    // 重置表单
-                    form.reset();
-                    form.classList.remove('was-validated');
-                    // 刷新页面
+                AdminToast.success(result.message || '<?= __('角色创建成功！') ?>');
+                offcanvas.hide();
+                form.reset();
+                form.classList.remove('was-validated');
+                setTimeout(function() {
                     window.location.reload();
-                });
+                }, 1500);
             } else {
-                // 失败提示
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('失败') ?>',
-                    text: result.message || '<?= __('角色创建失败！') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
+                AdminToast.error(result.message || '<?= __('角色创建失败！') ?>');
             }
         })
-        .catch(error => {
+        .catch(function(error) {
             console.error('Error:', error);
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('错误') ?>',
-                text: '<?= __('请求失败：') ?>' + error.message,
-                confirmButtonText: '<?= __('确定') ?>'
-            });
+            AdminToast.error('<?= __('请求失败：') ?>' + error.message);
         });
     });
     
-    // 当 offcanvas 关闭时重置表单
     offcanvasElement.addEventListener('hidden.bs.offcanvas', function() {
         form.reset();
         form.classList.remove('was-validated');
     });
 })();
 </script>
-</body>
-</html>

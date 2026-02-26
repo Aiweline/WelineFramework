@@ -183,6 +183,11 @@ class WlsRuntime implements RuntimeInterface
             $_SERVER['WELINE_IS_MEDIA'] = false;
             $_SERVER['WLS_REQUEST_COUNT'] = $this->requestCount;
             
+            // 早期 URL 解析：在 run_before 事件之前，从 URL 路径中提取语言和货币
+            // URL 结构：/backendKey/USD/zh_Hans_CN/module/area/controller
+            // 确保 run_before 事件处理器能获取到正确的语言/货币
+            $this->parseUrlLangCurrency($timing['uri']);
+            
             $t1 = \microtime(true);
             // 触发 run_before 事件
             $this->eventManager->dispatch('Weline_Framework::App::run_before');
@@ -467,20 +472,10 @@ class WlsRuntime implements RuntimeInterface
             RequestContext::locale($parse['language']);
         }
         
-        // 设置默认值
-        $defaultKeys = [
-            'WELINE_USER_LANG' => '',
-            'WELINE_USER_CURRENCY' => '',
-            'WELINE_WEBSITE_ID' => '',
-            'WELINE_WEBSITE_CODE' => '',
-            'WELINE_WEBSITE_URL' => '',
-        ];
-        
-        foreach ($defaultKeys as $key => $default) {
-            if (!isset($_SERVER[$key])) {
-                $_SERVER[$key] = $default;
-            }
-        }
+        // 注意：不再设置空字符串默认值
+        // 空字符串会导致 ?? 运算符无法正确回退到默认值
+        // WELINE_USER_LANG 和 WELINE_USER_CURRENCY 应该在 Url::parser() 中被正确设置
+        // 如果 URL 解析未设置，RequestContext 的默认值会被使用（zh_Hans_CN / CNY）
         
         // 存储网站信息到上下文
         if (!empty($_SERVER['WELINE_WEBSITE_ID'])) {
@@ -490,6 +485,78 @@ class WlsRuntime implements RuntimeInterface
         // 标记 URL 解析已完成
         // CheckFullPageCache 在 url_parsed_after 事件中可以使用此标志判断
         $_SERVER['WELINE_URL_PARSED'] = true;
+    }
+    
+    /**
+     * 早期 URL 解析：从 URL 路径中快速提取语言和货币
+     * 
+     * 在 run_before 事件之前调用，确保事件处理器能获取正确的语言/货币。
+     * 这是一个轻量级解析，不涉及网站匹配、路由识别等复杂逻辑。
+     * 
+     * URL 结构示例：
+     * - /backendKey/USD/zh_Hans_CN/module/backend/controller
+     * - /USD/zh_Hans_CN/module/controller
+     * - /zh_Hans_CN/module/controller
+     * 
+     * 货币识别规则：3 位大写字母（如 USD、CNY、EUR）
+     * 语言识别规则：xx_Xxxx_XX 格式（如 zh_Hans_CN、en_US）
+     * 
+     * @param string $uri 请求 URI
+     */
+    private function parseUrlLangCurrency(string $uri): void
+    {
+        if (empty($uri) || $uri === '/') {
+            return;
+        }
+        
+        // 分割 URI 路径段
+        $segments = \explode('/', \trim($uri, '/'));
+        if (empty($segments)) {
+            return;
+        }
+        
+        $currency = null;
+        $language = null;
+        
+        // 检查前 4 个路径段（足够覆盖 backendKey/currency/language/... 结构）
+        $checkCount = \min(4, \count($segments));
+        for ($i = 0; $i < $checkCount; $i++) {
+            $segment = $segments[$i];
+            if (empty($segment)) {
+                continue;
+            }
+            
+            // 货币识别：3 位大写字母
+            if ($currency === null && \strlen($segment) === 3 && \ctype_upper($segment)) {
+                $currency = $segment;
+                continue;
+            }
+            
+            // 语言识别：xx_Xxxx_XX 或 xx_XX 格式
+            // 例如：zh_Hans_CN, en_US, fr_FR, pt_BR
+            if ($language === null && \strlen($segment) >= 5 && \strlen($segment) <= 11) {
+                // 检查是否符合 locale 格式
+                if (\preg_match('/^[a-z]{2}_[A-Za-z]{2,4}(_[A-Z]{2})?$/', $segment)) {
+                    $language = $segment;
+                    continue;
+                }
+            }
+            
+            // 如果都找到了，提前退出
+            if ($currency !== null && $language !== null) {
+                break;
+            }
+        }
+        
+        // 设置到 $_SERVER（URL 路径中的值优先级最高）
+        if ($currency !== null) {
+            $_SERVER['WELINE_USER_CURRENCY'] = $currency;
+            RequestContext::currency($currency);
+        }
+        if ($language !== null) {
+            $_SERVER['WELINE_USER_LANG'] = $language;
+            RequestContext::locale($language);
+        }
     }
     
     /**

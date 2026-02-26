@@ -5,19 +5,15 @@
  * @var $this \Weline\Framework\View\Template
  * @var $model \Weline\Ai\Model\AiModel|null
  */
-/**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
 
 use Weline\Ai\Model\AiModel;
 
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 $model = $this->getData('model');
 $isEdit = $model && $model->getId();
 $isCopied = $isEdit && $model->isCopied();
-$isReadonly = $isEdit && !$isCopied; // 只有原始模型（非复制）才只读
+$isReadonly = $isEdit && !$isCopied;
 $pageTitle = $isEdit ? __('编辑模型: %{1}', $model->getModelName()) : __('新建模型');
 
-// 解析配置JSON
 $config = [];
 if ($isEdit && $model->getConfigJson()) {
     $configJson = $model->getConfigJson();
@@ -27,7 +23,6 @@ if ($isEdit && $model->getConfigJson()) {
     }
 }
 
-// 解析代理信息
 $proxyInfo = [];
 if ($isEdit && $model->getProxyInfo()) {
     $proxyInfoData = $model->getProxyInfo();
@@ -37,7 +32,6 @@ if ($isEdit && $model->getProxyInfo()) {
     }
 }
 
-// 解析提供商配置
 $providerConfig = [];
 if ($isEdit && $model->getData('provider_config')) {
     $providerConfigData = $model->getData('provider_config');
@@ -47,71 +41,37 @@ if ($isEdit && $model->getData('provider_config')) {
     }
 }
 
-// 如果没有提供商配置，使用config作为默认值
 if (empty($providerConfig) && !empty($config)) {
     $providerConfig = $config;
 }
 ?>
-<!DOCTYPE html>
-<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= $pageTitle ?></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
-<!--页头工具条 开始-->
-@template(Weline_Admin::common/page/loading.phtml)
-<!--页头工具条 结束-->
+<!-- 面包屑导航 -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0 font-size-18">
+                <i class="mdi mdi-robot text-primary"></i> <?= $pageTitle ?>
+            </h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('*/backend/model') ?>"><lang>AI模型</lang></a></li>
+                    <li class="breadcrumb-item active"><?= $isEdit ? __('编辑') : __('新建') ?></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
 
-<!-- 开始 页面 -->
-<div id="layout-wrapper">
+<!-- 消息提示 -->
+<div class='row'>
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
 
-    <!--页头工具条 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <!--页头工具条 结束-->
-
-    <!-- ========== Topnav Start ========== -->
-    <!--页头菜单栏 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    <!--页头菜单栏 结束-->
-
-    <!-- ========== Left Sidebar Start ========== -->
-    <!--左侧菜单栏 开始-->
-    @template(Weline_Admin::common/left-sidebar.phtml)
-    <!--左侧菜单栏 结束-->
-
-    <!-- 主要内容开始 -->
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                
-                <!-- 面包屑导航 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0 font-size-18">
-                                <i class="mdi mdi-robot text-primary"></i> <?= $pageTitle ?>
-                            </h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('*/backend/model') ?>"><lang>AI模型</lang></a></li>
-                                    <li class="breadcrumb-item active"><?= $isEdit ? __('编辑') : __('新建') ?></li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 消息提示 -->
-                <div class='row'>
-                    <div class="col-12">
-                        <template>Weline_Component::message.phtml</template>
-                    </div>
-                </div>
-
-                <div class="model-edit-container">
-                    <form action="<?= $this->getBackendUrl('*/backend/model/save') ?>" method="post" id="model-form">
+<div class="model-edit-container">
+    <form action="<?= $this->getBackendUrl('*/backend/model/save') ?>" method="post" id="model-form">
         <?php if ($isEdit): ?>
             <input type="hidden" name="id" value="<?= $model->getId() ?>">
         <?php endif; ?>
@@ -444,18 +404,15 @@ if (empty($providerConfig) && !empty($config)) {
   "max_retries": 3
 }'
                                       style="font-family: 'Courier New', monospace;"><?php
-// 优先使用provider_config，如果没有则使用config
 $displayConfig = $providerConfig;
 if (empty($displayConfig) && !empty($config)) {
     $displayConfig = $config;
 }
 
 if (!empty($displayConfig)) {
-    // 如果是数组，转换为JSON
     if (is_array($displayConfig)) {
         echo json_encode($displayConfig, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     } else if (is_string($displayConfig)) {
-        // 如果是JSON字符串，尝试解析并格式化
         $decoded = json_decode($displayConfig, true);
         if (json_last_error() === JSON_ERROR_NONE) {
             echo json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -558,9 +515,7 @@ if (!empty($displayConfig)) {
                     <div class="col-md-6">
                         <div class="mb-3">
                             <?php 
-                            // 启用条件：供应商连通性成功；若存在自配置，则自配置连通性也必须成功
                             $providerOk = (($model ? $model->getData('provider_test_status') : 'pending') === 'success');
-                            // 判断是否存在自配置api_key
                             $hasSelfConfig = false;
                             $providerCfgRaw = $model ? $model->getData('provider_config') : '';
                             if (!empty($providerCfgRaw)) {
@@ -678,190 +633,139 @@ if (!empty($displayConfig)) {
     </form>
 </div>
 
-            </div>
-        </div>
-    </div>
-    <!-- 主要内容结束 -->
-
-</div>
-<!-- 页面结束 -->
-
-<!-- 页脚 -->
-@template(Weline_Admin::common/footer.phtml)
-
 <!-- SweetAlert2 CSS -->
 <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
 <!-- SweetAlert2 JS -->
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
-// 表单验证
-document.getElementById('model-form').addEventListener('submit', function(e) {
-    // 基本验证
-    const vendor = document.getElementById('vendor').value.trim();
-    const modelCode = document.getElementById('model_code').value.trim();
-    const modelName = document.getElementById('model_name').value.trim();
+(function() {
+    'use strict';
     
-    if (!vendor || !modelCode || !modelName) {
-        e.preventDefault();
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: __('请填写必填项：供应商、模型代码、模型名称'),
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error(__('请填写必填项：供应商、模型代码、模型名称'));
-        }
-        return false;
-    }
-    
-    // 验证提供商配置JSON
-    const providerConfigTextarea = document.getElementById('provider_config_json');
-    if (providerConfigTextarea && providerConfigTextarea.value.trim()) {
-        try {
-            JSON.parse(providerConfigTextarea.value);
-        } catch (e) {
+    document.getElementById('model-form').addEventListener('submit', function(e) {
+        var vendor = document.getElementById('vendor').value.trim();
+        var modelCode = document.getElementById('model_code').value.trim();
+        var modelName = document.getElementById('model_name').value.trim();
+        
+        if (!vendor || !modelCode || !modelName) {
             e.preventDefault();
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('格式错误') ?>',
-                    text: __('提供商配置JSON格式错误，请检查语法'),
+                    icon: 'warning',
+                    title: '<?= __('提示') ?>',
+                    text: '<?= __('请填写必填项：供应商、模型代码、模型名称') ?>',
                     confirmButtonText: '<?= __('确定') ?>'
                 });
             } else {
-                console.error(__('提供商配置JSON格式错误，请检查语法'));
+                console.error('<?= __('请填写必填项：供应商、模型代码、模型名称') ?>');
             }
-            providerConfigTextarea.focus();
             return false;
         }
-    }
-    
-    return true;
-});
-
-// 模型测试功能
-<?php if ($isEdit): ?>
-const testModelBtn = document.getElementById('testModelBtn');
-testModelBtn.addEventListener('click', function() {
-    const prompt = document.getElementById('test_prompt').value.trim();
-    const modelId = <?= $model->getId() ?>;
-    
-    if (!prompt) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: __('请输入测试提示词'),
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error(__('请输入测试提示词'));
-        }
-        return;
-    }
-    
-    // 禁用按钮并显示加载状态
-    testModelBtn.disabled = true;
-    testModelBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> ' + __('测试中...');
-    
-    // 隐藏之前的结果
-    document.getElementById('testResult').style.display = 'none';
-    
-    // 发送测试请求
-    const formData = new FormData();
-    formData.append('id', modelId);
-    formData.append('prompt', prompt);
-    
-    fetch('<?= $this->getBackendUrl("*/backend/model/testConnection") ?>', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        // 恢复按钮状态
-        testModelBtn.disabled = false;
-        testModelBtn.innerHTML = '<i class="mdi mdi-play-circle"></i> ' + __('测试模型');
         
-        // 显示结果
-        const resultDiv = document.getElementById('testResult');
-        const resultContent = document.getElementById('testResultContent');
-        
-        if (data && data.data && data.data.results) {
-            const r = data.data.results;
-            const s = r.self_config || {};
-            const p = r.provider_account || {};
-            const sBadge = s.tested ? (s.success ? '<span class="badge bg-success">' + __('成功') + '</span>' : '<span class="badge bg-danger">' + __('失败') + '</span>') : '<span class="badge bg-secondary">' + __('未测') + '</span>';
-            const pBadge = p.tested ? (p.success ? '<span class="badge bg-success">' + __('成功') + '</span>' : '<span class="badge bg-danger">' + __('失败') + '</span>') : '<span class="badge bg-secondary">' + __('未测') + '</span>';
-            resultContent.innerHTML = `
-                <div class="row g-2">
-                    <div class="col-12">
-                        <div class="alert alert-${(s.success ? 'success' : (s.tested ? 'danger' : 'secondary'))} py-2 px-3 mb-2">
-                            <strong>自配置</strong> ${sBadge}<br>
-                            ${s.tested ? (`<small class=\"text-muted\">耗时：</small><code>${s.duration || 0} ms</code><br>` +
-                            `<small class=\"text-muted\">消息：</small>${(s.message || '')}<br>` +
-                            `<div class=\"alert alert-light mb-0\" style=\"white-space: pre-wrap; max-height: 200px; overflow-y: auto;\">${(s.response || '')}</div>`) : ''}
-                        </div>
-                    </div>
-                    <div class="col-12">
-                        <div class="alert alert-${(p.success ? 'success' : (p.tested ? 'danger' : 'secondary'))} py-2 px-3 mb-2">
-                            <strong>供应商账户</strong> ${pBadge} ${p.account_name ? ` <span class=\"badge bg-info\">${p.account_name}</span>` : ''}<br>
-                            ${p.tested ? (`<small class=\"text-muted\">耗时：</small><code>${p.duration || 0} ms</code><br>` +
-                            `<small class=\"text-muted\">消息：</small>${(p.message || '')}<br>` +
-                            `<div class=\"alert alert-light mb-0\" style=\"white-space: pre-wrap; max-height: 200px; overflow-y: auto;\">${(p.response || '')}</div>`) : ''}
-                        </div>
-                    </div>
-                </div>`;
-        } else if (data.success) {
-            resultContent.innerHTML = `
-                <div class="alert alert-success">
-            <strong>${__('测试成功')}!</strong> ${data.message}
-                </div>`;
-        } else {
-            resultContent.innerHTML = `
-                <div class="alert alert-danger">
-            <strong>${__('测试失败')}!</strong> ${data.message}
-                </div>
-                ${data.error ? `<div class="alert alert-warning"><small>${data.error}</small></div>` : ''}
-            `;
+        var providerConfigTextarea = document.getElementById('provider_config_json');
+        if (providerConfigTextarea && providerConfigTextarea.value.trim()) {
+            try {
+                JSON.parse(providerConfigTextarea.value);
+            } catch (err) {
+                e.preventDefault();
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('格式错误') ?>',
+                        text: '<?= __('提供商配置JSON格式错误，请检查语法') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('提供商配置JSON格式错误，请检查语法') ?>');
+                }
+                providerConfigTextarea.focus();
+                return false;
+            }
         }
         
-        resultDiv.style.display = 'block';
-        
-        // 滚动到结果区域
-        resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    })
-    .catch(error => {
-        // 恢复按钮状态
-        testModelBtn.disabled = false;
-        testModelBtn.innerHTML = '<i class="mdi mdi-play-circle"></i> ' + __('测试模型');
-        
-        // 显示错误
-        const resultDiv = document.getElementById('testResult');
-        const resultContent = document.getElementById('testResultContent');
-        
-        resultContent.innerHTML = `
-            <div class="alert alert-danger">
-                <strong>${__('网络错误')}!</strong> ${error.message}
-            </div>
-        `;
-        
-        resultDiv.style.display = 'block';
+        return true;
     });
-});
-<?php endif; ?>
+    
+    <?php if ($isEdit): ?>
+    var testModelBtn = document.getElementById('testModelBtn');
+    testModelBtn.addEventListener('click', function() {
+        var prompt = document.getElementById('test_prompt').value.trim();
+        var modelId = <?= $model->getId() ?>;
+        
+        if (!prompt) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('提示') ?>',
+                    text: '<?= __('请输入测试提示词') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('请输入测试提示词') ?>');
+            }
+            return;
+        }
+        
+        testModelBtn.disabled = true;
+        testModelBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('测试中...') ?>';
+        
+        document.getElementById('testResult').style.display = 'none';
+        
+        var formData = new FormData();
+        formData.append('id', modelId);
+        formData.append('prompt', prompt);
+        
+        fetch('<?= $this->getBackendUrl("*/backend/model/testConnection") ?>', {
+            method: 'POST',
+            body: formData
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            testModelBtn.disabled = false;
+            testModelBtn.innerHTML = '<i class="mdi mdi-play-circle"></i> <?= __('测试模型') ?>';
+            
+            var resultDiv = document.getElementById('testResult');
+            var resultContent = document.getElementById('testResultContent');
+            
+            if (data && data.data && data.data.results) {
+                var r = data.data.results;
+                var s = r.self_config || {};
+                var p = r.provider_account || {};
+                var sBadge = s.tested ? (s.success ? '<span class="badge bg-success"><?= __('成功') ?></span>' : '<span class="badge bg-danger"><?= __('失败') ?></span>') : '<span class="badge bg-secondary"><?= __('未测') ?></span>';
+                var pBadge = p.tested ? (p.success ? '<span class="badge bg-success"><?= __('成功') ?></span>' : '<span class="badge bg-danger"><?= __('失败') ?></span>') : '<span class="badge bg-secondary"><?= __('未测') ?></span>';
+                resultContent.innerHTML = '<div class="row g-2"><div class="col-12"><div class="alert alert-' + (s.success ? 'success' : (s.tested ? 'danger' : 'secondary')) + ' py-2 px-3 mb-2"><strong>自配置</strong> ' + sBadge + '<br>' + (s.tested ? ('<small class="text-muted">耗时：</small><code>' + (s.duration || 0) + ' ms</code><br><small class="text-muted">消息：</small>' + (s.message || '') + '<br><div class="alert alert-light mb-0" style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">' + (s.response || '') + '</div>') : '') + '</div></div><div class="col-12"><div class="alert alert-' + (p.success ? 'success' : (p.tested ? 'danger' : 'secondary')) + ' py-2 px-3 mb-2"><strong>供应商账户</strong> ' + pBadge + (p.account_name ? ' <span class="badge bg-info">' + p.account_name + '</span>' : '') + '<br>' + (p.tested ? ('<small class="text-muted">耗时：</small><code>' + (p.duration || 0) + ' ms</code><br><small class="text-muted">消息：</small>' + (p.message || '') + '<br><div class="alert alert-light mb-0" style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">' + (p.response || '') + '</div>') : '') + '</div></div></div>';
+            } else if (data.success) {
+                resultContent.innerHTML = '<div class="alert alert-success"><strong><?= __('测试成功') ?>!</strong> ' + data.message + '</div>';
+            } else {
+                resultContent.innerHTML = '<div class="alert alert-danger"><strong><?= __('测试失败') ?>!</strong> ' + data.message + '</div>' + (data.error ? '<div class="alert alert-warning"><small>' + data.error + '</small></div>' : '');
+            }
+            
+            resultDiv.style.display = 'block';
+            resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        })
+        .catch(function(error) {
+            testModelBtn.disabled = false;
+            testModelBtn.innerHTML = '<i class="mdi mdi-play-circle"></i> <?= __('测试模型') ?>';
+            
+            var resultDiv = document.getElementById('testResult');
+            var resultContent = document.getElementById('testResultContent');
+            
+            resultContent.innerHTML = '<div class="alert alert-danger"><strong><?= __('网络错误') ?>!</strong> ' + error.message + '</div>';
+            resultDiv.style.display = 'block';
+        });
+    });
+    <?php endif; ?>
+})();
 </script>
 
 <style>
 .model-edit-container .card {
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    border: 1px solid #e9ecef;
+    border: 1px solid var(--backend-color-border);
 }
 
 .model-edit-container .card-header {
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #e9ecef;
+    background-color: var(--backend-color-card-header-bg);
+    border-bottom: 1px solid var(--backend-color-border);
 }
 
 .model-edit-container .card-header h5 {
@@ -872,13 +776,13 @@ testModelBtn.addEventListener('click', function() {
 
 .model-edit-container .form-label {
     font-weight: 500;
-    color: #495057;
+    color: var(--backend-color-text-primary);
     margin-bottom: 0.5rem;
 }
 
 .model-edit-container .form-control:focus {
-    border-color: #80bdff;
-    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+    border-color: var(--backend-color-primary);
+    box-shadow: 0 0 0 0.2rem var(--backend-color-primary-light);
 }
 
 .model-edit-container .form-text {
@@ -890,6 +794,3 @@ testModelBtn.addEventListener('click', function() {
     margin-bottom: 1.5rem;
 }
 </style>
-
-</body>
-</html>

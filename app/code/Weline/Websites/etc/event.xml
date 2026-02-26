@@ -54,4 +54,19 @@
                   disabled="false"
                   shared="true" sort="10"/>
     </event>
+    
+    <!-- ========== PageBuilder 快速建站事件观察者 ========== -->
+    
+    <!--注册域名服务能力-->
+    <event name="GuoLaiRen_PageBuilder::quickbuild::query_services">
+        <observer name="Weline_Websites::register_quickbuild_services" 
+                  instance="Weline\Websites\Observer\RegisterQuickBuildServices"
+                  disabled="false"
+                  shared="true" sort="10"/>
+    </event>
+    
+    <!-- 以下事件已迁移到 WebsitesQueryProvider（统一查询器），不再需要独立观察者 -->
+    <!-- 已删除：query_registrar_accounts, check_availability, purchase, query_registrars,
+         save_registrar_account, delete_registrar_account, query_domain_list,
+         test_connection, query_config_fields -->
 </config>

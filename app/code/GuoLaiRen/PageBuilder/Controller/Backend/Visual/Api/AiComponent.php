@@ -406,6 +406,15 @@ class AiComponent extends BackendController
     /**
      * API: 微调 AI 组件（流式 SSE）
      * GET /backend/visual/api/ai-component/refine-stream?params=base64编码JSON
+     * 
+     * 支持的参数：
+     * - component_id: 组件 ID（优先使用，自动获取模板内容）
+     * - code + style_code: 组件代码（备选，自动获取模板内容）
+     * - refine_token: 临时文件引用（旧方式，兼容）
+     * - template_content: 模板内容（最后备选）
+     * - adjustment_prompt: 微调描述（必填）
+     * - category: 组件区域
+     * - language: 页面语言（用于生成对应语言的内容）
      */
     public function getRefine_stream(): void
     {
@@ -427,13 +436,54 @@ class AiComponent extends BackendController
                 }
             }
 
-            $templateContent = $this->resolveTemplateContentFromRefineToken($body);
+            // 优先通过组件 ID 获取模板内容
+            $templateContent = '';
+            $componentId = (int)($body['component_id'] ?? 0);
+            $componentCode = $body['code'] ?? '';
+            $styleCode = $body['style_code'] ?? Component::STYLE_CODE_AI_GENERATED;
+            
+            if ($componentId > 0) {
+                // 通过 ID 获取组件
+                $componentModel = ObjectManager::getInstance(Component::class);
+                $component = clone $componentModel;
+                $component->load($componentId);
+                if ($component->getId()) {
+                    $templateContent = $component->getTemplateContent() ?: '';
+                    $componentCode = $component->getData(Component::fields_CODE) ?: $componentCode;
+                    $body['code'] = $componentCode;
+                }
+            } elseif (!empty($componentCode)) {
+                // 通过 code + style_code 获取组件
+                $componentModel = ObjectManager::getInstance(Component::class);
+                $component = clone $componentModel;
+                $component->clear()
+                    ->where(Component::fields_CODE, $componentCode)
+                    ->where(Component::fields_STYLE_CODE, $styleCode)
+                    ->find()
+                    ->fetch();
+                if ($component->getId()) {
+                    $templateContent = $component->getTemplateContent() ?: '';
+                    $componentId = (int)$component->getId();
+                }
+            }
+            
+            // 回退到 refine_token 或 template_content
+            if (empty($templateContent)) {
+                $templateContent = $this->resolveTemplateContentFromRefineToken($body);
+            }
+            
             $adjustmentPrompt = $body['adjustment_prompt'] ?? '';
             $category = $body['category'] ?? 'content';
+            $language = $body['language'] ?? '';
             $draftId = isset($body['draft_id']) ? (int) $body['draft_id'] : 0;
 
             if (empty($templateContent)) {
-                $sse->sendEvent('error', ['message' => __('请提供模板内容或有效的 refine_token')]);
+                $errorDetail = $componentId > 0 
+                    ? __('组件 ID %{1} 不存在或模板内容为空', [$componentId])
+                    : ($componentCode 
+                        ? __('组件 %{1} 不存在或模板内容为空', [$componentCode])
+                        : __('请提供 component_id、code 或有效的 refine_token'));
+                $sse->sendEvent('error', ['message' => $errorDetail]);
                 $sse->close();
                 return;
             }
@@ -453,10 +503,15 @@ class AiComponent extends BackendController
             if (!empty($body['style_code'])) {
                 $options['style_code'] = $body['style_code'];
             }
+            // 传递语言参数，让 AI 生成对应语言的内容
+            if (!empty($language)) {
+                $options['language'] = $language;
+            }
 
             $sse->sendEvent('start', [
                 'message' => __('开始微调'),
                 'category' => $category,
+                'component_id' => $componentId,
             ]);
 
             $options['stream_callback'] = function (string $event, array $data = []) use ($sse) {

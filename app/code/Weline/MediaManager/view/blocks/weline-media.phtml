@@ -1,75 +1,263 @@
-<notempty name="preview">
-    <!-- 图片预览 -->
-    @template(Weline_FileManager::image-preview/template.phtml)
-</notempty>
-<!-- Small modal -->
-<a type="button" data-bs-target="#{{target}}-select-modal" class="btn btn-primary btn-sm waves-effect waves-light"
-   data-bs-toggle="modal">{{title}}</a>
+<!-- 图片预览容器 -->
+@template(Weline_FileManager::image-preview/template.phtml)
+
+<!-- 触发按钮 -->
+<button type="button" class="btn btn-primary btn-sm waves-effect waves-light" 
+        onclick="WelineMediaManager_{{target}}_open()">{{title}}</button>
 <if condition="ext !== '*'"><br><span>@lang{允许的文件类型：}({{ext}})</span></if>
 <br>
 <span>@lang{允许的文件大小：}{{size_alias}}</span>
-<div class="modal fade bs-example-modal-center bd-example-modal-lg" tabindex="-1" role="dialog"
-     aria-labelledby="WelineMedia" aria-hidden="true" id="{{target}}-select-modal">
-    <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-md-down w-80">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    {{title}}
-                    <if condition="ext !== '*'"><span class="text-danger">@lang{允许的文件类型：}({{ext}})</span></if>
-                    <span>@lang{允许的文件大小：}{{size_alias}}</span>
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" id="{{target}}-close-modal"
-                        aria-label="Close"></button>
-            </div>
-            <div class="modal-body" style="padding: 0;">
-                <iframe id="{{target}}-file-manager-iframe" class="w-100" style="min-height: 70vh" src="" scrolling="no"
-                        frameborder="0"></iframe>
-            </div>
-        </div><!-- /.modal-content -->
-    </div><!-- /.modal-dialog -->
-</div><!-- /.modal -->
+
+<!-- 自定义 Modal -->
+<div id="{{target}}-modal-overlay" class="wm-modal-overlay" onclick="if(event.target===this)WelineMediaManager_{{target}}_close()">
+    <div class="wm-modal-container">
+        <div class="wm-modal-header">
+            <h5 class="wm-modal-title">
+                {{title}}
+                <if condition="ext !== '*'"><span class="wm-modal-hint">@lang{允许的文件类型：}({{ext}})</span></if>
+                <span class="wm-modal-hint">@lang{允许的文件大小：}{{size_alias}}</span>
+            </h5>
+            <button type="button" class="wm-modal-close" onclick="WelineMediaManager_{{target}}_close()">&times;</button>
+        </div>
+        <div class="wm-modal-body">
+            <iframe id="{{target}}-file-manager-iframe" class="wm-modal-iframe" src="" frameborder="0"
+                    data-connector="{{connector}}"></iframe>
+        </div>
+    </div>
+</div>
+
+<style>
+.wm-modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+}
+.wm-modal-overlay.wm-show {
+    display: flex;
+}
+.wm-modal-container {
+    background: var(--backend-color-bg-card, #fff);
+    border-radius: 8px;
+    width: 90%;
+    max-width: 1200px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+.wm-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--backend-color-border, #dee2e6);
+}
+.wm-modal-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--backend-color-text, #333);
+}
+.wm-modal-hint {
+    font-size: 12px;
+    color: var(--backend-color-text-muted, #6c757d);
+    margin-left: 10px;
+}
+.wm-modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: var(--backend-color-text-muted, #6c757d);
+    padding: 0;
+    line-height: 1;
+}
+.wm-modal-close:hover {
+    color: var(--backend-color-danger, #dc3545);
+}
+.wm-modal-body {
+    flex: 1;
+    overflow: hidden;
+    min-height: 70vh;
+}
+.wm-modal-iframe {
+    width: 100%;
+    height: 70vh;
+    border: none;
+}
+.wm-preview-item {
+    display: inline-block;
+    position: relative;
+    margin: 4px;
+    border: 1px solid var(--backend-color-border, #dee2e6);
+    border-radius: 4px;
+    overflow: hidden;
+}
+.wm-preview-img {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    display: block;
+}
+.wm-preview-close {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 18px;
+    height: 18px;
+    background: rgba(220, 53, 69, 0.9);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 14px;
+    line-height: 16px;
+    text-align: center;
+    cursor: pointer;
+    z-index: 1;
+}
+.wm-preview-close:hover {
+    background: #dc3545;
+}
+</style>
+
 <script>
-    var timer_{{target}} = null;
-    $('#{{target}}-select-modal').on('shown.bs.modal', () => {
-        const iframe = $("#{{target}}-file-manager-iframe");
-        if (iframe.attr('src') === '') {
-            iframe.attr('src', '{{connector}}');
+function WelineMediaManager_{{target}}_open() {
+    var overlay = document.getElementById('{{target}}-modal-overlay');
+    var iframe = document.getElementById('{{target}}-file-manager-iframe');
+    if (!overlay) { alert('Modal not found'); return; }
+    
+    overlay.classList.add('wm-show');
+    document.body.style.overflow = 'hidden';
+    
+    if (iframe) {
+        var currentSrc = iframe.getAttribute('src');
+        var connectorUrl = iframe.getAttribute('data-connector');
+        if ((!currentSrc || currentSrc === '') && connectorUrl) {
+            iframe.src = connectorUrl;
         }
+    }
+}
 
-        function checkIframeLoaded() {
-            const iframe = $("#{{target}}-file-manager-iframe");
-            let iframeDoc = iframe[0].contentDocument || undefined;
-            if (iframeDoc === undefined && iframe[0].contentWindow) {
-                iframeDoc = iframe[0].contentWindow.document;
-            }
-            if (iframeDoc !== undefined && iframeDoc.readyState === 'complete') {
-                const filemanager = $(iframeDoc).find('.mmf-wrap');
-                if (filemanager.length > 0) {
-                    const height = filemanager.outerHeight();
-                    if (height > 0) {
-                        iframe.css({height: (height + 10) + 'px'});
-                        clearInterval(timer_{{target}});
-                    }
-                }
-            }
+function WelineMediaManager_{{target}}_close() {
+    var overlay = document.getElementById('{{target}}-modal-overlay');
+    if (overlay) {
+        overlay.classList.remove('wm-show');
+        document.body.style.overflow = '';
+    }
+}
+
+(function() {
+    var targetId = '{{target}}';
+    
+    document.addEventListener('keydown', function(e) {
+        var overlay = document.getElementById(targetId + '-modal-overlay');
+        if (e.key === 'Escape' && overlay && overlay.classList.contains('wm-show')) {
+            WelineMediaManager_{{target}}_close();
         }
-
-        timer_{{target}} = window.setInterval(() => {
-            checkIframeLoaded();
-        }, 100);
-        setTimeout(function () {
-            clearInterval(timer_{{target}});
-        }, 10000);
     });
-</script>
-<notempty name="preview">
-    <script>
-        if ($('#{{target}}-preview')) {
-            $('#{{target}}-preview').on('click', '.img', function () {
-                let url = $(this).data('url');
-                let iframe = $("#{{target}}-file-manager-iframe");
-                iframe.attr('src', url);
-            });
+    
+    window.addEventListener('message', function(e) {
+        if (!e.data) return;
+        
+        // 处理取消消息
+        if (e.data.type === 'weline-media-manager-cancel') {
+            if (e.data.target && e.data.target !== targetId) return;
+            WelineMediaManager_{{target}}_close();
+            return;
         }
-    </script>
+        
+        if (e.data.type !== 'weline-media-manager-select') return;
+        if (e.data.target && e.data.target !== targetId) return;
+        
+        var files = e.data.files || [];
+        if (!files.length) return;
+        
+        var paths = [];
+        files.forEach(function(f) {
+            if (f.path) {
+                paths.push(f.path);
+            } else if (f.url) {
+                paths.push(f.url);
+            } else if (f.name) {
+                paths.push(f.name);
+            }
+        });
+        
+        var isMulti = e.data.multi;
+        var targetEl = document.getElementById(targetId);
+        
+        if (targetEl) {
+            var value;
+            if (isMulti && targetEl.value) {
+                value = targetEl.value + ',' + paths.join(',');
+            } else {
+                value = paths.join(',');
+            }
+            
+            if (targetEl.tagName === 'INPUT' || targetEl.tagName === 'TEXTAREA') {
+                targetEl.value = value;
+                targetEl.dispatchEvent(new Event('change', { bubbles: true }));
+                targetEl.dispatchEvent(new Event('input', { bubbles: true }));
+            } else {
+                targetEl.textContent = value;
+            }
+        }
+        
+        var previewContainer = document.getElementById(targetId + '-preview');
+        if (previewContainer) {
+            if (!isMulti) {
+                previewContainer.innerHTML = '';
+            }
+            files.forEach(function(f) {
+                // 兼容 FileManager 预览模板的 HTML 结构（drag-item, drag-pic, data-src）
+                var wrapper = document.createElement('div');
+                wrapper.className = 'drag-item';
+                wrapper.draggable = true;
+                var relativePath = (f.path || f.url || '').replace(/^\/pub\/media\//, '');
+                wrapper.innerHTML = '<div class="close" onclick="delSelectedImage(event)">x</div>' +
+                    '<img data-src="' + relativePath + '" src="' + (f.thumb || f.url || f.path) + '" alt="' + (f.name || '') + '" class="drag-pic img-responsive" draggable="false" data-file="">';
+                previewContainer.appendChild(wrapper);
+            });
+            // 触发 flushSelectedImage（如果存在）来同步隐藏输入框的值
+            if (typeof flushSelectedImage === 'function') {
+                flushSelectedImage();
+            }
+        }
+        
+        WelineMediaManager_{{target}}_close();
+    });
+})();
+</script>
+
+<notempty name="preview">
+<script>
+(function() {
+    var previewContainer = document.getElementById('{{target}}-preview');
+    if (!previewContainer) return;
+    
+    previewContainer.addEventListener('click', function(e) {
+        var img = e.target.closest('.img');
+        if (!img) return;
+        
+        var url = img.dataset.url;
+        if (!url) return;
+        
+        var iframe = document.getElementById('{{target}}-file-manager-iframe');
+        if (iframe) {
+            iframe.src = url;
+            var overlay = document.getElementById('{{target}}-modal-overlay');
+            if (overlay) {
+                overlay.classList.add('wm-show');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+    });
+})();
+</script>
 </notempty>

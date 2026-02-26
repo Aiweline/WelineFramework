@@ -1,621 +1,450 @@
-@template(Weline_Admin::common/page_header.phtml)
-@template(Weline_Admin::common/page_nav.phtml)
+<?php
+/**
+ * 供应商账户编辑页面（内容模板）
+ * 由布局系统自动包裹 HTML 框架
+ */
+?>
+<!-- 页面标题 -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box">
+            <h4 class="page-title">
+                <?= isset($account) ? __('编辑供应商账户') : __('添加供应商账户') ?>
+            </h4>
+        </div>
+    </div>
+</div>
 
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h4 class="card-title mb-0"><?= isset($account) ? '编辑供应商账户' : '添加供应商账户' ?></h4>
-                </div>
-                <div class="card-body">
-                    <form id="accountForm" method="post" action="<?= $this->getBackendUrl('*/backend/provider/save') ?>">
-                        <?php if (isset($account)): ?>
-                            <input type="hidden" name="id" value="<?= $account->getId() ?>">
-                        <?php endif; ?>
-                        
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label for="provider_code" class="form-label">供应商 <span class="text-danger">*</span></label>
-                                <select class="form-select" id="provider_code" name="provider_code" required <?= isset($account) ? 'readonly' : 'onchange="onProviderChange()"' ?>>
-                                    <option value="">请选择供应商</option>
-                                    <?php foreach ($providers as $code => $info): ?>
-                                        <option value="<?= $code ?>" 
-                                            data-base-url="<?= $info['base_url'] ?>"
-                                            data-name="<?= $info['name'] ?>"
-                                            <?= isset($account) && $account->getData('provider_code') == $code ? 'selected' : '' ?>>
-                                            <?= $info['name'] ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
+<!-- 消息 -->
+<div class="row">
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<!-- 编辑表单 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <form id="weline-ai-provider-form" method="post" action="<?= $this->getBackendUrl('*/backend/provider/save') ?>">
+                    <?php if (isset($account)): ?>
+                        <input type="hidden" name="id" value="<?= $account->getId() ?>">
+                    <?php endif; ?>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="provider_code" class="form-label"><lang>供应商</lang> <span class="text-danger">*</span></label>
+                            <select class="form-select" id="weline-ai-provider-code" name="provider_code" required <?= isset($account) ? 'readonly' : '' ?>>
+                                <option value=""><?= __('请选择供应商') ?></option>
+                                <?php foreach ($providers as $code => $info): ?>
+                                    <option value="<?= $code ?>" 
+                                        data-base-url="<?= $info['base_url'] ?>"
+                                        data-name="<?= $info['name'] ?>"
+                                        <?= isset($account) && $account->getData('provider_code') == $code ? 'selected' : '' ?>>
+                                        <?= $info['name'] ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="account_name" class="form-label"><lang>账户名称</lang> <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="weline-ai-account-name" name="account_name" 
+                                value="<?= isset($account) ? htmlspecialchars($account->getData('account_name')) : '' ?>" required>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="api_key" class="form-label">API<lang>密钥</lang> <?= !isset($account) ? '<span class="text-danger">*</span>' : '' ?></label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="weline-ai-api-key" name="api_key" 
+                                    placeholder="<?= isset($account) ? __('留空保持不变') : __('请输入API密钥') ?>" 
+                                    <?= !isset($account) ? 'required' : '' ?>>
+                                <button class="btn btn-outline-secondary weline-ai-toggle-password" type="button" data-target="weline-ai-api-key">
+                                    <i class="mdi mdi-eye"></i>
+                                </button>
                             </div>
-                            <div class="col-md-6">
-                                <label for="account_name" class="form-label">账户名称 <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="account_name" name="account_name" 
-                                    value="<?= isset($account) ? htmlspecialchars($account->getData('account_name')) : '' ?>" required>
+                            <small class="text-muted"><?= __('API密钥将被加密存储') ?></small>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="api_secret" class="form-label">API Secret<lang>（如需要）</lang></label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="weline-ai-api-secret" name="api_secret" 
+                                    placeholder="<?= __('某些供应商可能需要') ?>">
+                                <button class="btn btn-outline-secondary weline-ai-toggle-password" type="button" data-target="weline-ai-api-secret">
+                                    <i class="mdi mdi-eye"></i>
+                                </button>
                             </div>
                         </div>
+                    </div>
 
-                        <div class="row mb-3">
-                            <div class="col-md-12">
-                                <label for="api_key" class="form-label">API密钥 <?= !isset($account) ? '<span class="text-danger">*</span>' : '' ?></label>
-                                <div class="input-group">
-                                    <input type="password" class="form-control" id="api_key" name="api_key" 
-                                        placeholder="<?= isset($account) ? '留空保持不变' : '请输入API密钥' ?>" 
-                                        <?= !isset($account) ? 'required' : '' ?>>
-                                    <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('api_key')">
-                                        <i class="mdi mdi-eye"></i>
-                                    </button>
-                                </div>
-                                <small class="text-muted">API密钥将被加密存储</small>
-                            </div>
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="base_url" class="form-label">API<lang>基础URL</lang></label>
+                            <input type="url" class="form-control" id="weline-ai-base-url" name="base_url" 
+                                value="<?= isset($account) ? htmlspecialchars($account->getData('base_url')) : '' ?>"
+                                placeholder="<?= __('留空使用默认值') ?>">
+                            <small class="text-muted"><?= __('自定义API端点，例如使用代理服务或私有部署') ?></small>
                         </div>
+                    </div>
 
-                        <div class="row mb-3">
-                            <div class="col-md-12">
-                                <label for="api_secret" class="form-label">API Secret（如需要）</label>
-                                <div class="input-group">
-                                    <input type="password" class="form-control" id="api_secret" name="api_secret" 
-                                        placeholder="某些供应商可能需要">
-                                    <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('api_secret')">
-                                        <i class="mdi mdi-eye"></i>
-                                    </button>
-                                </div>
-                            </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="balance" class="form-label"><lang>账户余额</lang></label>
+                            <input type="number" class="form-control" id="balance" name="balance" step="0.01" 
+                                value="<?= isset($account) ? $account->getData('balance') : '0' ?>">
                         </div>
-
-                        <div class="row mb-3">
-                            <div class="col-md-12">
-                                <label for="base_url" class="form-label">API基础URL</label>
-                                <input type="url" class="form-control" id="base_url" name="base_url" 
-                                    value="<?= isset($account) ? htmlspecialchars($account->getData('base_url')) : '' ?>"
-                                    placeholder="留空使用默认值">
-                                <small class="text-muted">自定义API端点，例如使用代理服务或私有部署</small>
-                            </div>
+                        <div class="col-md-4">
+                            <label for="currency" class="form-label"><lang>货币单位</lang></label>
+                            <select class="form-select" id="currency" name="currency">
+                                <?php 
+                                $currencies = ['USD' => __('美元'), 'CNY' => __('人民币'), 'EUR' => __('欧元')];
+                                $currentCurrency = isset($account) ? $account->getData('currency') : 'USD';
+                                foreach ($currencies as $code => $name): 
+                                ?>
+                                    <option value="<?= $code ?>" <?= $currentCurrency == $code ? 'selected' : '' ?>>
+                                        <?= $code ?> - <?= $name ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
                         </div>
-
-                        <div class="row mb-3">
-                            <div class="col-md-4">
-                                <label for="balance" class="form-label">账户余额</label>
-                                <input type="number" class="form-control" id="balance" name="balance" step="0.01" 
-                                    value="<?= isset($account) ? $account->getData('balance') : '0' ?>">
-                            </div>
-                            <div class="col-md-4">
-                                <label for="currency" class="form-label">货币单位</label>
-                                <select class="form-select" id="currency" name="currency">
-                                    <?php 
-                                    $currencies = ['USD' => '美元', 'CNY' => '人民币', 'EUR' => '欧元'];
-                                    $currentCurrency = isset($account) ? $account->getData('currency') : 'USD';
-                                    foreach ($currencies as $code => $name): 
-                                    ?>
-                                        <option value="<?= $code ?>" <?= $currentCurrency == $code ? 'selected' : '' ?>>
-                                            <?= $code ?> - <?= $name ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">账户设置</label>
-                                <div>
-                                    <div class="form-check form-check-inline">
-                                        <input class="form-check-input" type="checkbox" id="is_active" name="is_active" value="1"
-                                            <?= isset($account) && $account->getData('is_active') ? 'checked' : '' ?>
-                                            onchange="onActivateChange()">
-                                        <label class="form-check-label" for="is_active">激活账户</label>
-                                    </div>
-                                    <div class="form-check form-check-inline">
-                                        <input class="form-check-input" type="checkbox" id="is_default" name="is_default" value="1"
-                                            <?= isset($account) && $account->getData('is_default') ? 'checked' : '' ?>>
-                                        <label class="form-check-label" for="is_default">
-                                            设为默认
-                                            <span class="badge bg-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="只有设置为默认的账户才能被模型调用">?</span>
-                                        </label>
-                                    </div>
+                        <div class="col-md-4">
+                            <label class="form-label"><lang>账户设置</lang></label>
+                            <div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="checkbox" id="weline-ai-is-active" name="is_active" value="1"
+                                        <?= isset($account) && $account->getData('is_active') ? 'checked' : '' ?>>
+                                    <label class="form-check-label" for="weline-ai-is-active"><lang>激活账户</lang></label>
                                 </div>
-                            </div>
-                        </div>
-
-                        <?php if (isset($account)): ?>
-                            <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <label class="form-label">总花费</label>
-                                    <div class="form-control-plaintext">
-                                        <strong><?= $account->getData('currency') ?> <?= number_format((float)$account->getData('total_spent'), 2) ?></strong>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">连接状态</label>
-                                    <div class="form-control-plaintext">
-                                        <?php
-                                        $status = $account->getData('connection_status');
-                                        $statusClass = match($status) {
-                                            'success' => 'success',
-                                            'failed' => 'danger',
-                                            default => 'warning'
-                                        };
-                                        $statusText = match($status) {
-                                            'success' => '已连接',
-                                            'failed' => '连接失败',
-                                            default => '待测试'
-                                        };
-                                        ?>
-                                        <span class="badge bg-<?= $statusClass ?>"><?= $statusText ?></span>
-                                        <?php if ($account->getData('connection_test_time')): ?>
-                                            <small class="text-muted ms-2">
-                                                最后测试: <?= date('Y-m-d H:i:s', (int)$account->getData('connection_test_time')) ?>
-                                            </small>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-
-                        <!-- 代理设置 -->
-                        <div class="card mb-3">
-                            <div class="card-header">
-                                <div class="form-check">
-                                    <?php
-                                    $proxyConfig = isset($account) ? $account->getProxyConfig() : [];
-                                    $proxyEnabled = !empty($proxyConfig['enabled']);
-                                    ?>
-                                    <input class="form-check-input" type="checkbox" id="proxy_enabled" name="proxy_enabled" value="1"
-                                        <?= $proxyEnabled ? 'checked' : '' ?>>
-                                    <label class="form-check-label" for="proxy_enabled">
-                                        启用代理
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="checkbox" id="is_default" name="is_default" value="1"
+                                        <?= isset($account) && $account->getData('is_default') ? 'checked' : '' ?>>
+                                    <label class="form-check-label" for="is_default">
+                                        <lang>设为默认</lang>
+                                        <span class="badge bg-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="<?= __('只有设置为默认的账户才能被模型调用') ?>">?</span>
                                     </label>
                                 </div>
                             </div>
-                            <div class="card-body" id="proxySettings" style="<?= $proxyEnabled ? '' : 'display: none;' ?>">
-                                <div class="row">
-                                    <div class="col-md-4">
-                                        <label for="proxy_type" class="form-label">代理类型</label>
-                                        <select class="form-select" id="proxy_type" name="proxy_type">
-                                            <option value="http" <?= ($proxyConfig['type'] ?? '') == 'http' ? 'selected' : '' ?>>HTTP</option>
-                                            <option value="https" <?= ($proxyConfig['type'] ?? '') == 'https' ? 'selected' : '' ?>>HTTPS</option>
-                                            <option value="socks5" <?= ($proxyConfig['type'] ?? '') == 'socks5' ? 'selected' : '' ?>>SOCKS5</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="proxy_host" class="form-label">代理地址</label>
-                                        <input type="text" class="form-control" id="proxy_host" name="proxy_host"
-                                            value="<?= htmlspecialchars($proxyConfig['host'] ?? '') ?>">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="proxy_port" class="form-label">端口</label>
-                                        <input type="number" class="form-control" id="proxy_port" name="proxy_port"
-                                            value="<?= $proxyConfig['port'] ?? '' ?>">
-                                    </div>
-                                </div>
-                                <div class="row mt-2">
-                                    <div class="col-md-6">
-                                        <label for="proxy_username" class="form-label">用户名（可选）</label>
-                                        <input type="text" class="form-control" id="proxy_username" name="proxy_username"
-                                            value="<?= htmlspecialchars($proxyConfig['username'] ?? '') ?>">
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label for="proxy_password" class="form-label">密码（可选）</label>
-                                        <input type="password" class="form-control" id="proxy_password" name="proxy_password"
-                                            placeholder="<?= !empty($proxyConfig['password']) ? '已设置' : '' ?>">
-                                    </div>
-                                </div>
-                            </div>
                         </div>
+                    </div>
 
-                        <div class="d-flex justify-content-between">
-                            <div>
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="mdi mdi-content-save me-1"></i>保存
-                                </button>
-                                <a href="<?= $this->getBackendUrl('*/backend/provider') ?>" class="btn btn-secondary ms-2">
-                                    <i class="mdi mdi-arrow-left me-1"></i>返回列表
-                                </a>
+                    <?php if (isset($account)): ?>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label"><lang>总花费</lang></label>
+                                <div class="form-control-plaintext">
+                                    <strong><?= $account->getData('currency') ?> <?= number_format((float)$account->getData('total_spent'), 2) ?></strong>
+                                </div>
                             </div>
-                            <?php if (isset($account)): ?>
-                                <button type="button" class="btn btn-info" onclick="testConnection()">
-                                    <i class="mdi mdi-wifi me-1"></i>测试连接
-                                </button>
-                            <?php endif; ?>
+                            <div class="col-md-6">
+                                <label class="form-label"><lang>连接状态</lang></label>
+                                <div class="form-control-plaintext">
+                                    <?php
+                                    $connectionStatus = $account->getData('connection_status');
+                                    $statusClass = match($connectionStatus) {
+                                        'success' => 'success',
+                                        'failed' => 'danger',
+                                        default => 'warning'
+                                    };
+                                    $statusText = match($connectionStatus) {
+                                        'success' => __('已连接'),
+                                        'failed' => __('连接失败'),
+                                        default => __('待测试')
+                                    };
+                                    ?>
+                                    <span class="badge bg-<?= $statusClass ?>"><?= $statusText ?></span>
+                                    <?php if ($account->getData('connection_test_time')): ?>
+                                        <small class="text-muted ms-2">
+                                            <?= __('最后测试') ?>: <?= date('Y-m-d H:i:s', (int)$account->getData('connection_test_time')) ?>
+                                        </small>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
                         </div>
-                    </form>
-                </div>
+                    <?php endif; ?>
+
+                    <!-- 代理设置 -->
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <div class="form-check">
+                                <?php
+                                $proxyConfig = isset($account) ? $account->getProxyConfig() : [];
+                                $proxyEnabled = !empty($proxyConfig['enabled']);
+                                ?>
+                                <input class="form-check-input" type="checkbox" id="weline-ai-proxy-enabled" name="proxy_enabled" value="1"
+                                    <?= $proxyEnabled ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="weline-ai-proxy-enabled">
+                                    <lang>启用代理</lang>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="card-body" id="weline-ai-proxy-settings" style="<?= $proxyEnabled ? '' : 'display: none;' ?>">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <label for="proxy_type" class="form-label"><lang>代理类型</lang></label>
+                                    <select class="form-select" id="proxy_type" name="proxy_type">
+                                        <option value="http" <?= ($proxyConfig['type'] ?? '') == 'http' ? 'selected' : '' ?>>HTTP</option>
+                                        <option value="https" <?= ($proxyConfig['type'] ?? '') == 'https' ? 'selected' : '' ?>>HTTPS</option>
+                                        <option value="socks5" <?= ($proxyConfig['type'] ?? '') == 'socks5' ? 'selected' : '' ?>>SOCKS5</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="proxy_host" class="form-label"><lang>代理地址</lang></label>
+                                    <input type="text" class="form-control" id="proxy_host" name="proxy_host"
+                                        value="<?= htmlspecialchars($proxyConfig['host'] ?? '') ?>">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="proxy_port" class="form-label"><lang>端口</lang></label>
+                                    <input type="number" class="form-control" id="proxy_port" name="proxy_port"
+                                        value="<?= $proxyConfig['port'] ?? '' ?>">
+                                </div>
+                            </div>
+                            <div class="row mt-2">
+                                <div class="col-md-6">
+                                    <label for="proxy_username" class="form-label"><lang>用户名（可选）</lang></label>
+                                    <input type="text" class="form-control" id="proxy_username" name="proxy_username"
+                                        value="<?= htmlspecialchars($proxyConfig['username'] ?? '') ?>">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="proxy_password" class="form-label"><lang>密码（可选）</lang></label>
+                                    <input type="password" class="form-control" id="proxy_password" name="proxy_password"
+                                        placeholder="<?= !empty($proxyConfig['password']) ? __('已设置') : '' ?>">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="mdi mdi-content-save me-1"></i><lang>保存</lang>
+                            </button>
+                            <a href="<?= $this->getBackendUrl('*/backend/provider') ?>" class="btn btn-secondary ms-2">
+                                <i class="mdi mdi-arrow-left me-1"></i><lang>返回列表</lang>
+                            </a>
+                        </div>
+                        <?php if (isset($account)): ?>
+                            <button type="button" class="btn btn-info" id="weline-ai-test-connection">
+                                <i class="mdi mdi-wifi me-1"></i><lang>测试连接</lang>
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 </div>
 
-@template(Weline_Admin::common/right-sidebar.phtml)
-@template(Weline_Admin::common/footer.phtml)
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-
 <script>
-// 页面加载完成后初始化
-document.addEventListener('DOMContentLoaded', function() {
-    // 代理设置切换
-    document.getElementById('proxy_enabled').addEventListener('change', function() {
-        document.getElementById('proxySettings').style.display = this.checked ? 'block' : 'none';
-    });
+(function() {
+    'use strict';
     
-    // 供应商选择时自动填充基础URL
-    document.getElementById('provider_code').addEventListener('change', function() {
-        const baseUrl = this.options[this.selectedIndex].getAttribute('data-base-url');
-        if (baseUrl && !document.getElementById('base_url').value) {
-            document.getElementById('base_url').value = baseUrl;
-        }
-    });
-    
-    // 表单提交
-    document.getElementById('accountForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        saveAccount();
-    });
-});
-
-// 切换密码可见性
-function togglePasswordVisibility(fieldId) {
-    const field = document.getElementById(fieldId);
-    const button = event.currentTarget;
-    const icon = button.querySelector('i');
-    
-    if (field.type === 'password') {
-        field.type = 'text';
-        icon.classList.remove('mdi-eye');
-        icon.classList.add('mdi-eye-off');
-    } else {
-        field.type = 'password';
-        icon.classList.remove('mdi-eye-off');
-        icon.classList.add('mdi-eye');
-    }
-}
-
-// 激活状态变化时的处理
-function onActivateChange() {
-    const activateCheckbox = document.getElementById('is_active');
-    
-    // 如果是要激活账户
-    if (activateCheckbox.checked) {
-        // 检查必要字段是否已填写
-        const providerCode = document.getElementById('provider_code').value;
-        const apiKey = document.getElementById('api_key').value;
+    var WelineAiProvider = {
+        form: null,
         
-        if (!providerCode) {
-            activateCheckbox.checked = false;
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'warning',
-                    title: '<?= __('提示') ?>',
-                    text: '<?= __('请先选择供应商') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('请先选择供应商');
-            }
-            return;
-        }
-        
-        if (!apiKey) {
-            activateCheckbox.checked = false;
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'warning',
-                    title: '<?= __('提示') ?>',
-                    text: '<?= __('请先填写API密钥') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('请先填写API密钥');
-            }
-            return;
-        }
-        
-        // 先保存账户，然后进行连接测试
-        saveAccountForActivation();
-    }
-}
-
-// 为激活而保存账户
-function saveAccountForActivation() {
-    const activateCheckbox = document.getElementById('is_active');
-    const form = document.getElementById('accountForm');
-    
-    // 显示保存中状态
-    const originalLabel = document.querySelector('label[for="is_active"]').textContent;
-    document.querySelector('label[for="is_active"]').innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i>保存中...';
-    activateCheckbox.disabled = true;
-    
-    // 验证表单
-    if (!form.checkValidity()) {
-        form.reportValidity();
-        document.querySelector('label[for="is_active"]').textContent = originalLabel;
-        activateCheckbox.disabled = false;
-        activateCheckbox.checked = false;
-        return;
-    }
-    
-    const formData = new FormData(form);
-    const data = Object.fromEntries(formData);
-    
-    // 确保激活状态为1
-    data.is_active = '1';
-    
-    fetch(form.action, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // 保存成功，进行连接测试
-            testConnectionForActivation(data.account_id || data.id);
-        } else {
-            // 保存失败
-            document.querySelector('label[for="is_active"]').textContent = originalLabel;
-            activateCheckbox.disabled = false;
-            activateCheckbox.checked = false;
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('保存失败') ?>',
-                    text: data.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('保存失败: ' + data.message);
-            }
-        }
-    })
-    .catch(error => {
-        document.querySelector('label[for="is_active"]').textContent = originalLabel;
-        activateCheckbox.disabled = false;
-        activateCheckbox.checked = false;
-        console.error('Error:', error);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('保存失败') ?>',
-                text: '<?= __('请重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
+        init: function() {
+            var self = this;
+            this.form = document.getElementById('weline-ai-provider-form');
+            
+            // 代理设置切换
+            document.getElementById('weline-ai-proxy-enabled').addEventListener('change', function() {
+                document.getElementById('weline-ai-proxy-settings').style.display = this.checked ? 'block' : 'none';
             });
-        } else {
-            console.error('保存失败');
-        }
-    });
-}
-
-// 为激活而进行的连接测试
-function testConnectionForActivation(accountId) {
-    const activateCheckbox = document.getElementById('is_active');
-    
-    // 更新状态为测试中
-    document.querySelector('label[for="is_active"]').innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i>测试中...';
-    
-    fetch('<?= $this->getBackendUrl('*/backend/provider/testConnection') ?>', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ id: accountId })
-    })
-    .then(response => response.json())
-    .then(data => {
-        // 恢复状态
-        const originalLabel = '激活账户';
-        document.querySelector('label[for="is_active"]').textContent = originalLabel;
-        activateCheckbox.disabled = false;
-        
-        if (data.success) {
-            // 测试成功，保持激活状态
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('连接测试成功') ?>',
-                    html: `<?= __('使用的测试模型') ?>: ${data.model_code || '<?= __('未知') ?>'}<br><br><?= __('账户已激活') ?>`,
-                    confirmButtonText: '<?= __('确定') ?>'
+            
+            // 供应商选择时自动填充
+            var providerSelect = document.getElementById('weline-ai-provider-code');
+            if (providerSelect) {
+                providerSelect.addEventListener('change', function() {
+                    self.onProviderChange();
                 });
-            } else {
-                console.log(`连接测试成功！使用的测试模型: ${data.model_code || '未知'}\n账户已激活。`);
             }
-        } else {
-            // 测试失败，取消激活状态
-            activateCheckbox.checked = false;
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('连接测试失败') ?>',
-                    html: `<?= __('无法激活账户') ?>！<br><br><?= __('错误信息') ?>: ${data.message}<br><br><?= __('请检查API密钥和网络连接后重试') ?>`,
-                    confirmButtonText: '<?= __('确定') ?>'
+            
+            // 切换密码可见性
+            document.querySelectorAll('.weline-ai-toggle-password').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var targetId = this.getAttribute('data-target');
+                    self.togglePasswordVisibility(targetId, this);
                 });
-            } else {
-                console.error(`连接测试失败，无法激活账户！错误信息: ${data.message}`);
-            }
-        }
-    })
-    .catch(error => {
-        // 恢复状态
-        const originalLabel = '激活账户';
-        document.querySelector('label[for="is_active"]').textContent = originalLabel;
-        activateCheckbox.disabled = false;
-        activateCheckbox.checked = false;
-        
-        console.error('Error:', error);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('连接测试失败') ?>',
-                html: '<?= __('无法激活账户') ?>！<br><br><?= __('网络错误，请检查网络连接后重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
             });
-        } else {
-            console.error('连接测试失败，无法激活账户！网络错误，请检查网络连接后重试。');
-        }
-    });
-}
-
-// 供应商选择变化时的处理
-function onProviderChange() {
-    const providerSelect = document.getElementById('provider_code');
-    const accountNameInput = document.getElementById('account_name');
-    const baseUrlInput = document.getElementById('base_url');
-    
-    const selectedOption = providerSelect.options[providerSelect.selectedIndex];
-    
-    if (selectedOption.value) {
-        // 自动填充供应商名称到账户名称（仅在账户名称为空时）
-        const providerName = selectedOption.getAttribute('data-name');
-        if (providerName && !accountNameInput.value.trim()) {
-            accountNameInput.value = providerName;
-        }
-        
-        // 自动填充基础URL（仅在基础URL为空时）
-        const baseUrl = selectedOption.getAttribute('data-base-url');
-        if (baseUrl && !baseUrlInput.value.trim()) {
-            baseUrlInput.value = baseUrl;
-        }
-    }
-}
-
-// 保存账户
-function saveAccount() {
-    const form = document.getElementById('accountForm');
-    if (!form.checkValidity()) {
-        form.reportValidity();
-        return;
-    }
-    
-    const formData = new FormData(form);
-    const data = Object.fromEntries(formData);
-    
-    // 显示加载状态
-    const submitBtn = form.querySelector('button[type="submit"]');
-    const originalText = submitBtn.innerHTML;
-    submitBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i>保存中...';
-    submitBtn.disabled = true;
-    
-    fetch(form.action, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data)
-    })
-    .then(response => response.json())
-    .then(data => {
-        submitBtn.innerHTML = originalText;
-        submitBtn.disabled = false;
-        
-        if (data.success) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('成功') ?>',
-                    text: data.message,
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => {
-                    window.location.href = '<?= $this->getBackendUrl('*/backend/provider') ?>';
+            
+            // 激活状态变化
+            var activeCheckbox = document.getElementById('weline-ai-is-active');
+            if (activeCheckbox) {
+                activeCheckbox.addEventListener('change', function() {
+                    self.onActivateChange();
                 });
-            } else {
-                console.log(data.message);
-                window.location.href = '<?= $this->getBackendUrl('*/backend/provider') ?>';
             }
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('保存失败') ?>',
-                    text: data.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('保存失败: ' + data.message);
-            }
-        }
-    })
-    .catch(error => {
-        submitBtn.innerHTML = originalText;
-        submitBtn.disabled = false;
-        console.error('Error:', error);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('保存失败') ?>',
-                text: '<?= __('请重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
+            
+            // 表单提交
+            this.form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                self.saveAccount();
             });
-        } else {
-            console.error('保存失败');
-        }
-    });
-}
-
-<?php if (isset($account)): ?>
-// 测试连接
-function testConnection() {
-    const btn = event.currentTarget;
-    const originalHtml = btn.innerHTML;
-    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i>测试中...';
-    btn.disabled = true;
-    
-    fetch('<?= $this->getBackendUrl('*/backend/provider/testConnection') ?>', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
+            
+            // 测试连接按钮
+            var testBtn = document.getElementById('weline-ai-test-connection');
+            if (testBtn) {
+                testBtn.addEventListener('click', function() {
+                    self.testConnection();
+                });
+            }
         },
-        body: JSON.stringify({ id: <?= $account->getId() ?> })
-    })
-    .then(response => response.json())
-    .then(data => {
-        btn.innerHTML = originalHtml;
-        btn.disabled = false;
         
-        if (data.success) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('测试成功') ?>',
-                    text: data.message,
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => {
-                    window.location.reload();
-                });
+        togglePasswordVisibility: function(fieldId, button) {
+            var field = document.getElementById(fieldId);
+            var icon = button.querySelector('i');
+            
+            if (field.type === 'password') {
+                field.type = 'text';
+                icon.classList.remove('mdi-eye');
+                icon.classList.add('mdi-eye-off');
             } else {
-                console.log(data.message);
-                window.location.reload();
+                field.type = 'password';
+                icon.classList.remove('mdi-eye-off');
+                icon.classList.add('mdi-eye');
             }
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('测试失败') ?>',
-                    text: data.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('测试失败: ' + data.message);
+        },
+        
+        onProviderChange: function() {
+            var providerSelect = document.getElementById('weline-ai-provider-code');
+            var accountNameInput = document.getElementById('weline-ai-account-name');
+            var baseUrlInput = document.getElementById('weline-ai-base-url');
+            
+            var selectedOption = providerSelect.options[providerSelect.selectedIndex];
+            
+            if (selectedOption.value) {
+                var providerName = selectedOption.getAttribute('data-name');
+                if (providerName && !accountNameInput.value.trim()) {
+                    accountNameInput.value = providerName;
+                }
+                
+                var baseUrl = selectedOption.getAttribute('data-base-url');
+                if (baseUrl && !baseUrlInput.value.trim()) {
+                    baseUrlInput.value = baseUrl;
+                }
             }
-        }
-    })
-    .catch(error => {
-        btn.innerHTML = originalHtml;
-        btn.disabled = false;
-        console.error('Error:', error);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('测试失败') ?>',
-                text: '<?= __('请重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
+        },
+        
+        onActivateChange: function() {
+            var activateCheckbox = document.getElementById('weline-ai-is-active');
+            
+            if (activateCheckbox.checked) {
+                var providerCode = document.getElementById('weline-ai-provider-code').value;
+                var apiKey = document.getElementById('weline-ai-api-key').value;
+                
+                if (!providerCode) {
+                    activateCheckbox.checked = false;
+                    if (typeof AdminToast !== 'undefined') {
+                        AdminToast.warning('<?= __('请先选择供应商') ?>');
+                    }
+                    return;
+                }
+                
+                if (!apiKey) {
+                    activateCheckbox.checked = false;
+                    if (typeof AdminToast !== 'undefined') {
+                        AdminToast.warning('<?= __('请先填写API密钥') ?>');
+                    }
+                    return;
+                }
+            }
+        },
+        
+        saveAccount: function() {
+            var self = this;
+            if (!this.form.checkValidity()) {
+                this.form.reportValidity();
+                return;
+            }
+            
+            var formData = new FormData(this.form);
+            var data = {};
+            formData.forEach(function(value, key) { data[key] = value; });
+            
+            var submitBtn = this.form.querySelector('button[type="submit"]');
+            var originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i><?= __('保存中...') ?>';
+            submitBtn.disabled = true;
+            
+            fetch(this.form.action, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+                
+                if (data.success) {
+                    if (typeof AdminToast !== 'undefined') {
+                        AdminToast.success(data.message);
+                    }
+                    setTimeout(function() {
+                        window.location.href = '<?= $this->getBackendUrl('*/backend/provider') ?>';
+                    }, 1500);
+                } else {
+                    if (typeof AdminToast !== 'undefined') {
+                        AdminToast.error(data.message || '<?= __('保存失败') ?>');
+                    }
+                }
+            })
+            .catch(function(error) {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+                console.error('Error:', error);
+                if (typeof AdminToast !== 'undefined') {
+                    AdminToast.error('<?= __('保存失败，请重试') ?>');
+                }
             });
-        } else {
-            console.error('测试失败');
+        },
+        
+        testConnection: function() {
+            var btn = document.getElementById('weline-ai-test-connection');
+            var originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i><?= __('测试中...') ?>';
+            btn.disabled = true;
+            
+            fetch('<?= $this->getBackendUrl('*/backend/provider/testConnection') ?>', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ id: <?= isset($account) ? $account->getId() : 'null' ?> })
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                
+                if (data.success) {
+                    if (typeof AdminToast !== 'undefined') {
+                        AdminToast.success(data.message || '<?= __('连接测试成功') ?>');
+                    }
+                    setTimeout(function() { window.location.reload(); }, 1500);
+                } else {
+                    if (typeof AdminToast !== 'undefined') {
+                        AdminToast.error(data.message || '<?= __('连接测试失败') ?>');
+                    }
+                }
+            })
+            .catch(function(error) {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                console.error('Error:', error);
+                if (typeof AdminToast !== 'undefined') {
+                    AdminToast.error('<?= __('测试失败，请重试') ?>');
+                }
+            });
         }
+    };
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        WelineAiProvider.init();
     });
-}
-<?php endif; ?>
+})();
 </script>

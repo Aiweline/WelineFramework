@@ -67,6 +67,26 @@ class AzureDnsRegistrar implements DomainRegistrarInterface
                 'type' => 'text',
                 'required' => true,
                 'placeholder' => 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+                'mapping' => 'extra_config.tenant_id',
+            ],
+        ];
+    }
+
+    public function getConfigHelp(): array
+    {
+        return [
+            'help_url' => 'https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade',
+            'help_title' => __('Azure DNS 配置获取指南'),
+            'help_steps' => [
+                __('1. 登录 Azure 门户：https://portal.azure.com'),
+                __('2. 进入「Azure Active Directory」→「应用注册」→「新注册」'),
+                __('3. 创建应用后，在「概述」页面获取：'),
+                __('   - 应用程序(客户端) ID → 填入「客户端 ID」'),
+                __('   - 目录(租户) ID → 填入「租户 ID」'),
+                __('4. 在「证书和密码」→「新客户端密码」创建密钥'),
+                __('   - 复制密钥值 → 填入「客户端密钥」（仅显示一次）'),
+                __('5. 进入「订阅」，复制订阅 ID → 填入「订阅 ID」'),
+                __('6. 在订阅的「访问控制(IAM)」中，为应用分配「DNS Zone 参与者」角色'),
             ],
         ];
     }
