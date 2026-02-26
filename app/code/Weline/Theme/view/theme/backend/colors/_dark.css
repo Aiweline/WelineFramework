@@ -30,14 +30,14 @@
     /* ========================================
        背景色 - 需要变暗
        ======================================== */
-    --backend-color-bg-primary: #1a1a1a;
-    --backend-color-bg-secondary: #2d2d2d;
-    --backend-color-bg-tertiary: #3a3a3a;
-    --backend-color-bg-dark: #0f1419;
-    --backend-color-bg-dark-secondary: #1e293b;
-    --backend-color-bg-dark-tertiary: #334155;
-    --backend-color-bg-body: #1a1a1a;
-    --backend-color-bg-surface: #2d2d2d;
+    --backend-color-bg-primary: #1D222E;
+    --backend-color-bg-secondary: #252B3B;
+    --backend-color-bg-tertiary: #2E3548;
+    --backend-color-bg-dark: #151923;
+    --backend-color-bg-dark-secondary: #1D222E;
+    --backend-color-bg-dark-tertiary: #252B3B;
+    --backend-color-bg-body: #1D222E;
+    --backend-color-bg-surface: #252B3B;
     --backend-color-bg-overlay: rgba(0, 0, 0, 0.7);
 
     /* ========================================
@@ -76,31 +76,31 @@
        组件特定颜色
        ======================================== */
     /* 侧边栏 */
-    --backend-color-sidebar-bg: #212529;
+    --backend-color-sidebar-bg: #1D222E;
     --backend-color-sidebar-text: var(--backend-color-text-primary);
-    --backend-color-sidebar-hover: #343a40;
+    --backend-color-sidebar-hover: #2E3548;
     --backend-color-sidebar-active: rgba(85, 110, 230, 0.15);
     --backend-color-sidebar-border: rgba(255, 255, 255, 0.1);
     
     /* 头部 */
-    --backend-color-header-bg: #212529;
+    --backend-color-header-bg: #1D222E;
     --backend-color-header-text: var(--backend-color-text-primary);
     --backend-color-header-border: rgba(255, 255, 255, 0.1);
     
     /* 表格 */
-    --backend-color-table-bg: #2d2d2d;
-    --backend-color-table-bg-striped: #343a40;
-    --backend-color-table-bg-hover: #3a3a3a;
+    --backend-color-table-bg: #252B3B;
+    --backend-color-table-bg-striped: #2E3548;
+    --backend-color-table-bg-hover: #363D50;
     --backend-color-table-border: rgba(255, 255, 255, 0.1);
     
     /* 卡片 */
-    --backend-color-card-bg: #2d2d2d;
+    --backend-color-card-bg: #252B3B;
     --backend-color-card-border: rgba(255, 255, 255, 0.1);
-    --backend-color-card-header-bg: #343a40;
+    --backend-color-card-header-bg: #2E3548;
     
     /* 输入框 */
-    --backend-color-input-bg: #2d2d2d;
+    --backend-color-input-bg: #252B3B;
     --backend-color-input-border: rgba(255, 255, 255, 0.1);
     --backend-color-input-focus-border: var(--backend-color-primary);
-    --backend-color-input-disabled-bg: #343a40;
+    --backend-color-input-disabled-bg: #2E3548;
 }

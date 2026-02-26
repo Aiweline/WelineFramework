@@ -29,32 +29,12 @@
 /** @var string $getFileParamsUrl */
 /** @var string $saveFileParamsUrl */
 
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
 $area = $area ?: 'frontend';
 $scope = $scope ?: 'default';
 $themeId = $theme ? (is_object($theme) && method_exists($theme, 'getId') ? $theme->getId() : ($theme['id'] ?? null)) : null;
 ?>
-<!DOCTYPE html>
-<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= __('主题配置编辑') ?> - <?= __('Weline Admin 管理面板') ?></title>
-    <link rel="stylesheet" href="<?= $this->fetchTagSource('statics', 'Weline_Theme::templates/backend/config/edit-new.css') ?>">
-</head>
-
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-@template(Weline_Admin::common/page/loading.phtml)
-
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-
-                <!-- 页面标题 -->
+<!-- 页面标题 -->
                 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -307,52 +287,3 @@ $themeId = $theme ? (is_object($theme) && method_exists($theme, 'getId') ? $them
                     <?= __('请先选择一个主题以开始配置。') ?>
                 </div>
                 <?php endif; ?>
-
-            </div>
-        </div>
-
-        @template(Weline_Admin::common/footer.phtml)
-    </div>
-</div>
-
-@template(Weline_Admin::common/right-sidebar.phtml)
-
-<!-- 参数配置模态框 -->
-@template(Weline_Theme::templates/backend/config/params-modal.phtml)
-
-<script>
-// 配置数据
-window.themeEditConfig = {
-    themeId: <?= json_encode($themeId) ?>,
-    area: <?= json_encode($area) ?>,
-    scope: <?= json_encode($scope) ?>,
-    saveSelectionUrl: <?= json_encode($saveSelectionUrl) ?>,
-    getFileParamsUrl: <?= json_encode($getFileParamsUrl) ?>,
-    saveFileParamsUrl: <?= json_encode($saveFileParamsUrl) ?>,
-    frontendLayoutOptions: <?= json_encode($frontendLayoutOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
-    backendLayoutOptions: <?= json_encode($backendLayoutOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
-    frontendPartialsOptions: <?= json_encode($frontendPartialsOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
-    backendPartialsOptions: <?= json_encode($backendPartialsOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
-    frontendColorOptions: <?= json_encode($frontendColorOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
-    backendColorOptions: <?= json_encode($backendColorOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
-    frontendVariableOptions: <?= json_encode($frontendVariableOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
-    backendVariableOptions: <?= json_encode($backendVariableOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
-    frontendComponentOptions: <?= json_encode($frontendComponentOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
-    backendComponentOptions: <?= json_encode($backendComponentOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
-    frontendLayoutConfig: <?= json_encode($frontendLayoutConfig ?? [], JSON_UNESCAPED_UNICODE) ?>,
-    backendLayoutConfig: <?= json_encode($backendLayoutConfig ?? [], JSON_UNESCAPED_UNICODE) ?>,
-    frontendPartialsConfig: <?= json_encode($frontendPartialsConfig ?? [], JSON_UNESCAPED_UNICODE) ?>,
-    backendPartialsConfig: <?= json_encode($backendPartialsConfig ?? [], JSON_UNESCAPED_UNICODE) ?>,
-    frontendColorConfig: <?= json_encode($frontendColorConfig ?? null) ?>,
-    backendColorConfig: <?= json_encode($backendColorConfig ?? null) ?>,
-    frontendVariablesConfig: <?= json_encode($frontendVariablesConfig ?? [], JSON_UNESCAPED_UNICODE) ?>,
-    backendVariablesConfig: <?= json_encode($backendVariablesConfig ?? [], JSON_UNESCAPED_UNICODE) ?>,
-    previewUrlFrontend: <?= json_encode($previewUrlFrontend ?? '') ?>,
-    previewUrlBackend: <?= json_encode($previewUrlBackend ?? '') ?>
-};
-</script>
-<script src="<?= $this->fetchTagSource('statics', 'Weline_Theme::templates/backend/config/edit-new.js') ?>"></script>
-
-</body>
-</html>
-

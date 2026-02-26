@@ -1,0 +1,37 @@
+<!--
+布局：后端 - 登录布局
+
+后端登录页面布局，无侧边栏、无header/footer，带背景图
+字段
+@meta.name {default="后端登录布局",name="后端登录布局",description="后端登录布局，用于描述布局的名称"}
+@meta.description {default="后端登录页面布局，居中显示登录表单",name="后端登录页面布局，居中显示登录表单",description="后端登录页面布局，居中显示登录表单，用于描述布局的用途"}
+@param.title {default="Weline 登录面板",name="页面标题",description="页面标题，用于设置页面标题"}
+@param.content {default="",name="内容（登录表单HTML）",description="内容（登录表单HTML），用于设置页面内容"}
+@param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+
+参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+-->
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<head>
+    <w:hook>Weline_Theme::backend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="backend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::backend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::backend::layouts::login::head-after</w:hook>
+</head>
+<body class="bg-pattern <?= htmlspecialchars($meta['class'] ?? '') ?>">
+    <w:hook>Weline_Theme::backend::layouts::login::body-start</w:hook>
+    
+    <if condition="contentTemplate">
+        <?php echo $this->fetch($this->getData("contentTemplate")); ?>
+        <else/>
+        {{meta.content}}
+    </if>
+    
+    <w:hook>Weline_Theme::backend::layouts::login::body-end</w:hook>
+    
+    <w:block class="Weline\Theme\Block\Partials" area="backend" type="foot" default-option="default"/>
+</body>
+</html>

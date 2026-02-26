@@ -169,6 +169,53 @@ $this->setData('envConfig', $envConfig);
         if (window.__WelineThemeConfig.modulesConfigUrl) {
             window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
         }
+        
+        // 预定义 Weline 对象骨架，确保在 theme.js 加载前即可使用
+        // theme.js 加载后会合并/覆盖这些方法
+        if (!window.Weline) {
+            var pendingCalls = [];
+            window.Weline = {
+                __pending: true,
+                i18n: {
+                    switchLang: function(lang) {
+                        // 延迟执行：等待 theme.js 加载完成
+                        if (window.Weline && !window.Weline.__pending) {
+                            window.Weline.i18n.switchLang(lang);
+                        } else {
+                            pendingCalls.push({ type: 'switchLang', args: [lang] });
+                            // 轮询等待 theme.js 加载
+                            var checkInterval = setInterval(function() {
+                                if (window.Weline && !window.Weline.__pending) {
+                                    clearInterval(checkInterval);
+                                    pendingCalls.forEach(function(call) {
+                                        if (call.type === 'switchLang') {
+                                            window.Weline.i18n.switchLang.apply(null, call.args);
+                                        }
+                                    });
+                                }
+                            }, 50);
+                        }
+                    }
+                },
+                Locale: {
+                    switchLang: function(lang) {
+                        window.Weline.i18n.switchLang(lang);
+                    },
+                    switchCurrency: function(currency) {
+                        if (window.Weline && !window.Weline.__pending) {
+                            window.Weline.Locale.switchCurrency(currency);
+                        } else {
+                            var checkInterval = setInterval(function() {
+                                if (window.Weline && !window.Weline.__pending) {
+                                    clearInterval(checkInterval);
+                                    window.Weline.Locale.switchCurrency(currency);
+                                }
+                            }, 50);
+                        }
+                    }
+                }
+            };
+        }
     })();
 </script>
 <!-- 注意：内联JS已移除，配置初始化由theme.js处理 -->

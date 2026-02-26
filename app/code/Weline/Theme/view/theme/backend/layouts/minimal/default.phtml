@@ -1,0 +1,51 @@
+<!--
+布局：后端 - 极简布局
+
+后端极简布局，无header和footer，适合弹窗、打印、iframe等场景
+字段
+@meta.name {default="后端极简布局",name="后端极简布局",description="后端极简布局，用于描述布局的名称"}
+@meta.description {default="后端极简布局，无header和footer",name="后端极简布局，无header和footer",description="后端极简布局，无header和footer，用于描述布局的用途"}
+@param.title {default="",name="页面标题",description="页面标题，用于设置页面标题"}
+@param.content {default="",name="内容（HTML字符串）",description="内容（HTML字符串），用于设置页面内容"}
+@param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+
+参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+-->
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<head>
+    <w:hook>Weline_Theme::backend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="backend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::backend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::backend::layouts::minimal::head-after</w:hook>
+</head>
+<body class="<?= htmlspecialchars($meta['class'] ?? '') ?>">
+    <w:hook>Weline_Theme::backend::layouts::minimal::body-start</w:hook>
+    
+    <main class="backend-main-content backend-main-content--minimal" id="main-content">
+        <if condition="contentTemplate">
+            <?php echo $this->fetch($this->getData("contentTemplate")); ?>
+            <else/>
+            {{meta.content}}
+        </if>
+    </main>
+    
+    <w:hook>Weline_Theme::backend::layouts::minimal::body-end</w:hook>
+</body>
+</html>
+
+<style>
+/* 极简布局样式 */
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--backend-color-bg-primary, #fff);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.backend-main-content--minimal {
+    padding: var(--backend-spacing-md, 16px);
+}
+</style>

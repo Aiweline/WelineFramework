@@ -1,0 +1,150 @@
+<?php
+/**
+ * 布局：后端 - 默认布局
+ *
+ * 后端默认布局，包含完整的后台管理界面结构：
+ * - Loading 加载动画
+ * - Topbar 顶部工具栏（Logo、搜索、语言切换、用户菜单等）
+ * - Topnav 顶部导航（水平布局时显示）
+ * - Left Sidebar 左侧菜单栏
+ * - Main Content 主内容区域
+ * - Footer 底部版权信息
+ * - Right Sidebar 右侧设置面板
+ * - Scripts 公共脚本
+ *
+ * 字段
+ * @meta.name {default="后端默认布局",name="后端默认布局",description="后端默认布局，用于描述布局的名称"}
+ * @meta.description {default="后端完整布局，包含topbar、sidebar、main、footer",name="后端完整布局",description="后端完整布局，包含topbar、sidebar、main、footer，用于描述布局的用途"}
+ * @param.title {default="",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param.content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+ * @param.showHeader {default=true,name="是否显示Topbar",description="是否显示Topbar，用于控制顶部工具栏的显示"}
+ * @param.showSidebar {default=true,name="是否显示Sidebar",description="是否显示Sidebar，用于控制左侧菜单栏的显示"}
+ * @param.showFooter {default=true,name="是否显示Footer",description="是否显示Footer，用于控制底部的显示"}
+ * @param.showRightSidebar {default=true,name="是否显示右侧设置栏",description="是否显示右侧设置栏，用于控制设置面板的显示"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ *
+ * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+ * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+ * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+ */
+/** @var \Weline\Framework\View\Template $this */
+
+// 获取主题配置
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+$meta = $this->getData('meta') ?? [];
+
+// 默认值处理
+$showHeader = $meta['showHeader'] ?? true;
+$showSidebar = $meta['showSidebar'] ?? true;
+$showFooter = $meta['showFooter'] ?? true;
+$showRightSidebar = $meta['showRightSidebar'] ?? true;
+$extraClass = $meta['class'] ?? '';
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<head>
+    <w:hook>Weline_Theme::backend::layouts::base::head-before</w:hook>
+    <!-- Admin 模块基础 Head（Meta、CSS、jQuery等） -->
+    <w:template>Weline_Admin::common/head.phtml</w:template>
+    <!-- Theme Head（主题CSS、JS初始化） -->
+    <w:block class="Weline\Theme\Block\Partials" area="backend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::backend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::backend::layouts::default::head-after</w:hook>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+    <w:hook>Weline_Theme::backend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::backend::layouts::default::body-start</w:hook>
+    
+    <!-- 加载中组件 -->
+    <w:block class="Weline\Theme\Block\Partials" area="backend" type="loading" default-option="default"/>
+    
+    <!-- 开始 页面布局 -->
+    <div id="layout-wrapper">
+        
+        <!-- Topbar 顶部工具栏 -->
+        <?php if ($showHeader): ?>
+        <w:hook>Weline_Theme::backend::layouts::base::topbar-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="backend" type="topbar" default-option="default"/>
+        <w:hook>Weline_Theme::backend::layouts::base::topbar-after</w:hook>
+        <?php endif; ?>
+        
+        <!-- Topnav 顶部导航（水平布局时显示） -->
+        <w:hook>Weline_Theme::backend::layouts::base::topnav-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="backend" type="topnav" default-option="default"/>
+        <w:hook>Weline_Theme::backend::layouts::base::topnav-after</w:hook>
+        
+        <!-- Left Sidebar 左侧菜单栏 -->
+        <?php if ($showSidebar): ?>
+        <w:hook>Weline_Theme::backend::layouts::base::sidebar-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="backend" type="sidebar" default-option="left"/>
+        <w:hook>Weline_Theme::backend::layouts::base::sidebar-after</w:hook>
+        <?php endif; ?>
+        
+        <!-- Main Content 主内容区域 -->
+        <div class="main-content">
+            <div class="page-content">
+                <div class="container-fluid">
+                    <!-- 消息提示 -->
+                    <div class="row">
+                        <template>Weline_Component::message.phtml</template>
+                    </div>
+                    
+                    <w:hook>Weline_Theme::backend::layouts::base::content-before</w:hook>
+                    <w:hook>Weline_Theme::backend::layouts::default::content-before</w:hook>
+                    
+                    <!-- 页面主内容 -->
+                    <main class="backend-main-content <?= htmlspecialchars($extraClass) ?>" id="main-content" data-layout="main_content">
+                        <if condition="contentTemplate">
+                            <?php echo $this->fetch($this->getData('contentTemplate')); ?>
+                            <else/>
+                            {{meta.content}}
+                        </if>
+                    </main>
+                    
+                    <w:hook>Weline_Theme::backend::layouts::default::content-after</w:hook>
+                    <w:hook>Weline_Theme::backend::layouts::base::content-after</w:hook>
+                </div>
+                <!-- container-fluid end -->
+            </div>
+            <!-- page-content end -->
+            
+            <!-- Footer 底部 -->
+            <?php if ($showFooter): ?>
+            <footer class="footer">
+                <div class="container-fluid">
+                    <div class="row">
+                        <div class="col-sm-6">
+                            <script>document.write(new Date().getFullYear())</script> © Weline.
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="text-sm-end d-none d-sm-block">
+                                Crafted with <i class="mdi mdi-heart text-danger"></i> By <a href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </footer>
+            <?php endif; ?>
+            
+        </div>
+        <!-- main-content end -->
+        
+    </div>
+    <!-- layout-wrapper end -->
+    
+    <!-- Right Sidebar 右侧设置栏 -->
+    <?php if ($showRightSidebar): ?>
+    <w:hook>Weline_Theme::backend::layouts::base::right-sidebar-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="backend" type="right-sidebar" default-option="default"/>
+    <w:hook>Weline_Theme::backend::layouts::base::right-sidebar-after</w:hook>
+    <?php endif; ?>
+    
+    <!-- Common Scripts 公共脚本 -->
+    <w:hook>Weline_Theme::backend::layouts::base::scripts-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="backend" type="scripts" default-option="default"/>
+    <w:hook>Weline_Theme::backend::layouts::base::scripts-after</w:hook>
+    
+    <w:hook>Weline_Theme::backend::layouts::default::body-end</w:hook>
+    <w:hook>Weline_Theme::backend::layouts::base::body-end</w:hook>
+</body>
+</html>
