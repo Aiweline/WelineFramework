@@ -1,0 +1,115 @@
+{
+    "version": "3.1",
+    "name": "PHP Agent Orchestrator",
+    "description": "分布式任务总线 - 自监督智能体系统（带规则分析和代码备份）",
+    
+    "paths": {
+        "plans": "dev/ai/plans",
+        "agents": "dev/ai/agents",
+        "tasks": "dev/ai/agents/tasks.json",
+        "skills": "dev/ai/skills",
+        "rules": "dev/ai/rules",
+        "backup": "dev/ai/code_backup"
+    },
+    
+    "master_brain": {
+        "default_model": "deepseek",
+        "fallback_model": "claude",
+        "max_retries": 3,
+        "task_decomposition": true
+    },
+    
+    "driver": {
+        "max_parallel_agents": 3,
+        "auto_trigger": true,
+        "cursor_command": "cursor",
+        "fallback_command": "code"
+    },
+    
+    "backup": {
+        "enabled": true,
+        "keep_versions": 5,
+        "max_age_days": 30,
+        "auto_cleanup": true,
+        "exclude_patterns": ["vendor/*", "generated/*", "var/*", "node_modules/*"]
+    },
+    
+    "compliance": {
+        "enabled": true,
+        "auto_fix": true,
+        "generate_tasks": true,
+        "severity_threshold": "warning",
+        "watch_extensions": ["php", "phtml", "css", "js"],
+        "rules": {
+            "css_hardcoded_color": {"enabled": true, "severity": "error"},
+            "css_generic_class": {"enabled": true, "severity": "warning"},
+            "js_global_pollution": {"enabled": true, "severity": "error"},
+            "js_native_dialog": {"enabled": true, "severity": "error"},
+            "phtml_hardcoded_text": {"enabled": true, "severity": "warning"},
+            "phtml_global_function": {"enabled": true, "severity": "error"},
+            "php_error_log": {"enabled": true, "severity": "error"},
+            "php_missing_fetch": {"enabled": true, "severity": "error"}
+        }
+    },
+    
+    "watchdog": {
+        "check_interval": 2,
+        "syntax_check": true,
+        "run_unit_tests": true,
+        "run_http_tests": false,
+        "auto_backup": true,
+        "compliance_check": true,
+        "test_command": "php bin/w phpunit:run",
+        "http_test_command": "php bin/w http:req"
+    },
+    
+    "testing": {
+        "auto_test_on_complete": true,
+        "test_patterns": {
+            "unit": "Test/{Module}Test.php",
+            "http": "Test/Http/{Module}HttpTest.php"
+        },
+        "required_coverage": 0
+    },
+    
+    "agent_types": {
+        "Agent_DB": {
+            "description": "数据库、模型",
+            "file_patterns": ["Model/*.php", "Setup/*.php"],
+            "test_required": true
+        },
+        "Agent_Logic": {
+            "description": "业务逻辑、服务",
+            "file_patterns": ["Service/*.php", "Helper/*.php"],
+            "test_required": true
+        },
+        "Agent_API": {
+            "description": "API、控制器",
+            "file_patterns": ["Controller/*.php", "Api/*.php"],
+            "test_required": true
+        },
+        "Agent_UI": {
+            "description": "前端、视图",
+            "file_patterns": ["view/**/*.phtml", "view/**/*.css", "view/**/*.js"],
+            "test_required": false
+        },
+        "Agent_Test": {
+            "description": "测试",
+            "file_patterns": ["Test/*.php"],
+            "test_required": false
+        },
+        "Agent_General": {
+            "description": "通用",
+            "file_patterns": ["**/*.php"],
+            "test_required": false
+        }
+    },
+    
+    "priority_weights": {
+        "critical": 1,
+        "high": 2,
+        "normal": 3,
+        "low": 4,
+        "trivial": 5
+    }
+}

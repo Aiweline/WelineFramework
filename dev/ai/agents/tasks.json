@@ -1,0 +1,94 @@
+{
+    "project": "DEV-workspace",
+    "version": "1.0",
+    "created_at": "2026-02-26 03:18:55",
+    "updated_at": "2026-02-26 03:18:55",
+    "master": {
+        "status": "idle",
+        "last_task": null,
+        "model": "deepseek"
+    },
+    "agents": {
+        "Agent_DB_001": {
+            "id": "Agent_DB_001",
+            "file": "app\/code\/Example\/Demo\/Model\/Demo.php",
+            "description": "创建示例模型",
+            "status": "todo",
+            "dep": null,
+            "priority": "critical",
+            "created_at": "2026-02-26 03:18:55",
+            "started_at": null,
+            "completed_at": null,
+            "error": null,
+            "retries": 0
+        },
+        "Agent_Logic_002": {
+            "id": "Agent_Logic_002",
+            "file": "app\/code\/Example\/Demo\/Service\/DemoService.php",
+            "description": "创建示例服务",
+            "status": "blocked",
+            "dep": "Agent_DB_001",
+            "priority": "high",
+            "created_at": "2026-02-26 03:18:55",
+            "started_at": null,
+            "completed_at": null,
+            "error": null,
+            "retries": 0
+        },
+        "Agent_API_003": {
+            "id": "Agent_API_003",
+            "file": "app\/code\/Example\/Demo\/Controller\/Backend\/Demo.php",
+            "description": "创建示例控制器",
+            "status": "blocked",
+            "dep": "Agent_Logic_002",
+            "priority": "high",
+            "created_at": "2026-02-26 03:18:55",
+            "started_at": null,
+            "completed_at": null,
+            "error": null,
+            "retries": 0
+        },
+        "Agent_UI_004": {
+            "id": "Agent_UI_004",
+            "file": "app\/code\/Example\/Demo\/view\/templates\/Backend\/Demo\/index.phtml",
+            "description": "创建示例视图",
+            "status": "blocked",
+            "dep": "Agent_API_003",
+            "priority": "normal",
+            "created_at": "2026-02-26 03:18:55",
+            "started_at": null,
+            "completed_at": null,
+            "error": null,
+            "retries": 0
+        },
+        "Agent_General_005": {
+            "id": "Agent_General_005",
+            "file": "",
+            "description": "单元测试: Test\/DemoServiceTest.php",
+            "status": "todo",
+            "dep": null,
+            "priority": "normal",
+            "created_at": "2026-02-26 03:18:55",
+            "started_at": null,
+            "completed_at": null,
+            "error": null,
+            "retries": 0
+        },
+        "Agent_General_006": {
+            "id": "Agent_General_006",
+            "file": "",
+            "description": "HTTP 测试: \/backend\/demo 页面可访问",
+            "status": "todo",
+            "dep": null,
+            "priority": "normal",
+            "created_at": "2026-02-26 03:18:55",
+            "started_at": null,
+            "completed_at": null,
+            "error": null,
+            "retries": 0
+        }
+    },
+    "completed": [],
+    "failed": [],
+    "current_plan": "example"
+}
