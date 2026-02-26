@@ -1,6 +1,6 @@
 <?php
 /**
- * 操作记录列表
+ * 操作记录列表（内容模板）
  *
  * @var \Weline\Framework\View\Template $this
  */
@@ -27,16 +27,20 @@ $total = $total ?? 0;
 $total_pages = $total_pages ?? 1;
 ?>
 
-@template(Weline_Admin::common/head.phtml)
-
-<div class="page-content">
-    <div class="container-fluid">
-        <div class="row mb-3">
-            <div class="col-12 d-flex justify-content-between align-items-center">
-                <h4 class="mb-0"><lang>操作记录</lang></h4>
-            </div>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-0"><lang>操作记录</lang></h4>
         </div>
+    </div>
+</div>
 
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<div class="row">
+    <div class="col-12">
         <div class="card mb-3">
             <div class="card-body py-2">
                 <form method="get" class="row g-2 align-items-center">
@@ -142,8 +146,8 @@ $total_pages = $total_pages ?? 1;
                                     <td><?= htmlspecialchars($op['operator_name'] ?? '-', ENT_QUOTES) ?></td>
                                     <td><?= htmlspecialchars($op['created_at'] ?? '-', ENT_QUOTES) ?></td>
                                     <td>
-                                        <button type="button" class="btn btn-sm btn-outline-info"
-                                                onclick="showDetail(<?= (int)($op['operation_id'] ?? 0) ?>)">
+                                        <button type="button" class="btn btn-sm btn-outline-info aws-show-detail-btn"
+                                                data-id="<?= (int)($op['operation_id'] ?? 0) ?>">
                                             <i class="mdi mdi-information-outline"></i>
                                         </button>
                                     </td>
@@ -197,7 +201,6 @@ $total_pages = $total_pages ?? 1;
     </div>
 </div>
 
-<!-- 详情弹窗 -->
 <div class="modal fade" id="detailModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -218,53 +221,60 @@ $total_pages = $total_pages ?? 1;
 </div>
 
 <script>
-function showDetail(id) {
-    const modal = new bootstrap.Modal(document.getElementById('detailModal'));
-    const content = document.getElementById('detailContent');
-
-    content.innerHTML = '<div class="text-center py-4"><i class="mdi mdi-loading mdi-spin mdi-48px"></i></div>';
-    modal.show();
-
-    fetch('<?= $this->getBackendUrl('aws/backend/operation/detail') ?>?id=' + id)
-        .then(res => res.json())
-        .then(data => {
-            if (data.success && data.operation) {
-                const op = data.operation;
-                let html = `
-                    <table class="table table-borderless">
-                        <tr><th width="30%"><?= __('操作ID') ?></th><td>${op.id}</td></tr>
-                        <tr><th><?= __('域名') ?></th><td>${op.domain_name || '-'}</td></tr>
-                        <tr><th><?= __('操作类型') ?></th><td>${op.operation_type_name}</td></tr>
-                        <tr><th><?= __('状态') ?></th><td>${op.status_name}</td></tr>
-                        <tr><th><?= __('AWS 操作ID') ?></th><td><code>${op.aws_operation_id || '-'}</code></td></tr>
-                        ${op.error_message ? `<tr><th><?= __('错误信息') ?></th><td class="text-danger">${op.error_message}</td></tr>` : ''}
-                        <tr><th><?= __('操作人') ?></th><td>${op.operator_name || '-'}</td></tr>
-                        <tr><th><?= __('创建时间') ?></th><td>${op.created_at}</td></tr>
-                        <tr><th><?= __('更新时间') ?></th><td>${op.updated_at}</td></tr>
-                    </table>
-                `;
-
-                if (op.request_data && Object.keys(op.request_data).length > 0) {
-                    html += `
-                        <h6><?= __('请求数据') ?></h6>
-                        <pre class="bg-light p-2 rounded small" style="max-height: 200px; overflow: auto;">${JSON.stringify(op.request_data, null, 2)}</pre>
-                    `;
-                }
-
-                if (op.response_data && Object.keys(op.response_data).length > 0) {
-                    html += `
-                        <h6><?= __('响应数据') ?></h6>
-                        <pre class="bg-light p-2 rounded small" style="max-height: 200px; overflow: auto;">${JSON.stringify(op.response_data, null, 2)}</pre>
-                    `;
-                }
-
-                content.innerHTML = html;
-            } else {
-                content.innerHTML = '<div class="alert alert-danger">' + (data.message || '<?= __('获取失败') ?>') + '</div>';
-            }
-        })
-        .catch(err => {
-            content.innerHTML = '<div class="alert alert-danger"><?= __('请求失败') ?>: ' + err.message + '</div>';
+(function() {
+    'use strict';
+    
+    document.querySelectorAll('.aws-show-detail-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var id = this.dataset.id;
+            showDetail(id);
         });
-}
+    });
+    
+    function showDetail(id) {
+        var modal = new bootstrap.Modal(document.getElementById('detailModal'));
+        var content = document.getElementById('detailContent');
+
+        content.innerHTML = '<div class="text-center py-4"><i class="mdi mdi-loading mdi-spin mdi-48px"></i></div>';
+        modal.show();
+
+        fetch('<?= $this->getBackendUrl('aws/backend/operation/detail') ?>?id=' + id)
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data.success && data.operation) {
+                    var op = data.operation;
+                    var html = '<table class="table table-borderless">' +
+                        '<tr><th width="30%"><?= __('操作ID') ?></th><td>' + op.id + '</td></tr>' +
+                        '<tr><th><?= __('域名') ?></th><td>' + (op.domain_name || '-') + '</td></tr>' +
+                        '<tr><th><?= __('操作类型') ?></th><td>' + op.operation_type_name + '</td></tr>' +
+                        '<tr><th><?= __('状态') ?></th><td>' + op.status_name + '</td></tr>' +
+                        '<tr><th><?= __('AWS 操作ID') ?></th><td><code>' + (op.aws_operation_id || '-') + '</code></td></tr>' +
+                        (op.error_message ? '<tr><th><?= __('错误信息') ?></th><td class="text-danger">' + op.error_message + '</td></tr>' : '') +
+                        '<tr><th><?= __('操作人') ?></th><td>' + (op.operator_name || '-') + '</td></tr>' +
+                        '<tr><th><?= __('创建时间') ?></th><td>' + op.created_at + '</td></tr>' +
+                        '<tr><th><?= __('更新时间') ?></th><td>' + op.updated_at + '</td></tr>' +
+                        '</table>';
+
+                    if (op.request_data && Object.keys(op.request_data).length > 0) {
+                        html += '<h6><?= __('请求数据') ?></h6>' +
+                            '<pre class="bg-light p-2 rounded small" style="max-height: 200px; overflow: auto;">' + 
+                            JSON.stringify(op.request_data, null, 2) + '</pre>';
+                    }
+
+                    if (op.response_data && Object.keys(op.response_data).length > 0) {
+                        html += '<h6><?= __('响应数据') ?></h6>' +
+                            '<pre class="bg-light p-2 rounded small" style="max-height: 200px; overflow: auto;">' + 
+                            JSON.stringify(op.response_data, null, 2) + '</pre>';
+                    }
+
+                    content.innerHTML = html;
+                } else {
+                    content.innerHTML = '<div class="alert alert-danger">' + (data.message || '<?= __('获取失败') ?>') + '</div>';
+                }
+            })
+            .catch(function(err) {
+                content.innerHTML = '<div class="alert alert-danger"><?= __('请求失败') ?>: ' + err.message + '</div>';
+            });
+    }
+})();
 </script>
