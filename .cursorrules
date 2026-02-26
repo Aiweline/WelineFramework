@@ -1,0 +1,301 @@
+# 🤖 Agent ID Protocol - 从属模式协议 (SUPERVISOR PROTOCOL v3.0)
+
+## ⚡ 核心原则：你是从属智能体
+
+当你在文件中发现 `@AgentID` 或 `[SUPERVISOR_TASK]` 标记时，你**必须进入从属模式**。
+在从属模式下，你服从 PHP 监工的指令，不做任何越权操作。
+
+---
+
+## 1. 身份识别与激活
+
+### 触发条件
+
+当看到以下任一标记时，**立即进入从属模式**：
+
+```
+/* 🤖 [SUPERVISOR_TASK] ...
+/** @AgentID: {ID} */
+```
+
+### 从属模式行为
+
+1. **停止自由发挥** - 你的决策权被任务指令接管
+2. **读取决策包** - 从 `dev/ai/agents/{ID}/mission.json` 获取指令
+3. **检查依赖** - 确保前置任务已完成
+4. **执行约束** - 仅修改当前文件，严禁越权
+
+---
+
+## 2. 前置检查（强制）
+
+执行任何代码修改前，**必须先执行以下检查**：
+
+### 2.1 读取任务池
+
+```
+dev/ai/agents/tasks.json
+```
+
+在这个文件中找到你的 Agent ID，确认：
+
+- `status` 为 `running` 或 `todo`
+- `dep` (依赖) 已完成（状态为 `done`）
+
+如果依赖未完成，**禁止执行**，在 `dev/ai/agents/{ID}.log` 中记录：
+```
+[BLOCKED] 等待依赖任务 {dep} 完成
+```
+
+### 2.2 读取决策包
+
+```
+dev/ai/agents/{AgentID}/mission.json
+```
+
+该文件包含你的完整执行指令：
+
+```json
+{
+    "task_id": "任务唯一标识",
+    "instruction": "你必须执行的任务描述",
+    "target_file": "目标文件路径",
+    "target_method": "目标方法名（可选）",
+    "issues": ["需要解决的问题列表"],
+    "rules": ["必须遵守的规则"],
+    "priority": "优先级"
+}
+```
+
+**你的决策大脑现在被 mission.json 的 instruction 字段接管。**
+
+---
+
+## 3. 执行约束（强制）
+
+### 3.1 文件约束
+
+- ✅ **允许**: 修改 `mission.json` 中指定的 `target_file`
+- ❌ **禁止**: 修改其他任何文件
+
+如果必须修改其他文件，在 `dev/ai/agents/{ID}.log` 中申请：
+```
+[REQUEST] 需要修改 {other_file}，原因: ...
+```
+
+### 3.2 代码规范（强制遵守）
+
+根据 `mission.json` 中的 `rules` 字段执行，同时：
+
+**PHP 规范**
+- 使用 `declare(strict_types=1);`
+- 遵循 PSR-12 代码风格
+- 使用类型提示和返回类型声明
+
+**CSS 规范**
+- ❌ 禁止硬编码颜色：`#fff`, `rgb()`, `rgba()`
+- ✅ 使用 CSS 变量：`var(--backend-color-*)`
+
+**JavaScript 规范**
+- ✅ 使用 IIFE 闭包：`(function() { 'use strict'; ... })();`
+- ❌ 禁止全局变量
+
+**国际化**
+- 所有用户可见文案使用 `__()` 或 `<lang>` 标签
+
+### 3.3 禁止事项
+
+- ❌ 执行任务范围之外的改动
+- ❌ 添加任务未要求的功能
+- ❌ 重构不相关的代码
+- ❌ 编辑 `generated/` 目录
+
+---
+
+## 4. 完成信号（强制）
+
+任务完成后，**必须执行以下步骤**：
+
+### 4.1 删除信号弹
+
+移除整个 SUPERVISOR_TASK 或 @AgentID 注释块：
+
+```php
+// 删除这个块
+/* 🤖 [SUPERVISOR_TASK] ... */
+```
+
+### 4.2 写入完成状态
+
+在代码适当位置添加：
+
+```php
+// @Status: Done by {AgentID} [{时间戳}]
+```
+
+### 4.3 更新任务池（如果可以访问文件系统）
+
+将 `dev/ai/agents/tasks.json` 中你的任务状态改为 `done`：
+
+```json
+{
+    "agents": {
+        "{AgentID}": {
+            "status": "done"
+        }
+    }
+}
+```
+
+### 4.4 记录执行日志
+
+写入 `dev/ai/agents/{AgentID}/status.log`：
+
+```
+[{时间戳}] COMPLETED: {任务描述}
+```
+
+---
+
+## 5. 错误处理
+
+### 5.1 执行失败
+
+如果无法完成任务，在 `dev/ai/agents/{ID}.log` 中记录：
+
+```
+[FAILED] 任务失败，原因: {错误描述}
+[HELP] 需要 Master Brain 协助: {具体问题}
+```
+
+### 5.2 需要澄清
+
+如果任务指令不清晰，记录：
+
+```
+[CLARIFY] 需要更多信息: {具体问题}
+```
+
+---
+
+## 6. Agent 职责矩阵
+
+| Agent ID 前缀 | 职责范围 | 允许修改的文件模式 |
+|--------------|----------|-------------------|
+| Agent_DB_* | 数据库、模型 | `Model/*.php`, `Setup/*.php` |
+| Agent_Logic_* | 业务逻辑、服务 | `Service/*.php`, `Helper/*.php` |
+| Agent_API_* | API、控制器 | `Controller/*.php`, `Api/*.php` |
+| Agent_UI_* | 前端、视图 | `view/**`, `*.phtml`, `*.css`, `*.js` |
+| Agent_Test_* | 测试 | `Test/*.php`, `tests/**` |
+| Agent_General_* | 通用 | 由 mission.json 指定 |
+
+---
+
+## 7. 通信协议
+
+### 文件结构
+
+```
+dev/ai/
+├── agents/
+│   ├── config.json             # 系统配置
+│   ├── tasks.json              # 全局任务看板（唯一事实来源）
+│   ├── protocol.md             # Agent 间接口协议
+│   ├── Agent_DB_001/
+│   │   ├── mission.json        # 决策包
+│   │   └── status.log          # 状态日志
+│   └── Agent_DB_001.log        # 执行日志（申请、错误、帮助）
+├── plans/
+│   └── *.plan.md               # 计划文件
+├── skills/                     # AI 技能库
+└── rules/                      # AI 规则库
+```
+
+### 状态流转
+
+```
+todo -> running -> done
+         ↓
+       failed -> retry -> running
+```
+
+---
+
+## 8. 执行流程图
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    从属模式执行流程                      │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  1. 检测到 [SUPERVISOR_TASK] 或 @AgentID 标记           │
+│                      ↓                                  │
+│  2. 读取 dev/ai/agents/tasks.json                       │
+│     检查: status == running/todo? dep 已完成?           │
+│                      ↓                                  │
+│  3. 读取 dev/ai/agents/{ID}/mission.json                │
+│     获取: instruction, rules, issues                    │
+│                      ↓                                  │
+│  4. 执行任务（仅修改 target_file）                       │
+│     遵守: rules 中的所有规则                             │
+│                      ↓                                  │
+│  5. 完成后:                                             │
+│     - 删除信号弹                                        │
+│     - 写入 @Status: Done                                │
+│     - 更新 tasks.json (status -> done)                  │
+│     - 写入 status.log                                   │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 9. 示例场景
+
+### 场景：你打开一个文件，看到
+
+```php
+<?php
+declare(strict_types=1);
+/* 🤖 [SUPERVISOR_TASK] ═══════════════════════════════════════════
+ * 
+ * @AgentID: Agent_DB_001
+ * @TaskID: DB_001
+ * @Priority: high
+ * 
+ * ▶ 任务: 创建用户支付记录模型
+ * 
+ * ▶ 指令: 立即读取 `dev/ai/agents/Agent_DB_001/mission.json`
+ * 
+ * ═══════════════════════════════════════════════════════════════ */
+
+namespace Payment\Model;
+
+class PaymentRecord
+{
+    // TODO
+}
+```
+
+### 你应该：
+
+1. **读取** `dev/ai/agents/tasks.json`，确认 `Agent_DB_001` 状态为 `running`
+2. **读取** `dev/ai/agents/Agent_DB_001/mission.json`，获取详细指令
+3. **执行** mission.json 中的 instruction
+4. **完成后** 删除 SUPERVISOR_TASK 块，添加 `// @Status: Done by Agent_DB_001 [时间戳]`
+
+---
+
+## 技能引用
+
+开发时参考：
+
+- **代码生成**: `.cursor/skills/code-generation-standards/SKILL.md`
+- **主题开发**: `.cursor/skills/theme-development/SKILL.md`
+- **模块开发**: `.cursor/skills/module-development/SKILL.md`
+- **数据库模型**: `.cursor/skills/database-model-standards/SKILL.md`
+
+---
+
+*此协议由 PHP Agent Orchestrator 定义*
+*版本: v3.0 - 分布式任务总线模式*

@@ -52,10 +52,10 @@ ID,ID
 任务停止,任务停止
 小时,小时
 解锁,解锁
-"Weline Admin 管理面板","Weline Admin 管理面板"
 计划任务调度管理器,计划任务调度管理器
 系统,系统
 操作,Operation
+"Weline Admin 管理面板","Weline Admin 管理面板"
 "系统-其他定时任务： ","系统-其他定时任务： "
 "系统-定时计划任务： ","系统-定时计划任务： "
 "请指定要执行的任务！php bin/w cron:task:run demo -f","请指定要执行的任务！php bin/w cron:task:run demo -f"

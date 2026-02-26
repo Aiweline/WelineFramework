@@ -1,260 +1,278 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $title ?? __('缓存清理管理') ?></title>
-    <css>Weline_Admin::css/bootstrap.min.css</css>
-    <css>Weline_Admin::css/admin.css</css>
-    <style>
-        .stats-card {
-            background: #fff;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .stat-item {
-            text-align: center;
-            padding: 15px;
-        }
-        .stat-number {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #007bff;
-        }
-        .stat-label {
-            color: #6c757d;
-            margin-top: 5px;
-        }
-        .progress {
-            height: 20px;
-            margin: 10px 0;
-        }
-        .btn-cleanup {
-            background: linear-gradient(45deg, #28a745, #20c997);
-            border: none;
-            color: white;
-            padding: 12px 30px;
-            border-radius: 25px;
-            font-weight: bold;
-            transition: all 0.3s ease;
-        }
-        .btn-cleanup:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-            color: white;
-        }
-        .alert-info {
-            background: linear-gradient(45deg, #17a2b8, #138496);
-            border: none;
-            color: white;
-        }
-    </style>
-</head>
-<body>
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-12">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h1 class="h3 mb-0"><?= $title ?? __('缓存清理管理') ?></h1>
-                    <div class="btn-group">
-                        <button type="button" class="btn btn-cleanup" onclick="executeCleanup()">
-                            <i class="fas fa-broom"></i> <?= __('立即清理缓存') ?>
-                        </button>
-                        <button type="button" class="btn btn-info" onclick="runCronTask()">
-                            <i class="fas fa-play"></i> <?= __('执行定时任务') ?>
-                        </button>
-                        <a href="<?= $this->getUrl('*/cachecleanup/cronstatus') ?>" class="btn btn-secondary">
-                            <i class="fas fa-clock"></i> <?= __('查看定时任务') ?>
-                        </a>
-                    </div>
-                </div>
+<?php
+/**
+ * 缓存清理管理 - 内容模板
+ * @var \Weline\Framework\View\Template $this
+ */
+?>
+<style>
+    .weline-cache-stats-card {
+        background: var(--backend-color-card-bg);
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .weline-cache-stat-item {
+        text-align: center;
+        padding: 15px;
+    }
+    .weline-cache-stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        color: var(--backend-color-primary);
+    }
+    .weline-cache-stat-label {
+        color: var(--backend-color-text-secondary);
+        margin-top: 5px;
+    }
+    .weline-cache-progress {
+        height: 20px;
+        margin: 10px 0;
+    }
+    .weline-cache-btn-cleanup {
+        background: linear-gradient(45deg, #28a745, #20c997);
+        border: none;
+        color: white;
+        padding: 12px 30px;
+        border-radius: 25px;
+        font-weight: bold;
+        transition: all 0.3s ease;
+    }
+    .weline-cache-btn-cleanup:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        color: white;
+    }
+</style>
 
-                <!-- 缓存统计信息 -->
-                <div class="row">
-                    <div class="col-md-3">
-                        <div class="stats-card">
-                            <div class="stat-item">
-                                <div class="stat-number"><?= $total_files ?? 0 ?></div>
-                                <div class="stat-label"><?= __('总缓存文件数') ?></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="stats-card">
-                            <div class="stat-item">
-                                <div class="stat-number"><?= $total_size ?? '0 B' ?></div>
-                                <div class="stat-label"><?= __('总缓存大小') ?></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="stats-card">
-                            <div class="stat-item">
-                                <div class="stat-number text-warning"><?= $expired_files ?? 0 ?></div>
-                                <div class="stat-label"><?= __('过期文件数') ?></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="stats-card">
-                            <div class="stat-item">
-                                <div class="stat-number text-danger"><?= $expired_size ?? '0 B' ?></div>
-                                <div class="stat-label"><?= __('可释放空间') ?></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 过期文件比例 -->
-                <?php if (isset($stats) && $stats['total_files'] > 0): ?>
-                <div class="stats-card">
-                    <h5><?= __('过期文件比例') ?></h5>
-                    <?php 
-                    $expiredPercentage = ($stats['expired_files'] / $stats['total_files']) * 100;
-                    ?>
-                    <div class="progress">
-                        <div class="progress-bar bg-warning" role="progressbar" 
-                             style="width: <?= $expiredPercentage ?>%" 
-                             aria-valuenow="<?= $expiredPercentage ?>" 
-                             aria-valuemin="0" aria-valuemax="100">
-                            <?= round($expiredPercentage, 2) ?>%
-                        </div>
-                    </div>
-                    <small class="text-muted">
-                        <?= __('过期文件: %{expired_files} / %{total_files} (%{expired_percentage}%)', ['expired_files' => $stats['expired_files'], 'total_files' => $stats['total_files'], 'expired_percentage' => round($expiredPercentage, 2)]) ?>
-                    </small>
-                </div>
-                <?php endif; ?>
-
-                <!-- 清理说明 -->
-                <div class="alert alert-info">
-                    <h5><i class="fas fa-info-circle"></i> <?= __('缓存清理说明') ?></h5>
-                    <ul class="mb-0">
-                        <li><strong><?= __('自动清理：') ?></strong><?= __('系统每10分钟自动清理7天前的过期缓存文件') ?></li>
-                        <li><strong><?= __('手动清理：') ?></strong><?= __('点击"立即清理缓存"按钮可手动执行清理任务') ?></li>
-                        <li><strong><?= __('清理范围：') ?></strong><?= __('包括所有类型的缓存文件（系统缓存、应用缓存、框架缓存等）') ?></li>
-                        <li><strong><?= __('安全机制：') ?></strong><?= __('只清理过期文件，不会影响正在使用的缓存') ?></li>
-                    </ul>
-                </div>
-
-                <!-- 缓存目录信息 -->
-                <div class="stats-card">
-                    <h5><?= __('缓存目录结构') ?></h5>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h6><?= __('系统缓存目录：') ?></h6>
-                            <ul class="list-unstyled">
-                                <li><code>var/cache/backend_cache/</code> - <?= __('后台缓存') ?></li>
-                                <li><code>var/cache/frontend_cache/</code> - <?= __('前台缓存') ?></li>
-                                <li><code>var/cache/system_cache/</code> - <?= __('系统缓存') ?></li>
-                                <li><code>var/cache/config/</code> - <?= __('配置缓存') ?></li>
-                            </ul>
-                        </div>
-                        <div class="col-md-6">
-                            <h6><?= __('框架缓存目录：') ?></h6>
-                            <ul class="list-unstyled">
-                                <li><code>var/cache/framework_*/</code> - <?= __('框架组件缓存') ?></li>
-                                <li><code>var/cache/database_model/</code> - <?= __('数据库模型缓存') ?></li>
-                                <li><code>var/cache/eav_cache/</code> - <?= __('EAV模型缓存') ?></li>
-                                <li><code>var/cache/taglib_cache/</code> - <?= __('标签库缓存') ?></li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 mb-0"><?= $title ?? __('缓存清理管理') ?></h1>
+            <div class="btn-group">
+                <button type="button" class="btn weline-cache-btn-cleanup" id="executeCleanupBtn">
+                    <i class="fas fa-broom"></i> <?= __('立即清理缓存') ?>
+                </button>
+                <button type="button" class="btn btn-info" id="runCronTaskBtn">
+                    <i class="fas fa-play"></i> <?= __('执行定时任务') ?>
+                </button>
+                <a href="<?= $this->getUrl('*/cachecleanup/cronstatus') ?>" class="btn btn-secondary">
+                    <i class="fas fa-clock"></i> <?= __('查看定时任务') ?>
+                </a>
             </div>
         </div>
     </div>
+</div>
 
-    <js>Weline_Admin::js/jquery.min.js</js>
-    <js>Weline_Admin::js/bootstrap.bundle.min.js</js>
-    <script>
-        function executeCleanup() {
-            if (confirm(__('确定要执行缓存清理吗？这将删除所有过期的缓存文件。'))) {
-                showLoading();
-                
-                fetch('<?= $this->getUrl("*/cachecleanup/executecleanup") ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    hideLoading();
-                    if (data.success) {
-                        showMessage('success', __('缓存清理完成！'));
-                        // 刷新页面显示最新统计
-                        setTimeout(() => {
-                            location.reload();
-                        }, 2000);
-                    } else {
-                        showMessage('error', __('缓存清理失败: %{1}', data.message || __('未知错误')));
-                    }
-                })
-                .catch(error => {
-                    hideLoading();
-                    showMessage('error', __('请求失败: %{1}', error.message));
-                });
+<div class="row">
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
+
+<!-- 缓存统计信息 -->
+<div class="row">
+    <div class="col-md-3">
+        <div class="weline-cache-stats-card">
+            <div class="weline-cache-stat-item">
+                <div class="weline-cache-stat-number"><?= $total_files ?? 0 ?></div>
+                <div class="weline-cache-stat-label"><?= __('总缓存文件数') ?></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="weline-cache-stats-card">
+            <div class="weline-cache-stat-item">
+                <div class="weline-cache-stat-number"><?= $total_size ?? '0 B' ?></div>
+                <div class="weline-cache-stat-label"><?= __('总缓存大小') ?></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="weline-cache-stats-card">
+            <div class="weline-cache-stat-item">
+                <div class="weline-cache-stat-number text-warning"><?= $expired_files ?? 0 ?></div>
+                <div class="weline-cache-stat-label"><?= __('过期文件数') ?></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="weline-cache-stats-card">
+            <div class="weline-cache-stat-item">
+                <div class="weline-cache-stat-number text-danger"><?= $expired_size ?? '0 B' ?></div>
+                <div class="weline-cache-stat-label"><?= __('可释放空间') ?></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 过期文件比例 -->
+<?php if (isset($stats) && $stats['total_files'] > 0): ?>
+<div class="weline-cache-stats-card">
+    <h5><?= __('过期文件比例') ?></h5>
+    <?php 
+    $expiredPercentage = ($stats['expired_files'] / $stats['total_files']) * 100;
+    ?>
+    <div class="progress weline-cache-progress">
+        <div class="progress-bar bg-warning" role="progressbar" 
+             style="width: <?= $expiredPercentage ?>%" 
+             aria-valuenow="<?= $expiredPercentage ?>" 
+             aria-valuemin="0" aria-valuemax="100">
+            <?= round($expiredPercentage, 2) ?>%
+        </div>
+    </div>
+    <small class="text-muted">
+        <?= __('过期文件: %{expired_files} / %{total_files} (%{expired_percentage}%)', ['expired_files' => $stats['expired_files'], 'total_files' => $stats['total_files'], 'expired_percentage' => round($expiredPercentage, 2)]) ?>
+    </small>
+</div>
+<?php endif; ?>
+
+<!-- 清理说明 -->
+<div class="alert alert-info">
+    <h5><i class="fas fa-info-circle"></i> <?= __('缓存清理说明') ?></h5>
+    <ul class="mb-0">
+        <li><strong><?= __('自动清理：') ?></strong><?= __('系统每10分钟自动清理7天前的过期缓存文件') ?></li>
+        <li><strong><?= __('手动清理：') ?></strong><?= __('点击"立即清理缓存"按钮可手动执行清理任务') ?></li>
+        <li><strong><?= __('清理范围：') ?></strong><?= __('包括所有类型的缓存文件（系统缓存、应用缓存、框架缓存等）') ?></li>
+        <li><strong><?= __('安全机制：') ?></strong><?= __('只清理过期文件，不会影响正在使用的缓存') ?></li>
+    </ul>
+</div>
+
+<!-- 缓存目录信息 -->
+<div class="weline-cache-stats-card">
+    <h5><?= __('缓存目录结构') ?></h5>
+    <div class="row">
+        <div class="col-md-6">
+            <h6><?= __('系统缓存目录：') ?></h6>
+            <ul class="list-unstyled">
+                <li><code>var/cache/backend_cache/</code> - <?= __('后台缓存') ?></li>
+                <li><code>var/cache/frontend_cache/</code> - <?= __('前台缓存') ?></li>
+                <li><code>var/cache/system_cache/</code> - <?= __('系统缓存') ?></li>
+                <li><code>var/cache/config/</code> - <?= __('配置缓存') ?></li>
+            </ul>
+        </div>
+        <div class="col-md-6">
+            <h6><?= __('框架缓存目录：') ?></h6>
+            <ul class="list-unstyled">
+                <li><code>var/cache/framework_*/</code> - <?= __('框架组件缓存') ?></li>
+                <li><code>var/cache/database_model/</code> - <?= __('数据库模型缓存') ?></li>
+                <li><code>var/cache/eav_cache/</code> - <?= __('EAV模型缓存') ?></li>
+                <li><code>var/cache/taglib_cache/</code> - <?= __('标签库缓存') ?></li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    
+    function executeCleanup() {
+        if (window.AdminConfirm) {
+            AdminConfirm.show({
+                title: '<?= __('确认清理') ?>',
+                message: '<?= __('确定要执行缓存清理吗？这将删除所有过期的缓存文件。') ?>',
+                confirmText: '<?= __('确认') ?>',
+                cancelText: '<?= __('取消') ?>',
+                onConfirm: function() {
+                    doCleanup();
+                }
+            });
+        } else if (confirm('<?= __('确定要执行缓存清理吗？这将删除所有过期的缓存文件。') ?>')) {
+            doCleanup();
+        }
+    }
+    
+    function doCleanup() {
+        fetch('<?= $this->getUrl("*/cachecleanup/executecleanup") ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
             }
-        }
-
-        function runCronTask() {
-            if (confirm(__('确定要手动执行定时任务吗？'))) {
-                showLoading();
-                
-                fetch('<?= $this->getUrl("*/cachecleanup/runcrontask") ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    hideLoading();
-                    if (data.success) {
-                        showMessage('success', __('定时任务执行完成！'));
-                        // 刷新页面显示最新统计
-                        setTimeout(() => {
-                            location.reload();
-                        }, 2000);
-                    } else {
-                        showMessage('error', __('定时任务执行失败: %{1}', data.message || __('未知错误')));
-                    }
-                })
-                .catch(error => {
-                    hideLoading();
-                    showMessage('error', __('请求失败: %{1}', error.message));
-                });
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.success) {
+                if (window.AdminToast) {
+                    AdminToast.success('<?= __('缓存清理完成！') ?>');
+                }
+                setTimeout(function() { location.reload(); }, 2000);
+            } else {
+                if (window.AdminToast) {
+                    AdminToast.error('<?= __('缓存清理失败') ?>: ' + (data.message || '<?= __('未知错误') ?>'));
+                }
             }
-        }
-
-        function refreshStats() {
-            fetch('<?= $this->getUrl("*/cachecleanup/getstats") ?>')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // 更新统计信息显示
-                        updateStatsDisplay(data.data);
-                    }
-                })
-                .catch(error => {
-                    console.error(__('获取统计信息失败: %{1}', error));
-                });
-        }
-
-        function updateStatsDisplay(stats) {
-            // 这里可以更新页面上的统计数字
-            console.log(__('缓存统计更新: %{1}', stats));
-        }
-
-        // 页面加载完成后，每30秒刷新一次统计信息
-        $(document).ready(function() {
-            setInterval(refreshStats, 30000);
+        })
+        .catch(function(error) {
+            if (window.AdminToast) {
+                AdminToast.error('<?= __('请求失败') ?>: ' + error.message);
+            }
         });
-    </script>
-</body>
-</html>
+    }
+
+    function runCronTask() {
+        if (window.AdminConfirm) {
+            AdminConfirm.show({
+                title: '<?= __('确认执行') ?>',
+                message: '<?= __('确定要手动执行定时任务吗？') ?>',
+                confirmText: '<?= __('确认') ?>',
+                cancelText: '<?= __('取消') ?>',
+                onConfirm: function() {
+                    doCronTask();
+                }
+            });
+        } else if (confirm('<?= __('确定要手动执行定时任务吗？') ?>')) {
+            doCronTask();
+        }
+    }
+    
+    function doCronTask() {
+        fetch('<?= $this->getUrl("*/cachecleanup/runcrontask") ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.success) {
+                if (window.AdminToast) {
+                    AdminToast.success('<?= __('定时任务执行完成！') ?>');
+                }
+                setTimeout(function() { location.reload(); }, 2000);
+            } else {
+                if (window.AdminToast) {
+                    AdminToast.error('<?= __('定时任务执行失败') ?>: ' + (data.message || '<?= __('未知错误') ?>'));
+                }
+            }
+        })
+        .catch(function(error) {
+            if (window.AdminToast) {
+                AdminToast.error('<?= __('请求失败') ?>: ' + error.message);
+            }
+        });
+    }
+
+    function refreshStats() {
+        fetch('<?= $this->getUrl("*/cachecleanup/getstats") ?>')
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    console.log('<?= __('缓存统计更新') ?>:', data.data);
+                }
+            })
+            .catch(function(error) {
+                console.error('<?= __('获取统计信息失败') ?>:', error);
+            });
+    }
+
+    // 绑定事件
+    document.getElementById('executeCleanupBtn').addEventListener('click', executeCleanup);
+    document.getElementById('runCronTaskBtn').addEventListener('click', runCronTask);
+    
+    // 每30秒刷新一次统计信息
+    setInterval(refreshStats, 30000);
+})();
+</script>

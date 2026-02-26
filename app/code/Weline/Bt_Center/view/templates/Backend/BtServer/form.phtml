@@ -1,6 +1,6 @@
 <?php
 /**
- * 宝塔服务器表单
+ * 宝塔服务器表单（内容模板）
  *
  * @var \Weline\Framework\View\Template $this
  */
@@ -21,25 +21,29 @@ $port = $server ? (int)$server->getData(\Weline\Bt_Center\Model\BtServer::fields
 $description = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServer::fields_DESCRIPTION) : '';
 ?>
 
-@template(Weline_Admin::common/head.phtml)
-
-<div class="page-content">
-    <div class="container-fluid">
-        <div class="row mb-3">
-            <div class="col-12 d-flex justify-content-between align-items-center">
-                <h4 class="mb-0">
-                    <?php if ($id): ?>
-                        <lang>编辑宝塔服务器</lang> #<?= $id ?>
-                    <?php else: ?>
-                        <lang>新增宝塔服务器</lang>
-                    <?php endif; ?>
-                </h4>
-            </div>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-0">
+                <?php if ($id): ?>
+                    <lang>编辑宝塔服务器</lang> #<?= $id ?>
+                <?php else: ?>
+                    <lang>新增宝塔服务器</lang>
+                <?php endif; ?>
+            </h4>
         </div>
+    </div>
+</div>
 
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<div class="row">
+    <div class="col-12">
         <div class="card">
             <div class="card-body">
-                <form id="btServerForm" onsubmit="saveBtServer(event)">
+                <form id="btServerForm">
                     <input type="hidden" name="id" value="<?= $id ?>">
 
                     <div class="mb-3">
@@ -107,7 +111,7 @@ $description = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServ
                                        class="form-control"
                                        value="<?= htmlspecialchars($password, ENT_QUOTES) ?>"
                                        required>
-                                <button type="button" class="btn btn-outline-secondary" onclick="togglePassword()">
+                                <button type="button" class="btn btn-outline-secondary" id="togglePasswordBtn">
                                     <i class="mdi mdi-eye" id="passwordToggleIcon"></i>
                                 </button>
                             </div>
@@ -150,52 +154,62 @@ $description = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServ
 </div>
 
 <script>
-function togglePassword() {
-    const passwordInput = document.getElementById('password');
-    const toggleIcon = document.getElementById('passwordToggleIcon');
+(function() {
+    'use strict';
     
-    if (passwordInput.type === 'password') {
-        passwordInput.type = 'text';
-        toggleIcon.classList.remove('mdi-eye');
-        toggleIcon.classList.add('mdi-eye-off');
-    } else {
-        passwordInput.type = 'password';
-        toggleIcon.classList.remove('mdi-eye-off');
-        toggleIcon.classList.add('mdi-eye');
-    }
-}
+    document.getElementById('togglePasswordBtn').addEventListener('click', function() {
+        var passwordInput = document.getElementById('password');
+        var toggleIcon = document.getElementById('passwordToggleIcon');
+        
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            toggleIcon.classList.remove('mdi-eye');
+            toggleIcon.classList.add('mdi-eye-off');
+        } else {
+            passwordInput.type = 'password';
+            toggleIcon.classList.remove('mdi-eye-off');
+            toggleIcon.classList.add('mdi-eye');
+        }
+    });
 
-function saveBtServer(event) {
-    event.preventDefault();
-    const form = document.getElementById('btServerForm');
-    const formData = new FormData(form);
+    document.getElementById('btServerForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var form = this;
+        var formData = new FormData(form);
 
-    const data = {};
-    for (let [key, value] of formData.entries()) {
-        data[key] = value;
-    }
+        var data = {};
+        for (var entry of formData.entries()) {
+            data[entry[0]] = entry[1];
+        }
 
-    fetch('<?= $this->getBackendUrl('bt_center/backend/bt_server/save') ?>', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams(data)
-    })
-        .then(response => response.json())
-        .then(resp => {
+        fetch('<?= $this->getBackendUrl('bt_center/backend/bt_server/save') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams(data)
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(resp) {
             if (resp.success) {
-                showPageMessage('success', resp.message);
-                setTimeout(() => {
+                if (typeof AdminToast !== 'undefined') {
+                    AdminToast.success(resp.message);
+                }
+                setTimeout(function() {
                     window.location.href = '<?= $this->getBackendUrl('bt_center/backend/bt_server/index') ?>';
                 }, 800);
             } else {
-                showPageMessage('error', resp.message || '保存失败');
+                if (typeof AdminToast !== 'undefined') {
+                    AdminToast.error(resp.message || '<?= __("保存失败") ?>');
+                }
             }
         })
-        .catch(error => {
+        .catch(function(error) {
             console.error('Error:', error);
-            showPageMessage('error', '请求失败');
+            if (typeof AdminToast !== 'undefined') {
+                AdminToast.error('<?= __("请求失败") ?>');
+            }
         });
-}
+    });
+})();
 </script>

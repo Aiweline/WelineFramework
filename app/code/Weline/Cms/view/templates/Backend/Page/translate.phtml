@@ -1,13 +1,17 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Cms\Model\Page $page */
-/**@var \Weline\Cms\Model\Page\LocalDescription $translation */
+/**
+ * CMS页面翻译 - 内容模板
+ * 由布局系统自动包裹
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var \Weline\Cms\Model\Page $page
+ * @var \Weline\Cms\Model\Page\LocalDescription $translation
+ */
 $page = $this->getData('page');
 $translation = $this->getData('translation');
 $locale = $this->getData('locale');
 $localeName = $this->getData('locale_name');
 ?>
-<w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
 
 <!-- start page title -->
 <div class="row">
@@ -216,5 +220,4 @@ $localeName = $this->getData('locale_name');
 })();
 </script>
 
-<w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>
 

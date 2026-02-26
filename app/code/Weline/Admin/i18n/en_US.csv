@@ -87,10 +87,9 @@ ID,ID
 未分配角色,"Unassigned Role"
 暂无记录,"No records"
 分配,Assign
+用户管理,"User Management"
 编辑,Edit
 新增,"Add New"
-用户,User
-用户管理,"User Management"
 用户名,Username
 用户名称验证成功,"Username validation successful"
 请输入用户名称,"Please enter username"
@@ -210,6 +209,12 @@ Cms内容管理,"CMS Content Management"
 Icon图标,Icon
 排序,Sort
 是否系统菜单,"Is System Menu"
+确认删除,确认删除
+确定要删除这个菜单吗？,确定要删除这个菜单吗？
+确定删除,确定删除
+删除成功,删除成功
+删除失败,删除失败
+请求失败,请求失败
 模组管理,"Module Management"
 系统中安装的模组。,"Modules installed in the system."
 模组名,"Module Name"
@@ -219,6 +224,8 @@ Icon图标,Icon
 路由,Route
 版本,Version
 描述,Description
+路由管理,路由管理
+路由列表,路由列表
 模块,模块
 控制器信息,"Controller Information"
 控制器类信息：,"Controller Class Information:"
@@ -228,6 +235,7 @@ Icon图标,Icon
 插件类,"Plugin Class"
 插件配置文件：,"Plugin Configuration File:"
 插件名：,"Plugin Name:"
+用户,User
 像素,像素
 用户不存在,"User does not exist"
 用户名不能为空,"Username cannot be empty"

@@ -162,9 +162,10 @@ class DocumentScanner
         string $docPrefix = 'doc',
         int    $depth = 0
     ): void {
-        if (!is_dir($dirPath) || $depth > 2) {
-            if ($depth > 2) {
-                $this->progress("      ⚠️  " . __('跳过深层目录（超过2层）: %{path}', ['path' => $relativePath]), 'warning');
+        // 支持最多 6 层深度，满足 hook/backend/layouts/login/ 等多层结构
+        if (!is_dir($dirPath) || $depth > 6) {
+            if ($depth > 6) {
+                $this->progress("      ⚠️  " . __('跳过深层目录（超过6层）: %{path}', ['path' => $relativePath]), 'warning');
             }
             return;
         }
@@ -206,8 +207,9 @@ class DocumentScanner
         // 递归处理子目录
         foreach ($subDirs as $dir) {
             $displayName = $this->extractDisplayName($dir['name']);
+            $sortOrder = $this->extractSortOrder($dir['name']);
             $parentLevel = $this->getCatalogLevel($parentCatId);
-            $subCatalog = $this->ensureCatalog($displayName, $parentCatId, $parentLevel + 1);
+            $subCatalog = $this->ensureCatalog($displayName, $parentCatId, $parentLevel + 1, '', $sortOrder);
             $this->seenCatalogIds[(int)$subCatalog->getId()] = true;
             $this->scanDirectory($dir['path'], $moduleName, (int)$subCatalog->getId(), $result, $dir['relative'], $docPrefix, $depth + 1);
         }
@@ -356,12 +358,27 @@ class DocumentScanner
             ->fetch();
 
         if ($catalog && $catalog->getId()) {
+            $needsUpdate = false;
+            $updateData = [];
+
             // 更新 level（缓存值，可能需要修正）
             $currentLevel = (int)($catalog->getData(Catalog::fields_level) ?? 0);
             if ($currentLevel !== $level) {
+                $updateData[Catalog::fields_level] = $level;
+                $needsUpdate = true;
+            }
+
+            // 更新 position（排序值）
+            $currentPosition = (int)($catalog->getData(Catalog::fields_position) ?? 0);
+            if ($position > 0 && $currentPosition !== $position) {
+                $updateData[Catalog::fields_position] = $position;
+                $needsUpdate = true;
+            }
+
+            if ($needsUpdate && !empty($updateData)) {
                 ObjectManager::make(Catalog::class)->clear()
                     ->where(Catalog::fields_ID, $catalog->getId())
-                    ->update([Catalog::fields_level => $level])
+                    ->update($updateData)
                     ->fetch();
             }
             if (!empty($description) && $catalog->getDescription() !== $description) {
@@ -641,10 +658,34 @@ class DocumentScanner
 
     private function extractTitle(string $content, string $fallback): string
     {
+        $fileName = pathinfo($fallback, PATHINFO_FILENAME);
+        
         if (preg_match('/^#\s+(.+)$/m', $content, $m)) {
-            return trim($m[1]);
+            $title = trim($m[1]);
+            
+            // 如果标题是泛称（如"事件文档"、"Hook文档"等），追加文件名使其更具体
+            $genericPatterns = [
+                '/事件文档$/u',
+                '/Hook文档$/u',
+                '/hook文档$/ui',
+                '/Event文档$/ui',
+                '/文档$/u',
+            ];
+            
+            foreach ($genericPatterns as $pattern) {
+                if (preg_match($pattern, $title)) {
+                    // 只有当文件名与标题不同时才追加
+                    if (mb_stripos($title, $fileName) === false) {
+                        return $title . ' - ' . $fileName;
+                    }
+                    break;
+                }
+            }
+            
+            return $title;
         }
-        return pathinfo($fallback, PATHINFO_FILENAME);
+        
+        return $fileName;
     }
 
     private function extractSummary(string $content): string

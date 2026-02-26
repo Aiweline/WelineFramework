@@ -1,6 +1,11 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
-/**@var \WeShop\Cms\Model\Page $page */
+/**
+ * WeShop CMS页面表单 - 内容模板
+ * 由布局系统自动包裹
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var \WeShop\Cms\Model\Page $page
+ */
 $page = $this->getData('page');
 $isEdit = $page && $page->getId();
 $selectedLocales = $this->getData('selected_locales') ?? [];
@@ -22,7 +27,6 @@ if ($isEdit && $page && $page->getId()) {
 }
 if (!is_array($pageLocales)) $pageLocales = [];
 ?>
-<w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
 
 <!-- start page title -->
 <div class="row">
@@ -3171,6 +3175,3 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
     });
 })();
 </script>
-
-<w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>
-

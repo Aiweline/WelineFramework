@@ -75,7 +75,7 @@
                 <div class='dropdown-menu dropdown-menu-end languages'>
                     <foreach name='languages' item='language' key='code'>
                         <!-- item-->
-                        <a href='javascript:select_language("{{code}}");'
+                        <a href='javascript:void(0);' onclick='select_language("{{code}}");'
                            class='dropdown-item notify-item <?= $current_language["code"] == $code ? "active" : "" ?>'>
                             {{language.flag}}<span class='align-middle'> {{language.name}}</span>
                         </a>

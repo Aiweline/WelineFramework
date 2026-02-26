@@ -1,0 +1,135 @@
+<?php
+/** @var \GuoLaiRen\PageBuilder\Controller\Backend\QuickBuild $this */
+$orders = $this->getData('orders') ?? [];
+
+$statusLabels = [
+    'pending' => __('待处理'),
+    'step_purchase' => __('购买域名中'),
+    'step_dns' => __('DNS 配置中'),
+    'step_cdn' => __('CDN 配置中'),
+    'step_ssl' => __('SSL 申请中'),
+    'completed' => __('已完成'),
+    'failed' => __('失败'),
+];
+
+$statusColors = [
+    'pending' => 'warning',
+    'step_purchase' => 'info',
+    'step_dns' => 'info',
+    'step_cdn' => 'info',
+    'step_ssl' => 'info',
+    'completed' => 'success',
+    'failed' => 'danger',
+];
+?>
+<style>
+.pb-orders-container { max-width: 1200px; margin: 0 auto; }
+.pb-orders-card {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-md, 8px);
+    padding: var(--backend-padding-card, 24px);
+    box-shadow: var(--backend-card-shadow);
+}
+.pb-orders-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.pb-orders-table th {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #333);
+    font-weight: 600;
+    padding: var(--backend-padding-table-cell, 12px);
+    border-bottom: 2px solid var(--backend-color-border-default, #dee2e6);
+    text-align: left;
+}
+.pb-orders-table td {
+    padding: var(--backend-padding-table-cell, 12px);
+    color: var(--backend-color-text-primary, #333);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+.pb-orders-table tr:hover td {
+    background: var(--backend-color-table-bg-hover, #f8f9fa);
+}
+.pb-orders-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+.pb-orders-badge-success {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+    color: var(--backend-color-success, #34c38f);
+}
+.pb-orders-badge-info {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    color: var(--backend-color-info, #50a5f1);
+}
+.pb-orders-badge-warning {
+    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.1));
+    color: var(--backend-color-warning, #f1b44c);
+}
+.pb-orders-badge-danger {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
+    color: var(--backend-color-danger, #f46a6a);
+}
+.pb-orders-empty {
+    text-align: center;
+    padding: var(--backend-spacing-xl, 40px);
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+.pb-orders-empty i { font-size: 3rem; opacity: 0.3; display: block; margin-bottom: var(--backend-spacing-md, 16px); }
+.pb-orders-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--backend-spacing-lg, 24px); }
+</style>
+
+<div class="pb-orders-container">
+    <div class="pb-orders-actions">
+        <h4 style="color: var(--backend-color-text-primary, #212529); margin: 0;">
+            <i class="mdi mdi-clipboard-list"></i> <lang>配置订单</lang>
+        </h4>
+        <a href="<backend-url>pagebuilder/backend/quickBuild/wizard</backend-url>" class="pb-qb-btn pb-qb-btn-primary" style="padding:8px 20px;border:none;border-radius:6px;background:var(--backend-color-primary,#556ee6);color:var(--backend-color-text-inverse,#fff);text-decoration:none;font-weight:500;">
+            <i class="mdi mdi-plus"></i> <lang>新建站点</lang>
+        </a>
+    </div>
+
+    <div class="pb-orders-card">
+        <if condition="empty($orders)">
+            <div class="pb-orders-empty">
+                <i class="mdi mdi-clipboard-text-outline"></i>
+                <p><lang>暂无配置订单</lang></p>
+                <p><a href="<backend-url>pagebuilder/backend/quickBuild/wizard</backend-url>"><lang>前往新建站点</lang></a></p>
+            </div>
+        <else/>
+            <table class="pb-orders-table">
+                <thead>
+                    <tr>
+                        <th><lang>订单ID</lang></th>
+                        <th><lang>域名</lang></th>
+                        <th><lang>状态</lang></th>
+                        <th><lang>当前步骤</lang></th>
+                        <th><lang>创建时间</lang></th>
+                        <th><lang>错误信息</lang></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($orders as $order): ?>
+                    <?php
+                        $status = $order['status'] ?? 'pending';
+                        $colorClass = $statusColors[$status] ?? 'info';
+                        $label = $statusLabels[$status] ?? $status;
+                    ?>
+                    <tr>
+                        <td>#<?= (int)($order['order_id'] ?? 0) ?></td>
+                        <td><?= htmlspecialchars($order['domain'] ?? '', ENT_QUOTES) ?></td>
+                        <td><span class="pb-orders-badge pb-orders-badge-<?= $colorClass ?>"><?= $label ?></span></td>
+                        <td><?= htmlspecialchars($order['current_step'] ?? '-', ENT_QUOTES) ?></td>
+                        <td><?= htmlspecialchars($order['created_at'] ?? '-', ENT_QUOTES) ?></td>
+                        <td style="color:var(--backend-color-danger, #f46a6a);"><?= htmlspecialchars($order['error_message'] ?? '', ENT_QUOTES) ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </if>
+    </div>
+</div>

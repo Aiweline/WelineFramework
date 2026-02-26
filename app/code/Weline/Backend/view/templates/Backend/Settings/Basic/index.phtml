@@ -1,149 +1,127 @@
 <?php
 /**
- * 基础设置页面
+ * 基础设置页面（内容模板）
+ * 
+ * 只包含页面内容，由布局系统自动包裹 HTML 框架
+ * 布局由 BackendController::$layoutType = 'default.default' 控制
  *
  * @var \Weline\Framework\View\Template $this
  * @var array $settings
  */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
-
 $settings = $settings ?? [];
 ?>
-<!DOCTYPE html>
-<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><lang>基础设置</lang></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+<!-- 页面标题 -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0 font-size-18"><lang>基础设置</lang></h4>
+        </div>
+    </div>
+</div>
 
-@template(Weline_Admin::common/page/loading.phtml)
+<!-- 消息提示区域 -->
+<div class='row'>
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
 
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
+<!-- 提示信息 -->
+<div class="row">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <i class="mdi mdi-information me-2"></i>
+            <strong><lang>提示</lang>:</strong> <lang>基础设置功能正在开发中，敬请期待。</lang>
+        </div>
+    </div>
+</div>
 
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <!-- 页面标题 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0 font-size-18"><lang>基础设置</lang></h4>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 消息提示区域 -->
-                <div class='row'>
-                    <div class="col-12">
-                        <template>Weline_Component::message.phtml</template>
-                    </div>
-                </div>
-
-                <!-- 提示信息 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="alert alert-info">
-                            <i class="mdi mdi-information me-2"></i>
-                            <strong><lang>提示</lang>:</strong> <lang>基础设置功能正在开发中，敬请期待。</lang>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 设置表单 -->
-                <div class="row">
-                    <div class="col-xl-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <h4 class="card-title mb-4"><lang>基础设置</lang></h4>
-                                
-                                <form id="settingsForm" onsubmit="saveSettings(event)">
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <div class="mb-3">
-                                                <label class="form-label"><lang>站点名称</lang></label>
-                                                <input type="text" class="form-control" name="site_name" 
-                                                       value="<?= htmlspecialchars($settings['site_name'] ?? '') ?>">
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="mb-3">
-                                                <label class="form-label"><lang>站点URL</lang></label>
-                                                <input type="url" class="form-control" name="site_url" 
-                                                       value="<?= htmlspecialchars($settings['site_url'] ?? '') ?>">
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="mb-3">
-                                                <label class="form-label"><lang>时区</lang></label>
-                                                <select class="form-select" name="timezone">
-                                                    <option value="Asia/Shanghai" <?= ($settings['timezone'] ?? '') === 'Asia/Shanghai' ? 'selected' : '' ?>>
-                                                        Asia/Shanghai
-                                                    </option>
-                                                    <option value="UTC" <?= ($settings['timezone'] ?? '') === 'UTC' ? 'selected' : '' ?>>
-                                                        UTC
-                                                    </option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="mb-3">
-                                                <label class="form-label"><lang>默认语言</lang></label>
-                                                <select class="form-select" name="language">
-                                                    <option value="zh_Hans_CN" <?= ($settings['language'] ?? '') === 'zh_Hans_CN' ? 'selected' : '' ?>>
-                                                        简体中文
-                                                    </option>
-                                                    <option value="en_US" <?= ($settings['language'] ?? '') === 'en_US' ? 'selected' : '' ?>>
-                                                        English
-                                                    </option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-12">
-                                            <button type="submit" class="btn btn-primary">
-                                                <i class="mdi mdi-content-save me-2"></i><lang>保存设置</lang>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </form>
+<!-- 设置表单 -->
+<div class="row">
+    <div class="col-xl-12">
+        <div class="card">
+            <div class="card-body">
+                <h4 class="card-title mb-4"><lang>基础设置</lang></h4>
+                
+                <form id="settingsForm" onsubmit="WelineBasicSettings.save(event)">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label"><lang>站点名称</lang></label>
+                                <input type="text" class="form-control" name="site_name" 
+                                       value="<?= htmlspecialchars($settings['site_name'] ?? '') ?>">
                             </div>
                         </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label"><lang>站点URL</lang></label>
+                                <input type="url" class="form-control" name="site_url" 
+                                       value="<?= htmlspecialchars($settings['site_url'] ?? '') ?>">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label"><lang>时区</lang></label>
+                                <select class="form-select" name="timezone">
+                                    <option value="Asia/Shanghai" <?= ($settings['timezone'] ?? '') === 'Asia/Shanghai' ? 'selected' : '' ?>>
+                                        Asia/Shanghai
+                                    </option>
+                                    <option value="UTC" <?= ($settings['timezone'] ?? '') === 'UTC' ? 'selected' : '' ?>>
+                                        UTC
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label"><lang>默认语言</lang></label>
+                                <select class="form-select" name="language">
+                                    <option value="zh_Hans_CN" <?= ($settings['language'] ?? '') === 'zh_Hans_CN' ? 'selected' : '' ?>>
+                                        简体中文
+                                    </option>
+                                    <option value="en_US" <?= ($settings['language'] ?? '') === 'en_US' ? 'selected' : '' ?>>
+                                        English
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-12">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="mdi mdi-content-save me-2"></i><lang>保存设置</lang>
+                            </button>
+                        </div>
                     </div>
-                </div>
+                </form>
             </div>
         </div>
     </div>
-
-    @template(Weline_Admin::common/footer.phtml)
 </div>
 
 <script>
-function saveSettings(event) {
-    event.preventDefault();
-    const formData = new FormData(event.target);
+(function() {
+    'use strict';
     
-    fetch('<?= $this->getBackendUrl('*/backend/settings/basic/save') ?>', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showPageMessage('success', data.message);
-        } else {
-            showPageMessage('error', data.message);
+    window.WelineBasicSettings = {
+        save: function(event) {
+            event.preventDefault();
+            var formData = new FormData(event.target);
+            
+            fetch('<?= $this->getBackendUrl('*/backend/settings/basic/save') ?>', {
+                method: 'POST',
+                body: formData
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    AdminToast.success(data.message);
+                } else {
+                    AdminToast.error(data.message);
+                }
+            })
+            .catch(function(error) {
+                AdminToast.error('<?= __('保存失败') ?>');
+            });
         }
-    })
-    .catch(error => {
-        showPageMessage('error', '<?= __('保存失败') ?>');
-    });
-}
+    };
+})();
 </script>
-
-</body>
-</html>
-

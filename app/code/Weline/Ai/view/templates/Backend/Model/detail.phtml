@@ -7,27 +7,8 @@
  * @var array $proxyInfo
  */
 /**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 ?>
-<!DOCTYPE html>
-<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><lang>模型详情</lang></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-
-<!-- 开始 页面 -->
-<div id="layout-wrapper">
-    <!-- ============================================================== -->
-    <!-- 开始 主要内容 -->
-    <!-- ============================================================== -->
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-
-<div class="model-detail-container">
+<div class="weline-ai-model-detail-container">
     <div class="card mb-3">
         <div class="card-header">
             <h5><?= __('基本信息') ?></h5>
@@ -102,7 +83,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
             <h5><?= __('模型配置') ?></h5>
         </div>
         <div class="card-body">
-            <pre class="bg-light p-3"><?= json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
+            <pre class="weline-ai-model-config-pre"><?= json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
         </div>
     </div>
     <?php endif; ?>
@@ -113,7 +94,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
             <h5><?= __('代理配置') ?></h5>
         </div>
         <div class="card-body">
-            <pre class="bg-light p-3"><?= json_encode($proxyInfo, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
+            <pre class="weline-ai-model-config-pre"><?= json_encode($proxyInfo, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
         </div>
     </div>
     <?php endif; ?>
@@ -145,106 +126,104 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     </div>
 </div>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-<script>
-function testConnection() {
-    if (!confirm('<?= __('确定要测试此模型的连接吗？') ?>')) {
-        return;
-    }
-
-    const btn = event.target.closest('button');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('测试中...') ?>';
-
-    fetch('<?= $this->getBackendUrl('*/backend/model/testConnection') ?>', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: 'id=<?= $model->getId() ?>'
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('连接测试成功') ?>',
-                    html: data.response.replace(/\n/g, '<br>'),
-                    confirmButtonText: '<?= __('确定') ?>',
-                    width: '600px'
-                });
-            } else {
-                console.log('<?= __('连接测试成功！') ?>\n\n' + data.response);
-            }
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('连接测试失败') ?>',
-                    text: data.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('连接测试失败：') ?>' + data.message);
-            }
-        }
-    })
-    .catch(error => {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('请求失败') ?>',
-                text: error.message,
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('请求失败：') ?>' + error.message);
-        }
-    })
-    .finally(() => {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="mdi mdi-connection"></i> <?= __('测试连接') ?>';
-    });
-}
-</script>
-
 <style>
-.model-detail-container .card {
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    border: 1px solid #e9ecef;
+.weline-ai-model-detail-container .card {
+    box-shadow: 0 1px 3px var(--backend-color-shadow, rgba(0,0,0,0.08));
+    border: 1px solid var(--backend-color-border, #e9ecef);
 }
 
-.model-detail-container .card-header {
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #e9ecef;
+.weline-ai-model-detail-container .card-header {
+    background-color: var(--backend-color-card-header-bg, #f8f9fa);
+    border-bottom: 1px solid var(--backend-color-border, #e9ecef);
 }
 
-.model-detail-container pre {
+.weline-ai-model-detail-container .weline-ai-model-config-pre {
+    background-color: var(--backend-color-pre-bg, #f8f9fa);
+    padding: 1rem;
     border-radius: 4px;
     max-height: 300px;
     overflow-y: auto;
     font-size: 12px;
 }
 
-.model-detail-container .table th {
-    background-color: #f8f9fa;
+.weline-ai-model-detail-container .table th {
+    background-color: var(--backend-color-table-header-bg, #f8f9fa);
     font-weight: 600;
 }
 
-.model-detail-container .table td {
+.weline-ai-model-detail-container .table td {
     vertical-align: middle;
 }
 </style>
 
-            </div><!-- container-fluid -->
-        </div><!-- page-content -->
-    </div><!-- main-content -->
-</div><!-- layout-wrapper -->
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 
-@template(Weline_Admin::common/footer.phtml)
-</body>
-</html>
+<script>
+(function() {
+    'use strict';
+
+    window.testConnection = function() {
+        if (!confirm('<?= __('确定要测试此模型的连接吗？') ?>')) {
+            return;
+        }
+
+        var btn = event.target.closest('button');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('测试中...') ?>';
+
+        fetch('<?= $this->getBackendUrl('*/backend/model/testConnection') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'id=<?= $model->getId() ?>'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('连接测试成功') ?>',
+                        html: data.response.replace(/\n/g, '<br>'),
+                        confirmButtonText: '<?= __('确定') ?>',
+                        width: '600px'
+                    });
+                } else {
+                    console.log('<?= __('连接测试成功！') ?>\n\n' + data.response);
+                }
+            } else {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('连接测试失败') ?>',
+                        text: data.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('连接测试失败：') ?>' + data.message);
+                }
+            }
+        })
+        .catch(error => {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('请求失败') ?>',
+                    text: error.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('请求失败：') ?>' + error.message);
+            }
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="mdi mdi-connection"></i> <?= __('测试连接') ?>';
+        });
+    };
+})();
+</script>

@@ -1,14 +1,12 @@
 <?php
 /**
  * PageBuilder 网站管理 - 添加/编辑表单
+ * 内容模板 - 由布局系统自动包裹
  *
  * @var \Weline\Framework\View\Template $this
  */
 
 use Weline\Framework\Manager\ObjectManager;
-
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 
 // 确保变量存在
 $website = $website ?? [];
@@ -18,64 +16,53 @@ $currencies = $currencies ?? [];
 $selected_currencies = $selected_currencies ?? [];
 $selected_languages = $selected_languages ?? [];
 ?>
-<!DOCTYPE html>
-<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
 
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= __('Weline Admin 管理面板') ?></title>
-    <!-- twitter-bootstrap-wizard css -->
-    <link rel='stylesheet' href='@static(Weline_Admin::assets/libs/twitter-bootstrap-wizard/prettify.css)'>
-    <!-- Sweet Alert-->
-    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-    <w:css>Weline_Eav::libs/bootstrap-colorpicker/bootstrap-colorpicker.min.css</w:css>
-    <style>
-        /* form-select 滚动条样式 */
-        .form-select,
-        .form-select[multiple] {
-            scrollbar-width: thin;
-            scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
-        }
-        .form-select::-webkit-scrollbar,
-        .form-select[multiple]::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        .form-select::-webkit-scrollbar-track,
-        .form-select[multiple]::-webkit-scrollbar-track {
-            background: var(--scrollbar-track);
-        }
-        .form-select::-webkit-scrollbar-thumb,
-        .form-select[multiple]::-webkit-scrollbar-thumb {
-            background: var(--scrollbar-thumb);
-            border-radius: 4px;
-        }
-        .form-select::-webkit-scrollbar-thumb:hover,
-        .form-select[multiple]::-webkit-scrollbar-thumb:hover {
-            background: var(--scrollbar-thumb-hover);
-        }
-        /* 时区搜索输入框样式 */
-        #timezone-search {
-            margin-bottom: 0.5rem;
-        }
-        #timezone-list {
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        #timezone-list option {
-            padding: 0.5rem;
-        }
-    </style>
-</head>
+<!-- twitter-bootstrap-wizard css -->
+<link rel='stylesheet' href='@static(Weline_Admin::assets/libs/twitter-bootstrap-wizard/prettify.css)'>
+<!-- Sweet Alert-->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<w:css>Weline_Eav::libs/bootstrap-colorpicker/bootstrap-colorpicker.min.css</w:css>
 
-<body <?= $themeConfig->getLayouts() ?? ''; ?> class='bg-transparent'>
-
-<!--页头工具条 开始-->
-@template(Weline_Admin::common/page/loading.phtml)
-<!--页头工具条 结束-->
+<style>
+    /* form-select 滚动条样式 */
+    .pagebuilder-website-form .form-select,
+    .pagebuilder-website-form .form-select[multiple] {
+        scrollbar-width: thin;
+        scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    }
+    .pagebuilder-website-form .form-select::-webkit-scrollbar,
+    .pagebuilder-website-form .form-select[multiple]::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    .pagebuilder-website-form .form-select::-webkit-scrollbar-track,
+    .pagebuilder-website-form .form-select[multiple]::-webkit-scrollbar-track {
+        background: var(--scrollbar-track);
+    }
+    .pagebuilder-website-form .form-select::-webkit-scrollbar-thumb,
+    .pagebuilder-website-form .form-select[multiple]::-webkit-scrollbar-thumb {
+        background: var(--scrollbar-thumb);
+        border-radius: 4px;
+    }
+    .pagebuilder-website-form .form-select::-webkit-scrollbar-thumb:hover,
+    .pagebuilder-website-form .form-select[multiple]::-webkit-scrollbar-thumb:hover {
+        background: var(--scrollbar-thumb-hover);
+    }
+    /* 时区搜索输入框样式 */
+    .pagebuilder-website-form #pagebuilder-website-timezone-search {
+        margin-bottom: 0.5rem;
+    }
+    .pagebuilder-website-form #pagebuilder-website-timezone-list {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .pagebuilder-website-form #pagebuilder-website-timezone-list option {
+        padding: 0.5rem;
+    }
+</style>
 
 <!-- 开始 页面 -->
-<div class="layout-wrapper overflow-hidden " id="WebsitePage">
+<div class="pagebuilder-website-form" id="pagebuilder-website-page">
     <!-- start page message -->
     <div class='row'>
         <template>Weline_Component::message.phtml</template>
@@ -276,7 +263,6 @@ $selected_languages = $selected_languages ?? [];
 </div>
 <!-- END layout-wrapper -->
 
-@template(Weline_Admin::common/footer.phtml)
 <!-- twitter-bootstrap-wizard js -->
 <script src='@static(Weline_Admin::assets/libs/twitter-bootstrap-wizard/jquery.bootstrap.wizard.min.js)'></script>
 
@@ -292,94 +278,94 @@ $selected_languages = $selected_languages ?? [];
 <script src='@static(Weline_Admin::assets/js/pages/sweet-alerts.init.js)'></script>
 <w:js>Weline_Eav::libs/bootstrap-colorpicker/bootstrap-colorpicker.min.js</w:js>
 <js:part name="debounce"/>
+
 <script>
+(function() {
+    'use strict';
+    
     // 时区搜索功能 - 原生实现
-    (function() {
-        const timezoneSearch = document.getElementById('timezone-search');
-        const timezoneSelect = document.getElementById('default_timezone');
+    var timezoneSearch = document.getElementById('timezone-search');
+    var timezoneSelect = document.getElementById('default_timezone');
+    
+    if (!timezoneSearch || !timezoneSelect) return;
+    
+    // 存储所有选项的原始数据
+    var allOptions = [];
+    for (var i = 1; i < timezoneSelect.options.length; i++) {
+        var option = timezoneSelect.options[i];
+        allOptions.push({
+            value: option.value,
+            text: option.textContent,
+            selected: option.selected
+        });
+    }
+    
+    // 搜索过滤函数
+    function filterTimezones(searchTerm) {
+        var term = searchTerm.toLowerCase().trim();
         
-        if (!timezoneSearch || !timezoneSelect) return;
+        // 清空当前选项（保留第一个空选项）
+        timezoneSelect.innerHTML = '<option value="">-- <?= __("请选择") ?> --</option>';
         
-        // 存储所有选项的原始数据
-        const allOptions = [];
-        for (let i = 1; i < timezoneSelect.options.length; i++) {
-            const option = timezoneSelect.options[i];
-            allOptions.push({
-                value: option.value,
-                text: option.textContent,
-                selected: option.selected
-            });
-        }
-        
-        // 搜索过滤函数
-        function filterTimezones(searchTerm) {
-            const term = searchTerm.toLowerCase().trim();
-            
-            // 清空当前选项（保留第一个空选项）
-            timezoneSelect.innerHTML = '<option value="">-- <?= __("请选择") ?> --</option>';
-            
-            if (!term) {
-                // 如果没有搜索词，显示所有选项
-                allOptions.forEach(opt => {
-                    const option = document.createElement('option');
-                    option.value = opt.value;
-                    option.textContent = opt.text;
-                    if (opt.selected) {
-                        option.selected = true;
-                        timezoneSearch.value = opt.text;
-                    }
-                    timezoneSelect.appendChild(option);
-                });
-            } else {
-                // 过滤匹配的选项
-                const matched = allOptions.filter(opt => 
-                    opt.text.toLowerCase().includes(term)
-                );
-                
-                matched.forEach(opt => {
-                    const option = document.createElement('option');
-                    option.value = opt.value;
-                    option.textContent = opt.text;
-                    if (opt.selected) {
-                        option.selected = true;
-                        timezoneSearch.value = opt.text;
-                    }
-                    timezoneSelect.appendChild(option);
-                });
-                
-                // 如果只有一个匹配项，自动选中
-                if (matched.length === 1) {
-                    timezoneSelect.selectedIndex = 1;
-                    timezoneSearch.value = matched[0].text;
+        if (!term) {
+            // 如果没有搜索词，显示所有选项
+            allOptions.forEach(function(opt) {
+                var option = document.createElement('option');
+                option.value = opt.value;
+                option.textContent = opt.text;
+                if (opt.selected) {
+                    option.selected = true;
+                    timezoneSearch.value = opt.text;
                 }
+                timezoneSelect.appendChild(option);
+            });
+        } else {
+            // 过滤匹配的选项
+            var matched = allOptions.filter(function(opt) {
+                return opt.text.toLowerCase().includes(term);
+            });
+            
+            matched.forEach(function(opt) {
+                var option = document.createElement('option');
+                option.value = opt.value;
+                option.textContent = opt.text;
+                if (opt.selected) {
+                    option.selected = true;
+                    timezoneSearch.value = opt.text;
+                }
+                timezoneSelect.appendChild(option);
+            });
+            
+            // 如果只有一个匹配项，自动选中
+            if (matched.length === 1) {
+                timezoneSelect.selectedIndex = 1;
+                timezoneSearch.value = matched[0].text;
             }
         }
-        
-        // 输入搜索（防抖）
-        let searchTimeout;
-        timezoneSearch.addEventListener('input', function() {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(function() {
-                filterTimezones(timezoneSearch.value);
-            }, 200);
-        });
-        
-        // 选择时区后，更新搜索框显示
-        timezoneSelect.addEventListener('change', function() {
-            if (timezoneSelect.value) {
-                timezoneSearch.value = timezoneSelect.options[timezoneSelect.selectedIndex].textContent;
-            } else {
-                timezoneSearch.value = '';
-            }
-        });
-        
-        // 初始化：如果有选中的值，显示在搜索框
+    }
+    
+    // 输入搜索（防抖）
+    var searchTimeout;
+    timezoneSearch.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function() {
+            filterTimezones(timezoneSearch.value);
+        }, 200);
+    });
+    
+    // 选择时区后，更新搜索框显示
+    timezoneSelect.addEventListener('change', function() {
         if (timezoneSelect.value) {
             timezoneSearch.value = timezoneSelect.options[timezoneSelect.selectedIndex].textContent;
+        } else {
+            timezoneSearch.value = '';
         }
-    })();
+    });
+    
+    // 初始化：如果有选中的值，显示在搜索框
+    if (timezoneSelect.value) {
+        timezoneSearch.value = timezoneSelect.options[timezoneSelect.selectedIndex].textContent;
+    }
+})();
 </script>
-<w:scope url="@backend-url('backend/user-data')" container-id="WebsitePage" event="input change click"/>
-</body>
-
-</html>
+<w:scope url="@backend-url('backend/user-data')" container-id="pagebuilder-website-page" event="input change click"/>

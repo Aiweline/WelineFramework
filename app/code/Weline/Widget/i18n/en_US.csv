@@ -138,8 +138,6 @@ FAQ部件,FAQ部件
 画布,Canvas
 从左侧拖放部件到这里,"Drag widgets from left panel here"
 属性配置,Properties
-编辑代码,"Edit Code"
-取消,Cancel
 所有模块,"All Modules"
 所有类型,"All Types"
 筛选,Filter
@@ -152,6 +150,8 @@ FAQ部件,FAQ部件
 版本,Version
 操作,Actions
 详情,Details
+编辑代码,"Edit Code"
+取消,Cancel
 部件详情,"Widget Details"
 加载中...,Loading...
 关闭,Close

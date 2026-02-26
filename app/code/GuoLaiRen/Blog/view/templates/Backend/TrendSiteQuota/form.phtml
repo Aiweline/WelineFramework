@@ -1,8 +1,14 @@
 <?php
-/** @var \GuoLaiRen\Blog\Model\TrendSiteQuota|null $quota */
-/** @var array $sites */
-/** @var array $profiles */
-/** @var array $categoriesBySite [ site_id => [ category_id => name ] ] */
+/**
+ * 站点发文配额表单 - 内容模板
+ * 由布局系统自动包裹
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var \GuoLaiRen\Blog\Model\TrendSiteQuota|null $quota
+ * @var array $sites
+ * @var array $profiles
+ * @var array $categoriesBySite [ site_id => [ category_id => name ] ]
+ */
 $quota = $this->getData('quota');
 $action = $this->getData('action');
 $sites = $this->getData('sites') ?? [];
@@ -12,7 +18,6 @@ $isEdit = $quota && $quota->getId();
 $currentSiteId = $quota ? (int)$quota->getData('site_id') : 0;
 $currentCategoryId = $quota ? (int)$quota->getData('default_category_id') : 0;
 ?>
-<w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
 
 <div class="row">
     <div class="col-12">
@@ -113,5 +118,3 @@ $currentCategoryId = $quota ? (int)$quota->getData('default_category_id') : 0;
     }
 })();
 </script>
-
-<w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>

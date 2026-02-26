@@ -314,7 +314,13 @@ class Post extends BackendController
             $modeText = $hasTrendSource ? __('趋势增长词模式') : __('画像关键词兜底模式');
             /** @var AiPublish $cron */
             $cron = ObjectManager::getInstance(AiPublish::class);
-            $result = $cron->execute();
+            
+            $debugLogs = [];
+            $onProgress = function (string $event, array $data) use (&$debugLogs) {
+                $debugLogs[] = ['event' => $event, 'data' => $data];
+            };
+            
+            $result = $cron->execute($onProgress);
 
             $message = __('当前模式：%{mode}；%{result}', ['mode' => $modeText, 'result' => $result]);
             if (str_contains($result, '0 篇')) {
@@ -326,6 +332,7 @@ class Post extends BackendController
                 'success' => true,
                 'mode' => $modeText,
                 'message' => $message,
+                'debug' => $debugLogs,
             ], JSON_UNESCAPED_UNICODE);
         } catch (\Throwable $e) {
             return json_encode([

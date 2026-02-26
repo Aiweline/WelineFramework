@@ -1,12 +1,15 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
+/**
+ * CMS模板管理 - 索引页面
+ * 内容模板 - 由布局系统自动包裹
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
 $styles = $this->getData('styles') ?: [];
 $search = $this->getData('search') ?: '';
 $testPageId = $this->getData('test_page_id') ?: 0;
 $pages = $this->getData('pages') ?: [];
 ?>
-
-<w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
 
 <!-- start page title -->
 <div class="row">
@@ -858,5 +861,4 @@ function refreshTemplateConfigIframe() {
 }
 </script>
 
-<w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>
 

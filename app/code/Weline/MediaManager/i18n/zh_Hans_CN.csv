@@ -11,58 +11,70 @@
 本地存储,本地存储
 允许的文件类型：,允许的文件类型：
 允许的文件大小：,允许的文件大小：
-Folders,Folders
-Upload,Upload
-"New Folder","New Folder"
-Rename,Rename
-Download,Download
-Delete,Delete
-Select,Select
-Refresh,Refresh
-"Drop files here to upload","Drop files here to upload"
-Loading...,Loading...
+Storage,存储源
+"Local Storage","Local Storage"
+Folders,文件夹
+Upload,上传
+"New Folder",新建文件夹
+Rename,重命名
+Download,下载
+Delete,删除
+Refresh,刷新
+Select,选择
+"Drop files here to upload",拖放文件到此处上传
+Loading...,加载中...
+已选择,已选择
+个文件,个文件
+取消全选,取消全选
+取消,取消
+确认选择,确认选择
+Preview,预览
+"Select a file to preview",选择文件预览
+Type,类型
+Size,大小
+Dimensions,尺寸
 Cancel,Cancel
-OK,OK
+OK,确定
+连接器URL未配置，请刷新页面,连接器URL未配置，请刷新页面
+请求超时，服务器可能繁忙,请求超时，服务器可能繁忙
+响应JSON格式无效,响应JSON格式无效
+网络错误,网络错误
+响应无效,响应无效
+%{count,%{count
+"已选择 %{count","已选择 %{count"
+请选择一个项目进行重命名,请选择一个项目进行重命名
+未选择任何项目,未选择任何项目
+请至少选择一个文件,请至少选择一个文件
+请选择有效的文件（非文件夹）,请选择有效的文件（非文件夹）
+"确定删除 %{count","确定删除 %{count"
+删除成功,删除成功
+重命名成功,重命名成功
+上传完成,上传完成
+文件夹已创建,文件夹已创建
+不能访问指定路径以外的目录,不能访问指定路径以外的目录
+未知,未知
+文件夹名称,文件夹名称
+未命名,未命名
+新名称,新名称
+确认,确认
+暂无文件,暂无文件
+打开,打开
+退出选择模式,退出选择模式
+清除选择,清除选择
+选择模式,选择模式
+选择文件,选择文件
 媒体文件管理器,媒体文件管理器
 建议尺寸：,建议尺寸：
 允许类型：,允许类型：
 大小限制：,大小限制：
 连接器URL未配置,连接器URL未配置
-响应无效,响应无效
-不能访问指定路径以外的目录,不能访问指定路径以外的目录
 没有可上传的有效文件,没有可上传的有效文件
-上传完成,上传完成
-文件夹已创建,文件夹已创建
-请选择一个项目进行重命名,请选择一个项目进行重命名
-重命名成功,重命名成功
-未选择任何项目,未选择任何项目
-"确定删除 %{count","确定删除 %{count"
-删除成功,删除成功
-请至少选择一个文件,请至少选择一个文件
 请选择有效的文件,请选择有效的文件
-新建文件夹,新建文件夹
-文件夹名称,文件夹名称
-未命名,未命名
-重命名,重命名
-新名称,新名称
-确认,确认
-取消,取消
-确定,确定
 请求超时,请求超时
-响应JSON格式无效,响应JSON格式无效
-网络错误,网络错误
-%{count,%{count
-"已选择 %{count","已选择 %{count"
-选择,选择
-下载,下载
-打开,打开
-删除,删除
-加载中...,加载中...
-暂无文件,暂无文件
-Storage,Storage
-"Local Storage","Local Storage"
-Preview,Preview
-"Select a file to preview","Select a file to preview"
-Type,Type
-Size,Size
-Dimensions,Dimensions
+超出大小,超出大小
+类型不允许,类型不允许
+"确定删除 %{count} 个项目？","确定删除 %{count} 个项目？"
+"%{count} 个项目","%{count} 个项目"
+"已选择 %{count} 个","已选择 %{count} 个"
+"文件 ""%{name}"" 超过大小限制（最大：%{size}）","文件 ""%{name}"" 超过大小限制（最大：%{size}）"
+"文件类型 ""%{ext}"" 不允许。允许的类型：%{allowed}","文件类型 ""%{ext}"" 不允许。允许的类型：%{allowed}"

@@ -324,6 +324,27 @@ class CodeFixer
             $this->addFix('js_content', '移除了IIFE包装');
         }
         
+        // 将 var 替换为 const（避免变量提升）
+        $original = $js;
+        $js = preg_replace('/\bvar\s+(\w)/', 'const $1', $js);
+        if ($js !== $original) {
+            $this->addFix('js_content', '将 var 替换为 const（避免变量提升）');
+        }
+        
+        // 将 function xxx() 替换为 const xxx = function()（避免函数提升到全局）
+        $original = $js;
+        $js = preg_replace('/\bfunction\s+([a-zA-Z_]\w*)\s*\(/', 'const $1 = function(', $js);
+        if ($js !== $original) {
+            $this->addFix('js_content', '将 function 声明转换为 const 表达式（避免全局污染）');
+        }
+        
+        // 将 document.querySelector 替换为 component.querySelector
+        $original = $js;
+        $js = preg_replace('/\bdocument\s*\.\s*(querySelector|querySelectorAll)\s*\(/', 'component.$1(', $js);
+        if ($js !== $original) {
+            $this->addFix('js_content', '将 document.querySelector 替换为 component.querySelector（限定组件作用域）');
+        }
+        
         // 修复大括号匹配
         $openCount = substr_count($js, '{');
         $closeCount = substr_count($js, '}');

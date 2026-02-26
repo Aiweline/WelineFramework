@@ -1,9 +1,10 @@
 <?php
+/**
+ * 元数据配置管理（内容模板）
+ * 由布局系统自动包裹 HTML 框架
+ */
 /** @var \Weline\Framework\View\Template $this */
 /** @var array $metaContext */
-
-/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 
 $metaContext = $this->getData('metaContext') ?? [];
 $namespaceList = $this->getData('namespaceList') ?? [];
@@ -16,75 +17,44 @@ $currentType = $metaContext['type'] ?? '';
 $currentCategory = $metaContext['category'] ?? '';
 $currentIdentityId = $metaContext['identity_id'] ?? '';
 
-// 从控制器传入的唯一化选项（如果没有则使用空数组）
 $scopeOptions = $this->getData('scopeOptions') ?? [];
 $localeOptions = $this->getData('localeOptions') ?? [];
 $typeOptions = $this->getData('typeOptions') ?? [];
 $categoryOptions = $this->getData('categoryOptions') ?? [];
 
-// 如果没有当前命名空间，默认选择第一个
 if (empty($currentNamespace) && !empty($namespaceList)) {
     $currentNamespace = $namespaceList[0];
 }
 ?>
 
-<!DOCTYPE html>
-<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= __('元数据配置管理') ?></title>
-    <style>
-        .meta-tree ul {
-            list-style: none;
-            padding-left: 1rem;
-            margin-bottom: 0;
-        }
-        .meta-tree li {
-            margin: 0.2rem 0;
-        }
-        .meta-tree .tree-label {
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 0.35rem;
-            padding: 0.2rem 0.3rem;
-            border-radius: 4px;
-        }
-        .meta-tree .tree-label:hover {
-            background: rgba(13,110,253,0.08);
-        }
-        .meta-tree .tree-label.active {
-            background: rgba(13,110,253,0.15);
-            color: #0d6efd;
-            font-weight: 600;
-        }
-        .meta-tree .tree-node-children {
-            margin-left: 1rem;
-        }
-        .meta-tree .collapsed {
-            display: none;
-        }
-        .meta-param-list .list-group-item {
-            border-left: none;
-            border-right: none;
-        }
-        .meta-param-list .list-group-item:first-child {
-            border-top: none;
-        }
-        .meta-param-list .list-group-item:last-child {
-            border-bottom: none;
-        }
-    </style>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-@template(Weline_Admin::common/page/loading.phtml)
-<div id="layout-wrapper">
-    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
-    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
+<!-- 页面标题 -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><lang>元数据配置管理</lang></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item">
+                        <a href="@backend-url('admin/index/index')"><lang>系统</lang></a>
+                    </li>
+                    <li class="breadcrumb-item">
+                        <a href="@backend-url('meta/backend/meta')"><lang>元数据管理</lang></a>
+                    </li>
+                    <li class="breadcrumb-item active"><lang>配置管理</lang></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 消息 -->
+<div class="row">
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
+
+<div class="container-fluid p-0">
                 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -243,10 +213,6 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- Meta name/description 翻译 Modal -->
 <div class="modal fade" id="metaNameDescriptionTranslationModal" tabindex="-1" aria-labelledby="metaNameDescriptionTranslationModalLabel" aria-hidden="true">
@@ -314,11 +280,11 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
         border-radius: 4px;
     }
     .meta-tree .tree-label:hover {
-        background: rgba(13,110,253,0.08);
+        background: var(--backend-color-primary-bg, rgba(13,110,253,0.08));
     }
     .meta-tree .tree-label.active {
-        background: rgba(13,110,253,0.15);
-        color: #0d6efd;
+        background: var(--backend-color-primary-bg-active, rgba(13,110,253,0.15));
+        color: var(--backend-color-primary, #0d6efd);
         font-weight: 600;
     }
     .meta-tree .tree-node-children {
@@ -1263,5 +1229,3 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
     }
 })();
 </script>
-</body>
-</html>

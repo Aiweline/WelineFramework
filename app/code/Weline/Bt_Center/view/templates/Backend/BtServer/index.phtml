@@ -1,6 +1,6 @@
 <?php
 /**
- * 宝塔服务器列表
+ * 宝塔服务器列表（内容模板）
  *
  * @var \Weline\Framework\View\Template $this
  */
@@ -13,22 +13,25 @@ $keyword = $keyword ?? '';
 $platformOptions = $platformOptions ?? [];
 ?>
 
-@template(Weline_Admin::common/head.phtml)
-
-<div class="page-content">
-    <div class="container-fluid">
-        <div class="row mb-3">
-            <div class="col-12 d-flex justify-content-between align-items-center">
-                <h4 class="mb-0"><lang>宝塔服务器列表</lang></h4>
-                <a href="<?= $this->getBackendUrl('bt_center/backend/bt_server/form') ?>"
-                   class="btn btn-primary">
-                    <i class="mdi mdi-plus-circle-outline me-1"></i>
-                    <lang>新增服务器</lang>
-                </a>
-            </div>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-0"><lang>宝塔服务器列表</lang></h4>
+            <a href="<?= $this->getBackendUrl('bt_center/backend/bt_server/form') ?>"
+               class="btn btn-primary">
+                <i class="mdi mdi-plus-circle-outline me-1"></i>
+                <lang>新增服务器</lang>
+            </a>
         </div>
+    </div>
+</div>
 
-        <!-- 筛选表单 -->
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<div class="row">
+    <div class="col-12">
         <div class="card mb-3">
             <div class="card-body">
                 <form method="get" action="<?= $this->getBackendUrl('bt_center/backend/bt_server/index') ?>" class="row g-3">
@@ -126,8 +129,8 @@ $platformOptions = $platformOptions ?? [];
                                             <lang>编辑</lang>
                                         </a>
                                         <button type="button"
-                                                class="btn btn-sm btn-outline-danger"
-                                                onclick="deleteServer(<?= (int)($server['server_id'] ?? 0) ?>)">
+                                                class="btn btn-sm btn-outline-danger weline-bt-delete-btn"
+                                                data-id="<?= (int)($server['server_id'] ?? 0) ?>">
                                             <i class="mdi mdi-delete"></i>
                                             <lang>删除</lang>
                                         </button>
@@ -144,35 +147,62 @@ $platformOptions = $platformOptions ?? [];
 </div>
 
 <script>
-function deleteServer(id) {
-    if (!confirm('<?= __('确定要删除这个服务器吗？') ?>')) {
-        return;
-    }
+(function() {
+    'use strict';
+    
+    document.querySelectorAll('.weline-bt-delete-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var id = this.dataset.id;
+            
+            if (typeof AdminConfirm !== 'undefined') {
+                AdminConfirm.show({
+                    title: '<?= __("确认删除") ?>',
+                    message: '<?= __("确定要删除这个服务器吗？") ?>',
+                    confirmText: '<?= __("确定删除") ?>',
+                    cancelText: '<?= __("取消") ?>',
+                    type: 'danger',
+                    onConfirm: function() {
+                        deleteServer(id);
+                    }
+                });
+            } else {
+                deleteServer(id);
+            }
+        });
+    });
+    
+    function deleteServer(id) {
+        var formData = new URLSearchParams();
+        formData.append('id', id);
 
-    const formData = new URLSearchParams();
-    formData.append('id', id);
-
-    fetch('<?= $this->getBackendUrl('bt_center/backend/bt_server/delete') ?>', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: formData
-    })
-        .then(response => response.json())
-        .then(resp => {
+        fetch('<?= $this->getBackendUrl('bt_center/backend/bt_server/delete') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: formData
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(resp) {
             if (resp.success) {
-                showPageMessage('success', resp.message);
-                setTimeout(() => {
+                if (typeof AdminToast !== 'undefined') {
+                    AdminToast.success(resp.message);
+                }
+                setTimeout(function() {
                     window.location.reload();
                 }, 800);
             } else {
-                showPageMessage('error', resp.message || '删除失败');
+                if (typeof AdminToast !== 'undefined') {
+                    AdminToast.error(resp.message || '<?= __("删除失败") ?>');
+                }
             }
         })
-        .catch(error => {
+        .catch(function(error) {
             console.error('Error:', error);
-            showPageMessage('error', '请求失败');
+            if (typeof AdminToast !== 'undefined') {
+                AdminToast.error('<?= __("请求失败") ?>');
+            }
         });
-}
+    }
+})();
 </script>

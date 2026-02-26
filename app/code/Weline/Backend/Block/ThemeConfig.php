@@ -37,8 +37,17 @@ class ThemeConfig extends \Weline\Framework\View\Block
     public function getOriginThemeConfig($key = '')
     {
         $themeConfig = $this->userSession->getData(self::theme_Session_Config);
-        if (empty($themeConfig) and $this->userSession->isLogin()) {
-            $themeConfig = $this->userConfig->getData(self::theme_Session_Config);
+        if (empty($themeConfig) && $this->userSession->isLogin()) {
+            $configValue = $this->userConfig->getConfig(self::theme_Session_Config, 'Weline_Backend', '主题设置');
+            if ($configValue) {
+                $themeConfig = json_decode($configValue, true);
+                if (!is_array($themeConfig)) {
+                    $themeConfig = [];
+                }
+            }
+        }
+        if (!is_array($themeConfig)) {
+            $themeConfig = [];
         }
         return $key ? ($themeConfig[$key] ?? '') : $themeConfig;
     }
@@ -52,10 +61,9 @@ class ThemeConfig extends \Weline\Framework\View\Block
             if ($data = $this->userSession->getData(self::area . 'theme_config')) {
                 return $data;
             }
-            $data = $this->userConfig->getOriginThemeConfig();
-            # 保存配置 (更新session配置)
+            $data = $this->getOriginThemeConfig();
             if ($data) {
-                $this->setThemeConfig($data);
+                $this->userSession->setData(self::theme_Session_Config, $data);
             }
         }
         return $data;
@@ -115,7 +123,7 @@ class ThemeConfig extends \Weline\Framework\View\Block
             $theme_Config[$key] = $value;
             $this->userSession->setData(self::theme_Session_Config, $theme_Config);
             if ($this->userSession->isLogin()) {
-                $this->userConfig->setConfig(self::theme_Session_Config, $theme_Config, 'Weline_Backend', '主题设置');
+                $this->userConfig->setConfig(self::theme_Session_Config, json_encode($theme_Config), 'Weline_Backend', '主题设置');
             }
         }
 
@@ -127,7 +135,7 @@ class ThemeConfig extends \Weline\Framework\View\Block
     {
         $body_attributes = $this->userSession->getData(self::theme_Session_Config)['layouts'] ?? [];
         if (empty($body_attributes)) {
-            $configData = $this->userConfig->getData(self::theme_Session_Config);
+            $configData = $this->userConfig->getConfig(self::theme_Session_Config, 'Weline_Backend', '主题设置');
             if ($configData) {
                 $decoded = json_decode($configData, true);
                 $body_attributes = $decoded['layouts'] ?? [];

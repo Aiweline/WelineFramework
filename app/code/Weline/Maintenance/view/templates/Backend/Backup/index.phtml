@@ -1,181 +1,157 @@
 <?php
 /**
- * 备份列表页面
+ * 备份列表页面（内容模板）
  *
  * @var \Weline\Framework\View\Template $this
  * @var array $backups
  * @var array $filters
  */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
-
 $backups = $backups ?? [];
 $filters = $filters ?? [];
 ?>
-<!DOCTYPE html>
-<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><lang>备份管理</lang></title>
-</head>
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+<!-- 页面标题 -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0 font-size-18"><lang>备份管理</lang></h4>
+            <div>
+                <button type="button" class="btn btn-primary" onclick="location.href='<?= $this->getBackendUrl('maintenance/backend/backup/create') ?>'">
+                    <i class="mdi mdi-plus me-2"></i><lang>创建备份</lang>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
-@template(Weline_Admin::common/page/loading.phtml)
+<!-- 消息提示区域 -->
+<div class='row'>
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
 
-<div id="layout-wrapper">
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    @template(Weline_Admin::common/left-sidebar.phtml)
-
-    <div class="main-content">
-        <div class="page-content">
-            <div class="container-fluid">
-                <!-- 页面标题 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0 font-size-18"><lang>备份管理</lang></h4>
-                            <div>
-                                <button type="button" class="btn btn-primary" onclick="location.href='<?= $this->getBackendUrl('maintenance/backend/backup/create') ?>'">
-                                    <i class="mdi mdi-plus me-2"></i><lang>创建备份</lang>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 消息提示区域 -->
-                <div class='row'>
-                    <div class="col-12">
-                        <template>Weline_Component::message.phtml</template>
-                    </div>
-                </div>
-
-                <!-- 备份列表 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <div class="table-responsive">
-                                    <table class="table table-bordered table-hover">
-                                        <thead>
-                                            <tr>
-                                                <th><lang>备份ID</lang></th>
-                                                <th><lang>备份类型</lang></th>
-                                                <th><lang>备份名称</lang></th>
-                                                <th><lang>文件大小</lang></th>
-                                                <th><lang>状态</lang></th>
-                                                <th><lang>创建时间</lang></th>
-                                                <th><lang>操作</lang></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php if (empty($backups)): ?>
-                                                <tr>
-                                                    <td colspan="7" class="text-center"><lang>暂无备份记录</lang></td>
-                                                </tr>
-                                            <?php else: ?>
-                                                <?php foreach ($backups as $backup): ?>
-                                                    <tr>
-                                                        <td><?= $backup['backup_id'] ?? '' ?></td>
-                                                        <td>
-                                                            <?php
-                                                            $typeMap = [
-                                                                'full' => __('完整备份'),
-                                                                'database' => __('数据库备份'),
-                                                                'code' => __('代码备份'),
-                                                                'config' => __('配置文件备份'),
-                                                            ];
-                                                            echo $typeMap[$backup['backup_type'] ?? ''] ?? $backup['backup_type'] ?? '';
-                                                            ?>
-                                                        </td>
-                                                        <td><?= htmlspecialchars($backup['backup_name'] ?? '') ?></td>
-                                                        <td>
-                                                            <?php
-                                                            $size = (int)($backup['file_size'] ?? 0);
-                                                            if ($size === 0) {
-                                                                echo '0 B';
-                                                            } else {
-                                                                $units = ['B', 'KB', 'MB', 'GB', 'TB'];
-                                                                $i = floor(log($size) / log(1024));
-                                                                $i = min($i, count($units) - 1);
-                                                                echo round($size / pow(1024, $i), 2) . ' ' . $units[$i];
-                                                            }
-                                                            ?>
-                                                        </td>
-                                                        <td>
-                                                            <?php
-                                                            $statusMap = [
-                                                                'completed' => '<span class="badge bg-success">' . __('已完成') . '</span>',
-                                                                'pending' => '<span class="badge bg-warning">' . __('进行中') . '</span>',
-                                                                'failed' => '<span class="badge bg-danger">' . __('失败') . '</span>',
-                                                            ];
-                                                            echo $statusMap[$backup['status'] ?? 'pending'] ?? $backup['status'] ?? '';
-                                                            ?>
-                                                        </td>
-                                                        <td><?= $backup['created_at'] ?? '' ?></td>
-                                                        <td>
-                                                            <a href="<?= $this->getBackendUrl('maintenance/backend/backup/download', ['id' => $backup['backup_id'] ?? 0]) ?>" 
-                                                               class="btn btn-sm btn-primary me-1">
-                                                                <i class="mdi mdi-download"></i> <lang>下载</lang>
-                                                            </a>
-                                                            <button type="button" class="btn btn-sm btn-danger" 
-                                                                    onclick="deleteBackup(<?= $backup['backup_id'] ?? 0 ?>)">
-                                                                <i class="mdi mdi-delete"></i> <lang>删除</lang>
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                <?php endforeach; ?>
-                                            <?php endif; ?>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+<!-- 备份列表 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover">
+                        <thead>
+                            <tr>
+                                <th><lang>备份ID</lang></th>
+                                <th><lang>备份类型</lang></th>
+                                <th><lang>备份名称</lang></th>
+                                <th><lang>文件大小</lang></th>
+                                <th><lang>状态</lang></th>
+                                <th><lang>创建时间</lang></th>
+                                <th><lang>操作</lang></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($backups)): ?>
+                                <tr>
+                                    <td colspan="7" class="text-center"><lang>暂无备份记录</lang></td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($backups as $backup): ?>
+                                    <tr>
+                                        <td><?= $backup['backup_id'] ?? '' ?></td>
+                                        <td>
+                                            <?php
+                                            $typeMap = [
+                                                'full' => __('完整备份'),
+                                                'database' => __('数据库备份'),
+                                                'code' => __('代码备份'),
+                                                'config' => __('配置文件备份'),
+                                            ];
+                                            echo $typeMap[$backup['backup_type'] ?? ''] ?? $backup['backup_type'] ?? '';
+                                            ?>
+                                        </td>
+                                        <td><?= htmlspecialchars($backup['backup_name'] ?? '') ?></td>
+                                        <td>
+                                            <?php
+                                            $size = (int)($backup['file_size'] ?? 0);
+                                            if ($size === 0) {
+                                                echo '0 B';
+                                            } else {
+                                                $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+                                                $i = floor(log($size) / log(1024));
+                                                $i = min($i, count($units) - 1);
+                                                echo round($size / pow(1024, $i), 2) . ' ' . $units[$i];
+                                            }
+                                            ?>
+                                        </td>
+                                        <td>
+                                            <?php
+                                            $statusMap = [
+                                                'completed' => '<span class="badge bg-success">' . __('已完成') . '</span>',
+                                                'pending' => '<span class="badge bg-warning">' . __('进行中') . '</span>',
+                                                'failed' => '<span class="badge bg-danger">' . __('失败') . '</span>',
+                                            ];
+                                            echo $statusMap[$backup['status'] ?? 'pending'] ?? $backup['status'] ?? '';
+                                            ?>
+                                        </td>
+                                        <td><?= $backup['created_at'] ?? '' ?></td>
+                                        <td>
+                                            <a href="<?= $this->getBackendUrl('maintenance/backend/backup/download', ['id' => $backup['backup_id'] ?? 0]) ?>" 
+                                               class="btn btn-sm btn-primary me-1">
+                                                <i class="mdi mdi-download"></i> <lang>下载</lang>
+                                            </a>
+                                            <button type="button" class="btn btn-sm btn-danger" 
+                                                    onclick="MaintenanceBackup.deleteBackup(<?= $backup['backup_id'] ?? 0 ?>)">
+                                                <i class="mdi mdi-delete"></i> <lang>删除</lang>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </div>
-
-    @template(Weline_Admin::common/footer.phtml)
 </div>
 
 <script>
-function formatBytes(bytes) {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-}
-
-function deleteBackup(backupId) {
-    if (!confirm('<?= __('确定要删除此备份吗？') ?>')) {
-        return;
-    }
-
-    const formData = new FormData();
-    formData.append('id', backupId);
-
-    fetch('<?= $this->getBackendUrl('maintenance/backend/backup/delete') ?>', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showPageMessage('success', data.message);
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            showPageMessage('error', data.message);
+(function() {
+    'use strict';
+    
+    window.MaintenanceBackup = {
+        formatBytes: function(bytes) {
+            if (bytes === 0) return '0 B';
+            var k = 1024;
+            var sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            var i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        },
+        
+        deleteBackup: function(backupId) {
+            AdminConfirm.show('<?= __('确定要删除此备份吗？') ?>').then(function(confirmed) {
+                if (!confirmed) return;
+                
+                var formData = new FormData();
+                formData.append('id', backupId);
+                
+                fetch('<?= $this->getBackendUrl('maintenance/backend/backup/delete') ?>', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        AdminToast.success(data.message);
+                        setTimeout(function() { location.reload(); }, 1000);
+                    } else {
+                        AdminToast.error(data.message);
+                    }
+                })
+                .catch(function(error) {
+                    AdminToast.error('<?= __('操作失败') ?>');
+                });
+            });
         }
-    })
-    .catch(error => {
-        showPageMessage('error', '<?= __('操作失败') ?>');
-    });
-}
+    };
+})();
 </script>
-
-</body>
-</html>

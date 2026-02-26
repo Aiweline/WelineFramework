@@ -18,11 +18,30 @@
     var EXPANDED_NODES = {};
     var STORAGE_KEY = '';
     var START_PATH = '';
+    var LAST_CLICKED_HASH = null;
+    var SELECTION_MODE = false;
+    var GET_FILE_CALLBACK = null;
+    var MULTI_SELECT = false;
+    var ALLOWED_MIMES = [];
+    var IFRAME_MODE = false;
+    var I18N = {};
 
     /* ─── helpers ────────────────────────────────────────────────────── */
 
     function qs(sel, ctx) { return (ctx || document).querySelector(sel); }
     function qsa(sel, ctx) { return (ctx || document).querySelectorAll(sel); }
+
+    function t(key, params) {
+        var str = (I18N && I18N[key]) || key;
+        if (params) {
+            for (var k in params) {
+                if (params.hasOwnProperty(k)) {
+                    str = str.replace(new RegExp('%\\{' + k + '\\}', 'g'), params[k]);
+                }
+            }
+        }
+        return str;
+    }
 
     function api(params, onDone, onErr) {
         var isUpload = params instanceof FormData;
@@ -55,7 +74,7 @@
         }
         xhr.ontimeout = function () {
             timedOut = true;
-            (onErr || showError)('Request timeout. The server may be busy or the connector URL may be wrong.');
+            (onErr || showError)(t('requestTimeout'));
         };
         xhr.onload = function () {
             if (timedOut) return;
@@ -68,13 +87,13 @@
                         onDone && onDone(data);
                     }
                 } catch (e) {
-                    (onErr || showError)('Invalid JSON response');
+                    (onErr || showError)(t('invalidJson'));
                 }
             } else {
                 (onErr || showError)('HTTP ' + xhr.status);
             }
         };
-        xhr.onerror = function () { if (!timedOut) (onErr || showError)('Network error'); };
+        xhr.onerror = function () { if (!timedOut) (onErr || showError)(t('networkError')); };
         if (isUpload && xhr.upload) {
             xhr.upload.onprogress = function (ev) {
                 if (ev.lengthComputable) updateUploadProgress(Math.round(ev.loaded / ev.total * 100));
@@ -136,22 +155,41 @@
     /* ─── init ───────────────────────────────────────────────────────── */
 
     var CURRENT_STORAGE = 'local';
+    var CONFIG = {};
 
-    function init(connectorUrl, startPath) {
+    function init(connectorUrl, startPath, options) {
+        options = options || {};
+        CONFIG = options;
+        I18N = options.i18n || {};
+        
         CONNECTOR = (typeof connectorUrl === 'string' ? connectorUrl : '').trim();
         if (!CONNECTOR) {
             setLoading(false);
-            showError('Connector URL is not configured. Please refresh the page.');
+            showError(t('connectorNotConfigured'));
             return;
         }
         START_PATH = (typeof startPath === 'string' ? startPath : '').trim();
         STORAGE_KEY = 'mmf_last_path_' + hashCode(START_PATH || '_root_');
 
+        // 检查是否为 iframe 模式（通过 options.isIframe 或检测 window.parent）
+        IFRAME_MODE = !!options.isIframe || (window.parent && window.parent !== window);
+        MULTI_SELECT = !!options.multi;
+        
         bindToolbar();
         bindDragDrop();
         bindContextMenu();
         bindPreviewPanel();
-        loadStorages();
+        
+        // 只在非 iframe 模式下加载存储选择器
+        if (!IFRAME_MODE) {
+            loadStorages();
+        }
+        
+        // iframe 模式下绑定选择工具栏
+        if (IFRAME_MODE) {
+            window.addEventListener('message', handleParentMessage);
+            bindSelectBar();
+        }
 
         var lastHash = loadLastPath();
         if (lastHash) {
@@ -242,8 +280,15 @@
         if (CURRENT_STORAGE && CURRENT_STORAGE !== 'local') {
             params.storage = CURRENT_STORAGE;
         }
-        if (isInit) { params.init = '1'; params.tree = '1'; }
-        else { params.tree = '1'; }
+        if (isInit) {
+            params.init = '1';
+            params.tree = '1';
+            if (START_PATH && !target) {
+                params.path = START_PATH;
+            }
+        } else {
+            params.tree = '1';
+        }
 
         api(params, function (data) {
             try {
@@ -284,7 +329,7 @@
                 saveLastPath();
             } catch (e) {
                 setLoading(false);
-                showError('Invalid response: ' + (e && e.message ? e.message : String(e)));
+                showError(t('invalidResponse') + ': ' + (e && e.message ? e.message : String(e)));
             }
         }, function (err) {
             setLoading(false);
@@ -459,7 +504,7 @@
         });
 
         if (!items.length) {
-            container.innerHTML = '<div class="mmf-empty"><div class="mmf-empty-icon">\uD83D\uDCC2</div><div>No files</div></div>';
+            container.innerHTML = '<div class="mmf-empty"><div class="mmf-empty-icon">\uD83D\uDCC2</div><div>' + t('noFiles') + '</div></div>';
             return;
         }
 
@@ -512,7 +557,7 @@
         if (!el) return;
         var count = 0;
         for (var h in FILES) { if (FILES[h].phash === CWD_HASH) count++; }
-        el.textContent = count + ' items' + (SELECTED.length ? ', ' + SELECTED.length + ' selected' : '');
+        el.textContent = t('itemsCount', {count: count}) + (SELECTED.length ? ', ' + t('selectedCount', {count: SELECTED.length}) : '');
     }
 
     function setLoading(on) {
@@ -533,7 +578,7 @@
             if (!loadingEl) {
                 loadingEl = document.createElement('div');
                 loadingEl.className = 'mmf-loading';
-                loadingEl.innerHTML = '<span class="mmf-spinner"></span>Loading...';
+                loadingEl.innerHTML = '<span class="mmf-spinner"></span>' + t('loading');
                 el.appendChild(loadingEl);
             }
         } else {
@@ -545,13 +590,46 @@
     /* ─── file events ────────────────────────────────────────────────── */
 
     function bindFileEvents(container) {
-        qsa('.mmf-item', container).forEach(function (el) {
+        var items = qsa('.mmf-item', container);
+        var itemsArray = Array.prototype.slice.call(items);
+        
+        items.forEach(function (el) {
             el.addEventListener('click', function (e) {
                 var hash = el.dataset.hash;
-                if (e.ctrlKey || e.metaKey) {
+                
+                if (SELECTION_MODE) {
                     toggleSelect(hash);
+                    LAST_CLICKED_HASH = hash;
+                    updateStatus();
+                    return;
+                }
+                
+                if (e.shiftKey && LAST_CLICKED_HASH) {
+                    var startIdx = -1, endIdx = -1;
+                    for (var i = 0; i < itemsArray.length; i++) {
+                        if (itemsArray[i].dataset.hash === LAST_CLICKED_HASH) startIdx = i;
+                        if (itemsArray[i].dataset.hash === hash) endIdx = i;
+                    }
+                    if (startIdx >= 0 && endIdx >= 0) {
+                        var minIdx = Math.min(startIdx, endIdx);
+                        var maxIdx = Math.max(startIdx, endIdx);
+                        if (!e.ctrlKey && !e.metaKey) {
+                            SELECTED = [];
+                        }
+                        for (var j = minIdx; j <= maxIdx; j++) {
+                            var h = itemsArray[j].dataset.hash;
+                            if (SELECTED.indexOf(h) < 0) {
+                                SELECTED.push(h);
+                            }
+                        }
+                        highlightSelected();
+                    }
+                } else if (e.ctrlKey || e.metaKey) {
+                    toggleSelect(hash);
+                    LAST_CLICKED_HASH = hash;
                 } else {
                     SELECTED = [hash];
+                    LAST_CLICKED_HASH = hash;
                     highlightSelected();
                 }
                 updateStatus();
@@ -563,6 +641,8 @@
                 if (!f) return;
                 if (f.mime === 'directory') {
                     openDir(hash);
+                } else if (IFRAME_MODE && GET_FILE_CALLBACK) {
+                    confirmSelection();
                 } else if (isImageMime(f.mime)) {
                     openLightbox(hash);
                 } else {
@@ -574,7 +654,11 @@
                 e.preventDefault();
                 var hash = el.dataset.hash;
                 if (SELECTED.indexOf(hash) < 0) {
-                    SELECTED = [hash];
+                    if (!SELECTION_MODE && !e.ctrlKey && !e.metaKey) {
+                        SELECTED = [hash];
+                    } else {
+                        SELECTED.push(hash);
+                    }
                     highlightSelected();
                 }
                 showContextMenu(e.pageX, e.pageY);
@@ -594,6 +678,9 @@
             el.classList.toggle('selected', SELECTED.indexOf(el.dataset.hash) >= 0);
         });
         updatePreviewPanel();
+        if (IFRAME_MODE) {
+            updateSelectBar();
+        }
     }
 
     /* ─── preview panel ───────────────────────────────────────────────── */
@@ -632,7 +719,7 @@
         var btnDownload = qs('.mmf-preview-btn-download');
 
         if (nameEl) nameEl.textContent = f.name || '';
-        if (typeEl) typeEl.textContent = f.mime === 'directory' ? 'Folder' : (f.mime || 'Unknown');
+        if (typeEl) typeEl.textContent = f.mime === 'directory' ? t('folder') : (f.mime || t('unknown'));
         if (sizeEl) sizeEl.textContent = f.mime === 'directory' ? '—' : humanSize(f.size);
 
         if (isImageMime(f.mime)) {
@@ -652,7 +739,7 @@
                 };
             }
             if (btnOpen) {
-                btnOpen.innerHTML = '&#x1F50D; Preview';
+                btnOpen.innerHTML = '&#x1F50D; ' + t('preview');
                 btnOpen.style.display = '';
             }
         } else {
@@ -660,7 +747,7 @@
             if (dimensionsRow) dimensionsRow.style.display = 'none';
             if (f.mime === 'directory') {
                 if (btnOpen) {
-                    btnOpen.innerHTML = '&#x1F4C2; Open';
+                    btnOpen.innerHTML = '&#x1F4C2; ' + t('open');
                     btnOpen.style.display = '';
                 }
             } else {
@@ -806,7 +893,7 @@
         updateUploadProgress(0);
         api(fd, function (data) {
             showUploadProgress(false);
-            showSuccess('Upload complete');
+            showSuccess(t('uploadComplete'));
             openDir(CWD_HASH);
         }, function (err) {
             showUploadProgress(false);
@@ -829,10 +916,10 @@
     /* ─── new folder (cmd=mkdir) ──────────────────────────────────────── */
 
     function promptNewFolder() {
-        showDialog('New Folder', 'Folder name', 'Untitled', function (name) {
+        showDialog(t('newFolder'), t('folderName'), t('untitled'), function (name) {
             if (!name) return;
             api({ cmd: 'mkdir', target: CWD_HASH, name: name }, function () {
-                showSuccess('Folder created');
+                showSuccess(t('folderCreated'));
                 openDir(CWD_HASH);
             });
         });
@@ -841,15 +928,15 @@
     /* ─── rename (cmd=rename) ────────────────────────────────────────── */
 
     function renameSelected() {
-        if (SELECTED.length !== 1) { showError('Select one item to rename'); return; }
+        if (SELECTED.length !== 1) { showError(t('selectOneToRename')); return; }
         var f = FILES[SELECTED[0]];
         if (!f) return;
         var oldHash = f.hash;
         var isDir = f.mime === 'directory';
-        showDialog('Rename', 'New name', f.name, function (name) {
+        showDialog(t('rename'), t('newName'), f.name, function (name) {
             if (!name || name === f.name) return;
             api({ cmd: 'rename', target: oldHash, name: name }, function (data) {
-                showSuccess('Renamed');
+                showSuccess(t('renamed'));
                 if (isDir) {
                     delete TREE[oldHash];
                     if (data && data.added && data.added.length) {
@@ -866,11 +953,11 @@
     /* ─── delete (cmd=rm) ────────────────────────────────────────────── */
 
     function deleteSelected() {
-        if (!SELECTED.length) { showError('No items selected'); return; }
+        if (!SELECTED.length) { showError(t('noItemsSelected')); return; }
         var toDelete = SELECTED.slice();
-        showConfirm('Delete ' + SELECTED.length + ' item(s)?', function () {
+        showConfirm(t('confirmDelete', {count: SELECTED.length}), function () {
             api({ cmd: 'rm', targets: toDelete }, function () {
-                showSuccess('Deleted');
+                showSuccess(t('deleted'));
                 toDelete.forEach(function (hash) {
                     delete TREE[hash];
                     delete FILES[hash];
@@ -914,21 +1001,41 @@
         var isImage = f && isImageMime(f.mime);
 
         var html = '';
+        
+        if (SELECTION_MODE) {
+            html += '<div class="mmf-context-item mmf-context-item-active" data-action="exit-selection">\u2716 ' + t('exitSelectionMode') + '</div>';
+            if (SELECTED.length > 0) {
+                html += '<div class="mmf-context-item" data-action="clear-selection">\u2718 ' + t('clearSelection') + ' (' + SELECTED.length + ')</div>';
+            }
+            if (IFRAME_MODE && SELECTED.length > 0) {
+                html += '<div class="mmf-context-item mmf-context-item-primary" data-action="confirm-selection">\u2714 ' + t('confirmSelection') + ' (' + SELECTED.length + ')</div>';
+            }
+            html += '<div class="mmf-context-sep"></div>';
+        } else {
+            html += '<div class="mmf-context-item" data-action="enter-selection">\u2610 ' + t('selectionMode') + '</div>';
+            html += '<div class="mmf-context-sep"></div>';
+        }
+        
+        if (IFRAME_MODE && SELECTED.length > 0 && !SELECTION_MODE) {
+            html += '<div class="mmf-context-item mmf-context-item-primary" data-action="confirm-selection">\u2714 ' + t('selectFiles') + '</div>';
+            html += '<div class="mmf-context-sep"></div>';
+        }
+        
         if (f && isImage) {
-            html += '<div class="mmf-context-item" data-action="preview">\uD83D\uDD0D Preview</div>';
+            html += '<div class="mmf-context-item" data-action="preview">\uD83D\uDD0D ' + t('preview') + '</div>';
         }
         if (f && !isDir) {
-            html += '<div class="mmf-context-item" data-action="download">\uD83D\uDCE5 Download</div>';
+            html += '<div class="mmf-context-item" data-action="download">\uD83D\uDCE5 ' + t('download') + '</div>';
         }
         if (f && isDir) {
-            html += '<div class="mmf-context-item" data-action="open">\uD83D\uDCC2 Open</div>';
+            html += '<div class="mmf-context-item" data-action="open">\uD83D\uDCC2 ' + t('open') + '</div>';
         }
         if (SELECTED.length === 1) {
-            html += '<div class="mmf-context-item" data-action="rename">\u270F\uFE0F Rename</div>';
+            html += '<div class="mmf-context-item" data-action="rename">\u270F\uFE0F ' + t('rename') + '</div>';
         }
         if (SELECTED.length) {
             html += '<div class="mmf-context-sep"></div>';
-            html += '<div class="mmf-context-item" data-action="delete">\uD83D\uDDD1\uFE0F Delete</div>';
+            html += '<div class="mmf-context-item" data-action="delete">\uD83D\uDDD1\uFE0F ' + t('delete') + '</div>';
         }
 
         menu.innerHTML = html;
@@ -940,7 +1047,11 @@
             it.addEventListener('click', function () {
                 var action = it.dataset.action;
                 hideContextMenu();
-                if (action === 'preview' && SELECTED.length === 1) openLightbox(SELECTED[0]);
+                if (action === 'enter-selection') enterSelectionMode();
+                else if (action === 'exit-selection') exitSelectionMode();
+                else if (action === 'clear-selection') clearSelection();
+                else if (action === 'confirm-selection') confirmSelection();
+                else if (action === 'preview' && SELECTED.length === 1) openLightbox(SELECTED[0]);
                 else if (action === 'download' && SELECTED.length === 1) downloadFile(SELECTED[0]);
                 else if (action === 'open' && SELECTED.length === 1) openDir(SELECTED[0]);
                 else if (action === 'rename') renameSelected();
@@ -952,6 +1063,177 @@
     function hideContextMenu() {
         var menu = qs('.mmf-context-menu');
         if (menu) menu.classList.remove('visible');
+    }
+
+    /* ─── selection mode ─────────────────────────────────────────────── */
+
+    function enterSelectionMode() {
+        SELECTION_MODE = true;
+        var wrap = qs('.mmf-wrap');
+        if (wrap) wrap.classList.add('mmf-selection-mode');
+        updateStatus();
+    }
+
+    function exitSelectionMode() {
+        SELECTION_MODE = false;
+        var wrap = qs('.mmf-wrap');
+        if (wrap) wrap.classList.remove('mmf-selection-mode');
+        updateStatus();
+    }
+
+    function clearSelection() {
+        SELECTED = [];
+        highlightSelected();
+        updateStatus();
+        if (SELECTED.length === 0) {
+            exitSelectionMode();
+        }
+    }
+
+    function confirmSelection() {
+        if (!SELECTED.length) {
+            showError(t('pleaseSelectFile'));
+            return;
+        }
+        
+        var selectedFiles = [];
+        SELECTED.forEach(function (hash) {
+            var f = FILES[hash];
+            if (f && f.mime !== 'directory') {
+                var relativePath = f.path || '';
+                var fileUrl = '/pub/media/' + relativePath;
+                var thumbUrl = getThumbnailUrl(f) || fileUrl;
+                selectedFiles.push({
+                    hash: f.hash,
+                    name: f.name,
+                    mime: f.mime,
+                    size: f.size,
+                    path: fileUrl,
+                    url: fileUrl,
+                    thumb: thumbUrl
+                });
+            }
+        });
+        
+        if (!selectedFiles.length) {
+            showError(t('pleaseSelectValidFiles'));
+            return;
+        }
+        
+        if (!MULTI_SELECT && selectedFiles.length > 1) {
+            selectedFiles = [selectedFiles[0]];
+        }
+        
+        if (GET_FILE_CALLBACK) {
+            GET_FILE_CALLBACK(selectedFiles);
+        }
+        
+        if (window.parent && window.parent !== window) {
+            window.parent.postMessage({
+                type: 'weline-media-manager-select',
+                target: CONFIG.target || '',
+                files: selectedFiles,
+                multi: MULTI_SELECT
+            }, '*');
+        }
+        
+        exitSelectionMode();
+        SELECTED = [];
+        highlightSelected();
+        updateSelectBar();
+    }
+
+    /* ─── iframe / file-manager integration ───────────────────────────── */
+
+    function bindSelectBar() {
+        var btnSelect = qs('#mmf-btn-select');
+        var btnConfirmSelect = qs('#mmf-btn-confirm-select');
+        var btnClearSelect = qs('#mmf-btn-clear-select');
+        var btnCancel = qs('#mmf-btn-cancel');
+
+        if (btnSelect) {
+            btnSelect.addEventListener('click', function () { confirmSelection(); });
+        }
+        if (btnConfirmSelect) {
+            btnConfirmSelect.addEventListener('click', function () { confirmSelection(); });
+        }
+        if (btnClearSelect) {
+            btnClearSelect.addEventListener('click', function () {
+                SELECTED = [];
+                highlightSelected();
+                updateSelectBar();
+                updateStatus();
+            });
+        }
+        if (btnCancel) {
+            btnCancel.addEventListener('click', function () {
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'weline-media-manager-cancel',
+                        target: CONFIG.target || ''
+                    }, '*');
+                }
+            });
+        }
+    }
+
+    function updateSelectBar() {
+        var bar = qs('#mmf-select-bar');
+        var countEl = qs('#mmf-select-count-num');
+        var wrap = qs('.mmf-wrap');
+        
+        if (!bar) return;
+        
+        if (MULTI_SELECT && SELECTED.length > 0) {
+            bar.style.display = 'flex';
+            if (wrap) wrap.classList.add('with-select-bar');
+        } else {
+            bar.style.display = 'none';
+            if (wrap) wrap.classList.remove('with-select-bar');
+        }
+        
+        if (countEl) {
+            countEl.textContent = SELECTED.length;
+        }
+    }
+
+    function setupIframeMode(options) {
+        options = options || {};
+        IFRAME_MODE = true;
+        MULTI_SELECT = !!options.multi;
+        GET_FILE_CALLBACK = options.callback || null;
+        
+        if (options.mimes && Array.isArray(options.mimes)) {
+            ALLOWED_MIMES = options.mimes;
+        }
+        
+        var wrap = qs('.mmf-wrap');
+        if (wrap) wrap.classList.add('mmf-iframe-mode');
+    }
+
+    function handleParentMessage(e) {
+        if (!e.data || typeof e.data !== 'object') return;
+        
+        if (e.data.type === 'weline-media-manager-init') {
+            setupIframeMode({
+                multi: e.data.multi,
+                mimes: e.data.mimes,
+                callback: function (files) {
+                    if (window.parent && window.parent !== window) {
+                        window.parent.postMessage({
+                            type: 'weline-media-manager-select',
+                            files: files
+                        }, '*');
+                    }
+                }
+            });
+        }
+        
+        if (e.data.type === 'weline-media-manager-close') {
+            SELECTED = [];
+            highlightSelected();
+            exitSelectionMode();
+        }
     }
 
     /* ─── lightbox ───────────────────────────────────────────────────── */
@@ -1145,7 +1427,7 @@
     }
 
     function showConfirm(msg, onOk) {
-        showDialog('Confirm', '', msg, function (val) { onOk(); });
+        showDialog(t('confirm'), '', msg, function (val) { onOk(); });
     }
 
     /* ─── util ───────────────────────────────────────────────────────── */
@@ -1161,6 +1443,27 @@
     }
 
     /* ─── expose ─────────────────────────────────────────────────────── */
-    window.WelineMediaManager = { init: init };
+    window.WelineMediaManager = {
+        init: init,
+        setupIframeMode: setupIframeMode,
+        getSelected: function () {
+            var files = [];
+            SELECTED.forEach(function (hash) {
+                var f = FILES[hash];
+                if (f) files.push(f);
+            });
+            return files;
+        },
+        confirmSelection: confirmSelection,
+        setCallback: function (cb) {
+            GET_FILE_CALLBACK = cb;
+        },
+        setMultiSelect: function (multi) {
+            MULTI_SELECT = !!multi;
+        },
+        enterSelectionMode: enterSelectionMode,
+        exitSelectionMode: exitSelectionMode,
+        clearSelection: clearSelection
+    };
 
 })();

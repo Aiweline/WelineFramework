@@ -1,0 +1,917 @@
+<?php
+/** @var \GuoLaiRen\PageBuilder\Controller\Backend\DomainManagement $this */
+$accounts = $this->getData('accounts') ?? [];
+$registrars = $this->getData('registrars') ?? [];
+?>
+<style>
+.pb-dm { max-width: 1400px; margin: 0 auto; }
+.pb-dm-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--backend-color-border-default, #dee2e6);
+    margin-bottom: var(--backend-spacing-lg, 24px);
+}
+.pb-dm-tab {
+    padding: 12px 24px;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--backend-color-text-secondary, #6c757d);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s ease;
+    background: none;
+    border-top: none; border-left: none; border-right: none;
+    font-size: 0.95rem;
+}
+.pb-dm-tab:hover { color: var(--backend-color-primary, #556ee6); }
+.pb-dm-tab.pb-dm-tab--active {
+    color: var(--backend-color-primary, #556ee6);
+    border-bottom-color: var(--backend-color-primary, #556ee6);
+    font-weight: 600;
+}
+.pb-dm-panel { display: none; }
+.pb-dm-panel.pb-dm-panel--active { display: block; }
+.pb-dm-card {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-md, 8px);
+    padding: var(--backend-padding-card, 24px);
+    margin-bottom: var(--backend-spacing-lg, 24px);
+    box-shadow: var(--backend-card-shadow);
+}
+.pb-dm-card-title {
+    color: var(--backend-color-text-primary, #212529);
+    font-weight: 600;
+    font-size: 1.05rem;
+    margin-bottom: var(--backend-spacing-md, 16px);
+    padding-bottom: var(--backend-spacing-sm, 8px);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.pb-dm-row {
+    display: flex;
+    gap: var(--backend-spacing-md, 16px);
+    align-items: flex-end;
+    flex-wrap: wrap;
+    margin-bottom: var(--backend-spacing-md, 16px);
+}
+.pb-dm-fg { flex: 1; min-width: 180px; }
+.pb-dm-fg label {
+    display: block;
+    font-weight: 500;
+    color: var(--backend-color-text-secondary, #6c757d);
+    margin-bottom: var(--backend-spacing-xs, 4px);
+    font-size: 0.85rem;
+}
+.pb-dm-fg select,
+.pb-dm-fg input,
+.pb-dm-fg textarea {
+    width: 100%;
+    padding: var(--backend-padding-input, 8px 12px);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-input-bg, #fff);
+    color: var(--backend-color-text-primary, #333);
+    transition: border-color 0.2s ease;
+    box-sizing: border-box;
+}
+.pb-dm-fg select:focus,
+.pb-dm-fg input:focus,
+.pb-dm-fg textarea:focus {
+    outline: none;
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: var(--backend-focus-ring);
+}
+.pb-dm-btn {
+    padding: 8px 18px;
+    border: none;
+    border-radius: var(--backend-border-radius, 6px);
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.pb-dm-btn-primary {
+    background: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-inverse, #fff);
+}
+.pb-dm-btn-success {
+    background: var(--backend-color-success, #34c38f);
+    color: var(--backend-color-text-inverse, #fff);
+}
+.pb-dm-btn-danger {
+    background: var(--backend-color-danger, #f46a6a);
+    color: var(--backend-color-text-inverse, #fff);
+}
+.pb-dm-btn-warning {
+    background: var(--backend-color-warning, #f1b44c);
+    color: var(--backend-color-text-inverse, #fff);
+}
+.pb-dm-btn-outline {
+    background: transparent;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    color: var(--backend-color-text-primary, #333);
+}
+.pb-dm-btn-sm { padding: 4px 12px; font-size: 0.8rem; }
+.pb-dm-btn:hover { opacity: 0.88; }
+.pb-dm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.pb-dm-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.pb-dm-table th {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #333);
+    font-weight: 600;
+    padding: 10px 12px;
+    border-bottom: 2px solid var(--backend-color-border-default, #dee2e6);
+    text-align: left;
+    font-size: 0.85rem;
+}
+.pb-dm-table td {
+    padding: 10px 12px;
+    color: var(--backend-color-text-primary, #333);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    font-size: 0.875rem;
+}
+.pb-dm-table tr:hover td {
+    background: var(--backend-color-table-bg-hover, #f8f9fa);
+}
+.pb-dm-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    font-size: 0.78rem;
+    font-weight: 500;
+}
+.pb-dm-badge--ok {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+    color: var(--backend-color-success, #34c38f);
+}
+.pb-dm-badge--no {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
+    color: var(--backend-color-danger, #f46a6a);
+}
+.pb-dm-badge--warn {
+    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.12));
+    color: var(--backend-color-warning, #f1b44c);
+}
+.pb-dm-badge--info {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    color: var(--backend-color-info, #50a5f1);
+}
+.pb-dm-empty {
+    text-align: center;
+    padding: var(--backend-spacing-xl, 40px);
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+.pb-dm-empty i { font-size: 2.5rem; opacity: 0.3; display: block; margin-bottom: var(--backend-spacing-sm, 8px); }
+.pb-dm-form-modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 1050;
+    background: var(--backend-color-overlay, rgba(0,0,0,0.5));
+    align-items: center;
+    justify-content: center;
+}
+.pb-dm-form-modal.pb-dm-form-modal--open { display: flex; }
+.pb-dm-form-dialog {
+    background: var(--backend-color-card-bg, #fff);
+    border-radius: var(--backend-border-radius-lg, 12px);
+    padding: var(--backend-padding-card, 24px);
+    min-width: 520px;
+    max-width: 680px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: var(--backend-shadow-lg);
+}
+.pb-dm-form-dialog-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+    margin-bottom: var(--backend-spacing-md, 16px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.pb-dm-form-dialog-close {
+    background: none;
+    border: none;
+    font-size: 1.4rem;
+    cursor: pointer;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    line-height: 1;
+}
+.pb-dm-form-dialog-close:hover { color: var(--backend-color-danger, #f46a6a); }
+.pb-dm-extra-fields { margin-top: var(--backend-spacing-md, 16px); }
+.pb-dm-actions { display: flex; gap: 8px; }
+.pb-dm-checkbox-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+.pb-dm-checkbox-row input[type="checkbox"] { margin: 0; }
+.pb-dm-help-box {
+    margin: var(--backend-spacing-md, 16px) 0;
+    padding: var(--backend-spacing-md, 16px);
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.08));
+    border: 1px solid var(--backend-color-info, #50a5f1);
+    border-radius: var(--backend-border-radius, 6px);
+    border-left-width: 4px;
+}
+.pb-dm-help-title {
+    font-weight: 600;
+    color: var(--backend-color-info, #50a5f1);
+    margin-bottom: var(--backend-spacing-sm, 8px);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.pb-dm-help-title a {
+    color: var(--backend-color-info, #50a5f1);
+    text-decoration: none;
+    font-weight: 500;
+}
+.pb-dm-help-title a:hover {
+    text-decoration: underline;
+}
+.pb-dm-help-steps {
+    margin: 0;
+    padding-left: var(--backend-spacing-lg, 24px);
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.875rem;
+    line-height: 1.7;
+}
+.pb-dm-help-steps li {
+    margin-bottom: 4px;
+}
+</style>
+
+<div class="pb-dm">
+    <h4 style="color: var(--backend-color-text-primary, #212529); margin-bottom: var(--backend-spacing-md, 16px);">
+        <i class="mdi mdi-dns"></i> <lang>域名管理</lang>
+    </h4>
+
+    <!-- Tab 导航 -->
+    <div class="pb-dm-tabs">
+        <button class="pb-dm-tab pb-dm-tab--active" data-tab="accounts">
+            <i class="mdi mdi-account-key"></i> <lang>供应商账户</lang>
+        </button>
+        <button class="pb-dm-tab" data-tab="domains">
+            <i class="mdi mdi-format-list-bulleted"></i> <lang>域名列表</lang>
+        </button>
+        <button class="pb-dm-tab" data-tab="register">
+            <i class="mdi mdi-cart-plus"></i> <lang>域名注册</lang>
+        </button>
+    </div>
+
+    <!-- ==================== Tab 1: 供应商账户管理 ==================== -->
+    <div class="pb-dm-panel pb-dm-panel--active" id="pb-dm-tab-accounts">
+        <div class="pb-dm-card">
+            <div class="pb-dm-card-title">
+                <span><i class="mdi mdi-account-key"></i> <lang>域名商账户列表</lang></span>
+                <button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm" id="pb-dm-add-account-btn">
+                    <i class="mdi mdi-plus"></i> <lang>添加账户</lang>
+                </button>
+            </div>
+            <div id="pb-dm-accounts-list">
+                <?php if (empty($accounts)): ?>
+                    <div class="pb-dm-empty">
+                        <i class="mdi mdi-alert-circle-outline"></i>
+                        <p><lang>暂无域名商账户，请点击"添加账户"创建。</lang></p>
+                    </div>
+                <?php else: ?>
+                    <table class="pb-dm-table">
+                        <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th><lang>账户名称</lang></th>
+                            <th><lang>域名商</lang></th>
+                            <th><lang>状态</lang></th>
+                            <th><lang>操作</lang></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($accounts as $acct): ?>
+                        <tr data-account-id="<?= (int)($acct['account_id'] ?? 0) ?>">
+                            <td><?= (int)($acct['account_id'] ?? 0) ?></td>
+                            <td><?= htmlspecialchars($acct['account_name'] ?? '', ENT_QUOTES) ?></td>
+                            <td>
+                                <?= htmlspecialchars($acct['registrar_name'] ?? '', ENT_QUOTES) ?>
+                                <small style="color:var(--backend-color-text-tertiary,#adb5bd)">(<?= htmlspecialchars($acct['registrar_code'] ?? '', ENT_QUOTES) ?>)</small>
+                            </td>
+                            <td>
+                                <?php if (($acct['status'] ?? '') === 'active'): ?>
+                                    <span class="pb-dm-badge pb-dm-badge--ok"><lang>启用</lang></span>
+                                <?php else: ?>
+                                    <span class="pb-dm-badge pb-dm-badge--no"><lang>禁用</lang></span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="pb-dm-actions">
+                                <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-test-btn"
+                                        data-id="<?= (int)($acct['account_id'] ?? 0) ?>">
+                                    <i class="mdi mdi-connection"></i> <lang>测试</lang>
+                                </button>
+                                <button class="pb-dm-btn pb-dm-btn-warning pb-dm-btn-sm pb-dm-edit-btn"
+                                        data-id="<?= (int)($acct['account_id'] ?? 0) ?>"
+                                        data-name="<?= htmlspecialchars($acct['account_name'] ?? '', ENT_QUOTES) ?>"
+                                        data-code="<?= htmlspecialchars($acct['registrar_code'] ?? '', ENT_QUOTES) ?>"
+                                        data-status="<?= htmlspecialchars($acct['status'] ?? 'active', ENT_QUOTES) ?>">
+                                    <i class="mdi mdi-pencil"></i> <lang>编辑</lang>
+                                </button>
+                                <button class="pb-dm-btn pb-dm-btn-danger pb-dm-btn-sm pb-dm-del-btn"
+                                        data-id="<?= (int)($acct['account_id'] ?? 0) ?>"
+                                        data-name="<?= htmlspecialchars($acct['account_name'] ?? '', ENT_QUOTES) ?>">
+                                    <i class="mdi mdi-delete"></i> <lang>删除</lang>
+                                </button>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== Tab 2: 域名列表 ==================== -->
+    <div class="pb-dm-panel" id="pb-dm-tab-domains">
+        <div class="pb-dm-card">
+            <div class="pb-dm-card-title">
+                <span><i class="mdi mdi-format-list-bulleted"></i> <lang>域名列表</lang></span>
+            </div>
+            <div class="pb-dm-row">
+                <div class="pb-dm-fg">
+                    <label><lang>选择域名商账户</lang></label>
+                    <select id="pb-dm-domain-acct">
+                        <option value=""><lang>请选择</lang></option>
+                        <?php foreach ($accounts as $acct): ?>
+                        <option value="<?= (int)($acct['account_id'] ?? 0) ?>">
+                            <?= htmlspecialchars(($acct['account_name'] ?? '') . ' (' . ($acct['registrar_code'] ?? '') . ')', ENT_QUOTES) ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <button class="pb-dm-btn pb-dm-btn-primary" id="pb-dm-load-domains-btn">
+                        <i class="mdi mdi-refresh"></i> <lang>加载域名</lang>
+                    </button>
+                </div>
+            </div>
+            <div id="pb-dm-domains-result">
+                <div class="pb-dm-empty">
+                    <i class="mdi mdi-domain"></i>
+                    <p><lang>请选择账户后加载域名列表</lang></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== Tab 3: 域名注册 ==================== -->
+    <div class="pb-dm-panel" id="pb-dm-tab-register">
+        <div class="pb-dm-card">
+            <div class="pb-dm-card-title">
+                <span><i class="mdi mdi-cart-plus"></i> <lang>批量域名注册</lang></span>
+            </div>
+            <div class="pb-dm-row">
+                <div class="pb-dm-fg">
+                    <label><lang>域名商账户</lang></label>
+                    <select id="pb-dm-reg-acct">
+                        <option value=""><lang>请选择</lang></option>
+                        <?php foreach ($accounts as $acct): ?>
+                        <option value="<?= (int)($acct['account_id'] ?? 0) ?>">
+                            <?= htmlspecialchars(($acct['account_name'] ?? '') . ' (' . ($acct['registrar_code'] ?? '') . ')', ENT_QUOTES) ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="pb-dm-fg" style="flex: 2;">
+                    <label><lang>域名（每行一个或逗号分隔）</lang></label>
+                    <textarea id="pb-dm-reg-domains" rows="3" placeholder="example.com&#10;test.net&#10;mysite.org"></textarea>
+                </div>
+                <div>
+                    <button class="pb-dm-btn pb-dm-btn-primary" id="pb-dm-check-btn">
+                        <i class="mdi mdi-magnify"></i> <lang>检查可用性</lang>
+                    </button>
+                </div>
+            </div>
+            <div id="pb-dm-check-results"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 添加/编辑账户弹窗 ==================== -->
+<div class="pb-dm-form-modal" id="pb-dm-account-modal">
+    <div class="pb-dm-form-dialog">
+        <div class="pb-dm-form-dialog-title">
+            <span id="pb-dm-modal-title"><lang>添加域名商账户</lang></span>
+            <button class="pb-dm-form-dialog-close" id="pb-dm-modal-close">&times;</button>
+        </div>
+        <input type="hidden" id="pb-dm-form-id" value="0">
+        <div class="pb-dm-row">
+            <div class="pb-dm-fg">
+                <label><lang>域名商类型</lang></label>
+                <select id="pb-dm-form-registrar">
+                    <option value=""><lang>请选择</lang></option>
+                    <?php foreach ($registrars as $reg): ?>
+                    <option value="<?= htmlspecialchars($reg['code'] ?? '', ENT_QUOTES) ?>">
+                        <?= htmlspecialchars($reg['name'] ?? '', ENT_QUOTES) ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="pb-dm-fg">
+                <label><lang>账户名称</lang></label>
+                <input type="text" id="pb-dm-form-name" placeholder="<?= __('如：GName 主账号') ?>">
+            </div>
+        </div>
+        <div class="pb-dm-row">
+            <div class="pb-dm-fg">
+                <label><lang>API Key / APP ID</lang></label>
+                <input type="text" id="pb-dm-form-apikey" placeholder="">
+            </div>
+            <div class="pb-dm-fg">
+                <label><lang>API Secret / APP Key</lang></label>
+                <input type="password" id="pb-dm-form-apisecret" placeholder="">
+            </div>
+        </div>
+        <div class="pb-dm-row">
+            <div class="pb-dm-fg">
+                <label><lang>区域 / API 域名</lang></label>
+                <input type="text" id="pb-dm-form-region" placeholder="<?= __('如：www.gname.com') ?>">
+            </div>
+            <div class="pb-dm-fg">
+                <label><lang>状态</lang></label>
+                <select id="pb-dm-form-status">
+                    <option value="active"><lang>启用</lang></option>
+                    <option value="disabled"><lang>禁用</lang></option>
+                </select>
+            </div>
+        </div>
+        <div id="pb-dm-extra-fields" class="pb-dm-extra-fields"></div>
+        <div id="pb-dm-config-help" class="pb-dm-help-box" style="display:none;"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:var(--backend-spacing-md,16px);">
+            <button class="pb-dm-btn pb-dm-btn-outline" id="pb-dm-modal-cancel"><lang>取消</lang></button>
+            <button class="pb-dm-btn pb-dm-btn-success" id="pb-dm-modal-save">
+                <i class="mdi mdi-check"></i> <lang>保存</lang>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+
+    var API = {
+        getRegistrars:    '<backend-url>pagebuilder/backend/domain-management/get-registrars</backend-url>',
+        getConfigFields:  '<backend-url>pagebuilder/backend/domain-management/get-config-fields</backend-url>',
+        getRegistrarInfo: '<backend-url>pagebuilder/backend/domain-management/get-registrar-info</backend-url>',
+        saveAccount:      '<backend-url>pagebuilder/backend/domain-management/save-account</backend-url>',
+        deleteAccount:    '<backend-url>pagebuilder/backend/domain-management/delete-account</backend-url>',
+        testConnection:   '<backend-url>pagebuilder/backend/domain-management/test-connection</backend-url>',
+        getDomains:       '<backend-url>pagebuilder/backend/domain-management/get-domains</backend-url>',
+        checkAvail:       '<backend-url>pagebuilder/backend/domain-management/check-availability</backend-url>',
+        purchase:         '<backend-url>pagebuilder/backend/domain-management/purchase</backend-url>',
+        batchPurchase:    '<backend-url>pagebuilder/backend/domain-management/batch-purchase</backend-url>'
+    };
+
+    /* ========== Tab 切换 ========== */
+    document.querySelectorAll('.pb-dm-tab').forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            document.querySelectorAll('.pb-dm-tab').forEach(function(t) { t.classList.remove('pb-dm-tab--active'); });
+            document.querySelectorAll('.pb-dm-panel').forEach(function(p) { p.classList.remove('pb-dm-panel--active'); });
+            tab.classList.add('pb-dm-tab--active');
+            var panel = document.getElementById('pb-dm-tab-' + tab.dataset.tab);
+            if (panel) panel.classList.add('pb-dm-panel--active');
+        });
+    });
+
+    /* ========== 工具函数 ========== */
+    function postForm(url, data) {
+        var fd = new FormData();
+        Object.keys(data).forEach(function(k) {
+            fd.append(k, typeof data[k] === 'object' ? JSON.stringify(data[k]) : data[k]);
+        });
+        return fetch(url, { method: 'POST', body: fd }).then(function(r) { return r.json(); });
+    }
+
+    function setBtnLoading(btn, loading, originalHtml) {
+        if (loading) {
+            btn.dataset.origHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i>';
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml || btn.dataset.origHtml || '';
+        }
+    }
+
+    /* ========== 账户管理 - 弹窗 ========== */
+    var modal = document.getElementById('pb-dm-account-modal');
+    var formId = document.getElementById('pb-dm-form-id');
+    var formRegistrar = document.getElementById('pb-dm-form-registrar');
+    var formName = document.getElementById('pb-dm-form-name');
+    var formApiKey = document.getElementById('pb-dm-form-apikey');
+    var formApiSecret = document.getElementById('pb-dm-form-apisecret');
+    var formRegion = document.getElementById('pb-dm-form-region');
+    var formStatus = document.getElementById('pb-dm-form-status');
+    var extraFieldsDiv = document.getElementById('pb-dm-extra-fields');
+
+    var configHelpDiv = document.getElementById('pb-dm-config-help');
+
+    function openModal(isEdit) {
+        document.getElementById('pb-dm-modal-title').textContent = isEdit
+            ? '<?= __('编辑域名商账户') ?>'
+            : '<?= __('添加域名商账户') ?>';
+        modal.classList.add('pb-dm-form-modal--open');
+    }
+    function closeModal() {
+        modal.classList.remove('pb-dm-form-modal--open');
+        formId.value = '0';
+        formRegistrar.value = '';
+        formName.value = '';
+        formApiKey.value = '';
+        formApiSecret.value = '';
+        formRegion.value = '';
+        formStatus.value = 'active';
+        extraFieldsDiv.innerHTML = '';
+        configHelpDiv.innerHTML = '';
+        configHelpDiv.style.display = 'none';
+    }
+
+    document.getElementById('pb-dm-modal-close').addEventListener('click', closeModal);
+    document.getElementById('pb-dm-modal-cancel').addEventListener('click', closeModal);
+    modal.addEventListener('click', function(e) { if (e.target === modal) closeModal(); });
+
+    /* 添加账户 */
+    document.getElementById('pb-dm-add-account-btn').addEventListener('click', function() {
+        closeModal();
+        openModal(false);
+    });
+
+    /* 域名商类型变更 → 加载配置字段、默认值和帮助信息 */
+    formRegistrar.addEventListener('change', function() {
+        var code = formRegistrar.value;
+        extraFieldsDiv.innerHTML = '';
+        configHelpDiv.innerHTML = '';
+        configHelpDiv.style.display = 'none';
+        if (!code) return;
+
+        postForm(API.getRegistrarInfo, { registrar_code: code }).then(function(res) {
+            if (!res.success || !res.data) return;
+
+            var info = res.data;
+            var fields = info.config_fields || [];
+            var help = info.config_help || {};
+
+            /* 主字段默认值填充 */
+            fields.forEach(function(field) {
+                if (field.name === 'api_key' && field.default && !formApiKey.value) {
+                    formApiKey.value = field.default;
+                }
+                if ((field.name === 'region' || field.name === 'api_host') && field.default && !formRegion.value) {
+                    formRegion.value = field.default;
+                }
+            });
+
+            /* 额外字段渲染 */
+            var skip = ['appid', 'appkey', 'api_key', 'api_secret', 'region'];
+            var html = '';
+            fields.forEach(function(field) {
+                if (skip.indexOf(field.name) >= 0) return;
+                html += '<div class="pb-dm-fg" style="margin-bottom:12px;">';
+                html += '<label>' + (field.label || field.name) + (field.required ? ' <span style="color:var(--backend-color-danger,#f46a6a)">*</span>' : '') + '</label>';
+                if (field.type === 'select' && field.options) {
+                    html += '<select class="pb-dm-extra-input" data-field="' + field.name + '"' + (field.mapping ? ' data-mapping="' + field.mapping + '"' : '') + '>';
+                    field.options.forEach(function(opt) {
+                        var selected = (field.default && field.default === opt.value) ? ' selected' : '';
+                        html += '<option value="' + (opt.value || '') + '"' + selected + '>' + (opt.label || opt.value || '') + '</option>';
+                    });
+                    html += '</select>';
+                } else {
+                    var inputType = field.type === 'password' ? 'password' : 'text';
+                    var defaultVal = field.default || '';
+                    html += '<input type="' + inputType + '" class="pb-dm-extra-input" data-field="' + field.name + '"';
+                    if (field.mapping) html += ' data-mapping="' + field.mapping + '"';
+                    if (field.placeholder) html += ' placeholder="' + field.placeholder + '"';
+                    if (defaultVal) html += ' value="' + defaultVal + '"';
+                    html += '>';
+                }
+                html += '</div>';
+            });
+            extraFieldsDiv.innerHTML = html;
+
+            /* 帮助信息渲染 */
+            if (help.help_steps && help.help_steps.length) {
+                var helpHtml = '<div class="pb-dm-help-title"><i class="mdi mdi-information-outline"></i>';
+                if (help.help_url) {
+                    helpHtml += '<a href="' + help.help_url + '" target="_blank">' + (help.help_title || '<?= __('配置获取指南') ?>') + ' <i class="mdi mdi-open-in-new" style="font-size:0.85em;"></i></a>';
+                } else {
+                    helpHtml += '<span>' + (help.help_title || '<?= __('配置获取指南') ?>') + '</span>';
+                }
+                helpHtml += '</div><ol class="pb-dm-help-steps">';
+                help.help_steps.forEach(function(step) {
+                    helpHtml += '<li>' + step + '</li>';
+                });
+                helpHtml += '</ol>';
+                configHelpDiv.innerHTML = helpHtml;
+                configHelpDiv.style.display = 'block';
+            }
+        });
+    });
+
+    /* 保存账户 */
+    document.getElementById('pb-dm-modal-save').addEventListener('click', function() {
+        var btn = this;
+        var regCode = formRegistrar.value;
+        var name = formName.value.trim();
+        if (!regCode || !name) {
+            AdminToast.warning('<?= __('请填写域名商类型和账户名称') ?>');
+            return;
+        }
+
+        var extra = {};
+        extraFieldsDiv.querySelectorAll('.pb-dm-extra-input').forEach(function(el) {
+            var v = el.value.trim();
+            if (v) extra[el.dataset.field] = v;
+        });
+
+        var data = {
+            account_id: formId.value,
+            registrar_code: regCode,
+            account_name: name,
+            api_key: formApiKey.value.trim(),
+            api_secret: formApiSecret.value.trim(),
+            region: formRegion.value.trim(),
+            status: formStatus.value,
+            extra_config: extra
+        };
+
+        setBtnLoading(btn, true);
+        postForm(API.saveAccount, data).then(function(res) {
+            setBtnLoading(btn, false, '<i class="mdi mdi-check"></i> <?= __('保存') ?>');
+            if (res.success) {
+                AdminToast.success(res.message || '<?= __('保存成功') ?>');
+                closeModal();
+                location.reload();
+            } else {
+                AdminToast.error(res.message || res.msg || '<?= __('保存失败') ?>');
+            }
+        }).catch(function() {
+            setBtnLoading(btn, false, '<i class="mdi mdi-check"></i> <?= __('保存') ?>');
+            AdminToast.error('<?= __('网络错误') ?>');
+        });
+    });
+
+    /* 编辑账户 */
+    document.querySelectorAll('.pb-dm-edit-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            closeModal();
+            formId.value = btn.dataset.id;
+            formRegistrar.value = btn.dataset.code;
+            formName.value = btn.dataset.name;
+            formStatus.value = btn.dataset.status || 'active';
+            formApiKey.value = '';
+            formApiSecret.value = '';
+            formRegistrar.dispatchEvent(new Event('change'));
+            openModal(true);
+        });
+    });
+
+    /* 删除账户 */
+    document.querySelectorAll('.pb-dm-del-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var id = btn.dataset.id;
+            var name = btn.dataset.name;
+            AdminConfirm.show('<?= __('确定要删除账户') ?> "' + name + '" <?= __('吗？此操作不可恢复。') ?>', {
+                title: '<?= __('确认删除') ?>',
+                confirmText: '<?= __('确认删除') ?>',
+                cancelText: '<?= __('取消') ?>'
+            }).then(function(confirmed) {
+                if (!confirmed) return;
+                setBtnLoading(btn, true);
+                postForm(API.deleteAccount, { account_id: id }).then(function(res) {
+                    if (res.success) {
+                        AdminToast.success(res.message || '<?= __('已删除') ?>');
+                        location.reload();
+                    } else {
+                        setBtnLoading(btn, false, '<i class="mdi mdi-delete"></i> <?= __('删除') ?>');
+                        AdminToast.error(res.message || res.msg || '<?= __('删除失败') ?>');
+                    }
+                }).catch(function() {
+                    setBtnLoading(btn, false, '<i class="mdi mdi-delete"></i> <?= __('删除') ?>');
+                    AdminToast.error('<?= __('网络错误') ?>');
+                });
+            });
+        });
+    });
+
+    /* 测试连接 */
+    document.querySelectorAll('.pb-dm-test-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var id = btn.dataset.id;
+            setBtnLoading(btn, true);
+            postForm(API.testConnection, { account_id: id }).then(function(res) {
+                setBtnLoading(btn, false, '<i class="mdi mdi-connection"></i> <?= __('测试') ?>');
+                if (res.success) {
+                    AdminToast.success(res.message || '<?= __('连接成功') ?>');
+                } else {
+                    AdminToast.error(res.message || res.msg || '<?= __('连接失败') ?>');
+                }
+            }).catch(function() {
+                setBtnLoading(btn, false, '<i class="mdi mdi-connection"></i> <?= __('测试') ?>');
+                AdminToast.error('<?= __('网络错误') ?>');
+            });
+        });
+    });
+
+    /* ========== 域名列表 ========== */
+    document.getElementById('pb-dm-load-domains-btn').addEventListener('click', function() {
+        var btn = this;
+        var accountId = document.getElementById('pb-dm-domain-acct').value;
+        if (!accountId) {
+            AdminToast.warning('<?= __('请选择域名商账户') ?>');
+            return;
+        }
+        setBtnLoading(btn, true);
+        postForm(API.getDomains, { account_id: accountId }).then(function(res) {
+            setBtnLoading(btn, false, '<i class="mdi mdi-refresh"></i> <?= __('加载域名') ?>');
+            var container = document.getElementById('pb-dm-domains-result');
+            if (!res.success) {
+                AdminToast.error(res.msg || '<?= __('加载失败') ?>');
+                return;
+            }
+            var list = res.data || [];
+            if (!list.length) {
+                container.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-domain"></i><p><?= __('该账户下暂无域名') ?></p></div>';
+                return;
+            }
+            var statusMap = {
+                'active': ['<?= __('正常') ?>', 'pb-dm-badge--ok'],
+                'pending': ['<?= __('处理中') ?>', 'pb-dm-badge--warn'],
+                'expired': ['<?= __('已过期') ?>', 'pb-dm-badge--no'],
+                'suspended': ['<?= __('已暂停') ?>', 'pb-dm-badge--no']
+            };
+            var html = '<table class="pb-dm-table"><thead><tr>' +
+                '<th><?= __('域名') ?></th><th><?= __('状态') ?></th><th><?= __('过期时间') ?></th>' +
+                '</tr></thead><tbody>';
+            list.forEach(function(d) {
+                var st = statusMap[d.status] || [d.status, 'pb-dm-badge--info'];
+                html += '<tr><td>' + d.domain + '</td>' +
+                    '<td><span class="pb-dm-badge ' + st[1] + '">' + st[0] + '</span></td>' +
+                    '<td>' + (d.expires_at || '-') + '</td></tr>';
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }).catch(function() {
+            setBtnLoading(btn, false, '<i class="mdi mdi-refresh"></i> <?= __('加载域名') ?>');
+            AdminToast.error('<?= __('网络错误') ?>');
+        });
+    });
+
+    /* ========== 域名注册 ========== */
+    var checkResults = document.getElementById('pb-dm-check-results');
+
+    document.getElementById('pb-dm-check-btn').addEventListener('click', function() {
+        var btn = this;
+        var accountId = document.getElementById('pb-dm-reg-acct').value;
+        var domainsText = document.getElementById('pb-dm-reg-domains').value.trim();
+        if (!accountId || !domainsText) {
+            AdminToast.warning('<?= __('请选择账户并输入域名') ?>');
+            return;
+        }
+        setBtnLoading(btn, true);
+        postForm(API.checkAvail, { account_id: accountId, domains: domainsText }).then(function(res) {
+            setBtnLoading(btn, false, '<i class="mdi mdi-magnify"></i> <?= __('检查可用性') ?>');
+            if (!res.success) {
+                AdminToast.error(res.msg || '<?= __('检查失败') ?>');
+                return;
+            }
+            renderCheckResults(res.data || [], accountId);
+        }).catch(function() {
+            setBtnLoading(btn, false, '<i class="mdi mdi-magnify"></i> <?= __('检查可用性') ?>');
+            AdminToast.error('<?= __('网络错误') ?>');
+        });
+    });
+
+    function renderCheckResults(results, accountId) {
+        if (!results.length) {
+            checkResults.innerHTML = '<div class="pb-dm-empty"><p><?= __('无检查结果') ?></p></div>';
+            return;
+        }
+
+        var availCount = results.filter(function(r) { return r.available; }).length;
+        var html = '<div style="margin:12px 0;display:flex;align-items:center;justify-content:space-between;">' +
+            '<span style="color:var(--backend-color-text-secondary,#6c757d);font-size:0.9rem;">' +
+            '<?= __('共') ?> ' + results.length + ' <?= __('个域名，') ?>' +
+            '<strong style="color:var(--backend-color-success,#34c38f)">' + availCount + '</strong> <?= __('个可注册') ?></span>';
+
+        if (availCount > 0) {
+            html += '<button class="pb-dm-btn pb-dm-btn-success" id="pb-dm-batch-buy-btn">' +
+                '<i class="mdi mdi-cart-arrow-down"></i> <?= __('一键购买全部可用域名') ?> (' + availCount + ')</button>';
+        }
+        html += '</div>';
+
+        html += '<table class="pb-dm-table"><thead><tr>' +
+            '<th><input type="checkbox" id="pb-dm-select-all"></th>' +
+            '<th><?= __('域名') ?></th><th><?= __('状态') ?></th><th><?= __('价格') ?></th><th><?= __('操作') ?></th>' +
+            '</tr></thead><tbody>';
+
+        results.forEach(function(item, idx) {
+            var badge = item.available
+                ? '<span class="pb-dm-badge pb-dm-badge--ok">' + (item.premium ? '<?= __('溢价可注册') ?>' : '<?= __('可注册') ?>') + '</span>'
+                : '<span class="pb-dm-badge pb-dm-badge--no"><?= __('已注册') ?></span>';
+            var price = item.price ? ('$' + parseFloat(item.price).toFixed(2)) : '-';
+            var action = item.available
+                ? '<button class="pb-dm-btn pb-dm-btn-success pb-dm-btn-sm pb-dm-buy-one" ' +
+                  'data-domain="' + item.domain + '" data-account="' + accountId + '">' +
+                  '<i class="mdi mdi-cart"></i> <?= __('购买') ?></button>'
+                : '-';
+            var chk = item.available
+                ? '<input type="checkbox" class="pb-dm-domain-chk" data-domain="' + item.domain + '" checked>'
+                : '<input type="checkbox" disabled>';
+            html += '<tr><td>' + chk + '</td><td>' + item.domain + '</td><td>' + badge + '</td><td>' + price + '</td><td>' + action + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        checkResults.innerHTML = html;
+
+        /* 全选 */
+        var selectAll = document.getElementById('pb-dm-select-all');
+        if (selectAll) {
+            selectAll.addEventListener('change', function() {
+                var checked = selectAll.checked;
+                checkResults.querySelectorAll('.pb-dm-domain-chk').forEach(function(c) { c.checked = checked; });
+            });
+        }
+
+        /* 单个购买 */
+        checkResults.querySelectorAll('.pb-dm-buy-one').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var domain = btn.dataset.domain;
+                var acctId = btn.dataset.account;
+                AdminConfirm.show('<?= __('确定购买') ?> ' + domain + ' <?= __('吗？') ?>', {
+                    title: '<?= __('确认购买') ?>',
+                    confirmText: '<?= __('确认') ?>',
+                    cancelText: '<?= __('取消') ?>'
+                }).then(function(ok) {
+                    if (!ok) return;
+                    setBtnLoading(btn, true);
+                    postForm(API.purchase, { account_id: acctId, domain: domain, years: '1' }).then(function(res) {
+                        if (res.success) {
+                            AdminToast.success(res.message || res.msg || '<?= __('购买成功') ?>');
+                            btn.innerHTML = '<i class="mdi mdi-check"></i> <?= __('已购买') ?>';
+                            btn.disabled = true;
+                        } else {
+                            setBtnLoading(btn, false, '<i class="mdi mdi-cart"></i> <?= __('购买') ?>');
+                            AdminToast.error(res.message || res.msg || '<?= __('购买失败') ?>');
+                        }
+                    }).catch(function() {
+                        setBtnLoading(btn, false, '<i class="mdi mdi-cart"></i> <?= __('购买') ?>');
+                        AdminToast.error('<?= __('网络错误') ?>');
+                    });
+                });
+            });
+        });
+
+        /* 批量购买 */
+        var batchBtn = document.getElementById('pb-dm-batch-buy-btn');
+        if (batchBtn) {
+            batchBtn.addEventListener('click', function() {
+                var selected = [];
+                checkResults.querySelectorAll('.pb-dm-domain-chk:checked').forEach(function(c) {
+                    selected.push({ domain: c.dataset.domain, years: 1 });
+                });
+                if (!selected.length) {
+                    AdminToast.warning('<?= __('请勾选要购买的域名') ?>');
+                    return;
+                }
+                AdminConfirm.show('<?= __('确定批量购买') ?> ' + selected.length + ' <?= __('个域名吗？') ?>', {
+                    title: '<?= __('批量购买确认') ?>',
+                    confirmText: '<?= __('确认购买') ?>',
+                    cancelText: '<?= __('取消') ?>'
+                }).then(function(ok) {
+                    if (!ok) return;
+                    setBtnLoading(batchBtn, true);
+                    postForm(API.batchPurchase, { account_id: accountId, domains: selected }).then(function(res) {
+                        setBtnLoading(batchBtn, false, '<i class="mdi mdi-cart-arrow-down"></i> <?= __('一键购买全部可用域名') ?>');
+                        if (res.success) {
+                            AdminToast.success(res.message || res.msg || '<?= __('批量购买已提交') ?>');
+                        } else {
+                            AdminToast.error(res.message || res.msg || '<?= __('购买失败') ?>');
+                        }
+                    }).catch(function() {
+                        setBtnLoading(batchBtn, false, '<i class="mdi mdi-cart-arrow-down"></i> <?= __('一键购买全部可用域名') ?>');
+                        AdminToast.error('<?= __('网络错误') ?>');
+                    });
+                });
+            });
+        }
+    }
+
+})();
+</script>

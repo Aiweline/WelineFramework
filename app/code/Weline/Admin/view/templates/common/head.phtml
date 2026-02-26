@@ -47,18 +47,19 @@ endif;
       rel="stylesheet" type="text/css"/>
 <?php
 // 始终加载主题基础变量CSS（所有变量的默认值）
+// 注意：必须先加载 _colors.css（定义所有 --backend-* 颜色变量）
 ?>
-<theme:css>Weline_Theme::theme/backend/colors/_default.css</theme:css>
+<theme:css>Weline_Theme::theme/backend/variables/_colors.css</theme:css>
+<theme:css>Weline_Theme::theme/backend/variables/_typography.css</theme:css>
 <theme:css>Weline_Theme::theme/backend/variables/_spacing.css</theme:css>
 <theme:css>Weline_Theme::theme/backend/variables/_borders.css</theme:css>
 <theme:css>Weline_Theme::theme/backend/variables/_shadows.css</theme:css>
+<theme:css>Weline_Theme::theme/backend/colors/_default.css</theme:css>
 <?php
-// 根据当前主题模式加载暗色/亮色覆盖
-$currentThemeMode = $themeConfig->getThemeModel(); // 'dark', 'light', 或空
-if ($currentThemeMode === 'dark'):
+// 始终加载暗色模式CSS（通过属性选择器 [data-layout-mode="dark"] 等控制生效）
+// 这样用户可以动态切换主题模式，无需重新加载页面
 ?>
 <theme:css>Weline_Theme::theme/backend/colors/_dark.css</theme:css>
-<?php endif; ?>
 <?php
 // 加载主题色系和变量CSS文件（预览配置）
 $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
@@ -89,6 +90,44 @@ if ($previewThemeId && $previewThemeArea === 'backend') {
 ?>
 <!--JS-->
 <js>Weline_Backend::/backend/lib/jquery/3.6.0/jquery.js</js>
+<?php
+// 注入主题配置（必须在 theme.js 加载前）
+$isDev = defined('DEV') && DEV;
+$baseUrl = $this->request->getBaseUrl();
+
+// 根据环境设置模块配置URL和基础URL
+if ($isDev) {
+    $modulesConfigUrl = '/Weline/Backend/view/statics/base/weline.modules.js';
+    $modulesBaseUrl = '/Weline/Backend/view/statics/js/weline-api';
+} else {
+    $modulesConfigUrl = '/static/Weline/Backend/base/weline.modules.js';
+    $modulesBaseUrl = '/static/Weline/Backend/js/weline-api';
+}
+
+$currentLang = $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
+$currentCurrency = $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY';
+
+$themeConfigPayload = [
+    'env' => [
+        'WELINE_ENV' => DEV ? 'DEV' : 'PROD',
+        'DEV' => DEV,
+        'PROD' => !DEV,
+    ],
+    'baseUrl' => $baseUrl,
+    'modulesConfigUrl' => $modulesConfigUrl,
+    'modulesBaseUrl' => $modulesBaseUrl,
+    'currentLang' => $currentLang,
+    'currentCurrency' => $currentCurrency,
+    'debug' => DEV,
+];
+?>
+<script data-no-extract="true">
+window.__WelineThemeConfig = <?= json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE) ?>;
+</script>
+<!-- 主题核心 JS（Weline 对象、模块加载器、API 代理等） -->
+<theme:js>Weline_Theme::theme/backend/assets/js/theme.js</theme:js>
+<!-- 后台全局组件（BackendToast、BackendConfirm 等） -->
+<theme:js>Weline_Theme::theme/backend/assets/js/backend-components.js</theme:js>
 <?php if (DEV): ?>
     <!--        <script src="@static(Weline_Backend::/backend/lib/jquery/3.6.0/jquery.map)"></script>-->
 <?php endif; ?>

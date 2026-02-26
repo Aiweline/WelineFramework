@@ -171,6 +171,7 @@ class ConnectorService
             'mime'  => $mime,
             'size'  => $size,
             'ts'    => $ts,
+            'path'  => $relative,
         ];
         
         if (!$isDir && $this->getThumbnailService()->isPreviewable($mime)) {
@@ -495,24 +496,26 @@ class ConnectorService
         if (\is_array($files['name'])) {
             foreach ($files['name'] as $idx => $name) {
                 $tmp = $files['tmp_name'][$idx] ?? '';
-                if ($tmp === '' || !\is_uploaded_file($tmp)) {
+                $error = $files['error'][$idx] ?? \UPLOAD_ERR_NO_FILE;
+                if ($tmp === '' || $error !== \UPLOAD_ERR_OK || !\file_exists($tmp)) {
                     continue;
                 }
                 $cleanName = \basename((string) $name);
                 $rel = \trim(($relative === '' ? '' : $relative . '/') . $cleanName, '/');
                 $dest = $rootPath . $rel;
-                if (@\move_uploaded_file($tmp, $dest)) {
+                if ($this->moveUploadedFile($tmp, $dest)) {
                     $added[] = $this->buildFileInfo($rel, $rootPath, $rootReal);
                 }
             }
         } else {
             $tmp = $files['tmp_name'] ?? '';
             $name = $files['name'] ?? '';
-            if ($tmp !== '' && \is_uploaded_file($tmp)) {
+            $error = $files['error'] ?? \UPLOAD_ERR_NO_FILE;
+            if ($tmp !== '' && $error === \UPLOAD_ERR_OK && \file_exists($tmp)) {
                 $cleanName = \basename((string) $name);
                 $rel = \trim(($relative === '' ? '' : $relative . '/') . $cleanName, '/');
                 $dest = $rootPath . $rel;
-                if (@\move_uploaded_file($tmp, $dest)) {
+                if ($this->moveUploadedFile($tmp, $dest)) {
                     $added[] = $this->buildFileInfo($rel, $rootPath, $rootReal);
                 }
             }
@@ -526,6 +529,31 @@ class ConnectorService
     }
 
     /**
+     * WLS 兼容的文件移动方法
+     *
+     * 在 WLS 环境下，is_uploaded_file() 和 move_uploaded_file() 不能正常工作，
+     * 因为文件是通过手动解析 multipart 数据写入的临时文件，PHP 不认为它是"上传"文件。
+     * 此方法首先尝试标准 move_uploaded_file()，失败则回退到 rename/copy。
+     */
+    private function moveUploadedFile(string $tmpFile, string $destination): bool
+    {
+        if (@\is_uploaded_file($tmpFile) && @\move_uploaded_file($tmpFile, $destination)) {
+            return true;
+        }
+
+        if (@\rename($tmpFile, $destination)) {
+            return true;
+        }
+
+        if (@\copy($tmpFile, $destination)) {
+            @\unlink($tmpFile);
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * tmb 命令：返回缩略图（使用 ThumbnailService 按需生成）
      */
     private function handleTmb(array $src, string $rootPath, string $rootReal): array
@@ -535,18 +563,18 @@ class ConnectorService
         try {
             [$relative, $abs] = $this->resolvePath($target, $rootPath, $rootReal);
         } catch (\Throwable $e) {
-            return ['error' => 'Invalid target: ' . $e->getMessage()];
+            return ['error' => 'Invalid target'];
         }
         
         if (!\is_file($abs)) {
-            return ['error' => 'File not found: ' . $abs];
+            return ['error' => 'File not found'];
         }
 
         $mime = $this->detectMime($abs);
         $thumbService = $this->getThumbnailService();
         
         if (!$thumbService->isPreviewable($mime)) {
-            return ['error' => 'Not a previewable file, mime: ' . $mime];
+            return ['error' => 'Not a previewable file'];
         }
 
         $thumbPath = $thumbService->getOrGenerate($abs);
