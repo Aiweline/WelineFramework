@@ -22,6 +22,7 @@ namespace Weline\Server\Strategy;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\System\Process\Processer;
+use Weline\Server\Service\ServerInstanceService;
 
 /**
  * Linux 直连策略（SO_REUSEPORT）
@@ -311,7 +312,7 @@ class LinuxDirectStrategy implements ServerStrategyInterface
             'start_time' => \time(),
         ];
         
-        \file_put_contents($instanceFile, \json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        ServerInstanceService::atomicWriteJson($instanceFile, $data);
     }
     
     /**

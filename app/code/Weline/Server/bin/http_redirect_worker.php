@@ -169,8 +169,10 @@ if ($controlPort > 0) {
         });
         
         // 设置断开处理器（复活优先级 1 = HTTP Redirect，延迟 1 秒）
-        $ipcClient->onDisconnect(function (bool $receivedShutdown, \Weline\Server\IPC\ControlClient $client) use ($instanceName, $controlPort, $redirectLog) {
-            if ($receivedShutdown) {
+        $ipcClient->onDisconnect(function (bool $receivedShutdown, \Weline\Server\IPC\ControlClient $client) use (&$ipcReceivedShutdown, $instanceName, $controlPort, $redirectLog) {
+            // 已收到 shutdown，不做任何复活/重连操作
+            if ($receivedShutdown || $ipcReceivedShutdown) {
+                $redirectLog('Master 连接断开（已收到 shutdown，不复活）', 'INFO');
                 return;
             }
             $redirectLog('Master 连接意外断开，尝试复活（优先级 1，延迟 1 秒）...', 'WARN');
@@ -195,9 +197,19 @@ $connections = [];
 $requestBuffers = [];
 
 // 优雅退出函数（统一使用进程管理器清理）
-$gracefulExit = function (string $reason = '') use ($socket, &$connections, $processName, &$ipcClient, $redirectLog) {
+$gracefulExit = function (string $reason = '') use ($socket, &$connections, $processName, &$ipcClient, $redirectLog, $httpPort) {
     if ($reason) {
         $redirectLog("退出: {$reason}", 'WARN');
+    }
+    
+    // 通知 Master 即将退出（IPC exited 消息）
+    if ($ipcClient && $ipcClient->isConnected()) {
+        $ipcClient->send(\Weline\Server\IPC\ControlMessage::exited(
+            \Weline\Server\IPC\ControlMessage::ROLE_REDIRECT,
+            \getmypid(),
+            $httpPort
+        ));
+        $redirectLog("已发送 exited 消息给 Master", 'INFO');
     }
     
     // 关闭 IPC 客户端

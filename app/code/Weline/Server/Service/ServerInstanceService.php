@@ -70,7 +70,7 @@ class ServerInstanceService
     }
     
     /**
-     * 保存实例信息
+     * 保存实例信息（带文件锁，原子写入）
      * 
      * @param string $name 实例名称
      * @param array $info 实例信息
@@ -94,7 +94,279 @@ class ServerInstanceService
             'os' => PHP_OS,
         ], $info);
         
-        file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        self::atomicWriteJson($file, $data);
+    }
+    
+    /**
+     * 原子写入 JSON 文件（带排他锁，防止并发写入损坏）
+     * 
+     * 锁安全说明：
+     * - PHP flock() 是进程级锁，进程崩溃时操作系统自动释放
+     * - .lock 文件只是锁的载体，其存在与否不影响锁状态
+     * - 临时文件命名含 PID，崩溃后由下次写入清理
+     * 
+     * @param string $file 文件路径
+     * @param array $data 数据
+     * @param int $timeout 获取锁超时（秒）
+     * @return bool 是否成功
+     */
+    public static function atomicWriteJson(string $file, array $data, int $timeout = 5): bool
+    {
+        $dir = \dirname($file);
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0755, true);
+        }
+        
+        $json = \json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        if ($json === false) {
+            return false;
+        }
+        
+        // 清理可能残留的陈旧临时文件（上次崩溃遗留）
+        self::cleanupStaleTempFiles($file);
+        
+        $lockFile = $file . '.lock';
+        $fp = @\fopen($lockFile, 'c');
+        if ($fp === false) {
+            return false;
+        }
+        
+        $locked = false;
+        $startTime = \time();
+        
+        while (\time() - $startTime < $timeout) {
+            if (\flock($fp, LOCK_EX | LOCK_NB)) {
+                $locked = true;
+                break;
+            }
+            \usleep(10000);
+        }
+        
+        if (!$locked) {
+            @\fclose($fp);
+            return false;
+        }
+        
+        try {
+            $tempFile = $file . '.tmp.' . \getmypid();
+            if (@\file_put_contents($tempFile, $json) === false) {
+                return false;
+            }
+            
+            if (PHP_OS_FAMILY === 'Windows') {
+                @\unlink($file);
+            }
+            
+            $success = @\rename($tempFile, $file);
+            if (!$success) {
+                @\unlink($tempFile);
+            }
+            return $success;
+        } finally {
+            \flock($fp, LOCK_UN);
+            @\fclose($fp);
+        }
+    }
+    
+    /**
+     * 清理陈旧临时文件（进程崩溃后遗留的 .tmp.{pid} 文件）
+     * 
+     * 策略：
+     * - 只清理超过 60 秒的临时文件（避免误删正在写入的文件）
+     * - 检查 PID 是否仍在运行，若进程已死则立即清理
+     */
+    private static function cleanupStaleTempFiles(string $file): void
+    {
+        $dir = \dirname($file);
+        $basename = \basename($file);
+        $pattern = $dir . DIRECTORY_SEPARATOR . $basename . '.tmp.*';
+        
+        $tmpFiles = @\glob($pattern);
+        if ($tmpFiles === false || $tmpFiles === []) {
+            return;
+        }
+        
+        $now = \time();
+        $staleThreshold = 60;
+        
+        foreach ($tmpFiles as $tmpFile) {
+            $mtime = @\filemtime($tmpFile);
+            if ($mtime === false) {
+                continue;
+            }
+            
+            // 超过阈值的临时文件
+            if ($now - $mtime > $staleThreshold) {
+                @\unlink($tmpFile);
+                continue;
+            }
+            
+            // 检查 PID 是否仍在运行
+            if (\preg_match('/\.tmp\.(\d+)$/', $tmpFile, $matches)) {
+                $pid = (int) $matches[1];
+                if ($pid > 0 && !self::isProcessAlive($pid)) {
+                    @\unlink($tmpFile);
+                }
+            }
+        }
+    }
+    
+    /**
+     * 检查进程是否仍在运行（轻量级检测，不依赖 Processer）
+     */
+    private static function isProcessAlive(int $pid): bool
+    {
+        if ($pid <= 0) {
+            return false;
+        }
+        
+        if (PHP_OS_FAMILY === 'Windows') {
+            $output = [];
+            @\exec("tasklist /FI \"PID eq {$pid}\" /NH 2>NUL", $output);
+            foreach ($output as $line) {
+                if (\strpos($line, (string) $pid) !== false) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        // POSIX: kill -0 检测进程是否存在
+        if (\function_exists('posix_kill')) {
+            return @\posix_kill($pid, 0);
+        }
+        
+        // 回退：检查 /proc/{pid}
+        return \is_dir("/proc/{$pid}");
+    }
+    
+    /**
+     * 原子读取 JSON 文件（带共享锁）
+     * 
+     * @param string $file 文件路径
+     * @param int $timeout 获取锁超时（秒）
+     * @return array|null 数据，失败返回 null
+     */
+    public static function atomicReadJson(string $file, int $timeout = 5): ?array
+    {
+        if (!\is_file($file)) {
+            return null;
+        }
+        
+        $lockFile = $file . '.lock';
+        $fp = @\fopen($lockFile, 'c');
+        if ($fp === false) {
+            $content = @\file_get_contents($file);
+            $data = \json_decode($content ?: '', true);
+            return \is_array($data) ? $data : null;
+        }
+        
+        $locked = false;
+        $startTime = \time();
+        
+        while (\time() - $startTime < $timeout) {
+            if (\flock($fp, LOCK_SH | LOCK_NB)) {
+                $locked = true;
+                break;
+            }
+            \usleep(10000);
+        }
+        
+        if (!$locked) {
+            @\fclose($fp);
+            $content = @\file_get_contents($file);
+            $data = \json_decode($content ?: '', true);
+            return \is_array($data) ? $data : null;
+        }
+        
+        try {
+            $content = @\file_get_contents($file);
+            $data = \json_decode($content ?: '', true);
+            return \is_array($data) ? $data : null;
+        } finally {
+            \flock($fp, LOCK_UN);
+            @\fclose($fp);
+        }
+    }
+    
+    /**
+     * 原子更新 JSON 文件（读取-修改-写入，全程加锁）
+     * 
+     * @param string $file 文件路径
+     * @param callable $modifier 修改器函数，接收当前数据数组，返回修改后的数组
+     * @param int $timeout 获取锁超时（秒）
+     * @return bool 是否成功
+     */
+    public static function atomicUpdateJson(string $file, callable $modifier, int $timeout = 5): bool
+    {
+        $dir = \dirname($file);
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0755, true);
+        }
+        
+        // 清理可能残留的陈旧临时文件
+        self::cleanupStaleTempFiles($file);
+        
+        $lockFile = $file . '.lock';
+        $fp = @\fopen($lockFile, 'c');
+        if ($fp === false) {
+            return false;
+        }
+        
+        $locked = false;
+        $startTime = \time();
+        
+        while (\time() - $startTime < $timeout) {
+            if (\flock($fp, LOCK_EX | LOCK_NB)) {
+                $locked = true;
+                break;
+            }
+            \usleep(10000);
+        }
+        
+        if (!$locked) {
+            @\fclose($fp);
+            return false;
+        }
+        
+        try {
+            $data = [];
+            if (\is_file($file)) {
+                $content = @\file_get_contents($file);
+                $parsed = \json_decode($content ?: '', true);
+                if (\is_array($parsed)) {
+                    $data = $parsed;
+                }
+            }
+            
+            $newData = $modifier($data);
+            if (!\is_array($newData)) {
+                return false;
+            }
+            
+            $json = \json_encode($newData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+            if ($json === false) {
+                return false;
+            }
+            
+            $tempFile = $file . '.tmp.' . \getmypid();
+            if (@\file_put_contents($tempFile, $json) === false) {
+                return false;
+            }
+            
+            if (PHP_OS_FAMILY === 'Windows') {
+                @\unlink($file);
+            }
+            
+            $success = @\rename($tempFile, $file);
+            if (!$success) {
+                @\unlink($tempFile);
+            }
+            return $success;
+        } finally {
+            \flock($fp, LOCK_UN);
+            @\fclose($fp);
+        }
     }
     
     /**

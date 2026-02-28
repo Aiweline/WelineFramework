@@ -18,6 +18,7 @@ use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
+use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\WlsInstanceRegistry;
 use Weline\Server\Observer\CliCommandExecutedObserver;
@@ -50,10 +51,19 @@ class Reload extends CommandAbstract
         // 解析实例名称
         $instanceName = $this->parseInstanceName($args);
         
-        // 代码重载类型
-        $reloadType = CliCommandExecutedObserver::RELOAD_TYPE_CODE;
+        // 检查是否强制模式（-f）：批量杀死后重启，不等待排水
+        $forceMode = isset($args['f']) || isset($args['force']);
         
-        $this->printer->note(__('正在执行代码重载...'));
+        // 确定重载类型
+        $reloadType = $forceMode 
+            ? ControlMessage::RELOAD_TYPE_FORCE 
+            : CliCommandExecutedObserver::RELOAD_TYPE_CODE;
+        
+        if ($forceMode) {
+            $this->printer->warning(__('强制重载模式：批量杀死所有 Worker 后重新启动（不等待排水）'));
+        } else {
+            $this->printer->note(__('正在执行代码重载（滚动重启）...'));
+        }
         
         /** @var WlsInstanceRegistry $registry */
         $registry = ObjectManager::getInstance(WlsInstanceRegistry::class);
@@ -74,13 +84,24 @@ class Reload extends CommandAbstract
         if ($ipcSuccess) {
             echo "\n";
             $this->printer->success(__('✓ 热重载命令已发送（IPC 控制通道）'));
-            $this->printer->note(__('Master 将编排滚动重启，Worker 逐个优雅重启'));
+            if ($forceMode) {
+                $this->printer->note(__('Master 将批量杀死所有 Worker 后重新启动'));
+            } else {
+                $this->printer->note(__('Master 将编排滚动重启，Worker 逐个优雅重启'));
+            }
             $this->printer->note(__('Worker 数：%{1}', [$totalWorkers]));
             echo "\n";
             return;
         }
         
-        // IPC 失败：回退到信号方式
+        // IPC 失败时，强制模式无法回退到信号方式
+        if ($forceMode) {
+            $this->printer->error(__('IPC 通道不可用，强制模式无法执行'));
+            $this->printer->note(__('请检查 Master 是否运行，或使用 server:start -r -f 重启'));
+            return;
+        }
+        
+        // IPC 失败：回退到信号方式（仅滚动重启）
         $notified = 0;
         $method = '';
         
@@ -162,20 +183,23 @@ class Reload extends CommandAbstract
     public function help(): array|string
     {
         return CommandHelper::formatHelp(
-            'server:reload',
+            'server:reload [-f]',
             __('通知 WLS Worker 重新加载代码。修改 Worker 代码后使用此命令即可生效，无需重启整个服务器。'),
             [
                 '[instance]' => __('实例名称（默认：default）'),
+                '-f, --force' => __('强制模式：批量杀死所有 Worker 后重新启动（不等待排水）'),
             ],
             [
+                __('默认模式') => __('滚动重启：逐个 Worker 排水后重启，保证服务不中断'),
+                __('-f 强制模式') => __('批量重启：直接杀死所有 Worker，快速但会中断请求'),
                 __('适用场景') => __('修改了 Worker 代码、业务代码、模板、配置等'),
-                __('不适用场景') => __('修改了 Dispatcher、Master 代码或启动参数（需用 server:restart -r）'),
-                __('缓存清理') => __('请使用 cache:clear 命令，已集成 WLS 缓存重载事件'),
+                __('不适用场景') => __('修改了 Dispatcher、Master 代码或启动参数（需用 server:start -r）'),
             ],
             [
-                __('代码重载（Worker 优雅重启）') => 'php bin/w server:reload',
+                __('滚动重载（默认）') => 'php bin/w server:reload',
+                __('强制重载（批量）') => 'php bin/w server:reload -f',
                 __('重载指定实例') => 'php bin/w server:reload api-server',
-                __('清理缓存') => 'php bin/w cache:clear',
+                __('强制重载指定实例') => 'php bin/w server:reload api-server -f',
             ]
         );
     }
