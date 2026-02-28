@@ -1,8 +1,0 @@
-# 忽略 Tool 目录
-Tool/
-
-# 忽略其他不需要版本控制的文件
-.DS_Store
-*.log
-*.tmp
-*.cache
