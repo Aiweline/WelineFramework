@@ -16,7 +16,7 @@
  * @var string $active_tab 当前激活的 Tab
  */
 
-$activeTab = $active_tab ?? 'registrar';
+$activeTab = $active_tab ?? 'domain_list';
 ?>
 <style>
 .domain-tabs-nav {
@@ -92,6 +92,17 @@ $activeTab = $active_tab ?? 'registrar';
 <div class="card">
     <div class="card-body">
         <nav class='domain-tabs-nav' role='tablist'>
+            <button class='btn domain-tab <?= $activeTab === 'domain_list' ? 'active' : '' ?>'
+                    type='button'
+                    id='domain-list-tab'
+                    data-bs-toggle='tab'
+                    data-bs-target='#domain-list'
+                    role='tab'
+                    aria-controls='domain-list'
+                    aria-selected='<?= $activeTab === 'domain_list' ? 'true' : 'false' ?>'>
+                <i class="mdi mdi-earth me-1"></i>
+                <span class='d-none d-sm-inline-block'><?= __('域名列表') ?></span>
+            </button>
             <button class='btn domain-tab <?= $activeTab === 'registrar' ? 'active' : '' ?>'
                     type='button'
                     id='domain-registrar-tab'
@@ -120,7 +131,15 @@ $activeTab = $active_tab ?? 'registrar';
 
         <!-- Tab 内容 -->
         <div class='tab-content'>
-            <!-- Tab1: 域名商管理 -->
+            <!-- Tab1: 域名列表 -->
+            <div class='tab-pane fade <?= $activeTab === 'domain_list' ? 'show active' : '' ?>'
+                 id='domain-list'
+                 role='tabpanel'
+                 aria-labelledby='domain-list-tab'>
+                <?= $this->fetch('Weline_Websites::templates/Admin/Domain/domain_list_tab.phtml') ?>
+            </div>
+
+            <!-- Tab2: 域名商管理 -->
             <div class='tab-pane fade <?= $activeTab === 'registrar' ? 'show active' : '' ?>'
                  id='domain-registrar'
                  role='tabpanel'
@@ -128,7 +147,7 @@ $activeTab = $active_tab ?? 'registrar';
                 <?= $this->fetch('Weline_Websites::templates/Admin/Domain/registrar_tab.phtml') ?>
             </div>
 
-            <!-- Tab2: 域名购买 -->
+            <!-- Tab3: 域名购买 -->
             <div class='tab-pane fade <?= $activeTab === 'purchase' ? 'show active' : '' ?>'
                  id='domain-purchase'
                  role='tabpanel'
@@ -169,5 +188,35 @@ $activeTab = $active_tab ?? 'registrar';
     }
     
     window.showToast = showToast;
+
+    function initTabs() {
+        var tabButtons = document.querySelectorAll('.domain-tab[data-bs-toggle="tab"]');
+        tabButtons.forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                var targetSelector = btn.getAttribute('data-bs-target');
+                var target = document.querySelector(targetSelector);
+                if (!target) return;
+
+                tabButtons.forEach(function(b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
+                btn.classList.add('active');
+                btn.setAttribute('aria-selected', 'true');
+
+                document.querySelectorAll('.tab-pane').forEach(function(pane) {
+                    pane.classList.remove('show', 'active');
+                });
+                target.classList.add('show', 'active');
+
+                var event = new CustomEvent('shown.bs.tab', { bubbles: true });
+                btn.dispatchEvent(event);
+            });
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initTabs);
+    } else {
+        initTabs();
+    }
 })();
 </script>

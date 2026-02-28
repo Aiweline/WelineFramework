@@ -147,4 +147,93 @@ class AzureDnsRegistrar implements DomainRegistrarInterface
             'status' => 'unknown',
         ];
     }
+
+    // ============================================================
+    // DNS 记录操作（v1.5.0 新增）
+    // ============================================================
+
+    public function supportsDnsManagement(): bool
+    {
+        // Azure DNS 支持 DNS 管理
+        return true;
+    }
+
+    public function getDnsRecords(string $domain, array $credentials): array
+    {
+        // TODO: 调用 Azure DNS Zone Record Sets 接口
+        return [];
+    }
+
+    public function addDnsRecord(string $domain, array $record, array $credentials): array
+    {
+        // TODO: 调用 Azure DNS Zone createOrUpdate 接口
+        return [
+            'success' => false,
+            'message' => __('Azure DNS 适配器尚未完成 API 对接，请稍后再试。'),
+        ];
+    }
+
+    public function updateDnsRecord(string $domain, string $recordId, array $record, array $credentials): array
+    {
+        // TODO: 调用 Azure DNS Zone createOrUpdate 接口
+        return [
+            'success' => false,
+            'message' => __('Azure DNS 适配器尚未完成 API 对接，请稍后再试。'),
+        ];
+    }
+
+    public function deleteDnsRecord(string $domain, string $recordId, array $credentials): array
+    {
+        // TODO: 调用 Azure DNS Zone delete 接口
+        return [
+            'success' => false,
+            'message' => __('Azure DNS 适配器尚未完成 API 对接，请稍后再试。'),
+        ];
+    }
+
+    public function batchAddDnsRecords(string $domain, array $records, array $credentials): array
+    {
+        // TODO: 批量调用 Azure DNS 接口
+        return [
+            'success' => false,
+            'added' => 0,
+            'failed' => count($records),
+            'errors' => [__('Azure DNS 适配器尚未完成 API 对接，请稍后再试。')],
+        ];
+    }
+
+    public function updateNameservers(string $domain, array $nameservers, array $credentials): array
+    {
+        // TODO: 调用 Azure App Service Domains 更新 NS 记录
+        return [
+            'success' => false,
+            'message' => __('Azure DNS Nameserver 修改功能尚未完成 API 对接，请稍后再试。'),
+        ];
+    }
+
+    /**
+     * @inheritDoc
+     *
+     * Azure DNS 的 Nameserver 是动态分配的，需要创建 DNS Zone 后获取
+     */
+    public function getProviderNameservers(array $credentials, string $domain = ''): array
+    {
+        // TODO: 调用 Azure DNS Zone 获取分配的 NS
+        return [
+            'success' => false,
+            'nameservers' => [],
+            'message' => __('Azure DNS Nameserver 获取功能尚未完成 API 对接'),
+        ];
+    }
+
+    /**
+     * @inheritDoc
+     *
+     * Azure DNS 主要是 DNS 服务商，但通过 App Service Domains 也可以注册域名。
+     * 这里暂时设置为 false，因为 Azure 的域名注册功能相对有限。
+     */
+    public function isDomainRegistrar(): bool
+    {
+        return false;
+    }
 }
