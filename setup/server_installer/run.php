@@ -12,8 +12,66 @@ require_once __DIR__ . DIRECTORY_SEPARATOR . 'EnvLoader.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'SetupPgsqlDatabase.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'ConfigurePhpIni.php';
 
-$env = (new EnvLoader($projectRoot))->load(true);
 $argv = $GLOBALS['argv'] ?? [];
+
+// === 检测系统是否已安装（env.php 存在） ===
+$envPhpFile = $projectRoot . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'env.php';
+$forceInstall = in_array('-f', $argv, true) || in_array('--force', $argv, true);
+
+if (is_file($envPhpFile)) {
+    if (!$forceInstall) {
+        // 系统已安装，提示用户
+        echo "\n";
+        echo "╔══════════════════════════════════════════════════════════════════════════════╗\n";
+        echo "║                              系统已安装                                      ║\n";
+        echo "╠══════════════════════════════════════════════════════════════════════════════╣\n";
+        echo "║ 检测到 app/etc/env.php 已存在，说明系统已完成过安装。                        ║\n";
+        echo "║                                                                              ║\n";
+        echo "║ 建议操作：                                                                   ║\n";
+        echo "║   1. 升级系统：php bin/w setup:upgrade                                       ║\n";
+        echo "║   2. 重装系统：先删除 app/etc/env.php，再执行 php bin/w system:install       ║\n";
+        echo "║                                                                              ║\n";
+        echo "║ 如果确实需要重新执行安装脚本，请使用强制模式：                               ║\n";
+        echo "║   php setup/server_installer/run.php -f                                      ║\n";
+        echo "║   或通过安装脚本：                                                           ║\n";
+        echo "║   bin/install.bat -f (Windows) / ./bin/install.sh -f (Linux/Mac)             ║\n";
+        echo "║                                                                              ║\n";
+        echo "║ ⚠ 警告：强制重装可能导致数据丢失，请先备份重要数据！                        ║\n";
+        echo "╚══════════════════════════════════════════════════════════════════════════════╝\n";
+        echo "\n";
+        exit(0);
+    }
+    
+    // 强制安装模式：二次确认
+    echo "\n";
+    echo "╔══════════════════════════════════════════════════════════════════════════════╗\n";
+    echo "║                          ⚠ 强制安装警告 ⚠                                  ║\n";
+    echo "╠══════════════════════════════════════════════════════════════════════════════╣\n";
+    echo "║ 检测到 app/etc/env.php 已存在，您正在使用强制安装模式。                      ║\n";
+    echo "║                                                                              ║\n";
+    echo "║ ⚠ 这将重新执行完整安装流程，可能导致：                                      ║\n";
+    echo "║   - 数据库配置被覆盖                                                         ║\n";
+    echo "║   - 现有配置丢失                                                             ║\n";
+    echo "║   - 其他不可预料的数据损失                                                   ║\n";
+    echo "║                                                                              ║\n";
+    echo "║ 请确认您已备份重要数据！                                                     ║\n";
+    echo "╚══════════════════════════════════════════════════════════════════════════════╝\n";
+    echo "\n";
+    echo "是否继续？输入 'yes' 确认继续，其他任意键取消：";
+    
+    $handle = fopen('php://stdin', 'r');
+    $input = trim(fgets($handle));
+    fclose($handle);
+    
+    if (strtolower($input) !== 'yes') {
+        echo "已取消安装。\n";
+        exit(0);
+    }
+    
+    echo "\n继续强制安装...\n\n";
+}
+
+$env = (new EnvLoader($projectRoot))->load(true);
 $fromStep5b = in_array('--from', $argv, true)
     && (($i = array_search('--from', $argv, true)) !== false)
     && isset($argv[$i + 1])
