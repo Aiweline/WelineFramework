@@ -167,6 +167,12 @@ class MasterProcess
     protected bool $rollingRestart = false;
     
     /**
+     * 是否正在执行批量强制重启（-f 模式）
+     * 此标志为 true 时，禁止 handleWorkerDisconnect 触发复活逻辑
+     */
+    protected bool $forceRestarting = false;
+
+    /**
      * 滚动重启队列（待重启的 Worker ID 列表）
      */
     protected array $rollingRestartQueue = [];
@@ -175,6 +181,16 @@ class MasterProcess
      * 当前正在排水的 Worker ID（同时只有一个）
      */
     protected int $drainingWorkerId = 0;
+    
+    /**
+     * 滚动重启开始时间（用于超时检测）
+     */
+    protected int $rollingRestartStartTime = 0;
+    
+    /**
+     * 当前 Worker 排水开始时间（用于单个 Worker 超时检测）
+     */
+    protected int $drainingStartTime = 0;
     
     /**
      * 维护 Worker 信息 [port => int, pid => int] 或空数组
@@ -429,7 +445,7 @@ class MasterProcess
     }
     
     /**
-     * 保存 Master 进程信息到实例文件
+     * 保存 Master 进程信息到实例文件（原子更新，带文件锁）
      */
     public function saveMasterInfo(): void
     {
@@ -438,31 +454,36 @@ class MasterProcess
             return;
         }
         
-        $content = @\file_get_contents($instanceFile);
-        $data = \json_decode($content, true);
-        if (!\is_array($data)) {
-            return;
-        }
+        $masterPid = \getmypid();
+        $masterMode = $this->mode;
+        $mainPort = $this->mainPort;
+        $controlPort = $this->controlPort;
+        $workers = $this->workers;
+        $httpRedirectWorker = $this->httpRedirectWorker;
+        $dispatcher = $this->dispatcher;
         
-        $data['master_pid'] = \getmypid();
-        $data['master_enabled'] = true;
-        $data['master_started_at'] = \date('Y-m-d H:i:s');
-        $data['master_mode'] = $this->mode;  // 保存运行模式
-        $data['main_port'] = $this->mainPort;  // 保存主端口（Linux 直连模式使用）
-        $data['control_port'] = $this->controlPort;  // IPC 控制端口
-        $data['workers'] = $this->workers;
-        if ($this->httpRedirectWorker !== null) {
-            $data['http_redirect_port'] = $this->httpRedirectWorker['port'];
-            $data['http_redirect_pid'] = $this->httpRedirectWorker['pid'];
-        }
-        if ($this->dispatcher !== null) {
-            $data['dispatcher_enabled'] = true;
-            $data['dispatcher_port'] = $this->dispatcher['port'];
-            $data['dispatcher_pid'] = $this->dispatcher['pid'];
-            $data['dispatcher_worker_ports'] = $this->dispatcher['worker_ports'] ?? [];
-        }
-        
-        \file_put_contents($instanceFile, \json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        ServerInstanceService::atomicUpdateJson($instanceFile, function (array $data) use (
+            $masterPid, $masterMode, $mainPort, $controlPort, $workers, $httpRedirectWorker, $dispatcher
+        ): array {
+            $data['master_pid'] = $masterPid;
+            $data['master_enabled'] = true;
+            $data['master_started_at'] = \date('Y-m-d H:i:s');
+            $data['master_mode'] = $masterMode;
+            $data['main_port'] = $mainPort;
+            $data['control_port'] = $controlPort;
+            $data['workers'] = $workers;
+            if ($httpRedirectWorker !== null) {
+                $data['http_redirect_port'] = $httpRedirectWorker['port'];
+                $data['http_redirect_pid'] = $httpRedirectWorker['pid'];
+            }
+            if ($dispatcher !== null) {
+                $data['dispatcher_enabled'] = true;
+                $data['dispatcher_port'] = $dispatcher['port'];
+                $data['dispatcher_pid'] = $dispatcher['pid'];
+                $data['dispatcher_worker_ports'] = $dispatcher['worker_ports'] ?? [];
+            }
+            return $data;
+        });
     }
     
     /**
@@ -790,6 +811,9 @@ class MasterProcess
                 
                 // 重置重启计数
                 $this->maybeResetRestartCounts();
+                
+                // 滚动重启超时检查（单个 Worker 排水超过 60 秒则强制跳过）
+                $this->checkDrainingTimeout($now);
                 
                 // 健康检查并修复（每 healthCheckInterval 秒）
                 if (($now - $lastHealthCheck) >= $this->healthCheckInterval) {
@@ -1437,17 +1461,12 @@ class MasterProcess
     }
     
     /**
-     * 更新实例文件中的 Worker PID 列表
+     * 更新实例文件中的 Worker PID 列表（原子更新，带文件锁）
      */
     protected function updateInstanceWorkerPids(): void
     {
         $instanceFile = $this->getInstanceFile();
         if (!\is_file($instanceFile)) {
-            return;
-        }
-        
-        $data = \json_decode(\file_get_contents($instanceFile), true);
-        if (!\is_array($data)) {
             return;
         }
         
@@ -1458,8 +1477,10 @@ class MasterProcess
             }
         }
         
-        $data['worker_pids'] = $workerPids;
-        \file_put_contents($instanceFile, \json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        ServerInstanceService::atomicUpdateJson($instanceFile, function (array $data) use ($workerPids): array {
+            $data['worker_pids'] = $workerPids;
+            return $data;
+        });
     }
     
     /**
@@ -1965,7 +1986,7 @@ class MasterProcess
     }
     
     /**
-     * 发起重载：缓存重载原地清理，代码重载滚动重启
+     * 发起重载：缓存重载原地清理，代码重载滚动重启，强制重载批量杀死后重启
      */
     protected function initiateRollingRestart(string $type = 'code'): void
     {
@@ -1982,13 +2003,28 @@ class MasterProcess
             return;
         }
         
-        // 代码重载：滚动重启
-        if ($this->rollingRestart) {
-            $this->log(__('滚动重启已在进行中，忽略重复请求'), 'warning');
+        // 强制重载：批量杀死所有 Worker 后重新启动（不排水）
+        if ($type === ControlMessage::RELOAD_TYPE_FORCE) {
+            $this->log(__('发起强制重载：批量杀死所有 Worker 后重新启动...'));
+            $this->batchForceRestartWorkers();
             return;
         }
         
+        // 代码重载：滚动重启
+        if ($this->rollingRestart) {
+            // 检查滚动重启是否超时卡住（每个 Worker 最多等待 60 秒）
+            $maxTimeout = 60 * \max(1, \count($this->workers));
+            if ($this->rollingRestartStartTime > 0 && (\time() - $this->rollingRestartStartTime) > $maxTimeout) {
+                $this->log(__('滚动重启超时 (%{1}s)，强制重置状态', [$maxTimeout]), 'warning');
+                $this->resetRollingRestartState();
+            } else {
+                $this->log(__('滚动重启已在进行中，忽略重复请求'), 'warning');
+                return;
+            }
+        }
+        
         $this->rollingRestart = true;
+        $this->rollingRestartStartTime = \time();
         $this->rollingRestartQueue = \array_keys($this->workers);
         $this->log(__('发起滚动重启，Worker 队列: [%{1}]', [\implode(', ', $this->rollingRestartQueue)]));
         
@@ -2004,15 +2040,149 @@ class MasterProcess
     }
     
     /**
+     * 批量强制重启所有 Worker（不排水，直接杀死后重新启动）
+     * 
+     * 适用于 -f 强制模式：不等待请求处理完成，直接杀死所有 Worker，然后批量启动新的
+     */
+    protected function batchForceRestartWorkers(): void
+    {
+        $startTime = \time();
+        $workerIds = \array_keys($this->workers);
+        $workerCount = \count($workerIds);
+        
+        if ($workerCount === 0) {
+            $this->log(__('没有 Worker 需要重启'));
+            return;
+        }
+        
+        // ⭐ 设置强制重启标志，禁止 handleWorkerDisconnect 触发复活逻辑
+        $this->forceRestarting = true;
+        
+        $this->log(__('批量强制重启 %{1} 个 Worker...', [$workerCount]));
+        
+        // 通知 Dispatcher 暂停路由（如果有）
+        if ($this->controlServer && $this->mode !== self::MODE_LINUX_DIRECT) {
+            $allPorts = [];
+            foreach ($this->workers as $worker) {
+                if (!empty($worker['port'])) {
+                    $allPorts[] = $worker['port'];
+                }
+            }
+            if (!empty($allPorts)) {
+                $this->controlServer->sendToRole(ControlMessage::ROLE_DISPATCHER, ControlMessage::drain($allPorts));
+                $this->log(__('已通知 Dispatcher 暂停路由到所有 Worker 端口'));
+            }
+        }
+        
+        // ========== 阶段 1：批量发送 shutdown 信号给所有 Worker ==========
+        $pidsToKill = [];
+        $isWin = \defined('IS_WIN') && IS_WIN;
+        
+        foreach ($this->workers as $workerId => $worker) {
+            $pid = (int) ($worker['pid'] ?? 0);
+            $port = $worker['port'] ?? 0;
+            
+            // 通过 IPC 发送 shutdown
+            if ($this->controlServer) {
+                $this->controlServer->sendToWorker($workerId, ControlMessage::shutdown('force_reload'));
+            }
+            
+            if ($pid > 0) {
+                $pidsToKill[$pid] = ['workerId' => $workerId, 'port' => $port];
+                
+                // 同时发送系统信号
+                if (!$isWin && \function_exists('posix_kill')) {
+                    @\posix_kill($pid, \SIGTERM);
+                }
+            }
+        }
+        
+        $this->log(__('已向 %{1} 个 Worker 发送 shutdown 信号', [\count($pidsToKill)]));
+        
+        // ========== 阶段 2：等待进程退出（短超时） ==========
+        $waitTimeout = 3; // 强制模式下只等 3 秒
+        $waitStart = \time();
+        
+        while (!empty($pidsToKill) && (\time() - $waitStart) < $waitTimeout) {
+            \usleep(200000); // 200ms
+            
+            foreach ($pidsToKill as $pid => $info) {
+                if (!Processer::isRunningByPid($pid)) {
+                    $this->log(__('  Worker #%{1} 已退出 (PID: %{2})', [$info['workerId'], $pid]));
+                    unset($pidsToKill[$pid]);
+                }
+            }
+        }
+        
+        // ========== 阶段 3：强制杀死未退出的进程 ==========
+        if (!empty($pidsToKill)) {
+            $this->log(__('部分 Worker 未响应，批量强制杀死...'), 'warning');
+            
+            foreach ($pidsToKill as $pid => $info) {
+                if (!$isWin && \function_exists('posix_kill')) {
+                    @\posix_kill($pid, \SIGKILL);
+                }
+                Processer::killProcessTreeByPid($pid, true);
+                $this->log(__('  已强制杀死 Worker #%{1} (PID: %{2})', [$info['workerId'], $pid]));
+            }
+            
+            // 等待强制杀死生效
+            \usleep(500000); // 500ms
+        }
+        
+        // ========== 阶段 4：批量启动新 Worker ==========
+        $this->log(__('批量启动 %{1} 个新 Worker...', [$workerCount]));
+        
+        foreach ($workerIds as $workerId) {
+            $oldWorker = $this->workers[$workerId] ?? [];
+            $port = $oldWorker['port'] ?? 0;
+            
+            // 重置 Worker 状态
+            $this->workers[$workerId] = [
+                'pid' => 0,
+                'port' => $port,
+                'state' => self::WORKER_STATE_STOPPED,
+                'restarts' => ($oldWorker['restarts'] ?? 0) + 1,
+                'last_restart' => \time(),
+            ];
+            
+            // 启动新 Worker
+            $this->startWorker($workerId);
+        }
+        
+        // ========== 阶段 5：通知 Dispatcher 恢复路由 ==========
+        if ($this->controlServer && $this->mode !== self::MODE_LINUX_DIRECT) {
+            $allPorts = [];
+            foreach ($this->workers as $worker) {
+                if (!empty($worker['port'])) {
+                    $allPorts[] = $worker['port'];
+                }
+            }
+            if (!empty($allPorts)) {
+                // 延迟一点让 Worker 启动
+                \usleep(500000);
+                $this->controlServer->sendToRole(ControlMessage::ROLE_DISPATCHER, ControlMessage::undrain($allPorts));
+                $this->log(__('已通知 Dispatcher 恢复路由到所有 Worker 端口'));
+            }
+        }
+        
+        // ⭐ 重置强制重启标志，恢复正常的管理策略
+        $this->forceRestarting = false;
+        
+        $elapsed = \time() - $startTime;
+        $this->log(__('批量强制重启完成，%{1} 个 Worker 已更新 (耗时: %{2}s)', [$workerCount, $elapsed]), 'success');
+    }
+    
+    /**
      * 排水下一个待重启的 Worker
      */
     protected function drainNextWorker(): void
     {
         if (empty($this->rollingRestartQueue)) {
             // 所有 Worker 重启完成
-            $this->rollingRestart = false;
-            $this->drainingWorkerId = 0;
-            $this->log(__('滚动重启完成，所有 Worker 已更新'));
+            $elapsed = $this->rollingRestartStartTime > 0 ? (\time() - $this->rollingRestartStartTime) : 0;
+            $this->resetRollingRestartState();
+            $this->log(__('滚动重启完成，所有 Worker 已更新 (耗时: %{1}s)', [$elapsed]));
             
             // 关闭维护 Worker
             $this->stopMaintenanceWorkers();
@@ -2021,6 +2191,7 @@ class MasterProcess
         
         $workerId = \array_shift($this->rollingRestartQueue);
         $this->drainingWorkerId = $workerId;
+        $this->drainingStartTime = \time();
         
         $worker = $this->workers[$workerId] ?? null;
         if (!$worker) {
@@ -2038,11 +2209,60 @@ class MasterProcess
         }
         
         // 通知 Worker 重载（Worker 收到后关闭监听 socket，处理完剩余请求后发送 draining_complete）
+        $sendSuccess = false;
         if ($this->controlServer) {
-            $this->controlServer->sendToWorker($workerId, ControlMessage::reload(ControlMessage::RELOAD_TYPE_CODE));
+            $sendSuccess = $this->controlServer->sendToWorker($workerId, ControlMessage::reload(ControlMessage::RELOAD_TYPE_CODE));
+        }
+        
+        if (!$sendSuccess) {
+            $this->log(__('Worker #%{1} (端口: %{2}) 无法发送 reload 消息（可能未注册），尝试直接杀死', [$workerId, $port]), 'warning');
+            $pid = $worker['pid'] ?? 0;
+            if ($pid > 0) {
+                Processer::killProcessTreeByPid($pid, true);
+            }
         }
         
         $this->log(__('Worker #%{1} (端口: %{2}) 开始排水', [$workerId, $port]));
+    }
+    
+    /**
+     * 重置滚动重启状态
+     */
+    protected function resetRollingRestartState(): void
+    {
+        $this->rollingRestart = false;
+        $this->rollingRestartStartTime = 0;
+        $this->rollingRestartQueue = [];
+        $this->drainingWorkerId = 0;
+        $this->drainingStartTime = 0;
+    }
+    
+    /**
+     * 检查单个 Worker 排水超时（在主循环中定期调用）
+     */
+    protected function checkDrainingTimeout(int $now): void
+    {
+        if (!$this->rollingRestart || $this->drainingWorkerId === 0 || $this->drainingStartTime === 0) {
+            return;
+        }
+        
+        $elapsed = $now - $this->drainingStartTime;
+        $drainingTimeout = 60;
+        
+        if ($elapsed > $drainingTimeout) {
+            $workerId = $this->drainingWorkerId;
+            $this->log(__('Worker #%{1} 排水超时 (%{2}s > %{3}s)，强制杀死并继续下一个', [$workerId, $elapsed, $drainingTimeout]), 'warning');
+            
+            $worker = $this->workers[$workerId] ?? null;
+            if ($worker && !empty($worker['pid'])) {
+                Processer::killProcessTreeByPid($worker['pid'], true);
+            }
+            
+            $this->drainingWorkerId = 0;
+            $this->drainingStartTime = 0;
+            
+            $this->drainNextWorker();
+        }
     }
     
     /**
@@ -2093,19 +2313,55 @@ class MasterProcess
         if (!$this->shouldRunManagementStrategies()) {
             return;
         }
-        // 新 Worker 启动后会 register + ready，Master 在 handleReady 中 undrain 并继续
-        // 这里只需触发 Worker 重启（由已有的 healthCheckAndRepair 或直接调用）
         $worker = $this->workers[$workerId] ?? null;
-        if ($worker) {
-            $port = $worker['port'];
-            $newPid = ($this->mode === self::MODE_LINUX_DIRECT)
-                ? $this->restartWorkerLinuxDirect($workerId)
-                : $this->restartWorker($workerId, $port);
-            if ($newPid > 0) {
-                $this->log(__('新 Worker #%{1} 已启动 (PID: %{2})，等待 ready...', [$workerId, $newPid]));
-            } else {
-                $this->log(__('新 Worker #%{1} 启动失败，将由健康检查重试', [$workerId]), 'error');
+        if (!$worker) {
+            return;
+        }
+        
+        $port = $worker['port'];
+        $oldPid = (int)($worker['pid'] ?? 0);
+        
+        // 检查端口是否已被其他进程占用（可能是健康检查并发重启的 Worker）
+        Processer::clearPortCache($port);
+        if (Processer::isPortInUse($port)) {
+            $existingPid = Processer::getProcessIdByPort($port);
+            if ($existingPid > 0 && Processer::isRunningByPid($existingPid) && $existingPid !== $oldPid) {
+                // 端口被另一个存活进程占用（可能是健康检查重启的新 Worker）
+                // 这个新 Worker 应该已经注册过了，直接采纳并继续滚动重启
+                $this->log(__('Worker #%{1} 端口已被 PID %{2} 占用（可能是并发重启），采纳并继续', [$workerId, $existingPid]));
+                $this->workers[$workerId]['pid'] = $existingPid;
+                $this->workers[$workerId]['state'] = self::WORKER_STATE_RUNNING;
+                $this->workers[$workerId]['state_since'] = \time();
+                
+                // 直接继续下一个 Worker，不等待 ready（因为该 Worker 可能早就 ready 过了）
+                $this->drainingWorkerId = 0;
+                $this->drainNextWorker();
+                return;
             }
+        }
+        
+        // 启动新 Worker
+        $newPid = ($this->mode === self::MODE_LINUX_DIRECT)
+            ? $this->restartWorkerLinuxDirect($workerId)
+            : $this->restartWorker($workerId, $port);
+        
+        if ($newPid > 0) {
+            // 检查返回的 PID 是否真的是新启动的（不是采纳已有的）
+            $wasAdopted = ($newPid === $oldPid) || (Processer::isPortInUse($port) && Processer::getProcessIdByPort($port) === $newPid);
+            
+            if ($wasAdopted && $this->workers[$workerId]['state'] === self::WORKER_STATE_RUNNING) {
+                // 采纳了已有进程，它可能已经 ready 过了，直接继续
+                $this->log(__('Worker #%{1} 采纳已有进程 (PID: %{2})，继续滚动重启', [$workerId, $newPid]));
+                $this->drainingWorkerId = 0;
+                $this->drainNextWorker();
+            } else {
+                $this->log(__('新 Worker #%{1} 已启动 (PID: %{2})，等待 ready...', [$workerId, $newPid]));
+            }
+        } else {
+            $this->log(__('新 Worker #%{1} 启动失败，将由健康检查重试', [$workerId]), 'error');
+            // 启动失败也要继续滚动重启，否则会卡死
+            $this->drainingWorkerId = 0;
+            $this->drainNextWorker();
         }
     }
     
@@ -2479,6 +2735,10 @@ class MasterProcess
         if ($this->shouldStopFlag) {
             return false;
         }
+        // 批量强制重启期间禁止复活逻辑（由 batchForceRestartWorkers 统一管理）
+        if ($this->forceRestarting) {
+            return false;
+        }
         if ($this->startupPhase) {
             return false;
         }
@@ -2696,6 +2956,11 @@ class MasterProcess
         }
         $this->cleanedUp = true;
         
+        // ⭐ 立即设置停止标志，禁止所有复活/重启/健康检查逻辑
+        // 这确保 handleWorkerDisconnect 中的 shouldRunManagementStrategies() 返回 false
+        $this->shouldStopFlag = true;
+        $this->running = false;
+        
         $masterPid = \getmypid();
         $this->log('========================================');
         $this->log(__('Master 开始清理'), 'warning');
@@ -2706,350 +2971,71 @@ class MasterProcess
         $this->log(__('  内存使用: %{1} MB', [\round(\memory_get_usage(true) / 1024 / 1024, 2)]));
         $this->log('========================================');
         
-        // 0. Mac/Linux: 先通过 posix_kill 直接向所有子进程发送 SIGTERM（最快路径）
-        if (!\defined('IS_WIN') || !IS_WIN) {
-            $this->signalAllChildren(\SIGTERM);
-        }
+        // ========== 统一使用 IPC 通道广播 shutdown 并等待子进程退出 ==========
+        $gracefulShutdownTimeout = 10; // 等待子进程优雅退出的最长时间（秒）
+        $waitedChildren = false;
         
-        // 0.1 通过控制通道广播 shutdown 命令（优雅退出）
         if ($this->controlServer) {
-            $this->controlServer->broadcast(ControlMessage::shutdown('master_cleanup'));
-            // 给子进程时间收到消息
-            \usleep(500000); // 500ms
-        }
-        
-        // 1. 杀死所有 Worker 进程（兜底：如果控制通道 shutdown 和信号都不生效）
-        $isDirectMode = ($this->mode === self::MODE_LINUX_DIRECT);
-        $killedWorkers = 0;
-        foreach ($this->workers as $workerId => $worker) {
-            $port = $worker['port'] ?? 0;
-            $workerProcessName = '--name=' . 'weline-master-' . $this->instanceName . '-worker-' . $workerId;
-            $result = Processer::destroy($workerProcessName);
-            if (!$result && $port > 0 && !$isDirectMode) {
-                // 兜底：仅在无法按进程名销毁时按端口清理（直连模式下共用端口，不能按端口杀）
-                $result = Processer::killProcessByPort($port);
-            }
-            if ($result) {
-                $killedWorkers++;
-                $this->log(__('  已停止 Worker #%{1} (端口: %{2})', [$workerId, $port]));
-            }
-        }
-        
-        // 1.1 停止维护 Worker
-        foreach ($this->maintenanceWorkers as $mw) {
-            $port = $mw['port'] ?? 0;
-            if ($port > 0) {
-                Processer::killProcessByPort($port);
-                $this->log(__('  已停止维护 Worker (端口: %{1})', [$port]));
-            }
-        }
-        $this->maintenanceWorkers = [];
-        
-        // 2. 杀死 Dispatcher 进程（优先使用实例属性，如果为空则从实例文件读取）
-        $dispatcherPort = null;
-        if ($this->dispatcher !== null && !empty($this->dispatcher['port'])) {
-            $dispatcherPort = $this->dispatcher['port'];
-        } else {
-            // 从实例文件读取 Dispatcher 端口和 PID（防止属性未初始化的情况）
-            $instanceFile = $this->getInstanceFile();
-            if (\is_file($instanceFile)) {
-                $data = @\json_decode(\file_get_contents($instanceFile), true);
-                if (\is_array($data) && !empty($data['dispatcher_port'])) {
-                    $dispatcherPort = (int)$data['dispatcher_port'];
-                }
-            }
-        }
-        
-        if ($dispatcherPort !== null && $dispatcherPort > 0) {
-            // 优先通过进程管理器按进程名销毁
-            $dispatcherProcessName = '--name=' . 'weline-dispatcher-' . $this->instanceName;
-            $result = Processer::destroy($dispatcherProcessName);
-            if (!$result) {
-                // 兜底：按端口杀死
-                $result = Processer::killProcessByPort($dispatcherPort);
-            }
+            // 获取当前连接的子进程数量
+            $connectedClients = $this->controlServer->getConnectedClients();
+            $childCount = \count($connectedClients);
             
-            // 如果 killProcessByPort 失败但端口仍被占用，强制通过 PID 杀死
-            // 注意：Windows 上可能有多个进程占用同一端口，需要循环杀死所有相关进程
-            $maxKillAttempts = 10; // 最多尝试 10 次，防止无限循环
-            $killAttempts = 0;
-            while (!$result && Processer::isPortInUse($dispatcherPort) && $killAttempts < $maxKillAttempts) {
-                $killAttempts++;
-                $currentPid = Processer::getProcessIdByPort($dispatcherPort);
-                $isRunning = $currentPid > 0 ? Processer::isRunningByPid($currentPid) : false;
-                $isOurs = $currentPid > 0 ? Processer::isProcessManagerCreated($currentPid) : false;
-                $isWeline = $currentPid > 0 ? Processer::isWelineServerProcess($currentPid) : false;
+            if ($childCount > 0) {
+                // 广播 shutdown 命令
+                $this->controlServer->broadcast(ControlMessage::shutdown('master_cleanup'));
+                $this->log(__('已通过 IPC 通道广播 shutdown 命令 (子进程数: %{1})', [$childCount]));
                 
-                if ($currentPid > 0 && Processer::isRunningByPid($currentPid)) {
-                    // 强制杀死（跳过安全检查，因为我们在 cleanup() 中，且这是我们的端口）
-                    // 使用进程树杀死（Windows 上会杀死所有子进程）
-                    // 通过进程管理器杀死进程树（skipCheck=true 因为这是 cleanup() 中的内部清理操作）
-                    // 使用 killProcessTreeByPid 确保子进程也被终止
-                    $killResult = Processer::killProcessTreeByPid($currentPid, true);
-                    
-                    if ($killResult) {
-                        $this->log(__('  已强制停止 Dispatcher (PID: %{1}, 端口: %{2}, 尝试: %{3})', [$currentPid, $dispatcherPort, $killAttempts]));
-                        // 等待进程退出
-                        \usleep(200000); // 200ms
-                        // 检查端口是否已释放
-                        if (!Processer::isPortInUse($dispatcherPort)) {
-                            $result = true; // 标记为成功
-                            break;
+                // 等待所有子进程断开连接（收到 exited 或 TCP FIN）
+                $startTime = \time();
+                $lastLogTime = $startTime;
+                
+                while (true) {
+                    // 检查超时
+                    $elapsed = \time() - $startTime;
+                    if ($elapsed >= $gracefulShutdownTimeout) {
+                        $remaining = $this->controlServer->getConnectedClients();
+                        $remainingCount = \count($remaining);
+                        if ($remainingCount > 0) {
+                            $this->log(__('等待超时 (%{1}s)，仍有 %{2} 个子进程未退出', [$gracefulShutdownTimeout, $remainingCount]), 'warning');
                         }
-                    } else {
-                        $this->log(__('  强制停止 Dispatcher (PID: %{1}, 端口: %{2}) 失败', [$currentPid, $dispatcherPort]), 'warning');
-                        // 即使失败也等待一下，然后继续尝试下一个进程
-                        \usleep(200000);
+                        break;
                     }
-                } else {
-                    // 无法获取 PID 或进程已不存在，退出循环
-                    break;
-                }
-            }
-            
-            if ($killAttempts >= $maxKillAttempts && Processer::isPortInUse($dispatcherPort)) {
-                $this->log(__('  警告：Dispatcher 端口 %{1} 仍有进程占用，已尝试 %{2} 次', [$dispatcherPort, $maxKillAttempts]), 'warning');
-            }
-            
-            if ($result) {
-                $this->log(__('  已停止 Dispatcher (端口: %{1})', [$dispatcherPort]));
-            } else {
-                // 如果通过端口失败，尝试从实例文件读取 PID 并直接杀死
-                $instanceFile = $this->getInstanceFile();
-                $dispatcherPid = 0;
-                if (\is_file($instanceFile)) {
-                    $data = @\json_decode(\file_get_contents($instanceFile), true);
-                    if (\is_array($data) && !empty($data['dispatcher_pid'])) {
-                        $dispatcherPid = (int)$data['dispatcher_pid'];
+                    
+                    // 轮询 IPC 通道，处理子进程消息和断开事件
+                    $this->controlServer->poll(100); // 100ms
+                    
+                    // 检查是否所有子进程都已断开
+                    $remaining = $this->controlServer->getConnectedClients();
+                    $remainingCount = \count($remaining);
+                    
+                    if ($remainingCount === 0) {
+                        $this->log(__('所有子进程已优雅退出 (耗时: %{1}s)', [$elapsed]));
+                        $waitedChildren = true;
+                        break;
                     }
-                }
-                
-                // 尝试通过进程名获取 PID（Dispatcher 进程名格式：weline-dispatcher-{instanceName}）
-                if ($dispatcherPid <= 0) {
-                    $dispatcherName = 'weline-dispatcher-' . $this->instanceName;
-                    $dispatcherPid = (int) Processer::getData('--name=' . $dispatcherName, 'pid');
-                }
-                
-                if ($dispatcherPid > 0 && Processer::isRunningByPid($dispatcherPid)) {
-                    // 通过进程管理器杀死进程树（skipCheck=true 因为这是 cleanup() 中的内部清理操作）
-                    // 使用 killProcessTreeByPid 确保子进程也被终止
-                    $killResult = Processer::killProcessTreeByPid($dispatcherPid, true);
-                    if ($killResult) {
-                        $this->log(__('  已停止 Dispatcher (PID: %{1}, 端口: %{2})', [$dispatcherPid, $dispatcherPort]));
-                    } else {
-                        $this->log(__('  停止 Dispatcher (PID: %{1}) 失败', [$dispatcherPid]), 'warning');
-                    }
-                } else {
-                    // 最后尝试：通过端口获取当前 PID 并杀死（如果端口仍被占用）
-                    if (Processer::isPortInUse($dispatcherPort)) {
-                        $currentPid = Processer::getProcessIdByPort($dispatcherPort);
-                        if ($currentPid > 0 && Processer::isRunningByPid($currentPid)) {
-                            // 检查是否是己方进程
-                            $isOurs = Processer::isProcessManagerCreated($currentPid);
-                            $debugLog = Env::VAR_DIR . 'log' . DS . 'master_cleanup_debug.log';
-                            $debugMsg = \date('Y-m-d H:i:s') . " [DEBUG] Dispatcher PID {$currentPid} isProcessManagerCreated: " . ($isOurs ? 'true' : 'false') . "\n";
-                            @\file_put_contents($debugLog, $debugMsg, \FILE_APPEND | \LOCK_EX);
-                            
-                            if ($isOurs) {
-                                // 通过进程管理器杀死进程树（skipCheck=true 因为这是 cleanup() 中的内部清理操作）
-                                // 使用 killProcessTreeByPid 确保子进程也被终止
-                                $killResult = Processer::killProcessTreeByPid($currentPid, true);
-                                if ($killResult) {
-                                    $this->log(__('  已停止 Dispatcher (PID: %{1}, 端口: %{2})', [$currentPid, $dispatcherPort]));
-                                } else {
-                                    $this->log(__('  停止 Dispatcher (PID: %{1}) 失败', [$currentPid]), 'warning');
-                                }
+                    
+                    // 每秒输出一次等待日志
+                    $now = \time();
+                    if ($now > $lastLogTime) {
+                        $lastLogTime = $now;
+                        $roles = [];
+                        foreach ($remaining as $client) {
+                            $role = $client['role'] ?? 'unknown';
+                            $wid = $client['worker_id'] ?? 0;
+                            if ($role === ControlMessage::ROLE_WORKER && $wid > 0) {
+                                $roles[] = "Worker#{$wid}";
                             } else {
-                                // 即使不是己方进程，如果是我们的端口，也尝试杀死（可能是进程注册延迟）
-                                $this->log(__('  Dispatcher 端口 %{1} 被进程占用 (PID: %{2})，尝试强制停止', [$dispatcherPort, $currentPid]), 'warning');
-                                Processer::killProcessTreeByPid($currentPid, true);
+                                $roles[] = \ucfirst($role);
                             }
-                        } else {
-                            $this->log(__('  停止 Dispatcher (端口: %{1}) 失败：无法获取 PID', [$dispatcherPort]), 'warning');
                         }
-                    } else {
-                        $this->log(__('  Dispatcher (端口: %{1}) 已停止或不存在', [$dispatcherPort]));
+                        $this->log(__('等待子进程退出... (%{1}s/%{2}s) 剩余: %{3}', [$elapsed, $gracefulShutdownTimeout, \implode(', ', $roles)]));
                     }
                 }
             }
         }
         
-        // 3. 杀死 HTTP 重定向进程（优先使用实例属性，如果为空则从实例文件读取）
-        $httpRedirectPort = null;
-        if ($this->httpRedirectWorker !== null && $this->httpRedirectWorker['port'] > 0) {
-            $httpRedirectPort = $this->httpRedirectWorker['port'];
-        } else {
-            // 从实例文件读取 HTTP 重定向端口（防止属性未初始化的情况）
-            $instanceFile = $this->getInstanceFile();
-            if (\is_file($instanceFile)) {
-                $data = @\json_decode(\file_get_contents($instanceFile), true);
-                if (\is_array($data) && !empty($data['http_redirect_port'])) {
-                    $httpRedirectPort = (int)$data['http_redirect_port'];
-                }
-            }
-        }
-        
-        if ($httpRedirectPort !== null && $httpRedirectPort > 0) {
-            // 检查 HTTP 重定向进程是否真的启动了（pid > 0）
-            $httpRedirectPid = $this->httpRedirectWorker !== null && !empty($this->httpRedirectWorker['pid']) 
-                ? (int)$this->httpRedirectWorker['pid'] 
-                : 0;
-            
-            // 如果进程没有启动（pid = 0），且端口被非框架进程占用，则跳过清理
-            if ($httpRedirectPid === 0) {
-                // 从实例文件读取 PID（防止属性未初始化的情况）
-                $instanceFile = $this->getInstanceFile();
-                if (\is_file($instanceFile)) {
-                    $data = @\json_decode(\file_get_contents($instanceFile), true);
-                    if (\is_array($data) && !empty($data['http_redirect_pid'])) {
-                        $httpRedirectPid = (int)$data['http_redirect_pid'];
-                    }
-                }
-            }
-            
-            // 如果 PID 仍为 0，且端口被非框架进程占用，跳过清理
-            if ($httpRedirectPid === 0 && Processer::isPortInUse($httpRedirectPort)) {
-                if (!Processer::isPortUsedByWeline($httpRedirectPort)) {
-                    $this->log(__('HTTP 重定向端口 %{1} 被非框架进程占用，跳过清理', [$httpRedirectPort]));
-                    // 跳过清理，继续处理其他进程（不 return，让 cleanup 继续执行）
-                    // 注意：这里不清理端口 80，因为不是我们的进程
-                } else {
-                    // 端口被框架进程占用，继续清理
-                }
-            }
-            
-            // 优先通过进程管理器按进程名销毁
-            $redirectName = self::HTTP_REDIRECT_PROCESS_NAME;
-            $result = Processer::destroy('--name=' . $redirectName);
-            if (!$result) {
-                // 兜底：按端口杀死
-                $result = Processer::killProcessByPort($httpRedirectPort);
-            }
-            
-            // 如果 killProcessByPort 失败但端口仍被占用，强制通过 PID 杀死
-            // 注意：Windows 上可能有多个进程占用同一端口，需要循环杀死所有相关进程
-            // 优先通过进程名杀死（HTTP 重定向有固定的进程名）
-            $redirectPid = (int) Processer::getData('--name=' . $redirectName, 'pid');
-            
-            if ($redirectPid > 0 && Processer::isRunningByPid($redirectPid)) {
-                // 通过进程管理器杀死进程树（skipCheck=true 因为这是 cleanup() 中的内部清理操作）
-                // 使用 killProcessTreeByPid 确保子进程也被终止
-                $killResult = Processer::killProcessTreeByPid($redirectPid, true);
-                
-                if ($killResult) {
-                    $this->log(__('  已通过进程名停止 HTTP 重定向 (PID: %{1}, 端口: %{2})', [$redirectPid, $httpRedirectPort]));
-                    \usleep(200000); // 等待进程退出
-                    if (!Processer::isPortInUse($httpRedirectPort)) {
-                        $result = true;
-                    }
-                }
-            }
-            
-            // 如果端口仍被占用，循环杀死所有占用该端口的进程
-            $maxKillAttempts = 10; // 最多尝试 10 次，防止无限循环
-            $killAttempts = 0;
-            $killedPids = []; // 记录已杀死的 PID，避免重复
-            while (!$result && Processer::isPortInUse($httpRedirectPort) && $killAttempts < $maxKillAttempts) {
-                $killAttempts++;
-                $currentPid = Processer::getProcessIdByPort($httpRedirectPort);
-                
-                // 如果获取到的 PID 已经处理过，跳过
-                if (\in_array($currentPid, $killedPids, true)) {
-                    \usleep(200000); // 等待端口状态更新
-                    continue;
-                }
-                
-                $isRunning = $currentPid > 0 ? Processer::isRunningByPid($currentPid) : false;
-                $isOurs = $currentPid > 0 ? Processer::isProcessManagerCreated($currentPid) : false;
-                $isWeline = $currentPid > 0 ? Processer::isWelineServerProcess($currentPid) : false;
-                
-                if ($currentPid > 0 && Processer::isRunningByPid($currentPid)) {
-                    // 强制杀死（跳过安全检查，因为我们在 cleanup() 中，且这是我们的端口）
-                    // 通过进程管理器杀死进程树（skipCheck=true 因为这是 cleanup() 中的内部清理操作）
-                    // 使用 killProcessTreeByPid 确保子进程也被终止
-                    $killResult = Processer::killProcessTreeByPid($currentPid, true);
-                    
-                    $killedPids[] = $currentPid; // 记录已杀死的 PID
-                    
-                    if ($killResult) {
-                        $this->log(__('  已强制停止 HTTP 重定向 (PID: %{1}, 端口: %{2}, 尝试: %{3})', [$currentPid, $httpRedirectPort, $killAttempts]));
-                        // 等待进程退出
-                        \usleep(200000); // 200ms
-                        // 检查端口是否已释放
-                        if (!Processer::isPortInUse($httpRedirectPort)) {
-                            $result = true; // 标记为成功
-                            break;
-                        }
-                    } else {
-                        $this->log(__('  强制停止 HTTP 重定向 (PID: %{1}, 端口: %{2}) 失败', [$currentPid, $httpRedirectPort]), 'warning');
-                        // 即使失败也等待一下，然后继续尝试下一个进程
-                        \usleep(200000);
-                    }
-                } else {
-                    // 无法获取 PID 或进程已不存在，退出循环
-                    break;
-                }
-            }
-            
-            if ($killAttempts >= $maxKillAttempts && Processer::isPortInUse($httpRedirectPort)) {
-                $this->log(__('  警告：HTTP 重定向端口 %{1} 仍有进程占用，已尝试 %{2} 次', [$httpRedirectPort, $maxKillAttempts]), 'warning');
-            }
-            
-            if ($result) {
-                $this->log(__('  已停止 HTTP 重定向 (端口: %{1})', [$httpRedirectPort]));
-            } else {
-                // 如果通过端口失败，尝试通过进程名杀死（HTTP 重定向有固定的进程名）
-                $redirectName = self::HTTP_REDIRECT_PROCESS_NAME;
-                $redirectPid = (int) Processer::getData('--name=' . $redirectName, 'pid');
-                
-                if ($redirectPid > 0 && Processer::isRunningByPid($redirectPid)) {
-                    // 通过进程管理器杀死进程树（skipCheck=true 因为这是 cleanup() 中的内部清理操作）
-                    // 使用 killProcessTreeByPid 确保子进程也被终止
-                    $killResult = Processer::killProcessTreeByPid($redirectPid, true);
-                    
-                    if ($killResult) {
-                        $this->log(__('  已停止 HTTP 重定向 (PID: %{1}, 端口: %{2})', [$redirectPid, $httpRedirectPort]));
-                        $result = true;
-                    } else {
-                        $this->log(__('  通过进程名停止 HTTP 重定向失败 (PID: %{1})', [$redirectPid]), 'warning');
-                    }
-                } else {
-                    $this->log(__('  停止 HTTP 重定向 (端口: %{1}) 失败或进程不存在', [$httpRedirectPort]), 'warning');
-                }
-            }
-        }
-        
-        $this->log(__('已停止 %{1} 个 Worker 进程', [$killedWorkers]));
-        
-        // 4. Windows/macOS 兜底：验证所有子进程是否已停止，未停止的强制杀死
-        if (IS_WIN || \PHP_OS === 'Darwin') {
-            $stillRunning = [];
-            if ($dispatcherPort !== null && $dispatcherPort > 0 && Processer::isPortInUse($dispatcherPort)) {
-                $stillRunning[] = "Dispatcher (端口: {$dispatcherPort})";
-            }
-            if ($httpRedirectPort !== null && $httpRedirectPort > 0 && Processer::isPortInUse($httpRedirectPort)) {
-                $stillRunning[] = "HTTP 重定向 (端口: {$httpRedirectPort})";
-            }
-            foreach ($this->workers as $wid => $worker) {
-                $wPort = $worker['port'] ?? 0;
-                if ($wPort > 0 && Processer::isPortInUse($wPort)) {
-                    $stillRunning[] = "Worker #{$wid} (端口: {$wPort})";
-                }
-            }
-            if (!empty($stillRunning)) {
-                $this->log(__('警告：以下进程仍在运行: %{1}', [\implode(', ', $stillRunning)]), 'warning');
-                foreach ($stillRunning as $proc) {
-                    if (\preg_match('/端口:\s*(\d+)/', $proc, $m)) {
-                        $port = (int)$m[1];
-                        $pid = Processer::getProcessIdByPort($port);
-                        if ($pid > 0 && Processer::isRunningByPid($pid)) {
-                            Processer::killProcessTreeByPid($pid, true);
-                            $this->log(__('  强制停止进程 (PID: %{1}, 端口: %{2})', [$pid, $port]));
-                        }
-                    }
-                }
-            }
-        }
+        // ========== 兜底：批量强制清理未退出的进程 ==========
+        $this->batchKillRemainingProcesses();
         
         // 5. 关闭 IPC 控制服务器
         if ($this->controlServer) {
@@ -3063,25 +3049,230 @@ class MasterProcess
             $this->logBuffer->flush(true);
         }
         
-        // 7. 更新实例文件
+        // 7. 更新实例文件（原子更新，带文件锁）
         $instanceFile = $this->getInstanceFile();
         if (\is_file($instanceFile)) {
-            $content = @\file_get_contents($instanceFile);
-            $data = \json_decode($content, true);
-            if (\is_array($data)) {
+            ServerInstanceService::atomicUpdateJson($instanceFile, function (array $data): array {
                 $data['master_enabled'] = false;
                 $data['master_pid'] = 0;
                 $data['control_port'] = 0;
                 $data['dispatcher_pid'] = 0;
                 unset($data['http_redirect_pid']);
-                \file_put_contents($instanceFile, \json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-            }
+                return $data;
+            });
         }
         
         $this->log('========================================');
         $this->log(__('Master 清理完成，进程即将退出'), 'success');
         $this->log(__('  内存峰值: %{1} MB', [\round(\memory_get_peak_usage(true) / 1024 / 1024, 2)]));
         $this->log('========================================');
+    }
+    
+    /**
+     * 批量强制清理未退出的进程
+     * 
+     * 核心思路：
+     * 1. 收集所有仍在运行的进程 PID
+     * 2. 批量发送 kill 信号（而不是逐个等待）
+     * 3. 统一等待一次
+     * 4. 验证并清理残留
+     */
+    protected function batchKillRemainingProcesses(): void
+    {
+        $isDirectMode = ($this->mode === self::MODE_LINUX_DIRECT);
+        
+        // ========== 阶段 1：收集所有需要清理的进程 PID ==========
+        $processesToKill = []; // ['label' => string, 'pid' => int, 'port' => int, 'processName' => string]
+        
+        // 收集 Worker 进程
+        foreach ($this->workers as $workerId => $worker) {
+            $port = $worker['port'] ?? 0;
+            $pid = (int) ($worker['pid'] ?? 0);
+            $processName = '--name=' . 'weline-master-' . $this->instanceName . '-worker-' . $workerId;
+            
+            // 检查进程是否仍在运行
+            $stillRunning = ($pid > 0 && Processer::isRunningByPid($pid)) 
+                || ($port > 0 && !$isDirectMode && Processer::isPortInUse($port));
+            
+            if ($stillRunning) {
+                // 如果没有 PID，尝试从端口获取
+                if ($pid <= 0 && $port > 0) {
+                    $pid = Processer::getProcessIdByPort($port);
+                }
+                if ($pid > 0) {
+                    $processesToKill[] = [
+                        'label' => "Worker #{$workerId}",
+                        'pid' => $pid,
+                        'port' => $port,
+                        'processName' => $processName,
+                    ];
+                }
+            } else {
+                $this->log(__('  Worker #%{1} 已停止 (端口: %{2})', [$workerId, $port]));
+            }
+        }
+        
+        // 收集维护 Worker
+        foreach ($this->maintenanceWorkers as $mw) {
+            $port = $mw['port'] ?? 0;
+            $pid = (int) ($mw['pid'] ?? 0);
+            if ($port > 0 && Processer::isPortInUse($port)) {
+                if ($pid <= 0) {
+                    $pid = Processer::getProcessIdByPort($port);
+                }
+                if ($pid > 0) {
+                    $processesToKill[] = [
+                        'label' => "Maintenance Worker",
+                        'pid' => $pid,
+                        'port' => $port,
+                        'processName' => '',
+                    ];
+                }
+            }
+        }
+        $this->maintenanceWorkers = [];
+        
+        // 收集 Dispatcher 进程
+        $dispatcherPort = $this->dispatcher['port'] ?? 0;
+        if ($dispatcherPort <= 0) {
+            $instanceFile = $this->getInstanceFile();
+            if (\is_file($instanceFile)) {
+                $data = @\json_decode(\file_get_contents($instanceFile), true);
+                $dispatcherPort = (int) ($data['dispatcher_port'] ?? 0);
+            }
+        }
+        if ($dispatcherPort > 0 && Processer::isPortInUse($dispatcherPort)) {
+            $dispatcherPid = (int) ($this->dispatcher['pid'] ?? 0);
+            if ($dispatcherPid <= 0) {
+                $dispatcherPid = Processer::getProcessIdByPort($dispatcherPort);
+            }
+            if ($dispatcherPid > 0) {
+                $processesToKill[] = [
+                    'label' => 'Dispatcher',
+                    'pid' => $dispatcherPid,
+                    'port' => $dispatcherPort,
+                    'processName' => '--name=weline-dispatcher-' . $this->instanceName,
+                ];
+            }
+        }
+        
+        // 收集 HTTP 重定向进程
+        $httpRedirectPort = $this->httpRedirectWorker['port'] ?? 0;
+        if ($httpRedirectPort <= 0) {
+            $instanceFile = $this->getInstanceFile();
+            if (\is_file($instanceFile)) {
+                $data = @\json_decode(\file_get_contents($instanceFile), true);
+                $httpRedirectPort = (int) ($data['http_redirect_port'] ?? 0);
+            }
+        }
+        if ($httpRedirectPort > 0 && Processer::isPortInUse($httpRedirectPort)) {
+            // 检查是否是框架进程
+            if (Processer::isPortUsedByWeline($httpRedirectPort)) {
+                $httpRedirectPid = (int) ($this->httpRedirectWorker['pid'] ?? 0);
+                if ($httpRedirectPid <= 0) {
+                    $httpRedirectPid = Processer::getProcessIdByPort($httpRedirectPort);
+                }
+                if ($httpRedirectPid > 0) {
+                    $processesToKill[] = [
+                        'label' => 'HTTP Redirect',
+                        'pid' => $httpRedirectPid,
+                        'port' => $httpRedirectPort,
+                        'processName' => '--name=' . self::HTTP_REDIRECT_PROCESS_NAME,
+                    ];
+                }
+            } else {
+                $this->log(__('HTTP 重定向端口 %{1} 被非框架进程占用，跳过清理', [$httpRedirectPort]));
+            }
+        }
+        
+        // 如果没有需要清理的进程
+        if (empty($processesToKill)) {
+            $this->log(__('所有子进程已停止'));
+            return;
+        }
+        
+        // ========== 阶段 2：批量发送 kill 信号 ==========
+        $labels = [];
+        $pidsToWait = [];
+        
+        foreach ($processesToKill as $proc) {
+            $pid = $proc['pid'];
+            $label = $proc['label'];
+            $port = $proc['port'];
+            $labels[] = "{$label}(PID:{$pid})";
+            $pidsToWait[$pid] = ['label' => $label, 'port' => $port];
+            
+            // Mac/Linux: 使用 posix_kill 发送 SIGTERM
+            if (!\defined('IS_WIN') || !IS_WIN) {
+                if (\function_exists('posix_kill')) {
+                    @\posix_kill($pid, \SIGTERM);
+                }
+            } else {
+                // Windows: 使用 taskkill（不等待）
+                @\exec("taskkill /PID {$pid} /F 2>NUL", $output, $code);
+            }
+        }
+        
+        $this->log(__('批量发送终止信号: %{1}', [\implode(', ', $labels)]));
+        
+        // ========== 阶段 3：统一等待进程退出 ==========
+        $waitTimeout = 3; // 批量杀死后的等待时间（秒）
+        $startTime = \time();
+        
+        while (!empty($pidsToWait) && (\time() - $startTime) < $waitTimeout) {
+            \usleep(200000); // 200ms
+            
+            foreach ($pidsToWait as $pid => $info) {
+                if (!Processer::isRunningByPid($pid)) {
+                    $this->log(__('  %{1} 已停止 (端口: %{2})', [$info['label'], $info['port']]));
+                    unset($pidsToWait[$pid]);
+                }
+            }
+        }
+        
+        // ========== 阶段 4：强制清理残留进程 ==========
+        if (!empty($pidsToWait)) {
+            $this->log(__('部分进程未响应，强制清理...'), 'warning');
+            
+            foreach ($pidsToWait as $pid => $info) {
+                // Mac/Linux: 发送 SIGKILL
+                if (!\defined('IS_WIN') || !IS_WIN) {
+                    if (\function_exists('posix_kill')) {
+                        @\posix_kill($pid, \SIGKILL);
+                    }
+                }
+                // 使用 Processer 的进程树杀死（确保子进程也被终止）
+                Processer::killProcessTreeByPid($pid, true);
+                $this->log(__('  已强制停止 %{1} (PID: %{2}, 端口: %{3})', [$info['label'], $pid, $info['port']]));
+            }
+            
+            // 等待强制杀死生效
+            \usleep(500000); // 500ms
+        }
+        
+        // ========== 阶段 5：最终验证（按端口检查） ==========
+        $stillRunning = [];
+        foreach ($processesToKill as $proc) {
+            $port = $proc['port'];
+            if ($port > 0 && Processer::isPortInUse($port)) {
+                $stillRunning[] = "{$proc['label']} (端口: {$port})";
+                // 最后尝试按端口杀死
+                Processer::killProcessByPort($port);
+            }
+        }
+        
+        if (!empty($stillRunning)) {
+            $this->log(__('警告：以下进程仍在运行: %{1}', [\implode(', ', $stillRunning)]), 'warning');
+        }
+        
+        // 清理 PID 文件
+        foreach ($processesToKill as $proc) {
+            if (!empty($proc['processName'])) {
+                Processer::removePidFile($proc['processName']);
+            }
+        }
+        
+        $this->log(__('已处理 %{1} 个进程', [\count($processesToKill)]));
     }
     
     /**
