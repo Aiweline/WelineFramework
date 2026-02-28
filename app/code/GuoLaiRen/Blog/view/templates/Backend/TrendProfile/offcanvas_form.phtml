@@ -1,31 +1,16 @@
 <?php
 /**
- * 关键词画像 Offcanvas 表单（iframe 内加载）
+ * 关键词画像 Offcanvas 表单
+ * 内容模板 - 由 default.blank 布局包装
  *
+ * @var \Weline\Framework\View\Template $this
  * @var \GuoLaiRen\Blog\Model\TrendProfile|null $profile
  */
 $profile = $this->getData('profile');
 $action  = $this->getData('action');
 $isEdit  = $profile && $profile->getId();
-$title   = $isEdit ? __('编辑关键词画像') : __('新建关键词画像');
 $keywordsStr = $profile ? implode(', ', $profile->getKeywordsArray()) : '';
 ?>
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $title ?></title>
-    <link href="@static(Weline_Frontend::assets/css/bootstrap.min.css)" rel="stylesheet">
-    <link href="@static(Weline_Admin::assets/css/icons.min.css)" rel="stylesheet">
-    <style>
-        body { padding: 1rem; background: #fff; }
-        .offcanvas-form-card { border: none; box-shadow: none; }
-    </style>
-</head>
-<body>
-
-<template>Weline_Component::message.phtml</template>
 
 <form id="offcanvasForm" action="<?= htmlspecialchars($action) ?>" method="post">
     <div class="mb-3">
@@ -55,6 +40,3 @@ $keywordsStr = $profile ? implode(', ', $profile->getKeywordsArray()) : '';
         <i class="mdi mdi-content-save me-1"></i><?= $isEdit ? __('保存') : __('创建') ?>
     </button>
 </form>
-
-</body>
-</html>
