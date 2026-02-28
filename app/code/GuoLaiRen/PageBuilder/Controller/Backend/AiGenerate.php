@@ -3225,4 +3225,226 @@ PROMPT;
         
         return ['valid' => true, 'error' => ''];
     }
+
+    /**
+     * AI 文章内容生成
+     * 
+     * POST /pagebuilder/backend/ai-generate/generate-article
+     * 
+     * 参数：
+     * - topic: 文章主题（必填）
+     * - article_type: 文章类型（blog/news/product/landing/about/faq/tutorial/review）
+     * - style: 写作风格（professional/casual/technical/marketing/educational）
+     * - length: 文章长度（short/medium/long）
+     * - locale: 语言代码（zh_Hans_CN/en_US 等）
+     * - keyword: 主关键词
+     * - additional_keywords: 相关关键词（数组或逗号分隔）
+     * - target_audience: 目标受众
+     * - include_seo: 是否包含 SEO 信息（默认 true）
+     * - custom_instructions: 自定义说明
+     * - page_id: 关联页面ID（可选，用于直接更新页面内容）
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::ai_generate_article', '生成文章内容', 'mdi mdi-file-document-edit', 'AI生成页面文章内容', 'GuoLaiRen_PageBuilder::visual_editor')]
+    public function postGenerateArticle(): string
+    {
+        try {
+            $topic = trim($this->request->getPost('topic', ''));
+            if (empty($topic)) {
+                return json_encode([
+                    'success' => false,
+                    'message' => __('请输入文章主题'),
+                ], JSON_UNESCAPED_UNICODE);
+            }
+
+            $articleType = $this->request->getPost('article_type', 'blog');
+            $style = $this->request->getPost('style', 'professional');
+            $length = $this->request->getPost('length', 'medium');
+            $locale = $this->request->getPost('locale', 'zh_Hans_CN');
+            $keyword = $this->request->getPost('keyword', $topic);
+            $additionalKeywords = $this->request->getPost('additional_keywords', []);
+            $targetAudience = $this->request->getPost('target_audience', '');
+            $includeSeo = (bool) $this->request->getPost('include_seo', true);
+            $customInstructions = $this->request->getPost('custom_instructions', '');
+            $pageId = (int) $this->request->getPost('page_id', 0);
+
+            if (is_string($additionalKeywords)) {
+                $additionalKeywords = array_filter(array_map('trim', explode(',', $additionalKeywords)));
+            }
+
+            /** @var \Weline\Ai\Service\ArticleGenerationService $articleService */
+            $articleService = ObjectManager::getInstance(\Weline\Ai\Service\ArticleGenerationService::class);
+
+            $result = $articleService->generateArticle($topic, [
+                'keyword' => $keyword,
+                'additional_keywords' => $additionalKeywords,
+                'article_type' => $articleType,
+                'style' => $style,
+                'length' => $length,
+                'locale' => $locale,
+                'target_audience' => $targetAudience,
+                'include_seo' => $includeSeo,
+                'custom_instructions' => $customInstructions,
+                'is_backend' => true,
+            ]);
+
+            if (isset($result['_error']) && $result['_error']) {
+                return json_encode([
+                    'success' => false,
+                    'message' => $result['_error_message'] ?? __('文章生成失败'),
+                ], JSON_UNESCAPED_UNICODE);
+            }
+
+            if ($pageId > 0) {
+                $this->updatePageWithArticle($pageId, $result);
+            }
+
+            return json_encode([
+                'success' => true,
+                'message' => __('文章生成成功'),
+                'data' => $result,
+            ], JSON_UNESCAPED_UNICODE);
+
+        } catch (\Throwable $e) {
+            return json_encode([
+                'success' => false,
+                'message' => __('生成失败：%{error}', ['error' => $e->getMessage()]),
+            ], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /**
+     * AI 文章内容流式生成（SSE）
+     * 
+     * GET /pagebuilder/backend/ai-generate/generate-article-stream
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::ai_generate_article', '生成文章内容', 'mdi mdi-file-document-edit', 'AI生成页面文章内容（流式）', 'GuoLaiRen_PageBuilder::visual_editor')]
+    public function getGenerateArticleStream(): void
+    {
+        @set_time_limit(0);
+        @ignore_user_abort(true);
+
+        $sse = new \Weline\Framework\Http\Sse\SseWriter();
+        $sse->start();
+
+        try {
+            $topic = trim($this->request->getGet('topic', ''));
+            if (empty($topic)) {
+                $sse->sendEvent('error', ['message' => __('请输入文章主题')]);
+                return;
+            }
+
+            $articleType = $this->request->getGet('article_type', 'blog');
+            $style = $this->request->getGet('style', 'professional');
+            $length = $this->request->getGet('length', 'medium');
+            $locale = $this->request->getGet('locale', 'zh_Hans_CN');
+            $keyword = $this->request->getGet('keyword', $topic);
+
+            $sse->sendEvent('start', [
+                'topic' => $topic,
+                'article_type' => $articleType,
+            ]);
+
+            /** @var \Weline\Ai\Service\ArticleGenerationService $articleService */
+            $articleService = ObjectManager::getInstance(\Weline\Ai\Service\ArticleGenerationService::class);
+
+            $result = $articleService->generateArticleStream($topic, function (string $chunk, string $fullResponse) use ($sse) {
+                $sse->sendEvent('chunk', ['text' => $chunk]);
+            }, [
+                'keyword' => $keyword,
+                'article_type' => $articleType,
+                'style' => $style,
+                'length' => $length,
+                'locale' => $locale,
+                'include_seo' => true,
+            ]);
+
+            $sse->sendEvent('done', [
+                'success' => true,
+                'data' => $result,
+            ]);
+
+        } catch (\Throwable $e) {
+            $sse->sendEvent('error', ['message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * 使用生成的文章内容更新页面
+     */
+    private function updatePageWithArticle(int $pageId, array $articleData): void
+    {
+        $page = clone $this->pageModel;
+        $page->clearQuery()->load($pageId);
+
+        if (!$page->getId()) {
+            return;
+        }
+
+        if (!empty($articleData['title'])) {
+            $page->setData(PageModel::fields_TITLE, $articleData['title']);
+            if (empty($page->getData(PageModel::fields_NAME))) {
+                $page->setData(PageModel::fields_NAME, $articleData['title']);
+            }
+        }
+
+        if (!empty($articleData['content'])) {
+            $page->setData(PageModel::fields_CONTENT, $articleData['content']);
+        }
+
+        if (!empty($articleData['meta_title'])) {
+            $page->setData(PageModel::fields_META_TITLE, $articleData['meta_title']);
+        }
+
+        if (!empty($articleData['meta_description'])) {
+            $page->setData(PageModel::fields_META_DESCRIPTION, $articleData['meta_description']);
+        }
+
+        if (!empty($articleData['meta_keywords'])) {
+            $page->setData(PageModel::fields_META_KEYWORDS, $articleData['meta_keywords']);
+        }
+
+        $page->save();
+    }
+
+    /**
+     * 获取可用的文章类型列表
+     * 
+     * GET /pagebuilder/backend/ai-generate/article-types
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::ai_generate_article', '文章类型列表', 'mdi mdi-format-list-bulleted', '获取AI文章生成支持的类型', 'GuoLaiRen_PageBuilder::visual_editor')]
+    public function getArticleTypes(): string
+    {
+        $adapter = new \Weline\Ai\Adapter\ArticleGenerationAdapter();
+        $paramTemplate = $adapter->getParamTemplate();
+
+        $types = [];
+        if (isset($paramTemplate['fields']['article_type']['options'])) {
+            foreach ($paramTemplate['fields']['article_type']['options'] as $value => $label) {
+                $types[] = ['value' => $value, 'label' => $label];
+            }
+        }
+
+        $styles = [];
+        if (isset($paramTemplate['fields']['style']['options'])) {
+            foreach ($paramTemplate['fields']['style']['options'] as $value => $label) {
+                $styles[] = ['value' => $value, 'label' => $label];
+            }
+        }
+
+        $lengths = [];
+        if (isset($paramTemplate['fields']['length']['options'])) {
+            foreach ($paramTemplate['fields']['length']['options'] as $value => $label) {
+                $lengths[] = ['value' => $value, 'label' => $label];
+            }
+        }
+
+        return json_encode([
+            'success' => true,
+            'data' => [
+                'types' => $types,
+                'styles' => $styles,
+                'lengths' => $lengths,
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+    }
 }

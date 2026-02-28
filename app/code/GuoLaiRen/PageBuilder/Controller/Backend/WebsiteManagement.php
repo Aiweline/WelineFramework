@@ -143,11 +143,14 @@ class WebsiteManagement extends BaseController
     }
 
     /**
-     * 添加网站
+     * 添加网站（使用空白布局，适用于 offcanvas）
      */
     #[Acl('GuoLaiRen_PageBuilder::website_listing_add', '添加网站', 'mdi mdi-plus', '网站列表管理')]
     public function add(): string
     {
+        // 使用空白布局（适用于 offcanvas/弹窗）
+        $this->layoutType = 'default.blank';
+        
         if ($this->request->isPost()) {
             $data = $this->request->getPost();
             try {
@@ -241,6 +244,10 @@ class WebsiteManagement extends BaseController
         sort($timezones);
         $this->assign('timezones', $timezones);
         
+        // 获取域名池数据（按根域名分组）
+        $domainPool = $this->objectManager->getInstance(\Weline\Websites\Model\DomainPool::class);
+        $this->assign('domain_options', $domainPool->getSelectOptions());
+        
         return $this->fetch('form');
     }
 
@@ -250,6 +257,9 @@ class WebsiteManagement extends BaseController
     #[Acl('GuoLaiRen_PageBuilder::website_listing_edit', '编辑网站', 'mdi mdi-pencil', '网站列表管理')]
     public function edit(): string
     {
+        // 使用空白布局（适用于 offcanvas/弹窗）
+        $this->layoutType = 'default.blank';
+        
         $websiteId = $this->request->getParam('id');
         
         if (empty($websiteId)) {
@@ -402,6 +412,10 @@ class WebsiteManagement extends BaseController
         $timezones = \DateTimeZone::listIdentifiers();
         sort($timezones);
         $this->assign('timezones', $timezones);
+        
+        // 获取域名池数据（按根域名分组）
+        $domainPool = $this->objectManager->getInstance(\Weline\Websites\Model\DomainPool::class);
+        $this->assign('domain_options', $domainPool->getSelectOptions());
         
         return $this->fetch('form');
     }
