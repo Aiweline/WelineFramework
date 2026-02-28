@@ -33,6 +33,16 @@
          parent="Weline_Backend::system_settings" icon="mdi mdi-email" order="20"/>
     <add source="Weline_Backend::storage_settings" name="storage_settings" title="存储设置" action="*/backend/settings/storage"
          parent="Weline_Backend::system_settings" icon="mdi mdi-folder" order="30"/>
+    
+    <!--消息通知分组-->
+    <add source="Weline_Backend::notification_settings" name="notification_settings" title="消息通知" action=""
+         parent="Weline_Backend::system_settings" icon="mdi mdi-bell" order="40"/>
+    <add source="Weline_Backend::notification_subscription" name="notification_subscription" title="我的订阅" action="*/backend/notificationsubscription"
+         parent="Weline_Backend::notification_settings" icon="mdi mdi-bell-cog" order="10"/>
+    <add source="Weline_Backend::user_contact" name="user_contact" title="我的联系人" action="*/backend/usercontact"
+         parent="Weline_Backend::notification_settings" icon="mdi mdi-account-box" order="20"/>
+    <add source="Weline_Backend::notification_channel" name="notification_channel" title="渠道配置" action="*/backend/notificationchannel"
+         parent="Weline_Backend::notification_settings" icon="mdi mdi-tune" order="30"/>
     <!--顶层：系统服务-->
     <add source="Weline_Backend::system_service" name="system_service" title="系统服务" action="" parent=""
          icon="mdi mdi-server" order="30000"/>

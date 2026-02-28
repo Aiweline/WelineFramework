@@ -1,0 +1,158 @@
+<?php
+/**
+ * 渠道配置列表页面
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $channels 渠道列表
+ * @var array $adapter_map 适配器映射
+ */
+$channels = $channels ?? [];
+$adapter_map = $adapter_map ?? [];
+?>
+
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0 font-size-18"><lang>渠道配置</lang></h4>
+            <div>
+                <a href="<?= $this->getBackendUrl('*/backend/notificationchannel/form') ?>" class="btn btn-primary">
+                    <i class="mdi mdi-plus me-1"></i><lang>新建渠道</lang>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class='row'>
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <?php if (empty($channels)): ?>
+                <div class="weline-channel-empty text-center py-5">
+                    <i class="mdi mdi-tune-variant weline-channel-empty-icon"></i>
+                    <p class="mt-3"><lang>暂无渠道配置</lang></p>
+                    <a href="<?= $this->getBackendUrl('*/backend/notificationchannel/form') ?>" class="btn btn-primary mt-2">
+                        <i class="mdi mdi-plus me-1"></i><lang>创建第一个渠道</lang>
+                    </a>
+                </div>
+                <?php else: ?>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover weline-channel-table">
+                        <thead>
+                            <tr>
+                                <th><lang>渠道</lang></th>
+                                <th><lang>类型</lang></th>
+                                <th><lang>最低级别</lang></th>
+                                <th><lang>订阅主题</lang></th>
+                                <th class="text-center"><lang>状态</lang></th>
+                                <th class="text-center"><lang>操作</lang></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($channels as $channel): ?>
+                            <?php
+                            $channelCode = $channel['channel_code'] ?? '';
+                            $adapterInfo = $adapter_map[$channelCode] ?? null;
+                            $subscribedTopics = json_decode($channel['subscribed_topics'] ?? '[]', true) ?: [];
+                            ?>
+                            <tr>
+                                <td>
+                                    <strong><?= htmlspecialchars($channel['channel_name'] ?? '') ?></strong>
+                                    <br><small class="text-muted"><?= htmlspecialchars($channelCode) ?></small>
+                                </td>
+                                <td>
+                                    <?= $adapterInfo ? htmlspecialchars($adapterInfo['name']) : $channelCode ?>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary"><?= __('≥') ?> <?= htmlspecialchars($channel['min_type'] ?? 'info') ?></span>
+                                </td>
+                                <td>
+                                    <?php if (empty($subscribedTopics)): ?>
+                                    <span class="text-muted"><lang>全部主题</lang></span>
+                                    <?php else: ?>
+                                    <span class="badge bg-info"><?= count($subscribedTopics) ?> <lang>个主题</lang></span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="text-center">
+                                    <?php if ($channel['is_enabled']): ?>
+                                    <span class="badge bg-success"><lang>启用</lang></span>
+                                    <?php else: ?>
+                                    <span class="badge bg-secondary"><lang>禁用</lang></span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="text-center">
+                                    <a href="<?= $this->getBackendUrl('*/backend/notificationchannel/form', ['id' => $channel['channel_id']]) ?>" 
+                                       class="btn btn-sm btn-outline-primary" title="<?= __('编辑') ?>">
+                                        <i class="mdi mdi-pencil"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" 
+                                            onclick="WelineChannel.deleteChannel(<?= $channel['channel_id'] ?>)"
+                                            title="<?= __('删除') ?>">
+                                        <i class="mdi mdi-delete"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.weline-channel-empty-icon {
+    font-size: 4rem;
+    color: var(--backend-color-text-muted, #6c757d);
+}
+.weline-channel-table {
+    background: var(--backend-color-card-bg, #fff);
+}
+.weline-channel-table th {
+    background: var(--backend-color-card-header-bg, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+}
+</style>
+
+<script>
+(function() {
+    'use strict';
+
+    var WelineChannel = {
+        deleteChannel: function(channelId) {
+            BackendConfirm.show('<?= __('确定要删除此渠道吗？删除后将停止向该渠道发送通知。') ?>').then(function(confirmed) {
+                if (!confirmed) return;
+
+                fetch('<?= $this->getBackendUrl('*/backend/notificationchannel/delete') ?>', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'channel_id=' + channelId
+                })
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        BackendToast.success(data.message);
+                        setTimeout(function() { window.location.reload(); }, 1000);
+                    } else {
+                        BackendToast.error(data.message);
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Error:', error);
+                    BackendToast.error('<?= __('删除失败') ?>');
+                });
+            });
+        }
+    };
+
+    window.WelineChannel = WelineChannel;
+})();
+</script>
