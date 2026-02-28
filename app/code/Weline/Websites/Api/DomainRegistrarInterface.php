@@ -115,4 +115,107 @@ interface DomainRegistrarInterface
      * @return array{domain: string, status: string, nameservers?: array, expires_at?: string, registrar?: string}
      */
     public function getDomainDetail(string $domain, array $credentials): array;
+
+    // ============================================================
+    // DNS 记录操作（v1.5.0 新增）
+    // ============================================================
+
+    /**
+     * 是否支持 DNS 记录管理
+     *
+     * @return bool
+     */
+    public function supportsDnsManagement(): bool;
+
+    /**
+     * 获取域名的 DNS 解析记录列表
+     *
+     * @param string $domain 域名
+     * @param array $credentials API 凭据配置
+     * @return array<array{
+     *     record_id: string,
+     *     type: string,
+     *     host: string,
+     *     value: string,
+     *     ttl: int,
+     *     priority?: int
+     * }>
+     */
+    public function getDnsRecords(string $domain, array $credentials): array;
+
+    /**
+     * 添加 DNS 解析记录
+     *
+     * @param string $domain 域名
+     * @param array $record 记录数据 {type, host, value, ttl, priority?}
+     * @param array $credentials API 凭据配置
+     * @return array{success: bool, record_id?: string, message?: string}
+     */
+    public function addDnsRecord(string $domain, array $record, array $credentials): array;
+
+    /**
+     * 更新 DNS 解析记录
+     *
+     * @param string $domain 域名
+     * @param string $recordId 记录 ID
+     * @param array $record 记录数据 {type, host, value, ttl, priority?}
+     * @param array $credentials API 凭据配置
+     * @return array{success: bool, message?: string}
+     */
+    public function updateDnsRecord(string $domain, string $recordId, array $record, array $credentials): array;
+
+    /**
+     * 删除 DNS 解析记录
+     *
+     * @param string $domain 域名
+     * @param string $recordId 记录 ID
+     * @param array $credentials API 凭据配置
+     * @return array{success: bool, message?: string}
+     */
+    public function deleteDnsRecord(string $domain, string $recordId, array $credentials): array;
+
+    /**
+     * 批量添加 DNS 解析记录
+     *
+     * @param string $domain 域名
+     * @param array $records 记录数组
+     * @param array $credentials API 凭据配置
+     * @return array{success: bool, added: int, failed: int, errors?: array}
+     */
+    public function batchAddDnsRecords(string $domain, array $records, array $credentials): array;
+
+    /**
+     * 修改域名的 Nameservers
+     *
+     * @param string $domain 域名
+     * @param array $nameservers Nameserver 列表
+     * @param array $credentials API 凭据配置
+     * @return array{success: bool, message?: string}
+     */
+    public function updateNameservers(string $domain, array $nameservers, array $credentials): array;
+
+    /**
+     * 获取供应商的默认 Nameservers
+     *
+     * 用于将域名切换到该供应商时，获取目标 Nameserver 列表。
+     * 对于 Cloudflare 等需要先添加域名的供应商，需要传入域名参数。
+     *
+     * @param array $credentials API 凭据配置
+     * @param string $domain 可选，某些供应商需要域名来获取特定的 Nameserver
+     * @return array{success: bool, nameservers: array<string>, message?: string}
+     */
+    public function getProviderNameservers(array $credentials, string $domain = ''): array;
+
+    /**
+     * 是否为域名注册商
+     *
+     * 用于区分"域名注册商"和"DNS 服务商"：
+     * - 域名注册商（如 GName、GoDaddy）：可以购买域名，getDomainList 返回的是真正拥有的域名
+     * - DNS 服务商（如 Cloudflare）：只提供 DNS 服务，getDomainList 返回的是托管的域名（可能属于其他注册商）
+     *
+     * 同步时只导入域名注册商的域名到根域表，避免重复。
+     *
+     * @return bool true = 域名注册商，false = 仅 DNS 服务商
+     */
+    public function isDomainRegistrar(): bool;
 }

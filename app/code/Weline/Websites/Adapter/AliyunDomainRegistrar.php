@@ -145,4 +145,94 @@ class AliyunDomainRegistrar implements DomainRegistrarInterface
             'status' => 'unknown',
         ];
     }
+
+    // ============================================================
+    // DNS 记录操作（v1.5.0 新增）
+    // ============================================================
+
+    public function supportsDnsManagement(): bool
+    {
+        // 阿里云支持 DNS 管理（需对接阿里云 DNS API）
+        return true;
+    }
+
+    public function getDnsRecords(string $domain, array $credentials): array
+    {
+        // TODO: 调用阿里云 DescribeDomainRecords
+        return [];
+    }
+
+    public function addDnsRecord(string $domain, array $record, array $credentials): array
+    {
+        // TODO: 调用阿里云 AddDomainRecord
+        return [
+            'success' => false,
+            'message' => __('阿里云 DNS 适配器尚未完成 API 对接，请稍后再试。'),
+        ];
+    }
+
+    public function updateDnsRecord(string $domain, string $recordId, array $record, array $credentials): array
+    {
+        // TODO: 调用阿里云 UpdateDomainRecord
+        return [
+            'success' => false,
+            'message' => __('阿里云 DNS 适配器尚未完成 API 对接，请稍后再试。'),
+        ];
+    }
+
+    public function deleteDnsRecord(string $domain, string $recordId, array $credentials): array
+    {
+        // TODO: 调用阿里云 DeleteDomainRecord
+        return [
+            'success' => false,
+            'message' => __('阿里云 DNS 适配器尚未完成 API 对接，请稍后再试。'),
+        ];
+    }
+
+    public function batchAddDnsRecords(string $domain, array $records, array $credentials): array
+    {
+        // TODO: 批量调用 AddDomainRecord
+        return [
+            'success' => false,
+            'added' => 0,
+            'failed' => count($records),
+            'errors' => [__('阿里云 DNS 适配器尚未完成 API 对接，请稍后再试。')],
+        ];
+    }
+
+    public function updateNameservers(string $domain, array $nameservers, array $credentials): array
+    {
+        // TODO: 调用阿里云 SaveSingleTaskForModifyingDnsHost
+        return [
+            'success' => false,
+            'message' => __('阿里云 Nameserver 修改功能尚未完成 API 对接，请稍后再试。'),
+        ];
+    }
+
+    /**
+     * @inheritDoc
+     *
+     * 阿里云 DNS（云解析 DNS）默认 Nameserver
+     */
+    public function getProviderNameservers(array $credentials, string $domain = ''): array
+    {
+        return [
+            'success' => true,
+            'nameservers' => [
+                'ns1.alidns.com',
+                'ns2.alidns.com',
+            ],
+            'message' => __('阿里云 DNS 默认服务器'),
+        ];
+    }
+
+    /**
+     * @inheritDoc
+     *
+     * 阿里云是真正的域名注册商，可以购买和管理域名。
+     */
+    public function isDomainRegistrar(): bool
+    {
+        return true;
+    }
 }

@@ -257,6 +257,38 @@ class DomainRegistrarAccount extends Model
         return (string) $this->getData(self::fields_STATUS);
     }
 
+    /**
+     * 获取关联的域名商代码
+     *
+     * 如果已通过 JOIN 查询加载了 registrar_code，直接返回；
+     * 否则查询 DomainRegistrar 表获取。
+     */
+    public function getRegistrarCode(): ?string
+    {
+        $code = $this->getData('registrar_code');
+        if ($code !== null && $code !== '') {
+            return (string) $code;
+        }
+
+        $registrarId = $this->getRegistrarId();
+        if ($registrarId <= 0) {
+            return null;
+        }
+
+        $registrar = \Weline\Framework\Manager\ObjectManager::getInstance(DomainRegistrar::class);
+        $registrar->clearData(true);
+        $registrar->load($registrarId);
+
+        if (!$registrar->getId()) {
+            return null;
+        }
+
+        $code = $registrar->getData(DomainRegistrar::fields_CODE);
+        $this->setData('registrar_code', $code);
+
+        return $code !== null && $code !== '' ? (string) $code : null;
+    }
+
     // =============== 业务方法 ===============
 
     /**
@@ -288,11 +320,14 @@ class DomainRegistrarAccount extends Model
      */
     public function getCredentials(): array
     {
+        $extraConfig = $this->getExtraConfig();
         return [
             'api_key' => $this->getApiKey(),
             'api_secret' => $this->getApiSecret(),
             'region' => $this->getRegion(),
-            'extra' => $this->getExtraConfig(),
+            'extra_config' => $extraConfig,
+            'extra' => $extraConfig, // 兼容旧代码
+            'account_id' => $extraConfig['account_id'] ?? '', // Cloudflare 特殊需要
         ];
     }
 

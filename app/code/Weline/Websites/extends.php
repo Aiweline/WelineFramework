@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+use Weline\Backend\Api\NotificationTopicProviderInterface;
+use Weline\Websites\Extends\NotificationTopicProvider;
+
 /**
  * Weline_Websites 模块扩展规约
  *
@@ -8,6 +11,9 @@ declare(strict_types=1);
  * - Registrar: 域名商适配器扩展点，用于接入第三方域名注册商 API
  */
 return [
+    NotificationTopicProviderInterface::class => [
+        NotificationTopicProvider::class,
+    ],
     'type' => 'module',
     'documentation' => 'extends.md',
     'extends' => [

@@ -178,13 +178,24 @@ class WebsitesQueryProvider implements QueryProviderInterface
                 $registrarCode = (string)($reg->getData(DomainRegistrar::fields_CODE) ?? '');
                 $registrarName = (string)($reg->getData(DomainRegistrar::fields_NAME) ?? '');
             }
+            $extraConfigRaw = $record[DomainRegistrarAccount::fields_EXTRA_CONFIG] ?? '';
+            $extraConfig = [];
+            if (\is_string($extraConfigRaw) && $extraConfigRaw !== '') {
+                $extraConfig = \json_decode($extraConfigRaw, true) ?: [];
+            } elseif (\is_array($extraConfigRaw)) {
+                $extraConfig = $extraConfigRaw;
+            }
+            
             $accounts[] = [
                 'account_id'     => (int)($record[DomainRegistrarAccount::fields_ID] ?? 0),
                 'account_name'   => (string)($record[DomainRegistrarAccount::fields_ACCOUNT_NAME] ?? ''),
                 'registrar_id'   => $registrarId,
                 'registrar_code' => $registrarCode,
                 'registrar_name' => $registrarName,
+                'region'         => (string)($record[DomainRegistrarAccount::fields_REGION] ?? ''),
+                'extra_config'   => $extraConfig,
                 'status'         => (string)($record[DomainRegistrarAccount::fields_STATUS] ?? ''),
+                'created_at'     => (string)($record[DomainRegistrarAccount::fields_CREATED_AT] ?? ''),
             ];
         }
         return $accounts;
@@ -203,6 +214,50 @@ class WebsitesQueryProvider implements QueryProviderInterface
         $adapter = $this->resolver->getAdapter($registrarCode);
         if ($adapter === null) {
             return ['success' => false, 'message' => (string)__('未找到注册商适配器：%{1}', $registrarCode)];
+        }
+
+        // 根据适配器配置校验必填字段
+        $configFields = $adapter->getConfigFields();
+        $missingFields = [];
+        $isEditMode = $accountId > 0;
+        $extraConfig = $params['extra_config'] ?? [];
+        
+        foreach ($configFields as $field) {
+            if (!($field['required'] ?? false)) {
+                continue;
+            }
+            $fieldName = $field['name'] ?? '';
+            $fieldType = $field['type'] ?? 'text';
+            $mapping = $field['mapping'] ?? $fieldName;
+            $isPassword = $fieldType === 'password';
+            
+            // 编辑模式下，密码类字段允许为空（表示不修改）
+            if ($isEditMode && $isPassword) {
+                continue;
+            }
+            
+            $value = '';
+            
+            if ($mapping === 'api_key') {
+                $value = (string)($params['api_key'] ?? '');
+            } elseif ($mapping === 'api_secret') {
+                $value = (string)($params['api_secret'] ?? '');
+            } elseif ($mapping === 'region') {
+                $value = (string)($params['region'] ?? '');
+            } elseif (\str_starts_with($mapping, 'extra_config.')) {
+                $extraKey = \str_replace('extra_config.', '', $mapping);
+                $value = trim((string)($extraConfig[$extraKey] ?? ''));
+            } else {
+                $value = trim((string)($extraConfig[$fieldName] ?? ''));
+            }
+            
+            if ($value === '') {
+                $missingFields[] = $field['label'] ?? $fieldName;
+            }
+        }
+        
+        if (!empty($missingFields)) {
+            return ['success' => false, 'message' => (string)__('请填写必填字段：%{1}', \implode(', ', $missingFields))];
         }
 
         try {
@@ -354,13 +409,14 @@ class WebsitesQueryProvider implements QueryProviderInterface
     {
         $accountId = (int)($params['account_id'] ?? 0);
         $items     = (array)($params['items'] ?? []);
+        $autoResolve = (bool)($params['auto_resolve'] ?? false);
         if ($accountId <= 0 || $items === []) {
             return ['success' => false, 'message' => (string)__('参数不完整')];
         }
         try {
             /** @var DomainPurchaseService $purchaseService */
             $purchaseService = ObjectManager::getInstance(DomainPurchaseService::class);
-            return $purchaseService->createAndProcessOrder($accountId, $items);
+            return $purchaseService->createAndProcessOrder($accountId, $items, $autoResolve);
         } catch (\Throwable $e) {
             Env::log_error('domain_management', (string)__('域名购买异常：%{1}', $e->getMessage()));
             return ['success' => false, 'message' => (string)__('域名购买异常：%{1}', $e->getMessage())];

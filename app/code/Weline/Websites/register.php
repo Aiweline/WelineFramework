@@ -13,8 +13,8 @@ Register::register(
     Register::MODULE,
     'Weline_Websites',
     __DIR__,
-    '1.4.0',
-    '<a href="https://bbs.aiweline.com">系统组件模块: 多网站（含域名商管理、域名购买、证书管理集成）</a>',
+    '1.6.0',
+    '<a href="https://bbs.aiweline.com">系统组件模块: 多网站（含域名商管理、域名购买、DNS管理、证书管理集成）</a>',
     [
         'Weline_Acl',
         'Weline_Admin',

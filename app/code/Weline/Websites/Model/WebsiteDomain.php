@@ -22,11 +22,15 @@ use Weline\Framework\Setup\Db\ModelSetup;
  * 网站域名模型
  * 
  * 每个网站可以关联多个域名
+ * 
+ * 注意：v1.6.0 开始推荐使用 pool_id 关联 DomainPool 模型
+ * domain 字段保留用于向后兼容
  */
 class WebsiteDomain extends Model
 {
     public const fields_ID = 'domain_id';
     public const fields_WEBSITE_ID = 'website_id';      // 关联的网站 ID
+    public const fields_POOL_ID = 'pool_id';            // v1.6.0 新增：关联 DomainPool.pool_id
     public const fields_DOMAIN = 'domain';              // 域名（子域名或完整域名）
     public const fields_ROOT_DOMAIN = 'root_domain';    // 根域名（由 domain 自动解析归属）
     public const fields_SUB_PATH = 'sub_path';          // 子路径（可选，如 /shop）
@@ -68,6 +72,26 @@ class WebsiteDomain extends Model
             $this->install($setup, $context);
             return;
         }
+        
+        // v1.6.0: 新增 pool_id 字段关联 DomainPool
+        if (!$setup->hasField(self::fields_POOL_ID)) {
+            $setup->alterTable()->addColumn(
+                self::fields_POOL_ID,
+                self::fields_WEBSITE_ID,
+                TableInterface::column_type_INTEGER,
+                11,
+                'default null',
+                '关联 DomainPool.pool_id'
+            )->alter();
+        }
+        
+        // 为 pool_id 添加索引
+        if (!$setup->hasIndex('idx_pool')) {
+            $setup->alterTable()
+                ->addIndex(TableInterface::index_type_KEY, 'idx_pool', self::fields_POOL_ID)
+                ->alter();
+        }
+        
         // 新增 root_domain 字段（填写子域名时自动归属根域名）
         if (!$setup->hasField(self::fields_ROOT_DOMAIN)) {
             $setup->alterTable()->addColumn(
@@ -159,6 +183,7 @@ class WebsiteDomain extends Model
         $setup->createTable('网站域名表')
             ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 11, 'primary key auto_increment', '域名ID')
             ->addColumn(self::fields_WEBSITE_ID, TableInterface::column_type_INTEGER, 11, 'not null', '网站ID')
+            ->addColumn(self::fields_POOL_ID, TableInterface::column_type_INTEGER, 11, 'default null', '关联域名池ID')
             ->addColumn(self::fields_DOMAIN, TableInterface::column_type_VARCHAR, 255, 'not null', '域名')
             ->addColumn(self::fields_ROOT_DOMAIN, TableInterface::column_type_VARCHAR, 255, "default ''", '根域名（自动解析）')
             ->addColumn(self::fields_SUB_PATH, TableInterface::column_type_VARCHAR, 255, "default ''", '子路径')
@@ -174,6 +199,7 @@ class WebsiteDomain extends Model
             ->addColumn(self::fields_UPDATED_AT, TableInterface::column_type_DATETIME, 0, '', '更新时间')
             ->addIndex(TableInterface::index_type_UNIQUE, 'uk_domain_subpath', self::fields_DOMAIN . ',' . self::fields_SUB_PATH)
             ->addIndex(TableInterface::index_type_KEY, 'idx_website', self::fields_WEBSITE_ID)
+            ->addIndex(TableInterface::index_type_KEY, 'idx_pool', self::fields_POOL_ID)
             ->addIndex(TableInterface::index_type_KEY, 'idx_root_domain', self::fields_ROOT_DOMAIN)
             ->addIndex(TableInterface::index_type_KEY, 'idx_cert', self::fields_CERT_ID)
             ->addIndex(TableInterface::index_type_KEY, 'idx_status', self::fields_STATUS)
@@ -257,6 +283,49 @@ class WebsiteDomain extends Model
     public function getWebsiteId(): int
     {
         return (int) $this->getData(self::fields_WEBSITE_ID);
+    }
+    
+    public function setPoolId(?int $poolId): self
+    {
+        $this->setData(self::fields_POOL_ID, $poolId);
+        return $this;
+    }
+    
+    public function getPoolId(): ?int
+    {
+        $poolId = $this->getData(self::fields_POOL_ID);
+        return $poolId !== null && $poolId !== '' ? (int) $poolId : null;
+    }
+    
+    /**
+     * 从关联的 DomainPool 同步域名信息
+     * 
+     * @return self
+     */
+    public function syncFromPool(): self
+    {
+        $poolId = $this->getPoolId();
+        if (!$poolId) {
+            return $this;
+        }
+        
+        try {
+            $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+            $pool->loadByPoolId($poolId);
+            
+            if ($pool->getPoolId()) {
+                $this->setDomain($pool->getDomain());
+                // 同步 HTTPS 状态
+                if ($pool->getHttpsStatus() === DomainPool::HTTPS_STATUS_VALID) {
+                    $this->setHttpsEnabled(true);
+                    $this->setCertId($pool->getCertId());
+                }
+            }
+        } catch (\Throwable $e) {
+            // 忽略错误
+        }
+        
+        return $this;
     }
     
     public function setDomain(string $domain): self
