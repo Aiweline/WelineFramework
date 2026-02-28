@@ -309,17 +309,23 @@ class GitCommitService
         $files = $group['files'];
         $analysis = $group['analysis'] ?? $this->analyzeGroup($files);
         
-        // 简单规则生成
+        // 简单规则生成（中文）
         $action = match ($analysis['action']) {
-            'add' => 'Add',
-            'remove' => 'Remove',
-            default => 'Update',
+            'add' => 'feat',
+            'remove' => 'chore',
+            default => 'update',
+        };
+        
+        $actionDesc = match ($analysis['action']) {
+            'add' => '添加',
+            'remove' => '移除',
+            default => '更新',
         };
         
         $components = implode(', ', $analysis['components']);
         $fileCount = count($files);
         
-        $simpleMessage = "{$action} {$module}: {$components} ({$fileCount} files)";
+        $simpleMessage = "{$action}({$module}): {$actionDesc} {$components} ({$fileCount} 个文件)";
         
         if (!$useAi) {
             return $simpleMessage;
@@ -396,12 +402,19 @@ class GitCommitService
 ```
 
 ## 要求
-1. 使用英文，遵循 Conventional Commits 格式
+1. 使用中文，遵循 Conventional Commits 格式
 2. 第一行不超过 72 字符
 3. 如有必要，空一行后添加详细说明
-4. 格式: <type>(<scope>): <subject>
+4. 格式: <type>(<scope>): <中文描述>
 5. type: feat/fix/docs/style/refactor/test/chore
-6. scope: 模块名或功能名
+6. scope: 模块名或功能名（英文）
+7. 描述部分使用中文，简洁明了
+
+示例：
+- feat(Server): 添加批量强制重启 Worker 功能
+- fix(Console): 修复空命令时的参数检查
+- docs(Backend): 更新通知系统文档
+- refactor(Ai): 重构适配器扫描逻辑
 
 只输出提交信息，不要其他内容。
 PROMPT;
