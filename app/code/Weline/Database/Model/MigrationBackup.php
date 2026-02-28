@@ -25,8 +25,10 @@ class MigrationBackup extends Model implements ModelInterface
     // 备份类型常量
     public const TYPE_TABLE = 'table';
     public const TYPE_COLUMN = 'column';
+    public const TYPE_STRUCTURE = 'structure';
     public const TYPE_INDEX = 'index';
     public const TYPE_CONSTRAINT = 'constraint';
+    public const TYPE_CHUNK = 'chunk';
     
     public function _construct()
     {
