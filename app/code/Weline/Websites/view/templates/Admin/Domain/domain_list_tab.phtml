@@ -785,8 +785,14 @@ $accounts = $accounts ?? [];
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200) {
-                    renderDomainList(data.data.items || []);
-                    renderPagination(data.data.pagination || {});
+                    var items = data.data.items || [];
+                    var pagination = data.data.pagination || {};
+                    // 检查是否有筛选条件
+                    var hasFilters = filters.account_id || filters.resolve_status || filters.https_status || filters.search;
+                    // 仅在首次加载（第1页，无筛选条件）且本地无数据时自动获取远程域名
+                    var shouldAutoFetch = (currentPage === 1 && !hasFilters && items.length === 0);
+                    renderDomainList(items, shouldAutoFetch, hasFilters);
+                    renderPagination(pagination);
                 } else {
                     toast(data.msg || '<?= __('加载失败') ?>', 'error');
                     tbody.innerHTML = '<tr><td colspan="8" class="weline-domain-empty"><i class="mdi mdi-alert-circle-outline" style="font-size:2rem;color:var(--backend-color-danger);"></i><p class="mt-2 mb-0">' + (data.msg || '<?= __('加载失败') ?>') + '</p></td></tr>';
@@ -798,12 +804,247 @@ $accounts = $accounts ?? [];
             });
     }
 
-    function renderDomainList(items) {
+    var autoFetchTriggered = false;
+    var allRemoteDomainsCache = [];
+    var remoteDomainsDisplayMode = false;
+
+    /**
+     * 从所有账户获取远程域名并显示
+     * 当本地没有已拉取的域名时，自动调用此函数
+     */
+    function loadRemoteDomainsForDisplay() {
+        var accounts = <?= json_encode(array_map(function($a) { return ['id' => (int)($a['account_id'] ?? 0), 'name' => $a['account_name'] ?? '']; }, $accounts)) ?>;
+        
+        if (accounts.length === 0) {
+            var tbody = document.getElementById('weline-domain-list-body');
+            tbody.innerHTML = '<tr><td colspan="8" class="weline-domain-empty">' +
+                '<i class="mdi mdi-account-off-outline" style="font-size:2rem;"></i>' +
+                '<p class="mt-2 mb-0"><?= __('请先添加域名商账户') ?></p></td></tr>';
+            return;
+        }
+
+        allRemoteDomainsCache = [];
+        remoteDomainsDisplayMode = true;
+        var fetchedCount = 0;
+        var totalAccounts = accounts.length;
+
+        // 并行获取所有账户的远程域名
+        accounts.forEach(function(acc) {
+            if (!acc.id) {
+                fetchedCount++;
+                checkAllFetched();
+                return;
+            }
+            fetch(urls.remoteDomains + '?account_id=' + acc.id)
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.code === 200 && data.data && data.data.domains) {
+                        data.data.domains.forEach(function(d) {
+                            d._account_id = acc.id;
+                            d._account_name = acc.name;
+                            allRemoteDomainsCache.push(d);
+                        });
+                    }
+                })
+                .catch(function() {})
+                .finally(function() {
+                    fetchedCount++;
+                    checkAllFetched();
+                });
+        });
+
+        function checkAllFetched() {
+            if (fetchedCount >= totalAccounts) {
+                renderRemoteDomainsForDisplay(allRemoteDomainsCache);
+            }
+        }
+    }
+
+    /**
+     * 渲染远程域名列表（未拉取状态）
+     */
+    function renderRemoteDomainsForDisplay(domains) {
         var tbody = document.getElementById('weline-domain-list-body');
+        
+        if (!domains.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="weline-domain-empty">' +
+                '<i class="mdi mdi-earth-off" style="font-size:2rem;"></i>' +
+                '<p class="mt-2 mb-0"><?= __('域名商账户下暂无域名') ?></p></td></tr>';
+            renderPagination({});
+            return;
+        }
+
+        // 显示提示信息
+        var infoHtml = '<div class="alert alert-info mb-3 d-flex align-items-center justify-content-between">' +
+            '<span><i class="mdi mdi-information-outline me-2"></i><?= __('以下域名尚未拉取到本地，请选择域名后点击「导入选中」按钮') ?></span>' +
+            '<button type="button" class="btn btn-primary btn-sm" onclick="WelineDomainList.importSelectedRemoteDomains()">' +
+            '<i class="mdi mdi-import me-1"></i><?= __('导入选中') ?></button></div>';
+        
+        // 在表格前插入提示
+        var tableWrapper = tbody.closest('.table-responsive');
+        var existingAlert = tableWrapper.previousElementSibling;
+        if (existingAlert && existingAlert.classList.contains('alert-info')) {
+            existingAlert.outerHTML = infoHtml;
+        } else {
+            tableWrapper.insertAdjacentHTML('beforebegin', infoHtml);
+        }
+
+        var html = '';
+        domains.forEach(function(d) {
+            var statusClass = d.status === 'active' ? 'weline-domain-status-resolved' : 'weline-domain-status-pending';
+            var statusText = d.status === 'active' ? '<?= __('正常') ?>' : (d.status || '-');
+            var localBadge = d.is_local
+                ? '<span class="badge bg-success"><?= __('已拉取') ?></span>'
+                : '<span class="badge bg-secondary"><?= __('未拉取') ?></span>';
+
+            html += '<tr data-domain="' + (d.domain || '') + '" data-account-id="' + (d._account_id || '') + '">' +
+                '<td><input type="checkbox" class="weline-remote-domain-checkbox" value="' + (d.domain || '') + '" data-account-id="' + (d._account_id || '') + '"' + (d.is_local ? ' disabled' : '') + '></td>' +
+                '<td><span class="domain-name">' + (d.domain || '') + '</span></td>' +
+                '<td><span class="badge bg-primary">' + (d._account_name || '-') + '</span></td>' +
+                '<td><span class="weline-domain-status-badge ' + statusClass + '">' + statusText + '</span></td>' +
+                '<td>' + (d.expires_at || '-') + '</td>' +
+                '<td>' + localBadge + '</td>' +
+                '<td>-</td>' +
+                '<td class="text-end weline-domain-actions">' +
+                    (d.is_local ? '-' : '<button type="button" class="btn btn-outline-primary btn-sm" title="<?= __('导入') ?>" onclick="WelineDomainList.importSingleRemoteDomain(\'' + (d.domain || '').replace(/'/g, "\\'") + '\', ' + (d._account_id || 0) + ')"><i class="mdi mdi-import"></i></button>') +
+                '</td>' +
+                '</tr>';
+        });
+        tbody.innerHTML = html;
+
+        // 更新分页信息
+        var paginationInfo = document.getElementById('weline-domain-pagination-info');
+        paginationInfo.textContent = '<?= __('共') ?> ' + domains.length + ' <?= __('个远程域名') ?>';
+        document.getElementById('weline-domain-pagination-links').innerHTML = '';
+    }
+
+    /**
+     * 导入选中的远程域名
+     */
+    function importSelectedRemoteDomains() {
+        var checkboxes = document.querySelectorAll('.weline-remote-domain-checkbox:checked');
+        if (checkboxes.length === 0) {
+            toast('<?= __('请选择要导入的域名') ?>', 'warning');
+            return;
+        }
+
+        // 按账户分组
+        var domainsByAccount = {};
+        checkboxes.forEach(function(cb) {
+            var accountId = cb.dataset.accountId;
+            if (!domainsByAccount[accountId]) {
+                domainsByAccount[accountId] = [];
+            }
+            domainsByAccount[accountId].push(cb.value);
+        });
+
+        toast('<?= __('正在导入域名...') ?>', 'info');
+
+        var accountIds = Object.keys(domainsByAccount);
+        var importedCount = 0;
+        var totalCount = checkboxes.length;
+        var errors = [];
+
+        accountIds.forEach(function(accountId) {
+            var domains = domainsByAccount[accountId];
+            var fd = new FormData();
+            fd.append('account_id', accountId);
+            fd.append('auto_resolve', '1');
+            domains.forEach(function(d) { fd.append('domains[]', d); });
+
+            fetch(urls.importDomains, { method: 'POST', body: fd })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.code === 200) {
+                        importedCount += domains.length;
+                    } else {
+                        errors.push(data.msg || '<?= __('导入失败') ?>');
+                    }
+                })
+                .catch(function() {
+                    errors.push('<?= __('请求失败') ?>');
+                })
+                .finally(function() {
+                    if (importedCount + errors.length >= totalCount || accountIds.indexOf(accountId) === accountIds.length - 1) {
+                        if (errors.length > 0) {
+                            toast('<?= __('部分导入失败') ?>: ' + errors.join(', '), 'warning');
+                        } else {
+                            toast('<?= __('导入成功') ?> ' + importedCount + ' <?= __('个域名') ?>', 'success');
+                        }
+                        // 重置状态并重新加载
+                        autoFetchTriggered = false;
+                        remoteDomainsDisplayMode = false;
+                        // 移除提示条
+                        var tableWrapper = document.querySelector('#weline-domain-list-body').closest('.table-responsive');
+                        var alertEl = tableWrapper.previousElementSibling;
+                        if (alertEl && alertEl.classList.contains('alert-info')) {
+                            alertEl.remove();
+                        }
+                        loadDomains(1);
+                    }
+                });
+        });
+    }
+
+    /**
+     * 导入单个远程域名
+     */
+    function importSingleRemoteDomain(domain, accountId) {
+        toast('<?= __('正在导入域名...') ?>', 'info');
+        var fd = new FormData();
+        fd.append('account_id', accountId);
+        fd.append('auto_resolve', '1');
+        fd.append('domains[]', domain);
+
+        fetch(urls.importDomains, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    toast(data.msg || '<?= __('导入成功') ?>', 'success');
+                    // 重新获取远程列表更新状态
+                    loadRemoteDomainsForDisplay();
+                } else {
+                    toast(data.msg || '<?= __('导入失败') ?>', 'error');
+                }
+            })
+            .catch(function() { toast('<?= __('请求失败') ?>', 'error'); });
+    }
+
+    function renderDomainList(items, autoFetchRemote, hasFilters) {
+        var tbody = document.getElementById('weline-domain-list-body');
+        
+        // 先移除可能存在的提示条
+        var tableWrapper = tbody.closest('.table-responsive');
+        var existingAlert = tableWrapper ? tableWrapper.previousElementSibling : null;
+        if (existingAlert && existingAlert.classList.contains('alert')) {
+            existingAlert.remove();
+        }
+        
         if (!items.length) {
+            // 如果有筛选条件且没有数据，提示用户切换到全部状态
+            if (hasFilters) {
+                tbody.innerHTML = '<tr><td colspan="8" class="weline-domain-empty">' +
+                    '<i class="mdi mdi-cloud-download-outline" style="font-size:2rem;color:var(--backend-color-primary);"></i>' +
+                    '<p class="mt-2 mb-1"><?= __('当前筛选条件下暂无已拉取的域名') ?></p>' +
+                    '<p class="text-muted small mb-2"><?= __('请切换筛选条件为「全部」，从线上选择域名拉取到本地') ?></p>' +
+                    '<button type="button" class="btn btn-primary btn-sm" onclick="WelineDomainList.resetFilters()">' +
+                    '<i class="mdi mdi-filter-off me-1"></i><?= __('查看全部状态') ?></button></td></tr>';
+                return;
+            }
+            // 如果本地没有域名且允许自动拉取，则自动获取远程域名
+            if (autoFetchRemote && !autoFetchTriggered) {
+                autoFetchTriggered = true;
+                tbody.innerHTML = '<tr><td colspan="8" class="weline-domain-empty">' +
+                    '<i class="mdi mdi-cloud-download-outline" style="font-size:2rem;color:var(--backend-color-primary);"></i>' +
+                    '<p class="mt-2 mb-0"><?= __('本地暂无已拉取的域名，正在从域名商获取...') ?></p></td></tr>';
+                loadRemoteDomainsForDisplay();
+                return;
+            }
             tbody.innerHTML = '<tr><td colspan="8" class="weline-domain-empty"><i class="mdi mdi-earth-off" style="font-size:2rem;"></i><p class="mt-2 mb-0"><?= __('暂无域名数据') ?></p></td></tr>';
             return;
         }
+        autoFetchTriggered = false;
+        remoteDomainsDisplayMode = false;
 
         var html = '';
         items.forEach(function(item) {
@@ -1828,6 +2069,8 @@ $accounts = $accounts ?? [];
         toggleImportSelectAll: toggleImportSelectAll,
         toggleShowImported: toggleShowImported,
         importSelectedDomains: importSelectedDomains,
+        importSelectedRemoteDomains: importSelectedRemoteDomains,
+        importSingleRemoteDomain: importSingleRemoteDomain,
         checkResolve: checkResolve,
         batchCheckResolve: batchCheckResolve,
         showDnsModal: showDnsModal,
