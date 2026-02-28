@@ -334,8 +334,10 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $this->checkEnvironmentDependencies($args);
         
         // 6. 收集框架注册表（必须在升级前完成，确保系统可用）
+        // 如果指定了模块，则使用增量更新模式
         $this->printing->note(__('正在准备系统环境...'));
-        $this->collectFrameworkRegistries();
+        $argsModule = $this->parseModuleArgs($args);
+        $this->collectFrameworkRegistries(true, $argsModule);
         
         // 7. 验证框架约束规则（必须在模块升级前验证，遵循框架约束）
         $this->validateFrameworkRules();
@@ -707,16 +709,59 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             if (is_dir($path)) {
                 $this->scanDirectoryForClasses($path . DS, $baseDir, $classMap);
             } elseif (str_ends_with($file, '.php')) {
-                // 从文件路径推断类名
-                $relativePath = str_replace($baseDir, '', $path);
-                $className = str_replace([DS, '.php'], ['\\', ''], $relativePath);
+                // 从文件内容解析实际的 namespace 和 class 名称
+                // 这样可以正确处理大小写（如 extends vs Extends）
+                $className = $this->extractFullyQualifiedClassName($path);
                 
-                // 验证类名是否有效（只包含有效字符）
-                if (preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*$/', $className)) {
+                if ($className !== null) {
                     $classMap[$className] = $path;
                 }
             }
         }
+    }
+    
+    /**
+     * 从 PHP 文件中提取完整类名（namespace + class）
+     * 
+     * 通过解析文件内容获取实际声明的 namespace 和 class 名称，
+     * 而不是从文件路径推断，确保大小写正确（解决 Linux 区分大小写问题）
+     * 
+     * @param string $filePath PHP 文件路径
+     * @return string|null 完整类名，解析失败返回 null
+     */
+    private function extractFullyQualifiedClassName(string $filePath): ?string
+    {
+        $content = @file_get_contents($filePath);
+        if ($content === false) {
+            return null;
+        }
+        
+        // 只读取文件前 4KB（namespace 和 class 声明通常在文件开头）
+        $content = substr($content, 0, 4096);
+        
+        $namespace = '';
+        $className = '';
+        
+        // 解析 namespace
+        if (preg_match('/^\s*namespace\s+([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*)\s*;/m', $content, $matches)) {
+            $namespace = $matches[1];
+        }
+        
+        // 解析 class/interface/trait/enum 名称
+        if (preg_match('/^\s*(?:abstract\s+|final\s+|readonly\s+)*(?:class|interface|trait|enum)\s+([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)/m', $content, $matches)) {
+            $className = $matches[1];
+        }
+        
+        if ($className === '') {
+            return null;
+        }
+        
+        // 组合完整类名
+        if ($namespace !== '') {
+            return $namespace . '\\' . $className;
+        }
+        
+        return $className;
     }
     
     /**
@@ -818,22 +863,36 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      * 遵循SOLID原则：单一职责 - 本方法负责所有注册表的收集
      * 
      * @param bool $includeTag 是否包含 Tag 注册表收集（默认true）
+     * @param array $moduleNames 指定模块名列表，如果为空则更新所有（增量更新支持）
      * @return void
      */
-    private function collectFrameworkRegistries(bool $includeTag = true): void
+    private function collectFrameworkRegistries(bool $includeTag = true, array $moduleNames = []): void
     {
         // 使用统一服务更新所有注册表
         try {
             /** @var RegistryUpdateService $registryService */
             $registryService = ObjectManager::getInstance(RegistryUpdateService::class);
-            $this->printing->note(__('正在更新所有注册表...'));
-            // 传入 false 强制跳过自动编译（升级流程中会在后面统一编译一次）
-            // 跳过命令更新（第三个参数 true），因为 setup:upgrade 会在后面第 961-964 行单独执行 command:upgrade
-            $ok = $registryService->updateAllRegistries(false, false, true);
-            if ($ok) {
-                $this->printing->success(__('✓ 所有注册表已更新完成。'));
+            
+            if (!empty($moduleNames)) {
+                // 增量更新模式：只更新指定模块的注册表
+                $this->printing->note(__('正在增量更新模块 %{1} 的注册表...', [implode(', ', $moduleNames)]));
+                $ok = $registryService->updateModuleRegistriesIncremental($moduleNames);
+                if ($ok) {
+                    $this->printing->success(__('✓ 模块注册表增量更新完成。'));
+                } else {
+                    $this->printing->warning(__('部分注册表增量更新失败，但将继续执行。'));
+                }
             } else {
-                $this->printing->warning(__('部分注册表更新失败，但将继续执行。'));
+                // 全量更新模式：更新所有注册表
+                $this->printing->note(__('正在更新所有注册表...'));
+                // 传入 false 强制跳过自动编译（升级流程中会在后面统一编译一次）
+                // 跳过命令更新（第三个参数 true），因为 setup:upgrade 会在后面第 961-964 行单独执行 command:upgrade
+                $ok = $registryService->updateAllRegistries(false, false, true);
+                if ($ok) {
+                    $this->printing->success(__('✓ 所有注册表已更新完成。'));
+                } else {
+                    $this->printing->warning(__('部分注册表更新失败，但将继续执行。'));
+                }
             }
         } catch (\Exception $e) {
             // 检查是否是致命错误（包含"【致命错误】"标记）
@@ -858,7 +917,13 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 /** @var \Weline\Taglib\Console\Taglib\Collect $taglibCollect */
                 $taglibCollect = ObjectManager::getInstance(\Weline\Taglib\Console\Taglib\Collect::class);
                 // 在升级流程中跳过模板缓存清理，因为 Upgrade.php 已经在前面清理过了
-                $taglibCollect->execute([], ['skip_template_cache_clear' => true]);
+                // 如果指定了模块，则只收集指定模块的标签
+                $taglibArgs = ['skip_template_cache_clear' => true];
+                if (!empty($moduleNames)) {
+                    $taglibCollect->execute(['module' => implode(',', $moduleNames)], $taglibArgs);
+                } else {
+                    $taglibCollect->execute([], $taglibArgs);
+                }
                 $this->printing->success(__('✓ 标签注册表已收集完成。'));
             } catch (\Exception $e) {
                 // 标签收集失败不影响系统更新，只记录警告
@@ -1032,7 +1097,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $cacheManagerConsole->execute();
             $i += 1;
         } else {
-            $this->printing->note('指定模块升级，跳过全局清理操作...');
+            // 指定模块升级时，使用增量更新方式处理命令、事件、插件等
+            $this->printing->note('指定模块升级，使用增量更新模式...');
+            /** @var RegistryUpdateService $registryService */
+            $registryService = ObjectManager::getInstance(RegistryUpdateService::class);
+            $registryService->updateModuleRegistriesIncremental($argsModule);
+            $i += 1;
         }
         
         // 扫描代码
@@ -1103,8 +1173,14 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         Env::getInstance()->getModuleList(true);
         /** @var RegistryUpdateService $registryService */
         $registryService = ObjectManager::getInstance(RegistryUpdateService::class);
-        // 跳过命令更新，因为前面第 961-964 行已经单独执行过 command:upgrade
-        $registryService->updateAllRegistries(true, false, true);
+        // 跳过命令更新，因为后面会单独执行 command:upgrade
+        if (!empty($argsModule)) {
+            // 增量更新模式：只更新指定模块的注册表
+            $registryService->updateModuleRegistriesIncremental($argsModule);
+        } else {
+            // 全量更新模式：更新所有注册表
+            $registryService->updateAllRegistries(true, false, true);
+        }
         Register::runPendingRegistrations();
         Register::clearRegisterPhase();
         $modules = Env::getInstance()->getModuleList();
@@ -1968,6 +2044,40 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             // 如果获取模块列表失败，返回空数组
             return [];
         }
+    }
+    
+    /**
+     * 解析模块参数
+     * 
+     * 支持 --module、-m 选项及位置参数
+     * 
+     * @param array $args 命令参数
+     * @return array 模块名数组
+     */
+    private function parseModuleArgs(array $args): array
+    {
+        // 支持 --module 和 -m 两种写法
+        $argsModule = $args['module'] ?? $args['m'] ?? [];
+        if (is_string($argsModule)) {
+            $argsModule = array_filter(array_map('trim', explode(' ', $argsModule)));
+        }
+        
+        // 如果没有通过 --module 或 -m 指定模块，检查位置参数
+        if (empty($argsModule)) {
+            $positionalArgs = [];
+            foreach ($args as $key => $value) {
+                // 如果是数字键且不是选项参数，则认为是位置参数
+                // 排除命令本身（通常是第一个位置参数）
+                if (is_numeric($key) && is_string($value) && !str_starts_with($value, '-') && $key > 0) {
+                    $positionalArgs[] = $value;
+                }
+            }
+            if (!empty($positionalArgs)) {
+                $argsModule = $positionalArgs;
+            }
+        }
+        
+        return array_values(array_filter($argsModule));
     }
     
     /**
