@@ -3336,10 +3336,13 @@ PHP;
         $restFrontendPrefix = Env::getAreaRoutePrefix('rest_frontend') ?? 'api';
 
         $urlFrontend = rtrim($baseUrl, '/') . '/';
-        // 后台入口 = 密钥路径 + /admin（不输出单独的 /admin 地址）
+        // 后台入口 = 密钥路径 + /admin
         $urlBackend = rtrim($baseUrl, '/') . '/' . ($backendPrefix !== '' ? $backendPrefix . '/' : '') . 'admin';
-        $urlRestBackend = rtrim($baseUrl, '/') . '/' . ($restBackendPrefix !== '' ? $restBackendPrefix . '/' : '');
-        $urlRestFrontend = rtrim($baseUrl, '/') . '/' . ($restFrontendPrefix !== '' ? $restFrontendPrefix . '/' : '');
+        // REST 接口路径：未配置时显示"未配置"
+        $urlRestBackend = $restBackendPrefix !== '' 
+            ? rtrim($baseUrl, '/') . '/' . $restBackendPrefix . '/' 
+            : __('未配置（请在 env.php 中设置 area_routes.rest_backend.prefix）');
+        $urlRestFrontend = rtrim($baseUrl, '/') . '/' . ($restFrontendPrefix !== '' ? $restFrontendPrefix . '/' : 'api/');
 
         echo "\n";
         $this->printer->title(__('使用说明'), '═');
