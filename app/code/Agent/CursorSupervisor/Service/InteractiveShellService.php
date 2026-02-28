@@ -704,7 +704,7 @@ class InteractiveShellService
             return;
         }
         
-        if ($result['message'] === 'Nothing to commit') {
+        if (($result['message'] ?? '') === 'Nothing to commit') {
             $this->output("✅ 没有待提交的更改");
             return;
         }
