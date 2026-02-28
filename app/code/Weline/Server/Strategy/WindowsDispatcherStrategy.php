@@ -23,6 +23,7 @@ namespace Weline\Server\Strategy;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\System\Process\Processer;
+use Weline\Server\Service\ServerInstanceService;
 
 /**
  * Windows Dispatcher 策略（TCP 透传）
@@ -402,7 +403,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
             'start_time' => \time(),
         ];
         
-        \file_put_contents($instanceFile, \json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        ServerInstanceService::atomicWriteJson($instanceFile, $data);
     }
     
     /**
