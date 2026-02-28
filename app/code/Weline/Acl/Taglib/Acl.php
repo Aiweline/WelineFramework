@@ -29,29 +29,19 @@ class Acl implements TaglibInterface
 {
     /**
      * 防止权限检查重入的标志
+     * WLS 注意：请求级状态，已注册 StateManager 重置
      */
     private static bool $checkingPermission = false;
     
     /**
-     * 缓存的 Request 实例，避免重复获取
+     * WLS 注意：以下静态缓存变量是请求级状态，必须在 StateManager 中注册重置。
+     * 这些变量在 WLS 常驻进程模式下会跨请求保留，导致：
+     * - $cachedRequest 指向旧请求对象
+     * - $cachedSession 指向旧 Session，可能是不同用户
+     * - 权限检查使用错误的用户身份
+     * 
+     * 解决方案：不再使用静态缓存，每次调用时从 ObjectManager 获取最新实例
      */
-    private static ?Request $cachedRequest = null;
-    
-    /**
-     * 缓存的 Session 实例
-     */
-    private static $cachedSession = null;
-    
-    /**
-     * 编译时结果缓存，防止同一个标签被递归编译
-     * Key: md5(source + tag_key + tag_data_hash)
-     */
-    private static array $compileCache = [];
-    
-    /**
-     * 当前正在编译的标签哈希集合，用于检测递归
-     */
-    private static array $compilingTags = [];
 
     /**
      * @inheritDoc
@@ -117,31 +107,39 @@ class Acl implements TaglibInterface
     }
     
     /**
+     * 请求内权限缓存
+     * WLS 注意：这是请求级缓存，已在 StateManager 中注册重置
+     */
+    private static array $permissionCache = [];
+    
+    /**
+     * 重置请求级状态
+     * 由 StateManager 在每次请求结束时调用
+     */
+    public static function resetRequestState(): void
+    {
+        self::$checkingPermission = false;
+        self::$permissionCache = [];
+    }
+    
+    /**
      * 运行时权限检查方法（返回 bool）
      * @param string $source 权限源标识
      * @return bool
      */
     public static function hasPermission(string $source): bool
     {
-        // 使用静态缓存避免重复检查
-        static $permissionCache = [];
-        if (isset($permissionCache[$source])) {
-            return $permissionCache[$source];
+        // 请求内缓存：避免同一请求内重复检查同一权限
+        if (isset(self::$permissionCache[$source])) {
+            return self::$permissionCache[$source];
         }
         
-        // 使用缓存的 Request 实例
-        if (self::$cachedRequest === null) {
-            self::$cachedRequest = ObjectManager::getInstance(Request::class);
-        }
-        $request = self::$cachedRequest;
-        
-        // 获取 session
-        if (self::$cachedSession === null) {
-            self::$cachedSession = ObjectManager::getInstance(
-                $request->isBackend() ? BackendSession::class : FrontendSession::class
-            );
-        }
-        $session = self::$cachedSession;
+        // WLS 修复：每次从 ObjectManager 获取最新的 Request 和 Session 实例
+        // 不能使用静态缓存，否则会跨请求保留旧用户的 Session
+        $request = ObjectManager::getInstance(Request::class);
+        $session = ObjectManager::getInstance(
+            $request->isBackend() ? BackendSession::class : FrontendSession::class
+        );
         
         // 获取对应用户和角色
         $user = $session->getLoginUser();
@@ -149,7 +147,7 @@ class Acl implements TaglibInterface
         
         // 超级管理员直接返回 true
         if ($role->getId() === 1) {
-            $permissionCache[$source] = true;
+            self::$permissionCache[$source] = true;
             return true;
         }
         
@@ -159,11 +157,11 @@ class Acl implements TaglibInterface
             /**@var MessageManager $messageManager */
             $messageManager = ObjectManager::getInstance(MessageManager::class);
             $messageManager->addWarning($msg);
-            $permissionCache[$source] = false;
+            self::$permissionCache[$source] = false;
             return false;
         }
         
-        // 获取权限列表（使用缓存）
+        // 获取权限列表（使用文件缓存，不受 WLS 影响）
         /**@var CacheInterface $cache */
         $cache = ObjectManager::getInstance(AclCache::class . 'Factory');
         $cacheKey = 'acl_' . $role->getId() . '_source';
@@ -188,7 +186,7 @@ class Acl implements TaglibInterface
             $messageManager->addWarning($msg);
         }
         
-        $permissionCache[$source] = $hasAccess;
+        self::$permissionCache[$source] = $hasAccess;
         return $hasAccess;
     }
 
