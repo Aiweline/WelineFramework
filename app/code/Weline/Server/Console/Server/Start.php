@@ -25,6 +25,7 @@ use Weline\Server\Service\MasterProcess;
 use Weline\Server\Strategy\ServerStrategyFactory;
 use Weline\Server\Strategy\ServerStrategyInterface;
 use Weline\Server\Strategy\ServerConfig;
+use Weline\Server\Service\ServerInstanceService;
 
 /**
  * server:start - 启动常驻内存服务器
@@ -794,7 +795,7 @@ class Start extends CommandAbstract
     }
     
     /**
-     * 更新实例的 Master 信息
+     * 更新实例的 Master 信息（原子更新，带文件锁）
      */
     protected function updateInstanceMasterInfo(string $instanceName, int $masterPid, bool $enabled): void
     {
@@ -805,15 +806,12 @@ class Start extends CommandAbstract
             return;
         }
         
-        $content = \file_get_contents($instanceFile);
-        $data = \json_decode($content, true);
-        
-        if (\is_array($data)) {
+        ServerInstanceService::atomicUpdateJson($instanceFile, function (array $data) use ($masterPid, $enabled): array {
             $data['master_enabled'] = $enabled;
             $data['master_pid'] = $masterPid;
             $data['master_started_at'] = \date('Y-m-d H:i:s');
-            \file_put_contents($instanceFile, \json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-        }
+            return $data;
+        });
     }
 
     /**
@@ -2274,7 +2272,7 @@ class Start extends CommandAbstract
             $instanceData['main_port'] = 0;
         }
         
-        \file_put_contents($instanceFile, \json_encode($instanceData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        ServerInstanceService::atomicWriteJson($instanceFile, $instanceData);
     }
     
     /**
@@ -2395,7 +2393,7 @@ class Start extends CommandAbstract
     /*----------------------------------------实例配置记忆结束------------------------------------------*/
     
     /**
-     * 更新实例的 Worker PID 列表
+     * 更新实例的 Worker PID 列表（原子更新，带文件锁）
      */
     protected function updateInstanceWorkerPids(string $instanceName, array $workerPids): void
     {
@@ -2406,16 +2404,10 @@ class Start extends CommandAbstract
             return;
         }
         
-        $content = \file_get_contents($instanceFile);
-        $data = \json_decode($content, true);
-        
-        if (!\is_array($data)) {
-            return;
-        }
-        
-        $data['worker_pids'] = $workerPids;
-        
-        \file_put_contents($instanceFile, \json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        ServerInstanceService::atomicUpdateJson($instanceFile, function (array $data) use ($workerPids): array {
+            $data['worker_pids'] = $workerPids;
+            return $data;
+        });
     }
     
     /**
@@ -2771,7 +2763,7 @@ PHP;
     }
     
     /**
-     * 更新实例的 Dispatcher PID
+     * 更新实例的 Dispatcher PID（原子更新，带文件锁）
      */
     protected function updateInstanceDispatcherPid(string $instanceName, int $dispatcherPid): void
     {
@@ -2782,14 +2774,10 @@ PHP;
             return;
         }
         
-        $content = \file_get_contents($instanceFile);
-        $data = \json_decode($content, true);
-        if (!\is_array($data)) {
-            return;
-        }
-        
-        $data['dispatcher_pid'] = $dispatcherPid;
-        \file_put_contents($instanceFile, \json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        ServerInstanceService::atomicUpdateJson($instanceFile, function (array $data) use ($dispatcherPid): array {
+            $data['dispatcher_pid'] = $dispatcherPid;
+            return $data;
+        });
     }
     
     /**

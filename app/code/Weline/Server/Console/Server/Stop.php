@@ -157,177 +157,18 @@ class Stop extends CommandAbstract
 
         $this->printer->note(__('停止子进程...'));
         echo "\n";
-        $stoppedCount = 0;
-        $killedPids = [];
-        $workerPrefix = 'weline-master-' . $name . '-';
-        $dispatcherName = 'weline-dispatcher-' . $name;
-        $redirectName = MasterProcess::HTTP_REDIRECT_PROCESS_NAME;
-        $masterPrefix = MasterProcess::MASTER_PROCESS_NAME_PREFIX . $name;
-
-        $maxAttempts = 3;
-        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
-            // 1) Worker 前缀 + 端口兜底
-            $batchKilled = Processer::killByProcessNamePrefix($workerPrefix);
-            if ($batchKilled > 0) {
-                $stoppedCount += $batchKilled;
-            }
-            for ($i = 0; $i < $count; $i++) {
-                $wPort = $workerPortBase + $i;
-                if (Processer::isPortInUse($wPort)) {
-                    $pidByPort = Processer::getPidByPort($wPort);
-                    if ($pidByPort > 0 && Processer::isProcessManagerCreated($pidByPort) && !isset($killedPids[$pidByPort])) {
-                        Processer::killByPid($pidByPort);
-                        $killedPids[$pidByPort] = true;
-                        $stoppedCount++;
-                    } else {
-                        Processer::killProcessByPort($wPort);
-                    }
-                }
-            }
-            // 2) Dispatcher
-            if ($dispatcherEnabled) {
-                $dispatcherPid = (int) Processer::getData('--name=' . $dispatcherName, 'pid');
-                if ($dispatcherPid > 0 && Processer::isRunningByPid($dispatcherPid)) {
-                    Processer::killByPid($dispatcherPid);
-                    $killedPids[$dispatcherPid] = true;
-                    $stoppedCount++;
-                }
-                if (Processer::isPortInUse($port)) {
-                    Processer::killProcessByPort($port);
-                }
-            }
-            // 3) HTTP 重定向
-            if ($sslEnabled && $httpRedirectPort > 0) {
-                $redirectPid = (int) Processer::getData('--name=' . $redirectName, 'pid');
-                if ($redirectPid > 0 && Processer::isRunningByPid($redirectPid)) {
-                    Processer::killByPid($redirectPid);
-                    $killedPids[$redirectPid] = true;
-                    $stoppedCount++;
-                }
-                if (Processer::isPortInUse($httpRedirectPort)) {
-                    Processer::killProcessByPort($httpRedirectPort);
-                }
-            }
-            // 4) 实例文件中的 PID
-            $pidsFromFile = [];
-            if (!empty($instanceData['dispatcher_pid'])) {
-                $pidsFromFile[(int)$instanceData['dispatcher_pid']] = true;
-            }
-            if (!empty($instanceData['workers']) && \is_array($instanceData['workers'])) {
-                foreach ($instanceData['workers'] as $w) {
-                    $pid = (int)($w['pid'] ?? 0);
-                    if ($pid > 0) {
-                        $pidsFromFile[$pid] = true;
-                    }
-                }
-            }
-            if (!empty($instanceData['worker_pids']) && \is_array($instanceData['worker_pids'])) {
-                foreach ($instanceData['worker_pids'] as $pid) {
-                    $pid = (int)$pid;
-                    if ($pid > 0) {
-                        $pidsFromFile[$pid] = true;
-                    }
-                }
-            }
-            if ($httpRedirectPort > 0 && !empty($instanceData['http_redirect_pid'])) {
-                $pidsFromFile[(int)$instanceData['http_redirect_pid']] = true;
-            }
-            foreach (\array_keys($pidsFromFile) as $pid) {
-                if ($pid <= 0 || isset($killedPids[$pid])) {
-                    continue;
-                }
-                if (Processer::isRunningByPid($pid)) {
-                    Processer::killByPid($pid);
-                    $killedPids[$pid] = true;
-                    $stoppedCount++;
-                }
-            }
-
-            $portsStillInUse = false;
-            for ($i = 0; $i < $count; $i++) {
-                if (Processer::isPortInUse($workerPortBase + $i)) {
-                    $portsStillInUse = true;
-                    break;
-                }
-            }
-            if ($dispatcherEnabled && Processer::isPortInUse($port)) {
-                $portsStillInUse = true;
-            }
-            if ($sslEnabled && $httpRedirectPort > 0 && Processer::isPortInUse($httpRedirectPort)) {
-                $portsStillInUse = true;
-            }
-            if (!$portsStillInUse) {
-                break;
-            }
-            if ($attempt < $maxAttempts) {
-                \usleep(500000);
-            }
-        }
-
-        // 三轮仍杀不死：存在逃逸 Master 在不断拉起，按 Master 前缀清理后再试一轮
-        $portsStillInUse = false;
-        for ($i = 0; $i < $count; $i++) {
-            if (Processer::isPortInUse($workerPortBase + $i)) {
-                $portsStillInUse = true;
-                break;
-            }
-        }
-        if ($dispatcherEnabled && Processer::isPortInUse($port)) {
-            $portsStillInUse = true;
-        }
-        if ($sslEnabled && $httpRedirectPort > 0 && Processer::isPortInUse($httpRedirectPort)) {
-            $portsStillInUse = true;
-        }
-        if ($portsStillInUse) {
-            $this->printer->warning(__('经 %{1} 轮仍有关联进程/端口占用，按 Master 前缀清理逃逸进程...', [$maxAttempts]));
-            $pnamesInProcessDir = Processer::getProcessNamesByPrefix($masterPrefix);
-            if (\count($pnamesInProcessDir) > 0) {
-                $this->printer->note(__('  从 var/process 发现 %{1} 个匹配 Master，正在按前缀杀死', [\count($pnamesInProcessDir)]));
-            }
-            $masterKilled = Processer::killByProcessNamePrefix($masterPrefix);
-            if ($masterKilled > 0) {
-                $stoppedCount += $masterKilled;
-                $this->printer->success(__('  ├─ 逃逸 Master 进程：已按前缀停止 %{1} 个 ✓', [$masterKilled]));
-            }
-            \sleep(1);
-            Processer::killByProcessNamePrefix($workerPrefix);
-            for ($i = 0; $i < $count; $i++) {
-                Processer::killProcessByPort($workerPortBase + $i);
-            }
-            if ($dispatcherEnabled) {
-                Processer::killProcessByPort($port);
-            }
-            if ($sslEnabled && $httpRedirectPort > 0) {
-                Processer::killProcessByPort($httpRedirectPort);
-            }
-        }
-
-        // 5) 最终兜底：按所有 weline 进程前缀做系统级扫杀（pgrep/ps），
-        //    确保 osascript/nohup 等未被 name_index 跟踪的孤儿进程也被清理
-        $allPrefixes = [
-            $masterPrefix,
-            $workerPrefix,
-            $dispatcherName,
-            $redirectName,
-        ];
-        $sysKilled = 0;
-        foreach ($allPrefixes as $pfx) {
-            $sysKilled += Processer::killByProcessNamePrefix($pfx);
-        }
-        if ($sysKilled > 0) {
-            $this->printer->note(__('  系统级扫杀：额外清理 %{1} 个残留进程', [$sysKilled]));
-            $stoppedCount += $sysKilled;
-        }
-
-        // 6) 清理本实例所有进程的 PID 文件
-        Processer::removePidFile('--name=' . $dispatcherName);
-        Processer::removePidFile('--name=' . MasterProcess::getMasterProcessName($name));
-        for ($i = 1; $i <= $count; $i++) {
-            Processer::removePidFile('--name=weline-master-' . $name . '-worker-' . $i);
-        }
-        if ($sslEnabled) {
-            Processer::removePidFile('--name=' . MasterProcess::HTTP_REDIRECT_PROCESS_NAME);
-        }
+        
+        // 使用批量杀死策略
+        $stoppedCount = $this->batchKillChildProcesses(
+            $name,
+            $count,
+            $workerPortBase,
+            $port,
+            $dispatcherEnabled,
+            $sslEnabled,
+            $httpRedirectPort,
+            $instanceData
+        );
 
         echo "\n";
 
@@ -359,6 +200,255 @@ class Stop extends CommandAbstract
         }
 
         $this->printer->success(__('实例 [%{1}] 已停止 ✓', [$name]));
+    }
+    
+    /**
+     * 批量杀死子进程
+     * 
+     * 核心思路：
+     * 1. 收集所有需要清理的进程 PID
+     * 2. 批量发送 kill 信号（而不是逐个等待）
+     * 3. 统一等待一次
+     * 4. 验证并清理残留
+     * 
+     * @return int 成功停止的进程数量
+     */
+    protected function batchKillChildProcesses(
+        string $name,
+        int $count,
+        int $workerPortBase,
+        int $dispatcherPort,
+        bool $dispatcherEnabled,
+        bool $sslEnabled,
+        int $httpRedirectPort,
+        array $instanceData
+    ): int {
+        $workerPrefix = 'weline-master-' . $name . '-';
+        $dispatcherName = 'weline-dispatcher-' . $name;
+        $redirectName = MasterProcess::HTTP_REDIRECT_PROCESS_NAME;
+        $masterPrefix = MasterProcess::MASTER_PROCESS_NAME_PREFIX . $name;
+        
+        // ========== 阶段 1：收集所有需要清理的进程 PID ==========
+        $processesToKill = []; // ['label' => string, 'pid' => int, 'port' => int, 'processName' => string]
+        
+        // 收集 Worker 进程
+        for ($i = 0; $i < $count; $i++) {
+            $workerId = $i + 1;
+            $wPort = $workerPortBase + $i;
+            $processName = '--name=weline-master-' . $name . '-worker-' . $workerId;
+            
+            // 尝试从进程名获取 PID
+            $pid = (int) Processer::getData($processName, 'pid');
+            
+            // 如果进程名无 PID，尝试从端口获取
+            if ($pid <= 0 && Processer::isPortInUse($wPort)) {
+                $pid = Processer::getPidByPort($wPort);
+            }
+            
+            // 从实例数据获取
+            if ($pid <= 0) {
+                $workers = $instanceData['workers'] ?? [];
+                foreach ($workers as $w) {
+                    if ((int)($w['port'] ?? 0) === $wPort) {
+                        $pid = (int)($w['pid'] ?? 0);
+                        break;
+                    }
+                }
+            }
+            
+            $stillRunning = ($pid > 0 && Processer::isRunningByPid($pid)) 
+                || Processer::isPortInUse($wPort);
+            
+            if ($stillRunning && $pid > 0) {
+                $processesToKill[] = [
+                    'label' => "Worker #{$workerId}",
+                    'pid' => $pid,
+                    'port' => $wPort,
+                    'processName' => $processName,
+                ];
+            }
+        }
+        
+        // 收集 Dispatcher 进程
+        if ($dispatcherEnabled) {
+            $dProcessName = '--name=' . $dispatcherName;
+            $dispatcherPid = (int) Processer::getData($dProcessName, 'pid');
+            
+            if ($dispatcherPid <= 0 && !empty($instanceData['dispatcher_pid'])) {
+                $dispatcherPid = (int) $instanceData['dispatcher_pid'];
+            }
+            
+            if ($dispatcherPid <= 0 && Processer::isPortInUse($dispatcherPort)) {
+                $dispatcherPid = Processer::getPidByPort($dispatcherPort);
+            }
+            
+            $stillRunning = ($dispatcherPid > 0 && Processer::isRunningByPid($dispatcherPid))
+                || Processer::isPortInUse($dispatcherPort);
+            
+            if ($stillRunning && $dispatcherPid > 0) {
+                $processesToKill[] = [
+                    'label' => 'Dispatcher',
+                    'pid' => $dispatcherPid,
+                    'port' => $dispatcherPort,
+                    'processName' => $dProcessName,
+                ];
+            }
+        }
+        
+        // 收集 HTTP 重定向进程
+        if ($sslEnabled && $httpRedirectPort > 0) {
+            $rProcessName = '--name=' . $redirectName;
+            $redirectPid = (int) Processer::getData($rProcessName, 'pid');
+            
+            if ($redirectPid <= 0 && !empty($instanceData['http_redirect_pid'])) {
+                $redirectPid = (int) $instanceData['http_redirect_pid'];
+            }
+            
+            if ($redirectPid <= 0 && Processer::isPortInUse($httpRedirectPort)) {
+                $redirectPid = Processer::getPidByPort($httpRedirectPort);
+            }
+            
+            $stillRunning = ($redirectPid > 0 && Processer::isRunningByPid($redirectPid))
+                || Processer::isPortInUse($httpRedirectPort);
+            
+            if ($stillRunning && $redirectPid > 0) {
+                $processesToKill[] = [
+                    'label' => 'HTTP Redirect',
+                    'pid' => $redirectPid,
+                    'port' => $httpRedirectPort,
+                    'processName' => $rProcessName,
+                ];
+            }
+        }
+        
+        // 如果没有需要清理的进程，先尝试按前缀批量清理
+        if (empty($processesToKill)) {
+            $prefixKilled = Processer::killByProcessNamePrefix($workerPrefix);
+            if ($prefixKilled > 0) {
+                $this->printer->success(__('  ├─ 按前缀清理 %{1} 个 Worker 进程 ✓', [$prefixKilled]));
+                return $prefixKilled;
+            }
+            $this->printer->success(__('所有子进程已停止 ✓'));
+            return 0;
+        }
+        
+        // ========== 阶段 2：批量发送 kill 信号 ==========
+        $labels = [];
+        $pidsToWait = [];
+        $isWin = \defined('IS_WIN') && IS_WIN;
+        
+        foreach ($processesToKill as $proc) {
+            $pid = $proc['pid'];
+            $label = $proc['label'];
+            $port = $proc['port'];
+            $labels[] = "{$label}(PID:{$pid})";
+            $pidsToWait[$pid] = ['label' => $label, 'port' => $port, 'processName' => $proc['processName']];
+            
+            // Mac/Linux: 使用 posix_kill 发送 SIGTERM
+            if (!$isWin) {
+                if (\function_exists('posix_kill')) {
+                    @\posix_kill($pid, \SIGTERM);
+                }
+            } else {
+                // Windows: 使用 taskkill（不等待）
+                @\exec("taskkill /PID {$pid} /F 2>NUL", $output, $code);
+            }
+        }
+        
+        $this->printer->note(__('批量发送终止信号: %{1}', [\implode(', ', $labels)]));
+        
+        // ========== 阶段 3：统一等待进程退出 ==========
+        $waitTimeout = 3; // 批量杀死后的等待时间（秒）
+        $startTime = \time();
+        
+        while (!empty($pidsToWait) && (\time() - $startTime) < $waitTimeout) {
+            \usleep(200000); // 200ms
+            
+            foreach ($pidsToWait as $pid => $info) {
+                if (!Processer::isRunningByPid($pid)) {
+                    $this->printer->success(__('  ├─ %{1} 已停止 (端口: %{2}) ✓', [$info['label'], $info['port']]));
+                    unset($pidsToWait[$pid]);
+                }
+            }
+        }
+        
+        $stoppedCount = \count($processesToKill) - \count($pidsToWait);
+        
+        // ========== 阶段 4：强制清理残留进程 ==========
+        if (!empty($pidsToWait)) {
+            $this->printer->warning(__('部分进程未响应 SIGTERM，批量发送 SIGKILL...'));
+            
+            // 批量发送 SIGKILL
+            foreach ($pidsToWait as $pid => $info) {
+                if (!$isWin) {
+                    if (\function_exists('posix_kill')) {
+                        @\posix_kill($pid, \SIGKILL);
+                    }
+                }
+                Processer::killProcessTreeByPid($pid, true);
+            }
+            
+            // 等待强制杀死生效
+            \usleep(500000); // 500ms
+            
+            // 验证是否已停止
+            foreach ($pidsToWait as $pid => $info) {
+                if (!Processer::isRunningByPid($pid)) {
+                    $this->printer->success(__('  ├─ %{1} 已强制停止 (PID: %{2}) ✓', [$info['label'], $pid]));
+                    $stoppedCount++;
+                    unset($pidsToWait[$pid]);
+                }
+            }
+        }
+        
+        // ========== 阶段 5：按端口最终清理 ==========
+        $stillRunning = [];
+        foreach ($processesToKill as $proc) {
+            $port = $proc['port'];
+            if ($port > 0 && Processer::isPortInUse($port)) {
+                $stillRunning[] = "{$proc['label']} (端口: {$port})";
+                Processer::killProcessByPort($port);
+            }
+        }
+        
+        if (!empty($stillRunning)) {
+            $this->printer->warning(__('按端口清理: %{1}', [\implode(', ', $stillRunning)]));
+        }
+        
+        // ========== 阶段 6：逃逸进程扫杀（按前缀） ==========
+        $allPrefixes = [
+            $masterPrefix,
+            $workerPrefix,
+            $dispatcherName,
+            $redirectName,
+        ];
+        $sysKilled = 0;
+        foreach ($allPrefixes as $pfx) {
+            $sysKilled += Processer::killByProcessNamePrefix($pfx);
+        }
+        if ($sysKilled > 0) {
+            $this->printer->note(__('  系统级扫杀：额外清理 %{1} 个残留进程', [$sysKilled]));
+            $stoppedCount += $sysKilled;
+        }
+        
+        // ========== 阶段 7：清理 PID 文件 ==========
+        foreach ($processesToKill as $proc) {
+            if (!empty($proc['processName'])) {
+                Processer::removePidFile($proc['processName']);
+            }
+        }
+        Processer::removePidFile('--name=' . $dispatcherName);
+        Processer::removePidFile('--name=' . MasterProcess::getMasterProcessName($name));
+        for ($i = 1; $i <= $count; $i++) {
+            Processer::removePidFile('--name=weline-master-' . $name . '-worker-' . $i);
+        }
+        if ($sslEnabled) {
+            Processer::removePidFile('--name=' . MasterProcess::HTTP_REDIRECT_PROCESS_NAME);
+        }
+        
+        $this->printer->success(__('批量停止完成，共处理 %{1} 个进程', [$stoppedCount]));
+        
+        return $stoppedCount;
     }
     
     /**

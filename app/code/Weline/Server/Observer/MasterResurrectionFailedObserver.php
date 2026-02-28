@@ -13,10 +13,9 @@ declare(strict_types=1);
 
 namespace Weline\Server\Observer;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Event\EventsManager;
 
 class MasterResurrectionFailedObserver implements ObserverInterface
 {
@@ -40,16 +39,22 @@ class MasterResurrectionFailedObserver implements ObserverInterface
         $title = __('WLS Master 复活失败');
 
         try {
-            /** @var EventsManager $eventsManager */
-            $eventsManager = ObjectManager::getInstance(EventsManager::class);
-            $eventsManager->dispatch('Weline_Admin::msg', [
-                'data' => [
-                    'title' => $title,
-                    'content' => $message,
-                ],
-            ]);
+            w_msg(
+                'server_error',
+                'error',
+                $title,
+                $message,
+                [
+                    'icon' => 'ri-error-warning-line',
+                    'source_module' => 'Weline_Server',
+                    'metadata' => [
+                        'instance_name' => $instanceName,
+                        'attempts' => $attempts,
+                    ],
+                ]
+            );
         } catch (\Throwable $e) {
-            \error_log('[MasterResurrectionFailedObserver] dispatch Weline_Admin::msg failed: ' . $e->getMessage());
+            Env::log_error('server', '[MasterResurrectionFailedObserver] w_msg failed: ' . $e->getMessage());
         }
     }
 }

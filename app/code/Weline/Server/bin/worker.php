@@ -619,8 +619,9 @@ if ($controlPort > 0) {
         });
         
         // 设置断开处理器
-        $ipcClient->onDisconnect(function (bool $receivedShutdown, \Weline\Server\IPC\ControlClient $client) use (&$ipcReceivedShutdown, $wlsLog, $instanceName, $controlPort, $workerId) {
-            if ($receivedShutdown) {
+        $ipcClient->onDisconnect(function (bool $receivedShutdown, \Weline\Server\IPC\ControlClient $client) use (&$ipcReceivedShutdown, &$shouldExit, $wlsLog, $instanceName, $controlPort, $workerId) {
+            // 已收到 shutdown 或正在退出，不做任何复活/重连操作
+            if ($receivedShutdown || $ipcReceivedShutdown || $shouldExit) {
                 $wlsLog("Master 连接断开（已收到 shutdown，不复活）", 'INFO');
                 return;
             }
@@ -689,7 +690,7 @@ $shouldExit = false;
 // 优雅关闭配置
 $gracefulShutdownTimeout = 30; // 等待活跃请求的最大时间（秒）
 
-$gracefulExit = function (string $reason = '', bool $waitForRequests = true) use ($socket, &$connections, &$requestBuffers, &$connectionLastActivity, &$activeRequests, $processName, $gracefulShutdownTimeout, $wlsLog, $flushLog) {
+$gracefulExit = function (string $reason = '', bool $waitForRequests = true) use ($socket, &$connections, &$requestBuffers, &$connectionLastActivity, &$activeRequests, $processName, $gracefulShutdownTimeout, $wlsLog, $flushLog, &$ipcClient, $workerId, $port, $isMaintenanceWorker) {
     // 刷新日志缓冲区
     $flushLog(true);
     
@@ -766,6 +767,13 @@ $gracefulExit = function (string $reason = '', bool $waitForRequests = true) use
     
     // 刷新异步日志缓冲
     \Weline\Server\Service\AsyncLogger::flushAll();
+    
+    // 通知 Master 即将退出（IPC exited 消息）
+    if ($ipcClient && $ipcClient->isConnected()) {
+        $exitRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
+        $ipcClient->send(\Weline\Server\IPC\ControlMessage::exited($exitRole, \getmypid(), $port, $workerId));
+        $wlsLog("已发送 exited 消息给 Master", 'INFO');
+    }
     
     // 使用进程管理器清理 PID 文件
     if ($processName) {
