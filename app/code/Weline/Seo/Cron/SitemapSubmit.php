@@ -12,7 +12,6 @@ declare(strict_types=1);
 namespace Weline\Seo\Cron;
 
 use Weline\Cron\CronTaskInterface;
-use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Model\SeoAccount;
 use Weline\Seo\Model\SeoWebsiteAccount;
@@ -69,8 +68,6 @@ class SitemapSubmit implements CronTaskInterface
             $sitemapAdapterRegistry = ObjectManager::getInstance(SitemapAdapterRegistry::class);
             /** @var Website $websiteModel */
             $websiteModel = ObjectManager::getInstance(Website::class);
-            /** @var EventsManager $eventsManager */
-            $eventsManager = ObjectManager::getInstance(EventsManager::class);
 
             $stats = [
                 'collected_websites' => 0,
@@ -216,17 +213,16 @@ class SitemapSubmit implements CronTaskInterface
             // ========== 步骤4：发送消息通知未绑定的站点 ==========
             if (!empty($stats['unbound_websites'])) {
                 try {
-                    $msgData = [
-                        'title' => __('Sitemap 提交提示'),
-                        'content' => __('以下站点未绑定 SEO 账户，无法自动提交 sitemap：') . "\n\n" 
+                    w_msg(
+                        'seo_sitemap',
+                        'warning',
+                        __('Sitemap 提交提示'),
+                        __('以下站点未绑定 SEO 账户，无法自动提交 sitemap：') . "\n\n" 
                             . implode("\n", $stats['unbound_websites']) . "\n\n" 
                             . __('请前往"SEO管理 > Sitemap管理"或"站点管理"绑定 SEO 账户。'),
-                        'type' => 'warning',
-                        'level' => 'warning',
-                    ];
-                    $eventsManager->dispatch('Weline_Admin::msg', $msgData);
+                        ['source_module' => 'Weline_Seo', 'icon' => 'ri-sitemap-line']
+                    );
                 } catch (\Exception $e) {
-                    // 消息发送失败不影响主流程
                     error_log('[Weline_Seo] SitemapSubmit message error: ' . $e->getMessage());
                 }
             }
