@@ -487,6 +487,15 @@ class Cli extends CliAbstract
     private function checkCommand(array $args): array
     {
         $command = strtolower(trim($args['command'] ?? ''));
+        
+        // 空命令：显示所有命令列表
+        if ($command === '') {
+            $commands = Env::getCommands();
+            if (!empty($commands)) {
+                return $commands; // 返回所有命令，让 showRecommendations 显示
+            }
+        }
+        
         if ($command === 'command:upgrade') {
             try {
                 ObjectManager::getInstance(\Weline\Framework\Console\Console\Command\Upgrade::class)->execute();
@@ -518,6 +527,46 @@ class Cli extends CliAbstract
         $commands = [];
         foreach ($recommendCommands as $recommendCommand) {
             $commands = array_merge($commands, $recommendCommand);
+        }
+        
+        // 收集所有唯一命令（按命令名分组，同名命令按优先级排序）
+        $commandsByName = [];
+        foreach ($commands as $cmdItem) {
+            if (!is_array($cmdItem)) {
+                continue;
+            }
+            foreach ($cmdItem as $c => $data) {
+                if (is_array($data) && isset($data['class'])) {
+                    $commandsByName[$c][] = ['class' => $data['class'], 'command' => $c, 'data' => $data];
+                }
+            }
+        }
+        
+        // 对同名命令按优先级排序：app/code 下的命令优先于 vendor 下的命令
+        $allUniqueCommands = [];
+        foreach ($commandsByName as $cmdName => $cmdList) {
+            if (count($cmdList) > 1) {
+                // 同名命令多个，按优先级排序
+                usort($cmdList, function($a, $b) {
+                    $aIsVendor = $this->isVendorCommand($a['class']);
+                    $bIsVendor = $this->isVendorCommand($b['class']);
+                    // app/code 优先于 vendor（vendor 排后面）
+                    if ($aIsVendor && !$bIsVendor) {
+                        return 1;
+                    }
+                    if (!$aIsVendor && $bIsVendor) {
+                        return -1;
+                    }
+                    return 0;
+                });
+            }
+            // 取优先级最高的
+            $allUniqueCommands[$cmdList[0]['class']] = $cmdList[0];
+        }
+        
+        // 如果只有一个唯一命令类，直接执行
+        if (count($allUniqueCommands) === 1) {
+            return reset($allUniqueCommands);
         }
         
         if (count($commands) === 1 && $singleCmd = $commands[0]) {
@@ -645,6 +694,34 @@ class Cli extends CliAbstract
         $this->printer->note(__('💡 提示：可以使用短命令形式，如 u:r 匹配 user:reset:password'));
     }
 
+    /**
+     * 判断命令类是否来自 vendor 目录（Framework 或其他 vendor 包）
+     * app/code 下的命令优先于 vendor 下的命令
+     *
+     * @param string $class 命令类全名
+     * @return bool 是否为 vendor 命令
+     */
+    private function isVendorCommand(string $class): bool
+    {
+        // 通过类名反射获取文件路径
+        try {
+            $reflection = new \ReflectionClass($class);
+            $filePath = $reflection->getFileName();
+            if ($filePath) {
+                // 规范化路径分隔符
+                $filePath = str_replace('\\', '/', $filePath);
+                // 检查是否在 vendor 目录下
+                return str_contains($filePath, '/vendor/');
+            }
+        } catch (\Throwable $e) {
+            // 反射失败，降级为模块名判断
+        }
+        
+        // 降级：通过模块名判断（Weline_Framework_* 通常在 vendor）
+        // 但这不够准确，因为 Framework 模块也可能在 app/code
+        return false;
+    }
+    
     /**
      * 根据分组名称获取对应的图标
      *
