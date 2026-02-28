@@ -20,8 +20,8 @@
     {
         "route": "ai\/backend\/assistant\/index",
         "description": "助手管理",
-        "status": "OK",
-        "message": "正常"
+        "status": "SQL_ERROR",
+        "message": "Undefined"
     },
     {
         "route": "ai\/backend\/model\/index",
@@ -44,8 +44,8 @@
     {
         "route": "ai\/backend\/user\/index",
         "description": "用户管理",
-        "status": "SQL_ERROR",
-        "message": "Undefined"
+        "status": "OK",
+        "message": "正常"
     },
     {
         "route": "ai\/backend\/adapter\/index",
@@ -92,8 +92,8 @@
     {
         "route": "ai\/backend\/marketingtools\/index",
         "description": "营销工具",
-        "status": "NO_TEMPLATE",
-        "message": "缺少模板文件"
+        "status": "OK",
+        "message": "正常"
     },
     {
         "route": "ai\/backend\/modelbenchmark\/index",
