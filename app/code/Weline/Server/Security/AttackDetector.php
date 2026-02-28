@@ -173,12 +173,14 @@ class AttackDetector
         ],
         
         // SSL 握手失败检测（Dispatcher 快速关闭模式检测）
+        // 注意：fast_close_threshold 不能太大，否则会误伤正常的快速请求
+        // 真正的 SSL 握手失败通常在 50-100ms 内断开（客户端拒绝证书 → SSL alert → 断开）
         'ssl_handshake_failure' => [
             'enabled' => true,
-            'window' => 60,                // 统计窗口（秒）
-            'max_failures' => 5,           // 触发封禁的最大失败次数
-            'block_duration' => 600,       // 封禁时长（秒）
-            'fast_close_threshold' => 5.0, // 快速关闭阈值（秒），连接存活 < 此值视为疑似 SSL 失败
+            'window' => 60,                 // 统计窗口（秒）
+            'max_failures' => 10,           // 触发封禁的最大失败次数（提高容错）
+            'block_duration' => 300,        // 封禁时长（秒）- 降低到 5 分钟
+            'fast_close_threshold' => 0.3,  // 快速关闭阈值（秒）- 降低到 300ms，避免误伤正常请求
         ],
     ];
     
@@ -704,6 +706,11 @@ class AttackDetector
      */
     private function checkUserAgent(string $ip, array $headers): array
     {
+        // 没有 headers 时跳过检测（TCP 代理模式下 SSL 握手阶段没有 HTTP 头）
+        if (empty($headers)) {
+            return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
+        }
+        
         $rule = $this->rules['bad_user_agents'] ?? [];
         if (!($rule['enabled'] ?? true)) {
             return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
@@ -714,11 +721,19 @@ class AttackDetector
         
         // 获取 User-Agent
         $ua = '';
+        $hasUaHeader = false;
         foreach ($headers as $name => $value) {
             if (\strtolower($name) === 'user-agent') {
                 $ua = \is_array($value) ? ($value[0] ?? '') : $value;
+                $hasUaHeader = true;
                 break;
             }
+        }
+        
+        // 有 headers 但没有 User-Agent 头时，也跳过（某些合法请求可能不带 UA）
+        // 只有明确发送了空 UA 或恶意 UA 才检测
+        if (!$hasUaHeader) {
+            return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
         }
         
         foreach ($patterns as $pattern) {
