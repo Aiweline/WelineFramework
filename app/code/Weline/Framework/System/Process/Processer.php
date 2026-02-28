@@ -2271,7 +2271,10 @@ class Processer
     /**
      * 检测指定 PID 的进程是否是 Weline 框架服务器进程（Worker/HTTP重定向/Master）
      *
-     * 通过命令行中是否包含 --name=weline- 或 weline-worker/weline-http-redirect 等标识判断。
+     * 判断策略（按优先级）：
+     * 1. 命令行中包含 --name=weline- 或 weline-worker/weline-dispatcher 等标识
+     * 2. pid_index.json 中存在该 PID 的记录（进程名以 weline- 开头）
+     *
      * 用于：端口被占用时，判断是否是框架进程，如果不是则不乱杀。
      *
      * @param int $pid 进程 ID
@@ -2282,9 +2285,9 @@ class Processer
         if ($pid <= 0) {
             return false;
         }
+        
+        // 策略1：通过命令行判断
         $cmdLine = self::getProcessCommandLine($pid);
-        // 检测标识：--name=weline-xxx 或各类进程脚本名
-        // 新进程名格式：weline-master-{instance}-{worker_id}, weline-dispatcher-{instance}
         if ($cmdLine !== '') {
             // Master 进程：通过 bin/w (或 bin\w) CLI 入口启动的 server 命令
             // 命令行形如 php bin/w server:start ... 或 php bin/w s:start ...
@@ -2311,6 +2314,22 @@ class Processer
                 return true;
             }
         }
+        
+        // 策略2：通过 pid_index.json 判断（命令行获取失败时的回退方案）
+        // 进程正在终止时，命令行可能无法读取，但 pid_index 中仍有记录
+        $pname = self::getNameByPid($pid);
+        if ($pname !== 'unknown' && $pname !== '') {
+            // 检查进程名是否以 weline- 开头（通过 --name= 参数提取）
+            // 进程名格式：--name=weline-dispatcher-default 或 --name=weline-master-default-worker-1
+            if (\strpos($pname, '--name=' . self::WELINE_PROCESS_PREFIX) !== false) {
+                return true;
+            }
+            // 直接检查进程名是否包含 weline- 前缀
+            if (\strpos($pname, self::WELINE_PROCESS_PREFIX) !== false) {
+                return true;
+            }
+        }
+        
         return false;
     }
     
