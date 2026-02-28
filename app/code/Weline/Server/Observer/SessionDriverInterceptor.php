@@ -31,11 +31,6 @@ use Weline\Framework\Event\ObserverInterface;
 class SessionDriverInterceptor implements ObserverInterface
 {
     /**
-     * WLS 内存 Session 驱动类名
-     */
-    private const WLS_MEMORY_SESSION_CLASS = \Weline\Server\Extends\Module\Weline_Framework\Session\WlsMemorySession::class;
-    
-    /**
      * 框架 File Session 驱动类名
      */
     private const FILE_SESSION_CLASS = \Weline\Framework\Session\Driver\File::class;
@@ -66,7 +61,7 @@ class SessionDriverInterceptor implements ObserverInterface
         // 仅接管 File 驱动
         if ($driverClass === self::FILE_SESSION_CLASS || \strtolower($driver) === 'file') {
             // 替换为 WLS 内存 Session 驱动
-            $event->setData('driver_class', self::WLS_MEMORY_SESSION_CLASS);
+            $event->setData('driver_class', \Weline\Server\Extends\Module\Weline_Framework\Session\WlsMemorySession::class);
         }
     }
 }
