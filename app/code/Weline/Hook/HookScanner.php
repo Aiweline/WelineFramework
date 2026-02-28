@@ -151,6 +151,37 @@ class HookScanner
     }
 
     /**
+     * 扫描指定模块的 Hook 规约信息
+     *
+     * @param array $moduleNames 模块名列表
+     * @return array 返回格式与 scanAllHooks 相同
+     */
+    public function scanModulesHooks(array $moduleNames): array
+    {
+        $result = [];
+        $modules = Env::getInstance()->getModuleList();
+
+        foreach ($moduleNames as $moduleName) {
+            if (!isset($modules[$moduleName])) {
+                continue;
+            }
+            
+            $module = $modules[$moduleName];
+            $basePath = $module['base_path'] ?? '';
+            if (empty($basePath) || !($module['status'] ?? false)) {
+                continue;
+            }
+
+            $hooksConfig = $this->scanModuleHookConfig($moduleName, $basePath);
+            if (!empty($hooksConfig)) {
+                $result[$moduleName] = $hooksConfig;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * 验证 Hook 名是否符合规范
      * Hook 名必须以模块名开头，格式：模块名::area::type::component::position
      *
