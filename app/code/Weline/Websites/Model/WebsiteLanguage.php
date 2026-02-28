@@ -129,7 +129,8 @@ class WebsiteLanguage extends Model
                 }
             }
             if (!empty($data)) {
-                $this->clearQuery()->insert($data)->fetch();
+                $this->clearData(true);
+                $this->insert($data)->fetch();
             }
         }
         

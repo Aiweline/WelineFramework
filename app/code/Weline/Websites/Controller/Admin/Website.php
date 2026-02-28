@@ -127,11 +127,16 @@ class Website extends BackendController
     #[Acl('Weline_Websites::website_add', '添加网站', 'mdi mdi-plus', '网站管理')]
     public function add()
     {
+        // 使用空白布局（适用于 offcanvas/弹窗）
+        $this->layoutType = 'default.blank';
+        
         if ($this->request->isPost()) {
             $data = $this->request->getPost();
             try {
                 $addressLines = \trim((string)($data['address_lines'] ?? ''));
-                $addressList = $this->parseAddressLines($addressLines);
+                // v1.6.0: 支持从域名池选择域名（pool_ids）
+                $poolIds = \trim((string)($data['pool_ids'] ?? ''));
+                $addressList = $this->parseAddressLines($addressLines, $poolIds);
                 if (empty($addressList)) {
                     throw new \Exception(__('请至少填写一个网站地址（域名或域名/子路径）'));
                 }
@@ -174,7 +179,7 @@ class Website extends BackendController
                 if (isset($data['website_id'])) {
                     unset($data['website_id']);
                 }
-                unset($data['address_lines'], $data['domain_values']);
+                unset($data['address_lines'], $data['domain_values'], $data['pool_ids']);
                 $this->website->clearData()->setData($data)->save();
                 $websiteId = $this->website->getId();
                 
@@ -210,11 +215,16 @@ class Website extends BackendController
                     'time' => '3',
                 ]);
             } catch (\Exception $e) {
+                $errorMsg = $e->getMessage();
+                // 开发环境显示完整堆栈
+                if (DEV) {
+                    $errorMsg .= "\n\n[File] " . $e->getFile() . ':' . $e->getLine();
+                }
                 $this->redirect('/component/offcanvas/error', [
-                    'msg' => __('网站添加失败: %{1}', [$e->getMessage()]),
+                    'msg' => __('网站添加失败: %{1}', [$errorMsg]),
                     'url' => '/',
                     'reload' => '0',
-                    'time' => '3',
+                    'time' => '10',
                 ]);
             }
         }
@@ -242,6 +252,9 @@ class Website extends BackendController
     #[Acl('Weline_Websites::website_edit', '编辑网站', 'mdi mdi-pencil', '网站管理')]
     public function edit()
     {
+        // 使用空白布局（适用于 offcanvas/弹窗）
+        $this->layoutType = 'default.blank';
+        
         $websiteId = $this->request->getParam('id');
         
         if (empty($websiteId)) {
@@ -294,7 +307,9 @@ class Website extends BackendController
             
             try {
                 $addressLines = \trim((string)($data['address_lines'] ?? ''));
-                $addressList = $this->parseAddressLines($addressLines);
+                // v1.6.0: 支持从域名池选择域名（pool_ids）
+                $poolIds = \trim((string)($data['pool_ids'] ?? ''));
+                $addressList = $this->parseAddressLines($addressLines, $poolIds);
                 if (empty($addressList)) {
                     throw new \Exception(__('请至少填写一个网站地址（域名或域名/子路径）'));
                 }
@@ -329,7 +344,7 @@ class Website extends BackendController
                 }
                 
                 $data['website_id'] = $postWebsiteId;
-                unset($data['address_lines'], $data['domain_values']);
+                unset($data['address_lines'], $data['domain_values'], $data['pool_ids']);
                 $this->website->addData($data)->save();
                 
                 $this->saveWebsiteDomains($postWebsiteId, $addressList);
@@ -650,18 +665,55 @@ class Website extends BackendController
     }
 
     /**
-     * 解析「网站地址」多行文本为 [['domain' => string, 'sub_path' => string], ...]
+     * 解析「网站地址」多行文本为 [['domain' => string, 'sub_path' => string, 'pool_id' => int], ...]
      * 每行：域名 或 域名/子路径（子路径自动加前导 /）
+     * 自动去重：相同 domain + sub_path 组合只保留一个
+     * 
+     * v1.6.0: 支持 pool_ids 参数，从域名池关联域名
+     * - 如果提供了 pool_ids，优先使用 pool_id 关联
+     * - pool_ids 格式：逗号分隔的 pool_id 列表
+     * 
+     * @param string $text 多行地址文本
+     * @param string $poolIds 逗号分隔的 pool_id 列表（可选）
      */
-    private function parseAddressLines(string $text): array
+    private function parseAddressLines(string $text, string $poolIds = ''): array
     {
         $list = [];
+        $seen = [];  // 用于去重
+        
+        // v1.6.0: 如果提供了 pool_ids，从域名池获取域名
+        if (!empty($poolIds)) {
+            $poolIdArray = array_filter(array_map('intval', explode(',', $poolIds)));
+            if (!empty($poolIdArray)) {
+                /** @var DomainPool $poolModel */
+                $poolModel = ObjectManager::getInstance(DomainPool::class);
+                foreach ($poolIdArray as $poolId) {
+                    $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+                    $pool->loadByPoolId($poolId);
+                    if ($pool->getPoolId()) {
+                        $domain = strtolower($pool->getDomain());
+                        $key = $domain . '|';
+                        if (!isset($seen[$key])) {
+                            $seen[$key] = true;
+                            $list[] = [
+                                'domain' => $domain,
+                                'sub_path' => '',
+                                'pool_id' => $poolId,
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 解析多行文本（传统方式）
         $lines = \preg_split('/\r\n|\r|\n/', $text, -1, \PREG_SPLIT_NO_EMPTY);
         foreach ($lines as $line) {
             $line = \trim($line);
             if ($line === '') {
                 continue;
             }
+            // 去掉协议前缀（http:// 或 https://）
             $line = \preg_replace('#^https?://#i', '', $line);
             $line = \trim($line, "/ \t");
             if ($line === '') {
@@ -679,7 +731,12 @@ class Website extends BackendController
                 }
             }
             if ($domain !== '') {
-                $list[] = ['domain' => $domain, 'sub_path' => $subPath];
+                // 去重：相同 domain + sub_path 只保留一个
+                $key = $domain . '|' . $subPath;
+                if (!isset($seen[$key])) {
+                    $seen[$key] = true;
+                    $list[] = ['domain' => $domain, 'sub_path' => $subPath, 'pool_id' => 0];
+                }
             }
         }
         return $list;
@@ -695,6 +752,10 @@ class Website extends BackendController
 
     /**
      * 保存站点的域名列表（先删后增，第一个为主域名）
+     * 
+     * v1.6.0: 支持 pool_id 关联方式
+     * - 如果 item 包含 pool_id，优先使用 pool_id 关联并从 DomainPool 同步数据
+     * - 否则使用传统的 domain 字符串方式
      */
     private function saveWebsiteDomains(int $websiteId, array $addressList): void
     {
@@ -706,9 +767,19 @@ class Website extends BackendController
             ->fetch();
         $isFirst = true;
         foreach ($addressList as $item) {
-            $newDomain = ObjectManager::getInstance(WebsiteDomain::class);
+            /** @var WebsiteDomain $newDomain */
+            $newDomain = ObjectManager::getInstance(WebsiteDomain::class, [], false);
             $newDomain->setWebsiteId($websiteId);
-            $newDomain->setDomain($item['domain']);
+            
+            // v1.6.0: 支持 pool_id 关联
+            $poolId = (int)($item['pool_id'] ?? 0);
+            if ($poolId > 0) {
+                $newDomain->setPoolId($poolId);
+                $newDomain->syncFromPool();
+            } else {
+                $newDomain->setDomain($item['domain']);
+            }
+            
             $newDomain->setSubPath($item['sub_path']);
             $newDomain->setIsPrimary($isFirst);
             $newDomain->setStatus(WebsiteDomain::STATUS_ACTIVE);
