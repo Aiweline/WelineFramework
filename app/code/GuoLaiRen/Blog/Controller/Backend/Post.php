@@ -375,7 +375,7 @@ class Post extends BackendController
     }
 
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::blog_delete', '删除博客', 'mdi mdi-delete', '删除博客文章', 'GuoLaiRen_Blog::blog')]
-    public function delete()
+    public function getRemove()
     {
         try {
             $id = (int)$this->request->getGet('id', 0);
