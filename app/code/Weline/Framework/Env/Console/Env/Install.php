@@ -41,12 +41,97 @@ class Install extends CommandAbstract
     /** @var bool 是否强制重试已尝试过的推荐项 */
     private bool $forceRetry = false;
 
+    /** @var bool 是否以 root/管理员权限运行 */
+    private bool $isRoot = false;
+
+    /** @var bool 是否有 sudo 可用 */
+    private bool $hasSudo = false;
+
     public function __construct()
     {
         $this->collector = ObjectManager::getInstance(EnvRequirementsCollector::class);
         $this->checker = ObjectManager::getInstance(EnvChecker::class);
         $this->statusService = ObjectManager::getInstance(RecommendedStatusService::class);
         $this->system = ObjectManager::getInstance(System::class);
+        $this->detectPrivileges();
+    }
+
+    /**
+     * 检测当前用户权限
+     */
+    private function detectPrivileges(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            // Windows: 检查是否以管理员身份运行
+            $output = [];
+            @exec('net session 2>&1', $output, $code);
+            $this->isRoot = ($code === 0);
+            $this->hasSudo = false; // Windows 没有 sudo
+        } else {
+            // Linux/macOS: 检查是否为 root (uid=0)
+            $this->isRoot = (posix_getuid() === 0);
+            // 检查 sudo 是否可用
+            $this->hasSudo = $this->commandExists('sudo');
+        }
+    }
+
+    /**
+     * 检查命令是否存在
+     */
+    private function commandExists(string $cmd): bool
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $output = [];
+            @exec("where $cmd 2>NUL", $output, $code);
+            return $code === 0 && !empty($output);
+        } else {
+            $output = [];
+            @exec("command -v $cmd 2>/dev/null", $output, $code);
+            return $code === 0 && !empty($output);
+        }
+    }
+
+    /**
+     * 获取带 sudo 前缀的命令（如果需要且可用）
+     */
+    private function getSudoCommand(string $cmd): string
+    {
+        if ($this->isRoot) {
+            return $cmd;
+        }
+        if ($this->hasSudo) {
+            return 'sudo ' . $cmd;
+        }
+        return $cmd;
+    }
+
+    /**
+     * 打印当前权限状态
+     */
+    private function printPrivilegeStatus(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            if ($this->isRoot) {
+                $this->printer->success(__('当前以管理员身份运行 ✔'));
+            } else {
+                $this->printer->warning(__('当前非管理员身份运行'));
+                $this->printer->note(__('  部分操作（如修改 php.ini、安装扩展）可能需要管理员权限'));
+                $this->printer->note(__('  建议：右键点击命令提示符 → 以管理员身份运行'));
+            }
+        } else {
+            $currentUser = posix_getpwuid(posix_getuid())['name'] ?? __('未知');
+            if ($this->isRoot) {
+                $this->printer->success(__('当前以 root 身份运行 ✔'));
+            } elseif ($this->hasSudo) {
+                $this->printer->note(__('当前用户: %{user}（非 root，但有 sudo 可用）', ['user' => $currentUser]));
+                $this->printer->note(__('  将自动使用 sudo 执行需要权限的操作'));
+            } else {
+                $this->printer->warning(__('当前用户: %{user}（非 root，且无 sudo 可用）', ['user' => $currentUser]));
+                $this->printer->warning(__('  部分操作可能失败，建议切换到 root 或具有 sudo 权限的用户'));
+                $this->printer->note(__('  执行: sudo php bin/w env:install -y'));
+            }
+        }
+        $this->printer->note('');
     }
 
     /**
@@ -56,6 +141,9 @@ class Install extends CommandAbstract
     {
         $this->printer->note(__('========== 环境依赖安装 =========='));
         $this->printer->note('');
+
+        // 权限检测提示
+        $this->printPrivilegeStatus();
 
         $skipConfirm = isset($args['y']) || isset($args['yes']);
         $target = isset($args[1]) && is_string($args[1]) && $args[1] !== '' ? trim($args[1]) : null;
@@ -470,7 +558,16 @@ class Install extends CommandAbstract
     private function tryUnblockFunctions(array $functions): bool
     {
         $phpIniPath = php_ini_loaded_file();
-        if (!$phpIniPath || !is_writable($phpIniPath)) {
+        if (!$phpIniPath) {
+            return false;
+        }
+
+        // 检查是否可写（直接或通过 sudo）
+        $canWrite = is_writable($phpIniPath);
+        $needSudo = !$canWrite && $this->hasSudo && !$this->isRoot;
+
+        if (!$canWrite && !$needSudo) {
+            $this->printer->warning(__('  php.ini 不可写且无 sudo 权限: %{path}', ['path' => $phpIniPath]));
             return false;
         }
 
@@ -494,7 +591,27 @@ class Install extends CommandAbstract
             return false;
         }
 
-        return file_put_contents($phpIniPath, $newContent) !== false;
+        if ($canWrite) {
+            return file_put_contents($phpIniPath, $newContent) !== false;
+        }
+
+        // 使用 sudo 写入
+        $tempFile = sys_get_temp_dir() . '/php_ini_temp_' . uniqid() . '.ini';
+        if (file_put_contents($tempFile, $newContent) === false) {
+            return false;
+        }
+
+        $cmd = $this->getSudoCommand("cp '$tempFile' '$phpIniPath'");
+        $output = [];
+        @exec($cmd . ' 2>&1', $output, $code);
+        @unlink($tempFile);
+
+        if ($code === 0) {
+            $this->printer->note(__('  已通过 sudo 修改 php.ini'));
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -627,15 +744,26 @@ class Install extends CommandAbstract
             'pkg'      => $map->getPreferredPackageManagerName($platform),
         ]));
 
+        // 显示权限状态
+        if (!$this->isRoot && $this->hasSudo) {
+            $this->printer->note(__('    将使用 sudo 执行安装命令'));
+        } elseif (!$this->isRoot && !$this->hasSudo) {
+            $this->printer->warning(__('    非 root 且无 sudo，安装可能失败'));
+        }
+
         $tryStrategies = function (array $strategies) use ($map, $ext): bool {
             foreach ($strategies as $s) {
                 if (!$map->commandExists($s['check'])) {
                     continue;
                 }
                 $this->printer->note(__('    尝试: %{name}...', ['name' => $s['name']]));
+                
+                // 为安装命令添加 sudo 前缀（如果需要）
+                $cmd = $this->getSudoCommand($s['cmd']);
+                
                 $output = [];
                 $returnCode = 0;
-                @exec($s['cmd'] . ' 2>&1', $output, $returnCode);
+                @exec($cmd . ' 2>&1', $output, $returnCode);
                 if ($returnCode === 0) {
                     $this->printer->success(__('    %{name} 执行成功', ['name' => $s['name']]));
                     $checkOutput = [];
@@ -646,6 +774,12 @@ class Install extends CommandAbstract
                     }
                     $this->tryEnableExtensionInIniLinux($ext);
                     return true;
+                } else {
+                    // 输出错误信息帮助诊断
+                    $errorOutput = implode("\n", array_slice($output, 0, 3));
+                    if ($errorOutput) {
+                        $this->printer->note(__('    输出: %{output}', ['output' => $errorOutput]));
+                    }
                 }
             }
             return false;
@@ -675,7 +809,15 @@ class Install extends CommandAbstract
     private function tryEnableExtensionInIniLinux(string $ext): bool
     {
         $phpIniPath = php_ini_loaded_file();
-        if (!$phpIniPath || !is_writable($phpIniPath)) {
+        if (!$phpIniPath) {
+            return false;
+        }
+
+        // 检查是否可写（直接或通过 sudo）
+        $canWrite = is_writable($phpIniPath);
+        $needSudo = !$canWrite && $this->hasSudo && !$this->isRoot;
+
+        if (!$canWrite && !$needSudo) {
             return false;
         }
 
@@ -691,11 +833,14 @@ class Install extends CommandAbstract
             return false;
         }
 
+        $modified = false;
+
         // 检查是否已有被注释的行
         $pattern = '/^;(\s*extension\s*=\s*' . preg_quote($ext, '/') . '(?:\.so)?\s*)$/mi';
         if (preg_match($pattern, $content)) {
             $content = preg_replace($pattern, '$1', $content);
             $this->printer->note(__('    取消注释: extension=%{ext}', ['ext' => $ext]));
+            $modified = true;
         } else {
             // 检查是否已启用
             $enabledPattern = '/^\s*extension\s*=\s*' . preg_quote($ext, '/') . '(?:\.so)?\s*$/mi';
@@ -705,9 +850,34 @@ class Install extends CommandAbstract
             // 追加
             $content .= "\nextension=" . $ext . "\n";
             $this->printer->note(__('    添加配置: extension=%{ext}', ['ext' => $ext]));
+            $modified = true;
         }
 
-        return file_put_contents($phpIniPath, $content) !== false;
+        if (!$modified) {
+            return false;
+        }
+
+        if ($canWrite) {
+            return file_put_contents($phpIniPath, $content) !== false;
+        }
+
+        // 使用 sudo 写入
+        $tempFile = sys_get_temp_dir() . '/php_ini_temp_' . uniqid() . '.ini';
+        if (file_put_contents($tempFile, $content) === false) {
+            return false;
+        }
+
+        $cmd = $this->getSudoCommand("cp '$tempFile' '$phpIniPath'");
+        $output = [];
+        @exec($cmd . ' 2>&1', $output, $code);
+        @unlink($tempFile);
+
+        if ($code === 0) {
+            $this->printer->note(__('    已通过 sudo 修改 php.ini'));
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -720,10 +890,18 @@ class Install extends CommandAbstract
         $this->printer->warning(__('  【手动修复指引】'));
         $this->printer->printing(__('    去什么地方: %{path}', ['path' => $phpIniPath]));
         $this->printer->printing(__('    做什么操作:'));
-        $this->printer->printing(__('      1. 用管理员权限打开该文件'));
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->printer->printing(__('      1. 以管理员身份打开命令提示符'));
+            $this->printer->printing(__('      2. 用记事本（管理员）打开该文件'));
+        } else {
+            $this->printer->printing(__('      1. 使用 root 权限或 sudo: sudo nano %{path}', ['path' => $phpIniPath]));
+        }
         $this->printer->printing(__('      2. 找到 disable_functions 配置项'));
         $this->printer->printing(__('      3. 从中移除: %{funcs}', ['funcs' => implode(', ', $functions)]));
         $this->printer->printing(__('      4. 保存并重启 PHP/Web 服务'));
+        if (!$this->isRoot && PHP_OS_FAMILY !== 'Windows') {
+            $this->printer->note(__('    或者直接以 root 运行: sudo php bin/w env:install -y'));
+        }
         $this->printer->printing(__('    如何验证: 再次运行 php bin/w env:check'));
     }
 
