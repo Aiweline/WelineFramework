@@ -146,11 +146,12 @@ class TrendProfile extends BackendController
         }
     }
 
-    // ─── Offcanvas 新建/编辑（iframe 内加载） ───
+    // ─── Offcanvas 新建/编辑（iframe 内加载，使用空白布局） ───
 
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::trend_profile_create', '新建画像(Offcanvas)', '', '', 'GuoLaiRen_Blog::trend_profile')]
     public function getOffcanvasCreate(): string
     {
+        $this->layoutType = 'default.blank';
         $this->assign('profile', null);
         $this->assign('action', $this->request->getUrlBuilder()->getBackendUrl('blog/backend/trend-profile/offcanvas-create'));
         return $this->fetch('offcanvas_form');
@@ -171,6 +172,7 @@ class TrendProfile extends BackendController
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::trend_profile_edit', '编辑画像(Offcanvas)', '', '', 'GuoLaiRen_Blog::trend_profile')]
     public function getOffcanvasEdit(): string
     {
+        $this->layoutType = 'default.blank';
         $id = (int)$this->request->getGet('id', 0);
         $profile = clone $this->profileModel;
         $profile->clear()->load($id);

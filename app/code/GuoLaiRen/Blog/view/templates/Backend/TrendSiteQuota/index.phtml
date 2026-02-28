@@ -6,13 +6,13 @@
  * @var \Weline\Framework\View\Template $this
  * @var array $quotas
  * @var array $profileNames
- * @var array $siteNames
+ * @var array $pageNames
  * @var array $categoryNames
  * @var mixed $pagination
  */
 $quotas = $this->getData('quotas') ?? [];
 $profileNames = $this->getData('profileNames') ?? [];
-$siteNames = $this->getData('siteNames') ?? [];
+$pageNames = $this->getData('pageNames') ?? [];
 $categoryNames = $this->getData('categoryNames') ?? [];
 $pagination = $this->getData('pagination');
 ?>
@@ -72,7 +72,7 @@ $pagination = $this->getData('pagination');
                             <thead>
                                 <tr>
                                     <th width="60">ID</th>
-                                    <th><lang>站点</lang></th>
+                                    <th><lang>首页</lang></th>
                                     <th><lang>画像</lang></th>
                                     <th><lang>每日篇数</lang></th>
                                     <th><lang>默认分类</lang></th>
@@ -82,13 +82,13 @@ $pagination = $this->getData('pagination');
                             <tbody>
                                 <?php foreach ($quotas as $q): ?>
                                     <?php
-                                    $siteId = (int)$q->getData('site_id');
+                                    $pageId = (int)$q->getData('page_id');
                                     $profileId = (int)$q->getData('profile_id');
                                     $catId = (int)$q->getData('default_category_id');
                                     ?>
                                     <tr>
                                         <td><?= (int)$q->getData('quota_id') ?></td>
-                                        <td><?= htmlspecialchars($siteNames[$siteId] ?? (string)$siteId) ?></td>
+                                        <td><?= htmlspecialchars($pageNames[$pageId] ?? (string)$pageId) ?></td>
                                         <td><?= htmlspecialchars($profileNames[$profileId] ?? (string)$profileId) ?></td>
                                         <td><?= (int)$q->getData('articles_per_day') ?></td>
                                         <td><?= $catId > 0 ? htmlspecialchars($categoryNames[$catId] ?? (string)$catId) : __('未设置') ?></td>
