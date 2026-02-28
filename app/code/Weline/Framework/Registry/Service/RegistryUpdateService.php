@@ -201,6 +201,173 @@ class RegistryUpdateService
     }
     
     /**
+     * 增量更新指定模块的所有注册表
+     * 仅重新扫描和更新指定模块的数据，不重建整个注册表
+     * 
+     * @param array $moduleNames 模块名数组
+     * @param bool $silent 是否静默执行（不输出信息）
+     * @return bool 是否全部成功
+     */
+    public function updateModuleRegistriesIncremental(array $moduleNames, bool $silent = false): bool
+    {
+        if (empty($moduleNames)) {
+            return true;
+        }
+        
+        $allSuccess = true;
+        
+        // 1. 更新 Extends 注册表
+        try {
+            if (!$silent) {
+                Env::log_info('registry_update.log', __('正在增量更新 Extends 注册表（模块：%{1}）...', [implode(', ', $moduleNames)]));
+            }
+            /** @var ExtendsRegistry $extendsRegistry */
+            $extendsRegistry = ObjectManager::getInstance(ExtendsRegistry::class);
+            $ok = $extendsRegistry->refreshForModules($moduleNames);
+            if ($ok) {
+                $extendsRegistry->getRegistry(true);
+                if (!$silent) {
+                    Env::log_info('registry_update.log', __('✓ Extends 注册表增量更新完成。'));
+                }
+            } else {
+                $allSuccess = false;
+                Env::log_warning('registry_update.log', __('Extends 注册表增量更新失败，但将继续执行。'));
+            }
+        } catch (\Exception $e) {
+            $allSuccess = false;
+            Env::log_warning('registry_update.log', __('Extends 注册表增量更新失败: %{1}', [$e->getMessage()]));
+        }
+        
+        // 2. 更新插件注册表
+        try {
+            if (!$silent) {
+                Env::log_info('registry_update.log', __('正在增量更新插件注册表（模块：%{1}）...', [implode(', ', $moduleNames)]));
+            }
+            /** @var PluginRegistry $pluginRegistry */
+            $pluginRegistry = ObjectManager::getInstance(PluginRegistry::class);
+            $ok = $pluginRegistry->refreshForModules($moduleNames);
+            if ($ok) {
+                $pluginRegistry->getRegistry(true);
+                if (!$silent) {
+                    Env::log_info('registry_update.log', __('✓ 插件注册表增量更新完成。'));
+                }
+                
+                // 编译指定模块的插件
+                if (!$this->isUpgradeLockExists()) {
+                    try {
+                        if (!$silent) {
+                            Env::log_info('registry_update.log', __('正在编译模块插件/DI...'));
+                        }
+                        /** @var \Weline\Framework\Plugin\PluginsManager $pluginsManager */
+                        $pluginsManager = ObjectManager::getInstance(\Weline\Framework\Plugin\PluginsManager::class);
+                        $pluginsManager->compileForModules($moduleNames);
+                        if (!$silent) {
+                            Env::log_info('registry_update.log', __('✓ 模块插件/DI编译完成。'));
+                        }
+                    } catch (\Exception $compileException) {
+                        Env::log_warning('registry_update.log', __('模块插件/DI编译失败：%{1}，但将继续执行。', [$compileException->getMessage()]));
+                    }
+                }
+            } else {
+                $allSuccess = false;
+                Env::log_warning('registry_update.log', __('插件注册表增量更新失败，但将继续执行。'));
+            }
+        } catch (\Exception $e) {
+            $allSuccess = false;
+            Env::log_warning('registry_update.log', __('插件注册表增量更新失败: %{1}', [$e->getMessage()]));
+        }
+        
+        // 3. 更新事件注册表
+        try {
+            if (!$silent) {
+                Env::log_info('registry_update.log', __('正在增量更新事件注册表（模块：%{1}）...', [implode(', ', $moduleNames)]));
+            }
+            /** @var EventRegistry $eventRegistry */
+            $eventRegistry = ObjectManager::getInstance(EventRegistry::class);
+            $ok = $eventRegistry->refreshForModules($moduleNames);
+            if ($ok) {
+                $eventRegistry->getRegistry(true);
+                /** @var \Weline\Framework\Event\EventsManager $eventsManager */
+                $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+                $eventsManager->clearObserverCache();
+                if (!$silent) {
+                    Env::log_info('registry_update.log', __('✓ 事件注册表增量更新完成。'));
+                }
+            } else {
+                $allSuccess = false;
+                Env::log_warning('registry_update.log', __('事件注册表增量更新失败，但将继续执行。'));
+            }
+        } catch (\Exception $e) {
+            $allSuccess = false;
+            Env::log_warning('registry_update.log', __('事件注册表增量更新失败: %{1}', [$e->getMessage()]));
+        }
+        
+        // 4. 更新 Hook 注册表
+        try {
+            if (!$silent) {
+                Env::log_info('registry_update.log', __('正在增量更新 Hook 注册表（模块：%{1}）...', [implode(', ', $moduleNames)]));
+            }
+            /** @var HookRegistry $hookRegistry */
+            $hookRegistry = ObjectManager::getInstance(HookRegistry::class);
+            $ok = $hookRegistry->refreshForModules($moduleNames, true);
+            if ($ok) {
+                $hookRegistry->getRegistry(true);
+                if (!$silent) {
+                    Env::log_info('registry_update.log', __('✓ Hook 注册表增量更新完成。'));
+                }
+            } else {
+                $allSuccess = false;
+                Env::log_warning('registry_update.log', __('Hook 注册表增量更新失败，但将继续执行。'));
+            }
+        } catch (\RuntimeException $e) {
+            $errorMessage = $e->getMessage();
+            if (str_contains($errorMessage, '【致命错误】')) {
+                Env::log_error('registry_update.log', __('Hook 注册表增量更新失败（致命错误）: %{1}', [$errorMessage]));
+                throw $e;
+            }
+            $allSuccess = false;
+            Env::log_warning('registry_update.log', __('Hook 注册表增量更新失败: %{1}', [$errorMessage]));
+        } catch (\Exception $e) {
+            $allSuccess = false;
+            Env::log_warning('registry_update.log', __('Hook 注册表增量更新失败: %{1}', [$e->getMessage()]));
+        }
+        
+        // 5. 更新命令注册表
+        try {
+            if (!$silent) {
+                Env::log_info('registry_update.log', __('正在增量更新命令注册表（模块：%{1}）...', [implode(', ', $moduleNames)]));
+            }
+            /** @var \Weline\Framework\Console\Console\Command\Upgrade $commandUpgrade */
+            $commandUpgrade = ObjectManager::getInstance(\Weline\Framework\Console\Console\Command\Upgrade::class);
+            $commandUpgrade->refreshForModules($moduleNames);
+            if (!$silent) {
+                Env::log_info('registry_update.log', __('✓ 命令注册表增量更新完成。'));
+            }
+        } catch (\Exception $e) {
+            $allSuccess = false;
+            Env::log_warning('registry_update.log', __('命令注册表增量更新失败: %{1}', [$e->getMessage()]));
+        }
+        
+        // 6. 更新 Taglib（已支持模块参数）
+        try {
+            if (!$silent) {
+                Env::log_info('registry_update.log', __('正在增量更新 Taglib（模块：%{1}）...', [implode(', ', $moduleNames)]));
+            }
+            /** @var \Weline\Taglib\Console\Taglib\Collect $taglibCollect */
+            $taglibCollect = ObjectManager::getInstance(\Weline\Taglib\Console\Taglib\Collect::class);
+            $taglibCollect->execute(['module' => implode(',', $moduleNames)]);
+            if (!$silent) {
+                Env::log_info('registry_update.log', __('✓ Taglib 增量更新完成。'));
+            }
+        } catch (\Exception $e) {
+            $allSuccess = false;
+            Env::log_warning('registry_update.log', __('Taglib 增量更新失败: %{1}', [$e->getMessage()]));
+        }
+        
+        return $allSuccess;
+    }
+    
+    /**
      * 更新指定模块相关的注册表
      * 当模块状态变更时，需要更新所有注册表以确保一致性
      * 

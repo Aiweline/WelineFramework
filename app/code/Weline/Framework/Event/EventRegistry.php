@@ -116,6 +116,266 @@ class EventRegistry
     }
     
     /**
+     * 增量刷新指定模块的事件注册表
+     * 仅重新扫描指定模块的事件和观察者，合并到现有注册表
+     *
+     * @param array $moduleNames 需要刷新的模块名列表
+     * @return bool
+     * @throws \RuntimeException 如果发现事件名冲突
+     */
+    public function refreshForModules(array $moduleNames): bool
+    {
+        // 1. 加载现有注册表
+        $registry = $this->getRegistry(true);
+        
+        // 确保注册表结构完整
+        if (!isset($registry['events'])) {
+            $registry['events'] = [];
+        }
+        if (!isset($registry['event_to_module'])) {
+            $registry['event_to_module'] = [];
+        }
+        if (!isset($registry['dynamic_patterns'])) {
+            $registry['dynamic_patterns'] = [];
+        }
+        
+        // 2. 清除目标模块的旧数据
+        $this->clearModuleData($registry, $moduleNames);
+        
+        // 3. 扫描目标模块的新数据
+        $newScannedData = $this->scanner->scanModules($moduleNames);
+        $newObserversData = $this->collectObserversForModules($moduleNames);
+        
+        // 4. 合并新数据到注册表
+        $this->mergeScannedDataIntoRegistry($registry, $newScannedData, $newObserversData);
+        
+        // 5. 重新排序所有观察者
+        foreach ($registry['events'] as &$eventInfo) {
+            if (isset($eventInfo['observers']) && count($eventInfo['observers']) > 1) {
+                usort($eventInfo['observers'], function ($a, $b) {
+                    $sortA = (int)($a['sort'] ?? 10000);
+                    $sortB = (int)($b['sort'] ?? 10000);
+                    return $sortA <=> $sortB;
+                });
+            }
+        }
+        
+        // 6. 保存注册表
+        return $this->saveRegistry($registry);
+    }
+    
+    /**
+     * 清除指定模块的事件和观察者数据
+     *
+     * @param array &$registry 注册表数据（引用传递）
+     * @param array $moduleNames 要清除的模块名列表
+     * @return void
+     */
+    private function clearModuleData(array &$registry, array $moduleNames): void
+    {
+        // 1. 清除目标模块定义的事件
+        foreach ($registry['events'] as $eventName => $eventInfo) {
+            if (in_array($eventInfo['module'] ?? '', $moduleNames, true)) {
+                unset($registry['events'][$eventName]);
+                unset($registry['event_to_module'][$eventName]);
+            } else {
+                // 2. 清除目标模块注册的观察者（从所有事件中移除）
+                if (isset($eventInfo['observers']) && is_array($eventInfo['observers'])) {
+                    $registry['events'][$eventName]['observers'] = array_values(array_filter(
+                        $eventInfo['observers'],
+                        fn($obs) => !in_array($obs['module'] ?? '', $moduleNames, true)
+                    ));
+                }
+            }
+        }
+        
+        // 3. 清除目标模块的动态事件模式
+        foreach ($registry['dynamic_patterns'] as $pattern => $patternInfo) {
+            if (in_array($patternInfo['module'] ?? '', $moduleNames, true)) {
+                unset($registry['dynamic_patterns'][$pattern]);
+            } else {
+                // 清除动态事件模式中目标模块的观察者
+                if (isset($patternInfo['observers']) && is_array($patternInfo['observers'])) {
+                    $registry['dynamic_patterns'][$pattern]['observers'] = array_values(array_filter(
+                        $patternInfo['observers'],
+                        fn($obs) => !in_array($obs['module'] ?? '', $moduleNames, true)
+                    ));
+                }
+            }
+        }
+    }
+    
+    /**
+     * 收集指定模块的观察者信息
+     *
+     * @param array $moduleNames 模块名列表
+     * @return array 观察者数据，格式：['EventName' => [observer1, observer2, ...]]
+     */
+    private function collectObserversForModules(array $moduleNames): array
+    {
+        $observersData = [];
+        
+        try {
+            $eventObserversList = $this->xmlReader->read();
+            $env = \Weline\Framework\App\Env::getInstance();
+            
+            foreach ($eventObserversList as $module_and_file => $moduleEventObservers) {
+                $moduleName = explode('::', $module_and_file)[0] ?? '';
+                
+                // 只处理目标模块
+                if (!in_array($moduleName, $moduleNames, true)) {
+                    continue;
+                }
+                
+                // 检查模块状态
+                if (!$env->getModuleStatus($moduleName)) {
+                    continue;
+                }
+                
+                foreach ($moduleEventObservers as $eventName => $eventObservers) {
+                    if (!isset($observersData[$eventName])) {
+                        $observersData[$eventName] = [];
+                    }
+                    foreach ($eventObservers as $observer) {
+                        $observer['module'] = $moduleName;
+                        $observer['module_status'] = true;
+                        $observersData[$eventName][] = $observer;
+                    }
+                }
+            }
+            
+            // 按 sort 值排序
+            foreach ($observersData as $eventName => $observers) {
+                if (count($observers) > 1) {
+                    usort($observersData[$eventName], function ($a, $b) {
+                        return ((int)($a['sort'] ?? 10000)) <=> ((int)($b['sort'] ?? 10000));
+                    });
+                }
+            }
+        } catch (\Exception $e) {
+            \Weline\Framework\App\Env::log_warning('event_registry.log', __('收集模块观察者失败: %{1}', [$e->getMessage()]));
+        }
+        
+        return $observersData;
+    }
+    
+    /**
+     * 将扫描的数据合并到现有注册表
+     *
+     * @param array &$registry 现有注册表（引用传递）
+     * @param array $scannedData 扫描的事件数据
+     * @param array $observersData 观察者数据
+     * @return void
+     * @throws \RuntimeException 如果发现事件名冲突
+     */
+    private function mergeScannedDataIntoRegistry(array &$registry, array $scannedData, array $observersData): void
+    {
+        foreach ($scannedData as $moduleName => $events) {
+            foreach ($events as $eventName => $eventInfo) {
+                // 检查是否是动态事件模式
+                if ($this->isDynamicEventPattern($eventName)) {
+                    // 收集匹配的观察者
+                    $matchedObservers = [];
+                    foreach ($observersData as $actualEventName => $eventObservers) {
+                        if ($this->matchPattern($eventName, $actualEventName)) {
+                            $matchedObservers = array_merge($matchedObservers, $eventObservers);
+                        }
+                    }
+                    
+                    // 合并到现有动态模式的观察者
+                    if (isset($registry['dynamic_patterns'][$eventName])) {
+                        $existingObservers = $registry['dynamic_patterns'][$eventName]['observers'] ?? [];
+                        $matchedObservers = array_merge($existingObservers, $matchedObservers);
+                    }
+                    
+                    // 排序观察者
+                    if (count($matchedObservers) > 1) {
+                        usort($matchedObservers, fn($a, $b) => 
+                            ((int)($a['sort'] ?? 10000)) <=> ((int)($b['sort'] ?? 10000))
+                        );
+                    }
+                    
+                    $registry['dynamic_patterns'][$eventName] = [
+                        'name' => $eventInfo['name'] ?? $eventName,
+                        'description' => $eventInfo['description'] ?? '',
+                        'doc' => $eventInfo['doc'] ?? '',
+                        'doc_path' => $eventInfo['doc_path'] ?? '',
+                        'has_spec' => $eventInfo['has_spec'] ?? false,
+                        'has_doc' => $eventInfo['has_doc'] ?? false,
+                        'module' => $moduleName,
+                        'pattern' => $eventName,
+                        'observers' => $matchedObservers,
+                    ];
+                    continue;
+                }
+                
+                // 检查事件名冲突（与其他模块冲突）
+                if (isset($registry['events'][$eventName])) {
+                    $existingModule = $registry['event_to_module'][$eventName] ?? '';
+                    if ($existingModule !== $moduleName) {
+                        $errorMessage = $this->buildConflictErrorMessage(
+                            $eventName,
+                            $existingModule,
+                            $moduleName,
+                            $registry['events'][$eventName],
+                            $eventInfo
+                        );
+                        throw new \RuntimeException($errorMessage);
+                    }
+                }
+                
+                // 合并观察者
+                $eventObservers = $observersData[$eventName] ?? [];
+                if (isset($registry['events'][$eventName]['observers'])) {
+                    $eventObservers = array_merge($registry['events'][$eventName]['observers'], $eventObservers);
+                }
+                
+                // 添加/更新事件
+                $registry['events'][$eventName] = [
+                    'name' => $eventInfo['name'] ?? $eventName,
+                    'description' => $eventInfo['description'] ?? '',
+                    'doc' => $eventInfo['doc'] ?? '',
+                    'doc_path' => $eventInfo['doc_path'] ?? '',
+                    'has_spec' => $eventInfo['has_spec'] ?? false,
+                    'has_doc' => $eventInfo['has_doc'] ?? false,
+                    'module' => $moduleName,
+                    'modules' => [
+                        $moduleName => [
+                            'module' => $moduleName,
+                            'doc_path' => $eventInfo['doc_path'] ?? '',
+                            'has_doc' => $eventInfo['has_doc'] ?? false
+                        ]
+                    ],
+                    'observers' => $eventObservers
+                ];
+                
+                $registry['event_to_module'][$eventName] = $moduleName;
+            }
+        }
+        
+        // 合并观察者到现有事件（目标模块可能监听其他模块的事件）
+        foreach ($observersData as $eventName => $observers) {
+            if (isset($registry['events'][$eventName])) {
+                // 去重后添加
+                foreach ($observers as $observer) {
+                    $observerKey = ($observer['instance'] ?? '') . '::' . ($observer['name'] ?? '');
+                    $isDuplicate = false;
+                    foreach ($registry['events'][$eventName]['observers'] as $existingObserver) {
+                        $existingKey = ($existingObserver['instance'] ?? '') . '::' . ($existingObserver['name'] ?? '');
+                        if ($observerKey === $existingKey && !empty($observerKey)) {
+                            $isDuplicate = true;
+                            break;
+                        }
+                    }
+                    if (!$isDuplicate) {
+                        $registry['events'][$eventName]['observers'][] = $observer;
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
      * 收集所有观察者信息
      * 
      * @return array 观察者数据，格式：['EventName' => [observer1, observer2, ...]]

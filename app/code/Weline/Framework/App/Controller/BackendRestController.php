@@ -38,12 +38,20 @@ class BackendRestController extends AbstractRestController
                     // 找到有效用户，执行登录
                     $this->session->login($user);
                 } else {
-                    // 没有找到有效用户，返回未登录错误
-                    return $this->error(__('请先登录'), '', 401);
+                    // 没有找到有效用户，抛出 401 异常
+                    throw new \Weline\Framework\Http\ResponseTerminateException(
+                        401,
+                        \json_encode(['code' => 401, 'msg' => __('请先登录'), 'data' => null], JSON_UNESCAPED_UNICODE),
+                        ['Content-Type' => 'application/json; charset=utf-8']
+                    );
                 }
             } else {
-                // 没有session ID，返回未登录错误
-                return $this->error(__('请先登录'), '', 401);
+                // 没有session ID，抛出 401 异常
+                throw new \Weline\Framework\Http\ResponseTerminateException(
+                    401,
+                    \json_encode(['code' => 401, 'msg' => __('请先登录'), 'data' => null], JSON_UNESCAPED_UNICODE),
+                    ['Content-Type' => 'application/json; charset=utf-8']
+                );
             }
         }
     }

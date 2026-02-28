@@ -24,6 +24,10 @@ class FrontendRestController extends AbstractRestController
      */
     protected function errorXml(string $msg = '错误！', mixed $data = false, int $code = 400)
     {
-        die($this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]));
+        throw new \Weline\Framework\Http\ResponseTerminateException(
+            $code,
+            $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code], self::fetch_XML),
+            ['Content-Type' => 'text/xml; charset=UTF-8']
+        );
     }
 }

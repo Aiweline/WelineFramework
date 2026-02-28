@@ -77,6 +77,62 @@ class ExtendsScanner
     }
 
     /**
+     * 扫描指定模块的扩展信息
+     *
+     * @param array $moduleNames 模块名列表
+     * @return array 返回格式与 scanAllExtends 相同
+     */
+    public function scanModules(array $moduleNames): array
+    {
+        $result = [];
+        $modules = Env::getInstance()->getModuleList();
+
+        foreach ($moduleNames as $moduleName) {
+            if (!isset($modules[$moduleName])) {
+                continue;
+            }
+            
+            $module = $modules[$moduleName];
+            $basePath = $module['base_path'] ?? '';
+            if (empty($basePath) || !($module['status'] ?? false)) {
+                continue;
+            }
+
+            // 扫描模块的 extends.php 规约文件
+            $extendsConfig = $this->scanModuleExtendsConfig($moduleName, $basePath);
+            if ($extendsConfig) {
+                $existingExtendedBy = $result[$moduleName]['extended_by'] ?? [];
+                $result[$moduleName] = [
+                    'extends' => $extendsConfig,
+                    'extended_by' => $existingExtendedBy
+                ];
+            }
+
+            // 扫描模块对其他模块的扩展
+            $extendedBy = $this->scanModuleExtends($moduleName, $basePath);
+            if (!empty($extendedBy)) {
+                foreach ($extendedBy as $targetModule => $extendInfo) {
+                    if (!isset($result[$targetModule])) {
+                        $result[$targetModule] = [
+                            'extends' => [],
+                            'extended_by' => []
+                        ];
+                    }
+                    if (!isset($result[$targetModule]['extended_by'][$moduleName])) {
+                        $result[$targetModule]['extended_by'][$moduleName] = [];
+                    }
+                    $result[$targetModule]['extended_by'][$moduleName] = array_merge(
+                        $result[$targetModule]['extended_by'][$moduleName] ?? [],
+                        $extendInfo
+                    );
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * 扫描模块的 extends.php 规约文件
      *
      * @param string $moduleName 模块名
