@@ -15,6 +15,7 @@ use Aiweline\AliDdnsServer\Model\DdnsDomains;
 use Weline\Acl\Model\Role;
 use Weline\Backend\Model\Backend\Acl\UserRole;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
@@ -36,6 +37,8 @@ class BackendUser extends \Weline\Framework\Database\Model
 
     public array $_unit_primary_keys = ['user_id'];
     public array $_index_sort_keys = ['user_id', 'email', 'username'];
+
+    private bool $_is_new_user = false;
 
     /**
      * @inheritDoc
@@ -270,5 +273,33 @@ class BackendUser extends \Weline\Framework\Database\Model
         $userRole->setUserId($this->getId())
             ->setRoleId($role_id)
             ->save(true);
+    }
+
+    public function save_before(): void
+    {
+        $this->_is_new_user = !$this->getOriginData(self::fields_ID);
+    }
+
+    public function save_after(): void
+    {
+        if ($this->_is_new_user && $this->getId()) {
+            $this->dispatchUserRegisteredEvent();
+        }
+    }
+
+    private function dispatchUserRegisteredEvent(): void
+    {
+        /** @var EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+
+        $eventData = [
+            'user_id'  => (int) $this->getId(),
+            'username' => $this->getUsername(),
+            'email'    => $this->getEmail(),
+            'phone'    => $this->getData('phone') ?: null,
+            'is_new'   => true,
+        ];
+
+        $eventsManager->dispatch('Weline_Backend::user::registered', $eventData);
     }
 }
