@@ -11,10 +11,9 @@ declare(strict_types=1);
 namespace Weline\I18n\Observer;
 
 use Weline\Ai\Service\TranslationService;
+use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
-use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Manager\ObjectManager;
 
 /**
  * AI翻译事件观察者
@@ -29,19 +28,12 @@ class AiTranslationObserver implements ObserverInterface
     private TranslationService $translationService;
 
     /**
-     * @var EventsManager
-     */
-    private EventsManager $eventsManager;
-
-    /**
      * 构造函数
      */
     public function __construct(
-        TranslationService $translationService,
-        EventsManager $eventsManager
+        TranslationService $translationService
     ) {
         $this->translationService = $translationService;
-        $this->eventsManager = $eventsManager;
     }
 
     /**
@@ -155,19 +147,15 @@ class AiTranslationObserver implements ObserverInterface
     private function sendSystemMessage(string $title, string $content, string $icon = 'ri-translate'): void
     {
         try {
-            $this->eventsManager->dispatch('Weline_Admin::msg', [
-                'data' => [
-                    'title' => $title,
-                    'content' => $content,
-                    'is_read' => false,
-                    'is_icon' => 1,
-                    'is_img' => 0,
-                    'avatar' => $icon
-                ]
-            ]);
+            w_msg(
+                'ai_translation',
+                'warning',
+                $title,
+                $content,
+                ['icon' => $icon, 'source_module' => 'Weline_I18n']
+            );
         } catch (\Exception $e) {
-            // 记录日志，避免消息发送失败影响主流程
-            error_log("发送AI翻译事件系统消息失败: " . $e->getMessage());
+            Env::log_error('i18n', "发送AI翻译事件系统消息失败: " . $e->getMessage());
         }
     }
 }
