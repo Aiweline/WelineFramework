@@ -1,0 +1,245 @@
+<?php
+/**
+ * 消息订阅管理页面
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $topics_grouped 按分组的主题
+ * @var array $subscription_map 订阅映射
+ * @var array $channels 渠道列表
+ * @var array $types 消息类型
+ * @var array $user_contacts 用户联系人（按渠道分组）
+ */
+$topics_grouped = $topics_grouped ?? [];
+$subscription_map = $subscription_map ?? [];
+$channels = $channels ?? [];
+$types = $types ?? [];
+$user_contacts = $user_contacts ?? [];
+?>
+
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0 font-size-18"><lang>消息订阅</lang></h4>
+            <div>
+                <a href="<?= $this->getBackendUrl('*/backend/usercontact') ?>" class="btn btn-outline-primary">
+                    <i class="mdi mdi-account-cog me-1"></i><lang>管理联系人</lang>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class='row'>
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="alert alert-info weline-subscription-tip">
+                    <i class="mdi mdi-information-outline me-2"></i>
+                    <lang>选择您希望通过哪些渠道接收不同类型的消息通知。外部渠道（邮件、飞书等）需要先配置联系人。</lang>
+                    <a href="<?= $this->getBackendUrl('*/backend/usercontact') ?>"><lang>管理联系人</lang></a>
+                </div>
+
+                <?php if (empty($topics_grouped)): ?>
+                <div class="weline-subscription-empty text-center py-5">
+                    <i class="mdi mdi-bell-off weline-subscription-empty-icon"></i>
+                    <p class="mt-3"><lang>暂无可订阅的消息主题</lang></p>
+                </div>
+                <?php else: ?>
+                
+                <?php foreach ($topics_grouped as $groupName => $topics): ?>
+                <div class="weline-subscription-group mb-4">
+                    <h5 class="weline-subscription-group-title">
+                        <i class="mdi mdi-folder-outline me-2"></i><?= htmlspecialchars($groupName) ?>
+                    </h5>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-bordered weline-subscription-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 30%"><lang>消息主题</lang></th>
+                                    <?php foreach ($channels as $channelCode => $channelInfo): ?>
+                                    <th class="text-center" style="width: <?= (70 / count($channels)) ?>%">
+                                        <i class="<?= $channelInfo['icon'] ?> me-1"></i><?= $channelInfo['name'] ?>
+                                        <?php if ($channelCode !== 'backend'): ?>
+                                        <?php $hasContact = !empty($user_contacts[$channelCode]); ?>
+                                        <br>
+                                        <small class="<?= $hasContact ? 'text-success' : 'text-warning' ?>">
+                                            <?= $hasContact ? __('已配置联系人') : __('未配置联系人') ?>
+                                        </small>
+                                        <?php endif; ?>
+                                    </th>
+                                    <?php endforeach; ?>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($topics as $topic): ?>
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <?php if (!empty($topic['icon'])): ?>
+                                            <i class="<?= $topic['icon'] ?> me-2" style="color: <?= $topic['color'] ?? 'inherit' ?>"></i>
+                                            <?php endif; ?>
+                                            <div>
+                                                <strong><?= htmlspecialchars($topic['topic_name'] ?? '') ?></strong>
+                                                <?php if (!empty($topic['description'])): ?>
+                                                <br><small class="text-muted"><?= htmlspecialchars($topic['description']) ?></small>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <?php foreach ($channels as $channelCode => $channelInfo): ?>
+                                    <?php
+                                    $topicCode = $topic['topic_code'] ?? '';
+                                    $subKey = $topicCode . '_' . $channelCode;
+                                    $sub = $subscription_map[$subKey] ?? null;
+                                    $isEnabled = $sub ? (bool) $sub['is_enabled'] : false;
+                                    $minType = $sub ? ($sub['min_type'] ?? 'info') : 'info';
+                                    ?>
+                                    <td class="text-center weline-subscription-cell">
+                                        <div class="form-check form-switch d-inline-block">
+                                            <input class="form-check-input weline-subscription-toggle" 
+                                                   type="checkbox" 
+                                                   <?= $isEnabled ? 'checked' : '' ?>
+                                                   data-topic="<?= htmlspecialchars($topicCode) ?>"
+                                                   data-channel="<?= $channelCode ?>"
+                                                   onchange="WelineSubscription.toggle(this)">
+                                        </div>
+                                        <?php if ($isEnabled): ?>
+                                        <div class="mt-1">
+                                            <select class="form-select form-select-sm weline-subscription-min-type"
+                                                    data-topic="<?= htmlspecialchars($topicCode) ?>"
+                                                    data-channel="<?= $channelCode ?>"
+                                                    onchange="WelineSubscription.saveMinType(this)"
+                                                    style="font-size: 0.75rem; padding: 0.1rem 1.5rem 0.1rem 0.25rem;">
+                                                <?php foreach ($types as $type): ?>
+                                                <option value="<?= $type['value'] ?>" <?= $type['value'] === $minType ? 'selected' : '' ?>>
+                                                    <?= __('≥') ?> <?= $type['label'] ?>
+                                                </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <?php endif; ?>
+                                    </td>
+                                    <?php endforeach; ?>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.weline-subscription-tip {
+    background: var(--backend-color-info-bg, #cff4fc);
+    border-color: var(--backend-color-info-border, #9eeaf9);
+    color: var(--backend-color-info-text, #055160);
+}
+.weline-subscription-empty-icon {
+    font-size: 4rem;
+    color: var(--backend-color-text-muted, #6c757d);
+}
+.weline-subscription-group-title {
+    padding: 0.75rem 0;
+    border-bottom: 2px solid var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-primary, #212529);
+    margin-bottom: 1rem;
+}
+.weline-subscription-table {
+    background: var(--backend-color-card-bg, #fff);
+}
+.weline-subscription-table th {
+    background: var(--backend-color-card-header-bg, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    font-weight: 600;
+}
+.weline-subscription-table td {
+    vertical-align: middle;
+}
+.weline-subscription-cell {
+    min-width: 120px;
+}
+.weline-subscription-toggle {
+    width: 2.5rem;
+    height: 1.25rem;
+}
+.weline-subscription-min-type {
+    max-width: 100px;
+    margin: 0 auto;
+}
+</style>
+
+<script>
+(function() {
+    'use strict';
+
+    var WelineSubscription = {
+        toggle: function(checkbox) {
+            var topicCode = checkbox.dataset.topic;
+            var channel = checkbox.dataset.channel;
+
+            fetch('<?= $this->getBackendUrl('*/backend/notificationsubscription/toggle') ?>', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'topic_code=' + encodeURIComponent(topicCode) + '&channel=' + encodeURIComponent(channel)
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    BackendToast.success(data.message);
+                    setTimeout(function() { window.location.reload(); }, 500);
+                } else {
+                    BackendToast.error(data.message);
+                    checkbox.checked = !checkbox.checked;
+                }
+            })
+            .catch(function(error) {
+                console.error('Error:', error);
+                BackendToast.error('<?= __('操作失败') ?>');
+                checkbox.checked = !checkbox.checked;
+            });
+        },
+
+        saveMinType: function(select) {
+            var topicCode = select.dataset.topic;
+            var channel = select.dataset.channel;
+            var minType = select.value;
+
+            fetch('<?= $this->getBackendUrl('*/backend/notificationsubscription/save') ?>', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'topic_code=' + encodeURIComponent(topicCode) + 
+                      '&channel=' + encodeURIComponent(channel) + 
+                      '&min_type=' + encodeURIComponent(minType) +
+                      '&is_enabled=1'
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    BackendToast.success(data.message);
+                } else {
+                    BackendToast.error(data.message);
+                }
+            })
+            .catch(function(error) {
+                console.error('Error:', error);
+                BackendToast.error('<?= __('保存失败') ?>');
+            });
+        }
+    };
+
+    window.WelineSubscription = WelineSubscription;
+})();
+</script>
