@@ -44,6 +44,14 @@ class QuickBuildAggregator
      */
     public function startProvisioning(string $domain, int $registrarAccountId, array $options = []): array
     {
+        // 参数预检
+        if (trim($domain) === '') {
+            return ['success' => false, 'message' => __('域名不能为空')];
+        }
+        if ($registrarAccountId <= 0) {
+            return ['success' => false, 'message' => __('请选择域名商账号')];
+        }
+
         $eventData = [
             'data' => [
                 'domain' => $domain,
@@ -54,7 +62,17 @@ class QuickBuildAggregator
         ];
         $this->eventsManager->dispatch('GuoLaiRen_PageBuilder::quickbuild::start_provisioning', $eventData);
 
-        return $eventData['data']['result'] ?? ['success' => false, 'message' => __('无可用配置服务')];
+        $result = $eventData['data']['result'] ?? null;
+        
+        if ($result === null) {
+            // 没有模块处理该事件，返回详细诊断信息
+            return [
+                'success' => false,
+                'message' => __('无可用配置服务。请检查 Weline_Saas 模块是否已安装并正确注册事件观察者 (GuoLaiRen_PageBuilder::quickbuild::start_provisioning)。'),
+            ];
+        }
+        
+        return $result;
     }
 
     /**
@@ -133,11 +151,12 @@ class QuickBuildAggregator
     /**
      * 发起域名购买
      */
-    public function purchaseDomain(int $accountId, array $items): array
+    public function purchaseDomain(int $accountId, array $items, bool $autoResolve = false): array
     {
         return $this->queryService->execute('websites', 'purchaseDomain', [
             'account_id' => $accountId,
             'items' => $items,
+            'auto_resolve' => $autoResolve,
         ]);
     }
 
@@ -168,6 +187,34 @@ class QuickBuildAggregator
     {
         return $this->queryService->execute('websites', 'getRegistrarInfo', [
             'registrar_code' => $registrarCode,
+        ]);
+    }
+
+    // ── CDN 相关查询 (CdnQueryProvider) ──
+
+    /**
+     * 查询可用的 CDN 适配器列表
+     */
+    public function queryCdnAdapters(): array
+    {
+        return $this->queryService->execute('cdn', 'getAdapters');
+    }
+
+    /**
+     * 查询 CDN 账户列表
+     */
+    public function queryCdnAccounts(array $filter = []): array
+    {
+        return $this->queryService->execute('cdn', 'getAccounts', $filter);
+    }
+
+    /**
+     * 获取指定适配器的默认 CDN 账户
+     */
+    public function getCdnDefaultAccount(string $adapter): ?array
+    {
+        return $this->queryService->execute('cdn', 'getDefaultAccount', [
+            'adapter' => $adapter,
         ]);
     }
 }
