@@ -4,6 +4,4 @@
 
 ## 任务列表
 
-- [ ] 创建 Observer/LegacyNotificationObserver.php 兼容层
-- [ ] 修改 etc/event.xml 注册 Observer
-- [ ] 验证旧事件调用可以正常转发
+- [x] ~~旧事件兼容层~~ **已取消**：按最新方案，不实现兼容层，直接使用 `w_msg()` / 新事件即可。
