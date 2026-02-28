@@ -378,28 +378,24 @@ class CursorAiService implements CursorAiInterface
         $hasContent = !empty(trim($response));
         $error = null;
         
-            if (!$hasContent) {
+        if (!$hasContent) {
+            // 清理 stderr 中的 ANSI 转义序列
+            $stderrClean = '';
+            if ($stderr) {
+                $stderrClean = preg_replace('/\x1b\[[0-9;]*m/', '', trim($stderr));
+            }
+            
             if ($returnCode !== 0) {
                 $error = "CLI 错误 (code {$returnCode})";
-                if ($stderr) {
-                    $stderrClean = preg_replace('/\x1b\[[0-9;]*m/', '', trim($stderr));
-                    if ($stderrClean) {
-                        $error .= ': ' . mb_substr($stderrClean, 0, 200);
-                    }
+                if ($stderrClean) {
+                    $error .= ': ' . mb_substr($stderrClean, 0, 300);
                 }
+            } elseif ($stderrClean) {
+                // 有 stderr 输出，优先使用 stderr 作为错误信息（通常是网络/连接问题）
+                $error = mb_substr($stderrClean, 0, 300);
             } else {
-                $apiKey = $this->getApiKey();
-                if (!$apiKey) {
-                    $error = "缺少 Cursor API Key，请配置 env.php 中的 cursor_api_key 或设置环境变量 CURSOR_API_KEY";
-                } else {
-                    $error = "Cursor Agent 无响应（可能是网络问题或 API Key 无效）";
-                }
-                if ($stderr) {
-                    $stderrClean = preg_replace('/\x1b\[[0-9;]*m/', '', trim($stderr));
-                    if ($stderrClean) {
-                        $error .= ' - ' . mb_substr($stderrClean, 0, 200);
-                    }
-                }
+                // 无 stderr，才推测可能的原因
+                $error = "Cursor Agent 无响应（可能是网络问题，请检查网络连接或运行 'agent login' 确认登录状态）";
             }
         }
 
