@@ -21,4 +21,10 @@
     <event name="Framework_Http::response_redirect_before">
         <observer name="Weline_Backend::response_redirect_before" instance="Weline\Backend\Observer\ResponseRedirectBefore" disabled="false" shared="true" sort="0"/>
     </event>
+    <event name="Weline_Backend::application::system_notification">
+        <observer name="Weline_Backend::system_notification" instance="Weline\Backend\Observer\SystemNotificationObserver" disabled="false" shared="true" sort="0"/>
+    </event>
+    <event name="Weline_Backend::user::registered">
+        <observer name="Weline_Backend::create_user_contacts" instance="Weline\Backend\Observer\UserRegisteredObserver" disabled="false" shared="true" sort="0"/>
+    </event>
 </config>

@@ -1,0 +1,282 @@
+<?php
+/**
+ * 用户联系人管理页面
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $contacts_grouped 按渠道分组的联系人
+ * @var array $channels 渠道列表
+ */
+$contacts_grouped = $contacts_grouped ?? [];
+$channels = $channels ?? [];
+?>
+
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0 font-size-18"><lang>我的联系人</lang></h4>
+            <div>
+                <button type="button" class="btn btn-primary" onclick="WelineUserContact.showAddModal()">
+                    <i class="mdi mdi-plus me-1"></i><lang>添加联系人</lang>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class='row'>
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
+
+<div class="row">
+    <?php foreach ($channels as $channelCode => $channelInfo): ?>
+    <div class="col-xl-6 col-lg-6">
+        <div class="card weline-user-contact-card">
+            <div class="card-header weline-user-contact-card-header">
+                <h5 class="card-title mb-0">
+                    <i class="<?= $channelInfo['icon'] ?> me-2"></i><?= $channelInfo['name'] ?>
+                </h5>
+            </div>
+            <div class="card-body">
+                <?php
+                $channelContacts = $contacts_grouped[$channelCode] ?? [];
+                if (empty($channelContacts)):
+                ?>
+                <div class="weline-user-contact-empty">
+                    <i class="mdi mdi-account-off weline-user-contact-empty-icon"></i>
+                    <p class="mb-0"><lang>暂无联系人</lang></p>
+                    <button type="button" class="btn btn-sm btn-outline-primary mt-2" 
+                            onclick="WelineUserContact.showAddModal('<?= $channelCode ?>')">
+                        <i class="mdi mdi-plus me-1"></i><lang>添加</lang>
+                    </button>
+                </div>
+                <?php else: ?>
+                <ul class="list-group list-group-flush">
+                    <?php foreach ($channelContacts as $contact): ?>
+                    <li class="list-group-item weline-user-contact-item d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center">
+                            <?php if ($contact['is_default']): ?>
+                            <span class="badge bg-primary me-2"><lang>默认</lang></span>
+                            <?php endif; ?>
+                            <div>
+                                <div class="weline-user-contact-value"><?= htmlspecialchars($contact['contact_value']) ?></div>
+                                <?php if (!empty($contact['contact_name'])): ?>
+                                <small class="weline-user-contact-name"><?= htmlspecialchars($contact['contact_name']) ?></small>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <div class="weline-user-contact-actions">
+                            <?php if (!$contact['is_default']): ?>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" 
+                                    onclick="WelineUserContact.setDefault(<?= $contact['contact_id'] ?>)"
+                                    title="<?= __('设为默认') ?>">
+                                <i class="mdi mdi-star-outline"></i>
+                            </button>
+                            <?php endif; ?>
+                            <button type="button" class="btn btn-sm btn-outline-danger" 
+                                    onclick="WelineUserContact.deleteContact(<?= $contact['contact_id'] ?>)"
+                                    title="<?= __('删除') ?>">
+                                <i class="mdi mdi-delete-outline"></i>
+                            </button>
+                        </div>
+                    </li>
+                    <?php endforeach; ?>
+                </ul>
+                <div class="mt-3">
+                    <button type="button" class="btn btn-sm btn-outline-primary" 
+                            onclick="WelineUserContact.showAddModal('<?= $channelCode ?>')">
+                        <i class="mdi mdi-plus me-1"></i><lang>添加更多</lang>
+                    </button>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    <?php endforeach; ?>
+</div>
+
+<div class="modal fade" id="addContactModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><lang>添加联系人</lang></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addContactForm">
+                    <div class="mb-3">
+                        <label class="form-label"><lang>渠道</lang></label>
+                        <select class="form-select" name="channel_code" id="contactChannelCode" required>
+                            <option value=""><lang>请选择渠道</lang></option>
+                            <?php foreach ($channels as $code => $info): ?>
+                            <option value="<?= $code ?>"><?= $info['name'] ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label"><lang>联系方式</lang></label>
+                        <input type="text" class="form-control" name="contact_value" id="contactValue" required
+                               placeholder="<?= __('邮箱、手机号或用户 ID') ?>">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label"><lang>备注名称</lang></label>
+                        <input type="text" class="form-control" name="contact_name" id="contactName"
+                               placeholder="<?= __('可选') ?>">
+                    </div>
+                    <div class="form-check mb-3">
+                        <input type="checkbox" class="form-check-input" name="is_default" id="contactIsDefault" value="1">
+                        <label class="form-check-label" for="contactIsDefault"><lang>设为默认</lang></label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><lang>取消</lang></button>
+                <button type="button" class="btn btn-primary" onclick="WelineUserContact.saveContact()"><lang>保存</lang></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.weline-user-contact-card {
+    margin-bottom: 1.5rem;
+}
+.weline-user-contact-card-header {
+    background: var(--backend-color-card-header-bg, #f8f9fa);
+    border-bottom: 1px solid var(--backend-color-border-default, #dee2e6);
+}
+.weline-user-contact-empty {
+    text-align: center;
+    padding: 2rem;
+    color: var(--backend-color-text-muted, #6c757d);
+}
+.weline-user-contact-empty-icon {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+}
+.weline-user-contact-item {
+    background: var(--backend-color-card-bg, #fff);
+    border-color: var(--backend-color-border-light, #e9ecef);
+}
+.weline-user-contact-value {
+    font-weight: 500;
+    color: var(--backend-color-text-primary, #212529);
+}
+.weline-user-contact-name {
+    color: var(--backend-color-text-muted, #6c757d);
+}
+.weline-user-contact-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+</style>
+
+<script>
+(function() {
+    'use strict';
+
+    var WelineUserContact = {
+        modal: null,
+
+        init: function() {
+            var modalEl = document.getElementById('addContactModal');
+            if (modalEl && typeof bootstrap !== 'undefined') {
+                this.modal = new bootstrap.Modal(modalEl);
+            }
+        },
+
+        showAddModal: function(channelCode) {
+            document.getElementById('addContactForm').reset();
+            if (channelCode) {
+                document.getElementById('contactChannelCode').value = channelCode;
+            }
+            if (this.modal) {
+                this.modal.show();
+            }
+        },
+
+        saveContact: function() {
+            var form = document.getElementById('addContactForm');
+            var formData = new FormData(form);
+
+            fetch('<?= $this->getBackendUrl('*/backend/usercontact/save') ?>', {
+                method: 'POST',
+                body: new URLSearchParams(formData)
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    BackendToast.success(data.message);
+                    if (WelineUserContact.modal) {
+                        WelineUserContact.modal.hide();
+                    }
+                    setTimeout(function() { window.location.reload(); }, 1000);
+                } else {
+                    BackendToast.error(data.message);
+                }
+            })
+            .catch(function(error) {
+                console.error('Error:', error);
+                BackendToast.error('<?= __('保存失败') ?>');
+            });
+        },
+
+        setDefault: function(contactId) {
+            BackendConfirm.show('<?= __('确定要将此联系人设为默认吗？') ?>').then(function(confirmed) {
+                if (!confirmed) return;
+
+                fetch('<?= $this->getBackendUrl('*/backend/usercontact/setDefault') ?>', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'contact_id=' + contactId
+                })
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        BackendToast.success(data.message);
+                        setTimeout(function() { window.location.reload(); }, 1000);
+                    } else {
+                        BackendToast.error(data.message);
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Error:', error);
+                    BackendToast.error('<?= __('设置失败') ?>');
+                });
+            });
+        },
+
+        deleteContact: function(contactId) {
+            BackendConfirm.show('<?= __('确定要删除此联系人吗？') ?>').then(function(confirmed) {
+                if (!confirmed) return;
+
+                fetch('<?= $this->getBackendUrl('*/backend/usercontact/delete') ?>', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'contact_id=' + contactId
+                })
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        BackendToast.success(data.message);
+                        setTimeout(function() { window.location.reload(); }, 1000);
+                    } else {
+                        BackendToast.error(data.message);
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Error:', error);
+                    BackendToast.error('<?= __('删除失败') ?>');
+                });
+            });
+        }
+    };
+
+    window.WelineUserContact = WelineUserContact;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        WelineUserContact.init();
+    });
+})();
+</script>
