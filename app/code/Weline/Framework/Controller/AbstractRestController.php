@@ -43,6 +43,8 @@ abstract class AbstractRestController extends Core
     protected function fetch($data, string $type = self::fetch_JSON)
     {
         $result = null;
+        $response = $this->request->getResponse();
+        
         switch ($type) {
             case self::fetch_STRING:
                 foreach ($data as $key => $datum) {
@@ -52,13 +54,13 @@ abstract class AbstractRestController extends Core
 
                 break;
             case self::fetch_XML:
-                header('Content-type: text/xml; charset=UTF-8');
+                $response->setHeader('Content-Type', 'text/xml; charset=UTF-8');
                 $result = $this->setXml($data);
 
                 break;
             case self::fetch_JSON:
             default:
-                header('Content-Type: application/json; charset=utf-8');
+                $response->setHeader('Content-Type', 'application/json; charset=utf-8');
                 // 将所有值转换为字符串
                 $data = $this->convertAllToString($data);
                 $result = json_encode($data, JSON_UNESCAPED_UNICODE);

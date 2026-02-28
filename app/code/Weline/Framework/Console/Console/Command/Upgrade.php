@@ -407,6 +407,317 @@ class Upgrade extends CommandAbstract
     }
 
     /**
+     * 增量刷新指定模块的命令
+     * 仅重新扫描指定模块的命令，合并到现有命令列表
+     *
+     * @param array $moduleNames 需要刷新的模块名列表
+     * @return array 更新后的命令列表
+     */
+    public function refreshForModules(array $moduleNames): array
+    {
+        // 1. 加载现有命令
+        $commands = is_file(Env::path_COMMANDS_FILE) 
+            ? require Env::path_COMMANDS_FILE 
+            : [];
+        
+        // 2. 清除目标模块的命令
+        $commands = $this->clearModuleCommands($commands, $moduleNames);
+        
+        // 3. 扫描目标模块的命令
+        $newCommands = $this->scanModulesCommands($moduleNames);
+        
+        // 4. 合并命令
+        foreach ($newCommands as $group => $groupCommands) {
+            if (!isset($commands[$group])) {
+                $commands[$group] = [];
+            }
+            $commands[$group] = array_merge($commands[$group], $groupCommands);
+        }
+        
+        // 5. 注册别名
+        $commands = $this->registerAliases($commands);
+        
+        // 6. 写入文件
+        $this->writeCommandsFile($commands);
+        
+        return $commands;
+    }
+    
+    /**
+     * 清除指定模块的命令
+     *
+     * @param array $commands 命令列表
+     * @param array $moduleNames 要清除的模块名列表
+     * @return array 清理后的命令列表
+     */
+    private function clearModuleCommands(array $commands, array $moduleNames): array
+    {
+        foreach ($commands as $group => &$groupCommands) {
+            foreach ($groupCommands as $command => $commandData) {
+                $module = $commandData['module'] ?? '';
+                if (in_array($module, $moduleNames, true)) {
+                    unset($groupCommands[$command]);
+                }
+            }
+            // 如果组内没有命令了，移除整个组
+            if (empty($groupCommands)) {
+                unset($commands[$group]);
+            }
+        }
+        
+        return $commands;
+    }
+    
+    /**
+     * 扫描指定模块的命令
+     *
+     * @param array $moduleNames 模块名列表
+     * @return array 命令列表
+     */
+    private function scanModulesCommands(array $moduleNames): array
+    {
+        $commands = [];
+        $processedClasses = [];
+        $processedFiles = [];
+        $env = Env::getInstance();
+        
+        foreach ($moduleNames as $moduleName) {
+            // 框架模块特殊处理
+            if ($moduleName === 'Weline_Framework') {
+                $frameworkCommands = $this->scanFrameworkCommands($processedClasses);
+                foreach ($frameworkCommands as $group => $groupCommands) {
+                    if (!isset($commands[$group])) {
+                        $commands[$group] = [];
+                    }
+                    $commands[$group] = array_merge($commands[$group], $groupCommands);
+                }
+                continue;
+            }
+            
+            // 普通模块
+            try {
+                $module = $env->getModuleInfo($moduleName);
+            } catch (\Exception $e) {
+                continue;
+            }
+            
+            if (empty($module['base_path']) || !($module['status'] ?? false)) {
+                continue;
+            }
+            
+            $pattern = $module['base_path'] . 'Console' . DS . '*';
+            $files = [];
+            $this->scan->globFile($pattern, $files, '.php', $module['base_path'], '', true, true);
+            
+            foreach ($files as $file) {
+                $class = $module['namespace_path'] . '\\' . $file;
+                $filePath = $module['base_path'] . str_replace('\\', DS, $file) . '.php';
+                $fileReal = is_file($filePath) ? realpath($filePath) : $filePath;
+                
+                if ($fileReal && isset($processedFiles[$fileReal])) {
+                    continue;
+                }
+                
+                $before = get_declared_classes();
+                if ($fileReal && is_file($fileReal)) {
+                    include_once $fileReal;
+                    $processedFiles[$fileReal] = true;
+                }
+                $after = get_declared_classes();
+                $newClasses = array_diff($after, $before);
+                
+                foreach ($newClasses as $declaredClass) {
+                    if (isset($processedClasses[$declaredClass])) {
+                        continue;
+                    }
+                    try {
+                        $classRef = ObjectManager::getReflectionInstance($declaredClass);
+                        if ($classRef->isAbstract() || $classRef->isTrait() || $classRef->isInterface()) {
+                            continue;
+                        }
+                        if ($this->isStaticClass($declaredClass)) {
+                            continue;
+                        }
+                        $command_class = ObjectManager::getInstance($declaredClass);
+                        if ($command_class instanceof CommandInterface) {
+                            $file_array = explode('\\', $file);
+                            array_shift($file_array);
+                            $fileKey = implode(':', $file_array);
+                            $fileKey = w_split_by_capital($fileKey);
+                            $file_str = '';
+                            $pre_end_with = '';
+                            $pre_is_one = false;
+                            foreach ($fileKey as $key => &$item) {
+                                if (1 == strlen($item)) {
+                                    $file_str .= $item;
+                                    $pre_is_one = true;
+                                    $pre_end_with = $item[strlen($item) - 1];
+                                    continue;
+                                }
+                                if ($pre_is_one) {
+                                    $file_str .= $item;
+                                    $pre_end_with = $item[strlen($item) - 1];
+                                    $pre_is_one = false;
+                                    continue;
+                                }
+                                if ($pre_end_with and ':' === $pre_end_with) {
+                                    $file_str .= $item;
+                                    $pre_end_with = $item[strlen($item) - 1];
+                                    continue;
+                                }
+                                $pre_end_with = $item[strlen($item) - 1];
+                                if (':' === $pre_end_with) {
+                                    $file_str .= $item;
+                                    continue;
+                                }
+                                if ($key !== 0) {
+                                    $file_str .= '-' . $item;
+                                } else {
+                                    $file_str .= $item;
+                                }
+                            }
+                            $command = str_replace('\\', ':', strtolower($file_str));
+                            array_pop($file_array);
+                            $command_prefix = strtolower(implode(':', $file_array));
+                            $commands[$command_prefix . '#' . $moduleName][$command] = [
+                                'tip' => $command_class->tip(),
+                                'class' => $declaredClass,
+                                'type' => 'module',
+                                'module' => $module['name']
+                            ];
+                            
+                            // 处理别名
+                            $aliases = [];
+                            if (defined($declaredClass . '::ALIASES')) {
+                                $aliases = $declaredClass::ALIASES;
+                            }
+                            if (!empty($aliases) && is_array($aliases)) {
+                                foreach ($aliases as $alias) {
+                                    if (is_string($alias) && !empty($alias)) {
+                                        $commands[$command_prefix . '#' . $moduleName][$alias] = [
+                                            'tip' => $command_class->tip(),
+                                            'class' => $declaredClass,
+                                            'type' => 'module',
+                                            'module' => $module['name']
+                                        ];
+                                    }
+                                }
+                            }
+                            $processedClasses[$declaredClass] = true;
+                        }
+                    } catch (\Throwable $exception) {
+                        continue;
+                    }
+                }
+            }
+        }
+        
+        return $commands;
+    }
+    
+    /**
+     * 扫描框架命令
+     *
+     * @param array &$processedClasses 已处理的类
+     * @return array 框架命令列表
+     */
+    private function scanFrameworkCommands(array &$processedClasses): array
+    {
+        $commands = [];
+        $framework_files = [];
+        
+        $this->scan->globFile(
+            Env::framework_path . '*' . DS . 'Console' . DS . '*',
+            $framework_files,
+            '.php',
+            Env::framework_path,
+            Env::framework_name . '\\Framework\\',
+            true,
+            true
+        );
+        $this->scan->globFile(
+            Env::framework_code_path . '*' . DS . 'Console' . DS . '*',
+            $framework_files,
+            '.php',
+            Env::framework_code_path,
+            'Weline\\Framework\\',
+            true,
+            true
+        );
+        
+        foreach ($framework_files as $class) {
+            if (isset($processedClasses[$class])) {
+                continue;
+            }
+            try {
+                $classRef = ObjectManager::getReflectionInstance($class);
+                if ($classRef->isAbstract() || $classRef->isTrait() || $classRef->isInterface()) {
+                    continue;
+                }
+                if ($this->isStaticClass($class)) {
+                    continue;
+                }
+                $command_class = ObjectManager::getInstance($class);
+                if ($command_class instanceof CommandInterface) {
+                    $class_array = explode('\\', $class);
+                    array_shift($class_array);
+                    array_shift($class_array);
+                    $framework_module = array_shift($class_array);
+                    array_shift($class_array);
+                    $command = implode(':', $class_array);
+                    $command = str_replace('\\', ':', strtolower($command));
+                    array_pop($class_array);
+                    $command_prefix = strtolower(implode(':', $class_array));
+                    $commands[$command_prefix . '#Weline_Framework_' . $framework_module][$command] = [
+                        'tip' => $command_class->tip(),
+                        'class' => $class,
+                        'type' => 'framework',
+                        'module' => 'Weline_Framework'
+                    ];
+                    
+                    $aliases = [];
+                    if (defined($class . '::ALIASES')) {
+                        $aliases = $class::ALIASES;
+                    }
+                    if (!empty($aliases) && is_array($aliases)) {
+                        foreach ($aliases as $alias) {
+                            if (is_string($alias) && !empty($alias)) {
+                                $commands[$command_prefix . '#Weline_Framework_' . $framework_module][$alias] = [
+                                    'tip' => $command_class->tip(),
+                                    'class' => $class,
+                                    'type' => 'framework',
+                                    'module' => 'Weline_Framework'
+                                ];
+                            }
+                        }
+                    }
+                    $processedClasses[$class] = true;
+                }
+            } catch (\Throwable $exception) {
+                continue;
+            }
+        }
+        
+        return $commands;
+    }
+    
+    /**
+     * 写入命令文件
+     *
+     * @param array $commands 命令列表
+     * @return void
+     */
+    private function writeCommandsFile(array $commands): void
+    {
+        /** @var \Weline\Framework\System\File\Io\File $file */
+        $file = ObjectManager::getInstance(\Weline\Framework\System\File\Io\File::class);
+        $file->open(Env::path_COMMANDS_FILE, $file::mode_w_add);
+        $text = '<?php return ' . w_var_export($commands, true) . ';';
+        $file->write($text);
+        $file->close();
+    }
+
+    /**
      * @DESC         |注册命令别名
      *
      * @Author       秋枫雁飞
