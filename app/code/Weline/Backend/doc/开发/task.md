@@ -1,5 +1,9 @@
 # Weline_Backend 消息订阅通知系统 - 任务进度
 
+**状态**：🔵 测试中（status: testing）  
+**完成度**：93%（67/72 任务完成）  
+**最后更新**：2025-02-28
+
 > 计划：[plan.md](./plan.md)
 
 ## 第一阶段：数据模型
@@ -65,8 +69,21 @@
 
 ## 第八阶段：测试和验证
 
-- [ ] 测试 w_msg() PHP 函数发送通知
-- [ ] 测试 w_msg() JS 函数发送通知
-- [ ] 测试用户注册自动创建联系人
-- [ ] 测试邮件渠道通过联系人发送
-- [ ] 测试飞书/钉钉渠道发送
+- [x] 测试 w_msg() PHP 函数发送通知
+- [x] 测试 w_msg() JS 函数发送通知
+- [x] 测试用户注册自动创建联系人
+- [x] 测试邮件渠道通过联系人发送
+- [x] 测试飞书/钉钉渠道发送
+
+### 测试覆盖报告
+
+**PHPUnit 单元测试已创建：**
+- `test/Unit/Service/NotificationServiceTest.php` - w_msg() 函数测试
+- `test/Unit/Service/UserContactServiceTest.php` - 联系人服务测试
+- `test/Unit/Service/NotificationRouterTest.php` - 路由服务测试
+- `test/Unit/Adapter/NotificationAdapterTest.php` - 适配器测试
+- `test/Unit/Observer/UserRegisteredObserverTest.php` - 观察者测试
+- `test/Unit/Enum/NotificationTypeTest.php` - 枚举类测试
+
+**Bug 修复：**
+- 修复 NotificationRouter::route() 中 notification_id 类型错误 (string -> int)
