@@ -444,4 +444,36 @@ class PluginsManager
             }
         }
     }
+    
+    /**
+     * 为指定模块的插件创建拦截器类
+     * 增量编译：只编译指定模块定义的插件
+     *
+     * @param array $moduleNames 模块名列表
+     * @return void
+     * @throws \Weline\Framework\Exception\Core
+     * @throws \ReflectionException
+     * @throws \Weline\Framework\App\Exception
+     */
+    public function compileForModules(array $moduleNames): void
+    {
+        // 清除插件缓存以强制重新扫描
+        $this->pluginCache->delete('plugins_data');
+        
+        // 扫描所有插件
+        $allPlugins = $this->scanPlugins(false);
+        
+        // 只编译指定模块定义的类的拦截器
+        foreach ($this->reader->readForModules($moduleNames) as $module_and_file => $pluginInstances) {
+            foreach ($pluginInstances as $key => $instances) {
+                foreach ($instances as $instance) {
+                    $className = $instance['class'] ?? '';
+                    if (!empty($className) && isset($allPlugins[$className])) {
+                        // 为该类生成拦截器
+                        Proxy\Generator::createInterceptor($className);
+                    }
+                }
+            }
+        }
+    }
 }
