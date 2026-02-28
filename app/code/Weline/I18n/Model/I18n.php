@@ -599,6 +599,14 @@ class I18n
             echo str_repeat("=", 80) . "\n\n";
         }
         
+        // 翻译数据量大，提前提升内存限制，避免在收集过程中内存溢出
+        $_prevMemLimit = ini_get('memory_limit');
+        $currentLimit = $this->parseMemoryLimit($_prevMemLimit);
+        $requiredLimit = 512 * 1024 * 1024; // 512MB
+        if ($currentLimit < $requiredLimit) {
+            ini_set('memory_limit', '512M');
+        }
+        
         $directories = [];
         foreach (Env::getInstance()->getActiveModules() as $module) {
             if ($moduleName !== null && $module['name'] !== $moduleName) {
@@ -651,9 +659,6 @@ class I18n
             }
             unset($module_words); // 每个模块处理完后释放
         }
-        // 翻译数据量大，后续多处 var_export 需要较多内存；在此统一提升，方法结束时恢复
-        $_prevMemLimit = ini_get('memory_limit');
-        ini_set('memory_limit', '512M');
         
         if ($translations or isset($locals_words[Env::default_LANGUAGE_CODE])) {
             $default_local_words = array_merge($translations, $locals_words[Env::default_LANGUAGE_CODE] ?? []);
