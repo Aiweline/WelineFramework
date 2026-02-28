@@ -1633,7 +1633,19 @@ $statusOptions = $this->getData('statusOptions') ?? [];
                     '<p style="color:var(--backend-color-warning,#f1b44c);">' + escapeHtml(group.registrar_name || '') + ' <?= __('是 DNS 服务商，不是域名注册商。域名归属以实际注册商为准。') ?></p>' +
                 '</div>';
             } else {
-                html += '<div class="pb-dm-empty" style="padding:20px;"><p><?= __('该账户下暂无域名') ?></p></div>';
+                // 根据当前筛选状态显示不同的提示
+                if (domainListState.status === 'pulled') {
+                    html += '<div class="pb-dm-empty" style="padding:20px;">' +
+                        '<i class="mdi mdi-cloud-download-outline" style="font-size:1.5rem;color:var(--backend-color-primary,#556ee6);"></i>' +
+                        '<p><?= __('该账户下尚无已拉取的域名') ?></p>' +
+                        '<p style="font-size:0.85rem;color:var(--backend-color-text-secondary,#6c757d);">' +
+                        '<?= __('请切换上方「状态」为「全部状态」或「未拉取」，从线上选择域名拉取到本地') ?></p>' +
+                        '<button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm" style="margin-top:8px;" onclick="document.getElementById(\'pb-dm-domain-status\').value=\'\';document.getElementById(\'pb-dm-domain-status\').dispatchEvent(new Event(\'change\'));">' +
+                        '<i class="mdi mdi-filter-off"></i> <?= __('查看全部状态') ?></button>' +
+                        '</div>';
+                } else {
+                    html += '<div class="pb-dm-empty" style="padding:20px;"><p><?= __('该账户下暂无域名') ?></p></div>';
+                }
             }
             html += '</div>';
 
@@ -3322,7 +3334,14 @@ $statusOptions = $this->getData('statusOptions') ?? [];
     function renderDomainPool(items) {
         var container = document.getElementById('pb-dm-pool-container');
         if (!items || items.length === 0) {
-            container.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-database-off" style="font-size:2rem;"></i><p><?= __('暂无域名池数据') ?></p></div>';
+            container.innerHTML = '<div class="pb-dm-empty">' +
+                '<i class="mdi mdi-database-off" style="font-size:2rem;color:var(--backend-color-text-secondary,#6c757d);"></i>' +
+                '<p><?= __('暂无域名池数据') ?></p>' +
+                '<p style="font-size:0.85rem;color:var(--backend-color-text-secondary,#6c757d);">' +
+                '<?= __('请先在「根域列表」中拉取域名，然后转存到域名池') ?></p>' +
+                '<button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm" style="margin-top:8px;" onclick="document.querySelector(\'.pb-dm-tab[data-tab=domains]\').click();">' +
+                '<i class="mdi mdi-earth"></i> <?= __('前往根域列表') ?></button>' +
+                '</div>';
             return;
         }
 
