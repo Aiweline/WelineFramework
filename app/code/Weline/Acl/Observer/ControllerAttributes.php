@@ -161,6 +161,27 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                     ->setIsBackend($data->getData('is_backend') ?: false)
                     ->setType($type);
                 
+                // 🔧 修复：如果控制器 #[Acl] 没有指定 parent_source，查询数据库保留原有值
+                // ACL 父子级关系：menu.xml → 控制器类 → 控制器方法
+                // menu.xml 定义的 parent_source 优先级最高，控制器不应覆盖
+                $sourceId = $acl->getSourceId();
+                $aclParentSource = $acl->getParentSource();
+                if (empty($aclParentSource)) {
+                    // 查询数据库中是否已存在该 source_id 的 parent_source
+                    $existingRecord = $this->acl->reset()
+                        ->where(\Weline\Acl\Model\Acl::fields_SOURCE_ID, $sourceId)
+                        ->select(\Weline\Acl\Model\Acl::fields_PARENT_SOURCE . ',' . \Weline\Acl\Model\Acl::fields_TYPE)
+                        ->fetchOrigin();
+                    if ($existingRecord && !empty($existingRecord['parent_source'])) {
+                        // 保留 menu.xml 设置的 parent_source
+                        $acl->setParentSource($existingRecord['parent_source']);
+                    }
+                    // 同时保留 type='menus'
+                    if ($existingRecord && $existingRecord['type'] === 'menus') {
+                        $acl->setType('menus');
+                    }
+                }
+                
                 // 收集到批量保存数组，不立即保存
                 if (!isset($this->pending_class_level_acls[$module])) {
                     $this->pending_class_level_acls[$module] = [];
@@ -519,7 +540,44 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         $this->acl->reset()->clearData();
         $this->acl->beginTransaction();
         try {
+            // 🔧 修复：保护 type='menus' 的记录以及 parent_source 字段不被覆盖
+            // 如果 menu.xml 定义的菜单与控制器 #[Acl] 注解使用相同的 source_id，
+            // 控制器收集会尝试把 type 从 'menus' 改成 'pc'，并清空 parent_source，导致菜单消失或层级错乱
+            // 解决方案：检查现有记录，如果是 'menus' 类型则保留原 type 和 parent_source
+            $sourceIds = array_column($deduplicatedAcls, 'source_id');
+            $existingMenuRecords = [];
+            if (!empty($sourceIds)) {
+                $existingRecords = $this->acl->reset()
+                    ->where(\Weline\Acl\Model\Acl::fields_SOURCE_ID, $sourceIds, 'in')
+                    ->where(\Weline\Acl\Model\Acl::fields_TYPE, 'menus')
+                    ->select(\Weline\Acl\Model\Acl::fields_SOURCE_ID . ',' . \Weline\Acl\Model\Acl::fields_PARENT_SOURCE)
+                    ->fetchArray();
+                foreach ($existingRecords as $record) {
+                    $existingMenuRecords[$record['source_id']] = [
+                        'type' => 'menus',
+                        'parent_source' => $record['parent_source'] ?? '',
+                    ];
+                }
+            }
+            
+            // 对于已存在且 type='menus' 的记录，保留其 type 和 parent_source 不被覆盖
+            foreach ($deduplicatedAcls as &$acl) {
+                $sourceId = $acl['source_id'] ?? '';
+                if (!empty($sourceId) && isset($existingMenuRecords[$sourceId])) {
+                    // 保留原有的 type='menus'，不覆盖为控制器的 type
+                    $acl['type'] = 'menus';
+                    // 保留原有的 parent_source（如果新数据的 parent_source 为空）
+                    $existingParent = $existingMenuRecords[$sourceId]['parent_source'] ?? '';
+                    $newParent = $acl['parent_source'] ?? '';
+                    if (empty($newParent) && !empty($existingParent)) {
+                        $acl['parent_source'] = $existingParent;
+                    }
+                }
+            }
+            unset($acl);
+            
             // acl 表对 source_id 有 UNIQUE，显式设置 exist_update_sql 后 Sqlite 会生成 ON CONFLICT(source_id) DO UPDATE，避免 UNIQUE 违反
+            $this->acl->reset()->clearData();
             $this->acl->getQuery()->exist_update_sql = 'DO UPDATE SET ALL_FIELDS';
             $this->acl->insert($deduplicatedAcls, 'source_id', '')->fetch();
             $this->acl->commit();
@@ -645,7 +703,41 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         $this->acl->reset()->clearData();
         $this->acl->beginTransaction();
         try {
+            // 🔧 修复：保护 type='menus' 的记录以及 parent_source 字段不被覆盖（方法级别权限同样需要保护）
+            $sourceIds = array_column($deduplicatedAcls, 'source_id');
+            $existingMenuRecords = [];
+            if (!empty($sourceIds)) {
+                $existingRecords = $this->acl->reset()
+                    ->where(\Weline\Acl\Model\Acl::fields_SOURCE_ID, $sourceIds, 'in')
+                    ->where(\Weline\Acl\Model\Acl::fields_TYPE, 'menus')
+                    ->select(\Weline\Acl\Model\Acl::fields_SOURCE_ID . ',' . \Weline\Acl\Model\Acl::fields_PARENT_SOURCE)
+                    ->fetchArray();
+                foreach ($existingRecords as $record) {
+                    $existingMenuRecords[$record['source_id']] = [
+                        'type' => 'menus',
+                        'parent_source' => $record['parent_source'] ?? '',
+                    ];
+                }
+            }
+            
+            // 对于已存在且 type='menus' 的记录，保留其 type 和 parent_source 不被覆盖
+            foreach ($deduplicatedAcls as &$acl) {
+                $sourceId = $acl['source_id'] ?? '';
+                if (!empty($sourceId) && isset($existingMenuRecords[$sourceId])) {
+                    // 保留原有的 type='menus'，不覆盖为控制器的 type
+                    $acl['type'] = 'menus';
+                    // 保留原有的 parent_source（如果新数据的 parent_source 为空）
+                    $existingParent = $existingMenuRecords[$sourceId]['parent_source'] ?? '';
+                    $newParent = $acl['parent_source'] ?? '';
+                    if (empty($newParent) && !empty($existingParent)) {
+                        $acl['parent_source'] = $existingParent;
+                    }
+                }
+            }
+            unset($acl);
+            
             // acl 表对 source_id 有 UNIQUE，显式设置 exist_update_sql 后 Sqlite 会生成 ON CONFLICT(source_id) DO UPDATE，避免 UNIQUE 违反
+            $this->acl->reset()->clearData();
             $this->acl->getQuery()->exist_update_sql = 'DO UPDATE SET ALL_FIELDS';
             $this->acl->insert($deduplicatedAcls, ['source_id'], '')->fetch();
             $this->acl->commit();
