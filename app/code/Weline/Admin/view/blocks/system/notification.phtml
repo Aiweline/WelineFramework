@@ -50,7 +50,7 @@
                         <div class="flex-grow-1">
                             <h6 class="mb-1"><?= $notice->getTitle() ?></h6>
                             <div class="font-size-12 text-muted">
-                                <p class="mb-1"><?= $notice->getContent() ?></p>
+                                <p class="mb-1"><?php echo $notice->getContent(); ?></p>
                                 <p class="mb-0"><i class="mdi mdi-clock-outline"></i> <?= $notice->getCreateTime() ?>
                                 </p>
                             </div>

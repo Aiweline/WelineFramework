@@ -37,9 +37,9 @@
         <observer name="Weline_Admin::menu_access_log" instance="Weline\Admin\Observer\MenuAccessLogObserver" disabled="false"
                   shared="true" sort="10"/>
     </event>
-    <!--系统消息通知-->
+    <!--系统消息通知（兼容层：转发到新的 Weline_Backend::application::system_notification 事件）-->
     <event name="Weline_Admin::msg">
-        <observer name="Weline_Admin::system_notification" instance="Weline\Admin\Observer\SystemNotificationObserver" disabled="false" shared="true" sort="0"/>
+        <observer name="Weline_Admin::legacy_notification" instance="Weline\Admin\Observer\LegacyNotificationObserver" disabled="false" shared="true" sort="0"/>
     </event>
     <!--维护模式-->
     <event name="Weline_Maintenance::maintenance">

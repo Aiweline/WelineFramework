@@ -45,42 +45,68 @@ class MenuRenderService
     private BackendSession $session;
 
     /**
-     * @var Request
-     */
-    private Request $request;
-
-    /**
-     * @var string
-     */
-    private string $backendUrlPrefix;
-
-    /**
-     * @var string
-     */
-    private string $frontendUrlPrefix;
-
-    /**
      * 构造函数
      * 
      * @param Menu $menuModel
      * @param MenuAccessLog $menuAccessLogModel
      * @param BackendSession $session
-     * @param Request $request
      */
     public function __construct(
         Menu $menuModel,
         MenuAccessLog $menuAccessLogModel,
-        BackendSession $session,
-        Request $request
+        BackendSession $session
     ) {
         $this->menuModel = $menuModel;
         $this->menuAccessLogModel = $menuAccessLogModel;
         $this->session = $session;
-        $this->request = $request;
+    }
+
+    /**
+     * 获取当前请求对象（每次调用时从 ObjectManager 获取最新实例，避免 WLS 下状态泄漏）
+     * 
+     * @return Request
+     */
+    private function getRequest(): Request
+    {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(Request::class);
+    }
+
+    /**
+     * 获取后端 URL 前缀（每次调用时动态获取，避免 WLS 模式下状态泄漏）
+     * 
+     * @return string
+     */
+    private function getBackendUrlPrefix(): string
+    {
+        $prefix = rtrim($this->getRequest()->getUrlBuilder()->getBackendUrl('/'), '/');
         
-        // 初始化 URL 前缀
-        $this->frontendUrlPrefix = '/';
-        $this->backendUrlPrefix = rtrim($this->request->getUrlBuilder()->getBackendUrl('/'), '/');
+        // 调试：检测异常的 URL 前缀
+        // 正常的后端 URL 应该包含货币和语言路径段，如 /backend/USD/zh_Hans_CN
+        // 如果只有 /backend 而没有货币语言，说明 $_SERVER 变量可能未正确设置
+        $backendKey = \Weline\Framework\App\Env::getAreaRoutePrefix('backend');
+        $expectedMinLength = strlen($backendKey) + 10; // backend + /XXX/xx_XX 至少
+        if (strlen($prefix) < $expectedMinLength) {
+            $lang = $_SERVER['WELINE_USER_LANG'] ?? '(not set)';
+            $currency = $_SERVER['WELINE_USER_CURRENCY'] ?? '(not set)';
+            $requestUri = $_SERVER['REQUEST_URI'] ?? '(not set)';
+            \Weline\Framework\App\Env::log_warning(
+                "MenuRenderService::getBackendUrlPrefix returned short prefix: '{$prefix}', " .
+                "WELINE_USER_LANG={$lang}, WELINE_USER_CURRENCY={$currency}, REQUEST_URI={$requestUri}",
+                'menu_debug'
+            );
+        }
+        
+        return $prefix;
+    }
+
+    /**
+     * 获取前端 URL 前缀
+     * 
+     * @return string
+     */
+    private function getFrontendUrlPrefix(): string
+    {
+        return '/';
     }
 
     /**
@@ -146,7 +172,23 @@ class MenuRenderService
     public function formatMenuUrl(array $menuData): string
     {
         $isBackend = $menuData['is_backend'] ?? true;
-        $urlPrefix = $isBackend ? $this->backendUrlPrefix : $this->frontendUrlPrefix;
+        $urlPrefix = $isBackend ? $this->getBackendUrlPrefix() : $this->getFrontendUrlPrefix();
+        $urlPrefix = rtrim($urlPrefix, '/');
+        $route = $menuData['route'] ?? '';
+        
+        return $urlPrefix . '/' . $route;
+    }
+    
+    /**
+     * 使用缓存的 URL 前缀格式化菜单 URL（仅在 renderMenu 内部使用）
+     * 
+     * @param array $menuData 菜单数据
+     * @return string
+     */
+    private function formatMenuUrlCached(array $menuData): string
+    {
+        $isBackend = $menuData['is_backend'] ?? true;
+        $urlPrefix = $isBackend ? ($this->cachedBackendUrlPrefix ?? $this->getBackendUrlPrefix()) : ($this->cachedFrontendUrlPrefix ?? $this->getFrontendUrlPrefix());
         $urlPrefix = rtrim($urlPrefix, '/');
         $route = $menuData['route'] ?? '';
         
@@ -161,7 +203,7 @@ class MenuRenderService
     private function getCurrentUrl(): string
     {
         // 使用 getUrlBuilder()->getCurrentUrl() 获取完整的当前 URL（包含协议、域名和路径）
-        $url = $this->request->getUrlBuilder()->getCurrentUrl();
+        $url = $this->getRequest()->getUrlBuilder()->getCurrentUrl();
         if (empty($url)) {
             return '';
         }
@@ -224,7 +266,7 @@ class MenuRenderService
             }
             
             if ($childCount == 0) {
-                $menuUrl = $this->formatMenuUrl($node);
+                $menuUrl = $this->formatMenuUrlCached($node);
                 if ($this->isMenuActive($menuUrl)) {
                     return true;
                 }
@@ -256,6 +298,16 @@ class MenuRenderService
     }
 
     /**
+     * 渲染时缓存的后端 URL 前缀（确保整个渲染过程中使用一致的值）
+     */
+    private ?string $cachedBackendUrlPrefix = null;
+    
+    /**
+     * 渲染时缓存的前端 URL 前缀（确保整个渲染过程中使用一致的值）
+     */
+    private ?string $cachedFrontendUrlPrefix = null;
+    
+    /**
      * 渲染主菜单 HTML
      * 
      * @param array $menus 菜单数组
@@ -264,6 +316,11 @@ class MenuRenderService
     public function renderMenu(array $menus): string
     {
         $html = '';
+        
+        // 在渲染开始时缓存 URL 前缀，确保整个渲染过程中使用一致的值
+        // 这避免了 WLS 下由于状态变化导致的 URL 不一致问题
+        $this->cachedBackendUrlPrefix = $this->getBackendUrlPrefix();
+        $this->cachedFrontendUrlPrefix = $this->getFrontendUrlPrefix();
         
         foreach ($menus as $menu) {
             if (!isset($menu['is_enable']) || !$menu['is_enable']) {
@@ -276,9 +333,16 @@ class MenuRenderService
             $title = __($menu['source_name'] ?? '');
             
             // 使用 formatMenuUrl 和 isMenuActive 来判断菜单是否有 URL 和是否激活
-            $menuUrl = $this->formatMenuUrl($menu);
+            $menuUrl = $this->formatMenuUrlCached($menu);
             $isActive = $this->isMenuActive($menuUrl);
-            $hasMenuUrl = !empty($menuUrl) && $menuUrl !== ($this->backendUrlPrefix . '/') && $menuUrl !== ($this->frontendUrlPrefix . '/');
+            $route = $menu['route'] ?? '';
+            $backendPrefixWithSlash = $this->cachedBackendUrlPrefix . '/';
+            $frontendPrefixWithSlash = $this->cachedFrontendUrlPrefix . '/';
+            
+            // 严格检查：如果 route 为空，则认为没有有效的菜单 URL
+            // 不依赖字符串比较，直接检查 route 是否为空
+            $hasMenuUrl = !empty($route);
+            
             
             // 如果有子菜单，检查子菜单中是否有激活项
             $hasActiveChild = $hasNodes ? $this->hasActiveChild($menu['nodes']) : false;
@@ -335,7 +399,10 @@ class MenuRenderService
         $html = '';
         
         foreach ($submenus as $submenu) {
-            if (($submenu['type'] ?? '') !== 'menus') {
+            $submenuType = $submenu['type'] ?? '';
+            
+            
+            if ($submenuType !== 'menus') {
                 continue;
             }
 
@@ -355,19 +422,33 @@ class MenuRenderService
 
             // 如果没有子菜单，渲染为普通菜单项
             if ($childCount == 0) {
-                $menuUrl = $this->formatMenuUrl($submenu);
-                $isActive = $this->isMenuActive($menuUrl);
-                $menuUrl = htmlspecialchars($menuUrl);
+                $route = $submenu['route'] ?? '';
+                $hasMenuUrl = !empty($route);
                 
-                $liClass = $isActive ? 'mm-active' : '';
-                $aClass = $isActive ? 'waves-effect active' : 'waves-effect';
                 
-                $html .= "<li data-source=\"{$sourceId}\" class=\"{$liClass}\">";
-                $html .= "<a href=\"{$menuUrl}\" data-source=\"{$sourceId}\" class=\"{$aClass}\">";
-                $html .= "<i class=\"{$icon}\"></i>";
-                $html .= "<span>{$title}</span>";
-                $html .= "</a>";
-                $html .= "</li>";
+                if ($hasMenuUrl) {
+                    $menuUrl = $this->formatMenuUrlCached($submenu);
+                    $isActive = $this->isMenuActive($menuUrl);
+                    $menuUrl = htmlspecialchars($menuUrl);
+                    
+                    $liClass = $isActive ? 'mm-active' : '';
+                    $aClass = $isActive ? 'waves-effect active' : 'waves-effect';
+                    
+                    $html .= "<li data-source=\"{$sourceId}\" class=\"{$liClass}\">";
+                    $html .= "<a href=\"{$menuUrl}\" data-source=\"{$sourceId}\" class=\"{$aClass}\">";
+                    $html .= "<i class=\"{$icon}\"></i>";
+                    $html .= "<span>{$title}</span>";
+                    $html .= "</a>";
+                    $html .= "</li>";
+                } else {
+                    // 没有路由的菜单项，渲染为不可点击的展示项
+                    $html .= "<li data-source=\"{$sourceId}\" class=\"\">";
+                    $html .= "<a href=\"javascript: void(0);\" data-source=\"{$sourceId}\" class=\"waves-effect disabled\" style=\"cursor: default;\">";
+                    $html .= "<i class=\"{$icon}\"></i>";
+                    $html .= "<span>{$title}</span>";
+                    $html .= "</a>";
+                    $html .= "</li>";
+                }
             } else {
                 // 有子菜单，渲染为可展开菜单项
                 $hasActiveChild = $this->hasActiveChild($nodes);
