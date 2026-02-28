@@ -18,9 +18,15 @@ namespace Weline\Websites\Controller\Admin;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Model\Domain as DomainModel;
+use Weline\Websites\Model\DomainConfig;
+use Weline\Websites\Model\DomainDnsRecord;
 use Weline\Websites\Model\DomainRegistrar;
 use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Service\DomainRegistrarResolverService;
+use Weline\Websites\Service\DomainResolveService;
+use Weline\Websites\Service\DomainSyncService;
+use Weline\Websites\Service\ServerIpService;
 
 #[Acl('Weline_Websites::domain_service', '域名服务', 'mdi mdi-domain', '域名服务管理')]
 class Domain extends BackendController
@@ -28,15 +34,30 @@ class Domain extends BackendController
     private DomainRegistrar $registrar;
     private DomainRegistrarAccount $registrarAccount;
     private DomainRegistrarResolverService $resolverService;
+    private DomainModel $domainModel;
+    private DomainConfig $domainConfig;
+    private DomainResolveService $resolveService;
+    private DomainSyncService $syncService;
+    private ServerIpService $serverIpService;
 
     public function __construct(
         DomainRegistrar $registrar,
         DomainRegistrarAccount $registrarAccount,
-        DomainRegistrarResolverService $resolverService
+        DomainRegistrarResolverService $resolverService,
+        DomainModel $domainModel,
+        DomainConfig $domainConfig,
+        DomainResolveService $resolveService,
+        DomainSyncService $syncService,
+        ServerIpService $serverIpService
     ) {
         $this->registrar = $registrar;
         $this->registrarAccount = $registrarAccount;
         $this->resolverService = $resolverService;
+        $this->domainModel = $domainModel;
+        $this->domainConfig = $domainConfig;
+        $this->resolveService = $resolveService;
+        $this->syncService = $syncService;
+        $this->serverIpService = $serverIpService;
     }
 
     // ============================================================
@@ -63,11 +84,19 @@ class Domain extends BackendController
 
         // 获取网站列表（供购买时绑定选择）
         $websiteModel = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
-        $websites = $websiteModel->clearQuery()->order('name', 'ASC')->select()->fetchArray();
+        $websiteModel->clearData(true);
+        $websites = $websiteModel->order('name', 'ASC')->select()->fetchArray();
         $this->assign('websites', $websites);
 
         // 当前 Tab
-        $this->assign('active_tab', $this->request->getGet('tab', 'registrar'));
+        $this->assign('active_tab', $this->request->getGet('tab', 'domain_list'));
+
+        // 域名列表（初始数据，前端会通过 AJAX 加载分页）
+        $domains = $this->domainModel->clearQuery()
+            ->order(DomainModel::fields_CREATED_AT, 'DESC')
+            ->select()
+            ->fetchArray();
+        $this->assign('domains', \array_slice($domains, 0, 20));
 
         return $this->fetch();
     }
@@ -93,6 +122,38 @@ class Domain extends BackendController
                 'msg' => __('获取域名商列表失败：%{error}', ['error' => $e->getMessage()]),
             ]);
         }
+    }
+
+    /**
+     * 获取域名商适配器配置信息（AJAX）
+     */
+    public function postRegistrarInfo()
+    {
+        $registrarCode = trim($this->request->getPost('registrar_code', '') ?? '');
+        if ($registrarCode === '') {
+            return $this->fetchJson([
+                'code' => 400,
+                'msg' => __('域名商代码不能为空'),
+            ]);
+        }
+
+        $adapter = $this->resolverService->getAdapter($registrarCode);
+        if (!$adapter) {
+            return $this->fetchJson([
+                'code' => 404,
+                'msg' => __('未找到域名商适配器'),
+            ]);
+        }
+
+        return $this->fetchJson([
+            'code' => 200,
+            'data' => [
+                'name' => $adapter->getRegistrarName(),
+                'description' => $adapter->getDescription(),
+                'config_fields' => $adapter->getConfigFields(),
+                'config_help' => $adapter->getConfigHelp(),
+            ],
+        ]);
     }
 
     /**
@@ -144,21 +205,69 @@ class Domain extends BackendController
             // 查找或创建域名商记录
             $registrarModel = clone $this->registrar;
             $registrarModel->loadByCode($registrarCode);
+            $adapter = $this->resolverService->getAdapter($registrarCode);
+            if (!$adapter) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('未找到域名商适配器：%{code}', ['code' => $registrarCode]),
+                ]);
+            }
+            
             if (!$registrarModel->getRegistrarId()) {
                 // 从适配器获取信息并自动创建
-                $adapter = $this->resolverService->getAdapter($registrarCode);
-                if (!$adapter) {
-                    return $this->fetchJson([
-                        'code' => 400,
-                        'msg' => __('未找到域名商适配器：%{code}', ['code' => $registrarCode]),
-                    ]);
-                }
                 $registrarModel->clearData();
                 $registrarModel->setCode($registrarCode);
                 $registrarModel->setName($adapter->getRegistrarName());
                 $registrarModel->setDescription($adapter->getDescription());
                 $registrarModel->setStatus(DomainRegistrar::STATUS_ACTIVE);
                 $registrarModel->save();
+            }
+
+            // 根据适配器配置校验必填字段
+            $extraConfigArr = !empty($extraConfig) ? (\json_decode($extraConfig, true) ?: []) : [];
+            $configFields = $adapter->getConfigFields();
+            $missingFields = [];
+            $isEditMode = $accountId > 0;
+            
+            foreach ($configFields as $field) {
+                if (!($field['required'] ?? false)) {
+                    continue;
+                }
+                $fieldName = $field['name'] ?? '';
+                $fieldType = $field['type'] ?? 'text';
+                $mapping = $field['mapping'] ?? $fieldName;
+                $isPassword = $fieldType === 'password';
+                
+                // 编辑模式下，密码类字段允许为空（表示不修改）
+                if ($isEditMode && $isPassword) {
+                    continue;
+                }
+                
+                $value = '';
+                
+                if ($mapping === 'api_key') {
+                    $value = $apiKey;
+                } elseif ($mapping === 'api_secret') {
+                    $value = $apiSecret;
+                } elseif ($mapping === 'region') {
+                    $value = $region;
+                } elseif (\str_starts_with($mapping, 'extra_config.')) {
+                    $extraKey = \str_replace('extra_config.', '', $mapping);
+                    $value = trim((string) ($extraConfigArr[$extraKey] ?? ''));
+                } else {
+                    $value = trim((string) ($extraConfigArr[$fieldName] ?? ''));
+                }
+                
+                if ($value === '') {
+                    $missingFields[] = $field['label'] ?? $fieldName;
+                }
+            }
+            
+            if (!empty($missingFields)) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('请填写必填字段：%{1}', [\implode(', ', $missingFields)]),
+                ]);
             }
 
             // 保存账号
@@ -394,6 +503,7 @@ class Domain extends BackendController
         try {
             $accountId = (int) $this->request->getPost('account_id', 0);
             $items = $this->request->getPost('items', []);
+            $autoResolve = $this->request->getPost('auto_resolve', '0') === '1';
 
             if (empty($items) || $accountId <= 0) {
                 return $this->fetchJson([
@@ -407,7 +517,7 @@ class Domain extends BackendController
                 \Weline\Websites\Service\DomainPurchaseService::class
             );
 
-            $result = $purchaseService->createAndProcessOrder($accountId, $items);
+            $result = $purchaseService->createAndProcessOrder($accountId, $items, $autoResolve);
 
             return $this->fetchJson([
                 'code' => $result['success'] ? 200 : 400,
@@ -497,4 +607,2450 @@ class Domain extends BackendController
             ]);
         }
     }
+
+    // ============================================================
+    // 域名列表管理 API（v1.5.0 新增）
+    // ============================================================
+
+    /**
+     * 获取域名列表（分页、筛选）
+     */
+    #[Acl('Weline_Websites::domain_list', '域名列表', 'mdi mdi-format-list-bulleted', '查看域名列表')]
+    public function getDomainList()
+    {
+        try {
+            $page = (int) $this->request->getGet('page', 1);
+            $pageSize = (int) ($this->request->getGet('page_size') ?: $this->request->getGet('limit', 20));
+            $pageSize = min($pageSize, 100);
+            $accountId = (int) $this->request->getGet('account_id', 0);
+            $status = (string) $this->request->getGet('status', '');
+            $search = (string) $this->request->getGet('search', '');
+            $resolveStatus = (string) $this->request->getGet('resolve_status', '');
+            $httpsStatus = (string) $this->request->getGet('https_status', '');
+
+            $filters = [
+                'account_id' => $accountId,
+                'status' => $status,
+                'search' => $search,
+            ];
+
+            $result = $this->domainModel->getPagedList($filters, $page, $pageSize);
+
+            // 补充注册商名称和服务商名称
+            $dnsDetector = ObjectManager::getInstance(\Weline\Websites\Service\DnsProviderDetector::class);
+            $accountCache = [];
+
+            foreach ($result['items'] as &$item) {
+                // 获取注册商名称
+                $accId = (int) ($item['account_id'] ?? 0);
+                if ($accId > 0) {
+                    if (!isset($accountCache[$accId])) {
+                        $acc = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+                        $acc->load($accId);
+                        $accountCache[$accId] = [
+                            'account_name' => $acc->getAccountName() ?: '',
+                            'registrar_code' => $acc->getRegistrarCode() ?: '',
+                            'registrar_name' => '',
+                        ];
+                        if ($accountCache[$accId]['registrar_code']) {
+                            $adapter = $this->resolverService->getAdapter($accountCache[$accId]['registrar_code']);
+                            if ($adapter) {
+                                $accountCache[$accId]['registrar_name'] = $adapter->getRegistrarName();
+                            }
+                        }
+                    }
+                    $item['account_name'] = $accountCache[$accId]['account_name'];
+                    $item['registrar_name'] = $accountCache[$accId]['registrar_name'] ?: $accountCache[$accId]['account_name'];
+                    $item['registrar_code'] = $accountCache[$accId]['registrar_code'];
+                } else {
+                    $item['account_name'] = '';
+                    $item['registrar_name'] = '-';
+                    $item['registrar_code'] = '';
+                }
+
+                // DNS 服务商名称
+                $dnsProvider = $item['dns_provider'] ?? '';
+                if ($dnsProvider) {
+                    $dnsInfo = $dnsDetector->getProviderInfo($dnsProvider);
+                    $item['dns_provider_name'] = $dnsInfo['name'] ?? $dnsProvider;
+                } else {
+                    $item['dns_provider_name'] = '-';
+                }
+
+                // CDN 服务商名称
+                $cdnProvider = $item['cdn_provider'] ?? '';
+                if ($cdnProvider) {
+                    $cdnInfo = $dnsDetector->getProviderInfo($cdnProvider);
+                    $item['cdn_provider_name'] = $cdnInfo['name'] ?? $cdnProvider;
+                } else {
+                    $item['cdn_provider_name'] = '-';
+                }
+            }
+            unset($item);
+
+            return $this->fetchJson([
+                'code' => 200,
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('获取域名列表失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 获取远程域名列表（仅查询，不自动导入）
+     */
+    #[Acl('Weline_Websites::domain_sync', '同步域名', 'mdi mdi-sync', '从域名商获取域名列表')]
+    public function getRemoteDomains()
+    {
+        try {
+            $accountId = (int) $this->request->getGet('account_id', 0);
+            if ($accountId <= 0) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('请选择域名商账户'),
+                ]);
+            }
+
+            $result = $this->syncService->fetchRemoteDomains($accountId);
+
+            return $this->fetchJson([
+                'code' => $result['success'] ? 200 : 400,
+                'msg' => $result['message'],
+                'data' => [
+                    'domains' => $result['domains'] ?? [],
+                    'account_name' => $result['account_name'] ?? '',
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('获取失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 手动导入选中的域名到本地
+     */
+    #[Acl('Weline_Websites::domain_import', '导入域名', 'mdi mdi-import', '导入域名到本地')]
+    public function postImportDomains()
+    {
+        try {
+            $accountId = (int) $this->request->getPost('account_id', 0);
+            $domains = $this->request->getPost('domains', []);
+            $autoResolve = $this->request->getPost('auto_resolve', '0') === '1';
+
+            if ($accountId <= 0) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('请选择域名商账户'),
+                ]);
+            }
+
+            if (!\is_array($domains) || $domains === []) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('请选择要导入的域名'),
+                ]);
+            }
+
+            $result = $this->syncService->importDomains($accountId, $domains, $autoResolve);
+
+            return $this->fetchJson([
+                'code' => $result['success'] ? 200 : 400,
+                'msg' => $result['message'],
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('导入失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 同步域名列表（从域名商拉取，自动同步所有）- 保留向后兼容
+     */
+    public function postSyncDomains()
+    {
+        try {
+            $accountId = (int) $this->request->getPost('account_id', 0);
+            if ($accountId <= 0) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('请选择域名商账户'),
+                ]);
+            }
+
+            $result = $this->syncService->syncAccount($accountId);
+
+            return $this->fetchJson([
+                'code' => $result['success'] ? 200 : 400,
+                'msg' => $result['message'],
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('同步失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 获取域名管理配置
+     */
+    public function getDomainConfig()
+    {
+        try {
+            $config = $this->domainConfig->getAllConfig();
+            $serverIp = $this->serverIpService->getPublicIpv4();
+            $serverIpv6 = $this->serverIpService->getPublicIpv6();
+
+            return $this->fetchJson([
+                'code' => 200,
+                'data' => [
+                    'config' => $config,
+                    'server_ip' => $serverIp,
+                    'server_ipv6' => $serverIpv6,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('获取配置失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 保存域名管理配置
+     */
+    public function postSaveDomainConfig()
+    {
+        try {
+            $autoResolve = (string) $this->request->getPost('auto_resolve_enabled', '0');
+            $recordType = (string) $this->request->getPost('auto_resolve_record_type', 'A');
+            $subdomains = (string) $this->request->getPost('auto_resolve_subdomains', '@,www');
+            $certAutoRequest = (string) $this->request->getPost('cert_auto_request', '0');
+
+            $this->domainConfig->setValues([
+                DomainConfig::CONFIG_AUTO_RESOLVE_ENABLED => $autoResolve === '1' ? '1' : '0',
+                DomainConfig::CONFIG_AUTO_RESOLVE_RECORD_TYPE => $recordType,
+                DomainConfig::CONFIG_AUTO_RESOLVE_SUBDOMAINS => $subdomains,
+                DomainConfig::CONFIG_CERT_AUTO_REQUEST => $certAutoRequest === '1' ? '1' : '0',
+            ]);
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => __('配置保存成功'),
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('保存配置失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 刷新服务器公网 IP
+     */
+    public function postRefreshServerIp()
+    {
+        try {
+            $result = $this->serverIpService->refreshAll();
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => __('刷新成功'),
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('刷新失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    // ============================================================
+    // DNS 解析管理 API（v1.5.0 新增）
+    // ============================================================
+
+    /**
+     * 获取域名的 DNS 记录详情
+     */
+    #[Acl('Weline_Websites::dns_view', 'DNS 记录', 'mdi mdi-dns', '查看 DNS 解析记录')]
+    public function getDnsRecords()
+    {
+        try {
+            $domainId = (int) $this->request->getGet('domain_id', 0);
+            if ($domainId <= 0) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('域名 ID 不能为空'),
+                ]);
+            }
+
+            $domain = clone $this->domainModel;
+            $domain->clearQuery()->load($domainId);
+            if (!$domain->getDomainId()) {
+                return $this->fetchJson([
+                    'code' => 404,
+                    'msg' => __('域名不存在'),
+                ]);
+            }
+
+            $details = $this->resolveService->getDnsDetails($domain);
+
+            return $this->fetchJson([
+                'code' => 200,
+                'data' => [
+                    'domain' => $domain->getData(),
+                    'dns' => $details,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('获取 DNS 记录失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 同步域名的 DNS 记录
+     */
+    public function postSyncDnsRecords()
+    {
+        try {
+            $domainId = (int) $this->request->getPost('domain_id', 0);
+            if ($domainId <= 0) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('域名 ID 不能为空'),
+                ]);
+            }
+
+            $domain = clone $this->domainModel;
+            $domain->clearQuery()->load($domainId);
+            if (!$domain->getDomainId()) {
+                return $this->fetchJson([
+                    'code' => 404,
+                    'msg' => __('域名不存在'),
+                ]);
+            }
+
+            $result = $this->resolveService->syncDnsRecords($domain);
+
+            if ($result['error'] !== '') {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => $result['error'],
+                ]);
+            }
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => __('同步完成：新增 %{added}，更新 %{updated}，删除 %{deleted}', [
+                    'added' => $result['added'],
+                    'updated' => $result['updated'],
+                    'deleted' => $result['deleted'],
+                ]),
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('同步 DNS 记录失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 添加 DNS 记录
+     */
+    #[Acl('Weline_Websites::dns_edit', '编辑 DNS', 'mdi mdi-dns', '添加/编辑 DNS 解析记录')]
+    public function postAddDnsRecord()
+    {
+        try {
+            $domainId = (int) $this->request->getPost('domain_id', 0);
+            $type = (string) $this->request->getPost('type', 'A');
+            $host = (string) $this->request->getPost('host', '@');
+            $value = (string) $this->request->getPost('value', '');
+            $ttl = (int) $this->request->getPost('ttl', 600);
+            $priority = (int) $this->request->getPost('priority', 0);
+
+            if ($domainId <= 0 || $value === '') {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('域名 ID 和记录值不能为空'),
+                ]);
+            }
+
+            $domain = clone $this->domainModel;
+            $domain->clearQuery()->load($domainId);
+            if (!$domain->getDomainId()) {
+                return $this->fetchJson([
+                    'code' => 404,
+                    'msg' => __('域名不存在'),
+                ]);
+            }
+
+            // 获取 DNS 管理账户（根据 DNS 托管位置自动选择）
+            $dnsResult = $this->resolveService->getDnsManagementAccount($domain);
+            if ($dnsResult['error'] !== '') {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => $dnsResult['error'],
+                ]);
+            }
+
+            $account = $dnsResult['account'];
+            $adapter = $dnsResult['adapter'];
+
+            $record = [
+                'type' => $type,
+                'host' => $host,
+                'value' => $value,
+                'ttl' => $ttl,
+                'priority' => $priority,
+            ];
+
+            $result = $adapter->addDnsRecord($domain->getDomain(), $record, $account->getCredentials());
+
+            if (!$result['success']) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => $result['message'] ?? __('添加 DNS 记录失败'),
+                ]);
+            }
+
+            // 同步到本地
+            $this->resolveService->syncDnsRecords($domain);
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => __('DNS 记录添加成功'),
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('添加 DNS 记录失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 删除 DNS 记录
+     */
+    public function postDeleteDnsRecord()
+    {
+        try {
+            $domainId = (int) $this->request->getPost('domain_id', 0);
+            $recordId = (string) $this->request->getPost('record_id', '');
+
+            if ($domainId <= 0 || $recordId === '') {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('域名 ID 和记录 ID 不能为空'),
+                ]);
+            }
+
+            $domain = clone $this->domainModel;
+            $domain->clearQuery()->load($domainId);
+            if (!$domain->getDomainId()) {
+                return $this->fetchJson([
+                    'code' => 404,
+                    'msg' => __('域名不存在'),
+                ]);
+            }
+
+            // 获取本地记录的 remote_record_id
+            $dnsRecord = ObjectManager::getInstance(DomainDnsRecord::class);
+            $dnsRecord->clearQuery()->load((int) $recordId);
+            $remoteRecordId = $dnsRecord->getRemoteRecordId();
+
+            if ($remoteRecordId === '') {
+                // 仅删除本地记录
+                $dnsRecord->delete()->fetch();
+                return $this->fetchJson([
+                    'code' => 200,
+                    'msg' => __('本地记录已删除'),
+                ]);
+            }
+
+            // 获取 DNS 管理账户（根据 DNS 托管位置自动选择）
+            $dnsResult = $this->resolveService->getDnsManagementAccount($domain);
+            if ($dnsResult['error'] !== '') {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => $dnsResult['error'],
+                ]);
+            }
+
+            $account = $dnsResult['account'];
+            $adapter = $dnsResult['adapter'];
+
+            $result = $adapter->deleteDnsRecord($domain->getDomain(), $remoteRecordId, $account->getCredentials());
+
+            // 无论远程是否成功，都删除本地记录
+            $dnsRecord->delete()->fetch();
+
+            if (!$result['success']) {
+                return $this->fetchJson([
+                    'code' => 200,
+                    'msg' => __('本地记录已删除，远程删除失败：%{error}', ['error' => $result['message'] ?? '']),
+                ]);
+            }
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => __('DNS 记录删除成功'),
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('删除 DNS 记录失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 批量添加 DNS 解析记录
+     * 支持为多个域名添加相同的DNS记录配置
+     */
+    #[Acl('Weline_Websites::dns_batch_add', '批量添加DNS记录', 'mdi mdi-dns', '批量为域名添加DNS解析记录')]
+    public function postBatchAddDnsRecords(): string
+    {
+        try {
+            $domainIds = $this->request->getPost('domain_ids', []);
+            $type = (string) $this->request->getPost('type', 'A');
+            $hostInput = (string) $this->request->getPost('host', '@');
+            $value = (string) $this->request->getPost('value', '');
+            $ttl = (int) $this->request->getPost('ttl', 600);
+            $priority = (int) $this->request->getPost('priority', 0);
+            $useServerIp = (bool) $this->request->getPost('use_server_ip', false);
+
+            if (\is_string($domainIds)) {
+                $domainIds = \json_decode($domainIds, true) ?: [];
+            }
+            $domainIds = \array_filter(\array_map('intval', $domainIds));
+
+            if (empty($domainIds)) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('请选择要添加DNS记录的域名'),
+                ]);
+            }
+
+            if ($useServerIp) {
+                $serverIpService = ObjectManager::getInstance(ServerIpService::class);
+                $value = $serverIpService->getServerIp();
+                if ($value === '') {
+                    return $this->fetchJson([
+                        'code' => 400,
+                        'msg' => __('无法获取服务器公网IP'),
+                    ]);
+                }
+                $type = 'A';
+            } elseif ($value === '') {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('记录值不能为空'),
+                ]);
+            }
+
+            // 支持逗号分隔的多个主机记录
+            $hosts = \array_filter(\array_map('trim', \explode(',', $hostInput)));
+            if (empty($hosts)) {
+                $hosts = ['@'];
+            }
+
+            $successCount = 0;
+            $failedCount = 0;
+            $errors = [];
+            $addedRecords = [];
+            $dnsProviderHints = []; // 域名的 DNS 服务商提示
+
+            // 获取 DNS 服务商检测器
+            $dnsDetector = ObjectManager::getInstance(\Weline\Websites\Service\DnsProviderDetector::class);
+
+            foreach ($domainIds as $domainId) {
+                $domain = clone $this->domainModel;
+                $domain->clearQuery()->load($domainId);
+                if (!$domain->getDomainId()) {
+                    $failedCount += \count($hosts);
+                    $errors[] = __('域名ID %{1} 不存在', [$domainId]);
+                    continue;
+                }
+
+                // 获取 DNS 管理账户（根据 DNS 托管位置自动选择）
+                $dnsResult = $this->resolveService->getDnsManagementAccount($domain);
+                if ($dnsResult['error'] !== '') {
+                    $failedCount += \count($hosts);
+                    $errors[] = $domain->getDomain() . ': ' . $dnsResult['error'];
+                    continue;
+                }
+
+                $account = $dnsResult['account'];
+                $adapter = $dnsResult['adapter'];
+
+                $domainAddFailed = false;
+
+                // 为每个主机记录添加 DNS
+                foreach ($hosts as $host) {
+                    $record = [
+                        'type' => $type,
+                        'host' => $host,
+                        'value' => $value,
+                        'ttl' => $ttl,
+                        'priority' => $priority,
+                    ];
+
+                    try {
+                        $result = $adapter->addDnsRecord($domain->getDomain(), $record, $account->getCredentials());
+                        if ($result['success']) {
+                            $successCount++;
+                            $addedRecords[] = $domain->getDomain() . ' [' . $host . ']';
+                        } else {
+                            $failedCount++;
+                            $domainAddFailed = true;
+                            $errors[] = $domain->getDomain() . ' [' . $host . ']: ' . ($result['message'] ?? __('添加失败'));
+                        }
+                    } catch (\Throwable $e) {
+                        $failedCount++;
+                        $domainAddFailed = true;
+                        $errors[] = $domain->getDomain() . ' [' . $host . ']: ' . $e->getMessage();
+                    }
+                }
+
+                // 如果添加失败，检测域名当前的 DNS 服务商
+                if ($domainAddFailed) {
+                    $dnsHint = $this->detectDnsProviderHint($domain, $account->getRegistrarCode(), $dnsDetector);
+                    if ($dnsHint !== null) {
+                        $dnsProviderHints[$domain->getDomain()] = $dnsHint;
+                    }
+                }
+
+                // 同步 DNS 记录
+                $this->resolveService->syncDnsRecords($domain);
+            }
+
+            $msg = __('批量添加DNS记录完成：成功 %{1} 条，失败 %{2} 条', [$successCount, $failedCount]);
+
+            return $this->fetchJson([
+                'code' => $failedCount === 0 ? 200 : ($successCount > 0 ? 206 : 400),
+                'msg' => $msg,
+                'data' => [
+                    'success_count' => $successCount,
+                    'failed_count' => $failedCount,
+                    'errors' => $errors,
+                    'hosts' => $hosts,
+                    'added_records' => $addedRecords,
+                    'dns_provider_hints' => $dnsProviderHints,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('批量添加DNS记录失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 检测域名当前的 DNS 服务商并生成提示
+     *
+     * @param DomainModel $domain 域名模型
+     * @param string $registrarCode 注册商代码
+     * @param \Weline\Websites\Service\DnsProviderDetector $dnsDetector DNS 检测器
+     * @return array|null 提示信息或 null
+     */
+    private function detectDnsProviderHint(
+        DomainModel $domain,
+        string $registrarCode,
+        \Weline\Websites\Service\DnsProviderDetector $dnsDetector
+    ): ?array {
+        try {
+            // 获取域名的 Nameservers
+            $nameservers = $this->getNameserversForDomain($domain->getDomain());
+            if (empty($nameservers)) {
+                return null;
+            }
+
+            // 检测 DNS 服务商
+            $detectResult = $dnsDetector->detect($nameservers, $registrarCode);
+            $provider = $detectResult['provider'];
+            $providerName = $detectResult['name'];
+
+            if ($provider === 'unknown') {
+                return [
+                    'provider' => 'unknown',
+                    'provider_name' => __('未知'),
+                    'nameservers' => $nameservers,
+                    'message' => __('域名 DNS 已转移到其他服务商，无法通过 %{1} 管理解析', [$this->resolverService->getAdapter($registrarCode)?->getRegistrarName() ?? $registrarCode]),
+                    'has_account' => false,
+                    'action' => 'manual',
+                ];
+            }
+
+            // 如果是原注册商的 DNS，不应该失败，返回 null
+            if ($detectResult['is_original']) {
+                return null;
+            }
+
+            // 检查是否有对应 DNS 服务商的账户
+            $hasAccount = $this->checkHasProviderAccount($provider);
+
+            // 构建提示信息
+            $message = __('域名 DNS 已转移到 %{1}', [$providerName]);
+            $action = 'add_account';
+
+            if ($hasAccount) {
+                $message .= __('，您已有 %{1} 账户，请到该账户下管理此域名的 DNS 解析', [$providerName]);
+                $action = 'switch_account';
+            } else {
+                $message .= __('，请先添加 %{1} 账户后再管理此域名的 DNS 解析', [$providerName]);
+            }
+
+            return [
+                'provider' => $provider,
+                'provider_name' => $providerName,
+                'nameservers' => $nameservers,
+                'message' => $message,
+                'has_account' => $hasAccount,
+                'action' => $action,
+            ];
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * 获取域名的 Nameservers
+     */
+    private function getNameserversForDomain(string $domain): array
+    {
+        try {
+            $records = @\dns_get_record($domain, \DNS_NS);
+            if ($records === false || empty($records)) {
+                return [];
+            }
+
+            $nameservers = [];
+            foreach ($records as $record) {
+                if (!empty($record['target'])) {
+                    $nameservers[] = $record['target'];
+                }
+            }
+
+            return $nameservers;
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    /**
+     * 检查是否有某个 DNS 服务商的账户
+     */
+    private function checkHasProviderAccount(string $providerCode): bool
+    {
+        try {
+            $account = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+            $account->where('registrar_code', $providerCode)
+                    ->where('status', 'active');
+
+            return $account->find()->fetch() !== null && $account->getId() > 0;
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    // ============================================================
+    // 解析检测 API（v1.5.0 新增）
+    // ============================================================
+
+    /**
+     * 检测单个域名的解析状态
+     */
+    #[Acl('Weline_Websites::resolve_check', '解析检测', 'mdi mdi-check-network', '检测域名解析状态')]
+    public function postCheckResolve()
+    {
+        try {
+            $domainId = (int) $this->request->getPost('domain_id', 0);
+            if ($domainId <= 0) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('域名 ID 不能为空'),
+                ]);
+            }
+
+            $domain = clone $this->domainModel;
+            $domain->clearQuery()->load($domainId);
+            if (!$domain->getDomainId()) {
+                return $this->fetchJson([
+                    'code' => 404,
+                    'msg' => __('域名不存在'),
+                ]);
+            }
+
+            $result = $this->resolveService->checkResolve($domain);
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => $result['resolved'] ? __('解析正常') : __('解析异常'),
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('检测失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 批量检测解析状态
+     */
+    public function postBatchCheckResolve()
+    {
+        try {
+            $domainIds = $this->request->getPost('domain_ids', []);
+            if (!\is_array($domainIds) || $domainIds === []) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('请选择要检测的域名'),
+                ]);
+            }
+
+            $domainIds = \array_map('intval', $domainIds);
+            $result = $this->resolveService->batchCheckResolve($domainIds);
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => __('检测完成：%{checked} 个域名，%{resolved} 个已解析，%{local} 个指向本服务器', [
+                    'checked' => $result['checked'],
+                    'resolved' => $result['resolved'],
+                    'local' => $result['local'],
+                ]),
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('批量检测失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 自动解析域名到本服务器
+     */
+    #[Acl('Weline_Websites::auto_resolve', '自动解析', 'mdi mdi-auto-fix', '自动添加解析到本服务器')]
+    public function postAutoResolve()
+    {
+        try {
+            $domainId = (int) $this->request->getPost('domain_id', 0);
+            $subdomains = $this->request->getPost('subdomains', []);
+
+            if ($domainId <= 0) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('域名 ID 不能为空'),
+                ]);
+            }
+
+            $domain = clone $this->domainModel;
+            $domain->clearQuery()->load($domainId);
+            if (!$domain->getDomainId()) {
+                return $this->fetchJson([
+                    'code' => 404,
+                    'msg' => __('域名不存在'),
+                ]);
+            }
+
+            if (!\is_array($subdomains)) {
+                $subdomains = [];
+            }
+
+            $result = $this->resolveService->autoResolveToLocal($domain, $subdomains);
+
+            if (!$result['success']) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('自动解析失败：%{error}', ['error' => \implode('; ', $result['errors'])]),
+                ]);
+            }
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => __('自动解析成功：添加了 %{count} 条记录', ['count' => $result['added']]),
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('自动解析失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 批量自动解析
+     */
+    public function postBatchAutoResolve()
+    {
+        try {
+            $domainIds = $this->request->getPost('domain_ids', []);
+            if (!\is_array($domainIds) || $domainIds === []) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('请选择要解析的域名'),
+                ]);
+            }
+
+            $domainIds = \array_map('intval', $domainIds);
+            $domains = $this->domainModel->getByIds($domainIds);
+
+            $success = 0;
+            $failed = 0;
+            $errors = [];
+
+            foreach ($domains as $row) {
+                $domain = clone $this->domainModel;
+                $domain->setData($row);
+
+                $result = $this->resolveService->autoResolveToLocal($domain);
+                if ($result['success']) {
+                    $success++;
+                } else {
+                    $failed++;
+                    $errors[] = $domain->getDomain() . ': ' . \implode('; ', $result['errors']);
+                }
+            }
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => __('批量解析完成：成功 %{success} 个，失败 %{failed} 个', [
+                    'success' => $success,
+                    'failed' => $failed,
+                ]),
+                'data' => [
+                    'success' => $success,
+                    'failed' => $failed,
+                    'errors' => $errors,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('批量解析失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    // ============================================================
+    // 域名转存到域名池 API
+    // ============================================================
+
+    /**
+     * 单个域名转存到域名池
+     */
+    #[Acl('Weline_Websites::domain_to_pool', '转存域名池', 'mdi mdi-database-export', '将根域名转存到域名池')]
+    public function postTransferToPool()
+    {
+        try {
+            $domainId = (int) $this->request->getPost('domain_id', 0);
+            $prefixes = $this->request->getPost('prefixes', []);
+
+            if ($domainId <= 0) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('域名 ID 不能为空'),
+                ]);
+            }
+
+            $domain = clone $this->domainModel;
+            $domain->clearQuery()->load($domainId);
+            if (!$domain->getDomainId()) {
+                return $this->fetchJson([
+                    'code' => 404,
+                    'msg' => __('域名不存在'),
+                ]);
+            }
+
+            $subdomainGenerator = ObjectManager::getInstance(
+                \Weline\Websites\Service\SubdomainGeneratorService::class
+            );
+
+            if (!\is_array($prefixes)) {
+                $prefixes = [];
+            }
+
+            $result = $subdomainGenerator->generateDefaultSubdomains($domain, $prefixes);
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => __('转存完成：新增 %{added} 个，已存在 %{skipped} 个', [
+                    'added' => $result['added'],
+                    'skipped' => $result['skipped'],
+                ]),
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('转存失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 批量域名转存到域名池
+     */
+    public function postBatchTransferToPool()
+    {
+        try {
+            $domainIds = $this->request->getPost('domain_ids', []);
+            $prefixes = $this->request->getPost('prefixes', []);
+
+            if (!\is_array($domainIds) || $domainIds === []) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('请选择要转存的域名'),
+                ]);
+            }
+
+            $domainIds = \array_map('intval', $domainIds);
+
+            $subdomainGenerator = ObjectManager::getInstance(
+                \Weline\Websites\Service\SubdomainGeneratorService::class
+            );
+
+            if (!\is_array($prefixes)) {
+                $prefixes = [];
+            }
+
+            $result = $subdomainGenerator->batchGenerateSubdomains($domainIds, $prefixes);
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => __('批量转存完成：新增 %{added} 个，已存在 %{skipped} 个', [
+                    'added' => $result['total_added'],
+                    'skipped' => $result['total_skipped'],
+                ]),
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('批量转存失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 批量域名转存到域名池（仅解析到本服务器的域名）
+     */
+    public function postBatchTransferToPoolWithIpCheck()
+    {
+        try {
+            $domainIds = $this->request->getPost('domain_ids', []);
+            $prefixes = $this->request->getPost('prefixes', []);
+
+            if (\is_string($domainIds)) {
+                $domainIds = \json_decode($domainIds, true) ?: [];
+            }
+
+            if (!\is_array($domainIds) || $domainIds === []) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('请选择要转存的域名'),
+                ]);
+            }
+
+            $domainIds = \array_map('intval', $domainIds);
+
+            $serverIpService = ObjectManager::getInstance(\Weline\Websites\Service\ServerIpService::class);
+            $subdomainGenerator = ObjectManager::getInstance(\Weline\Websites\Service\SubdomainGeneratorService::class);
+            $domainModel = ObjectManager::getInstance(\Weline\Websites\Model\Domain::class);
+
+            $serverIp = $serverIpService->getPublicIpv4();
+            if ($serverIp === '') {
+                return $this->fetchJson([
+                    'code' => 500,
+                    'msg' => __('无法获取服务器公网IP'),
+                ]);
+            }
+
+            if (!\is_array($prefixes)) {
+                $prefixes = [];
+            }
+
+            $totalAdded = 0;
+            $totalSkipped = 0;
+            $skippedDomains = [];
+            $processedDomains = [];
+
+            foreach ($domainIds as $domainId) {
+                $domain = ObjectManager::getInstance(\Weline\Websites\Model\Domain::class, [], false);
+                $domain->load($domainId);
+
+                if (!$domain->getDomainId()) {
+                    $totalSkipped++;
+                    continue;
+                }
+
+                $domainName = $domain->getDomain();
+                $resolvedIp = \gethostbyname($domainName);
+
+                if ($resolvedIp === $domainName || !$serverIpService->isLocalServer($resolvedIp)) {
+                    $totalSkipped++;
+                    $skippedDomains[] = $domainName;
+                    continue;
+                }
+
+                $result = $subdomainGenerator->generateDefaultSubdomains($domain, $prefixes);
+                $totalAdded += $result['added'] ?? 0;
+                $processedDomains[] = $domainName;
+            }
+
+            $msg = __('批量转存完成：成功 %{1} 个子域名', [$totalAdded]);
+            if (\count($skippedDomains) > 0) {
+                $msg .= '，' . __('跳过 %{1} 个域名（IP不匹配）', [\count($skippedDomains)]);
+            }
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => $msg,
+                'data' => [
+                    'total_added' => $totalAdded,
+                    'total_skipped' => $totalSkipped,
+                    'skipped_domains' => $skippedDomains,
+                    'processed_domains' => $processedDomains,
+                    'server_ip' => $serverIp,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('批量转存失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * AJAX: 批量解析域名到本地服务器
+     */
+    public function postBatchResolveToLocal(): string
+    {
+        $domainIds = $this->request->getPost('domain_ids', []);
+
+        if (\is_string($domainIds)) {
+            $domainIds = \json_decode($domainIds, true) ?: [];
+        }
+
+        $domainIds = \array_map('intval', \array_filter((array) $domainIds));
+
+        if ($domainIds === []) {
+            return $this->fetchJson(['code' => 400, 'msg' => __('请选择要解析的域名')]);
+        }
+
+        try {
+            $resolveService = ObjectManager::getInstance(DomainResolveService::class);
+            $serverIpService = ObjectManager::getInstance(ServerIpService::class);
+
+            $serverIp = $serverIpService->getPublicIpv4();
+            if ($serverIp === '') {
+                return $this->fetchJson(['code' => 500, 'msg' => __('无法获取服务器公网IP')]);
+            }
+
+            $success = 0;
+            $failed = 0;
+            $errors = [];
+
+            foreach ($domainIds as $domainId) {
+                $domain = ObjectManager::getInstance(DomainModel::class, [], false);
+                $domain->load($domainId);
+
+                if (!$domain->getDomainId()) {
+                    $failed++;
+                    continue;
+                }
+
+                $result = $resolveService->autoResolveToLocal($domain, ['@', 'www']);
+
+                if ($result['success']) {
+                    $success++;
+                } else {
+                    $failed++;
+                    $errors[] = $domain->getDomain() . ': ' . \implode('; ', $result['errors'] ?? []);
+                }
+            }
+
+            $msg = __('解析完成：成功 %{1} 个，失败 %{2} 个', [$success, $failed]);
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => $msg,
+                'data' => [
+                    'success' => $success,
+                    'failed' => $failed,
+                    'errors' => $errors,
+                    'server_ip' => $serverIp,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('解析失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * AJAX: 批量切换域名 DNS 服务器
+     */
+    public function postBatchChangeNameservers(): string
+    {
+        $domainIds = $this->request->getPost('domain_ids', []);
+        $nameservers = $this->request->getPost('nameservers', '');
+        $targetProvider = $this->request->getPost('target_provider', '');
+
+        if (\is_string($domainIds)) {
+            $domainIds = \json_decode($domainIds, true) ?: [];
+        }
+
+        $domainIds = \array_map('intval', \array_filter((array) $domainIds));
+
+        if ($domainIds === []) {
+            return $this->fetchJson(['code' => 400, 'msg' => __('请选择要切换的域名')]);
+        }
+
+        $nameserverList = [];
+        if ($nameservers !== '') {
+            $nameserverList = \array_filter(\array_map('trim', \explode(',', $nameservers)));
+        }
+
+        if ($nameserverList === [] && $targetProvider === '') {
+            return $this->fetchJson(['code' => 400, 'msg' => __('请输入目标 DNS 服务器或选择目标服务商')]);
+        }
+
+        try {
+            $registrarResolver = ObjectManager::getInstance(DomainRegistrarResolverService::class);
+
+            if ($targetProvider !== '' && $nameserverList === []) {
+                $nameserverList = $this->getProviderNameservers($targetProvider);
+                if ($nameserverList === []) {
+                    return $this->fetchJson(['code' => 400, 'msg' => __('无法获取目标服务商的 Nameserver')]);
+                }
+            }
+
+            $success = 0;
+            $failed = 0;
+            $errors = [];
+
+            foreach ($domainIds as $domainId) {
+                $domain = ObjectManager::getInstance(DomainModel::class, [], false);
+                $domain->load($domainId);
+
+                if (!$domain->getDomainId()) {
+                    $failed++;
+                    continue;
+                }
+
+                $accountId = (int) $domain->getAccountId();
+                $account = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+                $account->load($accountId);
+
+                if (!$account->getAccountId()) {
+                    $failed++;
+                    $errors[] = $domain->getDomain() . ': ' . __('找不到域名商账户');
+                    continue;
+                }
+
+                $adapter = $registrarResolver->getAdapter($account->getRegistrarCode());
+                if ($adapter === null) {
+                    $failed++;
+                    $errors[] = $domain->getDomain() . ': ' . __('域名商适配器不存在');
+                    continue;
+                }
+
+                $credentials = $account->getCredentials();
+                $result = $adapter->updateNameservers($domain->getDomain(), $nameserverList, $credentials);
+
+                if ($result['success'] ?? false) {
+                    $success++;
+                    $domain->setNameservers($nameserverList);
+                    $domain->save();
+                } else {
+                    $failed++;
+                    $errors[] = $domain->getDomain() . ': ' . ($result['message'] ?? __('切换失败'));
+                }
+            }
+
+            $msg = __('DNS切换完成：成功 %{1} 个，失败 %{2} 个', [$success, $failed]);
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => $msg,
+                'data' => [
+                    'success' => $success,
+                    'failed' => $failed,
+                    'errors' => $errors,
+                    'target_nameservers' => $nameserverList,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('切换失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * AJAX: 获取可用的 DNS 服务商列表
+     */
+    public function getGetDnsProviders(): string
+    {
+        $providers = [
+            [
+                'code' => 'cloudflare',
+                'name' => 'Cloudflare',
+                'nameservers' => [],
+                'description' => __('全球领先的 CDN 和 DNS 服务商，提供免费 DDoS 防护'),
+            ],
+            [
+                'code' => 'dnspod',
+                'name' => 'DNSPod',
+                'nameservers' => ['ns1.dnspod.net', 'ns2.dnspod.net'],
+                'description' => __('腾讯云 DNS 服务，国内解析速度快'),
+            ],
+            [
+                'code' => 'alidns',
+                'name' => __('阿里云 DNS'),
+                'nameservers' => ['ns1.alidns.com', 'ns2.alidns.com'],
+                'description' => __('阿里云 DNS 服务，稳定可靠'),
+            ],
+            [
+                'code' => 'custom',
+                'name' => __('自定义'),
+                'nameservers' => [],
+                'description' => __('手动输入 Nameserver'),
+            ],
+        ];
+
+        return $this->fetchJson([
+            'code' => 200,
+            'msg' => 'success',
+            'data' => ['providers' => $providers],
+        ]);
+    }
+
+    /**
+     * 获取服务商的默认 Nameserver
+     */
+    private function getProviderNameservers(string $provider): array
+    {
+        $providerNameservers = [
+            'dnspod' => ['ns1.dnspod.net', 'ns2.dnspod.net'],
+            'alidns' => ['ns1.alidns.com', 'ns2.alidns.com'],
+            'cloudflare' => [],
+            'godaddy' => ['ns1.domaincontrol.com', 'ns2.domaincontrol.com'],
+            'namecheap' => ['dns1.registrar-servers.com', 'dns2.registrar-servers.com'],
+        ];
+
+        return $providerNameservers[\strtolower($provider)] ?? [];
+    }
+
+    /**
+     * AJAX: 获取可用的域名商账户列表（用于DNS切换）
+     */
+    public function getGetRegistrarAccounts(): string
+    {
+        try {
+            $accountModel = ObjectManager::getInstance(DomainRegistrarAccount::class);
+            $accountModel->clearData(true);
+            $accountModel->clearQuery();
+            $allAccounts = $accountModel->select()->fetchArray();
+
+            $result = [];
+            foreach ($allAccounts as $account) {
+                $acctId = (int) ($account['account_id'] ?? $account['id'] ?? 0);
+                if ($acctId <= 0) {
+                    continue;
+                }
+                $registrarCode = $account['registrar_code'] ?? '';
+                $registrarName = $account['registrar_name'] ?? '';
+
+                if ($registrarCode === '' || $registrarName === '') {
+                    $registrarId = (int) ($account['registrar_id'] ?? 0);
+                    if ($registrarId > 0) {
+                        $registrar = ObjectManager::getInstance(\Weline\Websites\Model\DomainRegistrar::class);
+                        $registrar->clearData(true);
+                        $registrar->clearQuery();
+                        $registrar->where(\Weline\Websites\Model\DomainRegistrar::fields_ID, $registrarId)
+                            ->find()->fetch();
+                        $registrarCode = (string) ($registrar->getData(\Weline\Websites\Model\DomainRegistrar::fields_CODE) ?? '');
+                        $registrarName = (string) ($registrar->getData(\Weline\Websites\Model\DomainRegistrar::fields_NAME) ?? '');
+                    }
+                }
+
+                $result[] = [
+                    'id' => $acctId,
+                    'name' => $account['account_name'] ?? '',
+                    'registrar_code' => $registrarCode,
+                    'registrar_name' => $registrarName,
+                ];
+            }
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => 'success',
+                'data' => ['accounts' => $result],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('获取账户列表失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * AJAX: 获取账户的 Nameserver（用于一键切换）
+     *
+     * 对于 Cloudflare 等供应商，需要传入域名列表来获取每个域名的 Nameserver
+     */
+    public function postGetAccountNameservers(): string
+    {
+        $accountId = (int) $this->request->getPost('account_id', 0);
+        $domains = $this->request->getPost('domains', []);
+
+        if ($accountId <= 0) {
+            return $this->fetchJson(['code' => 400, 'msg' => __('请选择目标账户')]);
+        }
+
+        if (\is_string($domains)) {
+            $domains = \json_decode($domains, true) ?: [];
+        }
+
+        try {
+            $account = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+            $account->load($accountId);
+
+            if (!$account->getAccountId()) {
+                return $this->fetchJson(['code' => 404, 'msg' => __('账户不存在')]);
+            }
+
+            $registrarResolver = ObjectManager::getInstance(DomainRegistrarResolverService::class);
+            $adapter = $registrarResolver->getAdapter($account->getRegistrarCode());
+
+            if ($adapter === null) {
+                return $this->fetchJson(['code' => 404, 'msg' => __('适配器不存在')]);
+            }
+
+            $credentials = $account->getCredentials();
+
+            if (empty($domains)) {
+                $result = $adapter->getProviderNameservers($credentials);
+                return $this->fetchJson([
+                    'code' => $result['success'] ? 200 : 400,
+                    'msg' => $result['message'] ?? '',
+                    'data' => [
+                        'nameservers' => $result['nameservers'] ?? [],
+                        'per_domain' => false,
+                    ],
+                ]);
+            }
+
+            $firstDomain = \is_array($domains) ? ($domains[0] ?? '') : '';
+            $result = $adapter->getProviderNameservers($credentials, $firstDomain);
+
+            $needsPerDomain = ($account->getRegistrarCode() === 'cloudflare');
+
+            if ($needsPerDomain && !empty($domains)) {
+                $domainNs = [];
+                foreach ($domains as $domain) {
+                    $nsResult = $adapter->getProviderNameservers($credentials, $domain);
+                    $domainNs[$domain] = [
+                        'success' => $nsResult['success'] ?? false,
+                        'nameservers' => $nsResult['nameservers'] ?? [],
+                        'message' => $nsResult['message'] ?? '',
+                    ];
+                }
+                return $this->fetchJson([
+                    'code' => 200,
+                    'msg' => __('已获取各域名的 Nameserver'),
+                    'data' => [
+                        'nameservers' => [],
+                        'per_domain' => true,
+                        'domain_nameservers' => $domainNs,
+                    ],
+                ]);
+            }
+
+            return $this->fetchJson([
+                'code' => $result['success'] ? 200 : 400,
+                'msg' => $result['message'] ?? '',
+                'data' => [
+                    'nameservers' => $result['nameservers'] ?? [],
+                    'per_domain' => false,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('获取 Nameserver 失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * AJAX: 批量切换域名到目标账户（一键切换）
+     */
+    public function postBatchSwitchToAccount(): string
+    {
+        $domainIds = $this->request->getPost('domain_ids', []);
+        $targetAccountId = (int) $this->request->getPost('target_account_id', 0);
+
+        if (\is_string($domainIds)) {
+            $domainIds = \json_decode($domainIds, true) ?: [];
+        }
+
+        $domainIds = \array_map('intval', \array_filter((array) $domainIds));
+
+        if ($domainIds === []) {
+            return $this->fetchJson(['code' => 400, 'msg' => __('请选择要切换的域名')]);
+        }
+
+        if ($targetAccountId <= 0) {
+            return $this->fetchJson(['code' => 400, 'msg' => __('请选择目标账户')]);
+        }
+
+        try {
+            $targetAccount = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+            $targetAccount->load($targetAccountId);
+
+            if (!$targetAccount->getAccountId()) {
+                return $this->fetchJson(['code' => 404, 'msg' => __('目标账户不存在')]);
+            }
+
+            $registrarResolver = ObjectManager::getInstance(DomainRegistrarResolverService::class);
+            $targetAdapter = $registrarResolver->getAdapter($targetAccount->getRegistrarCode());
+
+            if ($targetAdapter === null) {
+                return $this->fetchJson(['code' => 404, 'msg' => __('目标适配器不存在')]);
+            }
+
+            $targetCredentials = $targetAccount->getCredentials();
+
+            $success = 0;
+            $failed = 0;
+            $errors = [];
+
+            foreach ($domainIds as $domainId) {
+                $domain = ObjectManager::getInstance(DomainModel::class, [], false);
+                $domain->load($domainId);
+
+                if (!$domain->getDomainId()) {
+                    $failed++;
+                    continue;
+                }
+
+                $domainName = $domain->getDomain();
+
+                $nsResult = $targetAdapter->getProviderNameservers($targetCredentials, $domainName);
+                if (!($nsResult['success'] ?? false) || empty($nsResult['nameservers'])) {
+                    $failed++;
+                    $errors[] = $domainName . ': ' . ($nsResult['message'] ?? __('无法获取目标 Nameserver'));
+                    continue;
+                }
+
+                $targetNs = $nsResult['nameservers'];
+
+                $sourceAccountId = (int) $domain->getAccountId();
+                $sourceAccount = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+                $sourceAccount->load($sourceAccountId);
+
+                if (!$sourceAccount->getAccountId()) {
+                    $failed++;
+                    $errors[] = $domainName . ': ' . __('找不到源域名商账户');
+                    continue;
+                }
+
+                $sourceAdapter = $registrarResolver->getAdapter($sourceAccount->getRegistrarCode());
+                if ($sourceAdapter === null) {
+                    $failed++;
+                    $errors[] = $domainName . ': ' . __('源域名商适配器不存在');
+                    continue;
+                }
+
+                $sourceCredentials = $sourceAccount->getCredentials();
+                $updateResult = $sourceAdapter->updateNameservers($domainName, $targetNs, $sourceCredentials);
+
+                if ($updateResult['success'] ?? false) {
+                    $success++;
+                    $domain->setNameservers($targetNs);
+                    $domain->save();
+                } else {
+                    $failed++;
+                    $errors[] = $domainName . ': ' . ($updateResult['message'] ?? __('切换失败'));
+                }
+            }
+
+            $msg = __('DNS切换完成：成功 %{1} 个，失败 %{2} 个', [$success, $failed]);
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => $msg,
+                'data' => [
+                    'success' => $success,
+                    'failed' => $failed,
+                    'errors' => $errors,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('切换失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * AJAX: 实时检测域名的 DNS 服务商和 NS 记录
+     *
+     * 从公网 DNS 查询当前域名的 NS 记录，判断 DNS 服务商归属
+     */
+    public function postDetectDnsProvider(): string
+    {
+        try {
+            $domainIds = $this->request->getPost('domain_ids', []);
+            $forceRefresh = (bool) $this->request->getPost('force_refresh', false);
+
+            if (\is_string($domainIds)) {
+                $domainIds = \json_decode($domainIds, true) ?: [];
+            }
+
+            $domainIds = \array_map('intval', \array_filter((array) $domainIds));
+
+            if ($domainIds === []) {
+                return $this->fetchJson(['code' => 400, 'msg' => __('请选择要检测的域名')]);
+            }
+
+            $dnsDetector = ObjectManager::getInstance(\Weline\Websites\Service\DnsProviderDetector::class);
+            $results = [];
+            $updated = 0;
+
+            foreach ($domainIds as $domainId) {
+                $domain = clone $this->domainModel;
+                $domain->clearQuery()->load($domainId);
+
+                if (!$domain->getId()) {
+                    continue;
+                }
+
+                $domainName = $domain->getDomain();
+                $registrarCode = '';
+
+                // 获取注册商代码
+                $accountId = $domain->getAccountId();
+                if ($accountId > 0) {
+                    $account = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+                    $account->load($accountId);
+                    $registrarCode = $account->getRegistrarCode() ?: '';
+                }
+
+                // 实时查询 DNS NS 记录
+                $liveNs = $this->queryLiveNsRecords($domainName);
+                $storedNs = $domain->getNameservers();
+
+                // 如果实时查询成功，更新存储的 NS
+                if (!empty($liveNs)) {
+                    if ($forceRefresh || $liveNs !== $storedNs) {
+                        $domain->setNameservers($liveNs);
+                        $storedNs = $liveNs;
+                    }
+                }
+
+                // 检测 DNS 服务商
+                $detectResult = $dnsDetector->detect($storedNs, $registrarCode);
+                $provider = $detectResult['provider'];
+
+                // 更新 dns_provider 字段
+                $currentProvider = $domain->getDnsProvider();
+                if ($currentProvider !== $provider) {
+                    $domain->setDnsProvider($provider);
+                    $updated++;
+                }
+
+                // 如果 DNS 服务商是 CDN 服务商，同步更新 cdn_provider 和 cdn_account_id
+                $cdnProvider = '';
+                $cdnAccountId = 0;
+                if ($dnsDetector->isCdnProvider($provider)) {
+                    $cdnProvider = $provider;
+                    $domain->setCdnProvider($cdnProvider);
+                    
+                    // 自动查找并关联 CDN 账户
+                    if ($domain->getCdnAccountId() === 0) {
+                        $cdnAccount = $this->resolveService->findAccountByProviderCode($cdnProvider);
+                        if ($cdnAccount !== null) {
+                            $cdnAccountId = $cdnAccount->getAccountId();
+                            $domain->setCdnAccountId($cdnAccountId);
+                        }
+                    } else {
+                        $cdnAccountId = $domain->getCdnAccountId();
+                    }
+                    
+                    // 同时设置 DNS 账户（CDN 服务商通常也管理 DNS）
+                    if ($domain->getDnsAccountId() === 0 && $cdnAccountId > 0) {
+                        $domain->setDnsAccountId($cdnAccountId);
+                    }
+                }
+
+                // 保存更改（强制保存，因为 hasDataChanges 可能误判）
+                $domain->forceCheck(false)->save();
+
+                // 同步更新域名池中关联此根域的所有子域名
+                $poolUpdated = $this->syncDnsProviderToPool($domainName, $provider, $cdnProvider);
+
+                // 获取 CDN provider 显示名称
+                $cdnProviderName = '';
+                if ($cdnProvider !== '') {
+                    $cdnInfo = $dnsDetector->getProviderInfo($cdnProvider);
+                    $cdnProviderName = $cdnInfo['name'] ?? $cdnProvider;
+                }
+
+                $results[$domainName] = [
+                    'domain_id' => $domainId,
+                    'domain' => $domainName,
+                    'nameservers' => $storedNs,
+                    'live_nameservers' => $liveNs,
+                    'dns_provider' => $provider,
+                    'dns_provider_name' => $detectResult['name'],
+                    'dns_provider_color' => $detectResult['color'],
+                    'cdn_provider' => $cdnProvider,
+                    'cdn_provider_name' => $cdnProviderName,
+                    'is_original' => $detectResult['is_original'],
+                    'registrar_code' => $registrarCode,
+                    'pool_updated' => $poolUpdated,
+                ];
+            }
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => __('DNS 检测完成，共 %{1} 个根域，%{2} 个已更新', [\count($results), $updated]),
+                'data' => [
+                    'results' => $results,
+                    'total' => \count($results),
+                    'updated' => $updated,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('DNS 检测失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * AJAX: 批量检测所有域名的 DNS 服务商
+     */
+    public function postBatchDetectDnsProvider(): string
+    {
+        try {
+            $dnsDetector = ObjectManager::getInstance(\Weline\Websites\Service\DnsProviderDetector::class);
+
+            // 获取所有域名
+            $domains = $this->domainModel->clearQuery()->select()->fetch();
+
+            $total = 0;
+            $updated = 0;
+            $errors = 0;
+            $results = [];
+
+            foreach ($domains as $domain) {
+                $total++;
+                try {
+                    $domainName = $domain->getDomain();
+                    $registrarCode = '';
+
+                    // 获取注册商代码
+                    $accountId = $domain->getAccountId();
+                    if ($accountId > 0) {
+                        $account = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+                        $account->load($accountId);
+                        $registrarCode = $account->getRegistrarCode() ?: '';
+                    }
+
+                    // 实时查询 NS
+                    $liveNs = $this->queryLiveNsRecords($domainName);
+                    $storedNs = $domain->getNameservers();
+
+                    if (!empty($liveNs) && $liveNs !== $storedNs) {
+                        $domain->setNameservers($liveNs);
+                        $storedNs = $liveNs;
+                    }
+
+                    // 检测服务商
+                    $detectResult = $dnsDetector->detect($storedNs, $registrarCode);
+                    $provider = $detectResult['provider'];
+
+                    $currentProvider = $domain->getDnsProvider();
+                    if ($currentProvider !== $provider) {
+                        $domain->setDnsProvider($provider);
+                        $updated++;
+                    }
+
+                    // 如果 DNS 服务商是 CDN 服务商，同步更新 cdn_provider 和 cdn_account_id
+                    $cdnProvider = '';
+                    $cdnAccountId = 0;
+                    if ($dnsDetector->isCdnProvider($provider)) {
+                        $cdnProvider = $provider;
+                        $domain->setCdnProvider($cdnProvider);
+                        
+                        // 自动查找并关联 CDN 账户
+                        if ($domain->getCdnAccountId() === 0) {
+                            $cdnAccount = $this->resolveService->findAccountByProviderCode($cdnProvider);
+                            if ($cdnAccount !== null) {
+                                $cdnAccountId = $cdnAccount->getAccountId();
+                                $domain->setCdnAccountId($cdnAccountId);
+                            }
+                        } else {
+                            $cdnAccountId = $domain->getCdnAccountId();
+                        }
+                        
+                        // 同时设置 DNS 账户
+                        if ($domain->getDnsAccountId() === 0 && $cdnAccountId > 0) {
+                            $domain->setDnsAccountId($cdnAccountId);
+                        }
+                    }
+
+                    // 强制保存（hasDataChanges 可能误判）
+                    $domain->forceCheck(false)->save();
+
+                    // 同步到域名池
+                    $poolUpdated = $this->syncDnsProviderToPool($domainName, $provider, $cdnProvider);
+
+                    // 获取 CDN provider 显示名称
+                    $cdnProviderName = '';
+                    if ($cdnProvider !== '') {
+                        $cdnInfo = $dnsDetector->getProviderInfo($cdnProvider);
+                        $cdnProviderName = $cdnInfo['name'] ?? $cdnProvider;
+                    }
+
+                    $results[$domainName] = [
+                        'dns_provider' => $provider,
+                        'dns_provider_name' => $detectResult['name'],
+                        'cdn_provider' => $cdnProvider,
+                        'cdn_provider_name' => $cdnProviderName,
+                        'dns_account_id' => $domain->getDnsAccountId(),
+                        'cdn_account_id' => $cdnAccountId,
+                        'nameservers' => $storedNs,
+                        'pool_updated' => $poolUpdated,
+                    ];
+                } catch (\Throwable $e) {
+                    $errors++;
+                }
+            }
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => __('批量检测完成：共 %{1} 个根域，更新 %{2} 个，失败 %{3} 个', [$total, $updated, $errors]),
+                'data' => [
+                    'total' => $total,
+                    'updated' => $updated,
+                    'errors' => $errors,
+                    'results' => $results,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('批量检测失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * AJAX: 批量设置域名的 DNS/CDN 账户
+     *
+     * 允许用户批量修改已拉取根域的 dns_account_id、cdn_account_id
+     */
+    #[Acl('Weline_Websites::batch_set_accounts', '批量设置账户', 'mdi mdi-account-multiple-check', '批量设置域名的 DNS/CDN 管理账户')]
+    public function postBatchSetAccounts(): string
+    {
+        try {
+            $domainIds = $this->request->getPost('domain_ids', []);
+            $dnsAccountId = $this->request->getPost('dns_account_id');
+            $cdnAccountId = $this->request->getPost('cdn_account_id');
+
+            if (\is_string($domainIds)) {
+                $domainIds = \json_decode($domainIds, true) ?: [];
+            }
+
+            $domainIds = \array_map('intval', \array_filter((array) $domainIds));
+
+            if ($domainIds === []) {
+                return $this->fetchJson(['code' => 400, 'msg' => __('请选择要设置的域名')]);
+            }
+
+            // 至少要设置一个账户
+            $hasDnsAccount = $dnsAccountId !== null && $dnsAccountId !== '';
+            $hasCdnAccount = $cdnAccountId !== null && $cdnAccountId !== '';
+
+            if (!$hasDnsAccount && !$hasCdnAccount) {
+                return $this->fetchJson(['code' => 400, 'msg' => __('请至少选择一个账户进行设置')]);
+            }
+
+            // 验证账户存在性
+            if ($hasDnsAccount && (int) $dnsAccountId > 0) {
+                $dnsAccount = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+                $dnsAccount->load((int) $dnsAccountId);
+                if (!$dnsAccount->getAccountId()) {
+                    return $this->fetchJson(['code' => 404, 'msg' => __('DNS 账户不存在')]);
+                }
+            }
+
+            if ($hasCdnAccount && (int) $cdnAccountId > 0) {
+                $cdnAccount = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+                $cdnAccount->load((int) $cdnAccountId);
+                if (!$cdnAccount->getAccountId()) {
+                    return $this->fetchJson(['code' => 404, 'msg' => __('CDN 账户不存在')]);
+                }
+            }
+
+            $updated = 0;
+            $errors = [];
+
+            foreach ($domainIds as $domainId) {
+                $domain = clone $this->domainModel;
+                $domain->clearQuery()->load($domainId);
+
+                if (!$domain->getDomainId()) {
+                    $errors[] = __('域名 ID %{1} 不存在', [$domainId]);
+                    continue;
+                }
+
+                $changed = false;
+
+                // 设置 DNS 账户（0 表示清除，> 0 表示设置）
+                if ($hasDnsAccount) {
+                    $newDnsAccountId = (int) $dnsAccountId;
+                    if ($domain->getDnsAccountId() !== $newDnsAccountId) {
+                        $domain->setDnsAccountId($newDnsAccountId);
+                        $changed = true;
+                    }
+                }
+
+                // 设置 CDN 账户
+                if ($hasCdnAccount) {
+                    $newCdnAccountId = (int) $cdnAccountId;
+                    if ($domain->getCdnAccountId() !== $newCdnAccountId) {
+                        $domain->setCdnAccountId($newCdnAccountId);
+                        $changed = true;
+                    }
+                }
+
+                if ($changed) {
+                    $domain->forceCheck(false)->save();
+                    $updated++;
+                }
+            }
+
+            $msg = __('批量设置完成：共 %{1} 个域名，更新 %{2} 个', [\count($domainIds), $updated]);
+            if (!empty($errors)) {
+                $msg .= '，' . __('失败 %{1} 个', [\count($errors)]);
+            }
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => $msg,
+                'data' => [
+                    'total' => \count($domainIds),
+                    'updated' => $updated,
+                    'errors' => $errors,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('批量设置失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * AJAX: 获取可用于 DNS/CDN 管理的账户列表
+     *
+     * 返回支持 DNS 管理的账户（用于下拉选择）
+     */
+    #[Acl('Weline_Websites::get_dns_accounts', '获取DNS账户列表', 'mdi mdi-dns', '获取支持 DNS 管理的账户列表')]
+    public function getDnsAccounts(): string
+    {
+        try {
+            $registrarResolver = ObjectManager::getInstance(DomainRegistrarResolverService::class);
+            $accounts = ObjectManager::getInstance(DomainRegistrarAccount::class);
+            $allAccounts = $accounts->clearQuery()
+                ->where(DomainRegistrarAccount::fields_STATUS, DomainRegistrarAccount::STATUS_ACTIVE)
+                ->select()
+                ->fetch();
+
+            $dnsAccounts = [];
+            $cdnAccounts = [];
+
+            foreach ($allAccounts as $account) {
+                $registrarCode = $account->getRegistrarCode();
+                $adapter = $registrarResolver->getAdapter($registrarCode);
+
+                $accountInfo = [
+                    'account_id' => $account->getAccountId(),
+                    'name' => $account->getName(),
+                    'registrar_code' => $registrarCode,
+                    'registrar_name' => $account->getData('registrar_name') ?: $registrarCode,
+                ];
+
+                // 支持 DNS 管理的账户
+                if ($adapter !== null && $adapter->supportsDnsManagement()) {
+                    $dnsAccounts[] = $accountInfo;
+                }
+
+                // CDN 服务商账户（Cloudflare 等）
+                $dnsDetector = ObjectManager::getInstance(\Weline\Websites\Service\DnsProviderDetector::class);
+                if ($dnsDetector->isCdnProvider($registrarCode)) {
+                    $cdnAccounts[] = $accountInfo;
+                }
+            }
+
+            return $this->fetchJson([
+                'code' => 200,
+                'data' => [
+                    'dns_accounts' => $dnsAccounts,
+                    'cdn_accounts' => $cdnAccounts,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('获取账户列表失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 实时查询域名的 NS 记录（从公网 DNS）
+     *
+     * @param string $domain 域名
+     * @return array NS 记录列表
+     */
+    private function queryLiveNsRecords(string $domain): array
+    {
+        $records = @\dns_get_record($domain, \DNS_NS);
+        if ($records === false || empty($records)) {
+            return [];
+        }
+
+        $nameservers = [];
+        foreach ($records as $record) {
+            if (isset($record['target'])) {
+                $nameservers[] = \strtolower($record['target']);
+            }
+        }
+
+        \sort($nameservers);
+        return $nameservers;
+    }
+
+    /**
+     * 同步 DNS/CDN 服务商到域名池
+     *
+     * 将根域名的 DNS 服务商同步到域名池中所有关联的子域名
+     *
+     * @param string $rootDomain 根域名
+     * @param string $dnsProvider DNS 服务商代码
+     * @param string $cdnProvider CDN 服务商代码（可选，如果 DNS 是 CDN 服务商则传入）
+     * @return int 更新的域名池记录数
+     */
+    private function syncDnsProviderToPool(string $rootDomain, string $dnsProvider, string $cdnProvider = ''): int
+    {
+        $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
+
+        // 查找域名池中所有 root_domain 匹配的记录
+        $poolDomains = $poolModel->clearQuery()
+            ->where(\Weline\Websites\Model\DomainPool::fields_ROOT_DOMAIN, \strtolower($rootDomain))
+            ->select()
+            ->fetch();
+
+        $updated = 0;
+        foreach ($poolDomains as $poolDomain) {
+            $changed = false;
+            
+            // 同步 DNS provider
+            $currentDnsProvider = $poolDomain->getDnsProvider();
+            if ($currentDnsProvider !== $dnsProvider) {
+                $poolDomain->setDnsProvider($dnsProvider);
+                $changed = true;
+            }
+            
+            // 同步 CDN provider（如果有）
+            if ($cdnProvider !== '') {
+                $currentCdnProvider = $poolDomain->getData('cdn_provider') ?? '';
+                if ($currentCdnProvider !== $cdnProvider) {
+                    $poolDomain->setData('cdn_provider', $cdnProvider);
+                    $changed = true;
+                }
+            }
+            
+            if ($changed) {
+                $poolDomain->save();
+                $updated++;
+            }
+        }
+
+        return $updated;
+    }
+
+    // ============================================================
+    // 批量取消拉取（从本地删除已同步的域名）
+    // ============================================================
+
+    /**
+     * 批量取消拉取域名
+     *
+     * 从本地删除已同步的域名记录，不影响远程域名商的域名数据。
+     * 同时会删除关联的域名池记录和 DNS 解析记录。
+     */
+    #[Acl('Weline_Websites::batch_remove_sync', '批量取消拉取', 'mdi mdi-database-remove', '从本地移除已同步的域名')]
+    public function postBatchRemoveSync(): string
+    {
+        try {
+            $domainIds = $this->request->getPost('domain_ids', []);
+
+            if (\is_string($domainIds)) {
+                $domainIds = \json_decode($domainIds, true) ?: [];
+            }
+            $domainIds = \array_filter(\array_map('intval', $domainIds));
+
+            if (empty($domainIds)) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('请选择要取消拉取的域名'),
+                ]);
+            }
+
+            $deleted = 0;
+            $poolDeleted = 0;
+            $dnsDeleted = 0;
+            $errors = [];
+
+            foreach ($domainIds as $domainId) {
+                try {
+                    $domain = ObjectManager::getInstance(DomainModel::class, [], false);
+                    $domain->clearQuery()->load($domainId);
+
+                    if (!$domain->getDomainId()) {
+                        continue;
+                    }
+
+                    $domainName = $domain->getDomain();
+
+                    // 1. 删除关联的域名池记录
+                    $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
+                    $poolRecords = $poolModel->clearQuery()
+                        ->where(\Weline\Websites\Model\DomainPool::fields_ROOT_DOMAIN, \strtolower($domainName))
+                        ->select()
+                        ->fetch();
+
+                    foreach ($poolRecords as $poolRecord) {
+                        $poolRecord->delete();
+                        $poolDeleted++;
+                    }
+
+                    // 2. 删除关联的 DNS 解析记录（本地记录）
+                    $dnsModel = ObjectManager::getInstance(DomainDnsRecord::class, [], false);
+                    $dnsRecords = $dnsModel->clearQuery()
+                        ->where(DomainDnsRecord::fields_DOMAIN_ID, $domainId)
+                        ->select()
+                        ->fetch();
+
+                    foreach ($dnsRecords as $dnsRecord) {
+                        $dnsRecord->delete();
+                        $dnsDeleted++;
+                    }
+
+                    // 3. 删除域名记录
+                    $domain->delete();
+                    $deleted++;
+                } catch (\Throwable $e) {
+                    $errors[] = "ID {$domainId}: " . $e->getMessage();
+                }
+            }
+
+            $msg = __('批量取消拉取完成：删除 %{1} 个根域，%{2} 个域名池记录，%{3} 条 DNS 记录', [
+                $deleted,
+                $poolDeleted,
+                $dnsDeleted,
+            ]);
+
+            if (!empty($errors)) {
+                $msg .= ' ' . __('（%{1} 个失败）', [\count($errors)]);
+            }
+
+            return $this->fetchJson([
+                'code' => empty($errors) ? 200 : 206,
+                'msg' => $msg,
+                'data' => [
+                    'deleted' => $deleted,
+                    'pool_deleted' => $poolDeleted,
+                    'dns_deleted' => $dnsDeleted,
+                    'errors' => $errors,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('批量取消拉取失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 按账户批量取消拉取
+     *
+     * 删除指定账户下的所有已同步域名
+     */
+    #[Acl('Weline_Websites::remove_sync_by_account', '按账户取消拉取', 'mdi mdi-account-remove', '删除指定账户下的所有域名')]
+    public function postRemoveSyncByAccount(): string
+    {
+        try {
+            $accountId = (int) $this->request->getPost('account_id', 0);
+
+            if ($accountId <= 0) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => __('请选择域名商账户'),
+                ]);
+            }
+
+            // 获取该账户下的所有域名
+            $domains = $this->domainModel->clearQuery()
+                ->where(DomainModel::fields_ACCOUNT_ID, $accountId)
+                ->select()
+                ->fetch();
+
+            if (empty($domains) || (\is_countable($domains) && \count($domains) === 0)) {
+                return $this->fetchJson([
+                    'code' => 200,
+                    'msg' => __('该账户下没有已同步的域名'),
+                    'data' => [
+                        'deleted' => 0,
+                        'pool_deleted' => 0,
+                        'dns_deleted' => 0,
+                    ],
+                ]);
+            }
+
+            $deleted = 0;
+            $poolDeleted = 0;
+            $dnsDeleted = 0;
+
+            foreach ($domains as $domain) {
+                $domainId = $domain->getDomainId();
+                $domainName = $domain->getDomain();
+
+                // 1. 删除关联的域名池记录
+                $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
+                $poolRecords = $poolModel->clearQuery()
+                    ->where(\Weline\Websites\Model\DomainPool::fields_ROOT_DOMAIN, \strtolower($domainName))
+                    ->select()
+                    ->fetch();
+
+                foreach ($poolRecords as $poolRecord) {
+                    $poolRecord->delete();
+                    $poolDeleted++;
+                }
+
+                // 2. 删除关联的 DNS 解析记录
+                $dnsModel = ObjectManager::getInstance(DomainDnsRecord::class, [], false);
+                $dnsRecords = $dnsModel->clearQuery()
+                    ->where(DomainDnsRecord::fields_DOMAIN_ID, $domainId)
+                    ->select()
+                    ->fetch();
+
+                foreach ($dnsRecords as $dnsRecord) {
+                    $dnsRecord->delete();
+                    $dnsDeleted++;
+                }
+
+                // 3. 删除域名记录
+                $domain->delete();
+                $deleted++;
+            }
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => __('取消拉取完成：删除 %{1} 个根域，%{2} 个域名池记录，%{3} 条 DNS 记录', [
+                    $deleted,
+                    $poolDeleted,
+                    $dnsDeleted,
+                ]),
+                'data' => [
+                    'deleted' => $deleted,
+                    'pool_deleted' => $poolDeleted,
+                    'dns_deleted' => $dnsDeleted,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('取消拉取失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 清理所有 DNS 服务商账户下的域名
+     *
+     * 删除所有非域名注册商（如 Cloudflare、Azure DNS）账户下的域名，
+     * 这些域名不应该出现在根域列表中（它们只是托管在 DNS 服务商，实际归属于其他注册商）。
+     */
+    #[Acl('Weline_Websites::cleanup_dns_provider_domains', '清理DNS服务商域名', 'mdi mdi-broom', '清理误同步的DNS服务商域名')]
+    public function postCleanupDnsProviderDomains(): string
+    {
+        try {
+            $resolverService = ObjectManager::getInstance(DomainRegistrarResolverService::class);
+
+            // 获取所有账户
+            $accounts = $this->registrarAccount->clearQuery()
+                ->select()
+                ->fetch();
+
+            $totalDeleted = 0;
+            $totalPoolDeleted = 0;
+            $totalDnsDeleted = 0;
+            $cleanedAccounts = [];
+
+            foreach ($accounts as $account) {
+                $registrarCode = $account->getRegistrarCode();
+                if (!$registrarCode) {
+                    continue;
+                }
+
+                $adapter = $resolverService->getAdapter($registrarCode);
+                if (!$adapter) {
+                    continue;
+                }
+
+                // 跳过真正的域名注册商
+                if ($adapter->isDomainRegistrar()) {
+                    continue;
+                }
+
+                $accountId = $account->getAccountId();
+                $accountName = $account->getAccountName();
+
+                // 获取该账户下的所有域名
+                $domains = $this->domainModel->clearQuery()
+                    ->where(DomainModel::fields_ACCOUNT_ID, $accountId)
+                    ->select()
+                    ->fetch();
+
+                if (empty($domains)) {
+                    continue;
+                }
+
+                $deleted = 0;
+                $poolDeleted = 0;
+                $dnsDeleted = 0;
+
+                foreach ($domains as $domain) {
+                    $domainId = $domain->getDomainId();
+                    $domainName = $domain->getDomain();
+
+                    // 删除关联的域名池记录
+                    $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
+                    $poolRecords = $poolModel->clearQuery()
+                        ->where(\Weline\Websites\Model\DomainPool::fields_ROOT_DOMAIN, \strtolower($domainName))
+                        ->select()
+                        ->fetch();
+
+                    foreach ($poolRecords as $poolRecord) {
+                        $poolRecord->delete();
+                        $poolDeleted++;
+                    }
+
+                    // 删除关联的 DNS 解析记录
+                    $dnsModel = ObjectManager::getInstance(DomainDnsRecord::class, [], false);
+                    $dnsRecords = $dnsModel->clearQuery()
+                        ->where(DomainDnsRecord::fields_DOMAIN_ID, $domainId)
+                        ->select()
+                        ->fetch();
+
+                    foreach ($dnsRecords as $dnsRecord) {
+                        $dnsRecord->delete();
+                        $dnsDeleted++;
+                    }
+
+                    // 删除域名记录
+                    $domain->delete();
+                    $deleted++;
+                }
+
+                if ($deleted > 0) {
+                    $cleanedAccounts[] = [
+                        'account_name' => $accountName,
+                        'registrar_name' => $adapter->getRegistrarName(),
+                        'deleted' => $deleted,
+                        'pool_deleted' => $poolDeleted,
+                        'dns_deleted' => $dnsDeleted,
+                    ];
+                    $totalDeleted += $deleted;
+                    $totalPoolDeleted += $poolDeleted;
+                    $totalDnsDeleted += $dnsDeleted;
+                }
+            }
+
+            if (empty($cleanedAccounts)) {
+                return $this->fetchJson([
+                    'code' => 200,
+                    'msg' => __('没有需要清理的 DNS 服务商域名'),
+                    'data' => [
+                        'cleaned_accounts' => [],
+                        'total_deleted' => 0,
+                    ],
+                ]);
+            }
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => __('清理完成：共删除 %{1} 个误同步的域名（来自 %{2} 个 DNS 服务商账户）', [
+                    $totalDeleted,
+                    \count($cleanedAccounts),
+                ]),
+                'data' => [
+                    'cleaned_accounts' => $cleanedAccounts,
+                    'total_deleted' => $totalDeleted,
+                    'total_pool_deleted' => $totalPoolDeleted,
+                    'total_dns_deleted' => $totalDnsDeleted,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('清理失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
 }
