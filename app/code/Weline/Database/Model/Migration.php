@@ -165,7 +165,7 @@ class Migration extends Model implements ModelInterface
             $this->setData(self::fields_ROLLBACK_AT, date('Y-m-d H:i:s'));
         }
         
-        return $this->save();
+        return (bool)$this->save();
     }
     
     /**

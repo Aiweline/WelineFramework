@@ -27,7 +27,14 @@ class MigrationServiceTest extends TestCore
     public function tearDown(): void
     {
         parent::tearDown();
-        // 清理测试数据
+        // 清理测试数据 - 删除测试模块的迁移记录
+        $testModules = ['Weline_Test', 'Weline_TestModule'];
+        foreach ($testModules as $moduleName) {
+            $this->migrationModel->reset()
+                ->where(Migration::fields_MODULE, $moduleName)
+                ->delete()
+                ->fetch();
+        }
     }
     
     /**
@@ -237,7 +244,14 @@ class CreateTableTest20250101V100 implements MigrationInterface
         $moduleName = 'Weline_Test';
         $migrationFile = 'test_migration.php';
         
-        // 先记录一个迁移
+        // 先清理可能遗留的测试数据
+        $this->migrationModel->reset()
+            ->where(Migration::fields_MODULE, $moduleName)
+            ->where(Migration::fields_FILE, $migrationFile)
+            ->delete()
+            ->fetch();
+        
+        // 记录一个新迁移
         $testData = [
             'module_name' => $moduleName,
             'version' => '1.0.0',
