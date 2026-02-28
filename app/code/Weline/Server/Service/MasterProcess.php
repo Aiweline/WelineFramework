@@ -2555,10 +2555,9 @@ class MasterProcess
         $this->controlServer->setLogger(function (string $line) {
             $this->log("\033[95m{$line}\033[0m");
         });
-        
-        // DEV 模式下输出详细 IPC SEND/RECV 明细，否则只输出关键事件（CONNECT/DISCONNECT）
-        $isDevMode = (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE);
-        $this->controlServer->setVerboseLog($isDevMode);
+
+        // 始终启用详细 IPC SEND/RECV 明细（便于调试）
+        $this->controlServer->setVerboseLog(true);
         
         // 注册消息处理器
         $this->controlServer->onMessage(function (array $msg, int $clientId, MasterControlServer $server) {
@@ -2635,6 +2634,9 @@ class MasterProcess
         switch ($action) {
             case ControlMessage::ACTION_STOP:
                 $this->log(__('收到 CLI 停止命令'));
+                // ⭐ 立即设置停止标志，禁止 handleWorkerDisconnect 触发复活逻辑
+                // 必须在 broadcast shutdown 之前设置，否则 Worker 退出时会被误判为"意外断开"并尝试重启
+                $this->shouldStopFlag = true;
                 // 通过 IPC 控制通道广播 shutdown，子进程收后不复活（不依赖文件信号）
                 if ($this->controlServer) {
                     $this->controlServer->broadcast(ControlMessage::shutdown('server:stop'));
@@ -2642,7 +2644,6 @@ class MasterProcess
                     \usleep(100000); // 100ms
                     $this->controlServer->sendTo($clientId, ControlMessage::commandResult(true, [], 'stopping'));
                 }
-                $this->shouldStopFlag = true;
                 break;
                 
             case ControlMessage::ACTION_RELOAD:
@@ -2666,10 +2667,14 @@ class MasterProcess
                 $status = $this->getWorkersStatus();
                 if ($this->controlServer) {
                     $this->controlServer->sendTo($clientId, ControlMessage::commandResult(true, [
-                        'workers'    => $status,
-                        'mode'       => $this->mode,
-                        'uptime'     => $this->getUptime(),
-                        'master_pid' => \getmypid(),
+                        'workers'         => $status,
+                        'mode'            => $this->mode,
+                        'uptime'          => $this->getUptime(),
+                        'master_pid'      => \getmypid(),
+                        'rolling_restart' => $this->rollingRestart,
+                        'rolling_queue'   => $this->rollingRestartQueue,
+                        'draining_worker' => $this->drainingWorkerId,
+                        'force_restarting'=> $this->forceRestarting,
                     ]));
                 }
                 break;

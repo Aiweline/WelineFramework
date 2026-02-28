@@ -41,7 +41,11 @@ use Weline\Server\Observer\CliCommandExecutedObserver;
  */
 class Reload extends CommandAbstract
 {
-    // 重载通过 IPC 控制通道发送，不再使用文件标记
+    /** 等待模式轮询间隔（毫秒） */
+    private const WAIT_POLL_INTERVAL_MS = 500;
+    
+    /** 等待模式最大超时时间（秒） */
+    private const WAIT_MAX_TIMEOUT = 120;
     
     /**
      * @inheritDoc
@@ -53,6 +57,9 @@ class Reload extends CommandAbstract
         
         // 检查是否强制模式（-f）：批量杀死后重启，不等待排水
         $forceMode = isset($args['f']) || isset($args['force']);
+        
+        // 默认等待模式，-n/--no-wait 跳过等待
+        $waitMode = !(isset($args['n']) || isset($args['no-wait']));
         
         // 确定重载类型
         $reloadType = $forceMode 
@@ -90,6 +97,13 @@ class Reload extends CommandAbstract
                 $this->printer->note(__('Master 将编排滚动重启，Worker 逐个优雅重启'));
             }
             $this->printer->note(__('Worker 数：%{1}', [$totalWorkers]));
+            
+            // 等待模式：轮询直到滚动重启完成
+            if ($waitMode) {
+                echo "\n";
+                $this->waitForReloadComplete($instanceName, $totalWorkers);
+            }
+            
             echo "\n";
             return;
         }
@@ -119,6 +133,13 @@ class Reload extends CommandAbstract
                 echo "\n";
                 $this->printer->success(__('✓ 热重载信号已发送'));
                 $this->printer->note(__('Master 将通知所有 Worker 优雅重启'));
+                
+                // 等待模式（信号方式回退）
+                if ($waitMode) {
+                    echo "\n";
+                    $this->waitForReloadComplete($instanceName, $totalWorkers);
+                }
+                
                 echo "\n";
                 return;
             }
@@ -146,6 +167,102 @@ class Reload extends CommandAbstract
         $this->printer->note(__('Worker 数：%{1}', [$totalWorkers]));
         echo "\n";
         $this->printer->note(__('Worker 将在当前请求处理完成后优雅重启'));
+    }
+    
+    /**
+     * 等待滚动重启完成
+     */
+    protected function waitForReloadComplete(string $instanceName, int $totalWorkers): void
+    {
+        $this->printer->note(__('等待滚动重启完成...'));
+        
+        $startTime = \time();
+        $lastProgress = -1;
+        $reloadStarted = false;  // 标记滚动重启是否已开始
+        $consecutiveFailures = 0; // 连续查询失败次数
+        $maxConsecutiveFailures = 5; // 最大允许连续失败次数
+        
+        // 先等待一小段时间让 Master 处理 reload 命令
+        \usleep(200000); // 200ms
+        
+        while (true) {
+            // 超时检查
+            $elapsed = \time() - $startTime;
+            if ($elapsed > self::WAIT_MAX_TIMEOUT) {
+                $this->printer->warning(__('等待超时 (%{1}s)，滚动重启可能仍在进行中', [self::WAIT_MAX_TIMEOUT]));
+                return;
+            }
+            
+            // 查询 Master 状态（带重试）
+            $status = MasterProcess::sendCommand($instanceName, ControlMessage::ACTION_STATUS);
+            if ($status === null) {
+                $consecutiveFailures++;
+                if ($consecutiveFailures >= $maxConsecutiveFailures) {
+                    $this->printer->warning(__('连续 %{1} 次无法获取 Master 状态，等待中止', [$consecutiveFailures]));
+                    return;
+                }
+                // 短暂等待后重试
+                \usleep(500000); // 500ms
+                continue;
+            }
+            
+            // 查询成功，重置失败计数
+            $consecutiveFailures = 0;
+            
+            $data = $status['data'] ?? [];
+            $rollingRestart = $data['rolling_restart'] ?? false;
+            $forceRestarting = $data['force_restarting'] ?? false;
+            $rollingQueue = $data['rolling_queue'] ?? [];
+            $drainingWorker = $data['draining_worker'] ?? 0;
+            
+            // 检测滚动重启是否已开始
+            if ($rollingRestart || $forceRestarting) {
+                $reloadStarted = true;
+            }
+            
+            // 只有在滚动重启已开始后，才判断是否完成
+            // 如果从未开始且已等待超过 5 秒，也认为完成（可能 Master 处理太快）
+            if (!$rollingRestart && !$forceRestarting) {
+                if ($reloadStarted || $elapsed >= 5) {
+                    echo "\r" . \str_repeat(' ', 80) . "\r";
+                    $this->printer->success(__('✓ 滚动重启完成（耗时: %{1}s）', [$elapsed]));
+                    return;
+                }
+                // 还没开始，继续等待
+                \usleep(self::WAIT_POLL_INTERVAL_MS * 1000);
+                continue;
+            }
+            
+            // 显示进度
+            $remaining = \count($rollingQueue);
+            $completed = $totalWorkers - $remaining - ($drainingWorker > 0 ? 1 : 0);
+            $progress = $totalWorkers > 0 ? (int)(($completed / $totalWorkers) * 100) : 0;
+            
+            if ($progress !== $lastProgress) {
+                $bar = $this->renderProgressBar($progress);
+                echo "\r" . \str_repeat(' ', 80) . "\r";
+                echo "  {$bar} {$completed}/{$totalWorkers} Worker";
+                if ($drainingWorker > 0) {
+                    echo " (Worker #{$drainingWorker} 排水中)";
+                }
+                $lastProgress = $progress;
+            }
+            
+            // 轮询间隔
+            \usleep(self::WAIT_POLL_INTERVAL_MS * 1000);
+        }
+    }
+    
+    /**
+     * 渲染进度条
+     */
+    protected function renderProgressBar(int $percent): string
+    {
+        $percent = \max(0, \min(100, $percent));
+        $width = 20;
+        $filled = (int)(($percent / 100) * $width);
+        $empty = $width - $filled;
+        return '[' . \str_repeat('=', $filled) . \str_repeat(' ', $empty) . '] ' . \str_pad((string)$percent, 3, ' ', STR_PAD_LEFT) . '%';
     }
     
     /**
@@ -183,23 +300,25 @@ class Reload extends CommandAbstract
     public function help(): array|string
     {
         return CommandHelper::formatHelp(
-            'server:reload [-f]',
+            'server:reload [-f] [-n]',
             __('通知 WLS Worker 重新加载代码。修改 Worker 代码后使用此命令即可生效，无需重启整个服务器。'),
             [
                 '[instance]' => __('实例名称（默认：default）'),
                 '-f, --force' => __('强制模式：批量杀死所有 Worker 后重新启动（不等待排水）'),
+                '-n, --no-wait' => __('不等待：发送命令后立即返回，不等待重启完成'),
             ],
             [
-                __('默认模式') => __('滚动重启：逐个 Worker 排水后重启，保证服务不中断'),
+                __('默认行为') => __('等待滚动重启完成后返回，显示进度'),
                 __('-f 强制模式') => __('批量重启：直接杀死所有 Worker，快速但会中断请求'),
+                __('-n 不等待') => __('发送命令后立即返回，适合脚本调用'),
                 __('适用场景') => __('修改了 Worker 代码、业务代码、模板、配置等'),
                 __('不适用场景') => __('修改了 Dispatcher、Master 代码或启动参数（需用 server:start -r）'),
             ],
             [
-                __('滚动重载（默认）') => 'php bin/w server:reload',
-                __('强制重载（批量）') => 'php bin/w server:reload -f',
+                __('滚动重载（默认等待）') => 'php bin/w server:reload',
+                __('不等待') => 'php bin/w server:reload -n',
+                __('强制重载') => 'php bin/w server:reload -f',
                 __('重载指定实例') => 'php bin/w server:reload api-server',
-                __('强制重载指定实例') => 'php bin/w server:reload api-server -f',
             ]
         );
     }
