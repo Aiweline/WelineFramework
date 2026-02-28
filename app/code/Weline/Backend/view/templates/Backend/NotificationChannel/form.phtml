@@ -1,0 +1,311 @@
+<?php
+/**
+ * 渠道编辑表单页面
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var \Weline\Backend\Model\NotificationChannel|null $channel
+ * @var array $adapter_options 适配器选项
+ * @var array $config_fields 配置字段
+ * @var array $topics 主题列表
+ * @var array $types 消息类型
+ */
+$channel = $channel ?? null;
+$adapter_options = $adapter_options ?? [];
+$config_fields = $config_fields ?? [];
+$topics = $topics ?? [];
+$types = $types ?? [];
+
+$channelData = $channel ? $channel->getData() : [];
+$currentCode = $channelData['channel_code'] ?? '';
+$currentConfig = [];
+if ($channel) {
+    $currentConfig = $channel->getChannelConfig();
+}
+$currentTopics = [];
+if ($channel) {
+    $currentTopics = $channel->getSubscribedTopics();
+}
+?>
+
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0 font-size-18">
+                <?= $channel ? __('编辑渠道') : __('新建渠道') ?>
+            </h4>
+            <div>
+                <a href="<?= $this->getBackendUrl('*/backend/notificationchannel') ?>" class="btn btn-outline-secondary">
+                    <i class="mdi mdi-arrow-left me-1"></i><lang>返回列表</lang>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class='row'>
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-body">
+                <form id="channelForm">
+                    <input type="hidden" name="channel_id" value="<?= $channelData['channel_id'] ?? '' ?>">
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label"><lang>渠道类型</lang> <span class="text-danger">*</span></label>
+                                <select class="form-select" name="channel_code" id="channelCode" required
+                                        onchange="WelineChannelForm.onChannelCodeChange(this.value)"
+                                        <?= $channel ? 'disabled' : '' ?>>
+                                    <option value=""><lang>请选择</lang></option>
+                                    <?php foreach ($adapter_options as $code => $name): ?>
+                                    <option value="<?= $code ?>" <?= $code === $currentCode ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($name) ?>
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <?php if ($channel): ?>
+                                <input type="hidden" name="channel_code" value="<?= $currentCode ?>">
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label"><lang>渠道名称</lang> <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" name="channel_name" required
+                                       value="<?= htmlspecialchars($channelData['channel_name'] ?? '') ?>"
+                                       placeholder="<?= __('如：飞书机器人-研发群') ?>">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label"><lang>最低通知级别</lang></label>
+                                <select class="form-select" name="min_type">
+                                    <?php foreach ($types as $type): ?>
+                                    <option value="<?= $type['value'] ?>" 
+                                            <?= ($channelData['min_type'] ?? 'info') === $type['value'] ? 'selected' : '' ?>>
+                                        <?= __('≥') ?> <?= $type['label'] ?>
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <small class="form-text text-muted"><lang>只发送达到此级别的通知</lang></small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label"><lang>状态</lang></label>
+                                <div class="form-check form-switch mt-2">
+                                    <input class="form-check-input" type="checkbox" name="is_enabled" value="1"
+                                           <?= ($channelData['is_enabled'] ?? 1) ? 'checked' : '' ?>>
+                                    <label class="form-check-label"><lang>启用此渠道</lang></label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div id="channelConfigFields">
+                        <?php if ($currentCode && isset($config_fields[$currentCode])): ?>
+                        <h5 class="mb-3"><lang>渠道配置</lang></h5>
+                        <?php foreach ($config_fields[$currentCode] as $field): ?>
+                        <div class="mb-3">
+                            <label class="form-label">
+                                <?= htmlspecialchars($field['label']) ?>
+                                <?php if ($field['required'] ?? false): ?>
+                                <span class="text-danger">*</span>
+                                <?php endif; ?>
+                            </label>
+                            <?php if (($field['type'] ?? 'text') === 'password'): ?>
+                            <input type="password" class="form-control" 
+                                   name="channel_config[<?= $field['name'] ?>]"
+                                   value="<?= htmlspecialchars($currentConfig[$field['name']] ?? '') ?>"
+                                   placeholder="<?= htmlspecialchars($field['placeholder'] ?? '') ?>"
+                                   <?= ($field['required'] ?? false) ? 'required' : '' ?>>
+                            <?php else: ?>
+                            <input type="text" class="form-control" 
+                                   name="channel_config[<?= $field['name'] ?>]"
+                                   value="<?= htmlspecialchars($currentConfig[$field['name']] ?? '') ?>"
+                                   placeholder="<?= htmlspecialchars($field['placeholder'] ?? '') ?>"
+                                   <?= ($field['required'] ?? false) ? 'required' : '' ?>>
+                            <?php endif; ?>
+                        </div>
+                        <?php endforeach; ?>
+                        <?php else: ?>
+                        <p class="text-muted"><lang>请先选择渠道类型</lang></p>
+                        <?php endif; ?>
+                    </div>
+
+                    <hr>
+
+                    <div class="mb-3">
+                        <label class="form-label"><lang>订阅主题</lang></label>
+                        <p class="text-muted mb-2"><lang>留空表示订阅所有主题</lang></p>
+                        <div class="row">
+                            <?php foreach ($topics as $topic): ?>
+                            <div class="col-md-4 col-sm-6">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" 
+                                           name="subscribed_topics[]" 
+                                           value="<?= htmlspecialchars($topic['topic_code'] ?? '') ?>"
+                                           <?= in_array($topic['topic_code'] ?? '', $currentTopics, true) ? 'checked' : '' ?>>
+                                    <label class="form-check-label">
+                                        <?= htmlspecialchars($topic['topic_name'] ?? $topic['topic_code'] ?? '') ?>
+                                    </label>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary" onclick="WelineChannelForm.save()">
+                            <i class="mdi mdi-content-save me-1"></i><lang>保存</lang>
+                        </button>
+                        <button type="button" class="btn btn-outline-info" onclick="WelineChannelForm.test()">
+                            <i class="mdi mdi-send me-1"></i><lang>测试连接</lang>
+                        </button>
+                        <a href="<?= $this->getBackendUrl('*/backend/notificationchannel') ?>" class="btn btn-secondary">
+                            <lang>取消</lang>
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><lang>帮助</lang></h5>
+            </div>
+            <div class="card-body">
+                <h6><lang>渠道类型说明</lang></h6>
+                <ul class="weline-channel-help-list">
+                    <li><strong><lang>飞书</lang></strong>：<lang>通过飞书机器人 Webhook 发送消息</lang></li>
+                    <li><strong><lang>钉钉</lang></strong>：<lang>通过钉钉机器人 Webhook 发送消息</lang></li>
+                    <li><strong><lang>邮件</lang></strong>：<lang>使用系统 SMTP 配置发送邮件</lang></li>
+                    <li><strong><lang>Webhook</lang></strong>：<lang>向自定义 URL 发送 POST 请求</lang></li>
+                </ul>
+                <hr>
+                <h6><lang>通知级别</lang></h6>
+                <p class="text-muted"><lang>只有达到设定级别的通知才会发送到此渠道。级别从低到高：</lang></p>
+                <p>
+                    <span class="badge bg-info"><lang>信息</lang></span>
+                    <span class="badge bg-success"><lang>成功</lang></span>
+                    <span class="badge bg-warning"><lang>警告</lang></span>
+                    <span class="badge bg-danger"><lang>错误</lang></span>
+                    <span class="badge" style="background: #721c24;"><lang>紧急</lang></span>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.weline-channel-help-list {
+    padding-left: 1.25rem;
+    margin-bottom: 0;
+}
+.weline-channel-help-list li {
+    margin-bottom: 0.5rem;
+    color: var(--backend-color-text-secondary, #495057);
+}
+</style>
+
+<script>
+(function() {
+    'use strict';
+
+    var configFieldsData = <?= json_encode($config_fields, JSON_UNESCAPED_UNICODE) ?>;
+
+    var WelineChannelForm = {
+        onChannelCodeChange: function(code) {
+            var container = document.getElementById('channelConfigFields');
+            if (!code || !configFieldsData[code]) {
+                container.innerHTML = '<p class="text-muted"><?= __('请先选择渠道类型') ?></p>';
+                return;
+            }
+
+            var fields = configFieldsData[code];
+            var html = '<h5 class="mb-3"><?= __('渠道配置') ?></h5>';
+
+            fields.forEach(function(field) {
+                var inputType = field.type === 'password' ? 'password' : 'text';
+                var required = field.required ? 'required' : '';
+                var requiredMark = field.required ? '<span class="text-danger">*</span>' : '';
+
+                html += '<div class="mb-3">';
+                html += '<label class="form-label">' + field.label + ' ' + requiredMark + '</label>';
+                html += '<input type="' + inputType + '" class="form-control" ';
+                html += 'name="channel_config[' + field.name + ']" ';
+                html += 'placeholder="' + (field.placeholder || '') + '" ' + required + '>';
+                html += '</div>';
+            });
+
+            container.innerHTML = html;
+        },
+
+        save: function() {
+            var form = document.getElementById('channelForm');
+            var formData = new FormData(form);
+
+            fetch('<?= $this->getBackendUrl('*/backend/notificationchannel/save') ?>', {
+                method: 'POST',
+                body: new URLSearchParams(formData)
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    BackendToast.success(data.message);
+                    setTimeout(function() {
+                        window.location.href = '<?= $this->getBackendUrl('*/backend/notificationchannel') ?>';
+                    }, 1000);
+                } else {
+                    BackendToast.error(data.message);
+                }
+            })
+            .catch(function(error) {
+                console.error('Error:', error);
+                BackendToast.error('<?= __('保存失败') ?>');
+            });
+        },
+
+        test: function() {
+            var form = document.getElementById('channelForm');
+            var formData = new FormData(form);
+
+            BackendToast.info('<?= __('正在测试连接...') ?>');
+
+            fetch('<?= $this->getBackendUrl('*/backend/notificationchannel/test') ?>', {
+                method: 'POST',
+                body: new URLSearchParams(formData)
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    BackendToast.success(data.message);
+                } else {
+                    BackendToast.error(data.message);
+                }
+            })
+            .catch(function(error) {
+                console.error('Error:', error);
+                BackendToast.error('<?= __('测试失败') ?>');
+            });
+        }
+    };
+
+    window.WelineChannelForm = WelineChannelForm;
+})();
+</script>
