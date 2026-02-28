@@ -7,6 +7,7 @@ description: |
   - 修复错误后、做完了、完成了
   - 修改了进程、改了 Server、WLS、Worker、static、StateManager
   - 更新技能、规则
+  - **计划状态、进入测试、测试阶段、测试中、项目完成、计划完成、状态更新、完成度** ⭐
   - **测试、test、单元测试、phpunit、测一下、验证、怎么测、写测试** ⭐
   - **CSS、样式、style、颜色、color、背景、border、shadow、暗色、dark、亮色、light**
   - **JS、JavaScript、组件、component、widget、闭包、closure、IIFE、全局**
@@ -28,8 +29,10 @@ alwaysApply: false
 | 场景 | 必须读取的技能 | 执行内容 |
 |------|----------------|----------|
 | **修复错误/bug 后** | `error-learning`、`error-tracking` | 验证修复 → 更新 ERROR_LOG.md、COMMON_ERRORS.md、相关技能 Q&A；遵循 `.cursor/rules/auto-update-skills-on-error.mdc` |
-| **完成任务/计划后**（都处理了、做完了、搞定了、完成了） | `post-plan-completion-check` | 执行校验清单（技能冲突、模块依赖、页面一致性等） |
-| **创建/写计划**（plan、任务拆分、更新进度、plan.md、task.md） | `create-plan` | 先指定路径（大计划→.cursor/plans/，模块→模块/doc/开发/plan.md）；遵循 `.cursor/rules/create-plan.mdc` |
+| **完成任务/计划后**（都处理了、做完了、搞定了、完成了） | `post-plan-completion-check` + `create-plan` | 执行校验清单；**更新计划状态**（🔵测试中/🟢已完成）和完成度 |
+| **创建/写计划**（plan、任务拆分、更新进度、plan.md、task.md） | `create-plan` | 先指定路径；**必须标注状态**（🔴未开始/🟡进行中/🔵测试中/🟢已完成）；遵循 `.cursor/rules/create-plan.mdc` |
+| **进入测试阶段**（测试中、开始测试、测试阶段） | `create-plan` | 更新计划状态为 🔵 测试中（status: testing），更新完成度 |
+| **计划完成**（测试通过、项目完成、计划完成） | `create-plan` + `post-plan-completion-check` | 更新状态为 🟢 已完成，记录完成时间，执行完成检查清单 |
 | **修改 Server/Worker/进程代码后** | `process-management` | 遵循进程管理规范；如有架构变更更新技能 |
 | **新增 static 或修改 WLS/Runtime/State** | `weline-server`（状态管理章节） | 评估是否需注册 StateManager 重置；禁止请求级 static 不注册 |
 | **用户说「更新技能/架构图/记录更改」** | 相关 SKILL.md | 更新涉及到的技能文件 |
@@ -56,7 +59,8 @@ alwaysApply: false
 ## 快速参考
 
 - 错误相关 → **error-learning** + **error-tracking** + rule `auto-update-skills-on-error.mdc`
-- 完成相关 → **post-plan-completion-check**
+- 完成相关 → **post-plan-completion-check** + **create-plan**（更新状态和完成度）
+- **计划状态** ⭐ → **create-plan**（🔴未开始/🟡进行中/🔵测试中/🟢已完成/⚫已取消）
 - 进程/WLS → **process-management**、**weline-server**
 - 规则/技能/引用 → **cursor-as-reference**（在 `dev/ai` 下编辑，.cursor 仅做引用）
 - **测试** ⭐ → **php-unit-testing**（单元测试为主，http:req 辅助，测试代码放 test/ 目录）
@@ -199,3 +203,25 @@ show message, display message, notify, 提醒用户, 告知用户, 询问用户,
 - ✅ 消息/提示 → `BackendToast.success/error/warning/info()`
 - ✅ 确认操作 → `BackendConfirm.show()`
 - ✅ 用户输入 → `BackendConfirm.showInput()`
+
+## 计划状态触发词 ⭐
+
+以下关键词出现时**必须**读取 `create-plan` 技能并更新计划状态：
+
+```
+计划状态, 状态更新, 更新状态, 进度, 完成度, 完成百分比,
+进入测试, 测试阶段, 测试中, 开始测试, 进行测试,
+项目完成, 计划完成, 测试通过, 测试完成, 全部完成,
+做完了, 搞定了, 处理完了, 都处理了, 都搞了, 都改了,
+status, testing, completed, in_progress, pending,
+🔴, 🟡, 🔵, 🟢, ⚫, 未开始, 进行中, 已完成, 已取消
+```
+
+**状态更新规则**：
+- 用户说「进入测试/测试阶段」→ 更新为 🔵 测试中
+- 用户说「完成/搞定/做完」→ 检查任务，更新完成度，评估是否可标记完成
+- 用户说「测试通过/计划完成」→ 执行完成检查清单，更新为 🟢 已完成
+
+**总计划必须包含**：
+- 状态头（状态、当前阶段、完成度、最后更新）
+- 子计划进度汇总表（包含状态和完成度列）
