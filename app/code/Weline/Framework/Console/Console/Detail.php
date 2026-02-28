@@ -8,6 +8,12 @@ class Detail extends \Weline\Framework\Console\CommandAbstract
 {
     public function execute(array $args = [], array $data = [])
     {
+        if (!isset($args[1])) {
+            $this->printer->error(__('请指定要查看的命令名称'));
+            $this->printer->note(__('用法: php bin/w detail <command>'));
+            $this->printer->note(__('示例: php bin/w detail dev:debug'));
+            return;
+        }
         $command = $args[1];
         # 导入命令行信息
         $commands = Env::GENERATED_DIR.DS.'commands.php';
