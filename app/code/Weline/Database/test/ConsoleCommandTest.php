@@ -137,10 +137,18 @@ class ConsoleCommandTest extends TestCore
      */
     public function testCommandNamespaces()
     {
-        $this->assertEquals('Weline\Database\Console\Db\Migrate', Upgrade::class);
-        $this->assertEquals('Weline\Database\Console\Db\Migrate', Rollback::class);
-        $this->assertEquals('Weline\Database\Console\Db\Migrate', Status::class);
-        $this->assertEquals('Weline\Database\Console\Db\Migrate', Uninstall::class);
+        // 测试命令类在正确的命名空间下
+        $reflection = new \ReflectionClass(Upgrade::class);
+        $this->assertEquals('Weline\Database\Console\Db\Migrate', $reflection->getNamespaceName());
+        
+        $reflection = new \ReflectionClass(Rollback::class);
+        $this->assertEquals('Weline\Database\Console\Db\Migrate', $reflection->getNamespaceName());
+        
+        $reflection = new \ReflectionClass(Status::class);
+        $this->assertEquals('Weline\Database\Console\Db\Migrate', $reflection->getNamespaceName());
+        
+        $reflection = new \ReflectionClass(Uninstall::class);
+        $this->assertEquals('Weline\Database\Console\Db\Migrate', $reflection->getNamespaceName());
     }
     
     /**

@@ -6,21 +6,27 @@
  * @package Weline\Database\Service
  */
 
+declare(strict_types=1);
+
 namespace Weline\Database\Service;
 
 use Weline\Database\Model\ModuleVersion;
+use Weline\Database\Model\ModuleVersionHistory;
 use Weline\Framework\Output\Cli\Printing;
 
 class VersionService
 {
     private ModuleVersion $versionModel;
+    private ModuleVersionHistory $historyModel;
     private Printing $printing;
     
     public function __construct(
         ModuleVersion $versionModel,
+        ModuleVersionHistory $historyModel,
         Printing $printing
     ) {
         $this->versionModel = $versionModel;
+        $this->historyModel = $historyModel;
         $this->printing = $printing;
     }
     
@@ -57,14 +63,15 @@ class VersionService
                 $result = $this->versionModel->save();
             }
             
-            if ($result) {
-                $this->printing->info("模块 {$moduleName} 版本更新为 {$newVersion}");
+            $success = (bool)$result;
+            if ($success) {
+                $this->printing->info(__("模块 %{1} 版本更新为 %{2}", [$moduleName, $newVersion]));
             }
             
-            return $result;
+            return $success;
             
         } catch (\Exception $e) {
-            $this->printing->error("更新模块版本失败: " . $e->getMessage());
+            $this->printing->error(__("更新模块版本失败: %{1}", $e->getMessage()));
             return false;
         }
     }
@@ -121,25 +128,37 @@ class VersionService
      * 获取模块版本历史
      * 
      * @param string $moduleName 模块名称
+     * @param int $limit 限制数量
      * @return array
      */
-    public function getModuleVersionHistory(string $moduleName): array
+    public function getModuleVersionHistory(string $moduleName, int $limit = 50): array
     {
-        // 这里可以实现版本历史记录功能
-        // 暂时返回当前版本信息
-        $currentVersion = $this->getModuleVersion($moduleName);
+        $history = $this->historyModel->getModuleHistory($moduleName, $limit);
         
-        if (!$currentVersion) {
-            return [];
+        $result = [];
+        foreach ($history as $record) {
+            $result[] = [
+                'from_version' => $record->getData(ModuleVersionHistory::fields_FROM_VERSION),
+                'to_version' => $record->getData(ModuleVersionHistory::fields_TO_VERSION),
+                'action' => $record->getData(ModuleVersionHistory::fields_ACTION),
+                'migration_file' => $record->getData(ModuleVersionHistory::fields_MIGRATION_FILE),
+                'operator' => $record->getData(ModuleVersionHistory::fields_OPERATOR),
+                'created_at' => $record->getData(ModuleVersionHistory::fields_CREATED_AT),
+            ];
         }
         
-        return [
-            [
-                'version' => $currentVersion->getData(ModuleVersion::fields_CURRENT_VERSION),
-                'last_migration' => $currentVersion->getData(ModuleVersion::fields_LAST_MIGRATION),
-                'updated_at' => $currentVersion->getData(ModuleVersion::fields_UPDATED_AT)
-            ]
-        ];
+        return $result;
+    }
+    
+    /**
+     * 获取版本操作统计
+     * 
+     * @param string $moduleName 模块名称
+     * @return array
+     */
+    public function getVersionActionStats(string $moduleName): array
+    {
+        return $this->historyModel->getActionStats($moduleName);
     }
     
     /**
@@ -211,5 +230,144 @@ class VersionService
         $stats['recent_updates'] = array_slice($stats['recent_updates'], 0, 10);
         
         return $stats;
+    }
+    
+    /**
+     * 设置模块版本（updateModuleVersion 的别名）
+     * 
+     * @param string $moduleName 模块名称
+     * @param string $version 版本号
+     * @return bool
+     */
+    public function setModuleVersion(string $moduleName, string $version): bool
+    {
+        return $this->updateModuleVersion($moduleName, $version);
+    }
+    
+    /**
+     * 回滚模块版本
+     * 
+     * @param string $moduleName 模块名称
+     * @param string $toVersion 目标版本
+     * @param string $migrationFile 迁移文件（可选）
+     * @return bool
+     */
+    public function rollbackModuleVersion(string $moduleName, string $toVersion, string $migrationFile = ''): bool
+    {
+        $currentVersion = $this->getModuleVersionString($moduleName);
+        if (!$currentVersion) {
+            $this->printing->error(__('模块 %{1} 当前版本不存在', $moduleName));
+            return false;
+        }
+        
+        if (version_compare($currentVersion, $toVersion, '<=')) {
+            $this->printing->error(__('当前版本 %{1} 不高于目标版本 %{2}', [$currentVersion, $toVersion]));
+            return false;
+        }
+        
+        $result = $this->updateModuleVersion($moduleName, $toVersion);
+        if ($result) {
+            $this->recordVersionHistory($moduleName, $currentVersion, $toVersion, ModuleVersionHistory::ACTION_ROLLBACK, $migrationFile);
+            $this->printing->info(__('模块 %{1} 版本已回滚: %{2} -> %{3}', [$moduleName, $currentVersion, $toVersion]));
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * 升级模块版本
+     * 
+     * @param string $moduleName 模块名称
+     * @param string $toVersion 目标版本
+     * @param string $migrationFile 迁移文件（可选）
+     * @return bool
+     */
+    public function upgradeModuleVersion(string $moduleName, string $toVersion, string $migrationFile = ''): bool
+    {
+        $currentVersion = $this->getModuleVersionString($moduleName) ?? '0.0.0';
+        
+        if (version_compare($currentVersion, $toVersion, '>=')) {
+            $this->printing->warning(__('当前版本 %{1} 已经是最新或更高版本', $currentVersion));
+            return false;
+        }
+        
+        $result = $this->updateModuleVersion($moduleName, $toVersion);
+        if ($result) {
+            $action = $currentVersion === '0.0.0' ? ModuleVersionHistory::ACTION_INSTALL : ModuleVersionHistory::ACTION_UPGRADE;
+            $this->recordVersionHistory($moduleName, $currentVersion, $toVersion, $action, $migrationFile);
+            $this->printing->info(__('模块 %{1} 版本已升级: %{2} -> %{3}', [$moduleName, $currentVersion, $toVersion]));
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * 记录版本历史
+     * 
+     * @param string $moduleName 模块名称
+     * @param string $fromVersion 原版本
+     * @param string $toVersion 目标版本
+     * @param string $action 操作类型
+     * @param string $migrationFile 迁移文件
+     * @return void
+     */
+    private function recordVersionHistory(
+        string $moduleName, 
+        string $fromVersion, 
+        string $toVersion, 
+        string $action,
+        string $migrationFile = ''
+    ): void {
+        try {
+            $operator = php_sapi_name() === 'cli' ? ModuleVersionHistory::OPERATOR_CLI : ModuleVersionHistory::OPERATOR_ADMIN;
+            
+            $this->historyModel->reset()->setData([
+                ModuleVersionHistory::fields_MODULE_NAME => $moduleName,
+                ModuleVersionHistory::fields_FROM_VERSION => $fromVersion,
+                ModuleVersionHistory::fields_TO_VERSION => $toVersion,
+                ModuleVersionHistory::fields_ACTION => $action,
+                ModuleVersionHistory::fields_MIGRATION_FILE => $migrationFile,
+                ModuleVersionHistory::fields_OPERATOR => $operator,
+                ModuleVersionHistory::fields_CREATED_AT => date('Y-m-d H:i:s'),
+            ])->save();
+        } catch (\Exception $e) {
+            $this->printing->warning(__('记录版本历史失败: %{1}', $e->getMessage()));
+        }
+    }
+    
+    /**
+     * 验证版本号格式
+     * 支持语义化版本：X.Y.Z 或 X.Y.Z-suffix（如 1.0.0-beta.1）
+     * 
+     * @param string $version 版本号
+     * @return bool
+     */
+    public function validateVersion(string $version): bool
+    {
+        return preg_match('/^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/', $version) === 1;
+    }
+    
+    /**
+     * 检查是否有版本更新（isVersionChanged 的别名）
+     * 
+     * @param string $moduleName 模块名称
+     * @param string $newVersion 新版本
+     * @return bool
+     */
+    public function checkVersionUpdate(string $moduleName, string $newVersion): bool
+    {
+        return $this->isVersionChanged($moduleName, $newVersion);
+    }
+    
+    /**
+     * 获取模块版本字符串
+     * 
+     * @param string $moduleName 模块名称
+     * @return string|null
+     */
+    public function getModuleVersionString(string $moduleName): ?string
+    {
+        $version = $this->getModuleVersion($moduleName);
+        return $version?->getData(ModuleVersion::fields_CURRENT_VERSION);
     }
 }
