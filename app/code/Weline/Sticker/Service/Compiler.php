@@ -12,7 +12,6 @@ declare(strict_types=1);
 namespace Weline\Sticker\Service;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Event\EventsManager;
 use Weline\Sticker\Helper\CodeMinifier;
 use Weline\Sticker\Model\StickerLog;
 
@@ -26,7 +25,6 @@ class Compiler
     private StickerRegistry $stickerRegistry;
     private RuleParser $ruleParser;
     private NotificationService $notificationService;
-    private ?EventsManager $eventsManager = null;
 
     public function __construct(
         CodeMinifier $codeMinifier,
@@ -39,20 +37,7 @@ class Compiler
         $this->ruleParser = $ruleParser;
         $this->notificationService = $notificationService;
     }
-    
-    /**
-     * 获取事件管理器实例（延迟加载）
-     *
-     * @return EventsManager
-     */
-    private function getEventsManager(): EventsManager
-    {
-        if ($this->eventsManager === null) {
-            $this->eventsManager = \Weline\Framework\Manager\ObjectManager::getInstance(EventsManager::class);
-        }
-        return $this->eventsManager;
-    }
-    
+
     /**
      * 发送系统消息通知
      *
@@ -64,18 +49,15 @@ class Compiler
     private function sendSystemMessage(string $title, string $content, string $icon = 'ri-error-warning-line'): void
     {
         try {
-            $this->getEventsManager()->dispatch('Weline_Admin::msg', [
-                'data' => [
-                    'title' => $title,
-                    'content' => $content,
-                    'is_read' => false,
-                    'is_icon' => 1,
-                    'is_img' => 0,
-                    'avatar' => $icon
-                ]
-            ]);
+            w_msg(
+                'sticker_compile',
+                'warning',
+                $title,
+                $content,
+                ['icon' => $icon, 'source_module' => 'Weline_Sticker']
+            );
         } catch (\Exception $e) {
-            error_log("发送 Sticker 系统消息失败: " . $e->getMessage());
+            Env::log_error('sticker', "发送 Sticker 系统消息失败: " . $e->getMessage());
         }
     }
 
