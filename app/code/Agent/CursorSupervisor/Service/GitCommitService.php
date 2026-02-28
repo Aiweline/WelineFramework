@@ -437,9 +437,8 @@ PROMPT;
             }
         }
         
-        // 提交
-        $escapedMessage = str_replace("'", "'\\''", $message);
-        $cmd = "git commit -m '{$escapedMessage}' 2>&1";
+        // 提交（使用 escapeshellarg 正确处理中文和特殊字符）
+        $cmd = 'git commit -m ' . escapeshellarg($message) . ' 2>&1';
         
         $output = [];
         exec($cmd, $output, $returnCode);
