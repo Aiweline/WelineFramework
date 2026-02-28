@@ -44,9 +44,26 @@ class VersionServiceTest extends TestCore
     {
         $moduleName = 'Weline_Test';
         
-        // 测试获取模块版本
-        $version = $this->versionService->getModuleVersion($moduleName);
-        $this->assertIsString($version);
+        // 测试获取模块版本对象
+        $versionObj = $this->versionService->getModuleVersion($moduleName);
+        // 对于不存在的模块，返回 null；对于存在的模块，返回 ModuleVersion 对象
+        $this->assertTrue($versionObj === null || $versionObj instanceof ModuleVersion);
+    }
+    
+    /**
+     * 测试获取模块版本字符串
+     */
+    public function testGetModuleVersionString()
+    {
+        $moduleName = 'Weline_TestVersionStr';
+        $version = '1.0.0';
+        
+        // 先设置版本
+        $this->versionService->setModuleVersion($moduleName, $version);
+        
+        // 测试获取模块版本字符串
+        $versionStr = $this->versionService->getModuleVersionString($moduleName);
+        $this->assertEquals($version, $versionStr);
     }
     
     /**
@@ -54,15 +71,15 @@ class VersionServiceTest extends TestCore
      */
     public function testSetModuleVersion()
     {
-        $moduleName = 'Weline_Test';
+        $moduleName = 'Weline_TestSet';
         $version = '1.0.0';
         
         // 测试设置模块版本
         $result = $this->versionService->setModuleVersion($moduleName, $version);
         $this->assertTrue($result, '设置模块版本应该成功');
         
-        // 验证版本是否设置成功
-        $actualVersion = $this->versionService->getModuleVersion($moduleName);
+        // 验证版本是否设置成功（使用 getModuleVersionString）
+        $actualVersion = $this->versionService->getModuleVersionString($moduleName);
         $this->assertEquals($version, $actualVersion);
     }
     
@@ -119,7 +136,7 @@ class VersionServiceTest extends TestCore
      */
     public function testUpgradeModuleVersion()
     {
-        $moduleName = 'Weline_Test';
+        $moduleName = 'Weline_TestUpgrade';
         $fromVersion = '1.0.0';
         $toVersion = '1.0.1';
         
@@ -130,8 +147,8 @@ class VersionServiceTest extends TestCore
         $result = $this->versionService->upgradeModuleVersion($moduleName, $toVersion);
         $this->assertTrue($result, '版本升级应该成功');
         
-        // 验证版本已升级
-        $actualVersion = $this->versionService->getModuleVersion($moduleName);
+        // 验证版本已升级（使用 getModuleVersionString）
+        $actualVersion = $this->versionService->getModuleVersionString($moduleName);
         $this->assertEquals($toVersion, $actualVersion);
     }
     
@@ -140,7 +157,7 @@ class VersionServiceTest extends TestCore
      */
     public function testRollbackModuleVersion()
     {
-        $moduleName = 'Weline_Test';
+        $moduleName = 'Weline_TestRollback';
         $fromVersion = '1.0.1';
         $toVersion = '1.0.0';
         
@@ -151,8 +168,8 @@ class VersionServiceTest extends TestCore
         $result = $this->versionService->rollbackModuleVersion($moduleName, $toVersion);
         $this->assertTrue($result, '版本回滚应该成功');
         
-        // 验证版本已回滚
-        $actualVersion = $this->versionService->getModuleVersion($moduleName);
+        // 验证版本已回滚（使用 getModuleVersionString）
+        $actualVersion = $this->versionService->getModuleVersionString($moduleName);
         $this->assertEquals($toVersion, $actualVersion);
     }
     
