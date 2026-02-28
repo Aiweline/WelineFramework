@@ -511,19 +511,15 @@ class AiTranslationService
     private function sendSystemMessage(string $title, string $content, string $icon = 'ri-translate'): void
     {
         try {
-            $this->eventsManager->dispatch('Weline_Admin::msg', [
-                'data' => [
-                    'title' => $title,
-                    'content' => $content,
-                    'is_read' => false,
-                    'is_icon' => 1,
-                    'is_img' => 0,
-                    'avatar' => $icon
-                ]
-            ]);
+            w_msg(
+                'ai_translation',
+                'info',
+                $title,
+                $content,
+                ['icon' => $icon, 'source_module' => 'Weline_I18n']
+            );
         } catch (\Exception $e) {
-            // 记录日志，避免消息发送失败影响主流程
-            error_log("发送AI翻译系统消息失败: " . $e->getMessage());
+            \Weline\Framework\App\Env::log_error('i18n', "发送AI翻译系统消息失败: " . $e->getMessage());
         }
     }
 }
