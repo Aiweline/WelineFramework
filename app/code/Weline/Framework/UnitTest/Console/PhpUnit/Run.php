@@ -286,8 +286,8 @@ class Run implements \Weline\Framework\Console\CommandInterface
                     $this->printing->error(__('测试失败，退出代码: %{1}', [$exitCode]));
                 }
                 
-                // 如果启用了后台模式，启动 Web 服务器并打开浏览器
-                $isBackground = true; // Pest 模式默认后台运行
+                // 如果启用了 Web 模式，启动 Web 服务器并打开浏览器
+                $isBackground = isset($args['web']) || isset($args['--web']); // Pest 模式也需要 --web 参数
                 if ($isBackground && !$watchMode) {
                     $php_unit_report_path = DEV_PATH . 'phpunit' . DS . 'report';
                     if (!is_dir($php_unit_report_path)) {
@@ -321,9 +321,9 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->note(__('调试 - 所有参数: %{1}', [json_encode($args)]));
         }
         
-        # 运行模式：仅保留后台运行，去除 -f/--foreground 前台模式
-        $isForeground = false;
-        $isBackground = true;
+        # 运行模式：默认不启用 Web 界面，可通过 --web 参数启用
+        $isForeground = true;
+        $isBackground = isset($args['web']) || isset($args['--web']);
         
         # 检查模块参数（只从用户明确指定的参数中获取）
         $moduleName = $args['--module'] ?? $args['module'] ?? null;
@@ -339,11 +339,11 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->note(__('调试 - data: %{1}', [json_encode($data)]));
         }
         
-        # 检查后台运行参数（已默认后台运行）
+        # 检查 Web 界面参数
         if ($isBackground) {
-            $this->printing->note(__('运行模式: 后台运行 (默认)'));
+            $this->printing->note(__('运行模式: 启用 Web 报告界面 (--web)'));
         } else {
-            $this->printing->note(__('运行模式: 前台运行'));
+            $this->printing->note(__('运行模式: 命令行输出 (默认)'));
         }
         
         # 显示运行模式
@@ -1987,7 +1987,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
     默认使用 PHPUnit，可通过 --pest 参数使用 Pest（如果已安装）
     支持多种测试方式：套件测试、模块测试、文件测试、方法测试
     提供智能文件名匹配，自动收集各个模块的测试脚本
-    默认后台运行并启动报告服务器（PHPUnit模式）
+    默认命令行输出，可通过 --web 参数启用 Web 报告界面
     
     ⚡ 重要特性：
     - 自动收集所有模块的测试脚本（保持之前的功能）
@@ -2000,7 +2000,8 @@ class Run implements \Weline\Framework\Console\CommandInterface
 
 🔧 核心选项：
     --pest                  使用 Pest 测试框架（默认使用 PHPUnit）
-    -p, --port=<端口>       指定报告服务器端口（默认：9980，仅 PHPUnit 模式）
+    --web                   启用 Web 报告界面（默认关闭，仅命令行输出）
+    -p, --port=<端口>       指定报告服务器端口（默认：9980，需配合 --web 使用）
     --debug                 显示详细的调试信息
     --module=<模块名>       指定要测试的模块（自动收集该模块的测试）
     --name=<文件名|方法名>  指定测试文件或方法（支持智能匹配，自动查找）
@@ -2111,12 +2112,23 @@ class Run implements \Weline\Framework\Console\CommandInterface
     - 自动识别测试文件（*Test.php 格式）
 
 🚀 最佳实践：
-    · 日常测试：直接运行（默认后台），访问浏览器查看报告
+    · 日常测试：直接运行命令行输出，快速查看结果
+    · 详细报告：添加 --web 参数启动 Web 报告界面
     · CI/CD集成：结合 --debug 参数查看详细信息
 
 💡 提示：
-    现在默认后台运行，测试完成后会自动启动报告服务器并打开浏览器
-    报告地址会在命令行显示（默认 http://localhost:9980）
+    默认命令行输出，测试完成后直接显示结果
+    如需 Web 报告界面，添加 --web 参数
+
+🌐 Web 报告界面（--web）：
+    php bin/w phpunit:run --web               # 启用 Web 报告界面
+    php bin/w phpunit:run --web --port=9980   # 指定端口号
+    
+    💡 Web 模式功能：
+    - 测试完成后自动启动报告服务器
+    - 自动打开浏览器显示测试报告
+    - 报告地址默认 http://localhost:9980
+    - 如不想自动打开浏览器，设置环境变量：WELINE_NO_BROWSER=1
 
 📡 监听模式（Watch Mode）：
     ✅ 已实现：自定义文件监听功能（Pest 2.x 本身不支持 --watch，已实现替代方案）
@@ -2130,10 +2142,6 @@ class Run implements \Weline\Framework\Console\CommandInterface
     - 文件变化时自动重新运行相关测试
     - 持续运行直到手动停止（Ctrl+C）
     - 每 0.5 秒检查一次文件变化
-
-🌐 自动打开浏览器：
-    测试完成后会自动打开浏览器显示测试报告
-    如果不想自动打开，可以设置环境变量：WELINE_NO_BROWSER=1
 
 ════════════════════════════════════════════════════════════════════════════════
 ';
