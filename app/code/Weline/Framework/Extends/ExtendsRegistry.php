@@ -86,6 +86,103 @@ class ExtendsRegistry
         // 保存注册表
         return $this->saveRegistry($registry);
     }
+    
+    /**
+     * 增量刷新指定模块的扩展注册表
+     * 仅重新扫描指定模块的扩展，合并到现有注册表
+     *
+     * @param array $moduleNames 需要刷新的模块名列表
+     * @return bool
+     */
+    public function refreshForModules(array $moduleNames): bool
+    {
+        // 1. 加载现有注册表
+        $registry = $this->getRegistry(true);
+        
+        // 2. 清除目标模块的旧数据
+        $this->clearModuleExtends($registry, $moduleNames);
+        
+        // 3. 扫描目标模块的新数据
+        $scannedData = $this->scanner->scanModules($moduleNames);
+        
+        // 4. 进行完备性检查（仅对扫描的数据）
+        $completenessReport = $this->completenessChecker->checkAll($scannedData);
+        
+        // 5. 组织新数据
+        $newRegistry = $this->organizeRegistryData($scannedData, $completenessReport);
+        
+        // 6. 合并到现有注册表
+        $this->mergeExtendsRegistry($registry, $newRegistry);
+        
+        // 7. 保存注册表
+        return $this->saveRegistry($registry);
+    }
+    
+    /**
+     * 清除指定模块的扩展数据
+     *
+     * @param array &$registry 注册表数据（引用传递）
+     * @param array $moduleNames 要清除的模块名列表
+     * @return void
+     */
+    private function clearModuleExtends(array &$registry, array $moduleNames): void
+    {
+        foreach ($moduleNames as $moduleName) {
+            // 1. 清除模块自身的定义
+            if (isset($registry[$moduleName])) {
+                unset($registry[$moduleName]);
+            }
+            
+            // 2. 清除其他模块中由该模块提供的扩展
+            foreach ($registry as $targetModule => &$targetData) {
+                if (isset($targetData['extended_by'][$moduleName])) {
+                    unset($targetData['extended_by'][$moduleName]);
+                }
+            }
+        }
+    }
+    
+    /**
+     * 合并扩展注册表
+     *
+     * @param array &$registry 现有注册表（引用传递）
+     * @param array $newRegistry 新注册表数据
+     * @return void
+     */
+    private function mergeExtendsRegistry(array &$registry, array $newRegistry): void
+    {
+        foreach ($newRegistry as $moduleName => $moduleData) {
+            if (!isset($registry[$moduleName])) {
+                $registry[$moduleName] = [
+                    'extends' => [],
+                    'extended_by' => []
+                ];
+            }
+            
+            // 合并 extends（如果新数据有定义）
+            if (!empty($moduleData['extends'])) {
+                $registry[$moduleName]['extends'] = $moduleData['extends'];
+            }
+            
+            // 合并 extended_by
+            if (!empty($moduleData['extended_by'])) {
+                foreach ($moduleData['extended_by'] as $sourceModule => $extensions) {
+                    if (!isset($registry[$moduleName]['extended_by'][$sourceModule])) {
+                        $registry[$moduleName]['extended_by'][$sourceModule] = [];
+                    }
+                    $registry[$moduleName]['extended_by'][$sourceModule] = array_merge(
+                        $registry[$moduleName]['extended_by'][$sourceModule],
+                        $extensions
+                    );
+                }
+            }
+            
+            // 合并 completeness
+            if (isset($moduleData['completeness'])) {
+                $registry[$moduleName]['completeness'] = $moduleData['completeness'];
+            }
+        }
+    }
 
     /**
      * 组织注册表数据

@@ -103,6 +103,122 @@ class PluginRegistry
         // 保存注册表
         return $this->saveRegistry($registry);
     }
+    
+    /**
+     * 增量刷新指定模块的插件注册表
+     * 仅重新扫描指定模块的 plugin.xml，合并到现有注册表
+     *
+     * @param array $moduleNames 需要刷新的模块名列表
+     * @return bool
+     */
+    public function refreshForModules(array $moduleNames): bool
+    {
+        // 1. 加载现有注册表
+        $registry = $this->getRegistry(true);
+        
+        // 确保注册表结构完整
+        if (!isset($registry['plugins'])) {
+            $registry['plugins'] = [];
+        }
+        if (!isset($registry['class_to_plugins'])) {
+            $registry['class_to_plugins'] = [];
+        }
+        
+        // 2. 清除目标模块的旧数据
+        $this->removeModulePlugins($registry, $moduleNames);
+        
+        // 3. 扫描目标模块的新数据
+        $pluginData = $this->xmlReader->readForModules($moduleNames);
+        
+        // 4. 组织新数据
+        $newRegistry = $this->organizeRegistryData($pluginData);
+        
+        // 5. 合并到现有注册表
+        $this->mergePluginRegistry($registry, $newRegistry);
+        
+        // 6. 保存注册表
+        return $this->saveRegistry($registry);
+    }
+    
+    /**
+     * 清除指定模块的插件数据
+     *
+     * @param array &$registry 注册表数据（引用传递）
+     * @param array $moduleNames 要清除的模块名列表
+     * @return void
+     */
+    private function removeModulePlugins(array &$registry, array $moduleNames): void
+    {
+        foreach ($registry['plugins'] as $pluginKey => &$pluginInfo) {
+            if (isset($pluginInfo['interceptors']) && is_array($pluginInfo['interceptors'])) {
+                // 过滤掉属于目标模块的拦截器
+                $pluginInfo['interceptors'] = array_values(array_filter(
+                    $pluginInfo['interceptors'],
+                    fn($interceptor) => !in_array($interceptor['module'] ?? '', $moduleNames, true)
+                ));
+                
+                // 如果该插件没有任何拦截器了，移除整个插件
+                if (empty($pluginInfo['interceptors'])) {
+                    $className = $pluginInfo['class'] ?? '';
+                    unset($registry['plugins'][$pluginKey]);
+                    
+                    // 从 class_to_plugins 中移除
+                    if (isset($registry['class_to_plugins'][$className])) {
+                        $registry['class_to_plugins'][$className] = array_values(array_filter(
+                            $registry['class_to_plugins'][$className],
+                            fn($key) => $key !== $pluginKey
+                        ));
+                        if (empty($registry['class_to_plugins'][$className])) {
+                            unset($registry['class_to_plugins'][$className]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * 合并插件注册表
+     *
+     * @param array &$registry 现有注册表（引用传递）
+     * @param array $newRegistry 新注册表数据
+     * @return void
+     */
+    private function mergePluginRegistry(array &$registry, array $newRegistry): void
+    {
+        // 合并 plugins
+        foreach (($newRegistry['plugins'] ?? []) as $pluginKey => $pluginInfo) {
+            if (isset($registry['plugins'][$pluginKey])) {
+                // 插件已存在，合并拦截器
+                if (isset($pluginInfo['interceptors'])) {
+                    $registry['plugins'][$pluginKey]['interceptors'] = array_merge(
+                        $registry['plugins'][$pluginKey]['interceptors'] ?? [],
+                        $pluginInfo['interceptors']
+                    );
+                    
+                    // 重新按 sort 值排序
+                    usort($registry['plugins'][$pluginKey]['interceptors'], function ($a, $b) {
+                        return ((int)($a['sort'] ?? 10000)) <=> ((int)($b['sort'] ?? 10000));
+                    });
+                }
+            } else {
+                // 新插件
+                $registry['plugins'][$pluginKey] = $pluginInfo;
+            }
+        }
+        
+        // 合并 class_to_plugins
+        foreach (($newRegistry['class_to_plugins'] ?? []) as $className => $pluginKeys) {
+            if (!isset($registry['class_to_plugins'][$className])) {
+                $registry['class_to_plugins'][$className] = [];
+            }
+            foreach ($pluginKeys as $pluginKey) {
+                if (!in_array($pluginKey, $registry['class_to_plugins'][$className], true)) {
+                    $registry['class_to_plugins'][$className][] = $pluginKey;
+                }
+            }
+        }
+    }
 
     /**
      * 组织注册表数据

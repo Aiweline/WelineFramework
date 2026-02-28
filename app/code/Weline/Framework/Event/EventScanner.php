@@ -117,6 +117,37 @@ class EventScanner
     }
 
     /**
+     * 扫描指定模块的事件规约信息
+     *
+     * @param array $moduleNames 模块名列表
+     * @return array 返回格式与 scanAllEvents 相同
+     */
+    public function scanModules(array $moduleNames): array
+    {
+        $result = [];
+        $modules = Env::getInstance()->getModuleList();
+
+        foreach ($moduleNames as $moduleName) {
+            if (!isset($modules[$moduleName])) {
+                continue;
+            }
+            
+            $module = $modules[$moduleName];
+            $basePath = $module['base_path'] ?? '';
+            if (empty($basePath) || !($module['status'] ?? false)) {
+                continue;
+            }
+
+            $eventsConfig = $this->scanModuleEventConfig($moduleName, $basePath);
+            if (!empty($eventsConfig)) {
+                $result[$moduleName] = $eventsConfig;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * 验证事件名是否符合规范
      * 事件名必须以模块名开头，格式：模块名::事件名
      *

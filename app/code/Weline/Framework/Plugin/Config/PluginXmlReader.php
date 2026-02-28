@@ -162,4 +162,134 @@ class PluginXmlReader extends \Weline\Framework\Config\Reader\XmlReader
 
         return $plugin_interceptors_list;
     }
+    
+    /**
+     * 读取指定模块的拦截器配置
+     *
+     * @param array $moduleNames 模块名列表
+     * @return array
+     * @throws Core
+     */
+    public function readForModules(array $moduleNames): array
+    {
+        // 清除缓存以强制重新读取
+        $this->pluginCache->delete('plugin');
+        
+        // 读取所有配置
+        $allConfigs = parent::read();
+        
+        // 过滤只保留指定模块的配置
+        $plugin_interceptors_list = [];
+        $env = \Weline\Framework\App\Env::getInstance();
+        
+        foreach ($allConfigs as $module_and_file => $config) {
+            $moduleName = explode('::', $module_and_file)[0] ?? '';
+            
+            // 只处理目标模块
+            if (!in_array($moduleName, $moduleNames, true)) {
+                continue;
+            }
+            
+            // 检查模块状态
+            if (empty($moduleName) || !$env->getModuleStatus($moduleName)) {
+                continue;
+            }
+            
+            $module_plugin_interceptors = [];
+            if (
+                !isset($config['config']['_attribute']['noNamespaceSchemaLocation']) ||
+                ('urn:Weline_Framework::Plugin/etc/xsd/plugin.xsd' !== $config['config']['_attribute']['noNamespaceSchemaLocation'])
+            ) {
+                die(__('%{1} 拦截器必须设置：noNamespaceSchemaLocation="urn:Weline_Framework::Plugin/etc/xsd/plugin.xsd"', [$module_and_file]));
+            }
+            
+            // 复用与 read() 相同的解析逻辑
+            if (is_integer(array_key_first($config['config']['_value']['plugin']))) {
+                foreach ($config['config']['_value']['plugin'] as $plugin) {
+                    if (!isset($plugin['_attribute']['name'])) {
+                        throw new Core(__('%{1} 拦截器Plugin未指定name属性', [$module_and_file]));
+                    }
+                    if (!isset($plugin['_attribute']['class'])) {
+                        throw new Core(__('%{1} 拦截器Plugin未指定class属性', [$module_and_file]));
+                    }
+                    if (is_integer(array_key_first($plugin['_value']))) {
+                        foreach ($plugin['_value'] as $item_interceptor) {
+                            $module_plugin_interceptors[$plugin['_attribute']['name']][] = $item_interceptor;
+                        }
+                    } else {
+                        if (is_array($plugin['_value']['interceptor'])) {
+                            foreach ($plugin['_value']['interceptor'] as $item) {
+                                if (!isset($item['_attribute'])) {
+                                    throw new Core(__('%{1} 拦截器Interceptor没有设置属性', [$module_and_file]));
+                                }
+                                if (!isset($item['_attribute']['name'])) {
+                                    throw new Core(__('%{1} 拦截器Interceptor没有设置name属性', [$module_and_file]));
+                                }
+                                if (!isset($item['_attribute']['instance'])) {
+                                    throw new Core(__('%{1} 拦截器Interceptor没有设置instance属性', [$module_and_file]));
+                                }
+                                $pluginData = $item['_attribute'];
+                                $pluginData['module'] = $moduleName;
+                                $pluginData['module_status'] = true;
+                                $module_plugin_interceptors[$plugin['_attribute']['name']][] = ['class' => $plugin['_attribute']['class'], 'plugins' => $pluginData];
+                            }
+                        } else {
+                            if (!isset($plugin['_value']['interceptor']['_attribute'])) {
+                                throw new Core(__('%{1} 拦截器Interceptor没有设置属性', [$module_and_file]));
+                            }
+                            if (!isset($plugin['_value']['interceptor']['_attribute']['name'])) {
+                                throw new Core(__('%{1} 拦截器Interceptor没有设置name属性', [$module_and_file]));
+                            }
+                            if (!isset($plugin['_value']['interceptor']['_attribute']['instance'])) {
+                                throw new Core(__('%{1} 拦截器Interceptor没有设置instance属性', [$module_and_file]));
+                            }
+                            $pluginData = $plugin['_value']['interceptor']['_attribute'];
+                            $pluginData['module'] = $moduleName;
+                            $pluginData['module_status'] = true;
+                            $module_plugin_interceptors[$plugin['_attribute']['name']][] = ['class' => $plugin['_attribute']['class'], 'plugins' => $pluginData];
+                        }
+                    }
+                }
+            } else {
+                if (!isset($config['config']['_value']['plugin']['_attribute']['name'])) {
+                    throw new Core(__('%{1} 拦截器Plugin未指定name属性', [$module_and_file]));
+                }
+                $interceptors = $config['config']['_value']['plugin']['_value']['interceptor'];
+                if (!isset($interceptors['_attribute']) && is_array($interceptors)) {
+                    foreach ($interceptors as $item) {
+                        if (!isset($item['_attribute'])) {
+                            throw new Core(__('%{1} 拦截器Interceptor没有设置属性', [$module_and_file]));
+                        }
+                        if (!isset($item['_attribute']['name'])) {
+                            throw new Core(__('%{1} 拦截器Interceptor没有设置name属性', [$module_and_file]));
+                        }
+                        if (!isset($item['_attribute']['instance'])) {
+                            throw new Core(__('%{1} 拦截器Interceptor没有设置instance属性', [$module_and_file]));
+                        }
+                        $pluginData = $item['_attribute'];
+                        $pluginData['module'] = $moduleName;
+                        $pluginData['module_status'] = true;
+                        $module_plugin_interceptors[$config['config']['_value']['plugin']['_attribute']['name']][] = ['class' => $config['config']['_value']['plugin']['_attribute']['class'], 'plugins' => $pluginData];
+                    }
+                } else {
+                    if (!isset($interceptors['_attribute'])) {
+                        throw new Core(__('%{1} 拦截器Interceptor没有设置属性', [$module_and_file]));
+                    }
+                    if (!isset($interceptors['_attribute']['name'])) {
+                        throw new Core(__('%{1} 拦截器Interceptor没有设置name属性', [$module_and_file]));
+                    }
+                    if (!isset($interceptors['_attribute']['instance'])) {
+                        throw new Core(__('%{1} 拦截器Interceptor没有设置instance属性', [$module_and_file]));
+                    }
+                    $pluginData = $interceptors['_attribute'];
+                    $pluginData['module'] = $moduleName;
+                    $pluginData['module_status'] = true;
+                    $module_plugin_interceptors[$config['config']['_value']['plugin']['_attribute']['name']][] = ['class' => $config['config']['_value']['plugin']['_attribute']['class'], 'plugins' => $pluginData];
+                }
+            }
+            $plugin_interceptors_list[$module_and_file] = $module_plugin_interceptors;
+        }
+
+        return $plugin_interceptors_list;
+    }
 }

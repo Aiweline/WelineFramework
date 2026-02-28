@@ -454,7 +454,7 @@ class UninstallService
                 'module_name' => $moduleName,
                 'backup_path' => $backupPath,
             ];
-            $eventManager->dispatch('Framework_UninstallService::before_uninstall_module', $beforeEventData);
+            $eventManager->dispatch('Weline_Framework_UninstallService::before_uninstall_module', $beforeEventData);
 
             $steps[] = [
                 'step' => 'before_uninstall',
@@ -471,7 +471,7 @@ class UninstallService
                 'module_name' => $moduleName,
                 'backup_path' => $backupPath,
             ];
-            $eventManager->dispatch('Framework_UninstallService::after_uninstall_module', $afterEventData);
+            $eventManager->dispatch('Weline_Framework_UninstallService::after_uninstall_module', $afterEventData);
 
             $steps[] = [
                 'step' => 'after_uninstall',
@@ -554,7 +554,7 @@ class UninstallService
                 'theme_name' => $themeName,
                 'backup_path' => $backupPath,
             ];
-            $eventManager->dispatch('Framework_UninstallService::before_uninstall_theme', $beforeThemeEventData);
+            $eventManager->dispatch('Weline_Framework_UninstallService::before_uninstall_theme', $beforeThemeEventData);
 
             $steps[] = [
                 'step' => 'before_uninstall',
@@ -568,7 +568,7 @@ class UninstallService
                 'theme_name' => $themeName,
                 'backup_path' => $backupPath,
             ];
-            $eventManager->dispatch('Framework_UninstallService::after_uninstall_theme', $afterThemeEventData);
+            $eventManager->dispatch('Weline_Framework_UninstallService::after_uninstall_theme', $afterThemeEventData);
 
             $steps[] = [
                 'step' => 'after_uninstall',
@@ -651,7 +651,7 @@ class UninstallService
                 'locale_code' => $localeCode,
                 'backup_path' => $backupPath,
             ];
-            $eventManager->dispatch('Framework_UninstallService::before_uninstall_i18n', $beforeI18nEventData);
+            $eventManager->dispatch('Weline_Framework_UninstallService::before_uninstall_i18n', $beforeI18nEventData);
 
             $steps[] = [
                 'step' => 'before_uninstall',
@@ -665,7 +665,7 @@ class UninstallService
                 'locale_code' => $localeCode,
                 'backup_path' => $backupPath,
             ];
-            $eventManager->dispatch('Framework_UninstallService::after_uninstall_i18n', $afterI18nEventData);
+            $eventManager->dispatch('Weline_Framework_UninstallService::after_uninstall_i18n', $afterI18nEventData);
 
             $steps[] = [
                 'step' => 'after_uninstall',
@@ -756,18 +756,39 @@ class UninstallService
                 'backup_path' => $backupPath,
                 'target_path' => $targetPath,
             ];
-            $eventManager->dispatch('Framework_UninstallService::before_rollback_module', $beforeRollbackModuleData);
+            $eventManager->dispatch('Weline_Framework_UninstallService::before_rollback_module', $beforeRollbackModuleData);
 
             // 恢复文件
             $this->copyDirectory($backupPath, $targetPath, ['backup_info.json']);
+
+            // 恢复数据库表
+            $dbRestoreResult = ['success' => true, 'message' => ''];
+            if (class_exists(ModuleBackupService::class)) {
+                /** @var ModuleBackupService $moduleBackupService */
+                $moduleBackupService = ObjectManager::getInstance(ModuleBackupService::class);
+                $dbRestoreResult = $moduleBackupService->restoreModuleTables($moduleName);
+                
+                if (!$dbRestoreResult['success']) {
+                    $this->printer->warning(__('文件恢复成功，但数据库恢复失败：%{1}', [$dbRestoreResult['message']]));
+                }
+            }
 
             // 触发回滚后事件
             $afterRollbackModuleData = [
                 'module_name' => $moduleName,
                 'backup_path' => $backupPath,
                 'target_path' => $targetPath,
+                'db_restore_result' => $dbRestoreResult,
             ];
-            $eventManager->dispatch('Framework_UninstallService::after_rollback_module', $afterRollbackModuleData);
+            $eventManager->dispatch('Weline_Framework_UninstallService::after_rollback_module', $afterRollbackModuleData);
+
+            // 如果数据库恢复失败，返回部分成功
+            if (!$dbRestoreResult['success']) {
+                return [
+                    'success' => false,
+                    'message' => __('文件恢复成功，但数据库恢复失败：%{1}', [$dbRestoreResult['message']])
+                ];
+            }
 
             return [
                 'success' => true,
@@ -838,7 +859,7 @@ class UninstallService
                 'backup_path' => $backupPath,
                 'target_path' => $targetPath,
             ];
-            $eventManager->dispatch('Framework_UninstallService::before_rollback_theme', $beforeRollbackThemeData);
+            $eventManager->dispatch('Weline_Framework_UninstallService::before_rollback_theme', $beforeRollbackThemeData);
 
             // 恢复文件
             $this->copyDirectory($backupPath, $targetPath, ['backup_info.json']);
@@ -849,7 +870,7 @@ class UninstallService
                 'backup_path' => $backupPath,
                 'target_path' => $targetPath,
             ];
-            $eventManager->dispatch('Framework_UninstallService::after_rollback_theme', $afterRollbackThemeData);
+            $eventManager->dispatch('Weline_Framework_UninstallService::after_rollback_theme', $afterRollbackThemeData);
 
             return [
                 'success' => true,
@@ -920,7 +941,7 @@ class UninstallService
                 'backup_path' => $backupPath,
                 'target_path' => $targetPath,
             ];
-            $eventManager->dispatch('Framework_UninstallService::before_rollback_i18n', $beforeRollbackI18nData);
+            $eventManager->dispatch('Weline_Framework_UninstallService::before_rollback_i18n', $beforeRollbackI18nData);
 
             // 恢复文件
             $this->copyDirectory($backupPath, $targetPath, ['backup_info.json']);
@@ -931,7 +952,7 @@ class UninstallService
                 'backup_path' => $backupPath,
                 'target_path' => $targetPath,
             ];
-            $eventManager->dispatch('Framework_UninstallService::after_rollback_i18n', $afterRollbackI18nData);
+            $eventManager->dispatch('Weline_Framework_UninstallService::after_rollback_i18n', $afterRollbackI18nData);
 
             return [
                 'success' => true,
