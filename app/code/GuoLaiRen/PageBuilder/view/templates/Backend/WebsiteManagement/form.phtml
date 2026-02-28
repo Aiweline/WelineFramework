@@ -15,6 +15,8 @@ $timezones = $timezones ?? [];
 $currencies = $currencies ?? [];
 $selected_currencies = $selected_currencies ?? [];
 $selected_languages = $selected_languages ?? [];
+$domain_options = $domain_options ?? [];
+$isEdit = isset($website['website_id']) && !empty($website['website_id']);
 ?>
 
 <!-- twitter-bootstrap-wizard css -->
@@ -83,6 +85,27 @@ $selected_languages = $selected_languages ?? [];
                 <div class="row">
                     <?php if (isset($website['website_id'])): ?>
                         <input type="hidden" name="website_id" value="<?= $website['website_id'] ?>">
+                    <?php endif; ?>
+
+                    <!-- 域名选择器（新增时显示，使用 Taglib 组件，支持单选/多选） -->
+                    <?php if (!$isEdit): ?>
+                    <div class="col-12 mb-3">
+                        <label class="form-label">
+                            <i class="mdi mdi-domain me-1"></i><lang>选择域名</lang>
+                        </label>
+                        <w:websites:domain:select
+                            id="pagebuilder_domain_select"
+                            name="selected_domain"
+                            value="''"
+                            display="'点击选择域名（单选或多选）'"
+                            class="w-100"
+                            multiple="true"
+                            auto-fill-code="code"
+                            auto-fill-url="url"
+                            auto-fill-name="name"
+                        />
+                        <div class="form-text-hint"><lang>从域名池选择域名（可多选），选择后自动填充网站代码、URL和名称</lang></div>
+                    </div>
                     <?php endif; ?>
 
                     <div class="col-4 mb-3">
