@@ -38,11 +38,11 @@ class DomainProvisioningService
     }
 
     /**
-     * 创建配置订单并执行第一步：购买域名
+     * 创建配置订单并执行第一步：购买域名（或跳过购买使用已有域名）
      *
      * @param string $domain 域名
      * @param int $registrarAccountId 域名商账号 ID
-     * @param array $options years, website_id, auto_create_site, dns_vendor, dns_account_id, cdn_vendor, cdn_account_id, apply_ssl
+     * @param array $options years, website_id, auto_create_site, dns_vendor, dns_account_id, cdn_vendor, cdn_account_id, apply_ssl, skip_purchase
      * @return array{success: bool, message: string, order_id?: int, results?: array}
      */
     public function startProvisioning(string $domain, int $registrarAccountId, array $options = []): array
@@ -70,11 +70,17 @@ class DomainProvisioningService
         $cdnVendor = trim((string) ($options['cdn_vendor'] ?? ''));
         $cdnAccountId = (int) ($options['cdn_account_id'] ?? 0);
         $applySsl = !isset($options['apply_ssl']) || (bool) $options['apply_ssl'];
+        // 是否跳过购买步骤（使用已有域名）
+        $skipPurchase = !empty($options['skip_purchase']) || !empty($options['domain_owned']);
+
+        // 确定初始步骤
+        $initialStep = $skipPurchase ? ProvisioningOrder::STEP_DNS : ProvisioningOrder::STEP_PURCHASE;
+        $initialStatus = $skipPurchase ? ProvisioningOrder::STATUS_STEP_DNS : ProvisioningOrder::STATUS_STEP_PURCHASE;
 
         $order = clone $this->orderModel;
         $order->clearData();
         $order->setData(ProvisioningOrder::fields_DOMAIN, $domain);
-        $order->setData(ProvisioningOrder::fields_STATUS, ProvisioningOrder::STATUS_STEP_PURCHASE);
+        $order->setData(ProvisioningOrder::fields_STATUS, $initialStatus);
         $order->setData(ProvisioningOrder::fields_REGISTRAR_ACCOUNT_ID, $registrarAccountId);
         $order->setData(ProvisioningOrder::fields_DNS_VENDOR, $dnsVendor);
         $order->setData(ProvisioningOrder::fields_DNS_ACCOUNT_ID, $dnsAccountId);
@@ -82,10 +88,23 @@ class DomainProvisioningService
         $order->setData(ProvisioningOrder::fields_CDN_ACCOUNT_ID, $cdnAccountId);
         $order->setData(ProvisioningOrder::fields_WEBSITE_ID, $websiteId);
         $order->setData(ProvisioningOrder::fields_APPLY_SSL, $applySsl ? 1 : 0);
-        $order->setData(ProvisioningOrder::fields_CURRENT_STEP, ProvisioningOrder::STEP_PURCHASE);
+        $order->setData(ProvisioningOrder::fields_CURRENT_STEP, $initialStep);
         $order->save();
 
         $orderId = $order->getOrderId();
+
+        // 如果跳过购买（使用已有域名），直接返回成功并记录
+        if ($skipPurchase) {
+            $this->recordStep($orderId, ProvisioningOrder::STEP_PURCHASE, 'skipped', '', 0, ['reason' => 'domain_owned']);
+            return [
+                'success' => true,
+                'message' => __('配置订单已创建（使用已有域名），请继续 DNS/CDN/证书 步骤'),
+                'order_id' => $orderId,
+                'skipped_purchase' => true,
+            ];
+        }
+
+        // 执行购买流程
         $this->recordStep($orderId, ProvisioningOrder::STEP_PURCHASE, 'running', '', 0, []);
 
         $items = [
@@ -102,22 +121,28 @@ class DomainProvisioningService
         ]);
 
         if (!($result['success'] ?? false)) {
+            $errorMsg = $result['message'] ?? __('购买失败');
             $order->setData(ProvisioningOrder::fields_STATUS, ProvisioningOrder::STATUS_FAILED);
-            $order->setData(ProvisioningOrder::fields_ERROR_MESSAGE, $result['message'] ?? __('购买失败'));
+            $order->setData(ProvisioningOrder::fields_ERROR_MESSAGE, $errorMsg);
             $order->save();
-            $this->recordStep($orderId, ProvisioningOrder::STEP_PURCHASE, 'failed', $result['message'] ?? '', 0, $result);
-            return $result;
+            $this->recordStep($orderId, ProvisioningOrder::STEP_PURCHASE, 'failed', $errorMsg, 0, $result);
+            return [
+                'success' => false,
+                'message' => $errorMsg,
+                'order_id' => $orderId,
+            ];
         }
 
         $first = $result['results'][0] ?? [];
         if (!($first['success'] ?? false)) {
+            $errorMsg = $first['message'] ?? __('购买失败');
             $order->setData(ProvisioningOrder::fields_STATUS, ProvisioningOrder::STATUS_FAILED);
-            $order->setData(ProvisioningOrder::fields_ERROR_MESSAGE, $first['message'] ?? __('购买失败'));
+            $order->setData(ProvisioningOrder::fields_ERROR_MESSAGE, $errorMsg);
             $order->save();
-            $this->recordStep($orderId, ProvisioningOrder::STEP_PURCHASE, 'failed', $first['message'] ?? '', 0, $result);
+            $this->recordStep($orderId, ProvisioningOrder::STEP_PURCHASE, 'failed', $errorMsg, 0, $result);
             return [
                 'success' => false,
-                'message' => $first['message'] ?? __('购买失败'),
+                'message' => $errorMsg,
                 'order_id' => $orderId,
                 'results' => $result['results'] ?? [],
             ];
