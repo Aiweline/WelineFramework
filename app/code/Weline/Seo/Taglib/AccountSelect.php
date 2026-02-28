@@ -110,21 +110,69 @@ class AccountSelect implements TaglibInterface
                 $dataAttrsStr = ' ' . implode(' ', $dataParts);
             }
             
-            // 输出 HTML
-            $html[] = '<div class="position-relative seo-account-select ' . htmlspecialchars($class) . '" style="' . htmlspecialchars($style) . '"' . $dataAttrsStr . '>';
-            $html[] = '  <button type="button" class="btn btn-outline-secondary w-100 text-start" id="<?= htmlspecialchars($Taglib__id) ?>_trigger" style="height: 38px;">';
-            $html[] = '    <i class="mdi mdi-account-search me-1"></i>';
-            $html[] = '    <span id="<?= htmlspecialchars($Taglib__id) ?>_display"><?php if($Taglib__display!==' . "''" . '): echo htmlspecialchars($Taglib__display); else: ?>' . htmlspecialchars(__('请选择SEO账户')) . '<?php endif; ?></span>';
+            // 组件 CSS（使用主题变量，兼容暗色/亮色模式）
+            $html[] = '<style>';
+            $html[] = '.weline-seo-account-select { position: relative; }';
+            $html[] = '.weline-seo-account-select-trigger {';
+            $html[] = '  display: flex; align-items: center; justify-content: space-between;';
+            $html[] = '  width: 100%; height: 38px; padding: 0.375rem 0.75rem;';
+            $html[] = '  background-color: var(--backend-color-card-bg, #fff);';
+            $html[] = '  border: 1px solid var(--backend-color-border-default, #ced4da);';
+            $html[] = '  border-radius: var(--backend-border-radius-sm, 0.25rem);';
+            $html[] = '  color: var(--backend-color-text-primary, #212529);';
+            $html[] = '  cursor: pointer; transition: border-color 0.15s ease-in-out;';
+            $html[] = '}';
+            $html[] = '.weline-seo-account-select-trigger:hover { border-color: var(--backend-color-primary, #556ee6); }';
+            $html[] = '.weline-seo-account-select-dropdown {';
+            $html[] = '  position: absolute; left: 0; right: 0; z-index: 1060; padding: 0.75rem;';
+            $html[] = '  background-color: var(--backend-color-card-bg, #fff);';
+            $html[] = '  border: 1px solid var(--backend-color-border-default, #dee2e6);';
+            $html[] = '  border-radius: var(--backend-border-radius-md, 0.375rem);';
+            $html[] = '  box-shadow: var(--backend-shadow-lg, 0 0.5rem 1rem rgba(0, 0, 0, 0.15));';
+            $html[] = '}';
+            $html[] = '.weline-seo-account-select-search {';
+            $html[] = '  width: 100%; padding: 0.5rem 0.75rem; margin-bottom: 0.5rem;';
+            $html[] = '  background-color: var(--backend-color-input-bg, #fff);';
+            $html[] = '  border: 1px solid var(--backend-color-border-default, #ced4da);';
+            $html[] = '  border-radius: var(--backend-border-radius-sm, 0.25rem);';
+            $html[] = '  color: var(--backend-color-text-primary, #212529);';
+            $html[] = '}';
+            $html[] = '.weline-seo-account-select-search:focus { border-color: var(--backend-color-primary, #556ee6); outline: none; }';
+            $html[] = '.weline-seo-account-select-list {';
+            $html[] = '  max-height: 300px; overflow-y: auto;';
+            $html[] = '  border: 1px solid var(--backend-color-border-default, #dee2e6);';
+            $html[] = '  border-radius: var(--backend-border-radius-sm, 0.25rem);';
+            $html[] = '  background-color: var(--backend-color-card-bg, #fff);';
+            $html[] = '}';
+            $html[] = '.weline-seo-account-select .account-item {';
+            $html[] = '  padding: 0.5rem 0.75rem; cursor: pointer;';
+            $html[] = '  border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);';
+            $html[] = '  color: var(--backend-color-text-primary, #212529);';
+            $html[] = '  transition: background-color 0.15s ease;';
+            $html[] = '}';
+            $html[] = '.weline-seo-account-select .account-item:last-child { border-bottom: none; }';
+            $html[] = '.weline-seo-account-select .account-item:hover { background-color: var(--backend-color-bg-hover, #f1f3f5); }';
+            $html[] = '.weline-seo-account-select .account-item.active { background-color: var(--backend-color-primary-light, #e8ebf5); color: var(--backend-color-primary, #556ee6); }';
+            $html[] = '.weline-seo-account-select-loading { padding: 1rem; text-align: center; color: var(--backend-color-text-secondary, #6c757d); }';
+            $html[] = '.weline-seo-account-select-hint { margin-top: 0.25rem; font-size: 0.75rem; color: var(--backend-color-text-muted, #adb5bd); }';
+            $html[] = '</style>';
+            
+            // 输出 HTML（使用自定义类名）
+            $html[] = '<div class="weline-seo-account-select ' . htmlspecialchars($class) . '" style="' . htmlspecialchars($style) . '"' . $dataAttrsStr . '>';
+            $html[] = '  <button type="button" class="weline-seo-account-select-trigger" id="<?= htmlspecialchars($Taglib__id) ?>_trigger">';
+            $html[] = '    <span><i class="mdi mdi-account-search me-1"></i>';
+            $html[] = '    <span id="<?= htmlspecialchars($Taglib__id) ?>_display"><?php if($Taglib__display!==' . "''" . '): echo htmlspecialchars($Taglib__display); else: ?>' . htmlspecialchars(__('请选择SEO账户')) . '<?php endif; ?></span></span>';
+            $html[] = '    <i class="mdi mdi-chevron-down"></i>';
             $html[] = '  </button>';
-            $html[] = '  <div id="<?= htmlspecialchars($Taglib__id) ?>_container" class="bg-white border rounded shadow-sm" style="display:none; position:absolute; left:0; right:0; top:0; z-index:1060; padding: 0.75rem;"' . $dataAttrsStr . '>';
-            $html[] = '    <input type="text" class="form-control mb-2" id="<?= htmlspecialchars($Taglib__id) ?>_search" placeholder="' . htmlspecialchars($placeholder) . '" autocomplete="off">';
+            $html[] = '  <div id="<?= htmlspecialchars($Taglib__id) ?>_container" class="weline-seo-account-select-dropdown" style="display:none;"' . $dataAttrsStr . '>';
+            $html[] = '    <input type="text" class="weline-seo-account-select-search" id="<?= htmlspecialchars($Taglib__id) ?>_search" placeholder="' . htmlspecialchars($placeholder) . '" autocomplete="off">';
             $html[] = '    <input type="hidden" id="<?= htmlspecialchars($Taglib__id) ?>_value" name="<?= htmlspecialchars($Taglib__name) ?>" value="<?= htmlspecialchars($Taglib__value) ?>"' . $dataAttrsStr . '>';
-            $html[] = '    <div class="border rounded shadow bg-white" style="max-height:300px; overflow-y:auto; position:relative;">';
-            $html[] = '      <div id="<?= htmlspecialchars($Taglib__id) ?>_loading" style="padding:1rem; text-align:center; display:none;">' . __('加载中...') . '</div>';
-            $html[] = '      <div id="<?= htmlspecialchars($Taglib__id) ?>_list" style="padding:0.25rem;"></div>';
+            $html[] = '    <div class="weline-seo-account-select-list">';
+            $html[] = '      <div id="<?= htmlspecialchars($Taglib__id) ?>_loading" class="weline-seo-account-select-loading" style="display:none;">' . __('加载中...') . '</div>';
+            $html[] = '      <div id="<?= htmlspecialchars($Taglib__id) ?>_list"></div>';
             $html[] = '    </div>';
             $html[] = '  </div>';
-            $html[] = '  <small class="text-muted d-block mt-1">' . __('提示：点击选择SEO账户，绑定后将自动提交sitemap') . '</small>';
+            $html[] = '  <small class="weline-seo-account-select-hint">' . __('提示：点击选择SEO账户，绑定后将自动提交sitemap') . '</small>';
             $html[] = '</div>';
 
             // JavaScript 脚本
