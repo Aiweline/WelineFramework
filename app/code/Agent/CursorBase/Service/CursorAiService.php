@@ -20,7 +20,8 @@ class CursorAiService implements CursorAiInterface
     private bool $verbose = false;
     private int $timeout = 120;
     private ?string $workspace = null;
-    private ?string $model = null;
+    private string $model = 'auto';
+    private ?string $apiKey = null;
 
     public function __construct()
     {
@@ -48,8 +49,36 @@ class CursorAiService implements CursorAiInterface
 
     public function setModel(?string $model): self
     {
-        $this->model = $model;
+        $this->model = $model ?: 'auto';
         return $this;
+    }
+
+    public function setApiKey(?string $apiKey): self
+    {
+        $this->apiKey = $apiKey;
+        return $this;
+    }
+
+    /**
+     * 获取 API Key（优先级：setApiKey > 环境变量 CURSOR_API_KEY > env.php 配置）
+     */
+    private function getApiKey(): ?string
+    {
+        if ($this->apiKey) {
+            return $this->apiKey;
+        }
+
+        $envKey = getenv('CURSOR_API_KEY');
+        if ($envKey) {
+            return $envKey;
+        }
+
+        $config = \Weline\Framework\App\Env::getInstance()->getConfig('cursor_api_key');
+        if ($config) {
+            return $config;
+        }
+
+        return null;
     }
 
     public function getSessionDir(): string
@@ -348,12 +377,28 @@ class CursorAiService implements CursorAiInterface
 
         $hasContent = !empty(trim($response));
         $error = null;
-        if ($returnCode !== 0 && !$hasContent) {
-            $error = "CLI 错误 (code {$returnCode})";
-            if ($stderr) {
-                $stderrClean = preg_replace('/\x1b\[[0-9;]*m/', '', trim($stderr));
-                if ($stderrClean) {
-                    $error .= ': ' . mb_substr($stderrClean, 0, 200);
+        
+            if (!$hasContent) {
+            if ($returnCode !== 0) {
+                $error = "CLI 错误 (code {$returnCode})";
+                if ($stderr) {
+                    $stderrClean = preg_replace('/\x1b\[[0-9;]*m/', '', trim($stderr));
+                    if ($stderrClean) {
+                        $error .= ': ' . mb_substr($stderrClean, 0, 200);
+                    }
+                }
+            } else {
+                $apiKey = $this->getApiKey();
+                if (!$apiKey) {
+                    $error = "缺少 Cursor API Key，请配置 env.php 中的 cursor_api_key 或设置环境变量 CURSOR_API_KEY";
+                } else {
+                    $error = "Cursor Agent 无响应（可能是网络问题或 API Key 无效）";
+                }
+                if ($stderr) {
+                    $stderrClean = preg_replace('/\x1b\[[0-9;]*m/', '', trim($stderr));
+                    if ($stderrClean) {
+                        $error .= ' - ' . mb_substr($stderrClean, 0, 200);
+                    }
                 }
             }
         }
@@ -391,8 +436,11 @@ class CursorAiService implements CursorAiInterface
                 $runLine = "& '{$nodePath}' -p \$prompt --output-format {$outputFormat}{$streamFlag} --trust --workspace '{$workspace}'";
             }
 
-            if ($this->model) {
-                $runLine .= " --model '{$this->model}'";
+            $runLine .= " --model '{$this->model}'";
+
+            $apiKey = $this->getApiKey();
+            if ($apiKey) {
+                $runLine .= " --api-key '{$apiKey}'";
             }
 
             $ps1Content = "\$prompt = [IO.File]::ReadAllText('{$tempPath}', [Text.Encoding]::UTF8)\n{$runLine}\n";
@@ -407,10 +455,12 @@ class CursorAiService implements CursorAiInterface
         $agent = escapeshellarg($info['node']);
         $scriptArg = !empty($info['script']) ? ' ' . escapeshellarg($info['script']) : '';
         $workspace = escapeshellarg($this->workspace ?? rtrim(BP, '/'));
-        $modelFlag = $this->model ? ' --model ' . escapeshellarg($this->model) : '';
+        $modelFlag = ' --model ' . escapeshellarg($this->model);
+        $apiKey = $this->getApiKey();
+        $apiKeyFlag = $apiKey ? ' --api-key ' . escapeshellarg($apiKey) : '';
         $promptArg = escapeshellarg(file_get_contents($tempFile));
 
-        return "{$agent}{$scriptArg} -p {$promptArg} --output-format {$outputFormat}{$streamFlag} --trust --workspace {$workspace}{$modelFlag}";
+        return "{$agent}{$scriptArg} -p {$promptArg} --output-format {$outputFormat}{$streamFlag} --trust --workspace {$workspace}{$modelFlag}{$apiKeyFlag}";
     }
 
     /**
