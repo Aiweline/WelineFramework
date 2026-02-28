@@ -175,12 +175,16 @@ class AttackDetector
         // SSL 握手失败检测（Dispatcher 快速关闭模式检测）
         // 注意：fast_close_threshold 不能太大，否则会误伤正常的快速请求
         // 真正的 SSL 握手失败通常在 50-100ms 内断开（客户端拒绝证书 → SSL alert → 断开）
+        // 
+        // 重要：自签名证书场景下，浏览器预连接（Preconnect）可能频繁触发此检测，
+        // 因为浏览器会预先建立连接，但发现证书不信任后立即断开。
+        // 阈值设置需要考虑这种正常行为，避免误封合法用户。
         'ssl_handshake_failure' => [
             'enabled' => true,
             'window' => 60,                 // 统计窗口（秒）
-            'max_failures' => 10,           // 触发封禁的最大失败次数（提高容错）
-            'block_duration' => 300,        // 封禁时长（秒）- 降低到 5 分钟
-            'fast_close_threshold' => 0.3,  // 快速关闭阈值（秒）- 降低到 300ms，避免误伤正常请求
+            'max_failures' => 30,           // 触发封禁的最大失败次数（提高容错，适应自签名证书场景）
+            'block_duration' => 60,         // 封禁时长（秒）- 降低到 1 分钟，快速解封
+            'fast_close_threshold' => 0.2,  // 快速关闭阈值（秒）- 降低到 200ms，只捕获真正的 SSL 失败
         ],
     ];
     

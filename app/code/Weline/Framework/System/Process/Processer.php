@@ -2336,11 +2336,29 @@ class Processer
     /**
      * 检测指定端口是否被 Weline 框架进程占用
      *
+     * 判断策略（按优先级）：
+     * 1. 从 port_index.json 查找（最快，进程刚启动时可能已注册端口）
+     * 2. 通过系统命令获取 PID，再判断是否是框架进程
+     *
      * @param int $port 端口号
      * @return bool 是否被框架进程占用
      */
     public static function isPortUsedByWeline(int $port): bool
     {
+        // 策略1：从 port_index.json 查找
+        // 进程启动时会先注册端口到索引，即使进程正在初始化也能识别
+        $portKey = (string) $port;
+        $portIndex = self::readPortIndex();
+        if (isset($portIndex[$portKey])) {
+            $pname = $portIndex[$portKey];
+            // 验证该进程名是否属于框架进程
+            if (\strpos($pname, self::WELINE_PROCESS_PREFIX) !== false
+                || \strpos($pname, '--name=' . self::WELINE_PROCESS_PREFIX) !== false) {
+                return true;
+            }
+        }
+        
+        // 策略2：通过系统命令获取 PID，再判断是否是框架进程
         $pid = self::getProcessIdByPort($port);
         if ($pid <= 0) {
             return false;
