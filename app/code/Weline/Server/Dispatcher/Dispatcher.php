@@ -392,7 +392,8 @@ class Dispatcher
         
         // 设置断开处理器
         $this->ipcClient->onDisconnect(function (bool $receivedShutdown, ControlClient $client) {
-            if ($receivedShutdown) {
+            // 已收到 shutdown 或正在退出，不做任何复活/重连操作
+            if ($receivedShutdown || $this->ipcReceivedShutdown || !$this->running) {
                 $this->log('Master 连接断开（已收到 shutdown，不复活）', 'INFO');
                 return;
             }
@@ -533,6 +534,11 @@ class Dispatcher
      */
     private function checkMasterHeartbeat(): void
     {
+        // 已收到 shutdown，跳过心跳检查
+        if ($this->ipcReceivedShutdown || !$this->running) {
+            return;
+        }
+        
         $now = \time();
         if ($now - $this->lastMasterCheck < $this->masterCheckInterval) {
             return;
@@ -629,6 +635,11 @@ class Dispatcher
      */
     private function probeWorkerHealth(): void
     {
+        // 已收到 shutdown，跳过健康探测
+        if ($this->ipcReceivedShutdown || !$this->running) {
+            return;
+        }
+        
         $now = \microtime(true);
         if ($now - $this->lastWorkerProbeTime < $this->workerProbeInterval) {
             return;
@@ -1238,6 +1249,16 @@ class Dispatcher
             AttackLogService::flush();
         } catch (\Throwable $e) {
             // 忽略刷新失败
+        }
+        
+        // 通知 Master 即将退出（IPC exited 消息）
+        if ($this->ipcClient && $this->ipcClient->isConnected()) {
+            $this->ipcClient->send(ControlMessage::exited(
+                ControlMessage::ROLE_DISPATCHER,
+                \getmypid(),
+                $this->port
+            ));
+            $this->log('已发送 exited 消息给 Master', 'INFO');
         }
         
         // 关闭 IPC 控制客户端

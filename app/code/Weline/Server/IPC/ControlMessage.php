@@ -49,6 +49,9 @@ class ControlMessage
     /** Worker → Master：所有请求处理完毕，准备退出 */
     public const TYPE_DRAINING_COMPLETE = 'draining_complete';
 
+    /** 子进程 → Master：进程即将退出（Master 可从等待列表移除） */
+    public const TYPE_EXITED = 'exited';
+
     /** 子进程 → Master：上报运行状态 */
     public const TYPE_STATUS_REPORT = 'status_report';
 
@@ -69,6 +72,8 @@ class ControlMessage
 
     public const RELOAD_TYPE_CODE = 'code';
     public const RELOAD_TYPE_CACHE = 'cache';
+    /** 强制重载：批量杀死所有 Worker 后重新启动（不排水） */
+    public const RELOAD_TYPE_FORCE = 'force';
 
     // ========== CLI 命令动作 ==========
 
@@ -325,6 +330,20 @@ class ControlMessage
             'success' => $success,
             'data'    => $data,
             'message' => $message,
+        ]);
+    }
+
+    /**
+     * 构建 exited 消息（子进程退出前发送）
+     */
+    public static function exited(string $role, int $pid, int $port = 0, int $workerId = 0): string
+    {
+        return self::encode([
+            'type'      => self::TYPE_EXITED,
+            'role'      => $role,
+            'pid'       => $pid,
+            'port'      => $port,
+            'worker_id' => $workerId,
         ]);
     }
 }

@@ -313,6 +313,12 @@ class MasterControlServer
                 $this->clients[$clientId]['state'] = self::STATE_DRAINING;
             }
 
+            // 内部处理 exited 消息（子进程即将退出，提前从列表移除）
+            if ($type === ControlMessage::TYPE_EXITED) {
+                $this->ipcLog("[IPC-Master] {$tag} 即将退出");
+                $this->removeClient($clientId);
+            }
+
             // 回调外部处理器
             if ($this->messageHandler) {
                 ($this->messageHandler)($msg, $clientId, $this);
