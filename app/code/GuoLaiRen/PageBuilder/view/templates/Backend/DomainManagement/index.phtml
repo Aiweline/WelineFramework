@@ -2,6 +2,9 @@
 /** @var \GuoLaiRen\PageBuilder\Controller\Backend\DomainManagement $this */
 $accounts = $this->getData('accounts') ?? [];
 $registrars = $this->getData('registrars') ?? [];
+$activeAccounts = $this->getData('activeAccounts') ?? [];
+$lastSyncTime = $this->getData('lastSyncTime') ?? '';
+$statusOptions = $this->getData('statusOptions') ?? [];
 ?>
 <style>
 .pb-dm { max-width: 1400px; margin: 0 auto; }
@@ -166,6 +169,51 @@ $registrars = $this->getData('registrars') ?? [];
     background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
     color: var(--backend-color-info, #50a5f1);
 }
+.pb-dm-badge--cf {
+    background: linear-gradient(135deg, #f38020 0%, #faad3f 100%);
+    color: #fff;
+}
+.pb-dm-provider-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+.pb-dm-provider-row {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.72rem;
+}
+.pb-dm-provider-label {
+    color: var(--backend-color-text-tertiary, #9a9cae);
+    min-width: 2rem;
+}
+.pb-dm-provider-badge {
+    padding: 0.1em 0.4em;
+    border-radius: 3px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.pb-dm-provider--registrar {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.12));
+    color: var(--backend-color-primary, #556ee6);
+}
+.pb-dm-provider--dns {
+    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.12));
+    color: #f38020;
+}
+.pb-dm-provider--cdn {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    color: var(--backend-color-info, #50a5f1);
+}
+.pb-dm-provider--none {
+    background: var(--backend-color-bg-tertiary, #f1f3f5);
+    color: var(--backend-color-text-tertiary, #9a9cae);
+}
+.pb-dm-modal-md {
+    max-width: 600px;
+    width: 90%;
+}
 .pb-dm-empty {
     text-align: center;
     padding: var(--backend-spacing-xl, 40px);
@@ -215,6 +263,31 @@ $registrars = $this->getData('registrars') ?? [];
 .pb-dm-actions { display: flex; gap: 8px; }
 .pb-dm-checkbox-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
 .pb-dm-checkbox-row input[type="checkbox"] { margin: 0; }
+.pb-dm-filters { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 16px; }
+.pb-dm-filters .pb-dm-fg { min-width: 150px; flex: unset; }
+.pb-dm-filters .pb-dm-fg.pb-dm-fg--search { min-width: 220px; }
+.pb-dm-pagination { display: flex; gap: 8px; align-items: center; justify-content: center; margin-top: 16px; }
+.pb-dm-pagination button { min-width: 36px; }
+.pb-dm-pagination-info { color: var(--backend-color-text-secondary, #6c757d); font-size: 0.875rem; }
+.pb-dm-pagination select {
+    margin-left: 12px;
+    padding: 4px 8px;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-sm, 4px);
+    background: var(--backend-color-input-bg, #fff);
+    color: var(--backend-color-text-primary, #333);
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+.pb-dm-pagination select:focus {
+    outline: none;
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: var(--backend-focus-ring);
+}
+.pb-dm-sync-info { font-size: 0.85rem; color: var(--backend-color-text-tertiary, #adb5bd); margin-left: auto; }
+.pb-dm-batch-bar { display: none; padding: 12px; background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.08)); border-radius: var(--backend-border-radius, 6px); margin-bottom: 16px; align-items: center; gap: 12px; }
+.pb-dm-batch-bar.pb-dm-batch-bar--active { display: flex; }
+.pb-dm-batch-count { font-weight: 500; color: var(--backend-color-info, #50a5f1); }
 .pb-dm-help-box {
     margin: var(--backend-spacing-md, 16px) 0;
     padding: var(--backend-spacing-md, 16px);
@@ -249,6 +322,318 @@ $registrars = $this->getData('registrars') ?? [];
 .pb-dm-help-steps li {
     margin-bottom: 4px;
 }
+.pb-dm-accordion {
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+.pb-dm-accordion-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s ease;
+    border-bottom: 1px solid transparent;
+}
+.pb-dm-accordion-header:hover {
+    background: var(--backend-color-table-bg-hover, #e9ecef);
+}
+.pb-dm-accordion.pb-dm-accordion--open .pb-dm-accordion-header {
+    border-bottom-color: var(--backend-color-border-default, #dee2e6);
+}
+.pb-dm-accordion-icon {
+    transition: transform 0.2s ease;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+.pb-dm-accordion.pb-dm-accordion--open .pb-dm-accordion-icon {
+    transform: rotate(90deg);
+}
+.pb-dm-accordion-title {
+    flex: 1;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #333);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.pb-dm-accordion-stats {
+    display: flex;
+    gap: 12px;
+    font-size: 0.85rem;
+}
+.pb-dm-accordion-stat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+.pb-dm-accordion-stat--ok { color: var(--backend-color-success, #34c38f); }
+.pb-dm-accordion-stat--warn { color: var(--backend-color-warning, #f1b44c); }
+.pb-dm-accordion-body {
+    display: none;
+    padding: 0;
+    max-height: 400px;
+    overflow-y: auto;
+}
+.pb-dm-accordion.pb-dm-accordion--open .pb-dm-accordion-body {
+    display: block;
+}
+.pb-dm-accordion-actions {
+    display: flex;
+    gap: 6px;
+}
+/* 批量切换DNS弹窗样式 */
+.pb-dm-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1050;
+    background: var(--backend-color-overlay, rgba(0,0,0,0.5));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.pb-dm-modal {
+    background: var(--backend-color-card-bg, #fff);
+    border-radius: var(--backend-border-radius-lg, 12px);
+    box-shadow: var(--backend-shadow-lg, 0 10px 40px rgba(0,0,0,0.2));
+    max-width: 90%;
+    max-height: 85vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.pb-dm-modal-sm {
+    width: 480px;
+}
+.pb-dm-modal-header {
+    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 24px);
+    border-bottom: 1px solid var(--backend-color-border-default, #dee2e6);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.pb-dm-modal-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.pb-dm-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    line-height: 1;
+    padding: 0;
+}
+.pb-dm-modal-close:hover {
+    color: var(--backend-color-danger, #f46a6a);
+}
+.pb-dm-modal-body {
+    padding: var(--backend-spacing-lg, 24px);
+    overflow-y: auto;
+    flex: 1;
+}
+.pb-dm-modal-footer {
+    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 24px);
+    border-top: 1px solid var(--backend-color-border-default, #dee2e6);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+/* 弹窗内表单组件 */
+.pb-dm-form-group {
+    margin-bottom: var(--backend-spacing-md, 16px);
+}
+.pb-dm-form-group label {
+    display: block;
+    font-weight: 500;
+    color: var(--backend-color-text-secondary, #6c757d);
+    margin-bottom: var(--backend-spacing-xs, 4px);
+    font-size: 0.9rem;
+}
+.pb-dm-form-group select,
+.pb-dm-form-group input {
+    width: 100%;
+    padding: var(--backend-padding-input, 8px 12px);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-input-bg, #fff);
+    color: var(--backend-color-text-primary, #333);
+    font-size: 0.9rem;
+    box-sizing: border-box;
+}
+.pb-dm-form-group select:focus,
+.pb-dm-form-group input:focus {
+    outline: none;
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: var(--backend-focus-ring);
+}
+.pb-dm-form-group small {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.8rem;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+/* 服务器 IP 选项样式 */
+.pb-dm-server-ip-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--backend-spacing-sm, 12px) var(--backend-spacing-md, 16px);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-radius: var(--backend-border-radius-md, 8px);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    margin-bottom: var(--backend-spacing-md, 16px);
+    gap: var(--backend-spacing-md, 16px);
+}
+.pb-dm-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-sm, 8px);
+    cursor: pointer;
+    user-select: none;
+    flex: 1;
+}
+.pb-dm-checkbox-label input[type="checkbox"] {
+    display: none;
+}
+.pb-dm-checkbox-custom {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-sm, 4px);
+    background: var(--backend-color-bg-primary, #fff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+.pb-dm-checkbox-custom::after {
+    content: '\2713';
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--backend-color-text-inverse, #fff);
+    opacity: 0;
+    transform: scale(0.5);
+    transition: all 0.15s ease;
+}
+.pb-dm-checkbox-label input:checked + .pb-dm-checkbox-custom {
+    background: var(--backend-color-primary, #556ee6);
+    border-color: var(--backend-color-primary, #556ee6);
+}
+.pb-dm-checkbox-label input:checked + .pb-dm-checkbox-custom::after {
+    opacity: 1;
+    transform: scale(1);
+}
+.pb-dm-checkbox-label:hover .pb-dm-checkbox-custom {
+    border-color: var(--backend-color-primary, #556ee6);
+}
+.pb-dm-checkbox-text {
+    font-weight: 500;
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 0.9rem;
+}
+.pb-dm-server-ip-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--backend-spacing-xs, 4px) var(--backend-spacing-sm, 10px);
+    background: linear-gradient(135deg, var(--backend-color-primary, #556ee6), var(--backend-color-info, #50a5f1));
+    color: var(--backend-color-text-inverse, #fff);
+    border-radius: var(--backend-border-radius-pill, 20px);
+    font-size: 0.85rem;
+    font-weight: 600;
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    letter-spacing: 0.02em;
+    box-shadow: var(--backend-shadow-sm);
+    white-space: nowrap;
+}
+.pb-dm-btn-group {
+    display: flex;
+    gap: 0;
+}
+.pb-dm-btn-radio {
+    flex: 1;
+    display: block;
+    cursor: pointer;
+}
+.pb-dm-btn-radio input {
+    display: none;
+}
+.pb-dm-btn-radio span {
+    display: block;
+    padding: 10px 16px;
+    text-align: center;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+.pb-dm-btn-radio:first-child span {
+    border-radius: var(--backend-border-radius, 6px) 0 0 var(--backend-border-radius, 6px);
+    border-right: none;
+}
+.pb-dm-btn-radio:last-child span {
+    border-radius: 0 var(--backend-border-radius, 6px) var(--backend-border-radius, 6px) 0;
+}
+.pb-dm-btn-radio input:checked + span {
+    background: var(--backend-color-primary, #556ee6);
+    border-color: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-inverse, #fff);
+}
+.pb-dm-btn-radio:hover span {
+    background: var(--backend-color-table-bg-hover, #e9ecef);
+}
+.pb-dm-btn-radio input:checked:hover + span {
+    background: var(--backend-color-primary-hover, #4a5fd9);
+}
+/* 弹窗内 Alert 样式 */
+.pb-dm-alert {
+    padding: 12px 16px;
+    border-radius: var(--backend-border-radius, 6px);
+    font-size: 0.875rem;
+    margin-bottom: var(--backend-spacing-md, 16px);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+.pb-dm-alert i {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+.pb-dm-alert-info {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    color: var(--backend-color-info, #50a5f1);
+    border: 1px solid var(--backend-color-info, #50a5f1);
+}
+.pb-dm-alert-success {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+    color: var(--backend-color-success, #34c38f);
+    border: 1px solid var(--backend-color-success, #34c38f);
+}
+.pb-dm-alert-warning {
+    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.1));
+    color: var(--backend-color-warning-text, #856404);
+    border: 1px solid var(--backend-color-warning, #f1b44c);
+}
+.pb-dm-text-muted {
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.875rem;
+}
 </style>
 
 <div class="pb-dm">
@@ -262,7 +647,10 @@ $registrars = $this->getData('registrars') ?? [];
             <i class="mdi mdi-account-key"></i> <lang>供应商账户</lang>
         </button>
         <button class="pb-dm-tab" data-tab="domains">
-            <i class="mdi mdi-format-list-bulleted"></i> <lang>域名列表</lang>
+            <i class="mdi mdi-earth"></i> <lang>根域列表</lang>
+        </button>
+        <button class="pb-dm-tab" data-tab="pool">
+            <i class="mdi mdi-database"></i> <lang>域名池</lang>
         </button>
         <button class="pb-dm-tab" data-tab="register">
             <i class="mdi mdi-cart-plus"></i> <lang>域名注册</lang>
@@ -316,11 +704,21 @@ $registrars = $this->getData('registrars') ?? [];
                                         data-id="<?= (int)($acct['account_id'] ?? 0) ?>">
                                     <i class="mdi mdi-connection"></i> <lang>测试</lang>
                                 </button>
+                                <?php
+                                $extraConfig = $acct['extra_config'] ?? '';
+                                if (\is_string($extraConfig) && $extraConfig !== '') {
+                                    $extraConfigArr = \json_decode($extraConfig, true) ?: [];
+                                } else {
+                                    $extraConfigArr = \is_array($extraConfig) ? $extraConfig : [];
+                                }
+                                ?>
                                 <button class="pb-dm-btn pb-dm-btn-warning pb-dm-btn-sm pb-dm-edit-btn"
                                         data-id="<?= (int)($acct['account_id'] ?? 0) ?>"
                                         data-name="<?= htmlspecialchars($acct['account_name'] ?? '', ENT_QUOTES) ?>"
                                         data-code="<?= htmlspecialchars($acct['registrar_code'] ?? '', ENT_QUOTES) ?>"
-                                        data-status="<?= htmlspecialchars($acct['status'] ?? 'active', ENT_QUOTES) ?>">
+                                        data-status="<?= htmlspecialchars($acct['status'] ?? 'active', ENT_QUOTES) ?>"
+                                        data-region="<?= htmlspecialchars($acct['region'] ?? '', ENT_QUOTES) ?>"
+                                        data-extra-config="<?= htmlspecialchars(\json_encode($extraConfigArr, JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>">
                                     <i class="mdi mdi-pencil"></i> <lang>编辑</lang>
                                 </button>
                                 <button class="pb-dm-btn pb-dm-btn-danger pb-dm-btn-sm pb-dm-del-btn"
@@ -338,40 +736,185 @@ $registrars = $this->getData('registrars') ?? [];
         </div>
     </div>
 
-    <!-- ==================== Tab 2: 域名列表 ==================== -->
+    <!-- ==================== Tab 2: 根域列表 ==================== -->
     <div class="pb-dm-panel" id="pb-dm-tab-domains">
         <div class="pb-dm-card">
             <div class="pb-dm-card-title">
-                <span><i class="mdi mdi-format-list-bulleted"></i> <lang>域名列表</lang></span>
+                <span><i class="mdi mdi-earth"></i> <lang>根域列表</lang></span>
+                <span class="pb-dm-sync-info" id="pb-dm-sync-info">
+                    <?php if ($lastSyncTime): ?>
+                        <lang>最后同步</lang>: <?= htmlspecialchars($lastSyncTime, ENT_QUOTES) ?>
+                    <?php else: ?>
+                        <lang>尚未同步</lang>
+                    <?php endif; ?>
+                </span>
             </div>
-            <div class="pb-dm-row">
+            <!-- 筛选栏 -->
+            <div class="pb-dm-filters">
                 <div class="pb-dm-fg">
-                    <label><lang>选择域名商账户</lang></label>
+                    <label><lang>域名商账户</lang></label>
                     <select id="pb-dm-domain-acct">
-                        <option value=""><lang>请选择</lang></option>
-                        <?php foreach ($accounts as $acct): ?>
+                        <option value="0"><lang>全部账户</lang></option>
+                        <?php foreach ($activeAccounts as $acct): ?>
                         <option value="<?= (int)($acct['account_id'] ?? 0) ?>">
-                            <?= htmlspecialchars(($acct['account_name'] ?? '') . ' (' . ($acct['registrar_code'] ?? '') . ')', ENT_QUOTES) ?>
+                            <?= htmlspecialchars($acct['account_name'] ?? '', ENT_QUOTES) ?>
                         </option>
                         <?php endforeach; ?>
                     </select>
                 </div>
+                <div class="pb-dm-fg">
+                    <label><lang>状态</lang></label>
+                    <select id="pb-dm-domain-status">
+                        <option value=""><lang>全部状态</lang></option>
+                        <option value="pulled" selected><lang>已拉取</lang></option>
+                        <option value="not_pulled"><lang>未拉取</lang></option>
+                        <?php foreach ($statusOptions as $val => $label): ?>
+                        <option value="<?= htmlspecialchars($val, ENT_QUOTES) ?>"><?= htmlspecialchars($label, ENT_QUOTES) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="pb-dm-fg pb-dm-fg--search">
+                    <label><lang>搜索域名</lang></label>
+                    <input type="text" id="pb-dm-domain-search" placeholder="<?= __('输入域名关键词') ?>">
+                </div>
                 <div>
-                    <button class="pb-dm-btn pb-dm-btn-primary" id="pb-dm-load-domains-btn">
-                        <i class="mdi mdi-refresh"></i> <lang>加载域名</lang>
+                    <button class="pb-dm-btn pb-dm-btn-outline" id="pb-dm-search-btn">
+                        <i class="mdi mdi-magnify"></i> <lang>搜索</lang>
+                    </button>
+                </div>
+                <div>
+                    <button class="pb-dm-btn pb-dm-btn-outline" id="pb-dm-batch-search-btn">
+                        <i class="mdi mdi-text-search"></i> <lang>批量搜索</lang>
+                    </button>
+                </div>
+                <div>
+                    <button class="pb-dm-btn pb-dm-btn-success" id="pb-dm-pull-domains-btn" disabled>
+                        <i class="mdi mdi-download"></i> <lang>拉取选中</lang>
+                    </button>
+                </div>
+            </div>
+            <!-- 全选与批量操作栏 -->
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:8px 12px;background:var(--backend-color-bg-secondary,#f8f9fa);border-radius:var(--backend-border-radius,6px);flex-wrap:wrap;">
+                <label style="display:flex;align-items:center;gap:6px;font-weight:500;cursor:pointer;">
+                    <input type="checkbox" id="pb-dm-select-all-domain">
+                    <lang>全选当前页</lang>
+                </label>
+                <span class="pb-dm-batch-count"><lang>已选择</lang> <strong id="pb-dm-batch-count-num">0</strong> <lang>个域名</lang></span>
+                <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">
+                    <button class="pb-dm-btn pb-dm-btn-success pb-dm-btn-sm" id="pb-dm-batch-pull-btn" title="<?= __('拉取未拉取的域名到本地并入域名池') ?>">
+                        <i class="mdi mdi-download"></i> <lang>批量拉取</lang>
+                    </button>
+                    <button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm" id="pb-dm-batch-transfer-pool-btn" title="<?= __('将解析到本服务器的域名转存到域名池（IP不匹配的将跳过）') ?>">
+                        <i class="mdi mdi-folder-move"></i> <lang>批量转存</lang>
+                    </button>
+                    <button class="pb-dm-btn pb-dm-btn-warning pb-dm-btn-sm" id="pb-dm-batch-resolve-to-local-btn" title="<?= __('将选中域名的 @ 和 www 解析到本服务器公网IP') ?>">
+                        <i class="mdi mdi-server"></i> <lang>批量解析到本地</lang>
+                    </button>
+                    <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm" id="pb-dm-batch-resolve-btn" title="<?= __('检测已拉取域名的DNS解析状态') ?>">
+                        <i class="mdi mdi-dns"></i> <lang>批量解析检测</lang>
+                    </button>
+                    <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm" id="pb-dm-batch-change-dns-btn" title="<?= __('批量切换DNS服务器') ?>">
+                        <i class="mdi mdi-server-network"></i> <lang>批量转DNS</lang>
+                    </button>
+                    <button class="pb-dm-btn pb-dm-btn-info pb-dm-btn-sm" id="pb-dm-batch-add-dns-btn" title="<?= __('为选中域名批量添加DNS解析记录') ?>">
+                        <i class="mdi mdi-plus-network"></i> <lang>批量添加记录</lang>
+                    </button>
+                    <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm" id="pb-dm-batch-set-accounts-btn" title="<?= __('批量设置选中域名的 DNS/CDN 管理账户') ?>">
+                        <i class="mdi mdi-account-cog"></i> <lang>设置账户</lang>
                     </button>
                 </div>
             </div>
             <div id="pb-dm-domains-result">
                 <div class="pb-dm-empty">
                     <i class="mdi mdi-domain"></i>
-                    <p><lang>请选择账户后加载域名列表</lang></p>
+                    <p><lang>正在加载域名列表...</lang></p>
                 </div>
+            </div>
+            <!-- 分页 -->
+            <div class="pb-dm-pagination" id="pb-dm-pagination" style="display:none;">
+                <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm" id="pb-dm-page-prev" disabled>
+                    <i class="mdi mdi-chevron-left"></i>
+                </button>
+                <span class="pb-dm-pagination-info" id="pb-dm-page-info">1 / 1</span>
+                <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm" id="pb-dm-page-next" disabled>
+                    <i class="mdi mdi-chevron-right"></i>
+                </button>
+                <select id="pb-dm-page-size">
+                    <option value="20">20 / <lang>页</lang></option>
+                    <option value="50">50 / <lang>页</lang></option>
+                    <option value="100">100 / <lang>页</lang></option>
+                </select>
             </div>
         </div>
     </div>
 
-    <!-- ==================== Tab 3: 域名注册 ==================== -->
+    <!-- ==================== Tab 3: 域名池 ==================== -->
+    <div class="pb-dm-panel" id="pb-dm-tab-pool">
+        <div class="pb-dm-card">
+            <div class="pb-dm-card-title">
+                <span><i class="mdi mdi-database"></i> <lang>域名池</lang></span>
+                <span class="text-muted" style="font-size:0.8rem;" id="pb-dm-pool-sync-time"></span>
+            </div>
+
+            <!-- 域名池过滤器 -->
+            <div class="pb-dm-row" style="margin-bottom:16px;">
+                <div class="pb-dm-fg" style="min-width:200px;">
+                    <label><lang>搜索域名</lang></label>
+                    <input type="text" id="pb-dm-pool-search" placeholder="<?= __('输入域名关键词') ?>">
+                </div>
+                <div class="pb-dm-fg" style="min-width:140px;">
+                    <label><lang>状态</lang></label>
+                    <select id="pb-dm-pool-status">
+                        <option value=""><?= __('全部状态') ?></option>
+                        <option value="available"><?= __('可用') ?></option>
+                        <option value="allocated"><?= __('已分配') ?></option>
+                        <option value="reserved"><?= __('预留') ?></option>
+                    </select>
+                </div>
+                <div class="pb-dm-fg" style="min-width:140px;">
+                    <label><lang>解析状态</lang></label>
+                    <select id="pb-dm-pool-resolve">
+                        <option value=""><?= __('全部') ?></option>
+                        <option value="resolved"><?= __('已解析') ?></option>
+                        <option value="unresolved"><?= __('未解析') ?></option>
+                    </select>
+                </div>
+                <div style="display:flex;gap:8px;align-items:flex-end;">
+                    <button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm" id="pb-dm-pool-search-btn">
+                        <i class="mdi mdi-magnify"></i> <lang>搜索</lang>
+                    </button>
+                    <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm" id="pb-dm-pool-reset-btn">
+                        <i class="mdi mdi-refresh"></i> <lang>重置</lang>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 域名池列表 -->
+            <div id="pb-dm-pool-container">
+                <div class="pb-dm-empty">
+                    <i class="mdi mdi-database-search" style="font-size:2rem;"></i>
+                    <p><lang>请搜索或加载域名池数据</lang></p>
+                </div>
+            </div>
+
+            <!-- 分页 -->
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;">
+                <div id="pb-dm-pool-pagination-info" style="color:var(--backend-color-text-secondary);font-size:0.85rem;"></div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm" id="pb-dm-pool-prev" disabled>&laquo; <lang>上一页</lang></button>
+                    <span id="pb-dm-pool-page-info" style="font-size:0.85rem;"></span>
+                    <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm" id="pb-dm-pool-next"><lang>下一页</lang> &raquo;</button>
+                </div>
+                <select id="pb-dm-pool-page-size">
+                    <option value="20">20 / <lang>页</lang></option>
+                    <option value="50">50 / <lang>页</lang></option>
+                    <option value="100">100 / <lang>页</lang></option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== Tab 4: 域名注册 ==================== -->
     <div class="pb-dm-panel" id="pb-dm-tab-register">
         <div class="pb-dm-card">
             <div class="pb-dm-card-title">
@@ -398,6 +941,16 @@ $registrars = $this->getData('registrars') ?? [];
                         <i class="mdi mdi-magnify"></i> <lang>检查可用性</lang>
                     </button>
                 </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:16px;margin:12px 0;padding:12px;background:var(--backend-color-info-bg-subtle,rgba(80,165,241,0.08));border-radius:var(--backend-border-radius,6px);flex-wrap:wrap;">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500;">
+                    <input type="checkbox" id="pb-dm-auto-resolve" checked>
+                    <span><lang>自动解析到本服务器</lang></span>
+                </label>
+                <span style="color:var(--backend-color-text-tertiary,#adb5bd);font-size:0.85rem;">
+                    <i class="mdi mdi-information-outline"></i>
+                    <lang>购买后自动将域名的 @ 和 www 记录解析到本服务器公网IP，通过Cron任务在域名可用后自动执行</lang>
+                </span>
             </div>
             <div id="pb-dm-check-results"></div>
         </div>
@@ -429,21 +982,10 @@ $registrars = $this->getData('registrars') ?? [];
                 <input type="text" id="pb-dm-form-name" placeholder="<?= __('如：GName 主账号') ?>">
             </div>
         </div>
+        <!-- 动态配置字段区域（根据适配器配置自动生成） -->
+        <div id="pb-dm-dynamic-fields"></div>
+        
         <div class="pb-dm-row">
-            <div class="pb-dm-fg">
-                <label><lang>API Key / APP ID</lang></label>
-                <input type="text" id="pb-dm-form-apikey" placeholder="">
-            </div>
-            <div class="pb-dm-fg">
-                <label><lang>API Secret / APP Key</lang></label>
-                <input type="password" id="pb-dm-form-apisecret" placeholder="">
-            </div>
-        </div>
-        <div class="pb-dm-row">
-            <div class="pb-dm-fg">
-                <label><lang>区域 / API 域名</lang></label>
-                <input type="text" id="pb-dm-form-region" placeholder="<?= __('如：www.gname.com') ?>">
-            </div>
             <div class="pb-dm-fg">
                 <label><lang>状态</lang></label>
                 <select id="pb-dm-form-status">
@@ -452,12 +994,60 @@ $registrars = $this->getData('registrars') ?? [];
                 </select>
             </div>
         </div>
-        <div id="pb-dm-extra-fields" class="pb-dm-extra-fields"></div>
         <div id="pb-dm-config-help" class="pb-dm-help-box" style="display:none;"></div>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:var(--backend-spacing-md,16px);">
             <button class="pb-dm-btn pb-dm-btn-outline" id="pb-dm-modal-cancel"><lang>取消</lang></button>
             <button class="pb-dm-btn pb-dm-btn-success" id="pb-dm-modal-save">
                 <i class="mdi mdi-check"></i> <lang>保存</lang>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 批量搜索弹窗 ==================== -->
+<div class="pb-dm-form-modal" id="pb-dm-batch-search-modal">
+    <div class="pb-dm-form-dialog" style="max-width: 800px;">
+        <div class="pb-dm-form-dialog-title">
+            <span><i class="mdi mdi-text-search"></i> <lang>批量搜索域名</lang></span>
+            <button class="pb-dm-form-dialog-close" id="pb-dm-batch-search-close">&times;</button>
+        </div>
+        <div class="pb-dm-fg" style="margin-bottom: 16px;">
+            <label><lang>输入域名（每行一个或逗号分隔）</lang></label>
+            <textarea id="pb-dm-batch-search-input" rows="6" placeholder="example.com&#10;test.net&#10;mysite.org&#10;&#10;<?= __('或者使用逗号分隔：example.com, test.net, mysite.org') ?>" style="width:100%;font-family:monospace;"></textarea>
+            <small style="color:var(--backend-color-text-tertiary,#adb5bd);font-size:0.8rem;">
+                <lang>将从域名商账户中搜索这些域名，显示存在的域名供您选择拉取</lang>
+            </small>
+        </div>
+        <div id="pb-dm-batch-search-result" style="display:none;">
+            <div class="pb-dm-card-title" style="font-size:0.95rem;">
+                <span><lang>搜索结果</lang>：<strong id="pb-dm-batch-found-count">0</strong> / <strong id="pb-dm-batch-total-count">0</strong></span>
+                <label style="font-weight:normal;font-size:0.85rem;display:flex;align-items:center;gap:4px;">
+                    <input type="checkbox" id="pb-dm-batch-select-all-found" checked>
+                    <lang>全选</lang>
+                </label>
+            </div>
+            <div id="pb-dm-batch-search-list" style="max-height:300px;overflow-y:auto;border:1px solid var(--backend-color-border-light,#e9ecef);border-radius:var(--backend-border-radius,6px);"></div>
+            <div style="margin-top:12px;padding:10px;background:var(--backend-color-bg-tertiary,#f1f3f5);border-radius:var(--backend-border-radius,6px);">
+                <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+                    <input type="checkbox" id="pb-dm-batch-pull-auto-resolve" checked style="margin-top:3px;">
+                    <div>
+                        <strong style="color:var(--backend-color-text-primary);">
+                            <i class="mdi mdi-server"></i> <lang>自动解析DNS到本地服务器</lang>
+                        </strong>
+                        <div style="font-size:0.8rem;color:var(--backend-color-text-tertiary,#adb5bd);margin-top:2px;">
+                            <lang>拉取后自动将域名的 @ 和 www 记录解析到本服务器公网IP</lang>
+                        </div>
+                    </div>
+                </label>
+            </div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:var(--backend-spacing-md,16px);">
+            <button class="pb-dm-btn pb-dm-btn-outline" id="pb-dm-batch-search-cancel"><lang>取消</lang></button>
+            <button class="pb-dm-btn pb-dm-btn-primary" id="pb-dm-batch-search-exec">
+                <i class="mdi mdi-magnify"></i> <lang>搜索</lang>
+            </button>
+            <button class="pb-dm-btn pb-dm-btn-success" id="pb-dm-batch-search-pull" style="display:none;">
+                <i class="mdi mdi-download"></i> <lang>拉取选中</lang>
             </button>
         </div>
     </div>
@@ -475,9 +1065,42 @@ $registrars = $this->getData('registrars') ?? [];
         deleteAccount:    '<backend-url>pagebuilder/backend/domain-management/delete-account</backend-url>',
         testConnection:   '<backend-url>pagebuilder/backend/domain-management/test-connection</backend-url>',
         getDomains:       '<backend-url>pagebuilder/backend/domain-management/get-domains</backend-url>',
+        pullDomains:      '<backend-url>pagebuilder/backend/domain-management/pull-domains</backend-url>',
+        batchOperate:     '<backend-url>pagebuilder/backend/domain-management/batch-operate</backend-url>',
         checkAvail:       '<backend-url>pagebuilder/backend/domain-management/check-availability</backend-url>',
         purchase:         '<backend-url>pagebuilder/backend/domain-management/purchase</backend-url>',
-        batchPurchase:    '<backend-url>pagebuilder/backend/domain-management/batch-purchase</backend-url>'
+        batchPurchase:    '<backend-url>pagebuilder/backend/domain-management/batch-purchase</backend-url>',
+        getDomainPool:    '<backend-url>pagebuilder/backend/domain-management/get-domain-pool</backend-url>',
+        addSubdomain:     '<backend-url>pagebuilder/backend/domain-management/add-subdomain</backend-url>',
+        checkResolve:     '<backend-url>pagebuilder/backend/domain-management/check-resolve</backend-url>',
+        generateSubdomains: '<backend-url>pagebuilder/backend/domain-management/generate-subdomains</backend-url>',
+        batchTransferToPool: '<backend-url>pagebuilder/backend/domain-management/batch-transfer-to-pool</backend-url>',
+        batchResolveToLocal: '<backend-url>pagebuilder/backend/domain-management/batch-resolve-to-local</backend-url>',
+        batchChangeNameservers: '<backend-url>pagebuilder/backend/domain-management/batch-change-nameservers</backend-url>',
+        getDnsProviders: '<backend-url>pagebuilder/backend/domain-management/get-dns-providers</backend-url>',
+        getRegistrarAccounts: '<backend-url>pagebuilder/backend/domain-management/get-registrar-accounts</backend-url>',
+        getAccountNameservers: '<backend-url>pagebuilder/backend/domain-management/get-account-nameservers</backend-url>',
+        batchSwitchToAccount: '<backend-url>pagebuilder/backend/domain-management/batch-switch-to-account</backend-url>',
+        addDnsRecord: '<backend-url>pagebuilder/backend/domain-management/add-dns-record</backend-url>',
+        batchAddDnsRecords: '<backend-url>pagebuilder/backend/domain-management/batch-add-dns-records</backend-url>',
+        getDnsRecords: '<backend-url>pagebuilder/backend/domain-management/get-dns-records</backend-url>',
+        deleteDnsRecord: '<backend-url>pagebuilder/backend/domain-management/delete-dns-record</backend-url>',
+        refreshServerIp: '<backend-url>pagebuilder/backend/domain-management/refresh-server-ip</backend-url>',
+        batchSetAccounts: '<backend-url>pagebuilder/backend/domain-management/batch-set-accounts</backend-url>',
+        getDnsAccounts: '<backend-url>pagebuilder/backend/domain-management/get-dns-accounts</backend-url>'
+    };
+
+    var domainListState = {
+        page: 1,
+        limit: 20,
+        total: 0,
+        pages: 0,
+        accountId: 0,
+        status: '',
+        search: '',
+        accounts: {},
+        selectedDomains: [],
+        items: []
     };
 
     /* ========== Tab 切换 ========== */
@@ -516,13 +1139,12 @@ $registrars = $this->getData('registrars') ?? [];
     var formId = document.getElementById('pb-dm-form-id');
     var formRegistrar = document.getElementById('pb-dm-form-registrar');
     var formName = document.getElementById('pb-dm-form-name');
-    var formApiKey = document.getElementById('pb-dm-form-apikey');
-    var formApiSecret = document.getElementById('pb-dm-form-apisecret');
-    var formRegion = document.getElementById('pb-dm-form-region');
     var formStatus = document.getElementById('pb-dm-form-status');
-    var extraFieldsDiv = document.getElementById('pb-dm-extra-fields');
-
+    var dynamicFieldsDiv = document.getElementById('pb-dm-dynamic-fields');
     var configHelpDiv = document.getElementById('pb-dm-config-help');
+
+    // 当前适配器的配置字段定义（用于校验和提交）
+    var currentConfigFields = [];
 
     function openModal(isEdit) {
         document.getElementById('pb-dm-modal-title').textContent = isEdit
@@ -535,31 +1157,34 @@ $registrars = $this->getData('registrars') ?? [];
         formId.value = '0';
         formRegistrar.value = '';
         formName.value = '';
-        formApiKey.value = '';
-        formApiSecret.value = '';
-        formRegion.value = '';
         formStatus.value = 'active';
-        extraFieldsDiv.innerHTML = '';
+        dynamicFieldsDiv.innerHTML = '';
         configHelpDiv.innerHTML = '';
         configHelpDiv.style.display = 'none';
+        currentConfigFields = [];
     }
 
     document.getElementById('pb-dm-modal-close').addEventListener('click', closeModal);
     document.getElementById('pb-dm-modal-cancel').addEventListener('click', closeModal);
     modal.addEventListener('click', function(e) { if (e.target === modal) closeModal(); });
 
+    /* 编辑时保存待填充数据 */
+    var pendingEditData = null;
+
     /* 添加账户 */
     document.getElementById('pb-dm-add-account-btn').addEventListener('click', function() {
         closeModal();
+        pendingEditData = null;
         openModal(false);
     });
 
     /* 域名商类型变更 → 加载配置字段、默认值和帮助信息 */
     formRegistrar.addEventListener('change', function() {
         var code = formRegistrar.value;
-        extraFieldsDiv.innerHTML = '';
+        dynamicFieldsDiv.innerHTML = '';
         configHelpDiv.innerHTML = '';
         configHelpDiv.style.display = 'none';
+        currentConfigFields = [];
         if (!code) return;
 
         postForm(API.getRegistrarInfo, { registrar_code: code }).then(function(res) {
@@ -569,25 +1194,33 @@ $registrars = $this->getData('registrars') ?? [];
             var fields = info.config_fields || [];
             var help = info.config_help || {};
 
-            /* 主字段默认值填充 */
-            fields.forEach(function(field) {
-                if (field.name === 'api_key' && field.default && !formApiKey.value) {
-                    formApiKey.value = field.default;
-                }
-                if ((field.name === 'region' || field.name === 'api_host') && field.default && !formRegion.value) {
-                    formRegion.value = field.default;
-                }
-            });
+            // 保存配置字段定义
+            currentConfigFields = fields;
+            
+            // 判断是否为编辑模式
+            var isEditMode = parseInt(formId.value) > 0;
 
-            /* 额外字段渲染 */
-            var skip = ['appid', 'appkey', 'api_key', 'api_secret', 'region'];
+            /* 动态字段渲染 */
             var html = '';
             fields.forEach(function(field) {
-                if (skip.indexOf(field.name) >= 0) return;
+                var fieldId = 'pb-dm-field-' + field.name;
+                var mapping = field.mapping || field.name;
+                var isRequired = field.required === true;
+                var isPassword = field.type === 'password';
+                
                 html += '<div class="pb-dm-fg" style="margin-bottom:12px;">';
-                html += '<label>' + (field.label || field.name) + (field.required ? ' <span style="color:var(--backend-color-danger,#f46a6a)">*</span>' : '') + '</label>';
+                html += '<label>' + (field.label || field.name);
+                
+                // 编辑模式下，密码字段标注为可选（不修改留空）
+                if (isEditMode && isPassword) {
+                    html += ' <span style="color:var(--backend-color-text-muted,#6c757d);font-size:0.85em;"><?= __('（不修改请留空）') ?></span>';
+                } else if (isRequired) {
+                    html += ' <span style="color:var(--backend-color-danger,#f46a6a);">*</span>';
+                }
+                html += '</label>';
+                
                 if (field.type === 'select' && field.options) {
-                    html += '<select class="pb-dm-extra-input" data-field="' + field.name + '"' + (field.mapping ? ' data-mapping="' + field.mapping + '"' : '') + '>';
+                    html += '<select id="' + fieldId + '" class="pb-dm-config-input" data-field="' + field.name + '" data-mapping="' + mapping + '" data-required="' + isRequired + '">';
                     field.options.forEach(function(opt) {
                         var selected = (field.default && field.default === opt.value) ? ' selected' : '';
                         html += '<option value="' + (opt.value || '') + '"' + selected + '>' + (opt.label || opt.value || '') + '</option>';
@@ -596,15 +1229,47 @@ $registrars = $this->getData('registrars') ?? [];
                 } else {
                     var inputType = field.type === 'password' ? 'password' : 'text';
                     var defaultVal = field.default || '';
-                    html += '<input type="' + inputType + '" class="pb-dm-extra-input" data-field="' + field.name + '"';
-                    if (field.mapping) html += ' data-mapping="' + field.mapping + '"';
-                    if (field.placeholder) html += ' placeholder="' + field.placeholder + '"';
-                    if (defaultVal) html += ' value="' + defaultVal + '"';
+                    
+                    // 编辑模式下，密码字段显示占位符
+                    var placeholder = field.placeholder || '';
+                    if (isEditMode && isPassword) {
+                        placeholder = '••••••••••••••••<?= __('（留空不修改）') ?>';
+                    }
+                    
+                    html += '<input type="' + inputType + '" id="' + fieldId + '" class="pb-dm-config-input" data-field="' + field.name + '" data-mapping="' + mapping + '" data-required="' + isRequired + '"';
+                    if (placeholder) html += ' placeholder="' + placeholder + '"';
+                    if (defaultVal && !isPassword) html += ' value="' + defaultVal + '"';
                     html += '>';
                 }
                 html += '</div>';
             });
-            extraFieldsDiv.innerHTML = html;
+            dynamicFieldsDiv.innerHTML = html;
+            
+            // 编辑模式下，回填已保存的值
+            if (isEditMode && pendingEditData) {
+                dynamicFieldsDiv.querySelectorAll('.pb-dm-config-input').forEach(function(el) {
+                    var mapping = el.dataset.mapping || el.dataset.field;
+                    var fieldName = el.dataset.field;
+                    var isPassword = el.type === 'password';
+                    var value = '';
+                    
+                    // 根据 mapping 获取值
+                    if (mapping === 'region') {
+                        value = pendingEditData.region || '';
+                    } else if (mapping.indexOf('extra_config.') === 0) {
+                        var extraKey = mapping.replace('extra_config.', '');
+                        value = pendingEditData.extra_config[extraKey] || '';
+                    } else if (pendingEditData.extra_config[fieldName]) {
+                        value = pendingEditData.extra_config[fieldName];
+                    }
+                    
+                    // 密码字段不回填（保持空白，表示不修改）
+                    if (!isPassword && value) {
+                        el.value = value;
+                    }
+                });
+                pendingEditData = null;
+            }
 
             /* 帮助信息渲染 */
             if (help.help_steps && help.help_steps.length) {
@@ -635,21 +1300,77 @@ $registrars = $this->getData('registrars') ?? [];
             return;
         }
 
-        var extra = {};
-        extraFieldsDiv.querySelectorAll('.pb-dm-extra-input').forEach(function(el) {
-            var v = el.value.trim();
-            if (v) extra[el.dataset.field] = v;
+        // 校验必填字段
+        var isEditMode = parseInt(formId.value) > 0;
+        var hasError = false;
+        var missingFields = [];
+        dynamicFieldsDiv.querySelectorAll('.pb-dm-config-input').forEach(function(el) {
+            var isRequired = el.dataset.required === 'true';
+            var value = el.value.trim();
+            var fieldName = el.dataset.field;
+            var isPassword = el.type === 'password';
+            
+            // 查找字段配置
+            var fieldConfig = null;
+            var label = fieldName;
+            currentConfigFields.forEach(function(f) {
+                if (f.name === fieldName) {
+                    label = f.label || fieldName;
+                    fieldConfig = f;
+                }
+            });
+            
+            // 编辑模式下，密码类字段允许为空（表示不修改）
+            // 但其他必填字段（如 account_id）仍需校验
+            var skipValidation = isEditMode && isPassword;
+            
+            if (isRequired && !value && !skipValidation) {
+                hasError = true;
+                missingFields.push(label);
+                el.style.borderColor = 'var(--backend-color-danger, #f46a6a)';
+            } else {
+                el.style.borderColor = '';
+            }
+        });
+        
+        if (hasError) {
+            AdminToast.error('<?= __('请填写必填字段') ?>: ' + missingFields.join(', '));
+            return;
+        }
+
+        // 收集所有配置字段数据
+        var configData = {};
+        var extraConfig = {};
+        dynamicFieldsDiv.querySelectorAll('.pb-dm-config-input').forEach(function(el) {
+            var value = el.value.trim();
+            var mapping = el.dataset.mapping || el.dataset.field;
+            
+            // 根据 mapping 决定存储位置
+            if (mapping === 'api_key') {
+                configData.api_key = value;
+            } else if (mapping === 'api_secret') {
+                configData.api_secret = value;
+            } else if (mapping === 'region') {
+                configData.region = value;
+            } else if (mapping.startsWith('extra_config.')) {
+                // extra_config.xxx 格式
+                var extraKey = mapping.replace('extra_config.', '');
+                if (value) extraConfig[extraKey] = value;
+            } else {
+                // 其他字段存入 extra_config
+                if (value) extraConfig[el.dataset.field] = value;
+            }
         });
 
         var data = {
             account_id: formId.value,
             registrar_code: regCode,
             account_name: name,
-            api_key: formApiKey.value.trim(),
-            api_secret: formApiSecret.value.trim(),
-            region: formRegion.value.trim(),
+            api_key: configData.api_key || '',
+            api_secret: configData.api_secret || '',
+            region: configData.region || '',
             status: formStatus.value,
-            extra_config: extra
+            extra_config: extraConfig
         };
 
         setBtnLoading(btn, true);
@@ -676,8 +1397,20 @@ $registrars = $this->getData('registrars') ?? [];
             formRegistrar.value = btn.dataset.code;
             formName.value = btn.dataset.name;
             formStatus.value = btn.dataset.status || 'active';
-            formApiKey.value = '';
-            formApiSecret.value = '';
+            
+            // 保存待填充的数据
+            var extraConfigStr = btn.dataset.extraConfig || '{}';
+            var extraConfig = {};
+            try {
+                extraConfig = JSON.parse(extraConfigStr);
+            } catch (e) {}
+            
+            pendingEditData = {
+                region: btn.dataset.region || '',
+                extra_config: extraConfig
+            };
+            
+            // 触发 change 事件以加载适配器配置字段
             formRegistrar.dispatchEvent(new Event('change'));
             openModal(true);
         });
@@ -730,46 +1463,1668 @@ $registrars = $this->getData('registrars') ?? [];
         });
     });
 
-    /* ========== 域名列表 ========== */
-    document.getElementById('pb-dm-load-domains-btn').addEventListener('click', function() {
-        var btn = this;
-        var accountId = document.getElementById('pb-dm-domain-acct').value;
-        if (!accountId) {
-            AdminToast.warning('<?= __('请选择域名商账户') ?>');
-            return;
-        }
-        setBtnLoading(btn, true);
-        postForm(API.getDomains, { account_id: accountId }).then(function(res) {
-            setBtnLoading(btn, false, '<i class="mdi mdi-refresh"></i> <?= __('加载域名') ?>');
-            var container = document.getElementById('pb-dm-domains-result');
+    /* ========== 域名列表（本地分页） ========== */
+    var domainContainer = document.getElementById('pb-dm-domains-result');
+    var paginationEl = document.getElementById('pb-dm-pagination');
+    var batchCountNum = document.getElementById('pb-dm-batch-count-num');
+    var pagePrev = document.getElementById('pb-dm-page-prev');
+    var pageNext = document.getElementById('pb-dm-page-next');
+    var pageInfo = document.getElementById('pb-dm-page-info');
+    var pageSizeSelect = document.getElementById('pb-dm-page-size');
+
+    function loadDomainList() {
+        domainListState.accountId = parseInt(document.getElementById('pb-dm-domain-acct').value) || 0;
+        domainListState.status = document.getElementById('pb-dm-domain-status').value;
+        domainListState.search = document.getElementById('pb-dm-domain-search').value.trim();
+        domainListState.limit = parseInt(pageSizeSelect.value) || 20;
+
+        domainContainer.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-loading mdi-spin"></i><p><?= __('正在从域名商获取数据...') ?></p></div>';
+
+        var data = {
+            account_id: domainListState.accountId,
+            status: domainListState.status,
+            search: domainListState.search,
+            page: domainListState.page,
+            limit: domainListState.limit
+        };
+
+        postForm(API.getDomains, data).then(function(res) {
             if (!res.success) {
                 AdminToast.error(res.msg || '<?= __('加载失败') ?>');
+                domainContainer.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-alert-circle-outline"></i><p>' + (res.msg || '<?= __('加载失败') ?>') + '</p></div>';
                 return;
             }
-            var list = res.data || [];
-            if (!list.length) {
-                container.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-domain"></i><p><?= __('该账户下暂无域名') ?></p></div>';
-                return;
-            }
-            var statusMap = {
-                'active': ['<?= __('正常') ?>', 'pb-dm-badge--ok'],
-                'pending': ['<?= __('处理中') ?>', 'pb-dm-badge--warn'],
-                'expired': ['<?= __('已过期') ?>', 'pb-dm-badge--no'],
-                'suspended': ['<?= __('已暂停') ?>', 'pb-dm-badge--no']
-            };
-            var html = '<table class="pb-dm-table"><thead><tr>' +
-                '<th><?= __('域名') ?></th><th><?= __('状态') ?></th><th><?= __('过期时间') ?></th>' +
-                '</tr></thead><tbody>';
-            list.forEach(function(d) {
-                var st = statusMap[d.status] || [d.status, 'pb-dm-badge--info'];
-                html += '<tr><td>' + d.domain + '</td>' +
-                    '<td><span class="pb-dm-badge ' + st[1] + '">' + st[0] + '</span></td>' +
-                    '<td>' + (d.expires_at || '-') + '</td></tr>';
-            });
-            html += '</tbody></table>';
-            container.innerHTML = html;
+            var result = res.data || {};
+            domainListState.total = result.total || 0;
+            domainListState.pages = result.pages || 0;
+            domainListState.page = result.page || 1;
+            domainListState.accounts = result.accounts || {};
+            domainListState.items = result.items || [];
+            domainListState.groups = result.groups || [];
+            domainListState.selectedDomains = [];
+
+            renderDomainAccordion(domainListState.groups);
+            updatePagination();
+            updateBatchBar();
         }).catch(function() {
-            setBtnLoading(btn, false, '<i class="mdi mdi-refresh"></i> <?= __('加载域名') ?>');
+            AdminToast.error('<?= __('网络错误') ?>');
+            domainContainer.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-alert-circle-outline"></i><p><?= __('网络错误') ?></p></div>';
+        });
+    }
+
+    function renderDomainAccordion(groups) {
+        if (!groups || groups.length === 0) {
+            domainContainer.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-domain"></i><p><?= __('暂无域名数据') ?></p></div>';
+            paginationEl.style.display = 'none';
+            return;
+        }
+
+        var statusMap = {
+            'active': ['<?= __('正常') ?>', 'pb-dm-badge--ok'],
+            'pending': ['<?= __('处理中') ?>', 'pb-dm-badge--warn'],
+            'expired': ['<?= __('已过期') ?>', 'pb-dm-badge--no'],
+            'suspended': ['<?= __('已暂停') ?>', 'pb-dm-badge--no']
+        };
+
+        var html = '';
+
+        groups.forEach(function(group, gIdx) {
+            var isOpen = gIdx === 0 ? ' pb-dm-accordion--open' : '';
+            html += '<div class="pb-dm-accordion' + isOpen + '" data-account-id="' + group.account_id + '">';
+
+            var dnsOnlyLabel = group.is_dns_only
+                ? ' <span class="pb-dm-badge pb-dm-badge--warn" style="font-size:0.7rem;"><?= __('DNS服务商') ?></span>'
+                : '';
+            var registrarLabel = group.registrar_name
+                ? ' <span class="pb-dm-badge pb-dm-badge--info" style="font-size:0.7rem;">' + escapeHtml(group.registrar_name) + '</span>'
+                : '';
+
+            html += '<div class="pb-dm-accordion-header">' +
+                '<i class="mdi mdi-chevron-right pb-dm-accordion-icon"></i>' +
+                '<div class="pb-dm-accordion-title">' +
+                    '<i class="mdi mdi-account-key"></i> ' + escapeHtml(group.account_name) + registrarLabel + dnsOnlyLabel +
+                '</div>' +
+                '<div class="pb-dm-accordion-stats">' +
+                    '<span class="pb-dm-accordion-stat">' +
+                        '<i class="mdi mdi-domain"></i> ' + group.total + ' <?= __('个') ?>' +
+                    '</span>' +
+                    '<span class="pb-dm-accordion-stat pb-dm-accordion-stat--ok">' +
+                        '<i class="mdi mdi-check-circle"></i> ' + group.pulled + ' <?= __('已拉取') ?>' +
+                    '</span>' +
+                    '<span class="pb-dm-accordion-stat pb-dm-accordion-stat--warn">' +
+                        '<i class="mdi mdi-alert-circle"></i> ' + group.not_pulled + ' <?= __('未拉取') ?>' +
+                    '</span>' +
+                '</div>' +
+                '<div class="pb-dm-accordion-actions">' +
+                    '<button class="pb-dm-btn pb-dm-btn-success pb-dm-btn-sm pb-dm-pull-all-btn" data-account-id="' + group.account_id + '" title="<?= __('拉取全部未拉取域名') ?>">' +
+                        '<i class="mdi mdi-download-multiple"></i>' +
+                    '</button>' +
+                '</div>' +
+            '</div>';
+
+            html += '<div class="pb-dm-accordion-body">';
+            if (group.items && group.items.length > 0) {
+                html += '<table class="pb-dm-table" style="margin:0;border-radius:0;"><thead><tr>' +
+                    '<th style="width:40px;"><input type="checkbox" class="pb-dm-select-all-group" data-account-id="' + group.account_id + '"></th>' +
+                    '<th><?= __('域名') ?></th>' +
+                    '<th><?= __('服务商') ?></th>' +
+                    '<th><?= __('本地状态') ?></th>' +
+                    '<th><?= __('域名状态') ?></th>' +
+                    '<th><?= __('过期时间') ?></th>' +
+                    '<th><?= __('操作') ?></th>' +
+                    '</tr></thead><tbody>';
+
+                group.items.forEach(function(d) {
+                    var st = statusMap[d.status] || [d.status || '-', 'pb-dm-badge--info'];
+                    var isPulled = d.is_pulled === true || d.is_pulled === 1;
+                    var pullBadge = isPulled
+                        ? '<span class="pb-dm-badge pb-dm-badge--ok"><?= __('已拉取') ?></span>'
+                        : '<span class="pb-dm-badge pb-dm-badge--warn"><?= __('未拉取') ?></span>';
+
+                    var checkboxDisabled = '';
+
+                    var actions = isPulled
+                        ? '<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-resolve-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __('检测解析') ?>">' +
+                          '<i class="mdi mdi-dns"></i></button>' +
+                          '<button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm pb-dm-manage-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __('管理DNS记录') ?>" style="margin-left:4px;">' +
+                          '<i class="mdi mdi-playlist-plus"></i></button>'
+                        : '<button class="pb-dm-btn pb-dm-btn-success pb-dm-btn-sm pb-dm-pull-single-btn" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" title="<?= __('拉取并入池') ?>">' +
+                          '<i class="mdi mdi-download"></i></button>';
+
+                    // 构建服务商列（三行：注册商、DNS、CDN）
+                    var registrarName = d.registrar_name || group.registrar_name || '-';
+                    var dnsName = d.dns_provider_name || d.dns_provider || '-';
+                    var cdnName = d.cdn_provider_name || d.cdn_provider || '-';
+
+                    var registrarClass = registrarName !== '-' ? 'pb-dm-provider--registrar' : 'pb-dm-provider--none';
+                    var dnsClass = dnsName !== '-' ? 'pb-dm-provider--dns' : 'pb-dm-provider--none';
+                    var cdnClass = cdnName !== '-' ? 'pb-dm-provider--cdn' : 'pb-dm-provider--none';
+
+                    var providerCell = '<div class="pb-dm-provider-cell">' +
+                        '<div class="pb-dm-provider-row">' +
+                            '<span class="pb-dm-provider-label"><?= __('注册') ?></span>' +
+                            '<span class="pb-dm-provider-badge ' + registrarClass + '">' + escapeHtml(registrarName) + '</span>' +
+                        '</div>' +
+                        '<div class="pb-dm-provider-row">' +
+                            '<span class="pb-dm-provider-label">DNS</span>' +
+                            '<span class="pb-dm-provider-badge ' + dnsClass + '">' + escapeHtml(dnsName) + '</span>' +
+                        '</div>' +
+                        '<div class="pb-dm-provider-row">' +
+                            '<span class="pb-dm-provider-label">CDN</span>' +
+                            '<span class="pb-dm-provider-badge ' + cdnClass + '">' + escapeHtml(cdnName) + '</span>' +
+                        '</div>' +
+                    '</div>';
+
+                    html += '<tr data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '">' +
+                        '<td><input type="checkbox" class="pb-dm-domain-select" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" data-pulled="' + (isPulled ? '1' : '0') + '"' + checkboxDisabled + '></td>' +
+                        '<td><strong>' + escapeHtml(d.domain) + '</strong></td>' +
+                        '<td>' + providerCell + '</td>' +
+                        '<td>' + pullBadge + '</td>' +
+                        '<td><span class="pb-dm-badge ' + st[1] + '">' + st[0] + '</span></td>' +
+                        '<td>' + (d.expires_at || '-') + '</td>' +
+                        '<td>' + actions + '</td>' +
+                        '</tr>';
+                });
+
+                html += '</tbody></table>';
+            } else if (group.is_dns_only) {
+                html += '<div class="pb-dm-empty" style="padding:20px;">' +
+                    '<i class="mdi mdi-dns" style="font-size:1.5rem;color:var(--backend-color-warning,#f1b44c);"></i>' +
+                    '<p style="color:var(--backend-color-warning,#f1b44c);">' + escapeHtml(group.registrar_name || '') + ' <?= __('是 DNS 服务商，不是域名注册商。域名归属以实际注册商为准。') ?></p>' +
+                '</div>';
+            } else {
+                html += '<div class="pb-dm-empty" style="padding:20px;"><p><?= __('该账户下暂无域名') ?></p></div>';
+            }
+            html += '</div>';
+
+            html += '</div>';
+        });
+
+        domainContainer.innerHTML = html;
+        paginationEl.style.display = 'none';
+
+        bindAccordionEvents();
+        bindDomainSelectEvents();
+    }
+
+    function bindAccordionEvents() {
+        domainContainer.querySelectorAll('.pb-dm-accordion-header').forEach(function(header) {
+            header.addEventListener('click', function(e) {
+                if (e.target.closest('.pb-dm-accordion-actions')) return;
+                var accordion = header.closest('.pb-dm-accordion');
+                accordion.classList.toggle('pb-dm-accordion--open');
+            });
+        });
+
+        domainContainer.querySelectorAll('.pb-dm-pull-all-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var accountId = parseInt(btn.dataset.accountId);
+                var group = domainListState.groups.find(function(g) { return g.account_id === accountId; });
+                if (!group) return;
+
+                var notPulledDomains = group.items.filter(function(d) { return !d.is_pulled; }).map(function(d) { return d.domain; });
+                if (notPulledDomains.length === 0) {
+                    AdminToast.info('<?= __('该账户所有域名都已拉取') ?>');
+                    return;
+                }
+
+                setBtnLoading(btn, true);
+                postForm(API.pullDomains, {
+                    account_id: accountId,
+                    domains: notPulledDomains
+                }).then(function(res) {
+                    setBtnLoading(btn, false, '<i class="mdi mdi-download-multiple"></i>');
+                    if (res.success) {
+                        AdminToast.success(res.message || '<?= __('拉取成功') ?>');
+                        loadDomainList();
+                    } else {
+                        AdminToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
+                    }
+                }).catch(function() {
+                    setBtnLoading(btn, false, '<i class="mdi mdi-download-multiple"></i>');
+                    AdminToast.error('<?= __('网络错误') ?>');
+                });
+            });
+        });
+
+        domainContainer.querySelectorAll('.pb-dm-select-all-group').forEach(function(chk) {
+            chk.addEventListener('change', function() {
+                var accountId = chk.dataset.accountId;
+                var accordion = chk.closest('.pb-dm-accordion');
+                var checkboxes = accordion.querySelectorAll('.pb-dm-domain-select:not(:disabled)');
+
+                checkboxes.forEach(function(cb) {
+                    cb.checked = chk.checked;
+                    var domain = cb.dataset.domain;
+                    if (chk.checked) {
+                        if (domainListState.selectedDomains.indexOf(domain) === -1) {
+                            domainListState.selectedDomains.push(domain);
+                        }
+                    } else {
+                        var idx = domainListState.selectedDomains.indexOf(domain);
+                        if (idx >= 0) domainListState.selectedDomains.splice(idx, 1);
+                    }
+                });
+                updateBatchBar();
+            });
+        });
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        var div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function updatePagination() {
+        pageInfo.textContent = domainListState.page + ' / ' + Math.max(1, domainListState.pages) +
+            ' (<?= __('共') ?> ' + domainListState.total + ' <?= __('条') ?>)';
+        pagePrev.disabled = domainListState.page <= 1;
+        pageNext.disabled = domainListState.page >= domainListState.pages;
+    }
+
+    function updateBatchBar() {
+        var count = domainListState.selectedDomains.length;
+        batchCountNum.textContent = count;
+
+        var pullBtn = document.getElementById('pb-dm-pull-domains-btn');
+        if (pullBtn) {
+            pullBtn.disabled = count === 0;
+        }
+    }
+
+    var selectAllDomainCheckbox = document.getElementById('pb-dm-select-all-domain');
+    if (selectAllDomainCheckbox) {
+        selectAllDomainCheckbox.addEventListener('change', function() {
+            var checked = selectAllDomainCheckbox.checked;
+            var checkboxes = domainContainer.querySelectorAll('.pb-dm-domain-select:not(:disabled)');
+            domainListState.selectedDomains = [];
+            checkboxes.forEach(function(cb) {
+                cb.checked = checked;
+                if (checked) {
+                    domainListState.selectedDomains.push(cb.dataset.domain);
+                }
+            });
+            updateBatchBar();
+        });
+    }
+
+    function bindDomainSelectEvents() {
+        var checkboxes = domainContainer.querySelectorAll('.pb-dm-domain-select:not(:disabled)');
+
+        if (selectAllDomainCheckbox) {
+            selectAllDomainCheckbox.checked = false;
+        }
+        domainListState.selectedDomains = [];
+        updateBatchBar();
+
+        checkboxes.forEach(function(cb) {
+            cb.addEventListener('change', function() {
+                var domain = cb.dataset.domain;
+                if (cb.checked) {
+                    if (domainListState.selectedDomains.indexOf(domain) === -1) {
+                        domainListState.selectedDomains.push(domain);
+                    }
+                } else {
+                    var idx = domainListState.selectedDomains.indexOf(domain);
+                    if (idx >= 0) domainListState.selectedDomains.splice(idx, 1);
+                }
+                updateBatchBar();
+            });
+        });
+
+        domainContainer.querySelectorAll('.pb-dm-pull-single-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var domain = btn.dataset.domain;
+                var accountId = parseInt(btn.dataset.accountId) || 0;
+                pullDomains([domain], btn, accountId);
+            });
+        });
+
+        domainContainer.querySelectorAll('.pb-dm-resolve-dns-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var domainId = parseInt(btn.dataset.domainId);
+                var domain = btn.dataset.domain;
+                resolveDns(domainId, domain, btn);
+            });
+        });
+
+        domainContainer.querySelectorAll('.pb-dm-manage-dns-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var domainId = parseInt(btn.dataset.domainId);
+                var domain = btn.dataset.domain;
+                showDnsManageModal(domainId, domain);
+            });
+        });
+    }
+
+    function pullDomains(domainList, btn, accountId, autoResolve) {
+        if (!domainList || domainList.length === 0) {
+            AdminToast.warning('<?= __('请选择要拉取的域名') ?>');
+            return;
+        }
+
+        accountId = accountId || domainListState.accountId || 0;
+        autoResolve = autoResolve !== false;
+
+        if (btn) setBtnLoading(btn, true);
+
+        postForm(API.pullDomains, {
+            account_id: accountId,
+            domains: domainList,
+            auto_resolve: autoResolve ? '1' : '0'
+        }).then(function(res) {
+            if (res.success) {
+                var msg = res.message || '<?= __('拉取成功') ?>';
+                if (autoResolve && res.auto_resolve_queued) {
+                    msg += ' <?= __('（自动解析任务已创建）') ?>';
+                }
+                AdminToast.success(msg);
+                if (btn && res.domains && domainList.length === 1) {
+                    var domain = domainList[0];
+                    var domainId = res.domains[domain] || 0;
+                    if (domainId > 0) {
+                        btn.className = 'pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-resolve-dns-btn';
+                        btn.setAttribute('data-domain-id', domainId);
+                        btn.setAttribute('data-domain', domain);
+                        btn.setAttribute('title', '<?= __('解析DNS') ?>');
+                        btn.innerHTML = '<i class="mdi mdi-dns"></i>';
+                        btn.onclick = function(e) {
+                            e.stopPropagation();
+                            resolveDns(domainId, domain, btn);
+                        };
+                        var row = btn.closest('tr');
+                        if (row) {
+                            var pullBadge = row.querySelector('.pb-dm-badge--warn');
+                            if (pullBadge) {
+                                pullBadge.className = 'pb-dm-badge pb-dm-badge--ok';
+                                pullBadge.textContent = '<?= __('已拉取') ?>';
+                            }
+                            var checkbox = row.querySelector('.pb-dm-domain-select');
+                            if (checkbox) {
+                                checkbox.checked = false;
+                            }
+                        }
+                    } else {
+                        setBtnLoading(btn, false, '<i class="mdi mdi-check"></i>');
+                    }
+                } else if (btn) {
+                    setBtnLoading(btn, false, '<i class="mdi mdi-check"></i>');
+                }
+            } else {
+                if (btn) setBtnLoading(btn, false, '<i class="mdi mdi-download"></i>');
+                AdminToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
+            }
+        }).catch(function() {
+            if (btn) setBtnLoading(btn, false, '<i class="mdi mdi-download"></i>');
+            AdminToast.error('<?= __('网络错误') ?>');
+        });
+    }
+
+    function resolveDns(domainId, domainName, btn) {
+        if (domainId <= 0) {
+            AdminToast.warning('<?= __('域名 ID 无效') ?>');
+            return;
+        }
+
+        setBtnLoading(btn, true);
+
+        postForm(API.checkResolve, { domain_id: domainId }).then(function(res) {
+            setBtnLoading(btn, false, '<i class="mdi mdi-dns"></i>');
+            if (res.success) {
+                AdminToast.success(res.msg || '<?= __('解析检测完成') ?>');
+            } else {
+                AdminToast.error(res.msg || '<?= __('解析检测失败') ?>');
+            }
+        }).catch(function() {
+            setBtnLoading(btn, false, '<i class="mdi mdi-dns"></i>');
+            AdminToast.error('<?= __('网络错误') ?>');
+        });
+    }
+
+    /* ========== 单条域名DNS记录管理 ========== */
+    var currentDnsManageDomainId = 0;
+    var currentDnsManageDomainName = '';
+
+    function showDnsManageModal(domainId, domainName) {
+        currentDnsManageDomainId = domainId;
+        currentDnsManageDomainName = domainName;
+
+        var modalHtml = '\
+            <div class="pb-dm-modal-overlay" id="pb-dm-dns-manage-modal">\
+                <div class="pb-dm-modal" style="max-width:700px;">\
+                    <div class="pb-dm-modal-header">\
+                        <h3><i class="mdi mdi-dns"></i> <?= __('DNS记录管理') ?> - ' + escapeHtml(domainName) + '</h3>\
+                        <button class="pb-dm-modal-close" onclick="closeDnsManageModal()">&times;</button>\
+                    </div>\
+                    <div class="pb-dm-modal-body">\
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">\
+                            <div>\
+                                <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm" onclick="refreshDnsRecords()">\
+                                    <i class="mdi mdi-refresh"></i> <?= __('刷新') ?>\
+                                </button>\
+                            </div>\
+                            <div>\
+                                <button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm" onclick="showAddDnsRecordForm()">\
+                                    <i class="mdi mdi-plus"></i> <?= __('添加记录') ?>\
+                                </button>\
+                            </div>\
+                        </div>\
+                        \
+                        <div id="pb-dm-add-dns-form" style="display:none;padding:12px;border:1px solid var(--backend-color-border,#ddd);border-radius:6px;margin-bottom:16px;background:var(--backend-color-card-bg,#f8f9fa);">\
+                            <div style="display:grid;grid-template-columns:100px 1fr 1fr 80px;gap:8px;align-items:end;">\
+                                <div>\
+                                    <label style="font-size:0.8rem;"><?= __('类型') ?></label>\
+                                    <select id="pb-dm-dns-add-type" class="pb-dm-select" style="width:100%;">\
+                                        <option value="A">A</option>\
+                                        <option value="AAAA">AAAA</option>\
+                                        <option value="CNAME">CNAME</option>\
+                                        <option value="MX">MX</option>\
+                                        <option value="TXT">TXT</option>\
+                                        <option value="NS">NS</option>\
+                                    </select>\
+                                </div>\
+                                <div>\
+                                    <label style="font-size:0.8rem;"><?= __('主机记录') ?></label>\
+                                    <input type="text" id="pb-dm-dns-add-host" class="pb-dm-input" value="@" placeholder="@" style="width:100%;">\
+                                </div>\
+                                <div>\
+                                    <label style="font-size:0.8rem;"><?= __('记录值') ?></label>\
+                                    <input type="text" id="pb-dm-dns-add-value" class="pb-dm-input" placeholder="<?= __('IP地址或域名') ?>" style="width:100%;">\
+                                </div>\
+                                <div>\
+                                    <label style="font-size:0.8rem;">TTL</label>\
+                                    <input type="number" id="pb-dm-dns-add-ttl" class="pb-dm-input" value="600" min="60" style="width:100%;">\
+                                </div>\
+                            </div>\
+                            <div style="margin-top:8px;display:flex;gap:8px;">\
+                                <button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm" onclick="saveNewDnsRecord()">\
+                                    <i class="mdi mdi-check"></i> <?= __('保存') ?>\
+                                </button>\
+                                <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm" onclick="hideAddDnsRecordForm()">\
+                                    <?= __('取消') ?>\
+                                </button>\
+                            </div>\
+                        </div>\
+                        \
+                        <div id="pb-dm-dns-records-container">\
+                            <div style="text-align:center;padding:20px;color:var(--backend-color-text-tertiary);">\
+                                <i class="mdi mdi-loading mdi-spin"></i> <?= __('加载中...') ?>\
+                            </div>\
+                        </div>\
+                    </div>\
+                    <div class="pb-dm-modal-footer">\
+                        <button class="pb-dm-btn pb-dm-btn-outline" onclick="closeDnsManageModal()"><?= __('关闭') ?></button>\
+                    </div>\
+                </div>\
+            </div>\
+        ';
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        loadDnsRecords();
+    }
+
+    function closeDnsManageModal() {
+        var modal = document.getElementById('pb-dm-dns-manage-modal');
+        if (modal) modal.remove();
+    }
+
+    function loadDnsRecords() {
+        var container = document.getElementById('pb-dm-dns-records-container');
+        if (!container) return;
+
+        container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--backend-color-text-tertiary);"><i class="mdi mdi-loading mdi-spin"></i> <?= __('加载中...') ?></div>';
+
+        fetch(API.getDnsRecords + '?domain_id=' + currentDnsManageDomainId)
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+                if (res.success) {
+                    renderDnsRecords(res.data.records || []);
+                } else {
+                    container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--backend-color-danger);">' + (res.msg || '<?= __('获取失败') ?>') + '</div>';
+                }
+            })
+            .catch(function() {
+                container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--backend-color-danger);"><?= __('网络错误') ?></div>';
+            });
+    }
+
+    function refreshDnsRecords() {
+        loadDnsRecords();
+        AdminToast.info('<?= __('已刷新') ?>');
+    }
+
+    function renderDnsRecords(records) {
+        var container = document.getElementById('pb-dm-dns-records-container');
+        if (!container) return;
+
+        if (!records || records.length === 0) {
+            container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--backend-color-text-tertiary);"><?= __('暂无DNS记录') ?></div>';
+            return;
+        }
+
+        var html = '<table class="pb-dm-table" style="width:100%;font-size:0.9rem;">' +
+            '<thead><tr>' +
+            '<th><?= __('类型') ?></th>' +
+            '<th><?= __('主机记录') ?></th>' +
+            '<th><?= __('记录值') ?></th>' +
+            '<th>TTL</th>' +
+            '<th><?= __('操作') ?></th>' +
+            '</tr></thead><tbody>';
+
+        records.forEach(function(rec) {
+            html += '<tr>' +
+                '<td><code>' + escapeHtml(rec.type || '-') + '</code></td>' +
+                '<td>' + escapeHtml(rec.host || rec.name || '@') + '</td>' +
+                '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + escapeHtml(rec.value || rec.data || '') + '">' + escapeHtml(rec.value || rec.data || '-') + '</td>' +
+                '<td>' + (rec.ttl || '-') + '</td>' +
+                '<td><button class="pb-dm-btn pb-dm-btn-danger pb-dm-btn-sm" onclick="deleteDnsRecord(\'' + escapeHtml(rec.record_id || rec.id || '') + '\')" title="<?= __('删除') ?>"><i class="mdi mdi-delete"></i></button></td>' +
+                '</tr>';
+        });
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    }
+
+    function showAddDnsRecordForm() {
+        document.getElementById('pb-dm-add-dns-form').style.display = 'block';
+        document.getElementById('pb-dm-dns-add-type').value = 'A';
+        document.getElementById('pb-dm-dns-add-host').value = '@';
+        document.getElementById('pb-dm-dns-add-value').value = '';
+        document.getElementById('pb-dm-dns-add-ttl').value = '600';
+    }
+
+    function hideAddDnsRecordForm() {
+        document.getElementById('pb-dm-add-dns-form').style.display = 'none';
+    }
+
+    function saveNewDnsRecord() {
+        var type = document.getElementById('pb-dm-dns-add-type').value;
+        var host = document.getElementById('pb-dm-dns-add-host').value || '@';
+        var value = document.getElementById('pb-dm-dns-add-value').value.trim();
+        var ttl = document.getElementById('pb-dm-dns-add-ttl').value || 600;
+
+        if (!value) {
+            AdminToast.warning('<?= __('请输入记录值') ?>');
+            return;
+        }
+
+        AdminToast.info('<?= __('正在添加...') ?>');
+
+        postForm(API.addDnsRecord, {
+            domain_id: currentDnsManageDomainId,
+            type: type,
+            host: host,
+            value: value,
+            ttl: ttl
+        }).then(function(res) {
+            if (res.success) {
+                AdminToast.success(res.msg || '<?= __('添加成功') ?>');
+                hideAddDnsRecordForm();
+                loadDnsRecords();
+            } else {
+                AdminToast.error(res.msg || '<?= __('添加失败') ?>');
+            }
+        }).catch(function() {
+            AdminToast.error('<?= __('网络错误') ?>');
+        });
+    }
+
+    function deleteDnsRecord(recordId) {
+        if (!recordId) {
+            AdminToast.warning('<?= __('记录ID无效') ?>');
+            return;
+        }
+
+        BackendConfirm.show('<?= __('确定要删除这条DNS记录吗？') ?>', {
+            title: '<?= __('删除确认') ?>',
+            confirmText: '<?= __('确认删除') ?>',
+            cancelText: '<?= __('取消') ?>'
+        }).then(function(confirmed) {
+            if (!confirmed) return;
+
+            AdminToast.info('<?= __('正在删除...') ?>');
+
+            postForm(API.deleteDnsRecord, {
+                domain_id: currentDnsManageDomainId,
+                record_id: recordId
+            }).then(function(res) {
+                if (res.success) {
+                    AdminToast.success(res.msg || '<?= __('删除成功') ?>');
+                    loadDnsRecords();
+                } else {
+                    AdminToast.error(res.msg || '<?= __('删除失败') ?>');
+                }
+            }).catch(function() {
+                AdminToast.error('<?= __('网络错误') ?>');
+            });
+        });
+    }
+
+    /* 搜索按钮 */
+    document.getElementById('pb-dm-search-btn').addEventListener('click', function() {
+        domainListState.page = 1;
+        loadDomainList();
+    });
+
+    /* 回车搜索 */
+    document.getElementById('pb-dm-domain-search').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            domainListState.page = 1;
+            loadDomainList();
+        }
+    });
+
+    /* 筛选变更 */
+    document.getElementById('pb-dm-domain-acct').addEventListener('change', function() {
+        domainListState.page = 1;
+        loadDomainList();
+    });
+    document.getElementById('pb-dm-domain-status').addEventListener('change', function() {
+        domainListState.page = 1;
+        loadDomainList();
+    });
+
+    /* 分页 */
+    pagePrev.addEventListener('click', function() {
+        if (domainListState.page > 1) {
+            domainListState.page--;
+            loadDomainList();
+        }
+    });
+    pageNext.addEventListener('click', function() {
+        if (domainListState.page < domainListState.pages) {
+            domainListState.page++;
+            loadDomainList();
+        }
+    });
+    pageSizeSelect.addEventListener('change', function() {
+        domainListState.page = 1;
+        loadDomainList();
+    });
+
+    /* 拉取选中域名 */
+    document.getElementById('pb-dm-pull-domains-btn').addEventListener('click', function() {
+        pullDomains(domainListState.selectedDomains, this, 0);
+    });
+
+    /* 批量拉取 */
+    document.getElementById('pb-dm-batch-pull-btn').addEventListener('click', function() {
+        pullDomains(domainListState.selectedDomains, this, 0);
+    });
+
+    /* 批量转存子域名（仅解析到本服务器的域名） */
+    document.getElementById('pb-dm-batch-transfer-pool-btn').addEventListener('click', function() {
+        var selected = domainListState.items.filter(function(d) {
+            return d.is_pulled && d.domain_id > 0;
+        }).filter(function(d) {
+            var checkbox = domainContainer.querySelector('.pb-dm-domain-select[data-domain="' + d.domain + '"]');
+            return checkbox && checkbox.checked;
+        });
+
+        if (selected.length === 0) {
+            AdminToast.warning('<?= __('请选择已拉取的域名进行转存') ?>');
+            return;
+        }
+
+        var btn = this;
+        var domainIds = selected.map(function(d) { return d.domain_id; });
+
+        BackendConfirm.show('<?= __('确定批量转存') ?> ' + selected.length + ' <?= __('个域名到域名池？') ?>\n\n<?= __('注意：只有解析到本服务器IP的域名才会被转存，其他将跳过。') ?>', {
+            title: '<?= __('批量转存确认') ?>',
+            confirmText: '<?= __('确认转存') ?>',
+            cancelText: '<?= __('取消') ?>'
+        }).then(function(confirmed) {
+            if (!confirmed) return;
+
+            setBtnLoading(btn, true);
+
+            postForm(API.batchTransferToPool, { domain_ids: JSON.stringify(domainIds) }).then(function(res) {
+                setBtnLoading(btn, false, '<i class="mdi mdi-folder-move"></i> <?= __('批量转存') ?>');
+                if (res.success) {
+                    var msg = res.msg || res.message || '<?= __('转存完成') ?>';
+                    if (res.data && res.data.skipped_domains && res.data.skipped_domains.length > 0) {
+                        AdminToast.success(msg);
+                        console.log('<?= __('跳过的域名（IP不匹配）') ?>:', res.data.skipped_domains);
+                    } else {
+                        AdminToast.success(msg);
+                    }
+                } else {
+                    AdminToast.error(res.msg || res.message || '<?= __('转存失败') ?>');
+                }
+            }).catch(function(err) {
+                setBtnLoading(btn, false, '<i class="mdi mdi-folder-move"></i> <?= __('批量转存') ?>');
+                AdminToast.error('<?= __('网络错误') ?>');
+            });
+        });
+    });
+
+    /* 批量解析到本地服务器 */
+    document.getElementById('pb-dm-batch-resolve-to-local-btn').addEventListener('click', function() {
+        var selected = domainListState.items.filter(function(d) {
+            return d.is_pulled && d.domain_id > 0;
+        }).filter(function(d) {
+            var checkbox = domainContainer.querySelector('.pb-dm-domain-select[data-domain="' + d.domain + '"]');
+            return checkbox && checkbox.checked;
+        });
+
+        if (selected.length === 0) {
+            AdminToast.warning('<?= __('请选择已拉取的域名') ?>');
+            return;
+        }
+
+        var btn = this;
+        var domainIds = selected.map(function(d) { return d.domain_id; });
+        var domainNames = selected.map(function(d) { return d.domain; }).join(', ');
+
+        BackendConfirm.show('<?= __('确定将') ?> ' + selected.length + ' <?= __('个域名解析到本服务器？') ?>\n\n<?= __('将为每个域名添加 @ 和 www 的A记录指向本服务器公网IP。') ?>', {
+            title: '<?= __('批量解析到本地') ?>',
+            confirmText: '<?= __('确认解析') ?>',
+            cancelText: '<?= __('取消') ?>'
+        }).then(function(confirmed) {
+            if (!confirmed) return;
+
+            setBtnLoading(btn, true);
+
+            postForm(API.batchResolveToLocal, { domain_ids: JSON.stringify(domainIds) }).then(function(res) {
+                setBtnLoading(btn, false, '<i class="mdi mdi-server"></i> <?= __('批量解析到本地') ?>');
+                if (res.success) {
+                    var msg = res.msg || res.message || '<?= __('解析完成') ?>';
+                    AdminToast.success(msg);
+                    if (res.data && res.data.errors && res.data.errors.length > 0) {
+                        console.log('<?= __('解析错误') ?>:', res.data.errors);
+                    }
+                    loadDomainList();
+                } else {
+                    AdminToast.error(res.msg || res.message || '<?= __('解析失败') ?>');
+                }
+            }).catch(function(err) {
+                setBtnLoading(btn, false, '<i class="mdi mdi-server"></i> <?= __('批量解析到本地') ?>');
+                AdminToast.error('<?= __('网络错误') ?>');
+            });
+        });
+    });
+
+    /* 批量解析检测（仅已拉取的域名可操作） */
+    document.getElementById('pb-dm-batch-resolve-btn').addEventListener('click', function() {
+        var selected = domainListState.items.filter(function(d) {
+            return d.is_pulled && d.domain_id > 0;
+        }).filter(function(d) {
+            var checkbox = domainContainer.querySelector('.pb-dm-domain-select[data-domain="' + d.domain + '"]');
+            return checkbox && checkbox.checked;
+        });
+
+        if (selected.length === 0) {
+            AdminToast.warning('<?= __('请选择已拉取的域名进行检测') ?>');
+            return;
+        }
+
+        var btn = this;
+        setBtnLoading(btn, true);
+
+        var processed = 0;
+        var successCount = 0;
+        var total = selected.length;
+
+        selected.forEach(function(d) {
+            postForm(API.checkResolve, { domain_id: d.domain_id }).then(function(res) {
+                processed++;
+                if (res.success) successCount++;
+                if (processed >= total) {
+                    setBtnLoading(btn, false, '<i class="mdi mdi-dns"></i> <?= __('批量解析检测') ?>');
+                    AdminToast.success('<?= __('批量检测完成') ?>：' + successCount + '/' + total);
+                }
+            }).catch(function() {
+                processed++;
+                if (processed >= total) {
+                    setBtnLoading(btn, false, '<i class="mdi mdi-dns"></i> <?= __('批量解析检测') ?>');
+                    AdminToast.success('<?= __('批量检测完成') ?>：' + successCount + '/' + total);
+                }
+            });
+        });
+    });
+
+    /* 批量切换DNS服务器（仅已拉取的域名可操作） */
+    document.getElementById('pb-dm-batch-change-dns-btn').addEventListener('click', function() {
+        var selected = domainListState.items.filter(function(d) {
+            return d.is_pulled && d.domain_id > 0;
+        }).filter(function(d) {
+            var checkbox = domainContainer.querySelector('.pb-dm-domain-select[data-domain="' + d.domain + '"]');
+            return checkbox && checkbox.checked;
+        });
+
+        if (selected.length === 0) {
+            AdminToast.warning('<?= __('请选择已拉取的域名') ?>');
+            return;
+        }
+
+        var domainIds = selected.map(function(d) { return d.domain_id; });
+        var btn = this;
+
+        showBatchChangeNsModal(domainIds, btn);
+    });
+
+    var pbDmBatchNsSelectedIds = [];
+    var pbDmBatchNsSelectedDomains = [];
+    var pbDmBatchNsBtn = null;
+    var pbDmRegistrarAccounts = null;
+
+    function showBatchChangeNsModal(domainIds, btn) {
+        pbDmBatchNsSelectedIds = domainIds;
+        pbDmBatchNsBtn = btn;
+
+        var selected = domainListState.items.filter(function(d) {
+            return pbDmBatchNsSelectedIds.indexOf(d.domain_id) !== -1;
+        });
+        pbDmBatchNsSelectedDomains = selected.map(function(d) { return d.domain; });
+
+        var modalHtml = '\
+            <div class="pb-dm-modal-overlay" id="pb-dm-batch-ns-modal">\
+                <div class="pb-dm-modal pb-dm-modal-sm">\
+                    <div class="pb-dm-modal-header">\
+                        <h3><i class="mdi mdi-swap-horizontal"></i> <?= __('批量切换DNS服务器') ?></h3>\
+                        <button class="pb-dm-modal-close" onclick="closeBatchNsModal()">&times;</button>\
+                    </div>\
+                    <div class="pb-dm-modal-body">\
+                        <div class="pb-dm-alert pb-dm-alert-info">\
+                            <i class="mdi mdi-information-outline"></i>\
+                            <?= __('将选中域名的 Nameserver 切换到目标服务商。切换后域名将使用新的 DNS 服务商进行解析。') ?>\
+                        </div>\
+                        <p class="pb-dm-text-muted"><?= __('已选择') ?> ' + domainIds.length + ' <?= __('个域名') ?></p>\
+                        \
+                        <div class="pb-dm-form-group">\
+                            <label><?= __('切换方式') ?></label>\
+                            <div class="pb-dm-btn-group">\
+                                <label class="pb-dm-btn-radio" onclick="document.getElementById(\'pb-dm-ns-mode-account\').checked=true;onPbDmNsModeChange();">\
+                                    <input type="radio" name="pb-dm-ns-mode" id="pb-dm-ns-mode-account" value="account" checked> \
+                                    <span><i class="mdi mdi-account-key"></i> <?= __('选择账户（推荐）') ?></span>\
+                                </label>\
+                                <label class="pb-dm-btn-radio" onclick="document.getElementById(\'pb-dm-ns-mode-manual\').checked=true;onPbDmNsModeChange();">\
+                                    <input type="radio" name="pb-dm-ns-mode" id="pb-dm-ns-mode-manual" value="manual"> \
+                                    <span><i class="mdi mdi-pencil"></i> <?= __('手动输入') ?></span>\
+                                </label>\
+                            </div>\
+                        </div>\
+                        \
+                        <div id="pb-dm-ns-account-mode">\
+                            <div class="pb-dm-form-group">\
+                                <label><?= __('选择目标账户') ?></label>\
+                                <select id="pb-dm-batch-ns-account" onchange="onPbDmNsAccountChange()">\
+                                    <option value=""><?= __('-- 加载中... --') ?></option>\
+                                </select>\
+                                <small class="pb-dm-text-muted"><?= __('选择已配置的域名商账户，系统将自动获取该账户的DNS服务器') ?></small>\
+                            </div>\
+                            <div class="pb-dm-alert pb-dm-alert-warning" id="pb-dm-ns-account-no-data" style="display:none;">\
+                                <i class="mdi mdi-alert-circle"></i>\
+                                <?= __('暂无可用的域名商账户，请先添加并启用账户，或使用下方「手动输入」模式直接填写DNS服务器地址') ?>\
+                            </div>\
+                            <div class="pb-dm-alert pb-dm-alert-success" id="pb-dm-ns-account-info" style="display:none;">\
+                                <i class="mdi mdi-check-circle"></i>\
+                                <span id="pb-dm-ns-account-ns"></span>\
+                            </div>\
+                        </div>\
+                        \
+                        <div id="pb-dm-ns-manual-mode" style="display:none;">\
+                            <div class="pb-dm-form-group">\
+                                <label><?= __('选择DNS服务商') ?></label>\
+                                <select id="pb-dm-batch-ns-provider" onchange="onPbDmNsProviderChange()">\
+                                    <option value="">-- <?= __('请选择') ?> --</option>\
+                                    <option value="cloudflare">Cloudflare (<?= __('每个域名独立分配') ?>)</option>\
+                                    <option value="dnspod">DNSPod (ns1.dnspod.net, ns2.dnspod.net)</option>\
+                                    <option value="alidns"><?= __('阿里云 DNS') ?> (ns1.alidns.com, ns2.alidns.com)</option>\
+                                    <option value="custom"><?= __('自定义') ?></option>\
+                                </select>\
+                            </div>\
+                            <div class="pb-dm-alert pb-dm-alert-info" id="pb-dm-batch-ns-cloudflare-tip" style="display:none;">\
+                                <i class="mdi mdi-information-outline"></i>\
+                                <div>\
+                                    <strong>Cloudflare</strong>: <?= __('将为每个域名分配独立的 Nameserver。请确保已在「供应商账户」中添加 Cloudflare 账户。') ?>\
+                                </div>\
+                            </div>\
+                            <div class="pb-dm-form-group" id="pb-dm-batch-ns-custom-wrap" style="display:none;">\
+                                <label><?= __('Nameserver 列表') ?></label>\
+                                <input type="text" id="pb-dm-batch-ns-custom" placeholder="<?= __('如：ns1.example.com,ns2.example.com') ?>">\
+                                <small class="pb-dm-text-muted"><?= __('多个 Nameserver 用英文逗号分隔') ?></small>\
+                            </div>\
+                        </div>\
+                    </div>\
+                    <div class="pb-dm-modal-footer">\
+                        <button class="pb-dm-btn pb-dm-btn-outline" onclick="closeBatchNsModal()"><?= __('取消') ?></button>\
+                        <button class="pb-dm-btn pb-dm-btn-primary" id="pb-dm-batch-ns-submit" onclick="doBatchChangeNs()">\
+                            <i class="mdi mdi-swap-horizontal"></i> <?= __('确认切换') ?>\
+                        </button>\
+                    </div>\
+                </div>\
+            </div>\
+        ';
+
+        var existingModal = document.getElementById('pb-dm-batch-ns-modal');
+        if (existingModal) existingModal.remove();
+
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        loadPbDmRegistrarAccounts();
+    }
+
+    function loadPbDmRegistrarAccounts() {
+        var select = document.getElementById('pb-dm-batch-ns-account');
+        if (!select) return;
+
+        var accountModeRadio = document.getElementById('pb-dm-ns-mode-account');
+        var manualModeRadio = document.getElementById('pb-dm-ns-mode-manual');
+        var accountNoDataTip = document.getElementById('pb-dm-ns-account-no-data');
+        
+        select.innerHTML = '<option value=""><?= __('-- 加载中... --') ?></option>';
+        if (accountNoDataTip) accountNoDataTip.style.display = 'none';
+
+        fetch(API.getRegistrarAccounts)
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+                var accounts = (res.data && res.data.accounts) ? res.data.accounts : [];
+                if ((res.success || res.code === 200) && accounts.length > 0) {
+                    pbDmRegistrarAccounts = accounts;
+                    select.disabled = false;
+                    if (accountModeRadio) accountModeRadio.disabled = false;
+                    var html = '<option value=""><?= __('-- 请选择目标账户 --') ?></option>';
+                    accounts.forEach(function(acc) {
+                        html += '<option value="' + acc.id + '" data-registrar="' + acc.registrar_code + '">' +
+                                acc.name + ' (' + acc.registrar_name + ')' +
+                                '</option>';
+                    });
+                    select.innerHTML = html;
+                } else if ((res.success || res.code === 200) && accounts.length === 0) {
+                    pbDmRegistrarAccounts = [];
+                    select.innerHTML = '<option value=""><?= __('-- 暂无可用账户 --') ?></option>';
+                    select.disabled = true;
+                    if (accountModeRadio) accountModeRadio.disabled = true;
+                    if (accountNoDataTip) accountNoDataTip.style.display = 'block';
+                    if (manualModeRadio) {
+                        manualModeRadio.checked = true;
+                        onPbDmNsModeChange();
+                    }
+                } else {
+                    select.innerHTML = '<option value=""><?= __('-- 加载失败 --') ?></option>';
+                }
+            }).catch(function() {
+                select.innerHTML = '<option value=""><?= __('-- 加载失败 --') ?></option>';
+            });
+    }
+
+    function onPbDmNsModeChange() {
+        var mode = document.querySelector('input[name="pb-dm-ns-mode"]:checked').value;
+        var accountMode = document.getElementById('pb-dm-ns-account-mode');
+        var manualMode = document.getElementById('pb-dm-ns-manual-mode');
+        if (accountMode) accountMode.style.display = (mode === 'account') ? 'block' : 'none';
+        if (manualMode) manualMode.style.display = (mode === 'manual') ? 'block' : 'none';
+    }
+
+    function onPbDmNsAccountChange() {
+        var select = document.getElementById('pb-dm-batch-ns-account');
+        var accountId = select ? select.value : '';
+        var infoDiv = document.getElementById('pb-dm-ns-account-info');
+        var nsSpan = document.getElementById('pb-dm-ns-account-ns');
+
+        if (!accountId) {
+            if (infoDiv) infoDiv.style.display = 'none';
+            return;
+        }
+
+        if (infoDiv) infoDiv.style.display = 'block';
+        if (nsSpan) nsSpan.textContent = '<?= __('正在获取DNS服务器...') ?>';
+
+        postForm(API.getAccountNameservers, {
+            account_id: accountId,
+            domains: JSON.stringify(pbDmBatchNsSelectedDomains.slice(0, 1))
+        }).then(function(res) {
+            if (res.success && res.data) {
+                if (res.data.per_domain) {
+                    if (nsSpan) nsSpan.textContent = '<?= __('Cloudflare 将为每个域名分配独立的 Nameserver') ?>';
+                } else if (res.data.nameservers && res.data.nameservers.length > 0) {
+                    if (nsSpan) nsSpan.textContent = '<?= __('目标DNS') ?>: ' + res.data.nameservers.join(', ');
+                } else {
+                    if (nsSpan) nsSpan.textContent = res.msg || res.message || '<?= __('该账户暂无可用DNS服务器') ?>';
+                    if (infoDiv) infoDiv.className = 'pb-dm-alert pb-dm-alert-warning';
+                }
+            } else {
+                if (nsSpan) nsSpan.textContent = res.msg || res.message || '<?= __('获取失败') ?>';
+                if (infoDiv) infoDiv.className = 'pb-dm-alert pb-dm-alert-warning';
+            }
+        }).catch(function() {
+            if (nsSpan) nsSpan.textContent = '<?= __('获取失败') ?>';
+            if (infoDiv) infoDiv.className = 'pb-dm-alert pb-dm-alert-warning';
+        });
+    }
+
+    function closeBatchNsModal() {
+        var modal = document.getElementById('pb-dm-batch-ns-modal');
+        if (modal) modal.remove();
+    }
+
+    function onPbDmNsProviderChange() {
+        var provider = document.getElementById('pb-dm-batch-ns-provider').value;
+        var customWrap = document.getElementById('pb-dm-batch-ns-custom-wrap');
+        var cloudflareTip = document.getElementById('pb-dm-batch-ns-cloudflare-tip');
+
+        if (customWrap) customWrap.style.display = (provider === 'custom') ? 'block' : 'none';
+        if (cloudflareTip) cloudflareTip.style.display = (provider === 'cloudflare') ? 'flex' : 'none';
+    }
+
+    function doBatchChangeNs() {
+        if (!pbDmBatchNsSelectedIds || pbDmBatchNsSelectedIds.length === 0) {
+            AdminToast.warning('<?= __('请选择要切换DNS的域名') ?>');
+            return;
+        }
+
+        var mode = document.querySelector('input[name="pb-dm-ns-mode"]:checked');
+        mode = mode ? mode.value : 'account';
+        var submitBtn = document.getElementById('pb-dm-batch-ns-submit');
+
+        if (mode === 'account') {
+            var accountId = document.getElementById('pb-dm-batch-ns-account').value;
+            if (!accountId) {
+                AdminToast.warning('<?= __('请选择目标账户') ?>');
+                return;
+            }
+
+            AdminToast.info('<?= __('正在批量切换DNS服务器...') ?>');
+            if (submitBtn) submitBtn.disabled = true;
+
+            postForm(API.batchSwitchToAccount, {
+                domain_ids: JSON.stringify(pbDmBatchNsSelectedIds),
+                target_account_id: accountId
+            }).then(function(res) {
+                if (submitBtn) submitBtn.disabled = false;
+                closeBatchNsModal();
+                
+                if (res.success) {
+                    var successCount = res.data && res.data.success || 0;
+                    var failedCount = res.data && res.data.failed || 0;
+                    var errors = res.data && res.data.errors || [];
+                    
+                    if (failedCount === 0) {
+                        AdminToast.success('<?= __('DNS 切换成功') ?>：' + successCount + ' <?= __('个域名') ?>');
+                    } else if (successCount > 0) {
+                        AdminToast.warning('<?= __('DNS 切换部分完成') ?>：<?= __('成功') ?> ' + successCount + ' <?= __('个') ?>，<?= __('失败') ?> ' + failedCount + ' <?= __('个') ?>');
+                        showDnsSwitchErrors(errors);
+                    } else {
+                        AdminToast.error('<?= __('DNS 切换失败') ?>：' + failedCount + ' <?= __('个域名') ?>');
+                        showDnsSwitchErrors(errors);
+                    }
+                } else {
+                    AdminToast.error(res.msg || res.message || '<?= __('切换失败') ?>');
+                }
+            }).catch(function() {
+                if (submitBtn) submitBtn.disabled = false;
+                AdminToast.error('<?= __('网络错误，请检查网络连接后重试') ?>');
+            });
+            return;
+        }
+
+        var provider = document.getElementById('pb-dm-batch-ns-provider').value;
+        var customNs = document.getElementById('pb-dm-batch-ns-custom').value.trim();
+
+        if (!provider) {
+            AdminToast.warning('<?= __('请选择DNS服务商') ?>');
+            return;
+        }
+
+        if (provider === 'custom' && !customNs) {
+            AdminToast.warning('<?= __('请输入自定义Nameserver') ?>');
+            return;
+        }
+
+        if (provider === 'cloudflare') {
+            AdminToast.warning('<?= __('Cloudflare 需要为每个域名分配独立的 Nameserver，请先在「供应商账户」中添加 Cloudflare 账户，然后使用「选择账户」模式切换。') ?>');
+            return;
+        }
+
+        AdminToast.info('<?= __('正在批量切换DNS服务器...') ?>');
+        if (submitBtn) submitBtn.disabled = true;
+
+        var params = { domain_ids: JSON.stringify(pbDmBatchNsSelectedIds) };
+        if (provider === 'custom') {
+            params.nameservers = customNs;
+        } else {
+            params.target_provider = provider;
+        }
+
+        postForm(API.batchChangeNameservers, params).then(function(res) {
+            if (submitBtn) submitBtn.disabled = false;
+            closeBatchNsModal();
+            
+            if (res.success) {
+                var successCount = res.data && res.data.success || 0;
+                var failedCount = res.data && res.data.failed || 0;
+                var errors = res.data && res.data.errors || [];
+                
+                if (failedCount === 0) {
+                    AdminToast.success('<?= __('DNS 切换成功') ?>：' + successCount + ' <?= __('个域名') ?>');
+                } else if (successCount > 0) {
+                    AdminToast.warning('<?= __('DNS 切换部分完成') ?>：<?= __('成功') ?> ' + successCount + ' <?= __('个') ?>，<?= __('失败') ?> ' + failedCount + ' <?= __('个') ?>');
+                    showDnsSwitchErrors(errors);
+                } else {
+                    AdminToast.error('<?= __('DNS 切换失败') ?>：' + failedCount + ' <?= __('个域名') ?>');
+                    showDnsSwitchErrors(errors);
+                }
+            } else {
+                AdminToast.error(res.msg || res.message || '<?= __('切换失败') ?>');
+            }
+        }).catch(function() {
+            if (submitBtn) submitBtn.disabled = false;
+            AdminToast.error('<?= __('网络错误，请检查网络连接后重试') ?>');
+        });
+    }
+
+    /* ========== 批量添加DNS记录 ========== */
+    var pbDmBatchAddDnsSelectedIds = [];
+    var pbDmServerIp = '';
+
+    document.getElementById('pb-dm-batch-add-dns-btn').addEventListener('click', function() {
+        var selected = domainListState.items.filter(function(d) {
+            return d.is_pulled && d.domain_id > 0;
+        }).filter(function(d) {
+            var checkbox = domainContainer.querySelector('.pb-dm-domain-select[data-domain="' + d.domain + '"]');
+            return checkbox && checkbox.checked;
+        });
+
+        if (selected.length === 0) {
+            AdminToast.warning('<?= __('请选择已拉取的域名') ?>');
+            return;
+        }
+
+        var domainIds = selected.map(function(d) { return d.domain_id; });
+        pbDmBatchAddDnsSelectedIds = domainIds;
+
+        fetch(API.refreshServerIp)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200 && data.data && data.data.ip) {
+                    pbDmServerIp = data.data.ip;
+                }
+                showBatchAddDnsModal(domainIds.length);
+            })
+            .catch(function() {
+                showBatchAddDnsModal(domainIds.length);
+            });
+    });
+
+    function showBatchAddDnsModal(count) {
+        var modalHtml = '\
+            <div class="pb-dm-modal-overlay" id="pb-dm-batch-add-dns-modal">\
+                <div class="pb-dm-modal pb-dm-modal-sm">\
+                    <div class="pb-dm-modal-header">\
+                        <h3><i class="mdi mdi-plus-network"></i> <?= __('批量添加DNS记录') ?></h3>\
+                        <button class="pb-dm-modal-close" onclick="closeBatchAddDnsModal()">&times;</button>\
+                    </div>\
+                    <div class="pb-dm-modal-body">\
+                        <div class="pb-dm-alert pb-dm-alert-info">\
+                            <i class="mdi mdi-information-outline"></i>\
+                            <?= __('为选中的域名批量添加相同的DNS解析记录。') ?>\
+                        </div>\
+                        <p class="pb-dm-text-muted"><?= __('已选择') ?> ' + count + ' <?= __('个域名') ?></p>\
+                        \
+                        <div class="pb-dm-server-ip-option">\
+                            <label class="pb-dm-checkbox-label">\
+                                <input type="checkbox" id="pb-dm-batch-add-dns-use-server-ip" onchange="onBatchAddDnsUseServerIpChange()">\
+                                <span class="pb-dm-checkbox-custom"></span>\
+                                <span class="pb-dm-checkbox-text"><?= __('使用本服务器公网IP') ?></span>\
+                            </label>\
+                            <code class="pb-dm-server-ip-badge">' + (pbDmServerIp || '-') + '</code>\
+                        </div>\
+                        \
+                        <div id="pb-dm-batch-add-dns-fields">\
+                            <div class="pb-dm-form-group">\
+                                <label><?= __('记录类型') ?></label>\
+                                <select id="pb-dm-batch-add-dns-type" class="pb-dm-select">\
+                                    <option value="A">A</option>\
+                                    <option value="AAAA">AAAA</option>\
+                                    <option value="CNAME">CNAME</option>\
+                                    <option value="MX">MX</option>\
+                                    <option value="TXT">TXT</option>\
+                                    <option value="NS">NS</option>\
+                                </select>\
+                            </div>\
+                            <div class="pb-dm-form-group">\
+                                <label><?= __('主机记录') ?></label>\
+                                <input type="text" id="pb-dm-batch-add-dns-host" class="pb-dm-input" value="@" placeholder="<?= __('如：@,www 或 @,www,* 多个用逗号分隔') ?>">\
+                                <small class="pb-dm-text-muted"><?= __('支持多个主机记录，用英文逗号分隔') ?></small>\
+                            </div>\
+                            <div class="pb-dm-form-group">\
+                                <label><?= __('记录值') ?></label>\
+                                <input type="text" id="pb-dm-batch-add-dns-value" class="pb-dm-input" placeholder="<?= __('如：192.168.1.1 或 example.com') ?>">\
+                            </div>\
+                            <div class="pb-dm-form-group">\
+                                <label><?= __('TTL (秒)') ?></label>\
+                                <input type="number" id="pb-dm-batch-add-dns-ttl" class="pb-dm-input" value="600" min="60" max="86400">\
+                            </div>\
+                        </div>\
+                        \
+                        <div id="pb-dm-batch-add-dns-server-fields" style="display:none;">\
+                            <div class="pb-dm-form-group">\
+                                <label><?= __('主机记录') ?></label>\
+                                <input type="text" id="pb-dm-batch-add-dns-host-server" class="pb-dm-input" value="@,www" placeholder="<?= __('如：@,www 或 @,www,* 多个用逗号分隔') ?>">\
+                                <small class="pb-dm-text-muted"><?= __('支持多个主机记录，用英文逗号分隔') ?></small>\
+                            </div>\
+                            <div class="pb-dm-form-group">\
+                                <label><?= __('TTL (秒)') ?></label>\
+                                <input type="number" id="pb-dm-batch-add-dns-ttl-server" class="pb-dm-input" value="600" min="60" max="86400">\
+                            </div>\
+                            <p class="pb-dm-text-muted" style="font-size:0.85rem;"><?= __('记录类型') ?>: <code>A</code>，<?= __('记录值') ?>: <code>' + (pbDmServerIp || '-') + '</code></p>\
+                        </div>\
+                    </div>\
+                    <div class="pb-dm-modal-footer">\
+                        <button class="pb-dm-btn pb-dm-btn-outline" onclick="closeBatchAddDnsModal()"><?= __('取消') ?></button>\
+                        <button class="pb-dm-btn pb-dm-btn-primary" id="pb-dm-batch-add-dns-submit" onclick="doBatchAddDnsRecords()">\
+                            <i class="mdi mdi-plus"></i> <?= __('确认添加') ?>\
+                        </button>\
+                    </div>\
+                </div>\
+            </div>\
+        ';
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+
+    function closeBatchAddDnsModal() {
+        var modal = document.getElementById('pb-dm-batch-add-dns-modal');
+        if (modal) modal.remove();
+    }
+
+    function onBatchAddDnsUseServerIpChange() {
+        var useServerIp = document.getElementById('pb-dm-batch-add-dns-use-server-ip').checked;
+        document.getElementById('pb-dm-batch-add-dns-fields').style.display = useServerIp ? 'none' : 'block';
+        document.getElementById('pb-dm-batch-add-dns-server-fields').style.display = useServerIp ? 'block' : 'none';
+    }
+
+    function doBatchAddDnsRecords() {
+        if (pbDmBatchAddDnsSelectedIds.length === 0) {
+            AdminToast.warning('<?= __('请选择要添加DNS记录的域名') ?>');
+            return;
+        }
+
+        var useServerIp = document.getElementById('pb-dm-batch-add-dns-use-server-ip').checked;
+        var submitBtn = document.getElementById('pb-dm-batch-add-dns-submit');
+        var params = {
+            domain_ids: JSON.stringify(pbDmBatchAddDnsSelectedIds),
+            use_server_ip: useServerIp ? '1' : '0'
+        };
+
+        if (useServerIp) {
+            params.host = document.getElementById('pb-dm-batch-add-dns-host-server').value || '@';
+            params.ttl = document.getElementById('pb-dm-batch-add-dns-ttl-server').value || 600;
+        } else {
+            var value = document.getElementById('pb-dm-batch-add-dns-value').value.trim();
+            if (!value) {
+                AdminToast.warning('<?= __('请输入记录值') ?>');
+                return;
+            }
+            params.type = document.getElementById('pb-dm-batch-add-dns-type').value;
+            params.host = document.getElementById('pb-dm-batch-add-dns-host').value || '@';
+            params.value = value;
+            params.ttl = document.getElementById('pb-dm-batch-add-dns-ttl').value || 600;
+        }
+
+        AdminToast.info('<?= __('正在批量添加DNS记录...') ?>');
+        if (submitBtn) submitBtn.disabled = true;
+
+        postForm(API.batchAddDnsRecords, params).then(function(res) {
+            if (submitBtn) submitBtn.disabled = false;
+            var code = res.code || (res.success ? 200 : 400);
+            var msg = res.msg || res.message || '<?= __('添加完成') ?>';
+            var hasErrors = res.data && res.data.errors && res.data.errors.length > 0;
+            var dnsHints = res.data && res.data.dns_provider_hints ? res.data.dns_provider_hints : {};
+            
+            if (code === 200) {
+                AdminToast.success(msg);
+                closeBatchAddDnsModal();
+                loadDomainList();
+            } else if (code === 206) {
+                // 部分成功
+                AdminToast.warning(msg);
+                closeBatchAddDnsModal();
+                if (hasErrors) {
+                    showBatchAddDnsErrors(res.data.errors, dnsHints);
+                }
+                loadDomainList();
+            } else {
+                // 全部失败
+                AdminToast.error(msg);
+                closeBatchAddDnsModal();
+                if (hasErrors) {
+                    showBatchAddDnsErrors(res.data.errors, dnsHints);
+                }
+            }
+        }).catch(function() {
+            if (submitBtn) submitBtn.disabled = false;
+            AdminToast.error('<?= __('网络错误') ?>');
+        });
+    }
+
+    function showBatchAddDnsErrors(errors, dnsProviderHints) {
+        if (!errors || errors.length === 0) return;
+        
+        dnsProviderHints = dnsProviderHints || {};
+        var hasHints = Object.keys(dnsProviderHints).length > 0;
+        
+        var errorHtml = '<div class="pb-dm-modal-overlay" id="pb-dm-dns-errors-modal" onclick="if(event.target===this)closeDnsErrorsModal()">' +
+            '<div class="pb-dm-modal pb-dm-modal-md">' +
+            '<div class="pb-dm-modal-header">' +
+            '<h3><i class="mdi mdi-alert-circle" style="color:var(--backend-color-danger,#f46a6a);"></i> <?= __('DNS 添加失败详情') ?></h3>' +
+            '<button class="pb-dm-modal-close" onclick="closeDnsErrorsModal()">&times;</button>' +
+            '</div>' +
+            '<div class="pb-dm-modal-body" style="max-height:500px;overflow-y:auto;">';
+        
+        // 显示 DNS 服务商提示（如果有）
+        if (hasHints) {
+            errorHtml += '<div class="pb-dm-dns-hints" style="margin-bottom:16px;">';
+            for (var domain in dnsProviderHints) {
+                var hint = dnsProviderHints[domain];
+                var iconClass = hint.has_account ? 'mdi-swap-horizontal' : 'mdi-plus-circle';
+                var badgeClass = hint.provider === 'cloudflare' ? 'pb-dm-badge--cf' : 'pb-dm-badge--info';
+                
+                errorHtml += '<div class="pb-dm-dns-hint-item" style="padding:12px;background:var(--backend-color-bg-secondary,#f8f9fa);border-radius:8px;margin-bottom:8px;border-left:4px solid var(--backend-color-warning,#f1b44c);">' +
+                    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
+                    '<i class="mdi mdi-domain" style="color:var(--backend-color-primary,#556ee6);"></i>' +
+                    '<strong style="color:var(--backend-color-text-primary,#212529);">' + escapeHtml(domain) + '</strong>' +
+                    '<span class="pb-dm-badge ' + badgeClass + '" style="font-size:0.75rem;">' + escapeHtml(hint.provider_name) + '</span>' +
+                    '</div>' +
+                    '<p style="margin:0 0 8px 0;font-size:0.9rem;color:var(--backend-color-text-secondary,#6c757d);">' + escapeHtml(hint.message) + '</p>';
+                
+                if (hint.nameservers && hint.nameservers.length > 0) {
+                    errorHtml += '<div style="font-size:0.8rem;color:var(--backend-color-text-tertiary,#adb5bd);">' +
+                        '<i class="mdi mdi-dns"></i> Nameservers: <code style="font-size:0.75rem;">' + escapeHtml(hint.nameservers.join(', ')) + '</code>' +
+                        '</div>';
+                }
+                
+                if (!hint.has_account && hint.action === 'add_account') {
+                    errorHtml += '<div style="margin-top:8px;">' +
+                        '<button class="pb-dm-btn pb-dm-btn-sm pb-dm-btn-warning" onclick="closeDnsErrorsModal();switchToAccountTab(\'' + escapeHtml(hint.provider) + '\')">' +
+                        '<i class="mdi ' + iconClass + '"></i> <?= __('添加') ?> ' + escapeHtml(hint.provider_name) + ' <?= __('账户') ?>' +
+                        '</button>' +
+                        '</div>';
+                }
+                
+                errorHtml += '</div>';
+            }
+            errorHtml += '</div>';
+        } else {
+            errorHtml += '<div class="pb-dm-alert pb-dm-alert-warning" style="margin-bottom:12px;">' +
+                '<i class="mdi mdi-information-outline"></i>' +
+                '<div><?= __('以下域名的 DNS 记录添加失败，可能原因：域名 DNS 已切换到其他服务商，需要到对应服务商处添加解析记录。') ?></div>' +
+                '</div>';
+        }
+        
+        // 显示错误列表
+        errorHtml += '<div style="margin-top:12px;">' +
+            '<p style="font-weight:500;color:var(--backend-color-text-primary,#212529);margin-bottom:8px;"><?= __('错误详情') ?>:</p>' +
+            '<ul style="margin:0;padding-left:20px;color:var(--backend-color-text-secondary,#6c757d);font-size:0.85rem;line-height:1.8;">';
+        
+        errors.forEach(function(err) {
+            errorHtml += '<li style="word-break:break-all;">' + escapeHtml(err) + '</li>';
+        });
+        
+        errorHtml += '</ul></div></div>' +
+            '<div class="pb-dm-modal-footer">' +
+            '<button class="pb-dm-btn pb-dm-btn-primary" onclick="closeDnsErrorsModal()"><?= __('我知道了') ?></button>' +
+            '</div></div></div>';
+        
+        document.body.insertAdjacentHTML('beforeend', errorHtml);
+    }
+    
+    function switchToAccountTab(providerCode) {
+        // 切换到供应商账户 Tab 并打开添加弹窗
+        var accountTab = document.querySelector('[data-tab="accounts"]');
+        if (accountTab) {
+            accountTab.click();
+            setTimeout(function() {
+                // 查找添加账户按钮（ID 为 pb-dm-add-account-btn）
+                var addBtn = document.getElementById('pb-dm-add-account-btn');
+                if (addBtn) {
+                    addBtn.click();
+                    // 预选供应商类型
+                    setTimeout(function() {
+                        var registrarSelect = document.getElementById('pb-dm-registrar');
+                        if (registrarSelect && providerCode) {
+                            // 尝试设置供应商类型
+                            var options = registrarSelect.options;
+                            for (var i = 0; i < options.length; i++) {
+                                if (options[i].value.toLowerCase() === providerCode.toLowerCase()) {
+                                    registrarSelect.value = options[i].value;
+                                    registrarSelect.dispatchEvent(new Event('change'));
+                                    break;
+                                }
+                            }
+                        }
+                    }, 300);
+                } else {
+                    // 如果找不到按钮，显示提示
+                    AdminToast.info('<?= __('请点击"添加账户"按钮添加') ?> ' + providerCode.toUpperCase() + ' <?= __('供应商账户') ?>');
+                }
+            }, 200);
+        }
+    }
+
+    function closeDnsErrorsModal() {
+        var modal = document.getElementById('pb-dm-dns-errors-modal');
+        if (modal) modal.remove();
+    }
+
+    /* 页面加载时自动加载域名列表 */
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() { loadDomainList(); }, 300);
+    });
+
+    /* ========== 批量搜索 ========== */
+    var batchSearchModal = document.getElementById('pb-dm-batch-search-modal');
+    var batchSearchInput = document.getElementById('pb-dm-batch-search-input');
+    var batchSearchResult = document.getElementById('pb-dm-batch-search-result');
+    var batchSearchList = document.getElementById('pb-dm-batch-search-list');
+    var batchFoundCount = document.getElementById('pb-dm-batch-found-count');
+    var batchTotalCount = document.getElementById('pb-dm-batch-total-count');
+    var batchSearchPullBtn = document.getElementById('pb-dm-batch-search-pull');
+    var batchSearchExecBtn = document.getElementById('pb-dm-batch-search-exec');
+    var batchSearchFoundDomains = [];
+
+    function openBatchSearchModal() {
+        batchSearchInput.value = '';
+        batchSearchResult.style.display = 'none';
+        batchSearchList.innerHTML = '';
+        batchSearchPullBtn.style.display = 'none';
+        batchSearchExecBtn.style.display = '';
+        batchSearchFoundDomains = [];
+        batchSearchModal.classList.add('pb-dm-form-modal--open');
+    }
+
+    function closeBatchSearchModal() {
+        batchSearchModal.classList.remove('pb-dm-form-modal--open');
+    }
+
+    document.getElementById('pb-dm-batch-search-btn').addEventListener('click', function() {
+        openBatchSearchModal();
+    });
+
+    document.getElementById('pb-dm-batch-search-close').addEventListener('click', closeBatchSearchModal);
+    document.getElementById('pb-dm-batch-search-cancel').addEventListener('click', closeBatchSearchModal);
+    batchSearchModal.addEventListener('click', function(e) { if (e.target === batchSearchModal) closeBatchSearchModal(); });
+
+    batchSearchExecBtn.addEventListener('click', function() {
+        var rawText = batchSearchInput.value.trim();
+        if (!rawText) {
+            AdminToast.warning('<?= __('请输入要搜索的域名') ?>');
+            return;
+        }
+
+        var searchDomains = rawText.split(/[\r\n,;]+/).map(function(s) { return s.trim().toLowerCase(); }).filter(function(s) { return s.length > 0; });
+        searchDomains = [...new Set(searchDomains)];
+
+        if (searchDomains.length === 0) {
+            AdminToast.warning('<?= __('请输入有效的域名') ?>');
+            return;
+        }
+
+        batchTotalCount.textContent = searchDomains.length;
+        setBtnLoading(batchSearchExecBtn, true);
+
+        fetchAllRemoteDomains(domainListState.accountId).then(function(remoteItems) {
+            setBtnLoading(batchSearchExecBtn, false, '<i class="mdi mdi-magnify"></i> <?= __('搜索') ?>');
+
+            var remoteMap = {};
+            remoteItems.forEach(function(item) {
+                remoteMap[item.domain.toLowerCase()] = item;
+            });
+
+            batchSearchFoundDomains = [];
+            var notFound = [];
+            searchDomains.forEach(function(d) {
+                if (remoteMap[d]) {
+                    batchSearchFoundDomains.push(remoteMap[d]);
+                } else {
+                    notFound.push(d);
+                }
+            });
+
+            batchFoundCount.textContent = batchSearchFoundDomains.length;
+            renderBatchSearchList(batchSearchFoundDomains, notFound);
+            batchSearchResult.style.display = 'block';
+
+            if (batchSearchFoundDomains.length > 0) {
+                batchSearchPullBtn.style.display = '';
+                batchSearchExecBtn.style.display = 'none';
+            }
+        }).catch(function(err) {
+            setBtnLoading(batchSearchExecBtn, false, '<i class="mdi mdi-magnify"></i> <?= __('搜索') ?>');
+            AdminToast.error(err || '<?= __('网络错误') ?>');
+        });
+    });
+
+    function fetchAllRemoteDomains(accountId) {
+        return new Promise(function(resolve, reject) {
+            var allItems = [];
+            var page = 1;
+            var pageSize = 500;
+
+            function fetchPage() {
+                postForm(API.getDomains, {
+                    account_id: accountId,
+                    page: page,
+                    limit: pageSize
+                }).then(function(res) {
+                    if (!res.success) {
+                        reject(res.msg || '<?= __('获取域名列表失败') ?>');
+                        return;
+                    }
+
+                    var items = res.data.items || [];
+                    allItems = allItems.concat(items);
+
+                    var totalPages = res.data.pages || 1;
+                    if (page < totalPages) {
+                        page++;
+                        fetchPage();
+                    } else {
+                        resolve(allItems);
+                    }
+                }).catch(function() {
+                    reject('<?= __('网络错误') ?>');
+                });
+            }
+
+            fetchPage();
+        });
+    }
+
+    function renderBatchSearchList(foundList, notFoundList) {
+        var html = '<table class="pb-dm-table" style="margin:0;"><thead><tr>' +
+            '<th style="width:40px;"><input type="checkbox" id="pb-dm-batch-chk-all" checked></th>' +
+            '<th><?= __('域名') ?></th>' +
+            '<th><?= __('本地状态') ?></th>' +
+            '<th><?= __('域名状态') ?></th>' +
+            '</tr></thead><tbody>';
+
+        foundList.forEach(function(d) {
+            var isPulled = d.is_pulled === true || d.is_pulled === 1;
+            var pullBadge = isPulled
+                ? '<span class="pb-dm-badge pb-dm-badge--ok"><?= __('已拉取') ?></span>'
+                : '<span class="pb-dm-badge pb-dm-badge--warn"><?= __('未拉取') ?></span>';
+            var checkboxDisabled = isPulled ? ' disabled' : '';
+            var checkboxChecked = isPulled ? '' : ' checked';
+
+            html += '<tr>' +
+                '<td><input type="checkbox" class="pb-dm-batch-chk" data-domain="' + escapeHtml(d.domain) + '" data-pulled="' + (isPulled ? '1' : '0') + '"' + checkboxDisabled + checkboxChecked + '></td>' +
+                '<td><strong>' + escapeHtml(d.domain) + '</strong></td>' +
+                '<td>' + pullBadge + '</td>' +
+                '<td><span class="pb-dm-badge pb-dm-badge--ok"><?= __('存在') ?></span></td>' +
+                '</tr>';
+        });
+
+        notFoundList.forEach(function(d) {
+            html += '<tr style="opacity:0.5;">' +
+                '<td><input type="checkbox" disabled></td>' +
+                '<td>' + escapeHtml(d) + '</td>' +
+                '<td>-</td>' +
+                '<td><span class="pb-dm-badge pb-dm-badge--no"><?= __('不存在') ?></span></td>' +
+                '</tr>';
+        });
+
+        html += '</tbody></table>';
+        batchSearchList.innerHTML = html;
+
+        var chkAll = document.getElementById('pb-dm-batch-chk-all');
+        var chks = batchSearchList.querySelectorAll('.pb-dm-batch-chk:not(:disabled)');
+
+        if (chkAll) {
+            chkAll.addEventListener('change', function() {
+                chks.forEach(function(c) { c.checked = chkAll.checked; });
+            });
+        }
+    }
+
+    document.getElementById('pb-dm-batch-select-all-found').addEventListener('change', function() {
+        var checked = this.checked;
+        batchSearchList.querySelectorAll('.pb-dm-batch-chk:not(:disabled)').forEach(function(c) {
+            c.checked = checked;
+        });
+        var chkAll = document.getElementById('pb-dm-batch-chk-all');
+        if (chkAll) chkAll.checked = checked;
+    });
+
+    batchSearchPullBtn.addEventListener('click', function() {
+        var selectedDomains = [];
+        batchSearchList.querySelectorAll('.pb-dm-batch-chk:checked').forEach(function(c) {
+            selectedDomains.push(c.dataset.domain);
+        });
+
+        if (selectedDomains.length === 0) {
+            AdminToast.warning('<?= __('请选择要拉取的域名') ?>');
+            return;
+        }
+
+        var autoResolveCheckbox = document.getElementById('pb-dm-batch-pull-auto-resolve');
+        var autoResolve = autoResolveCheckbox ? autoResolveCheckbox.checked : true;
+
+        setBtnLoading(batchSearchPullBtn, true);
+
+        postForm(API.pullDomains, {
+            account_id: domainListState.accountId,
+            domains: selectedDomains,
+            auto_resolve: autoResolve ? '1' : '0'
+        }).then(function(res) {
+            setBtnLoading(batchSearchPullBtn, false, '<i class="mdi mdi-download"></i> <?= __('拉取选中') ?>');
+            if (res.success) {
+                var msg = res.message || '<?= __('拉取成功') ?>';
+                if (autoResolve && res.auto_resolve_queued) {
+                    msg += ' <?= __('（自动解析任务已创建）') ?>';
+                }
+                AdminToast.success(msg);
+                closeBatchSearchModal();
+                loadDomainList();
+            } else {
+                AdminToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
+            }
+        }).catch(function() {
+            setBtnLoading(batchSearchPullBtn, false, '<i class="mdi mdi-download"></i> <?= __('拉取选中') ?>');
             AdminToast.error('<?= __('网络错误') ?>');
         });
     });
@@ -861,9 +3216,14 @@ $registrars = $this->getData('registrars') ?? [];
                 }).then(function(ok) {
                     if (!ok) return;
                     setBtnLoading(btn, true);
-                    postForm(API.purchase, { account_id: acctId, domain: domain, years: '1' }).then(function(res) {
+                    var autoResolve = document.getElementById('pb-dm-auto-resolve').checked ? '1' : '0';
+                    postForm(API.purchase, { account_id: acctId, domain: domain, years: '1', auto_resolve: autoResolve }).then(function(res) {
                         if (res.success) {
-                            AdminToast.success(res.message || res.msg || '<?= __('购买成功') ?>');
+                            var msg = res.message || res.msg || '<?= __('购买成功') ?>';
+                            if (autoResolve === '1') {
+                                msg += ' <?= __('（自动解析任务已创建）') ?>';
+                            }
+                            AdminToast.success(msg);
                             btn.innerHTML = '<i class="mdi mdi-check"></i> <?= __('已购买') ?>';
                             btn.disabled = true;
                         } else {
@@ -897,10 +3257,15 @@ $registrars = $this->getData('registrars') ?? [];
                 }).then(function(ok) {
                     if (!ok) return;
                     setBtnLoading(batchBtn, true);
-                    postForm(API.batchPurchase, { account_id: accountId, domains: selected }).then(function(res) {
+                    var autoResolve = document.getElementById('pb-dm-auto-resolve').checked ? '1' : '0';
+                    postForm(API.batchPurchase, { account_id: accountId, domains: selected, auto_resolve: autoResolve }).then(function(res) {
                         setBtnLoading(batchBtn, false, '<i class="mdi mdi-cart-arrow-down"></i> <?= __('一键购买全部可用域名') ?>');
                         if (res.success) {
-                            AdminToast.success(res.message || res.msg || '<?= __('批量购买已提交') ?>');
+                            var msg = res.message || res.msg || '<?= __('批量购买已提交') ?>';
+                            if (autoResolve === '1') {
+                                msg += ' <?= __('（自动解析任务已创建）') ?>';
+                            }
+                            AdminToast.success(msg);
                         } else {
                             AdminToast.error(res.message || res.msg || '<?= __('购买失败') ?>');
                         }
@@ -912,6 +3277,375 @@ $registrars = $this->getData('registrars') ?? [];
             });
         }
     }
+
+    /* ========== 域名池功能 ========== */
+    var poolState = {
+        page: 1,
+        limit: 20,
+        total: 0,
+        pages: 0,
+        search: '',
+        status: '',
+        resolve: ''
+    };
+
+    function loadDomainPool(page) {
+        poolState.page = page || 1;
+        poolState.search = document.getElementById('pb-dm-pool-search').value.trim();
+        poolState.status = document.getElementById('pb-dm-pool-status').value;
+        poolState.resolve = document.getElementById('pb-dm-pool-resolve').value;
+        poolState.limit = parseInt(document.getElementById('pb-dm-pool-page-size').value) || 20;
+
+        var container = document.getElementById('pb-dm-pool-container');
+        container.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-loading mdi-spin" style="font-size:2rem;"></i><p><?= __('加载中...') ?></p></div>';
+
+        postForm(API.getDomainPool, {
+            page: poolState.page,
+            limit: poolState.limit,
+            search: poolState.search,
+            status: poolState.status,
+            resolve_status: poolState.resolve
+        }).then(function(res) {
+            if (res.success && res.data) {
+                poolState.total = res.data.total || 0;
+                poolState.pages = res.data.pages || 0;
+                renderDomainPool(res.data.items || []);
+                updatePoolPagination();
+            } else {
+                container.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-alert-circle" style="font-size:2rem;color:var(--backend-color-danger);"></i><p>' + (res.msg || '<?= __('加载失败') ?>') + '</p></div>';
+            }
+        }).catch(function() {
+            container.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-alert-circle" style="font-size:2rem;color:var(--backend-color-danger);"></i><p><?= __('网络错误') ?></p></div>';
+        });
+    }
+
+    function renderDomainPool(items) {
+        var container = document.getElementById('pb-dm-pool-container');
+        if (!items || items.length === 0) {
+            container.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-database-off" style="font-size:2rem;"></i><p><?= __('暂无域名池数据') ?></p></div>';
+            return;
+        }
+
+        var html = '<table class="pb-dm-table"><thead><tr>' +
+            '<th><?= __('域名') ?></th>' +
+            '<th><?= __('类型') ?></th>' +
+            '<th><?= __('状态') ?></th>' +
+            '<th><?= __('解析状态') ?></th>' +
+            '<th><?= __('解析IP') ?></th>' +
+            '<th><?= __('分配时间') ?></th>' +
+            '</tr></thead><tbody>';
+
+        items.forEach(function(item) {
+            var statusBadge = '';
+            if (item.status === 'available') {
+                statusBadge = '<span class="pb-dm-badge pb-dm-badge--ok"><?= __('可用') ?></span>';
+            } else if (item.status === 'allocated') {
+                statusBadge = '<span class="pb-dm-badge pb-dm-badge--info"><?= __('已分配') ?></span>';
+            } else if (item.status === 'reserved') {
+                statusBadge = '<span class="pb-dm-badge pb-dm-badge--warn"><?= __('预留') ?></span>';
+            } else {
+                statusBadge = '<span class="pb-dm-badge">' + (item.status || '-') + '</span>';
+            }
+
+            var resolveBadge = '';
+            if (item.resolve_status === 'resolved') {
+                resolveBadge = '<span class="pb-dm-badge pb-dm-badge--ok"><?= __('已解析') ?></span>';
+            } else if (item.resolve_status === 'unresolved') {
+                resolveBadge = '<span class="pb-dm-badge pb-dm-badge--warn"><?= __('未解析') ?></span>';
+            } else {
+                resolveBadge = '<span class="pb-dm-badge">' + (item.resolve_status || '-') + '</span>';
+            }
+
+            var typeText = item.subdomain ? '<?= __('子域名') ?>' : '<?= __('根域') ?>';
+
+            html += '<tr>' +
+                '<td><strong>' + escapeHtml(item.full_domain || item.domain || '') + '</strong></td>' +
+                '<td>' + typeText + '</td>' +
+                '<td>' + statusBadge + '</td>' +
+                '<td>' + resolveBadge + '</td>' +
+                '<td>' + (item.resolved_ip || '-') + '</td>' +
+                '<td>' + (item.allocated_at || '-') + '</td>' +
+                '</tr>';
+        });
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    }
+
+    function updatePoolPagination() {
+        var info = document.getElementById('pb-dm-pool-pagination-info');
+        var pageInfo = document.getElementById('pb-dm-pool-page-info');
+        var prevBtn = document.getElementById('pb-dm-pool-prev');
+        var nextBtn = document.getElementById('pb-dm-pool-next');
+
+        var from = poolState.total > 0 ? ((poolState.page - 1) * poolState.limit + 1) : 0;
+        var to = Math.min(poolState.page * poolState.limit, poolState.total);
+        info.textContent = poolState.total > 0 ? '<?= __('显示') ?> ' + from + '-' + to + ' / <?= __('共') ?> ' + poolState.total + ' <?= __('条') ?>' : '';
+        pageInfo.textContent = poolState.pages > 0 ? poolState.page + ' / ' + poolState.pages : '';
+
+        prevBtn.disabled = poolState.page <= 1;
+        nextBtn.disabled = poolState.page >= poolState.pages;
+    }
+
+    document.getElementById('pb-dm-pool-search-btn').addEventListener('click', function() {
+        loadDomainPool(1);
+    });
+
+    document.getElementById('pb-dm-pool-reset-btn').addEventListener('click', function() {
+        document.getElementById('pb-dm-pool-search').value = '';
+        document.getElementById('pb-dm-pool-status').value = '';
+        document.getElementById('pb-dm-pool-resolve').value = '';
+        loadDomainPool(1);
+    });
+
+    document.getElementById('pb-dm-pool-prev').addEventListener('click', function() {
+        if (poolState.page > 1) loadDomainPool(poolState.page - 1);
+    });
+
+    document.getElementById('pb-dm-pool-next').addEventListener('click', function() {
+        if (poolState.page < poolState.pages) loadDomainPool(poolState.page + 1);
+    });
+
+    document.getElementById('pb-dm-pool-page-size').addEventListener('change', function() {
+        loadDomainPool(1);
+    });
+
+    document.getElementById('pb-dm-pool-search').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') loadDomainPool(1);
+    });
+
+    document.querySelectorAll('.pb-dm-tab').forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            if (tab.dataset.tab === 'pool') {
+                loadDomainPool(1);
+            }
+        });
+    });
+
+    /* DNS 切换错误详情显示 */
+    function showDnsSwitchErrors(errors) {
+        if (!errors || errors.length === 0) return;
+        
+        var errorHtml = '<div class="pb-dm-modal-overlay" id="pb-dm-dns-switch-errors-modal" onclick="if(event.target===this)closeDnsSwitchErrorsModal()">' +
+            '<div class="pb-dm-modal pb-dm-modal-md">' +
+            '<div class="pb-dm-modal-header">' +
+            '<h3 style="color:var(--backend-color-danger,#f46a6a);"><i class="mdi mdi-alert-circle"></i> <?= __('DNS 切换失败详情') ?></h3>' +
+            '<button class="pb-dm-modal-close" onclick="closeDnsSwitchErrorsModal()">&times;</button>' +
+            '</div>' +
+            '<div class="pb-dm-modal-body" style="max-height:60vh;overflow-y:auto;">' +
+            '<div class="pb-dm-alert pb-dm-alert-warning" style="margin-bottom:16px;">' +
+            '<i class="mdi mdi-information-outline"></i> ' +
+            '<?= __('以下域名切换 DNS 服务器时发生错误，请根据提示修正后重试。') ?>' +
+            '</div>' +
+            '<div class="pb-dm-error-list">';
+        
+        errors.forEach(function(err, idx) {
+            var parts = err.split(': ');
+            var domain = parts[0] || '';
+            var message = parts.slice(1).join(': ') || err;
+            
+            errorHtml += '<div class="pb-dm-error-item" style="padding:12px;background:var(--backend-color-bg-secondary,#f8f9fa);border-radius:8px;margin-bottom:8px;border-left:4px solid var(--backend-color-danger,#f46a6a);">';
+            if (domain && domain !== message) {
+                errorHtml += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
+                    '<i class="mdi mdi-domain" style="color:var(--backend-color-primary,#556ee6);"></i>' +
+                    '<strong style="color:var(--backend-color-text-primary,#212529);">' + escapeHtml(domain) + '</strong>' +
+                    '</div>';
+            }
+            errorHtml += '<p style="margin:0;font-size:0.9rem;color:var(--backend-color-text-secondary,#6c757d);line-height:1.5;">' +
+                '<i class="mdi mdi-alert" style="color:var(--backend-color-danger,#f46a6a);"></i> ' +
+                escapeHtml(message) +
+                '</p>';
+            errorHtml += '</div>';
+        });
+        
+        errorHtml += '</div>' +
+            '</div>' +
+            '<div class="pb-dm-modal-footer" style="padding:12px 24px;border-top:1px solid var(--backend-color-border-default,#dee2e6);display:flex;justify-content:flex-end;">' +
+            '<button class="pb-dm-btn pb-dm-btn-outline" onclick="closeDnsSwitchErrorsModal()">' +
+            '<i class="mdi mdi-close"></i> <?= __('关闭') ?>' +
+            '</button>' +
+            '</div>' +
+            '</div>' +
+            '</div>';
+        
+        var existing = document.getElementById('pb-dm-dns-switch-errors-modal');
+        if (existing) existing.remove();
+        document.body.insertAdjacentHTML('beforeend', errorHtml);
+    }
+    
+    function closeDnsSwitchErrorsModal() {
+        var modal = document.getElementById('pb-dm-dns-switch-errors-modal');
+        if (modal) modal.remove();
+    }
+
+    /* 暴露批量切换DNS相关函数到全局，供 onclick 调用 */
+    window.closeBatchNsModal = closeBatchNsModal;
+    window.showDnsSwitchErrors = showDnsSwitchErrors;
+    window.closeDnsSwitchErrorsModal = closeDnsSwitchErrorsModal;
+    window.onPbDmNsModeChange = onPbDmNsModeChange;
+    window.onPbDmNsAccountChange = onPbDmNsAccountChange;
+    window.onPbDmNsProviderChange = onPbDmNsProviderChange;
+    window.doBatchChangeNs = doBatchChangeNs;
+
+    /* 暴露批量添加DNS记录相关函数到全局 */
+    window.closeBatchAddDnsModal = closeBatchAddDnsModal;
+    window.onBatchAddDnsUseServerIpChange = onBatchAddDnsUseServerIpChange;
+    window.doBatchAddDnsRecords = doBatchAddDnsRecords;
+    window.showBatchAddDnsErrors = showBatchAddDnsErrors;
+    window.closeDnsErrorsModal = closeDnsErrorsModal;
+    window.switchToAccountTab = switchToAccountTab;
+
+    /* ========== 批量设置账户 ========== */
+    var pbDmBatchSetAccountsSelectedIds = [];
+
+    document.getElementById('pb-dm-batch-set-accounts-btn').addEventListener('click', function() {
+        var selected = domainListState.items.filter(function(d) {
+            return d.is_pulled && d.domain_id > 0;
+        }).filter(function(d) {
+            return domainListState.selectedDomains.indexOf(String(d.domain_id)) !== -1
+                || domainListState.selectedDomains.indexOf(d.domain) !== -1;
+        });
+
+        if (selected.length === 0) {
+            AdminToast.warning('<?= __('请选择要设置的已拉取域名') ?>');
+            return;
+        }
+
+        pbDmBatchSetAccountsSelectedIds = selected.map(function(d) { return d.domain_id; });
+        showBatchSetAccountsModal(selected.length);
+    });
+
+    function showBatchSetAccountsModal(count) {
+        var html = '\
+            <div class="pb-dm-modal-overlay" id="pb-dm-batch-set-accounts-modal">\
+                <div class="pb-dm-modal pb-dm-modal-sm">\
+                    <div class="pb-dm-modal-header">\
+                        <h3><i class="mdi mdi-account-cog"></i> <?= __('批量设置账户') ?></h3>\
+                        <button class="pb-dm-modal-close" onclick="closeBatchSetAccountsModal()">&times;</button>\
+                    </div>\
+                    <div class="pb-dm-modal-body">\
+                        <div class="pb-dm-alert pb-dm-alert-info">\
+                            <i class="mdi mdi-information-outline"></i>\
+                            <?= __('为选中域名设置 DNS/CDN 管理账户。留空表示不修改该项。') ?>\
+                        </div>\
+                        <p class="pb-dm-text-muted"><?= __('已选择') ?> ' + count + ' <?= __('个域名') ?></p>\
+                        \
+                        <div class="pb-dm-form-group">\
+                            <label class="pb-dm-label"><?= __('DNS 管理账户') ?></label>\
+                            <select class="pb-dm-select" id="pb-dm-batch-set-dns-account">\
+                                <option value=""><?= __('-- 不修改 --') ?></option>\
+                                <option value="0"><?= __('清除（使用注册商账户）') ?></option>\
+                            </select>\
+                            <small class="pb-dm-text-muted"><?= __('用于管理 DNS 解析记录的账户') ?></small>\
+                        </div>\
+                        \
+                        <div class="pb-dm-form-group">\
+                            <label class="pb-dm-label"><?= __('CDN 管理账户') ?></label>\
+                            <select class="pb-dm-select" id="pb-dm-batch-set-cdn-account">\
+                                <option value=""><?= __('-- 不修改 --') ?></option>\
+                                <option value="0"><?= __('清除') ?></option>\
+                            </select>\
+                            <small class="pb-dm-text-muted"><?= __('CDN 服务商账户（如 Cloudflare）') ?></small>\
+                        </div>\
+                    </div>\
+                    <div class="pb-dm-modal-footer">\
+                        <button class="pb-dm-btn pb-dm-btn-outline" onclick="closeBatchSetAccountsModal()"><?= __('取消') ?></button>\
+                        <button class="pb-dm-btn pb-dm-btn-primary" id="pb-dm-batch-set-accounts-submit" onclick="doBatchSetAccounts()">\
+                            <i class="mdi mdi-check"></i> <?= __('确认设置') ?>\
+                        </button>\
+                    </div>\
+                </div>\
+            </div>';
+
+        document.body.insertAdjacentHTML('beforeend', html);
+        loadDnsAccountsForBatchSet();
+    }
+
+    function closeBatchSetAccountsModal() {
+        var modal = document.getElementById('pb-dm-batch-set-accounts-modal');
+        if (modal) modal.remove();
+    }
+
+    function loadDnsAccountsForBatchSet() {
+        fetch(API.getDnsAccounts, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success && data.data) {
+                    var dnsSelect = document.getElementById('pb-dm-batch-set-dns-account');
+                    var cdnSelect = document.getElementById('pb-dm-batch-set-cdn-account');
+
+                    if (dnsSelect) {
+                        (data.data.dns_accounts || []).forEach(function(acc) {
+                            var opt = document.createElement('option');
+                            opt.value = acc.account_id;
+                            opt.textContent = acc.name + ' (' + acc.registrar_name + ')';
+                            dnsSelect.appendChild(opt);
+                        });
+                    }
+
+                    if (cdnSelect) {
+                        (data.data.cdn_accounts || []).forEach(function(acc) {
+                            var opt = document.createElement('option');
+                            opt.value = acc.account_id;
+                            opt.textContent = acc.name + ' (' + acc.registrar_name + ')';
+                            cdnSelect.appendChild(opt);
+                        });
+                    }
+                }
+            })
+            .catch(function() {
+                AdminToast.error('<?= __('加载账户列表失败') ?>');
+            });
+    }
+
+    function doBatchSetAccounts() {
+        if (pbDmBatchSetAccountsSelectedIds.length === 0) {
+            AdminToast.warning('<?= __('请选择要设置的域名') ?>');
+            return;
+        }
+
+        var dnsAccountId = document.getElementById('pb-dm-batch-set-dns-account').value;
+        var cdnAccountId = document.getElementById('pb-dm-batch-set-cdn-account').value;
+
+        if (dnsAccountId === '' && cdnAccountId === '') {
+            AdminToast.warning('<?= __('请至少选择一个账户进行设置') ?>');
+            return;
+        }
+
+        var submitBtn = document.getElementById('pb-dm-batch-set-accounts-submit');
+        var params = { domain_ids: JSON.stringify(pbDmBatchSetAccountsSelectedIds) };
+        if (dnsAccountId !== '') params.dns_account_id = dnsAccountId;
+        if (cdnAccountId !== '') params.cdn_account_id = cdnAccountId;
+
+        AdminToast.info('<?= __('正在设置账户...') ?>');
+        if (submitBtn) submitBtn.disabled = true;
+
+        postForm(API.batchSetAccounts, params).then(function(res) {
+            if (submitBtn) submitBtn.disabled = false;
+            if (res.success) {
+                AdminToast.success(res.msg || '<?= __('设置成功') ?>');
+                closeBatchSetAccountsModal();
+                loadDomainList();
+            } else {
+                AdminToast.error(res.msg || '<?= __('设置失败') ?>');
+            }
+        }).catch(function() {
+            if (submitBtn) submitBtn.disabled = false;
+            AdminToast.error('<?= __('请求失败') ?>');
+        });
+    }
+
+    /* 暴露批量设置账户相关函数到全局 */
+    window.closeBatchSetAccountsModal = closeBatchSetAccountsModal;
+    window.doBatchSetAccounts = doBatchSetAccounts;
+
+    /* 暴露单条DNS记录管理相关函数到全局 */
+    window.closeDnsManageModal = closeDnsManageModal;
+    window.refreshDnsRecords = refreshDnsRecords;
+    window.showAddDnsRecordForm = showAddDnsRecordForm;
+    window.hideAddDnsRecordForm = hideAddDnsRecordForm;
+    window.saveNewDnsRecord = saveNewDnsRecord;
+    window.deleteDnsRecord = deleteDnsRecord;
 
 })();
 </script>
