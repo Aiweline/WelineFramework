@@ -13,8 +13,8 @@ Register::register(
     Register::MODULE,
     'Agent_WeeklyReport',
     __DIR__,
-    '1.0.0',
-    '周报管理器 - 交互式命令行周报管理、中国节假日支持、Excel 导出',
+    '1.1.0',
+    '周报管理器 - 交互式命令行周报管理、中国节假日支持、Excel 导出、任务通知',
     [
         'Weline_Framework',
         'Weline_Backend',
