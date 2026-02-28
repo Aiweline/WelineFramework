@@ -1,10 +1,9 @@
-# Theme 模块任务（媒体选择与分辨率配置）
+# Weline_Theme 消息订阅通知系统 - 任务进度
 
-- [x] hero-slider slides item_schema（image 为 media_image + media_options）
-- [x] hero-slider 部件级 image_recommend_width / image_recommend_height
-- [x] ThemeEditor 注入 data-file-manager-connector-base
+> 计划：[plan.md](./plan.md)
 
-# Theme 模块任务（语义化 ParamSchema 架构）
+## 任务列表
 
-- [x] 新增 Ui/ParamSchema/banner_items.php（轮播横幅项目 schema）
-- [x] widget.php hero-slider slides 改为 type=banner_items
+- [ ] 在 theme.js 中添加 Weline.Message 模块
+- [ ] 在 theme.js 中添加 window.w_msg() 全局函数
+- [ ] 验证 JS 函数可以正常调用 API
