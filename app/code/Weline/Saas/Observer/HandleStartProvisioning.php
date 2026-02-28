@@ -17,6 +17,8 @@ class HandleStartProvisioning implements ObserverInterface
     {
         $data = $event->getData('data');
         if (!\is_array($data)) {
+            $data = ['result' => ['success' => false, 'message' => __('事件数据格式错误')]];
+            $event->setData('data', $data);
             return;
         }
 
@@ -24,7 +26,22 @@ class HandleStartProvisioning implements ObserverInterface
         $registrarAccountId = (int) ($data['registrar_account_id'] ?? 0);
         $options = $data['options'] ?? [];
 
-        if ($domain === '' || $registrarAccountId <= 0) {
+        // 参数验证 - 返回详细错误信息
+        if ($domain === '') {
+            $data['result'] = [
+                'success' => false,
+                'message' => __('域名不能为空'),
+            ];
+            $event->setData('data', $data);
+            return;
+        }
+
+        if ($registrarAccountId <= 0) {
+            $data['result'] = [
+                'success' => false,
+                'message' => __('请选择域名商账号（registrar_account_id 无效）'),
+            ];
+            $event->setData('data', $data);
             return;
         }
 
@@ -38,7 +55,7 @@ class HandleStartProvisioning implements ObserverInterface
         } catch (\Throwable $e) {
             $data['result'] = [
                 'success' => false,
-                'message' => __('启动一站式配置失败：%{1}', $e->getMessage()),
+                'message' => __('启动一站式配置失败：%{1}', [$e->getMessage()]),
             ];
             $event->setData('data', $data);
         }
