@@ -46,7 +46,7 @@ class WeeklyReportService
     }
 
     /**
-     * 根据日期计算周次
+     * 根据日期计算周次（基于导入数据的第一周起始日期）
      */
     public function calculateWeekNumber(string $date): int
     {
@@ -163,6 +163,16 @@ class WeeklyReportService
 
         $task = $this->getTaskModel();
         return $task->addTask($taskData);
+    }
+
+    /**
+     * 获取单个任务
+     */
+    public function getTask(int $taskId): ?WeeklyTask
+    {
+        $task = $this->getTaskModel();
+        $task->load($taskId);
+        return $task->getId() ? $task : null;
     }
 
     /**
