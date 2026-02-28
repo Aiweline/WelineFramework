@@ -30,8 +30,16 @@ class WeeklyTask extends Model
     public const fields_RISKS = 'risks';
     public const fields_NEXT_WEEK_PLAN = 'next_week_plan';
     public const fields_SORT_ORDER = 'sort_order';
+    public const fields_PRIORITY = 'priority';
+    public const fields_IS_IMPORTANT = 'is_important';
+    public const fields_NOTIFIED_AT = 'notified_at';
     public const fields_CREATED_AT = 'created_at';
     public const fields_UPDATED_AT = 'updated_at';
+
+    public const PRIORITY_LOW = 1;
+    public const PRIORITY_NORMAL = 2;
+    public const PRIORITY_HIGH = 3;
+    public const PRIORITY_URGENT = 4;
 
     public const STATUS_TODO = '待开始';
     public const STATUS_IN_PROGRESS = '进行中';
@@ -191,6 +199,49 @@ class WeeklyTask extends Model
         if (!$setup->tableExist()) {
             return;
         }
+
+        $alter = $setup->alterTable();
+        $hasChanges = false;
+
+        if (!$setup->hasField(self::fields_PRIORITY)) {
+            $alter->addColumn(
+                self::fields_PRIORITY,
+                self::fields_SORT_ORDER,
+                TableInterface::column_type_INTEGER,
+                0,
+                'not null default 2',
+                '紧急程度：1低 2普通 3高 4紧急'
+            );
+            $hasChanges = true;
+        }
+
+        if (!$setup->hasField(self::fields_IS_IMPORTANT)) {
+            $alter->addColumn(
+                self::fields_IS_IMPORTANT,
+                self::fields_PRIORITY,
+                TableInterface::column_type_INTEGER,
+                0,
+                'not null default 0',
+                '是否重点任务：0否 1是'
+            );
+            $hasChanges = true;
+        }
+
+        if (!$setup->hasField(self::fields_NOTIFIED_AT)) {
+            $alter->addColumn(
+                self::fields_NOTIFIED_AT,
+                self::fields_IS_IMPORTANT,
+                TableInterface::column_type_DATETIME,
+                0,
+                'default null',
+                '最后通知时间'
+            );
+            $hasChanges = true;
+        }
+
+        if ($hasChanges) {
+            $alter->alter();
+        }
     }
 
     /**
@@ -208,13 +259,75 @@ class WeeklyTask extends Model
     }
 
     /**
-     * 获取周报的所有任务
+     * 获取紧急程度选项
+     */
+    public static function getPriorityOptions(): array
+    {
+        return [
+            self::PRIORITY_LOW => ['name' => __('低'), 'color' => '90'],
+            self::PRIORITY_NORMAL => ['name' => __('普通'), 'color' => '37'],
+            self::PRIORITY_HIGH => ['name' => __('高'), 'color' => '33'],
+            self::PRIORITY_URGENT => ['name' => __('紧急'), 'color' => '31'],
+        ];
+    }
+
+    /**
+     * 获取紧急程度名称
+     */
+    public function getPriorityName(): string
+    {
+        $priority = (int) $this->getData(self::fields_PRIORITY) ?: self::PRIORITY_NORMAL;
+        $options = self::getPriorityOptions();
+        return $options[$priority]['name'] ?? __('普通');
+    }
+
+    /**
+     * 获取紧急程度 ANSI 颜色码
+     */
+    public function getPriorityColor(): string
+    {
+        $priority = (int) $this->getData(self::fields_PRIORITY) ?: self::PRIORITY_NORMAL;
+        $options = self::getPriorityOptions();
+        return $options[$priority]['color'] ?? '37';
+    }
+
+    /**
+     * 是否重点任务
+     */
+    public function isImportant(): bool
+    {
+        return (bool) $this->getData(self::fields_IS_IMPORTANT);
+    }
+
+    /**
+     * 获取周报的所有任务（按紧急程度+重点排序）
      */
     public function getTasksByReportId(int $reportId): array
     {
         return $this->where(self::fields_REPORT_ID, $reportId)
+            ->order(self::fields_IS_IMPORTANT, 'DESC')
+            ->order(self::fields_PRIORITY, 'DESC')
             ->order(self::fields_SORT_ORDER, 'ASC')
             ->order(self::fields_ID, 'ASC')
+            ->select()
+            ->fetch()
+            ->getItems();
+    }
+
+    /**
+     * 获取临期未完成的重点任务
+     */
+    public function getOverdueTasks(int $daysThreshold = 2): array
+    {
+        $thresholdDate = date('Y-m-d', strtotime("+{$daysThreshold} days"));
+        
+        return $this->where(self::fields_STATUS, self::STATUS_COMPLETED, '!=')
+            ->where(self::fields_END_DATE, null, 'IS NOT')
+            ->where(self::fields_END_DATE, $thresholdDate, '<=')
+            ->where(function ($query) {
+                $query->where(self::fields_IS_IMPORTANT, 1)
+                    ->orWhere(self::fields_PRIORITY, self::PRIORITY_URGENT);
+            })
             ->select()
             ->fetch()
             ->getItems();
