@@ -462,6 +462,24 @@
      */
     window.inject_path = inject_path;
 
+    // 导出模块对象（供模块加载器识别）
+    const UrlBackendModule = {
+        url: window.url,
+        backend_url: window.backend_url,
+        frontend_url: window.frontend_url,
+        api: window.api,
+        backend_api: window.backend_api,
+        frontend_api: window.frontend_api,
+        urlWithLang: window.urlWithLang,
+        urlWithCurrency: window.urlWithCurrency,
+        select_language: window.select_language,
+        select_currency: window.select_currency,
+        path: window.path,
+        app_path: window.app_path,
+        inject_path: window.inject_path,
+    };
+    window.WelineUrlBackendModule = UrlBackendModule;
+
     // 导出到 Weline 对象（如果存在）
     if (window.Weline) {
         window.Weline.Url = window.Weline.Url || {};

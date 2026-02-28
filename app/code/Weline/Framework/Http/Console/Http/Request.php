@@ -32,11 +32,33 @@ class Request extends CommandAbstract
      */
     public function execute(array $args = [], array $data = [])
     {
-        // 获取路径参数 - $args[1]是第一个位置参数
-        $path = $args['path'] ?? $args[1] ?? '';
+        // 获取路径参数 - 增强的参数解析
+        // 问题：`http:req -b path` 会将 -b 解析为 $args[1]，导致路径变成 -b
+        // 解决：遍历位置参数，找到第一个非选项参数作为路径
+        $path = $args['path'] ?? '';
+        if (empty($path)) {
+            // 从位置参数中找到第一个非选项参数（不以 - 开头）
+            for ($i = 1; $i <= 10; $i++) {
+                if (isset($args[$i])) {
+                    $arg = $args[$i];
+                    // 跳过选项参数（以 - 开头）
+                    if (is_string($arg) && !str_starts_with($arg, '-')) {
+                        $path = $arg;
+                        break;
+                    }
+                }
+            }
+        }
+        
         if (empty($path)) {
             $this->printer->error(__('请指定请求路径！'));
             $this->printer->note(__('使用 -h 或 --help 查看帮助信息'));
+            $this->printer->note('');
+            $this->printer->note(__('正确用法示例:'));
+            $this->printer->note('  php bin/w http:req "/" -b');
+            $this->printer->note('  php bin/w http:req "admin/dashboard" -b');
+            $this->printer->note('  php bin/w http:req -b "admin/dashboard"');
+            $this->printer->note('  php bin/w http:req "pagebuilder/backend/domain-management" -b');
             return;
         }
         // Git Bash/MSYS2 下单独输入 / 会被转换为 C:/Program Files/Git/，规范为根路径 /

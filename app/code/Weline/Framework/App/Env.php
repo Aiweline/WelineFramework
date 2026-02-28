@@ -492,6 +492,11 @@ class Env extends DataObject
         if (!str_contains($filename, BP)) {
             // Remove .log extension if present (will be added below)
             $filename = preg_replace('/\.log$/', '', $filename);
+            // Sanitize filename: replace illegal characters for Windows filesystem
+            // Illegal chars: \ / : * ? " < > | and also replace spaces with underscores
+            $filename = preg_replace('/[\\\\\/:\*\?"<>\|\s]+/', '_', $filename);
+            // Remove leading/trailing underscores and collapse multiple underscores
+            $filename = preg_replace('/_+/', '_', trim($filename, '_'));
             $filename = Env::VAR_DIR . 'log' . DS . $filename . '.log';
         }
         

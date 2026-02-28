@@ -72,18 +72,43 @@ final class FileCache implements CacheInterface
         // 删除旧版本缓存
         $this->deleteOldVersions($path, $hash);
 
-        // 原子写入
-        $tmpFile = $filePath . '.tmp.' . getmypid();
+        // 原子写入：使用 PID + 微秒时间戳确保唯一性
+        $tmpFile = $filePath . '.tmp.' . getmypid() . '.' . hrtime(true);
         if (file_put_contents($tmpFile, $compiled, LOCK_EX) === false) {
             return false;
         }
 
-        // Windows 需要先删除目标文件
-        if (file_exists($filePath)) {
-            @unlink($filePath);
+        // Windows 下的重试机制：文件可能被其他进程短暂锁定
+        $maxRetries = 3;
+        $retryDelay = 10000; // 10ms
+        
+        for ($i = 0; $i < $maxRetries; $i++) {
+            // Windows 需要先删除目标文件
+            if (file_exists($filePath)) {
+                @unlink($filePath);
+            }
+
+            // 尝试重命名
+            if (@rename($tmpFile, $filePath)) {
+                return true;
+            }
+
+            // 如果目标文件已存在且内容相同，说明其他进程已完成写入
+            if (file_exists($filePath)) {
+                @unlink($tmpFile);
+                return true;
+            }
+
+            // 短暂等待后重试
+            if ($i < $maxRetries - 1) {
+                usleep($retryDelay);
+                $retryDelay *= 2; // 指数退避
+            }
         }
 
-        return rename($tmpFile, $filePath);
+        // 最终失败，清理临时文件
+        @unlink($tmpFile);
+        return false;
     }
 
     /**

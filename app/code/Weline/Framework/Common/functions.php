@@ -324,6 +324,51 @@ if (!function_exists('framework_view_process_block')) {
         return $result;
     }
 }
+if (!function_exists('w_msg')) {
+    /**
+     * 发送系统通知
+     *
+     * @param string $topic 消息主题（如 domain_expiring, system_info）
+     * @param string $type 消息类型：info/success/warning/error/urgent
+     * @param string $title 消息标题
+     * @param string $content 消息内容
+     * @param array $options 可选参数：
+     *   - priority: int 优先级 1-10，默认根据 type 自动设定
+     *   - metadata: array 扩展数据
+     *   - icon: string 图标类名，默认 ri-notification-line
+     *   - notify_users: array 指定通知的用户 ID 列表，空则通知所有订阅者
+     *   - source_module: string 来源模块，自动检测
+     */
+    function w_msg(
+        string $topic,
+        string $type,
+        string $title,
+        string $content,
+        array $options = []
+    ): void {
+        /** @var \Weline\Framework\Event\EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(
+            \Weline\Framework\Event\EventsManager::class
+        );
+
+        $eventData = [
+            'data' => [
+                'topic'         => $topic,
+                'type'          => $type,
+                'title'         => $title,
+                'content'       => $content,
+                'priority'      => $options['priority'] ?? null,
+                'metadata'      => $options['metadata'] ?? [],
+                'is_icon'       => 1,
+                'avatar'        => $options['icon'] ?? 'ri-notification-line',
+                'notify_users'  => $options['notify_users'] ?? [],
+                'source_module' => $options['source_module'] ?? '',
+            ]
+        ];
+
+        $eventsManager->dispatch('Weline_Backend::application::system_notification', $eventData);
+    }
+}
 if (!function_exists('w_get_string_between_quotes')) {
     /**
      * @DESC          # 读取引号之间的内容
