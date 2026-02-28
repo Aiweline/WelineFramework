@@ -79,6 +79,7 @@ URL别名已存在，请更换一个,"URL slug already exists"
 "AI 默认模型配置无效（模型代码 %{1} 不存在）","AI 默认模型配置无效（模型代码 %{1} 不存在）"
 "AI 默认模型 ""%{1}"" 未激活","AI 默认模型 ""%{1}"" 未激活"
 "AI 模型配置检查失败：%{1}","AI 模型配置检查失败：%{1}"
+文章生成失败,文章生成失败
 "Blog 趋势同步","Blog Trend Sync"
 每日拉取各画像关键词趋势，计算日/周环比，将满足阈值的增长词写入记录表,每日拉取各画像关键词趋势，计算日/周环比，将满足阈值的增长词写入记录表
 未配置趋势数据源，已跳过,未配置趋势数据源，已跳过
@@ -185,6 +186,8 @@ URL别名将用于生成分类页面的访问地址。,"URL slug will be used to
 标题,标题
 创建时间,"Created At"
 发布,Publish
+"AI 生成 SEO 文章","AI 生成 SEO 文章"
+关闭,关闭
 博客文章管理,博客文章管理
 博客文章,"Blog Post"
 当前模式：%{mode},"Current mode: %{mode}"
@@ -193,19 +196,19 @@ URL别名将用于生成分类页面的访问地址。,"URL slug will be used to
 当前还没有博客文章，请点击右上角“新建博客”创建。,当前还没有博客文章，请点击右上角“新建博客”创建。
 确定要审批并发布该文章吗？,"Are you sure you want to approve and publish this article?"
 审批发布,"Approve & Publish"
+编辑文章,编辑文章
 确定要删除该博客文章吗？,"Are you sure you want to delete this blog post?"
+删除文章,删除文章
 "共 %{total} 条记录，第 %{page}/%{pages} 页","共 %{total} 条记录，第 %{page}/%{pages} 页"
 确定发布,"Confirm Publish"
+"AI 生成进度","AI 生成进度"
+任务正在执行中，确定要关闭吗？,任务正在执行中，确定要关闭吗？
 生成中...,Generating...
-正在连接…,正在连接…
-配额数,配额数
-正在生成第,正在生成第
-篇,篇
-已生成,已生成
-生成失败,生成失败
-可能原因：请检查配额、默认分类与画像关键词。,可能原因：请检查配额、默认分类与画像关键词。
-连接中断或请求失败，请重试。,连接中断或请求失败，请重试。
-连接中断，请重试,连接中断，请重试
+成功生成,成功生成
+篇文章，即将刷新页面...,篇文章，即将刷新页面...
+未生成文章，请检查配额与关键词配置。,未生成文章，请检查配额与关键词配置。
+执行完成,执行完成
+执行出错，请查看终端输出。,执行出错，请查看终端输出。
 日志列表,"Log List"
 清理旧日志,"Clear Old Logs"
 暂无增长词日志,"No trending keyword logs"
@@ -296,6 +299,15 @@ URL别名将用于生成分类页面的访问地址。,"URL slug will be used to
 发布时间：,"Published At:"
 摘要：,Summary:
 返回博客列表,"Back to Blog List"
+正在连接…,正在连接…
+配额数,配额数
+正在生成第,正在生成第
+篇,篇
+已生成,已生成
+生成失败,生成失败
+可能原因：请检查配额、默认分类与画像关键词。,可能原因：请检查配额、默认分类与画像关键词。
+连接中断或请求失败，请重试。,连接中断或请求失败，请重试。
+连接中断，请重试,连接中断，请重试
 请求失败，请重试,"Request failed, please retry"
 "从趋势增长词中取词，调用 AI 生成文章（草稿）","Pick trending keywords and generate articles via AI (as draft)"
 "在 serpapi.com 注册并获取 API Key，用于拉取 Google Trends 数据。","Register at serpapi.com and get API Key for Google Trends data."
