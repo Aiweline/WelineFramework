@@ -105,6 +105,13 @@ class AttackDetector
             'ips' => [],
         ],
         
+        // IP 白名单（完全跳过所有攻击检测，用于开发/测试环境）
+        // 可在 env.php 中配置：server.attack_detector.ip_whitelist
+        'ip_whitelist' => [
+            'enabled' => true,
+            'ips' => [],  // 支持单个 IP 或 CIDR 格式，如 ['192.168.1.100', '10.0.0.0/8']
+        ],
+        
         // 路径扫描检测
         'path_scan' => [
             'enabled' => true,
@@ -273,6 +280,97 @@ class AttackDetector
                 $this->rules = \array_replace_recursive($this->defaultRules, $rules);
             }
         }
+        
+        // 从 env.php 加载 IP 白名单配置
+        $this->loadEnvWhitelist();
+    }
+    
+    /**
+     * 从 env.php 加载 IP 白名单
+     * 配置路径：server.attack_detector.ip_whitelist
+     */
+    private function loadEnvWhitelist(): void
+    {
+        try {
+            $envConfig = \Weline\Framework\App\Env::getInstance()->getConfig('server');
+            if (!empty($envConfig['attack_detector']['ip_whitelist'])) {
+                $envWhitelist = $envConfig['attack_detector']['ip_whitelist'];
+                
+                // 合并到规则中
+                if (isset($envWhitelist['enabled'])) {
+                    $this->rules['ip_whitelist']['enabled'] = (bool) $envWhitelist['enabled'];
+                }
+                
+                if (!empty($envWhitelist['ips']) && \is_array($envWhitelist['ips'])) {
+                    // 合并 IP 列表（去重）
+                    $this->rules['ip_whitelist']['ips'] = \array_unique(\array_merge(
+                        $this->rules['ip_whitelist']['ips'] ?? [],
+                        $envWhitelist['ips']
+                    ));
+                }
+            }
+        } catch (\Throwable $e) {
+            // env.php 读取失败时忽略，使用默认规则
+        }
+    }
+    
+    /**
+     * 检查 IP 是否在白名单中
+     *
+     * @param string $ip 要检查的 IP
+     * @return bool 是否在白名单中
+     */
+    public function isWhitelisted(string $ip): bool
+    {
+        $config = $this->rules['ip_whitelist'] ?? [];
+        
+        if (empty($config['enabled']) || empty($config['ips'])) {
+            return false;
+        }
+        
+        foreach ($config['ips'] as $whitelistEntry) {
+            // 精确匹配
+            if ($whitelistEntry === $ip) {
+                return true;
+            }
+            
+            // CIDR 匹配（如 10.0.0.0/8）
+            if (\strpos($whitelistEntry, '/') !== false) {
+                if ($this->ipMatchesCidr($ip, $whitelistEntry)) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * 检查 IP 是否匹配 CIDR 格式
+     *
+     * @param string $ip IP 地址
+     * @param string $cidr CIDR 格式（如 192.168.1.0/24）
+     * @return bool
+     */
+    private function ipMatchesCidr(string $ip, string $cidr): bool
+    {
+        [$subnet, $bits] = \explode('/', $cidr, 2);
+        $bits = (int) $bits;
+        
+        // 处理 IPv4
+        if (\filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) 
+            && \filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            $ipLong = \ip2long($ip);
+            $subnetLong = \ip2long($subnet);
+            $mask = -1 << (32 - $bits);
+            
+            return ($ipLong & $mask) === ($subnetLong & $mask);
+        }
+        
+        // 简单的 IPv6 支持（可后续扩展）
+        // 暂不实现，直接返回 false
+        
+        return false;
     }
     
     /**
@@ -346,6 +444,16 @@ class AttackDetector
         
         // 定期清理
         $this->maybeCleanup();
+        
+        // 0. 白名单检查（完全跳过所有攻击检测）
+        if ($this->isWhitelisted($clientIp)) {
+            return [
+                'is_attack' => false,
+                'type' => 'whitelisted',
+                'reason' => '',
+                'should_block' => false,
+            ];
+        }
         
         // 提取请求信息用于日志记录
         $requestInfo = [
@@ -949,6 +1057,11 @@ class AttackDetector
      */
     public function recordSslFailure(string $ip, float $duration = 0.0): array
     {
+        // 白名单 IP 跳过 SSL 失败记录
+        if ($this->isWhitelisted($ip)) {
+            return ['banned' => false, 'count' => 0, 'threshold' => 0, 'ban_duration' => 0, 'whitelisted' => true];
+        }
+        
         $rule = $this->rules['ssl_handshake_failure'] ?? [];
         if (!($rule['enabled'] ?? true)) {
             return ['banned' => false, 'count' => 0, 'threshold' => 0, 'ban_duration' => 0];
