@@ -26,11 +26,6 @@ use Weline\Framework\Event\ObserverInterface;
 class CacheDriverInterceptor implements ObserverInterface
 {
     /**
-     * WLS 内存缓存驱动类名
-     */
-    private const WLS_MEMORY_CACHE_CLASS = \Weline\Server\Extends\Module\Weline_Framework\Cache\WlsMemoryCache::class;
-    
-    /**
      * 框架 File 缓存驱动类名
      */
     private const FILE_CACHE_CLASS = \Weline\Framework\Cache\Driver\File::class;
@@ -52,7 +47,7 @@ class CacheDriverInterceptor implements ObserverInterface
         // 仅接管 File 驱动
         if ($driverClass === self::FILE_CACHE_CLASS || \strtolower($driver) === 'file') {
             // 替换为 WLS 内存缓存驱动
-            $event->setData('driver_class', self::WLS_MEMORY_CACHE_CLASS);
+            $event->setData('driver_class', \Weline\Server\Extends\Module\Weline_Framework\Cache\WlsMemoryCache::class);
         }
     }
 }

@@ -138,16 +138,59 @@ class BackgroundOptimize extends CommandAbstract
             if (is_dir($path)) {
                 $this->scanDirectoryForClasses($path . DS, $baseDir, $classMap);
             } elseif (str_ends_with($file, '.php')) {
-                // 从文件路径推断类名
-                $relativePath = str_replace($baseDir, '', $path);
-                $className = str_replace([DS, '.php'], ['\\', ''], $relativePath);
+                // 从文件内容解析实际的 namespace 和 class 名称
+                // 这样可以正确处理大小写（如 extends vs Extends）
+                $className = $this->extractFullyQualifiedClassName($path);
                 
-                // 验证类名是否有效（只包含有效字符）
-                if (preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*$/', $className)) {
+                if ($className !== null) {
                     $classMap[$className] = $path;
                 }
             }
         }
+    }
+    
+    /**
+     * 从 PHP 文件中提取完整类名（namespace + class）
+     * 
+     * 通过解析文件内容获取实际声明的 namespace 和 class 名称，
+     * 而不是从文件路径推断，确保大小写正确（解决 Linux 区分大小写问题）
+     * 
+     * @param string $filePath PHP 文件路径
+     * @return string|null 完整类名，解析失败返回 null
+     */
+    private function extractFullyQualifiedClassName(string $filePath): ?string
+    {
+        $content = @file_get_contents($filePath);
+        if ($content === false) {
+            return null;
+        }
+        
+        // 只读取文件前 4KB（namespace 和 class 声明通常在文件开头）
+        $content = substr($content, 0, 4096);
+        
+        $namespace = '';
+        $className = '';
+        
+        // 解析 namespace
+        if (preg_match('/^\s*namespace\s+([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*)\s*;/m', $content, $matches)) {
+            $namespace = $matches[1];
+        }
+        
+        // 解析 class/interface/trait/enum 名称
+        if (preg_match('/^\s*(?:abstract\s+|final\s+|readonly\s+)*(?:class|interface|trait|enum)\s+([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)/m', $content, $matches)) {
+            $className = $matches[1];
+        }
+        
+        if ($className === '') {
+            return null;
+        }
+        
+        // 组合完整类名
+        if ($namespace !== '') {
+            return $namespace . '\\' . $className;
+        }
+        
+        return $className;
     }
     
     /**
