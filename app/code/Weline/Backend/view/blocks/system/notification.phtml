@@ -1,0 +1,256 @@
+<?php
+/**
+ * 增强版系统通知下拉组件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+use Weline\Backend\Block\System\Notification;
+use Weline\Framework\Manager\ObjectManager;
+
+/** @var Notification $block */
+$block = ObjectManager::getInstance(Notification::class);
+$notifications = $block->getNotifications();
+$unreadCount = $block->getUnreadCount();
+?>
+
+<div class="dropdown d-inline-block weline-notification-dropdown">
+    <button type="button" class="btn header-item noti-icon waves-effect" 
+            id="page-header-notifications-dropdown"
+            data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="ri-notification-3-line"></i>
+        <?php if ($unreadCount > 0): ?>
+        <span class="noti-dot weline-notification-badge"><?= $unreadCount > 99 ? '99+' : $unreadCount ?></span>
+        <?php endif; ?>
+    </button>
+    <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end p-0 weline-notification-menu"
+         aria-labelledby="page-header-notifications-dropdown">
+        <div class="p-3 weline-notification-header">
+            <div class="row align-items-center">
+                <div class="col">
+                    <h6 class="m-0"><?= __('通知') ?></h6>
+                </div>
+                <div class="col-auto">
+                    <?php if ($unreadCount > 0): ?>
+                    <a href="javascript:void(0)" class="small weline-notification-mark-all" 
+                       onclick="WelineNotification.markAllRead()">
+                        <?= __('全部已读') ?>
+                    </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <div data-simplebar style="max-height: 300px;" class="weline-notification-list">
+            <?php if (empty($notifications)): ?>
+            <div class="weline-notification-empty">
+                <i class="mdi mdi-bell-off"></i>
+                <p><?= __('暂无通知') ?></p>
+            </div>
+            <?php else: ?>
+            <?php foreach ($notifications as $notification): ?>
+            <?php
+            $type = $notification['type'] ?? 'info';
+            $typeColor = $block->getTypeColor($type);
+            $typeIcon = $block->getTypeIcon($type);
+            $typeLabel = $block->getTypeLabel($type);
+            $isRead = (bool) ($notification['is_read'] ?? false);
+            ?>
+            <a href="javascript:void(0)" 
+               class="text-reset notification-item weline-notification-item <?= $isRead ? '' : 'weline-notification-unread' ?>"
+               data-notification-id="<?= $notification['notification_id'] ?? '' ?>"
+               onclick="WelineNotification.markRead(<?= $notification['notification_id'] ?? 0 ?>)">
+                <div class="d-flex">
+                    <div class="flex-shrink-0 me-3">
+                        <?php if (!empty($notification['is_icon']) && !empty($notification['avatar'])): ?>
+                        <div class="avatar-xs">
+                            <span class="avatar-title rounded-circle font-size-16" style="background: <?= $typeColor ?>">
+                                <i class="<?= htmlspecialchars($notification['avatar']) ?>"></i>
+                            </span>
+                        </div>
+                        <?php else: ?>
+                        <div class="avatar-xs">
+                            <span class="avatar-title rounded-circle font-size-16" style="background: <?= $typeColor ?>">
+                                <i class="<?= $typeIcon ?>"></i>
+                            </span>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-center mb-1">
+                            <h6 class="mb-0 me-2"><?= htmlspecialchars($notification['title'] ?? '') ?></h6>
+                            <span class="badge weline-notification-type-badge" style="background: <?= $typeColor ?>">
+                                <?= $typeLabel ?>
+                            </span>
+                        </div>
+                        <div class="font-size-12 text-muted">
+                            <p class="mb-1 weline-notification-content"><?= $notification['content'] ?? '' ?></p>
+                            <p class="mb-0">
+                                <i class="mdi mdi-clock-outline"></i> 
+                                <?= $notification['create_time'] ?? '' ?>
+                                <?php if (!empty($notification['topic_code'])): ?>
+                                <span class="ms-2 weline-notification-topic">
+                                    <i class="mdi mdi-tag-outline"></i> <?= htmlspecialchars($notification['topic_code']) ?>
+                                </span>
+                                <?php endif; ?>
+                            </p>
+                        </div>
+                    </div>
+                    <?php if (!$isRead): ?>
+                    <div class="weline-notification-dot"></div>
+                    <?php endif; ?>
+                </div>
+            </a>
+            <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+        <div class="p-2 border-top weline-notification-footer">
+            <div class="d-grid">
+                <a class="btn btn-sm btn-link font-size-14 text-center" 
+                   href="<?= $this->getBackendUrl('*/backend/notificationsubscription') ?>">
+                    <i class="mdi mdi-cog me-1"></i> <?= __('管理订阅') ?>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.weline-notification-dropdown .noti-icon {
+    position: relative;
+}
+.weline-notification-badge {
+    position: absolute;
+    top: 10px;
+    right: 8px;
+    font-size: 10px;
+    min-width: 18px;
+    height: 18px;
+    line-height: 18px;
+    text-align: center;
+    border-radius: 50%;
+    background: var(--backend-color-danger, #f46a6a);
+    color: #fff;
+}
+.weline-notification-menu {
+    width: 360px;
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+}
+.weline-notification-header {
+    background: var(--backend-color-card-header-bg, #f8f9fa);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+.weline-notification-empty {
+    text-align: center;
+    padding: 2rem;
+    color: var(--backend-color-text-muted, #6c757d);
+}
+.weline-notification-empty i {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+}
+.weline-notification-item {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    position: relative;
+}
+.weline-notification-item:hover {
+    background: var(--backend-color-hover-bg, #f8f9fa);
+}
+.weline-notification-unread {
+    background: var(--backend-color-info-bg, #d1ecf1);
+}
+.weline-notification-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--backend-color-primary, #556ee6);
+    flex-shrink: 0;
+    margin-left: 0.5rem;
+    align-self: center;
+}
+.weline-notification-type-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    color: #fff;
+}
+.weline-notification-content {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.weline-notification-topic {
+    color: var(--backend-color-text-muted, #6c757d);
+    font-size: 11px;
+}
+.weline-notification-footer {
+    background: var(--backend-color-card-bg, #fff);
+}
+.weline-notification-mark-all {
+    color: var(--backend-color-primary, #556ee6);
+}
+</style>
+
+<script>
+(function() {
+    'use strict';
+
+    var WelineNotification = {
+        markRead: function(notificationId) {
+            if (!notificationId) return;
+
+            fetch('<?= $this->getBackendUrl('*/api/notification/markRead') ?>', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'notification_id=' + notificationId
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    var item = document.querySelector('[data-notification-id="' + notificationId + '"]');
+                    if (item) {
+                        item.classList.remove('weline-notification-unread');
+                        var dot = item.querySelector('.weline-notification-dot');
+                        if (dot) dot.remove();
+                    }
+                    WelineNotification.updateBadge();
+                }
+            })
+            .catch(function(error) {
+                console.error('Mark read error:', error);
+            });
+        },
+
+        markAllRead: function() {
+            fetch('<?= $this->getBackendUrl('*/api/notification/markAllRead') ?>', {
+                method: 'POST'
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    BackendToast.success(data.message || '<?= __('已标记全部已读') ?>');
+                    setTimeout(function() { window.location.reload(); }, 500);
+                }
+            })
+            .catch(function(error) {
+                console.error('Mark all read error:', error);
+            });
+        },
+
+        updateBadge: function() {
+            var badge = document.querySelector('.weline-notification-badge');
+            if (badge) {
+                var current = parseInt(badge.textContent) || 0;
+                if (current > 1) {
+                    badge.textContent = current - 1;
+                } else {
+                    badge.remove();
+                }
+            }
+        }
+    };
+
+    window.WelineNotification = WelineNotification;
+})();
+</script>
