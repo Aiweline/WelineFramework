@@ -450,8 +450,18 @@
             const nameMap = {
                 'api': 'WelineApiModule',
                 'account': 'WelineAccountModule',
+                'url-backend': 'WelineUrlBackendModule',
+                'url-frontend': 'WelineUrlFrontendModule',
             };
-            return nameMap[moduleName] || `Weline${moduleName.charAt(0).toUpperCase() + moduleName.slice(1)}Module`;
+            if (nameMap[moduleName]) {
+                return nameMap[moduleName];
+            }
+            // 将连字符转换为驼峰命名：url-backend -> UrlBackend
+            const camelCaseName = moduleName
+                .split('-')
+                .map((part, index) => part.charAt(0).toUpperCase() + part.slice(1))
+                .join('');
+            return `Weline${camelCaseName}Module`;
         }
 
         isModuleLoaded(moduleName) {
@@ -553,20 +563,25 @@
 
             let loadingPromise = null;
             let loaded = false;
+            let proxy = null;
 
-            const proxy = new Proxy({}, {
+            proxy = new Proxy({}, {
                 get: (target, prop) => {
-                    if (window[globalVarName] && typeof window[globalVarName] === 'object' && window[globalVarName] !== null) {
-                        const realObj = window[globalVarName];
-                        if (realObj && typeof realObj[prop] !== 'undefined') {
-                            return realObj[prop];
+                    // 防止递归：检查 window[globalVarName] 是否是 Proxy 本身
+                    const windowObj = window[globalVarName];
+                    if (windowObj && windowObj !== proxy && typeof windowObj === 'object' && windowObj !== null) {
+                        if (typeof windowObj[prop] !== 'undefined') {
+                            return windowObj[prop];
                         }
                     }
 
                     if (loadingPromise) {
                         return loadingPromise.then(() => {
                             const realObj = window[globalVarName];
-                            return realObj ? realObj[prop] : undefined;
+                            if (realObj && realObj !== proxy) {
+                                return realObj[prop];
+                            }
+                            return undefined;
                         });
                     }
 
@@ -577,7 +592,7 @@
                     loadingPromise = this.loadOnDemand(moduleName).then(() => {
                         loaded = true;
                         const realObj = window[globalVarName];
-                        if (realObj) {
+                        if (realObj && realObj !== proxy) {
                             Object.assign(target, realObj);
                             return realObj[prop];
                         }
@@ -593,43 +608,50 @@
                     return loadingPromise;
                 },
                 set: (target, prop, value) => {
-                    if (window[globalVarName]) {
-                        window[globalVarName][prop] = value;
+                    const windowObj = window[globalVarName];
+                    if (windowObj && windowObj !== proxy) {
+                        windowObj[prop] = value;
                         return true;
                     }
                     target[prop] = value;
                     return true;
                 },
                 has: (target, prop) => {
-                    if (window[globalVarName]) {
-                        return prop in window[globalVarName];
+                    const windowObj = window[globalVarName];
+                    if (windowObj && windowObj !== proxy) {
+                        return prop in windowObj;
                     }
                     return prop in target;
                 },
                 ownKeys: (target) => {
-                    if (window[globalVarName]) {
-                        return Object.keys(window[globalVarName]);
+                    const windowObj = window[globalVarName];
+                    if (windowObj && windowObj !== proxy) {
+                        return Object.keys(windowObj);
                     }
                     return Object.keys(target);
                 },
                 construct: (target, args) => {
-                    if (window[globalVarName] && typeof window[globalVarName] === 'function') {
-                        return new window[globalVarName](...args);
+                    const windowObj = window[globalVarName];
+                    if (windowObj && windowObj !== proxy && typeof windowObj === 'function') {
+                        return new windowObj(...args);
                     }
                     return this.loadOnDemand(moduleName).then(() => {
-                        if (window[globalVarName] && typeof window[globalVarName] === 'function') {
-                            return new window[globalVarName](...args);
+                        const realObj = window[globalVarName];
+                        if (realObj && realObj !== proxy && typeof realObj === 'function') {
+                            return new realObj(...args);
                         }
                         throw new Error(`[Weline] ${globalVarName} 不是一个构造函数`);
                     });
                 },
                 apply: (target, thisArg, args) => {
-                    if (window[globalVarName] && typeof window[globalVarName] === 'function') {
-                        return window[globalVarName].apply(thisArg, args);
+                    const windowObj = window[globalVarName];
+                    if (windowObj && windowObj !== proxy && typeof windowObj === 'function') {
+                        return windowObj.apply(thisArg, args);
                     }
                     return this.loadOnDemand(moduleName).then(() => {
-                        if (window[globalVarName] && typeof window[globalVarName] === 'function') {
-                            return window[globalVarName].apply(thisArg, args);
+                        const realObj = window[globalVarName];
+                        if (realObj && realObj !== proxy && typeof realObj === 'function') {
+                            return realObj.apply(thisArg, args);
                         }
                         throw new Error(`[Weline] ${globalVarName} 不是一个函数`);
                     });
@@ -942,6 +964,45 @@
         },
 
         /**
+         * Message 消息模块 - 发送系统通知
+         */
+        Message: {
+            /**
+             * 发送系统通知
+             * @param {string} topic 消息主题（如 domain_expiring, system_info）
+             * @param {string} type 消息类型：info/success/warning/error/urgent
+             * @param {string} title 消息标题
+             * @param {string} content 消息内容
+             * @param {object} options 可选参数
+             * @returns {Promise<object>}
+             */
+            send: async (topic, type, title, content, options = {}) => {
+                const msgConfig = runtimeConfig.message || {};
+                const endpoint = msgConfig.backendUrl || '/api_admin/backend/notification/send';
+
+                const response = await Weline.Api.request(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        topic: topic,
+                        type: type,
+                        title: title,
+                        content: content,
+                        priority: options.priority || null,
+                        metadata: options.metadata || {},
+                        icon: options.icon || 'ri-notification-line',
+                        notify_users: options.notifyUsers || [],
+                    })
+                });
+
+                if (!response || response.code !== 200) {
+                    throw new Error((response && response.msg) ? response.msg : __('发送通知失败'));
+                }
+                return response;
+            }
+        },
+
+        /**
          * i18n 国际化对象（从PHP初始化）
          */
         i18n: {
@@ -1230,5 +1291,19 @@
             window.Weline.load('url-backend', 'Weline_Framework::js/url-backend.js');
         }
     })();
+
+    // ========== 全局 w_msg 函数 ==========
+    /**
+     * 发送系统通知的全局快捷函数
+     * @param {string} topic 消息主题
+     * @param {string} type 消息类型：info/success/warning/error/urgent
+     * @param {string} title 消息标题
+     * @param {string} content 消息内容
+     * @param {object} options 可选参数
+     * @returns {Promise<object>}
+     */
+    window.w_msg = function (topic, type, title, content, options = {}) {
+        return Weline.Message.send(topic, type, title, content, options);
+    };
 
 })(window, document);
