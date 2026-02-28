@@ -295,6 +295,24 @@ app/code/Vendor/ModuleName/
 - 模块需处于 **已启用** 状态，其菜单才会被收集并显示
 - 新增或修改 `menu.xml` 后，需再次执行 `s:up` 才能看到或更新菜单
 
+### ACL 父子级关系 ⚠️ 关键
+
+**ACL 的三层父子级结构：**
+
+```
+menu.xml 定义的菜单项（type=menus）
+    └── 控制器类上的 #[Acl]（继承 menu.xml 的 parent_source）
+        └── 控制器方法上的 #[Acl]（parent_source = 控制器类的 source_id）
+```
+
+**关键规则：**
+
+1. **menu.xml 定义菜单层级**：`parent` 属性指定父菜单
+2. **控制器类 `#[Acl]`**：如果 `source_id` 与 menu.xml 中某项相同，自动继承其 `parent_source`
+3. **控制器方法 `#[Acl]`**：父级自动指向控制器类的 `source_id`
+
+> 详细说明参见技能 `acl-permission-system`
+
 ### 后台开发检查清单
 
 涉及后台时请确认：

@@ -8,9 +8,14 @@ description: |
   - Writing database queries (select/insert/update/delete)
   - Adding columns/fields to existing tables (upgrade)
   - Using ORM operations (CRITICAL: fetch() required!)
+  - Pagination queries (MUST use framework pagination!)
   - Cross-database compatible code
   
-  Keywords: Model, 模型, database, 数据库, ORM, select, insert, update, delete, fetch, 查询, 加字段, 添加字段, add column, addColumn, alterTable, upgrade, install, ModelSetup, hasField, 表结构, schema, 字段, field, column, 数据库升级, PostgreSQL, MySQL
+  Keywords: Model, 模型, database, 数据库, ORM, select, insert, update, delete, fetch, 查询,
+  加字段, 添加字段, add column, addColumn, alterTable, upgrade, install, ModelSetup, hasField,
+  表结构, schema, 字段, field, column, 数据库升级, PostgreSQL, MySQL,
+  分页, pagination, paging, page, pageSize, 翻页, 每页, 页码, limit, offset, getItems, getPagination,
+  totalSize, lastPage, 总数, 总页数, 列表, list, 数据列表, 分页查询, paged query, paginated
 globs:
   - "**/Model/**/*.php"
 alwaysApply: false
@@ -23,6 +28,46 @@ alwaysApply: false
 本技能规定了 Weline Framework 中数据库模型和 SQL 编写的标准，确保代码的跨数据库兼容性和可维护性。
 
 ## 核心原则
+
+### 🚫 禁止使用框架不存在的方法
+
+**绝对禁止**凭空编造或假设框架存在某个方法！在使用任何 ORM/Query 方法前，必须确认框架确实支持该方法。
+
+**常见错误示例：**
+```php
+// ❌ 错误：框架没有 whereIn() 方法！
+$model->whereIn('id', [1, 2, 3])->select()->fetchArray();
+// 报错：Call to a member function xxx() on false
+
+// ❌ 错误：框架没有 orWhere() 方法！
+$model->where('a', 1)->orWhere('b', 2)->select()->fetchArray();
+
+// ❌ 错误：框架的 select() 不接受数组参数！
+$model->select(['id', 'name'])->fetchArray();
+// 报错：Argument #1 ($fields) must be of type string, array given
+```
+
+**正确做法：**
+```php
+// ✅ 正确：使用 where() 的第三个参数指定 IN 操作符
+$model->where('id', [1, 2, 3], 'IN')->select()->fetchArray();
+
+// ✅ 正确：使用 where() 的第四个参数指定 OR 逻辑
+$model->where('a', 1)->where('b', 2, '=', 'OR')->select()->fetchArray();
+
+// ✅ 正确：使用 fields() 指定字段，select() 不传参数
+$model->fields('id,name')->select()->fetchArray();
+```
+
+**不确定方法是否存在时：**
+1. 查阅本技能文档的"常用框架查询方法参考"表
+2. 搜索 `QueryInterface.php` 或 `QueryAst.php` 确认方法签名
+3. 禁止凭记忆或猜测使用方法
+
+**实际案例（2026-02-26）：**
+使用了不存在的 `whereIn()` 方法，`__call` 魔术方法找不到对应方法返回意外值，导致后续链式调用报错 `Call to a member function fields() on false`。
+
+---
 
 ### ⚠️ 所有 ORM 操作必须调用 fetch() 执行
 
@@ -254,15 +299,149 @@ $sql = "SHOW INDEX FROM table WHERE Key_name = 'idx_name'";
 | 插入 | `insert($data, $conflictFields)` | INSERT，支持冲突处理 |
 | 更新 | `update($data)` | UPDATE 查询 |
 | 删除 | `delete()` | DELETE 查询 |
-| 条件 | `where($field, $value, $op)` | WHERE 条件 |
+| 条件 | `where($field, $value, $op)` | WHERE 条件（支持 =, >, <, IN, NOT IN 等） |
 | 排序 | `order($field, $sort)` | ORDER BY |
 | 分组 | `group($fields)` | GROUP BY |
 | 分组条件 | `having($condition)` | HAVING |
 | 关联 | `join($table, $condition, $type)` | JOIN |
 | 模型关联 | `joinModel($model, $alias, $condition, $type, $fields)` | 模型 JOIN |
-| 分页 | `pagination($page, $pageSize)` | 分页查询 |
+| **分页** | `pagination($page, $pageSize)` | **分页查询（推荐）** |
 | 计数 | `count()` / `total()` | 统计数量 |
 | 清除 | `clearQuery()` / `reset()` | 清除查询条件 |
+| 获取结果 | `getItems()` | 获取分页后的数据列表 |
+| 获取分页信息 | `getPagination()` | 获取分页元数据 |
+
+---
+
+## ⭐ 分页查询（pagination）
+
+### 核心原则：必须使用框架内置分页
+
+**禁止手动实现分页逻辑！** 框架已提供完整的 `pagination()` 方法，自动处理 count、limit、offset。
+
+### 标准分页用法
+
+```php
+// ✅ 正确：使用框架 pagination() 方法
+$model->clearQuery()
+    ->where('status', 'active')
+    ->order('created_at', 'DESC')
+    ->pagination($page, $pageSize)  // 页码从 1 开始
+    ->select()
+    ->fetch();
+
+// 获取分页数据
+$items = $model->getItems();           // 当前页数据列表
+$pagination = $model->getPagination(); // 分页元数据
+
+// 分页元数据结构
+$pagination = [
+    'page'      => 1,      // 当前页码
+    'pageSize'  => 20,     // 每页数量
+    'totalSize' => 150,    // 总记录数
+    'lastPage'  => 8,      // 总页数
+];
+```
+
+### 完整示例：Service/Controller 中的分页列表
+
+```php
+// ✅ 正确：Service 层实现分页列表
+public function getPagedList(array $filters, int $page = 1, int $limit = 20): array
+{
+    $query = $this->model->clearQuery();
+
+    // 应用筛选条件
+    if (!empty($filters['account_id'])) {
+        $query->where('account_id', (int) $filters['account_id']);
+    }
+    if (!empty($filters['status'])) {
+        $query->where('status', $filters['status']);
+    }
+    if (!empty($filters['search'])) {
+        $query->where('name', '%' . trim($filters['search']) . '%', 'like');
+    }
+
+    // 排序 + 分页 + 执行
+    $query->order('created_at', 'DESC')
+        ->pagination($page, $limit)
+        ->select()
+        ->fetch();
+
+    $pagination = $this->model->getPagination();
+
+    return [
+        'items'  => $this->model->getItems(),
+        'total'  => (int) ($pagination['totalSize'] ?? 0),
+        'page'   => (int) ($pagination['page'] ?? $page),
+        'limit'  => (int) ($pagination['pageSize'] ?? $limit),
+        'pages'  => (int) ($pagination['lastPage'] ?? 1),
+    ];
+}
+```
+
+### ❌ 禁止的分页写法
+
+```php
+// ❌ 错误：手动实现 count + limit/offset
+$query = $this->clearQuery()->where('status', 1);
+$total = $query->count('id');                    // count() 后查询状态已改变！
+$items = $query->limit($limit, $offset)          // 可能导致错误
+    ->select()
+    ->fetchArray();
+
+// ❌ 错误：先 count 再重用同一个 $query 对象
+$total = $query->count();
+$items = $query->select()->fetchArray();  // 查询状态污染，结果不可预测
+
+// ❌ 错误：手动计算 offset
+$offset = ($page - 1) * $pageSize;
+$this->model->limit($pageSize, $offset)->select()->fetchArray();
+```
+
+### 为什么必须用 pagination()？
+
+1. **避免查询状态污染**：`count()` 会改变查询状态，手动分页容易出错
+2. **自动计算 total/lastPage**：框架内部处理，无需手动 count
+3. **统一的元数据格式**：`getPagination()` 返回标准结构
+4. **跨数据库兼容**：框架自动处理 MySQL/PostgreSQL 差异
+
+### pagination() 方法签名
+
+```php
+public function pagination(
+    int $page = 1,           // 页码（从 1 开始）
+    int $pageSize = 20,      // 每页数量
+    array $params = [],      // 可选：附加参数
+    int $max_limit = 1000,   // 可选：每页最大限制
+    int $total = 0           // 可选：预设总数（跳过 count 查询）
+): QueryInterface;
+```
+
+### 获取分页结果的方法
+
+| 方法 | 返回值 | 说明 |
+|------|--------|------|
+| `getItems()` | `array` | 当前页的数据列表 |
+| `getPagination()` | `array` | 分页元数据（page, pageSize, totalSize, lastPage） |
+| `fetchArray()` | `array` | 原始查询结果（不推荐用于分页） |
+
+### 实际案例（2026-02-26）
+
+**错误场景**：手动实现分页，先调用 `count()` 再调用 `select()`，导致查询状态污染，返回 `Call to a member function fields() on false`。
+
+**解决方案**：使用框架内置 `pagination()` 方法，自动处理 count 和 limit/offset，避免状态污染。
+
+```php
+// ❌ 之前的错误写法
+$total = $query->count('id');  // 污染了 $query
+$items = $query->select()->fetchArray();  // 失败！
+
+// ✅ 修复后使用 pagination()
+$query->pagination($page, $limit)->select()->fetch();
+$items = $model->getItems();
+$pagination = $model->getPagination();
+```
 
 ## ModelSetup 常用方法
 
@@ -522,6 +701,45 @@ $this->sql = $sql; // 回退 exec() 路径可复用一致状态
 2. 对 SQL/绑定做重命名时，必须确保两者同源一致。
 
 参考：[ERROR_LOG.md - Pgsql 回退 exec 占位符未替换](../error-tracking/ERROR_LOG.md)
+
+---
+
+### Q7: 如何使用 IN 条件查询？
+
+**错误用法：**
+```php
+// ❌ 错误：框架没有 whereIn() 方法！
+$this->model->whereIn('id', [1, 2, 3])->select()->fetchArray();
+// 报错：Call to a member function xxx() on false
+```
+
+**正确用法：**
+```php
+// ✅ 正确：使用 where() 方法的第三个参数指定 IN 操作符
+$this->model->clearQuery()
+    ->where('id', [1, 2, 3], 'IN')
+    ->select()
+    ->fetchArray();
+
+// ✅ NOT IN 条件
+$this->model->clearQuery()
+    ->where('status', ['deleted', 'expired'], 'NOT IN')
+    ->select()
+    ->fetchArray();
+```
+
+**where() 方法签名：**
+```php
+where(
+    array|string $field,      // 字段名
+    mixed $value = null,      // 值（数组时配合 IN/NOT IN）
+    string $condition = '=',  // 操作符：=, >, <, >=, <=, IN, NOT IN, LIKE 等
+    string $where_logic = 'AND'
+): QueryInterface
+```
+
+**实际案例（2026-02-26）：**
+使用了不存在的 `whereIn()` 方法导致返回 `false`，后续链式调用报错 `Call to a member function fields() on false`。修复后改为 `where($field, $array, 'IN')`。
 
 ---
 
