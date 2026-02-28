@@ -593,5 +593,28 @@ class StateManager
         });
         // CacheFactory 事件分发递归保护
         self::registerStaticReset(\Weline\Framework\Cache\CacheFactory::class, 'dispatchingCacheEvent', false);
+        
+        // ========== 10. 菜单相关缓存 ==========
+        // MenuUrlValidator::$menuPathsCache — 菜单路径验证缓存
+        // 虽然菜单路径通常进程内不变，但如果菜单发生变更（动态添加/删除），
+        // 旧缓存会导致验证结果错误。为安全起见，每请求重置。
+        self::registerStaticReset(\Weline\Admin\Helper\MenuUrlValidator::class, 'menuPathsCache', null);
+        
+        // MenuRenderService — 单例实例持有 Request 对象
+        // WLS 下 MenuRenderService 被 ObjectManager 缓存，其 $request 成员指向旧请求。
+        // 虽然已将 backendUrlPrefix 改为动态获取，但为保险起见，每请求清除实例。
+        self::registerResetCallback('menu_render_service', function () {
+            \Weline\Framework\Manager\ObjectManager::removeInstance(
+                \Weline\Admin\Service\MenuRenderService::class
+            );
+        });
+        
+        // ========== 11. ACL 权限缓存 ==========
+        // Acl\Taglib\Acl — 权限检查标签中的请求级缓存
+        // WLS 下静态缓存会跨请求保留，导致不同用户使用同一份权限缓存
+        // 必须在每次请求结束时重置
+        self::registerResetCallback('acl_taglib_reset', function () {
+            \Weline\Acl\Taglib\Acl::resetRequestState();
+        });
     }
 }
