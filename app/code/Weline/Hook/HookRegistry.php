@@ -160,6 +160,179 @@ class HookRegistry
     }
 
     /**
+     * 增量刷新指定模块的 Hook 注册表
+     * 仅重新扫描指定模块的 Hook 规约和实现，合并到现有注册表
+     *
+     * @param array $moduleNames 需要刷新的模块名列表
+     * @param bool $allowSoloConflict 是否允许 solo hook 冲突（系统升级时使用）
+     * @return bool
+     * @throws \RuntimeException 如果发现 Hook 名冲突
+     */
+    public function refreshForModules(array $moduleNames, bool $allowSoloConflict = false): bool
+    {
+        // 1. 加载现有注册表
+        $registry = $this->getRegistry(true);
+        
+        // 确保注册表结构完整
+        if (!isset($registry['hooks'])) {
+            $registry['hooks'] = [];
+        }
+        if (!isset($registry['hook_to_module'])) {
+            $registry['hook_to_module'] = [];
+        }
+        
+        // 2. 清除目标模块的旧数据
+        $this->clearModuleHooks($registry, $moduleNames);
+        
+        // 3. 扫描目标模块的新数据
+        $scannedData = $this->scanner->scanModulesHooks($moduleNames);
+        $hookFiles = $this->scanModuleHookFiles($moduleNames);
+        
+        // 4. 组织新数据
+        $newRegistry = $this->organizeRegistryData($scannedData, $hookFiles, $allowSoloConflict);
+        
+        // 5. 合并到现有注册表
+        $this->mergeHookRegistry($registry, $newRegistry);
+        
+        // 6. 验证文档（仅对新增的 Hooks）
+        $this->validateDocumentation($registry);
+        
+        // 7. 验证规约
+        $this->validateHookSpecifications($registry);
+        
+        // 8. 保存注册表
+        return $this->saveRegistry($registry);
+    }
+    
+    /**
+     * 清除指定模块的 Hook 数据
+     *
+     * @param array &$registry 注册表数据（引用传递）
+     * @param array $moduleNames 要清除的模块名列表
+     * @return void
+     */
+    private function clearModuleHooks(array &$registry, array $moduleNames): void
+    {
+        // 1. 清除目标模块定义的 Hook 规约
+        foreach ($registry['hooks'] as $hookName => $hookInfo) {
+            if (in_array($hookInfo['module'] ?? '', $moduleNames, true)) {
+                unset($registry['hooks'][$hookName]);
+                unset($registry['hook_to_module'][$hookName]);
+            } else {
+                // 2. 清除目标模块的 Hook 实现（从 implementations 中移除）
+                if (isset($hookInfo['implementations']) && is_array($hookInfo['implementations'])) {
+                    foreach ($moduleNames as $moduleName) {
+                        unset($registry['hooks'][$hookName]['implementations'][$moduleName]);
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * 扫描指定模块的 Hook 实现文件
+     *
+     * @param array $moduleNames 模块名列表
+     * @return array 格式：[hookName => [file_identifier, ...]]
+     */
+    private function scanModuleHookFiles(array $moduleNames): array
+    {
+        $result = [];
+        $env = \Weline\Framework\App\Env::getInstance();
+        $modules = $env->getModuleList();
+
+        foreach ($moduleNames as $moduleName) {
+            if (!isset($modules[$moduleName])) {
+                continue;
+            }
+            
+            $moduleInfo = $modules[$moduleName];
+            $basePath = $moduleInfo['base_path'] ?? '';
+            if (empty($basePath) || !($moduleInfo['status'] ?? false)) {
+                continue;
+            }
+
+            // 扫描 view/hooks/ 目录
+            $hooksDir = $basePath . DS . 'view' . DS . 'hooks';
+            if (!is_dir($hooksDir)) {
+                continue;
+            }
+
+            // 扫描目录下的所有 .phtml 文件
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($hooksDir, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::LEAVES_ONLY
+            );
+
+            foreach ($iterator as $file) {
+                /** @var \SplFileInfo $file */
+                if ($file->isFile() && $file->getExtension() === 'phtml') {
+                    $relativePath = str_replace($hooksDir . DS, '', $file->getPathname());
+                    $relativePath = str_replace(['/', '\\'], DS, $relativePath);
+                    $relativePathWithoutExt = str_replace('.phtml', '', $relativePath);
+                    $hookName = str_replace(DS, '::', $relativePathWithoutExt);
+                    $fileRelativePath = str_replace(['/', '\\'], '/', $relativePath);
+                    $filePath = $file->getPathname();
+                    
+                    // 解析文件中的元数据
+                    $hookMeta = $this->parseHookFileMeta($filePath, $moduleName, $hookName);
+                    
+                    $fileIdentifier = [
+                        'module' => $moduleName,
+                        'file' => $fileRelativePath,
+                        'priority' => $hookMeta['priority'],
+                        'sort_order' => $hookMeta['sort_order'],
+                        'solo' => $hookMeta['solo'],
+                    ];
+                    
+                    if (!isset($result[$hookName])) {
+                        $result[$hookName] = [];
+                    }
+                    $result[$hookName][] = $fileIdentifier;
+                }
+            }
+        }
+
+        return $result;
+    }
+    
+    /**
+     * 合并 Hook 注册表
+     *
+     * @param array &$registry 现有注册表（引用传递）
+     * @param array $newRegistry 新注册表数据
+     * @return void
+     */
+    private function mergeHookRegistry(array &$registry, array $newRegistry): void
+    {
+        // 合并 hooks
+        foreach (($newRegistry['hooks'] ?? []) as $hookName => $hookInfo) {
+            if (isset($registry['hooks'][$hookName])) {
+                // Hook 规约已存在（由其他模块定义），只合并实现
+                if (isset($hookInfo['implementations'])) {
+                    if (!isset($registry['hooks'][$hookName]['implementations'])) {
+                        $registry['hooks'][$hookName]['implementations'] = [];
+                    }
+                    $registry['hooks'][$hookName]['implementations'] = array_merge(
+                        $registry['hooks'][$hookName]['implementations'],
+                        $hookInfo['implementations']
+                    );
+                }
+            } else {
+                // 新 Hook 规约
+                $registry['hooks'][$hookName] = $hookInfo;
+            }
+        }
+        
+        // 合并 hook_to_module
+        foreach (($newRegistry['hook_to_module'] ?? []) as $hookName => $moduleName) {
+            if (!isset($registry['hook_to_module'][$hookName])) {
+                $registry['hook_to_module'][$hookName] = $moduleName;
+            }
+        }
+    }
+
+    /**
      * 组织注册表数据
      * 将模块级别的 Hook 信息转换为 Hook 名索引的结构
      * 
