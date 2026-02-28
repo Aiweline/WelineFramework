@@ -28,10 +28,16 @@ class QuickBuild extends BaseController
     {
         $services = $this->aggregator->queryServices('all');
         $accounts = $this->aggregator->queryRegistrarAccounts(['status' => 'active']);
+        
+        // CDN 适配器和账户
+        $cdnAdapters = $this->aggregator->queryCdnAdapters();
+        $cdnAccounts = $this->aggregator->queryCdnAccounts(['status' => 'active']);
 
         $this->assign('title', __('快速建站'));
         $this->assign('services', $services);
         $this->assign('accounts', $accounts);
+        $this->assign('cdnAdapters', $cdnAdapters);
+        $this->assign('cdnAccounts', $cdnAccounts);
 
         return $this->fetch();
     }
@@ -106,9 +112,12 @@ class QuickBuild extends BaseController
         $cdnAccountId = (int) $this->request->getPost('cdn_account_id', 0);
         $websiteId = (int) $this->request->getPost('website_id', 0);
         $applySsl = (bool) $this->request->getPost('apply_ssl', 1);
+        // 是否使用已有域名（跳过购买步骤）
+        $skipPurchase = !empty($this->request->getPost('skip_purchase', 0));
+        $domainOwned = !empty($this->request->getPost('domain_owned', 0));
 
         if ($domain === '' || $registrarAccountId <= 0) {
-            return $this->fetchJson(['success' => false, 'msg' => __('参数不完整')]);
+            return $this->fetchJson(['success' => false, 'msg' => __('参数不完整：域名=%{1}，账号ID=%{2}', [$domain, $registrarAccountId])]);
         }
 
         try {
@@ -117,6 +126,8 @@ class QuickBuild extends BaseController
                 'cdn_account_id' => $cdnAccountId > 0 ? $cdnAccountId : null,
                 'website_id' => $websiteId > 0 ? $websiteId : null,
                 'apply_ssl' => $applySsl,
+                'skip_purchase' => $skipPurchase || $domainOwned,
+                'domain_owned' => $domainOwned,
             ];
             $result = $this->aggregator->startProvisioning($domain, $registrarAccountId, $options);
             return $this->fetchJson($result);
