@@ -558,6 +558,7 @@ Model升级,Model升级
 "Start Time","Start Time"
 "End Time","End Time"
 Duration,Duration
+"收集模块观察者失败: %{1}","收集模块观察者失败: %{1}"
 【超级严重】检测到事件循环调用,【超级严重】检测到事件循环调用
 "EventsManager Error: Failed to send circular error message - %{error}","EventsManager Error: Failed to send circular error message - %{error}"
 "EventsManager Warning: Observer execution failed - %{error}","EventsManager Warning: Observer execution failed - %{error}"
@@ -968,6 +969,11 @@ dev=true,dev=true
 "%{1} 拦截器Interceptor没有设置属性：<interceptor name=""interceptorName"" instance=""instanceClass"" disabled=""false"" sort=""0""/>","%{1} 拦截器Interceptor没有设置属性：<interceptor name=""interceptorName"" instance=""instanceClass"" disabled=""false"" sort=""0""/>"
 "%{1} 拦截器Interceptor没有设置name属性：<interceptor name=""interceptorName"" instance=""instanceClass"" disabled=""false"" sort=""0""/>","%{1} 拦截器Interceptor没有设置name属性：<interceptor name=""interceptorName"" instance=""instanceClass"" disabled=""false"" sort=""0""/>"
 "%{1} 拦截器Interceptor没有设置instance属性：<interceptor name=""interceptorName"" instance=""instanceClass"" disabled=""false"" sort=""0""/>","%{1} 拦截器Interceptor没有设置instance属性：<interceptor name=""interceptorName"" instance=""instanceClass"" disabled=""false"" sort=""0""/>"
+"%{1} 拦截器Plugin未指定name属性","%{1} 拦截器Plugin未指定name属性"
+"%{1} 拦截器Plugin未指定class属性","%{1} 拦截器Plugin未指定class属性"
+"%{1} 拦截器Interceptor没有设置属性","%{1} 拦截器Interceptor没有设置属性"
+"%{1} 拦截器Interceptor没有设置name属性","%{1} 拦截器Interceptor没有设置name属性"
+"%{1} 拦截器Interceptor没有设置instance属性","%{1} 拦截器Interceptor没有设置instance属性"
 拦截器缓存清理成功！,拦截器缓存清理成功！
 插件缓存清理！,插件缓存清理！
 编译开始...,编译开始...
@@ -1009,6 +1015,32 @@ dev=true,dev=true
 "✓ 命令注册表已更新完成。","✓ 命令注册表已更新完成。"
 "命令注册表更新失败: %{1}","命令注册表更新失败: %{1}"
 跳过命令注册表更新（由调用方单独处理）,跳过命令注册表更新（由调用方单独处理）
+"正在增量更新 Extends 注册表（模块：%{1}）...","正在增量更新 Extends 注册表（模块：%{1}）..."
+"✓ Extends 注册表增量更新完成。","✓ Extends 注册表增量更新完成。"
+"Extends 注册表增量更新失败，但将继续执行。","Extends 注册表增量更新失败，但将继续执行。"
+"Extends 注册表增量更新失败: %{1}","Extends 注册表增量更新失败: %{1}"
+正在增量更新插件注册表（模块：%{1}）...,正在增量更新插件注册表（模块：%{1}）...
+"✓ 插件注册表增量更新完成。","✓ 插件注册表增量更新完成。"
+正在编译模块插件/DI...,正在编译模块插件/DI...
+"✓ 模块插件/DI编译完成。","✓ 模块插件/DI编译完成。"
+模块插件/DI编译失败：%{1}，但将继续执行。,模块插件/DI编译失败：%{1}，但将继续执行。
+插件注册表增量更新失败，但将继续执行。,插件注册表增量更新失败，但将继续执行。
+"插件注册表增量更新失败: %{1}","插件注册表增量更新失败: %{1}"
+正在增量更新事件注册表（模块：%{1}）...,正在增量更新事件注册表（模块：%{1}）...
+"✓ 事件注册表增量更新完成。","✓ 事件注册表增量更新完成。"
+事件注册表增量更新失败，但将继续执行。,事件注册表增量更新失败，但将继续执行。
+"事件注册表增量更新失败: %{1}","事件注册表增量更新失败: %{1}"
+"正在增量更新 Hook 注册表（模块：%{1}）...","正在增量更新 Hook 注册表（模块：%{1}）..."
+"✓ Hook 注册表增量更新完成。","✓ Hook 注册表增量更新完成。"
+"Hook 注册表增量更新失败，但将继续执行。","Hook 注册表增量更新失败，但将继续执行。"
+"Hook 注册表增量更新失败（致命错误）: %{1}","Hook 注册表增量更新失败（致命错误）: %{1}"
+"Hook 注册表增量更新失败: %{1}","Hook 注册表增量更新失败: %{1}"
+正在增量更新命令注册表（模块：%{1}）...,正在增量更新命令注册表（模块：%{1}）...
+"✓ 命令注册表增量更新完成。","✓ 命令注册表增量更新完成。"
+"命令注册表增量更新失败: %{1}","命令注册表增量更新失败: %{1}"
+"正在增量更新 Taglib（模块：%{1}）...","正在增量更新 Taglib（模块：%{1}）..."
+"✓ Taglib 增量更新完成。","✓ Taglib 增量更新完成。"
+"Taglib 增量更新失败: %{1}","Taglib 增量更新失败: %{1}"
 没有需要更新的模块，跳过注册表更新。,没有需要更新的模块，跳过注册表更新。
 未找到任何路由文件。请先运行路由生成命令。,未找到任何路由文件。请先运行路由生成命令。
 "路由列表 (共 %{1} 条)","路由列表 (共 %{1} 条)"
@@ -1162,6 +1194,9 @@ HTTP方法,HTTP方法
 "- 跳过 PSR-4 缓存生成：没有需要优化的映射","- 跳过 PSR-4 缓存生成：没有需要优化的映射"
 已禁用延迟注册表更新模式,已禁用延迟注册表更新模式
 维护模式已关闭。,维护模式已关闭。
+"正在增量更新模块 %{1} 的注册表...","正在增量更新模块 %{1} 的注册表..."
+"✓ 模块注册表增量更新完成。","✓ 模块注册表增量更新完成。"
+部分注册表增量更新失败，但将继续执行。,部分注册表增量更新失败，但将继续执行。
 正在更新所有注册表...,正在更新所有注册表...
 "✓ 所有注册表已更新完成。","✓ 所有注册表已更新完成。"
 部分注册表更新失败，但将继续执行。,部分注册表更新失败，但将继续执行。
@@ -1442,6 +1477,7 @@ HTTP方法,HTTP方法
 "未找到模块 %{1} 的备份","未找到模块 %{1} 的备份"
 备份信息文件不存在,备份信息文件不存在
 备份信息文件格式错误,备份信息文件格式错误
+文件恢复成功，但数据库恢复失败：%{1},文件恢复成功，但数据库恢复失败：%{1}
 模块回滚成功,模块回滚成功
 回滚失败：%{1},回滚失败：%{1}
 "未找到主题 %{1} 的备份","未找到主题 %{1} 的备份"

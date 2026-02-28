@@ -43,8 +43,16 @@ class QueryProviderRegistry
                 if (!str_starts_with($relativePath, 'extends/module/Weline_Framework/Query/')) {
                     continue;
                 }
+                $sourceFile = $extension['source_file'] ?? '';
                 $className = $this->resolveClassName($extension);
-                if ($className === null || !class_exists($className)) {
+                if ($className === null) {
+                    continue;
+                }
+                // 手动 require 源文件，避免 classmap 大小写不匹配问题
+                if (!class_exists($className, false) && $sourceFile !== '' && file_exists($sourceFile)) {
+                    require_once $sourceFile;
+                }
+                if (!class_exists($className)) {
                     continue;
                 }
                 try {
