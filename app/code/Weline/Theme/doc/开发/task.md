@@ -4,6 +4,6 @@
 
 ## 任务列表
 
-- [ ] 在 theme.js 中添加 Weline.Message 模块
-- [ ] 在 theme.js 中添加 window.w_msg() 全局函数
-- [ ] 验证 JS 函数可以正常调用 API
+- [x] 在 theme.js 中添加 Weline.Message 模块
+- [x] 在 theme.js 中添加 window.w_msg() 全局函数
+- [x] 验证 JS 函数可以正常调用 API
