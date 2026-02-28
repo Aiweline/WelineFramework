@@ -1,0 +1,2047 @@
+<?php
+/**
+ * 域名列表 Tab 内容
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $domains 域名列表
+ * @var array $accounts 域名商账号列表
+ */
+$domains = $domains ?? [];
+$accounts = $accounts ?? [];
+?>
+<style>
+.weline-domain-list-filter {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+.weline-domain-list-filter .form-control,
+.weline-domain-list-filter .form-select {
+    width: auto;
+    min-width: 140px;
+}
+.weline-domain-status-badge {
+    font-size: 0.7rem;
+    padding: 0.25em 0.5em;
+    border-radius: 4px;
+    font-weight: 500;
+}
+.weline-domain-status-resolved {
+    background: var(--backend-color-success-subtle, rgba(52, 195, 143, 0.15));
+    color: var(--backend-color-success, #34c38f);
+}
+.weline-domain-status-unresolved {
+    background: var(--backend-color-warning-subtle, rgba(241, 180, 76, 0.15));
+    color: var(--backend-color-warning, #f1b44c);
+}
+.weline-domain-status-error {
+    background: var(--backend-color-danger-subtle, rgba(244, 106, 106, 0.15));
+    color: var(--backend-color-danger, #f46a6a);
+}
+.weline-domain-status-pending {
+    background: var(--backend-color-secondary-subtle, rgba(116, 120, 141, 0.15));
+    color: var(--backend-color-text-secondary, #74788d);
+}
+.weline-domain-https-valid {
+    background: var(--backend-color-success-subtle, rgba(52, 195, 143, 0.15));
+    color: var(--backend-color-success, #34c38f);
+}
+.weline-domain-https-expiring {
+    background: var(--backend-color-warning-subtle, rgba(241, 180, 76, 0.15));
+    color: var(--backend-color-warning, #f1b44c);
+}
+.weline-domain-https-none {
+    background: var(--backend-color-secondary-subtle, rgba(116, 120, 141, 0.15));
+    color: var(--backend-color-text-secondary, #74788d);
+}
+.weline-domain-dns-provider {
+    font-size: 0.75rem;
+    padding: 0.2em 0.5em;
+    border-radius: 4px;
+}
+.weline-domain-dns-cloudflare {
+    background: var(--backend-color-warning-subtle, rgba(241, 180, 76, 0.15));
+    color: #f38020;
+}
+.weline-domain-dns-original {
+    background: var(--backend-color-info-subtle, rgba(85, 110, 230, 0.15));
+    color: var(--backend-color-info, #556ee6);
+}
+.weline-domain-dns-other {
+    background: var(--backend-color-secondary-subtle, rgba(116, 120, 141, 0.15));
+    color: var(--backend-color-text-secondary, #74788d);
+}
+.weline-domain-provider-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+.weline-domain-provider-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+}
+.weline-domain-provider-label {
+    color: var(--backend-color-text-tertiary, #9a9cae);
+    min-width: 2.2rem;
+}
+.weline-domain-provider-badge {
+    padding: 0.15em 0.45em;
+    border-radius: 4px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.weline-provider-registrar {
+    background: var(--backend-color-primary-subtle, rgba(85, 110, 230, 0.15));
+    color: var(--backend-color-primary, #556ee6);
+}
+.weline-provider-dns {
+    background: var(--backend-color-warning-subtle, rgba(241, 180, 76, 0.15));
+    color: #f38020;
+}
+.weline-provider-cdn {
+    background: var(--backend-color-info-subtle, rgba(80, 165, 241, 0.15));
+    color: var(--backend-color-info, #50a5f1);
+}
+.weline-provider-none {
+    background: var(--backend-color-bg-tertiary, #f1f3f5);
+    color: var(--backend-color-text-tertiary, #9a9cae);
+}
+.weline-domain-local-badge {
+    font-size: 0.65rem;
+    padding: 0.15em 0.4em;
+    border-radius: 3px;
+    background: var(--backend-color-primary-subtle, rgba(85, 110, 230, 0.15));
+    color: var(--backend-color-primary, #556ee6);
+}
+.weline-domain-table th {
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.weline-domain-table td {
+    vertical-align: middle;
+}
+.weline-domain-actions .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+}
+.weline-domain-table .domain-name {
+    font-weight: 500;
+    color: var(--backend-color-text-primary, #495057);
+}
+.weline-domain-empty {
+    text-align: center;
+    padding: 3rem;
+    color: var(--backend-color-text-secondary, #74788d);
+}
+/* 服务器 IP 选项样式 */
+.weline-server-ip-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-radius: var(--backend-border-radius-md, 8px);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    gap: 1rem;
+}
+.weline-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    user-select: none;
+    flex: 1;
+}
+.weline-checkbox-label input[type="checkbox"] {
+    display: none;
+}
+.weline-checkbox-custom {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-sm, 4px);
+    background: var(--backend-color-bg-primary, #fff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+.weline-checkbox-custom::after {
+    content: '\2713';
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--backend-color-text-inverse, #fff);
+    opacity: 0;
+    transform: scale(0.5);
+    transition: all 0.15s ease;
+}
+.weline-checkbox-label input:checked + .weline-checkbox-custom {
+    background: var(--backend-color-primary, #556ee6);
+    border-color: var(--backend-color-primary, #556ee6);
+}
+.weline-checkbox-label input:checked + .weline-checkbox-custom::after {
+    opacity: 1;
+    transform: scale(1);
+}
+.weline-checkbox-label:hover .weline-checkbox-custom {
+    border-color: var(--backend-color-primary, #556ee6);
+}
+.weline-checkbox-text {
+    font-weight: 500;
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 0.9rem;
+}
+.weline-server-ip-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.65rem;
+    background: linear-gradient(135deg, var(--backend-color-primary, #556ee6), var(--backend-color-info, #50a5f1));
+    color: var(--backend-color-text-inverse, #fff);
+    border-radius: var(--backend-border-radius-pill, 20px);
+    font-size: 0.85rem;
+    font-weight: 600;
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    letter-spacing: 0.02em;
+    box-shadow: var(--backend-shadow-sm, 0 1px 3px rgba(0,0,0,0.08));
+    white-space: nowrap;
+}
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><?= __('域名列表') ?></h5>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="WelineDomainList.refreshServerIp()">
+            <i class="mdi mdi-ip me-1"></i><?= __('刷新服务器IP') ?>
+        </button>
+        <button type="button" class="btn btn-outline-primary btn-sm" onclick="WelineDomainList.showImportModal()">
+            <i class="mdi mdi-import me-1"></i><?= __('导入域名') ?>
+        </button>
+        <button type="button" class="btn btn-outline-success btn-sm" onclick="WelineDomainList.batchTransferToPool()">
+            <i class="mdi mdi-database-export me-1"></i><?= __('批量转存域名池') ?>
+        </button>
+        <button type="button" class="btn btn-success btn-sm" onclick="WelineDomainList.batchTransferToPoolWithIpCheck()" title="<?= __('只转存解析到本服务器的域名，跳过IP不匹配的') ?>">
+            <i class="mdi mdi-folder-move me-1"></i><?= __('批量转存（检查IP）') ?>
+        </button>
+        <button type="button" class="btn btn-warning btn-sm" onclick="WelineDomainList.batchResolveToLocal()" title="<?= __('将选中域名的 @ 和 www 解析到本服务器公网IP') ?>">
+            <i class="mdi mdi-server me-1"></i><?= __('批量解析到本地') ?>
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="WelineDomainList.showBatchAddDnsRecordModal()" title="<?= __('为选中域名批量添加DNS解析记录') ?>">
+            <i class="mdi mdi-plus-network me-1"></i><?= __('批量添加记录') ?>
+        </button>
+        <button type="button" class="btn btn-info btn-sm" onclick="WelineDomainList.showBatchChangeNsModal()" title="<?= __('将选中域名的DNS服务器切换到其他服务商') ?>">
+            <i class="mdi mdi-swap-horizontal me-1"></i><?= __('批量切换DNS') ?>
+        </button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="WelineDomainList.batchCheckResolve()">
+            <i class="mdi mdi-dns me-1"></i><?= __('批量检测解析') ?>
+        </button>
+        <button type="button" class="btn btn-outline-warning btn-sm" onclick="WelineDomainList.batchDetectDnsProvider()" title="<?= __('检测选中域名的 DNS 服务商') ?>">
+            <i class="mdi mdi-magnify-scan me-1"></i><?= __('检测DNS') ?>
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="WelineDomainList.showBatchSetAccountsModal()" title="<?= __('批量设置选中域名的 DNS/CDN 管理账户') ?>">
+            <i class="mdi mdi-account-cog me-1"></i><?= __('设置账户') ?>
+        </button>
+        <button type="button" class="btn btn-outline-danger btn-sm" onclick="WelineDomainList.cleanupDnsProviderDomains()" title="<?= __('清理误同步的 DNS 服务商域名') ?>">
+            <i class="mdi mdi-broom me-1"></i><?= __('清理DNS域名') ?>
+        </button>
+    </div>
+</div>
+
+<!-- 过滤器 -->
+<div class="weline-domain-list-filter">
+    <select class="form-select form-select-sm" id="weline-domain-filter-account" onchange="WelineDomainList.loadDomains()">
+        <option value=""><?= __('所有账号') ?></option>
+        <?php foreach ($accounts as $acc): ?>
+            <option value="<?= (int)$acc['account_id'] ?>"><?= htmlspecialchars($acc['account_name'] ?? '') ?></option>
+        <?php endforeach; ?>
+    </select>
+    <select class="form-select form-select-sm" id="weline-domain-filter-resolve" onchange="WelineDomainList.loadDomains()">
+        <option value=""><?= __('解析状态') ?></option>
+        <option value="resolved"><?= __('已解析') ?></option>
+        <option value="unresolved"><?= __('未解析') ?></option>
+        <option value="error"><?= __('解析错误') ?></option>
+        <option value="local"><?= __('指向本服务器') ?></option>
+    </select>
+    <select class="form-select form-select-sm" id="weline-domain-filter-https" onchange="WelineDomainList.loadDomains()">
+        <option value=""><?= __('HTTPS状态') ?></option>
+        <option value="valid"><?= __('证书有效') ?></option>
+        <option value="expiring"><?= __('即将过期') ?></option>
+        <option value="expired"><?= __('已过期') ?></option>
+        <option value="none"><?= __('无证书') ?></option>
+    </select>
+    <input type="text" class="form-control form-control-sm" id="weline-domain-filter-search"
+           placeholder="<?= __('搜索域名...') ?>" onkeyup="WelineDomainList.onSearchKeyup(event)">
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="WelineDomainList.resetFilters()">
+        <i class="mdi mdi-filter-off"></i>
+    </button>
+</div>
+
+<!-- 域名表格 -->
+<div class="table-responsive">
+    <table class="table table-hover align-middle weline-domain-table mb-0">
+        <thead class="table-light">
+            <tr>
+                <th><input type="checkbox" id="weline-domain-select-all" onchange="WelineDomainList.toggleSelectAll()"></th>
+                <th><?= __('域名') ?></th>
+                <th><?= __('服务商') ?></th>
+                <th><?= __('解析状态') ?></th>
+                <th><?= __('解析IP') ?></th>
+                <th><?= __('HTTPS') ?></th>
+                <th><?= __('建站就绪') ?></th>
+                <th class="text-end"><?= __('操作') ?></th>
+            </tr>
+        </thead>
+        <tbody id="weline-domain-list-body">
+            <tr>
+                <td colspan="8" class="weline-domain-empty">
+                    <i class="mdi mdi-loading mdi-spin" style="font-size:2rem;"></i>
+                    <p class="mt-2 mb-0"><?= __('加载中...') ?></p>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- 分页 -->
+<nav class="d-flex justify-content-between align-items-center mt-3" id="weline-domain-pagination">
+    <div class="text-muted small" id="weline-domain-pagination-info"></div>
+    <ul class="pagination pagination-sm mb-0" id="weline-domain-pagination-links"></ul>
+</nav>
+
+<!-- 导入域名弹窗 -->
+<div class="modal fade" id="welineImportDomainModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="mdi mdi-import me-2"></i><?= __('从域名商导入域名') ?>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label"><?= __('选择域名商账户') ?></label>
+                    <select class="form-select" id="weline-import-account-select" onchange="WelineDomainList.fetchRemoteDomains()">
+                        <option value=""><?= __('-- 请选择 --') ?></option>
+                        <?php foreach ($accounts as $acc): ?>
+                            <option value="<?= (int)$acc['account_id'] ?>"><?= htmlspecialchars($acc['account_name'] ?? '') ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div>
+                        <input type="checkbox" id="weline-import-select-all" onchange="WelineDomainList.toggleImportSelectAll()">
+                        <label for="weline-import-select-all" class="form-label mb-0 ms-1"><?= __('全选') ?></label>
+                        <span class="text-muted ms-2" id="weline-import-count"></span>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="WelineDomainList.toggleShowImported()">
+                            <i class="mdi mdi-eye-off me-1"></i><span id="weline-import-toggle-text"><?= __('隐藏已导入') ?></span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th style="width:40px;"></th>
+                                <th><?= __('域名') ?></th>
+                                <th><?= __('状态') ?></th>
+                                <th><?= __('到期时间') ?></th>
+                                <th><?= __('本地状态') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody id="weline-import-domain-list">
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">
+                                    <?= __('请选择域名商账户') ?>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-3 p-2" style="background:var(--backend-color-bg-tertiary,#f1f3f5);border-radius:var(--backend-border-radius,6px);">
+                    <label class="form-check-label d-flex align-items-start gap-2" style="cursor:pointer;">
+                        <input type="checkbox" id="weline-import-auto-resolve" checked class="form-check-input" style="margin-top:3px;">
+                        <div>
+                            <strong><i class="mdi mdi-server"></i> <?= __('自动解析DNS到本地服务器') ?></strong>
+                            <div class="text-muted small"><?= __('导入后自动将域名的 @ 和 www 记录解析到本服务器公网IP') ?></div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                <button type="button" class="btn btn-primary" onclick="WelineDomainList.importSelectedDomains()">
+                    <i class="mdi mdi-import me-1"></i><?= __('导入选中域名') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- DNS 记录弹窗 -->
+<div class="modal fade" id="welineDnsRecordModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="mdi mdi-dns me-2"></i>
+                    <span id="weline-dns-modal-title"><?= __('DNS记录管理') ?></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex gap-2 align-items-center">
+                        <span class="text-muted"><?= __('DNS服务商') ?>:</span>
+                        <span id="weline-dns-provider-badge" class="weline-domain-dns-provider"></span>
+                        <span class="text-muted ms-3"><?= __('本服务器IP') ?>:</span>
+                        <code id="weline-dns-server-ip">-</code>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="WelineDomainList.syncDnsRecords()">
+                            <i class="mdi mdi-sync me-1"></i><?= __('同步记录') ?>
+                        </button>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="WelineDomainList.showAddDnsRecordForm()">
+                            <i class="mdi mdi-plus me-1"></i><?= __('添加记录') ?>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 添加/编辑记录表单 -->
+                <div id="weline-dns-record-form-container" style="display:none;" class="mb-3">
+                    <div class="card border">
+                        <div class="card-body">
+                            <form id="weline-dns-record-form">
+                                <input type="hidden" id="weline-dns-form-domain-id">
+                                <input type="hidden" id="weline-dns-form-record-id">
+                                <div class="row g-3">
+                                    <div class="col-md-2">
+                                        <label class="form-label"><?= __('类型') ?></label>
+                                        <select class="form-select form-select-sm" id="weline-dns-form-type">
+                                            <option value="A">A</option>
+                                            <option value="AAAA">AAAA</option>
+                                            <option value="CNAME">CNAME</option>
+                                            <option value="MX">MX</option>
+                                            <option value="TXT">TXT</option>
+                                            <option value="NS">NS</option>
+                                            <option value="CAA">CAA</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label"><?= __('主机记录') ?></label>
+                                        <input type="text" class="form-control form-control-sm" id="weline-dns-form-host" placeholder="@">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label"><?= __('记录值') ?></label>
+                                        <input type="text" class="form-control form-control-sm" id="weline-dns-form-value">
+                                    </div>
+                                    <div class="col-md-1">
+                                        <label class="form-label">TTL</label>
+                                        <input type="number" class="form-control form-control-sm" id="weline-dns-form-ttl" value="600">
+                                    </div>
+                                    <div class="col-md-2 d-flex align-items-end gap-2">
+                                        <button type="button" class="btn btn-primary btn-sm" onclick="WelineDomainList.saveDnsRecord()">
+                                            <i class="mdi mdi-check"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-secondary btn-sm" onclick="WelineDomainList.hideAddDnsRecordForm()">
+                                            <i class="mdi mdi-close"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DNS记录列表 -->
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th><?= __('类型') ?></th>
+                                <th><?= __('主机记录') ?></th>
+                                <th><?= __('记录值') ?></th>
+                                <th>TTL</th>
+                                <th><?= __('状态') ?></th>
+                                <th class="text-end"><?= __('操作') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody id="weline-dns-records-body">
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">
+                                    <?= __('请选择域名查看DNS记录') ?>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-success btn-sm" onclick="WelineDomainList.autoResolve()">
+                    <i class="mdi mdi-auto-fix me-1"></i><?= __('自动解析到本服务器') ?>
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('关闭') ?></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 批量切换DNS服务器弹窗 -->
+<div class="modal fade" id="welineBatchChangeNsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="mdi mdi-swap-horizontal me-2"></i><?= __('批量切换DNS服务器') ?>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small">
+                    <i class="mdi mdi-information-outline me-1"></i>
+                    <?= __('将选中域名的 Nameserver 切换到目标服务商。切换后域名将使用新的 DNS 服务商进行解析。') ?>
+                </div>
+                <p class="text-muted small mb-3" id="weline-batch-ns-selected-info"></p>
+
+                <!-- 切换方式选择 -->
+                <div class="mb-3">
+                    <label class="form-label"><?= __('切换方式') ?></label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="weline-ns-switch-mode" id="weline-ns-mode-account" value="account" checked>
+                        <label class="btn btn-outline-primary" for="weline-ns-mode-account">
+                            <i class="mdi mdi-account-key me-1"></i><?= __('选择账户（推荐）') ?>
+                        </label>
+                        <input type="radio" class="btn-check" name="weline-ns-switch-mode" id="weline-ns-mode-manual" value="manual">
+                        <label class="btn btn-outline-primary" for="weline-ns-mode-manual">
+                            <i class="mdi mdi-pencil me-1"></i><?= __('手动输入') ?>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 账户选择模式 -->
+                <div id="weline-batch-ns-account-mode">
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('选择目标账户') ?></label>
+                        <select class="form-select" id="weline-batch-ns-account">
+                            <option value=""><?= __('-- 加载中... --') ?></option>
+                        </select>
+                        <div class="form-text"><?= __('选择已配置的域名商账户，系统将自动获取该账户的DNS服务器') ?></div>
+                    </div>
+                    <div class="alert alert-warning small" id="weline-batch-ns-account-no-data" style="display:none;">
+                        <i class="mdi mdi-alert-circle me-1"></i>
+                        <?= __('暂无可用的域名商账户，请先在「域名注册商账户」中添加并启用账户，或使用下方「手动输入」模式直接填写DNS服务器地址') ?>
+                    </div>
+                    <div class="alert alert-success small" id="weline-batch-ns-account-info" style="display:none;">
+                        <i class="mdi mdi-check-circle me-1"></i>
+                        <span id="weline-batch-ns-account-ns"></span>
+                    </div>
+                </div>
+
+                <!-- 手动输入模式 -->
+                <div id="weline-batch-ns-manual-mode" style="display:none;">
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('选择DNS服务商') ?></label>
+                        <select class="form-select" id="weline-batch-ns-provider" onchange="WelineDomainList.onNsProviderChange()">
+                            <option value=""><?= __('-- 请选择 --') ?></option>
+                            <option value="dnspod">DNSPod (ns1.dnspod.net, ns2.dnspod.net)</option>
+                            <option value="alidns"><?= __('阿里云 DNS') ?> (ns1.alidns.com, ns2.alidns.com)</option>
+                            <option value="custom"><?= __('自定义') ?></option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3" id="weline-batch-ns-custom-input" style="display:none;">
+                        <label class="form-label"><?= __('Nameserver 列表') ?></label>
+                        <input type="text" class="form-control" id="weline-batch-ns-custom" 
+                               placeholder="<?= __('如：ns1.example.com,ns2.example.com') ?>">
+                        <div class="form-text"><?= __('多个 Nameserver 用英文逗号分隔') ?></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                <button type="button" class="btn btn-primary" id="weline-batch-ns-submit" onclick="WelineDomainList.doBatchChangeNs()">
+                    <i class="mdi mdi-swap-horizontal me-1"></i><?= __('确认切换') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 批量添加DNS记录弹窗 -->
+<div class="modal fade" id="welineBatchAddDnsRecordModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="mdi mdi-plus-network me-2"></i><?= __('批量添加DNS记录') ?>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small">
+                    <i class="mdi mdi-information-outline me-1"></i>
+                    <?= __('为选中的域名批量添加相同的DNS解析记录。') ?>
+                </div>
+                <p class="text-muted small mb-3" id="weline-batch-add-dns-selected-info"></p>
+
+                <div class="weline-server-ip-option mb-3">
+                    <label class="weline-checkbox-label">
+                        <input type="checkbox" id="weline-batch-add-dns-use-server-ip" onchange="WelineDomainList.onBatchAddDnsUseServerIpChange()">
+                        <span class="weline-checkbox-custom"></span>
+                        <span class="weline-checkbox-text"><?= __('使用本服务器公网IP') ?></span>
+                    </label>
+                    <code class="weline-server-ip-badge" id="weline-batch-add-dns-server-ip-display">-</code>
+                </div>
+
+                <div id="weline-batch-add-dns-form-fields">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label"><?= __('记录类型') ?></label>
+                            <select class="form-select" id="weline-batch-add-dns-type">
+                                <option value="A">A</option>
+                                <option value="AAAA">AAAA</option>
+                                <option value="CNAME">CNAME</option>
+                                <option value="MX">MX</option>
+                                <option value="TXT">TXT</option>
+                                <option value="NS">NS</option>
+                            </select>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label"><?= __('主机记录') ?></label>
+                            <input type="text" class="form-control" id="weline-batch-add-dns-host" value="@" placeholder="<?= __('如：@,www 或 @,www,* 多个用逗号分隔') ?>">
+                            <small class="text-muted"><?= __('支持多个主机记录，用英文逗号分隔') ?></small>
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-2">
+                        <div class="col-md-8">
+                            <label class="form-label"><?= __('记录值') ?></label>
+                            <input type="text" class="form-control" id="weline-batch-add-dns-value" placeholder="<?= __('如：192.168.1.1 或 example.com') ?>">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label"><?= __('TTL (秒)') ?></label>
+                            <input type="number" class="form-control" id="weline-batch-add-dns-ttl" value="600" min="60" max="86400">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="weline-batch-add-dns-server-ip-fields" style="display:none;">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label"><?= __('主机记录') ?></label>
+                            <input type="text" class="form-control" id="weline-batch-add-dns-host-server" value="@,www" placeholder="<?= __('如：@,www 或 @,www,* 多个用逗号分隔') ?>">
+                            <small class="text-muted"><?= __('支持多个主机记录，用英文逗号分隔') ?></small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label"><?= __('TTL (秒)') ?></label>
+                            <input type="number" class="form-control" id="weline-batch-add-dns-ttl-server" value="600" min="60" max="86400">
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <span class="text-muted small"><?= __('记录类型') ?>: <code>A</code></span>
+                        <span class="text-muted small ms-3"><?= __('记录值') ?>: <code id="weline-batch-add-dns-server-ip-display">-</code></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                <button type="button" class="btn btn-primary" id="weline-batch-add-dns-submit" onclick="WelineDomainList.doBatchAddDnsRecords()">
+                    <i class="mdi mdi-plus me-1"></i><?= __('确认添加') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 批量设置账户弹窗 -->
+<div class="modal fade" id="welineBatchSetAccountsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="mdi mdi-account-cog me-2"></i><?= __('批量设置账户') ?>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small">
+                    <i class="mdi mdi-information-outline me-1"></i>
+                    <?= __('为选中域名设置 DNS/CDN 管理账户。留空表示不修改该项。') ?>
+                </div>
+                <p class="text-muted small mb-3" id="weline-batch-set-accounts-selected-info"></p>
+
+                <div class="mb-3">
+                    <label class="form-label"><?= __('DNS 管理账户') ?></label>
+                    <select class="form-select" id="weline-batch-set-dns-account">
+                        <option value=""><?= __('-- 不修改 --') ?></option>
+                        <option value="0"><?= __('清除（使用注册商账户）') ?></option>
+                    </select>
+                    <small class="text-muted"><?= __('用于管理 DNS 解析记录的账户') ?></small>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label"><?= __('CDN 管理账户') ?></label>
+                    <select class="form-select" id="weline-batch-set-cdn-account">
+                        <option value=""><?= __('-- 不修改 --') ?></option>
+                        <option value="0"><?= __('清除') ?></option>
+                    </select>
+                    <small class="text-muted"><?= __('CDN 服务商账户（如 Cloudflare）') ?></small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                <button type="button" class="btn btn-primary" id="weline-batch-set-accounts-submit" onclick="WelineDomainList.doBatchSetAccounts()">
+                    <i class="mdi mdi-check me-1"></i><?= __('确认设置') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+
+    var currentPage = 1;
+    var pageSize = 20;
+    var currentDomainId = null;
+    var currentDomain = null;
+
+    var urls = {
+        domainList: '<?= $this->getUrl('*/admin/domain/get-domain-list') ?>',
+        remoteDomains: '<?= $this->getUrl('*/admin/domain/get-remote-domains') ?>',
+        importDomains: '<?= $this->getUrl('*/admin/domain/import-domains') ?>',
+        checkResolve: '<?= $this->getUrl('*/admin/domain/check-resolve') ?>',
+        batchCheckResolve: '<?= $this->getUrl('*/admin/domain/batch-check-resolve') ?>',
+        autoResolve: '<?= $this->getUrl('*/admin/domain/auto-resolve') ?>',
+        dnsRecords: '<?= $this->getUrl('*/admin/domain/get-dns-records') ?>',
+        syncDnsRecords: '<?= $this->getUrl('*/admin/domain/sync-dns-records') ?>',
+        addDnsRecord: '<?= $this->getUrl('*/admin/domain/add-dns-record') ?>',
+        deleteDnsRecord: '<?= $this->getUrl('*/admin/domain/delete-dns-record') ?>',
+        refreshServerIp: '<?= $this->getUrl('*/admin/domain/refresh-server-ip') ?>',
+        transferToPool: '<?= $this->getUrl('*/admin/domain/transfer-to-pool') ?>',
+        batchTransferToPool: '<?= $this->getUrl('*/admin/domain/batch-transfer-to-pool') ?>',
+        batchTransferToPoolWithIpCheck: '<?= $this->getUrl('*/admin/domain/batch-transfer-to-pool-with-ip-check') ?>',
+        batchResolveToLocal: '<?= $this->getUrl('*/admin/domain/batch-resolve-to-local') ?>',
+        batchChangeNameservers: '<?= $this->getUrl('*/admin/domain/batch-change-nameservers') ?>',
+        getRegistrarAccounts: '<?= $this->getUrl('*/admin/domain/get-registrar-accounts') ?>',
+        getAccountNameservers: '<?= $this->getUrl('*/admin/domain/get-account-nameservers') ?>',
+        batchSwitchToAccount: '<?= $this->getUrl('*/admin/domain/batch-switch-to-account') ?>',
+        batchAddDnsRecords: '<?= $this->getUrl('*/admin/domain/batch-add-dns-records') ?>',
+        detectDnsProvider: '<?= $this->getUrl('*/admin/domain/detect-dns-provider') ?>',
+        cleanupDnsProviderDomains: '<?= $this->getUrl('*/admin/domain/cleanup-dns-provider-domains') ?>',
+        batchSetAccounts: '<?= $this->getUrl('*/admin/domain/batch-set-accounts') ?>',
+        getDnsAccounts: '<?= $this->getUrl('*/admin/domain/get-dns-accounts') ?>'
+    };
+
+    var importModal = null;
+    var remoteDomainData = [];
+    var hideImported = false;
+
+    function toast(msg, type) {
+        if (typeof BackendToast !== 'undefined') {
+            BackendToast[type] ? BackendToast[type](msg) : BackendToast.info(msg);
+        } else if (typeof showToast !== 'undefined') {
+            showToast(msg, type);
+        } else {
+            console.log('[' + type + '] ' + msg);
+        }
+    }
+
+    function getFilters() {
+        return {
+            account_id: document.getElementById('weline-domain-filter-account').value,
+            resolve_status: document.getElementById('weline-domain-filter-resolve').value,
+            https_status: document.getElementById('weline-domain-filter-https').value,
+            search: document.getElementById('weline-domain-filter-search').value
+        };
+    }
+
+    function loadDomains(page) {
+        currentPage = page || 1;
+        var filters = getFilters();
+        var params = new URLSearchParams({
+            page: currentPage,
+            page_size: pageSize,
+            account_id: filters.account_id,
+            resolve_status: filters.resolve_status,
+            https_status: filters.https_status,
+            search: filters.search
+        });
+
+        var tbody = document.getElementById('weline-domain-list-body');
+        tbody.innerHTML = '<tr><td colspan="8" class="weline-domain-empty"><i class="mdi mdi-loading mdi-spin" style="font-size:2rem;"></i><p class="mt-2 mb-0"><?= __('加载中...') ?></p></td></tr>';
+
+        fetch(urls.domainList + '?' + params.toString())
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    renderDomainList(data.data.items || []);
+                    renderPagination(data.data.pagination || {});
+                } else {
+                    toast(data.msg || '<?= __('加载失败') ?>', 'error');
+                    tbody.innerHTML = '<tr><td colspan="8" class="weline-domain-empty"><i class="mdi mdi-alert-circle-outline" style="font-size:2rem;color:var(--backend-color-danger);"></i><p class="mt-2 mb-0">' + (data.msg || '<?= __('加载失败') ?>') + '</p></td></tr>';
+                }
+            })
+            .catch(function(err) {
+                toast('<?= __('请求失败') ?>', 'error');
+                tbody.innerHTML = '<tr><td colspan="8" class="weline-domain-empty"><i class="mdi mdi-alert-circle-outline" style="font-size:2rem;color:var(--backend-color-danger);"></i><p class="mt-2 mb-0"><?= __('请求失败') ?></p></td></tr>';
+            });
+    }
+
+    function renderDomainList(items) {
+        var tbody = document.getElementById('weline-domain-list-body');
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="weline-domain-empty"><i class="mdi mdi-earth-off" style="font-size:2rem;"></i><p class="mt-2 mb-0"><?= __('暂无域名数据') ?></p></td></tr>';
+            return;
+        }
+
+        var html = '';
+        items.forEach(function(item) {
+            var resolveClass = 'weline-domain-status-pending';
+            var resolveText = '<?= __('待检测') ?>';
+            if (item.resolve_status === 'resolved') {
+                resolveClass = 'weline-domain-status-resolved';
+                resolveText = '<?= __('已解析') ?>';
+            } else if (item.resolve_status === 'unresolved') {
+                resolveClass = 'weline-domain-status-unresolved';
+                resolveText = '<?= __('未解析') ?>';
+            } else if (item.resolve_status === 'error') {
+                resolveClass = 'weline-domain-status-error';
+                resolveText = '<?= __('错误') ?>';
+            }
+
+            var httpsClass = 'weline-domain-https-none';
+            var httpsText = '<?= __('无') ?>';
+            if (item.https_status === 'valid') {
+                httpsClass = 'weline-domain-https-valid';
+                httpsText = '<?= __('有效') ?>';
+            } else if (item.https_status === 'expiring') {
+                httpsClass = 'weline-domain-https-expiring';
+                httpsText = '<?= __('即将过期') ?>';
+            } else if (item.https_status === 'expired') {
+                httpsClass = 'weline-domain-status-error';
+                httpsText = '<?= __('已过期') ?>';
+            }
+
+            var localBadge = item.is_local_server ? '<span class="weline-domain-local-badge ms-1"><?= __('本机') ?></span>' : '';
+            var siteReady = item.site_ready ? '<i class="mdi mdi-check-circle text-success"></i>' : '<i class="mdi mdi-close-circle text-muted"></i>';
+
+            // 构建服务商列（三行：注册商、DNS、CDN）
+            var registrarName = item.registrar_name || item.account_name || '-';
+            var dnsName = item.dns_provider_name || item.dns_provider || '-';
+            var cdnName = item.cdn_provider_name || item.cdn_provider || '-';
+
+            var registrarClass = registrarName !== '-' ? 'weline-provider-registrar' : 'weline-provider-none';
+            var dnsClass = dnsName !== '-' ? 'weline-provider-dns' : 'weline-provider-none';
+            var cdnClass = cdnName !== '-' ? 'weline-provider-cdn' : 'weline-provider-none';
+
+            var providerCell = '<div class="weline-domain-provider-cell">' +
+                '<div class="weline-domain-provider-row">' +
+                    '<span class="weline-domain-provider-label"><?= __('注册') ?></span>' +
+                    '<span class="weline-domain-provider-badge ' + registrarClass + '">' + registrarName + '</span>' +
+                '</div>' +
+                '<div class="weline-domain-provider-row">' +
+                    '<span class="weline-domain-provider-label">DNS</span>' +
+                    '<span class="weline-domain-provider-badge ' + dnsClass + '">' + dnsName + '</span>' +
+                '</div>' +
+                '<div class="weline-domain-provider-row">' +
+                    '<span class="weline-domain-provider-label">CDN</span>' +
+                    '<span class="weline-domain-provider-badge ' + cdnClass + '">' + cdnName + '</span>' +
+                '</div>' +
+            '</div>';
+
+            html += '<tr data-domain-id="' + item.domain_id + '">' +
+                '<td><input type="checkbox" class="weline-domain-checkbox" value="' + item.domain_id + '" data-domain="' + (item.domain || '') + '"></td>' +
+                '<td><span class="domain-name">' + (item.domain || '') + '</span></td>' +
+                '<td>' + providerCell + '</td>' +
+                '<td><span class="weline-domain-status-badge ' + resolveClass + '">' + resolveText + '</span></td>' +
+                '<td>' + (item.resolved_ip || '-') + localBadge + '</td>' +
+                '<td><span class="weline-domain-status-badge ' + httpsClass + '">' + httpsText + '</span></td>' +
+                '<td>' + siteReady + '</td>' +
+                '<td class="text-end weline-domain-actions">' +
+                    '<button type="button" class="btn btn-outline-success btn-sm" title="<?= __('转存域名池') ?>" onclick="WelineDomainList.transferToPool(' + item.domain_id + ', \'' + (item.domain || '').replace(/'/g, "\\'") + '\')"><i class="mdi mdi-database-export"></i></button> ' +
+                    '<button type="button" class="btn btn-outline-info btn-sm" title="<?= __('DNS管理') ?>" onclick="WelineDomainList.showDnsModal(' + item.domain_id + ', \'' + (item.domain || '').replace(/'/g, "\\'") + '\')"><i class="mdi mdi-dns"></i></button> ' +
+                    '<button type="button" class="btn btn-outline-primary btn-sm" title="<?= __('检测解析') ?>" onclick="WelineDomainList.checkResolve(' + item.domain_id + ')"><i class="mdi mdi-refresh"></i></button>' +
+                '</td>' +
+                '</tr>';
+        });
+        tbody.innerHTML = html;
+    }
+
+    function renderPagination(pagination) {
+        var info = document.getElementById('weline-domain-pagination-info');
+        var links = document.getElementById('weline-domain-pagination-links');
+
+        var total = pagination.total || 0;
+        var current = pagination.current_page || 1;
+        var lastPage = pagination.last_page || 1;
+        var from = ((current - 1) * pageSize) + 1;
+        var to = Math.min(current * pageSize, total);
+
+        info.textContent = total > 0 ? '<?= __('显示') ?> ' + from + '-' + to + ' <?= __('共') ?> ' + total + ' <?= __('条') ?>' : '';
+
+        var linksHtml = '';
+        if (lastPage > 1) {
+            linksHtml += '<li class="page-item ' + (current <= 1 ? 'disabled' : '') + '"><a class="page-link" href="#" onclick="WelineDomainList.loadDomains(' + (current - 1) + ');return false;">&laquo;</a></li>';
+            for (var i = 1; i <= lastPage && i <= 10; i++) {
+                linksHtml += '<li class="page-item ' + (i === current ? 'active' : '') + '"><a class="page-link" href="#" onclick="WelineDomainList.loadDomains(' + i + ');return false;">' + i + '</a></li>';
+            }
+            linksHtml += '<li class="page-item ' + (current >= lastPage ? 'disabled' : '') + '"><a class="page-link" href="#" onclick="WelineDomainList.loadDomains(' + (current + 1) + ');return false;">&raquo;</a></li>';
+        }
+        links.innerHTML = linksHtml;
+    }
+
+    function showImportModal() {
+        if (!importModal) {
+            importModal = new bootstrap.Modal(document.getElementById('welineImportDomainModal'));
+        }
+        document.getElementById('weline-import-account-select').value = '';
+        document.getElementById('weline-import-domain-list').innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4"><?= __('请选择域名商账户') ?></td></tr>';
+        document.getElementById('weline-import-count').textContent = '';
+        remoteDomainData = [];
+        hideImported = false;
+        document.getElementById('weline-import-toggle-text').textContent = '<?= __('隐藏已导入') ?>';
+        importModal.show();
+    }
+
+    function fetchRemoteDomains() {
+        var accountId = document.getElementById('weline-import-account-select').value;
+        var tbody = document.getElementById('weline-import-domain-list');
+
+        if (!accountId) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4"><?= __('请选择域名商账户') ?></td></tr>';
+            remoteDomainData = [];
+            updateImportCount();
+            return;
+        }
+
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4"><i class="mdi mdi-loading mdi-spin" style="font-size:1.5rem;"></i><p class="mt-2 mb-0"><?= __('正在获取远程域名列表...') ?></p></td></tr>';
+
+        fetch(urls.remoteDomains + '?account_id=' + accountId)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    remoteDomainData = data.data.domains || [];
+                    renderImportDomainList();
+                    toast(data.msg || '<?= __('获取成功') ?>', 'success');
+                } else {
+                    toast(data.msg || '<?= __('获取失败') ?>', 'error');
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">' + (data.msg || '<?= __('获取失败') ?>') + '</td></tr>';
+                    remoteDomainData = [];
+                }
+                updateImportCount();
+            })
+            .catch(function() {
+                toast('<?= __('请求失败') ?>', 'error');
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4"><?= __('请求失败') ?></td></tr>';
+                remoteDomainData = [];
+                updateImportCount();
+            });
+    }
+
+    function renderImportDomainList() {
+        var tbody = document.getElementById('weline-import-domain-list');
+        var domains = remoteDomainData;
+
+        if (hideImported) {
+            domains = domains.filter(function(d) { return !d.is_local; });
+        }
+
+        if (domains.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">' + (hideImported ? '<?= __('所有域名已导入') ?>' : '<?= __('没有域名') ?>') + '</td></tr>';
+            return;
+        }
+
+        var html = '';
+        domains.forEach(function(d) {
+            var statusClass = d.status === 'active' ? 'weline-domain-status-resolved' : 'weline-domain-status-pending';
+            var statusText = d.status === 'active' ? '<?= __('正常') ?>' : (d.status || '-');
+            var localBadge = d.is_local
+                ? '<span class="badge bg-success"><?= __('已导入') ?></span>'
+                : '<span class="badge bg-secondary"><?= __('未导入') ?></span>';
+
+            html += '<tr data-domain="' + (d.domain || '') + '">' +
+                '<td><input type="checkbox" class="weline-import-checkbox" value="' + (d.domain || '') + '"' + (d.is_local ? ' disabled' : '') + '></td>' +
+                '<td><strong>' + (d.domain || '') + '</strong></td>' +
+                '<td><span class="weline-domain-status-badge ' + statusClass + '">' + statusText + '</span></td>' +
+                '<td>' + (d.expires_at || '-') + '</td>' +
+                '<td>' + localBadge + '</td>' +
+                '</tr>';
+        });
+        tbody.innerHTML = html;
+    }
+
+    function updateImportCount() {
+        var total = remoteDomainData.length;
+        var imported = remoteDomainData.filter(function(d) { return d.is_local; }).length;
+        var el = document.getElementById('weline-import-count');
+        if (total > 0) {
+            el.textContent = '<?= __('共') ?> ' + total + ' <?= __('个域名') ?>，<?= __('已导入') ?> ' + imported + ' <?= __('个') ?>';
+        } else {
+            el.textContent = '';
+        }
+    }
+
+    function toggleImportSelectAll() {
+        var checked = document.getElementById('weline-import-select-all').checked;
+        document.querySelectorAll('.weline-import-checkbox:not(:disabled)').forEach(function(cb) {
+            cb.checked = checked;
+        });
+    }
+
+    function toggleShowImported() {
+        hideImported = !hideImported;
+        document.getElementById('weline-import-toggle-text').textContent = hideImported ? '<?= __('显示全部') ?>' : '<?= __('隐藏已导入') ?>';
+        renderImportDomainList();
+    }
+
+    function importSelectedDomains() {
+        var checkboxes = document.querySelectorAll('.weline-import-checkbox:checked');
+        var domains = [];
+        checkboxes.forEach(function(cb) { domains.push(cb.value); });
+
+        if (domains.length === 0) {
+            toast('<?= __('请选择要导入的域名') ?>', 'warning');
+            return;
+        }
+
+        var accountId = document.getElementById('weline-import-account-select').value;
+        if (!accountId) {
+            toast('<?= __('请选择域名商账户') ?>', 'warning');
+            return;
+        }
+
+        var autoResolveCheckbox = document.getElementById('weline-import-auto-resolve');
+        var autoResolve = autoResolveCheckbox ? autoResolveCheckbox.checked : true;
+
+        toast('<?= __('正在导入域名...') ?>', 'info');
+        var fd = new FormData();
+        fd.append('account_id', accountId);
+        fd.append('auto_resolve', autoResolve ? '1' : '0');
+        domains.forEach(function(d) { fd.append('domains[]', d); });
+
+        fetch(urls.importDomains, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    var msg = data.msg || '<?= __('导入成功') ?>';
+                    if (autoResolve && data.auto_resolve_queued) {
+                        msg += ' <?= __('（自动解析任务已创建）') ?>';
+                    }
+                    toast(msg, 'success');
+                    fetchRemoteDomains();
+                    loadDomains(1);
+                } else {
+                    toast(data.msg || '<?= __('导入失败') ?>', 'error');
+                }
+            })
+            .catch(function() { toast('<?= __('请求失败') ?>', 'error'); });
+    }
+
+    function checkResolve(domainId) {
+        toast('<?= __('正在检测解析...') ?>', 'info');
+        var fd = new FormData();
+        fd.append('domain_id', domainId);
+        fetch(urls.checkResolve, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    toast(data.msg || '<?= __('检测完成') ?>', 'success');
+                    loadDomains(currentPage);
+                } else {
+                    toast(data.msg || '<?= __('检测失败') ?>', 'error');
+                }
+            })
+            .catch(function() { toast('<?= __('请求失败') ?>', 'error'); });
+    }
+
+    function batchCheckResolve() {
+        var checkboxes = document.querySelectorAll('.weline-domain-checkbox:checked');
+        var ids = [];
+        checkboxes.forEach(function(cb) { ids.push(cb.value); });
+
+        if (ids.length === 0) {
+            toast('<?= __('请选择要检测的域名') ?>', 'warning');
+            return;
+        }
+
+        toast('<?= __('正在批量检测解析...') ?>', 'info');
+        var fd = new FormData();
+        fd.append('domain_ids', JSON.stringify(ids));
+        fetch(urls.batchCheckResolve, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    toast(data.msg || '<?= __('检测完成') ?>', 'success');
+                    loadDomains(currentPage);
+                } else {
+                    toast(data.msg || '<?= __('检测失败') ?>', 'error');
+                }
+            })
+            .catch(function() { toast('<?= __('请求失败') ?>', 'error'); });
+    }
+
+    function showDnsModal(domainId, domain) {
+        currentDomainId = domainId;
+        currentDomain = domain;
+        document.getElementById('weline-dns-modal-title').textContent = '<?= __('DNS记录管理') ?> - ' + domain;
+        document.getElementById('weline-dns-form-domain-id').value = domainId;
+
+        var modal = new bootstrap.Modal(document.getElementById('welineDnsRecordModal'));
+        modal.show();
+
+        loadDnsRecords(domainId);
+    }
+
+    function loadDnsRecords(domainId) {
+        var tbody = document.getElementById('weline-dns-records-body');
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4"><i class="mdi mdi-loading mdi-spin"></i></td></tr>';
+
+        fetch(urls.dnsRecords + '?domain_id=' + domainId)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    var providerBadge = document.getElementById('weline-dns-provider-badge');
+                    providerBadge.textContent = data.data.dns_provider_name || data.data.dns_provider || '-';
+                    providerBadge.className = 'weline-domain-dns-provider';
+                    if (data.data.dns_provider === 'cloudflare') {
+                        providerBadge.classList.add('weline-domain-dns-cloudflare');
+                    } else if (data.data.is_original_provider) {
+                        providerBadge.classList.add('weline-domain-dns-original');
+                    } else {
+                        providerBadge.classList.add('weline-domain-dns-other');
+                    }
+
+                    document.getElementById('weline-dns-server-ip').textContent = data.data.server_ip || '-';
+
+                    renderDnsRecords(data.data.records || []);
+                } else {
+                    toast(data.msg || '<?= __('获取DNS记录失败') ?>', 'error');
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4"><?= __('获取失败') ?></td></tr>';
+                }
+            })
+            .catch(function() {
+                toast('<?= __('请求失败') ?>', 'error');
+            });
+    }
+
+    function renderDnsRecords(records) {
+        var tbody = document.getElementById('weline-dns-records-body');
+        if (!records.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4"><?= __('暂无DNS记录') ?></td></tr>';
+            return;
+        }
+
+        var html = '';
+        records.forEach(function(rec) {
+            var statusClass = 'weline-domain-status-pending';
+            var statusText = '<?= __('待同步') ?>';
+            if (rec.resolve_status === 'ok') {
+                statusClass = 'weline-domain-status-resolved';
+                statusText = '<?= __('正常') ?>';
+            } else if (rec.resolve_status === 'error') {
+                statusClass = 'weline-domain-status-error';
+                statusText = '<?= __('异常') ?>';
+            }
+
+            var localBadge = rec.is_local_ip ? ' <span class="weline-domain-local-badge"><?= __('本机') ?></span>' : '';
+
+            html += '<tr>' +
+                '<td><span class="badge bg-secondary">' + (rec.record_type || rec.type || 'A') + '</span></td>' +
+                '<td>' + (rec.host || '@') + '</td>' +
+                '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + (rec.value || '') + '">' + (rec.value || '') + localBadge + '</td>' +
+                '<td>' + (rec.ttl || 600) + '</td>' +
+                '<td><span class="weline-domain-status-badge ' + statusClass + '">' + statusText + '</span></td>' +
+                '<td class="text-end">' +
+                    '<button type="button" class="btn btn-outline-danger btn-sm" title="<?= __('删除') ?>" onclick="WelineDomainList.deleteDnsRecord(\'' + (rec.remote_record_id || rec.record_id || '') + '\', \'' + (rec.record_type || rec.type || 'A') + '\', \'' + (rec.host || '@') + '\')"><i class="mdi mdi-delete"></i></button>' +
+                '</td>' +
+                '</tr>';
+        });
+        tbody.innerHTML = html;
+    }
+
+    function syncDnsRecords() {
+        if (!currentDomainId) return;
+        toast('<?= __('正在同步DNS记录...') ?>', 'info');
+        var fd = new FormData();
+        fd.append('domain_id', currentDomainId);
+        fetch(urls.syncDnsRecords, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    toast(data.msg || '<?= __('同步成功') ?>', 'success');
+                    loadDnsRecords(currentDomainId);
+                } else {
+                    toast(data.msg || '<?= __('同步失败') ?>', 'error');
+                }
+            })
+            .catch(function() { toast('<?= __('请求失败') ?>', 'error'); });
+    }
+
+    function showAddDnsRecordForm() {
+        document.getElementById('weline-dns-record-form-container').style.display = 'block';
+        document.getElementById('weline-dns-form-record-id').value = '';
+        document.getElementById('weline-dns-form-type').value = 'A';
+        document.getElementById('weline-dns-form-host').value = '@';
+        document.getElementById('weline-dns-form-value').value = '';
+        document.getElementById('weline-dns-form-ttl').value = '600';
+    }
+
+    function hideAddDnsRecordForm() {
+        document.getElementById('weline-dns-record-form-container').style.display = 'none';
+    }
+
+    function saveDnsRecord() {
+        if (!currentDomainId) return;
+        var fd = new FormData();
+        fd.append('domain_id', currentDomainId);
+        fd.append('type', document.getElementById('weline-dns-form-type').value);
+        fd.append('host', document.getElementById('weline-dns-form-host').value || '@');
+        fd.append('value', document.getElementById('weline-dns-form-value').value);
+        fd.append('ttl', document.getElementById('weline-dns-form-ttl').value || 600);
+
+        fetch(urls.addDnsRecord, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    toast(data.msg || '<?= __('添加成功') ?>', 'success');
+                    hideAddDnsRecordForm();
+                    loadDnsRecords(currentDomainId);
+                } else {
+                    toast(data.msg || '<?= __('添加失败') ?>', 'error');
+                }
+            })
+            .catch(function() { toast('<?= __('请求失败') ?>', 'error'); });
+    }
+
+    function deleteDnsRecord(recordId, type, host) {
+        if (!currentDomainId) return;
+        if (typeof BackendConfirm !== 'undefined') {
+            BackendConfirm.show('<?= __('确定删除此DNS记录吗？') ?>').then(function(confirmed) {
+                if (confirmed) doDeleteDnsRecord(recordId, type, host);
+            });
+        } else if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: '<?= __('确认删除') ?>',
+                text: '<?= __('确定删除此DNS记录吗？') ?>',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#f46a6a',
+                cancelButtonText: '<?= __('取消') ?>',
+                confirmButtonText: '<?= __('删除') ?>'
+            }).then(function(result) {
+                if (result.isConfirmed) doDeleteDnsRecord(recordId, type, host);
+            });
+        } else {
+            doDeleteDnsRecord(recordId, type, host);
+        }
+    }
+
+    function doDeleteDnsRecord(recordId, type, host) {
+        var fd = new FormData();
+        fd.append('domain_id', currentDomainId);
+        fd.append('record_id', recordId);
+        fd.append('type', type);
+        fd.append('host', host);
+        fetch(urls.deleteDnsRecord, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    toast(data.msg || '<?= __('删除成功') ?>', 'success');
+                    loadDnsRecords(currentDomainId);
+                } else {
+                    toast(data.msg || '<?= __('删除失败') ?>', 'error');
+                }
+            })
+            .catch(function() { toast('<?= __('请求失败') ?>', 'error'); });
+    }
+
+    function autoResolve() {
+        if (!currentDomainId) return;
+        toast('<?= __('正在自动解析到本服务器...') ?>', 'info');
+        var fd = new FormData();
+        fd.append('domain_id', currentDomainId);
+        fetch(urls.autoResolve, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    toast(data.msg || '<?= __('解析成功') ?>', 'success');
+                    loadDnsRecords(currentDomainId);
+                    loadDomains(currentPage);
+                } else {
+                    toast(data.msg || '<?= __('解析失败') ?>', 'error');
+                }
+            })
+            .catch(function() { toast('<?= __('请求失败') ?>', 'error'); });
+    }
+
+    function refreshServerIp() {
+        toast('<?= __('正在刷新服务器IP...') ?>', 'info');
+        fetch(urls.refreshServerIp, { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    toast((data.msg || '<?= __('刷新成功') ?>') + ' IPv4: ' + (data.data.ipv4 || '-'), 'success');
+                } else {
+                    toast(data.msg || '<?= __('刷新失败') ?>', 'error');
+                }
+            })
+            .catch(function() { toast('<?= __('请求失败') ?>', 'error'); });
+    }
+
+    function transferToPool(domainId, domain) {
+        if (typeof BackendConfirm !== 'undefined' && BackendConfirm.showInput) {
+            BackendConfirm.showInput('<?= __('转存到域名池') ?>', '<?= __('输入子域名前缀（多个用逗号分隔，默认 @,www）') ?>', '@,www')
+                .then(function(result) {
+                    if (result.confirmed) {
+                        doTransferToPool(domainId, result.value);
+                    }
+                });
+        } else {
+            doTransferToPool(domainId, '@,www');
+        }
+    }
+
+    function doTransferToPool(domainId, prefixesStr) {
+        var prefixes = prefixesStr ? prefixesStr.split(',').map(function(s) { return s.trim(); }) : ['@', 'www'];
+        toast('<?= __('正在转存到域名池...') ?>', 'info');
+        var fd = new FormData();
+        fd.append('domain_id', domainId);
+        prefixes.forEach(function(p) { fd.append('prefixes[]', p); });
+        fetch(urls.transferToPool, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    toast(data.msg || '<?= __('转存成功') ?>', 'success');
+                } else {
+                    toast(data.msg || '<?= __('转存失败') ?>', 'error');
+                }
+            })
+            .catch(function() { toast('<?= __('请求失败') ?>', 'error'); });
+    }
+
+    function batchTransferToPool() {
+        var checkboxes = document.querySelectorAll('.weline-domain-checkbox:checked');
+        var ids = [];
+        checkboxes.forEach(function(cb) { ids.push(cb.value); });
+
+        if (ids.length === 0) {
+            toast('<?= __('请选择要转存的域名') ?>', 'warning');
+            return;
+        }
+
+        if (typeof BackendConfirm !== 'undefined' && BackendConfirm.showInput) {
+            BackendConfirm.showInput('<?= __('批量转存到域名池') ?>', '<?= __('输入子域名前缀（多个用逗号分隔，默认 @,www）') ?>', '@,www')
+                .then(function(result) {
+                    if (result.confirmed) {
+                        doBatchTransferToPool(ids, result.value);
+                    }
+                });
+        } else {
+            doBatchTransferToPool(ids, '@,www');
+        }
+    }
+
+    function doBatchTransferToPool(ids, prefixesStr) {
+        var prefixes = prefixesStr ? prefixesStr.split(',').map(function(s) { return s.trim(); }) : ['@', 'www'];
+        toast('<?= __('正在批量转存到域名池...') ?>', 'info');
+        var fd = new FormData();
+        ids.forEach(function(id) { fd.append('domain_ids[]', id); });
+        prefixes.forEach(function(p) { fd.append('prefixes[]', p); });
+        fetch(urls.batchTransferToPool, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    toast(data.msg || '<?= __('批量转存成功') ?>', 'success');
+                } else {
+                    toast(data.msg || '<?= __('批量转存失败') ?>', 'error');
+                }
+            })
+            .catch(function() { toast('<?= __('请求失败') ?>', 'error'); });
+    }
+
+    function toggleSelectAll() {
+        var selectAll = document.getElementById('weline-domain-select-all').checked;
+        document.querySelectorAll('.weline-domain-checkbox').forEach(function(cb) {
+            cb.checked = selectAll;
+        });
+    }
+
+    function resetFilters() {
+        document.getElementById('weline-domain-filter-account').value = '';
+        document.getElementById('weline-domain-filter-resolve').value = '';
+        document.getElementById('weline-domain-filter-https').value = '';
+        document.getElementById('weline-domain-filter-search').value = '';
+        loadDomains(1);
+    }
+
+    function onSearchKeyup(e) {
+        if (e.key === 'Enter') {
+            loadDomains(1);
+        }
+    }
+
+    function batchTransferToPoolWithIpCheck() {
+        var checkboxes = document.querySelectorAll('.weline-domain-checkbox:checked');
+        var ids = [];
+        checkboxes.forEach(function(cb) { ids.push(cb.value); });
+
+        if (ids.length === 0) {
+            toast('<?= __('请选择要转存的域名') ?>', 'warning');
+            return;
+        }
+
+        if (typeof BackendConfirm !== 'undefined' && BackendConfirm.show) {
+            BackendConfirm.show('<?= __('确定批量转存') ?> ' + ids.length + ' <?= __('个域名？') ?>\n\n<?= __('注意：只有解析到本服务器IP的域名才会被转存，其他将跳过。') ?>', {
+                title: '<?= __('批量转存（检查IP）') ?>',
+                confirmText: '<?= __('确认转存') ?>',
+                cancelText: '<?= __('取消') ?>'
+            }).then(function(confirmed) {
+                if (confirmed) {
+                    doBatchTransferWithIpCheck(ids);
+                }
+            });
+        } else {
+            doBatchTransferWithIpCheck(ids);
+        }
+    }
+
+    function doBatchTransferWithIpCheck(ids) {
+        toast('<?= __('正在批量转存（检查IP）...') ?>', 'info');
+        var fd = new FormData();
+        fd.append('domain_ids', JSON.stringify(ids));
+        fetch(urls.batchTransferToPoolWithIpCheck, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    var msg = data.msg || '<?= __('批量转存完成') ?>';
+                    if (data.data && data.data.skipped_domains && data.data.skipped_domains.length > 0) {
+                        toast(msg, 'success');
+                        console.log('<?= __('跳过的域名（IP不匹配）') ?>:', data.data.skipped_domains);
+                    } else {
+                        toast(msg, 'success');
+                    }
+                } else {
+                    toast(data.msg || '<?= __('批量转存失败') ?>', 'error');
+                }
+            })
+            .catch(function() { toast('<?= __('请求失败') ?>', 'error'); });
+    }
+
+    function batchResolveToLocal() {
+        var checkboxes = document.querySelectorAll('.weline-domain-checkbox:checked');
+        var ids = [];
+        checkboxes.forEach(function(cb) { ids.push(cb.value); });
+
+        if (ids.length === 0) {
+            toast('<?= __('请选择要解析的域名') ?>', 'warning');
+            return;
+        }
+
+        if (typeof BackendConfirm !== 'undefined' && BackendConfirm.show) {
+            BackendConfirm.show('<?= __('确定将') ?> ' + ids.length + ' <?= __('个域名解析到本服务器？') ?>\n\n<?= __('将为每个域名添加 @ 和 www 的A记录指向本服务器公网IP。') ?>', {
+                title: '<?= __('批量解析到本地') ?>',
+                confirmText: '<?= __('确认解析') ?>',
+                cancelText: '<?= __('取消') ?>'
+            }).then(function(confirmed) {
+                if (confirmed) {
+                    doBatchResolveToLocal(ids);
+                }
+            });
+        } else {
+            doBatchResolveToLocal(ids);
+        }
+    }
+
+    function doBatchResolveToLocal(ids) {
+        toast('<?= __('正在批量解析到本地服务器...') ?>', 'info');
+        var fd = new FormData();
+        fd.append('domain_ids', JSON.stringify(ids));
+        fetch(urls.batchResolveToLocal, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    var msg = data.msg || '<?= __('解析完成') ?>';
+                    toast(msg, 'success');
+                    if (data.data && data.data.errors && data.data.errors.length > 0) {
+                        console.log('<?= __('解析错误') ?>:', data.data.errors);
+                    }
+                    loadDomains(currentPage);
+                } else {
+                    toast(data.msg || '<?= __('解析失败') ?>', 'error');
+                }
+            })
+            .catch(function() { toast('<?= __('请求失败') ?>', 'error'); });
+    }
+
+    var batchChangeNsModal = null;
+    var batchChangeNsSelectedIds = [];
+    var batchChangeNsSelectedDomains = [];
+    var registrarAccountsCache = null;
+
+    function showBatchChangeNsModal() {
+        var checkboxes = document.querySelectorAll('.weline-domain-checkbox:checked');
+        var ids = [];
+        var domains = [];
+        checkboxes.forEach(function(cb) {
+            ids.push(cb.value);
+            domains.push(cb.dataset.domain || '');
+        });
+
+        if (ids.length === 0) {
+            toast('<?= __('请选择要切换DNS的域名') ?>', 'warning');
+            return;
+        }
+
+        batchChangeNsSelectedIds = ids;
+        batchChangeNsSelectedDomains = domains.filter(function(d) { return d !== ''; });
+        document.getElementById('weline-batch-ns-selected-info').textContent = 
+            '<?= __('已选择') ?> ' + ids.length + ' <?= __('个域名') ?>';
+
+        document.getElementById('weline-ns-mode-account').checked = true;
+        document.getElementById('weline-batch-ns-account-mode').style.display = 'block';
+        document.getElementById('weline-batch-ns-manual-mode').style.display = 'none';
+        document.getElementById('weline-batch-ns-provider').value = '';
+        document.getElementById('weline-batch-ns-custom').value = '';
+        document.getElementById('weline-batch-ns-custom-input').style.display = 'none';
+        document.getElementById('weline-batch-ns-account-info').style.display = 'none';
+
+        loadRegistrarAccounts();
+
+        if (!batchChangeNsModal) {
+            batchChangeNsModal = new bootstrap.Modal(document.getElementById('welineBatchChangeNsModal'));
+            document.querySelectorAll('input[name="weline-ns-switch-mode"]').forEach(function(radio) {
+                radio.addEventListener('change', onNsSwitchModeChange);
+            });
+            document.getElementById('weline-batch-ns-account').addEventListener('change', onNsAccountChange);
+        }
+        batchChangeNsModal.show();
+    }
+
+    function loadRegistrarAccounts() {
+        var select = document.getElementById('weline-batch-ns-account');
+        var accountModeRadio = document.getElementById('weline-ns-mode-account');
+        var manualModeRadio = document.getElementById('weline-ns-mode-manual');
+        var accountNoDataTip = document.getElementById('weline-batch-ns-account-no-data');
+        
+        select.innerHTML = '<option value=""><?= __('-- 加载中... --') ?></option>';
+        if (accountNoDataTip) accountNoDataTip.style.display = 'none';
+
+        fetch(urls.getRegistrarAccounts)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200 && data.data && data.data.accounts) {
+                    registrarAccountsCache = data.data.accounts;
+                    if (data.data.accounts.length === 0) {
+                        select.innerHTML = '<option value=""><?= __('-- 暂无可用账户 --') ?></option>';
+                        select.disabled = true;
+                        accountModeRadio.disabled = true;
+                        if (accountNoDataTip) {
+                            accountNoDataTip.style.display = 'block';
+                        }
+                        manualModeRadio.checked = true;
+                        onNsSwitchModeChange();
+                    } else {
+                        select.disabled = false;
+                        accountModeRadio.disabled = false;
+                        var html = '<option value=""><?= __('-- 请选择目标账户 --') ?></option>';
+                        data.data.accounts.forEach(function(acc) {
+                            html += '<option value="' + acc.id + '" data-registrar="' + acc.registrar_code + '">' +
+                                    acc.name + ' (' + acc.registrar_name + ')' +
+                                    '</option>';
+                        });
+                        select.innerHTML = html;
+                    }
+                } else {
+                    select.innerHTML = '<option value=""><?= __('-- 加载失败 --') ?></option>';
+                }
+            })
+            .catch(function() {
+                select.innerHTML = '<option value=""><?= __('-- 加载失败 --') ?></option>';
+            });
+    }
+
+    function onNsSwitchModeChange() {
+        var mode = document.querySelector('input[name="weline-ns-switch-mode"]:checked').value;
+        document.getElementById('weline-batch-ns-account-mode').style.display = (mode === 'account') ? 'block' : 'none';
+        document.getElementById('weline-batch-ns-manual-mode').style.display = (mode === 'manual') ? 'block' : 'none';
+    }
+
+    function onNsAccountChange() {
+        var select = document.getElementById('weline-batch-ns-account');
+        var accountId = select.value;
+        var infoDiv = document.getElementById('weline-batch-ns-account-info');
+        var nsSpan = document.getElementById('weline-batch-ns-account-ns');
+
+        if (!accountId) {
+            infoDiv.style.display = 'none';
+            return;
+        }
+
+        infoDiv.style.display = 'block';
+        nsSpan.textContent = '<?= __('正在获取DNS服务器...') ?>';
+
+        var fd = new FormData();
+        fd.append('account_id', accountId);
+        fd.append('domains', JSON.stringify(batchChangeNsSelectedDomains.slice(0, 1)));
+
+        fetch(urls.getAccountNameservers, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200 && data.data) {
+                    if (data.data.per_domain) {
+                        nsSpan.textContent = '<?= __('Cloudflare 将为每个域名分配独立的 Nameserver') ?>';
+                    } else if (data.data.nameservers && data.data.nameservers.length > 0) {
+                        nsSpan.textContent = '<?= __('目标DNS') ?>: ' + data.data.nameservers.join(', ');
+                    } else {
+                        nsSpan.textContent = data.msg || '<?= __('该账户暂无可用DNS服务器') ?>';
+                        infoDiv.className = 'alert alert-warning small';
+                    }
+                } else {
+                    nsSpan.textContent = data.msg || '<?= __('获取失败') ?>';
+                    infoDiv.className = 'alert alert-warning small';
+                }
+            })
+            .catch(function() {
+                nsSpan.textContent = '<?= __('获取失败') ?>';
+                infoDiv.className = 'alert alert-warning small';
+            });
+    }
+
+    function onNsProviderChange() {
+        var provider = document.getElementById('weline-batch-ns-provider').value;
+        var customInput = document.getElementById('weline-batch-ns-custom-input');
+
+        customInput.style.display = (provider === 'custom') ? 'block' : 'none';
+    }
+
+    function doBatchChangeNs() {
+        if (batchChangeNsSelectedIds.length === 0) {
+            toast('<?= __('请选择要切换DNS的域名') ?>', 'warning');
+            return;
+        }
+
+        var mode = document.querySelector('input[name="weline-ns-switch-mode"]:checked').value;
+        var submitBtn = document.getElementById('weline-batch-ns-submit');
+
+        if (mode === 'account') {
+            var accountId = document.getElementById('weline-batch-ns-account').value;
+            if (!accountId) {
+                toast('<?= __('请选择目标账户') ?>', 'warning');
+                return;
+            }
+
+            toast('<?= __('正在批量切换DNS服务器...') ?>', 'info');
+            submitBtn.disabled = true;
+
+            var fd = new FormData();
+            fd.append('domain_ids', JSON.stringify(batchChangeNsSelectedIds));
+            fd.append('target_account_id', accountId);
+
+            fetch(urls.batchSwitchToAccount, { method: 'POST', body: fd })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    submitBtn.disabled = false;
+                    if (data.code === 200) {
+                        var msg = data.msg || '<?= __('切换完成') ?>';
+                        toast(msg, 'success');
+                        if (data.data && data.data.errors && data.data.errors.length > 0) {
+                            console.log('<?= __('切换错误') ?>:', data.data.errors);
+                        }
+                        if (batchChangeNsModal) {
+                            batchChangeNsModal.hide();
+                        }
+                        loadDomains(currentPage);
+                    } else {
+                        toast(data.msg || '<?= __('切换失败') ?>', 'error');
+                    }
+                })
+                .catch(function() {
+                    submitBtn.disabled = false;
+                    toast('<?= __('请求失败') ?>', 'error');
+                });
+        } else {
+            var provider = document.getElementById('weline-batch-ns-provider').value;
+            var customNs = document.getElementById('weline-batch-ns-custom').value.trim();
+
+            if (!provider) {
+                toast('<?= __('请选择DNS服务商') ?>', 'warning');
+                return;
+            }
+
+            if (provider === 'custom' && !customNs) {
+                toast('<?= __('请输入自定义Nameserver') ?>', 'warning');
+                return;
+            }
+
+            toast('<?= __('正在批量切换DNS服务器...') ?>', 'info');
+            submitBtn.disabled = true;
+
+            var fd = new FormData();
+            fd.append('domain_ids', JSON.stringify(batchChangeNsSelectedIds));
+            if (provider === 'custom') {
+                fd.append('nameservers', customNs);
+            } else {
+                fd.append('target_provider', provider);
+            }
+
+            fetch(urls.batchChangeNameservers, { method: 'POST', body: fd })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    submitBtn.disabled = false;
+                    if (data.code === 200) {
+                        var msg = data.msg || '<?= __('切换完成') ?>';
+                        toast(msg, 'success');
+                        if (data.data && data.data.errors && data.data.errors.length > 0) {
+                            console.log('<?= __('切换错误') ?>:', data.data.errors);
+                        }
+                        if (batchChangeNsModal) {
+                            batchChangeNsModal.hide();
+                        }
+                        loadDomains(currentPage);
+                    } else {
+                        toast(data.msg || '<?= __('切换失败') ?>', 'error');
+                    }
+                })
+                .catch(function() {
+                    submitBtn.disabled = false;
+                    toast('<?= __('请求失败') ?>', 'error');
+                });
+        }
+    }
+
+    // ========== 批量添加DNS记录相关函数 ==========
+    var batchAddDnsSelectedIds = [];
+    var batchAddDnsModal = null;
+
+    function showBatchAddDnsRecordModal() {
+        var selected = getSelectedDomainIds();
+        if (selected.length === 0) {
+            toast('<?= __('请先选择要添加DNS记录的域名') ?>', 'warning');
+            return;
+        }
+
+        batchAddDnsSelectedIds = selected;
+        var infoEl = document.getElementById('weline-batch-add-dns-selected-info');
+        infoEl.innerHTML = '<?= __('已选择') ?> <strong>' + selected.length + '</strong> <?= __('个域名') ?>';
+
+        document.getElementById('weline-batch-add-dns-type').value = 'A';
+        document.getElementById('weline-batch-add-dns-host').value = '@';
+        document.getElementById('weline-batch-add-dns-value').value = '';
+        document.getElementById('weline-batch-add-dns-ttl').value = '600';
+        document.getElementById('weline-batch-add-dns-use-server-ip').checked = false;
+        onBatchAddDnsUseServerIpChange();
+
+        fetch(urls.refreshServerIp)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200 && data.data && data.data.ip) {
+                    document.getElementById('weline-batch-add-dns-server-ip-display').textContent = data.data.ip;
+                }
+            });
+
+        if (!batchAddDnsModal) {
+            batchAddDnsModal = new bootstrap.Modal(document.getElementById('welineBatchAddDnsRecordModal'));
+        }
+        batchAddDnsModal.show();
+    }
+
+    function onBatchAddDnsUseServerIpChange() {
+        var useServerIp = document.getElementById('weline-batch-add-dns-use-server-ip').checked;
+        document.getElementById('weline-batch-add-dns-form-fields').style.display = useServerIp ? 'none' : 'block';
+        document.getElementById('weline-batch-add-dns-server-ip-fields').style.display = useServerIp ? 'block' : 'none';
+    }
+
+    function doBatchAddDnsRecords() {
+        if (batchAddDnsSelectedIds.length === 0) {
+            toast('<?= __('请选择要添加DNS记录的域名') ?>', 'warning');
+            return;
+        }
+
+        var useServerIp = document.getElementById('weline-batch-add-dns-use-server-ip').checked;
+        var submitBtn = document.getElementById('weline-batch-add-dns-submit');
+        var fd = new FormData();
+        fd.append('domain_ids', JSON.stringify(batchAddDnsSelectedIds));
+        fd.append('use_server_ip', useServerIp ? '1' : '0');
+
+        if (useServerIp) {
+            fd.append('host', document.getElementById('weline-batch-add-dns-host-server').value || '@');
+            fd.append('ttl', document.getElementById('weline-batch-add-dns-ttl-server').value || 600);
+        } else {
+            var type = document.getElementById('weline-batch-add-dns-type').value;
+            var host = document.getElementById('weline-batch-add-dns-host').value || '@';
+            var value = document.getElementById('weline-batch-add-dns-value').value.trim();
+            var ttl = document.getElementById('weline-batch-add-dns-ttl').value || 600;
+
+            if (!value) {
+                toast('<?= __('请输入记录值') ?>', 'warning');
+                return;
+            }
+
+            fd.append('type', type);
+            fd.append('host', host);
+            fd.append('value', value);
+            fd.append('ttl', ttl);
+        }
+
+        toast('<?= __('正在批量添加DNS记录...') ?>', 'info');
+        submitBtn.disabled = true;
+
+        fetch(urls.batchAddDnsRecords, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                submitBtn.disabled = false;
+                if (data.code === 200 || data.code === 206) {
+                    var msg = data.msg || '<?= __('添加完成') ?>';
+                    toast(msg, data.code === 200 ? 'success' : 'warning');
+                    if (data.data && data.data.errors && data.data.errors.length > 0) {
+                        console.log('<?= __('添加错误') ?>:', data.data.errors);
+                    }
+                    if (batchAddDnsModal) {
+                        batchAddDnsModal.hide();
+                    }
+                    loadDomains(currentPage);
+                } else {
+                    toast(data.msg || '<?= __('添加失败') ?>', 'error');
+                }
+            })
+            .catch(function() {
+                submitBtn.disabled = false;
+                toast('<?= __('请求失败') ?>', 'error');
+            });
+    }
+
+    window.WelineDomainList = {
+        loadDomains: loadDomains,
+        showImportModal: showImportModal,
+        fetchRemoteDomains: fetchRemoteDomains,
+        toggleImportSelectAll: toggleImportSelectAll,
+        toggleShowImported: toggleShowImported,
+        importSelectedDomains: importSelectedDomains,
+        checkResolve: checkResolve,
+        batchCheckResolve: batchCheckResolve,
+        showDnsModal: showDnsModal,
+        syncDnsRecords: syncDnsRecords,
+        showAddDnsRecordForm: showAddDnsRecordForm,
+        hideAddDnsRecordForm: hideAddDnsRecordForm,
+        saveDnsRecord: saveDnsRecord,
+        deleteDnsRecord: deleteDnsRecord,
+        autoResolve: autoResolve,
+        refreshServerIp: refreshServerIp,
+        toggleSelectAll: toggleSelectAll,
+        resetFilters: resetFilters,
+        onSearchKeyup: onSearchKeyup,
+        transferToPool: transferToPool,
+        batchTransferToPool: batchTransferToPool,
+        batchTransferToPoolWithIpCheck: batchTransferToPoolWithIpCheck,
+        batchResolveToLocal: batchResolveToLocal,
+        showBatchChangeNsModal: showBatchChangeNsModal,
+        onNsProviderChange: onNsProviderChange,
+        doBatchChangeNs: doBatchChangeNs,
+        showBatchAddDnsRecordModal: showBatchAddDnsRecordModal,
+        onBatchAddDnsUseServerIpChange: onBatchAddDnsUseServerIpChange,
+        doBatchAddDnsRecords: doBatchAddDnsRecords,
+        batchDetectDnsProvider: batchDetectDnsProvider,
+        cleanupDnsProviderDomains: cleanupDnsProviderDomains,
+        showBatchSetAccountsModal: showBatchSetAccountsModal,
+        doBatchSetAccounts: doBatchSetAccounts
+    };
+
+    function getSelectedDomainIds() {
+        var ids = [];
+        document.querySelectorAll('.weline-domain-checkbox:checked').forEach(function(cb) {
+            ids.push(cb.value);
+        });
+        return ids;
+    }
+
+    // ========== 批量设置账户相关函数 ==========
+    var batchSetAccountsSelectedIds = [];
+    var batchSetAccountsModal = null;
+
+    function showBatchSetAccountsModal() {
+        var selected = getSelectedDomainIds();
+        if (selected.length === 0) {
+            toast('<?= __('请先选择要设置的域名') ?>', 'warning');
+            return;
+        }
+
+        batchSetAccountsSelectedIds = selected;
+        var infoEl = document.getElementById('weline-batch-set-accounts-selected-info');
+        infoEl.innerHTML = '<?= __('已选择') ?> <strong>' + selected.length + '</strong> <?= __('个域名') ?>';
+
+        // 重置下拉框
+        document.getElementById('weline-batch-set-dns-account').value = '';
+        document.getElementById('weline-batch-set-cdn-account').value = '';
+
+        // 加载可用账户列表
+        loadDnsAccountsForBatchSet();
+
+        if (!batchSetAccountsModal) {
+            batchSetAccountsModal = new bootstrap.Modal(document.getElementById('welineBatchSetAccountsModal'));
+        }
+        batchSetAccountsModal.show();
+    }
+
+    function loadDnsAccountsForBatchSet() {
+        fetch(urls.getDnsAccounts)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200 && data.data) {
+                    var dnsSelect = document.getElementById('weline-batch-set-dns-account');
+                    var cdnSelect = document.getElementById('weline-batch-set-cdn-account');
+
+                    // 清空旧选项（保留前两个）
+                    while (dnsSelect.options.length > 2) {
+                        dnsSelect.remove(2);
+                    }
+                    while (cdnSelect.options.length > 2) {
+                        cdnSelect.remove(2);
+                    }
+
+                    // 添加 DNS 账户选项
+                    (data.data.dns_accounts || []).forEach(function(acc) {
+                        var opt = document.createElement('option');
+                        opt.value = acc.account_id;
+                        opt.textContent = acc.name + ' (' + acc.registrar_name + ')';
+                        dnsSelect.appendChild(opt);
+                    });
+
+                    // 添加 CDN 账户选项
+                    (data.data.cdn_accounts || []).forEach(function(acc) {
+                        var opt = document.createElement('option');
+                        opt.value = acc.account_id;
+                        opt.textContent = acc.name + ' (' + acc.registrar_name + ')';
+                        cdnSelect.appendChild(opt);
+                    });
+                }
+            })
+            .catch(function() {
+                toast('<?= __('加载账户列表失败') ?>', 'error');
+            });
+    }
+
+    function doBatchSetAccounts() {
+        if (batchSetAccountsSelectedIds.length === 0) {
+            toast('<?= __('请选择要设置的域名') ?>', 'warning');
+            return;
+        }
+
+        var dnsAccountId = document.getElementById('weline-batch-set-dns-account').value;
+        var cdnAccountId = document.getElementById('weline-batch-set-cdn-account').value;
+
+        if (dnsAccountId === '' && cdnAccountId === '') {
+            toast('<?= __('请至少选择一个账户进行设置') ?>', 'warning');
+            return;
+        }
+
+        var submitBtn = document.getElementById('weline-batch-set-accounts-submit');
+        var fd = new FormData();
+        fd.append('domain_ids', JSON.stringify(batchSetAccountsSelectedIds));
+        if (dnsAccountId !== '') {
+            fd.append('dns_account_id', dnsAccountId);
+        }
+        if (cdnAccountId !== '') {
+            fd.append('cdn_account_id', cdnAccountId);
+        }
+
+        toast('<?= __('正在设置账户...') ?>', 'info');
+        submitBtn.disabled = true;
+
+        fetch(urls.batchSetAccounts, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                submitBtn.disabled = false;
+                if (data.code === 200) {
+                    toast(data.msg || '<?= __('设置成功') ?>', 'success');
+                    if (batchSetAccountsModal) {
+                        batchSetAccountsModal.hide();
+                    }
+                    loadDomains(currentPage);
+                } else {
+                    toast(data.msg || '<?= __('设置失败') ?>', 'error');
+                }
+            })
+            .catch(function() {
+                submitBtn.disabled = false;
+                toast('<?= __('请求失败') ?>', 'error');
+            });
+    }
+
+    function batchDetectDnsProvider() {
+        var ids = getSelectedDomainIds();
+        if (ids.length === 0) {
+            toast('<?= __('请选择要检测的域名') ?>', 'warning');
+            return;
+        }
+
+        toast('<?= __('正在检测 DNS 服务商...') ?>', 'info');
+        var fd = new FormData();
+        fd.append('domain_ids', JSON.stringify(ids));
+
+        fetch(urls.detectDnsProvider, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    toast(data.msg || '<?= __('检测完成') ?>', 'success');
+                    loadDomains(currentPage);
+                } else {
+                    toast(data.msg || '<?= __('检测失败') ?>', 'error');
+                }
+            })
+            .catch(function() { toast('<?= __('请求失败') ?>', 'error'); });
+    }
+
+    function cleanupDnsProviderDomains() {
+        if (typeof BackendConfirm !== 'undefined' && BackendConfirm.show) {
+            BackendConfirm.show('<?= __('确定清理所有 DNS 服务商（如 Cloudflare）下误同步的域名？') ?>\n\n<?= __('这些域名不属于 DNS 服务商，只是托管在那里。清理后不会影响远程数据。') ?>', {
+                title: '<?= __('清理 DNS 服务商域名') ?>',
+                confirmText: '<?= __('确认清理') ?>',
+                cancelText: '<?= __('取消') ?>',
+                type: 'warning'
+            }).then(function(confirmed) {
+                if (confirmed) {
+                    doCleanupDnsProviderDomains();
+                }
+            });
+        } else {
+            doCleanupDnsProviderDomains();
+        }
+    }
+
+    function doCleanupDnsProviderDomains() {
+        toast('<?= __('正在清理 DNS 服务商域名...') ?>', 'info');
+
+        fetch(urls.cleanupDnsProviderDomains, { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    toast(data.msg || '<?= __('清理完成') ?>', 'success');
+                    if (data.data && data.data.cleaned_accounts && data.data.cleaned_accounts.length > 0) {
+                        console.log('<?= __('已清理的账户') ?>:', data.data.cleaned_accounts);
+                    }
+                    loadDomains(1);
+                } else {
+                    toast(data.msg || '<?= __('清理失败') ?>', 'error');
+                }
+            })
+            .catch(function() { toast('<?= __('请求失败') ?>', 'error'); });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() { loadDomains(1); });
+    } else {
+        loadDomains(1);
+    }
+})();
+</script>

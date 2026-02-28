@@ -18,6 +18,7 @@ namespace Weline\Websites\Service;
 
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Model\DomainAutoResolveTask;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainPurchaseItem;
 use Weline\Websites\Model\DomainPurchaseOrder;
@@ -57,9 +58,10 @@ class DomainPurchaseService
      *
      * @param int $accountId 域名商账号 ID
      * @param array $items 购买条目列表 [{domain, years, website_id, auto_create_site}, ...]
+     * @param bool $autoResolve 是否自动解析到本服务器
      * @return array{success: bool, message: string, order_id?: int, order_no?: string, results?: array}
      */
-    public function createAndProcessOrder(int $accountId, array $items): array
+    public function createAndProcessOrder(int $accountId, array $items, bool $autoResolve = false): array
     {
         // 如果 items 是 JSON 字符串（从前端 FormData 传来），解码
         if (\is_string($items)) {
@@ -148,6 +150,11 @@ class DomainPurchaseService
                         $this->bindToWebsite($domain, $websiteId, $autoCreateSite);
                     }
 
+                    // 如果开启自动解析，创建解析任务
+                    if ($autoResolve) {
+                        $this->createAutoResolveTask($domain, $accountId);
+                    }
+
                     // 触发购买成功事件
                     $eventData = [
                         'data' => [
@@ -155,6 +162,7 @@ class DomainPurchaseService
                             'order_id' => $orderId,
                             'website_id' => $websiteId,
                             'auto_create_site' => $autoCreateSite,
+                            'auto_resolve' => $autoResolve,
                         ],
                     ];
                     $this->eventsManager->dispatch('Weline_Websites::domain::purchase_success', $eventData);
@@ -265,6 +273,21 @@ class DomainPurchaseService
             }
         } catch (\Exception $e) {
             \error_log(__('域名绑站失败: %{domain}, 错误: %{error}', [
+                'domain' => $domain,
+                'error' => $e->getMessage(),
+            ]));
+        }
+    }
+
+    /**
+     * 创建自动解析任务
+     */
+    private function createAutoResolveTask(string $domain, int $accountId): void
+    {
+        try {
+            DomainAutoResolveTask::createTask($domain, $accountId);
+        } catch (\Exception $e) {
+            \error_log(__('创建自动解析任务失败: %{domain}, 错误: %{error}', [
                 'domain' => $domain,
                 'error' => $e->getMessage(),
             ]));

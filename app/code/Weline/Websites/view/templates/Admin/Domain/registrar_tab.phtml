@@ -104,23 +104,11 @@ $accounts = $accounts ?? [];
                                placeholder="<?= __('如：主账号、生产环境') ?>">
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label">API Key</label>
-                        <input type="text" name="api_key" id="form-api-key" class="form-control"
-                               placeholder="<?= __('留空表示不修改（编辑时）') ?>">
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">API Secret</label>
-                        <input type="password" name="api_secret" id="form-api-secret" class="form-control"
-                               placeholder="<?= __('留空表示不修改（编辑时）') ?>">
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label"><?= __('区域') ?></label>
-                        <input type="text" name="region" id="form-region" class="form-control"
-                               placeholder="<?= __('如：us-east-1、cn-hangzhou') ?>">
-                    </div>
+                    <!-- 动态配置字段区域（根据适配器自动生成） -->
+                    <div id="dynamic-config-fields"></div>
+                    
+                    <!-- 配置帮助信息 -->
+                    <div id="config-help-info" class="alert alert-info small" style="display:none;"></div>
 
                     <div class="mb-3">
                         <label class="form-label"><?= __('状态') ?></label>
@@ -128,12 +116,6 @@ $accounts = $accounts ?? [];
                             <option value="active"><?= __('启用') ?></option>
                             <option value="disabled"><?= __('禁用') ?></option>
                         </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label"><?= __('额外配置') ?> <small class="text-muted">(JSON)</small></label>
-                        <textarea name="extra_config" id="form-extra-config" class="form-control" rows="3"
-                                  placeholder='<?= __('如：{"tenant_id": "xxx"}') ?>'></textarea>
                     </div>
                 </form>
             </div>
@@ -148,48 +130,241 @@ $accounts = $accounts ?? [];
 </div>
 
 <script>
+(function() {
+'use strict';
+
 var saveAccountUrl = '<?= $this->getUrl('*/admin/domain/save-account') ?>';
 var deleteAccountUrl = '<?= $this->getUrl('*/admin/domain/account') ?>';
 var testConnectionUrl = '<?= $this->getUrl('*/admin/domain/test-connection') ?>';
+var getRegistrarInfoUrl = '<?= $this->getUrl('*/admin/domain/registrar-info') ?>';
 
-function resetAccountForm() {
+var currentConfigFields = [];
+
+window.resetAccountForm = function() {
     document.getElementById('form-account-id').value = '0';
     document.getElementById('form-registrar-code').value = '';
     document.getElementById('form-account-name').value = '';
-    document.getElementById('form-api-key').value = '';
-    document.getElementById('form-api-secret').value = '';
-    document.getElementById('form-region').value = '';
     document.getElementById('form-status').value = 'active';
-    document.getElementById('form-extra-config').value = '';
     document.getElementById('registrar-description').textContent = '';
     document.getElementById('accountFormModalLabel').textContent = '<?= __('添加域名商账号') ?>';
-}
+    document.getElementById('dynamic-config-fields').innerHTML = '';
+    document.getElementById('config-help-info').style.display = 'none';
+    currentConfigFields = [];
+};
 
-function editAccount(account) {
+var pendingEditData = null;
+
+window.editAccount = function(account) {
     document.getElementById('form-account-id').value = account.account_id || '0';
     document.getElementById('form-registrar-code').value = account.registrar_code || '';
     document.getElementById('form-account-name').value = account.account_name || '';
-    document.getElementById('form-api-key').value = '';
-    document.getElementById('form-api-secret').value = '';
-    document.getElementById('form-region').value = account.region || '';
     document.getElementById('form-status').value = account.status || 'active';
-    document.getElementById('form-extra-config').value = account.extra_config || '';
     document.getElementById('accountFormModalLabel').textContent = '<?= __('编辑域名商账号') ?>';
+
+    // 保存待填充的数据
+    var extraConfig = account.extra_config || {};
+    if (typeof extraConfig === 'string') {
+        try {
+            extraConfig = JSON.parse(extraConfig);
+        } catch (e) {
+            extraConfig = {};
+        }
+    }
+    
+    pendingEditData = {
+        region: account.region || '',
+        extra_config: extraConfig
+    };
+
+    // 触发动态字段加载
+    onRegistrarChange(account.registrar_code);
 
     var modal = new bootstrap.Modal(document.getElementById('accountFormModal'));
     modal.show();
-}
+};
 
-function onRegistrarChange(code) {
+window.onRegistrarChange = function(code) {
     var select = document.getElementById('form-registrar-code');
     var option = select.options[select.selectedIndex];
     var desc = option ? option.getAttribute('data-description') : '';
     document.getElementById('registrar-description').textContent = desc || '';
-}
+    
+    var dynamicFieldsDiv = document.getElementById('dynamic-config-fields');
+    var helpInfoDiv = document.getElementById('config-help-info');
+    dynamicFieldsDiv.innerHTML = '';
+    helpInfoDiv.style.display = 'none';
+    currentConfigFields = [];
+    
+    if (!code) return;
+    
+    var formData = new FormData();
+    formData.append('registrar_code', code);
+    
+    fetch(getRegistrarInfoUrl, {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+        if (res.code !== 200 || !res.data) return;
+        
+        var info = res.data;
+        var fields = info.config_fields || [];
+        var help = info.config_help || {};
+        
+        currentConfigFields = fields;
+        
+        var isEditMode = parseInt(document.getElementById('form-account-id').value) > 0;
+        
+        var html = '';
+        fields.forEach(function(field) {
+            var fieldId = 'form-field-' + field.name;
+            var mapping = field.mapping || field.name;
+            var isRequired = field.required === true;
+            var isPassword = field.type === 'password';
+            
+            html += '<div class="mb-3">';
+            html += '<label class="form-label">' + (field.label || field.name);
+            
+            if (isEditMode && isPassword) {
+                html += ' <span class="text-muted small"><?= __('（不修改请留空）') ?></span>';
+            } else if (isRequired) {
+                html += ' <span class="text-danger">*</span>';
+            }
+            html += '</label>';
+            
+            if (field.type === 'select' && field.options) {
+                html += '<select id="' + fieldId + '" class="form-select config-input" data-field="' + field.name + '" data-mapping="' + mapping + '" data-required="' + isRequired + '">';
+                field.options.forEach(function(opt) {
+                    var selected = (field.default && field.default === opt.value) ? ' selected' : '';
+                    html += '<option value="' + (opt.value || '') + '"' + selected + '>' + (opt.label || opt.value || '') + '</option>';
+                });
+                html += '</select>';
+            } else {
+                var inputType = isPassword ? 'password' : 'text';
+                var placeholder = field.placeholder || '';
+                if (isEditMode && isPassword) {
+                    placeholder = '••••••••••••••••<?= __('（留空不修改）') ?>';
+                }
+                
+                html += '<input type="' + inputType + '" id="' + fieldId + '" class="form-control config-input" data-field="' + field.name + '" data-mapping="' + mapping + '" data-required="' + isRequired + '"';
+                if (placeholder) html += ' placeholder="' + placeholder + '"';
+                html += '>';
+            }
+            html += '</div>';
+        });
+        dynamicFieldsDiv.innerHTML = html;
+        
+        // 编辑模式下，回填已保存的值
+        if (isEditMode && pendingEditData) {
+            dynamicFieldsDiv.querySelectorAll('.config-input').forEach(function(el) {
+                var mapping = el.dataset.mapping || el.dataset.field;
+                var fieldName = el.dataset.field;
+                var isPassword = el.type === 'password';
+                var value = '';
+                
+                // 根据 mapping 获取值
+                if (mapping === 'region') {
+                    value = pendingEditData.region || '';
+                } else if (mapping.indexOf('extra_config.') === 0) {
+                    var extraKey = mapping.replace('extra_config.', '');
+                    value = pendingEditData.extra_config[extraKey] || '';
+                } else if (pendingEditData.extra_config[fieldName]) {
+                    value = pendingEditData.extra_config[fieldName];
+                }
+                
+                // 密码字段不回填（保持空白，表示不修改）
+                if (!isPassword && value) {
+                    el.value = value;
+                }
+            });
+            pendingEditData = null;
+        }
+        
+        // 渲染帮助信息
+        if (help.help_steps && help.help_steps.length) {
+            var helpHtml = '<strong>';
+            if (help.help_url) {
+                helpHtml += '<a href="' + help.help_url + '" target="_blank">' + (help.help_title || '<?= __('配置获取指南') ?>') + ' <i class="mdi mdi-open-in-new"></i></a>';
+            } else {
+                helpHtml += (help.help_title || '<?= __('配置获取指南') ?>');
+            }
+            helpHtml += '</strong><ol class="mb-0 mt-2 ps-3">';
+            help.help_steps.forEach(function(step) {
+                helpHtml += '<li>' + step + '</li>';
+            });
+            helpHtml += '</ol>';
+            helpInfoDiv.innerHTML = helpHtml;
+            helpInfoDiv.style.display = 'block';
+        }
+    })
+    .catch(function(err) {
+        console.error('加载适配器配置失败:', err);
+    });
+};
 
-function saveAccount() {
-    var form = document.getElementById('account-form');
-    var formData = new FormData(form);
+window.saveAccount = function() {
+    var isEditMode = parseInt(document.getElementById('form-account-id').value) > 0;
+    
+    // 校验必填字段
+    var hasError = false;
+    var missingFields = [];
+    document.querySelectorAll('#dynamic-config-fields .config-input').forEach(function(el) {
+        var isRequired = el.dataset.required === 'true';
+        var value = el.value.trim();
+        var fieldName = el.dataset.field;
+        var isPassword = el.type === 'password';
+        
+        var label = fieldName;
+        currentConfigFields.forEach(function(f) {
+            if (f.name === fieldName) {
+                label = f.label || fieldName;
+            }
+        });
+        
+        var skipValidation = isEditMode && isPassword;
+        
+        if (isRequired && !value && !skipValidation) {
+            hasError = true;
+            missingFields.push(label);
+            el.classList.add('is-invalid');
+        } else {
+            el.classList.remove('is-invalid');
+        }
+    });
+    
+    if (hasError) {
+        showToast('<?= __('请填写必填字段') ?>: ' + missingFields.join(', '), 'error');
+        return;
+    }
+    
+    // 收集数据
+    var formData = new FormData();
+    formData.append('account_id', document.getElementById('form-account-id').value);
+    formData.append('registrar_code', document.getElementById('form-registrar-code').value);
+    formData.append('account_name', document.getElementById('form-account-name').value);
+    formData.append('status', document.getElementById('form-status').value);
+    
+    var extraConfig = {};
+    document.querySelectorAll('#dynamic-config-fields .config-input').forEach(function(el) {
+        var value = el.value.trim();
+        var mapping = el.dataset.mapping || el.dataset.field;
+        
+        if (mapping === 'api_key') {
+            formData.append('api_key', value);
+        } else if (mapping === 'api_secret') {
+            formData.append('api_secret', value);
+        } else if (mapping === 'region') {
+            formData.append('region', value);
+        } else if (mapping.indexOf('extra_config.') === 0) {
+            var extraKey = mapping.replace('extra_config.', '');
+            if (value) extraConfig[extraKey] = value;
+        } else {
+            if (value) extraConfig[el.dataset.field] = value;
+        }
+    });
+    
+    formData.append('extra_config', JSON.stringify(extraConfig));
 
     fetch(saveAccountUrl, {
         method: 'POST',
@@ -207,9 +382,9 @@ function saveAccount() {
     .catch(function(err) {
         showToast('<?= __('请求失败') ?>: ' + err.message, 'error');
     });
-}
+};
 
-function removeAccount(accountId) {
+window.removeAccount = function(accountId) {
     if (!accountId) return;
     Swal.fire({
         title: '<?= __('确认删除') ?>',
@@ -241,9 +416,9 @@ function removeAccount(accountId) {
             });
         }
     });
-}
+};
 
-function testAccountConnection(accountId, registrarCode) {
+window.testAccountConnection = function(accountId, registrarCode) {
     showToast('<?= __('正在测试连接...') ?>', 'info');
     var formData = new FormData();
     formData.append('account_id', accountId);
@@ -264,5 +439,7 @@ function testAccountConnection(accountId, registrarCode) {
     .catch(function(err) {
         showToast('<?= __('测试失败') ?>: ' + err.message, 'error');
     });
-}
+};
+
+})();
 </script>

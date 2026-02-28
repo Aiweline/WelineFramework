@@ -40,17 +40,24 @@ $address_lines = $address_lines ?? '';
                 <?php endif; ?>
 
                 <div class="col-12 mb-3">
-                    <label for="domain_values" class="form-label"><lang>选择域名</lang></label>
-                    <select class="form-select" name="domain_values[]" id="domain_values" multiple size="6">
-                        <?php foreach ($domain_options as $group): ?>
-                            <optgroup label="<?= htmlspecialchars($group['label'] ?? '') ?>">
-                                <?php foreach ($group['options'] ?? [] as $opt): ?>
-                                    <option value="<?= htmlspecialchars($opt['value'] ?? '') ?>"><?= htmlspecialchars($opt['label'] ?? $opt['value']) ?></option>
-                                <?php endforeach; ?>
-                            </optgroup>
-                        <?php endforeach; ?>
-                    </select>
-                    <div class="form-text-hint"><lang>从域名池多选域名；选择后网站代码与网站地址将自动填充，可再编辑。同一域名被多站使用时须填写不同子路径。</lang></div>
+                    <label class="form-label">
+                        <i class="mdi mdi-domain me-1"></i><lang>选择域名</lang>
+                    </label>
+                    <w:websites:domain:select
+                        id="website_domain_select"
+                        name="pool_ids"
+                        value="''"
+                        display="'点击选择域名（可多选）'"
+                        class="w-100"
+                        multiple="true"
+                        value-type="pool_id"
+                        site-ready-only="true"
+                        auto-fill-code="code"
+                        auto-fill-address="address_lines"
+                        auto-fill-name="name"
+                    />
+                    <input type="hidden" name="domain_values" value="">
+                    <div class="form-text-hint"><lang>从域名池选择已就绪的域名（可多选）；选择后网站代码与网站地址将自动填充，可再编辑。同一域名被多站使用时须填写不同子路径。</lang></div>
                 </div>
 
                 <div class="col-4 mb-3">
@@ -332,27 +339,17 @@ $address_lines = $address_lines ?? '';
 (function() {
     'use strict';
     
-    var domainSelect = document.getElementById('domain_values');
-    var codeInput = document.getElementById('code');
-    var addressLines = document.getElementById('address_lines');
-    if (!domainSelect || !codeInput || !addressLines) return;
-
-    function domainToCode(domain) {
-        return (domain || '').toLowerCase().trim().replace(/\./g, '_');
+    // v1.6.0: 域名选择器使用 pool_id，域名字符串通过 auto-fill-address 自动填充
+    // 这里只保留监听 pool_ids 变化时更新 domain_values 隐藏字段（向后兼容）
+    var poolIdsInput = document.getElementById('website_domain_select_value');
+    var domainValuesInput = document.querySelector('input[name="domain_values"]');
+    
+    if (poolIdsInput && domainValuesInput) {
+        poolIdsInput.addEventListener('change', function() {
+            // domain_values 保持空，因为我们使用 pool_ids
+            // 但如果有需要，可以从 data-domain 属性获取域名列表
+        });
     }
-
-    domainSelect.addEventListener('change', function() {
-        var selected = [];
-        for (var i = 0; i < domainSelect.options.length; i++) {
-            if (domainSelect.options[i].selected) {
-                selected.push(domainSelect.options[i].value);
-            }
-        }
-        if (selected.length > 0) {
-            codeInput.value = domainToCode(selected[0]);
-            addressLines.value = selected.join('\n');
-        }
-    });
 })();
 </script>
 <w:scope url="@backend-url('backend/user-data')" container-id="WebsitePage" event="input change click"/>

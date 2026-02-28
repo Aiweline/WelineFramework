@@ -147,4 +147,93 @@ class AwsRoute53Registrar implements DomainRegistrarInterface
             'status' => 'unknown',
         ];
     }
+
+    // ============================================================
+    // DNS 记录操作（v1.5.0 新增）
+    // ============================================================
+
+    public function supportsDnsManagement(): bool
+    {
+        // AWS Route53 支持 DNS 管理
+        return true;
+    }
+
+    public function getDnsRecords(string $domain, array $credentials): array
+    {
+        // TODO: 调用 AWS Route53::listResourceRecordSets()
+        return [];
+    }
+
+    public function addDnsRecord(string $domain, array $record, array $credentials): array
+    {
+        // TODO: 调用 AWS Route53::changeResourceRecordSets()
+        return [
+            'success' => false,
+            'message' => __('AWS Route53 DNS 适配器尚未完成 API 对接，请稍后再试。'),
+        ];
+    }
+
+    public function updateDnsRecord(string $domain, string $recordId, array $record, array $credentials): array
+    {
+        // TODO: 调用 AWS Route53::changeResourceRecordSets()
+        return [
+            'success' => false,
+            'message' => __('AWS Route53 DNS 适配器尚未完成 API 对接，请稍后再试。'),
+        ];
+    }
+
+    public function deleteDnsRecord(string $domain, string $recordId, array $credentials): array
+    {
+        // TODO: 调用 AWS Route53::changeResourceRecordSets()
+        return [
+            'success' => false,
+            'message' => __('AWS Route53 DNS 适配器尚未完成 API 对接，请稍后再试。'),
+        ];
+    }
+
+    public function batchAddDnsRecords(string $domain, array $records, array $credentials): array
+    {
+        // TODO: 批量调用 changeResourceRecordSets
+        return [
+            'success' => false,
+            'added' => 0,
+            'failed' => count($records),
+            'errors' => [__('AWS Route53 DNS 适配器尚未完成 API 对接，请稍后再试。')],
+        ];
+    }
+
+    public function updateNameservers(string $domain, array $nameservers, array $credentials): array
+    {
+        // TODO: 调用 AWS Route53Domains::updateDomainNameservers()
+        return [
+            'success' => false,
+            'message' => __('AWS Route53 Nameserver 修改功能尚未完成 API 对接，请稍后再试。'),
+        ];
+    }
+
+    /**
+     * @inheritDoc
+     *
+     * AWS Route53 的 Nameserver 是动态分配的，需要创建 Hosted Zone 后获取
+     */
+    public function getProviderNameservers(array $credentials, string $domain = ''): array
+    {
+        // TODO: 调用 AWS Route53::createHostedZone() 或 getHostedZone() 获取分配的 NS
+        return [
+            'success' => false,
+            'nameservers' => [],
+            'message' => __('AWS Route53 Nameserver 获取功能尚未完成 API 对接'),
+        ];
+    }
+
+    /**
+     * @inheritDoc
+     *
+     * AWS Route53 同时是域名注册商和 DNS 服务商。
+     * 通过 Route53 Domains 可以注册和转入域名。
+     */
+    public function isDomainRegistrar(): bool
+    {
+        return true;
+    }
 }
