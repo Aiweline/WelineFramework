@@ -207,6 +207,22 @@ class Dispatcher
     private bool $maintenanceFallbackActive = false;
     
     /**
+     * 封禁拦截日志限流记录（IP => 上次记录时间）
+     */
+    private array $banLogThrottle = [];
+    
+    /**
+     * 封禁日志限流间隔（秒）
+     */
+    private int $banLogInterval = 60;
+    
+    /**
+     * 每连接字节统计（connId => ['in' => int, 'out' => int]）
+     * 用于判断连接是否有有效数据交换（避免 SSL 失败误判）
+     */
+    private array $connectionBytes = [];
+    
+    /**
      * 构造函数
      *
      * @param resource $serverSocket 服务器 socket
@@ -678,8 +694,16 @@ class Dispatcher
         if ($closedCount > 0) {
             $this->log("清理超时连接: {$closedCount} 个", 'HEALTH');
         }
+        
+        // 清理过期的封禁日志限流记录（保留最近 5 分钟内的）
+        $expireThreshold = $now - 300;
+        foreach ($this->banLogThrottle as $ip => $logTime) {
+            if ($logTime < $expireThreshold) {
+                unset($this->banLogThrottle[$ip]);
+            }
+        }
     }
-    
+
     /**
      * socket_select 事件处理
      */
@@ -770,6 +794,9 @@ class Dispatcher
             if ($flushed > 0) {
                 $this->connectionLastActivity[$connId] = \microtime(true);
                 $this->bytesCount['out'] += $flushed;
+                if (isset($this->connectionBytes[$connId])) {
+                    $this->connectionBytes[$connId]['out'] += $flushed;
+                }
             }
             
             // 如果缓冲区已空且 Worker 已关闭，现在可以安全关闭连接
@@ -814,7 +841,13 @@ class Dispatcher
             
             // SSL 握手失败封禁检查（独立于通用攻击检测，非本地 IP 才封禁）
             if (!$isTrustedIp && $this->attackDetector->isSslBanned($clientIp)) {
-                $this->log("SSL 封禁拦截: {$clientIp} (connId: {$connId}) — IP 因频繁 SSL 握手失败被封禁", 'BAN');
+                // 封禁拦截日志限流：同一 IP 每 60 秒最多记录一次
+                $now = \time();
+                $lastLog = $this->banLogThrottle[$clientIp] ?? 0;
+                if (($now - $lastLog) >= $this->banLogInterval) {
+                    $this->banLogThrottle[$clientIp] = $now;
+                    $this->log("SSL 封禁拦截: {$clientIp} — IP 因频繁 SSL 握手失败被封禁（后续拦截 {$this->banLogInterval}s 内不再记录）", 'BAN');
+                }
                 @\socket_close($clientSocket);
                 $accepted++;
                 continue;
@@ -852,8 +885,9 @@ class Dispatcher
                 $this->clientConnections[$connId] = $clientSocket;
                 $this->connectionAcceptTime[$connId] = \microtime(true);
                 $this->connectionLastActivity[$connId] = \microtime(true);
+                $this->connectionBytes[$connId] = ['in' => 0, 'out' => 0];
                 $this->requestCount++;
-                
+
                 $workerPort = $this->passthroughCore->getConnectionWorkerPort($clientSocket);
                 if ($this->isDevMode) {
                     $this->log("新连接: {$clientIp} (connId: {$connId}) → Worker:{$workerPort}", 'ROUTE');
@@ -1025,6 +1059,9 @@ class Dispatcher
         if ($result > 0) {
             $this->connectionLastActivity[$connId] = \microtime(true);
             $this->bytesCount['in'] += $result;
+            if (isset($this->connectionBytes[$connId])) {
+                $this->connectionBytes[$connId]['in'] += $result;
+            }
         }
     }
     
@@ -1057,6 +1094,9 @@ class Dispatcher
             $this->connectionLastActivity[$connId] = \microtime(true);
             if ($result > 0) {
                 $this->bytesCount['out'] += $result;
+                if (isset($this->connectionBytes[$connId])) {
+                    $this->connectionBytes[$connId]['out'] += $result;
+                }
             }
         }
     }
@@ -1085,15 +1125,19 @@ class Dispatcher
         
         unset(
             $this->connectionAcceptTime[$connId],
-            $this->connectionLastActivity[$connId]
+            $this->connectionLastActivity[$connId],
+            $this->connectionBytes[$connId]
         );
     }
     
     /**
      * 检测疑似 SSL 握手失败（快速关闭模式）
      *
-     * 连接在极短时间内关闭（< 阈值秒），且几乎无数据交换，视为疑似 SSL 握手失败。
-     * 典型场景：客户端拒绝自签名证书 → 发送 SSL alert → 立即断开连接。
+     * 判断条件（必须同时满足）：
+     * 1. 连接在极短时间内关闭（< 阈值秒，默认 0.3 秒）
+     * 2. 几乎无数据交换（入站 + 出站字节数 = 0）
+     *
+     * 典型场景：客户端拒绝自签名证书 → 发送 SSL alert → 立即断开连接（无 HTTP 数据交换）
      *
      * @param int      $connId       连接 ID
      * @param resource $clientSocket 客户端 socket
@@ -1113,12 +1157,21 @@ class Dispatcher
         $duration = \microtime(true) - $this->connectionAcceptTime[$connId];
         $threshold = $this->attackDetector->getSslFastCloseThreshold();
         
-        // 连接存活时长 < 阈值 → 疑似 SSL 握手失败
+        // 条件 1：连接存活时长 < 阈值
         if ($duration >= $threshold) {
             return;
         }
         
-        $durationStr = \round($duration, 1);
+        // 条件 2：没有任何有效数据交换
+        // 如果有数据交换，说明 SSL 握手成功了，只是请求完成得快，不是 SSL 失败
+        $bytes = $this->connectionBytes[$connId] ?? ['in' => 0, 'out' => 0];
+        $totalBytes = $bytes['in'] + $bytes['out'];
+        if ($totalBytes > 0) {
+            // 有数据交换，不是 SSL 握手失败，是正常的快速请求
+            return;
+        }
+        
+        $durationMs = \round($duration * 1000);
         
         // 本地和 CDN 回源白名单：只记录日志，不封禁
         $isLocalIp = $this->isTrustedSourceIp($clientIp);
@@ -1135,13 +1188,13 @@ class Dispatcher
         if ($result['banned']) {
             // 触发封禁 → 红色告警
             $this->log(
-                "SSL 握手失败频繁: {$clientIp} ({$result['threshold']}次/{$result['ban_duration']}秒窗口内) → 已封禁 {$result['ban_duration']} 秒",
+                "SSL 握手失败频繁: {$clientIp} ({$result['count']}次/60秒内) → 已封禁 {$result['ban_duration']} 秒",
                 'BAN'
             );
         } else {
             // 未触发封禁 → 红色警告（累计进度）
             $this->log(
-                "疑似 SSL 握手失败: {$clientIp} (connId: {$connId}, 存活 {$durationStr}秒) [累计: {$result['count']}/{$result['threshold']}]",
+                "疑似 SSL 握手失败: {$clientIp} ({$durationMs}ms, 无数据交换) [累计: {$result['count']}/{$result['threshold']}]",
                 'SSL_FAIL'
             );
         }
