@@ -188,7 +188,7 @@ class Adapter extends BackendController
     #[Acl('Weline_Ai::ai_adapter_toggle', '切换场景适配器状态', 'mdi-toggle-switch', '启用或禁用场景适配器')]
     public function toggleStatus(): string
     {
-        $id = (int)$this->request->getPost('id');
+        $id = (int)$this->request->getBodyParam('id', $this->request->getPost('id'));
         
         if (!$id) {
             return $this->jsonResponse([
@@ -304,6 +304,136 @@ class Adapter extends BackendController
             return $this->jsonResponse([
                 'success' => false,
                 'message' => '获取统计信息失败: ' . $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * 删除适配器
+     * 
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_adapter_delete', '删除场景适配器', 'mdi-delete', '删除场景适配器')]
+    public function postDelete(): string
+    {
+        $id = (int)$this->request->getBodyParam('id', $this->request->getPost('id'));
+        
+        if (!$id) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('适配器ID不能为空')
+            ]);
+        }
+
+        $adapter = $this->getScenarioAdapter()->reset()->load($id);
+        
+        if (!$adapter->getId()) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('适配器不存在')
+            ]);
+        }
+
+        try {
+            $adapter->delete();
+
+            return $this->jsonResponse([
+                'success' => true,
+                'message' => __('删除成功')
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('删除失败：%{error}', ['error' => $e->getMessage()])
+            ]);
+        }
+    }
+
+    /**
+     * 批量删除适配器
+     * 
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_adapter_batch_delete', '批量删除场景适配器', 'mdi-delete-sweep', '批量删除场景适配器')]
+    public function postBatchDelete(): string
+    {
+        $ids = $this->request->getBodyParam('ids', $this->request->getPost('ids', []));
+        
+        if (empty($ids)) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('请选择要删除的适配器')
+            ]);
+        }
+
+        if (!is_array($ids)) {
+            $ids = explode(',', (string)$ids);
+        }
+
+        try {
+            $deleted = 0;
+            foreach ($ids as $id) {
+                $adapter = $this->getScenarioAdapter()->reset()->load((int)$id);
+                if ($adapter->getId()) {
+                    $adapter->delete();
+                    $deleted++;
+                }
+            }
+
+            return $this->jsonResponse([
+                'success' => true,
+                'message' => __('成功删除 %{count} 个适配器', ['count' => $deleted])
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('批量删除失败：%{error}', ['error' => $e->getMessage()])
+            ]);
+        }
+    }
+
+    /**
+     * 批量切换状态
+     * 
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_adapter_batch_toggle', '批量切换场景适配器状态', 'mdi-toggle-switch-outline', '批量启用或禁用场景适配器')]
+    public function postBatchToggle(): string
+    {
+        $ids = $this->request->getBodyParam('ids', $this->request->getPost('ids', []));
+        $status = (int)$this->request->getBodyParam('status', $this->request->getPost('status', 1));
+        
+        if (empty($ids)) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('请选择要操作的适配器')
+            ]);
+        }
+
+        if (!is_array($ids)) {
+            $ids = explode(',', (string)$ids);
+        }
+
+        try {
+            $updated = 0;
+            foreach ($ids as $id) {
+                $adapter = $this->getScenarioAdapter()->reset()->load((int)$id);
+                if ($adapter->getId()) {
+                    $adapter->setData(AiScenarioAdapter::fields_IS_ACTIVE, $status);
+                    $adapter->save();
+                    $updated++;
+                }
+            }
+
+            $statusText = $status ? __('激活') : __('禁用');
+            return $this->jsonResponse([
+                'success' => true,
+                'message' => __('成功%{status} %{count} 个适配器', ['status' => $statusText, 'count' => $updated])
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('批量操作失败：%{error}', ['error' => $e->getMessage()])
             ]);
         }
     }
