@@ -26,9 +26,10 @@ INSTALL_MYSQL_VERSION="${INSTALL_MYSQL_VERSION:-8.0}"
 WELINE_REPO_URL="${WELINE_REPO_URL:-https://gitee.com/aiweline/WelineFramework.git}"
 
 usage() {
-  echo "Usage: $0 [--path-only] [-b BRANCH] [php] [pgsql] [mysql]"
+  echo "Usage: $0 [--path-only] [-f|--force] [-b BRANCH] [php] [pgsql] [mysql]"
   echo "  No args: install php and pgsql (default)."
   echo "  --path-only: only add extend/server/*/bin to PATH, do not download/install."
+  echo "  -f, --force: force reinstall even if env.php exists (will prompt for confirmation)."
   echo "  -b BRANCH: when run.php is missing, clone this branch (default: master)."
   exit 0
 }
@@ -36,11 +37,13 @@ usage() {
 # 解析参数
 PATH_ONLY=false
 BRANCH="master"
+FORCE_INSTALL=false
 COMPONENTS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help) usage ;;
     --path-only) PATH_ONLY=true; shift ;;
+    -f|--force) FORCE_INSTALL=true; shift ;;
     -b) [[ -n "${2:-}" ]] && { BRANCH="$2"; shift 2; } || shift ;;
     php|pgsql|mysql)
       if [[ " $VALID_COMPONENTS " == *" $1 "* ]]; then
@@ -717,7 +720,9 @@ fix_project_ownership() {
 fix_project_ownership
 
 echo ""
-(cd "$ROOT" && "$PHP_EXE" setup/server_installer/run.php) || exit 1
+RUN_ARGS=""
+[[ "$FORCE_INSTALL" == true ]] && RUN_ARGS="-f"
+(cd "$ROOT" && "$PHP_EXE" setup/server_installer/run.php $RUN_ARGS) || exit 1
 echo ""
 cd "$ROOT"
 echo "Done. php, pgsql and bin (w command) have been added to PATH (written to shell config)."
