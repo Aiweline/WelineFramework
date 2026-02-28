@@ -19,12 +19,15 @@ set "DO_MYSQL=0"
 set "BRANCH=master"
 
 REM Parse args (avoid for %%a in () when %* is empty - causes ") was unexpected" in cmd)
+set "FORCE_INSTALL="
 if "%~1"=="" (
   set "DO_PHP=1"
   set "DO_PGSQL=1"
 ) else (
   for %%a in (%*) do (
     if "%%a"=="--path-only" set "PATH_ONLY=1"
+    if "%%a"=="-f" set "FORCE_INSTALL=1"
+    if "%%a"=="--force" set "FORCE_INSTALL=1"
     if "%%a"=="php"   set "DO_PHP=1"
     if "%%a"=="pgsql" set "DO_PGSQL=1"
     if "%%a"=="mysql" set "DO_MYSQL=1"
@@ -182,8 +185,10 @@ goto :do_run_installer
 set "CECHO_MSG=ERROR: PHP not found. Install to %PHP_DIR% or add php to PATH." & call :cecho Red ""
 exit /b 1
 :do_run_installer
-call :cecho Gray "Running: php setup\server_installer\run.php"
-"!USE_PHP!" "%ROOT%\setup\server_installer\run.php"
+set "RUN_ARGS="
+if defined FORCE_INSTALL set "RUN_ARGS=-f"
+call :cecho Gray "Running: php setup\server_installer\run.php %RUN_ARGS%"
+"!USE_PHP!" "%ROOT%\setup\server_installer\run.php" %RUN_ARGS%
 if errorlevel 1 exit /b 1
 echo.
 cd /d "%ROOT%"
