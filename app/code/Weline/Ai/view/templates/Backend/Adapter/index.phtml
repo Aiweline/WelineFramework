@@ -3,223 +3,609 @@
  * 场景适配器管理页面模板
  */
 /**@var \Weline\Framework\View\Template $this */
+
+$adapters = $adapters ?? [];
+$totalCount = count($adapters);
+$activeCount = 0;
+$inactiveCount = 0;
+foreach ($adapters as $a) {
+    if ($a->getData('is_active')) {
+        $activeCount++;
+    } else {
+        $inactiveCount++;
+    }
+}
 ?>
 
-<!-- 页面标题 -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
-                <i class="mdi mdi-puzzle me-2"></i>
-                <lang>场景适配器管理</lang>
-            </h4>
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>AI助手</lang></a></li>
-                    <li class='breadcrumb-item active'><lang>场景适配器</lang></li>
-                </ol>
-            </div>
-        </div>
-    </div>
-</div>
-<!-- 页面标题结束 -->
+<style>
+.weline-adapter-page .stats-card {
+    border-radius: 12px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.weline-adapter-page .stats-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
+.weline-adapter-page .stats-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+}
+.weline-adapter-page .adapter-table {
+    border-radius: 8px;
+    overflow: hidden;
+}
+.weline-adapter-page .adapter-table th {
+    background: var(--backend-color-card-header-bg);
+    font-weight: 600;
+    white-space: nowrap;
+    padding: 12px 16px;
+}
+.weline-adapter-page .adapter-table td {
+    vertical-align: middle;
+    padding: 12px 16px;
+}
+.weline-adapter-page .adapter-code {
+    font-family: 'Fira Code', 'Monaco', monospace;
+    background: var(--backend-color-table-hover-bg);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.85em;
+}
+.weline-adapter-page .adapter-desc {
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+.weline-adapter-page .batch-toolbar {
+    background: var(--backend-color-card-bg);
+    border: 1px solid var(--backend-color-border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    display: none;
+}
+.weline-adapter-page .batch-toolbar.show {
+    display: flex;
+}
+.weline-adapter-page .select-count {
+    font-weight: 600;
+    color: var(--backend-color-primary);
+}
+.weline-adapter-page .action-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+.weline-adapter-page .action-btn:hover {
+    transform: scale(1.05);
+}
+.weline-adapter-page .checkbox-cell {
+    width: 40px;
+    text-align: center;
+}
+.weline-adapter-page .empty-state {
+    padding: 60px 20px;
+    text-align: center;
+}
+.weline-adapter-page .empty-state i {
+    font-size: 64px;
+    color: var(--backend-color-text-muted);
+    margin-bottom: 16px;
+}
+</style>
 
-<!-- start page message -->
-<div class='row'>
-    <template>Weline_Component::message.phtml</template>
-</div>
-<!-- end message -->
-
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">
-                    <i class="mdi mdi-puzzle me-2"></i>
+<div class="weline-adapter-page">
+    <!-- 页面标题 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <h4 class="mb-sm-0">
+                    <i class="mdi mdi-puzzle-outline me-2"></i>
                     <lang>场景适配器管理</lang>
-                </h3>
-                <div class="card-tools">
-                    <button type="button" class="btn btn-primary btn-sm" onclick="scanAdapters()">
-                        <i class="mdi mdi-magnify-scan me-1"></i>
-                        <lang>扫描适配器</lang>
-                    </button>
+                </h4>
+                <div class="page-title-right">
+                    <ol class="breadcrumb m-0">
+                        <li class="breadcrumb-item"><a href="javascript:void(0);"><lang>AI助手</lang></a></li>
+                        <li class="breadcrumb-item active"><lang>场景适配器</lang></li>
+                    </ol>
                 </div>
             </div>
-            <div class="card-body">
-                <?php if (isset($adapters) && $adapters): ?>
-                    <div class="table-responsive">
-                        <table class="table table-bordered table-striped">
-                            <thead>
-                                <tr>
-                                    <th><lang>ID</lang></th>
-                                    <th><lang>适配器代码</lang></th>
-                                    <th><lang>适配器名称</lang></th>
-                                    <th><lang>版本</lang></th>
-                                    <th width="600"><lang>描述</lang></th>
-                                    <th><lang>状态</lang></th>
-                                    <th><lang>创建时间</lang></th>
-                                    <th><lang>操作</lang></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($adapters as $adapter): ?>
-                                    <tr>
-                                        <td><?= $adapter->getId() ?></td>
-                                        <td><code><?= $adapter->getData('code') ?></code></td>
-                                        <td><?= $adapter->getData('name') ?></td>
-                                        <td><span class="badge bg-info"><?= $adapter->getData('version') ?></span></td>
-                                        <td><?= $adapter->getData('description') ?></td>
-                                        <td>
-                                            <?php if ($adapter->getData('is_active')): ?>
-                                                <span class="badge bg-success"><lang>激活</lang></span>
-                                            <?php else: ?>
-                                                <span class="badge bg-secondary"><lang>未激活</lang></span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td><?= date('Y-m-d H:i:s', $adapter->getData('created_time')) ?></td>
-                                        <td>
-                                            <div class="btn-group btn-group-sm">
-                                                <block class='Weline\Component\Block\OffCanvas'
-                                                       template='Weline_Component::off-canvas.phtml'
-                                                       cache='0'
-                                                       id='adapter_detail'
-                                                       action="*/backend/adapter/detailOffcanvas"
-                                                       target-tag="button"
-                                                       vars="adapter"
-                                                       action-params="{id: adapter.id}"
-                                                       target-button-class='btn btn-outline-primary'
-                                                       icon='mdi mdi-eye'
-                                                       title='适配器详情'
-                                                       target-button-text='编辑'
-                                                       close-button-show='1'
-                                                       close-button-text='关闭'
-                                                       direction='right'
-                                                       class-names='w-75'
-                                                       flush='1'
-                                                       flush-button-text='刷新'
-                                                       off-canvas-body-style=''
-                                                />
-                                                <button type="button" class="btn btn-outline-warning" 
-                                                        onclick="toggleStatus(<?= $adapter->getId() ?>)">
-                                                    <i class="mdi mdi-toggle-switch"></i>
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+        </div>
+    </div>
+
+    <!-- 消息提示 -->
+    <div class="row">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card stats-card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="stats-icon bg-primary bg-opacity-10 text-primary me-3">
+                            <i class="mdi mdi-puzzle"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <p class="text-muted mb-1"><lang>总适配器</lang></p>
+                            <h4 class="mb-0"><?= $totalCount ?></h4>
+                        </div>
                     </div>
-                    
-                    <?php if (isset($pagination)): ?>
-                        <div class="d-flex justify-content-center">
-                            <?= $pagination ?>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card stats-card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="stats-icon bg-success bg-opacity-10 text-success me-3">
+                            <i class="mdi mdi-check-circle"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <p class="text-muted mb-1"><lang>已激活</lang></p>
+                            <h4 class="mb-0"><?= $activeCount ?></h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card stats-card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="stats-icon bg-secondary bg-opacity-10 text-secondary me-3">
+                            <i class="mdi mdi-pause-circle"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <p class="text-muted mb-1"><lang>未激活</lang></p>
+                            <h4 class="mb-0"><?= $inactiveCount ?></h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card stats-card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-center h-100">
+                        <button type="button" class="btn btn-primary action-btn" onclick="WelineAdapterManager.scan()">
+                            <i class="mdi mdi-magnify-scan me-1"></i>
+                            <lang>扫描适配器</lang>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 适配器列表 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent d-flex align-items-center justify-content-between">
+                    <h5 class="card-title mb-0">
+                        <i class="mdi mdi-view-list me-2"></i>
+                        <lang>适配器列表</lang>
+                    </h5>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="WelineAdapterManager.cleanup()">
+                            <i class="mdi mdi-delete-sweep me-1"></i>
+                            <lang>清理无效</lang>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <!-- 批量操作工具栏 -->
+                    <div class="batch-toolbar align-items-center justify-content-between" id="batchToolbar">
+                        <div class="d-flex align-items-center">
+                            <span class="me-3">
+                                <lang>已选择</lang> <span class="select-count" id="selectCount">0</span> <lang>项</lang>
+                            </span>
+                            <div class="btn-group btn-group-sm">
+                                <button type="button" class="btn btn-outline-success" onclick="WelineAdapterManager.batchToggle(1)">
+                                    <i class="mdi mdi-check-circle me-1"></i>
+                                    <lang>批量激活</lang>
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="WelineAdapterManager.batchToggle(0)">
+                                    <i class="mdi mdi-pause-circle me-1"></i>
+                                    <lang>批量禁用</lang>
+                                </button>
+                                <button type="button" class="btn btn-outline-danger" onclick="WelineAdapterManager.batchDelete()">
+                                    <i class="mdi mdi-delete me-1"></i>
+                                    <lang>批量删除</lang>
+                                </button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-link text-muted btn-sm" onclick="WelineAdapterManager.clearSelection()">
+                            <lang>取消选择</lang>
+                        </button>
+                    </div>
+
+                    <?php if ($adapters): ?>
+                        <div class="table-responsive">
+                            <table class="table table-hover adapter-table mb-0">
+                                <thead>
+                                    <tr>
+                                        <th class="checkbox-cell">
+                                            <input type="checkbox" class="form-check-input" id="selectAll" onchange="WelineAdapterManager.toggleSelectAll(this)">
+                                        </th>
+                                        <th><lang>适配器代码</lang></th>
+                                        <th><lang>名称</lang></th>
+                                        <th><lang>版本</lang></th>
+                                        <th><lang>描述</lang></th>
+                                        <th><lang>状态</lang></th>
+                                        <th><lang>创建时间</lang></th>
+                                        <th class="text-center" style="width: 150px;"><lang>操作</lang></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($adapters as $adapter): ?>
+                                        <tr data-id="<?= $adapter->getId() ?>">
+                                            <td class="checkbox-cell">
+                                                <input type="checkbox" class="form-check-input row-checkbox" 
+                                                       value="<?= $adapter->getId() ?>" 
+                                                       onchange="WelineAdapterManager.updateSelection()">
+                                            </td>
+                                            <td>
+                                                <code class="adapter-code"><?= htmlspecialchars($adapter->getData('code')) ?></code>
+                                            </td>
+                                            <td>
+                                                <span class="fw-medium"><?= htmlspecialchars($adapter->getData('name')) ?></span>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-info bg-opacity-10 text-info">
+                                                    v<?= htmlspecialchars($adapter->getData('version')) ?>
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div class="adapter-desc text-muted" title="<?= htmlspecialchars($adapter->getData('description')) ?>">
+                                                    <?= htmlspecialchars($adapter->getData('description')) ?>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <?php if ($adapter->getData('is_active')): ?>
+                                                    <span class="badge bg-success bg-opacity-10 text-success">
+                                                        <i class="mdi mdi-check-circle me-1"></i><lang>激活</lang>
+                                                    </span>
+                                                <?php else: ?>
+                                                    <span class="badge bg-secondary bg-opacity-10 text-secondary">
+                                                        <i class="mdi mdi-pause-circle me-1"></i><lang>未激活</lang>
+                                                    </span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <small class="text-muted">
+                                                    <?= date('Y-m-d H:i', $adapter->getData('created_time')) ?>
+                                                </small>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex justify-content-center gap-1">
+                                                    <w:block class="Weline\Component\Block\OffCanvas"
+                                                           template="Weline_Component::off-canvas.phtml"
+                                                           cache="0"
+                                                           id="adapter_detail"
+                                                           action="*/backend/adapter/detailOffcanvas"
+                                                           target-tag="button"
+                                                           vars="adapter"
+                                                           action-params="{id: adapter.id}"
+                                                           target-button-class="btn btn-sm btn-outline-primary action-btn"
+                                                           icon="mdi mdi-eye"
+                                                           title="适配器详情"
+                                                           target-button-text=""
+                                                           close-button-show="1"
+                                                           close-button-text="关闭"
+                                                           direction="right"
+                                                           class-names="w-75"
+                                                           flush="1"
+                                                           flush-button-text="刷新"
+                                                           off-canvas-body-style=""
+                                                    />
+                                                    <button type="button" 
+                                                            class="btn btn-sm btn-outline-warning action-btn" 
+                                                            onclick="WelineAdapterManager.toggleStatus(<?= $adapter->getId() ?>)"
+                                                            title="<?= $adapter->getData('is_active') ? __('禁用') : __('激活') ?>">
+                                                        <i class="mdi mdi-toggle-switch<?= $adapter->getData('is_active') ? '' : '-off' ?>"></i>
+                                                    </button>
+                                                    <button type="button" 
+                                                            class="btn btn-sm btn-outline-danger action-btn" 
+                                                            onclick="WelineAdapterManager.delete(<?= $adapter->getId() ?>)"
+                                                            title="<?= __('删除') ?>">
+                                                        <i class="mdi mdi-delete"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <?php if (isset($pagination)): ?>
+                            <div class="card-footer bg-transparent d-flex justify-content-center">
+                                <?= $pagination ?>
+                            </div>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <div class="empty-state">
+                            <i class="mdi mdi-puzzle-outline d-block"></i>
+                            <h5 class="text-muted mb-2"><lang>暂无场景适配器</lang></h5>
+                            <p class="text-muted mb-3"><lang>请点击"扫描适配器"按钮来扫描和收集适配器。</lang></p>
+                            <button type="button" class="btn btn-primary" onclick="WelineAdapterManager.scan()">
+                                <i class="mdi mdi-magnify-scan me-1"></i>
+                                <lang>扫描适配器</lang>
+                            </button>
                         </div>
                     <?php endif; ?>
-                <?php else: ?>
-                    <div class="alert alert-info">
-                        <i class="mdi mdi-information me-2"></i>
-                        <lang>暂无场景适配器数据。请点击"扫描适配器"按钮来扫描和收集适配器。</lang>
-                    </div>
-                <?php endif; ?>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 (function() {
     'use strict';
     
-    window.scanAdapters = function() {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                title: '<?= __('确认扫描') ?>',
-                text: '<?= __('确定要扫描场景适配器吗？') ?>',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: '<?= __("确定扫描") ?>',
-                cancelButtonText: '<?= __("取消") ?>'
-            }).then(function(result) {
-                if (result.isConfirmed) {
+    var WelineAdapterManager = {
+        urls: {
+            scan: '<?= $this->getBackendUrl('*/backend/adapter/scan') ?>',
+            toggleStatus: '<?= $this->getBackendUrl('*/backend/adapter/toggleStatus') ?>',
+            delete: '<?= $this->getBackendUrl('*/backend/adapter/delete') ?>',
+            batchDelete: '<?= $this->getBackendUrl('*/backend/adapter/batchDelete') ?>',
+            batchToggle: '<?= $this->getBackendUrl('*/backend/adapter/batchToggle') ?>',
+            cleanup: '<?= $this->getBackendUrl('*/backend/adapter/cleanup') ?>'
+        },
+
+        scan: function() {
+            BackendConfirm.show('<?= __('确定要扫描场景适配器吗？这将发现所有模块中的适配器并更新数据库记录。') ?>', {
+                title: '<?= __('扫描适配器') ?>',
+                confirmText: '<?= __('确定扫描') ?>',
+                cancelText: '<?= __('取消') ?>',
+                type: 'info'
+            }).then(function(confirmed) {
+                if (confirmed) {
                     showLoading();
-                    window.location.href = '<?= $this->getBackendUrl('*/backend/adapter/scan') ?>';
+                    window.location.href = WelineAdapterManager.urls.scan;
                 }
             });
-        } else {
-            if (confirm('<?= __('确定要扫描场景适配器吗？') ?>')) {
-                showLoading();
-                window.location.href = '<?= $this->getBackendUrl('*/backend/adapter/scan') ?>';
-            }
-        }
-    };
-    
-    window.toggleStatus = function(adapterId) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                title: '<?= __('确认切换状态') ?>',
-                text: '<?= __('确定要切换适配器状态吗？') ?>',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: '<?= __("确定切换") ?>',
-                cancelButtonText: '<?= __("取消") ?>'
-            }).then(function(result) {
-                if (result.isConfirmed) {
-                    performToggleStatus(adapterId);
+        },
+
+        toggleStatus: function(id) {
+            BackendConfirm.show('<?= __('确定要切换此适配器的状态吗？') ?>', {
+                title: '<?= __('切换状态') ?>',
+                confirmText: '<?= __('确定') ?>',
+                cancelText: '<?= __('取消') ?>',
+                type: 'warning'
+            }).then(function(confirmed) {
+                if (confirmed) {
+                    WelineAdapterManager._doToggleStatus(id);
                 }
             });
-        } else {
-            if (confirm('<?= __('确定要切换适配器状态吗？') ?>')) {
-                performToggleStatus(adapterId);
-            }
-        }
-    };
-    
-    function performToggleStatus(adapterId) {
-        showLoading();
-        fetch('<?= $this->getBackendUrl('*/backend/adapter/toggleStatus') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({id: adapterId})
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
-            hideLoading();
-            if (data.success) {
-                location.reload();
-            } else {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('状态切换失败') ?>',
-                        text: data.message || '<?= __('未知错误') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
+        },
+
+        _doToggleStatus: function(id) {
+            showLoading();
+            fetch(this.urls.toggleStatus, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({id: id})
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                hideLoading();
+                if (data.success) {
+                    BackendToast.success(data.message || '<?= __('状态更新成功') ?>');
+                    setTimeout(function() { location.reload(); }, 500);
                 } else {
-                    console.error('<?= __('状态切换失败：') ?>' + (data.message || '<?= __('未知错误') ?>'));
+                    BackendToast.error(data.message || '<?= __('状态更新失败') ?>');
                 }
-            }
-        })
-        .catch(function(error) {
-            hideLoading();
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('请求失败') ?>',
-                    text: error.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
+            })
+            .catch(function(e) {
+                hideLoading();
+                BackendToast.error('<?= __('请求失败：') ?>' + e.message);
+            });
+        },
+
+        delete: function(id) {
+            BackendConfirm.show('<?= __('确定要删除此适配器吗？此操作不可恢复。') ?>', {
+                title: '<?= __('删除适配器') ?>',
+                confirmText: '<?= __('确定删除') ?>',
+                cancelText: '<?= __('取消') ?>',
+                type: 'danger'
+            }).then(function(confirmed) {
+                if (confirmed) {
+                    WelineAdapterManager._doDelete(id);
+                }
+            });
+        },
+
+        _doDelete: function(id) {
+            showLoading();
+            fetch(this.urls.delete, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({id: id})
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                hideLoading();
+                if (data.success) {
+                    BackendToast.success(data.message || '<?= __('删除成功') ?>');
+                    setTimeout(function() { location.reload(); }, 500);
+                } else {
+                    BackendToast.error(data.message || '<?= __('删除失败') ?>');
+                }
+            })
+            .catch(function(e) {
+                hideLoading();
+                BackendToast.error('<?= __('请求失败：') ?>' + e.message);
+            });
+        },
+
+        getSelectedIds: function() {
+            var ids = [];
+            document.querySelectorAll('.row-checkbox:checked').forEach(function(cb) {
+                ids.push(parseInt(cb.value));
+            });
+            return ids;
+        },
+
+        updateSelection: function() {
+            var ids = this.getSelectedIds();
+            var toolbar = document.getElementById('batchToolbar');
+            var countEl = document.getElementById('selectCount');
+            var selectAll = document.getElementById('selectAll');
+            var total = document.querySelectorAll('.row-checkbox').length;
+            
+            countEl.textContent = ids.length;
+            
+            if (ids.length > 0) {
+                toolbar.classList.add('show');
             } else {
-                console.error('<?= __('请求失败：') ?>' + error.message);
+                toolbar.classList.remove('show');
             }
-        });
-    }
+            
+            selectAll.checked = ids.length === total && total > 0;
+            selectAll.indeterminate = ids.length > 0 && ids.length < total;
+        },
+
+        toggleSelectAll: function(checkbox) {
+            var checked = checkbox.checked;
+            document.querySelectorAll('.row-checkbox').forEach(function(cb) {
+                cb.checked = checked;
+            });
+            this.updateSelection();
+        },
+
+        clearSelection: function() {
+            document.querySelectorAll('.row-checkbox').forEach(function(cb) {
+                cb.checked = false;
+            });
+            document.getElementById('selectAll').checked = false;
+            this.updateSelection();
+        },
+
+        batchDelete: function() {
+            var ids = this.getSelectedIds();
+            if (ids.length === 0) {
+                BackendToast.warning('<?= __('请先选择要删除的适配器') ?>');
+                return;
+            }
+
+            BackendConfirm.show('<?= __('确定要删除选中的') ?> ' + ids.length + ' <?= __('个适配器吗？此操作不可恢复。') ?>', {
+                title: '<?= __('批量删除') ?>',
+                confirmText: '<?= __('确定删除') ?>',
+                cancelText: '<?= __('取消') ?>',
+                type: 'danger'
+            }).then(function(confirmed) {
+                if (confirmed) {
+                    WelineAdapterManager._doBatchDelete(ids);
+                }
+            });
+        },
+
+        _doBatchDelete: function(ids) {
+            showLoading();
+            fetch(this.urls.batchDelete, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ids: ids})
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                hideLoading();
+                if (data.success) {
+                    BackendToast.success(data.message);
+                    setTimeout(function() { location.reload(); }, 500);
+                } else {
+                    BackendToast.error(data.message);
+                }
+            })
+            .catch(function(e) {
+                hideLoading();
+                BackendToast.error('<?= __('请求失败：') ?>' + e.message);
+            });
+        },
+
+        batchToggle: function(status) {
+            var ids = this.getSelectedIds();
+            if (ids.length === 0) {
+                BackendToast.warning('<?= __('请先选择要操作的适配器') ?>');
+                return;
+            }
+
+            var statusText = status ? '<?= __('激活') ?>' : '<?= __('禁用') ?>';
+            BackendConfirm.show('<?= __('确定要') ?>' + statusText + '<?= __('选中的') ?> ' + ids.length + ' <?= __('个适配器吗？') ?>', {
+                title: '<?= __('批量') ?>' + statusText,
+                confirmText: '<?= __('确定') ?>',
+                cancelText: '<?= __('取消') ?>',
+                type: 'warning'
+            }).then(function(confirmed) {
+                if (confirmed) {
+                    WelineAdapterManager._doBatchToggle(ids, status);
+                }
+            });
+        },
+
+        _doBatchToggle: function(ids, status) {
+            showLoading();
+            fetch(this.urls.batchToggle, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ids: ids, status: status})
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                hideLoading();
+                if (data.success) {
+                    BackendToast.success(data.message);
+                    setTimeout(function() { location.reload(); }, 500);
+                } else {
+                    BackendToast.error(data.message);
+                }
+            })
+            .catch(function(e) {
+                hideLoading();
+                BackendToast.error('<?= __('请求失败：') ?>' + e.message);
+            });
+        },
+
+        cleanup: function() {
+            BackendConfirm.show('<?= __('确定要清理无效的适配器吗？这将删除代码文件已不存在的适配器记录。') ?>', {
+                title: '<?= __('清理无效适配器') ?>',
+                confirmText: '<?= __('确定清理') ?>',
+                cancelText: '<?= __('取消') ?>',
+                type: 'warning'
+            }).then(function(confirmed) {
+                if (confirmed) {
+                    showLoading();
+                    window.location.href = WelineAdapterManager.urls.cleanup;
+                }
+            });
+        }
+    };
+
+    window.WelineAdapterManager = WelineAdapterManager;
 })();
 </script>
