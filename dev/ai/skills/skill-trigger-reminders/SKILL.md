@@ -13,6 +13,8 @@ description: |
   - **前端、frontend、.phtml、模板、template、视图、view**
   - **Widget、部件、widget.php、<w:widget>、widget:refresh**
   - **提示、通知、消息、弹窗、确认、toast、alert、confirm、dialog、notification** ⭐⭐
+  - **分页、pagination、pageSize、翻页、列表、getItems、getPagination、limit、offset** ⭐
+  - **菜单、menu、menu.xml、ACL、权限、#[Acl]、parent_source、菜单消失、菜单层级** ⭐
 globs: []
 alwaysApply: false
 ---
@@ -49,6 +51,7 @@ alwaysApply: false
 | **创建控制器/路由** | `weline-routing` | HTTP 方法前缀、URL 生成、getUrl、@backend-url |
 | **创建 Hook 扩展点** | `create-hook` | hook.php、`<w:hook>`、优先级、hooks 目录 |
 | **模块间查询/通信** ⭐ | `unified-query-provider` | 使用 `w_query()` 或 `FrameworkQueryService`；注册 QueryProvider；禁止为查询创建独立事件 |
+| **分页查询/列表查询** ⭐ | `database-model-standards` | **必须使用** `pagination()` 方法；禁止手动 count + limit/offset；使用 `getItems()` 和 `getPagination()` |
 
 ## 快速参考
 
@@ -67,8 +70,10 @@ alwaysApply: false
 - **依赖注入** → **object-manager**（ObjectManager、getInstance、Factory、__init）
 - **数据表格** → **datatable-component**（d-table、t-header、t-filter、CRUD）
 - **路由/URL** → **weline-routing**（HTTP 前缀、getUrl、@backend-url）
+- **后台菜单/ACL** ⭐ → **acl-permission-system**（menu.xml、#[Acl]、parent_source、type=menus/pc、菜单消失）
 - **Hook 扩展** → **create-hook**（hook.php、`<w:hook>`、优先级）
 - **模块间查询/通信** ⭐ → **unified-query-provider**（`w_query()`、`FrameworkQueryService`、QueryProviderInterface、extends/Query/）
+- **分页/列表查询** ⭐ → **database-model-standards**（`pagination()`、`getItems()`、`getPagination()`；禁止手动 count + limit）
 - **用户提示/通知/确认** ⭐⭐ → **friendly-notifications**（禁止 alert/confirm/prompt！使用 BackendToast/BackendConfirm）
 
 ## 前端开发触发词
@@ -140,7 +145,15 @@ Service 开发 → service-development:
 
 数据表格 → datatable-component:
   DataTable, 数据表格, d-table, t-header, t-filter, d-form, field,
-  表格, table, 列表页, listing, CRUD, 排序, sortable, 筛选, filter, 分页
+  表格, table, 列表页, listing, CRUD, 排序, sortable, 筛选, filter
+
+数据库模型/分页 → database-model-standards ⭐:
+  (中文) 分页, 翻页, 页码, 每页, 分页查询, 列表查询, 数据列表, 获取列表, 分页列表,
+  总数, 总页数, 第几页, 上一页, 下一页, 首页, 末页, 条目, 记录数,
+  ORM, 模型, Model, 查询, select, fetch, fetchArray, 链式查询,
+  (English) pagination, paging, page, pageSize, paginated, paged query, paged list,
+  limit, offset, total, totalSize, lastPage, getItems, getPagination, items,
+  per page, records, count, page number, page count
 
 路由/URL → weline-routing:
   Controller, 控制器, 路由, route, routing, URL, getUrl, getBackendUrl,
@@ -164,7 +177,7 @@ Hook 扩展 → create-hook:
   introspect, provider, operation, extends/Query, execute(provider)
 ```
 
-## 通知/提示触发词 ⭐⭐
+## 通知/提示/输入触发词 ⭐⭐
 
 以下关键词出现时**必须**读取 `friendly-notifications` 技能：
 
@@ -175,9 +188,14 @@ popover, snackbar, feedback, warning, error message, success message, info,
 用户提示, 操作确认, 删除确认, 提交确认, 保存成功, 保存失败, 操作成功, 操作失败,
 BackendToast, BackendConfirm, AdminToast, AdminConfirm, FrontendToast,
 show message, display message, notify, 提醒用户, 告知用户, 询问用户,
-确定删除, 确认操作, 确认提交, 是否继续, 是否删除, 是否保存
+确定删除, 确认操作, 确认提交, 是否继续, 是否删除, 是否保存,
+用户输入, 输入框, 输入弹窗, 让用户输入, 请输入, input dialog, showInput, 输入对话框,
+请用户填写, 让用户填写, 填入, 获取用户输入, 请输入新的
 ```
 
 **硬性禁止**：❌ `alert()` / `confirm()` / `prompt()` / `window.alert` / `window.confirm` / `window.prompt`
 
-**必须使用**：✅ `BackendToast.success/error/warning/info()` + `BackendConfirm.show()`
+**必须使用**：
+- ✅ 消息/提示 → `BackendToast.success/error/warning/info()`
+- ✅ 确认操作 → `BackendConfirm.show()`
+- ✅ 用户输入 → `BackendConfirm.showInput()`

@@ -531,6 +531,10 @@ StateManager::registerResetCallback('my_reset', function () {
 #### 11. 标签库编译期状态
 - `Local::$ids` — `<local>` 标签 ID 去重列表，防止跨请求误判 ID 重复（2026-02-26）
 
+#### 12. 菜单相关缓存（2026-02-27）
+- `MenuUrlValidator::$menuPathsCache` — 菜单路径验证静态缓存
+- `MenuRenderService` 实例清理 — 避免 Request 对象和 URL 前缀跨请求残留
+
 ## 故障排查
 
 ### 查看日志
