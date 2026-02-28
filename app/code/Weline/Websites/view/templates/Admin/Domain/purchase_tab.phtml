@@ -41,6 +41,19 @@ $websites = $websites ?? [];
         <button type="button" class="btn btn-primary w-100" onclick="checkDomainAvailability()">
             <i class="mdi mdi-magnify me-1"></i><?= __('检查可用性') ?>
         </button>
+
+        <div class="mt-3 p-3" style="background:var(--bs-info-bg-subtle, #e7f1ff); border-radius:6px;">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="purchase-auto-resolve" checked>
+                <label class="form-check-label fw-bold" for="purchase-auto-resolve">
+                    <?= __('自动解析到本服务器') ?>
+                </label>
+            </div>
+            <div class="small text-muted mt-1">
+                <i class="mdi mdi-information-outline"></i>
+                <?= __('购买后自动将域名的 @ 和 www 记录解析到本服务器公网IP，通过Cron任务在域名可用后自动执行') ?>
+            </div>
+        </div>
     </div>
 
     <!-- 右侧：结果区 -->
@@ -226,9 +239,12 @@ function submitPurchase() {
 function executePurchase(accountId, items) {
     showToast('<?= __('正在提交购买请求...') ?>', 'info');
 
+    var autoResolve = document.getElementById('purchase-auto-resolve').checked ? '1' : '0';
+
     var formData = new FormData();
     formData.append('account_id', accountId);
     formData.append('items', JSON.stringify(items));
+    formData.append('auto_resolve', autoResolve);
 
     fetch(purchaseUrl, {
         method: 'POST',
@@ -237,7 +253,11 @@ function executePurchase(accountId, items) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.code === 200) {
-            showToast(data.msg || '<?= __('购买请求已提交') ?>', 'success');
+            var msg = data.msg || '<?= __('购买请求已提交') ?>';
+            if (autoResolve === '1') {
+                msg += ' <?= __('（自动解析任务已创建）') ?>';
+            }
+            showToast(msg, 'success');
             loadOrders();
         } else {
             showToast(data.msg || '<?= __('购买失败') ?>', 'error');

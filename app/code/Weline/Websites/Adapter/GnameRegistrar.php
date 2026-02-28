@@ -111,8 +111,32 @@ class GnameRegistrar implements DomainRegistrarInterface
         $response = $this->makeRequest('api/user/info', [], $credentials);
 
         if (($response['code'] ?? 0) !== 1) {
+            $errorMsg = $response['msg'] ?? __('未知错误');
+            $errorCode = $response['code'] ?? 0;
+            $requestId = $response['requestid'] ?? '';
+            
+            // 开发环境下返回更详细的错误信息
+            if (DEV) {
+                $details = [
+                    'code' => $errorCode,
+                    'msg' => $errorMsg,
+                    'requestid' => $requestId,
+                    'appid' => $credentials['appid'] ?? '',
+                    'api_host' => $credentials['api_host'] ?? self::DEFAULT_API_HOST,
+                ];
+                throw new \RuntimeException(
+                    __('GName API 连接失败：%{1}（错误码：%{2}，请求ID：%{3}，AppID：%{4}，API地址：%{5}）', [
+                        $errorMsg,
+                        $errorCode,
+                        $requestId,
+                        $details['appid'],
+                        $details['api_host'],
+                    ])
+                );
+            }
+            
             throw new \RuntimeException(
-                __('GName API 连接失败：%{1}', [$response['msg'] ?? __('未知错误')])
+                __('GName API 连接失败：%{1}', [$errorMsg])
             );
         }
 
@@ -160,13 +184,21 @@ class GnameRegistrar implements DomainRegistrarInterface
             ];
         }
 
+        if ($code === -1002 || $code === -1001 || $code === -1003) {
+            $errorMsg = $response['msg'] ?? __('未知错误');
+            throw new \RuntimeException(
+                __('API 权限错误：%{1}（错误码：%{2}）', [$errorMsg, $code])
+            );
+        }
+
+        $errorMsg = $response['msg'] ?? __('域名不可注册');
         return [
             'available' => false,
             'domain' => $domain,
             'price' => (float) ($tldPrice['Register'] ?? 0),
             'currency' => 'USD',
             'premium' => false,
-            'message' => $response['msg'] ?? __('域名不可注册'),
+            'message' => __('%{1}（错误码：%{2}）', [$errorMsg, $code]),
         ];
     }
 
@@ -231,10 +263,11 @@ class GnameRegistrar implements DomainRegistrarInterface
             ];
         }
 
+        $errorMsg = $response['msg'] ?? __('未知错误');
         return [
             'success' => false,
             'domain' => $domain,
-            'message' => $response['msg'] ?? __('域名注册失败'),
+            'message' => __('域名注册失败：%{1}（错误码：%{2}）', [$errorMsg, $code]),
         ];
     }
 
@@ -243,14 +276,28 @@ class GnameRegistrar implements DomainRegistrarInterface
         $this->validateCredentials($credentials);
 
         $page = 1;
+        $pageSize = 100;
         $allDomains = [];
 
         do {
             $response = $this->makeRequest('api/domain/list', [
                 'page' => (string) $page,
+                'limit' => (string) $pageSize,
             ], $credentials);
 
-            if (($response['code'] ?? 0) !== 1 || !\is_array($response['data'] ?? null)) {
+            $code = (int) ($response['code'] ?? 0);
+
+            if ($code !== 1) {
+                if ($page === 1) {
+                    $errorMsg = $response['msg'] ?? __('API 请求失败');
+                    throw new \RuntimeException(
+                        __('获取域名列表失败：%{1}（错误码：%{2}）', [$errorMsg, $code])
+                    );
+                }
+                break;
+            }
+
+            if (!\is_array($response['data'] ?? null)) {
                 break;
             }
 
@@ -260,15 +307,20 @@ class GnameRegistrar implements DomainRegistrarInterface
             }
 
             foreach ($list as $item) {
+                $statusRaw = $item['ztstr'] ?? $item['zt'] ?? $item['status'] ?? '';
+                $dnsStr = (string) ($item['dns'] ?? '');
+                $nameservers = $dnsStr !== '' ? \array_map('trim', \explode(',', $dnsStr)) : [];
+
                 $allDomains[] = [
                     'domain' => (string) ($item['ym'] ?? $item['domain'] ?? ''),
-                    'status' => $this->normalizeStatus((string) ($item['zt'] ?? $item['status'] ?? '')),
+                    'status' => $this->normalizeStatus((string) $statusRaw),
                     'expires_at' => (string) ($item['dqsj'] ?? $item['expires_at'] ?? ''),
                     'auto_renew' => false,
+                    'nameservers' => $nameservers,
                 ];
             }
 
-            $total = (int) ($response['data']['total'] ?? 0);
+            $total = (int) ($response['count'] ?? $response['data']['total'] ?? 0);
             $hasMore = $total > 0 && \count($allDomains) < $total;
             $page++;
         } while ($hasMore && $page <= 100);
@@ -284,12 +336,12 @@ class GnameRegistrar implements DomainRegistrarInterface
             'ym' => $domain,
         ], $credentials);
 
-        if (($response['code'] ?? 0) !== 1) {
-            return [
-                'domain' => $domain,
-                'status' => 'unknown',
-                'message' => $response['msg'] ?? __('获取域名详情失败'),
-            ];
+        $code = (int) ($response['code'] ?? 0);
+        if ($code !== 1) {
+            $errorMsg = $response['msg'] ?? __('未知错误');
+            throw new \RuntimeException(
+                __('获取域名详情失败：%{1}（错误码：%{2}）', [$errorMsg, $code])
+            );
         }
 
         $data = $response['data'] ?? [];
@@ -325,7 +377,8 @@ class GnameRegistrar implements DomainRegistrarInterface
     {
         $this->validateCredentials($credentials);
 
-        $response = $this->makeRequest('api/domain/xgdns', [
+        // 注意：官方 API 文档的端点是 /api/domain/dns（不是 xgdns）
+        $response = $this->makeRequest('api/domain/dns', [
             'ym' => $domain,
             'dns' => $dnsServers,
         ], $credentials);
@@ -339,9 +392,10 @@ class GnameRegistrar implements DomainRegistrarInterface
             ];
         }
 
+        $errorMsg = $response['msg'] ?? __('未知错误');
         return [
             'success' => false,
-            'message' => $response['msg'] ?? __('DNS 修改失败'),
+            'message' => __('DNS 修改失败：%{1}（错误码：%{2}）', [$errorMsg, $code]),
         ];
     }
 
@@ -354,8 +408,12 @@ class GnameRegistrar implements DomainRegistrarInterface
 
         $response = $this->makeRequest('api/tpl/list', [], $credentials);
 
-        if (($response['code'] ?? 0) !== 1) {
-            return [];
+        $code = (int) ($response['code'] ?? 0);
+        if ($code !== 1) {
+            $errorMsg = $response['msg'] ?? __('未知错误');
+            throw new \RuntimeException(
+                __('获取联系人模板列表失败：%{1}（错误码：%{2}）', [$errorMsg, $code])
+            );
         }
 
         return $response['data'] ?? [];
@@ -370,8 +428,12 @@ class GnameRegistrar implements DomainRegistrarInterface
 
         $response = $this->makeRequest('api/domain/price', [], $credentials);
 
-        if (($response['code'] ?? 0) !== 1) {
-            return [];
+        $code = (int) ($response['code'] ?? 0);
+        if ($code !== 1) {
+            $errorMsg = $response['msg'] ?? __('未知错误');
+            throw new \RuntimeException(
+                __('获取 TLD 价格列表失败：%{1}（错误码：%{2}）', [$errorMsg, $code])
+            );
         }
 
         return $response['data'] ?? [];
@@ -386,8 +448,12 @@ class GnameRegistrar implements DomainRegistrarInterface
 
         $response = $this->makeRequest('api/user/balance', [], $credentials);
 
-        if (($response['code'] ?? 0) !== 1) {
-            return ['balance' => '0', 'currency' => 'USD'];
+        $code = (int) ($response['code'] ?? 0);
+        if ($code !== 1) {
+            $errorMsg = $response['msg'] ?? __('未知错误');
+            throw new \RuntimeException(
+                __('获取账户余额失败：%{1}（错误码：%{2}）', [$errorMsg, $code])
+            );
         }
 
         return $response['data'] ?? ['balance' => '0', 'currency' => 'USD'];
@@ -486,8 +552,39 @@ class GnameRegistrar implements DomainRegistrarInterface
 
         $url = 'https://' . $apiHost . '/' . \ltrim($endpoint, '/');
 
-        // DEBUG: 记录请求信息
-        Env::log_warning('gname_api', "请求: url={$url}, appid={$appId}, gntime={$data['gntime']}");
+        // DEBUG: 记录请求信息（开发环境下包含签名详情）
+        // 重新计算签名字符串用于调试
+        $debugParams = $data;
+        unset($debugParams['gntoken']);
+        \ksort($debugParams);
+        $debugParts = [];
+        foreach ($debugParams as $k => $v) {
+            $debugParts[] = $k . '=' . \urlencode(\trim((string)$v));
+        }
+        $signString = \implode('&', $debugParts);
+        $signStringWithKey = $signString . $appKey;
+
+        // 完整的调试信息（JSON 格式，方便技术排查）
+        $debugInfo = [
+            'request_time' => \date('Y-m-d H:i:s'),
+            'url' => $url,
+            'method' => 'POST',
+            'content_type' => 'application/x-www-form-urlencoded',
+            'params' => [
+                'appid' => $appId,
+                'gntime' => $data['gntime'],
+                'gntoken' => $gntoken,
+            ],
+            'signature' => [
+                'step1_params_sorted' => $debugParams,
+                'step2_string_before_key' => $signString,
+                'step3_string_with_key' => $signStringWithKey,
+                'step4_md5_upper' => $gntoken,
+            ],
+            'post_body' => \http_build_query($data),
+        ];
+        Env::log_warning('gname_api', "===== GName API 请求详情 =====");
+        Env::log_warning('gname_api', \json_encode($debugInfo, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 
         $ch = \curl_init();
 
@@ -500,14 +597,24 @@ class GnameRegistrar implements DomainRegistrarInterface
             CURLOPT_CONNECTTIMEOUT => self::CONNECT_TIMEOUT,
             CURLOPT_HTTPHEADER => [
                 'Content-Type: application/x-www-form-urlencoded',
+                'Accept: application/json, text/plain, */*',
+                'Accept-Language: zh-CN,zh;q=0.9,en;q=0.8',
+                'Accept-Encoding: gzip, deflate',
+                'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Origin: https://' . $apiHost,
+                'Referer: https://' . $apiHost . '/',
+                'Cache-Control: no-cache',
+                'Pragma: no-cache',
             ],
             CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_SSL_VERIFYHOST => 0,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS => 3,
+            CURLOPT_ENCODING => '',
         ]);
 
-        $this->configSsl($ch);
+        // 注：SSL 验证已在 curl_setopt_array 中禁用（CURLOPT_SSL_VERIFYPEER => false）
+        // 不再调用 configSsl()，避免生产环境下被覆盖回 true
 
         $responseBody = \curl_exec($ch);
         $httpCode = \curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -517,8 +624,8 @@ class GnameRegistrar implements DomainRegistrarInterface
 
         \curl_close($ch);
 
-        // DEBUG: 记录响应信息
-        Env::log_warning('gname_api', "响应: http_code={$httpCode}, effective_url={$effectiveUrl}, body_len=" . \strlen((string)$responseBody));
+        // DEBUG: 记录响应信息（含完整响应体）
+        Env::log_warning('gname_api', "响应: http_code={$httpCode}, effective_url={$effectiveUrl}, body=" . $responseBody);
 
         if ($errno !== 0 || $responseBody === false) {
             Env::log_error('gname_api', "请求失败: endpoint={$endpoint}, http_code={$httpCode}, error={$error}, errno={$errno}");
@@ -544,15 +651,20 @@ class GnameRegistrar implements DomainRegistrarInterface
      */
     private function configSsl(\CurlHandle $ch): void
     {
-        $isWindows = \strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN';
-        $isProduction = \getenv('APP_ENV') === 'production';
+        // 使用框架的部署模式检测
+        $deployMode = Env::get('deploy', 'prod');
+        $isDev = \in_array($deployMode, ['dev', 'development', 'local'], true);
 
-        if (!$isProduction) {
+        // 开发环境下直接禁用 SSL 验证
+        if ($isDev) {
             \curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            \curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+            \curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
             return;
         }
 
+        // 生产环境尝试查找 CA 证书
+        $isWindows = \strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN';
+        
         $caPaths = [
             \ini_get('curl.cainfo'),
             \ini_get('openssl.cafile'),
@@ -576,8 +688,9 @@ class GnameRegistrar implements DomainRegistrarInterface
             }
         }
 
+        // 找不到 CA 证书则禁用验证
         \curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        \curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        \curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
     }
 
     /**
@@ -617,7 +730,14 @@ class GnameRegistrar implements DomainRegistrarInterface
             }
             $cache[$cacheKey] = $map;
             return $map;
-        } catch (\Throwable) {
+        } catch (\RuntimeException $e) {
+            if (\str_contains($e->getMessage(), '权限') || \str_contains($e->getMessage(), '-1002')) {
+                throw $e;
+            }
+            Env::log_warning('gname_api', '获取 TLD 价格失败（非致命）: ' . $e->getMessage());
+            return [];
+        } catch (\Throwable $e) {
+            Env::log_warning('gname_api', '获取 TLD 价格失败（非致命）: ' . $e->getMessage());
             return [];
         }
     }
@@ -625,12 +745,31 @@ class GnameRegistrar implements DomainRegistrarInterface
     /**
      * 将 GName 域名状态标准化
      */
+    /**
+     * 标准化 GName 域名状态
+     *
+     * GName 状态码（zt 字段）：
+     *   0 = 正常 (active)
+     *   1 = 锁定/暂停
+     *  -1 = 过期
+     *
+     * @param string $gnameStatus GName 返回的状态值（zt 或 ztstr）
+     * @return string 标准化状态：active, pending, expired, suspended
+     */
     private function normalizeStatus(string $gnameStatus): string
     {
         $statusMap = [
-            '1' => 'active',
-            '0' => 'pending',
-            '-1' => 'expired',
+            // GName zt 数字状态码
+            '0' => 'active',      // zt=0 表示正常
+            '1' => 'suspended',   // zt=1 表示锁定/暂停
+            '-1' => 'expired',    // zt=-1 表示过期
+            // GName ztstr 中文状态
+            '正常' => 'active',
+            '锁定' => 'suspended',
+            '暂停' => 'suspended',
+            '过期' => 'expired',
+            '赎回期' => 'expired',
+            // 英文状态（兼容）
             'active' => 'active',
             'pending' => 'pending',
             'expired' => 'expired',
@@ -638,7 +777,240 @@ class GnameRegistrar implements DomainRegistrarInterface
             'serverhold' => 'suspended',
         ];
 
-        $lower = \strtolower($gnameStatus);
-        return $statusMap[$lower] ?? $gnameStatus;
+        $trimmed = \trim($gnameStatus);
+        return $statusMap[$trimmed] ?? $statusMap[\strtolower($trimmed)] ?? $trimmed;
+    }
+
+    // ============================================================
+    // DNS 记录管理（v1.5.0 新增，接口方法实现）
+    // ============================================================
+
+    /**
+     * @inheritDoc
+     */
+    public function supportsDnsManagement(): bool
+    {
+        return true;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getDnsRecords(string $domain, array $credentials): array
+    {
+        $this->validateCredentials($credentials);
+
+        $response = $this->makeRequest('api/domain/dnslist', [
+            'ym' => $domain,
+        ], $credentials);
+
+        $code = (int) ($response['code'] ?? 0);
+        if ($code !== 1) {
+            $errorMsg = $response['msg'] ?? __('未知错误');
+            throw new \RuntimeException(
+                __('获取 DNS 记录失败：%{1}（错误码：%{2}）', [$errorMsg, $code])
+            );
+        }
+
+        $records = [];
+        $list = $response['data'] ?? [];
+
+        if (!\is_array($list)) {
+            return [];
+        }
+
+        foreach ($list as $item) {
+            $records[] = [
+                'record_id' => (string) ($item['id'] ?? $item['record_id'] ?? ''),
+                'type' => \strtoupper((string) ($item['type'] ?? $item['lx'] ?? 'A')),
+                'host' => (string) ($item['host'] ?? $item['zj'] ?? '@'),
+                'value' => (string) ($item['value'] ?? $item['jlz'] ?? ''),
+                'ttl' => (int) ($item['ttl'] ?? 600),
+                'priority' => (int) ($item['priority'] ?? $item['mx'] ?? 0),
+            ];
+        }
+
+        return $records;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function addDnsRecord(string $domain, array $record, array $credentials): array
+    {
+        $this->validateCredentials($credentials);
+
+        $params = [
+            'ym' => $domain,
+            'type' => \strtoupper((string) ($record['type'] ?? 'A')),
+            'zj' => (string) ($record['host'] ?? '@'),
+            'jlz' => (string) ($record['value'] ?? ''),
+            'ttl' => (string) ($record['ttl'] ?? '600'),
+        ];
+
+        if (!empty($record['priority'])) {
+            $params['mx'] = (string) $record['priority'];
+        }
+
+        $response = $this->makeRequest('api/domain/dnsadd', $params, $credentials);
+
+        $code = (int) ($response['code'] ?? 0);
+        if ($code === 1) {
+            return [
+                'success' => true,
+                'record_id' => (string) ($response['data']['id'] ?? $response['data'] ?? ''),
+                'message' => $response['msg'] ?? __('DNS 记录添加成功'),
+            ];
+        }
+
+        $errorMsg = $response['msg'] ?? __('未知错误');
+
+        // 提供更友好的错误解释
+        $hint = '';
+        if ($code === -1002 || $code === -1001) {
+            $hint = __('（域名 DNS 可能已切换到其他服务商，请到对应服务商处添加解析）');
+        } elseif ($code === -1003) {
+            $hint = __('（域名可能不存在或已过期）');
+        } elseif (\str_contains($errorMsg, '不存在') || \str_contains($errorMsg, 'not exist')) {
+            $hint = __('（域名 DNS 可能已切换到其他服务商）');
+        } elseif (\str_contains($errorMsg, '权限') || \str_contains($errorMsg, 'permission')) {
+            $hint = __('（无权操作此域名 DNS，可能已切换到其他服务商）');
+        }
+
+        return [
+            'success' => false,
+            'message' => __('DNS 记录添加失败：%{1}（错误码：%{2}）', [$errorMsg, $code]) . $hint,
+        ];
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function updateDnsRecord(string $domain, string $recordId, array $record, array $credentials): array
+    {
+        $this->validateCredentials($credentials);
+
+        $params = [
+            'ym' => $domain,
+            'id' => $recordId,
+            'type' => \strtoupper((string) ($record['type'] ?? 'A')),
+            'zj' => (string) ($record['host'] ?? '@'),
+            'jlz' => (string) ($record['value'] ?? ''),
+            'ttl' => (string) ($record['ttl'] ?? '600'),
+        ];
+
+        if (!empty($record['priority'])) {
+            $params['mx'] = (string) $record['priority'];
+        }
+
+        $response = $this->makeRequest('api/domain/dnsupdate', $params, $credentials);
+
+        $code = (int) ($response['code'] ?? 0);
+        if ($code === 1) {
+            return [
+                'success' => true,
+                'message' => $response['msg'] ?? __('DNS 记录更新成功'),
+            ];
+        }
+
+        $errorMsg = $response['msg'] ?? __('未知错误');
+        return [
+            'success' => false,
+            'message' => __('DNS 记录更新失败：%{1}（错误码：%{2}）', [$errorMsg, $code]),
+        ];
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function deleteDnsRecord(string $domain, string $recordId, array $credentials): array
+    {
+        $this->validateCredentials($credentials);
+
+        $response = $this->makeRequest('api/domain/dnsdel', [
+            'ym' => $domain,
+            'id' => $recordId,
+        ], $credentials);
+
+        $code = (int) ($response['code'] ?? 0);
+        if ($code === 1) {
+            return [
+                'success' => true,
+                'message' => $response['msg'] ?? __('DNS 记录删除成功'),
+            ];
+        }
+
+        $errorMsg = $response['msg'] ?? __('未知错误');
+        return [
+            'success' => false,
+            'message' => __('DNS 记录删除失败：%{1}（错误码：%{2}）', [$errorMsg, $code]),
+        ];
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function batchAddDnsRecords(string $domain, array $records, array $credentials): array
+    {
+        $added = 0;
+        $failed = 0;
+        $errors = [];
+
+        foreach ($records as $record) {
+            $result = $this->addDnsRecord($domain, $record, $credentials);
+            if ($result['success']) {
+                $added++;
+            } else {
+                $failed++;
+                $errors[] = [
+                    'record' => $record,
+                    'error' => $result['message'] ?? __('未知错误'),
+                ];
+            }
+        }
+
+        return [
+            'success' => $failed === 0,
+            'added' => $added,
+            'failed' => $failed,
+            'errors' => $errors,
+        ];
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function updateNameservers(string $domain, array $nameservers, array $credentials): array
+    {
+        $dnsStr = \implode(',', \array_filter(\array_map('trim', $nameservers)));
+        return $this->modifyDns($domain, $dnsStr, $credentials);
+    }
+
+    /**
+     * @inheritDoc
+     *
+     * GName 使用自己的 DNS 服务器，返回 GName 默认的 Nameserver
+     */
+    public function getProviderNameservers(array $credentials, string $domain = ''): array
+    {
+        return [
+            'success' => true,
+            'nameservers' => [
+                'ns1.gname.com',
+                'ns2.gname.com',
+            ],
+            'message' => __('GName 默认 DNS 服务器'),
+        ];
+    }
+
+    /**
+     * @inheritDoc
+     *
+     * GName 是真正的域名注册商，可以购买和管理域名。
+     * getDomainList 返回的是真正拥有的域名。
+     */
+    public function isDomainRegistrar(): bool
+    {
+        return true;
     }
 }
