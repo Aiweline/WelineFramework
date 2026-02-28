@@ -78,6 +78,7 @@ class MigrationInterfaceTest extends TestCore
      */
     public function testInterfaceNamespace()
     {
-        $this->assertEquals('Weline\Database\Interface', MigrationInterface::class);
+        $reflection = new \ReflectionClass(MigrationInterface::class);
+        $this->assertEquals('Weline\Database\Interface', $reflection->getNamespaceName());
     }
 }

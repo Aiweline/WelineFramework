@@ -92,10 +92,10 @@ class Status implements CommandInterface
     private function getStatusText(string $status): string
     {
         return match ($status) {
-            Migration::STATUS_INSTALLED   => '已安装',
-            Migration::STATUS_ROLLED_BACK => '已回滚',
-            Migration::STATUS_FAILED      => '失败',
-            Migration::STATUS_PENDING     => '待执行',
+            Migration::STATUS_INSTALLED   => __('已安装'),
+            Migration::STATUS_ROLLED_BACK => __('已回滚'),
+            Migration::STATUS_FAILED      => __('失败'),
+            Migration::STATUS_PENDING     => __('待执行'),
             default                       => $status,
         };
     }
