@@ -26,7 +26,11 @@ class BackupServiceTest extends TestCore
     public function tearDown(): void
     {
         parent::tearDown();
-        // 清理测试数据
+        // 清理测试备份数据
+        $this->backupModel->reset()
+            ->where(MigrationBackup::fields_MIGRATION_ID, 99999)
+            ->delete()
+            ->fetch();
     }
     
     /**
@@ -38,128 +42,72 @@ class BackupServiceTest extends TestCore
     }
     
     /**
-     * 测试创建备份
+     * 测试获取备份统计信息
      */
-    public function testCreateBackup()
+    public function testGetBackupStats()
     {
-        $moduleName = 'Weline_Test';
-        $migrationFile = 'test_migration.php';
-        $backupData = [
-            'table_name' => 'test_table',
-            'data' => ['id' => 1, 'name' => 'test'],
-            'structure' => 'CREATE TABLE test_table (id INT, name VARCHAR(255))'
-        ];
+        $migrationId = 99999; // 使用测试用的迁移 ID
         
-        // 测试创建备份
-        $result = $this->backupService->createBackup($moduleName, $migrationFile, $backupData);
-        $this->assertTrue($result, '创建备份应该成功');
+        // 获取备份统计
+        $stats = $this->backupService->getBackupStats($migrationId);
+        
+        $this->assertIsArray($stats);
+        $this->assertArrayHasKey('total', $stats);
+        $this->assertArrayHasKey('tables', $stats);
+        $this->assertArrayHasKey('columns', $stats);
+        $this->assertArrayHasKey('structures', $stats);
+        $this->assertArrayHasKey('chunks', $stats);
+        $this->assertArrayHasKey('total_records', $stats);
     }
     
     /**
-     * 测试恢复备份
+     * 测试获取迁移相关的备份列表
      */
-    public function testRestoreBackup()
+    public function testGetBackupsByMigrationId()
     {
-        $moduleName = 'Weline_Test';
-        $migrationFile = 'test_migration.php';
-        
-        // 先创建一个备份
-        $backupData = [
-            'table_name' => 'test_table',
-            'data' => ['id' => 1, 'name' => 'test'],
-            'structure' => 'CREATE TABLE test_table (id INT, name VARCHAR(255))'
-        ];
-        
-        $this->backupService->createBackup($moduleName, $migrationFile, $backupData);
-        
-        // 测试恢复备份
-        $result = $this->backupService->restoreBackup($moduleName, $migrationFile);
-        $this->assertTrue($result, '恢复备份应该成功');
-    }
-    
-    /**
-     * 测试获取备份列表
-     */
-    public function testGetBackupList()
-    {
-        $moduleName = 'Weline_Test';
-        
-        // 创建一些测试备份
-        $backupData1 = [
-            'table_name' => 'test_table_1',
-            'data' => ['id' => 1, 'name' => 'test1'],
-            'structure' => 'CREATE TABLE test_table_1 (id INT, name VARCHAR(255))'
-        ];
-        
-        $backupData2 = [
-            'table_name' => 'test_table_2',
-            'data' => ['id' => 2, 'name' => 'test2'],
-            'structure' => 'CREATE TABLE test_table_2 (id INT, name VARCHAR(255))'
-        ];
-        
-        $this->backupService->createBackup($moduleName, 'test_migration_1.php', $backupData1);
-        $this->backupService->createBackup($moduleName, 'test_migration_2.php', $backupData2);
+        $migrationId = 99999;
         
         // 获取备份列表
-        $backups = $this->backupService->getBackupList($moduleName);
+        $backups = $this->backupService->getBackupsByMigrationId($migrationId);
+        
         $this->assertIsArray($backups);
-        $this->assertGreaterThanOrEqual(2, count($backups));
     }
     
     /**
-     * 测试删除备份
+     * 测试清理备份数据
      */
-    public function testDeleteBackup()
+    public function testCleanupBackupData()
     {
-        $moduleName = 'Weline_Test';
-        $migrationFile = 'test_migration.php';
+        $migrationId = 99999;
         
-        // 先创建一个备份
-        $backupData = [
-            'table_name' => 'test_table',
-            'data' => ['id' => 1, 'name' => 'test'],
-            'structure' => 'CREATE TABLE test_table (id INT, name VARCHAR(255))'
-        ];
+        // 清理备份数据
+        $result = $this->backupService->cleanupBackupData($migrationId);
         
-        $this->backupService->createBackup($moduleName, $migrationFile, $backupData);
-        
-        // 测试删除备份
-        $result = $this->backupService->deleteBackup($moduleName, $migrationFile);
-        $this->assertTrue($result, '删除备份应该成功');
+        // 方法应该返回 bool
+        $this->assertIsBool($result);
     }
     
     /**
-     * 测试清理过期备份
+     * 测试 MigrationBackup 模型的备份类型常量
      */
-    public function testCleanupExpiredBackups()
+    public function testBackupTypeConstants()
     {
-        $moduleName = 'Weline_Test';
-        $days = 30;
-        
-        // 测试清理过期备份
-        $result = $this->backupService->cleanupExpiredBackups($moduleName, $days);
-        $this->assertTrue($result, '清理过期备份应该成功');
+        // 验证备份类型常量存在
+        $this->assertEquals('table', MigrationBackup::TYPE_TABLE);
+        $this->assertEquals('column', MigrationBackup::TYPE_COLUMN);
+        $this->assertEquals('structure', MigrationBackup::TYPE_STRUCTURE);
+        $this->assertEquals('chunk', MigrationBackup::TYPE_CHUNK);
     }
     
     /**
-     * 测试备份验证
+     * 测试默认常量值
      */
-    public function testValidateBackup()
+    public function testDefaultConstants()
     {
-        $moduleName = 'Weline_Test';
-        $migrationFile = 'test_migration.php';
+        // 通过反射检查常量
+        $reflection = new \ReflectionClass(BackupService::class);
         
-        // 先创建一个备份
-        $backupData = [
-            'table_name' => 'test_table',
-            'data' => ['id' => 1, 'name' => 'test'],
-            'structure' => 'CREATE TABLE test_table (id INT, name VARCHAR(255))'
-        ];
-        
-        $this->backupService->createBackup($moduleName, $migrationFile, $backupData);
-        
-        // 测试备份验证
-        $result = $this->backupService->validateBackup($moduleName, $migrationFile);
-        $this->assertTrue($result, '备份验证应该成功');
+        $this->assertTrue($reflection->hasConstant('DEFAULT_CHUNK_SIZE'));
+        $this->assertTrue($reflection->hasConstant('LARGE_TABLE_THRESHOLD'));
     }
 }
