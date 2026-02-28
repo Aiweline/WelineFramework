@@ -49,7 +49,7 @@ class NotificationRouter
     {
         $topicCode = $notification['topic_code'] ?? '';
         $type = $notification['type'] ?? 'info';
-        $notificationId = $notification['notification_id'] ?? 0;
+        $notificationId = (int) ($notification['notification_id'] ?? 0);
         $specifiedUsers = $notification['notify_users'] ?? [];
 
         $this->createUserStatuses($notificationId, $specifiedUsers);
