@@ -9,6 +9,126 @@
 $aiModeLabel = (string)($this->getData('ai_mode_label') ?? __('画像关键词兜底模式'));
 ?>
 
+<style>
+/* ============================================
+   组件：Blog Post Action Buttons
+   模块：GuoLaiRen_Blog
+   前缀：blog-action-
+   ============================================ */
+.blog-action-btns {
+    display: flex;
+    gap: 6px;
+    flex-wrap: nowrap;
+}
+
+.blog-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border-radius: var(--backend-border-radius, 6px);
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.blog-action-btn i {
+    font-size: 14px;
+}
+
+.blog-action-btn span {
+    line-height: 1;
+}
+
+/* 发布按钮 - 绿色 */
+.blog-action-btn--publish {
+    background: var(--backend-color-success, #34c38f);
+    color: var(--backend-color-text-inverse, #fff);
+    box-shadow: 0 2px 4px rgba(52, 195, 143, 0.25);
+}
+
+.blog-action-btn--publish:hover {
+    background: #2db77d;
+    color: var(--backend-color-text-inverse, #fff);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(52, 195, 143, 0.35);
+}
+
+.blog-action-btn--publish:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(52, 195, 143, 0.2);
+}
+
+/* 编辑按钮 - 蓝色 */
+.blog-action-btn--edit {
+    background: var(--backend-color-info, #50a5f1);
+    color: var(--backend-color-text-inverse, #fff);
+    box-shadow: 0 2px 4px rgba(80, 165, 241, 0.25);
+}
+
+.blog-action-btn--edit:hover {
+    background: #3d96e8;
+    color: var(--backend-color-text-inverse, #fff);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(80, 165, 241, 0.35);
+}
+
+.blog-action-btn--edit:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(80, 165, 241, 0.2);
+}
+
+/* 删除按钮 - 红色 */
+.blog-action-btn--delete {
+    background: var(--backend-color-danger, #f46a6a);
+    color: var(--backend-color-text-inverse, #fff);
+    box-shadow: 0 2px 4px rgba(244, 106, 106, 0.25);
+}
+
+.blog-action-btn--delete:hover {
+    background: #e85555;
+    color: var(--backend-color-text-inverse, #fff);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(244, 106, 106, 0.35);
+}
+
+.blog-action-btn--delete:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(244, 106, 106, 0.2);
+}
+
+/* 焦点状态 - 无障碍支持 */
+.blog-action-btn:focus {
+    outline: none;
+    box-shadow: var(--backend-focus-ring, 0 0 0 3px rgba(85, 110, 230, 0.25));
+}
+
+.blog-action-btn--publish:focus {
+    box-shadow: 0 0 0 3px rgba(52, 195, 143, 0.3);
+}
+
+.blog-action-btn--edit:focus {
+    box-shadow: 0 0 0 3px rgba(80, 165, 241, 0.3);
+}
+
+.blog-action-btn--delete:focus {
+    box-shadow: 0 0 0 3px rgba(244, 106, 106, 0.3);
+}
+
+/* 禁用状态 */
+.blog-action-btn:disabled,
+.blog-action-btn.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+}
+</style>
+
 <!-- start page title -->
 <div class="row">
     <div class="col-12">
@@ -105,23 +225,28 @@ $aiModeLabel = (string)($this->getData('ai_mode_label') ?? __('画像关键词�
                                     <td><?= htmlspecialchars($post->getData('published_at') ?? '') ?></td>
                                     <td><?= htmlspecialchars($post->getData('created_at') ?? '') ?></td>
                                     <td>
-                                        <div class="btn-group" role="group">
+                                        <div class="blog-action-btns">
                                             <?php if ((int)$post->getData('status') === \GuoLaiRen\Blog\Model\Post::STATUS_DRAFT): ?>
                                                 <a href="<?= $this->getBackendUrl('blog/backend/post/publish') ?>?id=<?= (int)$post->getData('post_id') ?>"
-                                                   class="btn btn-sm btn-success blog-publish-confirm"
+                                                   class="blog-action-btn blog-action-btn--publish blog-publish-confirm"
                                                    data-msg="<?= htmlspecialchars(__('确定要审批并发布该文章吗？')) ?>"
                                                    title="<?= __('审批发布') ?>">
-                                                    <i class="mdi mdi-check-decagram"></i> <lang>发布</lang>
+                                                    <i class="mdi mdi-check-decagram"></i>
+                                                    <span><lang>发布</lang></span>
                                                 </a>
                                             <?php endif; ?>
                                             <a href="<?= $this->getBackendUrl('blog/backend/post/edit') ?>?id=<?= (int)$post->getData('post_id') ?>"
-                                               class="btn btn-sm btn-info">
-                                                <i class="mdi mdi-pencil"></i> <?= __('编辑') ?>
+                                               class="blog-action-btn blog-action-btn--edit"
+                                               title="<?= __('编辑文章') ?>">
+                                                <i class="mdi mdi-pencil"></i>
+                                                <span><lang>编辑</lang></span>
                                             </a>
-                                            <a href="<?= $this->getBackendUrl('blog/backend/post/delete') ?>?id=<?= (int)$post->getData('post_id') ?>"
-                                               class="btn btn-sm btn-danger blog-delete-confirm"
-                                               data-msg="<?= htmlspecialchars(__('确定要删除该博客文章吗？')) ?>">
-                                                <i class="mdi mdi-delete"></i> <lang>删除</lang>
+                                            <a href="<?= $this->getBackendUrl('blog/backend/post/remove') ?>?id=<?= (int)$post->getData('post_id') ?>"
+                                               class="blog-action-btn blog-action-btn--delete blog-delete-confirm"
+                                               data-msg="<?= htmlspecialchars(__('确定要删除该博客文章吗？')) ?>"
+                                               title="<?= __('删除文章') ?>">
+                                                <i class="mdi mdi-delete"></i>
+                                                <span><lang>删除</lang></span>
                                             </a>
                                         </div>
                                     </td>
@@ -257,88 +382,238 @@ $aiModeLabel = (string)($this->getData('ai_mode_label') ?? __('画像关键词�
 })();
 </script>
 
-<!-- 手动触发 AI 生成 SEO 文章（使用 Toast 提示，禁止原生 alert） -->
+<!-- SSE 终端模态框 - AI 生成 SEO 文章 -->
+<div id="blogSseTerminalModal" class="blog-sse-modal" role="dialog" aria-modal="true" aria-labelledby="blogSseTerminalTitle" style="display:none;">
+    <div class="blog-sse-modal-backdrop"></div>
+    <div class="blog-sse-modal-dialog">
+        <div class="blog-sse-modal-header">
+            <h5 class="blog-sse-modal-title" id="blogSseTerminalTitle">
+                <i class="mdi mdi-robot"></i> <lang>AI 生成 SEO 文章</lang>
+            </h5>
+            <button type="button" class="blog-sse-modal-close" id="blogSseTerminalClose" aria-label="<?= __('关闭') ?>">
+                <i class="mdi mdi-close"></i>
+            </button>
+        </div>
+        <div class="blog-sse-modal-body">
+            <w:theme:sse-terminal 
+                id="blog-ai-terminal"
+                url="<?= $this->getBackendUrl('blog/backend/post/trigger-ai-publish-sse') ?>"
+                title="<?= __('AI 生成进度') ?>"
+                height="400px"
+            />
+        </div>
+        <div class="blog-sse-modal-footer">
+            <span class="blog-sse-modal-hint" id="blogSseTerminalHint"></span>
+            <button type="button" class="btn btn-secondary" id="blogSseTerminalCloseBtn">
+                <lang>关闭</lang>
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ============================================
+   组件：Blog SSE Terminal Modal
+   模块：GuoLaiRen_Blog
+   前缀：blog-sse-
+   ============================================ */
+.blog-sse-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.blog-sse-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: var(--backend-color-bg-overlay, rgba(0, 0, 0, 0.5));
+}
+
+.blog-sse-modal-dialog {
+    position: relative;
+    width: 90%;
+    max-width: 700px;
+    max-height: 90vh;
+    background: var(--backend-color-card-bg, #fff);
+    border-radius: 12px;
+    box-shadow: var(--backend-shadow-lg, 0 8px 32px rgba(0, 0, 0, 0.2));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.blog-sse-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--backend-color-border-default, #e9ecef);
+    background: var(--backend-color-bg-surface, #f8f9fa);
+}
+
+.blog-sse-modal-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.blog-sse-modal-title i {
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.blog-sse-modal-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--backend-color-text-muted, #6c757d);
+    transition: all 0.2s;
+}
+
+.blog-sse-modal-close:hover {
+    background: var(--backend-color-hover-bg, #e9ecef);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.blog-sse-modal-body {
+    flex: 1;
+    padding: 20px;
+    overflow: auto;
+}
+
+.blog-sse-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-top: 1px solid var(--backend-color-border-default, #e9ecef);
+    background: var(--backend-color-bg-surface, #f8f9fa);
+}
+
+.blog-sse-modal-hint {
+    font-size: 13px;
+    color: var(--backend-color-text-muted, #6c757d);
+}
+
+.blog-sse-modal-hint.success {
+    color: var(--backend-color-success, #34c38f);
+}
+
+.blog-sse-modal-hint.error {
+    color: var(--backend-color-danger, #f46a6a);
+}
+</style>
+
+<!-- 手动触发 AI 生成 SEO 文章（使用 SSE 终端组件） -->
 <script>
 (function(){
-    function showToast(msg, type) {
-        type = type || 'info';
-        if (typeof AdminToast !== 'undefined') {
-            if (type === 'success') AdminToast.success(msg);
-            else if (type === 'error') AdminToast.error(msg);
-            else AdminToast.info(msg);
+    'use strict';
+    
+    var btn = document.getElementById('btnTriggerAi');
+    var modal = document.getElementById('blogSseTerminalModal');
+    var closeBtn = document.getElementById('blogSseTerminalClose');
+    var closeBtnFooter = document.getElementById('blogSseTerminalCloseBtn');
+    var hintEl = document.getElementById('blogSseTerminalHint');
+    var backdrop = modal ? modal.querySelector('.blog-sse-modal-backdrop') : null;
+    
+    if (!btn || !modal) return;
+    
+    var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['blog-ai-terminal'] : null;
+    var isRunning = false;
+    
+    function showModal() {
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+    
+    function hideModal() {
+        if (isRunning) {
+            if (!confirm('<?= __('任务正在执行中，确定要关闭吗？') ?>')) {
+                return;
+            }
+            if (terminal) terminal.stop();
+        }
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+    
+    function updateHint(text, type) {
+        if (hintEl) {
+            hintEl.textContent = text;
+            hintEl.className = 'blog-sse-modal-hint' + (type ? ' ' + type : '');
+        }
+    }
+    
+    btn.addEventListener('click', function() {
+        if (!terminal) {
+            console.error('SSE Terminal not initialized');
             return;
         }
-        var el = document.createElement('div');
-        el.setAttribute('role', 'alert');
-        el.style.cssText = 'position:fixed;top:20px;right:20px;max-width:400px;padding:12px 20px;border-radius:8px;font-size:14px;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,0.15);white-space:pre-wrap;';
-        el.textContent = msg;
-        if (type === 'success') { el.style.background = '#d4edda'; el.style.color = '#155724'; el.style.border = '1px solid #c3e6cb'; }
-        else if (type === 'error') { el.style.background = '#f8d7da'; el.style.color = '#721c24'; el.style.border = '1px solid #f5c6cb'; }
-        else { el.style.background = '#d1ecf1'; el.style.color = '#0c5460'; el.style.border = '1px solid #bee5eb'; }
-        document.body.appendChild(el);
-        setTimeout(function(){ el.remove(); }, 4000);
-    }
-    var btn = document.getElementById('btnTriggerAi');
-    if (!btn) return;
-    btn.addEventListener('click', function(){
+        
+        terminal.clear();
+        updateHint('');
+        showModal();
+        
         var origText = btn.innerHTML;
         btn.disabled = true;
         btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('生成中...') ?>';
-
-        var progressBox = document.createElement('div');
-        progressBox.setAttribute('role', 'alert');
-        progressBox.style.cssText = 'position:fixed;top:20px;right:20px;max-width:420px;padding:16px 20px;border-radius:8px;font-size:14px;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,0.2);background:#fff;border:1px solid #dee2e6;white-space:pre-wrap;';
-        progressBox.innerHTML = '<div class="mb-2"><i class="mdi mdi-robot"></i> <?= __('生成SEO文章') ?></div><div id="sseProgressText"><?= __('正在连接…') ?></div>';
-        document.body.appendChild(progressBox);
-
-        var sseUrl = '<?= $this->getBackendUrl('blog/backend/post/trigger-ai-publish-sse') ?>';
-        var es = new EventSource(sseUrl);
-        var progressEl = document.getElementById('sseProgressText');
-
-        es.addEventListener('start', function(e){
-            var d = JSON.parse(e.data || '{}');
-            if (progressEl) progressEl.textContent = (d.mode || '') + '\n' + (d.quotas_count !== undefined ? '<?= __('配额数') ?>: ' + d.quotas_count : '');
-        });
-        es.addEventListener('article_start', function(e){
-            var d = JSON.parse(e.data || '{}');
-            if (progressEl) progressEl.textContent = '<?= __('正在生成第') ?> ' + (d.index || 0) + '/' + (d.total || 0) + ' <?= __('篇') ?>：' + (d.keyword || '');
-        });
-        es.addEventListener('article_done', function(e){
-            var d = JSON.parse(e.data || '{}');
-            if (progressEl) progressEl.textContent = '<?= __('已生成') ?> ' + (d.published || 0) + ' <?= __('篇') ?>（' + (d.keyword || '') + '）';
-        });
-        es.addEventListener('article_error', function(e){
-            var d = JSON.parse(e.data || '{}');
-            if (progressEl) progressEl.textContent = '<?= __('生成失败') ?>：' + (d.keyword || '') + ' - ' + (d.error || '');
-        });
-        es.addEventListener('done', function(e){
-            var d = JSON.parse(e.data || '{}');
-            es.close();
-            progressBox.remove();
+        isRunning = true;
+        
+        terminal.on('done', function(e) {
+            isRunning = false;
             btn.disabled = false;
             btn.innerHTML = origText;
-            showToast((d.result || '') + (d.published === 0 ? '\n' + '<?= __('可能原因：请检查配额、默认分类与画像关键词。') ?>' : ''), d.published > 0 ? 'success' : 'error');
-            if (d.published > 0) setTimeout(function(){ window.location.reload(); }, 1500);
-        });
-        es.addEventListener('error', function(e){
-            if (es.readyState === EventSource.CLOSED) return;
-            es.close();
-            progressBox.remove();
-            btn.disabled = false;
-            btn.innerHTML = origText;
-            var msg = '<?= __('连接中断或请求失败，请重试。') ?>';
-            try { var ev = e; if (ev && ev.data) { var d = JSON.parse(ev.data); if (d.message) msg = d.message; } } catch(err) {}
-            showToast(msg, 'error');
-        });
-        es.onerror = function(){
-            if (es.readyState === 2) {
-                es.close();
-                progressBox.remove();
-                btn.disabled = false;
-                btn.innerHTML = origText;
-                showToast('<?= __('连接中断，请重试') ?>', 'error');
+            
+            try {
+                var d = JSON.parse(e.data || '{}');
+                var published = d.published || 0;
+                if (published > 0) {
+                    updateHint('<?= __('成功生成') ?> ' + published + ' <?= __('篇文章，即将刷新页面...') ?>', 'success');
+                    setTimeout(function() { window.location.reload(); }, 2000);
+                } else {
+                    updateHint('<?= __('未生成文章，请检查配额与关键词配置。') ?>', 'error');
+                }
+            } catch (err) {
+                updateHint('<?= __('执行完成') ?>', 'success');
             }
-        };
+        });
+        
+        terminal.on('error', function(e) {
+            isRunning = false;
+            btn.disabled = false;
+            btn.innerHTML = origText;
+            updateHint('<?= __('执行出错，请查看终端输出。') ?>', 'error');
+        });
+        
+        terminal.on('stop', function() {
+            isRunning = false;
+            btn.disabled = false;
+            btn.innerHTML = origText;
+        });
+        
+        terminal.start();
+    });
+    
+    closeBtn.addEventListener('click', hideModal);
+    closeBtnFooter.addEventListener('click', hideModal);
+    backdrop.addEventListener('click', hideModal);
+    
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal.style.display === 'flex') {
+            hideModal();
+        }
     });
 })();
 </script>

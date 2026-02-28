@@ -16,7 +16,8 @@ use GuoLaiRen\Blog\Model\TrendProfile;
 use GuoLaiRen\Blog\Model\TrendingKeywordLog;
 use GuoLaiRen\Blog\Model\TrendsConfig;
 use GuoLaiRen\Blog\Model\TrendSiteQuota;
-use Weline\Ai\Service\AiService;
+use Weline\Ai\Adapter\ArticleGenerationAdapter;
+use Weline\Ai\Service\ArticleGenerationService;
 use Weline\Cron\CronTaskInterface;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -391,6 +392,12 @@ class AiPublish implements CronTaskInterface
         bool $asDraft
     ): bool {
         $article = $this->generateArticle($keyword, $locale);
+
+        // 检测生成错误，抛出异常让调用方捕获并记录
+        if (!empty($article['_error'])) {
+            throw new \RuntimeException($article['_error_message'] ?? __('文章生成失败'));
+        }
+
         if (empty($article['title']) || empty($article['content'])) {
             return false;
         }
@@ -416,41 +423,16 @@ class AiPublish implements CronTaskInterface
 
     private function generateArticle(string $keyword, string $locale): array
     {
-        $prompt = <<<PROMPT
-请根据以下关键词生成一篇博客文章。严格按 JSON 输出，不要其他说明。格式：
-{"title":"文章标题","summary":"200字以内摘要","content":"正文HTML内容"}
-
-关键词：{$keyword}
-
-要求：标题包含关键词；摘要简明；正文 500-800 字，分段用 <p>，可带小标题。
-PROMPT;
-
-        /** @var AiService $ai */
-        $ai = ObjectManager::getInstance(AiService::class);
-        $response = $ai->generate(
-            $prompt,
-            null,
-            null,
-            $locale,
-            [],
-            null,
-            true
-        );
-
-        $decoded = json_decode(trim($response), true);
-        if (is_array($decoded) && isset($decoded['title']) && isset($decoded['content'])) {
-            return [
-                'title' => (string)$decoded['title'],
-                'summary' => (string)($decoded['summary'] ?? ''),
-                'content' => (string)$decoded['content'],
-            ];
-        }
-
-        return [
-            'title' => $keyword . ' - ' . date('Y-m-d'),
-            'summary' => '',
-            'content' => '<p>' . htmlspecialchars($response) . '</p>',
-        ];
+        /** @var ArticleGenerationService $articleService */
+        $articleService = ObjectManager::getInstance(ArticleGenerationService::class);
+        
+        return $articleService->generateBlogArticle($keyword, $locale, [
+            'article_type' => ArticleGenerationAdapter::ARTICLE_TYPE_BLOG,
+            'style' => ArticleGenerationAdapter::STYLE_PROFESSIONAL,
+            'length' => ArticleGenerationAdapter::LENGTH_MEDIUM,
+            'include_seo' => true,
+            'is_backend' => true,
+        ]);
     }
 
     private function uniqueSlug(string $title, int $siteId): string
