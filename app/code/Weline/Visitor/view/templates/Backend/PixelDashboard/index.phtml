@@ -16,51 +16,110 @@ $trends = $trends ?? [];
 ?>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <style>
-    .weline-pixel-dashboard-card {
-        border-radius: 10px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-        transition: all 0.3s ease;
-        border: none;
-    }
-    
-    .weline-pixel-dashboard-card:hover {
-        box-shadow: 0 4px 20px rgba(0,0,0,0.12);
-        transform: translateY(-2px);
-    }
-    
-    .weline-pixel-stat-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 24px;
-        border-radius: 12px;
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .weline-pixel-stat-card.success {
-        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-    }
-    
-    .weline-pixel-stat-card.warning {
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    }
-    
-    .weline-pixel-stat-card.info {
-        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-    }
-    
-    .weline-pixel-stat-number {
-        font-size: 2.5rem;
-        font-weight: 700;
-        margin: 8px 0;
-    }
-    
-    .weline-pixel-stat-label {
-        font-size: 0.9rem;
-        opacity: 0.9;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
+/* ============================================
+   组件：Pixel Dashboard
+   模块：Weline_Visitor
+   前缀：weline-pixel-
+   ============================================ */
+.weline-pixel-dashboard-card {
+    border-radius: var(--backend-border-radius-lg, 12px);
+    box-shadow: var(--backend-card-shadow, 0 2px 12px rgba(0,0,0,0.08));
+    transition: all 0.3s ease;
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    background: var(--backend-color-card-bg, #fff);
+}
+
+.weline-pixel-dashboard-card:hover {
+    box-shadow: 0 4px 20px rgba(var(--backend-color-primary-rgb, 85, 110, 230), 0.15);
+    transform: translateY(-2px);
+    border-color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-pixel-dashboard-card .card-body {
+    background: var(--backend-color-card-bg, #fff);
+}
+
+.weline-pixel-dashboard-card .card-title {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.weline-pixel-stat-card {
+    background: linear-gradient(135deg, var(--backend-color-primary, #556ee6) 0%, var(--backend-color-primary-dark, #4757d4) 100%);
+    color: var(--backend-color-text-inverse, #fff);
+    padding: 24px;
+    border-radius: var(--backend-border-radius-lg, 12px);
+    position: relative;
+    overflow: hidden;
+}
+
+.weline-pixel-stat-card.primary {
+    background: linear-gradient(135deg, var(--backend-color-primary, #556ee6) 0%, var(--backend-color-primary-dark, #4757d4) 100%);
+}
+
+.weline-pixel-stat-card.success {
+    background: linear-gradient(135deg, var(--backend-color-success, #34c38f) 0%, var(--backend-color-success-light, #56d0a5) 100%);
+}
+
+.weline-pixel-stat-card.warning {
+    background: linear-gradient(135deg, var(--backend-color-danger, #f46a6a) 0%, var(--backend-color-danger-light, #f68a8a) 100%);
+}
+
+.weline-pixel-stat-card.info {
+    background: linear-gradient(135deg, var(--backend-color-info, #50a5f1) 0%, var(--backend-color-info-light, #6fb5f3) 100%);
+}
+
+.weline-pixel-stat-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin: 8px 0;
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.weline-pixel-stat-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+/* 表格样式适配主题 */
+.weline-pixel-dashboard-card .table {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.weline-pixel-dashboard-card .table-light {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+
+.weline-pixel-dashboard-card .table-light th {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    border-color: var(--backend-color-border-light, #e9ecef);
+}
+
+.weline-pixel-dashboard-card .table tbody td {
+    border-color: var(--backend-color-border-light, #e9ecef);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.weline-pixel-dashboard-card .table-striped > tbody > tr:nth-of-type(odd) > * {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+
+.weline-pixel-dashboard-card .table-hover > tbody > tr:hover > * {
+    background: var(--backend-color-table-bg-hover, #e9ecef);
+}
+
+/* 页面标题适配 */
+.page-title-box h4 {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+/* 文字颜色适配 */
+.weline-pixel-dashboard-card .text-muted {
+    color: var(--backend-color-text-secondary, #6c757d) !important;
+}
 </style>
 
 <!-- 页面标题 -->

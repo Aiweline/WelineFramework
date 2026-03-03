@@ -94,7 +94,7 @@ class LoginPixel implements ObserverInterface
             
         } catch (\Exception $e) {
             // 静默失败，不影响登录流程
-            error_log('LoginPixel Observer Error: ' . $e->getMessage());
+            w_log_error('LoginPixel Observer Error: ' . $e->getMessage());
         }
     }
 
