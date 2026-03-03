@@ -2,11 +2,9 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <!--开发工作台-->
-    <add source="Weline_Hook::hook_module" name="hook_module" title="Hook 管理" action=""
-         parent="Weline_Backend::dev_workspace" icon="mdi mdi-hook" order="35"/>
-    <!--Hook列表-->
-    <add source="Weline_Hook::hook_index" name="hook_index" title="Hook 列表" 
-         action="*/backend/hook" parent="Weline_Hook::hook_module" 
-         icon="mdi mdi-view-list" order="10"/>
+    
+    <!-- Hook管理 - 归入开发者 > 事件与扩展 -->
+    <menu source="Weline_Hook::hook_index" name="hook_index" title="Hook 列表" 
+          action="*/backend/hook" parent="Weline_Backend::event_extend_group" 
+          icon="mdi mdi-hook" order="20"/>
 </menus>

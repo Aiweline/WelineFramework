@@ -508,7 +508,7 @@ class HookRegistry
                     
                     if ($allowSoloConflict) {
                         // 系统升级时，只记录警告，不抛出异常
-                        \Weline\Framework\App\Env::log_warning('hook_solo_conflict.log', $errorMessage);
+                        w_log_warning($errorMessage, [], 'hook_solo_conflict.log');
                     } else {
                         // 开发环境下，抛出异常
                         throw new \RuntimeException($errorMessage);
