@@ -11,19 +11,18 @@ declare(strict_types=1);
 
 namespace Weline\ModuleRouter\Observer;
 
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\Core;
 use Weline\Framework\Router\RouterInterface;
-use Weline\ModuleRouter\Cache\ModuleRouterCache;
 use Weline\ModuleRouter\Config\ModuleRouterReader;
 
 class ProcessUrlBefore implements \Weline\Framework\Event\ObserverInterface
 {
-    private CacheInterface $moduleRouterCache;
+    private CachePoolInterface $moduleRouterCache;
     
     /**
      * 静态缓存模块路由列表，避免每次事件分发都重新读取
@@ -33,18 +32,17 @@ class ProcessUrlBefore implements \Weline\Framework\Event\ObserverInterface
     private static ?array $cachedModuleRouters = null;
     
     /**
-     * 静态缓存ModuleRouterCache实例，避免重复创建
+     * 静态缓存实例，避免重复创建
      * 
-     * @var CacheInterface|null
+     * @var CachePoolInterface|null
      */
-    private static ?CacheInterface $staticCacheInstance = null;
+    private static ?CachePoolInterface $staticCacheInstance = null;
 
     public function __construct(
-        ModuleRouterCache $moduleRouterCache,
-        private Request   $request
+        private Request $request
     )
     {
-        $this->moduleRouterCache = $moduleRouterCache->create();
+        $this->moduleRouterCache = w_cache('module_router');
     }
 
     /**

@@ -12,21 +12,20 @@ declare(strict_types=1);
 namespace Weline\ModuleRouter\Config;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Register\Register;
 use Weline\Framework\System\File\Scanner;
-use Weline\ModuleRouter\Cache\ModuleRouterCache;
 
 use function p;
 
 class ModuleRouterReader extends \Weline\Framework\System\ModuleFileReader
 {
-    private CacheInterface $moduleRouterCache;
+    private CachePoolInterface $moduleRouterCache;
 
-    public function __construct(Scanner $scanner, ModuleRouterCache $moduleRouterCache, string $path = 'Controller' . DS . 'Router.php')
+    public function __construct(Scanner $scanner, string $path = 'Controller' . DS . 'Router.php')
     {
         parent::__construct($scanner, $path);
-        $this->moduleRouterCache = $moduleRouterCache->create();
+        $this->moduleRouterCache = w_cache('module_router');
     }
 
     public function read(): array
