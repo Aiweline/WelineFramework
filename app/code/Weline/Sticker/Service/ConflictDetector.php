@@ -91,7 +91,7 @@ class ConflictDetector
             return false;
         } catch (\Exception $e) {
             // 如果检查过程中出现异常，记录日志但不抛出异常
-            error_log("检查Sticker冲突时发生错误: " . $e->getMessage());
+            w_log_error("检查Sticker冲突时发生错误: " . $e->getMessage());
             return false;
         }
     }
