@@ -1,37 +1,25 @@
-<?xml version="1.0"?>
-<!--
- * 本文件由 秋枫雁飞 编写，所有解释权归WeShop所有。
- * 作者：Admin
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- * 描述：WeShop库存模块后台菜单配置
--->
-<config>
-    <menus>
-        <!-- 库存管理菜单 -->
-        <menu id="WeShop_Inventory::inventory_management" 
-              name="库存管理" 
-              icon="mdi mdi-warehouse"
-              parent_id="WeShop_Product::product_management" 
-              action="*/backend/inventory"
-              position="50"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    
+    <!-- 库存管理菜单 -->
+    <menu source="WeShop_Inventory::inventory_management" name="inventory_management" title="库存管理" 
+         action="*/backend/inventory"
+         parent="WeShop_Product::catalog"
+         icon="mdi mdi-warehouse"
+         order="50">
         
         <!-- 库存源管理 -->
-        <menu id="WeShop_Inventory::source" 
-              name="库存源管理" 
-              icon="mdi mdi-home-city-outline"
-              parent_id="WeShop_Inventory::inventory_management" 
-              action="*/backend/inventory/source"
-              position="10"/>
+        <menu source="WeShop_Inventory::source" name="inventory_source" title="库存源管理" 
+             action="*/backend/inventory/source"
+             icon="mdi mdi-home-city-outline"
+             order="10"/>
         
-        <!-- 库存列表 -->
-        <menu id="WeShop_Inventory::source_item" 
-              name="产品库存" 
-              icon="mdi mdi-package-variant-closed"
-              parent_id="WeShop_Inventory::inventory_management" 
-              action="*/backend/inventory/source-item"
-              position="20"/>
-    </menus>
-</config>
-
+        <!-- 产品库存 -->
+        <menu source="WeShop_Inventory::source_item" name="inventory_source_item" title="产品库存" 
+             action="*/backend/inventory/source-item"
+             icon="mdi mdi-package-variant-closed"
+             order="20"/>
+    </menu>
+</menus>
