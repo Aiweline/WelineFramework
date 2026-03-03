@@ -12,13 +12,11 @@ declare(strict_types=1);
 
 namespace Weline\Taglib\test;
 
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Taglib\Cache\TaglibCacheFactory;
-
 class TestObjectManager extends \Weline\Framework\UnitTest\TestCore
 {
     function testT()
     {
-        $m = ObjectManager::getInstance(TaglibCacheFactory::class);
+        $cache = w_cache('taglib');
+        $this->assertNotNull($cache);
     }
 }

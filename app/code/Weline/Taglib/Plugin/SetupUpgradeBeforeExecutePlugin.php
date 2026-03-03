@@ -12,10 +12,8 @@ declare(strict_types=1);
 namespace Weline\Taglib\Plugin;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
-use Weline\Taglib\Cache\TaglibCacheFactory;
 use Weline\Taglib\TaglibInterface;
 use Weline\Taglib\TaglibRegistry;
 
@@ -50,7 +48,7 @@ class SetupUpgradeBeforeExecutePlugin
                 $printing->warning(__('标签注册表收集时发生错误：%{1}，但将继续执行升级流程。', [$e->getMessage()]));
             } catch (\Exception $printException) {
                 // 如果 Printing 也不可用，只记录错误日志
-                error_log("标签注册表收集失败: " . $e->getMessage());
+                w_log_error("标签注册表收集失败: " . $e->getMessage());
             }
         }
     }
@@ -62,7 +60,7 @@ class SetupUpgradeBeforeExecutePlugin
      */
     private function collectAllTaglibs(Printing $printing): void
     {
-        $cache = ObjectManager::getInstance(TaglibCacheFactory::class);
+        $cache = w_cache('taglib');
         $cache_key = 'Weline_Taglib_module_tags';
         $modules_tags = [];
         $modules = Env::getInstance()->getActiveModules();
