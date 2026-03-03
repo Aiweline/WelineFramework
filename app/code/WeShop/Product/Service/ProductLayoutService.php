@@ -17,7 +17,6 @@ namespace WeShop\Product\Service;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Model\ProductLayout;
 use WeShop\Product\Model\ProductLayoutSchedule;
-use Weline\Framework\Cache\CacheFactory;
 use Weline\Framework\Manager\ObjectManager;
 
 class ProductLayoutService
@@ -86,10 +85,7 @@ class ProductLayoutService
 
             return true;
         } catch (\Exception $e) {
-            // 记录错误日志
-            if (function_exists('w_log')) {
-                w_log("应用产品布局失败: " . $e->getMessage());
-            }
+            w_log_error("应用产品布局失败: {error}", ['error' => $e->getMessage()]);
             return false;
         }
     }
@@ -130,10 +126,7 @@ class ProductLayoutService
 
             return $schedule;
         } catch (\Exception $e) {
-            // 记录错误日志
-            if (function_exists('w_log')) {
-                w_log("创建产品布局计划失败: " . $e->getMessage());
-            }
+            w_log_error("创建产品布局计划失败: {error}", ['error' => $e->getMessage()]);
             return null;
         }
     }
@@ -182,9 +175,7 @@ class ProductLayoutService
 
             return true;
         } catch (\Exception $e) {
-            if (function_exists('w_log')) {
-                w_log("更新产品布局计划失败: " . $e->getMessage());
-            }
+            w_log_error("更新产品布局计划失败: {error}", ['error' => $e->getMessage()]);
             return false;
         }
     }
@@ -212,9 +203,7 @@ class ProductLayoutService
 
             return true;
         } catch (\Exception $e) {
-            if (function_exists('w_log')) {
-                w_log("删除产品布局计划失败: " . $e->getMessage());
-            }
+            w_log_error("删除产品布局计划失败: {error}", ['error' => $e->getMessage()]);
             return false;
         }
     }
@@ -232,12 +221,8 @@ class ProductLayoutService
      */
     public function clearProductLayoutCache(int $productId, string $layoutType): void
     {
-        // 按需创建缓存实例，避免通过构造函数注入导致类型不匹配
-        /** @var CacheFactory $cacheFactory */
-        $cacheFactory = ObjectManager::getInstance(CacheFactory::class);
-        $cache = $cacheFactory->create();
         $cacheKey = self::CACHE_KEY_PREFIX . $layoutType . '_' . $productId;
-        $cache->delete($cacheKey);
+        w_cache('product')->delete($cacheKey);
     }
 
     /**
@@ -258,9 +243,7 @@ class ProductLayoutService
 
             return true;
         } catch (\Exception $e) {
-            if (function_exists('w_log')) {
-                w_log("激活布局计划失败: " . $e->getMessage());
-            }
+            w_log_error("激活布局计划失败: {error}", ['error' => $e->getMessage()]);
             return false;
         }
     }
@@ -287,9 +270,7 @@ class ProductLayoutService
 
             return true;
         } catch (\Exception $e) {
-            if (function_exists('w_log')) {
-                w_log("停用布局计划失败: " . $e->getMessage());
-            }
+            w_log_error("停用布局计划失败: {error}", ['error' => $e->getMessage()]);
             return false;
         }
     }

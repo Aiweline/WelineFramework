@@ -1,10 +1,14 @@
 <?php
 /**
- * 分类管理 - 内容模板
+ * 分类管理 - 树形结构
  * @var \Weline\Framework\View\Template $this
+ * @var array $categoryTree 分类树数据
+ * @var int $maxLevel 最大层级
  */
+
+$categoryTree = $categoryTree ?? [];
+$maxLevel = $maxLevel ?? 4;
 ?>
-<link href='@static(Weline_Eav::css/category.css)' rel='stylesheet' type='text/css'/>
 
 <!-- start page title -->
 <div class='row'>
@@ -13,11 +17,9 @@
             <h4 class='mb-sm-0'>
                 <breadcrumb model='Weline\Backend\Model\Menu' order_field="order" name_field='title'/>
             </h4>
-
             <div class='page-title-right'>
                 <breadcrumb model="Weline\Backend\Model\Menu" order_field='order' name_field="title"/>
             </div>
-
         </div>
     </div>
 </div>
@@ -33,165 +35,459 @@
     <div class='col-12'>
         <div class='card'>
             <div class='card-body'>
-                <h4 class='card-title'>
-                    <lang>分类管理</lang>
-                </h4>
-                <p class='card-title-desc'>
-                    <lang>管理分类</lang>
-                </p>
-                <div class='table-rep-plugin'>
-                    <!-- search form -->
-                    <div class='row'>
-                        <div class='col-6'>
-                            <block class='Weline\Component\Block\Form\Search'
-                                   id='entity-category-search'
-                                   action='*/backend/category' method='get' keyword='search' value=''
-                                   placeholder='请输入分类关键词回车搜索'></block>
-                        </div>
-                        <div class='col-6'>
-                            <button class='btn btn-primary pull-right weshop-category-add-btn' type='button'
-                                    data-bs-toggle='offcanvas'
-                                    data-bs-target='#offcanvasRightCategoryForm'
-                                    aria-controls='offcanvasRightCategoryForm'>
-                                <lang>添加</lang>
-                            </button>
-                            <!-- offcanvasRightCategoryForm -->
-                            <div class='offcanvas offcanvas-end w-75' tabindex='-1'
-                                 id='offcanvasRightCategoryForm'
-                                 aria-labelledby='offcanvasRightCategoryFormLabel'>
-                                <div class='offcanvas-header'>
-                                    <h5 id='offcanvasRightCategoryFormLabel'>
-                                        <lang>添加分类</lang>
-                                    </h5>
-                                    <button type='button' class='btn-close text-reset'
-                                            data-bs-dismiss='offcanvas'
-                                            aria-label='@lang{关闭}'></button>
-                                </div>
-                                <div class='offcanvas-body w-100 h-100 overflow-hidden'>
-                                    <div class="position-relative w-100 h-100 ">
-                                        <iframe id='categoryAddIframe' class='w-100 h-100'
-                                                data-src="@backend-url('*/backend/category/add')"
-                                                frameborder='0'></iframe>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h4 class='card-title mb-1'><lang>分类管理</lang></h4>
+                        <p class='card-title-desc mb-0'><?= __('树形结构管理分类，最多支持 %{1} 级分类', $maxLevel) ?></p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="weshop-category-expand-all">
+                            <i class="ri-add-box-line"></i> <lang>全部展开</lang>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="weshop-category-collapse-all">
+                            <i class="ri-checkbox-indeterminate-line"></i> <lang>全部收起</lang>
+                        </button>
+                        <button class='btn btn-primary btn-sm' type='button' id="weshop-category-add-root">
+                            <i class="ri-add-line"></i> <lang>添加根分类</lang>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 分类树容器 -->
+                <div class="weshop-category-tree-wrapper">
+                    <?php if (empty($categoryTree)): ?>
+                    <div class="weshop-category-tree-empty">
+                        <i class="ri-folder-open-line"></i>
+                        <p><lang>暂无分类数据</lang></p>
+                        <button type="button" class="btn btn-primary" id="weshop-category-add-first">
+                            <i class="ri-add-line"></i> <lang>添加第一个分类</lang>
+                        </button>
+                    </div>
+                    <?php else: ?>
+                    <ul class="weshop-category-tree" id="weshop-category-tree">
+                        <?php
+                        $renderNode = function (array $category, int $level = 1) use (&$renderNode, $maxLevel): void {
+                            $categoryId = (int)($category['category_id'] ?? 0);
+                            $displayName = htmlspecialchars($category['display_name'] ?? $category['name'] ?? '', ENT_QUOTES);
+                            $hasChildren = !empty($category['children']);
+                            $canAddChild = $level < $maxLevel;
+                            $isActive = (int)($category['is_active'] ?? 1);
+                            $sortOrder = (int)($category['sort_order'] ?? 0);
+                            ?>
+                            <li class="weshop-category-tree-item<?= $hasChildren ? ' has-children' : '' ?>" 
+                                data-id="<?= $categoryId ?>" 
+                                data-level="<?= $level ?>"
+                                data-expanded="true">
+                                <div class="weshop-category-tree-node">
+                                    <div class="weshop-category-tree-toggle">
+                                        <?php if ($hasChildren): ?>
+                                        <i class="ri-arrow-down-s-line toggle-icon"></i>
+                                        <?php else: ?>
+                                        <i class="ri-subtract-line toggle-placeholder"></i>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="weshop-category-tree-content">
+                                        <span class="weshop-category-tree-name"><?= $displayName ?></span>
+                                        <?php if (!$isActive): ?>
+                                        <span class="badge bg-secondary ms-2"><lang>已禁用</lang></span>
+                                        <?php endif; ?>
+                                        <span class="weshop-category-tree-meta">
+                                            <small class="text-muted">ID: <?= $categoryId ?></small>
+                                            <small class="text-muted ms-2"><lang>排序</lang>: <?= $sortOrder ?></small>
+                                        </span>
+                                    </div>
+                                    <div class="weshop-category-tree-actions">
+                                        <?php if ($canAddChild): ?>
+                                        <button type="button" class="btn btn-sm btn-outline-success weshop-category-add-child" 
+                                                data-parent-id="<?= $categoryId ?>"
+                                                data-parent-name="<?= $displayName ?>"
+                                                title="<?= __('添加子分类') ?>">
+                                            <i class="ri-add-line"></i>
+                                        </button>
+                                        <?php endif; ?>
+                                        <button type="button" class="btn btn-sm btn-outline-primary weshop-category-edit" 
+                                                data-id="<?= $categoryId ?>"
+                                                title="<?= __('编辑') ?>">
+                                            <i class="ri-edit-line"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger weshop-category-delete" 
+                                                data-id="<?= $categoryId ?>"
+                                                data-name="<?= $displayName ?>"
+                                                data-has-children="<?= $hasChildren ? '1' : '0' ?>"
+                                                title="<?= __('删除') ?>">
+                                            <i class="ri-delete-bin-line"></i>
+                                        </button>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- end search form -->
-                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
-                        <table id='tech-companies-1' class='table table-striped table-bordered'>
-                            <thead>
-                            <tr>
-                                <th data-priority='1'>
-                                    <lang>ID</lang>
-                                </th>
-                                <th data-priority='3'><?= __('名称') ?></th>
-                                <th data-priority='3'><?= __('父分类') ?></th>
-                                <th data-priority='3'><?= __('位置') ?></th>
-                                <th data-priority='3'><?= __('创建时间') ?></th>
-                                <th data-priority='3'><?= __('更新时间') ?></th>
-                                <th data-priority='3'><?= __('操作') ?></th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <foreach name="categories" item="category" key="key">
-                                <tr>
-                                    <td class='co-name'>{{category.category_id}}</td>
-                                    <td class='co-name'>
-                                        {{category.local_name|category.name}}
-                                    </td>
-                                    <td class='co-name'>
-                                        <if condition="category.pid">
-                                            <span class="text-muted">{{category.parent_name}}</span>
-                                        </if>
-                                    </td>
-                                    <td>{{category.position}}</td>
-                                    <td class='co-name'>{{category.create_time}}</td>
-                                    <td class='co-name'>{{category.update_time}}</td>
-                                    <td class='co-name'>
-                                        <div class="d-flex gap-2">
-                                            <block class='Weline\Component\Block\OffCanvas'
-                                                   template='Weline_Component::off-canvas.phtml'
-                                                   cache='0'
-                                                   id='off_canvas_category_edit'
-                                                   action='*/backend/category/edit'
-                                                   vars='category'
-                                                   action-params='{id:category.category_id}'
-                                                   submit-button-text='保存'
-                                                   target-button-text='修改'
-                                                   title='编辑分类'
-                                                   close-button-show='1'
-                                                   close-button-text='关闭'
-                                                   direction='right'
-                                                   class-names='w-75'
-                                                   off-canvas-body-style=''
-                                            />
-                                            <a class='text-danger weshop-category-delete' href="@backend-url('*/backend/category/delete',
-                                                ['id'=>$category['category_id']])">
-                                                <lang>删除</lang>
-                                            </a>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </foreach>
-                            </tbody>
-                        </table>
-                        {{pagination}}
-                    </div>
+                                <?php if ($hasChildren): ?>
+                                <ul class="weshop-category-tree-children">
+                                    <?php foreach ($category['children'] as $child): ?>
+                                        <?php $renderNode($child, $level + 1); ?>
+                                    <?php endforeach; ?>
+                                </ul>
+                                <?php endif; ?>
+                            </li>
+                            <?php
+                        };
+                        
+                        foreach ($categoryTree as $rootCategory):
+                            $renderNode($rootCategory, 1);
+                        endforeach;
+                        ?>
+                    </ul>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
-    </div> <!-- end col -->
-</div> <!-- end row -->
+    </div>
+</div>
+
+<!-- OffCanvas for Add/Edit -->
+<div class='offcanvas offcanvas-end w-75' tabindex='-1' id='offcanvasCategoryForm' aria-labelledby='offcanvasCategoryFormLabel'>
+    <div class='offcanvas-header'>
+        <h5 id='offcanvasCategoryFormLabel'><lang>分类表单</lang></h5>
+        <button type='button' class='btn-close text-reset' data-bs-dismiss='offcanvas' aria-label='<?= __('关闭') ?>'></button>
+    </div>
+    <div class='offcanvas-body w-100 h-100 overflow-hidden'>
+        <div class="position-relative w-100 h-100">
+            <iframe id='categoryFormIframe' class='w-100 h-100' frameborder='0'></iframe>
+        </div>
+    </div>
+</div>
+
+<style>
+.weshop-category-tree-wrapper {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-md, 8px);
+    padding: var(--backend-spacing-md, 16px);
+    min-height: 200px;
+}
+
+.weshop-category-tree-empty {
+    text-align: center;
+    padding: var(--backend-spacing-xl, 40px) var(--backend-spacing-md, 20px);
+    color: var(--backend-color-text-tertiary, #999);
+}
+
+.weshop-category-tree-empty i {
+    font-size: 3rem;
+    opacity: 0.3;
+    margin-bottom: var(--backend-spacing-md, 15px);
+    display: block;
+}
+
+.weshop-category-tree-empty p {
+    margin-bottom: var(--backend-spacing-md, 15px);
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.weshop-category-tree {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.weshop-category-tree-item {
+    list-style: none;
+}
+
+.weshop-category-tree-node {
+    display: flex;
+    align-items: center;
+    padding: var(--backend-spacing-sm, 8px) var(--backend-spacing-md, 12px);
+    border-radius: var(--backend-border-radius, 6px);
+    margin-bottom: 2px;
+    transition: all 0.2s ease;
+    background: var(--backend-color-bg-primary, #fff);
+}
+
+.weshop-category-tree-node:hover {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+
+.weshop-category-tree-toggle {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--backend-color-text-secondary, #6c757d);
+    flex-shrink: 0;
+}
+
+.weshop-category-tree-toggle .toggle-icon {
+    transition: transform 0.2s ease;
+}
+
+.weshop-category-tree-item[data-expanded="false"] .toggle-icon {
+    transform: rotate(-90deg);
+}
+
+.weshop-category-tree-toggle .toggle-placeholder {
+    opacity: 0.3;
+}
+
+.weshop-category-tree-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-sm, 8px);
+    min-width: 0;
+}
+
+.weshop-category-tree-name {
+    font-weight: 500;
+    color: var(--backend-color-text-primary, #212529);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.weshop-category-tree-meta {
+    display: flex;
+    gap: var(--backend-spacing-sm, 8px);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.weshop-category-tree-node:hover .weshop-category-tree-meta {
+    opacity: 1;
+}
+
+.weshop-category-tree-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.weshop-category-tree-node:hover .weshop-category-tree-actions {
+    opacity: 1;
+}
+
+.weshop-category-tree-actions .btn {
+    padding: 2px 6px;
+    font-size: 0.75rem;
+}
+
+.weshop-category-tree-children {
+    list-style: none;
+    padding-left: 28px;
+    margin: 0;
+    border-left: 1px dashed var(--backend-color-border-light, #e9ecef);
+    margin-left: 12px;
+}
+
+.weshop-category-tree-item[data-expanded="false"] > .weshop-category-tree-children {
+    display: none;
+}
+
+/* Level-based indentation visual hint */
+.weshop-category-tree-item[data-level="2"] > .weshop-category-tree-node {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+
+.weshop-category-tree-item[data-level="3"] > .weshop-category-tree-node {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+}
+
+.weshop-category-tree-item[data-level="4"] > .weshop-category-tree-node {
+    background: linear-gradient(to right, var(--backend-color-bg-tertiary, #e9ecef), var(--backend-color-bg-secondary, #f8f9fa));
+}
+
+.weshop-category-tree-item[data-level="2"] > .weshop-category-tree-node:hover,
+.weshop-category-tree-item[data-level="3"] > .weshop-category-tree-node:hover,
+.weshop-category-tree-item[data-level="4"] > .weshop-category-tree-node:hover {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+}
+</style>
 
 <script>
 (function() {
     'use strict';
     
-    var WeShopCategory = {
-        flushIframe: function() {
-            var iframe = $('#categoryAddIframe');
-            iframe.attr('src', iframe.attr('src'));
-        },
+    var STORAGE_KEY = 'weshop_category_tree_state';
+    
+    var WeShopCategoryTree = {
+        offcanvas: null,
+        iframe: null,
         
         init: function() {
             var self = this;
             
-            // offcanvas 显示时加载 iframe
-            var offcanvasRightCategoryForm = $('#offcanvasRightCategoryForm');
-            offcanvasRightCategoryForm.on('show.bs.offcanvas', function () {
-                var categoryAddIframe = $('#categoryAddIframe');
-                categoryAddIframe.attr('src', categoryAddIframe.attr('data-src'));
-            });
+            this.offcanvas = new bootstrap.Offcanvas(document.getElementById('offcanvasCategoryForm'));
+            this.iframe = document.getElementById('categoryFormIframe');
             
-            // 删除确认
-            $('a.weshop-category-delete').click(function(event) {
-                event.preventDefault();
-                var href = $(this).attr('href');
-                showLoading();
-                Swal.fire({
-                    title: '<?= __('确定删除吗?') ?>',
-                    text: "<?= __('删除后不可恢复') ?>",
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#3085d6',
-                    cancelButtonColor: '#d33',
-                    confirmButtonText: '<?= __('确定') ?>',
-                    cancelButtonText: '<?= __('取消') ?>'
-                }).then(function(result) {
-                    hideLoading();
-                    if (result.value) {
-                        window.location.href = href;
+            this.restoreExpandState();
+            this.bindEvents();
+        },
+        
+        bindEvents: function() {
+            var self = this;
+            
+            document.querySelectorAll('.weshop-category-tree-toggle').forEach(function(toggle) {
+                toggle.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    var item = this.closest('.weshop-category-tree-item');
+                    if (item && item.classList.contains('has-children')) {
+                        self.toggleItem(item);
                     }
                 });
+            });
+            
+            document.querySelectorAll('.weshop-category-add-child').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var parentId = this.dataset.parentId;
+                    var parentName = this.dataset.parentName;
+                    self.openAddForm(parentId, parentName);
+                });
+            });
+            
+            document.querySelectorAll('.weshop-category-edit').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var id = this.dataset.id;
+                    self.openEditForm(id);
+                });
+            });
+            
+            document.querySelectorAll('.weshop-category-delete').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var id = this.dataset.id;
+                    var name = this.dataset.name;
+                    var hasChildren = this.dataset.hasChildren === '1';
+                    self.confirmDelete(id, name, hasChildren);
+                });
+            });
+            
+            var addRootBtn = document.getElementById('weshop-category-add-root');
+            if (addRootBtn) {
+                addRootBtn.addEventListener('click', function() {
+                    self.openAddForm(0, '');
+                });
+            }
+            
+            var addFirstBtn = document.getElementById('weshop-category-add-first');
+            if (addFirstBtn) {
+                addFirstBtn.addEventListener('click', function() {
+                    self.openAddForm(0, '');
+                });
+            }
+            
+            var expandAllBtn = document.getElementById('weshop-category-expand-all');
+            if (expandAllBtn) {
+                expandAllBtn.addEventListener('click', function() {
+                    self.expandAll();
+                });
+            }
+            
+            var collapseAllBtn = document.getElementById('weshop-category-collapse-all');
+            if (collapseAllBtn) {
+                collapseAllBtn.addEventListener('click', function() {
+                    self.collapseAll();
+                });
+            }
+            
+            window.addEventListener('message', function(e) {
+                if (e.data && e.data.type === 'category_saved') {
+                    self.offcanvas.hide();
+                    location.reload();
+                }
+            });
+        },
+        
+        toggleItem: function(item) {
+            var isExpanded = item.dataset.expanded === 'true';
+            item.dataset.expanded = isExpanded ? 'false' : 'true';
+            this.saveExpandState();
+        },
+        
+        expandAll: function() {
+            document.querySelectorAll('.weshop-category-tree-item.has-children').forEach(function(item) {
+                item.dataset.expanded = 'true';
+            });
+            this.saveExpandState();
+        },
+        
+        collapseAll: function() {
+            document.querySelectorAll('.weshop-category-tree-item.has-children').forEach(function(item) {
+                item.dataset.expanded = 'false';
+            });
+            this.saveExpandState();
+        },
+        
+        saveExpandState: function() {
+            var state = {};
+            document.querySelectorAll('.weshop-category-tree-item[data-id]').forEach(function(item) {
+                state[item.dataset.id] = item.dataset.expanded === 'true';
+            });
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            } catch (e) {}
+        },
+        
+        restoreExpandState: function() {
+            try {
+                var state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+                document.querySelectorAll('.weshop-category-tree-item[data-id]').forEach(function(item) {
+                    var id = item.dataset.id;
+                    if (state.hasOwnProperty(id)) {
+                        item.dataset.expanded = state[id] ? 'true' : 'false';
+                    }
+                });
+            } catch (e) {}
+        },
+        
+        openAddForm: function(parentId, parentName) {
+            var url = '<?= $this->getBackendUrl('*/backend/category/add') ?>';
+            url += (url.indexOf('?') > -1 ? '&' : '?') + 'parent_id=' + parentId;
+            if (parentName) {
+                url += '&parent_name=' + encodeURIComponent(parentName);
+            }
+            
+            document.getElementById('offcanvasCategoryFormLabel').textContent = 
+                parentId > 0 ? '<?= __('添加子分类') ?>' : '<?= __('添加根分类') ?>';
+            this.iframe.src = url;
+            this.offcanvas.show();
+        },
+        
+        openEditForm: function(id) {
+            var url = '<?= $this->getBackendUrl('*/backend/category/edit') ?>';
+            url += (url.indexOf('?') > -1 ? '&' : '?') + 'id=' + id;
+            
+            document.getElementById('offcanvasCategoryFormLabel').textContent = '<?= __('编辑分类') ?>';
+            this.iframe.src = url;
+            this.offcanvas.show();
+        },
+        
+        confirmDelete: function(id, name, hasChildren) {
+            var message = '<?= __('确定要删除分类') ?> "' + name + '" <?= __('吗？') ?>';
+            if (hasChildren) {
+                message += '\n\n<?= __('警告：该分类包含子分类，删除后子分类也会被删除！') ?>';
+            }
+            
+            BackendConfirm.show(message, {
+                title: '<?= __('确认删除') ?>',
+                confirmText: '<?= __('删除') ?>',
+                cancelText: '<?= __('取消') ?>',
+                type: hasChildren ? 'danger' : 'warning'
+            }).then(function(confirmed) {
+                if (confirmed) {
+                    window.location.href = '<?= $this->getBackendUrl('*/backend/category/delete') ?>?id=' + id;
+                }
             });
         }
     };
     
-    window.WeShopCategory = WeShopCategory;
+    window.WeShopCategoryTree = WeShopCategoryTree;
     
-    $(document).ready(function() {
-        WeShopCategory.init();
-    });
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            WeShopCategoryTree.init();
+        });
+    } else {
+        WeShopCategoryTree.init();
+    }
 })();
 </script>

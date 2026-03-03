@@ -41,77 +41,11 @@ class Category extends \Weline\Framework\App\Controller\BackendController
 
     public function index()
     {
-        // 先获取分页信息
-        $categories = $this->category
-            ->loadLocalDescription()
-            ->pagination()
-            ->select()
-            ->fetch();
+        // 使用树形结构获取分类数据
+        $categoryTree = $this->categoryService->getCategoryTreeWithLocal(0, 1);
         
-        # 为父分类添加名称
-        // 为父分类添加名称（带缓存，避免重复查询）
-        $parentCache = [];
-        
-        // 使用 fetchArray 获取数据，因为 getItems() 可能没有正确加载数据
-        // 需要重新查询以获取数组数据
-        $itemsArray = $this->category->reset()
-            ->loadLocalDescription()
-            ->pagination($categories->getPaginationData()['current_page'] ?? 1, $categories->getPaginationData()['page_size'] ?? 20)
-            ->select()
-            ->fetchArray();
-        
-        $items = [];
-        
-        foreach ($itemsArray as $row) {
-            // 创建模型对象并设置数据
-            $category = clone $this->category;
-            $category->reset()->addData($row);
-            
-            $parentId = (int)($row['parent_id'] ?? 0);
-            $categoryId = (int)($row['category_id'] ?? 0);
-            
-            // 字段映射：将 Catalog 模型字段映射到表单期望的字段
-            $category->setData('pid', $parentId); // pid 用于列表显示
-            $category->setData('position', (int)($row['sort_order'] ?? 0)); // position 用于列表显示
-            $category->setData('create_time', $row['created_at'] ?? ''); // create_time 用于列表显示
-            $category->setData('update_time', $row['updated_at'] ?? ''); // update_time 用于列表显示
-            
-            // 从 join 的 local 表中获取 local_name
-            $localName = $row['local_name'] ?? '';
-            // 如果 local_name 为空，使用主表的 name
-            if (!$localName) {
-                $localName = $row['name'] ?? '';
-            }
-            $category->setData('local_name', $localName);
-            // 确保 name 字段也存在（用于模板回退）
-            $category->setData('name', $row['name'] ?? '');
-            
-            // 处理父分类名称
-            if ($parentId > 0) {
-                if (!isset($parentCache[$parentId])) {
-                    $parent = $this->category->reset()->loadLocalDescription()->load($parentId);
-                    $parentLocalName = $parent->getData('local_name');
-                    if (!$parentLocalName) {
-                        $parentAllData = $parent->getData();
-                        foreach ($parentAllData as $key => $value) {
-                            if (($key === 'local_name' || strpos($key, 'local_') === 0) && $value) {
-                                $parentLocalName = $value;
-                                break;
-                            }
-                        }
-                    }
-                    $parentCache[$parentId] = $parent->getId() ? ($parentLocalName ?: $parent->getData(CatalogCategory::fields_NAME)) : __('无');
-                }
-                $category->setData('parent_name', $parentCache[$parentId]);
-            } else {
-                $category->setData('parent_name', __('无'));
-            }
-            
-            $items[] = $category;
-        }
-        
-        $this->assign('categories', $items);
-        $this->assign('pagination', $categories->getPagination());
+        $this->assign('categoryTree', $categoryTree);
+        $this->assign('maxLevel', 4);
         return $this->fetch();
     }
 
@@ -612,6 +546,22 @@ class Category extends \Weline\Framework\App\Controller\BackendController
             // 加载产品实体的所有属性集
             $sets = $this->product->eav_AttributeSetModel()->select()->fetchArray();
             $this->assign('attribute_sets', $sets);
+            
+            // 支持预填父分类（从树形管理界面点击添加子分类时传递）
+            $parentId = (int)$this->request->getGet('parent_id', 0);
+            $parentName = $this->request->getGet('parent_name', '');
+            if ($parentId > 0) {
+                // 如果没有传递父分类名称，则查询获取
+                if (empty($parentName)) {
+                    $parent = $this->category->reset()->loadLocalDescription()->load($parentId);
+                    if ($parent->getId()) {
+                        $parentName = $parent->getData('local_name') ?: $parent->getData(CatalogCategory::fields_NAME);
+                    }
+                }
+                $this->assign('preset_parent_id', $parentId);
+                $this->assign('preset_parent_name', $parentName);
+            }
+            
             return $this->fetch('form');
         }
 
