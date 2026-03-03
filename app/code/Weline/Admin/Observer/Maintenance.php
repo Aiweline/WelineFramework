@@ -75,8 +75,12 @@ class Maintenance implements \Weline\Framework\Event\ObserverInterface
             
             // 标记为已处理，阻止 MaintenanceInterceptor 继续执行
             $data->setData('handled', true);
-            echo $block->fetchHtml('Weline_Admin::templates/maintenance.phtml');
-            exit;
+            // 使用 ResponseTerminateException 替代 exit，由 Runtime 层统一处理
+            throw new \Weline\Framework\Http\ResponseTerminateException(
+                503,
+                $block->fetchHtml('Weline_Admin::templates/maintenance.phtml'),
+                ['Content-Type' => 'text/html; charset=UTF-8', 'Retry-After' => '3600']
+            );
         }
     }
 }

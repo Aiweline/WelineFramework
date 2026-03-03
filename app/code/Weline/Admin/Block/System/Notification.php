@@ -12,8 +12,6 @@ declare(strict_types=1);
 namespace Weline\Admin\Block\System;
 
 use Weline\Admin\Model\System\SystemNotification;
-use Weline\Backend\Cache\BackendCache;
-use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Manager\ObjectManager;
 
 class Notification extends \Weline\Framework\View\Block

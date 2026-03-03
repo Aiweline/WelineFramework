@@ -1,10 +1,487 @@
 <?php
 /**
- * 路由管理页面（内容模板）
+ * 路由管理页面
  *
  * @var \Weline\Framework\View\Template $this
  */
+
+$routers = $this->getData('routers') ?: [];
+
+$totalRoutes = 0;
+$moduleCount = count($routers);
+$getRoutes = 0;
+$postRoutes = 0;
+
+foreach ($routers as $module => $routes) {
+    foreach ($routes as $path => $info) {
+        $totalRoutes++;
+        if (str_contains($path, '::GET') || !str_contains($path, '::')) {
+            $getRoutes++;
+        }
+        if (str_contains($path, '::POST')) {
+            $postRoutes++;
+        }
+    }
+}
 ?>
+
+<style>
+.weline-router-page {
+    --router-card-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.weline-router-header {
+    background: linear-gradient(135deg, var(--backend-color-primary, #556ee6) 0%, var(--backend-color-info, #50a5f1) 100%);
+    border-radius: var(--backend-border-radius-lg, 12px);
+    padding: var(--backend-spacing-lg, 24px);
+    margin-bottom: var(--backend-spacing-lg, 24px);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.weline-router-header h2 {
+    margin: 0 0 var(--backend-spacing-xs, 4px) 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.weline-router-header-subtitle {
+    opacity: 0.9;
+    font-size: 0.95rem;
+}
+
+.weline-router-stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--backend-spacing-md, 16px);
+    margin-bottom: var(--backend-spacing-lg, 24px);
+}
+
+.weline-router-stat-card {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: var(--backend-border-radius-md, 8px);
+    padding: var(--backend-spacing-md, 16px);
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-md, 16px);
+    transition: all 0.2s ease;
+    box-shadow: var(--router-card-shadow);
+}
+
+.weline-router-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.weline-router-stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--backend-border-radius, 6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+
+.weline-router-stat-icon.primary {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-router-stat-icon.success {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+    color: var(--backend-color-success, #34c38f);
+}
+
+.weline-router-stat-icon.info {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    color: var(--backend-color-info, #50a5f1);
+}
+
+.weline-router-stat-icon.warning {
+    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.1));
+    color: var(--backend-color-warning, #f1b44c);
+}
+
+.weline-router-stat-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.weline-router-stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--backend-color-text-primary, #212529);
+    line-height: 1.2;
+}
+
+.weline-router-stat-label {
+    font-size: 0.85rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+    margin-top: 2px;
+}
+
+.weline-router-toolbar {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: var(--backend-border-radius-md, 8px);
+    padding: var(--backend-spacing-md, 16px);
+    margin-bottom: var(--backend-spacing-md, 16px);
+    box-shadow: var(--router-card-shadow);
+}
+
+.weline-router-toolbar-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--backend-spacing-md, 16px);
+    align-items: center;
+}
+
+.weline-router-search-box {
+    flex: 1;
+    min-width: 280px;
+    max-width: 450px;
+}
+
+.weline-router-search-input {
+    position: relative;
+}
+
+.weline-router-search-input i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    font-size: 1.1rem;
+    pointer-events: none;
+}
+
+.weline-router-search-input input {
+    width: 100%;
+    padding: 10px 40px 10px 40px;
+    border: 2px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-input-bg, #fff);
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+}
+
+.weline-router-search-input input:focus {
+    outline: none;
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: var(--backend-focus-ring, 0 0 0 3px rgba(85, 110, 230, 0.15));
+}
+
+.weline-router-search-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    cursor: pointer;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.weline-router-search-input input:not(:placeholder-shown) + .weline-router-search-clear {
+    opacity: 1;
+}
+
+.weline-router-filters {
+    display: flex;
+    gap: var(--backend-spacing-sm, 8px);
+    flex-wrap: wrap;
+}
+
+.weline-router-filter-select {
+    min-width: 160px;
+    padding: 10px 32px 10px 12px;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-input-bg, #fff);
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.weline-router-filter-select:focus {
+    outline: none;
+    border-color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-router-actions {
+    display: flex;
+    gap: var(--backend-spacing-xs, 4px);
+}
+
+.weline-router-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-card-bg, #fff);
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.weline-router-action-btn:hover {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.weline-router-module-card {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: var(--backend-border-radius-md, 8px);
+    margin-bottom: var(--backend-spacing-md, 16px);
+    box-shadow: var(--router-card-shadow);
+    overflow: hidden;
+}
+
+.weline-router-module-header {
+    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 20px);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.weline-router-module-header:hover {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+}
+
+.weline-router-module-title {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--backend-color-text-primary, #212529);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.weline-router-module-title i {
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-router-module-badge {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary, #556ee6);
+    padding: 4px 10px;
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.weline-router-module-toggle {
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    transition: transform 0.2s ease;
+}
+
+.weline-router-module-header.collapsed .weline-router-module-toggle {
+    transform: rotate(-90deg);
+}
+
+.weline-router-module-body {
+    padding: 0;
+    max-height: 600px;
+    overflow-y: auto;
+    transition: max-height 0.3s ease;
+}
+
+.weline-router-module-body.collapsed {
+    max-height: 0;
+    overflow: hidden;
+}
+
+.weline-router-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.weline-router-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-bottom: 1px solid var(--backend-color-border-default, #dee2e6);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.weline-router-table td {
+    padding: 12px 16px;
+    font-size: 0.9rem;
+    color: var(--backend-color-text-primary, #212529);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    vertical-align: top;
+}
+
+.weline-router-table tbody tr:hover td {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+
+.weline-router-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.weline-router-path {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.85rem;
+    color: var(--backend-color-primary, #556ee6);
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.08));
+    padding: 6px 10px;
+    border-radius: var(--backend-border-radius-sm, 4px);
+    display: inline-block;
+    word-break: break-all;
+    max-width: 300px;
+}
+
+.weline-router-method {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: var(--backend-border-radius-sm, 4px);
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.weline-router-method.get {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.15));
+    color: var(--backend-color-info, #50a5f1);
+}
+
+.weline-router-method.post {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.15));
+    color: var(--backend-color-success, #34c38f);
+}
+
+.weline-router-method.put {
+    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.15));
+    color: var(--backend-color-warning, #f1b44c);
+}
+
+.weline-router-method.delete {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.15));
+    color: var(--backend-color-danger, #f46a6a);
+}
+
+.weline-router-method.all {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.weline-router-info {
+    font-size: 0.8rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.weline-router-info-item {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.weline-router-info-key {
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    min-width: 80px;
+}
+
+.weline-router-info-value {
+    color: var(--backend-color-text-primary, #212529);
+    word-break: break-all;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.75rem;
+}
+
+.weline-router-start-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--backend-color-primary, #556ee6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-card-bg, #fff);
+    color: var(--backend-color-primary, #556ee6);
+    font-size: 0.8rem;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.weline-router-start-btn:hover {
+    background: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.weline-router-empty {
+    padding: var(--backend-spacing-xl, 40px);
+    text-align: center;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+.weline-router-empty i {
+    font-size: 3rem;
+    opacity: 0.3;
+    margin-bottom: var(--backend-spacing-md, 16px);
+    display: block;
+}
+
+.weline-router-result-info {
+    display: none;
+    padding: 10px 16px;
+    margin-bottom: var(--backend-spacing-md, 16px);
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    border: 1px solid var(--backend-color-info, #50a5f1);
+    border-radius: var(--backend-border-radius, 6px);
+    color: var(--backend-color-info, #50a5f1);
+    font-size: 0.9rem;
+}
+
+.weline-router-result-info.visible {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+@media (max-width: 768px) {
+    .weline-router-toolbar-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .weline-router-search-box {
+        max-width: 100%;
+    }
+    
+    .weline-router-stats-row {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+</style>
 
 <div class="row">
     <div class="col-12">
@@ -24,81 +501,311 @@
     <template>Weline_Component::message.phtml</template>
 </div>
 
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title"><?= __('路由列表') ?></h4>
+<div class="weline-router-page">
+    <!-- 顶部信息卡片 -->
+    <div class="weline-router-header">
+        <h2><i class="mdi mdi-routes"></i> <?= __('路由管理') ?></h2>
+        <p class="weline-router-header-subtitle"><?= __('查看和管理系统中所有已注册的路由，支持按模块分组浏览') ?></p>
+    </div>
 
-                <div class='table-responsive'>
-                    <table class="table table-editable table-nowrap align-middle table-edits">
-                        <thead>
-                        <tr>
-                            <th><?= __('模块') ?></th>
-                            <th><?= __('路由') ?></th>
-                            <th><?= __('控制器信息') ?></th>
-                            <th><?= __('操作') ?></th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <?php
-                        foreach ($this->getData('routers') as $module => $router) {
-                            ?>
-                            <tr data-id='@var{$module}' class="success">
-                                <td colspan="3" style="font-weight: 700;font-size: 18px">@var{$module}
-                                </td>
-                            </tr>
-                            <?php foreach ($router as $path => $value): ?>
-                                <tr data-id='@var{$module}'>
-                                    <td></td>
-                                    <td data-field='path'>@var{$path}</td>
-                                    <td data-field='info'>
-                                        <?php foreach ($value as $key => $item):
-                                            if (is_string($item)):
-                                                ?>
-                                                <span><?= $key ?>:<?= $item ?></span><br>
-                                            <?php
-                                            else:
-                                                ?>
-                                                <b><?= __('控制器类信息：') ?></b><br>
-                                                <?php
-                                                foreach ($item as $k => $v) {
-                                                    ?>
-                                                    <span><?= str_pad($k, 20, '-', 1) ?>:<?= $v ?></span>
-                                                    <br>
-                                                    <?php
-                                                }
-                                                ?>
-                                            <?php
-                                            endif;
-                                            ?>
-                                        <?php
-                                        endforeach;
-                                        ?>
-                                    </td>
-                                    <td style='width: 100px'>
-                                        <notempty name="value.start_page_path">
-                                            <a class='btn btn-primary btn-lg'
-                                               href="<?= $this->getBackendUrl('backend/system/config/set?key=' . \Weline\Backend\Config\KeysInterface::key_start_page_path . '&value=' . $value['start_page_path']) ?>"
-                                               title='<?= __('设为开始页面') ?>'>
-                                                <?= __('设为开始页面') ?>
-                                            </a>
-                                        </notempty>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-
-                            <?php
-                        }
-                        ?>
-                        </tbody>
-                    </table>
-                </div>
+    <!-- 统计卡片 -->
+    <div class="weline-router-stats-row">
+        <div class="weline-router-stat-card">
+            <div class="weline-router-stat-icon primary">
+                <i class="mdi mdi-routes"></i>
+            </div>
+            <div class="weline-router-stat-content">
+                <div class="weline-router-stat-value"><?= $totalRoutes ?></div>
+                <div class="weline-router-stat-label"><?= __('路由总数') ?></div>
             </div>
         </div>
-        <?php
-        $pagination = $this->getData('pagination');
-        echo $pagination['html'] ?? '';
-        ?>
+        <div class="weline-router-stat-card">
+            <div class="weline-router-stat-icon success">
+                <i class="mdi mdi-package-variant"></i>
+            </div>
+            <div class="weline-router-stat-content">
+                <div class="weline-router-stat-value"><?= $moduleCount ?></div>
+                <div class="weline-router-stat-label"><?= __('涉及模块') ?></div>
+            </div>
+        </div>
+        <div class="weline-router-stat-card">
+            <div class="weline-router-stat-icon info">
+                <i class="mdi mdi-eye-outline"></i>
+            </div>
+            <div class="weline-router-stat-content">
+                <div class="weline-router-stat-value"><?= $getRoutes ?></div>
+                <div class="weline-router-stat-label"><?= __('GET 路由') ?></div>
+            </div>
+        </div>
+        <div class="weline-router-stat-card">
+            <div class="weline-router-stat-icon warning">
+                <i class="mdi mdi-content-save-outline"></i>
+            </div>
+            <div class="weline-router-stat-content">
+                <div class="weline-router-stat-value"><?= $postRoutes ?></div>
+                <div class="weline-router-stat-label"><?= __('POST 路由') ?></div>
+            </div>
+        </div>
     </div>
+
+    <!-- 工具栏 -->
+    <div class="weline-router-toolbar">
+        <div class="weline-router-toolbar-row">
+            <!-- 搜索框 -->
+            <div class="weline-router-search-box">
+                <div class="weline-router-search-input">
+                    <i class="mdi mdi-magnify"></i>
+                    <input type="text" id="router-search" placeholder="<?= __('搜索路由路径、控制器...') ?>">
+                    <button type="button" class="weline-router-search-clear" id="router-search-clear">
+                        <i class="mdi mdi-close"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 筛选器 -->
+            <div class="weline-router-filters">
+                <select id="router-filter-module" class="weline-router-filter-select">
+                    <option value=""><?= __('所有模块') ?></option>
+                    <?php foreach (array_keys($routers) as $module): ?>
+                    <option value="<?= htmlspecialchars($module) ?>"><?= htmlspecialchars($module) ?> (<?= count($routers[$module]) ?>)</option>
+                    <?php endforeach; ?>
+                </select>
+                <select id="router-filter-method" class="weline-router-filter-select">
+                    <option value=""><?= __('所有方法') ?></option>
+                    <option value="GET">GET</option>
+                    <option value="POST">POST</option>
+                    <option value="PUT">PUT</option>
+                    <option value="DELETE">DELETE</option>
+                </select>
+            </div>
+            
+            <!-- 操作按钮 -->
+            <div class="weline-router-actions">
+                <button type="button" class="weline-router-action-btn" id="expand-all">
+                    <i class="mdi mdi-unfold-more-horizontal"></i> <?= __('展开全部') ?>
+                </button>
+                <button type="button" class="weline-router-action-btn" id="collapse-all">
+                    <i class="mdi mdi-unfold-less-horizontal"></i> <?= __('折叠全部') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 搜索结果提示 -->
+    <div id="router-result-info" class="weline-router-result-info">
+        <i class="mdi mdi-information-outline"></i>
+        <span id="router-result-text"></span>
+    </div>
+
+    <!-- 路由列表 -->
+    <?php if (empty($routers)): ?>
+    <div class="weline-router-module-card">
+        <div class="weline-router-empty">
+            <i class="mdi mdi-database-off-outline"></i>
+            <p><?= __('暂无路由数据') ?></p>
+        </div>
+    </div>
+    <?php else: ?>
+    <?php foreach ($routers as $module => $routes): ?>
+    <div class="weline-router-module-card" data-module="<?= htmlspecialchars($module) ?>">
+        <div class="weline-router-module-header" onclick="toggleModule(this)">
+            <span class="weline-router-module-title">
+                <i class="mdi mdi-package-variant-closed"></i>
+                <?= htmlspecialchars($module) ?>
+                <span class="weline-router-module-badge"><?= count($routes) ?> <?= __('条路由') ?></span>
+            </span>
+            <span class="weline-router-module-toggle">
+                <i class="mdi mdi-chevron-down"></i>
+            </span>
+        </div>
+        <div class="weline-router-module-body collapsed">
+            <table class="weline-router-table">
+                <thead>
+                    <tr>
+                        <th style="width: 80px;"><?= __('方法') ?></th>
+                        <th style="width: 300px;"><?= __('路由路径') ?></th>
+                        <th><?= __('控制器信息') ?></th>
+                        <th style="width: 120px;"><?= __('操作') ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($routes as $path => $info): ?>
+                    <?php
+                    $method = 'ALL';
+                    if (str_contains($path, '::')) {
+                        $parts = explode('::', $path);
+                        $method = $parts[1] ?? 'ALL';
+                        $displayPath = $parts[0];
+                    } else {
+                        $displayPath = $path;
+                    }
+                    $methodLower = strtolower($method);
+                    $classInfo = $info['class'] ?? [];
+                    ?>
+                    <tr data-path="<?= htmlspecialchars(strtolower($path)) ?>" data-method="<?= htmlspecialchars($method) ?>">
+                        <td>
+                            <span class="weline-router-method <?= $methodLower ?>"><?= $method ?></span>
+                        </td>
+                        <td>
+                            <span class="weline-router-path"><?= htmlspecialchars($displayPath) ?></span>
+                        </td>
+                        <td>
+                            <div class="weline-router-info">
+                                <?php if (isset($classInfo['namespace'])): ?>
+                                <div class="weline-router-info-item">
+                                    <span class="weline-router-info-key"><?= __('命名空间') ?>:</span>
+                                    <span class="weline-router-info-value"><?= htmlspecialchars($classInfo['namespace']) ?></span>
+                                </div>
+                                <?php endif; ?>
+                                <?php if (isset($classInfo['controller_name'])): ?>
+                                <div class="weline-router-info-item">
+                                    <span class="weline-router-info-key"><?= __('控制器') ?>:</span>
+                                    <span class="weline-router-info-value"><?= htmlspecialchars($classInfo['controller_name']) ?></span>
+                                </div>
+                                <?php endif; ?>
+                                <?php if (isset($classInfo['method'])): ?>
+                                <div class="weline-router-info-item">
+                                    <span class="weline-router-info-key"><?= __('方法') ?>:</span>
+                                    <span class="weline-router-info-value"><?= htmlspecialchars($classInfo['method']) ?>()</span>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                        <td>
+                            <?php if (!empty($info['start_page_path'])): ?>
+                            <a class="weline-router-start-btn" href="<?= $this->getBackendUrl('backend/system/config/set?key=' . \Weline\Backend\Config\KeysInterface::key_start_page_path . '&value=' . urlencode($info['start_page_path'])) ?>" title="<?= __('设为首页') ?>">
+                                <i class="mdi mdi-home-outline"></i> <?= __('设为首页') ?>
+                            </a>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <?php endforeach; ?>
+    <?php endif; ?>
+
+    <?php
+    $pagination = $this->getData('pagination');
+    if (!empty($pagination['html'])) {
+        echo '<div style="margin-top: 16px;">' . $pagination['html'] . '</div>';
+    }
+    ?>
 </div>
+
+<script>
+(function() {
+    'use strict';
+    
+    var searchTimeout = null;
+    
+    window.toggleModule = function(header) {
+        var body = header.nextElementSibling;
+        header.classList.toggle('collapsed');
+        body.classList.toggle('collapsed');
+    };
+    
+    document.getElementById('expand-all').addEventListener('click', function() {
+        document.querySelectorAll('.weline-router-module-header').forEach(function(header) {
+            header.classList.remove('collapsed');
+            header.nextElementSibling.classList.remove('collapsed');
+        });
+    });
+    
+    document.getElementById('collapse-all').addEventListener('click', function() {
+        document.querySelectorAll('.weline-router-module-header').forEach(function(header) {
+            header.classList.add('collapsed');
+            header.nextElementSibling.classList.add('collapsed');
+        });
+    });
+    
+    document.getElementById('router-search').addEventListener('keyup', function() {
+        var searchVal = this.value.trim().toLowerCase();
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function() {
+            filterRoutes();
+        }, 300);
+    });
+    
+    document.getElementById('router-search-clear').addEventListener('click', function() {
+        document.getElementById('router-search').value = '';
+        filterRoutes();
+    });
+    
+    document.getElementById('router-filter-module').addEventListener('change', filterRoutes);
+    document.getElementById('router-filter-method').addEventListener('change', filterRoutes);
+    
+    function filterRoutes() {
+        var searchVal = document.getElementById('router-search').value.trim().toLowerCase();
+        var moduleFilter = document.getElementById('router-filter-module').value;
+        var methodFilter = document.getElementById('router-filter-method').value.toUpperCase();
+        
+        var visibleModules = 0;
+        var visibleRoutes = 0;
+        
+        document.querySelectorAll('.weline-router-module-card').forEach(function(card) {
+            var cardModule = card.getAttribute('data-module');
+            
+            if (moduleFilter && cardModule !== moduleFilter) {
+                card.style.display = 'none';
+                return;
+            }
+            
+            var rows = card.querySelectorAll('tbody tr');
+            var moduleVisible = false;
+            var moduleRouteCount = 0;
+            
+            rows.forEach(function(row) {
+                var path = row.getAttribute('data-path') || '';
+                var method = row.getAttribute('data-method') || '';
+                var rowText = row.textContent.toLowerCase();
+                
+                var searchMatch = !searchVal || path.includes(searchVal) || rowText.includes(searchVal);
+                var methodMatch = !methodFilter || method === methodFilter;
+                
+                if (searchMatch && methodMatch) {
+                    row.style.display = '';
+                    moduleVisible = true;
+                    moduleRouteCount++;
+                    visibleRoutes++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+            
+            if (moduleVisible) {
+                card.style.display = '';
+                visibleModules++;
+                
+                if (searchVal || methodFilter) {
+                    var header = card.querySelector('.weline-router-module-header');
+                    var body = card.querySelector('.weline-router-module-body');
+                    header.classList.remove('collapsed');
+                    body.classList.remove('collapsed');
+                }
+            } else {
+                card.style.display = 'none';
+            }
+        });
+        
+        var resultInfo = document.getElementById('router-result-info');
+        var resultText = document.getElementById('router-result-text');
+        
+        if (searchVal || moduleFilter || methodFilter) {
+            resultText.textContent = '<?= __("找到") ?> ' + visibleRoutes + ' <?= __("条路由，来自") ?> ' + visibleModules + ' <?= __("个模块") ?>';
+            resultInfo.classList.add('visible');
+        } else {
+            resultInfo.classList.remove('visible');
+        }
+    }
+    
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+            e.preventDefault();
+            document.getElementById('router-search').focus();
+        }
+    });
+})();
+</script>
