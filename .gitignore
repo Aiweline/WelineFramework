@@ -42,6 +42,9 @@ weline-async.json
 !/var/
 !/var/.gitkeep
 
+# Playwright MCP 运行时文件
+.playwright-mcp/
+
 # 临时文件和调试文件
 temp_*.json
 temp_*.txt
