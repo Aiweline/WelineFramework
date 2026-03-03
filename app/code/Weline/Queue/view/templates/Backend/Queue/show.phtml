@@ -1,124 +1,501 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
-
+/**
+ * 队列详情页面
+ * @var \Weline\Framework\View\Template $this
+ */
+$status = $queue['status'] ?? 'pending';
+$statusClass = match($status) {
+    'running' => 'running',
+    'done' => 'done',
+    'error' => 'error',
+    'stop' => 'stop',
+    default => 'pending',
+};
+$statusText = match($status) {
+    'running' => __('运行中'),
+    'done' => __('已完成'),
+    'error' => __('错误'),
+    'stop' => __('已停止'),
+    default => __('等待中'),
+};
 ?>
-<!-- start page message -->
-            <div class='row'>
-                <template>Weline_Component::message.phtml</template>
-            </div> <!-- end message -->
-            <div class='row'>
-                <div class='col-12'>
-                    <div class='card'>
-                        <div class='card-body'>
-                            <h4 class='card-title'>
-                                <lang>队列查看</lang>
-                            </h4>
-                            <p class='card-title-desc'>
-                                <lang>查看队列详细信息</lang>
-                            </p>
-                            <p>
-                                <b>
-                                    <lang>ID</lang>
-                                </b>
-                                : {{queue.queue_id}}<br></p>
-                            <p>
-                                <b>
-                                    <lang>队列状态</lang>
-                                </b>
-                                :
-                                <if condition="queue.status == 'done'">
-                                    <span class='badge badge-success text-success font-size-24'><lang>已完成</lang></span>
-                                    <elseif condition="queue.status == 'pending'"/>
-                                    <span class='badge badge-warning text-warning font-size-24'>
-                                        <lang>等待中</lang>
-                                    </span>
-                                    <elseif condition="queue.status == 'running'"/>
-                                    <span class='badge badge-primary text-primary font-size-24'><lang>运行中</lang></span>
-                                    <elseif condition="queue.status == 'error'"/>
-                                    <span class='badge badge-danger  text-danger font-size-24'><lang>错误</lang></span>
-                                </if>
-                                <br></p>
-                            <p>
-                                <b>
-                                    <lang>进程ID</lang>
-                                </b>
-                                : {{queue.pid}}<br></p>
-                            <p>
-                                <b>
-                                    <lang>运行结果</lang>
-                                </b>
-                                : <br></p>
-                            <p>
-                            <div class='card-footer'>
-                                {{queue.result}}
-                            </div>
-                            </p>
-                            <p>
-                                <b>
-                                    <lang>开始于</lang>
-                                </b>
-                                : {{queue.start_at}}<br></p>
-                            <p>
-                                <b>
-                                    <lang>结束于</lang>
-                                </b>
-                                : {{queue.end_at}}<br></p>
-                            <p>
-                                <b>
-                                    <lang>队列名称</lang>
-                                </b>
-                                : {{queue.name}}<br></p>
-                            <p>
-                                <b>
-                                    <lang>创建时间</lang>
-                                </b>
-                                : {{queue.create_time}}<br></p>
-                            <p>
-                                <b>
-                                    <lang>更新时间</lang>
-                                </b>
-                                : {{queue.update_time}}<br></p>
-                            <p>
-                                <b>
-                                    <lang>队列执行类</lang>
-                                </b>
-                                : {{queue.class}}<br></p>
-                            <p>
-                                <b>
-                                    <lang>队列类型</lang>
-                                </b>
-                                : {{queue.t_name}}<br></p>
-                            <p>
-                                <b>
-                                    <lang>队列执行注意项</lang>
-                                </b>
-                                : {{queue.tip}}<br></p>
-                            <p>
+<style>
+.weline-queue-detail {
+    background: var(--backend-color-card-bg, #fff);
+}
 
-                            <p>
-                                <b>
-                                    <lang>是否结束</lang>
-                                </b>
-                                : {{queue.finished}}<br></p>
-                            <p>
-                                <b>
-                                    <lang>是否自动运行</lang>
-                                </b>
-                                : {{queue.auto}}<br></p>
-                            <p>
-                                <b>
-                                    <lang>队列数据</lang>
-                                </b>
-                                :
-                            <div class="row">
-                                <foreach name="queue.data">
-                                    <div class="col-lg-4 col-md-6 col-sm-12">
-                                        {{v.html}}
-                                    </div>
-                                </foreach>
+.weline-queue-detail-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding-bottom: var(--backend-spacing-md, 16px);
+    margin-bottom: var(--backend-spacing-md, 16px);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+.weline-queue-detail-icon {
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--backend-border-radius-md, 8px);
+    font-size: 1.75rem;
+    flex-shrink: 0;
+}
+
+.weline-queue-detail-icon--pending {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.weline-queue-detail-icon--running {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    color: var(--backend-color-info, #50a5f1);
+}
+
+.weline-queue-detail-icon--done {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+    color: var(--backend-color-success, #34c38f);
+}
+
+.weline-queue-detail-icon--error {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
+    color: var(--backend-color-danger, #f46a6a);
+}
+
+.weline-queue-detail-icon--stop {
+    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.1));
+    color: var(--backend-color-warning, #f1b44c);
+}
+
+.weline-queue-detail-title {
+    flex: 1;
+}
+
+.weline-queue-detail-title h4 {
+    margin: 0 0 6px 0;
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.weline-queue-detail-title p {
+    margin: 0;
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.875rem;
+}
+
+.weline-queue-detail-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    font-weight: 600;
+    font-size: 0.9375rem;
+}
+
+.weline-queue-detail-status--pending {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.weline-queue-detail-status--running {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    color: var(--backend-color-info, #50a5f1);
+}
+
+.weline-queue-detail-status--done {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+    color: var(--backend-color-success, #34c38f);
+}
+
+.weline-queue-detail-status--error {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
+    color: var(--backend-color-danger, #f46a6a);
+}
+
+.weline-queue-detail-status--stop {
+    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.1));
+    color: var(--backend-color-warning, #f1b44c);
+}
+
+.weline-queue-detail-section {
+    margin-bottom: var(--backend-spacing-lg, 24px);
+}
+
+.weline-queue-detail-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+    margin-bottom: var(--backend-spacing-sm, 12px);
+    padding-bottom: var(--backend-spacing-xs, 8px);
+    border-bottom: 2px solid var(--backend-color-primary, #556ee6);
+}
+
+.weline-queue-detail-section-title i {
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-queue-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--backend-spacing-md, 16px);
+}
+
+@media (max-width: 768px) {
+    .weline-queue-detail-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.weline-queue-detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.weline-queue-detail-item--full {
+    grid-column: 1 / -1;
+}
+
+.weline-queue-detail-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--backend-color-text-secondary, #6c757d);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.weline-queue-detail-label i {
+    font-size: 0.9375rem;
+    opacity: 0.7;
+}
+
+.weline-queue-detail-value {
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 0.9375rem;
+}
+
+.weline-queue-detail-code {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.8125rem;
+    padding: 8px 12px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-radius: var(--backend-border-radius, 6px);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    word-break: break-all;
+}
+
+.weline-queue-detail-result {
+    padding: var(--backend-spacing-md, 16px);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-radius: var(--backend-border-radius-md, 8px);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.weline-queue-detail-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: var(--backend-border-radius-sm, 4px);
+    font-size: 0.8125rem;
+    font-weight: 500;
+}
+
+.weline-queue-detail-badge--yes {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+    color: var(--backend-color-success, #34c38f);
+}
+
+.weline-queue-detail-badge--no {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
+    color: var(--backend-color-danger, #f46a6a);
+}
+
+.weline-queue-detail-tip {
+    padding: var(--backend-spacing-md, 16px);
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    border-radius: var(--backend-border-radius-md, 8px);
+    border-left: 4px solid var(--backend-color-info, #50a5f1);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.weline-queue-detail-tip-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--backend-color-info, #50a5f1);
+}
+
+.weline-queue-detail-attrs {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--backend-spacing-md, 16px);
+}
+
+.weline-queue-detail-attr-item {
+    padding: var(--backend-spacing-sm, 12px);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-radius: var(--backend-border-radius, 6px);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+</style>
+
+<!-- start page message -->
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+<!-- end message -->
+
+<div class='row'>
+    <div class='col-12'>
+        <div class='card weline-queue-detail'>
+            <div class='card-body'>
+                <!-- Header -->
+                <div class="weline-queue-detail-header">
+                    <div class="weline-queue-detail-icon weline-queue-detail-icon--<?= $statusClass ?>">
+                        <?php
+                        $iconClass = match($status) {
+                            'running' => 'mdi-loading mdi-spin',
+                            'done' => 'mdi-check-circle',
+                            'error' => 'mdi-alert-circle',
+                            'stop' => 'mdi-pause-circle',
+                            default => 'mdi-clock-outline',
+                        };
+                        ?>
+                        <i class="mdi <?= $iconClass ?>"></i>
+                    </div>
+                    <div class="weline-queue-detail-title">
+                        <h4>{{queue.name}}</h4>
+                        <p>
+                            <lang>队列 ID</lang>: #{{queue.queue_id}} · 
+                            <lang>类型</lang>: {{queue.t_name}}
+                        </p>
+                    </div>
+                    <span class="weline-queue-detail-status weline-queue-detail-status--<?= $statusClass ?>">
+                        <?php
+                        $statusIcon = match($status) {
+                            'running' => 'mdi-loading mdi-spin',
+                            'done' => 'mdi-check-circle',
+                            'error' => 'mdi-alert-circle',
+                            'stop' => 'mdi-pause-circle',
+                            default => 'mdi-clock-outline',
+                        };
+                        ?>
+                        <i class="mdi <?= $statusIcon ?>"></i>
+                        <?= $statusText ?>
+                    </span>
+                </div>
+                
+                <!-- Basic Info Section -->
+                <div class="weline-queue-detail-section">
+                    <div class="weline-queue-detail-section-title">
+                        <i class="mdi mdi-information-outline"></i>
+                        <lang>基本信息</lang>
+                    </div>
+                    <div class="weline-queue-detail-grid">
+                        <div class="weline-queue-detail-item">
+                            <div class="weline-queue-detail-label">
+                                <i class="mdi mdi-identifier"></i>
+                                <lang>队列 ID</lang>
                             </div>
-                            </p>
+                            <div class="weline-queue-detail-value">
+                                <strong>#{{queue.queue_id}}</strong>
+                            </div>
+                        </div>
+                        
+                        <div class="weline-queue-detail-item">
+                            <div class="weline-queue-detail-label">
+                                <i class="mdi mdi-cog-outline"></i>
+                                <lang>进程 ID</lang>
+                            </div>
+                            <div class="weline-queue-detail-value">
+                                <if condition="queue.pid">
+                                    <strong>{{queue.pid}}</strong>
+                                <else/>
+                                    <span style="color: var(--backend-color-text-tertiary, #adb5bd);">-</span>
+                                </if>
+                            </div>
+                        </div>
+                        
+                        <div class="weline-queue-detail-item">
+                            <div class="weline-queue-detail-label">
+                                <i class="mdi mdi-clock-start"></i>
+                                <lang>开始时间</lang>
+                            </div>
+                            <div class="weline-queue-detail-value">
+                                <if condition="queue.start_at">
+                                    {{queue.start_at}}
+                                <else/>
+                                    <span style="color: var(--backend-color-text-tertiary, #adb5bd);">@lang(尚未开始)</span>
+                                </if>
+                            </div>
+                        </div>
+                        
+                        <div class="weline-queue-detail-item">
+                            <div class="weline-queue-detail-label">
+                                <i class="mdi mdi-clock-end"></i>
+                                <lang>结束时间</lang>
+                            </div>
+                            <div class="weline-queue-detail-value">
+                                <if condition="queue.end_at">
+                                    {{queue.end_at}}
+                                <else/>
+                                    <span style="color: var(--backend-color-text-tertiary, #adb5bd);">-</span>
+                                </if>
+                            </div>
+                        </div>
+                        
+                        <div class="weline-queue-detail-item">
+                            <div class="weline-queue-detail-label">
+                                <i class="mdi mdi-calendar-plus"></i>
+                                <lang>创建时间</lang>
+                            </div>
+                            <div class="weline-queue-detail-value">
+                                {{queue.create_time}}
+                            </div>
+                        </div>
+                        
+                        <div class="weline-queue-detail-item">
+                            <div class="weline-queue-detail-label">
+                                <i class="mdi mdi-calendar-sync"></i>
+                                <lang>更新时间</lang>
+                            </div>
+                            <div class="weline-queue-detail-value">
+                                {{queue.update_time}}
+                            </div>
+                        </div>
+                        
+                        <div class="weline-queue-detail-item">
+                            <div class="weline-queue-detail-label">
+                                <i class="mdi mdi-check-decagram"></i>
+                                <lang>是否结束</lang>
+                            </div>
+                            <div class="weline-queue-detail-value">
+                                <if condition="queue.finished">
+                                    <span class="weline-queue-detail-badge weline-queue-detail-badge--yes">
+                                        <i class="mdi mdi-check"></i>
+                                        <lang>已结束</lang>
+                                    </span>
+                                <else/>
+                                    <span class="weline-queue-detail-badge weline-queue-detail-badge--no">
+                                        <i class="mdi mdi-clock-outline"></i>
+                                        <lang>未结束</lang>
+                                    </span>
+                                </if>
+                            </div>
+                        </div>
+                        
+                        <div class="weline-queue-detail-item">
+                            <div class="weline-queue-detail-label">
+                                <i class="mdi mdi-brightness-auto"></i>
+                                <lang>自动运行</lang>
+                            </div>
+                            <div class="weline-queue-detail-value">
+                                <if condition="queue.auto">
+                                    <span class="weline-queue-detail-badge weline-queue-detail-badge--yes">
+                                        <i class="mdi mdi-check"></i>
+                                        <lang>是</lang>
+                                    </span>
+                                <else/>
+                                    <span class="weline-queue-detail-badge weline-queue-detail-badge--no">
+                                        <i class="mdi mdi-close"></i>
+                                        <lang>否</lang>
+                                    </span>
+                                </if>
+                            </div>
                         </div>
                     </div>
-                </div> <!-- end col -->
-            </div> <!-- end row -->
+                </div>
+                
+                <!-- Type Info Section -->
+                <div class="weline-queue-detail-section">
+                    <div class="weline-queue-detail-section-title">
+                        <i class="mdi mdi-cog-sync-outline"></i>
+                        <lang>类型信息</lang>
+                    </div>
+                    <div class="weline-queue-detail-grid">
+                        <div class="weline-queue-detail-item">
+                            <div class="weline-queue-detail-label">
+                                <i class="mdi mdi-tag-outline"></i>
+                                <lang>队列类型</lang>
+                            </div>
+                            <div class="weline-queue-detail-value">
+                                <strong>{{queue.t_name}}</strong>
+                            </div>
+                        </div>
+                        
+                        <div class="weline-queue-detail-item weline-queue-detail-item--full">
+                            <div class="weline-queue-detail-label">
+                                <i class="mdi mdi-code-braces"></i>
+                                <lang>执行类</lang>
+                            </div>
+                            <div class="weline-queue-detail-value">
+                                <div class="weline-queue-detail-code">{{queue.class}}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <notempty name="queue.tip">
+                        <div class="weline-queue-detail-tip mt-3">
+                            <div class="weline-queue-detail-tip-title">
+                                <i class="mdi mdi-lightbulb-outline"></i>
+                                <lang>执行注意事项</lang>
+                            </div>
+                            <div>{{queue.tip}}</div>
+                        </div>
+                    </notempty>
+                </div>
+                
+                <!-- Result Section -->
+                <div class="weline-queue-detail-section">
+                    <div class="weline-queue-detail-section-title">
+                        <i class="mdi mdi-text-box-outline"></i>
+                        <lang>运行结果</lang>
+                    </div>
+                    <notempty name="queue.result">
+                        <div class="weline-queue-detail-result">{{queue.result}}</div>
+                    <else/>
+                        <div class="weline-queue-detail-result" style="color: var(--backend-color-text-tertiary, #adb5bd); text-align: center; padding: 40px;">
+                            <i class="mdi mdi-text-box-remove-outline" style="font-size: 2rem; display: block; margin-bottom: 8px;"></i>
+                            <lang>暂无运行结果</lang>
+                        </div>
+                    </notempty>
+                </div>
+                
+                <!-- Attributes Section -->
+                <notempty name="queue.data">
+                    <div class="weline-queue-detail-section">
+                        <div class="weline-queue-detail-section-title">
+                            <i class="mdi mdi-format-list-bulleted"></i>
+                            <lang>队列参数</lang>
+                        </div>
+                        <div class="weline-queue-detail-attrs">
+                            <foreach name="queue.data">
+                                <div class="weline-queue-detail-attr-item">
+                                    {{v.html}}
+                                </div>
+                            </foreach>
+                        </div>
+                    </div>
+                </notempty>
+            </div>
+        </div>
+    </div>
+</div>
