@@ -13,7 +13,6 @@ namespace Weline\Multipass\Controller\Frontend;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Frontend\Model\FrontendUser;
-use Weline\Frontend\Session\FrontendUserSession;
 use Weline\Multipass\Model\MultipassSite;
 use Weline\Multipass\Service\MultipassService;
 
@@ -23,14 +22,11 @@ use Weline\Multipass\Service\MultipassService;
  */
 class Multipass extends FrontendController
 {
-    private FrontendUserSession $session;
     private MultipassService $multipassService;
 
-    public function __construct(
-        FrontendUserSession $session
-    ) {
+    public function __construct()
+    {
         parent::__construct();
-        $this->session = $session;
         $this->multipassService = ObjectManager::getInstance(MultipassService::class);
     }
 
