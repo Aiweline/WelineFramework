@@ -3,23 +3,23 @@
 namespace Weline\Api\Api\Rest\V1\Backend;
 
 use Weline\Backend\Model\BackendUser;
+use Weline\Backend\Service\BackendTokenService;
 use Weline\Framework\App\Controller\BackendRestController;
-use Weline\Framework\App\Session\BackendApiSession;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 
 class Auth extends BackendRestController
 {
-    private BackendApiSession $apiSession;
+    private BackendTokenService $tokenService;
     protected Request $request;
 
     public function __construct(
         Request $request,
-        BackendApiSession $apiSession
+        BackendTokenService $tokenService
     ) {
+        parent::__construct();
         $this->request = $request;
-        $this->apiSession = $apiSession;
-        parent::__construct($apiSession);
+        $this->tokenService = $tokenService;
     }
 
     /**
@@ -109,7 +109,7 @@ class Auth extends BackendRestController
             $user->resetAttemptTimes()->save();
 
             // 创建API token
-            $token = $this->apiSession->createApiToken($user, $expireTime);
+            $token = $this->tokenService->createApiToken($user, $expireTime);
             if (!$token) {
                 return $this->error(__('创建token失败'), '', 500);
             }
@@ -178,7 +178,7 @@ class Auth extends BackendRestController
                 $expireTime = $this->request->getPost('expire_time', 0);
             }
             $expireTime = (int)$expireTime;
-            $newToken = $this->apiSession->refreshToken($token, $expireTime);
+            $newToken = $this->tokenService->refreshToken($token, $expireTime);
 
             if (!$newToken) {
                 return $this->error(__('Token无效或已过期'), '', 401);
@@ -225,7 +225,7 @@ class Auth extends BackendRestController
                 return $this->error(__('Token不能为空'), '', 400);
             }
 
-            $result = $this->apiSession->revokeToken($token);
+            $result = $this->tokenService->revokeToken($token);
             if (!$result) {
                 return $this->error(__('撤销token失败'), '', 500);
             }
@@ -271,7 +271,8 @@ class Auth extends BackendRestController
     public function me()
     {
         try {
-            $user = $this->apiSession->getApiUser();
+            $token = $this->getTokenFromRequest();
+            $user = $token ? $this->tokenService->getUserByToken($token) : null;
             if (!$user) {
                 return $this->error(__('用户未登录'), '', 401);
             }
@@ -329,7 +330,7 @@ class Auth extends BackendRestController
                 return $this->error(__('Token不能为空'), '', 400);
             }
 
-            $tokenInfo = $this->apiSession->getTokenInfo($token);
+            $tokenInfo = $this->tokenService->getTokenInfo($token);
             if (!$tokenInfo) {
                 return $this->error(__('Token无效'), '', 401);
             }

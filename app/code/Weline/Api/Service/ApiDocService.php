@@ -12,8 +12,7 @@ declare(strict_types=1);
 namespace Weline\Api\Service;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Cache\CacheInterface;
-use Weline\Framework\Cache\CacheFactory;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Handle;
 
@@ -24,14 +23,12 @@ use Weline\Framework\Module\Handle;
  */
 class ApiDocService
 {
-    private CacheInterface $cache;
+    private CachePoolInterface $cache;
     private Handle $moduleHandle;
     
     public function __construct()
     {
-        // 直接实例化CacheFactory，避免ObjectManager缓存问题
-        $cacheFactory = new CacheFactory('api_doc', __('API文档缓存'), false);
-        $this->cache = $cacheFactory->create();
+        $this->cache = w_cache('api_doc');
         $this->moduleHandle = ObjectManager::getInstance(Handle::class);
     }
     

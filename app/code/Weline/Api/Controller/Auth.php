@@ -312,19 +312,17 @@ class Auth extends AbstractRestController
     /**
      * 成功响应
      */
-    protected function success(string $msg = '请求成功！', mixed $data = '', int $code = 200): string
+    protected function success(string $msg = '请求成功！', mixed $data = '', int $code = 200): array|string
     {
-        $result = $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
-        return $result ?: '';
+        return parent::success($msg, $data, $code);
     }
 
     /**
      * 错误响应
      */
-    protected function error(string $msg = '请求失败！', mixed $data = '', int $code = 404): string
+    protected function error(string $msg = '请求失败！', mixed $data = '', int $code = 400, ?string $title = null): array|string
     {
-        $result = $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
-        return $result ?: '';
+        return parent::error($msg, $data, $code, $title);
     }
 }
 

@@ -54,7 +54,7 @@ class TokenService
             return $token;
 
         } catch (\Exception $e) {
-            error_log('TokenService generateAccessToken error: ' . $e->getMessage());
+            w_log_error('TokenService generateAccessToken error: ' . $e->getMessage());
             return null;
         }
     }
@@ -91,7 +91,7 @@ class TokenService
             return $token;
 
         } catch (\Exception $e) {
-            error_log('TokenService generateRefreshToken error: ' . $e->getMessage());
+            w_log_error('TokenService generateRefreshToken error: ' . $e->getMessage());
             return null;
         }
     }
@@ -109,7 +109,7 @@ class TokenService
             return $user->getApiKey();
 
         } catch (\Exception $e) {
-            error_log('TokenService generatePassToken error: ' . $e->getMessage());
+            w_log_error('TokenService generatePassToken error: ' . $e->getMessage());
             return null;
         }
     }
@@ -155,7 +155,7 @@ class TokenService
             return $user;
 
         } catch (\Exception $e) {
-            error_log('TokenService validateAccessToken error: ' . $e->getMessage());
+            w_log_error('TokenService validateAccessToken error: ' . $e->getMessage());
             return null;
         }
     }
@@ -201,7 +201,7 @@ class TokenService
             return $user;
 
         } catch (\Exception $e) {
-            error_log('TokenService validateRefreshToken error: ' . $e->getMessage());
+            w_log_error('TokenService validateRefreshToken error: ' . $e->getMessage());
             return null;
         }
     }
@@ -240,7 +240,7 @@ class TokenService
             return $user;
 
         } catch (\Exception $e) {
-            error_log('TokenService validatePassToken error: ' . $e->getMessage());
+            w_log_error('TokenService validatePassToken error: ' . $e->getMessage());
             return null;
         }
     }
@@ -291,7 +291,7 @@ class TokenService
             ];
 
         } catch (\Exception $e) {
-            error_log('TokenService refreshTokens error: ' . $e->getMessage());
+            w_log_error('TokenService refreshTokens error: ' . $e->getMessage());
             return null;
         }
     }
@@ -314,7 +314,7 @@ class TokenService
                 ->fetch() !== false;
 
         } catch (\Exception $e) {
-            error_log('TokenService revokeToken error: ' . $e->getMessage());
+            w_log_error('TokenService revokeToken error: ' . $e->getMessage());
             return false;
         }
     }
@@ -341,7 +341,7 @@ class TokenService
             return $query->delete()->fetch() !== false;
 
         } catch (\Exception $e) {
-            error_log('TokenService revokeUserTokens error: ' . $e->getMessage());
+            w_log_error('TokenService revokeUserTokens error: ' . $e->getMessage());
             return false;
         }
     }
@@ -387,7 +387,7 @@ class TokenService
             ];
 
         } catch (\Exception $e) {
-            error_log('TokenService exchangeTokens error: ' . $e->getMessage());
+            w_log_error('TokenService exchangeTokens error: ' . $e->getMessage());
             return null;
         }
     }
@@ -438,7 +438,7 @@ class TokenService
             ];
 
         } catch (\Exception $e) {
-            error_log('TokenService getTokenInfo error: ' . $e->getMessage());
+            w_log_error('TokenService getTokenInfo error: ' . $e->getMessage());
             return null;
         }
     }
