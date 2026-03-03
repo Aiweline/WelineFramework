@@ -87,7 +87,7 @@ class MeilisearchEngine implements SearchEngineInterface
             ];
             
         } catch (\Exception $e) {
-            error_log("Meilisearch 搜索失败: " . $e->getMessage());
+            w_log_error("Meilisearch 搜索失败: " . $e->getMessage());
             // 回退到数据库搜索
             return $this->fallbackSearch($keyword, $filters, $page, $pageSize);
         }
@@ -126,7 +126,7 @@ class MeilisearchEngine implements SearchEngineInterface
             return $suggestions;
             
         } catch (\Exception $e) {
-            error_log("Meilisearch 获取建议失败: " . $e->getMessage());
+            w_log_error("Meilisearch 获取建议失败: " . $e->getMessage());
             return [];
         }
     }
@@ -162,7 +162,7 @@ class MeilisearchEngine implements SearchEngineInterface
             return isset($health['status']) && $health['status'] === 'available';
             
         } catch (\Exception $e) {
-            error_log("Meilisearch 连接测试失败: " . $e->getMessage());
+            w_log_error("Meilisearch 连接测试失败: " . $e->getMessage());
             return false;
         }
     }
