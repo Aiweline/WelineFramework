@@ -35,7 +35,7 @@ class Upgrade
     public function upgrade(Setup $setup, Context $context): void
     {
         // 检查是否在生产模式
-        $deployMode = Env::getInstance()->getConfig('deploy');
+        $deployMode = Env::system('deploy');
         if ($deployMode === 'prod') {
             // 生成版本号并创建token
             $this->generateVersionToken($context);

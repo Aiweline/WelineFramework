@@ -94,7 +94,7 @@ class RegisterPixel implements ObserverInterface
             
         } catch (\Exception $e) {
             // 静默失败，不影响注册流程
-            error_log('RegisterPixel Observer Error: ' . $e->getMessage());
+            w_log_error('RegisterPixel Observer Error: ' . $e->getMessage());
         }
     }
 
