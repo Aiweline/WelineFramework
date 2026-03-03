@@ -1320,7 +1320,7 @@ class Page extends BackendController
         } catch (\Exception $e) {
             // 静默失败，不影响页面保存
             if (DEV) {
-                error_log("Failed to create URL rewrite for page: " . $e->getMessage());
+                w_log_error("Failed to create URL rewrite for page: " . $e->getMessage());
             }
         }
     }
