@@ -64,7 +64,7 @@ class LayoutAssembler
         
         if ($homePage && $homePage->getId()) {
             $homeLayoutConfigJson = $homePage->getData('layout_config');
-            error_log("[LayoutAssembler] HomePage ID: " . $homePage->getId() . ", layout_config: " . ($homeLayoutConfigJson ?: 'empty'));
+            w_log_debug("[LayoutAssembler] HomePage ID: " . $homePage->getId() . ", layout_config: " . ($homeLayoutConfigJson ?: 'empty'));
             
             $homeLayoutConfig = $this->parseLayoutConfig($homeLayoutConfigJson);
             
@@ -628,7 +628,7 @@ class LayoutAssembler
             }
             
             // 记录日志帮助调试
-            error_log("[LayoutAssembler::getComponentMetadata] 组件未找到: code={$componentCode}, style={$styleCode}, available=" . implode(',', array_keys($componentFiles)));
+            w_log_warning("[LayoutAssembler::getComponentMetadata] 组件未找到: code={$componentCode}, style={$styleCode}, available=" . implode(',', array_keys($componentFiles)));
             return null;
         }
         

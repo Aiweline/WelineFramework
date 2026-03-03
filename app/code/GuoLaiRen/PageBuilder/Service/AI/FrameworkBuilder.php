@@ -178,7 +178,7 @@ class FrameworkBuilder
             $validation = $this->validateField($key, $value);
             if (!$validation['valid']) {
                 // 记录警告但继续执行
-                error_log("AI组件字段验证警告 [{$key}]: " . implode(', ', $validation['warnings']));
+                w_log_warning("AI组件字段验证警告 [{$key}]: " . implode(', ', $validation['warnings']));
             }
         }
         

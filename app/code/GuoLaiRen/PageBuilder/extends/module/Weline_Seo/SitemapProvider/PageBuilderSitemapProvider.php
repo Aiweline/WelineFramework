@@ -68,7 +68,7 @@ class PageBuilderSitemapProvider implements SitemapProviderInterface
         } catch (\Throwable $e) {
             // 记录错误日志，但不中断流程
             if (defined('DEV') && DEV) {
-                error_log('PageBuilderSitemapProvider::generateSitemaps() error: ' . $e->getMessage());
+                w_log_error('PageBuilderSitemapProvider::generateSitemaps() error: ' . $e->getMessage());
             }
             return [];
         }
