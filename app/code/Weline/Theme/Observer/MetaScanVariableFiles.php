@@ -79,7 +79,7 @@ class MetaScanVariableFiles implements ObserverInterface
             } catch (\Exception $e) {
                 // 记录错误但不阻止扫描
                 if (defined('DEV') && DEV) {
-                    error_log('解析变量文件失败: ' . $filePath . ' - ' . $e->getMessage());
+                    w_log_error('解析变量文件失败: ' . $filePath . ' - ' . $e->getMessage());
                 }
             }
         }
