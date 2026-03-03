@@ -56,7 +56,7 @@ class DingtalkAdapter implements ChannelAdapterInterface
 
             return false;
         } catch (\Exception $e) {
-            Env::log_error('DingtalkAdapter::send failed: ' . $e->getMessage());
+            w_log_error('DingtalkAdapter::send failed: ' . $e->getMessage(), [], 'notification');
             return false;
         }
     }

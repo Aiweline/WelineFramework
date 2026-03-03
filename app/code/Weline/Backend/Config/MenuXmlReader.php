@@ -11,10 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Config;
 
-use Weline\Backend\Cache\BackendCache;
-use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Config\Reader\XmlReader;
-use Weline\Framework\Exception\Core;
 use Weline\Framework\System\File\Scanner;
 use Weline\Framework\Xml\Parser;
 
@@ -32,24 +29,23 @@ class MenuXmlReader extends XmlReader
     public function read(): array
     {
         $configs = parent::read();
-        // 菜单提取
         $module_menus = [];
-        $has_orders = [];
-        $data = [];
+        
         foreach ($configs as $module_and_file => $config) {
-            // 跳过没有正确格式的配置
             if (!isset($config['menus']) || !is_array($config['menus'])) {
-                error_log(__('跳过格式不正确的菜单配置文件：%{1}', [$module_and_file]));
+                w_log_warning(__('跳过格式不正确的菜单配置文件：%{1}', [$module_and_file]));
                 continue;
             }
+            
             $m_a_f_arr = explode('::', $module_and_file);
             $module = array_shift($m_a_f_arr);
             $module_menu_file = array_pop($m_a_f_arr);
             $module_menus[$module]['file'] = $module_menu_file;
             $module_menus[$module]['data'] = [];
+            
             if (
                 !isset($config['menus']['_attribute']['noNamespaceSchemaLocation']) && (
-                    'urn:weline:module:Weline_Backend::etc/xsd/menu.xsd' !== $config['menus']['_attribute']['noNamespaceSchemaLocation']
+                    'urn:weline:module:Weline_Backend::etc/xsd/menu.xsd' !== ($config['menus']['_attribute']['noNamespaceSchemaLocation'] ?? '')
                 )
             ) {
                 $this->checkElementAttribute(
@@ -58,111 +54,88 @@ class MenuXmlReader extends XmlReader
                     __('菜单元素menus必须设置：noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"，文件：%{1}', $module_and_file)
                 );
             }
-            foreach ($config['menus'] as $menu) {
-                if (isset($menu['add'])) {
-                    if (is_int(array_key_first($menu['add']))) {
-                        foreach ($menu['add'] as $menu_data) {
-                            if (isset($menu_data['_attribute'])) {
-                                $this->checkElementAttribute(
-                                    $menu_data,
-                                    'name',
-                                    __('菜单配置错诶：add元素缺少name属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/"  icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
-                                );
-                                $this->checkElementAttribute(
-                                    $menu_data,
-                                    'source',
-                                    __('菜单配置错诶：add元素缺少source属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/"  icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
-                                );
-                                $this->checkElementAttribute(
-                                    $menu_data,
-                                    'title',
-                                    __('菜单配置错诶：add元素缺少title属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/"  icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
-                                );
-                                $this->checkElementAttribute(
-                                    $menu_data,
-                                    'action',
-                                    __('菜单配置错诶：add元素缺少action属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/"  icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
-                                );
-                                $this->checkElementAttribute(
-                                    $menu_data,
-                                    'order',
-                                    __('菜单配置错诶：add元素缺少icon属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/" icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
-                                );
-                                if (!isset($menu['add']['_attribute']['icon'])) {
-                                    $menu['add']['_attribute']['icon'] = '';
-                                }
-                                /*$menu['add']['_attribute']['order'] = $menu['add']['_attribute']['order']??0;
-                                if (in_array($menu_data['_attribute']['order'], $has_orders)) {
-                                    throw new \Exception(__('菜单排序值 %{1} 重复,请重新设置order排序值.错误所在文件：%{2}', [$menu['add']['_attribute']['order'], $module_menu_file]));
-                                }
-                                $has_orders[] = $menu_data['_attribute']['order'];*/
-                                # 默认属性
-                                if (!isset($menu_data['_attribute']['is_system']) || '0' !== $menu_data['_attribute']['is_system']) {
-                                    $menu_data['_attribute']['is_system'] = 1;
-                                }
-                                if (!isset($menu_data['_attribute']['is_backend']) || '0' !== $menu_data['_attribute']['is_backend']) {
-                                    $menu_data['_attribute']['is_backend'] = 1;
-                                }
-
-                                $module_menus[$module]['data'][] = $menu_data['_attribute'];
-                            }
-                        }
-                    } else {
-                        $this->checkElementAttribute(
-                            $menu['add'],
-                            'name',
-                            __('菜单配置错诶：add元素缺少name属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/" icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
-                        );
-                        $this->checkElementAttribute(
-                            $menu['add'],
-                            'source',
-                            __('菜单配置错诶：add元素缺少source属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/" icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
-                        );
-                        $this->checkElementAttribute(
-                            $menu['add'],
-                            'title',
-                            __('菜单配置错诶：add元素缺少title属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/" icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
-                        );
-                        $this->checkElementAttribute(
-                            $menu['add'],
-                            'action',
-                            __('菜单配置错诶：add元素缺少action属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/" icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
-                        );
-                        $this->checkElementAttribute(
-                            $menu['add'],
-                            'order',
-                            __('菜单配置错诶：add元素缺少order属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/" icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
-                        );
-                        if (!isset($menu['add']['_attribute']['icon'])) {
-                            $menu['add']['_attribute']['icon'] = '';
-                        }
-                        /*$menu['add']['_attribute']['order'] = $menu['add']['_attribute']['order']??0;
-                        if (in_array($menu['add']['_attribute']['order'], $has_orders)) {
-                            throw new \Exception(__('菜单排序值 %{1} 重复,请重新设置order排序值.错误所在文件：%{2}', [$menu['add']['_attribute']['order'], $module_menu_file]));
-                        }
-                        $has_orders[] = $menu['add']['_attribute']['order'];*/
-                        $menu['add']['_attribute']['is_system'] = 1;
-                        if ($menu['add']['_attribute']) {
-                            $module_menus[$module]['data'][] = $menu['add']['_attribute'];
-                        }
-                    }
+            
+            foreach ($config['menus'] as $key => $menuGroup) {
+                if ($key === '_attribute' || $key === '_value') {
+                    continue;
+                }
+                
+                if ($key === 'menu') {
+                    $menuItems = $this->parseMenuElement($menuGroup, '', $module_and_file);
+                    $module_menus[$module]['data'] = array_merge($module_menus[$module]['data'], $menuItems);
                 }
             }
         }
+        
         foreach ($module_menus as &$module_menu) {
             $data = $module_menu['data'];
             if ($data) {
                 $orders = array_column($data, 'order');
-                array_multisort($orders, SORT_ASC);
-                foreach ($orders as $order) {
-                    foreach ($data as $k => $v) {
-                        if ($v['order'] == $order) {
-                            $module_menu['data'][$k] = $v;
-                        }
-                    }
-                }
+                array_multisort($orders, SORT_ASC, $data);
+                $module_menu['data'] = $data;
             }
         }
+        
         return $module_menus;
+    }
+    
+    /**
+     * 递归解析 <menu> 元素
+     *
+     * @param array|mixed $menuData 菜单数据（可能是单个菜单或菜单数组）
+     * @param string $parentSource 父菜单的 source（用于自动继承）
+     * @param string $moduleAndFile 模块和文件标识（用于错误提示）
+     * @return array 扁平化的菜单数组
+     */
+    private function parseMenuElement(mixed $menuData, string $parentSource, string $moduleAndFile): array
+    {
+        $items = [];
+        
+        if (!is_array($menuData)) {
+            return $items;
+        }
+        
+        $menuList = is_int(array_key_first($menuData)) ? $menuData : [$menuData];
+        
+        foreach ($menuList as $menu) {
+            if (!isset($menu['_attribute'])) {
+                continue;
+            }
+            
+            $attrs = $menu['_attribute'];
+            
+            $this->checkElementAttribute($menu, 'source', __('菜单配置错误：menu元素缺少source属性,文件：%{1}', $moduleAndFile));
+            $this->checkElementAttribute($menu, 'name', __('菜单配置错误：menu元素缺少name属性,文件：%{1}', $moduleAndFile));
+            $this->checkElementAttribute($menu, 'title', __('菜单配置错误：menu元素缺少title属性,文件：%{1}', $moduleAndFile));
+            $this->checkElementAttribute($menu, 'order', __('菜单配置错误：menu元素缺少order属性,文件：%{1}', $moduleAndFile));
+            
+            if (empty($attrs['parent']) && !empty($parentSource)) {
+                $attrs['parent'] = $parentSource;
+            }
+            
+            if (!isset($attrs['action'])) {
+                $attrs['action'] = '';
+            }
+            if (!isset($attrs['icon'])) {
+                $attrs['icon'] = '';
+            }
+            if (!isset($attrs['is_system']) || '0' !== $attrs['is_system']) {
+                $attrs['is_system'] = 1;
+            }
+            if (!isset($attrs['is_backend']) || '0' !== $attrs['is_backend']) {
+                $attrs['is_backend'] = 1;
+            }
+            
+            $items[] = $attrs;
+            
+            $currentSource = $attrs['source'] ?? '';
+            
+            if (isset($menu['_value']) && is_array($menu['_value']) && isset($menu['_value']['menu'])) {
+                $childItems = $this->parseMenuElement($menu['_value']['menu'], $currentSource, $moduleAndFile);
+                $items = array_merge($items, $childItems);
+            }
+        }
+        
+        return $items;
     }
 }

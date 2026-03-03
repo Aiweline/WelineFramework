@@ -60,7 +60,7 @@ class Notification extends Block
 
     private function getLoginUserId(): int
     {
-        $session = ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
-        return (int) $session->getLoginUserId();
+        $session = \Weline\Framework\Session\SessionFactory::getInstance()->createBackendSession();
+        return (int) ($session->getUserId() ?? 0);
     }
 }

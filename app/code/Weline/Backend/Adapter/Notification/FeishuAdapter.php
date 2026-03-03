@@ -49,7 +49,7 @@ class FeishuAdapter implements ChannelAdapterInterface
 
             return false;
         } catch (\Exception $e) {
-            Env::log_error('FeishuAdapter::send failed: ' . $e->getMessage());
+            w_log_error('FeishuAdapter::send failed: ' . $e->getMessage(), [], 'notification');
             return false;
         }
     }
