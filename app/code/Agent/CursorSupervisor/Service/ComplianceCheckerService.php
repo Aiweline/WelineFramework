@@ -254,7 +254,7 @@ class ComplianceCheckerService
                 'severity' => 'error',
                 'message' => '禁止使用 error_log()',
                 'file' => $filePath,
-                'fix' => '使用 Env::log_error() 或 Debug::debug()',
+                'fix' => '使用 w_log_error() 或 Debug::debug()',
                 'rule' => 'debug-logging',
             ]);
         }
@@ -280,7 +280,7 @@ class ComplianceCheckerService
                 'severity' => 'error',
                 'message' => 'Model 查询缺少 fetch()',
                 'file' => $filePath,
-                'fix' => '链式调用末尾添加 ->fetch() 或 ->fetchOrigin()',
+                'fix' => '链式调用末尾添加 ->fetch() 或 ->fetchArray()',
                 'rule' => 'database-model-standards',
             ]);
         }
