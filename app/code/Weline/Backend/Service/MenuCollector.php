@@ -219,8 +219,9 @@ class MenuCollector
             }
         } else {
             if (empty($modulesFilter)) {
-                // 如果文件中没有任何菜单，删除所有菜单
-                $this->menu->reset()->delete()->fetch();
+                // 如果文件中没有任何菜单，跳过删除（避免空条件删除）
+                // 注意：不再执行无条件删除，因为这会导致数据库错误
+                // 如果确实需要清空所有菜单，应该显式指定条件
             } else {
                 // 仅删除指定模块的菜单
                 $this->menu->reset()

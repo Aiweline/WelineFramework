@@ -11,7 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Observer;
 
-use Weline\Backend\Session\BackendSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -101,7 +102,7 @@ class ResponseRedirectBefore implements ObserverInterface
             }
             
         } catch (\Exception $e) {
-            error_log("登录来源页面记录失败: " . $e->getMessage());
+            w_log_error("登录来源页面记录失败: " . $e->getMessage());
         }
     }
 
@@ -112,10 +113,10 @@ class ResponseRedirectBefore implements ObserverInterface
     {
         try {
             // 检查用户是否已登录
-            /** @var BackendSession $backendSession */
-            $backendSession = ObjectManager::getInstance(BackendSession::class);
+            /** @var AuthenticatedSessionInterface $backendSession */
+            $backendSession = SessionFactory::getInstance()->createBackendSession();
             
-            if (!$backendSession->isLogin()) {
+            if (!$backendSession->isLoggedIn()) {
                 // 未登录用户重定向到登录页
                 $loginUrl = $this->request->getUrlBuilder()->getBackendUrl('admin/login');
                 $data->setData('url', $loginUrl);
@@ -135,7 +136,7 @@ class ResponseRedirectBefore implements ObserverInterface
             }
             
         } catch (\Exception $e) {
-            error_log("权限重定向处理失败: " . $e->getMessage());
+            w_log_error("权限重定向处理失败: " . $e->getMessage());
         }
     }
 
@@ -178,7 +179,7 @@ class ResponseRedirectBefore implements ObserverInterface
             }
             
         } catch (\Exception $e) {
-            error_log("安全重定向处理失败: " . $e->getMessage());
+            w_log_error("安全重定向处理失败: " . $e->getMessage());
         }
     }
 
@@ -211,7 +212,7 @@ class ResponseRedirectBefore implements ObserverInterface
             }
             
         } catch (\Exception $e) {
-            error_log("后台特殊重定向处理失败: " . $e->getMessage());
+            w_log_error("后台特殊重定向处理失败: " . $e->getMessage());
         }
     }
 
@@ -261,7 +262,7 @@ class ResponseRedirectBefore implements ObserverInterface
             // 暂时返回true，实际项目中应该检查用户权限
             return true;
         } catch (\Exception $e) {
-            error_log("权限检查失败: " . $e->getMessage());
+            w_log_error("权限检查失败: " . $e->getMessage());
             return false;
         }
     }
@@ -276,7 +277,7 @@ class ResponseRedirectBefore implements ObserverInterface
             // 暂时返回true，实际项目中应该验证CSRF令牌
             return true;
         } catch (\Exception $e) {
-            error_log("CSRF验证失败: " . $e->getMessage());
+            w_log_error("CSRF验证失败: " . $e->getMessage());
             return false;
         }
     }

@@ -1,0 +1,310 @@
+<?php
+/**
+ * 通知中心页面
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $notifications 通知列表
+ * @var array $pagination 分页信息
+ */
+$notifications = $notifications ?? [];
+$pagination = $pagination ?? ['page' => 1, 'pages' => 1, 'total' => 0];
+?>
+
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0 font-size-18">
+                <i class="ri-notification-3-line me-2"></i><lang>通知中心</lang>
+            </h4>
+            <div class="d-flex gap-2">
+                <a href="<?= $this->getBackendUrl('*/backend/notificationsubscription') ?>" class="btn btn-outline-secondary btn-sm">
+                    <i class="mdi mdi-cog me-1"></i><lang>管理订阅</lang>
+                </a>
+                <?php if (!empty($notifications)): ?>
+                <button type="button" class="btn btn-outline-primary btn-sm" onclick="WelineNotificationCenter.markAllRead()">
+                    <i class="mdi mdi-check-all me-1"></i><lang>全部已读</lang>
+                </button>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class='row'>
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <?php if (empty($notifications)): ?>
+        <div class="card">
+            <div class="card-body">
+                <div class="weline-nc-empty text-center py-5">
+                    <i class="ri-notification-off-line weline-nc-empty-icon"></i>
+                    <p class="mt-3 mb-0"><lang>暂无通知消息</lang></p>
+                </div>
+            </div>
+        </div>
+        <?php else: ?>
+        <div class="weline-nc-list">
+            <?php foreach ($notifications as $notification): ?>
+            <?php
+            $isRead = (bool) ($notification['is_read'] ?? false);
+            $typeColor = $notification['type_color'] ?? 'var(--backend-color-info)';
+            $typeLabel = $notification['type_label'] ?? __('信息');
+            $typeIcon = $notification['avatar'] ?? 'ri-notification-line';
+            ?>
+            <a href="<?= $this->getBackendUrl('*/backend/notification/detail', ['id' => $notification['notification_id'] ?? 0]) ?>" 
+               class="weline-nc-item <?= $isRead ? 'weline-nc-item-read' : '' ?>">
+                <div class="weline-nc-item-icon" style="background: <?= $typeColor ?>">
+                    <i class="<?= htmlspecialchars($typeIcon) ?>"></i>
+                </div>
+                <div class="weline-nc-item-content">
+                    <div class="weline-nc-item-header">
+                        <h5 class="weline-nc-item-title"><?= htmlspecialchars($notification['title'] ?? '') ?></h5>
+                        <div class="weline-nc-item-meta">
+                            <span class="weline-nc-type-badge" style="background: <?= $typeColor ?>"><?= $typeLabel ?></span>
+                            <?php if (!$isRead): ?>
+                            <span class="weline-nc-unread-dot"></span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <p class="weline-nc-item-text"><?= htmlspecialchars(mb_substr(strip_tags($notification['content'] ?? ''), 0, 120)) ?><?= mb_strlen(strip_tags($notification['content'] ?? '')) > 120 ? '...' : '' ?></p>
+                    <div class="weline-nc-item-footer">
+                        <span class="weline-nc-item-time">
+                            <i class="mdi mdi-clock-outline me-1"></i><?= $notification['notification_time'] ?? '' ?>
+                        </span>
+                        <?php if (!empty($notification['topic_code'])): ?>
+                        <span class="weline-nc-item-topic">
+                            <i class="mdi mdi-tag-outline me-1"></i><?= htmlspecialchars($notification['topic_name'] ?? $notification['topic_code']) ?>
+                        </span>
+                        <?php endif; ?>
+                        <span class="weline-nc-view-link">
+                            <lang>查看详情</lang> <i class="ri-arrow-right-s-line"></i>
+                        </span>
+                    </div>
+                </div>
+            </a>
+            <?php endforeach; ?>
+        </div>
+
+        <?php if ($pagination['pages'] > 1): ?>
+        <div class="card mt-3">
+            <div class="card-body">
+                <nav aria-label="Page navigation">
+                    <ul class="pagination justify-content-center mb-0">
+                        <?php if ($pagination['page'] > 1): ?>
+                        <li class="page-item">
+                            <a class="page-link" href="<?= $this->getBackendUrl('*/backend/notification', ['page' => $pagination['page'] - 1]) ?>">
+                                <i class="mdi mdi-chevron-left"></i>
+                            </a>
+                        </li>
+                        <?php endif; ?>
+                        
+                        <?php for ($i = max(1, $pagination['page'] - 2); $i <= min($pagination['pages'], $pagination['page'] + 2); $i++): ?>
+                        <li class="page-item <?= $i === $pagination['page'] ? 'active' : '' ?>">
+                            <a class="page-link" href="<?= $this->getBackendUrl('*/backend/notification', ['page' => $i]) ?>"><?= $i ?></a>
+                        </li>
+                        <?php endfor; ?>
+                        
+                        <?php if ($pagination['page'] < $pagination['pages']): ?>
+                        <li class="page-item">
+                            <a class="page-link" href="<?= $this->getBackendUrl('*/backend/notification', ['page' => $pagination['page'] + 1]) ?>">
+                                <i class="mdi mdi-chevron-right"></i>
+                            </a>
+                        </li>
+                        <?php endif; ?>
+                    </ul>
+                </nav>
+                <p class="text-center text-muted mb-0 mt-2 small">
+                    <lang>共</lang> <?= $pagination['total'] ?> <lang>条通知，第</lang> <?= $pagination['page'] ?> / <?= $pagination['pages'] ?> <lang>页</lang>
+                </p>
+            </div>
+        </div>
+        <?php endif; ?>
+        <?php endif; ?>
+    </div>
+</div>
+
+<style>
+/* ============================================
+   组件：Backend Notification Center
+   模块：Weline_Backend
+   前缀：weline-nc-
+   ============================================ */
+.weline-nc-empty {
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+.weline-nc-empty-icon {
+    font-size: 4rem;
+    opacity: 0.4;
+}
+
+.weline-nc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.weline-nc-item {
+    display: flex;
+    gap: 16px;
+    padding: 20px;
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: var(--backend-border-radius-lg, 12px);
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.weline-nc-item:hover {
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: var(--backend-shadow-md, 0 4px 16px rgba(0,0,0,0.08));
+    transform: translateY(-2px);
+}
+
+.weline-nc-item-read {
+    opacity: 0.7;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+
+.weline-nc-item-read:hover {
+    opacity: 1;
+}
+
+.weline-nc-item-icon {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    border-radius: var(--backend-border-radius-md, 8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--backend-color-text-inverse, #fff);
+    font-size: 1.25rem;
+}
+
+.weline-nc-item-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.weline-nc-item-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.weline-nc-item-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+    line-height: 1.4;
+}
+
+.weline-nc-item-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.weline-nc-type-badge {
+    font-size: 0.7rem;
+    font-weight: 500;
+    padding: 3px 10px;
+    border-radius: var(--backend-border-radius-sm, 4px);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.weline-nc-unread-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--backend-color-primary, #556ee6);
+    box-shadow: 0 0 0 3px rgba(85, 110, 230, 0.2);
+    animation: weline-nc-pulse 2s infinite;
+}
+
+@keyframes weline-nc-pulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 3px rgba(85, 110, 230, 0.2); }
+    50% { transform: scale(1.1); box-shadow: 0 0 0 5px rgba(85, 110, 230, 0.1); }
+}
+
+.weline-nc-item-text {
+    margin: 0 0 12px 0;
+    font-size: 0.875rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+    line-height: 1.6;
+}
+
+.weline-nc-item-footer {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 0.75rem;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+.weline-nc-item-time,
+.weline-nc-item-topic {
+    display: inline-flex;
+    align-items: center;
+}
+
+.weline-nc-view-link {
+    margin-left: auto;
+    color: var(--backend-color-primary, #556ee6);
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.weline-nc-item:hover .weline-nc-view-link {
+    opacity: 1;
+}
+</style>
+
+<script>
+(function() {
+    'use strict';
+
+    var WelineNotificationCenter = {
+        markAllRead: function() {
+            BackendConfirm.show('<?= __('确定要将所有通知标记为已读吗？') ?>').then(function(confirmed) {
+                if (!confirmed) return;
+
+                fetch('<?= $this->getBackendUrl('*/api/notification/markAllRead') ?>', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        BackendToast.success(data.message || '<?= __('已标记全部已读') ?>');
+                        setTimeout(function() { window.location.reload(); }, 800);
+                    } else {
+                        BackendToast.error(data.message || '<?= __('操作失败') ?>');
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Error:', error);
+                    BackendToast.error('<?= __('网络错误，请重试') ?>');
+                });
+            });
+        }
+    };
+
+    window.WelineNotificationCenter = WelineNotificationCenter;
+})();
+</script>

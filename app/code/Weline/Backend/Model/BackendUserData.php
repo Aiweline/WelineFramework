@@ -2,7 +2,8 @@
 
 namespace Weline\Backend\Model;
 
-use Weline\Backend\Session\BackendSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Manager\ObjectManager;
@@ -76,13 +77,13 @@ class BackendUserData extends Model
     function getScope(string $scope): array
     {
         /**
-         * @var BackendSession $session
+         * @var AuthenticatedSessionInterface $session
          */
-        $session = ObjectManager::getInstance(BackendSession::class);
-        if (!$session->getLoginUserID()) {
+        $session = SessionFactory::getInstance()->createBackendSession();
+        if (!$session->getUserId()) {
             return [];
         }
-        $data = $this->where(self::fields_BACKEND_USER_ID, $session->getLoginUserID())
+        $data = $this->where(self::fields_BACKEND_USER_ID, $session->getUserId())
             ->where(self::fields_scope, $scope)
             ->find()
             ->fetch();
@@ -96,10 +97,10 @@ class BackendUserData extends Model
     function deleteScope(string $scope): BackendUserData
     {
         /**
-         * @var BackendSession $session
+         * @var AuthenticatedSessionInterface $session
          */
-        $session = ObjectManager::getInstance(BackendSession::class);
-        if ($user_id = $session->getLoginUserID()) {
+        $session = SessionFactory::getInstance()->createBackendSession();
+        if ($user_id = $session->getUserId()) {
             $this->where(self::fields_BACKEND_USER_ID, $user_id)
                 ->where(self::fields_scope, $scope)
                 ->delete()
