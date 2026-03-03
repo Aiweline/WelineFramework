@@ -57,7 +57,7 @@ class ProvideProvisioningOrders implements ObserverInterface
             $data['orders'] = $orders;
             $event->setData('data', $data);
         } catch (\Throwable $e) {
-            \Weline\Framework\App\Env::log_error(__('查询配置订单失败：%{1}', $e->getMessage()));
+            w_log_error(__('查询配置订单失败：%{1}', $e->getMessage()));
         }
     }
 }
