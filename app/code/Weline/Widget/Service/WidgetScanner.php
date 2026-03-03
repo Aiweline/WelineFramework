@@ -77,7 +77,7 @@ class WidgetScanner
     {
         // 仅在 CLI 模式下执行扫描，Web 运行时应该使用 WidgetData
         if (PHP_SAPI !== 'cli') {
-            error_log("警告: WidgetScanner::scanAllWidgets() 不应在 Web 运行时调用，请使用 WidgetData::getAllWidgets()");
+            w_log_warning("WidgetScanner::scanAllWidgets() 不应在 Web 运行时调用，请使用 WidgetData::getAllWidgets()", [], 'WidgetScanner');
             return [];
         }
         $result = [];
@@ -151,7 +151,7 @@ class WidgetScanner
                         }
                     }
                 } catch (\Exception $e) {
-                    error_log("读取模块 {$sourceModule} 的集中部件配置文件时出错: " . $e->getMessage());
+                    w_log_error("读取模块 {$sourceModule} 的集中部件配置文件时出错: " . $e->getMessage(), [], 'WidgetScanner');
                 }
             }
         }
@@ -199,7 +199,7 @@ class WidgetScanner
                         }
                     }
                 } catch (\Exception $e) {
-                    error_log("读取模块 {$moduleName} 的集中部件配置文件时出错: " . $e->getMessage());
+                    w_log_error("读取模块 {$moduleName} 的集中部件配置文件时出错: " . $e->getMessage(), [], 'WidgetScanner');
                 }
             }
         }
@@ -315,7 +315,7 @@ class WidgetScanner
                     }
                 }
             } catch (\Exception $e) {
-                error_log("扫描模块 {$moduleName} 的部件时出错: " . $e->getMessage());
+                w_log_error("扫描模块 {$moduleName} 的部件时出错: " . $e->getMessage(), [], 'WidgetScanner');
             }
         }
 
@@ -368,7 +368,7 @@ class WidgetScanner
             
             return null;
         } catch (\Exception $e) {
-            error_log("处理部件条目失败 (key={$key}): " . $e->getMessage());
+            w_log_error("处理部件条目失败 (key={$key}): " . $e->getMessage(), [], 'WidgetScanner');
             return null;
         }
     }
@@ -394,7 +394,7 @@ class WidgetScanner
             $templateConfig = $parser->parse($templatePath);
             
             if (empty($templateConfig)) {
-                error_log("无法解析模板: {$templatePath}");
+                w_log_error("无法解析模板: {$templatePath}", [], 'WidgetScanner');
                 return null;
             }
             
@@ -413,14 +413,14 @@ class WidgetScanner
             
             // 验证必需字段
             if (!$parser->validate($mergedConfig)) {
-                error_log("部件配置验证失败: {$templatePath}");
+                w_log_error("部件配置验证失败: {$templatePath}", [], 'WidgetScanner');
                 return null;
             }
             
             // 转换为标准的部件配置格式
             return $this->readWidgetConfigFromArray($mergedConfig, $moduleName, $basePath);
         } catch (\Exception $e) {
-            error_log("处理简化部件失败: {$templatePath}, 错误: " . $e->getMessage());
+            w_log_error("处理简化部件失败: {$templatePath}, 错误: " . $e->getMessage(), [], 'WidgetScanner');
             return null;
         }
     }
@@ -463,7 +463,7 @@ class WidgetScanner
             }
             
             if (!$hasTemplate) {
-                error_log("警告: 部件 {$moduleName}/{$type}/{$name} 缺少模板文件或 Block 类");
+                w_log_warning("部件 {$moduleName}/{$type}/{$name} 缺少模板文件或 Block 类", [], 'WidgetScanner');
                 return null;
             }
             
@@ -522,7 +522,7 @@ class WidgetScanner
                     }
                     
                     // Web 场景：仅记录错误日志，跳过该部件，避免导致整站无法访问
-                    error_log($errorMessage);
+                    w_log_error($errorMessage, [], 'WidgetScanner');
                     return null;
                 }
             }
@@ -555,7 +555,7 @@ class WidgetScanner
                 'config' => $widgetConfig
             ];
         } catch (\Exception $e) {
-            error_log("读取部件配置数组时出错: " . $e->getMessage());
+            w_log_error("读取部件配置数组时出错: " . $e->getMessage(), [], 'WidgetScanner');
             return null;
         }
     }
@@ -615,7 +615,7 @@ class WidgetScanner
             }
 
             if (!$hasTemplate) {
-                error_log("警告: 部件 {$moduleName}/{$type}/{$name} 缺少模板文件或 Block 类");
+                w_log_warning("部件 {$moduleName}/{$type}/{$name} 缺少模板文件或 Block 类", [], 'WidgetScanner');
                 return null;
             }
 
@@ -624,7 +624,7 @@ class WidgetScanner
                 $template = ObjectManager::getInstance(Template::class);
                 $realPath = $template->getTemplateRealPath($config['template']);
                 if ($realPath === '' || !file_exists($realPath)) {
-                    error_log("警告: 部件 {$moduleName}/{$type}/{$name} 模板文件不存在，已跳过: {$config['template']}");
+                    w_log_warning("部件 {$moduleName}/{$type}/{$name} 模板文件不存在，已跳过: {$config['template']}", [], 'WidgetScanner');
                     return null;
                 }
             }
@@ -681,7 +681,7 @@ class WidgetScanner
                     }
                     
                     // Web 场景：只记录错误并跳过该部件
-                    error_log($errorMessage);
+                    w_log_error($errorMessage, [], 'WidgetScanner');
                     return null;
                 }
             }
@@ -711,7 +711,7 @@ class WidgetScanner
                 'config' => $config
             ];
         } catch (\Exception $e) {
-            error_log("读取部件配置文件 {$widgetFile} 时出错: " . $e->getMessage());
+            w_log_error("读取部件配置文件 {$widgetFile} 时出错: " . $e->getMessage(), [], 'WidgetScanner');
             return null;
         }
     }
@@ -730,7 +730,7 @@ class WidgetScanner
     {
         // 仅在 CLI 模式下执行扫描，Web 运行时应该使用 WidgetData
         if (PHP_SAPI !== 'cli') {
-            error_log("警告: WidgetScanner::scanWidget() 不应在 Web 运行时调用，请使用 WidgetData::getWidget()");
+            w_log_warning("WidgetScanner::scanWidget() 不应在 Web 运行时调用，请使用 WidgetData::getWidget()", [], 'WidgetScanner');
             return null;
         }
         

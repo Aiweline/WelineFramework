@@ -151,7 +151,7 @@ class ParamSchemaRegistry
 
             return false;
         } catch (\Exception $e) {
-            Env::log_error('ParamSchemaRegistry', '保存 ParamSchema 注册表失败: ' . $e->getMessage());
+            w_log_error('保存 ParamSchema 注册表失败: ' . $e->getMessage(), [], 'ParamSchemaRegistry');
             return false;
         }
     }

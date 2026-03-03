@@ -22,7 +22,7 @@ class ParamSchemaScanner
     public function scanAllModules(): array
     {
         if (PHP_SAPI !== 'cli') {
-            Env::log_warning('ParamSchemaScanner', 'scanAllModules() 不应在 Web 运行时调用');
+            w_log_warning('scanAllModules() 不应在 Web 运行时调用', [], 'ParamSchemaScanner');
             return [];
         }
 
@@ -54,17 +54,17 @@ class ParamSchemaScanner
                 try {
                     $definition = include $file;
                 } catch (\Throwable $e) {
-                    Env::log_warning('ParamSchemaScanner', "加载 {$moduleName} 的 ParamSchema '{$typeCode}' 失败: {$e->getMessage()}");
+                    w_log_warning("加载 {$moduleName} 的 ParamSchema '{$typeCode}' 失败: {$e->getMessage()}", [], 'ParamSchemaScanner');
                     continue;
                 }
 
                 if (!is_array($definition)) {
-                    Env::log_warning('ParamSchemaScanner', "{$moduleName}::Ui/ParamSchema/{$typeCode}.php 必须 return 数组");
+                    w_log_warning("{$moduleName}::Ui/ParamSchema/{$typeCode}.php 必须 return 数组", [], 'ParamSchemaScanner');
                     continue;
                 }
 
                 if (!isset($definition['base_type']) || !isset($definition['item_schema'])) {
-                    Env::log_warning('ParamSchemaScanner', "{$moduleName}::Ui/ParamSchema/{$typeCode}.php 缺少 base_type 或 item_schema");
+                    w_log_warning("{$moduleName}::Ui/ParamSchema/{$typeCode}.php 缺少 base_type 或 item_schema", [], 'ParamSchemaScanner');
                     continue;
                 }
 
