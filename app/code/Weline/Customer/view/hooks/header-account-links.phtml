@@ -6,18 +6,16 @@
  * @hook-solo false    Hook独享：false（不独占）
  */
 
-use Weline\Customer\Session\CustomerSession;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\SessionFactory;
 
 // 获取 CustomerSession
-/** @var CustomerSession $session */
-$session = ObjectManager::getInstance(CustomerSession::class);
+$session = SessionFactory::getInstance()->createFrontendSession();
 
 // 获取前端URL（使用模板的 getUrl 方法更安全）
 $frontendUrl = $this->getUrl('');
 
 // 检查是否登录
-$isLoggedIn = $session->isLogin();
+$isLoggedIn = $session->isLoggedIn();
 ?>
 
 <?php if ($isLoggedIn): ?>
