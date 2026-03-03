@@ -15,25 +15,21 @@ use Weline\Checkout\Service\CheckoutService;
 use Weline\Checkout\Service\PaymentService;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Session\Session;
 
 /**
  * 前端结账控制器
  */
 class Checkout extends FrontendController
 {
-    protected ?Session $session;
     private CheckoutService $checkoutService;
     private PaymentService $paymentService;
 
     public function __construct(
         CheckoutService $checkoutService,
-        PaymentService $paymentService,
-        Session $session
+        PaymentService $paymentService
     ) {
         $this->checkoutService = $checkoutService;
         $this->paymentService = $paymentService;
-        $this->session = $session;
     }
 
     /**
@@ -44,7 +40,7 @@ class Checkout extends FrontendController
     public function index(): string
     {
         // 检查登录状态
-        if (!$this->session || !$this->session->isLogin()) {
+        if (!$this->isLoggedIn()) {
             return $this->redirect($this->getUrl('*/frontend/index'));
         }
 
@@ -68,14 +64,14 @@ class Checkout extends FrontendController
             ]);
         }
 
-        if (!$this->session || !$this->session->isLogin()) {
+        if (!$this->isLoggedIn()) {
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('请先登录')
             ]);
         }
 
-        $customerId = $this->session->getLoginUserData('entity_id');
+        $customerId = $this->getLoginUserId();
         
         try {
             $data = [
@@ -133,8 +129,8 @@ class Checkout extends FrontendController
         }
 
         // 验证订单所有权
-        if ($this->session && $this->session->isLogin()) {
-            $customerId = $this->session->getLoginUserData('entity_id');
+        if ($this->isLoggedIn()) {
+            $customerId = $this->getLoginUserId();
             if ($order->getCustomerId() != $customerId) {
                 return $this->redirect($this->getUrl('*/frontend/index'));
             }
@@ -161,7 +157,7 @@ class Checkout extends FrontendController
             ]);
         }
 
-        if (!$this->session || !$this->session->isLogin()) {
+        if (!$this->isLoggedIn()) {
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('请先登录')

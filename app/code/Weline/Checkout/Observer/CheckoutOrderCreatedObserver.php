@@ -39,7 +39,7 @@ class CheckoutOrderCreatedObserver implements ObserverInterface
         }
         
         // 示例：记录订单创建日志
-        error_log("订单创建成功 - 订单ID: {$orderId}, 订单号: {$order->getOrderNumber()}");
+        w_log_info("订单创建成功 - 订单ID: {$orderId}, 订单号: {$order->getOrderNumber()}");
         
         // 示例：扣减库存（需要库存模块实现）
         // $items = $order->getItems();
