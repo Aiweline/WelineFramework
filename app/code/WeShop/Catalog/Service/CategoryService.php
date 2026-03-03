@@ -179,6 +179,61 @@ class CategoryService
     }
     
     /**
+     * 获取带本地化名称的子分类（后台管理用，包含禁用分类）
+     * 
+     * @param int $parentId 父分类ID
+     * @return array
+     */
+    public function getChildCategoriesWithLocal(int $parentId): array
+    {
+        /** @var Category $category */
+        $category = ObjectManager::getInstance(Category::class);
+        
+        return $category->clear()
+            ->loadLocalDescription()
+            ->where(Category::fields_PARENT_ID, $parentId)
+            ->order(Category::fields_SORT_ORDER, 'ASC')
+            ->select()
+            ->fetchArray();
+    }
+    
+    /**
+     * 获取带本地化名称和层级的分类树（后台管理用）
+     * 
+     * @param int $parentId 父分类ID（默认0）
+     * @param int $level 当前层级（默认1）
+     * @param int $maxLevel 最大层级（默认4）
+     * @return array
+     */
+    public function getCategoryTreeWithLocal(int $parentId = 0, int $level = 1, int $maxLevel = 4): array
+    {
+        $categories = $this->getChildCategoriesWithLocal($parentId);
+        
+        foreach ($categories as &$category) {
+            $category['level'] = $level;
+            $category['can_add_child'] = $level < $maxLevel;
+            
+            $localName = $category['local_name'] ?? '';
+            if (!$localName) {
+                $localName = $category['name'] ?? '';
+            }
+            $category['display_name'] = $localName;
+            
+            if ($level < $maxLevel) {
+                $category['children'] = $this->getCategoryTreeWithLocal(
+                    (int)$category['category_id'], 
+                    $level + 1, 
+                    $maxLevel
+                );
+            } else {
+                $category['children'] = [];
+            }
+        }
+        
+        return array_values($categories);
+    }
+    
+    /**
      * 获取所有子分类ID（递归，包括子分类的子分类）
      * 
      * @param int $parentId 父分类ID

@@ -18,18 +18,12 @@ class Upgrade implements \Weline\Framework\Setup\UpgradeInterface
      * 
      * @param Setup $setup
      * @param Context $context
-     * @return string
+     * @return void
      */
-    public function setup(Setup $setup, Context $context): string
+    public function setup(Setup $setup, Context $context): void
     {
-        // 确保 EAV 实体和属性已创建（包括 icon 和 show_icon）
         /** @var UpgradeData $upgradeData */
         $upgradeData = ObjectManager::getInstance(UpgradeData::class);
-        try {
-            $upgradeData->install();
-            return __('分类 EAV 实体和属性已更新');
-        } catch (\Exception $e) {
-            return __('更新分类 EAV 实体和属性失败: %{1}', [$e->getMessage()]);
-        }
+        $upgradeData->install();
     }
 }
