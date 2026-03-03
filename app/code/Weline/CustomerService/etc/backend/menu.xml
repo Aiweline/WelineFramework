@@ -1,33 +1,37 @@
-<?xml version="1.0"?>
-<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xsi:noNamespaceSchemaLocation="urn:weline:backend:etc/menu.xsd">
-    <menu>
-        <item id="Weline_CustomerService::customer_service" 
-              title="客服服务" 
-              resource="Weline_CustomerService::customer_service"
-              parent="Weline_Backend::system_service"
-              sort="100">
-            <item id="Weline_CustomerService::config" 
-                  title="客服配置" 
-                  resource="Weline_CustomerService::config"
-                  action="*/backend/config"
-                  sort="10"/>
-            <item id="Weline_CustomerService::agent" 
-                  title="客服人员" 
-                  resource="Weline_CustomerService::agent"
-                  action="*/backend/agent"
-                  sort="20"/>
-            <item id="Weline_CustomerService::console" 
-                  title="客服工作台" 
-                  resource="Weline_CustomerService::console"
-                  action="*/backend/console"
-                  sort="25"/>
-            <item id="Weline_CustomerService::session" 
-                  title="会话管理" 
-                  resource="Weline_CustomerService::session"
-                  action="*/backend/session"
-                  sort="30"/>
-        </item>
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <menu source="Weline_CustomerService::customer_service" 
+         name="customer_service" 
+         title="客服服务" 
+         action=""
+         parent="Weline_Backend::system_service"
+         icon="mdi mdi-headset"
+         order="100">
+        <menu source="Weline_CustomerService::config" 
+             name="customer_service_config" 
+             title="客服配置" 
+             action="*/backend/config"
+             icon="mdi mdi-cog"
+             order="10"/>
+        <menu source="Weline_CustomerService::agent" 
+             name="customer_service_agent" 
+             title="客服人员" 
+             action="*/backend/agent"
+             icon="mdi mdi-account-tie"
+             order="20"/>
+        <menu source="Weline_CustomerService::console" 
+             name="customer_service_console" 
+             title="客服工作台" 
+             action="*/backend/console"
+             icon="mdi mdi-monitor-dashboard"
+             order="25"/>
+        <menu source="Weline_CustomerService::session" 
+             name="customer_service_session" 
+             title="会话管理" 
+             action="*/backend/session"
+             icon="mdi mdi-message-text"
+             order="30"/>
     </menu>
-</config>
-
+</menus>
