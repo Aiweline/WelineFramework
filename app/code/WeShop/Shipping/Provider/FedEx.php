@@ -113,7 +113,7 @@ class FedEx implements ShippingProviderInterface
             
             return $rates;
         } catch (\Exception $e) {
-            Env::log_error('FedEx费率计算失败', [
+            w_log_error('FedEx费率计算失败', [
                 'error' => $e->getMessage(),
                 'address' => $address,
             ], 'weshop_shipping');
