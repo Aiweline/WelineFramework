@@ -168,11 +168,9 @@ class MenuAccessLog extends Model
         
         // 尝试从缓存中获取（缓存5分钟）
         $cacheKey = 'frequent_menus_' . $userId . '_' . $limit . '_' . $days;
-        /** @var \Weline\Admin\Cache\AdminCache $cache */
-        $cache = ObjectManager::getInstance(\Weline\Admin\Cache\AdminCache::class);
-        $cacheDriver = $cache->create();
-        $cachedResult = $cacheDriver->get($cacheKey, false);
-        if ($cachedResult !== false) {
+        $cache = w_cache('default');
+        $cachedResult = $cache->get($cacheKey, false);
+        if ($cachedResult !== false && is_array($cachedResult)) {
             return $cachedResult;
         }
         
@@ -223,8 +221,10 @@ class MenuAccessLog extends Model
             $roleAccess = $roleAccessModel->where(\Weline\Acl\Model\RoleAccess::fields_ROLE_ID, $role->getId())
                 ->select()
                 ->fetchArray();
-            foreach ($roleAccess as $access) {
-                $userAccessSources[] = $access[\Weline\Acl\Model\RoleAccess::fields_SOURCE_ID];
+            if (is_array($roleAccess)) {
+                foreach ($roleAccess as $access) {
+                    $userAccessSources[] = $access[\Weline\Acl\Model\RoleAccess::fields_SOURCE_ID];
+                }
             }
         }
         
@@ -258,7 +258,7 @@ class MenuAccessLog extends Model
         }
         
         // 缓存结果（5分钟）
-        $cacheDriver->set($cacheKey, $frequentMenus, 300);
+        $cache->set($cacheKey, $frequentMenus, 300);
         
         return $frequentMenus;
     }
@@ -284,11 +284,9 @@ class MenuAccessLog extends Model
         
         // 尝试从缓存中获取（缓存5分钟）
         $cacheKey = 'recent_menus_' . $userId . '_' . $limit . '_' . $days;
-        /** @var \Weline\Admin\Cache\AdminCache $cache */
-        $cache = ObjectManager::getInstance(\Weline\Admin\Cache\AdminCache::class);
-        $cacheDriver = $cache->create();
-        $cachedResult = $cacheDriver->get($cacheKey, false);
-        if ($cachedResult !== false) {
+        $cache = w_cache('default');
+        $cachedResult = $cache->get($cacheKey, false);
+        if ($cachedResult !== false && is_array($cachedResult)) {
             return $cachedResult;
         }
         
@@ -339,8 +337,10 @@ class MenuAccessLog extends Model
             $roleAccess = $roleAccessModel->where(\Weline\Acl\Model\RoleAccess::fields_ROLE_ID, $role->getId())
                 ->select()
                 ->fetchArray();
-            foreach ($roleAccess as $access) {
-                $userAccessSources[] = $access[\Weline\Acl\Model\RoleAccess::fields_SOURCE_ID];
+            if (is_array($roleAccess)) {
+                foreach ($roleAccess as $access) {
+                    $userAccessSources[] = $access[\Weline\Acl\Model\RoleAccess::fields_SOURCE_ID];
+                }
             }
         }
         
@@ -374,7 +374,7 @@ class MenuAccessLog extends Model
         }
         
         // 缓存结果（5分钟）
-        $cacheDriver->set($cacheKey, $recentMenus, 300);
+        $cache->set($cacheKey, $recentMenus, 300);
         
         return $recentMenus;
     }

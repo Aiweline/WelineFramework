@@ -197,7 +197,7 @@ class SystemNotificationObserver implements ObserverInterface
         } catch (\Exception $e) {
             // 如果连错误消息都保存失败，记录到错误日志
             if (defined('DEV') && DEV) {
-                error_log(__('SystemNotificationObserver Error: Failed to save error notification - %{error}', ['error' => $e->getMessage()]));
+                w_log_error(__('SystemNotificationObserver Error: Failed to save error notification - %{error}', ['error' => $e->getMessage()]));
             }
         }
     }

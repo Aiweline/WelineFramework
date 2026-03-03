@@ -1,10 +1,303 @@
 <?php
 /**
- * 菜单管理页面（内容模板）
+ * 菜单管理页面 - 树状管理
  *
  * @var \Weline\Framework\View\Template $this
  */
+$menuTree = $this->getData('menuTree') ?? [];
+$allMenus = $this->getData('allMenus') ?? [];
+$search = $this->getData('search') ?? '';
 ?>
+
+<style>
+.weline-menu-tree-container {
+    background: var(--backend-color-card-bg, #fff);
+    border-radius: var(--backend-border-radius-md, 8px);
+    box-shadow: var(--backend-card-shadow);
+}
+
+.weline-menu-tree-header {
+    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 24px);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--backend-spacing-sm, 8px);
+}
+
+.weline-menu-tree-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-sm, 8px);
+}
+
+.weline-menu-tree-title i {
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-menu-tree-actions {
+    display: flex;
+    gap: var(--backend-spacing-sm, 8px);
+    align-items: center;
+}
+
+.weline-menu-tree-search {
+    position: relative;
+}
+
+.weline-menu-tree-search input {
+    padding: 0.5rem 2.5rem 0.5rem 1rem;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-input-bg, #fff);
+    color: var(--backend-color-text-primary, #333);
+    min-width: 200px;
+}
+
+.weline-menu-tree-search input:focus {
+    outline: none;
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: var(--backend-focus-ring);
+}
+
+.weline-menu-tree-search .search-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--backend-color-text-secondary, #6c757d);
+    cursor: pointer;
+}
+
+.weline-menu-tree-body {
+    padding: var(--backend-spacing-md, 16px);
+}
+
+.weline-menu-tree-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.weline-menu-tree-item {
+    margin-bottom: 2px;
+}
+
+.weline-menu-tree-node {
+    display: flex;
+    align-items: center;
+    padding: var(--backend-spacing-sm, 8px) var(--backend-spacing-md, 12px);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    transition: all 0.2s ease;
+    cursor: pointer;
+    gap: var(--backend-spacing-sm, 8px);
+}
+
+.weline-menu-tree-node:hover {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+}
+
+.weline-menu-tree-node.selected {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    border: 1px solid var(--backend-color-primary, #556ee6);
+}
+
+.weline-menu-tree-toggle {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--backend-color-text-secondary, #6c757d);
+    cursor: pointer;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.weline-menu-tree-toggle.expanded {
+    transform: rotate(90deg);
+}
+
+.weline-menu-tree-toggle.no-children {
+    visibility: hidden;
+}
+
+.weline-menu-tree-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary, #556ee6);
+    border-radius: var(--backend-border-radius, 6px);
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.weline-menu-tree-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.weline-menu-tree-name {
+    font-weight: 500;
+    color: var(--backend-color-text-primary, #212529);
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-xs, 4px);
+}
+
+.weline-menu-tree-meta {
+    font-size: 0.75rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+    display: flex;
+    gap: var(--backend-spacing-md, 16px);
+    margin-top: 2px;
+}
+
+.weline-menu-tree-meta span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.weline-menu-tree-badges {
+    display: flex;
+    gap: var(--backend-spacing-xs, 4px);
+    flex-shrink: 0;
+}
+
+.weline-menu-tree-badge {
+    padding: 2px 8px;
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    font-size: 0.7rem;
+    font-weight: 500;
+}
+
+.weline-menu-tree-badge.system {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    color: var(--backend-color-info, #50a5f1);
+}
+
+.weline-menu-tree-badge.custom {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+    color: var(--backend-color-success, #34c38f);
+}
+
+.weline-menu-tree-badge.disabled {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
+    color: var(--backend-color-danger, #f46a6a);
+}
+
+.weline-menu-tree-actions-cell {
+    display: flex;
+    gap: var(--backend-spacing-xs, 4px);
+    flex-shrink: 0;
+}
+
+.weline-menu-tree-actions-cell .btn {
+    padding: 4px 8px;
+    font-size: 0.8rem;
+}
+
+.weline-menu-tree-children {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    margin-left: 32px;
+    border-left: 1px dashed var(--backend-color-border-default, #dee2e6);
+    padding-left: 16px;
+    display: none;
+}
+
+.weline-menu-tree-children.expanded {
+    display: block;
+}
+
+.weline-menu-tree-empty {
+    text-align: center;
+    padding: var(--backend-spacing-xl, 40px);
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+.weline-menu-tree-empty i {
+    font-size: 3rem;
+    margin-bottom: var(--backend-spacing-md, 16px);
+    display: block;
+}
+
+.weline-menu-tree-stats {
+    display: flex;
+    gap: var(--backend-spacing-lg, 24px);
+    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 24px);
+    border-top: 1px solid var(--backend-color-border-light, #e9ecef);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-radius: 0 0 var(--backend-border-radius-md, 8px) var(--backend-border-radius-md, 8px);
+}
+
+.weline-menu-tree-stat {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-sm, 8px);
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.875rem;
+}
+
+.weline-menu-tree-stat i {
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-menu-tree-stat strong {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.weline-menu-edit-modal .modal-content {
+    background: var(--backend-color-card-bg, #fff);
+}
+
+.weline-menu-edit-form .form-group {
+    margin-bottom: var(--backend-spacing-md, 16px);
+}
+
+.weline-menu-edit-form label {
+    font-weight: 500;
+    color: var(--backend-color-text-primary, #212529);
+    margin-bottom: 4px;
+    display: block;
+}
+
+.weline-menu-edit-form .form-control {
+    background: var(--backend-color-input-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    color: var(--backend-color-text-primary, #333);
+}
+
+.weline-menu-edit-form .form-control:focus {
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: var(--backend-focus-ring);
+}
+
+.weline-menu-toolbar {
+    display: flex;
+    gap: var(--backend-spacing-sm, 8px);
+    margin-bottom: var(--backend-spacing-md, 16px);
+}
+
+.weline-menu-toolbar .btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+</style>
 
 <div class="row">
     <div class="col-12">
@@ -26,125 +319,463 @@
 
 <div class="row">
     <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title"><?= __('菜单编辑器') ?></h4>
+        <div class="weline-menu-tree-container">
+            <div class="weline-menu-tree-header">
+                <h5 class="weline-menu-tree-title">
+                    <i class="mdi mdi-file-tree"></i>
+                    <?= __('菜单树') ?>
+                </h5>
+                <div class="weline-menu-tree-actions">
+                    <form class="weline-menu-tree-search" method="get" action="">
+                        <input type="text" name="search" placeholder="<?= __('搜索菜单...') ?>" value="<?= htmlspecialchars($search) ?>">
+                        <button type="submit" class="search-btn"><i class="mdi mdi-magnify"></i></button>
+                    </form>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="weline-menu-expand-all">
+                        <i class="mdi mdi-unfold-more-horizontal"></i> <?= __('展开全部') ?>
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="weline-menu-collapse-all">
+                        <i class="mdi mdi-unfold-less-horizontal"></i> <?= __('折叠全部') ?>
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm" id="weline-menu-add">
+                        <i class="mdi mdi-plus"></i> <?= __('新增菜单') ?>
+                    </button>
+                </div>
+            </div>
 
-                <div class='table-responsive'>
-                    <table class="table table-editable table-nowrap align-middle table-edits">
-                        <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th><?= __('菜单名') ?></th>
-                            <th><?= __('标题') ?></th>
-                            <th><?= __('资源') ?></th>
-                            <th><?= __('父资源') ?></th>
-                            <th><?= __('动作') ?></th>
-                            <th><?= __('模组') ?></th>
-                            <th><?= __('Icon图标') ?></th>
-                            <th><?= __('排序') ?></th>
-                            <th><?= __('是否系统菜单') ?></th>
-                            <th><?= __('创建时间') ?></th>
-                            <th><?= __('更新时间') ?></th>
-                            <th><?= __('操作') ?></th>
-                        </tr>
-                        </thead>
-                        <tbody>
+            <div class="weline-menu-tree-body">
+                <?php if (empty($menuTree)): ?>
+                    <div class="weline-menu-tree-empty">
+                        <i class="mdi mdi-folder-open-outline"></i>
+                        <p><?= __('暂无菜单数据') ?></p>
+                    </div>
+                <?php else: ?>
+                    <ul class="weline-menu-tree-list">
                         <?php
-                        /**@var \Weline\Backend\Model\Menu $menu */
-                        foreach ($this->getData('menus') as $menu) {
+                        $renderMenuItem = function ($item, $depth = 0) use (&$renderMenuItem) {
+                            $hasChildren = !empty($item['children']);
+                            $isSystem = !empty($item['is_system']);
+                            $isEnabled = $item['is_enable'] ?? 1;
                             ?>
-                            <tr data-id='<?= $menu->getId() ?>'>
-                                <td data-field='id' style='width: 80px'><?= $menu->getId() ?></td>
-                                <td data-field='name'><?= $menu->getName() ?></td>
-                                <td data-field='title'><?= $menu->getTitle() ?></td>
-                                <td data-field='source'><?= $menu->getSource() ?></td>
-                                <td data-field='parent_source'><?= $menu->getParentSource() ?></td>
-                                <td data-field='action'><?= $menu->getAction() ?></td>
-                                <td data-field='module'><?= $menu->getModule() ?></td>
-                                <td data-field='icon'><i class='<?= $menu->getIcon() ?>'
-                                                         style="margin-right: 25px"></i><span><?= $menu->getIcon() ?></span>
-                                </td>
-                                <td data-field='order'><?= $menu->getOrder() ?></td>
-                                <td data-field='is_system'><?= $menu->isSystem() ?></td>
-                                <td data-field='create_time'><?= $menu->getCreateTime() ?></td>
-                                <td data-field='update_time'><?= $menu->getUpdateTime() ?></td>
-                                <td style='width: 100px'>
-                                    <a class='btn btn-outline-secondary btn-sm edit'
-                                       title='<?= __('编辑') ?>'>
-                                        <i class='fas fa-pencil-alt'></i>
-                                    </a>
-                                    <a class='btn btn-outline-secondary btn-sm <?= $menu->isSystem() ? '' : 'menu-delete' ?>'
-                                       data-id="<?= $menu->getId() ?>"
-                                       title='<?= $menu->isSystem() ? __('系统菜单无法删除！') : __('删除') ?>'>
-                                        <i class='mdi <?= $menu->isSystem() ? 'mdi-delete-off' : 'mdi-delete' ?> '
-                                           style="<?= $menu->isSystem() ? 'color:red' : '' ?>"
-                                           data-id="<?= $menu->getId() ?>"></i>
-                                    </a>
-                                </td>
-                            </tr>
+                            <li class="weline-menu-tree-item" data-id="<?= $item['menu_id'] ?>" data-source="<?= htmlspecialchars($item['source'] ?? '') ?>">
+                                <div class="weline-menu-tree-node">
+                                    <span class="weline-menu-tree-toggle <?= $hasChildren ? '' : 'no-children' ?>">
+                                        <i class="mdi mdi-chevron-right"></i>
+                                    </span>
+                                    <span class="weline-menu-tree-icon">
+                                        <i class="<?= htmlspecialchars($item['icon'] ?? 'mdi mdi-menu') ?>"></i>
+                                    </span>
+                                    <div class="weline-menu-tree-info">
+                                        <div class="weline-menu-tree-name">
+                                            <?= htmlspecialchars(__($item['title'] ?? $item['name'] ?? '')) ?>
+                                            <?php if ($hasChildren): ?>
+                                                <small class="text-muted">(<?= count($item['children']) ?>)</small>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="weline-menu-tree-meta">
+                                            <span title="<?= __('资源标识') ?>">
+                                                <i class="mdi mdi-identifier"></i>
+                                                <?= htmlspecialchars($item['source'] ?? '') ?>
+                                            </span>
+                                            <span title="<?= __('模块') ?>">
+                                                <i class="mdi mdi-puzzle"></i>
+                                                <?= htmlspecialchars($item['module'] ?? '') ?>
+                                            </span>
+                                            <span title="<?= __('排序') ?>">
+                                                <i class="mdi mdi-sort-numeric-ascending"></i>
+                                                <?= (int)($item['order'] ?? 0) ?>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="weline-menu-tree-badges">
+                                        <?php if ($isSystem): ?>
+                                            <span class="weline-menu-tree-badge system"><?= __('系统') ?></span>
+                                        <?php else: ?>
+                                            <span class="weline-menu-tree-badge custom"><?= __('自定义') ?></span>
+                                        <?php endif; ?>
+                                        <?php if (!$isEnabled): ?>
+                                            <span class="weline-menu-tree-badge disabled"><?= __('禁用') ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="weline-menu-tree-actions-cell">
+                                        <button type="button" class="btn btn-outline-primary btn-sm weline-menu-edit" 
+                                                data-id="<?= $item['menu_id'] ?>"
+                                                title="<?= __('编辑') ?>">
+                                            <i class="mdi mdi-pencil"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-success btn-sm weline-menu-add-child" 
+                                                data-parent-source="<?= htmlspecialchars($item['source'] ?? '') ?>"
+                                                title="<?= __('添加子菜单') ?>">
+                                            <i class="mdi mdi-plus"></i>
+                                        </button>
+                                        <?php if (!$isSystem): ?>
+                                            <button type="button" class="btn btn-outline-danger btn-sm weline-menu-delete" 
+                                                    data-id="<?= $item['menu_id'] ?>"
+                                                    data-name="<?= htmlspecialchars($item['title'] ?? $item['name'] ?? '') ?>"
+                                                    title="<?= __('删除') ?>">
+                                                <i class="mdi mdi-delete"></i>
+                                            </button>
+                                        <?php else: ?>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" disabled
+                                                    title="<?= __('系统菜单无法删除') ?>">
+                                                <i class="mdi mdi-delete-off"></i>
+                                            </button>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                                <?php if ($hasChildren): ?>
+                                    <ul class="weline-menu-tree-children">
+                                        <?php foreach ($item['children'] as $child): ?>
+                                            <?php $renderMenuItem($child, $depth + 1); ?>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                <?php endif; ?>
+                            </li>
                             <?php
+                        };
+                        
+                        foreach ($menuTree as $item) {
+                            $renderMenuItem($item);
                         }
                         ?>
-                        </tbody>
-                    </table>
+                    </ul>
+                <?php endif; ?>
+            </div>
+
+            <?php
+            $totalMenus = count($allMenus);
+            $systemMenus = count(array_filter($allMenus, fn($m) => !empty($m['is_system'])));
+            $customMenus = $totalMenus - $systemMenus;
+            $rootMenus = count($menuTree);
+            ?>
+            <div class="weline-menu-tree-stats">
+                <div class="weline-menu-tree-stat">
+                    <i class="mdi mdi-format-list-bulleted"></i>
+                    <?= __('总计') ?>: <strong><?= $totalMenus ?></strong>
+                </div>
+                <div class="weline-menu-tree-stat">
+                    <i class="mdi mdi-shield-check"></i>
+                    <?= __('系统菜单') ?>: <strong><?= $systemMenus ?></strong>
+                </div>
+                <div class="weline-menu-tree-stat">
+                    <i class="mdi mdi-account-edit"></i>
+                    <?= __('自定义菜单') ?>: <strong><?= $customMenus ?></strong>
+                </div>
+                <div class="weline-menu-tree-stat">
+                    <i class="mdi mdi-file-tree"></i>
+                    <?= __('顶级菜单') ?>: <strong><?= $rootMenus ?></strong>
                 </div>
             </div>
         </div>
-        <var>pagination</var>
+    </div>
+</div>
+
+<div class="modal fade weline-menu-edit-modal" id="menuEditModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="menuEditModalTitle"><?= __('编辑菜单') ?></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form class="weline-menu-edit-form" id="menuEditForm">
+                    <input type="hidden" name="menu_id" id="menu_id">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="menu_name"><?= __('菜单名称') ?> <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="menu_name" name="name" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="menu_title"><?= __('菜单标题') ?> <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="menu_title" name="title" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="menu_source"><?= __('资源标识') ?> <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="menu_source" name="source" required
+                                       placeholder="Vendor_Module::menu_name">
+                                <small class="text-muted"><?= __('格式：Vendor_Module::menu_name') ?></small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="menu_parent_source"><?= __('父级资源') ?></label>
+                                <select class="form-control" id="menu_parent_source" name="parent_source">
+                                    <option value=""><?= __('无（顶级菜单）') ?></option>
+                                    <?php foreach ($allMenus as $m): ?>
+                                        <option value="<?= htmlspecialchars($m['source'] ?? '') ?>">
+                                            <?= htmlspecialchars(($m['title'] ?? $m['name'] ?? '') . ' (' . ($m['source'] ?? '') . ')') ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="menu_action"><?= __('动作URL') ?></label>
+                                <input type="text" class="form-control" id="menu_action" name="action"
+                                       placeholder="module/controller/action">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="menu_module"><?= __('所属模块') ?> <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="menu_module" name="module" required
+                                       placeholder="Vendor_Module">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="menu_icon"><?= __('图标类') ?></label>
+                                <div class="input-group">
+                                    <span class="input-group-text" id="menu_icon_preview"><i class="mdi mdi-menu"></i></span>
+                                    <input type="text" class="form-control" id="menu_icon" name="icon"
+                                           placeholder="mdi mdi-menu">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="menu_order"><?= __('排序') ?></label>
+                                <input type="number" class="form-control" id="menu_order" name="order" value="0">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="menu_is_enable"><?= __('状态') ?></label>
+                                <select class="form-control" id="menu_is_enable" name="is_enable">
+                                    <option value="1"><?= __('启用') ?></option>
+                                    <option value="0"><?= __('禁用') ?></option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                <button type="button" class="btn btn-primary" id="menuSaveBtn"><?= __('保存') ?></button>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
 (function() {
     'use strict';
-    
-    document.querySelectorAll('.menu-delete').forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            var menuId = this.dataset.id;
-            
-            if (typeof AdminConfirm !== 'undefined') {
-                AdminConfirm.show({
-                    title: '<?= __("确认删除") ?>',
-                    message: '<?= __("确定要删除这个菜单吗？") ?>',
-                    confirmText: '<?= __("确定删除") ?>',
-                    cancelText: '<?= __("取消") ?>',
-                    type: 'danger',
-                    onConfirm: function() {
-                        deleteMenu(menuId);
-                    }
-                });
-            } else {
-                deleteMenu(menuId);
-            }
+
+    var menuModal = null;
+    var saveUrl = '<?= $this->getBackendUrl('admin/system/menus/save') ?>';
+    var deleteUrl = '<?= $this->getBackendUrl('admin/system/menus/delete') ?>';
+    var detailUrl = '<?= $this->getBackendUrl('admin/system/menus/detail') ?>';
+
+    function init() {
+        menuModal = new bootstrap.Modal(document.getElementById('menuEditModal'));
+        bindEvents();
+    }
+
+    function bindEvents() {
+        document.querySelectorAll('.weline-menu-tree-toggle').forEach(function(toggle) {
+            toggle.addEventListener('click', function(e) {
+                e.stopPropagation();
+                toggleNode(this);
+            });
         });
-    });
-    
-    function deleteMenu(menuId) {
-        fetch('<?= $this->getBackendUrl("backend/system/menus/delete") ?>?id=' + menuId, {
-            method: 'POST'
+
+        document.querySelectorAll('.weline-menu-tree-node').forEach(function(node) {
+            node.addEventListener('dblclick', function(e) {
+                var toggle = this.querySelector('.weline-menu-tree-toggle');
+                if (toggle && !toggle.classList.contains('no-children')) {
+                    toggleNode(toggle);
+                }
+            });
+        });
+
+        document.getElementById('weline-menu-expand-all').addEventListener('click', function() {
+            document.querySelectorAll('.weline-menu-tree-toggle:not(.no-children)').forEach(function(toggle) {
+                toggle.classList.add('expanded');
+                var children = toggle.closest('.weline-menu-tree-item').querySelector('.weline-menu-tree-children');
+                if (children) children.classList.add('expanded');
+            });
+        });
+
+        document.getElementById('weline-menu-collapse-all').addEventListener('click', function() {
+            document.querySelectorAll('.weline-menu-tree-toggle').forEach(function(toggle) {
+                toggle.classList.remove('expanded');
+                var children = toggle.closest('.weline-menu-tree-item').querySelector('.weline-menu-tree-children');
+                if (children) children.classList.remove('expanded');
+            });
+        });
+
+        document.getElementById('weline-menu-add').addEventListener('click', function() {
+            openAddModal();
+        });
+
+        document.querySelectorAll('.weline-menu-add-child').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                openAddModal(this.dataset.parentSource);
+            });
+        });
+
+        document.querySelectorAll('.weline-menu-edit').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                openEditModal(this.dataset.id);
+            });
+        });
+
+        document.querySelectorAll('.weline-menu-delete').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                deleteMenu(this.dataset.id, this.dataset.name);
+            });
+        });
+
+        document.getElementById('menuSaveBtn').addEventListener('click', saveMenu);
+
+        document.getElementById('menu_icon').addEventListener('input', function() {
+            var icon = this.value.trim() || 'mdi mdi-menu';
+            document.querySelector('#menu_icon_preview i').className = icon;
+        });
+    }
+
+    function toggleNode(toggle) {
+        toggle.classList.toggle('expanded');
+        var children = toggle.closest('.weline-menu-tree-item').querySelector('.weline-menu-tree-children');
+        if (children) {
+            children.classList.toggle('expanded');
+        }
+    }
+
+    function openAddModal(parentSource) {
+        document.getElementById('menuEditModalTitle').textContent = '<?= __("新增菜单") ?>';
+        document.getElementById('menuEditForm').reset();
+        document.getElementById('menu_id').value = '';
+        if (parentSource) {
+            document.getElementById('menu_parent_source').value = parentSource;
+        }
+        document.querySelector('#menu_icon_preview i').className = 'mdi mdi-menu';
+        menuModal.show();
+    }
+
+    function openEditModal(menuId) {
+        document.getElementById('menuEditModalTitle').textContent = '<?= __("编辑菜单") ?>';
+        
+        fetch(detailUrl + '?id=' + menuId)
+            .then(function(response) { return response.json(); })
+            .then(function(result) {
+                if (result.code === 200 && result.data) {
+                    var data = result.data;
+                    document.getElementById('menu_id').value = data.menu_id || '';
+                    document.getElementById('menu_name').value = data.name || '';
+                    document.getElementById('menu_title').value = data.title || '';
+                    document.getElementById('menu_source').value = data.source || '';
+                    document.getElementById('menu_parent_source').value = data.parent_source || '';
+                    document.getElementById('menu_action').value = data.action || '';
+                    document.getElementById('menu_module').value = data.module || '';
+                    document.getElementById('menu_icon').value = data.icon || '';
+                    document.getElementById('menu_order').value = data.order || 0;
+                    document.getElementById('menu_is_enable').value = data.is_enable || 1;
+                    
+                    var icon = data.icon || 'mdi mdi-menu';
+                    document.querySelector('#menu_icon_preview i').className = icon;
+                    
+                    menuModal.show();
+                } else {
+                    BackendToast.error(result.msg || '<?= __("获取菜单信息失败") ?>');
+                }
+            })
+            .catch(function(error) {
+                BackendToast.error('<?= __("请求失败") ?>: ' + error.message);
+            });
+    }
+
+    function saveMenu() {
+        var form = document.getElementById('menuEditForm');
+        var formData = new FormData(form);
+        var data = {};
+        
+        formData.forEach(function(value, key) {
+            data[key] = value;
+        });
+
+        if (!data.name || !data.title || !data.source || !data.module) {
+            BackendToast.warning('<?= __("请填写必填项") ?>');
+            return;
+        }
+
+        fetch(saveUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
         })
         .then(function(response) { return response.json(); })
-        .then(function(data) {
-            if (data.success) {
-                if (typeof AdminToast !== 'undefined') {
-                    AdminToast.success(data.message || '<?= __("删除成功") ?>');
-                }
+        .then(function(result) {
+            if (result.success || result.code === 200) {
+                BackendToast.success('<?= __("保存成功") ?>');
+                menuModal.hide();
                 setTimeout(function() {
                     location.reload();
                 }, 1000);
             } else {
-                if (typeof AdminToast !== 'undefined') {
-                    AdminToast.error(data.message || '<?= __("删除失败") ?>');
-                }
+                BackendToast.error(result.message || result.msg || '<?= __("保存失败") ?>');
             }
         })
         .catch(function(error) {
-            if (typeof AdminToast !== 'undefined') {
-                AdminToast.error('<?= __("请求失败") ?>');
-            }
+            BackendToast.error('<?= __("请求失败") ?>: ' + error.message);
         });
     }
+
+    function deleteMenu(menuId, menuName) {
+        BackendConfirm.show('<?= __("确定要删除菜单") ?> "' + menuName + '" <?= __("吗？") ?>', {
+            title: '<?= __("确认删除") ?>',
+            type: 'danger',
+            confirmText: '<?= __("删除") ?>',
+            cancelText: '<?= __("取消") ?>'
+        }).then(function(confirmed) {
+            if (!confirmed) return;
+
+            var formData = new FormData();
+            formData.append('id', menuId);
+
+            fetch(deleteUrl, {
+                method: 'POST',
+                body: formData
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(result) {
+                if (result.code === 200) {
+                    BackendToast.success(result.msg || '<?= __("删除成功") ?>');
+                    setTimeout(function() {
+                        location.reload();
+                    }, 1000);
+                } else {
+                    BackendToast.error(result.msg || '<?= __("删除失败") ?>');
+                }
+            })
+            .catch(function(error) {
+                BackendToast.error('<?= __("请求失败") ?>: ' + error.message);
+            });
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+
 })();
 </script>

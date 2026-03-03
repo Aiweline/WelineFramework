@@ -11,7 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Block\Backend\Page;
 
-use Weline\Admin\Session\AdminSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Backend\Model\BackendUser;
 use Weline\Backend\Model\Config;
 use Weline\Framework\Database\AbstractModel;
@@ -25,13 +26,13 @@ class Topbar extends \Weline\Framework\View\Block
 {
     public string $_template = 'Weline_Admin::backend/public/top-bar.phtml';
     private Config $config;
-    private AdminSession $session;
+    private AuthenticatedSessionInterface $session;
     private ?BackendUser $user = null;
 
-    public function __construct(Config $config, AdminSession $session, array $data = [])
+    public function __construct(Config $config, array $data = [])
     {
         $this->config = $config;
-        $this->session = $session;
+        $this->session = SessionFactory::getInstance()->createBackendSession();
         parent::__construct($data);
         $this->getUser();
     }
