@@ -131,7 +131,7 @@ class CssVariableInjector
         } catch (\Exception $e) {
             // 获取失败，返回空数组
             if (defined('DEV') && DEV) {
-                error_log('从Meta读取变量配置失败: ' . $e->getMessage());
+                w_log_error('从Meta读取变量配置失败: ' . $e->getMessage());
             }
         }
         
@@ -169,7 +169,7 @@ class CssVariableInjector
         } catch (\Exception $e) {
             // 获取失败，返回空数组
             if (defined('DEV') && DEV) {
-                error_log('从色盘读取变量配置失败: ' . $e->getMessage());
+                w_log_error('从色盘读取变量配置失败: ' . $e->getMessage());
             }
         }
         

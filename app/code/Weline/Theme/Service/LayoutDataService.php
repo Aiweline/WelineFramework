@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Framework\App\Env;
-use Weline\Theme\Cache\ThemeCache;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Theme\Helper\LayoutScanner;
 use Weline\Theme\Model\WelineTheme;
 
@@ -32,14 +32,13 @@ class LayoutDataService
      */
     private const CACHE_KEY_THEME_LAYOUTS = 'layout_types_theme_';
 
-    private ThemeCache $cache;
+    private CachePoolInterface $cache;
     private WelineTheme $welineTheme;
 
     public function __construct(
-        ThemeCache $cache,
         WelineTheme $welineTheme
     ) {
-        $this->cache = $cache;
+        $this->cache = w_cache('theme');
         $this->welineTheme = $welineTheme;
     }
 
