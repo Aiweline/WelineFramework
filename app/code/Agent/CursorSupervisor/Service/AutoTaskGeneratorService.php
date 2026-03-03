@@ -213,7 +213,7 @@ class AutoTaskGeneratorService
             ],
             'php_error_log' => [
                 'agent' => 'Agent_PHP',
-                'description' => "替换 error_log() 为 Env::log_error()",
+                'description' => "替换 error_log() 为 w_log_error()",
                 'priority' => 'high',
             ],
             'php_missing_fetch' => [
@@ -259,17 +259,17 @@ class AutoTaskGeneratorService
             // 只自动修复简单的问题
             switch ($type) {
                 case 'php_error_log':
-                    // 替换 error_log() 为 Env::log_error()
+                    // 替换 error_log() 为 w_log_error()
                     $newContent = preg_replace(
                         '/\berror_log\s*\(/',
-                        '\\Weline\\Framework\\System\\Env::log_error(',
+                        'w_log_error(',
                         $content
                     );
                     if ($newContent !== $content) {
                         $content = $newContent;
                         $modified = true;
                         $fixed[] = $type;
-                        $this->log("🔧 自动修复: error_log -> Env::log_error");
+                        $this->log("🔧 自动修复: error_log -> w_log_error");
                     }
                     break;
             }
