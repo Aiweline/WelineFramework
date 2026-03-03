@@ -5,7 +5,8 @@ namespace Weline\Admin\Observer;
 use Weline\Admin\Helper\MenuUrlValidator;
 use Weline\Backend\Model\BackendUserToken;
 use Weline\Backend\Model\BackendUser;
-use Weline\Backend\Session\BackendSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Cookie;
@@ -24,9 +25,9 @@ class BackendControllerInitAfter implements ObserverInterface
         $this->request = $request;
     }   
 
-    private function getSession(): BackendSession
+    private function getSession(): AuthenticatedSessionInterface
     {
-        return ObjectManager::getInstance(BackendSession::class);
+        return SessionFactory::getInstance()->createBackendSession();
     }
 
     /**
@@ -35,13 +36,14 @@ class BackendControllerInitAfter implements ObserverInterface
     public function execute(Event &$event): void
     {
         # 检测记住我
-        if ($token = Cookie::get('w_ut') and (!$this->getSession()->getLoginUserID())) {
+        if ($token = Cookie::get('w_ut') and (!$this->getSession()->getUserId())) {
             /**@var BackendUserToken $backendUserToken */
             $backendUserToken = ObjectManager::getInstance(BackendUserToken::class);
             $backendUserToken->where($backendUserToken::fields_token, $token)->where($backendUserToken::fields_type, 'admin_login_remember_me')->find()->fetch();
             if ($backendUserToken->getId() and $backendUserToken->getData($backendUserToken::fields_token_expire_time) < time()) {
                 $backendUserToken->setData($backendUserToken::fields_token, '')
-                    ->setData($backendUserToken::fields_token_expire_time, 0);
+                    ->setData($backendUserToken::fields_token_expire_time, 0)
+                    ->save();
                 ObjectManager::getInstance(MessageManager::class)->addWarning(__('记住登录已过期，请重新登录！'));
                 Cookie::set('w_ut', '', -1, ['path' => '/' . $this->request->getAreaRouter()]);
                 $this->getSession()->logout();

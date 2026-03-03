@@ -13,7 +13,8 @@ namespace Weline\Admin\Observer;
 
 use Weline\Acl\Model\Acl;
 use Weline\Admin\Model\MenuAccessLog;
-use Weline\Backend\Session\BackendSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
@@ -22,16 +23,15 @@ use Weline\Framework\Manager\ObjectManager;
 class MenuAccessLogObserver implements ObserverInterface
 {
     private Request $request;
-    private BackendSession $backendSession;
+    private AuthenticatedSessionInterface $backendSession;
     private Acl $acl;
 
     public function __construct(
         Request $request,
-        BackendSession $backendSession,
         Acl $acl
     ) {
         $this->request = $request;
-        $this->backendSession = $backendSession;
+        $this->backendSession = SessionFactory::getInstance()->createBackendSession();
         $this->acl = $acl;
     }
 
@@ -56,7 +56,7 @@ class MenuAccessLogObserver implements ObserverInterface
         }
 
         // 获取当前登录用户
-        $userId = $this->backendSession->getLoginUserID();
+        $userId = $this->backendSession->getUserId();
         if (!$userId) {
             return;
         }
@@ -89,8 +89,8 @@ class MenuAccessLogObserver implements ObserverInterface
             
             // 防止短时间内重复记录（同一用户、同一菜单在30秒内的重复访问不记录）
             $sessionKey = 'menu_access_log_' . $userId . '_' . $acl->getSourceId();
-            /** @var \Weline\Backend\Session\BackendSession $backendSession */
-            $backendSession = ObjectManager::getInstance(\Weline\Backend\Session\BackendSession::class);
+            /** @var AuthenticatedSessionInterface $backendSession */
+            $backendSession = SessionFactory::getInstance()->createBackendSession();
             $lastAccessTime = $backendSession->getData($sessionKey);
             $currentTime = time();
             
@@ -104,12 +104,10 @@ class MenuAccessLogObserver implements ObserverInterface
             
             try {
                 // 清除常用菜单缓存，强制下次查询时重新计算
-                /** @var \Weline\Admin\Cache\AdminCache $cache */
-                $cache = ObjectManager::getInstance(\Weline\Admin\Cache\AdminCache::class);
-                $cacheDriver = $cache->create();
+                $cache = w_cache('default');
                 // 清除最近访问和访问最多的缓存
-                $cacheDriver->delete('frequent_menus_' . $userId . '_20_7');
-                $cacheDriver->delete('recent_menus_' . $userId . '_20_7');
+                $cache->delete('frequent_menus_' . $userId . '_20_7');
+                $cache->delete('recent_menus_' . $userId . '_20_7');
                 
                 $menuAccessLog->clearData()
                     ->setUserId($userId)

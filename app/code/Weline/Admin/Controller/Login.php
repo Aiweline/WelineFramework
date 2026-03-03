@@ -187,15 +187,15 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         $backend_login_referer = Url::removeExtraDoubleSlashes($this->session->getData('backend_login_referer'));
         if ($backend_login_referer) {
             if ($this->request->getUrlPath($backend_login_referer) !== $this->request->getUrlPath()) {
-                // 验证是否是菜单链接
+                // 验证是否可以作为登录后跳转的有效目标
                 $parsed = \Weline\Framework\Http\Url::parser($backend_login_referer);
                 $refererRoutePath = trim($parsed['uri'] ?? '', '/');
-                if ($refererRoutePath && MenuUrlValidator::isMenuUrl($refererRoutePath)) {
+                if ($refererRoutePath && MenuUrlValidator::isValidLoginRedirectTarget($refererRoutePath)) {
                     $this->session->delete('backend_login_referer');
                     $this->redirect($backend_login_referer);
                     return;
                 } else {
-                    // 不是菜单链接，清除
+                    // 不是有效跳转目标，清除
                     $this->session->delete('backend_login_referer');
                 }
             }
@@ -204,13 +204,13 @@ class Login extends \Weline\Framework\App\Controller\BackendController
 
         if ($referer) {
             if (Url::is_same_site($referer) && $referer !== $this->request->getUrlPath()) {
-                // 验证是否是菜单链接
+                // 验证是否可以作为登录后跳转的有效目标
                 $parsed = \Weline\Framework\Http\Url::parser($referer);
                 $refererRoutePath = trim($parsed['uri'] ?? '', '/');
-                if ($refererRoutePath && MenuUrlValidator::isMenuUrl($refererRoutePath)) {
+                if ($refererRoutePath && MenuUrlValidator::isValidLoginRedirectTarget($refererRoutePath)) {
                     $this->redirect($referer);
                 } else {
-                    // 不是菜单链接，清除
+                    // 不是有效跳转目标，清除
                     $this->session->delete('referer');
                 }
             }
@@ -240,15 +240,18 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             }
         }
         
-        // 验证URL是否是菜单链接，如果是则保存到 backend_login_referer
+        // 验证URL是否可以作为登录后跳转的有效目标
+        // 有效条件：是菜单链接 且 不在白名单中（白名单路径不需要登录，跳转回去无意义）
+        $backendLoginReferer = null;
         if ($currentUrl) {
             // 使用 Url::parser 解析URL，获取真实的路径（已去除货币、语言、网站等前缀）
             $parsed = \Weline\Framework\Http\Url::parser($currentUrl);
             $routePath = trim($parsed['uri'] ?? '', '/');
             
-            // 验证路径是否是菜单链接（路径已去除前后斜杠）
-            if ($routePath && MenuUrlValidator::isMenuUrl($routePath)) {
-                $this->session->setData('backend_login_referer', $currentUrl);
+            // 使用统一的验证方法：是菜单链接 且 不在白名单中
+            if ($routePath && MenuUrlValidator::isValidLoginRedirectTarget($routePath)) {
+                // 保存到临时变量，因为 logout() 会清除所有 session 数据
+                $backendLoginReferer = $currentUrl;
             }
         }
         
@@ -256,6 +259,12 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         Cookie::set('w_sandbox', '', -1, ['path' => '/']);
         Cookie::set('w_sandbox', '', -1, ['path' => '/' . $this->request->getAreaRouter()]);
         $this->session->logout();
+        
+        // logout() 会清除所有 session 数据，所以需要在 logout 后重新设置 backend_login_referer
+        if (!empty($backendLoginReferer)) {
+            $this->session->setData('backend_login_referer', $backendLoginReferer);
+        }
+        
         $this->redirect($this->_url->getBackendUrl('admin/login'));
     }
 

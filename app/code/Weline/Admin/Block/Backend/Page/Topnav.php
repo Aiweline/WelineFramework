@@ -11,7 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Block\Backend\Page;
 
-use Weline\Backend\Session\BackendSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Manager\ObjectManager;
 
 class Topnav extends \Weline\Framework\View\Block
@@ -55,8 +56,8 @@ class Topnav extends \Weline\Framework\View\Block
     public function processMenu()
     {
         // 获取当前登录用户和角色
-        /**@var BackendSession $session */
-        $session = ObjectManager::getInstance(BackendSession::class);
+        /**@var AuthenticatedSessionInterface $session */
+        $session = SessionFactory::getInstance()->createBackendSession();
         /**@var \Weline\Backend\Model\BackendUser $user */
         $user = $session->getLoginUser();
         if ($user) {

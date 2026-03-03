@@ -1,10 +1,499 @@
 <?php
 /**
- * 插件管理页面（内容模板）
+ * 插件管理页面
  *
  * @var \Weline\Framework\View\Template $this
  */
+
+$plugins = $this->getData('plugins') ?: [];
+
+$totalFiles = count($plugins);
+$totalPlugins = 0;
+$totalInterceptors = 0;
+$enabledPlugins = 0;
+$disabledPlugins = 0;
+$moduleSet = [];
+
+foreach ($plugins as $file => $pluginGroups) {
+    foreach ($pluginGroups as $name => $instances) {
+        $totalPlugins++;
+        foreach ($instances as $instance) {
+            $totalInterceptors++;
+            $disabled = $instance['plugins']['disabled'] ?? 'false';
+            if ($disabled === 'true' || $disabled === true || $disabled === '1') {
+                $disabledPlugins++;
+            } else {
+                $enabledPlugins++;
+            }
+            if (!empty($instance['plugins']['module'])) {
+                $moduleSet[$instance['plugins']['module']] = true;
+            }
+        }
+    }
+}
+$moduleCount = count($moduleSet);
 ?>
+
+<style>
+.weline-plugin-page {
+    --plugin-card-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.weline-plugin-header {
+    background: linear-gradient(135deg, var(--backend-color-primary, #556ee6) 0%, var(--backend-color-success, #34c38f) 100%);
+    border-radius: var(--backend-border-radius-lg, 12px);
+    padding: var(--backend-spacing-lg, 24px);
+    margin-bottom: var(--backend-spacing-lg, 24px);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.weline-plugin-header h2 {
+    margin: 0 0 var(--backend-spacing-xs, 4px) 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.weline-plugin-header-subtitle {
+    opacity: 0.9;
+    font-size: 0.95rem;
+}
+
+.weline-plugin-stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: var(--backend-spacing-md, 16px);
+    margin-bottom: var(--backend-spacing-lg, 24px);
+}
+
+.weline-plugin-stat-card {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: var(--backend-border-radius-md, 8px);
+    padding: var(--backend-spacing-md, 16px);
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-md, 16px);
+    transition: all 0.2s ease;
+    box-shadow: var(--plugin-card-shadow);
+}
+
+.weline-plugin-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.weline-plugin-stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--backend-border-radius, 6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+
+.weline-plugin-stat-icon.primary {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-plugin-stat-icon.success {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+    color: var(--backend-color-success, #34c38f);
+}
+
+.weline-plugin-stat-icon.warning {
+    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.1));
+    color: var(--backend-color-warning, #f1b44c);
+}
+
+.weline-plugin-stat-icon.danger {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
+    color: var(--backend-color-danger, #f46a6a);
+}
+
+.weline-plugin-stat-icon.info {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    color: var(--backend-color-info, #50a5f1);
+}
+
+.weline-plugin-stat-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.weline-plugin-stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--backend-color-text-primary, #212529);
+    line-height: 1.2;
+}
+
+.weline-plugin-stat-label {
+    font-size: 0.85rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+    margin-top: 2px;
+}
+
+.weline-plugin-toolbar {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: var(--backend-border-radius-md, 8px);
+    padding: var(--backend-spacing-md, 16px);
+    margin-bottom: var(--backend-spacing-md, 16px);
+    box-shadow: var(--plugin-card-shadow);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--backend-spacing-md, 16px);
+    align-items: center;
+}
+
+.weline-plugin-search-box {
+    flex: 1;
+    min-width: 280px;
+    max-width: 400px;
+    position: relative;
+}
+
+.weline-plugin-search-box i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    font-size: 1.1rem;
+    pointer-events: none;
+}
+
+.weline-plugin-search-box input {
+    width: 100%;
+    padding: 10px 40px 10px 40px;
+    border: 2px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-input-bg, #fff);
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+}
+
+.weline-plugin-search-box input:focus {
+    outline: none;
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: var(--backend-focus-ring, 0 0 0 3px rgba(85, 110, 230, 0.15));
+}
+
+.weline-plugin-search-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    cursor: pointer;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.weline-plugin-search-box input:not(:placeholder-shown) + .weline-plugin-search-clear {
+    opacity: 1;
+}
+
+.weline-plugin-filters {
+    display: flex;
+    gap: var(--backend-spacing-sm, 8px);
+    flex-wrap: wrap;
+}
+
+.weline-plugin-filter-select {
+    min-width: 140px;
+    padding: 10px 32px 10px 12px;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-input-bg, #fff);
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.weline-plugin-filter-select:focus {
+    outline: none;
+    border-color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-plugin-actions {
+    display: flex;
+    gap: var(--backend-spacing-xs, 4px);
+}
+
+.weline-plugin-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-card-bg, #fff);
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.weline-plugin-action-btn:hover {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.weline-plugin-file-card {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: var(--backend-border-radius-md, 8px);
+    margin-bottom: var(--backend-spacing-md, 16px);
+    box-shadow: var(--plugin-card-shadow);
+    overflow: hidden;
+}
+
+.weline-plugin-file-header {
+    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 20px);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.weline-plugin-file-header:hover {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+}
+
+.weline-plugin-file-title {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--backend-color-text-primary, #212529);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    word-break: break-all;
+}
+
+.weline-plugin-file-title i {
+    color: var(--backend-color-primary, #556ee6);
+    flex-shrink: 0;
+}
+
+.weline-plugin-file-badge {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary, #556ee6);
+    padding: 4px 10px;
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    font-size: 0.75rem;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.weline-plugin-file-toggle {
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    transition: transform 0.2s ease;
+}
+
+.weline-plugin-file-header.collapsed .weline-plugin-file-toggle {
+    transform: rotate(-90deg);
+}
+
+.weline-plugin-file-body {
+    max-height: 1000px;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.weline-plugin-file-body.collapsed {
+    max-height: 0;
+}
+
+.weline-plugin-group {
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+.weline-plugin-group:last-child {
+    border-bottom: none;
+}
+
+.weline-plugin-group-header {
+    padding: var(--backend-spacing-sm, 12px) var(--backend-spacing-lg, 20px);
+    background: var(--backend-color-card-bg, #fff);
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-sm, 8px);
+    font-weight: 500;
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.85rem;
+}
+
+.weline-plugin-group-header i {
+    color: var(--backend-color-success, #34c38f);
+}
+
+.weline-plugin-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.weline-plugin-table th {
+    padding: 10px 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.75rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.weline-plugin-table td {
+    padding: 12px 16px;
+    font-size: 0.85rem;
+    color: var(--backend-color-text-primary, #212529);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    vertical-align: top;
+}
+
+.weline-plugin-table tbody tr:hover td {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+
+.weline-plugin-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.weline-plugin-class {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.8rem;
+    color: var(--backend-color-primary, #556ee6);
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.08));
+    padding: 4px 8px;
+    border-radius: var(--backend-border-radius-sm, 4px);
+    display: inline-block;
+    word-break: break-all;
+    max-width: 400px;
+}
+
+.weline-plugin-instance {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.8rem;
+    color: var(--backend-color-success, #34c38f);
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.08));
+    padding: 4px 8px;
+    border-radius: var(--backend-border-radius-sm, 4px);
+    display: inline-block;
+    word-break: break-all;
+    max-width: 400px;
+}
+
+.weline-plugin-name {
+    font-weight: 500;
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.weline-plugin-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.weline-plugin-status.enabled {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.15));
+    color: var(--backend-color-success, #34c38f);
+}
+
+.weline-plugin-status.disabled {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.15));
+    color: var(--backend-color-danger, #f46a6a);
+}
+
+.weline-plugin-sort {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-secondary, #6c757d);
+    border-radius: var(--backend-border-radius, 6px);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.weline-plugin-module {
+    font-size: 0.75rem;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    padding: 2px 8px;
+    border-radius: var(--backend-border-radius-sm, 4px);
+}
+
+.weline-plugin-empty {
+    padding: var(--backend-spacing-xl, 40px);
+    text-align: center;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+.weline-plugin-empty i {
+    font-size: 3rem;
+    opacity: 0.3;
+    margin-bottom: var(--backend-spacing-md, 16px);
+    display: block;
+}
+
+.weline-plugin-result-info {
+    display: none;
+    padding: 10px 16px;
+    margin-bottom: var(--backend-spacing-md, 16px);
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    border: 1px solid var(--backend-color-info, #50a5f1);
+    border-radius: var(--backend-border-radius, 6px);
+    color: var(--backend-color-info, #50a5f1);
+    font-size: 0.9rem;
+}
+
+.weline-plugin-result-info.visible {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+@media (max-width: 768px) {
+    .weline-plugin-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .weline-plugin-search-box {
+        max-width: 100%;
+    }
+    
+    .weline-plugin-stats-row {
+        grid-template-columns: 1fr 1fr;
+    }
+    
+    .weline-plugin-table {
+        display: block;
+        overflow-x: auto;
+    }
+}
+</style>
 
 <div class='row'>
     <div class='col-12'>
@@ -24,67 +513,299 @@
     <template>Weline_Component::message.phtml</template>
 </div>
 
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'><?= __('插件管理') ?></h4>
-                <p class='card-title-desc'><?= __('开发者使用插件功能修改函数的情况。') ?></p>
-                <?php
-                $plugins = $this->getData('plugins');
-                ?>
-                <div class='table-rep-plugin'>
-                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
-                        <table id='tech-companies-1' class='table table-striped table-bordered'>
-                            <thead>
-                            <tr>
-                                <th data-priority='1'><?= __('ID') ?></th>
-                                <th data-priority='1'><?= __('插件类') ?></th>
-                                <th data-priority='3'><?= __('示例类') ?></th>
-                                <th data-priority='1'><?= __('是否禁用') ?></th>
-                                <th data-priority='3'><?= __('是否共享') ?></th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <?php
-                            foreach ($plugins as $file => $plugin) :
-                                ?>
-                                <tr>
-                                    <th colspan="4" class='co-name'><?= __('插件配置文件：') ?><?= $file ?></th>
-                                </tr>
-                                <?php
-                                foreach ($plugin as $name => $instances) {
-                                    ?>
-                                    <tr>
-                                        <th colspan="4" class='co-name'><?= __('插件名：') ?><?= $name ?></th>
-                                    </tr>
-                                    <?php
-                                    foreach ($instances as $key => $instance) {
-                                        ?>
-                                        <tr>
-                                            <th class='co-name'><?= $key ?></th>
-                                            <td><?= $instance['class'] ?></td>
-                                        </tr>
-                                        <tr>
-                                            <td><?= $instance['plugins']['name'] ?></td>
-                                            <td><?= $instance['plugins']['instance'] ?></td>
-                                            <td><?= $instance['plugins']['disabled'] ?></td>
-                                            <td><?= $instance['plugins']['sort'] ?></td>
-                                        </tr>
-                                        <?php
-                                    }
-                                    ?>
-                                    <?php
-                                }
-                                ?>
-                            <?php
-                            endforeach;
-                            ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+<div class="weline-plugin-page">
+    <!-- 顶部信息卡片 -->
+    <div class="weline-plugin-header">
+        <h2><i class="mdi mdi-puzzle-outline"></i> <?= __('插件管理') ?></h2>
+        <p class="weline-plugin-header-subtitle"><?= __('查看系统中所有已注册的插件（拦截器），了解函数修改情况') ?></p>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="weline-plugin-stats-row">
+        <div class="weline-plugin-stat-card">
+            <div class="weline-plugin-stat-icon primary">
+                <i class="mdi mdi-file-document-outline"></i>
+            </div>
+            <div class="weline-plugin-stat-content">
+                <div class="weline-plugin-stat-value"><?= $totalFiles ?></div>
+                <div class="weline-plugin-stat-label"><?= __('配置文件') ?></div>
+            </div>
+        </div>
+        <div class="weline-plugin-stat-card">
+            <div class="weline-plugin-stat-icon info">
+                <i class="mdi mdi-puzzle-outline"></i>
+            </div>
+            <div class="weline-plugin-stat-content">
+                <div class="weline-plugin-stat-value"><?= $totalPlugins ?></div>
+                <div class="weline-plugin-stat-label"><?= __('插件数') ?></div>
+            </div>
+        </div>
+        <div class="weline-plugin-stat-card">
+            <div class="weline-plugin-stat-icon success">
+                <i class="mdi mdi-check-circle-outline"></i>
+            </div>
+            <div class="weline-plugin-stat-content">
+                <div class="weline-plugin-stat-value"><?= $enabledPlugins ?></div>
+                <div class="weline-plugin-stat-label"><?= __('已启用') ?></div>
+            </div>
+        </div>
+        <div class="weline-plugin-stat-card">
+            <div class="weline-plugin-stat-icon danger">
+                <i class="mdi mdi-close-circle-outline"></i>
+            </div>
+            <div class="weline-plugin-stat-content">
+                <div class="weline-plugin-stat-value"><?= $disabledPlugins ?></div>
+                <div class="weline-plugin-stat-label"><?= __('已禁用') ?></div>
+            </div>
+        </div>
+        <div class="weline-plugin-stat-card">
+            <div class="weline-plugin-stat-icon warning">
+                <i class="mdi mdi-package-variant"></i>
+            </div>
+            <div class="weline-plugin-stat-content">
+                <div class="weline-plugin-stat-value"><?= $moduleCount ?></div>
+                <div class="weline-plugin-stat-label"><?= __('涉及模块') ?></div>
             </div>
         </div>
     </div>
+
+    <!-- 工具栏 -->
+    <div class="weline-plugin-toolbar">
+        <!-- 搜索框 -->
+        <div class="weline-plugin-search-box">
+            <i class="mdi mdi-magnify"></i>
+            <input type="text" id="plugin-search" placeholder="<?= __('搜索插件类、实例类、名称...') ?>">
+            <button type="button" class="weline-plugin-search-clear" id="plugin-search-clear">
+                <i class="mdi mdi-close"></i>
+            </button>
+        </div>
+        
+        <!-- 筛选器 -->
+        <div class="weline-plugin-filters">
+            <select id="plugin-filter-status" class="weline-plugin-filter-select">
+                <option value=""><?= __('所有状态') ?></option>
+                <option value="enabled"><?= __('已启用') ?></option>
+                <option value="disabled"><?= __('已禁用') ?></option>
+            </select>
+            <select id="plugin-filter-module" class="weline-plugin-filter-select">
+                <option value=""><?= __('所有模块') ?></option>
+                <?php foreach (array_keys($moduleSet) as $mod): ?>
+                <option value="<?= htmlspecialchars($mod) ?>"><?= htmlspecialchars($mod) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        
+        <!-- 操作按钮 -->
+        <div class="weline-plugin-actions">
+            <button type="button" class="weline-plugin-action-btn" id="expand-all">
+                <i class="mdi mdi-unfold-more-horizontal"></i> <?= __('展开全部') ?>
+            </button>
+            <button type="button" class="weline-plugin-action-btn" id="collapse-all">
+                <i class="mdi mdi-unfold-less-horizontal"></i> <?= __('折叠全部') ?>
+            </button>
+        </div>
+    </div>
+
+    <!-- 搜索结果提示 -->
+    <div id="plugin-result-info" class="weline-plugin-result-info">
+        <i class="mdi mdi-information-outline"></i>
+        <span id="plugin-result-text"></span>
+    </div>
+
+    <!-- 插件列表 -->
+    <?php if (empty($plugins)): ?>
+    <div class="weline-plugin-file-card">
+        <div class="weline-plugin-empty">
+            <i class="mdi mdi-puzzle-remove-outline"></i>
+            <p><?= __('暂无插件配置') ?></p>
+        </div>
+    </div>
+    <?php else: ?>
+    <?php foreach ($plugins as $file => $pluginGroups): ?>
+    <?php
+    $filePluginCount = 0;
+    foreach ($pluginGroups as $instances) {
+        $filePluginCount += count($instances);
+    }
+    ?>
+    <div class="weline-plugin-file-card" data-file="<?= htmlspecialchars(strtolower($file)) ?>">
+        <div class="weline-plugin-file-header" onclick="togglePluginFile(this)">
+            <span class="weline-plugin-file-title">
+                <i class="mdi mdi-file-code-outline"></i>
+                <?= htmlspecialchars($file) ?>
+                <span class="weline-plugin-file-badge"><?= $filePluginCount ?> <?= __('个拦截器') ?></span>
+            </span>
+            <span class="weline-plugin-file-toggle">
+                <i class="mdi mdi-chevron-down"></i>
+            </span>
+        </div>
+        <div class="weline-plugin-file-body collapsed">
+            <?php foreach ($pluginGroups as $name => $instances): ?>
+            <div class="weline-plugin-group" data-plugin-name="<?= htmlspecialchars(strtolower($name)) ?>">
+                <div class="weline-plugin-group-header">
+                    <i class="mdi mdi-puzzle-outline"></i>
+                    <span><?= __('插件：') ?><?= htmlspecialchars($name) ?></span>
+                </div>
+                <table class="weline-plugin-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 120px;"><?= __('拦截器名') ?></th>
+                            <th><?= __('目标类') ?></th>
+                            <th><?= __('实例类') ?></th>
+                            <th style="width: 80px;"><?= __('状态') ?></th>
+                            <th style="width: 60px;"><?= __('排序') ?></th>
+                            <th style="width: 100px;"><?= __('模块') ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($instances as $instance): ?>
+                        <?php
+                        $disabled = $instance['plugins']['disabled'] ?? 'false';
+                        $isDisabled = ($disabled === 'true' || $disabled === true || $disabled === '1');
+                        $statusClass = $isDisabled ? 'disabled' : 'enabled';
+                        $statusText = $isDisabled ? __('已禁用') : __('已启用');
+                        $module = $instance['plugins']['module'] ?? '';
+                        ?>
+                        <tr data-status="<?= $statusClass ?>" data-module="<?= htmlspecialchars($module) ?>" data-searchable="<?= htmlspecialchars(strtolower($instance['class'] . ' ' . ($instance['plugins']['instance'] ?? '') . ' ' . ($instance['plugins']['name'] ?? ''))) ?>">
+                            <td>
+                                <span class="weline-plugin-name"><?= htmlspecialchars($instance['plugins']['name'] ?? '-') ?></span>
+                            </td>
+                            <td>
+                                <span class="weline-plugin-class" title="<?= htmlspecialchars($instance['class']) ?>"><?= htmlspecialchars($instance['class']) ?></span>
+                            </td>
+                            <td>
+                                <span class="weline-plugin-instance" title="<?= htmlspecialchars($instance['plugins']['instance'] ?? '-') ?>"><?= htmlspecialchars($instance['plugins']['instance'] ?? '-') ?></span>
+                            </td>
+                            <td>
+                                <span class="weline-plugin-status <?= $statusClass ?>">
+                                    <i class="mdi mdi-<?= $isDisabled ? 'close-circle' : 'check-circle' ?>"></i>
+                                    <?= $statusText ?>
+                                </span>
+                            </td>
+                            <td>
+                                <span class="weline-plugin-sort"><?= htmlspecialchars($instance['plugins']['sort'] ?? '0') ?></span>
+                            </td>
+                            <td>
+                                <?php if ($module): ?>
+                                <span class="weline-plugin-module"><?= htmlspecialchars($module) ?></span>
+                                <?php else: ?>
+                                <span style="color: var(--backend-color-text-tertiary);">-</span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <?php endforeach; ?>
+    <?php endif; ?>
 </div>
+
+<script>
+(function() {
+    'use strict';
+    
+    var searchTimeout = null;
+    
+    window.togglePluginFile = function(header) {
+        var body = header.nextElementSibling;
+        header.classList.toggle('collapsed');
+        body.classList.toggle('collapsed');
+    };
+    
+    document.getElementById('expand-all').addEventListener('click', function() {
+        document.querySelectorAll('.weline-plugin-file-header').forEach(function(header) {
+            header.classList.remove('collapsed');
+            header.nextElementSibling.classList.remove('collapsed');
+        });
+    });
+    
+    document.getElementById('collapse-all').addEventListener('click', function() {
+        document.querySelectorAll('.weline-plugin-file-header').forEach(function(header) {
+            header.classList.add('collapsed');
+            header.nextElementSibling.classList.add('collapsed');
+        });
+    });
+    
+    document.getElementById('plugin-search').addEventListener('keyup', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function() {
+            filterPlugins();
+        }, 300);
+    });
+    
+    document.getElementById('plugin-search-clear').addEventListener('click', function() {
+        document.getElementById('plugin-search').value = '';
+        filterPlugins();
+    });
+    
+    document.getElementById('plugin-filter-status').addEventListener('change', filterPlugins);
+    document.getElementById('plugin-filter-module').addEventListener('change', filterPlugins);
+    
+    function filterPlugins() {
+        var searchVal = document.getElementById('plugin-search').value.trim().toLowerCase();
+        var statusFilter = document.getElementById('plugin-filter-status').value;
+        var moduleFilter = document.getElementById('plugin-filter-module').value;
+        
+        var visibleFiles = 0;
+        var visibleInterceptors = 0;
+        
+        document.querySelectorAll('.weline-plugin-file-card').forEach(function(card) {
+            var fileText = card.getAttribute('data-file') || '';
+            var fileVisible = false;
+            
+            card.querySelectorAll('.weline-plugin-table tbody tr').forEach(function(row) {
+                var rowSearchable = row.getAttribute('data-searchable') || '';
+                var rowStatus = row.getAttribute('data-status') || '';
+                var rowModule = row.getAttribute('data-module') || '';
+                
+                var searchMatch = !searchVal || fileText.includes(searchVal) || rowSearchable.includes(searchVal);
+                var statusMatch = !statusFilter || rowStatus === statusFilter;
+                var moduleMatch = !moduleFilter || rowModule === moduleFilter;
+                
+                if (searchMatch && statusMatch && moduleMatch) {
+                    row.style.display = '';
+                    fileVisible = true;
+                    visibleInterceptors++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+            
+            if (fileVisible) {
+                card.style.display = '';
+                visibleFiles++;
+                
+                if (searchVal || statusFilter || moduleFilter) {
+                    var header = card.querySelector('.weline-plugin-file-header');
+                    var body = card.querySelector('.weline-plugin-file-body');
+                    header.classList.remove('collapsed');
+                    body.classList.remove('collapsed');
+                }
+            } else {
+                card.style.display = 'none';
+            }
+        });
+        
+        var resultInfo = document.getElementById('plugin-result-info');
+        var resultText = document.getElementById('plugin-result-text');
+        
+        if (searchVal || statusFilter || moduleFilter) {
+            resultText.textContent = '<?= __("找到") ?> ' + visibleInterceptors + ' <?= __("个拦截器，来自") ?> ' + visibleFiles + ' <?= __("个配置文件") ?>';
+            resultInfo.classList.add('visible');
+        } else {
+            resultInfo.classList.remove('visible');
+        }
+    }
+    
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+            e.preventDefault();
+            document.getElementById('plugin-search').focus();
+        }
+    });
+})();
+</script>
