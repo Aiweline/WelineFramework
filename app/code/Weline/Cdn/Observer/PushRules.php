@@ -56,13 +56,13 @@ class PushRules implements ObserverInterface
             // 规则已经是Cloudflare格式，直接使用（无需转换）
             $credentials = $this->getCredentials($domain);
             if (empty($credentials)) {
-                error_log("Cloudflare规则推送失败 [域名: {$domain->getData(Domain::fields_DOMAIN_NAME)}]: 未配置账户凭据");
+                w_log_error("Cloudflare规则推送失败 [域名: {$domain->getData(Domain::fields_DOMAIN_NAME)}]: 未配置账户凭据");
                 return;
             }
             
             $zoneId = $domain->getData(Domain::fields_ZONE_ID);
             if (empty($zoneId)) {
-                error_log("Cloudflare规则推送失败 [域名: {$domain->getData(Domain::fields_DOMAIN_NAME)}]: 未配置Zone ID");
+                w_log_error("Cloudflare规则推送失败 [域名: {$domain->getData(Domain::fields_DOMAIN_NAME)}]: 未配置Zone ID");
                 return;
             }
             
@@ -83,11 +83,11 @@ class PushRules implements ObserverInterface
             } else {
                 // 记录错误日志
                 $errorMessage = $result['message'] ?? '未知错误';
-                error_log("Cloudflare规则推送失败 [域名: {$domain->getData(Domain::fields_DOMAIN_NAME)}, 触发方式: {$triggerType}]: {$errorMessage}");
+                w_log_error("Cloudflare规则推送失败 [域名: {$domain->getData(Domain::fields_DOMAIN_NAME)}, 触发方式: {$triggerType}]: {$errorMessage}");
             }
         } catch (\Exception $e) {
             // 记录异常
-            error_log("Cloudflare规则推送异常 [域名: {$domain->getData(Domain::fields_DOMAIN_NAME)}, 触发方式: {$triggerType}]: " . $e->getMessage());
+            w_log_error("Cloudflare规则推送异常 [域名: {$domain->getData(Domain::fields_DOMAIN_NAME)}, 触发方式: {$triggerType}]: " . $e->getMessage());
         }
     }
 

@@ -115,7 +115,7 @@ class PushRules implements CronTaskInterface
             } catch (\Exception $e) {
                 $failedCount++;
                 // 记录错误日志
-                Env::log_error("CDN规则推送失败 [域名: {$domain->getData(Domain::fields_DOMAIN_NAME)}]: " . $e->getMessage());
+                w_log_error("CDN规则推送失败 [域名: {$domain->getData(Domain::fields_DOMAIN_NAME)}]: " . $e->getMessage());
             }
         }
 
