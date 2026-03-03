@@ -16,7 +16,9 @@ use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
-use Weline\Server\Service\WlsInstanceRegistry;
+use Weline\Server\Service\Contract\ServerInstanceInfo;
+use Weline\Server\Service\Contract\ServiceInfo;
+use Weline\Server\Service\ServerInstanceManager;
 
 /**
  * server:status - 查看服务器状态
@@ -61,9 +63,9 @@ class Status extends CommandAbstract
      */
     protected function instanceExists(string $name): bool
     {
-        /** @var WlsInstanceRegistry $registry */
-        $registry = ObjectManager::getInstance(WlsInstanceRegistry::class);
-        return $registry->hasInstance($name);
+        /** @var ServerInstanceManager $manager */
+        $manager = ObjectManager::getInstance(ServerInstanceManager::class);
+        return $manager->hasInstance($name);
     }
     
     /**
@@ -71,14 +73,14 @@ class Status extends CommandAbstract
      */
     protected function showAllInstances(): void
     {
-        /** @var WlsInstanceRegistry $registry */
-        $registry = ObjectManager::getInstance(WlsInstanceRegistry::class);
-        $allData = $registry->getAllInstanceData();
+        /** @var ServerInstanceManager $manager */
+        $manager = ObjectManager::getInstance(ServerInstanceManager::class);
+        $allInstances = $manager->getAllInstanceInfo();
 
         $this->printer->setup(__('Weline Server 状态'));
         echo "\n";
 
-        if (empty($allData)) {
+        if (empty($allInstances)) {
             $this->printer->note(__('没有运行中的服务器实例'));
             echo "\n";
             $this->showStartTip();
@@ -90,55 +92,69 @@ class Status extends CommandAbstract
         $this->printer->note(__('╚══════════════════════════════════════════════════════════════╝'));
         echo "\n";
 
-        $total = \count($allData);
+        $total = \count($allInstances);
         $index = 0;
-        foreach ($allData as $name => $data) {
+        foreach ($allInstances as $name => $info) {
+            /** @var ServerInstanceInfo $info */
             $isLast = ($index === $total - 1);
             $prefix = $isLast ? '└─' : '├─';
             $childPrefix = $isLast ? '   ' : '│  ';
             
-            $port = (int)($data['port'] ?? Start::DEFAULT_PORT);
-            $count = (int)($data['count'] ?? 4);
-            $host = $data['host'] ?? '127.0.0.1';
-            $startedAt = $data['started_at'] ?? 'unknown';
-            $dispatcherEnabled = !empty($data['dispatcher_enabled']);
-            $workerPortBase = (int)($data['worker_port'] ?? $port);
+            $port = $info->port;
+            $count = $info->workerCount;
+            $host = $info->host;
+            $startedAt = $info->startedAt;
+            $dispatcherEnabled = $info->dispatcherEnabled;
             
-            // 检查有多少 Worker 在运行（使用实际 Worker 端口）
+            // 从实际服务列表获取 Worker 信息
+            $workers = $info->getWorkers();
             $runningCount = 0;
-            for ($i = 0; $i < $count; $i++) {
-                if (Processer::isPortInUse($workerPortBase + $i)) {
+            foreach ($workers as $worker) {
+                if ($worker->isRunning()) {
                     $runningCount++;
                 }
             }
             
-            $status = $runningCount === $count ? '● 运行中' : ($runningCount > 0 ? '◐ 部分运行' : '○ 已停止');
+            $status = $runningCount === $count ? __('● 运行中') : ($runningCount > 0 ? __('◐ 部分运行') : __('○ 已停止'));
             $statusColor = $runningCount === $count ? 'success' : ($runningCount > 0 ? 'warning' : 'error');
             
             // 实例名称行
-            $this->printer->$statusColor("{$prefix} [{$name}] {$status} ({$runningCount}/{$count} workers)");
+            $this->printer->$statusColor($prefix . ' [' . $name . '] ' . $status . ' (' . $runningCount . '/' . $count . ' ' . __('workers') . ')');
             
             // 详细信息
-            $scheme = !empty($data['ssl_enabled']) ? 'https' : 'http';
-            $this->printer->note("{$childPrefix}  ├─ 地址：{$scheme}://{$host}:{$port}");
-            $portRangeStr = $dispatcherEnabled ? "Dispatcher:{$port}, Workers:{$workerPortBase}-" . ($workerPortBase + $count - 1) : "{$port} - " . ($port + $count - 1);
-            $this->printer->note("{$childPrefix}  ├─ 端口范围：{$portRangeStr}");
-            $this->printer->note("{$childPrefix}  ├─ 启动时间：{$startedAt}");
+            $scheme = $info->sslEnabled ? 'https' : 'http';
+            $this->printer->note($childPrefix . '  ├─ ' . __('地址：') . $scheme . '://' . $host . ':' . $port);
             
-            // Worker 进程列表（树形展开）
-            $this->printer->note("{$childPrefix}  └─ Workers:");
+            // 显示实际 Worker 端口范围
+            $workerPorts = [];
+            foreach ($workers as $worker) {
+                if ($worker->port !== null && $worker->port > 0) {
+                    $workerPorts[] = $worker->port;
+                }
+            }
+            $workerPortStr = !empty($workerPorts) ? \implode(',', $workerPorts) : __('(未知)');
+            $portRangeStr = $dispatcherEnabled ? 'Dispatcher:' . $port . ', Workers:' . $workerPortStr : $workerPortStr;
+            $this->printer->note($childPrefix . '  ├─ ' . __('端口范围：') . $portRangeStr);
+            $this->printer->note($childPrefix . '  ├─ ' . __('启动时间：') . $startedAt);
             
-            for ($i = 0; $i < $count; $i++) {
-                $workerPort = $workerPortBase + $i;
-                $workerId = $i + 1;
-                $isLastWorker = ($i === $count - 1);
-                $workerPrefix = $isLastWorker ? '└─' : '├─';
+            // 所有服务进程列表
+            $this->printer->note($childPrefix . '  └─ ' . __('服务：'));
+            
+            $services = $info->services;
+            $serviceCount = \count($services);
+            $svcIndex = 0;
+            foreach ($services as $service) {
+                /** @var ServiceInfo $service */
+                $isLastSvc = ($svcIndex === $serviceCount - 1);
+                $svcPrefix = $isLastSvc ? '└─' : '├─';
                 
-                $isRunning = Processer::isPortInUse($workerPort);
-                $workerStatus = $isRunning ? '● 运行中' : '○ 已停止';
-                $workerColor = $isRunning ? 'success' : 'error';
+                $isRunning = $service->isRunning();
+                $svcStatus = $isRunning ? __('● 运行中') : __('○ 已停止');
+                $svcColor = $isRunning ? 'success' : 'error';
+                $portDisplay = $service->port !== null && $service->port > 0 ? ':' . $service->port : '';
                 
-                $this->printer->$workerColor("{$childPrefix}       {$workerPrefix} Worker #{$workerId} (:{$workerPort}) {$workerStatus}");
+                $this->printer->$svcColor($childPrefix . '       ' . $svcPrefix . ' ' . $service->displayName . '#' . $service->instanceId . ' (PID:' . $service->pid . $portDisplay . ') ' . $svcStatus);
+                $svcIndex++;
             }
             
             echo "\n";
@@ -151,29 +167,22 @@ class Status extends CommandAbstract
     
     /**
      * 显示单个实例状态
+     *
+     * 使用 ServerInstanceManager 获取统一的实例信息
      */
     protected function showInstanceStatus(string $name): void
     {
-        /** @var WlsInstanceRegistry $registry */
-        $registry = ObjectManager::getInstance(WlsInstanceRegistry::class);
-        $data = $registry->getInstanceData($name);
+        $manager = $this->getInstanceManager();
+        $info = $manager->getInstanceInfo($name);
 
-        if ($data === null) {
+        if ($info === null) {
             $this->printer->warning(__('实例 [%{1}] 不存在', [$name]));
             echo "\n";
             $this->showAllInstances();
             return;
         }
         
-        $port = (int)($data['port'] ?? Start::DEFAULT_PORT);
-        $count = (int)($data['count'] ?? 4);
-        $host = $data['host'] ?? '127.0.0.1';
-        $startedAt = $data['started_at'] ?? 'unknown';
-        $dispatcherEnabled = !empty($data['dispatcher_enabled']);
-        $workerPortBase = (int)($data['worker_port'] ?? $port);
-        $sslEnabled = !empty($data['ssl_enabled']);
-        $masterPid = (int)($data['master_pid'] ?? 0);
-        $masterRunning = $masterPid > 0 && Processer::processExists($masterPid);
+        $masterRunning = $info->isMasterRunning();
         
         $this->printer->setup(__('实例 [%{1}] 状态', [$name]));
         echo "\n";
@@ -181,19 +190,15 @@ class Status extends CommandAbstract
         $this->printer->note(__('╔══════════════════════════════════════════════════════════════╗'));
         $this->printer->note(__('║                    实例详细信息                                ║'));
         $this->printer->note('╠══════════════════════════════════════════════════════════════╣');
-        $this->printer->note(\sprintf('║  实例名称：%-50s║', $name));
-        $scheme = $sslEnabled ? 'https' : 'http';
-        $this->printer->note(\sprintf('║  监听地址：%-50s║', "{$scheme}://{$host}:{$port}"));
-        $portRangeStr = $dispatcherEnabled
-            ? ("Dispatcher:{$port}, Workers:{$workerPortBase}-" . ($workerPortBase + $count - 1))
-            : "{$port} - " . ($port + $count - 1);
-        $this->printer->note(\sprintf('║  端口范围：%-50s║', $portRangeStr));
-        $this->printer->note(\sprintf('║  Worker 数：%-49s║', $count));
-        $this->printer->note(\sprintf('║  启动时间：%-50s║', $startedAt));
-        $masterPidStr = $masterPid > 0 ? (string)$masterPid : '-';
-        $masterStatusStr = $masterRunning ? '● 运行中' : '○ 已停止';
+        $this->printer->note(\sprintf('║  ' . __('实例名称：') . '%-50s║', $info->name));
+        $this->printer->note(\sprintf('║  ' . __('监听地址：') . '%-50s║', $info->getListenAddress()));
+        $this->printer->note(\sprintf('║  ' . __('端口范围：') . '%-50s║', $info->getPortRangeDescription()));
+        $this->printer->note(\sprintf('║  ' . __('Worker 数：') . '%-49s║', (string)$info->workerCount));
+        $this->printer->note(\sprintf('║  ' . __('启动时间：') . '%-50s║', $info->startedAt ?: __('unknown')));
+        $masterPidStr = $info->masterPid > 0 ? (string)$info->masterPid : '-';
+        $masterStatusStr = $masterRunning ? __('● 运行中') : __('○ 已停止');
         $this->printer->note(\sprintf('║  Master PID：%-47s║', $masterPidStr));
-        $this->printer->note(\sprintf('║  Master 状态：%-46s║', $masterStatusStr));
+        $this->printer->note(\sprintf('║  ' . __('Master 状态：') . '%-46s║', $masterStatusStr));
         $this->printer->note('╚══════════════════════════════════════════════════════════════╝');
         echo "\n";
         
@@ -201,83 +206,140 @@ class Status extends CommandAbstract
         $this->printer->note(__('进程架构：'));
         echo "\n";
         
+        // 批量获取所有进程的内存信息（单次系统调用）
+        $allPids = [];
+        if ($info->masterPid > 0) {
+            $allPids[] = $info->masterPid;
+        }
+        foreach ($info->services as $service) {
+            if ($service->pid > 0) {
+                $allPids[] = $service->pid;
+            }
+        }
+        $processInfoMap = !empty($allPids) ? Processer::batchGetProcessInfo($allPids) : [];
+        
         // Master 进程状态
         $masterColor = $masterRunning ? 'success' : 'error';
         $masterIcon = $masterRunning ? '●' : '○';
         $masterStatus = $masterRunning ? __('运行中') : __('已停止');
         $this->printer->$masterColor("  {$masterIcon} Master (PID: {$masterPidStr}) {$masterStatus}");
-        if ($masterRunning) {
-            $this->showProcessMemory($masterPid, '  │  ');
-        }
-        
-        // HTTP 重定向状态（若有）
-        $httpRedirectPort = (int)($data['http_redirect_port'] ?? 0);
-        if ($httpRedirectPort > 0) {
-            $httpRedirectPid = (int)($data['http_redirect_pid'] ?? 0);
-            $httpRedirectRunning = Processer::isPortInUse($httpRedirectPort);
-            $icon = $httpRedirectRunning ? '●' : '○';
-            $statusStr = $httpRedirectRunning ? __('运行中') : __('已停止');
-            $color = $httpRedirectRunning ? 'success' : 'error';
-            $this->printer->$color("  │");
-            $this->printer->$color("  ├─ HTTP 重定向 (端口: {$httpRedirectPort}) {$icon} {$statusStr}");
-        }
-        
-        // Dispatcher 状态（若有）
-        if ($dispatcherEnabled) {
-            $dispatcherPid = (int)($data['dispatcher_pid'] ?? 0);
-            $dispatcherRunning = Processer::isPortInUse($port);
-            $dIcon = $dispatcherRunning ? '●' : '○';
-            $dStatus = $dispatcherRunning ? __('运行中') : __('已停止');
-            $dColor = $dispatcherRunning ? 'success' : 'error';
-            $protocol = $sslEnabled ? 'SSL' : 'TCP';
-            $this->printer->$dColor("  │");
-            $this->printer->$dColor("  ├─ Dispatcher (端口: {$port}, {$protocol}) {$dIcon} {$dStatus}");
-            if ($dispatcherRunning && $dispatcherPid > 0) {
-                $this->showProcessMemory($dispatcherPid, '  │     ');
+        if ($masterRunning && isset($processInfoMap[$info->masterPid])) {
+            $memory = (string) ($processInfoMap[$info->masterPid]['memory'] ?? '');
+            if ($memory !== '') {
+                $this->printer->note('  │  └─ ' . __('内存：') . $memory);
             }
         }
         
-        // Worker 进程列表（Dispatcher 模式下使用 worker_port 作为实际监听端口）
-        $this->printer->note("  │");
-        $this->printer->note(__('  └─ Workers:'));
-        echo "\n";
-        
-        $runningCount = 0;
-        
-        for ($i = 0; $i < $count; $i++) {
-            $workerPort = $workerPortBase + $i;
-            $workerId = $i + 1;
-            $isLast = ($i === $count - 1);
-            $prefix = $isLast ? '└─' : '├─';
-            
-            $isRunning = Processer::isPortInUse($workerPort);
-            
-            if ($isRunning) {
-                $runningCount++;
-                $this->printer->success("  {$prefix} Worker #{$workerId} (端口: {$workerPort}) ● 运行中");
-                
-                // 显示内存占用（如果可以获取）
-                $this->showWorkerMemory($workerPort, $isLast ? '   ' : '│  ');
-            } else {
-                $this->printer->error("  {$prefix} Worker #{$workerId} (端口: {$workerPort}) ○ 已停止");
-            }
-        }
-        
-        echo "\n";
+        // 显示所有服务实例（按优先级排序，使用预取的内存信息）
+        $this->showServicesTree($info, $processInfoMap);
         
         // 总结
-        if ($runningCount === $count) {
-            $this->printer->success(__('状态：全部运行中 (%{1}/%{2})', [$runningCount, $count]));
+        $stats = $info->getServiceStats();
+        $runningCount = $stats['running'];
+        $totalCount = $stats['total'];
+        
+        if ($runningCount === $totalCount && $totalCount > 0) {
+            $this->printer->success(__('状态：全部运行中 (%{1}/%{2})', [$runningCount, $totalCount]));
         } elseif ($runningCount > 0) {
-            $this->printer->warning(__('状态：部分运行 (%{1}/%{2})', [$runningCount, $count]));
+            $this->printer->warning(__('状态：部分运行 (%{1}/%{2})', [$runningCount, $totalCount]));
         } else {
-            $this->printer->error(__('状态：全部停止 (%{1}/%{2})', [$runningCount, $count]));
+            $this->printer->error(__('状态：全部停止 (%{1}/%{2})', [$runningCount, $totalCount]));
         }
         
         echo "\n";
-        $scheme = $sslEnabled ? 'https' : 'http';
-        $this->printer->note(__('测试请求：curl %{1}://%{2}:%{3}/', [$scheme, $host, $port]));
+        $this->printer->note(__('测试请求：curl %{1}/', [$info->getListenAddress()]));
         $this->printer->note(__('停止服务：php bin/w server:stop %{1}', [$name]));
+    }
+    
+    /**
+     * 显示服务实例树形结构
+     * 
+     * @param ServerInstanceInfo $info 实例信息
+     * @param array<int, array> $processInfoMap 预取的进程信息映射（PID => info）
+     */
+    protected function showServicesTree(ServerInstanceInfo $info, array $processInfoMap = []): void
+    {
+        // 按角色分组
+        $servicesByRole = [];
+        foreach ($info->services as $service) {
+            $servicesByRole[$service->role][] = $service;
+        }
+        
+        $roleOrder = ['session_server', 'redirect', 'dispatcher', 'worker', 'maintenance'];
+        $sortedRoles = [];
+        foreach ($roleOrder as $role) {
+            if (isset($servicesByRole[$role])) {
+                $sortedRoles[$role] = $servicesByRole[$role];
+            }
+        }
+        foreach ($servicesByRole as $role => $services) {
+            if (!isset($sortedRoles[$role])) {
+                $sortedRoles[$role] = $services;
+            }
+        }
+        
+        $roleKeys = \array_keys($sortedRoles);
+        $lastRoleIndex = \count($roleKeys) - 1;
+        
+        foreach ($sortedRoles as $roleIndex => $services) {
+            $roleKeyIndex = \array_search($roleIndex, $roleKeys, true);
+            $isLastRole = ($roleKeyIndex === $lastRoleIndex);
+            
+            foreach ($services as $i => $service) {
+                $isLastService = ($i === \count($services) - 1) && $isLastRole;
+                $this->showServiceStatus($service, $isLastService, $processInfoMap);
+            }
+        }
+        
+        echo "\n";
+    }
+    
+    /**
+     * 显示单个服务实例状态
+     * 
+     * @param ServiceInfo $service 服务信息
+     * @param bool $isLast 是否最后一个
+     * @param array<int, array> $processInfoMap 预取的进程信息映射
+     */
+    protected function showServiceStatus(ServiceInfo $service, bool $isLast, array $processInfoMap = []): void
+    {
+        $isRunning = $service->isRunning();
+        $icon = $isRunning ? '●' : '○';
+        $statusStr = $isRunning ? __('运行中') : __('已停止');
+        $color = $isRunning ? 'success' : 'error';
+        $prefix = $isLast ? '└─' : '├─';
+        
+        $portStr = $service->port !== null && $service->port > 0 ? (__('端口：') . $service->port) : '';
+        
+        // 特殊处理不同服务类型的显示
+        $label = match ($service->role) {
+            'session_server' => __('Session Server') . ' (' . $portStr . ')',
+            'redirect' => __('HTTP 重定向') . ' (' . $portStr . ')',
+            'dispatcher' => 'Dispatcher (' . $portStr . ')',
+            'worker' => 'Worker #' . $service->instanceId . ' (' . $portStr . ')',
+            'maintenance' => __('Maintenance Worker') . ' (' . $portStr . ')',
+            default => $service->displayName . ' #' . $service->instanceId . ' (' . $portStr . ')',
+        };
+        
+        $this->printer->$color("  │");
+        $this->printer->$color("  {$prefix} {$label} {$icon} {$statusStr}");
+        
+        if ($isRunning && $service->pid > 0) {
+            $memPrefix = $isLast ? '   ' : '│  ';
+            // 使用预取的内存信息（避免逐个查询）
+            $memory = (string) ($processInfoMap[$service->pid]['memory'] ?? '');
+            if ($memory !== '') {
+                $this->printer->note('  ' . $memPrefix . '  └─ ' . __('内存：') . $memory);
+            }
+        }
+    }
+    
+    /**
+     * 获取实例管理器
+     */
+    protected function getInstanceManager(): ServerInstanceManager
+    {
+        return ObjectManager::getInstance(ServerInstanceManager::class);
     }
     
     /**
@@ -292,7 +354,7 @@ class Status extends CommandAbstract
         $info = Processer::getProcessInfo($pid);
         $memory = (string)($info['memory'] ?? '');
         if ($memory !== '') {
-            $this->printer->note("  {$prefix}  └─ 内存：{$memory} (PID: {$pid})");
+            $this->printer->note('  ' . $prefix . '  └─ ' . __('内存：') . $memory . ' (PID: ' . $pid . ')');
         }
     }
     
@@ -307,7 +369,7 @@ class Status extends CommandAbstract
         $info = Processer::getProcessInfo($pid);
         $memory = (string)($info['memory'] ?? '');
         if ($memory !== '') {
-            $this->printer->note("{$prefix}└─ 内存：{$memory}");
+            $this->printer->note($prefix . '└─ ' . __('内存：') . $memory);
         }
     }
     

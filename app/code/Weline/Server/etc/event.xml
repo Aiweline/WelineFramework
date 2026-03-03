@@ -39,13 +39,23 @@
                   sort="0"/>
     </event>
     
-    <!-- WLS 模式下接管 Session 驱动：File => WlsMemorySession -->
+    <!-- WLS 模式下接管 Session 驱动（已废弃）：新架构使用 SessionFactory 自动选择策略 -->
+    <!-- @deprecated 使用 Weline\Framework\Session\SessionFactory 替代 -->
     <event name="Weline_Framework_Session::driver_create_before">
         <observer name="Weline_Server::session_driver_interceptor"
                   instance="Weline\Server\Observer\SessionDriverInterceptor"
-                  disabled="false"
+                  disabled="true"
                   shared="true"
                   sort="0"/>
+    </event>
+    
+    <!-- Session 存储类型解析：检测 WLS Session Server 并设置 storage_type -->
+    <event name="Weline_Framework_Session::storage_resolve">
+        <observer name="Weline_Server::wls_session_storage"
+                  instance="Weline\Server\Observer\WlsSessionStorageObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
     </event>
     
     <!-- Master 复活失败时向后台报错，由 Admin 消息中心展示 -->

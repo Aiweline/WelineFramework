@@ -22,10 +22,10 @@ use Weline\Server\Console\Server\Stop as MainStop;
 use Weline\Server\Service\CliServerService;
 use Weline\Server\Service\SslCertificateService;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\ServerInstanceManager;
+use Weline\Server\Strategy\ServerConfig;
 use Weline\Server\Strategy\ServerStrategyFactory;
 use Weline\Server\Strategy\ServerStrategyInterface;
-use Weline\Server\Strategy\ServerConfig;
-use Weline\Server\Service\ServerInstanceService;
 
 /**
  * server:start - 启动常驻内存服务器
@@ -56,6 +56,16 @@ class Start extends CommandAbstract
      * 使用的启动方式
      */
     protected string $usedMethod = '';
+    
+    /**
+     * 启动锁文件句柄（防止并发启动）
+     */
+    private $startLockHandle = null;
+    
+    /**
+     * 启动锁文件路径
+     */
+    private string $startLockFile = '';
     
     /**
      * @inheritDoc
@@ -131,18 +141,29 @@ class Start extends CommandAbstract
         $instanceName = $this->parseInstanceName($args);
         
         // 仅运行 Master 进程（由 daemon 模式后台启动时调用，内部使用）
+        // master-only 不需要启动锁，因为它是由已经获取锁的父进程启动的
         if (isset($args['master-only']) || getenv('WLS_MASTER_ONLY')) {
             $this->runMasterOnly($instanceName);
             return;
         }
         
-        // --frontend / -frontend：前台运行（不后台）
+        // 获取启动锁，防止并发启动同一实例
+        if (!$this->acquireStartLock($instanceName)) {
+            $this->printer->error(__('无法启动：实例 [%{1}] 正在被另一个进程启动中', [$instanceName]));
+            $this->printer->note(__('请稍后重试，或检查是否有其他终端正在启动服务器'));
+            return;
+        }
+        
+        // 注册关闭时释放锁
+        \register_shutdown_function([$this, 'releaseStartLock']);
+        
+        // --frontend / -frontend / --foreground / -foreground：前台运行（不后台）
         // 兼容：部分参数解析器可能不会把 -frontend 解析为 args['frontend']，
         // 因此额外从原始 argv 兜底识别，避免误走后台路径。
-        $frontend = isset($args['frontend']);
+        $frontend = isset($args['frontend']) || isset($args['foreground']);
         if (!$frontend) {
             foreach ($args as $key => $val) {
-                if (\is_int($key) && ($val === '--frontend' || $val === '-frontend')) {
+                if (\is_int($key) && \in_array($val, ['--frontend', '-frontend', '--foreground', '-foreground'], true)) {
                     $frontend = true;
                     break;
                 }
@@ -152,7 +173,7 @@ class Start extends CommandAbstract
             $rawArgv = $_SERVER['argv'] ?? [];
             if (\is_array($rawArgv)) {
                 foreach ($rawArgv as $raw) {
-                    if ($raw === '--frontend' || $raw === '-frontend') {
+                    if (\in_array($raw, ['--frontend', '-frontend', '--foreground', '-foreground'], true)) {
                         $frontend = true;
                         break;
                     }
@@ -413,11 +434,17 @@ class Start extends CommandAbstract
                     $this->printer->note(__('HTTP 重定向已禁用（env.server.http_redirect_port = 0）'));
                 }
             } else {
-                // 未配置，自动计算：httpsPort - 463（如 443→80, 9443→9980）
-                $httpRedirectPort = $port - 463;
-                // 确保端口合法
-                if ($httpRedirectPort <= 0 || $httpRedirectPort > 65535) {
-                    $httpRedirectPort = 80;  // 回退到默认 80
+                // 未配置，自动计算：
+                // - HTTPS = 443 → 使用 80
+                // - HTTPS ≠ 443 → 使用 httpsPort - 1（如 9981 → 9980）
+                if ($port === 443) {
+                    $httpRedirectPort = 80;
+                } else {
+                    $httpRedirectPort = $port - 1;
+                    // 确保端口合法
+                    if ($httpRedirectPort <= 0 || $httpRedirectPort > 65535) {
+                        $httpRedirectPort = 80;  // 回退到默认 80
+                    }
                 }
             }
             
@@ -428,21 +455,19 @@ class Start extends CommandAbstract
             }
         }
         
-        // 非显式端口：若被非框架进程占用，则自动跳过到可用端口
-        if (!$portExplicit && Processer::isPortInUse($port) && !Processer::isPortUsedByWeline($port)) {
-            $nextPort = Processer::findAvailablePort($port + 1, 200);
-            if ($nextPort > 0 && $nextPort !== $port) {
-                $this->printer->warning(__('端口 %{1} 被非框架进程占用，自动切换到可用端口 %{2}', [$port, $nextPort]));
-                $port = $nextPort;
-                $config['port'] = $port;
-                $workerPort = $dispatcherEnabled ? ($workerBasePort + $port) : $port;
-                if ($sslEnabled && $httpRedirectPort > 0 && !$explicitRedirectPort) {
-                    $httpRedirectPort = $port - 463;
-                    if ($httpRedirectPort <= 0 || $httpRedirectPort > 65535) {
-                        $httpRedirectPort = 80;
-                    }
-                }
-            }
+        // 主端口（Dispatcher 端口）被非框架进程占用时：报错退出，绝不自动切换
+        // 主端口是对外服务的入口，自动切换会导致业务地址变化，影响外部访问
+        if (Processer::isPortInUse($port) && !Processer::isPortUsedByWeline($port)) {
+            $this->printer->error(__('主端口 %{1} 被非框架进程占用', [$port]));
+            $this->printer->note(__('主端口是业务入口，不会自动切换以避免服务地址变化'));
+            $this->printer->note('');
+            $this->printer->setup(__('解决方案：'));
+            $this->printer->note(__('  1. 手动停止占用端口 %{1} 的进程', [$port]));
+            $this->printer->note(__('  2. 或使用 -p 参数显式指定其他端口：'));
+            $this->printer->note('     php bin/w server:start ' . ($instanceName !== 'default' ? $instanceName . ' ' : '') . '-p <port>');
+            $this->printer->note(__('  3. 查看端口占用：'));
+            $this->printer->note('     php bin/w server:kill-port ' . $port . ' --info');
+            return;
         }
 
         // Dispatcher 模式或独立端口模式：Worker 端口段需智能分配
@@ -461,16 +486,19 @@ class Start extends CommandAbstract
             }
         }
 
-        // 自动计算的 HTTP Redirect 端口若被非框架进程占用，则自动跳过
-        if ($sslEnabled && $httpRedirectPort > 0 && !$explicitRedirectPort
+        // HTTP Redirect 端口被非框架进程占用时：报错退出，不自动切换
+        // HTTP Redirect 端口也是服务的一部分，自动切换会导致 HTTP 入口不一致
+        if ($sslEnabled && $httpRedirectPort > 0
             && Processer::isPortInUse($httpRedirectPort)
             && !Processer::isPortUsedByWeline($httpRedirectPort)
         ) {
-            $nextRedirectPort = Processer::findAvailablePort($httpRedirectPort + 1, 200);
-            if ($nextRedirectPort > 0 && $nextRedirectPort !== $httpRedirectPort) {
-                $this->printer->warning(__('HTTP 重定向端口 %{1} 被非框架进程占用，自动切换到 %{2}', [$httpRedirectPort, $nextRedirectPort]));
-                $httpRedirectPort = $nextRedirectPort;
-            }
+            $this->printer->error(__('HTTP 重定向端口 %{1} 被非框架进程占用', [$httpRedirectPort]));
+            $this->printer->note('');
+            $this->printer->setup(__('解决方案：'));
+            $this->printer->note(__('  1. 手动停止占用端口 %{1} 的进程', [$httpRedirectPort]));
+            $this->printer->note(__('  2. 或使用 --http-redirect-port 参数指定其他端口'));
+            $this->printer->note(__('  3. 或使用 --http-redirect-port 0 禁用 HTTP 重定向'));
+            return;
         }
 
         // Linux/Mac 非 root 绑定特权端口时，自动触发 sudo 密码输入并重启当前命令
@@ -584,6 +612,8 @@ class Start extends CommandAbstract
         
         if ($daemon) {
             $this->startMasterInBackground($instanceName, $sslEnabled, $host, $port);
+            // 后台模式：Master 已独立启动，释放启动锁
+            $this->releaseStartLock();
             return;
         }
         
@@ -645,9 +675,14 @@ class Start extends CommandAbstract
             // 优先使用实例文件中保存的端口，否则智能计算
             $httpRedirectPort = (int)($data['http_redirect_port'] ?? 0);
             if ($httpRedirectPort <= 0) {
-                $httpRedirectPort = $port - 463;
-                if ($httpRedirectPort <= 0 || $httpRedirectPort > 65535) {
+                // HTTPS = 443 → 使用 80；否则使用 httpsPort - 1
+                if ($port === 443) {
                     $httpRedirectPort = 80;
+                } else {
+                    $httpRedirectPort = $port - 1;
+                    if ($httpRedirectPort <= 0 || $httpRedirectPort > 65535) {
+                        $httpRedirectPort = 80;
+                    }
                 }
             }
         }
@@ -777,6 +812,7 @@ class Start extends CommandAbstract
         $master = ObjectManager::getInstance(MasterProcess::class);
         try {
             $master->setPrinter($this->printer)
+                ->setOnStartedCallback(fn() => $this->releaseStartLock())
                 ->init($instanceName, $config, $workerScript, $sslCert, $sslKey, $sslEnabled, $httpRedirectPort, $frontend)
                 ->setWorkerPids($workerPids)
                 ->run();
@@ -806,7 +842,7 @@ class Start extends CommandAbstract
             return;
         }
         
-        ServerInstanceService::atomicUpdateJson($instanceFile, function (array $data) use ($masterPid, $enabled): array {
+        ServerInstanceManager::atomicUpdateJsonStatic($instanceFile, function (array $data) use ($masterPid, $enabled): array {
             $data['master_enabled'] = $enabled;
             $data['master_pid'] = $masterPid;
             $data['master_started_at'] = \date('Y-m-d H:i:s');
@@ -821,7 +857,7 @@ class Start extends CommandAbstract
      */
     protected function enableMaintenanceMode(): void
     {
-        Env::getInstance()->setConfig('maintenance', true);
+        Env::getInstance()->setConfig('system.maintenance', true);
     }
 
     /**
@@ -829,7 +865,7 @@ class Start extends CommandAbstract
      */
     protected function disableMaintenanceMode(): void
     {
-        Env::getInstance()->setConfig('maintenance', false);
+        Env::getInstance()->setConfig('system.maintenance', false);
     }
     
     /**
@@ -1020,7 +1056,7 @@ class Start extends CommandAbstract
             'worker_count' => 'auto',
             'mode' => 'io',
             'daemon' => true,
-            'hot_reload' => false,  // 默认值，实际启用逻辑：开发模式默认 true，生产模式默认 false
+            'hot_reload' => false,  // 默认关闭，可通过 env.server.hot_reload=true 或 --hot-reload 启用
             'ssl_cert' => '',  // SSL 证书路径
             'ssl_key' => '',   // SSL 私钥路径
             'worker_base_port' => 10000,  // Dispatcher 模式下 Worker 内网端口基数（实际端口 = base + 外网端口）
@@ -1346,7 +1382,7 @@ class Start extends CommandAbstract
         }
         
         // 智能模式：根据环境、CPU 核心数和工作模式计算
-        $deployMode = Env::getInstance()->getConfig('deploy') ?? 'dev';
+        $deployMode = Env::system('deploy') ?? 'dev';
         
         // 开发环境：固定 2 个 Worker，便于调试且节省资源
         if ($deployMode === 'dev') {
@@ -1507,10 +1543,7 @@ class Start extends CommandAbstract
         $this->printer->note(\sprintf('║  配置来源：%-50s║', $source ?: __('智能模式')));
         $this->printer->note('╚══════════════════════════════════════════════════════════════╝');
         echo "\n";
-        
-        // 显示访问地址表格
-        $this->showAccessUrls($host, $port, $sslEnabled, $httpRedirectPort);
-        
+
         // 显示函数状态
         $this->showFunctionStatus();
     }
@@ -1772,7 +1805,7 @@ class Start extends CommandAbstract
         }
         
         // 获取后端路径（使用新的 area_routes 配置）
-        $adminPath = \Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?: 'admin';
+        $backendPrefix = \Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?? '';
         $apiPath = \Weline\Framework\App\Env::getAreaRoutePrefix('rest_frontend') ?: 'api';
         $apiAdminPath = \Weline\Framework\App\Env::getAreaRoutePrefix('rest_backend') ?: 'api_admin';
         
@@ -1789,8 +1822,8 @@ class Start extends CommandAbstract
         $frontendUrl = $baseUrl . '/';
         $this->printer->success('║ ' . \str_pad(__('前端'), $colType - 2, ' ') . '│ ' . \str_pad($frontendUrl, $colUrl - 1, ' ') . '║');
         
-        // 后端地址
-        $backendUrl = $baseUrl . '/' . $adminPath;
+        // 后端入口 = 密钥路径 + /admin（backend prefix 为随机 key 时）
+        $backendUrl = $baseUrl . '/' . ($backendPrefix !== '' ? $backendPrefix . '/' : '') . 'admin';
         $this->printer->success('║ ' . \str_pad(__('后端'), $colType - 2, ' ') . '│ ' . \str_pad($backendUrl, $colUrl - 1, ' ') . '║');
         
         // 分隔线后显示 REST API 与 HTTP 重定向（放在最后）
@@ -1857,7 +1890,7 @@ class Start extends CommandAbstract
         // getData() 直接读文件（< 1ms），isRunningByPid() 用 tasklist 精确匹配（10-50ms）
         
         // 检查 Dispatcher PID
-        $dispatcherProcessName = '--name=weline-dispatcher-' . $instanceName;
+        $dispatcherProcessName = '--name=weline-wls-dispatcher-' . $instanceName;
         $dispatcherPid = (int) Processer::getData($dispatcherProcessName, 'pid');
         if ($dispatcherPid > 0 && Processer::isRunningByPid($dispatcherPid)) {
             return true;
@@ -2272,15 +2305,18 @@ class Start extends CommandAbstract
             $instanceData['main_port'] = 0;
         }
         
-        ServerInstanceService::atomicWriteJson($instanceFile, $instanceData);
+        ServerInstanceManager::atomicWriteJsonStatic($instanceFile, $instanceData);
     }
     
     /**
-     * 将实际的 host/port/https 同步到 env.php 的 server 配置
+     * 将实际的 host 同步到 env.php 的 server 配置
      *
-     * http:req 等 CLI 工具依赖 env.server.{host,port,https} 构建请求 URL，
-     * 若 server:start 实际使用的端口与 env 不一致（如自动从 80→443 或备用 9981），
-     * 会导致 http:req 请求到错误地址。此方法在启动时自动同步，保证一致。
+     * http:req 等 CLI 工具依赖 env.server.{host,port,https} 构建请求 URL。
+     * 
+     * 注意：
+     * - 只同步 host，不同步 port 和 https
+     * - port 是用户配置的偏好设置，不应被启动参数自动覆盖
+     * - https 也是用户配置，不应被 --no-ssl 等临时参数覆盖
      */
     protected function syncServerConfigToEnv(string $host, int $port, bool $sslEnabled): void
     {
@@ -2290,21 +2326,9 @@ class Start extends CommandAbstract
             $serverConfig = [];
         }
         
-        $needsUpdate = false;
+        // 只同步 host，不同步 port（port 是用户配置，不应被自动覆盖）
         if (($serverConfig['host'] ?? null) !== $host) {
-            $needsUpdate = true;
-        }
-        if (($serverConfig['port'] ?? null) !== $port) {
-            $needsUpdate = true;
-        }
-        if (($serverConfig['https'] ?? null) !== $sslEnabled) {
-            $needsUpdate = true;
-        }
-        
-        if ($needsUpdate) {
             $serverConfig['host'] = $host;
-            $serverConfig['port'] = $port;
-            $serverConfig['https'] = $sslEnabled;
             $env->setConfig('server', $serverConfig);
         }
     }
@@ -2376,7 +2400,8 @@ class Start extends CommandAbstract
         $savedConfig = [];
         
         // 从当前合并后的配置中提取可复用项
-        $persistKeys = ['host', 'port', 'mode', 'no_ssl', 'ssl_cert', 'ssl_key', 'ssl_domain', 'http_redirect_port', 'worker_base_port'];
+        // 注意：不保存 no_ssl，这是临时参数，HTTPS 偏好应以 env.server.https 为准
+        $persistKeys = ['host', 'port', 'mode', 'ssl_cert', 'ssl_key', 'ssl_domain', 'http_redirect_port', 'worker_base_port'];
         foreach ($persistKeys as $key) {
             if (isset($config[$key])) {
                 $savedConfig[$key] = $config[$key];
@@ -2404,7 +2429,7 @@ class Start extends CommandAbstract
             return;
         }
         
-        ServerInstanceService::atomicUpdateJson($instanceFile, function (array $data) use ($workerPids): array {
+        ServerInstanceManager::atomicUpdateJsonStatic($instanceFile, function (array $data) use ($workerPids): array {
             $data['worker_pids'] = $workerPids;
             return $data;
         });
@@ -2726,7 +2751,7 @@ PHP;
         }
         
         // 统一进程名
-        $processName = 'weline-dispatcher-' . $instanceName;
+        $processName = 'weline-wls-dispatcher-' . $instanceName;
         
         // 使用进程管理器统一创建进程
         // 参数格式: <host> <port> <worker_base_port> <worker_count> <instance_name>
@@ -2774,7 +2799,7 @@ PHP;
             return;
         }
         
-        ServerInstanceService::atomicUpdateJson($instanceFile, function (array $data) use ($dispatcherPid): array {
+        ServerInstanceManager::atomicUpdateJsonStatic($instanceFile, function (array $data) use ($dispatcherPid): array {
             $data['dispatcher_pid'] = $dispatcherPid;
             return $data;
         });
@@ -3454,12 +3479,9 @@ PHP;
      */
     protected function startHotReloadIfEnabled(array $config, string $instanceName): void
     {
-        // 检查开发模式
-        $isDevMode = (Env::getInstance()->getConfig('deploy') ?? '') === 'dev';
-        
-        // 开发模式默认启用热重载，生产模式默认关闭
-        // 可通过 env.server.hot_reload 显式覆盖
-        $hotReload = $config['hot_reload'] ?? $isDevMode;
+        // 热重载默认关闭，需要显式启用
+        // 可通过 env.server.hot_reload=true 或命令行 --hot-reload 启用
+        $hotReload = $config['hot_reload'] ?? false;
         if (!$hotReload) {
             return;
         }
@@ -3496,7 +3518,7 @@ PHP;
     /**
      * 文件监控进程名（符合 Processer 规范：--name 标识）
      */
-    protected const FILE_WATCHER_PROCESS_NAME = 'weline-file-watcher';
+    protected const FILE_WATCHER_PROCESS_NAME = 'weline-wls-watcher';
 
     /**
      * 运行文件监控器（子进程模式）
@@ -3804,5 +3826,68 @@ PHP;
     {
         $strategy = $this->getOptimalStrategy();
         return $strategy->getStatus($instanceName);
+    }
+    
+    /**
+     * 获取启动锁，防止并发启动同一实例
+     * 
+     * 使用文件锁（flock）实现：
+     * - 进程崩溃时操作系统自动释放锁
+     * - 非阻塞模式，立即返回结果
+     * 
+     * @param string $instanceName 实例名称
+     * @param int $timeout 获取锁超时（秒）
+     * @return bool 是否成功获取锁
+     */
+    protected function acquireStartLock(string $instanceName, int $timeout = 3): bool
+    {
+        $lockDir = Env::VAR_DIR . 'server' . DS . 'locks' . DS;
+        if (!\is_dir($lockDir)) {
+            @\mkdir($lockDir, 0755, true);
+        }
+        
+        $this->startLockFile = $lockDir . 'start_' . $instanceName . '.lock';
+        $fp = @\fopen($this->startLockFile, 'c');
+        if ($fp === false) {
+            return false;
+        }
+        
+        $startTime = \time();
+        while (\time() - $startTime < $timeout) {
+            if (\flock($fp, \LOCK_EX | \LOCK_NB)) {
+                $this->startLockHandle = $fp;
+                // 写入锁持有者信息，便于调试
+                @\ftruncate($fp, 0);
+                @\fwrite($fp, \json_encode([
+                    'pid' => \getmypid(),
+                    'instance' => $instanceName,
+                    'started_at' => \date('Y-m-d H:i:s'),
+                    'command' => \implode(' ', $_SERVER['argv'] ?? []),
+                ], JSON_PRETTY_PRINT));
+                @\fflush($fp);
+                return true;
+            }
+            \usleep(100000); // 100ms
+        }
+        
+        @\fclose($fp);
+        return false;
+    }
+    
+    /**
+     * 释放启动锁
+     */
+    public function releaseStartLock(): void
+    {
+        if ($this->startLockHandle !== null) {
+            @\flock($this->startLockHandle, \LOCK_UN);
+            @\fclose($this->startLockHandle);
+            $this->startLockHandle = null;
+        }
+        
+        // 清理锁文件（可选，不影响锁机制）
+        if ($this->startLockFile !== '' && \is_file($this->startLockFile)) {
+            @\unlink($this->startLockFile);
+        }
     }
 }
