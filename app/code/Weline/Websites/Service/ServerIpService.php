@@ -131,7 +131,7 @@ class ServerIpService
                     return $ip;
                 }
             } catch (\Throwable $e) {
-                Env::log_warning('server_ip', "获取 IP 失败 ({$url}): " . $e->getMessage());
+                w_log_warning("获取 IP 失败 ({$url}): " . $e->getMessage(), [], 'server_ip');
             }
         }
 

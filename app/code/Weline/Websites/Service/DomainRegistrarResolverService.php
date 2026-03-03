@@ -173,7 +173,7 @@ class DomainRegistrarResolverService
                 }
             }
         } catch (\Exception $e) {
-            \error_log(__('从 ExtendsData 扫描域名商适配器失败: ') . $e->getMessage());
+            w_log_error(__('从 ExtendsData 扫描域名商适配器失败: ') . $e->getMessage());
         }
     }
 
@@ -207,7 +207,7 @@ class DomainRegistrarResolverService
             $adapterCode = $instance->getRegistrarCode();
             $this->adapters[$adapterCode] = $instance;
         } catch (\Exception $e) {
-            \error_log(__('加载域名商适配器失败: %{file}, 错误: %{error}', [
+            w_log_error(__('加载域名商适配器失败: %{file}, 错误: %{error}', [
                 'file' => $filePath,
                 'error' => $e->getMessage(),
             ]));

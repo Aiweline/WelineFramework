@@ -13,7 +13,6 @@ declare(strict_types=1);
 namespace Weline\Websites\Cron;
 
 use Weline\Cron\CronTaskInterface;
-use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Service\DomainSyncService;
 
@@ -65,9 +64,9 @@ class DomainSync implements CronTaskInterface
             $message = $result['message'];
 
             if ($result['success']) {
-                Env::log_info('domain_sync_cron', "同步成功: {$message}");
+                w_log_info("同步成功: {$message}", [], 'domain_sync_cron');
             } else {
-                Env::log_warning('domain_sync_cron', "同步部分失败: {$message}");
+                w_log_warning("同步部分失败: {$message}", [], 'domain_sync_cron');
             }
 
             $details = [];
@@ -82,7 +81,7 @@ class DomainSync implements CronTaskInterface
             return $message;
         } catch (\Throwable $e) {
             $errorMsg = '域名同步任务异常: ' . $e->getMessage();
-            Env::log_error('domain_sync_cron', $errorMsg);
+            w_log_error($errorMsg, [], 'domain_sync_cron');
             return $errorMsg;
         }
     }

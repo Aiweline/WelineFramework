@@ -828,6 +828,9 @@ $accounts = $accounts ?? [];
         var fetchedCount = 0;
         var totalAccounts = accounts.length;
 
+        // 收集供应商错误
+        var providerErrors = [];
+
         // 并行获取所有账户的远程域名
         accounts.forEach(function(acc) {
             if (!acc.id) {
@@ -844,9 +847,21 @@ $accounts = $accounts ?? [];
                             d._account_name = acc.name;
                             allRemoteDomainsCache.push(d);
                         });
+                    } else if (data.code !== 200 || data.msg) {
+                        // 记录供应商返回的错误
+                        providerErrors.push({
+                            account: acc.name || ('ID:' + acc.id),
+                            error: data.msg || '<?= __('未知错误') ?>'
+                        });
                     }
                 })
-                .catch(function() {})
+                .catch(function(err) {
+                    // 记录网络或解析错误
+                    providerErrors.push({
+                        account: acc.name || ('ID:' + acc.id),
+                        error: err.message || '<?= __('网络请求失败') ?>'
+                    });
+                })
                 .finally(function() {
                     fetchedCount++;
                     checkAllFetched();
@@ -855,21 +870,45 @@ $accounts = $accounts ?? [];
 
         function checkAllFetched() {
             if (fetchedCount >= totalAccounts) {
-                renderRemoteDomainsForDisplay(allRemoteDomainsCache);
+                renderRemoteDomainsForDisplay(allRemoteDomainsCache, providerErrors);
             }
         }
     }
 
     /**
      * 渲染远程域名列表（未拉取状态）
+     * @param {Array} domains - 域名列表
+     * @param {Array} providerErrors - 供应商错误列表 [{account, error}]
      */
-    function renderRemoteDomainsForDisplay(domains) {
+    function renderRemoteDomainsForDisplay(domains, providerErrors) {
         var tbody = document.getElementById('weline-domain-list-body');
+        var tableWrapper = tbody.closest('.table-responsive');
+        
+        // 移除旧的提示框
+        var existingAlerts = tableWrapper.parentElement.querySelectorAll('.alert');
+        existingAlerts.forEach(function(el) { el.remove(); });
+        
+        // 显示供应商错误（如果有）
+        if (providerErrors && providerErrors.length > 0) {
+            var errorHtml = '<div class="alert alert-danger mb-3">' +
+                '<div class="d-flex align-items-center mb-2">' +
+                '<i class="mdi mdi-alert-circle me-2" style="font-size:1.2rem;"></i>' +
+                '<strong><?= __('部分供应商获取域名失败') ?></strong></div>' +
+                '<ul class="mb-0 ps-4">';
+            providerErrors.forEach(function(e) {
+                errorHtml += '<li><strong>' + (e.account || '<?= __('未知账户') ?>') + '</strong>: ' + (e.error || '<?= __('未知错误') ?>') + '</li>';
+            });
+            errorHtml += '</ul></div>';
+            tableWrapper.insertAdjacentHTML('beforebegin', errorHtml);
+        }
         
         if (!domains.length) {
+            var emptyMsg = (providerErrors && providerErrors.length > 0)
+                ? '<?= __('无法获取域名，请检查上方的错误信息') ?>'
+                : '<?= __('域名商账户下暂无域名') ?>';
             tbody.innerHTML = '<tr><td colspan="8" class="weline-domain-empty">' +
                 '<i class="mdi mdi-earth-off" style="font-size:2rem;"></i>' +
-                '<p class="mt-2 mb-0"><?= __('域名商账户下暂无域名') ?></p></td></tr>';
+                '<p class="mt-2 mb-0">' + emptyMsg + '</p></td></tr>';
             renderPagination({});
             return;
         }
@@ -881,13 +920,7 @@ $accounts = $accounts ?? [];
             '<i class="mdi mdi-import me-1"></i><?= __('导入选中') ?></button></div>';
         
         // 在表格前插入提示
-        var tableWrapper = tbody.closest('.table-responsive');
-        var existingAlert = tableWrapper.previousElementSibling;
-        if (existingAlert && existingAlert.classList.contains('alert-info')) {
-            existingAlert.outerHTML = infoHtml;
-        } else {
-            tableWrapper.insertAdjacentHTML('beforebegin', infoHtml);
-        }
+        tableWrapper.insertAdjacentHTML('beforebegin', infoHtml);
 
         var html = '';
         domains.forEach(function(d) {
@@ -974,11 +1007,11 @@ $accounts = $accounts ?? [];
                         // 重置状态并重新加载
                         autoFetchTriggered = false;
                         remoteDomainsDisplayMode = false;
-                        // 移除提示条
+                        // 移除所有提示条（包括错误和信息提示）
                         var tableWrapper = document.querySelector('#weline-domain-list-body').closest('.table-responsive');
-                        var alertEl = tableWrapper.previousElementSibling;
-                        if (alertEl && alertEl.classList.contains('alert-info')) {
-                            alertEl.remove();
+                        if (tableWrapper && tableWrapper.parentElement) {
+                            var alerts = tableWrapper.parentElement.querySelectorAll('.alert');
+                            alerts.forEach(function(el) { el.remove(); });
                         }
                         loadDomains(1);
                     }
@@ -1013,11 +1046,11 @@ $accounts = $accounts ?? [];
     function renderDomainList(items, autoFetchRemote, hasFilters) {
         var tbody = document.getElementById('weline-domain-list-body');
         
-        // 先移除可能存在的提示条
+        // 先移除可能存在的所有提示条（包括错误和信息提示）
         var tableWrapper = tbody.closest('.table-responsive');
-        var existingAlert = tableWrapper ? tableWrapper.previousElementSibling : null;
-        if (existingAlert && existingAlert.classList.contains('alert')) {
-            existingAlert.remove();
+        if (tableWrapper && tableWrapper.parentElement) {
+            var existingAlerts = tableWrapper.parentElement.querySelectorAll('.alert');
+            existingAlerts.forEach(function(el) { el.remove(); });
         }
         
         if (!items.length) {

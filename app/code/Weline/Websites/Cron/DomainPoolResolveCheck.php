@@ -11,7 +11,6 @@ declare(strict_types=1);
 namespace Weline\Websites\Cron;
 
 use Weline\Cron\CronTaskInterface;
-use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Service\DomainPoolResolveService;
@@ -74,7 +73,7 @@ class DomainPoolResolveCheck implements CronTaskInterface
                     }
                 } catch (\Throwable $e) {
                     $errors++;
-                    Env::log_warning('domain_pool_resolve_check', "域名 {$row[DomainPool::fields_DOMAIN]} 检测失败: {$e->getMessage()}");
+                    w_log_warning("域名 {$row[DomainPool::fields_DOMAIN]} 检测失败: {$e->getMessage()}", [], 'domain_pool_resolve_check');
                 }
             }
 
@@ -87,12 +86,12 @@ class DomainPoolResolveCheck implements CronTaskInterface
                 $errors
             );
 
-            Env::log_info('domain_pool_resolve_check', $message);
+            w_log_info($message, [], 'domain_pool_resolve_check');
 
             return $message;
         } catch (\Throwable $e) {
             $errorMsg = '域名池解析检测任务异常: ' . $e->getMessage();
-            Env::log_error('domain_pool_resolve_check', $errorMsg);
+            w_log_error($errorMsg, [], 'domain_pool_resolve_check');
             return $errorMsg;
         }
     }

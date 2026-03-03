@@ -140,8 +140,7 @@ class Website extends Model
         parent::save_after();
         // 清除网站缓存
         try {
-            $websiteCache = new \Weline\Websites\Cache\WebsiteCache();
-            $websiteCache->clear();
+            w_cache('website')->clear();
         } catch (\Throwable $e) {
             // 缓存清除失败，静默处理
         }

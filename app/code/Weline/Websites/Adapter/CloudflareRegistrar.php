@@ -695,13 +695,13 @@ class CloudflareRegistrar implements DomainRegistrarInterface
             // 记录详细错误便于调试
             $errors = $response['errors'] ?? [];
             $errorMsg = !empty($errors) ? ($errors[0]['message'] ?? '') : '';
-            Env::log_warning('cloudflare_api', __('获取 Cloudflare Account ID 失败：%{1}', [$errorMsg ?: 'Unknown error']));
+            w_log_warning(__('获取 Cloudflare Account ID 失败：%{1}', [$errorMsg ?: 'Unknown error']), [], 'cloudflare_api');
             return '';
         }
 
         $accounts = $response['result'] ?? [];
         if (empty($accounts)) {
-            Env::log_warning('cloudflare_api', __('Cloudflare API 返回空账户列表，Token 可能没有 Account:Read 权限'));
+            w_log_warning(__('Cloudflare API 返回空账户列表，Token 可能没有 Account:Read 权限'), [], 'cloudflare_api');
             return '';
         }
         
@@ -757,7 +757,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface
 
         // 开发环境下禁用 SSL 验证（解决本地 CA 证书问题）
         // 临时强制禁用 SSL 验证以排查问题
-        $deployMode = Env::get('deploy', 'prod');
+        $deployMode = Env::system('deploy') ?? 'prod';
         $isDev = \in_array($deployMode, ['dev', 'development', 'local'], true);
         
         // 强制禁用 SSL 验证（Windows 开发环境经常缺少 CA 证书）
@@ -787,7 +787,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface
         \curl_close($ch);
 
         if ($curlError !== '') {
-            Env::log_error('cloudflare_api', "cURL 错误: {$curlError}, URL: {$url}");
+            w_log_error("cURL 错误: {$curlError}, URL: {$url}", [], 'cloudflare_api');
             return [
                 'success' => false,
                 'errors' => [['message' => __('网络请求失败：%{1}', [$curlError])]],
@@ -796,7 +796,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface
 
         $response = \json_decode($responseBody, true);
         if (!\is_array($response)) {
-            Env::log_error('cloudflare_api', "JSON 解析失败, HTTP Code: {$httpCode}, Body: " . \substr($responseBody, 0, 500));
+            w_log_error("JSON 解析失败, HTTP Code: {$httpCode}, Body: " . \substr($responseBody, 0, 500), [], 'cloudflare_api');
             return [
                 'success' => false,
                 'errors' => [['message' => __('API 响应格式错误')]],
@@ -806,7 +806,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface
         if (!($response['success'] ?? false)) {
             $errors = $response['errors'] ?? [];
             $errorMsg = !empty($errors) ? ($errors[0]['message'] ?? '') : '';
-            Env::log_warning('cloudflare_api', "API 错误: {$errorMsg}, Endpoint: {$endpoint}, HTTP Code: {$httpCode}");
+            w_log_warning("API 错误: {$errorMsg}, Endpoint: {$endpoint}, HTTP Code: {$httpCode}", [], 'cloudflare_api');
         }
 
         return $response;
