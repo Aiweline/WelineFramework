@@ -1,11 +1,12 @@
-<?xml version="1.0"?>
-<config>
-    <menu>
-        <item id="Weline_Captcha::config" 
-              title="验证码配置" 
-              module="Weline_Captcha"
-              parent="Weline_Backend::system_security"
-              action="weline/captcha/backend/config"
-              sort="100"/>
-    </menu>
-</config>
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <menu source="Weline_Captcha::config"
+         name="captcha_config"
+         title="验证码配置"
+         action="captcha/backend/config"
+         parent="Weline_Backend::system_security"
+         icon="mdi mdi-shield-check"
+         order="100"/>
+</menus>
