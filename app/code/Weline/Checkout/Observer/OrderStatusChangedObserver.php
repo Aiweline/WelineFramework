@@ -41,7 +41,7 @@ class OrderStatusChangedObserver implements ObserverInterface
         }
         
         // 示例：记录状态变更日志
-        error_log("订单状态变更 - 订单ID: {$orderId}, {$oldStatus} -> {$newStatus}");
+        w_log_info("订单状态变更 - 订单ID: {$orderId}, {$oldStatus} -> {$newStatus}");
         
         // 示例：根据状态变化执行相应操作
         switch ($newStatus) {
