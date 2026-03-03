@@ -16,7 +16,7 @@ use Weline\Acl\Model\SecurityLog as SecurityLogModel;
  * - 查看安全日志
  * - 记录登录失败、权限拒绝等安全事件
  */
-#[Acl('Weline_Acl::security_log', '安全日志', 'mdi-shield-alert', '安全日志', 'Weline_Acl::security_center')]
+#[Acl('Weline_Acl::security_log', '安全日志', 'mdi-shield-alert', '安全日志')]
 class SecurityLog extends BackendController
 {
     /**

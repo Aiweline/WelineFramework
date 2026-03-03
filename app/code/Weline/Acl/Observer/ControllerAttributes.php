@@ -168,10 +168,12 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                 $aclParentSource = $acl->getParentSource();
                 if (empty($aclParentSource)) {
                     // 查询数据库中是否已存在该 source_id 的 parent_source
-                    $existingRecord = $this->acl->reset()
+                    $existingRecords = $this->acl->reset()
                         ->where(\Weline\Acl\Model\Acl::fields_SOURCE_ID, $sourceId)
-                        ->select(\Weline\Acl\Model\Acl::fields_PARENT_SOURCE . ',' . \Weline\Acl\Model\Acl::fields_TYPE)
-                        ->fetchOrigin();
+                        ->fields(\Weline\Acl\Model\Acl::fields_PARENT_SOURCE . ',' . \Weline\Acl\Model\Acl::fields_TYPE)
+                        ->select()
+                        ->fetchArray();
+                    $existingRecord = $existingRecords[0] ?? null;
                     if ($existingRecord && !empty($existingRecord['parent_source'])) {
                         // 保留 menu.xml 设置的 parent_source
                         $acl->setParentSource($existingRecord['parent_source']);
