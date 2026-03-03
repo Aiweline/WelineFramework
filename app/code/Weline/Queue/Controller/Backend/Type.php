@@ -37,38 +37,71 @@ class Type extends \Weline\Framework\App\Controller\BackendController
     public function enable()
     {
         $id = $this->request->getGet('id');
+        $isAjax = $this->request->isXmlHttpRequest();
+        
         if (empty($id)) {
-            $this->getMessageManager()->addWarning(__('请选择要启用的队列类型'));
-            $this->redirect('/component/offcanvas/error', ['msg' => __('请选择要启用的队列类型'), 'reload' => 1]);
+            $msg = __('请选择要启用的队列类型');
+            if ($isAjax) {
+                return $this->fetchJson(['code' => 400, 'msg' => $msg]);
+            }
+            $this->getMessageManager()->addWarning($msg);
+            $this->redirect('/component/offcanvas/error', ['msg' => $msg, 'reload' => 1]);
         }
+        
         $this->type->load($id);
         if (!$this->type->getId()) {
-            $this->getMessageManager()->addWarning(__('队列类型不存在'));
-            $this->redirect('/component/offcanvas/error', ['msg' => __('队列类型不存在'), 'reload' => 0]);
+            $msg = __('队列类型不存在');
+            if ($isAjax) {
+                return $this->fetchJson(['code' => 404, 'msg' => $msg]);
+            }
+            $this->getMessageManager()->addWarning($msg);
+            $this->redirect('/component/offcanvas/error', ['msg' => $msg, 'reload' => 0]);
         }
 
         $this->type->setEnable(true);
         $this->type->save();
-        $this->getMessageManager()->addSuccess(__('队列类型已启用'));
-        $this->redirect('/component/offcanvas/success', ['msg' => __('队列类型已启用'), 'reload' => 1]);
+        
+        $msg = __('队列类型 "%1" 已成功启用', $this->type->getName());
+        if ($isAjax) {
+            return $this->fetchJson(['code' => 200, 'msg' => $msg]);
+        }
+        $this->getMessageManager()->addSuccess($msg);
+        $this->redirect('/component/offcanvas/success', ['msg' => $msg, 'reload' => 1]);
     }
 
     public function disable()
     {
         $id = $this->request->getGet('id');
+        $isAjax = $this->request->isXmlHttpRequest();
+        
         if (empty($id)) {
-            $this->getMessageManager()->addWarning(__('请选择要禁用的队列类型'));
-            $this->redirect('/component/offcanvas/error', ['msg' => __('请选择要禁用的队列类型'), 'reload' => 1]);
+            $msg = __('请选择要禁用的队列类型');
+            if ($isAjax) {
+                return $this->fetchJson(['code' => 400, 'msg' => $msg]);
+            }
+            $this->getMessageManager()->addWarning($msg);
+            $this->redirect('/component/offcanvas/error', ['msg' => $msg, 'reload' => 1]);
         }
+        
         $this->type->load($id);
         if (!$this->type->getId()) {
-            $this->getMessageManager()->addWarning(__('队列类型不存在'));
-            $this->redirect('/component/offcanvas/error', ['msg' => __('队列类型不存在'), 'reload' => 0]);
+            $msg = __('队列类型不存在');
+            if ($isAjax) {
+                return $this->fetchJson(['code' => 404, 'msg' => $msg]);
+            }
+            $this->getMessageManager()->addWarning($msg);
+            $this->redirect('/component/offcanvas/error', ['msg' => $msg, 'reload' => 0]);
         }
+        
         $this->type->setEnable(false);
         $this->type->save();
-        $this->getMessageManager()->addSuccess(__('队列类型已禁用'));
-        $this->redirect('/component/offcanvas/success', ['msg' => __('队列类型已禁用'), 'reload' => 1]);
+        
+        $msg = __('队列类型 "%1" 已成功禁用', $this->type->getName());
+        if ($isAjax) {
+            return $this->fetchJson(['code' => 200, 'msg' => $msg]);
+        }
+        $this->getMessageManager()->addSuccess($msg);
+        $this->redirect('/component/offcanvas/success', ['msg' => $msg, 'reload' => 1]);
     }
 
     function show()
