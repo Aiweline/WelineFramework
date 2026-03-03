@@ -9,7 +9,7 @@
 
 use Weline\Framework\Manager\ObjectManager;
 use WeShop\Cart\Service\CartService;
-use WeShop\Customer\Session\CustomerSession;
+use Weline\Framework\Session\SessionFactory;
 
 // 获取参数
 $showCount = $this->getData('showCount') ?? true;
@@ -20,7 +20,7 @@ $triggerAction = $this->getData('triggerAction') ?? 'drawer';
 $cartCount = 0;
 
 try {
-    $session = ObjectManager::getInstance(CustomerSession::class);
+    $session = SessionFactory::getInstance()->createFrontendSession();
     $customer = $session->getCustomer();
     
     if ($customer) {

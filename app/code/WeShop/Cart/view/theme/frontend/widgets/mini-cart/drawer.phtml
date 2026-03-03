@@ -10,7 +10,7 @@
 
 use Weline\Framework\Manager\ObjectManager;
 use WeShop\Cart\Service\CartService;
-use WeShop\Customer\Session\CustomerSession;
+use Weline\Framework\Session\SessionFactory;
 
 // 获取参数
 $position = $this->getData('position') ?? 'right';
@@ -24,7 +24,7 @@ $cartTotal = 0;
 $cartItems = [];
 
 try {
-    $session = ObjectManager::getInstance(CustomerSession::class);
+    $session = SessionFactory::getInstance()->createFrontendSession();
     $customer = $session->getCustomer();
     
     if ($customer) {
