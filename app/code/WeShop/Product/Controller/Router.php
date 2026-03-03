@@ -6,9 +6,7 @@ namespace WeShop\Product\Controller;
 
 use WeShop\Product\Model\Product;
 use WeShop\Product\Model\ProductWebsite;
-use Weline\Framework\App\Env;
-use Weline\Framework\Cache\CacheFactory;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\RouterInterface;
 use Weline\UrlManager\Model\UrlRewrite;
@@ -40,7 +38,7 @@ class Router implements RouterInterface
     /**
      * 跨请求缓存实例（文件缓存或Redis缓存）
      */
-    private static ?CacheInterface $crossRequestCache = null;
+    private static ?CachePoolInterface $crossRequestCache = null;
     
     /**
      * 缓存配置常量
@@ -179,7 +177,7 @@ class Router implements RouterInterface
         } catch (\Exception $e) {
             // 如果查询失败，记录日志并返回null
             if (defined('DEV') && DEV) {
-                Env::log_error('product_router', 'Product Router Error: ' . $e->getMessage());
+                w_log_error('Product Router Error: ' . $e->getMessage(), [], 'product_router');
             }
             return null;
         }
@@ -273,13 +271,12 @@ class Router implements RouterInterface
     /**
      * 获取跨请求缓存实例
      * 
-     * @return CacheInterface
+     * @return CachePoolInterface
      */
-    private static function getCrossRequestCache(): CacheInterface
+    private static function getCrossRequestCache(): CachePoolInterface
     {
         if (self::$crossRequestCache === null) {
-            $cacheFactory = new CacheFactory('product_handle_cache', 'Product产品Handle存在性缓存', true);
-            self::$crossRequestCache = $cacheFactory->create();
+            self::$crossRequestCache = w_cache('product');
         }
         return self::$crossRequestCache;
     }

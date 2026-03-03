@@ -2,21 +2,27 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <!--顶层：业务模块-->
-    <add source="WeShop_Shop::main" name="catalog" title="WeShop商城" action=""
-         parent="Weline_Backend::business_module"
-         icon="mdi mdi-package-variant"
-         order="10000"/>
-    <add source="WeShop_Product::catalog" name="catalog" title="目录" action=""
-         parent="WeShop_Shop::main"
-         icon="mdi mdi-package-variant"
-         order="10"/>
-    <add source="WeShop_Product::product" name="product" title="产品" action="/*/backend/product"
-         parent="WeShop_Product::catalog"
-         icon="ri-product-hunt-fill"
-         order="10"/>
-    <add source="WeShop_Product::category" name="category" title="分类" action="/*/backend/category"
-         parent="WeShop_Product::catalog"
-         icon="fas fa-clipboard-list"
-         order="20"/>
+    
+    <!-- WeShop商城 - 归入业务运营 > 商城管理 -->
+    <menu source="WeShop_Shop::main" name="weshop_main" title="WeShop商城" action=""
+         parent="Weline_Backend::shop_group"
+         icon="mdi mdi-shopping-outline"
+         order="10">
+        
+        <!-- 目录管理 -->
+        <menu source="WeShop_Product::catalog" name="catalog" title="目录管理" action=""
+             icon="mdi mdi-package-variant-closed"
+             order="10">
+            
+            <!-- 产品 -->
+            <menu source="WeShop_Product::product" name="product" title="产品列表" action="/*/backend/product"
+                 icon="mdi mdi-cube-outline"
+                 order="10"/>
+            
+            <!-- 分类 -->
+            <menu source="WeShop_Product::category" name="category" title="产品分类" action="/*/backend/category"
+                 icon="mdi mdi-shape-outline"
+                 order="20"/>
+        </menu>
+    </menu>
 </menus>
