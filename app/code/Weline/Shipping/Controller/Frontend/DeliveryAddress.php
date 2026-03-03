@@ -13,7 +13,7 @@ namespace Weline\Shipping\Controller\Frontend;
 
 use Weline\Framework\App\Controller\FrontendRestController;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Session\SessionManager;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Shipping\Service\DeliveryAddressService;
 
 /**
@@ -23,14 +23,14 @@ use Weline\Shipping\Service\DeliveryAddressService;
  */
 class DeliveryAddress extends FrontendRestController
 {
-    private SessionManager $sessionManager;
+    private SessionFactory $sessionFactory;
     private DeliveryAddressService $deliveryAddressService;
 
     public function __construct(
-        SessionManager $sessionManager,
+        SessionFactory $sessionFactory,
         DeliveryAddressService $deliveryAddressService
     ) {
-        $this->sessionManager = $sessionManager;
+        $this->sessionFactory = $sessionFactory;
         $this->deliveryAddressService = $deliveryAddressService;
     }
 
@@ -79,7 +79,7 @@ class DeliveryAddress extends FrontendRestController
             ];
             
             // 保存到session
-            $session = $this->sessionManager->create();
+            $session = $this->sessionFactory->create();
             $session->set('shipping_delivery_address', $deliveryAddress);
             
             // 如果用户已登录，尝试同步到数据库
@@ -105,7 +105,7 @@ class DeliveryAddress extends FrontendRestController
     public function getSession(): array
     {
         try {
-            $session = $this->sessionManager->create();
+            $session = $this->sessionFactory->create();
             $address = $session->get('shipping_delivery_address');
             
             if (empty($address)) {
@@ -145,7 +145,7 @@ class DeliveryAddress extends FrontendRestController
             }
             
             // 同步到session
-            $session = $this->sessionManager->create();
+            $session = $this->sessionFactory->create();
             $session->set('shipping_delivery_address', $address);
             
             // 同步到数据库
@@ -166,7 +166,7 @@ class DeliveryAddress extends FrontendRestController
     private function getCustomerId(): ?int
     {
         try {
-            $session = $this->sessionManager->create();
+            $session = $this->sessionFactory->create();
             $customerData = $session->get('weshop_customer');
             
             if ($customerData && isset($customerData['customer_id'])) {
@@ -228,7 +228,7 @@ class DeliveryAddress extends FrontendRestController
             }
         } catch (\Exception $e) {
             // 静默处理错误，不影响主流程
-            error_log('Shipping syncToDatabase error: ' . $e->getMessage());
+            w_log_error('Shipping syncToDatabase error: ' . $e->getMessage());
         }
     }
     
