@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace WeShop\Customer\Model;
 
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
+use Weline\Framework\Session\Auth\AuthenticableInterface;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 
 /**
  * 客户模型（WeShop扩展）
  */
-class Customer extends \Weline\Framework\Database\Model
+class Customer extends \Weline\Framework\Database\Model implements AuthenticableInterface
 {
     public const table = 'weshop_customer';
     public const primary_key = 'customer_id';
@@ -72,5 +73,60 @@ class Customer extends \Weline\Framework\Database\Model
                 ->addIndex(TableInterface::index_type_KEY, 'idx_email', self::fields_EMAIL, '邮箱索引')
                 ->create();
         }
+    }
+
+    // ==================== AuthenticableInterface 实现 ====================
+
+    /**
+     * @inheritDoc
+     */
+    public function getAuthIdentifier(): int|string
+    {
+        return $this->getId();
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getAuthUsername(): string
+    {
+        return (string) ($this->getData(self::fields_EMAIL) ?? '');
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getAuthSessionId(): string
+    {
+        return (string) ($this->getData('sess_id') ?? '');
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public static function getAuthModelClass(): string
+    {
+        return self::class;
+    }
+
+    // ==================== 辅助方法 ====================
+
+    /**
+     * 获取客户全名
+     */
+    public function getFullName(): string
+    {
+        $firstName = (string) ($this->getData(self::fields_FIRST_NAME) ?? '');
+        $lastName = (string) ($this->getData(self::fields_LAST_NAME) ?? '');
+        
+        return \trim($firstName . ' ' . $lastName);
+    }
+
+    /**
+     * 检查客户是否启用
+     */
+    public function getIsEnabled(): bool
+    {
+        return $this->getData(self::fields_STATUS) === 'active';
     }
 }

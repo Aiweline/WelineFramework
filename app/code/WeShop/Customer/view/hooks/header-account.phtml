@@ -6,12 +6,10 @@
  * @hook-solo true     Hook独享：true（独占此 hook，阻止低优先级的 hook 渲染）
  */
 
-use WeShop\Customer\Session\CustomerSession;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\SessionFactory;
 
 // 获取 CustomerSession
-/** @var CustomerSession $session */
-$session = ObjectManager::getInstance(CustomerSession::class);
+$session = SessionFactory::getInstance()->createFrontendSession();
 
 // 获取前端URL（使用模板的 getUrl 方法更安全）
 $frontendUrl = $this->getUrl('');
