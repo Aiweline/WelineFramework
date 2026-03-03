@@ -20,9 +20,6 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\I18n\Model\I18n;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Cache\CacheInterface;
-use Weline\I18n\Cache\I18nCache;
-use Weline\Framework\Phrase\Cache\PhraseCache;
 
 class Collect implements \Weline\Framework\Console\CommandInterface
 {
@@ -76,14 +73,10 @@ class Collect implements \Weline\Framework\Console\CommandInterface
         $this->printing->note(__('正在清理翻译缓存...'));
         try {
             // 清理i18n缓存
-            /**@var CacheInterface $i18nCache */
-            $i18nCache = ObjectManager::getInstance(I18nCache::class . 'Factory');
-            $i18nCache->clear();
+            w_cache('i18n')->clear();
             
             // 清理phrase缓存
-            /**@var CacheInterface $phraseCache */
-            $phraseCache = ObjectManager::getInstance(PhraseCache::class . 'Factory');
-            $phraseCache->clear();
+            w_cache('phrase')->clear();
             
             $this->printing->success(__('翻译缓存清理成功！'));
         } catch (Exception $e) {
