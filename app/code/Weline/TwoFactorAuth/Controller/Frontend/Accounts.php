@@ -20,6 +20,7 @@ class Accounts extends FrontendController
     public function __construct(
         TotpAccount $totpAccount
     ) {
+        parent::__construct();
         $this->totpAccount = $totpAccount;
     }
 
@@ -28,9 +29,7 @@ class Accounts extends FrontendController
      */
     public function index()
     {
-        /**@var \Weline\Frontend\Session\FrontendSession $session */
-        $session = \Weline\Framework\App\Env::getInstance(\Weline\Frontend\Session\FrontendSession::class);
-        $userId = $session->getLoginUserID() ?? 1;
+        $userId = $this->session->getUserId() ?? 1;
 
         $accounts = $this->totpAccount->getUserAccounts($userId);
 
@@ -57,9 +56,7 @@ class Accounts extends FrontendController
             return $this->fetchJson(['success' => false, 'message' => '无效的请求方法']);
         }
 
-        /**@var \Weline\Frontend\Session\FrontendSession $session */
-        $session = \Weline\Framework\App\Env::getInstance(\Weline\Frontend\Session\FrontendSession::class);
-        $userId = $session->getLoginUserID() ?? 1;
+        $userId = $this->session->getUserId() ?? 1;
 
         $name = $this->request->getPost('name');
         $secret = $this->request->getPost('secret');
@@ -99,9 +96,7 @@ class Accounts extends FrontendController
             return $this->fetchJson(['success' => false, 'message' => '无效的请求方法']);
         }
 
-        /**@var \Weline\Frontend\Session\FrontendSession $session */
-        $session = \Weline\Framework\App\Env::getInstance(\Weline\Frontend\Session\FrontendSession::class);
-        $userId = $session->getLoginUserID() ?? 1;
+        $userId = $this->session->getUserId() ?? 1;
 
         $accountId = (int)$this->request->getPost('account_id');
 
@@ -123,9 +118,7 @@ class Accounts extends FrontendController
      */
     public function getCode()
     {
-        /**@var \Weline\Frontend\Session\FrontendSession $session */
-        $session = \Weline\Framework\App\Env::getInstance(\Weline\Frontend\Session\FrontendSession::class);
-        $userId = $session->getLoginUserID() ?? 1;
+        $userId = $this->session->getUserId() ?? 1;
 
         $accountId = (int)$this->request->getParam('account_id');
 
@@ -232,9 +225,7 @@ class Accounts extends FrontendController
             return $this->fetchJson(['success' => false, 'message' => 'URI格式不正确']);
         }
 
-        /**@var \Weline\Frontend\Session\FrontendSession $session */
-        $session = \Weline\Framework\App\Env::getInstance(\Weline\Frontend\Session\FrontendSession::class);
-        $userId = $session->getLoginUserID() ?? 1;
+        $userId = $this->session->getUserId() ?? 1;
 
         // 验证密钥格式
         if (!TwoFactorAuthHelper::isValidBase32($parsed['secret'])) {
@@ -307,9 +298,7 @@ class Accounts extends FrontendController
      */
     public function export()
     {
-        /**@var \Weline\Frontend\Session\FrontendSession $session */
-        $session = \Weline\Framework\App\Env::getInstance(\Weline\Frontend\Session\FrontendSession::class);
-        $userId = $session->getLoginUserID() ?? 1;
+        $userId = $this->session->getUserId() ?? 1;
 
         $format = $this->request->getParam('format', 'json');
         
@@ -347,10 +336,14 @@ class Accounts extends FrontendController
             ];
         }
 
-        header('Content-Type: application/json');
-        header('Content-Disposition: attachment; filename="totp_accounts_' . date('Y-m-d_H-i-s') . '.json"');
-        echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-        exit();
+        throw new \Weline\Framework\Http\ResponseTerminateException(
+            200,
+            json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
+            [
+                'Content-Type' => 'application/json',
+                'Content-Disposition' => 'attachment; filename="totp_accounts_' . date('Y-m-d_H-i-s') . '.json"'
+            ]
+        );
     }
 
     /**
@@ -377,13 +370,18 @@ class Accounts extends FrontendController
             ]);
         }
 
-        header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename="totp_accounts_' . date('Y-m-d_H-i-s') . '.csv"');
-        
         rewind($output);
-        fpassthru($output);
+        $csvContent = stream_get_contents($output);
         fclose($output);
-        exit();
+        
+        throw new \Weline\Framework\Http\ResponseTerminateException(
+            200,
+            $csvContent,
+            [
+                'Content-Type' => 'text/csv; charset=utf-8',
+                'Content-Disposition' => 'attachment; filename="totp_accounts_' . date('Y-m-d_H-i-s') . '.csv"'
+            ]
+        );
     }
 
     /**
@@ -428,15 +426,20 @@ class Accounts extends FrontendController
         
         if (file_exists($workerPath)) {
             $content = file_get_contents($workerPath);
-            header('Content-Type: application/javascript; charset=utf-8');
-            // 设置缓存头，但允许更新
-            header('Cache-Control: public, max-age=3600');
-            echo $content;
-            exit();
+            throw new \Weline\Framework\Http\ResponseTerminateException(
+                200,
+                $content,
+                [
+                    'Content-Type' => 'application/javascript; charset=utf-8',
+                    'Cache-Control' => 'public, max-age=3600'
+                ]
+            );
         } else {
-            header('Content-Type: application/javascript; charset=utf-8');
-            echo '// Worker文件不存在';
-            exit();
+            throw new \Weline\Framework\Http\ResponseTerminateException(
+                404,
+                '// Worker文件不存在',
+                ['Content-Type' => 'application/javascript; charset=utf-8']
+            );
         }
     }
 }
