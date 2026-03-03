@@ -161,15 +161,14 @@ class AiTranslation implements CronTaskInterface
     private function getEnabledLocales(): array
     {
         try {
-            $locales = $this->localeModel->clearInstance()
-                ->where(Locale::fields_STATUS, 1) // 只获取启用的语言
+            $locales = $this->localeModel->clear()
+                ->where(Locale::fields_IS_ACTIVE, 1)
                 ->select()
                 ->fetch()
                 ->getItems();
 
             return $locales ?: [];
         } catch (\Exception $e) {
-            // 如果获取失败，返回默认语言列表
             return [
                 [Locale::fields_CODE => 'en_US'],
                 [Locale::fields_CODE => 'ja_JP'],

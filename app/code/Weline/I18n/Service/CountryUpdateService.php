@@ -89,7 +89,7 @@ class CountryUpdateService
             
         } catch (\Exception $e) {
             // 如果检测过程中出现异常，认为数据不完整
-            error_log('Country data completeness check failed: ' . $e->getMessage());
+            w_log_error('Country data completeness check failed: ' . $e->getMessage(), [], 'i18n');
             return false;
         }
     }
@@ -157,7 +157,7 @@ class CountryUpdateService
             $result['success'] = false;
             $result['message'] = __('国家信息更新失败：%{1}', [$e->getMessage()]);
             $result['errors'][] = $e->getMessage();
-            error_log('Country auto-update failed: ' . $e->getMessage());
+            w_log_error('Country auto-update failed: ' . $e->getMessage(), [], 'i18n');
         }
 
         return $result;
@@ -201,7 +201,7 @@ class CountryUpdateService
             $result['checked'] = true;
             $result['updated'] = false;
             $result['message'] = __('国家信息检查失败：%{1}', [$e->getMessage()]);
-            error_log('Country check and update failed: ' . $e->getMessage());
+            w_log_error('Country check and update failed: ' . $e->getMessage(), [], 'i18n');
         }
 
         return $result;

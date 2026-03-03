@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Controller\Frontend\Word;
 
+use Weline\Framework\App\Env;
 use Weline\I18n\Model\Dictionary;
 
 class Collect extends \Weline\Framework\App\Controller\FrontendController
@@ -87,7 +88,7 @@ class Collect extends \Weline\Framework\App\Controller\FrontendController
         } catch (\Exception $exception) {
             $this->dictionary->rollBack();
             // 记录详细错误信息，方便调试
-            error_log('翻译词收集失败: ' . $exception->getMessage() . PHP_EOL . $exception->getTraceAsString());
+            w_log_error('翻译词收集失败: ' . $exception->getMessage() . PHP_EOL . $exception->getTraceAsString(), [], 'i18n');
             return $this->fetchJson($this->error($exception->getMessage()));
         }
     }

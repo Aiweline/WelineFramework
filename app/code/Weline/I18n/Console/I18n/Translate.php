@@ -25,7 +25,7 @@ class Translate implements CommandInterface
 {
     private Printing $printing;
     private I18n $i18n;
-    private TranslationService $translationService;
+    private ?TranslationService $translationService = null;
     
     /**
      * 默认模块列表（不翻译这些模块的词条）
@@ -80,7 +80,7 @@ class Translate implements CommandInterface
         } catch (\Exception $e) {
             $this->translationService = null;
             // 记录错误但不抛出异常，在 execute 方法中会检查并提示用户
-            error_log(__('无法初始化 TranslationService：%{1}', [$e->getMessage()]));
+            w_log_error(__('无法初始化 TranslationService：%{1}', [$e->getMessage()]), [], 'i18n');
         }
     }
 
