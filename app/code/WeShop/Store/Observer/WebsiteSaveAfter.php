@@ -15,7 +15,6 @@ declare(strict_types=1);
 namespace WeShop\Store\Observer;
 
 use Weline\Framework\Event\Event;
-use Weline\Framework\Cache\CacheFactory;
 
 class WebsiteSaveAfter
 {
@@ -36,9 +35,7 @@ class WebsiteSaveAfter
         // 例如：清理店铺列表缓存、店铺网站关联缓存等
 
         // 如果有缓存需要清理，可以这样做：
-        // $cacheFactory = ObjectManager::getInstance(CacheFactory::class);
-        // $cache = $cacheFactory->create();
-        // $cache->delete('store_list_by_website_' . $websiteId);
+        // w_cache('default')->delete('store_list_by_website_' . $websiteId);
     }
 }
 
