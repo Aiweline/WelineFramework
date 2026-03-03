@@ -153,7 +153,7 @@ class AiGenerate extends BackendController
         if (!$this->request->isPost()) {
             // 记录详细的请求方法信息用于调试
             $actualMethod = $_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN';
-            error_log("[AiGenerate::pageContent] Request method check failed. isPost()=false, actual REQUEST_METHOD={$actualMethod}");
+            w_log_error("[AiGenerate::pageContent] Request method check failed. isPost()=false, actual REQUEST_METHOD={$actualMethod}");
             
             return json_encode([
                 'success' => false,
@@ -1418,14 +1418,14 @@ class AiGenerate extends BackendController
             $aiData = $codeFixer->fixAiData($aiData);
             $fixApplied = $codeFixer->getFixes();
             if (!empty($fixApplied)) {
-                error_log('[AI Component] Auto-fixes applied: ' . json_encode($fixApplied));
+                w_log_info('[AI Component] Auto-fixes applied: ' . json_encode($fixApplied));
             }
             
             // 使用CodeValidator验证AI返回的数据
             $codeValidator = ObjectManager::getInstance(CodeValidator::class);
             $aiDataValidation = $codeValidator->validateAiData($aiData, $region);
             if (!$aiDataValidation['valid']) {
-                error_log('[AI Component] AI data validation errors: ' . implode(', ', $aiDataValidation['errors']));
+                w_log_error('[AI Component] AI data validation errors: ' . implode(', ', $aiDataValidation['errors']));
             }
             
             // 使用框架构建器组装完整组件
@@ -1445,7 +1445,7 @@ class AiGenerate extends BackendController
                 $validation = $frameworkBuilder->validateAiData($aiData, $region);
                 if (!$validation['valid']) {
                     // 如果验证失败，记录警告但继续
-                    error_log('[AI Component] Framework validation warnings: ' . implode(', ', $validation['errors']));
+                    w_log_warning('[AI Component] Framework validation warnings: ' . implode(', ', $validation['errors']));
                 }
                 
                 // 构建完整的PHTML代码
@@ -1463,7 +1463,7 @@ class AiGenerate extends BackendController
                 if ($fixResult['validation']['valid']) {
                     $phtmlCode = $fixResult['code'];
                     $codeValidation = $fixResult['validation'];
-                    error_log('[AI Component] Code auto-fixed successfully');
+                    w_log_info('[AI Component] Code auto-fixed successfully');
                 } else {
                     // 修复失败，使用ErrorAnalyzer分析错误
                     $errorAnalyzer = ObjectManager::getInstance(ErrorAnalyzer::class);
@@ -1471,7 +1471,7 @@ class AiGenerate extends BackendController
                         implode('; ', $codeValidation['errors']),
                         $phtmlCode
                     );
-                    error_log('[AI Component] Code validation failed: ' . $errorAnalyzer->formatAnalysis($errorAnalysis));
+                    w_log_error('[AI Component] Code validation failed: ' . $errorAnalyzer->formatAnalysis($errorAnalysis));
                     
                     // 最后尝试安全模式构建（移除高风险字段）
                     if ($useFramework) {
@@ -1488,7 +1488,7 @@ class AiGenerate extends BackendController
                             $phtmlCode = $safePhtmlCode;
                             $codeValidation = $safeValidation;
                             $safeModeApplied = true;
-                            error_log('[AI Component] Safe mode build applied');
+                            w_log_info('[AI Component] Safe mode build applied');
                         }
                     }
                 }
@@ -1579,7 +1579,7 @@ class AiGenerate extends BackendController
                 $fixResult = $codeFixer->fixAndValidate($phtmlCode, $codeValidator);
                 if ($fixResult['validation']['valid']) {
                     $component['phtml_code'] = $fixResult['code'];
-                    error_log('[AI Component Save] Code auto-fixed before save');
+                    w_log_info('[AI Component Save] Code auto-fixed before save');
                 } else {
                     // 修复失败，但仍然尝试保存（用户可能已经手动确认）
                     $errorAnalyzer = ObjectManager::getInstance(ErrorAnalyzer::class);
@@ -1587,7 +1587,7 @@ class AiGenerate extends BackendController
                         implode('; ', $validation['errors']),
                         $phtmlCode
                     );
-                    error_log('[AI Component Save] Saving with validation errors: ' . $errorAnalyzer->formatAnalysis($errorAnalysis));
+                    w_log_error('[AI Component Save] Saving with validation errors: ' . $errorAnalyzer->formatAnalysis($errorAnalysis));
                 }
             }
             
@@ -3082,7 +3082,7 @@ PROMPT;
 
         } catch (\Throwable $e) {
             $errorMsg = preg_replace('/\x1b\[[0-9;]*m/', '', $e->getMessage());
-            error_log("[AgentComponentStream] 错误: " . $errorMsg);
+            w_log_error("[AgentComponentStream] 错误: " . $errorMsg);
             $this->logAgentDebug('AiGenerate::agentComponentStream catch', 'Agent stream exception', [
                 'msg' => $errorMsg,
                 'file' => $e->getFile(),

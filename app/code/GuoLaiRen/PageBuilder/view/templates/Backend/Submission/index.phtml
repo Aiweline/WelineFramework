@@ -7,6 +7,116 @@
  */
 ?>
 
+<style>
+/* ============================================
+   组件：PageBuilder Submission Manager
+   模块：GuoLaiRen_PageBuilder
+   前缀：pagebuilder-submission-
+   ============================================ */
+
+/* 页面标题适配 */
+.page-title-box h4 {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.page-title-box .breadcrumb-item a {
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.page-title-box .breadcrumb-item.active {
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+/* 卡片适配 */
+.card {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-md, 8px);
+}
+
+.card-body {
+    background: var(--backend-color-card-bg, #fff);
+}
+
+.card-title {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+/* 表单元素适配 */
+.form-label {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.form-control {
+    background: var(--backend-color-input-bg, #fff);
+    border-color: var(--backend-color-border-default, #dee2e6);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.form-control:focus {
+    background: var(--backend-color-input-bg, #fff);
+    border-color: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.form-control::placeholder {
+    color: var(--backend-color-text-placeholder, #adb5bd);
+}
+
+.form-select {
+    background-color: var(--backend-color-input-bg, #fff);
+    border-color: var(--backend-color-border-default, #dee2e6);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+/* 表格适配 */
+.table {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.table thead th {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    border-color: var(--backend-color-border-default, #dee2e6);
+}
+
+.table tbody td {
+    border-color: var(--backend-color-border-light, #e9ecef);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.table-hover tbody tr:hover {
+    background: var(--backend-color-table-bg-hover, #f8f9fa);
+}
+
+.table .text-muted {
+    color: var(--backend-color-text-tertiary, #adb5bd) !important;
+}
+
+/* Soft 按钮适配 */
+.btn-soft-info {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    color: var(--backend-color-info, #50a5f1);
+    border: none;
+}
+
+.btn-soft-info:hover {
+    background: var(--backend-color-info, #50a5f1);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.btn-soft-danger {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
+    color: var(--backend-color-danger, #f46a6a);
+    border: none;
+}
+
+.btn-soft-danger:hover {
+    background: var(--backend-color-danger, #f46a6a);
+    color: var(--backend-color-text-inverse, #fff);
+}
+</style>
+
 <!-- start page title -->
 <div class="row">
     <div class="col-12">

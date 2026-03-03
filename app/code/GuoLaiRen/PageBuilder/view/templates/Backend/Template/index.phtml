@@ -42,6 +42,9 @@ $pages = $this->getData('pages') ?: [];
 </div>
 <!-- end message -->
 
+<!-- 进度模态框组件 -->
+<w:theme:modal id="previewProgressModal" size="sm" closable="false" backdrop="false" />
+
 <!-- 搜索和筛选 -->
 <div class="row">
     <div class="col-12">
@@ -297,19 +300,95 @@ $pages = $this->getData('pages') ?: [];
 <!-- 复用form.phtml中的样式卡片CSS -->
 <link rel="stylesheet" href="<?= $this->getBackendUrl('*/backend/page/index') ?>" onload="this.onload=null;this.rel='stylesheet'">
 <style>
-/* 复用form.phtml中的样式卡片样式 */
+/* ============================================
+   组件：PageBuilder Template Manager
+   模块：GuoLaiRen_PageBuilder
+   前缀：style-card-
+   ============================================ */
+
+/* 页面标题适配 */
+.page-title-box h4 {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.page-title-box .breadcrumb-item a {
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.page-title-box .breadcrumb-item.active {
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+/* 卡片适配 */
+.card {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+}
+
+.card-body {
+    background: var(--backend-color-card-bg, #fff);
+}
+
+.card-title {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+/* 表单元素适配 */
+.form-label {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.form-control {
+    background: var(--backend-color-input-bg, #fff);
+    border-color: var(--backend-color-border-default, #dee2e6);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.form-control:focus {
+    background: var(--backend-color-input-bg, #fff);
+    border-color: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.form-control::placeholder {
+    color: var(--backend-color-text-placeholder, #adb5bd);
+}
+
+.form-select {
+    background-color: var(--backend-color-input-bg, #fff);
+    border-color: var(--backend-color-border-default, #dee2e6);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.form-text {
+    color: var(--backend-color-text-secondary, #6c757d) !important;
+}
+
+.input-group-text {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-color: var(--backend-color-border-default, #dee2e6);
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+/* 空状态适配 */
+.text-center.text-muted {
+    color: var(--backend-color-text-tertiary, #adb5bd) !important;
+}
+
+/* 样式卡片 */
 .style-card {
     height: 100%;
     cursor: default;
     transition: all 0.3s ease;
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
+    border: 2px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-md, 8px);
     overflow: hidden;
+    background: var(--backend-color-card-bg, #fff);
 }
 
 .style-card:hover {
-    border-color: #667eea;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: 0 4px 12px rgba(var(--backend-color-primary-rgb, 85, 110, 230), 0.2);
     transform: translateY(-2px);
 }
 
@@ -317,7 +396,7 @@ $pages = $this->getData('pages') ?: [];
     position: relative;
     width: 100%;
     height: 200px;
-    background: #f5f5f5;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
     overflow: hidden;
     display: flex;
     align-items: center;
@@ -342,22 +421,23 @@ $pages = $this->getData('pages') ?: [];
 .style-card-preview-btn {
     width: 32px;
     height: 32px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.95);
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: var(--backend-border-radius-sm, 4px);
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    color: var(--backend-color-text-secondary, #6c757d);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--backend-shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.1));
 }
 
 .style-card-preview-btn:hover {
-    background: #667eea;
-    color: white;
+    background: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-inverse, #fff);
     transform: scale(1.1);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 4px 12px rgba(var(--backend-color-primary-rgb, 85, 110, 230), 0.3);
 }
 
 .style-card-preview-btn i {
@@ -372,7 +452,7 @@ $pages = $this->getData('pages') ?: [];
 
 .style-card-preview-placeholder {
     text-align: center;
-    color: #999;
+    color: var(--backend-color-text-tertiary, #adb5bd);
 }
 
 .style-card-preview-placeholder i {
@@ -383,22 +463,24 @@ $pages = $this->getData('pages') ?: [];
 
 .style-card-body {
     padding: 16px;
+    background: var(--backend-color-card-bg, #fff);
 }
 
 .style-card-title {
     font-size: 16px;
     font-weight: 600;
-    color: #333;
+    color: var(--backend-color-text-primary, #212529);
     margin-bottom: 8px;
 }
 
 .style-card-description {
     font-size: 13px;
-    color: #666;
+    color: var(--backend-color-text-secondary, #6c757d);
     line-height: 1.5;
     margin-bottom: 12px;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -409,14 +491,15 @@ $pages = $this->getData('pages') ?: [];
     justify-content: space-between;
     align-items: center;
     font-size: 12px;
-    color: #999;
+    color: var(--backend-color-text-tertiary, #adb5bd);
 }
 
 .style-card-code {
     font-family: 'Courier New', monospace;
-    background: #f5f5f5;
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-secondary, #6c757d);
     padding: 2px 6px;
-    border-radius: 3px;
+    border-radius: var(--backend-border-radius-sm, 4px);
 }
 
 .style-card-preview-loading {
@@ -425,12 +508,13 @@ $pages = $this->getData('pages') ?: [];
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(255, 255, 255, 0.9);
+    background: var(--backend-color-bg-overlay, rgba(255, 255, 255, 0.9));
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     z-index: 10;
+    color: var(--backend-color-text-secondary, #6c757d);
 }
 
 .style-preview-img {
@@ -443,6 +527,20 @@ $pages = $this->getData('pages') ?: [];
 
 .style-card:hover .style-preview-img {
     transform: scale(1.02);
+}
+
+/* Offcanvas 适配 */
+.offcanvas {
+    background: var(--backend-color-card-bg, #fff);
+}
+
+.offcanvas-header {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-color: var(--backend-color-border-default, #dee2e6) !important;
+}
+
+.offcanvas-title {
+    color: var(--backend-color-text-primary, #212529);
 }
 </style>
 
@@ -461,9 +559,12 @@ const API_URLS = {
 
 // 切换发布状态
 async function togglePublish(styleId, isPublished, skipPreviewCheck = false) {
-    if (!confirm(isPublished ? '<?= __('确定要发布此模板吗？发布后，新建页面时将可以选择此模板。') ?>' : '<?= __('确定要取消发布此模板吗？取消发布后，新建页面时将无法选择此模板。') ?>')) {
-        return;
-    }
+    const confirmMsg = isPublished 
+        ? '<?= __('确定要发布此模板吗？发布后，新建页面时将可以选择此模板。') ?>' 
+        : '<?= __('确定要取消发布此模板吗？取消发布后，新建页面时将无法选择此模板。') ?>';
+    
+    const confirmed = await BackendConfirm.show(confirmMsg);
+    if (!confirmed) return;
     
     try {
         const response = await fetch(API_URLS.togglePublish, {
@@ -485,17 +586,15 @@ async function togglePublish(styleId, isPublished, skipPreviewCheck = false) {
             location.reload();
         } else if (data.needs_preview && isPublished) {
             // 需要先生成预览图
-            const confirmGenerate = confirm('<?= __('此模板还没有预览图，发布前需要先生成预览图。是否立即生成？') ?>');
+            const confirmGenerate = await BackendConfirm.show('<?= __('此模板还没有预览图，发布前需要先生成预览图。是否立即生成？') ?>');
             
             if (confirmGenerate) {
                 // 显示生成中提示
-                Swal.fire({
+                const progressModal = window.WelineModal['previewProgressModal'];
+                progressModal.showProgress({
                     title: '<?= __('正在生成预览图...') ?>',
-                    html: '<?= __('请稍候，正在自动生成模板预览图') ?>',
-                    allowOutsideClick: false,
-                    didOpen: () => {
-                        Swal.showLoading();
-                    }
+                    subtitle: '<?= __('请稍候，正在自动生成模板预览图') ?>',
+                    progress: 50
                 });
                 
                 try {
@@ -503,13 +602,8 @@ async function togglePublish(styleId, isPublished, skipPreviewCheck = false) {
                     await generatePreviewForPublish(data.style_code);
                     
                     // 预览图生成成功，重新发布
-                    Swal.fire({
-                        icon: 'success',
-                        title: '<?= __('预览图生成成功') ?>',
-                        text: '<?= __('正在完成发布...') ?>',
-                        timer: 1500,
-                        showConfirmButton: false
-                    });
+                    progressModal.hide();
+                    BackendToast.success('<?= __('预览图生成成功，正在完成发布...') ?>');
                     
                     // 延迟后重新调用发布（跳过预览检查）
                     setTimeout(() => {
@@ -517,19 +611,16 @@ async function togglePublish(styleId, isPublished, skipPreviewCheck = false) {
                     }, 1500);
                     
                 } catch (error) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('预览图生成失败') ?>',
-                        text: error.message || '<?= __('请手动生成预览图后再发布') ?>'
-                    });
+                    progressModal.hide();
+                    BackendToast.error('<?= __('预览图生成失败：') ?>' + (error.message || '<?= __('请手动生成预览图后再发布') ?>'));
                 }
             }
         } else {
-            alert(data.message || '<?= __('操作失败') ?>');
+            BackendToast.error(data.message || '<?= __('操作失败') ?>');
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('<?= __('操作失败，请稍后重试') ?>');
+        BackendToast.error('<?= __('操作失败，请稍后重试') ?>');
     }
 }
 
@@ -796,7 +887,7 @@ async function refreshSinglePreview(styleCode) {
         
     } catch (error) {
         console.error('❌ 生成预览图失败:', error);
-        alert('<?= __('生成预览图失败：') ?>' + error.message);
+        BackendToast.error('<?= __('生成预览图失败：') ?>' + error.message);
     } finally {
         // 隐藏加载状态
         if (loadingEl) loadingEl.style.display = 'none';
@@ -859,7 +950,8 @@ async function generateAllPreviews(force = false) {
         ? '<?= __('确定要强制刷新所有模板的预览图吗？这可能需要较长时间。') ?>'
         : '<?= __('确定要为缺少预览图的模板生成预览吗？') ?>';
     
-    if (!confirm(confirmMsg)) return;
+    const confirmed = await BackendConfirm.show(confirmMsg);
+    if (!confirmed) return;
     
     console.log('🚀 开始批量生成预览图, force:', force);
     
@@ -883,13 +975,18 @@ async function generateAllPreviews(force = false) {
         const templates = result.data.filter(t => t.needs_generate);
         
         if (templates.length === 0) {
-            alert('<?= __('所有模板都已有预览图，无需生成。') ?>');
+            BackendToast.info('<?= __('所有模板都已有预览图，无需生成。') ?>');
             return;
         }
         
-        // 显示进度提示
-        const progressModal = createProgressModal(templates.length);
-        document.body.appendChild(progressModal);
+        // 获取进度模态框组件
+        const progressModal = window.WelineModal['previewProgressModal'];
+        progressModal.showProgress({
+            title: '<?= __('正在生成预览图...') ?>',
+            subtitle: '-',
+            progress: 0,
+            count: '0 / ' + templates.length
+        });
         
         let completed = 0;
         let failed = 0;
@@ -897,7 +994,11 @@ async function generateAllPreviews(force = false) {
         // 逐个生成预览图
         for (const template of templates) {
             try {
-                updateProgressModal(progressModal, template.name, completed, templates.length);
+                progressModal.updateProgress({
+                    subtitle: template.name,
+                    progress: (completed / templates.length) * 100,
+                    count: completed + ' / ' + templates.length
+                });
                 await refreshSinglePreview(template.code);
                 completed++;
             } catch (error) {
@@ -909,10 +1010,10 @@ async function generateAllPreviews(force = false) {
             await new Promise(resolve => setTimeout(resolve, 500));
         }
         
-        // 完成后移除进度提示
-        progressModal.remove();
+        // 完成后隐藏进度提示
+        progressModal.hide();
         
-        alert(`<?= __('批量生成完成！成功：') ?>${completed}<?= __('，失败：') ?>${failed}`);
+        BackendToast.success('<?= __('批量生成完成！成功：') ?>' + completed + '<?= __('，失败：') ?>' + failed);
         
         // 刷新页面显示新预览图
         if (completed > 0) {
@@ -921,70 +1022,8 @@ async function generateAllPreviews(force = false) {
         
     } catch (error) {
         console.error('批量生成失败:', error);
-        alert('<?= __('批量生成失败：') ?>' + error.message);
+        BackendToast.error('<?= __('批量生成失败：') ?>' + error.message);
     }
-}
-
-/**
- * 创建进度提示模态框
- */
-function createProgressModal(total) {
-    const modal = document.createElement('div');
-    modal.id = 'previewProgressModal';
-    modal.innerHTML = `
-        <div style="
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: 10000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        ">
-            <div style="
-                background: white;
-                padding: 30px;
-                border-radius: 12px;
-                min-width: 400px;
-                text-align: center;
-                box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-            ">
-                <div class="spinner-border text-primary mb-3" role="status"></div>
-                <h5 class="mb-3"><?= __('正在生成预览图...') ?></h5>
-                <p class="text-muted mb-2" id="progressCurrentTemplate">-</p>
-                <div class="progress mb-2" style="height: 20px;">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                         role="progressbar" 
-                         id="progressBar"
-                         style="width: 0%">0%</div>
-                </div>
-                <small class="text-muted" id="progressCount">0 / ${total}</small>
-            </div>
-        </div>
-    `;
-    return modal;
-}
-
-/**
- * 更新进度提示
- */
-function updateProgressModal(modal, currentName, completed, total) {
-    const currentEl = modal.querySelector('#progressCurrentTemplate');
-    const barEl = modal.querySelector('#progressBar');
-    const countEl = modal.querySelector('#progressCount');
-    
-    if (currentEl) currentEl.textContent = currentName;
-    
-    const percent = Math.round((completed / total) * 100);
-    if (barEl) {
-        barEl.style.width = percent + '%';
-        barEl.textContent = percent + '%';
-    }
-    
-    if (countEl) countEl.textContent = `${completed} / ${total}`;
 }
 </script>
 
