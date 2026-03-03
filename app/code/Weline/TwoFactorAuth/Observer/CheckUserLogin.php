@@ -7,7 +7,8 @@ namespace Weline\TwoFactorAuth\Observer;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
-use Weline\Frontend\Session\FrontendUserSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 
 /**
  * 检查用户登录状态
@@ -15,16 +16,15 @@ use Weline\Frontend\Session\FrontendUserSession;
  */
 class CheckUserLogin implements ObserverInterface
 {
-    private FrontendUserSession $session;
+    private AuthenticatedSessionInterface $session;
     private Request $request;
     private Response $response;
 
     public function __construct(
-        FrontendUserSession $session,
         Request $request,
         Response $response
     ) {
-        $this->session = $session;
+        $this->session = SessionFactory::getInstance()->createFrontendSession();
         $this->request = $request;
         $this->response = $response;
     }
@@ -40,26 +40,23 @@ class CheckUserLogin implements ObserverInterface
         // 检查是否是TwoFactorAuth相关路径
         if ($this->isTwoFactorAuthPath($path)) {
             // 检查用户是否登录
-            if (!$this->session->isLogin()) {
+            if (!$this->session->isLoggedIn()) {
                 // 保存当前URL作为登录后的跳转地址
                 $currentUrl = $this->request->getUrlBuilder()->getCurrentUrl();
                 $loginUrl = '/frontend/account/login?referer=' . urlencode($currentUrl);
                 
                 // 如果是API请求，返回JSON
+                // 使用 ResponseTerminateException 替代 exit()，确保 WLS 兼容
                 if ($this->isApiRequest($path)) {
-                    header('Content-Type: application/json');
-                    echo json_encode([
-                        'success' => false,
-                        'code' => 401,
-                        'message' => '请先登录',
-                        'redirect' => $loginUrl
-                    ]);
-                    exit;
+                    throw new \Weline\Framework\Http\ResponseTerminateException(
+                        401,
+                        \json_encode(['success' => false, 'code' => 401, 'message' => '请先登录', 'redirect' => $loginUrl], JSON_UNESCAPED_UNICODE),
+                        ['Content-Type' => 'application/json; charset=utf-8']
+                    );
                 }
                 
                 // 普通请求，重定向到登录页
-                header('Location: ' . $loginUrl);
-                exit;
+                throw new \Weline\Framework\Http\RedirectException($loginUrl, 302);
             }
         }
     }
