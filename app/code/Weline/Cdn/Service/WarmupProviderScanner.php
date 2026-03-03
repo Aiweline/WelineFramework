@@ -109,7 +109,7 @@ class WarmupProviderScanner
                 }
             }
         } catch (\Exception $e) {
-            error_log("扫描WarmupProvider失败: " . $e->getMessage());
+            w_log_error("扫描WarmupProvider失败: " . $e->getMessage());
         }
         
         $this->cachedProviders = $providers;
@@ -141,7 +141,7 @@ class WarmupProviderScanner
                     }
                 }
             } catch (\Exception $e) {
-                error_log("执行WarmupProvider失败: {$className}, 错误: " . $e->getMessage());
+                w_log_error("执行WarmupProvider失败: {$className}, 错误: " . $e->getMessage());
             }
         }
         

@@ -63,7 +63,7 @@ class CollectRules implements ObserverInterface
             }
         } catch (\Exception $e) {
             // 记录错误但不中断升级流程
-            error_log("CDN规则收集失败: " . $e->getMessage());
+            w_log_error("CDN规则收集失败: " . $e->getMessage());
             if (defined('CLI') && CLI) {
                 echo "CDN规则收集失败: " . $e->getMessage() . "\n";
             }
