@@ -2,21 +2,19 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <!--市场营销管理菜单-->
-    <add source="Weline_Marketing::marketing_manager" name="marketing_manager" title="市场营销" action="" 
-         parent="Weline_Backend::business_module"
-         icon="mdi mdi-tag-multiple" order="10100"/>
     
-    <add source="Weline_Marketing::rule_list" name="rule_list" title="营销规则" 
-         action="marketing/backend/rule" parent="Weline_Marketing::marketing_manager"
-         icon="mdi mdi-rule" order="1"/>
+    <!-- 营销规则 - 归入业务运营 > 营销管理 -->
+    <menu source="Weline_Marketing::rule_list" name="rule_list" title="营销规则" 
+         action="marketing/backend/rule" parent="Weline_Backend::marketing_group"
+         icon="mdi mdi-clipboard-list-outline" order="10"/>
     
-    <add source="Weline_Marketing::coupon_list" name="coupon_list" title="优惠券管理" 
-         action="marketing/backend/coupon" parent="Weline_Marketing::marketing_manager"
-         icon="mdi mdi-ticket-percent" order="2"/>
+    <!-- 优惠券管理 -->
+    <menu source="Weline_Marketing::coupon_list" name="coupon_list" title="优惠券管理" 
+         action="marketing/backend/coupon" parent="Weline_Backend::marketing_group"
+         icon="mdi mdi-ticket-percent-outline" order="20"/>
     
-    <add source="Weline_Marketing::campaign_list" name="campaign_list" title="促销活动" 
-         action="marketing/backend/campaign" parent="Weline_Marketing::marketing_manager"
-         icon="mdi mdi-bullhorn" order="3"/>
+    <!-- 促销活动 -->
+    <menu source="Weline_Marketing::campaign_list" name="campaign_list" title="促销活动" 
+         action="marketing/backend/campaign" parent="Weline_Backend::marketing_group"
+         icon="mdi mdi-bullhorn-outline" order="30"/>
 </menus>
-
