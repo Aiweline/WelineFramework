@@ -526,13 +526,13 @@ class DataTable extends BackendRestController
                             ];
                         }
                     } catch (\Exception $e) {
-                        error_log("Check relation error for table {$table}: " . $e->getMessage());
+                        w_log_error("Check relation error for table {$table}: " . $e->getMessage());
                     }
                 }
             }
             
         } catch (\Exception $e) {
-            error_log("Check relation data error: " . $e->getMessage());
+            w_log_error("Check relation data error: " . $e->getMessage());
         }
         
         return $relations;
@@ -576,7 +576,7 @@ class DataTable extends BackendRestController
             }
             
         } catch (\Exception $e) {
-            error_log("Find foreign keys error for table {$table}: " . $e->getMessage());
+            w_log_error("Find foreign keys error for table {$table}: " . $e->getMessage());
         }
         
         return array_unique($foreignKeys);
@@ -637,7 +637,7 @@ class DataTable extends BackendRestController
             }
             
         } catch (\Exception $e) {
-            error_log("Cascade delete relations error: " . $e->getMessage());
+            w_log_error("Cascade delete relations error: " . $e->getMessage());
             throw $e;
         }
     }
@@ -693,7 +693,7 @@ class DataTable extends BackendRestController
             }
             
         } catch (\Exception $e) {
-            error_log("Delete related records by model error: " . $e->getMessage());
+            w_log_error("Delete related records by model error: " . $e->getMessage());
             throw $e;
         }
     }
@@ -714,7 +714,7 @@ class DataTable extends BackendRestController
             $connection->query($sql, [$recordId]);
             
         } catch (\Exception $e) {
-            error_log("Delete related records by SQL error: " . $e->getMessage());
+            w_log_error("Delete related records by SQL error: " . $e->getMessage());
             throw $e;
         }
     }
@@ -993,7 +993,7 @@ class DataTable extends BackendRestController
             return $this->createSingleTableRecord($model, $data, $useTransaction);
 
         } catch (\Exception $e) {
-            error_log("DataTable Create Error: " . $e->getMessage());
+            w_log_error("DataTable Create Error: " . $e->getMessage());
             return $this->error(__('记录创建失败: %{1}', $e->getMessage()));
         }
     }
@@ -1190,7 +1190,7 @@ class DataTable extends BackendRestController
             }
 
         } catch (\Exception $e) {
-            error_log("DataTable Update Error: " . $e->getMessage());
+            w_log_error("DataTable Update Error: " . $e->getMessage());
             return $this->error(__('记录更新失败: %{1}', $e->getMessage()));
         }
     }
@@ -1420,7 +1420,7 @@ class DataTable extends BackendRestController
             }
 
         } catch (\Exception $e) {
-            error_log("DataTable Delete Error: " . $e->getMessage());
+            w_log_error("DataTable Delete Error: " . $e->getMessage());
             return $this->error(__('记录删除失败: %{1}', $e->getMessage()));
         }
     }
@@ -1460,13 +1460,13 @@ class DataTable extends BackendRestController
 
                     // 必填验证
                     if ($column['Null'] === 'NO' && empty($value) && $value !== '0') {
-                        error_log("Field {$field} is required but empty");
+                        w_log_error("Field {$field} is required but empty");
                         return false;
                     }
 
                     // 类型验证
                     if (!$this->validateFieldType($value, $column['Type'])) {
-                        error_log("Field {$field} type validation failed");
+                        w_log_error("Field {$field} type validation failed");
                         return false;
                     }
                 }
@@ -1477,7 +1477,7 @@ class DataTable extends BackendRestController
             return $validatedData;
 
         } catch (\Exception $e) {
-            error_log("Data validation error: " . $e->getMessage());
+            w_log_error("Data validation error: " . $e->getMessage());
             return false;
         }
     }
@@ -1509,9 +1509,9 @@ class DataTable extends BackendRestController
     /**
      * 获取缓存实例
      */
-    private function getCache()
+    private function getCache(): \Weline\Framework\Cache\Contract\CachePoolInterface
     {
-        return \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\DataTable\Cache\DataTableCache::class)->create();
+        return w_cache('default');
     }
 
     /**
@@ -1615,7 +1615,7 @@ class DataTable extends BackendRestController
             ];
             
         } catch (\Exception $e) {
-            error_log("JOIN Query Error: " . $e->getMessage());
+            w_log_error("JOIN Query Error: " . $e->getMessage());
             return [
                 'msg' => 'JOIN查询失败: ' . $e->getMessage(),
                 'data' => '',
@@ -1684,7 +1684,7 @@ class DataTable extends BackendRestController
                         $selectFields[] = "{$alias}.{$field} AS {$alias}_{$field}";
                     }
                 } catch (\Exception $e) {
-                    error_log("Failed to get fields for model {$modelClass}: " . $e->getMessage());
+                    w_log_error("Failed to get fields for model {$modelClass}: " . $e->getMessage());
                 }
             }
         }
@@ -1723,7 +1723,7 @@ class DataTable extends BackendRestController
             return $modelInstance;
             
         } catch (\Exception $e) {
-            error_log("Apply JOIN Error: " . $e->getMessage());
+            w_log_error("Apply JOIN Error: " . $e->getMessage());
             throw $e;
         }
     }
@@ -2238,7 +2238,7 @@ class DataTable extends BackendRestController
             return $info;
 
         } catch (\Exception $e) {
-            error_log("Get image info error: " . $e->getMessage());
+            w_log_error("Get image info error: " . $e->getMessage());
             return null;
         }
     }
@@ -2254,7 +2254,7 @@ class DataTable extends BackendRestController
             }
             return true;
         } catch (\Exception $e) {
-            error_log("Delete image error: " . $e->getMessage());
+            w_log_error("Delete image error: " . $e->getMessage());
             return false;
         }
     }
@@ -2424,7 +2424,7 @@ class DataTable extends BackendRestController
             ]);
 
         } catch (\Exception $e) {
-            error_log("RecycleBin API Error: " . $e->getMessage());
+            w_log_error("RecycleBin API Error: " . $e->getMessage());
             return $this->error('回收站数据获取失败: ' . $e->getMessage());
         }
     }
@@ -2460,7 +2460,7 @@ class DataTable extends BackendRestController
             return $this->singleRestoreRecord($model, $id);
 
         } catch (\Exception $e) {
-            error_log("Restore Record Error: " . $e->getMessage());
+            w_log_error("Restore Record Error: " . $e->getMessage());
             return $this->error('记录恢复失败: ' . $e->getMessage());
         }
     }
@@ -2501,7 +2501,7 @@ class DataTable extends BackendRestController
             return $this->singlePermanentlyDelete($model, $id);
 
         } catch (\Exception $e) {
-            error_log("Permanently Delete Error: " . $e->getMessage());
+            w_log_error("Permanently Delete Error: " . $e->getMessage());
             return $this->error(__('永久删除失败: %{1}', $e->getMessage()));
         }
     }
@@ -2543,7 +2543,7 @@ class DataTable extends BackendRestController
             ]);
 
         } catch (\Exception $e) {
-            error_log("Empty RecycleBin Error: " . $e->getMessage());
+            w_log_error("Empty RecycleBin Error: " . $e->getMessage());
             return $this->error('清空回收站失败: ' . $e->getMessage());
         }
     }
