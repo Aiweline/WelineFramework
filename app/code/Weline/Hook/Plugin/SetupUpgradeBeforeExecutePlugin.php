@@ -36,7 +36,7 @@ class SetupUpgradeBeforeExecutePlugin
             $this->cleanupTempFiles();
         } catch (\Exception $e) {
             // 清理失败不影响主流程，只记录错误
-            Env::log_error('hook', '清理setup历史记录失败: ' . $e->getMessage());
+            w_log_error('清理setup历史记录失败: ' . $e->getMessage(), [], 'hook');
         }
     }
     
