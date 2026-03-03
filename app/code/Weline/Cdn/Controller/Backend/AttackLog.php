@@ -284,7 +284,7 @@ class AttackLog extends BackendController
         }
 
         $query->order(AttackLogModel::fields_CREATED_AT, 'DESC');
-        $logs = $query->find()->fetchOrigin();
+        $logs = $query->select()->fetchArray();
 
         // 生成 CSV
         $filename = 'attack_logs_' . \date('YmdHis') . '.csv';

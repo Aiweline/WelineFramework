@@ -713,7 +713,7 @@ class Cloudflare implements AdapterInterface
                 if (getenv('APP_ENV') !== 'production') {
                     $sslVerifyPeer = false;
                     $sslVerifyHost = 0;
-                    error_log('Warning: CA certificate bundle not found, SSL verification disabled for Cloudflare API requests. ' .
+                    w_log_warning('Warning: CA certificate bundle not found, SSL verification disabled for Cloudflare API requests. ' .
                              'To fix this, set CDN_DISABLE_SSL_VERIFY=1 or configure curl.cainfo in php.ini');
                 }
             }

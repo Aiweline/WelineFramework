@@ -182,7 +182,7 @@ class AdapterResolver
                 }
             }
         } catch (\Exception $e) {
-            error_log("从 ExtendsData 扫描 CDN 适配器失败: " . $e->getMessage());
+            w_log_error("从 ExtendsData 扫描 CDN 适配器失败: " . $e->getMessage());
         }
     }
 
@@ -219,7 +219,7 @@ class AdapterResolver
             $adapterCode = $instance->getAdapterCode();
             $this->adapters[$adapterCode] = $instance;
         } catch (\Exception $e) {
-            error_log("加载 CDN 适配器失败: {$filePath}, 错误: " . $e->getMessage());
+            w_log_error("加载 CDN 适配器失败: {$filePath}, 错误: " . $e->getMessage());
         }
     }
 
