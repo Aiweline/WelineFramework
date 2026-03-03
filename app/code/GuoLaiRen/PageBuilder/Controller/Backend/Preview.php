@@ -617,14 +617,14 @@ class Preview extends BackendController
     {
         try {
             // 调试日志
-            error_log('🔵 resetFieldsToDefault 接口被调用');
+            w_log_debug('🔵 resetFieldsToDefault 接口被调用');
             
             // 获取 JSON 请求体
             $rawBody = is_string($this->request->getBodyParams()) ? $this->request->getBodyParams() : json_encode($this->request->getBodyParams());
-            error_log('🔵 请求体: ' . $rawBody);
+            w_log_debug('🔵 请求体: ' . $rawBody);
             
             $data = json_decode($rawBody ?? '', true); // 第二个参数 true 表示返回数组而不是对象
-            error_log('🔵 解析后数据: ' . json_encode($data));
+            w_log_debug('🔵 解析后数据: ' . json_encode($data));
             
             // 如果 JSON 解析失败，尝试从 POST 获取
             if (!$data || !is_array($data)) {
@@ -641,12 +641,12 @@ class Preview extends BackendController
             $locale = $data['locale'] ?? '';
             $styleCode = $data['style_code'] ?? '';
             
-            error_log('🔵 pageId: ' . $pageId);
-            error_log('🔵 configKeys: ' . json_encode($configKeys));
-            error_log('🔵 locale: ' . $locale);
+            w_log_debug('🔵 pageId: ' . $pageId);
+            w_log_debug('🔵 configKeys: ' . json_encode($configKeys));
+            w_log_debug('🔵 locale: ' . $locale);
             
             if (!$pageId) {
-                error_log('❌ 页面ID不能为空');
+                w_log_error('❌ 页面ID不能为空');
                 return $this->fetchJson([
                     'success' => false,
                     'message' => __('页面ID不能为空')
@@ -654,20 +654,20 @@ class Preview extends BackendController
             }
             
             if (empty($configKeys) || !is_array($configKeys)) {
-                error_log('❌ 配置键列表不能为空');
+                w_log_error('❌ 配置键列表不能为空');
                 return $this->fetchJson([
                     'success' => false,
                     'message' => __('配置键列表不能为空')
                 ]);
             }
 
-            error_log('🔵 验证通过，开始加载页面...');
+            w_log_debug('🔵 验证通过，开始加载页面...');
             
             // 加载页面
             $page = clone $this->pageModel;
             $page->load($pageId);
             
-            error_log('🔵 页面加载完成，ID: ' . $page->getId());
+            w_log_debug('🔵 页面加载完成，ID: ' . $page->getId());
             
             if (!$page->getId()) {
                 return $this->fetchJson([
@@ -715,7 +715,7 @@ class Preview extends BackendController
                     }
                 }
                 
-                error_log('✅ 重置成功（LocalDescription），字段数: ' . count($configKeys));
+                w_log_info('✅ 重置成功（LocalDescription），字段数: ' . count($configKeys));
                 return $this->fetchJson([
                     'success' => true,
                     'message' => __('已重置 %{1} 个字段为默认值（语言：%{2}）', count($configKeys), $locale),
@@ -741,7 +741,7 @@ class Preview extends BackendController
                     $page->save();
                 }
                 
-                error_log('✅ 重置成功（Page.style_setting），字段数: ' . count($configKeys));
+                w_log_info('✅ 重置成功（Page.style_setting），字段数: ' . count($configKeys));
                 return $this->fetchJson([
                     'success' => true,
                     'message' => __('已重置 %{1} 个字段为默认值', count($configKeys)),
@@ -751,8 +751,8 @@ class Preview extends BackendController
                 ]);
             }
         } catch (\Exception $e) {
-            error_log('❌ 异常: ' . $e->getMessage());
-            error_log('❌ 异常跟踪: ' . $e->getTraceAsString());
+            w_log_error('❌ 异常: ' . $e->getMessage());
+            w_log_error('❌ 异常跟踪: ' . $e->getTraceAsString());
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage()
@@ -885,30 +885,26 @@ CSS;
             
             // 检查区域匹配
             if (data.region !== targetRegion) {
-                window.parent.Swal && window.parent.Swal.fire({
-                    icon: 'warning',
-                    title: '区域不匹配',
-                    text: '此组件只能放置在 ' + data.region.toUpperCase() + ' 区域',
-                    timer: 3000
-                });
+                if (window.parent.BackendToast) {
+                    window.parent.BackendToast.warning('区域不匹配：此组件只能放置在 ' + data.region.toUpperCase() + ' 区域');
+                }
                 return;
             }
             
             // 检查唯一性
             const hasComponent = this.classList.contains('has-component');
             if (!isMultiple && hasComponent) {
-                window.parent.Swal && window.parent.Swal.fire({
-                    title: '替换组件？',
-                    text: '此区域只能放置一个组件，是否替换现有组件？',
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: '确认替换',
-                    cancelButtonText: '取消'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        addComponent(data, targetRegion, true);
-                    }
-                });
+                if (window.parent.BackendConfirm) {
+                    window.parent.BackendConfirm.show('此区域只能放置一个组件，是否替换现有组件？', {
+                        title: '替换组件？',
+                        confirmText: '确认替换',
+                        cancelText: '取消'
+                    }).then((confirmed) => {
+                        if (confirmed) {
+                            addComponent(data, targetRegion, true);
+                        }
+                    });
+                }
                 return;
             }
             
@@ -957,32 +953,24 @@ CSS;
     async function addComponent(componentData, region, replace, position = null) {
         try {
             // 显示加载提示
-            window.parent.Swal && window.parent.Swal.fire({
-                title: '添加组件中...',
-                allowOutsideClick: false,
-                didOpen: () => {
-                    window.parent.Swal.showLoading();
-                }
-            });
+            if (window.parent.BackendToast) {
+                window.parent.BackendToast.info('添加组件中...', 2000);
+            }
             
             // 调用父窗口的添加组件函数
             if (typeof window.parent.addComponentToLayout === 'function') {
                 await window.parent.addComponentToLayout(componentData, region, replace, position);
             } else {
                 console.warn('⚠️ addComponentToLayout 函数不存在');
-                window.parent.Swal && window.parent.Swal.fire({
-                    icon: 'warning',
-                    title: '功能不可用',
-                    text: '请刷新页面后重试'
-                });
+                if (window.parent.BackendToast) {
+                    window.parent.BackendToast.warning('功能不可用，请刷新页面后重试');
+                }
             }
         } catch (error) {
             console.error('❌ 添加组件失败:', error);
-            window.parent.Swal && window.parent.Swal.fire({
-                icon: 'error',
-                title: '添加失败',
-                text: error.message || '未知错误'
-            });
+            if (window.parent.BackendToast) {
+                window.parent.BackendToast.error('添加失败：' + (error.message || '未知错误'));
+            }
         }
     }
     

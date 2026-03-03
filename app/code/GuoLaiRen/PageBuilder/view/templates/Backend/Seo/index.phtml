@@ -1478,62 +1478,63 @@ const i18n = {
     noMatch: '<?= __("无匹配结果") ?>'
 };
 
-// Safe Swal wrapper (local loading - no async wait needed)
+// Safe Swal wrapper - 使用框架 BackendToast/BackendConfirm 替代 SweetAlert
 const SafeSwal = {
     fire: function(config) {
-        if (typeof Swal !== 'undefined') {
-            return Swal.fire(config);
-        } else {
-            console.warn('SweetAlert2 not loaded, using native dialogs');
-            
-            if (config.icon === 'success' || config.icon === 'error' || config.icon === 'warning') {
-                const message = config.html || config.text || config.title || '';
-                const plainMessage = message.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-                alert(plainMessage);
-                
-                if (config.timer && config.showConfirmButton === false) {
-                    return Promise.resolve({ isConfirmed: true });
-                }
-            }
-            
-            if (config.showCancelButton) {
-                const message = config.html || config.text || config.title || '';
-                const plainMessage = message.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-                const result = confirm(plainMessage);
-                return Promise.resolve({ isConfirmed: result });
-            }
-            
-            return Promise.resolve({ isConfirmed: true });
+        const message = config.html || config.text || config.title || '';
+        const plainMessage = message.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        
+        // 如果是确认弹窗（有取消按钮）
+        if (config.showCancelButton) {
+            return BackendConfirm.show(plainMessage, {
+                title: config.title || '',
+                confirmText: config.confirmButtonText || '<?= __("确定") ?>',
+                cancelText: config.cancelButtonText || '<?= __("取消") ?>',
+                type: config.icon === 'warning' || config.confirmButtonColor === '#d33' ? 'danger' : 'default'
+            }).then((confirmed) => {
+                return { isConfirmed: confirmed };
+            });
         }
+        
+        // 如果是纯消息提示
+        if (config.icon === 'success') {
+            BackendToast.success(plainMessage);
+        } else if (config.icon === 'error') {
+            BackendToast.error(plainMessage);
+        } else if (config.icon === 'warning') {
+            BackendToast.warning(plainMessage);
+        } else if (config.icon === 'info' || config.icon === 'question') {
+            BackendToast.info(plainMessage);
+        } else {
+            BackendToast.info(plainMessage);
+        }
+        
+        // 如果有 timer，返回 Promise 以便链式调用 .then()
+        if (config.timer) {
+            return new Promise((resolve) => {
+                setTimeout(() => resolve({ isConfirmed: true }), config.timer);
+            });
+        }
+        
+        return Promise.resolve({ isConfirmed: true });
     },
     showLoading: function() {
-        if (typeof Swal !== 'undefined') {
-            Swal.showLoading();
-        }
+        // BackendToast 没有显示 loading 的功能，忽略
+    },
+    close: function() {
+        // BackendToast 会自动关闭，忽略
     }
 };
 
-// Friendly message function
+// Friendly message function - 使用框架 BackendToast
 function showMessage(type, message, title = null) {
-    if (typeof Swal !== 'undefined') {
-        const config = {
-            icon: type === 'success' ? 'success' : type === 'error' ? 'error' : 'warning',
-            title: title || (type === 'success' ? '<?= __("确认") ?>' : '<?= __("确认") ?>'),
-            text: message,
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: false,
-            timer: type === 'success' ? 3000 : 5000,
-            timerProgressBar: true,
-            didOpen: (toast) => {
-                toast.addEventListener('mouseenter', Swal.stopTimer);
-                toast.addEventListener('mouseleave', Swal.resumeTimer);
-            }
-        };
-        SafeSwal.fire(config);
+    const fullMessage = title ? (title + ': ' + message) : message;
+    if (type === 'success') {
+        BackendToast.success(fullMessage);
+    } else if (type === 'error') {
+        BackendToast.error(fullMessage);
     } else {
-        const prefix = type === 'success' ? '\u2713 ' : type === 'error' ? '\u2717 ' : '\u26A0 ';
-        alert(prefix + (title || '') + '\n' + message);
+        BackendToast.warning(fullMessage);
     }
 }
 

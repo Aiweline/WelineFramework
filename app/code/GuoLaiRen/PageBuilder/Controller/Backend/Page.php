@@ -34,7 +34,7 @@ use Weline\UrlManager\Model\UrlRewrite;
 use Weline\Websites\Model\Website as WebsiteModel;
 use Weline\Acl\Model\RoleAccess;
 use Weline\Acl\Cache\AclCache;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 
 #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder', '页面构建器', 'mdi mdi-file-document-edit', '管理和构建页面')]
 class Page extends BackendController
@@ -107,7 +107,7 @@ class Page extends BackendController
         // 使用缓存的权限列表
         $cacheKey = 'user_permissions_' . $userId;
         if (self::$userPermissionsCache === null) {
-            /** @var CacheInterface $cache */
+            /** @var CachePoolInterface $cache */
             $cache = ObjectManager::getInstance(AclCache::class . 'Factory');
             $permissions = $cache->get($cacheKey);
             
@@ -1563,7 +1563,7 @@ class Page extends BackendController
         } catch (\Exception $e) {
             // 静默失败
             if (DEV) {
-                error_log("Failed to delete URL rewrite for page: " . $e->getMessage());
+                w_log_error("Failed to delete URL rewrite for page: " . $e->getMessage());
             }
         }
     }
@@ -1981,7 +1981,7 @@ class Page extends BackendController
                     $eventsManager->dispatch('Weline_Seo::domain::website_account_bind', $eventData);
                 } catch (\Exception $e) {
                     // SEO 账户绑定失败不影响建站结果
-                    error_log('[GuoLaiRen_PageBuilder] SEO account bind error: ' . $e->getMessage());
+                    w_log_error('[GuoLaiRen_PageBuilder] SEO account bind error: ' . $e->getMessage());
                 }
             }
             
@@ -2487,7 +2487,7 @@ class Page extends BackendController
             
             if (empty($handle) || empty($pageId)) {
                 if (DEV) {
-                    error_log("createOrUpdateUrlRewrite: Missing handle or page ID. Handle: {$handle}, ID: {$pageId}");
+                    w_log_info("createOrUpdateUrlRewrite: Missing handle or page ID. Handle: {$handle}, ID: {$pageId}");
                 }
                 return false;
             }
@@ -2532,7 +2532,7 @@ class Page extends BackendController
         } catch (\Exception $e) {
             // 记录错误但不影响页面保存
             if (DEV) {
-                error_log("Failed to create URL rewrite for page [{$page->getId()}]: " . $e->getMessage());
+                w_log_error("Failed to create URL rewrite for page [{$page->getId()}]: " . $e->getMessage());
             }
             return false;
         }

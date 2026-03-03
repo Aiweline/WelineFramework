@@ -125,7 +125,7 @@ $accentColor = $getConfig('style.accent_color', '#6366f1');
 try {
     {{PHP_VARIABLES}}
 } catch (\Throwable $e) {
-    error_log('[AI Component Error] ' . $componentId . ': ' . $e->getMessage());
+    w_log_error('[AI Component Error] ' . $componentId . ': ' . $e->getMessage());
 }
 ?>
 

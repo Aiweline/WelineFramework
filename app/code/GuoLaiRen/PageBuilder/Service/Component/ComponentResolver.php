@@ -200,7 +200,7 @@ class ComponentResolver
             }
         } catch (\Exception $e) {
             // AI 组件查找失败，记录日志但不中断
-            error_log("[ComponentResolver] AI component lookup failed for {$code}: " . $e->getMessage());
+            w_log_error("[ComponentResolver] AI component lookup failed for {$code}: " . $e->getMessage());
         }
         
         return null;
@@ -288,7 +288,7 @@ class ComponentResolver
                 $this->getEntityFileManager()->ensureEntityFile($component);
                 $path = $component->getData(Component::fields_PATH);
             } catch (\Exception $e) {
-                error_log("[ComponentResolver] Failed to ensure AI component entity file: " . $e->getMessage());
+                w_log_error("[ComponentResolver] Failed to ensure AI component entity file: " . $e->getMessage());
             }
         }
         

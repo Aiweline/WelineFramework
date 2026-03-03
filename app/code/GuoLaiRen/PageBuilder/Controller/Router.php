@@ -205,7 +205,7 @@ class Router implements RouterInterface
         } catch (\Exception $e) {
             // 如果查询失败，记录日志并返回false
             if (defined('DEV') && DEV) {
-                error_log('PageBuilder Router Error: ' . $e->getMessage());
+                w_log_error('PageBuilder Router Error: ' . $e->getMessage());
             }
             return false;
         }
@@ -289,7 +289,7 @@ class Router implements RouterInterface
             return null;
         } catch (\Exception $e) {
             if (defined('DEV') && DEV) {
-                error_log('PageBuilder Router Error (getHomePageHandle): ' . $e->getMessage());
+                w_log_error('PageBuilder Router Error (getHomePageHandle): ' . $e->getMessage());
             }
             return null;
         }

@@ -101,7 +101,7 @@ class Form extends FrontendController
 
         } catch (\Exception $exception) {
             // 记录错误日志
-            error_log('Form submission error: ' . $exception->getMessage() . "\n" . $exception->getTraceAsString());
+            w_log_error('Form submission error: ' . $exception->getMessage() . "\n" . $exception->getTraceAsString());
 
             // 开发环境返回详细错误信息
             if (DEV) {

@@ -185,12 +185,12 @@ class Style extends Model
             $description = self::extractDescriptionFromReadmeStatic($readmeContent);
             $supportedTypes = self::extractSupportedTypesFromReadme($readmeContent);
             
-            // 检测预览图（优先webp，其次png）
-            $previewImage = '';
+            // 检测预览图（优先webp，其次png）- 从样式目录
+            $filePreviewImage = '';
             if (file_exists($styleDir . '/preview.webp')) {
-                $previewImage = 'style/' . $styleName . '/preview.webp';
+                $filePreviewImage = 'style/' . $styleName . '/preview.webp';
             } elseif (file_exists($styleDir . '/preview.png')) {
-                $previewImage = 'style/' . $styleName . '/preview.png';
+                $filePreviewImage = 'style/' . $styleName . '/preview.png';
             }
             
             if ($existing->getId()) {
@@ -204,10 +204,14 @@ class Style extends Model
                 
                 // 如果文件有更新，同步到数据库
                 if ($fileModTime > $dbUpdateTime) {
+                    // 保留已有的预览图路径，只有当样式目录有新预览图时才覆盖
+                    $existingPreviewImage = $existing->getData(self::fields_PREVIEW_IMAGE);
+                    $previewImageToSave = $filePreviewImage ?: $existingPreviewImage;
+                    
                     $existing->setData(self::fields_NAME, self::formatStyleNameStatic($styleName))
                         ->setData(self::fields_DESCRIPTION, $description)
                         ->setData(self::fields_PATH, 'style/' . $styleName)
-                        ->setData(self::fields_PREVIEW_IMAGE, $previewImage)
+                        ->setData(self::fields_PREVIEW_IMAGE, $previewImageToSave)
                         ->setData(self::fields_SUPPORTED_TYPES, json_encode($supportedTypes))
                         ->save();
                 }
@@ -219,7 +223,7 @@ class Style extends Model
                     ->setData(self::fields_NAME, self::formatStyleNameStatic($styleName))
                     ->setData(self::fields_DESCRIPTION, $description)
                     ->setData(self::fields_PATH, 'style/' . $styleName)
-                    ->setData(self::fields_PREVIEW_IMAGE, $previewImage)
+                    ->setData(self::fields_PREVIEW_IMAGE, $filePreviewImage)
                     ->setData(self::fields_SUPPORTED_TYPES, json_encode($supportedTypes))
                     ->setData(self::fields_IS_ACTIVE, 1)
                     ->setData(self::fields_SORT_ORDER, 10)
