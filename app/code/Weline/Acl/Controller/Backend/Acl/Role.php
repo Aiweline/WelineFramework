@@ -12,12 +12,12 @@ declare(strict_types=1);
 
 namespace Weline\Acl\Controller\Backend\Acl;
 
-use Weline\Acl\Cache\AclCache;
 use Weline\Acl\Model\Acl;
 use Weline\Acl\Model\RoleAccess;
 use Weline\Backend\Model\BackendUser;
 use Weline\Backend\Model\Menu;
-use Weline\Backend\Session\BackendSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
@@ -37,13 +37,16 @@ class Role extends \Weline\Admin\Controller\BaseController
     #[\Weline\Framework\Acl\Acl('Weline_Acl::acl_role_listing', '角色列表', '', '')]
     function getIndex()
     {
+        // 创建新实例避免 WLS 环境下状态残留
+        /** @var \Weline\Acl\Model\Role $roleModel */
+        $roleModel = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false);
         if ($search = $this->request->getGet('search')) {
-            $aclModelFields = implode(',', $this->role->getModelFields());
-            $this->role->where('CONCAT(' . $aclModelFields . ')', '%' . $search . '%', 'like');
+            $aclModelFields = implode(',', $roleModel->getModelFields());
+            $roleModel->where('CONCAT(' . $aclModelFields . ')', '%' . $search . '%', 'like');
         }
-        $this->role->pagination()->select()->fetch();
-        $this->assign('roles', $this->role->getItems());
-        $this->assign('pagination', $this->role->getPagination());
+        $roleModel->pagination()->select()->fetch();
+        $this->assign('roles', $roleModel->getItems());
+        $this->assign('pagination', $roleModel->getPagination());
         return $this->fetch('index');
     }
 
@@ -81,8 +84,11 @@ class Role extends \Weline\Admin\Controller\BaseController
                 return $this->fetch('form');
             }
             
-            $role = $this->role->clear()->where($this->role::fields_ROLE_NAME, $role_name)->find()->fetch();
-            if ($role->getId()) {
+            // 检查角色是否已存在（创建新实例避免状态污染，$shared=false）
+            /** @var \Weline\Acl\Model\Role $checkRole */
+            $checkRole = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false);
+            $existingRole = $checkRole->where(\Weline\Acl\Model\Role::fields_ROLE_NAME, $role_name)->find()->fetch();
+            if ($existingRole->getId()) {
                 if ($this->request->isAjax()) {
                     return $this->jsonResponse(false, __('角色已存在！'));
                 }
@@ -92,8 +98,11 @@ class Role extends \Weline\Admin\Controller\BaseController
             }
             
             try {
-                $save_result = $this->role->setData($postData)
-                    ->save(true, $this->role::fields_ROLE_NAME);
+                // 创建新实例保存，避免状态污染
+                /** @var \Weline\Acl\Model\Role $newRole */
+                $newRole = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false);
+                $save_result = $newRole->setData($postData)
+                    ->save(true, \Weline\Acl\Model\Role::fields_ROLE_NAME);
                 
                 if ($this->request->isAjax()) {
                     if ($save_result) {
@@ -136,7 +145,10 @@ class Role extends \Weline\Admin\Controller\BaseController
             if (!$id) {
                 $this->redirect(404);
             }
-            $role = clone $this->role->clear()->load($id);
+            // 使用新实例加载
+            /** @var \Weline\Acl\Model\Role $role */
+            $role = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false);
+            $role->load($id);
             if (!$role->getId()) {
                 $this->getMessageManager()->addWarning(__('角色已不存在！'));
             } else {
@@ -146,7 +158,10 @@ class Role extends \Weline\Admin\Controller\BaseController
             return $this->fetch('form');
         }
         if ($this->request->isPost()) {
-            $this->role->save($this->request->getPost());
+            // 使用新实例保存
+            /** @var \Weline\Acl\Model\Role $role */
+            $role = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false);
+            $role->setData($this->request->getPost())->save();
             $this->redirect('*/backend/acl/role');
         } else {
             $this->redirect(404);
@@ -195,13 +210,25 @@ class Role extends \Weline\Admin\Controller\BaseController
         $trees = $roleAccessModel->clear()->getTreeWithRole($role);
         // 当前角色权限
         $current_accesses = $roleAccessModel->clearData()->getRoleAccessList($role);
-//        $this->checkAccess($trees, $current_accesses);
         $this->assign('trees', $trees);
         $this->assign('current_accesses', $current_accesses);
+        
+        // 获取统计信息（用于前端显示已选/总数）
+        $statistics = $roleAccessModel->clear()->getTreeStatistics($role);
+        $this->assign('tree_statistics', $statistics);
+        
+        // 获取模块和类型列表（用于筛选器）
+        $moduleList = $roleAccessModel->getModuleList();
+        $typeList = $roleAccessModel->getTypeList();
+        $this->assign('module_list', $moduleList);
+        $this->assign('type_list', $typeList);
+        
         // 当前用户角色
-        /**@var BackendSession $session */
-        $session = ObjectManager::getInstance(BackendSession::class);
-        $this->assign('user_role', $session->getLoginUser()->getRole());
+        /**@var AuthenticatedSessionInterface $session */
+        $session = SessionFactory::getInstance()->createBackendSession();
+        $user = $session->getUser();
+        $userRole = ($user instanceof \Weline\Backend\Model\BackendUser) ? $user->getRole() : null;
+        $this->assign('user_role', $userRole);
         return $this->fetch('assign');
     }
 
@@ -237,9 +264,7 @@ class Role extends \Weline\Admin\Controller\BaseController
             $roleAccessModel->commit();
             $this->getMessageManager()->addSuccess(__('权限分配成功！'));
             // 清理权限缓存
-            /**@var \Weline\Framework\Cache\CacheInterface $aclCache */
-            $aclCache = ObjectManager::getInstance(AclCache::class . 'Factory');
-            $aclCache->clear();
+            w_cache('acl')->clear();
             $this->getMessageManager()->addSuccess(__('权限缓存清理成功！'));
         } catch (\Exception $exception) {
             $roleAccessModel->rollBack();
@@ -267,6 +292,35 @@ class Role extends \Weline\Admin\Controller\BaseController
             'message' => $message,
             'data' => $data,
         ], JSON_UNESCAPED_UNICODE);
+    }
+
+    #[\Weline\Framework\Acl\Acl('Weline_Acl::acl_role_search', '角色搜索', '', '搜索角色列表')]
+    public function getSearch(): string
+    {
+        $id = $this->request->getGet('id', '');
+        $keyword = trim($this->request->getGet('keyword', '') ?: $this->request->getGet('q', ''));
+        $limit = (int)$this->request->getGet('limit', 50);
+        
+        /** @var \Weline\Acl\Model\Role $roleModel */
+        $roleModel = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false);
+        
+        if ($id !== '') {
+            $roleModel->where(\Weline\Acl\Model\Role::fields_ROLE_ID, (int)$id);
+        } elseif ($keyword !== '') {
+            $roleModel->where(\Weline\Acl\Model\Role::fields_ROLE_NAME, '%' . $keyword . '%', 'like');
+        }
+        
+        $roleModel->limit($limit)->order(\Weline\Acl\Model\Role::fields_ROLE_NAME, 'ASC')->select()->fetch();
+        
+        $data = [];
+        foreach ($roleModel->getItems() as $role) {
+            $data[] = [
+                'value' => (string)$role->getId(),
+                'label' => $role->getRoleName(),
+            ];
+        }
+        
+        return $this->jsonResponse(true, __('搜索成功'), $data);
     }
 
 }

@@ -15,7 +15,8 @@ namespace Weline\Acl\Model;
 
 use Weline\Backend\Model\BackendUser;
 use Weline\Backend\Model\Menu;
-use Weline\Backend\Session\BackendSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Manager\ObjectManager;
@@ -204,5 +205,131 @@ class RoleAccess extends \Weline\Framework\Database\Model
             ->where('main_table.role_id', $roleModel->getId())
             ->select()
             ->fetchArray();
+    }
+
+    /**
+     * 获取权限树统计信息（按顶级节点分组）
+     * 
+     * @param Role $role 角色对象
+     * @return array 统计信息数组，格式为 ['source_id' => ['total' => 总数, 'selected' => 已选数, 'module' => 模块名]]
+     */
+    public function getTreeStatistics(Role $role): array
+    {
+        $trees = $this->clear()->getTreeWithRole($role);
+        $statistics = [];
+        
+        foreach ($trees as $tree) {
+            $sourceId = $tree->getSourceId();
+            $stats = $this->countNodeStatistics($tree);
+            $module = $this->extractModuleFromSourceId($sourceId);
+            
+            $statistics[$sourceId] = [
+                'source_id' => $sourceId,
+                'source_name' => $tree->getSourceName(),
+                'module' => $module,
+                'type' => $tree->getType(),
+                'total' => $stats['total'],
+                'selected' => $stats['selected'],
+            ];
+        }
+        
+        return $statistics;
+    }
+
+    /**
+     * 递归统计节点的总数和已选数
+     * 
+     * @param Model $node 节点
+     * @return array ['total' => 总数, 'selected' => 已选数]
+     */
+    private function countNodeStatistics(Model $node): array
+    {
+        $total = 1;
+        $selected = $node->getData('role_id') ? 1 : 0;
+        
+        $subs = $node->getSub();
+        if (!empty($subs)) {
+            foreach ($subs as $sub) {
+                $subStats = $this->countNodeStatistics($sub);
+                $total += $subStats['total'];
+                $selected += $subStats['selected'];
+            }
+        }
+        
+        return ['total' => $total, 'selected' => $selected];
+    }
+
+    /**
+     * 从 source_id 中提取模块名
+     * 例如: Weline_Acl::acl_role => Weline_Acl
+     * 
+     * @param string $sourceId
+     * @return string
+     */
+    private function extractModuleFromSourceId(string $sourceId): string
+    {
+        if (str_contains($sourceId, '::')) {
+            return explode('::', $sourceId)[0];
+        }
+        return $sourceId;
+    }
+
+    /**
+     * 获取所有模块列表（用于筛选器）
+     * 
+     * @return array
+     */
+    public function getModuleList(): array
+    {
+        $aclModel = ObjectManager::getInstance(Acl::class);
+        // PostgreSQL 严格要求 SELECT 的非聚合列必须在 GROUP BY 中
+        // 只查询 module 列，GROUP BY module 即可
+        $acls = $aclModel->clear()
+            ->fields('module')
+            ->where('module', '', '!=')
+            ->group('module')
+            ->order('module', 'ASC')
+            ->select()
+            ->fetch()
+            ->getItems();
+        
+        $modules = [];
+        foreach ($acls as $acl) {
+            $module = $acl->getModule();
+            if (!empty($module)) {
+                $modules[] = $module;
+            }
+        }
+        
+        return $modules;
+    }
+
+    /**
+     * 获取所有权限类型列表（用于筛选器）
+     * 
+     * @return array
+     */
+    public function getTypeList(): array
+    {
+        $aclModel = ObjectManager::getInstance(Acl::class);
+        // 只查询 type 列，GROUP BY type 即可
+        $acls = $aclModel->clear()
+            ->fields('type')
+            ->where('type', '', '!=')
+            ->group('type')
+            ->order('type', 'ASC')
+            ->select()
+            ->fetch()
+            ->getItems();
+        
+        $types = [];
+        foreach ($acls as $acl) {
+            $type = $acl->getType();
+            if (!empty($type)) {
+                $types[] = $type;
+            }
+        }
+        
+        return $types;
     }
 }

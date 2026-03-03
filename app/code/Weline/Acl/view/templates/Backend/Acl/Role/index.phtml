@@ -169,7 +169,15 @@
     
     var form = document.getElementById('roleAddForm');
     var offcanvasElement = document.getElementById('roleAddOffcanvas');
-    var offcanvas = bootstrap.Offcanvas.getInstance(offcanvasElement) || new bootstrap.Offcanvas(offcanvasElement);
+    var offcanvas = null;
+    
+    // 延迟初始化 offcanvas，确保 Bootstrap 已加载
+    function getOffcanvas() {
+        if (!offcanvas && typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
+            offcanvas = bootstrap.Offcanvas.getInstance(offcanvasElement) || new bootstrap.Offcanvas(offcanvasElement);
+        }
+        return offcanvas;
+    }
     
     form.addEventListener('submit', function(event) {
         event.preventDefault();
@@ -186,9 +194,15 @@
             data[pair[0]] = pair[1];
         }
         
-        AdminToast.info('<?= __('正在创建角色...') ?>');
+        // 禁用提交按钮防止重复提交
+        var submitBtn = form.querySelector('button[type="submit"]');
+        var originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('正在创建...') ?>';
         
-        fetch('@backend-url("*/backend/acl/role/add")', {
+        BackendToast.info('<?= __('正在创建角色...') ?>');
+        
+        fetch('<?= $this->getBackendUrl("*/backend/acl/role/add") ?>', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -196,23 +210,44 @@
             },
             body: JSON.stringify(data)
         })
-        .then(function(response) { return response.json(); })
+        .then(function(response) {
+            // 检查 HTTP 状态码
+            if (!response.ok) {
+                throw new Error('HTTP <?= __('错误') ?>: ' + response.status + ' ' + response.statusText);
+            }
+            return response.text();
+        })
+        .then(function(text) {
+            // 尝试解析 JSON
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.error('JSON parse error, response:', text);
+                throw new Error('<?= __('服务器返回格式错误，请检查后台日志') ?>');
+            }
+        })
         .then(function(result) {
             if (result.success) {
-                AdminToast.success(result.message || '<?= __('角色创建成功！') ?>');
-                offcanvas.hide();
+                BackendToast.success(result.message || '<?= __('角色创建成功！') ?>');
+                var oc = getOffcanvas();
+                if (oc) oc.hide();
                 form.reset();
                 form.classList.remove('was-validated');
                 setTimeout(function() {
                     window.location.reload();
                 }, 1500);
             } else {
-                AdminToast.error(result.message || '<?= __('角色创建失败！') ?>');
+                BackendToast.error(result.message || '<?= __('角色创建失败，请检查输入后重试') ?>');
             }
         })
         .catch(function(error) {
             console.error('Error:', error);
-            AdminToast.error('<?= __('请求失败：') ?>' + error.message);
+            BackendToast.error('<?= __('请求失败：') ?>' + error.message);
+        })
+        .finally(function() {
+            // 恢复提交按钮
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
         });
     });
     
