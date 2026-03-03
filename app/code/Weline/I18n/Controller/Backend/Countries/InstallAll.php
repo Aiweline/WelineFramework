@@ -18,6 +18,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Controller\Backend\BaseController;
 use Weline\I18n\Model\Countries;
 use Weline\I18n\Model\Countries\Locale\Name;
+use Weline\Framework\App\Env;
 use Weline\I18n\Model\I18n;
 
 class InstallAll extends BaseController
@@ -161,7 +162,7 @@ class InstallAll extends BaseController
                     $this->getMessageManager()->addSuccess(__('已为中国安装并激活zh_Hans_CN区域！'));
                 } catch (\Exception $e) {
                     // 如果安装中国区域失败，不影响整体流程
-                    error_log('Failed to install China locale: ' . $e->getMessage());
+                    w_log_error('Failed to install China locale: ' . $e->getMessage(), [], 'i18n');
                     // 不显示警告消息，避免影响用户体验
                 }
                 
@@ -218,7 +219,7 @@ class InstallAll extends BaseController
             }
         } catch (\Exception $e) {
             // 静默处理异常，不影响主流程
-            error_log('China locale installation failed: ' . $e->getMessage());
+            w_log_error('China locale installation failed: ' . $e->getMessage(), [], 'i18n');
         }
     }
 }
