@@ -101,14 +101,14 @@ class DHL implements ShippingProviderInterface
                 }
             }
             
-            Env::log_info('DHL费率计算成功', [
+            w_log_info('DHL费率计算成功', [
                 'address' => $address,
                 'rates_count' => count($rates),
             ], 'weshop_shipping');
             
             return $rates;
         } catch (\Exception $e) {
-            Env::log_error('DHL费率计算失败', [
+            w_log_error('DHL费率计算失败', [
                 'error' => $e->getMessage(),
                 'address' => $address,
             ], 'weshop_shipping');
@@ -181,7 +181,7 @@ class DHL implements ShippingProviderInterface
             if (isset($result['ShipmentResponse']['ShipmentIdentificationNumber'])) {
                 $trackingNumber = $result['ShipmentResponse']['ShipmentIdentificationNumber'];
                 
-                Env::log_info('DHL运单创建成功', [
+                w_log_info('DHL运单创建成功', [
                     'order_id' => $orderData['order_id'] ?? '',
                     'tracking_number' => $trackingNumber,
                 ], 'weshop_shipping');
@@ -195,7 +195,7 @@ class DHL implements ShippingProviderInterface
             
             throw new \Exception($result['ShipmentResponse']['Notification'][0]['Message'] ?? __('DHL运单创建失败'));
         } catch (\Exception $e) {
-            Env::log_error('DHL运单创建失败', [
+            w_log_error('DHL运单创建失败', [
                 'error' => $e->getMessage(),
                 'order_data' => $orderData,
             ], 'weshop_shipping');
@@ -251,7 +251,7 @@ class DHL implements ShippingProviderInterface
             
             return $tracking;
         } catch (\Exception $e) {
-            Env::log_error('DHL运单查询失败', [
+            w_log_error('DHL运单查询失败', [
                 'error' => $e->getMessage(),
                 'tracking_number' => $trackingNumber,
             ], 'weshop_shipping');
