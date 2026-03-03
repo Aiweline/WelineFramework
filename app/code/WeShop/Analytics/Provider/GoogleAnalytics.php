@@ -50,12 +50,12 @@ class GoogleAnalytics implements PixelProviderInterface
             
             $this->httpPost($endpoint, json_encode($eventData));
             
-            Env::log_info('Google Analytics事件追踪', [
+            w_log_info('Google Analytics事件追踪', [
                 'event' => $event,
                 'measurement_id' => $this->measurementId,
             ], 'weshop_analytics');
         } catch (\Exception $e) {
-            Env::log_error('Google Analytics追踪失败', [
+            w_log_error('Google Analytics追踪失败', [
                 'error' => $e->getMessage(),
                 'event' => $event,
                 'data' => $data,

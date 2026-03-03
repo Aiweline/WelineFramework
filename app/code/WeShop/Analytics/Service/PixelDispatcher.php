@@ -29,8 +29,7 @@ class PixelDispatcher
                 $provider->sendEvent($eventName, $eventData);
             } catch (\Exception $e) {
                 // 记录错误但继续处理其他提供者
-                \Weline\Framework\App\Env::log_warning('pixel_dispatcher.log', 
-                    __('像素事件发送失败: %{1}', [$e->getMessage()]));
+                w_log_warning(__('像素事件发送失败: %{1}', [$e->getMessage()]), [], 'pixel_dispatcher.log');
             }
         }
     }
