@@ -85,7 +85,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
         }
 
         // 检查维护模式配置
-        if (!Env::getInstance()->getConfig('maintenance', false)) {
+        if (!Env::system('maintenance')) {
             return;
         }
 
