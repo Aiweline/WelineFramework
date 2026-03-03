@@ -2,11 +2,13 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <!--可视化编辑器-->
-    <add source="Weline_Widget::editor" name="editor" title="可视化编辑器" action="*/backend/editor"
-         parent="Weline_EditorManager::content_management" icon="mdi mdi-pencil-box" order="100"/>
-    <!--部件管理-->
-    <add source="Weline_Widget::widget_management" name="widget_management" title="部件管理" action="*/backend/widget"
-         parent="Weline_Widget::editor" icon="mdi mdi-puzzle" order="10"/>
+    
+    <!-- 可视化编辑器 - 归入开发者 > 编辑器与组件 -->
+    <menu source="Weline_Widget::editor" name="editor" title="可视化编辑器" action="*/backend/editor"
+          parent="Weline_Backend::editor_component_group" icon="mdi mdi-pencil-ruler" order="10">
+        
+        <!-- 部件管理 -->
+        <menu source="Weline_Widget::widget_management" name="widget_management" title="部件管理" action="*/backend/widget"
+              icon="mdi mdi-puzzle-outline" order="10"/>
+    </menu>
 </menus>
-
