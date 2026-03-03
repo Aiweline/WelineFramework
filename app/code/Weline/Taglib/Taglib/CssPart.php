@@ -15,12 +15,10 @@ namespace Weline\Taglib\Taglib;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
-use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
-use Weline\Taglib\Cache\TaglibCacheFactory;
 
 class CssPart implements \Weline\Taglib\TaglibInterface
 {
@@ -82,8 +80,7 @@ class CssPart implements \Weline\Taglib\TaglibInterface
     {
         return function ($tag_key, $config, $tag_data, $attributes) {
             $name = $attributes['name'];
-            /**@var CacheInterface $cache */
-            $cache = ObjectManager::getInstance(TaglibCacheFactory::class);
+            $cache = w_cache('taglib');
             $cache_key = 'css:part::' . $name;
             $content = $cache->get($cache_key);
             if (PROD and !empty($content)) {
