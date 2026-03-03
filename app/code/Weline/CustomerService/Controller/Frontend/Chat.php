@@ -16,7 +16,6 @@ use Weline\CustomerService\Model\ChatSession;
 use Weline\CustomerService\Model\CustomerServiceConfig;
 use Weline\CustomerService\Model\ServiceAgent;
 use Weline\CustomerService\Service\ChatService;
-use Weline\Customer\Session\CustomerSession;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -26,14 +25,11 @@ use Weline\Framework\Manager\ObjectManager;
 class Chat extends FrontendController
 {
     private ChatService $chatService;
-    private CustomerSession $session;
 
     public function __construct(
-        ChatService $chatService,
-        CustomerSession $session
+        ChatService $chatService
     ) {
         $this->chatService = $chatService;
-        $this->session = $session;
     }
 
     /**
@@ -52,7 +48,7 @@ class Chat extends FrontendController
     public function getSession(): string
     {
         try {
-            $customerId = $this->session->isLogin() ? $this->session->getLoginID() : null;
+            $customerId = $this->isLoggedIn() ? $this->getLoginUserId() : null;
             $sessionToken = $this->request->getParam('session_token');
             $customerLocale = $this->request->getParam('locale', 'zh_Hans_CN');
 
@@ -105,7 +101,7 @@ class Chat extends FrontendController
                 ]);
             }
 
-            $customerId = $this->session->isLogin() ? $this->session->getLoginID() : 0;
+            $customerId = $this->session->isLoggedIn() ? $this->session->getUserId() : 0;
             $senderId = $customerId ?: $sessionId; // 未登录用户使用会话ID作为发送者ID
 
             $message = $this->chatService->sendMessage(
@@ -181,7 +177,7 @@ class Chat extends FrontendController
                 ]);
             }
 
-            $customerId = $this->session->isLogin() ? $this->session->getLoginID() : null;
+            $customerId = $this->isLoggedIn() ? $this->getLoginUserId() : null;
 
             $this->chatService->setCustomerLocale(
                 $locale,

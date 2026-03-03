@@ -12,7 +12,6 @@ declare(strict_types=1);
 namespace Weline\CustomerService\Controller\Frontend;
 
 use Weline\CustomerService\Service\EmailBindingService;
-use Weline\Customer\Session\CustomerSession;
 use Weline\Framework\App\Controller\FrontendController;
 
 /**
@@ -21,14 +20,11 @@ use Weline\Framework\App\Controller\FrontendController;
 class Bind extends FrontendController
 {
     private EmailBindingService $emailBindingService;
-    private CustomerSession $session;
 
     public function __construct(
-        EmailBindingService $emailBindingService,
-        CustomerSession $session
+        EmailBindingService $emailBindingService
     ) {
         $this->emailBindingService = $emailBindingService;
-        $this->session = $session;
     }
 
     /**
@@ -107,7 +103,7 @@ class Bind extends FrontendController
             }
 
             // 绑定客户到会话
-            $customerId = $this->session->isLogin() ? $this->session->getLoginID() : null;
+            $customerId = $this->session->isLoggedIn() ? $this->session->getUserId() : null;
             $result = $this->emailBindingService->bindCustomerToSession(
                 $data['email'],
                 $data['session_token'],

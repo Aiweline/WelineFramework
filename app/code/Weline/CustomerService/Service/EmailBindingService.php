@@ -68,7 +68,7 @@ class EmailBindingService
 
             return true;
         } catch (\Exception $e) {
-            error_log('EmailBindingService sendVerificationEmail error: ' . $e->getMessage());
+            w_log_error('EmailBindingService sendVerificationEmail error: ' . $e->getMessage());
             return false;
         }
     }
@@ -186,7 +186,7 @@ class EmailBindingService
 
             return true;
         } catch (\Exception $e) {
-            error_log('EmailBindingService bindCustomerToSession error: ' . $e->getMessage());
+            w_log_error('EmailBindingService bindCustomerToSession error: ' . $e->getMessage());
             return false;
         }
     }
