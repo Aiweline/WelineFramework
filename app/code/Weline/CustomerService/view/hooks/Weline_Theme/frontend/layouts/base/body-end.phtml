@@ -9,11 +9,11 @@
  * @hook-solo false        Hook独享：false（不独占）
  */
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Customer\Session\CustomerSession;
+use Weline\Framework\Session\SessionFactory;
 
 // 获取当前客户会话
-$session = ObjectManager::getInstance(CustomerSession::class);
-$isLoggedIn = $session->isLogin();
+$session = SessionFactory::getInstance()->createFrontendSession();
+$isLoggedIn = $session->isLoggedIn();
 $customerId = $isLoggedIn ? $session->getLoginID() : null;
 
 // 获取前端URL
