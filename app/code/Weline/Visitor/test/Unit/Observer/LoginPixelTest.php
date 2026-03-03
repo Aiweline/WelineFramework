@@ -41,9 +41,9 @@ class LoginPixelTest extends TestCore
             return;
         }
 
-        // 模拟用户对象
-        $user = $this->createMock(\Weline\Framework\App\Session\FrontendSession::class);
-        $user->method('getId')->willReturn(123);
+        // 模拟用户对象（实现 AuthenticableInterface）
+        $user = $this->createMock(\Weline\Framework\Session\Auth\AuthenticableInterface::class);
+        $user->method('getAuthIdentifier')->willReturn(123);
 
         // 模拟请求对象
         $request = $this->createMock(Request::class);
@@ -90,9 +90,9 @@ class LoginPixelTest extends TestCore
             return;
         }
 
-        // 模拟用户对象
-        $user = $this->createMock(\Weline\Framework\App\Session\FrontendSession::class);
-        $user->method('getId')->willReturn(123);
+        // 模拟用户对象（实现 AuthenticableInterface）
+        $user = $this->createMock(\Weline\Framework\Session\Auth\AuthenticableInterface::class);
+        $user->method('getAuthIdentifier')->willReturn(123);
 
         // 模拟请求对象
         $request = $this->createMock(Request::class);
@@ -136,7 +136,7 @@ class LoginPixelTest extends TestCore
 
         // 测试缺少请求
         $eventData2 = new \Weline\Framework\DataObject();
-        $eventData2->setData('user', $this->createMock(\Weline\Framework\App\Session\FrontendSession::class));
+        $eventData2->setData('user', $this->createMock(\Weline\Framework\Session\Auth\AuthenticableInterface::class));
         $event2 = new Event();
         $event2->setData($eventData2);
 
@@ -162,9 +162,9 @@ class LoginPixelTest extends TestCore
             return;
         }
 
-        // 模拟用户对象
-        $user = $this->createMock(\Weline\Framework\App\Session\FrontendSession::class);
-        $user->method('getId')->willReturn(456);
+        // 模拟用户对象（实现 AuthenticableInterface）
+        $user = $this->createMock(\Weline\Framework\Session\Auth\AuthenticableInterface::class);
+        $user->method('getAuthIdentifier')->willReturn(456);
 
         // 模拟请求对象
         $request = $this->createMock(Request::class);

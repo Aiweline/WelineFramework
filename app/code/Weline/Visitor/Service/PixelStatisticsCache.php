@@ -3,9 +3,6 @@ declare(strict_types=1);
 
 namespace Weline\Visitor\Service;
 
-use Weline\Framework\Cache\CacheFactory;
-use Weline\Framework\Manager\ObjectManager;
-
 /**
  * 像素统计缓存服务
  * 
@@ -40,14 +37,14 @@ class PixelStatisticsCache
     public static function getWebsiteSummary(int $websiteId, callable $callback): array
     {
         $cacheKey = self::CACHE_TAG . '_summary_' . $websiteId;
-        $cached = CacheFactory::get($cacheKey);
+        $cached = w_cache('default')->get($cacheKey);
         
         if ($cached !== false && $cached !== null) {
             return is_array($cached) ? $cached : json_decode($cached, true);
         }
         
         $result = $callback();
-        CacheFactory::set($cacheKey, json_encode($result), self::CACHE_TTL_SUMMARY);
+        w_cache('default')->set($cacheKey, json_encode($result), self::CACHE_TTL_SUMMARY);
         
         return $result;
     }
@@ -63,14 +60,14 @@ class PixelStatisticsCache
     public static function getTrends(?int $websiteId, int $days, callable $callback): array
     {
         $cacheKey = self::CACHE_TAG . '_trends_' . ($websiteId ?? 'all') . '_' . $days;
-        $cached = CacheFactory::get($cacheKey);
+        $cached = w_cache('default')->get($cacheKey);
         
         if ($cached !== false && $cached !== null) {
             return is_array($cached) ? $cached : json_decode($cached, true);
         }
         
         $result = $callback();
-        CacheFactory::set($cacheKey, json_encode($result), self::CACHE_TTL_TRENDS);
+        w_cache('default')->set($cacheKey, json_encode($result), self::CACHE_TTL_TRENDS);
         
         return $result;
     }
@@ -86,7 +83,7 @@ class PixelStatisticsCache
     public static function getEventStats(int $websiteId, ?string $event, callable $callback)
     {
         $cacheKey = self::CACHE_TAG . '_events_' . $websiteId . '_' . ($event ?? 'all');
-        $cached = CacheFactory::get($cacheKey);
+        $cached = w_cache('default')->get($cacheKey);
         
         if ($cached !== false && $cached !== null) {
             $decoded = is_array($cached) ? $cached : json_decode($cached, true);
@@ -94,7 +91,7 @@ class PixelStatisticsCache
         }
         
         $result = $callback();
-        CacheFactory::set($cacheKey, is_array($result) ? json_encode($result) : $result, self::CACHE_TTL_EVENTS);
+        w_cache('default')->set($cacheKey, is_array($result) ? json_encode($result) : $result, self::CACHE_TTL_EVENTS);
         
         return $result;
     }
@@ -111,14 +108,14 @@ class PixelStatisticsCache
     public static function getRealtimeData(int $websiteId, int $interval, int $hours, callable $callback): array
     {
         $cacheKey = self::CACHE_TAG . '_realtime_' . $websiteId . '_' . $interval . '_' . $hours;
-        $cached = CacheFactory::get($cacheKey);
+        $cached = w_cache('default')->get($cacheKey);
         
         if ($cached !== false && $cached !== null) {
             return is_array($cached) ? $cached : json_decode($cached, true);
         }
         
         $result = $callback();
-        CacheFactory::set($cacheKey, json_encode($result), self::CACHE_TTL_REALTIME);
+        w_cache('default')->set($cacheKey, json_encode($result), self::CACHE_TTL_REALTIME);
         
         return $result;
     }
@@ -136,14 +133,14 @@ class PixelStatisticsCache
     public static function getBusinessValue(int $websiteId, string $period, ?string $startDate, ?string $endDate, callable $callback): array
     {
         $cacheKey = self::CACHE_TAG . '_business_' . $websiteId . '_' . $period . '_' . md5($startDate . $endDate);
-        $cached = CacheFactory::get($cacheKey);
+        $cached = w_cache('default')->get($cacheKey);
         
         if ($cached !== false && $cached !== null) {
             return is_array($cached) ? $cached : json_decode($cached, true);
         }
         
         $result = $callback();
-        CacheFactory::set($cacheKey, json_encode($result), self::CACHE_TTL_TRENDS);
+        w_cache('default')->set($cacheKey, json_encode($result), self::CACHE_TTL_TRENDS);
         
         return $result;
     }
@@ -175,11 +172,11 @@ class PixelStatisticsCache
             ];
         }
         
-        // 注意：CacheFactory可能不支持通配符删除，这里需要根据实际实现调整
+        // 注意：w_cache() 可能不支持通配符删除，这里需要根据实际实现调整
         // 如果支持，可以遍历删除；如果不支持，可能需要记录所有缓存键
         foreach ($keys as $key) {
             // 这里简化处理，实际应该根据缓存驱动实现删除逻辑
-            // CacheFactory::delete($key);
+            // w_cache('default')->delete($key);
         }
     }
     
@@ -204,7 +201,7 @@ class PixelStatisticsCache
     public static function remember(string $key, int $ttl, callable $callback)
     {
         $cacheKey = self::CACHE_TAG . '_' . $key;
-        $cached = CacheFactory::get($cacheKey);
+        $cached = w_cache('default')->get($cacheKey);
         
         if ($cached !== false && $cached !== null) {
             $decoded = json_decode($cached, true);
@@ -212,7 +209,7 @@ class PixelStatisticsCache
         }
         
         $result = $callback();
-        CacheFactory::set($cacheKey, is_array($result) || is_object($result) ? json_encode($result) : $result, $ttl);
+        w_cache('default')->set($cacheKey, is_array($result) || is_object($result) ? json_encode($result) : $result, $ttl);
         
         return $result;
     }
