@@ -437,7 +437,7 @@ class Page extends Model
             }
         } catch (\Exception $e) {
             // 静默处理错误，避免影响模块安装
-            error_log('WeShop CMS: Failed to create default test page: ' . $e->getMessage());
+            w_log_error('WeShop CMS: Failed to create default test page: ' . $e->getMessage());
         }
     }
 }
