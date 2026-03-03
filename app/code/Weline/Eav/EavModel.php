@@ -12,14 +12,13 @@ declare(strict_types=1);
 
 namespace Weline\Eav;
 
-use Weline\Eav\Cache\EavCache;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Group;
 use Weline\Eav\Model\EavAttribute\Set;
 use Weline\Eav\Model\EavAttribute\Type;
 use Weline\Eav\Model\EavEntity;
 use Weline\Framework\App\Exception;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
@@ -36,9 +35,9 @@ abstract class EavModel extends Model implements EavInterface
      */
     private EavEntity $entity;
     /**
-     * @var CacheInterface
+     * @var CachePoolInterface
      */
-    private CacheInterface $eavCache;
+    private CachePoolInterface $eavCache;
     /**
      * @var EavAttribute
      */
@@ -51,13 +50,12 @@ abstract class EavModel extends Model implements EavInterface
 
     function __construct(
         EavEntity    $entity,
-        EavCache     $eavCache,
         EavAttribute $attribute,
                      $data = [],
     )
     {
         $this->entity = $entity;
-        $this->eavCache = $eavCache->create();
+        $this->eavCache = w_cache('eav');
         $this->attribute = $attribute;
         parent::__construct($data);
     }
