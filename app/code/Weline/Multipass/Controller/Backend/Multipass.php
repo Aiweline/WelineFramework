@@ -13,8 +13,8 @@ namespace Weline\Multipass\Controller\Backend;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Backend\Model\BackendUser;
-use Weline\Backend\Session\BackendSession as BackendSessionBackend;
-use Weline\Framework\App\Session\BackendSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Multipass\Model\MultipassSite;
 use Weline\Multipass\Service\MultipassService;
 
@@ -24,14 +24,12 @@ use Weline\Multipass\Service\MultipassService;
  */
 class Multipass extends BackendController
 {
-    protected BackendSession $session;
+    protected AuthenticatedSessionInterface $session;
     private MultipassService $multipassService;
 
-    public function __construct(
-        BackendSessionBackend $session
-    ) {
+    public function __construct() {
         parent::__construct();
-        $this->session = $session;
+        $this->session = SessionFactory::getInstance()->createBackendSession();
         $this->multipassService = ObjectManager::getInstance(MultipassService::class);
     }
 
