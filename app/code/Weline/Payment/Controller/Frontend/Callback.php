@@ -65,7 +65,7 @@ class Callback extends FrontendController
                 echo 'fail';
             }
         } catch (\Exception $e) {
-            error_log('支付回调处理失败: ' . $e->getMessage());
+            w_log_error('支付回调处理失败: ' . $e->getMessage());
             http_response_code(500);
             echo 'error';
         }
