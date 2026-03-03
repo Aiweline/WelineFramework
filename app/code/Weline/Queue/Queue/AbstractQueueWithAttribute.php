@@ -16,10 +16,10 @@ use PhpOffice\PhpSpreadsheet\Exception;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Database\Exception\ModelException;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Queue\Cache\QueueCache;
 use Weline\Queue\Model\Queue;
 use Weline\Queue\QueueInterface;
 
@@ -40,14 +40,13 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
     public ?object $task = null;
     protected array $current_item = [];
     protected int $current_index = 1;
-    protected \Weline\Framework\Cache\CacheInterface $cache;
+    protected CachePoolInterface $cache;
     protected array $fatal_errors = [];
     protected array $normal_errors = [];
 
-    public function __construct(private QueueCache $queue_cache)
+    public function __construct()
     {
-        $this->cache = $queue_cache->create();
-        $this->cache->setStatus(true);
+        $this->cache = w_cache('queue');
     }
 
     function setTitles(array $titles): self

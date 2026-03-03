@@ -1,122 +1,377 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
-
+/**
+ * 队列类型管理页面
+ * @var \Weline\Framework\View\Template $this
+ */
 ?>
-<!-- start page title -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'>
-                                <breadcrumb model="Weline\Backend\Model\Menu" order_field="order"
-                                            name_field="title"></breadcrumb>
-                            </h4>
-                            <div class='page-title-right'>
-                                <breadcrumb model='Weline\Backend\Model\Menu' order_field='order'
-                                            name_field='title'></breadcrumb>
-                            </div>
+<style>
+.weline-queue-type-container {
+    background: var(--backend-color-card-bg, #fff);
+}
 
+.weline-queue-type-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.weline-queue-type-table th {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #333);
+    font-weight: 600;
+    padding: var(--backend-padding-table-cell, 12px);
+    border-bottom: 2px solid var(--backend-color-border-default, #dee2e6);
+    white-space: nowrap;
+}
+
+.weline-queue-type-table td {
+    padding: var(--backend-padding-table-cell, 12px);
+    color: var(--backend-color-text-primary, #333);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    vertical-align: middle;
+}
+
+.weline-queue-type-table tr:hover td {
+    background: var(--backend-color-table-bg-hover, #f8f9fa);
+}
+
+.weline-queue-type-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.weline-queue-type-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    font-size: 0.8125rem;
+    font-weight: 500;
+}
+
+.weline-queue-type-status-badge--enabled {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+    color: var(--backend-color-success, #34c38f);
+}
+
+.weline-queue-type-status-badge--disabled {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
+    color: var(--backend-color-danger, #f46a6a);
+}
+
+.weline-queue-type-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.weline-queue-type-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border: none;
+    border-radius: var(--backend-border-radius, 6px);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.weline-queue-type-btn--enable {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+    color: var(--backend-color-success, #34c38f);
+}
+
+.weline-queue-type-btn--enable:hover {
+    background: var(--backend-color-success, #34c38f);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.weline-queue-type-btn--disable {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
+    color: var(--backend-color-danger, #f46a6a);
+}
+
+.weline-queue-type-btn--disable:hover {
+    background: var(--backend-color-danger, #f46a6a);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.weline-queue-type-btn--view {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    color: var(--backend-color-info, #50a5f1);
+}
+
+.weline-queue-type-btn--view:hover {
+    background: var(--backend-color-info, #50a5f1);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.weline-queue-type-class {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.75rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+    word-break: break-all;
+    max-width: 300px;
+}
+
+.weline-queue-type-module {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary, #556ee6);
+    border-radius: var(--backend-border-radius-sm, 4px);
+    font-size: 0.8125rem;
+}
+
+.weline-queue-type-time {
+    font-size: 0.8125rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.weline-queue-type-empty {
+    text-align: center;
+    padding: var(--backend-spacing-xl, 40px);
+    color: var(--backend-color-text-tertiary, #999);
+}
+
+.weline-queue-type-empty i {
+    font-size: 3rem;
+    opacity: 0.3;
+    margin-bottom: var(--backend-spacing-md, 15px);
+}
+</style>
+
+<!-- start page title -->
+<div class='row'>
+    <div class='col-12'>
+        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+            <h4 class='mb-sm-0'>
+                <breadcrumb model="Weline\Backend\Model\Menu" order_field="order" name_field="title"></breadcrumb>
+            </h4>
+            <div class='page-title-right'>
+                <breadcrumb model='Weline\Backend\Model\Menu' order_field='order' name_field='title'></breadcrumb>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end page title -->
+
+<!-- start page message -->
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+<!-- end message -->
+
+<div class='row'>
+    <div class='col-12'>
+        <div class='card weline-queue-type-container'>
+            <div class='card-body'>
+                <h4 class='card-title'>
+                    <lang>{{title}}</lang>
+                </h4>
+                <p class="card-title-desc">
+                    <lang>管理系统中注册的队列类型，可以启用或禁用特定类型的队列处理器</lang>
+                </p>
+                
+                <div class='table-rep-plugin'>
+                    <!-- search form -->
+                    <div class='row mb-3'>
+                        <div class='col-12'>
+                            <block class='Weline\Component\Block\Form\Search' 
+                                   id='type-search'
+                                   action='*/backend/type' 
+                                   method='get' 
+                                   keyword='q'
+                                   value=''
+                                   placeholder='搜索队列类型名称或ID...'></block>
                         </div>
                     </div>
-                </div>
-                <!-- end page title -->
-                <!-- start page message -->
-                <div class='row'>
-                    <template>Weline_Component::message.phtml</template>
-                </div> <!-- end message -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='card'>
-                            <div class='card-body'>
-                                <h4 class='card-title'>
-                                    <lang>{{title}}</lang>
-                                </h4>
-                                <div class='table-rep-plugin'>
-                                    <!-- search form -->
-                                    <div class='row'>
-                                        <div class='col-12'>
-                                            <block class='Weline\Component\Block\Form\Search' id='type-search'
-                                                   action='*/backend/type' method='get' keyword='q'
-                                                   value=''
-                                                   placeholder='请输入关键词'></block>
+                    <!-- end search form -->
+                    
+                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
+                        <table class='weline-queue-type-table table table-striped table-bordered'>
+                            <thead>
+                            <tr>
+                                <th data-priority='1' style="width: 80px;"><?= __('ID') ?></th>
+                                <th data-priority='1'><?= __('类型名称') ?></th>
+                                <th data-priority='1'><?= __('所属模块') ?></th>
+                                <th data-priority='2'><?= __('执行类') ?></th>
+                                <th data-priority='1' style="width: 120px;"><?= __('状态') ?></th>
+                                <th data-priority='3' style="width: 160px;"><?= __('更新时间') ?></th>
+                                <th data-priority='1' style="width: 180px;"><?= __('操作') ?></th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <empty name="types">
+                                <tr>
+                                    <td colspan="7">
+                                        <div class="weline-queue-type-empty">
+                                            <i class="mdi mdi-inbox-outline"></i>
+                                            <p><lang>暂无队列类型数据</lang></p>
                                         </div>
-                                    </div>
-                                    <!-- end search form -->
-                                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
-                                        <table id='tech-companies-1' class='table table-striped table-bordered'>
-                                            <thead>
-                                            <tr>
-                                                <th data-priority='1'><?= __('类型ID') ?></th>
-                                                <th data-priority='1'><?= __('名称') ?></th>
-                                                <th data-priority='1'><?= __('模组') ?></th>
-                                                <th data-priority='1'><?= __('执行类') ?></th>
-                                                <th data-priority='1'><?= __('启用') ?></th>
-                                                <th data-priority='3'><?= __('创建时间') ?></th>
-                                                <th data-priority='3'><?= __('更新时间') ?></th>
-                                            </tr>
-                                            </thead>
-                                            <tbody>
-                                            <foreach name="types" item="type" key="key">
-                                                <tr>
-                                                    <td>{{type.type_id}}</td>
-                                                    <td class='co-name'>{{type.name}}</td>
-                                                    <td class='co-name'>{{type.module_name}}</td>
-                                                    <td class='co-name'>{{type.class}}</td>
-                                                    <td class='co-name'>
-                                                        <if condition="type.enable == 1">
-                                                            <span class="text-success mr-2"><lang>是</lang></span>
-                                                            <block class='Weline\Component\Block\OffCanvas'
-                                                                   template='Weline_Component::off-canvas.phtml'
-                                                                   title='禁用'
-                                                                   cache='0'
-                                                                   id='create_queue_off_canvas_new'
-                                                                   action='*/backend/type/disable'
-                                                                   vars="type"
-                                                                   action-params="{id:type.type_id}"
-                                                                   target-tag='button'
-                                                                   target-button-text='禁用'
-                                                                   target-button-class='btn btn-danger'
-                                                                   flush='0'
-                                                                   save='0'
-                                                                   close-button-show='1'
-                                                                   close-button-text='关闭'
-                                                                   direction='right'
-                                                                   class-names='w-75'
-                                                                   off-canvas-body-style=''
-                                                            /><else/>
-                                                            <span class='text-danger mr-2'><lang>否</lang></span>
-                                                            <block class='Weline\Component\Block\OffCanvas'
-                                                                   template='Weline_Component::off-canvas.phtml'
-                                                                   title='启用'
-                                                                   cache='0'
-                                                                   id='create_queue_off_canvas_new'
-                                                                   action='*/backend/type/enable'
-                                                                   vars='type'
-                                                                   action-params='{id:type.type_id}'
-                                                                   target-tag='button'
-                                                                   target-button-text='启用'
-                                                                   target-button-class='btn btn-success'
-                                                                   flush='0'
-                                                                   save='0'
-                                                                   close-button-show='1'
-                                                                   close-button-text='关闭'
-                                                                   direction='right'
-                                                                   class-names='w-75'
-                                                                   off-canvas-body-style=''
-                                                            />
-                                                        </if>
-                                                    </td>
-                                                    <td class='co-name'>{{type.create_time}}</td>
-                                                    <td class='co-name'>{{type.update_time}}</td>
-                                                </tr>
-                                            </foreach>
-                                            </tbody>
-                                        </table>
-                                        {{pagination}}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div> <!-- end col -->
-                </div> <!-- end row -->
-<link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
-<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
+                                    </td>
+                                </tr>
+                            </empty>
+                            <foreach name="types" item="type" key="key">
+                                <tr data-type-id="{{type.type_id}}">
+                                    <td>
+                                        <strong>{{type.type_id}}</strong>
+                                    </td>
+                                    <td>
+                                        <strong>{{type.name}}</strong>
+                                    </td>
+                                    <td>
+                                        <span class="weline-queue-type-module">
+                                            <i class="mdi mdi-package-variant-closed"></i>
+                                            {{type.module_name}}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="weline-queue-type-class" title="{{type.class}}">
+                                            {{type.class}}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="weline-queue-type-status">
+                                            <if condition="type.enable == 1">
+                                                <span class="weline-queue-type-status-badge weline-queue-type-status-badge--enabled">
+                                                    <i class="mdi mdi-check-circle"></i>
+                                                    <lang>启用</lang>
+                                                </span>
+                                            <else/>
+                                                <span class="weline-queue-type-status-badge weline-queue-type-status-badge--disabled">
+                                                    <i class="mdi mdi-close-circle"></i>
+                                                    <lang>禁用</lang>
+                                                </span>
+                                            </if>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="weline-queue-type-time">{{type.update_time}}</span>
+                                    </td>
+                                    <td>
+                                        <div class="weline-queue-type-actions">
+                                            <if condition="type.enable == 1">
+                                                <button type="button" 
+                                                        class="weline-queue-type-btn weline-queue-type-btn--disable"
+                                                        data-action="disable"
+                                                        data-id="{{type.type_id}}"
+                                                        data-name="{{type.name}}"
+                                                        title="@lang(禁用此队列类型)">
+                                                    <i class="mdi mdi-power-off"></i>
+                                                    <lang>禁用</lang>
+                                                </button>
+                                            <else/>
+                                                <button type="button" 
+                                                        class="weline-queue-type-btn weline-queue-type-btn--enable"
+                                                        data-action="enable"
+                                                        data-id="{{type.type_id}}"
+                                                        data-name="{{type.name}}"
+                                                        title="@lang(启用此队列类型)">
+                                                    <i class="mdi mdi-power"></i>
+                                                    <lang>启用</lang>
+                                                </button>
+                                            </if>
+                                            <block class='Weline\Component\Block\OffCanvas'
+                                                   template='Weline_Component::off-canvas.phtml'
+                                                   title='查看详情'
+                                                   cache='0'
+                                                   id='view_queue_type_detail'
+                                                   action='*/backend/type/show'
+                                                   vars="type"
+                                                   action-params="{id:type.type_id}"
+                                                   target-tag='button'
+                                                   target-button-text='详情'
+                                                   icon='mdi mdi-eye'
+                                                   target-button-class='weline-queue-type-btn weline-queue-type-btn--view'
+                                                   flush='1'
+                                                   save='0'
+                                                   close-button-show='1'
+                                                   close-button-text='关闭'
+                                                   direction='right'
+                                                   class-names='w-50'
+                                                   off-canvas-body-style=''
+                                            />
+                                        </div>
+                                    </td>
+                                </tr>
+                            </foreach>
+                            </tbody>
+                        </table>
+                        {{pagination}}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    
+    var enableUrl = "@backend-url('*/backend/type/enable')";
+    var disableUrl = "@backend-url('*/backend/type/disable')";
+    
+    function handleTypeAction(button) {
+        var action = button.getAttribute('data-action');
+        var typeId = button.getAttribute('data-id');
+        var typeName = button.getAttribute('data-name');
+        
+        var actionText = action === 'enable' ? '@lang(启用)' : '@lang(禁用)';
+        var confirmMsg = '@lang(确定要)' + actionText + '@lang(队列类型)' + ' "' + typeName + '" @lang(吗？)';
+        
+        BackendConfirm.show(confirmMsg, {
+            title: actionText + '@lang(确认)',
+            confirmText: actionText,
+            cancelText: '@lang(取消)',
+            type: action === 'enable' ? 'success' : 'warning'
+        }).then(function(confirmed) {
+            if (!confirmed) return;
+            
+            var url = action === 'enable' ? enableUrl : disableUrl;
+            url += '?id=' + typeId;
+            
+            if (window.showLoading) showLoading();
+            
+            fetch(url, {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(function(response) {
+                return response.text();
+            })
+            .then(function() {
+                BackendToast.success(actionText + '@lang(成功，页面即将刷新...)');
+                setTimeout(function() {
+                    window.location.reload();
+                }, 1000);
+            })
+            .catch(function(error) {
+                if (window.hideLoading) hideLoading();
+                BackendToast.error('@lang(操作失败：)' + error.message);
+            });
+        });
+    }
+    
+    function init() {
+        document.querySelectorAll('[data-action="enable"], [data-action="disable"]').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                handleTypeAction(this);
+            });
+        });
+    }
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+</script>
