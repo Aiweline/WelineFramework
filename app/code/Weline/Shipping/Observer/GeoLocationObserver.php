@@ -14,7 +14,7 @@ namespace Weline\Shipping\Observer;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Session\SessionManager;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Shipping\Service\DeliveryAddressService;
 
 /**
@@ -24,14 +24,14 @@ use Weline\Shipping\Service\DeliveryAddressService;
  */
 class GeoLocationObserver implements ObserverInterface
 {
-    private SessionManager $sessionManager;
+    private SessionFactory $sessionFactory;
     private DeliveryAddressService $deliveryAddressService;
 
     public function __construct(
-        SessionManager $sessionManager,
+        SessionFactory $sessionFactory,
         DeliveryAddressService $deliveryAddressService
     ) {
-        $this->sessionManager = $sessionManager;
+        $this->sessionFactory = $sessionFactory;
         $this->deliveryAddressService = $deliveryAddressService;
     }
 
@@ -56,7 +56,7 @@ class GeoLocationObserver implements ObserverInterface
             }
             
             // 获取session
-            $session = $this->sessionManager->create();
+            $session = $this->sessionFactory->create();
             
             // 构建配送地址数据
             $deliveryAddress = [
@@ -87,7 +87,7 @@ class GeoLocationObserver implements ObserverInterface
         } catch (\Exception $e) {
             // 静默处理错误，不影响其他模块
             // 可以记录日志
-            error_log('Shipping GeoLocationObserver error: ' . $e->getMessage());
+            w_log_error('Shipping GeoLocationObserver error: ' . $e->getMessage());
         }
     }
     
@@ -100,7 +100,7 @@ class GeoLocationObserver implements ObserverInterface
     {
         try {
             // 检查是否有Customer模块的session
-            $session = $this->sessionManager->create();
+            $session = $this->sessionFactory->create();
             $customerData = $session->get('weshop_customer');
             
             if ($customerData && isset($customerData['customer_id'])) {
@@ -162,7 +162,7 @@ class GeoLocationObserver implements ObserverInterface
             }
         } catch (\Exception $e) {
             // 静默处理错误，不影响主流程
-            error_log('Shipping syncToDatabase error: ' . $e->getMessage());
+            w_log_error('Shipping syncToDatabase error: ' . $e->getMessage());
         }
     }
     
