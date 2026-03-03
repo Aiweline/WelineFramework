@@ -17,10 +17,11 @@ use Weline\Backend\Model\Backend\Acl\UserRole;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\Auth\AuthenticableInterface;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 
-class BackendUser extends \Weline\Framework\Database\Model
+class BackendUser extends \Weline\Framework\Database\Model implements AuthenticableInterface
 {
     public const fields_ID = 'user_id';
     public const fields_email = 'email';
@@ -301,5 +302,39 @@ class BackendUser extends \Weline\Framework\Database\Model
         ];
 
         $eventsManager->dispatch('Weline_Backend::user::registered', $eventData);
+    }
+
+    // ==================== AuthenticableInterface 实现 ====================
+
+    /**
+     * @inheritDoc
+     */
+    public function getAuthIdentifier(): int|string
+    {
+        return (int)$this->getId();
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getAuthUsername(): string
+    {
+        return (string)$this->getUsername();
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getAuthSessionId(): string
+    {
+        return (string)$this->getSessionId();
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public static function getAuthModelClass(): string
+    {
+        return self::class;
     }
 }
