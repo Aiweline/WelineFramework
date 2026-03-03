@@ -57,7 +57,7 @@ class ProvideDomainList implements ObserverInterface
             $event->setData('provider', 'Weline_Websites');
             
         } catch (\Throwable $e) {
-            \error_log('[ProvideDomainList] ' . __('获取域名列表失败：%{1}', [$e->getMessage()]));
+            w_log_error('[ProvideDomainList] ' . __('获取域名列表失败：%{1}', [$e->getMessage()]));
         }
     }
     

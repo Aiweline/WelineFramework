@@ -583,8 +583,8 @@ class GnameRegistrar implements DomainRegistrarInterface
             ],
             'post_body' => \http_build_query($data),
         ];
-        Env::log_warning('gname_api', "===== GName API 请求详情 =====");
-        Env::log_warning('gname_api', \json_encode($debugInfo, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        w_log_warning("===== GName API 请求详情 =====", [], 'gname_api');
+        w_log_warning(\json_encode($debugInfo, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), [], 'gname_api');
 
         $ch = \curl_init();
 
@@ -625,10 +625,10 @@ class GnameRegistrar implements DomainRegistrarInterface
         \curl_close($ch);
 
         // DEBUG: 记录响应信息（含完整响应体）
-        Env::log_warning('gname_api', "响应: http_code={$httpCode}, effective_url={$effectiveUrl}, body=" . $responseBody);
+        w_log_warning("响应: http_code={$httpCode}, effective_url={$effectiveUrl}, body=" . $responseBody, [], 'gname_api');
 
         if ($errno !== 0 || $responseBody === false) {
-            Env::log_error('gname_api', "请求失败: endpoint={$endpoint}, http_code={$httpCode}, error={$error}, errno={$errno}");
+            w_log_error("请求失败: endpoint={$endpoint}, http_code={$httpCode}, error={$error}, errno={$errno}", [], 'gname_api');
             throw new \RuntimeException(
                 __('GName API 请求失败：%{1}', [$error ?: __('网络错误')])
             );
@@ -637,7 +637,7 @@ class GnameRegistrar implements DomainRegistrarInterface
         $result = \json_decode((string) $responseBody, true);
         if (!\is_array($result)) {
             $bodySnippet = \mb_substr((string) $responseBody, 0, 500);
-            Env::log_error('gname_api', "响应解析失败: endpoint={$endpoint}, http_code={$httpCode}, body={$bodySnippet}");
+            w_log_error("响应解析失败: endpoint={$endpoint}, http_code={$httpCode}, body={$bodySnippet}", [], 'gname_api');
             throw new \RuntimeException(__('GName API 响应解析失败 (HTTP %{1}): %{2}', [$httpCode, $bodySnippet ?: __('空响应')]));
         }
 
@@ -652,7 +652,7 @@ class GnameRegistrar implements DomainRegistrarInterface
     private function configSsl(\CurlHandle $ch): void
     {
         // 使用框架的部署模式检测
-        $deployMode = Env::get('deploy', 'prod');
+        $deployMode = Env::system('deploy') ?? 'prod';
         $isDev = \in_array($deployMode, ['dev', 'development', 'local'], true);
 
         // 开发环境下直接禁用 SSL 验证
@@ -734,10 +734,10 @@ class GnameRegistrar implements DomainRegistrarInterface
             if (\str_contains($e->getMessage(), '权限') || \str_contains($e->getMessage(), '-1002')) {
                 throw $e;
             }
-            Env::log_warning('gname_api', '获取 TLD 价格失败（非致命）: ' . $e->getMessage());
+            w_log_warning('获取 TLD 价格失败（非致命）: ' . $e->getMessage(), [], 'gname_api');
             return [];
         } catch (\Throwable $e) {
-            Env::log_warning('gname_api', '获取 TLD 价格失败（非致命）: ' . $e->getMessage());
+            w_log_warning('获取 TLD 价格失败（非致命）: ' . $e->getMessage(), [], 'gname_api');
             return [];
         }
     }

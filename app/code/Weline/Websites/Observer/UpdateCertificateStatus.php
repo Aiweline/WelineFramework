@@ -55,7 +55,7 @@ class UpdateCertificateStatus implements ObserverInterface
             $domainModel->syncDomainCertificate($domain, $certId, true);
             
         } catch (\Throwable $e) {
-            \Weline\Framework\App\Env::log_error('websites', '[UpdateCertificateStatus] ' . __('更新证书状态失败：%{1}', [$e->getMessage()]));
+            w_log_error('[UpdateCertificateStatus] ' . __('更新证书状态失败：%{1}', [$e->getMessage()]), [], 'websites');
         }
     }
     

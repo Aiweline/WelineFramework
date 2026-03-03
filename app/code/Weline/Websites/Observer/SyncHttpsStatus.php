@@ -62,7 +62,7 @@ class SyncHttpsStatus implements ObserverInterface
             }
             
         } catch (\Throwable $e) {
-            \Weline\Framework\App\Env::log_error('websites', '[SyncHttpsStatus] ' . __('同步 HTTPS 状态失败：%{1}', [$e->getMessage()]));
+            w_log_error('[SyncHttpsStatus] ' . __('同步 HTTPS 状态失败：%{1}', [$e->getMessage()]), [], 'websites');
         }
     }
     
