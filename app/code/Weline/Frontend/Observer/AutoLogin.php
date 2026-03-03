@@ -8,9 +8,10 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Frontend\Model\FrontendUser;
 use Weline\Frontend\Model\FrontendUserToken;
-use Weline\Frontend\Session\FrontendUserSession;
 
 /**
  * 自动登录Observer
@@ -18,12 +19,11 @@ use Weline\Frontend\Session\FrontendUserSession;
  */
 class AutoLogin implements ObserverInterface
 {
-    private FrontendUserSession $session;
+    private AuthenticatedSessionInterface $session;
 
-    public function __construct(
-        FrontendUserSession $session
-    ) {
-        $this->session = $session;
+    public function __construct()
+    {
+        $this->session = SessionFactory::getInstance()->createFrontendSession();
     }
 
     /**
@@ -32,7 +32,7 @@ class AutoLogin implements ObserverInterface
     public function execute(Event &$event): void
     {
         // 如果已经登录，跳过
-        if ($this->session->isLogin()) {
+        if ($this->session->isLoggedIn()) {
             return;
         }
 

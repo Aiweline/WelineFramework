@@ -12,7 +12,7 @@ $user_id = $session->getLoginUserID();
 $base_host = $this->request->getPrePath();
 $base_router = $this->request->getRouterData('router');
 $current_module = $this->request->getModuleName();
-$env_model = \Weline\Framework\App\Env::get('deploy');
+$env_model = \Weline\Framework\App\Env::system('deploy');
 $api_host = $this->request->getUrlBuilder()->getApiUrl('', [], false);
 $theme_path = str_replace('\\', '/', \Weline\Framework\App\Env::getInstance()->getTheme()['path']);
 $env_model_media_base_path_template = $host . (DEV ? '/{module}/view/statics/{path}' : '/static/' . $theme_path . '/{module}/view/statics/{path}');
@@ -77,8 +77,8 @@ endif;
         env_model: '{{env_model}}',
         env_model_media_base_path_template: '{{env_model_media_base_path_template}}',
         base_host: '{{base_host}}',
-        currency: '{{$_SERVER.WELINE_USER_CURRENCY}}',
-        lang: '{{$_SERVER.WELINE_USER_LANG}}',
+        currency: '<?= $_SERVER['WELINE_USER_CURRENCY'] ?? '' ?>',
+        lang: '<?= $_SERVER['WELINE_USER_LANG'] ?? '' ?>',
         api_host: '{{api_host}}',
         base_router: '{{base_router}}',
         i18n: <?= json_encode($i18nWords, JSON_UNESCAPED_UNICODE) ?>,
