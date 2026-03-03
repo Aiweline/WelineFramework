@@ -170,7 +170,7 @@ class LeadSearchService
             return true;
 
         } catch (\Exception $e) {
-            error_log('LeadSearchService updateTaskStatus error: ' . $e->getMessage());
+            w_log_error('LeadSearchService updateTaskStatus error: ' . $e->getMessage());
             return false;
         }
     }
@@ -201,7 +201,7 @@ class LeadSearchService
             return true;
 
         } catch (\Exception $e) {
-            error_log('LeadSearchService saveSearchResults error: ' . $e->getMessage());
+            w_log_error('LeadSearchService saveSearchResults error: ' . $e->getMessage());
             return false;
         }
     }

@@ -768,9 +768,9 @@ class Config extends BackendController
             $fileNames = array_map(function($filePath) use ($modelDir) {
                 return str_replace($modelDir, '', $filePath);
             }, $allFiles);
-            error_log('[AutoLeadAgent] 检查模型缓存 - 模型ID: ' . $modelId . ', 目录: ' . $modelDir . ', 找到文件数: ' . count($allFiles));
+            w_log_debug('[AutoLeadAgent] 检查模型缓存 - 模型ID: ' . $modelId . ', 目录: ' . $modelDir . ', 找到文件数: ' . count($allFiles));
             if (count($allFiles) > 0) {
-                error_log('[AutoLeadAgent] 找到的文件列表: ' . implode(', ', array_slice($fileNames, 0, 20)) . (count($fileNames) > 20 ? ' ... (共' . count($fileNames) . '个)' : ''));
+                w_log_debug('[AutoLeadAgent] 找到的文件列表: ' . implode(', ', array_slice($fileNames, 0, 20)) . (count($fileNames) > 20 ? ' ... (共' . count($fileNames) . '个)' : ''));
             }
             
             // 检查必需文件是否存在（可以在根目录或子目录中）
@@ -792,7 +792,7 @@ class Config extends BackendController
             }
             
             if ($hasModelWeights) {
-                error_log('[AutoLeadAgent] 找到模型权重文件: ' . implode(', ', $weightFiles));
+                w_log_debug('[AutoLeadAgent] 找到模型权重文件: ' . implode(', ', $weightFiles));
             }
 
             // 检查必需文件（可以在任何子目录中）
@@ -816,12 +816,12 @@ class Config extends BackendController
             }
             
             if (count($foundRequiredFiles) > 0) {
-                error_log('[AutoLeadAgent] 找到的必需文件: ' . implode(', ', $foundRequiredFiles));
+                w_log_debug('[AutoLeadAgent] 找到的必需文件: ' . implode(', ', $foundRequiredFiles));
             }
 
             $isCached = $hasModelWeights && empty($missingFiles);
             
-            error_log('[AutoLeadAgent] 模型缓存检查结果 - 模型ID: ' . $modelId . ', 已缓存: ' . ($isCached ? '是' : '否') . ', 有权重文件: ' . ($hasModelWeights ? '是' : '否') . ', 缺失文件: ' . implode(', ', $missingFiles));
+            w_log_debug('[AutoLeadAgent] 模型缓存检查结果 - 模型ID: ' . $modelId . ', 已缓存: ' . ($isCached ? '是' : '否') . ', 有权重文件: ' . ($hasModelWeights ? '是' : '否') . ', 缺失文件: ' . implode(', ', $missingFiles));
 
             // 计算已缓存文件的总大小
             $totalSize = 0;
@@ -850,7 +850,7 @@ class Config extends BackendController
             ]);
 
         } catch (\Throwable $e) {
-            error_log('[AutoLeadAgent] 检查模型缓存异常: ' . $e->getMessage() . ', 文件: ' . $e->getFile() . ', 行: ' . $e->getLine());
+            w_log_error('[AutoLeadAgent] 检查模型缓存异常: ' . $e->getMessage() . ', 文件: ' . $e->getFile() . ', 行: ' . $e->getLine());
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('检查模型缓存失败：%{1}', [$e->getMessage()]),
@@ -1029,7 +1029,7 @@ class Config extends BackendController
             ]);
 
         } catch (\Throwable $e) {
-            error_log('[AutoLeadAgent] 检查模型完整性异常: ' . $e->getMessage());
+            w_log_error('[AutoLeadAgent] 检查模型完整性异常: ' . $e->getMessage());
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('检查模型完整性失败：%{1}', [$e->getMessage()]),
@@ -1089,7 +1089,7 @@ class Config extends BackendController
             ]);
             
         } catch (\Throwable $e) {
-            error_log('[AutoLeadAgent] 检查模型文件异常: ' . $e->getMessage());
+            w_log_error('[AutoLeadAgent] 检查模型文件异常: ' . $e->getMessage());
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('检查模型文件失败：%{1}', [$e->getMessage()]),

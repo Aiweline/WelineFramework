@@ -154,7 +154,7 @@ class TokenService
             return true;
 
         } catch (\Exception $e) {
-            error_log('TokenService validateToken error: ' . $e->getMessage());
+            w_log_error('TokenService validateToken error: ' . $e->getMessage());
             return false;
         }
     }
@@ -203,7 +203,7 @@ class TokenService
             ];
 
         } catch (\Exception $e) {
-            error_log('TokenService getTokenInfo error: ' . $e->getMessage());
+            w_log_error('TokenService getTokenInfo error: ' . $e->getMessage());
             return null;
         }
     }
