@@ -2,37 +2,36 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <!--数据管理分组菜单-->
-    <add source="Weline_Eav::data_management" name="data_management" title="数据管理" action="" parent="Weline_Backend::system_menu"
-         icon="mdi mdi-database" order="20400"/>
     
-    <!--顶层：系统配置-->
-    <add source="Weline_Eav::eav" name="eav_menu" title="Eav" action=""
-         parent="Weline_Eav::data_management"
-         icon="mdi mdi-package-variant"
-         order="10"/>
-    
-    <!-- 新：统一管理界面（推荐） -->
-    <add source="Weline_Eav::eav_manager" name="eav_manager" title="EAV管理" action="/eav/backend/manager"
-         parent="Weline_Eav::eav"
-         icon="mdi mdi-database-cog"
-         order="0"/>
-    
-    <!-- 旧菜单保留兼容 -->
-    <add source="Weline_Eav::eav_entity" name="eav_entity" title="实体(旧)" action="/eav/backend/entity"
-         parent="Weline_Eav::eav"
-         icon="mdi mdi-adjust"
-         order="1"/>
-    <add source="Weline_Eav::eav_attribute" name="eav_attribute" title="属性(旧)" action="/eav/backend/attribute"
-         parent="Weline_Eav::eav"
-         icon="mdi mdi-apache-kafka"
-         order="2"/>
-    <add source="Weline_Eav::eav_attribute_group" name="eav_attribute_group" title="属性组(旧)" action="/eav/backend/attribute/group"
-         parent="Weline_Eav::eav"
-         icon="mdi mdi-select-group"
-         order="3"/>
-    <add source="Weline_Eav::eav_attribute_set" name="eav_attribute_set" title="属性集(旧)" action="/eav/backend/attribute/set"
-         parent="Weline_Eav::eav"
-         icon="mdi mdi-package-variant"
-         order="4"/>
+    <!-- EAV管理 - 归入开发者 > 模组管理 -->
+    <menu source="Weline_Eav::eav" name="eav_menu" title="EAV数据管理"
+          parent="Weline_Backend::module_group"
+          icon="mdi mdi-database-cog-outline"
+          order="20">
+        
+        <!-- EAV统一管理界面 -->
+        <menu source="Weline_Eav::eav_manager" name="eav_manager" title="EAV管理器" action="/eav/backend/manager"
+              icon="mdi mdi-database-settings"
+              order="10"/>
+        
+        <!-- 实体 -->
+        <menu source="Weline_Eav::eav_entity" name="eav_entity" title="实体" action="/eav/backend/entity"
+              icon="mdi mdi-cube-outline"
+              order="20"/>
+        
+        <!-- 属性 -->
+        <menu source="Weline_Eav::eav_attribute" name="eav_attribute" title="属性" action="/eav/backend/attribute"
+              icon="mdi mdi-format-list-bulleted-type"
+              order="30"/>
+        
+        <!-- 属性组 -->
+        <menu source="Weline_Eav::eav_attribute_group" name="eav_attribute_group" title="属性组" action="/eav/backend/attribute/group"
+              icon="mdi mdi-group"
+              order="40"/>
+        
+        <!-- 属性集 -->
+        <menu source="Weline_Eav::eav_attribute_set" name="eav_attribute_set" title="属性集" action="/eav/backend/attribute/set"
+              icon="mdi mdi-package-variant"
+              order="50"/>
+    </menu>
 </menus>
