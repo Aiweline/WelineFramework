@@ -46,6 +46,9 @@ class ControlMessage
     /** Master → Dispatcher：从负载均衡池移除端口 */
     public const TYPE_REMOVE_WORKER = 'remove_worker';
 
+    /** Master → Dispatcher：设置 HTTP 重定向端口（用于明文 HTTP 请求转发） */
+    public const TYPE_SET_REDIRECT_PORT = 'set_redirect_port';
+
     /** Worker → Master：所有请求处理完毕，准备退出 */
     public const TYPE_DRAINING_COMPLETE = 'draining_complete';
 
@@ -61,12 +64,25 @@ class ControlMessage
     /** Master → CLI：CLI 命令执行结果 */
     public const TYPE_COMMAND_RESULT = 'command_result';
 
+    /** Master → Worker：确认收到 ready 消息（启动确认协议） */
+    public const TYPE_ACK_READY = 'ack_ready';
+
+    /** Master → CLI：滚动重启完成事件 */
+    public const TYPE_RELOAD_COMPLETED = 'reload_completed';
+
+    /** Master → CLI：滚动重启失败事件 */
+    public const TYPE_RELOAD_FAILED = 'reload_failed';
+
+    /** Master → CLI：滚动重启进度更新 */
+    public const TYPE_RELOAD_PROGRESS = 'reload_progress';
+
     // ========== 角色常量 ==========
 
     public const ROLE_WORKER = 'worker';
     public const ROLE_DISPATCHER = 'dispatcher';
     public const ROLE_REDIRECT = 'redirect';
     public const ROLE_MAINTENANCE = 'maintenance';
+    public const ROLE_SESSION_SERVER = 'session_server';
 
     // ========== 重载类型 ==========
 
@@ -79,8 +95,16 @@ class ControlMessage
 
     public const ACTION_STOP = 'stop';
     public const ACTION_RELOAD = 'reload';
+    /** 重载并等待完成：Master 滚动重启完成后才返回结果 */
+    public const ACTION_RELOAD_WAIT = 'reload_wait';
     public const ACTION_CACHE_CLEAR = 'cache_clear';
     public const ACTION_STATUS = 'status';
+    /** 启用维护模式：启动维护 Worker，准备滚动重启 */
+    public const ACTION_MAINTENANCE_ENABLE = 'maintenance_enable';
+    /** 禁用维护模式：停止维护 Worker，恢复正常运行 */
+    public const ACTION_MAINTENANCE_DISABLE = 'maintenance_disable';
+    /** 滚动重启：逐个重启 Worker，期间由维护 Worker 接管流量 */
+    public const ACTION_ROLLING_RESTART = 'rolling_restart';
 
     // ========== 复活优先级 ==========
 
@@ -169,15 +193,29 @@ class ControlMessage
     /**
      * 构建 register 消息
      */
-    public static function register(string $role, int $pid, int $port = 0, int $workerId = 0): string
+    public static function register(
+        string $role,
+        int $pid,
+        int $port = 0,
+        int $workerId = 0,
+        int $epoch = 0,
+        string $launchId = ''
+    ): string
     {
-        return self::encode([
+        $data = [
             'type'      => self::TYPE_REGISTER,
             'role'      => $role,
             'pid'       => $pid,
             'port'      => $port,
             'worker_id' => $workerId,
-        ]);
+        ];
+        if ($epoch > 0) {
+            $data['epoch'] = $epoch;
+        }
+        if ($launchId !== '') {
+            $data['launch_id'] = $launchId;
+        }
+        return self::encode($data);
     }
 
     /**
@@ -194,14 +232,27 @@ class ControlMessage
     /**
      * 构建 ready 消息
      */
-    public static function ready(string $role, int $workerId = 0, int $port = 0): string
+    public static function ready(
+        string $role,
+        int $workerId = 0,
+        int $port = 0,
+        int $epoch = 0,
+        string $launchId = ''
+    ): string
     {
-        return self::encode([
+        $data = [
             'type'      => self::TYPE_READY,
             'role'      => $role,
             'worker_id' => $workerId,
             'port'      => $port,
-        ]);
+        ];
+        if ($epoch > 0) {
+            $data['epoch'] = $epoch;
+        }
+        if ($launchId !== '') {
+            $data['launch_id'] = $launchId;
+        }
+        return self::encode($data);
     }
 
     /**
@@ -281,6 +332,17 @@ class ControlMessage
     }
 
     /**
+     * 构建 set_redirect_port 消息（设置 HTTP 重定向端口）
+     */
+    public static function setRedirectPort(int $port): string
+    {
+        return self::encode([
+            'type' => self::TYPE_SET_REDIRECT_PORT,
+            'port' => $port,
+        ]);
+    }
+
+    /**
      * 构建 draining_complete 消息
      */
     public static function drainingComplete(int $workerId, int $port): string
@@ -344,6 +406,72 @@ class ControlMessage
             'pid'       => $pid,
             'port'      => $port,
             'worker_id' => $workerId,
+        ]);
+    }
+
+    /**
+     * 构建 ack_ready 消息（Master → Worker：确认收到 ready）
+     *
+     * @param int $workerId Worker ID
+     * @return string NDJSON 消息
+     */
+    public static function ackReady(int $workerId): string
+    {
+        return self::encode([
+            'type'      => self::TYPE_ACK_READY,
+            'worker_id' => $workerId,
+        ]);
+    }
+
+    /**
+     * 构建 reload_completed 消息（Master → CLI：滚动重启完成）
+     *
+     * @param float $elapsedMs 耗时（毫秒）
+     * @param int $workerCount Worker 数量
+     * @return string NDJSON 消息
+     */
+    public static function reloadCompleted(float $elapsedMs, int $workerCount): string
+    {
+        return self::encode([
+            'type'         => self::TYPE_RELOAD_COMPLETED,
+            'elapsed_ms'   => $elapsedMs,
+            'worker_count' => $workerCount,
+        ]);
+    }
+
+    /**
+     * 构建 reload_failed 消息（Master → CLI：滚动重启失败）
+     *
+     * @param string $reason 失败原因
+     * @param int $workerId 失败的 Worker ID（可选）
+     * @return string NDJSON 消息
+     */
+    public static function reloadFailed(string $reason, int $workerId = 0): string
+    {
+        return self::encode([
+            'type'      => self::TYPE_RELOAD_FAILED,
+            'reason'    => $reason,
+            'worker_id' => $workerId,
+        ]);
+    }
+
+    /**
+     * 构建 reload_progress 消息（Master → CLI：滚动重启进度）
+     *
+     * @param int $completed 已完成数量
+     * @param int $total 总数量
+     * @param int $currentWorkerId 当前正在处理的 Worker ID
+     * @param string $stage 当前阶段：draining/starting/waiting_ready
+     * @return string NDJSON 消息
+     */
+    public static function reloadProgress(int $completed, int $total, int $currentWorkerId, string $stage): string
+    {
+        return self::encode([
+            'type'              => self::TYPE_RELOAD_PROGRESS,
+            'completed'         => $completed,
+            'total'             => $total,
+            'current_worker_id' => $currentWorkerId,
+            'stage'             => $stage,
         ]);
     }
 }

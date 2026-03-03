@@ -36,6 +36,12 @@ use Weline\Framework\System\Process\Processer;
  */
 class FileWatcher
 {
+    /** ANSI 颜色常量 */
+    private const ANSI_RESET = "\033[0m";
+    private const ANSI_BLUE = "\033[34m";
+    private const ANSI_GREEN = "\033[32m";
+    private const ANSI_YELLOW = "\033[33m";
+    
     /**
      * 监控的目录
      */
@@ -97,6 +103,16 @@ class FileWatcher
      * 每次检查的最大目录数（避免 CPU 峰值）
      */
     private int $maxDirsPerCheck = 50;
+
+    /**
+     * FileWatcher 初始化完成时间戳
+     */
+    private static float $initCompletedAt = 0.0;
+
+    /**
+     * 启动后冷却期（秒）- 在此期间不触发 reload，避免初始化时的误触发
+     */
+    private static float $startupCooldown = 15.0;
     
     /**
      * 构造函数
@@ -175,6 +191,9 @@ class FileWatcher
             }
         }
         $this->lastCheckTime = \microtime(true);
+
+        // 记录初始化完成时间（用于启动后冷却期）
+        self::$initCompletedAt = \microtime(true);
     }
     
     /**
@@ -376,6 +395,17 @@ class FileWatcher
         if (empty($changes)) {
             return;
         }
+
+        // 启动后冷却期：避免初始化时的误触发
+        if (self::$initCompletedAt > 0) {
+            $elapsed = \microtime(true) - self::$initCompletedAt;
+            if ($elapsed < self::$startupCooldown) {
+                $tag = self::ANSI_BLUE . '[FileWatcher]' . self::ANSI_RESET;
+                $msg = self::ANSI_YELLOW . "忽略启动后冷却期内的变更（已启动 " . \round($elapsed, 1) . "s，冷却期 " . self::$startupCooldown . "s）" . self::ANSI_RESET;
+                echo '[' . \date('Y-m-d H:i:s') . "] {$tag} {$msg}\n";
+                return;
+            }
+        }
         
         $changedCount = \count($changes);
         
@@ -389,27 +419,31 @@ class FileWatcher
         // 优先使用 IPC 控制通道
         $ipcSuccess = MasterProcess::sendReloadCommand('default', 'code');
         if ($ipcSuccess) {
-            echo '[' . \date('Y-m-d H:i:s') . "] [FileWatcher] 已通过 IPC 控制通道通知 Master 重启 Worker（{$changedCount} 个文件变更）\n";
+            $tag = self::ANSI_BLUE . '[FileWatcher]' . self::ANSI_RESET;
+            $msg = self::ANSI_GREEN . "已通过 IPC 控制通道通知 Master 重启 Worker（{$changedCount} 个文件变更）✓" . self::ANSI_RESET;
+            echo '[' . \date('Y-m-d H:i:s') . "] {$tag} {$msg}\n";
             return;
         }
         
         // 回退：信号方式
-        $registry = new WlsInstanceRegistry();
+        $manager = new ServerInstanceManager();
         // 尝试向 Master 发送 SIGHUP
-        $masterPids = $registry->getRunningMasterPids();
+        $masterPids = $manager->getRunningMasterPids();
         if (!empty($masterPids) && \defined('SIGHUP')) {
             foreach ($masterPids as $pid) {
                 $pid = (int) $pid;
                 if ($pid > 0 && Processer::isRunningByPid($pid)) {
                     Processer::sendSignal($pid, SIGHUP, true);
-                    echo "[FileWatcher] 已向 Master (PID: {$pid}) 发送 SIGHUP 信号\n";
+                    $tag = self::ANSI_BLUE . '[FileWatcher]' . self::ANSI_RESET;
+                    $msg = self::ANSI_YELLOW . "已向 Master (PID: {$pid}) 发送 SIGHUP 信号" . self::ANSI_RESET;
+                    echo "{$tag} {$msg}\n";
                 }
             }
             return;
         }
         
         // 无 Master 时回退：直接向 Worker 发送信号
-        $allWorkerPids = $registry->getRunningWorkerPids();
+        $allWorkerPids = $manager->getRunningWorkerPids();
         $signalCount = 0;
         if (\defined('SIGUSR1')) {
             foreach ($allWorkerPids as $pid) {
@@ -421,7 +455,9 @@ class FileWatcher
             }
         }
         if ($signalCount > 0) {
-            echo "[FileWatcher] 已向 {$signalCount} 个 Worker 发送 SIGUSR1 信号\n";
+            $tag = self::ANSI_BLUE . '[FileWatcher]' . self::ANSI_RESET;
+            $msg = self::ANSI_YELLOW . "已向 {$signalCount} 个 Worker 发送 SIGUSR1 信号" . self::ANSI_RESET;
+            echo "{$tag} {$msg}\n";
         }
     }
 
@@ -434,7 +470,7 @@ class FileWatcher
             try {
                 $callback($changes);
             } catch (\Throwable $e) {
-                \error_log('[FileWatcher] Callback error: ' . $e->getMessage());
+                w_log_error('[FileWatcher] Callback error: ' . $e->getMessage());
             }
         }
     }

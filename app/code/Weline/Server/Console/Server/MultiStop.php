@@ -39,7 +39,7 @@ class MultiStop extends CommandAbstract
             $workerId = $i + 1;
             
             // 构建进程名
-            $processName = "{$phpBinary} \"{$workerScript}\" 127.0.0.1 {$port} {$workerId} --name=weline-worker-{$port}";
+            $processName = "{$phpBinary} \"{$workerScript}\" 127.0.0.1 {$port} {$workerId} --name=weline-wls-worker-{$port}";
             
             // 尝试通过进程名停止
             if (Processer::running($processName)) {
