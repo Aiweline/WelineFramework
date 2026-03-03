@@ -123,7 +123,7 @@ class UniversalFontSubsetter
             }
 
         } catch (\Exception $e) {
-            error_log('创建字体子集失败: ' . $e->getMessage());
+            w_log_error('创建字体子集失败: ' . $e->getMessage());
             return false;
         }
     }
@@ -138,7 +138,7 @@ class UniversalFontSubsetter
             $result = $subsetter->generateSubset($inputPath, $outputPath, $validChars);
             return $result['success'];
         } catch (\Exception $e) {
-            error_log('创建TrueType子集失败: ' . $e->getMessage());
+            w_log_error('创建TrueType子集失败: ' . $e->getMessage());
             return false;
         }
     }
@@ -153,7 +153,7 @@ class UniversalFontSubsetter
             $result = $subsetter->generateSubset($inputPath, $outputPath, $validChars);
             return $result['success'];
         } catch (\Exception $e) {
-            error_log('创建OpenType子集失败: ' . $e->getMessage());
+            w_log_error('创建OpenType子集失败: ' . $e->getMessage());
             return false;
         }
     }
@@ -186,7 +186,7 @@ class UniversalFontSubsetter
             
             return false;
         } catch (\Exception $e) {
-            error_log('创建WOFF子集失败: ' . $e->getMessage());
+            w_log_error('创建WOFF子集失败: ' . $e->getMessage());
             return false;
         }
     }
@@ -219,7 +219,7 @@ class UniversalFontSubsetter
             
             return false;
         } catch (\Exception $e) {
-            error_log('创建WOFF2子集失败: ' . $e->getMessage());
+            w_log_error('创建WOFF2子集失败: ' . $e->getMessage());
             return false;
         }
     }
@@ -270,7 +270,7 @@ class UniversalFontSubsetter
             return $woffData;
 
         } catch (\Exception $e) {
-            error_log('转换为WOFF格式失败: ' . $e->getMessage());
+            w_log_error('转换为WOFF格式失败: ' . $e->getMessage());
             return null;
         }
     }
@@ -321,7 +321,7 @@ class UniversalFontSubsetter
             return $woff2Data;
 
         } catch (\Exception $e) {
-            error_log('转换为WOFF2格式失败: ' . $e->getMessage());
+            w_log_error('转换为WOFF2格式失败: ' . $e->getMessage());
             return null;
         }
     }
@@ -346,7 +346,7 @@ class UniversalFontSubsetter
             return count(array_intersect($expectedChars, $actualChars)) === count($expectedChars);
 
         } catch (\Exception $e) {
-            error_log('验证子集文件失败: ' . $e->getMessage());
+            w_log_error('验证子集文件失败: ' . $e->getMessage());
             return false;
         }
     }
@@ -363,7 +363,7 @@ class UniversalFontSubsetter
             }
             return null;
         } catch (\Exception $e) {
-            error_log('获取子集信息失败: ' . $e->getMessage());
+            w_log_error('获取子集信息失败: ' . $e->getMessage());
             return null;
         }
     }

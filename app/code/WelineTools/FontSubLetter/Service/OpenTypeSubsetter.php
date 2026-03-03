@@ -122,7 +122,7 @@ class OpenTypeSubsetter
             return true;
 
         } catch (\Exception $e) {
-            error_log('创建OpenType子集失败: ' . $e->getMessage());
+            w_log_error('创建OpenType子集失败: ' . $e->getMessage());
             return false;
         }
     }
@@ -638,7 +638,7 @@ class OpenTypeSubsetter
             
             file_put_contents($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT));
         } catch (\Exception $e) {
-            error_log('添加子集元数据失败: ' . $e->getMessage());
+            w_log_error('添加子集元数据失败: ' . $e->getMessage());
         }
     }
 
@@ -662,7 +662,7 @@ class OpenTypeSubsetter
             return count(array_intersect($expectedChars, $actualChars)) === count($expectedChars);
 
         } catch (\Exception $e) {
-            error_log('验证子集文件失败: ' . $e->getMessage());
+            w_log_error('验证子集文件失败: ' . $e->getMessage());
             return false;
         }
     }
@@ -679,7 +679,7 @@ class OpenTypeSubsetter
             }
             return null;
         } catch (\Exception $e) {
-            error_log('获取子集信息失败: ' . $e->getMessage());
+            w_log_error('获取子集信息失败: ' . $e->getMessage());
             return null;
         }
     }

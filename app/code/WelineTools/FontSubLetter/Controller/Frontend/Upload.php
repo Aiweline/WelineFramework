@@ -66,9 +66,9 @@ class Upload extends FrontendController
 
         } catch (\Exception $e) {
             // 记录错误日志
-            error_log('字体上传失败: ' . $e->getMessage());
-            error_log('请求方法: ' . $this->request->getMethod());
-            error_log('$_FILES: ' . json_encode($_FILES));
+            w_log_error('字体上传失败: ' . $e->getMessage());
+            w_log_info('请求方法: ' . $this->request->getMethod());
+            w_log_info('$_FILES: ' . json_encode($_FILES));
             
             return $this->fetchJson([
                 'code' => 500,
@@ -94,11 +94,11 @@ class Upload extends FrontendController
         ini_set('max_file_uploads', '10');
         
         // 记录当前配置
-        error_log('前端上传配置已设置:');
-        error_log('- upload_max_filesize: ' . ini_get('upload_max_filesize'));
-        error_log('- post_max_size: ' . ini_get('post_max_size'));
-        error_log('- max_execution_time: ' . ini_get('max_execution_time'));
-        error_log('- memory_limit: ' . ini_get('memory_limit'));
+        w_log_info('前端上传配置已设置:');
+        w_log_info('- upload_max_filesize: ' . ini_get('upload_max_filesize'));
+        w_log_info('- post_max_size: ' . ini_get('post_max_size'));
+        w_log_info('- max_execution_time: ' . ini_get('max_execution_time'));
+        w_log_info('- memory_limit: ' . ini_get('memory_limit'));
     }
 
     /**
@@ -121,11 +121,11 @@ class Upload extends FrontendController
             
             // 对于某些错误，尝试忽略并继续
             if (in_array($file['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE])) {
-                error_log('前端检测到文件大小限制错误，尝试忽略: ' . $errorMsg);
+                w_log_error('前端检测到文件大小限制错误，尝试忽略: ' . $errorMsg);
                 
                 // 检查文件是否仍然可用
                 if (file_exists($file['tmp_name']) && is_readable($file['tmp_name'])) {
-                    error_log('文件仍然可用，继续处理');
+                    w_log_info('文件仍然可用，继续处理');
                     return; // 继续处理
                 }
             }
