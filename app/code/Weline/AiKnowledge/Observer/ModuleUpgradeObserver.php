@@ -26,6 +26,9 @@ class ModuleUpgradeObserver implements ObserverInterface
     {
         try {
             $data = $event->getData('data');
+            if ($data === null) {
+                return;
+            }
             $moduleName = $data->getData('module_name') ?? null;
             
             if (empty($moduleName)) {

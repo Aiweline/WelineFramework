@@ -25,6 +25,9 @@ class DocumentScanObserver implements ObserverInterface
     {
         try {
             $data = $event->getData('data');
+            if ($data === null) {
+                return;
+            }
             $documents = $data->getData('documents') ?? [];
             
             if (empty($documents)) {
