@@ -50,7 +50,7 @@ class PaymentMethodManager
                 $this->registerProvider($provider);
                 $count++;
             } catch (\Throwable $e) {
-                error_log("注册支付提供商失败: " . $e->getMessage());
+                w_log_error("注册支付提供商失败: " . $e->getMessage());
             }
         }
 
@@ -150,7 +150,7 @@ class PaymentMethodManager
                 return $provider;
             }
         } catch (\Throwable $e) {
-            error_log("获取支付提供商实例失败: {$className}, 错误: " . $e->getMessage());
+            w_log_error("获取支付提供商实例失败: {$className}, 错误: " . $e->getMessage());
         }
 
         return null;
