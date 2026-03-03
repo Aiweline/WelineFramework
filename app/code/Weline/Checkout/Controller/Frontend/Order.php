@@ -14,32 +14,18 @@ namespace Weline\Checkout\Controller\Frontend;
 use Weline\Checkout\Service\OrderService;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Session\Session;
 
 /**
  * 前端订单控制器
  */
 class Order extends FrontendController
 {
-    protected ?Session $session;
     private OrderService $orderService;
 
     public function __construct(
-        OrderService $orderService,
-        Session $session
+        OrderService $orderService
     ) {
         $this->orderService = $orderService;
-        $this->session = $session;
-    }
-
-    /**
-     * 检查登录状态
-     * 
-     * @return bool
-     */
-    private function checkLogin(): bool
-    {
-        return $this->session && $this->session->isLogin();
     }
 
     /**
@@ -49,11 +35,11 @@ class Order extends FrontendController
      */
     public function list(): string
     {
-        if (!$this->checkLogin()) {
+        if (!$this->isLoggedIn()) {
             return $this->redirect($this->getUrl('*/frontend/index'));
         }
 
-        $customerId = $this->session->getLoginUserData('entity_id');
+        $customerId = $this->getLoginUserId();
         $page = max(1, (int)$this->request->getParam('page', 1));
         $pageSize = 20;
 
@@ -75,7 +61,7 @@ class Order extends FrontendController
      */
     public function view(): string
     {
-        if (!$this->checkLogin()) {
+        if (!$this->isLoggedIn()) {
             return $this->redirect($this->getUrl('*/frontend/index'));
         }
 
@@ -98,7 +84,7 @@ class Order extends FrontendController
         }
 
         // 验证订单所有权
-        $customerId = $this->session->getLoginUserData('entity_id');
+        $customerId = $this->getLoginUserId();
         if ($order->getCustomerId() != $customerId) {
             return $this->redirect($this->getUrl('checkout/frontend/order/list'));
         }
@@ -124,7 +110,7 @@ class Order extends FrontendController
             ]);
         }
 
-        if (!$this->checkLogin()) {
+        if (!$this->isLoggedIn()) {
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('请先登录')
@@ -132,7 +118,7 @@ class Order extends FrontendController
         }
 
         $orderId = (int)$this->request->getPost('order_id');
-        $customerId = $this->session->getLoginUserData('entity_id');
+        $customerId = $this->getLoginUserId();
 
         try {
             $order = $this->orderService->getOrder($orderId);
