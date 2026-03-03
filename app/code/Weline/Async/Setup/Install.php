@@ -106,21 +106,21 @@ class Install implements InstallInterface
         
         if (!$nodeVersion) {
             // Node.js 未安装，记录警告但不阻止安装
-            error_log('Weline_Async: Node.js 未安装，无法自动安装依赖。请手动安装 Node.js 后运行: cd ' . BP . 'app/code/Weline/Async/bin && npm install');
+            w_log_warning('Weline_Async: Node.js 未安装，无法自动安装依赖。请手动安装 Node.js 后运行: cd ' . BP . 'app/code/Weline/Async/bin && npm install');
             return;
         }
 
         // Node.js 已安装，检查 npm 是否可用
         $npmVersion = $this->checkNpmInstalled();
         if (!$npmVersion) {
-            error_log('Weline_Async: npm 未安装，无法自动安装依赖。请手动运行: cd ' . BP . 'app/code/Weline/Async/bin && npm install');
+            w_log_warning('Weline_Async: npm 未安装，无法自动安装依赖。请手动运行: cd ' . BP . 'app/code/Weline/Async/bin && npm install');
             return;
         }
 
         // 检查 package.json 是否存在
         $packageJsonPath = BP . DS . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Async' . DS . 'bin' . DS . 'package.json';
         if (!file_exists($packageJsonPath)) {
-            error_log('Weline_Async: package.json 不存在: ' . $packageJsonPath);
+            w_log_warning('Weline_Async: package.json 不存在: ' . $packageJsonPath);
             return;
         }
 
@@ -140,9 +140,9 @@ class Install implements InstallInterface
         exec($command, $output, $returnVar);
         
         if ($returnVar === 0) {
-            error_log('Weline_Async: Node.js 依赖安装成功');
+            w_log_info('Weline_Async: Node.js 依赖安装成功');
         } else {
-            error_log('Weline_Async: Node.js 依赖安装失败: ' . implode("\n", $output));
+            w_log_error('Weline_Async: Node.js 依赖安装失败: ' . implode("\n", $output));
         }
     }
 
