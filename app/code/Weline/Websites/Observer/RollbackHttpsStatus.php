@@ -55,7 +55,7 @@ class RollbackHttpsStatus implements ObserverInterface
             $domainModel->rollbackHttps($domain);
             
         } catch (\Throwable $e) {
-            \Weline\Framework\App\Env::log_error('websites', '[RollbackHttpsStatus] ' . __('回退 HTTPS 状态失败：%{1}', [$e->getMessage()]));
+            w_log_error('[RollbackHttpsStatus] ' . __('回退 HTTPS 状态失败：%{1}', [$e->getMessage()]), [], 'websites');
         }
     }
     
