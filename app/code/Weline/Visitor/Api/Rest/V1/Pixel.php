@@ -175,7 +175,7 @@ class Pixel extends FrontendRestController
                     ->save();
             } catch (Exception $e) {
                 // 记录错误但不影响主流程（附加数据保存失败不应该影响主数据保存）
-                error_log('Pixel Additional Save Error: ' . $e->getMessage());
+                w_log_error('Pixel Additional Save Error: ' . $e->getMessage());
                 // 可以选择返回错误或继续执行（这里选择继续执行，因为主数据已保存）
                 // return $this->error('保存附加数据失败：' . $e->getMessage());
             }

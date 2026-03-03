@@ -40,9 +40,9 @@ class RegisterPixelTest extends TestCore
             return;
         }
 
-        // 模拟用户对象
-        $user = $this->createMock(\Weline\Framework\App\Session\FrontendSession::class);
-        $user->method('getId')->willReturn(789);
+        // 模拟用户对象（实现 AuthenticableInterface）
+        $user = $this->createMock(\Weline\Framework\Session\Auth\AuthenticableInterface::class);
+        $user->method('getAuthIdentifier')->willReturn(789);
 
         // 模拟请求对象
         $request = $this->createMock(Request::class);
@@ -89,9 +89,9 @@ class RegisterPixelTest extends TestCore
             return;
         }
 
-        // 模拟用户对象
-        $user = $this->createMock(\Weline\Framework\App\Session\FrontendSession::class);
-        $user->method('getId')->willReturn(789);
+        // 模拟用户对象（实现 AuthenticableInterface）
+        $user = $this->createMock(\Weline\Framework\Session\Auth\AuthenticableInterface::class);
+        $user->method('getAuthIdentifier')->willReturn(789);
 
         // 模拟请求对象
         $request = $this->createMock(Request::class);
@@ -129,9 +129,9 @@ class RegisterPixelTest extends TestCore
             return;
         }
 
-        // 模拟用户对象
-        $user = $this->createMock(\Weline\Framework\App\Session\FrontendSession::class);
-        $user->method('getId')->willReturn(999);
+        // 模拟用户对象（实现 AuthenticableInterface）
+        $user = $this->createMock(\Weline\Framework\Session\Auth\AuthenticableInterface::class);
+        $user->method('getAuthIdentifier')->willReturn(999);
 
         // 模拟请求对象
         $request = $this->createMock(Request::class);

@@ -51,14 +51,14 @@ class CleanExpiredTokens
             }
             
             if ($deletedCount > 0) {
-                error_log(sprintf(
+                w_log_info(sprintf(
                     '[CleanExpiredTokens] 已清理 %d 个过期的像素加密token',
                     $deletedCount
                 ));
             }
             
         } catch (\Exception $e) {
-            error_log('[CleanExpiredTokens] 清理过期token时出错：' . $e->getMessage());
+            w_log_error('[CleanExpiredTokens] 清理过期token时出错：' . $e->getMessage());
         }
     }
 }
