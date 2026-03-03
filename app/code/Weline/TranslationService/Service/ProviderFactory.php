@@ -84,7 +84,7 @@ class ProviderFactory
             
             return $adapter;
         } catch (\Exception $e) {
-            error_log('Failed to create translation provider: ' . $e->getMessage());
+            w_log_error('Failed to create translation provider: ' . $e->getMessage());
             return null;
         }
     }

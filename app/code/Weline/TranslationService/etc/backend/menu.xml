@@ -1,18 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
-       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
-       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <!--翻译服务菜单-->
-    <add source="Weline_TranslationService::translation_service" name="translation_service" title="翻译服务" action="" 
-         parent="Weline_Backend::system_service"
-         icon="mdi mdi-translate" order="20430"/>
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     
-    <add source="Weline_TranslationService::translation_config" name="translation_config" title="渠道配置" 
-         action="translationservice/backend/config" parent="Weline_TranslationService::translation_service"
-         icon="mdi mdi-cog" order="1"/>
-    
-    <add source="Weline_TranslationService::translation_record" name="translation_record" title="翻译记录" 
-         action="translationservice/backend/record" parent="Weline_TranslationService::translation_service"
-         icon="mdi mdi-history" order="2"/>
+    <!-- 翻译服务 -->
+    <menu source="Weline_TranslationService::translation_service" 
+          name="translation_service" 
+          title="翻译服务" 
+          parent="Weline_Backend::system_service_group" 
+          icon="mdi mdi-translate" 
+          order="20430">
+        
+        <menu source="Weline_TranslationService::translation_config" 
+              name="translation_config" 
+              title="渠道配置" 
+              action="translation/backend/config"
+              icon="mdi mdi-cog" 
+              order="1"/>
+        
+        <menu source="Weline_TranslationService::translation_record" 
+              name="translation_record" 
+              title="翻译记录" 
+              action="translation/backend/record"
+              icon="mdi mdi-history" 
+              order="2"/>
+    </menu>
 </menus>
-
