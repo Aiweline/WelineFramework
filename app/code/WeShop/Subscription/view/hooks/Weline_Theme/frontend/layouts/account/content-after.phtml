@@ -10,13 +10,12 @@
  * @hook-solo false
  */
 
-use WeShop\Customer\Session\CustomerSession;
+use Weline\Framework\Session\SessionFactory;
 use WeShop\Subscription\Service\SubscriptionService;
 use WeShop\Subscription\Model\Subscription;
 use Weline\Framework\Manager\ObjectManager;
 
-/** @var CustomerSession $customerSession */
-$customerSession = ObjectManager::getInstance(CustomerSession::class);
+$customerSession = SessionFactory::getInstance()->createFrontendSession();
 $customer = $customerSession->getCustomer();
 
 if (!$customer || !$customer->getId()) {
