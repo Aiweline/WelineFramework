@@ -149,9 +149,7 @@ class TaskNotificationService
         if (function_exists('w_msg')) {
             w_msg($topic, $type, $title, $content, ['metadata' => $metadata]);
         } else {
-            \Weline\Framework\App\Env::log_warning(
-                "TaskNotificationService: w_msg() 函数不存在，无法发送通知: {$title}"
-            );
+            w_log_warning("TaskNotificationService: w_msg() 函数不存在，无法发送通知: {$title}", [], 'weekly_report');
         }
     }
 
