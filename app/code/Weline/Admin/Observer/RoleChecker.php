@@ -12,21 +12,20 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Observer;
 
-use Weline\Admin\Session\AdminSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Event\Event;
 
 class RoleChecker implements \Weline\Framework\Event\ObserverInterface
 {
     /**
-     * @var \Weline\Admin\Session\AdminSession
+     * @var AuthenticatedSessionInterface
      */
-    private AdminSession $session;
+    private AuthenticatedSessionInterface $session;
 
-    function __construct(
-        AdminSession $session
-    )
+    function __construct()
     {
-        $this->session = $session;
+        $this->session = SessionFactory::getInstance()->createBackendSession();
     }
 
     /**
