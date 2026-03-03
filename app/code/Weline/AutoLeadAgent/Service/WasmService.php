@@ -148,7 +148,7 @@ class WasmService
             $calculatedHash = $this->calculateHash($wasmPath);
             return hash_equals($hash, $calculatedHash);
         } catch (\Exception $e) {
-            error_log('WasmService verifyHash error: ' . $e->getMessage());
+            w_log_error('WasmService verifyHash error: ' . $e->getMessage());
             return false;
         }
     }

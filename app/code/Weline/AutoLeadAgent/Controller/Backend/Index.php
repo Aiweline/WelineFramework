@@ -1223,7 +1223,7 @@ class Index extends BackendController
                         ['module_name' => 'Weline_AutoLeadAgent']
                     );
                 } catch (\Exception $e) {
-                    error_log('Fallback translation failed: ' . $e->getMessage());
+                    w_log_error('Fallback translation failed: ' . $e->getMessage());
                 }
             }
             
@@ -1320,7 +1320,7 @@ class Index extends BackendController
             return $accessible;
             
         } catch (\Throwable $e) {
-            error_log('Google accessibility check failed: ' . $e->getMessage());
+            w_log_error('Google accessibility check failed: ' . $e->getMessage());
             $cache = false;
             $cacheTime = time();
             return false;
@@ -1343,7 +1343,7 @@ class Index extends BackendController
 
         // 先检测 Google 服务是否可访问
         if (!$this->isGoogleAccessible()) {
-            error_log('Google Translate service is not accessible, skipping');
+            w_log_warning('Google Translate service is not accessible, skipping');
             return '';
         }
 
@@ -1378,19 +1378,19 @@ class Index extends BackendController
             curl_close($ch);
             
             if ($curlError) {
-                error_log('Google Translate cURL error: ' . $curlError);
+                w_log_error('Google Translate cURL error: ' . $curlError);
                 return '';
             }
             
             if ($httpCode !== 200) {
-                error_log('Google Translate HTTP error: ' . $httpCode . ' - ' . $response);
+                w_log_error('Google Translate HTTP error: ' . $httpCode . ' - ' . $response);
                 return '';
             }
             
             $data = json_decode($response, true);
             
             if (!is_array($data) || empty($data) || !is_array($data[0])) {
-                error_log('Google Translate invalid response format');
+                w_log_error('Google Translate invalid response format');
                 return '';
             }
             
@@ -1409,7 +1409,7 @@ class Index extends BackendController
             return (string)$translatedText;
             
         } catch (\Throwable $e) {
-            error_log('Google Translate exception: ' . $e->getMessage());
+            w_log_error('Google Translate exception: ' . $e->getMessage());
             return '';
         }
     }
