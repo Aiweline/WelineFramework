@@ -19,8 +19,6 @@ use Weline\Framework\App\System;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Phrase\Cache\PhraseCache;
-use Weline\I18n\Cache\I18nCache;
 use Weline\I18n\Controller\Backend\BaseController;
 use Weline\I18n\Model\Countries;
 use Weline\I18n\Model\Countries\Locale\Name;
@@ -291,12 +289,8 @@ REGISTER_CONTENT;
         }
         file_put_contents($pack_file, $pack_file_content);
         // 清理i18n缓存
-        /**@var \Weline\Framework\Cache\CacheInterface $i18n */
-        $i18n = ObjectManager::getInstance(I18nCache::class . 'Factory');
-        $i18n->clear();
-        /**@var \Weline\Framework\Cache\CacheInterface $phrase */
-        $phrase = ObjectManager::getInstance(PhraseCache::class . 'Factory');
-        $phrase->clear();
+        w_cache('i18n')->clear();
+        w_cache('phrase')->clear();
         Message::success(__('成功清理i18n缓存！'));
         // 清理生成的模板缓存文件
         /**@var System $system */

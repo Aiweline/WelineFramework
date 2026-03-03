@@ -1299,7 +1299,7 @@ class Localization extends BaseController
             
         } catch (\Exception $e) {
             // 静默处理错误，不影响主要功能
-            error_log('Update missing locale codes failed: ' . $e->getMessage());
+            w_log_error('Update missing locale codes failed: ' . $e->getMessage(), [], 'i18n');
         }
     }
     

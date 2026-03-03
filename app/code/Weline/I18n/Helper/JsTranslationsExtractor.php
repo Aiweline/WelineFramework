@@ -13,6 +13,7 @@ namespace Weline\I18n\Helper;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
+use Weline\Framework\App\Env;
 use Weline\I18n\Service\TranslationCollector;
 
 /**
@@ -77,7 +78,7 @@ class JsTranslationsExtractor
                 }
             }
         } catch (\Exception $e) {
-            error_log('解析 weline.modules.js 失败: ' . $e->getMessage());
+            w_log_error('解析 weline.modules.js 失败: ' . $e->getMessage(), [], 'i18n');
         }
         
         return $modules;

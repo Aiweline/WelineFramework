@@ -16,6 +16,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Helper\JsModuleParser;
 use Weline\I18n\Helper\JsTranslationsExtractor;
 use Weline\I18n\Helper\JsWordsRegistry;
+use Weline\Framework\App\Env;
 use Weline\I18n\Model\I18n;
 
 /**
@@ -157,7 +158,7 @@ class TemplateCompile implements ObserverInterface
             }
         } catch (\Exception $e) {
             // 静默处理错误，避免影响模板编译
-            error_log('合并JS翻译词到i18n词库失败: ' . $e->getMessage());
+            w_log_error('合并JS翻译词到i18n词库失败: ' . $e->getMessage(), [], 'i18n');
         }
     }
     
@@ -279,7 +280,7 @@ class TemplateCompile implements ObserverInterface
             }
         } catch (\Exception $e) {
             // 静默处理错误，避免影响模板编译
-            error_log('从 modules.map.json 加载模块翻译词失败: ' . $e->getMessage());
+            w_log_error('从 modules.map.json 加载模块翻译词失败: ' . $e->getMessage(), [], 'i18n');
         }
         
         return $translations;
