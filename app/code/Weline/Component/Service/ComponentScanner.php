@@ -179,7 +179,7 @@ class ComponentScanner
             ];
         } catch (\Throwable $e) {
             // 忽略单个文件的错误，继续扫描其他文件
-            error_log("扫描组件文件失败: {$filePath}, 错误: " . $e->getMessage());
+            w_log_error("扫描组件文件失败: {$filePath}, 错误: " . $e->getMessage());
         }
     }
     
