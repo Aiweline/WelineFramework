@@ -225,7 +225,7 @@ class Import extends BackendRestController
                 }
             }
         } catch (\Exception $e) {
-            error_log("Generate default rules error: " . $e->getMessage());
+            w_log_error("Generate default rules error: " . $e->getMessage());
         }
 
         return $rules;

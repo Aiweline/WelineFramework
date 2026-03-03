@@ -224,7 +224,7 @@ class TableFilter implements TaglibInterface
                         }
                     }
                 } catch (\Exception $e) {
-                    error_log("TableFilter: getModelFields()失败: " . $e->getMessage());
+                    w_log_error("TableFilter: getModelFields()失败: " . $e->getMessage());
                 }
             }
 
@@ -254,7 +254,7 @@ class TableFilter implements TaglibInterface
             return $fieldsHtml;
 
         } catch (\Exception $e) {
-            error_log("TableFilter: 自动生成字段失败: " . $e->getMessage());
+            w_log_error("TableFilter: 自动生成字段失败: " . $e->getMessage());
             // 如果自动生成失败，返回空字符串（不生成任何字段，避免使用不存在的默认字段）
             return '';
         }
