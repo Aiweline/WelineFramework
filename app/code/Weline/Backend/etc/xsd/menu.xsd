@@ -2,37 +2,41 @@
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
            targetNamespace="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
            elementFormDefault="qualified"
-           version="0.0.1">
+           version="1.0.0">
     <xs:element name="menus">
         <xs:annotation>
             <xs:documentation>
-                系统菜单声明。
+                系统菜单声明。支持嵌套的 menu 元素定义菜单层级结构。
             </xs:documentation>
         </xs:annotation>
         <xs:complexType>
             <xs:sequence>
-                <xs:element name="add" type="menuDeclaration" minOccurs="1" maxOccurs="unbounded"/>
+                <xs:element name="menu" type="menuDeclaration" minOccurs="1" maxOccurs="unbounded"/>
             </xs:sequence>
         </xs:complexType>
     </xs:element>
-    <!--    菜单声明-->
+    
+    <!-- 菜单声明（支持嵌套） -->
     <xs:complexType name="menuDeclaration">
         <xs:annotation>
             <xs:documentation>
-                菜单详情声明。
+                菜单详情声明。支持嵌套子菜单，子菜单自动继承父菜单的 source 作为 parent。
             </xs:documentation>
         </xs:annotation>
+        <xs:sequence>
+            <xs:element name="menu" type="menuDeclaration" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+        <xs:attribute name="source" type="xs:string" use="required">
+            <xs:annotation>
+                <xs:documentation>
+                    菜单来源标识，格式：Vendor_Module::menu_name，必须唯一。
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
         <xs:attribute name="name" type="xs:string" use="required">
             <xs:annotation>
                 <xs:documentation>
                     菜单名称，必须唯一。
-                </xs:documentation>
-            </xs:annotation>
-        </xs:attribute>
-        <xs:attribute name="source" type="xs:integer" use="required">
-            <xs:annotation>
-                <xs:documentation>
-                    菜单来源标识。
                 </xs:documentation>
             </xs:annotation>
         </xs:attribute>
@@ -43,31 +47,31 @@
                 </xs:documentation>
             </xs:annotation>
         </xs:attribute>
-        <xs:attribute name="action" type="xs:string" use="required">
+        <xs:attribute name="action" type="xs:string" use="optional">
             <xs:annotation>
                 <xs:documentation>
-                    菜单动作/路由。
+                    菜单动作/路由。分组菜单可为空。
                 </xs:documentation>
             </xs:annotation>
         </xs:attribute>
         <xs:attribute name="parent" type="xs:string" use="optional">
             <xs:annotation>
                 <xs:documentation>
-                    父菜单名称。
+                    父菜单的 source。嵌套时自动推断，仅顶层菜单需要指定。
                 </xs:documentation>
             </xs:annotation>
         </xs:attribute>
         <xs:attribute name="icon" type="xs:string" use="optional">
             <xs:annotation>
                 <xs:documentation>
-                    菜单图标。
+                    菜单图标 CSS 类名。
                 </xs:documentation>
             </xs:annotation>
         </xs:attribute>
         <xs:attribute name="is_backend" type="xs:string" use="optional">
             <xs:annotation>
                 <xs:documentation>
-                    是否为后端菜单。
+                    是否为后端菜单。默认为 true。
                 </xs:documentation>
             </xs:annotation>
         </xs:attribute>
