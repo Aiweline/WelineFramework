@@ -1,21 +1,19 @@
-<?xml version="1.0"?>
-<!--
- * WeShop_Filters 后台菜单配置
--->
-<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:Weline_Framework::Backend/etc/xsd/menu.xsd">
-    <menu>
-        <!-- 商品管理下的筛选配置 -->
-        <item id="weshop_catalog_filters" translate="title" module="WeShop_Filters" parent="weshop_catalog" sortOrder="50">
-            <title>筛选配置</title>
-            <action>weshop/filters/backend/config</action>
-            <resource>WeShop_Filters::config</resource>
-        </item>
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    
+    <!-- 商品管理下的筛选配置 -->
+    <menu source="WeShop_Filters::config" name="weshop_catalog_filters" title="筛选配置" 
+         action="weshop/filters/backend/config"
+         parent="WeShop_Product::catalog"
+         icon="mdi mdi-filter-outline"
+         order="50">
         
         <!-- 价格区间配置 -->
-        <item id="weshop_catalog_price_ranges" translate="title" module="WeShop_Filters" parent="weshop_catalog_filters" sortOrder="10">
-            <title>价格区间</title>
-            <action>weshop/filters/backend/config/priceRanges</action>
-            <resource>WeShop_Filters::price_ranges</resource>
-        </item>
+        <menu source="WeShop_Filters::price_ranges" name="weshop_catalog_price_ranges" title="价格区间" 
+             action="weshop/filters/backend/config/priceRanges"
+             icon="mdi mdi-currency-usd"
+             order="10"/>
     </menu>
-</config>
+</menus>
