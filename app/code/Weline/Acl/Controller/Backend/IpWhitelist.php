@@ -15,7 +15,7 @@ use Weline\Acl\Model\IpWhitelist as IpWhitelistModel;
  * 功能：
  * - 管理允许访问的IP地址
  */
-#[Acl('Weline_Acl::ip_whitelist', 'IP白名单', 'mdi-shield-check', 'IP白名单', 'Weline_Acl::security_center')]
+#[Acl('Weline_Acl::ip_whitelist', 'IP白名单', 'mdi-shield-check', 'IP白名单')]
 class IpWhitelist extends BackendController
 {
     /**
