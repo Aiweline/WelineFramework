@@ -13,19 +13,16 @@ namespace Weline\Frontend\Plugin;
 
 use Weline\Backend\Config\KeysInterface;
 use Weline\Backend\Model\Config;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Frontend\Cache\FrontendCache;
 
 class StarPage
 {
-    private CacheInterface $cache;
+    private CachePoolInterface $cache;
 
-    public function __construct(
-        FrontendCache $cacheFactory
-    )
+    public function __construct()
     {
-        $this->cache = $cacheFactory->create();
+        $this->cache = w_cache('default');
     }
 
     public function beforeGetUrlPath(\Weline\Framework\Http\Request $request, $url = '')

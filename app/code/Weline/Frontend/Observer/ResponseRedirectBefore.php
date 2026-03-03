@@ -113,7 +113,7 @@ class ResponseRedirectBefore implements ObserverInterface
             }
         } catch (\Exception $e) {
             // 记录错误但不影响重定向
-            error_log("URL重写处理失败: " . $e->getMessage());
+            w_log_error("URL重写处理失败: " . $e->getMessage());
         }
     }
 
@@ -148,7 +148,7 @@ class ResponseRedirectBefore implements ObserverInterface
             }
             
         } catch (\Exception $e) {
-            error_log("SEO重定向处理失败: " . $e->getMessage());
+            w_log_error("SEO重定向处理失败: " . $e->getMessage());
         }
     }
 
@@ -182,7 +182,7 @@ class ResponseRedirectBefore implements ObserverInterface
             }
             
         } catch (\Exception $e) {
-            error_log("安全重定向处理失败: " . $e->getMessage());
+            w_log_error("安全重定向处理失败: " . $e->getMessage());
         }
     }
 
@@ -211,7 +211,7 @@ class ResponseRedirectBefore implements ObserverInterface
             }
             
         } catch (\Exception $e) {
-            error_log("移动端重定向处理失败: " . $e->getMessage());
+            w_log_error("移动端重定向处理失败: " . $e->getMessage());
         }
     }
 
