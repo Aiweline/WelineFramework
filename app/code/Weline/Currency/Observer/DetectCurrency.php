@@ -2,8 +2,8 @@
 
 namespace Weline\Currency\Observer;
 
-use Weline\Currency\Cache\CurrencyCache;
 use Weline\Currency\Model\Currency;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Url;
@@ -11,21 +11,7 @@ use Weline\Framework\Manager\ObjectManager;
 
 class DetectCurrency implements ObserverInterface
 {
-    /**
-     * @var CurrencyCache 货币缓存实例
-     */
-    private ?CurrencyCache $cache = null;
-
-    /**
-     * 获取缓存实例
-     */
-    private function getCache(): CurrencyCache
-    {
-        if ($this->cache === null) {
-            $this->cache = new CurrencyCache();
-        }
-        return $this->cache;
-    }
+    private const CACHE_KEY_PREFIX = 'currency_code_';
 
     /**
      * @inheritDoc
@@ -39,35 +25,38 @@ class DetectCurrency implements ObserverInterface
             return;
         }
         $code = $event->getData('code');
+        $codeUpper = strtoupper($code);
         
-        // 优化：使用缓存类，避免重复数据库查询
-        $cache = $this->getCache();
-        $currency = $cache->getByCode($code);
+        $cache = w_cache('currency');
+        $cacheKey = self::CACHE_KEY_PREFIX . $codeUpper;
         
-        if ($currency !== null && isset($currency['code'])) {
+        // 优化：使用缓存，避免重复数据库查询
+        $currency = $cache->get($cacheKey);
+        
+        if ($currency !== false && is_array($currency) && isset($currency['code'])) {
             $event->setData('result', true)
                 ->setData('code', $code);
             return;
         }
         
         // 缓存未命中，查询数据库
-        if ($currency === null) {
+        if ($currency === false) {
             /** @var Currency $currencyModel */
             $currencyModel = ObjectManager::getInstance(Currency::class);
             $currency = $currencyModel->clear()
-                ->where(Currency::fields_CODE, strtoupper($code))
+                ->where(Currency::fields_CODE, $codeUpper)
                 ->find()
                 ->fetch();
             
             if ($currency->getId()) {
                 $currencyData = $currency->getData();
                 // 保存到缓存
-                $cache->setByCode($code, $currencyData);
+                $cache->set($cacheKey, $currencyData);
                 $event->setData('result', true)
                     ->setData('code', $code);
             } else {
-                // 缓存未找到的结果
-                $cache->setByCode($code, null);
+                // 缓存未找到的结果（空数组表示不存在）
+                $cache->set($cacheKey, []);
             }
         }
     }

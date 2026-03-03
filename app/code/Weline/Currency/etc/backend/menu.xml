@@ -2,23 +2,19 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <!--货币管理父级菜单-->
-    <add source="Weline_Currency::currency_management" name="currency_management" title="货币管理" action=""
-         parent="Weline_Backend::business_module" icon="mdi mdi-currency-usd" order="13000"/>
     
-    <!--货币列表-->
-    <add source="Weline_Currency::currency_list" name="currency_list" title="货币列表" 
-         action="currency/backend/currency/index" parent="Weline_Currency::currency_management" 
-         icon="mdi mdi-format-list-bulleted" order="1"/>
+    <!-- 货币列表 - 归入业务运营 > 货币管理 -->
+    <menu source="Weline_Currency::currency_list" name="currency_list" title="货币列表" 
+          action="currency/backend/currency/index" parent="Weline_Backend::currency_group" 
+          icon="mdi mdi-format-list-bulleted" order="10"/>
     
-    <!--添加货币-->
-    <add source="Weline_Currency::currency_add" name="currency_add" title="添加货币" 
-         action="currency/backend/currency/getAdd" parent="Weline_Currency::currency_management" 
-         icon="mdi mdi-plus-circle" order="2"/>
+    <!-- 添加货币 -->
+    <menu source="Weline_Currency::currency_add" name="currency_add" title="添加货币" 
+          action="currency/backend/currency/getAdd" parent="Weline_Backend::currency_group" 
+          icon="mdi mdi-plus-circle-outline" order="20"/>
     
-    <!--货币配置-->
-    <add source="Weline_Currency::currency_config" name="currency_config" title="货币配置" 
-         action="currency/backend/config/index" parent="Weline_Currency::currency_management" 
-         icon="mdi mdi-cog" order="3"/>
+    <!-- 货币配置 -->
+    <menu source="Weline_Currency::currency_config" name="currency_config" title="货币配置" 
+          action="currency/backend/config/index" parent="Weline_Backend::currency_group" 
+          icon="mdi mdi-cog-outline" order="30"/>
 </menus>
-
