@@ -76,7 +76,7 @@ class DeployModeSetProdAfter implements ObserverInterface
             $token = $encryptionService->generateTokenForVersion($fullVersion);
             
             // 保存版本号到配置中，用于静态文件版本号
-            Env::getInstance()->setConfig('pixel_version', $fullVersion);
+            Env::getInstance()->setConfig('theme.static_version', $fullVersion);
             
             $printer = $data->getData('printer');
             if ($printer) {
@@ -89,7 +89,7 @@ class DeployModeSetProdAfter implements ObserverInterface
             if ($printer) {
                 $printer->warning('生成像素加密token时出错：' . $e->getMessage());
             }
-            error_log('DeployModeSetProdAfter Observer Error: ' . $e->getMessage());
+            w_log_error('DeployModeSetProdAfter Observer Error: ' . $e->getMessage());
         }
     }
 
