@@ -1033,20 +1033,68 @@ app/etc/
 
 **命令行参数 > env 配置 > 默认值**
 
+### 配置结构（v2）
+
+`env.php` 使用分组结构，顶级配置项为：
+
+| 分组 | 说明 | 便捷方法 |
+|------|------|----------|
+| `system` | 系统配置（env、deploy、maintenance、lang、currency） | `Env::system('deploy')` |
+| `db` | 数据库配置 | `Env::get('db')` |
+| `sandbox_db` | 沙盒数据库配置 | `Env::get('sandbox_db')` |
+| `cache` | 缓存配置 | `Env::get('cache')` |
+| `session` | 会话配置 | `Env::get('session')` |
+| `log` | 日志配置 | `Env::get('log')` |
+| `server` | 服务器配置 | `Env::get('server')` |
+| `router` | 路由配置（area_routes） | `Env::router('area_routes')` |
+| `theme` | 主题配置 | `Env::get('theme')` |
+| `dev` | 开发配置（php_cs、static_rand_version、phpunit_server） | `Env::dev('php_cs')` |
+
 ### 读取配置
 
 ```php
 use Weline\Framework\App\Env;
 
-// 获取配置
+// ===== 推荐方式：使用便捷方法 =====
+
+// 读取 system 分组
+$deploy = Env::system('deploy');                    // 'dev' 或 'prod'
+$maintenance = Env::system('maintenance');          // bool
+$lang = Env::system('lang');                        // 'zh_Hans_CN'
+
+// 读取 router 分组
+$areaRoutes = Env::router('area_routes');           // array
+
+// 读取 dev 分组
+$phpCs = Env::dev('php_cs');                        // bool
+$staticRand = Env::dev('static_rand_version');      // bool
+
+// 读取其他分组
+$serverConfig = Env::get('server');                 // 整个 server 分组
+$dbHost = Env::get('db.host');                      // 点号语法获取嵌套值
+
+// ===== 使用 w_array_get 辅助函数（原始数组场景） =====
+
+// 当直接操作 $config 数组（如 App::init() 中加载 env.php 后）时：
+$config = require APP_PATH . 'etc/env.php';
+$deploy = w_array_get($config, 'system.deploy', 'dev');   // 点号语法
+$phpCs = w_array_get($config, 'dev.php_cs', false);
+
+// ===== 传统方式（兼容） =====
+
 $envConfig = Env::getInstance()->getConfig();
+$workerCount = $envConfig['server']['worker_count'] ?? 'auto';
+```
 
-// 读取指定配置
-$serverConfig = $envConfig['server'] ?? [];
-$dbConfig = $envConfig['db'] ?? [];
+### ⚠️ 禁止：isset + 多层数组访问
 
-// 检查配置项
-$workerCount = $serverConfig['worker_count'] ?? 'auto';
+```php
+// ❌ 错误：冗长且易出错
+if (isset($config['system']['deploy']) && $config['system']['deploy'] === 'dev') { }
+
+// ✅ 正确：使用 w_array_get 或 Env 便捷方法
+if (w_array_get($config, 'system.deploy') === 'dev') { }
+if (Env::system('deploy') === 'dev') { }
 ```
 
 ### 服务器配置（server）

@@ -32,7 +32,7 @@ alwaysApply: false
 **ACL 的三层父子级结构：**
 
 ```
-menu.xml 定义的菜单项
+menu.xml 定义的菜单项（通过 XML 嵌套表示层级）
     └── 控制器类上的 #[Acl]（继承 menu.xml 的父级）
         └── 控制器方法上的 #[Acl]（父级 = 控制器类的 source_id）
 ```
@@ -40,7 +40,8 @@ menu.xml 定义的菜单项
 ### 关键规则
 
 1. **menu.xml 定义菜单层级**
-   - `parent` 属性指定父菜单的 `source`
+   - 使用 `<menu>` 标签嵌套表示父子关系
+   - 子菜单自动继承父菜单的 `source` 作为 `parent`
    - `type` 自动设为 `menus`
 
 2. **控制器类 `#[Acl]` 继承菜单层级**
@@ -69,30 +70,53 @@ menu.xml 定义的菜单项
 app/code/Vendor/Module/etc/backend/menu.xml
 ```
 
-### 基本结构
+### 基本结构（嵌套语法）
+
+使用嵌套的 `<menu>` 标签定义菜单层级，子菜单自动继承父菜单的 `source` 作为 `parent`：
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     
-    <!-- 顶层菜单（挂载到系统菜单下） -->
-    <add source="Vendor_Module::main_menu" 
-         name="main_menu" 
-         title="我的模块" 
-         action=""
-         parent="Weline_Backend::business_module" 
-         icon="mdi mdi-folder" 
-         order="100"/>
-    
-    <!-- 子菜单 -->
-    <add source="Vendor_Module::sub_menu" 
-         name="sub_menu" 
-         title="子功能" 
-         action="module/backend/controller/index"
-         parent="Vendor_Module::main_menu" 
-         icon="mdi mdi-file" 
-         order="10"/>
+    <!-- 顶层菜单（挂载到系统菜单下，需要指定 parent） -->
+    <menu source="Vendor_Module::main_menu" 
+          name="main_menu" 
+          title="我的模块" 
+          parent="Weline_Backend::content_management" 
+          icon="mdi mdi-folder" 
+          order="100">
+        
+        <!-- 子菜单（自动继承父菜单 source 作为 parent，无需指定） -->
+        <menu source="Vendor_Module::sub_menu" 
+              name="sub_menu" 
+              title="子功能" 
+              action="module/backend/controller/index"
+              icon="mdi mdi-file" 
+              order="10"/>
+        
+        <!-- 可以继续嵌套更深层级 -->
+        <menu source="Vendor_Module::settings_group" 
+              name="settings_group" 
+              title="设置" 
+              icon="mdi mdi-cog" 
+              order="20">
+            
+            <menu source="Vendor_Module::basic_settings" 
+                  name="basic_settings" 
+                  title="基础设置" 
+                  action="module/backend/settings/basic"
+                  icon="mdi mdi-tune" 
+                  order="10"/>
+            
+            <menu source="Vendor_Module::advanced_settings" 
+                  name="advanced_settings" 
+                  title="高级设置" 
+                  action="module/backend/settings/advanced"
+                  icon="mdi mdi-cog-outline" 
+                  order="20"/>
+        </menu>
+    </menu>
 </menus>
 ```
 
@@ -104,21 +128,23 @@ app/code/Vendor/Module/etc/backend/menu.xml
 | `name` | ✓ | 菜单名称（用于内部引用） |
 | `title` | ✓ | 显示标题（支持 i18n） |
 | `action` | | 路由地址，空表示仅作为分组 |
-| `parent` | | 父菜单的 `source`，空表示根级菜单 |
+| `parent` | | 父菜单的 `source`，**仅顶层菜单需要指定**，嵌套时自动推断 |
 | `icon` | | 图标 CSS 类名 |
-| `order` | | 排序值，数字越小越靠前 |
+| `order` | ✓ | 排序值，数字越小越靠前 |
 
 ### 常用父级菜单
 
 | 父级 source | 说明 |
 |-------------|------|
-| `Weline_Backend::dashboard` | 面板 |
-| `Weline_Backend::business_module` | 业务模块 |
-| `Weline_Backend::system_menu` | 系统管理 |
-| `Weline_Backend::system_settings` | 系统设置 |
-| `Weline_Backend::system_service` | 系统服务 |
-| `Weline_Backend::system_module` | 模组 |
-| `Weline_Backend::system_dev_configuration` | 开发工具 |
+| `Weline_Backend::dashboard` | 仪表盘 |
+| `Weline_Backend::content_management` | 内容管理 |
+| `Weline_Backend::business_operations` | 业务运营 |
+| `Weline_Backend::system_management` | 系统管理 |
+| `Weline_Backend::apps_tools` | 应用工具 |
+| `Weline_Backend::developer` | 开发者 |
+| `Weline_Backend::page_builder_group` | 页面构建（内容管理下） |
+| `Weline_Backend::system_service_group` | 系统服务（系统管理下） |
+| `Weline_Backend::user_permission_group` | 用户与权限（系统管理下） |
 
 ## 2. 控制器权限 (#[Acl] 属性)
 
@@ -220,7 +246,8 @@ class MyController extends \Weline\Framework\App\Controller\BackendController
 
 ### DO ✓
 
-- 在 menu.xml 中定义完整的菜单层级
+- 在 menu.xml 中使用嵌套 `<menu>` 标签定义菜单层级
+- 利用 XML 嵌套自动推断父级，减少重复的 `parent` 属性
 - 控制器 `#[Acl]` 使用与 menu.xml 相同的 `source_id` 实现菜单与权限绑定
 - 方法级别权限不需要显式指定 `parent_source`，自动继承类级别
 
@@ -229,6 +256,7 @@ class MyController extends \Weline\Framework\App\Controller\BackendController
 - 不要在控制器 `#[Acl]` 中显式指定空的 `parent_source` 覆盖 menu.xml
 - 不要定义指向不存在 `source_id` 的 `parent_source`
 - 不要手动修改 `weline_acl` 表（应通过 menu.xml 和 `s:up` 更新）
+- 不要使用旧的 `<add>` 标签（已废弃，使用 `<menu>` 标签）
 
 ## 6. 调试命令
 

@@ -7,6 +7,7 @@ description: |
   - 修复错误后、做完了、完成了
   - 修改了进程、改了 Server、WLS、Worker、static、StateManager
   - 更新技能、规则
+  - **创建计划前** ⭐⭐（创建计划、写计划、规划一下、帮我做个计划）→ 先执行 `pre-plan-analysis`
   - **计划状态、进入测试、测试阶段、测试中、项目完成、计划完成、状态更新、完成度** ⭐
   - **测试、test、单元测试、phpunit、测一下、验证、怎么测、写测试** ⭐
   - **CSS、样式、style、颜色、color、背景、border、shadow、暗色、dark、亮色、light**
@@ -30,7 +31,9 @@ alwaysApply: false
 |------|----------------|----------|
 | **修复错误/bug 后** | `error-learning`、`error-tracking` | 验证修复 → 更新 ERROR_LOG.md、COMMON_ERRORS.md、相关技能 Q&A；遵循 `.cursor/rules/auto-update-skills-on-error.mdc` |
 | **完成任务/计划后**（都处理了、做完了、搞定了、完成了） | `post-plan-completion-check` + `create-plan` | 执行校验清单；**更新计划状态**（🔵测试中/🟢已完成）和完成度 |
-| **创建/写计划**（plan、任务拆分、更新进度、plan.md、task.md） | `create-plan` | 先指定路径；**必须标注状态**（🔴未开始/🟡进行中/🔵测试中/🟢已完成）；遵循 `.cursor/rules/create-plan.mdc` |
+| **计划完成后深度审计** ⭐（审计、audit、计划审计、代码对比、缺陷检查） | `plan-code-auditor` | 对比计划与实际代码；生成审计报告；列出缺陷和遗漏；提供修复方案 |
+| **创建计划前** ⭐⭐（创建计划、写计划、做个计划、规划一下） | `pre-plan-analysis` | 先执行缺陷检查和现状分析；生成分析报告；为计划编写提供依据 |
+| **创建/写计划**（plan、任务拆分、更新进度、plan.md、task.md） | `create-plan`（先触发 `pre-plan-analysis`） | 先分析 → 再指定路径；**必须标注状态**（🔴未开始/🟡进行中/🔵测试中/🟢已完成）；遵循 `.cursor/rules/create-plan.mdc` |
 | **进入测试阶段**（测试中、开始测试、测试阶段） | `create-plan` | 更新计划状态为 🔵 测试中（status: testing），更新完成度 |
 | **计划完成**（测试通过、项目完成、计划完成） | `create-plan` + `post-plan-completion-check` | 更新状态为 🟢 已完成，记录完成时间，执行完成检查清单 |
 | **修改 Server/Worker/进程代码后** | `process-management` | 遵循进程管理规范；如有架构变更更新技能 |
@@ -55,11 +58,15 @@ alwaysApply: false
 | **创建 Hook 扩展点** | `create-hook` | hook.php、`<w:hook>`、优先级、hooks 目录 |
 | **模块间查询/通信** ⭐ | `unified-query-provider` | 使用 `w_query()` 或 `FrameworkQueryService`；注册 QueryProvider；禁止为查询创建独立事件 |
 | **分页查询/列表查询** ⭐ | `database-model-standards` | **必须使用** `pagination()` 方法；禁止手动 count + limit/offset；使用 `getItems()` 和 `getPagination()` |
+| **Session/登录/认证** ⭐ | `session-development` | SessionFactory 创建、AuthenticatedSession 使用、AreaConfig 区域隔离、AbstractBusinessSession 业务隔离 |
+| **购物车/愿望清单** | `session-development` | CartSession、WishlistSession、AbstractBusinessSession 继承 |
 
 ## 快速参考
 
 - 错误相关 → **error-learning** + **error-tracking** + rule `auto-update-skills-on-error.mdc`
 - 完成相关 → **post-plan-completion-check** + **create-plan**（更新状态和完成度）
+- **计划前分析** ⭐⭐ → **pre-plan-analysis**（创建计划前执行！缺陷检查、现状分析、优化建议）
+- **计划审计** ⭐ → **plan-code-auditor**（计划完成后深度审计、代码对比、缺陷检测、遗漏修复）
 - **计划状态** ⭐ → **create-plan**（🔴未开始/🟡进行中/🔵测试中/🟢已完成/⚫已取消）
 - 进程/WLS → **process-management**、**weline-server**
 - 规则/技能/引用 → **cursor-as-reference**（在 `dev/ai` 下编辑，.cursor 仅做引用）
@@ -79,6 +86,8 @@ alwaysApply: false
 - **模块间查询/通信** ⭐ → **unified-query-provider**（`w_query()`、`FrameworkQueryService`、QueryProviderInterface、extends/Query/）
 - **分页/列表查询** ⭐ → **database-model-standards**（`pagination()`、`getItems()`、`getPagination()`；禁止手动 count + limit）
 - **用户提示/通知/确认** ⭐⭐ → **friendly-notifications**（禁止 alert/confirm/prompt！使用 BackendToast/BackendConfirm）
+- **Session/登录/认证** ⭐ → **session-development**（SessionFactory、AuthenticatedSession、AreaConfig、AbstractBusinessSession）
+- **购物车/愿望清单** → **session-development**（CartSession、WishlistSession、业务 Session 继承 AbstractBusinessSession）
 
 ## 前端开发触发词
 
@@ -203,6 +212,27 @@ show message, display message, notify, 提醒用户, 告知用户, 询问用户,
 - ✅ 消息/提示 → `BackendToast.success/error/warning/info()`
 - ✅ 确认操作 → `BackendConfirm.show()`
 - ✅ 用户输入 → `BackendConfirm.showInput()`
+
+## 计划前分析触发词 ⭐⭐
+
+以下关键词出现时**必须先**读取 `pre-plan-analysis` 技能，执行缺陷检查和现状分析：
+
+```
+创建计划, 写计划, 做个计划, 新建计划, 规划一下, 帮我规划, 计划一下,
+分析一下, 看看现状, 检查一下现有, 评估一下, 现状分析, 给我分析,
+有什么问题, 找找缺陷, 有没有bug, 代码检查, 检查代码, 看看代码,
+给点建议, 优化建议, 改进建议, 可以怎么改进, 怎么优化, 如何改进,
+计划前, 开始之前, 动手之前, 先看看, 先分析,
+create plan, new plan, planning, analyze, assessment, pre-plan,
+defect check, status analysis, improvement suggestion
+```
+
+**执行流程**：
+1. 明确分析范围 → 2. 收集信息 → 3. 缺陷检查 → 4. 现状评估 → 5. 生成建议 → 6. 输出分析报告
+
+**可跳过**：用户明确说"紧急"、"马上"、"不用分析"、"直接写"
+
+**完成后**：进入 `create-plan` 技能编写正式计划
 
 ## 计划状态触发词 ⭐
 

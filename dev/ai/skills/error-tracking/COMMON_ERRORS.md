@@ -103,6 +103,8 @@ __('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count]
 | `Socket 创建失败 ... Permission denied`（Mac/Linux，Worker 端口 443/444 等） | 1）直连模式端口语义错误导致 Worker 误绑定递增端口；2）非 root 绑定 `<1024` 端口未提前进行 sudo 引导 | 1）直连模式统一使用主端口 + `SO_REUSEPORT`；2）`server:start` 入口检测特权端口并自动 `sudo` 重启（触发密码输入） |
 | HTTPS 实例访问 `http://host:port/...` 不跳转（Windows Dispatcher） | Dispatcher 仅透传 TCP，未在入口识别明文 HTTP 并执行重定向 | 在 Dispatcher 入口先识别协议：HTTPS 模式 + 明文 HTTP 时直接返回同端口 `301 Location: https://host:port/...` |
 | `Call to undefined function stream_socket_recv()`（Worker SSL） | 在 `worker_ssl.php` 里误用不存在的 stream API | 改为 `stream_socket_recvfrom($conn, ..., STREAM_PEEK)`；修改后重启服务并用 HTTP/HTTPS 各回归一次 |
+| WLS 子进程不断累积为孤儿进程 | 1）子进程具备复活 Master 能力导致控制面分散；2）Windows 非阻塞瞬时 PID 不可靠；3）缺少 `epoch + launch_id` 代际隔离 | 收口为 Master 单主控；禁用子进程复活；IPC 增加 `epoch + launch_id` 校验；引入 reconcile + orphan sweeper，旧代际进程统一回收 |
+| WLS 启动后频繁 `register_timeout` + 整组重启风暴 | 1）周期 orphan sweeper 在主循环执行重型 kill 扫描，阻塞 IPC poll；2）`register_timeout` 配置过短（低于启动宽限）导致误判 | 周期扫尾默认改为轻量（仅 stale pid 清理）；重型按前缀 kill 仅在 full restart 后执行；`register_timeout` 至少与 `startupGracePeriod` 一致 |
 
 ## 模块升级
 

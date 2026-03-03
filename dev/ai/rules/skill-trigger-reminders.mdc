@@ -2,11 +2,13 @@
 description: |
   以下场景必须主动读取并执行对应技能。
   触发词: 修复错误后、做完了、完成了、创建计划、写计划、plan、task、修改了进程、WLS、static、StateManager、更新技能、
+  **审计、audit、计划审计、代码对比、缺陷检查、遗漏检查、plan-code-auditor** ⭐
   **CSS、样式、颜色、color、背景、border、shadow、暗色、dark、亮色、light、JS、JavaScript、组件、闭包、前端、.phtml**
   **提示、通知、消息、弹窗、确认、toast、alert、confirm、dialog、notification、message、warning、error提示、成功提示**
   **用户输入、输入框、输入弹窗、让用户输入、请输入、input dialog、showInput、prompt** ⭐⭐
   **模块间查询、跨模块、模块间通信、模块间数据、w_query、FrameworkQueryService、QueryProvider、从其他模块、调用其他模块**
   **inter-module、cross-module、module query、call another module、get data from module、query from module**
+  **Session、登录、登出、认证、会话、SessionFactory、AreaConfig、购物车、CartSession、WishlistSession** ⭐
 alwaysApply: true
 ---
 
@@ -16,6 +18,7 @@ alwaysApply: true
 |------|----------------|
 | 修复错误/bug 后 | `error-learning` + `error-tracking`，并遵循 `auto-update-skills-on-error.mdc` |
 | 任务/计划完成（都处理了、做完了、搞定了） | `post-plan-completion-check` |
+| **计划完成后深度审计**（审计、audit、代码对比、缺陷检查） ⭐ | `plan-code-auditor`，对比计划与代码、生成审计报告、缺陷修复方案 |
 | **创建/写计划**（plan、任务拆分、更新进度、plan.md、task.md） | `create-plan`，并遵循 `create-plan.mdc` |
 | 修改 Server/Worker/进程代码 | `process-management` |
 | 新增 static 或修改 WLS/Runtime/State | `weline-server`（状态管理章节） |
@@ -26,5 +29,6 @@ alwaysApply: true
 | **写前端/模板/.phtml** ⭐ | `theme-development`，模板标签语法、暗色模式兼容、CSS/JS 独立作用域 |
 | **用户提示/通知/确认/弹窗/输入** ⭐⭐ | `friendly-notifications`，**禁止 alert/confirm/prompt！** 消息用 BackendToast，确认用 BackendConfirm.show()，输入用 BackendConfirm.showInput() |
 | **模块间查询/通信** ⭐ | `unified-query-provider`，使用 `w_query()` 或 `FrameworkQueryService`，禁止为查询创建独立事件 |
+| **Session/登录/认证/购物车** ⭐ | `session-development`，SessionFactory 创建、AreaConfig 区域隔离、AbstractBusinessSession 业务隔离 |
 
 **映射详情与触发词**：`dev/ai/skills/skill-trigger-reminders/SKILL.md`

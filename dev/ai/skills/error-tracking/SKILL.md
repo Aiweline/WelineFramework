@@ -106,9 +106,51 @@ globs: [适用文件模式]
 - 常见错误速查：[COMMON_ERRORS.md](COMMON_ERRORS.md)
 - 错误模式库：查看 `error-learning` 技能
 
+## 统一异常处理系统（v3.0）⭐
+
+框架已重构为统一的异常处理架构：
+
+### 异常处理架构
+
+```
+ExceptionBootstrap::init()
+    ├── ErrorHandler       → 处理 PHP 错误（E_WARNING, E_NOTICE 等）
+    ├── ExceptionHandler   → 处理未捕获异常
+    └── ShutdownHandler    → 处理致命错误（E_ERROR, E_PARSE）
+```
+
+### 异常渲染器
+
+| 场景 | 渲染器 | 输出格式 |
+|------|--------|----------|
+| Web 请求 | HtmlRenderer | 友好 HTML 页面 |
+| API 请求 | JsonRenderer | JSON 结构化响应 |
+| CLI 命令 | CliRenderer | 彩色终端输出 |
+
+### 异常指纹（ExceptionFingerprint）
+
+相似异常会被自动聚合：
+- 相同类、文件、行号、规范化消息的异常生成相同指纹
+- 便于异常监控和告警去重
+
+### 日志集成
+
+异常会自动通过统一日志系统记录：
+
+```php
+// 异常自动记录
+w_log_exception($exception, 'Optional context message', 'channel_name');
+
+// 异常日志文件
+var/log/exception.log      # 默认异常日志
+var/log/crash.log          # 致命错误日志
+var/log/{channel}.log      # 指定通道日志
+```
+
 ## 相关技能
 
 - **error-learning** - 自动错误学习和模式识别（必须配合使用）
+- **debug-logging** - 调试日志（含统一日志系统 w_log_* 文档）⭐
 - **module-development** - 模块开发规范
 - **weline-routing** - 路由规范
 - **theme-development** - 主题开发
@@ -160,3 +202,9 @@ $eventsManager->dispatch('event_name', $eventData);
 
 **相关文件**: WeShop/Catalog/Controller/Frontend/Category/View.php
 ```
+
+---
+
+**创建日期**: 2025-01-28
+**最后更新**: 2026-03-01
+**版本**: 2.0.0（统一异常处理系统集成）

@@ -70,6 +70,42 @@ php bin/w server:reload
 
 ---
 
+## [2026-03-01] WLS `register_timeout` 误判引发整组重启风暴 ✅ 已修复
+
+**错误类型**: 进程编排 / 启动判定 / 主循环阻塞
+
+**错误现象**:
+```text
+Master 日志持续出现：
+- register_timeout: session_server/worker
+- 已标记整组重启
+- 子进程扫尾完成(killed>0)
+形成重启风暴，服务无法稳定进入 READY。
+```
+
+**根本原因**:
+1. 主循环周期执行了重型 orphan sweeper（按前缀 kill），在 Windows 上阻塞明显，导致 IPC poll 饥饿。
+2. `register_timeout` 默认为 8s，低于启动宽限与实际冷启动时长，出现误判。
+
+**解决方案**:
+1. Orchestrator 周期扫尾默认改为轻量模式：仅 `cleanupStalePidFiles()`。
+2. 重型前缀 kill 仅在 `performFullRestart()` 场景执行。
+3. `register_timeout_sec` 默认提升为 `startupGracePeriod`，并强制下限不低于启动宽限。
+4. 新增开关 `server.orchestrator.periodic_orphan_sweep`（默认 false）。
+
+**验证方法**:
+```bash
+php -l app/code/Weline/Server/Service/ServiceOrchestrator.php
+php app/code/Weline/Server/Test/Service/standalone_test.php
+```
+
+**验证结果**: ✅ 成功（语法通过；standalone 测试 Passed 19, Failed 0）
+
+**相关文件**:
+- `app/code/Weline/Server/Service/ServiceOrchestrator.php`
+
+---
+
 ## [2026-02-24] Worker SSL 事件循环调用不存在函数 `stream_socket_recv()` ✅ 已修复
 
 **错误类型**: 运行时函数调用 / API 误用
@@ -1465,5 +1501,59 @@ ReadLints(paths=[worker.php, worker_ssl.php, Dispatcher.php, Account.php])
 - `app/code/Weline/Server/bin/worker_ssl.php`
 - `app/code/Weline/Server/Dispatcher/Dispatcher.php`
 - `app/code/Weline/Cdn/Controller/Backend/Account.php`
+
+---
+
+## [2026-03-01] WLS 子进程孤儿累积与 Master 控制失效（控制面收口 + 代际协议）✅ 已修复
+
+**错误类型**: 进程管理 / IPC 生命周期一致性 / Windows PID 不可靠
+
+**错误信息**:
+```text
+WLS 运行后出现子进程窗口累计、孤儿进程增多；
+Master 对子进程控制不稳定，出现“启动了但无法稳定关闭/回收”。
+```
+
+**根本原因**:
+1. 子进程侧具备 Master 复活能力，导致控制面分散（多点复活竞争风险）。
+2. Windows 非阻塞启动路径瞬时 PID 不可靠，易把错误 PID 写入管理索引。
+3. 缺少 epoch/launch_id 的代际隔离，旧进程迟到注册会污染当前实例集。
+4. 缺少持续收敛循环，仅依赖瞬时动作，故障后容易漂移为“进程集不一致”。
+
+**解决方案**:
+1. 禁用子进程主动复活 Master（默认 `allow_child_resurrection=false`），控制面收口到 Master/Orchestrator。
+2. IPC 协议新增 `epoch + launch_id`，Master 仅接纳当前代际并校验 launch_id。
+3. Orchestrator 启动实例时生成 `launchId`，并在整组重启时 `epoch++`。
+4. 引入期望状态收敛（reconcile）与周期孤儿回收（sweeper）。
+5. Windows 非阻塞 + WLS 进程启动时不信任瞬时 PID，改为等待 register/ready 回填真实 PID。
+
+**验证方法**:
+```bash
+php -l "app/code/Weline/Server/Service/ServiceOrchestrator.php"
+php -l "app/code/Weline/Framework/System/Process/Processer.php"
+php -l "app/code/Weline/Server/IPC/ControlMessage.php"
+php -l "app/code/Weline/Server/IPC/ControlClient.php"
+php -l "app/code/Weline/Server/IPC/MasterControlServer.php"
+php "app/code/Weline/Server/Test/Service/standalone_test.php"
+```
+
+**验证结果**: ✅ 成功（语法检查通过；standalone_test: Passed 19, Failed 0）
+
+**预防措施**:
+1. WLS 生命周期控制必须保持 Single Writer（仅 Master 控制进程创建/销毁）。
+2. 进程身份以 `process_name + epoch + launch_id` 为主，PID 仅作观测值。
+3. 出现 IPC 断连、启动超时、无 IPC 存活进程时优先整组收敛，不做局部“猜测式修复”。
+
+**相关文件**:
+- `app/code/Weline/Server/Service/ServiceOrchestrator.php`
+- `app/code/Weline/Framework/System/Process/Processer.php`
+- `app/code/Weline/Server/IPC/ControlMessage.php`
+- `app/code/Weline/Server/IPC/ControlClient.php`
+- `app/code/Weline/Server/IPC/MasterControlServer.php`
+- `app/code/Weline/Server/bin/worker.php`
+- `app/code/Weline/Server/bin/worker_ssl.php`
+- `app/code/Weline/Server/bin/session_server.php`
+- `app/code/Weline/Server/bin/http_redirect_worker.php`
+- `app/code/Weline/Server/Dispatcher/Dispatcher.php`
 
 ---
