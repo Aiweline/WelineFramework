@@ -386,19 +386,19 @@ PROMPT;
         curl_close($ch);
         
         if ($error) {
-            Env::log_error("AI API 请求错误: {$error}");
+            w_log_error("AI API 请求错误: {$error}", [], 'ai_fixer');
             return null;
         }
         
         if ($httpCode !== 200) {
-            Env::log_error("AI API 返回错误码: {$httpCode}, 响应: {$response}");
+            w_log_error("AI API 返回错误码: {$httpCode}, 响应: {$response}", [], 'ai_fixer');
             return null;
         }
         
         $result = json_decode($response, true);
         
         if (!isset($result['choices'][0]['message']['content'])) {
-            Env::log_error("AI API 响应格式错误: {$response}");
+            w_log_error("AI API 响应格式错误: {$response}", [], 'ai_fixer');
             return null;
         }
         
