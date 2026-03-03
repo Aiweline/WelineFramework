@@ -2,14 +2,11 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <!--内容管理分组菜单-->
-    <add source="Weline_EditorManager::content_management" name="content_management" title="内容管理" action="" parent="Weline_Backend::system_menu"
-         icon="mdi mdi-file-document-edit" order="20300"/>
     
-    <!--内容管理-->
-    <add source="Weline_EditorManager::main" name="editor_manager_main" title="编辑器管理器" 
+    <!-- 编辑器管理器 - 归入开发者 > 编辑器与组件 -->
+    <menu source="Weline_EditorManager::main" name="editor_manager_main" title="编辑器管理" 
          action="editormanager/backend/index"
-         parent="Weline_EditorManager::content_management"
-         icon="mdi mdi-content-save-edit"
+         parent="Weline_Backend::editor_component_group"
+         icon="mdi mdi-content-save-edit-outline"
          order="20"/>
 </menus>
