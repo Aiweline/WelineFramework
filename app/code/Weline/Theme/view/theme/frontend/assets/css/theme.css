@@ -63,3 +63,38 @@
     white-space: nowrap;
     border-width: 0;
 }
+
+/* =============================================
+   极细滚动条样式 - 全局应用
+   ============================================= */
+
+/* Webkit 浏览器（Chrome, Safari, Edge） */
+::-webkit-scrollbar {
+    width: var(--scrollbar-width, 4px);
+    height: var(--scrollbar-width, 4px);
+}
+
+::-webkit-scrollbar-track {
+    background: var(--scrollbar-track, transparent);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb, #c1c1c1);
+    border-radius: 4px;
+    transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover, #a8a8a8);
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* Firefox 浏览器 */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb, #c1c1c1) var(--scrollbar-track, transparent);
+}

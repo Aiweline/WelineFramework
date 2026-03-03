@@ -9,7 +9,8 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Session;
-use Weline\Framework\App\Session\BackendSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Http\Request;
 use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Helper\PreviewManager;
@@ -81,7 +82,7 @@ class PreviewAutoLogin implements ObserverInterface
             }
         } catch (\Throwable $e) {
             // 静默处理异常，不影响正常流程
-            Env::log_error('theme', "主题预览自动登录失败: " . $e->getMessage());
+            w_log_error("主题预览自动登录失败: " . $e->getMessage(), [], 'theme');
         }
     }
 
@@ -123,9 +124,9 @@ class PreviewAutoLogin implements ObserverInterface
     {
         try {
             // 使用BackendSession检查后端登录状态
-            /** @var BackendSession $backendSession */
-            $backendSession = ObjectManager::getInstance(BackendSession::class);
-            return $backendSession->isLogin();
+            /** @var AuthenticatedSessionInterface $backendSession */
+            $backendSession = SessionFactory::getInstance()->createBackendSession();
+            return $backendSession->isLoggedIn();
         } catch (\Exception $e) {
             // 如果获取BackendSession失败，返回false
             return false;

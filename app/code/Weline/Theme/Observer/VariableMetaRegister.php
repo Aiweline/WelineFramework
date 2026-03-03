@@ -69,7 +69,7 @@ class VariableMetaRegister implements ObserverInterface
         } catch (\Exception $e) {
             // 记录错误但不阻止系统升级
             if (defined('DEV') && DEV) {
-                error_log('CSS变量Meta注册失败: ' . $e->getMessage());
+                w_log_error('CSS变量Meta注册失败: ' . $e->getMessage());
             }
         }
     }

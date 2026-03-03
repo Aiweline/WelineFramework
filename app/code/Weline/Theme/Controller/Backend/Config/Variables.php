@@ -11,7 +11,6 @@ declare(strict_types=1);
 namespace Weline\Theme\Controller\Backend\Config;
 
 use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\CssVariableParser;
 use Weline\Theme\Helper\LayoutAssetsManager;
@@ -492,13 +491,11 @@ class Variables extends BackendController
             }
             
             // 清除主题缓存
-            /** @var CacheInterface $cache */
-            $cache = ObjectManager::getInstance(CacheInterface::class . 'Factory');
-            $cache->clean(['theme', 'variables', 'css']);
+            w_cache('theme')->clear();
         } catch (\Exception $e) {
             // 清除缓存失败不影响保存操作
             if (defined('DEV') && DEV) {
-                error_log('清除CSS缓存失败: ' . $e->getMessage());
+                w_log_error('清除CSS缓存失败: ' . $e->getMessage());
             }
         }
     }

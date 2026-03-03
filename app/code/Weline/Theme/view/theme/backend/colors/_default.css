@@ -143,4 +143,12 @@
     --backend-color-btn-primary-hover: var(--backend-color-primary-hover);
     --backend-color-btn-secondary: var(--backend-color-text-secondary);
     --backend-color-btn-secondary-hover: var(--backend-color-text-tertiary);
+
+    /* ========================================
+       滚动条
+       ======================================== */
+    --backend-scrollbar-width: 4px;
+    --backend-scrollbar-thumb: #c1c1c1;
+    --backend-scrollbar-thumb-hover: #a8a8a8;
+    --backend-scrollbar-track: transparent;
 }

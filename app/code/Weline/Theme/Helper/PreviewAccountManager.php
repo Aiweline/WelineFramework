@@ -7,8 +7,9 @@ namespace Weline\Theme\Helper;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Frontend\Model\FrontendUser;
-use Weline\Frontend\Session\FrontendUserSession;
 use Weline\Theme\Model\WelineTheme;
 use Weline\SystemConfig\Model\SystemConfig;
 
@@ -143,9 +144,9 @@ class PreviewAccountManager
             return;
         }
 
-        /** @var FrontendUserSession $frontendSession */
-        $frontendSession = ObjectManager::getInstance(FrontendUserSession::class);
-        if ($frontendSession->isLogin() && $frontendSession->getLoginUserID() === $user->getId()) {
+        /** @var AuthenticatedSessionInterface $frontendSession */
+        $frontendSession = SessionFactory::getInstance()->createFrontendSession();
+        if ($frontendSession->isLoggedIn() && $frontendSession->getUserId() === $user->getId()) {
             return;
         }
 
@@ -163,14 +164,14 @@ class PreviewAccountManager
      */
     public static function logoutPreviewUser(?int $themeId = null): void
     {
-        /** @var FrontendUserSession $frontendSession */
-        $frontendSession = ObjectManager::getInstance(FrontendUserSession::class);
-        if (!$frontendSession->isLogin()) {
+        /** @var AuthenticatedSessionInterface $frontendSession */
+        $frontendSession = SessionFactory::getInstance()->createFrontendSession();
+        if (!$frontendSession->isLoggedIn()) {
             return;
         }
 
         $previewUserId = self::getPreviewUserId();
-        if ($previewUserId && $frontendSession->getLoginUserID() !== $previewUserId) {
+        if ($previewUserId && $frontendSession->getUserId() !== $previewUserId) {
             return;
         }
 
