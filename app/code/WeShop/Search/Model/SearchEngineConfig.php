@@ -51,7 +51,7 @@ class SearchEngineConfig extends Model
             $installData = \Weline\Framework\Manager\ObjectManager::getInstance(\WeShop\Search\Setup\InstallData::class);
             $installData->install();
         } catch (\Exception $e) {
-            error_log("搜索模块安装数据失败: " . $e->getMessage());
+            w_log_error("搜索模块安装数据失败: " . $e->getMessage());
         }
     }
     

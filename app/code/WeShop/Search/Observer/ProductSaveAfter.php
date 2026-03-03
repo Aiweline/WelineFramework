@@ -32,7 +32,7 @@ class ProductSaveAfter implements ObserverInterface
             $indexer = ObjectManager::getInstance(ProductIndexer::class);
             $indexer->indexProduct($productId);
         } catch (\Exception $e) {
-            error_log("产品保存后更新搜索索引失败: " . $e->getMessage());
+            w_log_error("产品保存后更新搜索索引失败: " . $e->getMessage());
         }
     }
 }

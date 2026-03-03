@@ -32,7 +32,7 @@ class ProductDeleteAfter implements ObserverInterface
             $indexer = ObjectManager::getInstance(ProductIndexer::class);
             $indexer->deleteProduct($productId);
         } catch (\Exception $e) {
-            error_log("产品删除后清理搜索索引失败: " . $e->getMessage());
+            w_log_error("产品删除后清理搜索索引失败: " . $e->getMessage());
         }
     }
 }

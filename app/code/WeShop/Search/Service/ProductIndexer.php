@@ -38,7 +38,7 @@ class ProductIndexer
             $engine = SearchEngineFactory::create();
             
             if (!$engine instanceof MeilisearchEngine) {
-                error_log("当前搜索引擎不是 Meilisearch，无法执行索引操作");
+                w_log_info("当前搜索引擎不是 Meilisearch，无法执行索引操作");
                 return false;
             }
             
@@ -59,7 +59,7 @@ class ProductIndexer
             return $this->batchIndexProducts($index, $forceReindex);
             
         } catch (\Exception $e) {
-            error_log("产品索引失败: " . $e->getMessage());
+            w_log_error("产品索引失败: " . $e->getMessage());
             return false;
         }
     }
@@ -123,7 +123,7 @@ class ProductIndexer
             return true;
             
         } catch (\Exception $e) {
-            error_log("批量索引产品失败: " . $e->getMessage());
+            w_log_error("批量索引产品失败: " . $e->getMessage());
             return false;
         }
     }
@@ -174,7 +174,7 @@ class ProductIndexer
             return $document;
             
         } catch (\Exception $e) {
-            error_log("准备产品文档失败: " . $e->getMessage());
+            w_log_error("准备产品文档失败: " . $e->getMessage());
             return null;
         }
     }
@@ -348,7 +348,7 @@ class ProductIndexer
             return true;
             
         } catch (\Exception $e) {
-            error_log("删除产品索引失败: " . $e->getMessage());
+            w_log_error("删除产品索引失败: " . $e->getMessage());
             return false;
         }
     }
@@ -414,7 +414,7 @@ class ProductIndexer
             return true;
             
         } catch (\Exception $e) {
-            error_log("配置索引设置失败: " . $e->getMessage());
+            w_log_error("配置索引设置失败: " . $e->getMessage());
             return false;
         }
     }
