@@ -6,74 +6,565 @@
  */
 ?>
 
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><?= __('缓存管理') ?></h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('系统') ?></a></li>
-                    <li class="breadcrumb-item active"><?= __('缓存管理') ?></li>
-                </ol>
+<style>
+.weline-cache-manager {
+    --cache-icon-size: 2.5rem;
+}
+
+.weline-cache-manager .weline-cache-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--backend-spacing-md, 1rem);
+    margin-bottom: var(--backend-spacing-lg, 1.5rem);
+}
+
+.weline-cache-manager .weline-cache-stat-card {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-lg, 0.75rem);
+    padding: var(--backend-spacing-lg, 1.5rem);
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-md, 1rem);
+    transition: all 0.3s ease;
+    box-shadow: var(--backend-card-shadow, 0 0 13px 0 rgba(74, 53, 107, 0.05));
+}
+
+.weline-cache-manager .weline-cache-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(var(--backend-color-primary-rgb, 85, 110, 230), 0.15);
+}
+
+.weline-cache-manager .weline-cache-stat-icon {
+    width: var(--cache-icon-size);
+    height: var(--cache-icon-size);
+    border-radius: var(--backend-border-radius-md, 0.5rem);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.weline-cache-manager .weline-cache-stat-icon--total {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-cache-manager .weline-cache-stat-icon--enabled {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+    color: var(--backend-color-success, #34c38f);
+}
+
+.weline-cache-manager .weline-cache-stat-icon--disabled {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
+    color: var(--backend-color-danger, #f46a6a);
+}
+
+.weline-cache-manager .weline-cache-stat-icon--permanent {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    color: var(--backend-color-info, #50a5f1);
+}
+
+.weline-cache-manager .weline-cache-stat-content {
+    flex: 1;
+}
+
+.weline-cache-manager .weline-cache-stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--backend-color-text-primary, #212529);
+    line-height: 1.2;
+}
+
+.weline-cache-manager .weline-cache-stat-label {
+    font-size: 0.875rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+    margin-top: 0.25rem;
+}
+
+.weline-cache-manager .weline-cache-card {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-lg, 0.75rem);
+    box-shadow: var(--backend-card-shadow, 0 0 13px 0 rgba(74, 53, 107, 0.05));
+    overflow: hidden;
+}
+
+.weline-cache-manager .weline-cache-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--backend-spacing-md, 1rem);
+    padding: var(--backend-spacing-lg, 1.5rem);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+
+.weline-cache-manager .weline-cache-card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.weline-cache-manager .weline-cache-card-title i {
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-cache-manager .weline-cache-actions {
+    display: flex;
+    gap: var(--backend-spacing-sm, 0.5rem);
+    flex-wrap: wrap;
+}
+
+.weline-cache-manager .weline-cache-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 1rem;
+    border-radius: var(--backend-border-radius, 0.375rem);
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.weline-cache-manager .weline-cache-btn--success {
+    background: var(--backend-color-success, #34c38f);
+    color: #fff;
+}
+
+.weline-cache-manager .weline-cache-btn--success:hover {
+    background: #2ba97a;
+}
+
+.weline-cache-manager .weline-cache-btn--danger {
+    background: var(--backend-color-danger, #f46a6a);
+    color: #fff;
+}
+
+.weline-cache-manager .weline-cache-btn--danger:hover {
+    background: #e05656;
+}
+
+.weline-cache-manager .weline-cache-btn--secondary {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.weline-cache-manager .weline-cache-btn--secondary:hover {
+    background: var(--backend-color-border-default, #dee2e6);
+}
+
+.weline-cache-manager .weline-cache-table-wrapper {
+    padding: var(--backend-spacing-lg, 1.5rem);
+}
+
+.weline-cache-manager .weline-cache-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.weline-cache-manager .weline-cache-table th {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    font-weight: 600;
+    font-size: 0.8125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    padding: 0.875rem 1rem;
+    border-bottom: 2px solid var(--backend-color-border-default, #dee2e6);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.weline-cache-manager .weline-cache-table td {
+    padding: 1rem;
+    color: var(--backend-color-text-primary, #212529);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    font-size: 0.875rem;
+    vertical-align: middle;
+}
+
+.weline-cache-manager .weline-cache-table tbody tr {
+    transition: background 0.15s ease;
+}
+
+.weline-cache-manager .weline-cache-table tbody tr:hover {
+    background: var(--backend-color-table-bg-hover, #f8f9fa);
+}
+
+.weline-cache-manager .weline-cache-table tbody tr.weline-cache-row--permanent {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.05));
+}
+
+.weline-cache-manager .weline-cache-table tbody tr.weline-cache-row--permanent:hover {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+}
+
+.weline-cache-manager .weline-cache-identity {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.8125rem;
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--backend-border-radius-sm, 0.25rem);
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-cache-manager .weline-cache-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.625rem;
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.weline-cache-manager .weline-cache-badge--app {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-cache-manager .weline-cache-badge--system {
+    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.1));
+    color: var(--backend-color-warning, #f1b44c);
+}
+
+.weline-cache-manager .weline-cache-badge--permanent {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    color: var(--backend-color-info, #50a5f1);
+}
+
+.weline-cache-manager .weline-cache-badge--normal {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.weline-cache-manager .weline-cache-module {
+    font-size: 0.8125rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.weline-cache-manager .weline-cache-class {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.weline-cache-manager .weline-cache-switch-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.weline-cache-manager .weline-cache-switch {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    appearance: none;
+    background: var(--backend-color-border-default, #dee2e6);
+    border-radius: 24px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: none;
+    outline: none;
+}
+
+.weline-cache-manager .weline-cache-switch:checked {
+    background: var(--backend-color-success, #34c38f);
+}
+
+.weline-cache-manager .weline-cache-switch::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.weline-cache-manager .weline-cache-switch:checked::before {
+    transform: translateX(20px);
+}
+
+.weline-cache-manager .weline-cache-switch:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.weline-cache-manager .weline-cache-switch:disabled:checked {
+    background: var(--backend-color-info, #50a5f1);
+}
+
+.weline-cache-manager .weline-cache-switch-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    min-width: 32px;
+}
+
+.weline-cache-manager .weline-cache-switch-label--on {
+    color: var(--backend-color-success, #34c38f);
+}
+
+.weline-cache-manager .weline-cache-switch-label--off {
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+.weline-cache-manager .weline-cache-pagination {
+    padding: var(--backend-spacing-md, 1rem) var(--backend-spacing-lg, 1.5rem);
+    border-top: 1px solid var(--backend-color-border-light, #e9ecef);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+
+.weline-cache-manager .weline-cache-description {
+    color: var(--backend-color-text-secondary, #6c757d);
+    white-space: normal;
+    word-break: break-word;
+    min-width: 120px;
+}
+
+.weline-cache-manager .weline-cache-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.weline-cache-manager .weline-cache-detail-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.weline-cache-manager .weline-cache-detail-label {
+    font-size: 0.6875rem;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    min-width: 2.5rem;
+}
+
+.weline-cache-manager .weline-cache-detail-value {
+    font-size: 0.8125rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.weline-cache-manager .weline-cache-detail-class {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.6875rem;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    padding: 0.125rem 0.375rem;
+    border-radius: var(--backend-border-radius-sm, 0.25rem);
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+    .weline-cache-manager .weline-cache-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .weline-cache-manager .weline-cache-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .weline-cache-manager .weline-cache-table-wrapper {
+        overflow-x: auto;
+    }
+}
+</style>
+
+<div class="weline-cache-manager">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <h4 class="mb-sm-0"><?= __('缓存管理') ?></h4>
+                <div class="page-title-right">
+                    <ol class="breadcrumb m-0">
+                        <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('系统') ?></a></li>
+                        <li class="breadcrumb-item active"><?= __('缓存管理') ?></li>
+                    </ol>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<div class='row'>
-    <template>Weline_Component::message.phtml</template>
-</div>
+    <div class='row'>
+        <template>Weline_Component::message.phtml</template>
+    </div>
 
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title"><?= __('缓存控制器') ?>:
-                    <lang>一共有</lang>
-                    <var>total</var>
-                    <lang>条数据</lang>
-                </h4>
-
-                <div class='table-responsive'>
-                    <table class="table table-editable table-nowrap align-middle table-edits">
-                        <thead>
-                        <tr>
-                            <th><lang>标志</lang></th>
-                            <th><lang>说明</lang></th>
-                            <th><lang>类型</lang></th>
-                            <th><lang>模组</lang></th>
-                            <th><lang>类</lang></th>
-                            <th><lang>是否持久化</lang></th>
-                            <th><?= __('操作') ?></th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <foreach name="caches" item="cache">
-                            <tr @if{$cache->getPermanently()=>"style='background:var(--backend-color-card-bg-secondary)'"}>
-                                <td><var>$cache->getIdentity()</var></td>
-                                <td><var>$cache->getDescription()</var></td>
-                                <td><var>$cache->getType()?__('app'):__('system')</var></td>
-                                <td><var>$cache->getModule()</var></td>
-                                <td><var>$cache->getName()</var></td>
-                                <td><var>$cache->getPermanently()?__('是'):__('否')</var></td>
-                                <td style='width: 100px'>
-                                    <input class='form-check form-switch weline-cache-switch' type='checkbox'
-                                           alt="@php{echo $cache->isKeep()?__('系统持久缓存无法操作'):'状态开关'}"
-                                           id='@var{$cache->getIdentity()}' switch='bool' @if{$cache->getPermanently()=>'checked
-                                    disabled'} @if{$cache->getStatus()=>'checked'}>
-                                    <label class='form-label' for='@var{$cache->getIdentity()}'
-                                           data-on-label='<?= __('开启') ?>'
-                                           data-off-label='<?= __('关闭') ?>'></label>
-                                </td>
-                            </tr>
-                        </foreach>
-                        </tbody>
-                    </table>
-                    <div>
-                        <var>pagination</var>
-                    </div>
-                </div>
+    <div class="weline-cache-stats">
+        <div class="weline-cache-stat-card">
+            <div class="weline-cache-stat-icon weline-cache-stat-icon--total">
+                <i class="ri-database-2-line"></i>
             </div>
+            <div class="weline-cache-stat-content">
+                <div class="weline-cache-stat-value" id="weline-cache-stat-total">{{$total}}</div>
+                <div class="weline-cache-stat-label"><lang>缓存总数</lang></div>
+            </div>
+        </div>
+        <div class="weline-cache-stat-card">
+            <div class="weline-cache-stat-icon weline-cache-stat-icon--enabled">
+                <i class="ri-checkbox-circle-line"></i>
+            </div>
+            <div class="weline-cache-stat-content">
+                <div class="weline-cache-stat-value" id="weline-cache-stat-enabled">0</div>
+                <div class="weline-cache-stat-label"><lang>已启用</lang></div>
+            </div>
+        </div>
+        <div class="weline-cache-stat-card">
+            <div class="weline-cache-stat-icon weline-cache-stat-icon--disabled">
+                <i class="ri-close-circle-line"></i>
+            </div>
+            <div class="weline-cache-stat-content">
+                <div class="weline-cache-stat-value" id="weline-cache-stat-disabled">0</div>
+                <div class="weline-cache-stat-label"><lang>已禁用</lang></div>
+            </div>
+        </div>
+        <div class="weline-cache-stat-card">
+            <div class="weline-cache-stat-icon weline-cache-stat-icon--permanent">
+                <i class="ri-lock-line"></i>
+            </div>
+            <div class="weline-cache-stat-content">
+                <div class="weline-cache-stat-value" id="weline-cache-stat-permanent">0</div>
+                <div class="weline-cache-stat-label"><lang>持久化缓存</lang></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="weline-cache-card">
+        <div class="weline-cache-card-header">
+            <h5 class="weline-cache-card-title">
+                <i class="ri-server-line"></i>
+                <lang>缓存控制器</lang>
+            </h5>
+            <div class="weline-cache-actions">
+                <button type="button" class="weline-cache-btn weline-cache-btn--success" id="weline-cache-enable-all">
+                    <i class="ri-toggle-line"></i>
+                    <lang>全部启用</lang>
+                </button>
+                <button type="button" class="weline-cache-btn weline-cache-btn--danger" id="weline-cache-disable-all">
+                    <i class="ri-toggle-fill"></i>
+                    <lang>全部禁用</lang>
+                </button>
+                <button type="button" class="weline-cache-btn weline-cache-btn--danger" id="weline-cache-clear-all">
+                    <i class="ri-delete-bin-line"></i>
+                    <lang>清理所有</lang>
+                </button>
+                <button type="button" class="weline-cache-btn weline-cache-btn--secondary" id="weline-cache-refresh">
+                    <i class="ri-refresh-line"></i>
+                    <lang>刷新</lang>
+                </button>
+            </div>
+        </div>
+
+        <div class="weline-cache-table-wrapper">
+            <table class="weline-cache-table">
+                <thead>
+                <tr>
+                    <th><lang>标识</lang></th>
+                    <th><lang>说明</lang></th>
+                    <th><lang>类型</lang></th>
+                    <th><lang>详情</lang></th>
+                    <th style="text-align: center;"><?= __('状态') ?></th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php if (!empty($caches)): ?>
+                <?php foreach ($caches as $cache): ?>
+                    <tr class="<?= $cache->getPermanently() ? 'weline-cache-row--permanent' : '' ?>" 
+                        data-identity="<?= htmlspecialchars($cache->getIdentity()) ?>"
+                        data-permanent="<?= $cache->getPermanently() ? '1' : '0' ?>"
+                        data-status="<?= $cache->getStatus() ? '1' : '0' ?>">
+                        <td>
+                            <code class="weline-cache-identity"><?= htmlspecialchars($cache->getIdentity()) ?></code>
+                        </td>
+                        <td>
+                            <span class="weline-cache-description"><?= htmlspecialchars($cache->getDescription()) ?></span>
+                        </td>
+                        <td>
+                            <span class="weline-cache-badge <?= $cache->getType() ? 'weline-cache-badge--app' : 'weline-cache-badge--system' ?>">
+                                <?= $cache->getType() ? __('应用') : __('系统') ?>
+                            </span>
+                        </td>
+                        <td>
+                            <div class="weline-cache-detail">
+                                <div class="weline-cache-detail-row">
+                                    <span class="weline-cache-detail-label"><?= __('模块') ?></span>
+                                    <span class="weline-cache-detail-value"><?= htmlspecialchars($cache->getModule()) ?></span>
+                                    <?php if ($cache->getPermanently()): ?>
+                                    <span class="weline-cache-badge weline-cache-badge--permanent">
+                                        <i class="mdi mdi-lock" style="font-size: 0.75rem; margin-right: 0.125rem;"></i><?= __('持久') ?>
+                                    </span>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="weline-cache-detail-row">
+                                    <span class="weline-cache-detail-class" title="<?= htmlspecialchars($cache->getName()) ?>"><?= htmlspecialchars($cache->getName()) ?></span>
+                                </div>
+                            </div>
+                        </td>
+                        <td style="text-align: center;">
+                            <div class="weline-cache-switch-wrapper">
+                                <?php
+                                    $isEnabled = $cache->getStatus() || $cache->getPermanently();
+                                    $switchTitle = $cache->isKeep() ? __('系统持久缓存无法操作') : __('状态开关');
+                                    $switchAttr = '';
+                                    if ($cache->getPermanently()) {
+                                        $switchAttr = 'checked disabled';
+                                    } elseif ($cache->getStatus()) {
+                                        $switchAttr = 'checked';
+                                    }
+                                    $labelClass = $isEnabled ? 'weline-cache-switch-label--on' : 'weline-cache-switch-label--off';
+                                    $labelText = $isEnabled ? __('开启') : __('关闭');
+                                ?>
+                                <input class="weline-cache-switch" type="checkbox"
+                                       title="<?= $switchTitle ?>"
+                                       id="weline-cache-<?= $cache->getIdentity() ?>" 
+                                       <?= $switchAttr ?>>
+                                <span class="weline-cache-switch-label <?= $labelClass ?>">
+                                    <?= $labelText ?>
+                                </span>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="5" class="text-center py-4">
+                            <div class="text-muted">
+                                <i class="mdi mdi-database-off" style="font-size: 2rem;"></i>
+                                <p class="mt-2"><?= __('暂无缓存数据，请运行 php bin/w setup:upgrade 收集缓存信息') ?></p>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="weline-cache-pagination">
+            <var>pagination</var>
         </div>
     </div>
 </div>
@@ -82,39 +573,238 @@
 (function() {
     'use strict';
     
+    var statusUrl = '@admin-url("admin/system/cache/status")';
+    var clearUrl = '@admin-url("admin/system/cache/clear")';
+    var clearAllUrl = '@admin-url("admin/system/cache/clearAll")';
+    
+    function updateStats() {
+        var rows = document.querySelectorAll('.weline-cache-table tbody tr');
+        var enabled = 0;
+        var disabled = 0;
+        var permanent = 0;
+        
+        rows.forEach(function(row) {
+            var isPermanent = row.dataset.permanent === '1';
+            var switchEl = row.querySelector('.weline-cache-switch');
+            var isEnabled = switchEl ? switchEl.checked : false;
+            
+            if (isPermanent) {
+                permanent++;
+                enabled++;
+            } else if (isEnabled) {
+                enabled++;
+            } else {
+                disabled++;
+            }
+        });
+        
+        var totalEl = document.getElementById('weline-cache-stat-total');
+        var enabledEl = document.getElementById('weline-cache-stat-enabled');
+        var disabledEl = document.getElementById('weline-cache-stat-disabled');
+        var permanentEl = document.getElementById('weline-cache-stat-permanent');
+        
+        if (enabledEl) enabledEl.textContent = enabled;
+        if (disabledEl) disabledEl.textContent = disabled;
+        if (permanentEl) permanentEl.textContent = permanent;
+    }
+    
+    function updateSwitch(input, isChecked) {
+        var labelEl = input.parentElement.querySelector('.weline-cache-switch-label');
+        if (labelEl) {
+            labelEl.textContent = isChecked ? '<?= __("开启") ?>' : '<?= __("关闭") ?>';
+            labelEl.className = 'weline-cache-switch-label ' + (isChecked ? 'weline-cache-switch-label--on' : 'weline-cache-switch-label--off');
+        }
+        var row = input.closest('tr');
+        if (row) {
+            row.dataset.status = isChecked ? '1' : '0';
+        }
+        updateStats();
+    }
+    
+    function toggleCache(identity, value, input) {
+        fetch(statusUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'identity=' + encodeURIComponent(identity) + '&cache=' + value
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(res) {
+            if (res.code === 200) {
+                input.checked = !!res.data;
+                updateSwitch(input, !!res.data);
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.success('<?= __("缓存状态已更新") ?>');
+                }
+            } else {
+                input.checked = !value;
+                updateSwitch(input, !value);
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.error(res.message || '<?= __("操作失败") ?>');
+                }
+            }
+        })
+        .catch(function(error) {
+            input.checked = !value;
+            updateSwitch(input, !value);
+            if (typeof BackendToast !== 'undefined') {
+                BackendToast.error('<?= __("请求失败") ?>');
+            }
+        });
+    }
+    
     document.querySelectorAll('.weline-cache-switch').forEach(function(input) {
         input.addEventListener('change', function(e) {
-            var id = this.id;
-            var value = this.checked;
-            var url = '@admin-url("admin/system/cache/status")';
-            
-            fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: 'identity=' + encodeURIComponent(id) + '&cache=' + value
-            })
-            .then(function(response) { return response.json(); })
-            .then(function(res) {
-                if (res.code === 200) {
-                    input.checked = res.data;
-                    if (typeof AdminToast !== 'undefined') {
-                        AdminToast.success('<?= __("缓存状态已更新") ?>');
-                    }
-                } else {
-                    input.checked = !res.data;
-                    if (typeof AdminToast !== 'undefined') {
-                        AdminToast.error(res.message || '<?= __("操作失败") ?>');
-                    }
-                }
-            })
-            .catch(function(error) {
-                if (typeof AdminToast !== 'undefined') {
-                    AdminToast.error('<?= __("请求失败") ?>');
-                }
-            });
+            var identity = this.id.replace('weline-cache-', '');
+            toggleCache(identity, this.checked, this);
         });
     });
+    
+    var enableAllBtn = document.getElementById('weline-cache-enable-all');
+    if (enableAllBtn) {
+        enableAllBtn.addEventListener('click', function() {
+            if (typeof BackendConfirm !== 'undefined') {
+                BackendConfirm.show('<?= __("确定要启用所有非持久化缓存吗？") ?>', {
+                    title: '<?= __("批量启用") ?>',
+                    confirmText: '<?= __("确定") ?>',
+                    cancelText: '<?= __("取消") ?>'
+                }).then(function(confirmed) {
+                    if (confirmed) {
+                        batchToggle(true);
+                    }
+                });
+            } else {
+                batchToggle(true);
+            }
+        });
+    }
+    
+    var disableAllBtn = document.getElementById('weline-cache-disable-all');
+    if (disableAllBtn) {
+        disableAllBtn.addEventListener('click', function() {
+            if (typeof BackendConfirm !== 'undefined') {
+                BackendConfirm.show('<?= __("确定要禁用所有非持久化缓存吗？这可能会影响系统性能。") ?>', {
+                    title: '<?= __("批量禁用") ?>',
+                    confirmText: '<?= __("确定") ?>',
+                    cancelText: '<?= __("取消") ?>',
+                    type: 'warning'
+                }).then(function(confirmed) {
+                    if (confirmed) {
+                        batchToggle(false);
+                    }
+                });
+            } else {
+                batchToggle(false);
+            }
+        });
+    }
+    
+    function batchToggle(enable) {
+        var switches = document.querySelectorAll('.weline-cache-switch:not(:disabled)');
+        var promises = [];
+        var successCount = 0;
+        var failCount = 0;
+        
+        switches.forEach(function(input) {
+            if (input.checked !== enable) {
+                var identity = input.id.replace('weline-cache-', '');
+                promises.push(
+                    fetch(statusUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: 'identity=' + encodeURIComponent(identity) + '&cache=' + enable
+                    })
+                    .then(function(response) { return response.json(); })
+                    .then(function(res) {
+                        if (res.code === 200) {
+                            input.checked = !!res.data;
+                            updateSwitch(input, !!res.data);
+                            successCount++;
+                        } else {
+                            failCount++;
+                        }
+                    })
+                    .catch(function() {
+                        failCount++;
+                    })
+                );
+            }
+        });
+        
+        if (promises.length === 0) {
+            if (typeof BackendToast !== 'undefined') {
+                BackendToast.info('<?= __("没有需要更改的缓存项") ?>');
+            }
+            return;
+        }
+        
+        Promise.all(promises).then(function() {
+            if (typeof BackendToast !== 'undefined') {
+                if (failCount === 0) {
+                    BackendToast.success('<?= __("成功更新") ?> ' + successCount + ' <?= __("个缓存项") ?>');
+                } else {
+                    BackendToast.warning('<?= __("成功") ?> ' + successCount + '<?= __(", 失败") ?> ' + failCount);
+                }
+            }
+            updateStats();
+        });
+    }
+    
+    var refreshBtn = document.getElementById('weline-cache-refresh');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function() {
+            window.location.reload();
+        });
+    }
+    
+    var clearAllBtn = document.getElementById('weline-cache-clear-all');
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', function() {
+            if (typeof BackendConfirm !== 'undefined') {
+                BackendConfirm.show('<?= __("确定要清理所有缓存吗？这将清除所有非持久缓存数据。") ?>', {
+                    title: '<?= __("清理缓存") ?>',
+                    confirmText: '<?= __("清理") ?>',
+                    cancelText: '<?= __("取消") ?>',
+                    type: 'warning'
+                }).then(function(confirmed) {
+                    if (confirmed) {
+                        clearAllCaches(false);
+                    }
+                });
+            } else {
+                clearAllCaches(false);
+            }
+        });
+    }
+    
+    function clearAllCaches(force) {
+        fetch(clearAllUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'force=' + (force ? '1' : '0')
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(res) {
+            if (res.code === 200) {
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.success(res.msg || '<?= __("缓存已清理") ?>');
+                }
+            } else {
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.error(res.msg || '<?= __("清理失败") ?>');
+                }
+            }
+        })
+        .catch(function(error) {
+            if (typeof BackendToast !== 'undefined') {
+                BackendToast.error('<?= __("请求失败") ?>');
+            }
+        });
+    }
+    
+    updateStats();
 })();
 </script>
