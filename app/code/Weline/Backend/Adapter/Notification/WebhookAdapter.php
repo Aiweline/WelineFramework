@@ -64,7 +64,7 @@ class WebhookAdapter implements ChannelAdapterInterface
 
             return $httpCode >= 200 && $httpCode < 300;
         } catch (\Exception $e) {
-            Env::log_error('WebhookAdapter::send failed: ' . $e->getMessage());
+            w_log_error('WebhookAdapter::send failed: ' . $e->getMessage(), [], 'notification');
             return false;
         }
     }

@@ -12,32 +12,33 @@ declare(strict_types=1);
 namespace Weline\Backend\Block;
 
 use Weline\Backend\Model\BackendUserConfig;
-use Weline\Backend\Session\BackendSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 
 class ThemeConfig extends \Weline\Framework\View\Block
 {
     public const        area = 'backend_';
     public const        theme_Session_Config = 'backend_theme_config';
-    private BackendSession $userSession;
+    private AuthenticatedSessionInterface $userSession;
     private BackendUserConfig $userConfig;
 
-    public function __construct(BackendUserConfig $userConfig, BackendSession $backendSession, array $data = [])
+    public function __construct(BackendUserConfig $userConfig, array $data = [])
     {
         parent::__construct($data);
-        $this->userSession = $backendSession;
+        $this->userSession = SessionFactory::getInstance()->createBackendSession();
         $this->userConfig = $userConfig;
     }
 
     public function __init()
     {
-        $this->userConfig = $this->userSession->getLoginUserID() ? $this->userConfig->load($this->userSession->getLoginUserID()) : $this->userConfig;
-        $this->userConfig->setId($this->userSession->getLoginUserID());
+        $this->userConfig = $this->userSession->getUserId() ? $this->userConfig->load($this->userSession->getUserId()) : $this->userConfig;
+        $this->userConfig->setId($this->userSession->getUserId());
     }
 
     public function getOriginThemeConfig($key = '')
     {
         $themeConfig = $this->userSession->getData(self::theme_Session_Config);
-        if (empty($themeConfig) && $this->userSession->isLogin()) {
+        if (empty($themeConfig) && $this->userSession->isLoggedIn()) {
             $configValue = $this->userConfig->getConfig(self::theme_Session_Config, 'Weline_Backend', '主题设置');
             if ($configValue) {
                 $themeConfig = json_decode($configValue, true);
@@ -115,14 +116,14 @@ class ThemeConfig extends \Weline\Framework\View\Block
     {
         if (is_array($key)) {
             $this->userSession->setData(self::theme_Session_Config, $key);
-            if ($this->userSession->isLogin()) {
+            if ($this->userSession->isLoggedIn()) {
                 $this->userConfig->setConfig(self::theme_Session_Config, json_encode($key), 'Weline_Backend', '主题设置');
             }
         } else {
             $theme_Config = $this->getOriginThemeConfig();
             $theme_Config[$key] = $value;
             $this->userSession->setData(self::theme_Session_Config, $theme_Config);
-            if ($this->userSession->isLogin()) {
+            if ($this->userSession->isLoggedIn()) {
                 $this->userConfig->setConfig(self::theme_Session_Config, json_encode($theme_Config), 'Weline_Backend', '主题设置');
             }
         }

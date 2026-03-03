@@ -18,10 +18,12 @@ $unreadCount = $block->getUnreadCount();
     <button type="button" class="btn header-item noti-icon waves-effect" 
             id="page-header-notifications-dropdown"
             data-bs-toggle="dropdown" aria-expanded="false">
-        <i class="ri-notification-3-line"></i>
-        <?php if ($unreadCount > 0): ?>
-        <span class="noti-dot weline-notification-badge"><?= $unreadCount > 99 ? '99+' : $unreadCount ?></span>
-        <?php endif; ?>
+        <span class="weline-notification-icon-wrapper">
+            <i class="ri-notification-3-line"></i>
+            <?php if ($unreadCount > 0): ?>
+            <span class="weline-notification-badge"><?= $unreadCount > 99 ? '99+' : $unreadCount ?></span>
+            <?php endif; ?>
+        </span>
     </button>
     <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end p-0 weline-notification-menu"
          aria-labelledby="page-header-notifications-dropdown">
@@ -54,60 +56,58 @@ $unreadCount = $block->getUnreadCount();
             $typeIcon = $block->getTypeIcon($type);
             $typeLabel = $block->getTypeLabel($type);
             $isRead = (bool) ($notification['is_read'] ?? false);
+            $notificationId = $notification['notification_id'] ?? 0;
+            $detailUrl = $this->getBackendUrl('*/backend/notification/detail', ['id' => $notificationId]);
             ?>
-            <a href="javascript:void(0)" 
+            <a href="<?= $detailUrl ?>" 
                class="text-reset notification-item weline-notification-item <?= $isRead ? '' : 'weline-notification-unread' ?>"
-               data-notification-id="<?= $notification['notification_id'] ?? '' ?>"
-               onclick="WelineNotification.markRead(<?= $notification['notification_id'] ?? 0 ?>)">
-                <div class="d-flex">
-                    <div class="flex-shrink-0 me-3">
-                        <?php if (!empty($notification['is_icon']) && !empty($notification['avatar'])): ?>
-                        <div class="avatar-xs">
-                            <span class="avatar-title rounded-circle font-size-16" style="background: <?= $typeColor ?>">
-                                <i class="<?= htmlspecialchars($notification['avatar']) ?>"></i>
-                            </span>
-                        </div>
-                        <?php else: ?>
-                        <div class="avatar-xs">
-                            <span class="avatar-title rounded-circle font-size-16" style="background: <?= $typeColor ?>">
-                                <i class="<?= $typeIcon ?>"></i>
-                            </span>
-                        </div>
+               data-notification-id="<?= $notificationId ?>">
+                <div class="weline-notification-icon-wrap" style="background: <?= $typeColor ?>">
+                    <?php if (!empty($notification['is_icon']) && !empty($notification['avatar'])): ?>
+                    <i class="<?= htmlspecialchars($notification['avatar']) ?>"></i>
+                    <?php else: ?>
+                    <i class="<?= $typeIcon ?>"></i>
+                    <?php endif; ?>
+                </div>
+                <div class="weline-notification-main">
+                    <div class="weline-notification-header">
+                        <h6 class="weline-notification-title"><?= htmlspecialchars($notification['title'] ?? '') ?></h6>
+                        <span class="weline-notification-type-badge" style="background: <?= $typeColor ?>">
+                            <?= $typeLabel ?>
+                        </span>
+                    </div>
+                    <p class="weline-notification-content"><?= htmlspecialchars(mb_substr(strip_tags($notification['content'] ?? ''), 0, 80)) ?><?= mb_strlen(strip_tags($notification['content'] ?? '')) > 80 ? '...' : '' ?></p>
+                    <div class="weline-notification-meta">
+                        <span class="weline-notification-time">
+                            <i class="mdi mdi-clock-outline"></i> <?= $notification['notification_time'] ?? '' ?>
+                        </span>
+                        <?php if (!empty($notification['topic_code'])): ?>
+                        <span class="weline-notification-topic">
+                            <i class="mdi mdi-tag-outline"></i> <?= htmlspecialchars($notification['topic_name'] ?? $notification['topic_code']) ?>
+                        </span>
                         <?php endif; ?>
                     </div>
-                    <div class="flex-grow-1">
-                        <div class="d-flex align-items-center mb-1">
-                            <h6 class="mb-0 me-2"><?= htmlspecialchars($notification['title'] ?? '') ?></h6>
-                            <span class="badge weline-notification-type-badge" style="background: <?= $typeColor ?>">
-                                <?= $typeLabel ?>
-                            </span>
-                        </div>
-                        <div class="font-size-12 text-muted">
-                            <p class="mb-1 weline-notification-content"><?= $notification['content'] ?? '' ?></p>
-                            <p class="mb-0">
-                                <i class="mdi mdi-clock-outline"></i> 
-                                <?= $notification['create_time'] ?? '' ?>
-                                <?php if (!empty($notification['topic_code'])): ?>
-                                <span class="ms-2 weline-notification-topic">
-                                    <i class="mdi mdi-tag-outline"></i> <?= htmlspecialchars($notification['topic_code']) ?>
-                                </span>
-                                <?php endif; ?>
-                            </p>
-                        </div>
-                    </div>
-                    <?php if (!$isRead): ?>
-                    <div class="weline-notification-dot"></div>
-                    <?php endif; ?>
+                </div>
+                <?php if (!$isRead): ?>
+                <div class="weline-notification-dot"></div>
+                <?php endif; ?>
+                <div class="weline-notification-arrow">
+                    <i class="ri-arrow-right-s-line"></i>
                 </div>
             </a>
             <?php endforeach; ?>
             <?php endif; ?>
         </div>
         <div class="p-2 border-top weline-notification-footer">
-            <div class="d-grid">
-                <a class="btn btn-sm btn-link font-size-14 text-center" 
-                   href="<?= $this->getBackendUrl('*/backend/notificationsubscription') ?>">
-                    <i class="mdi mdi-cog me-1"></i> <?= __('管理订阅') ?>
+            <div class="d-flex justify-content-between align-items-center gap-2">
+                <a class="btn btn-sm btn-primary flex-grow-1" 
+                   href="<?= $this->getBackendUrl('*/backend/notification') ?>">
+                    <i class="ri-notification-3-line me-1"></i> <?= __('查看全部') ?>
+                </a>
+                <a class="btn btn-sm btn-outline-secondary" 
+                   href="<?= $this->getBackendUrl('*/backend/notificationsubscription') ?>"
+                   title="<?= __('管理订阅') ?>">
+                    <i class="mdi mdi-cog"></i>
                 </a>
             </div>
         </div>
@@ -115,80 +115,276 @@ $unreadCount = $block->getUnreadCount();
 </div>
 
 <style>
+/* ============================================
+   组件：Backend Notification Dropdown
+   模块：Weline_Backend
+   前缀：weline-notification-
+   ============================================ */
 .weline-notification-dropdown .noti-icon {
-    position: relative;
+    overflow: visible !important;
 }
-.weline-notification-badge {
+
+.weline-notification-icon-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.weline-notification-icon-wrapper > i {
+    display: block;
+    font-size: 1.3rem;
+}
+
+.weline-notification-icon-wrapper .weline-notification-badge {
     position: absolute;
-    top: 10px;
-    right: 8px;
-    font-size: 10px;
-    min-width: 18px;
-    height: 18px;
-    line-height: 18px;
+    top: -6px;
+    right: -8px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    line-height: 16px;
+    padding: 0 4px;
     text-align: center;
-    border-radius: 50%;
+    border-radius: 8px;
     background: var(--backend-color-danger, #f46a6a);
     color: #fff;
+    box-shadow: 0 2px 4px rgba(244, 106, 106, 0.4);
+    box-sizing: border-box;
+    z-index: 10;
+    animation: weline-notification-pulse 2s infinite;
 }
+
+.weline-notification-dropdown .noti-dot:not(.weline-notification-badge) {
+    display: none !important;
+}
+
+@keyframes weline-notification-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
 .weline-notification-menu {
-    width: 360px;
+    min-width: 360px;
+    max-width: 400px;
+    padding: 0 !important;
     background: var(--backend-color-card-bg, #fff);
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: var(--backend-border-radius-lg, 12px);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+    overflow: hidden;
 }
+
 .weline-notification-header {
-    background: var(--backend-color-card-header-bg, #f8f9fa);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
     border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
 }
+
+.weline-notification-header h6 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.weline-notification-header h6::before {
+    content: '\eb6a';
+    font-family: 'remixicon';
+    color: var(--backend-color-primary, #556ee6);
+}
+
 .weline-notification-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     text-align: center;
-    padding: 2rem;
-    color: var(--backend-color-text-muted, #6c757d);
+    padding: 40px 20px;
+    color: var(--backend-color-text-tertiary, #adb5bd);
 }
+
 .weline-notification-empty i {
-    font-size: 2.5rem;
-    margin-bottom: 0.5rem;
+    font-size: 3rem;
+    margin-bottom: 12px;
+    opacity: 0.5;
 }
+
+.weline-notification-empty p {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.weline-notification-list {
+    max-height: 360px;
+}
+
 .weline-notification-item {
-    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px 20px;
     border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
     position: relative;
+    transition: all 0.2s ease;
+    cursor: pointer;
 }
+
+.weline-notification-item:last-child {
+    border-bottom: none;
+}
+
 .weline-notification-item:hover {
-    background: var(--backend-color-hover-bg, #f8f9fa);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
 }
+
+.weline-notification-item:hover .weline-notification-arrow {
+    opacity: 1;
+    transform: translateX(0);
+}
+
 .weline-notification-unread {
-    background: var(--backend-color-info-bg, #d1ecf1);
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.06));
 }
+
+.weline-notification-unread:hover {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+}
+
+.weline-notification-icon-wrap {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--backend-border-radius-md, 8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--backend-color-text-inverse, #fff);
+    font-size: 1.15rem;
+}
+
+.weline-notification-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.weline-notification-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.weline-notification-title {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .weline-notification-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
     background: var(--backend-color-primary, #556ee6);
     flex-shrink: 0;
-    margin-left: 0.5rem;
     align-self: center;
+    box-shadow: 0 0 0 3px rgba(85, 110, 230, 0.2);
+    animation: weline-notification-dot-pulse 2s infinite;
 }
+
+@keyframes weline-notification-dot-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+}
+
 .weline-notification-type-badge {
-    font-size: 10px;
-    padding: 2px 6px;
-    color: #fff;
+    flex-shrink: 0;
+    font-size: 0.65rem;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: var(--backend-border-radius-sm, 4px);
+    color: var(--backend-color-text-inverse, #fff);
 }
+
 .weline-notification-content {
+    margin: 0 0 8px 0;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.8rem;
+    line-height: 1.5;
 }
+
+.weline-notification-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.7rem;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+.weline-notification-time,
 .weline-notification-topic {
-    color: var(--backend-color-text-muted, #6c757d);
-    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
+
+.weline-notification-arrow {
+    flex-shrink: 0;
+    align-self: center;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    font-size: 1.25rem;
+    opacity: 0;
+    transform: translateX(-8px);
+    transition: all 0.2s ease;
+}
+
 .weline-notification-footer {
-    background: var(--backend-color-card-bg, #fff);
+    padding: 12px 20px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-top: 1px solid var(--backend-color-border-light, #e9ecef);
 }
-.weline-notification-mark-all {
+
+.weline-notification-footer .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     color: var(--backend-color-primary, #556ee6);
+    font-weight: 500;
+}
+
+.weline-notification-footer .btn:hover {
+    color: var(--backend-color-primary-dark, #4757d4);
+}
+
+.weline-notification-mark-all {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--backend-color-primary, #556ee6);
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    border-radius: var(--backend-border-radius-sm, 4px);
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.weline-notification-mark-all:hover {
+    background: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-inverse, #fff);
 }
 </style>
 
@@ -197,31 +393,6 @@ $unreadCount = $block->getUnreadCount();
     'use strict';
 
     var WelineNotification = {
-        markRead: function(notificationId) {
-            if (!notificationId) return;
-
-            fetch('<?= $this->getBackendUrl('*/api/notification/markRead') ?>', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'notification_id=' + notificationId
-            })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
-                if (data.success) {
-                    var item = document.querySelector('[data-notification-id="' + notificationId + '"]');
-                    if (item) {
-                        item.classList.remove('weline-notification-unread');
-                        var dot = item.querySelector('.weline-notification-dot');
-                        if (dot) dot.remove();
-                    }
-                    WelineNotification.updateBadge();
-                }
-            })
-            .catch(function(error) {
-                console.error('Mark read error:', error);
-            });
-        },
-
         markAllRead: function() {
             fetch('<?= $this->getBackendUrl('*/api/notification/markAllRead') ?>', {
                 method: 'POST'
