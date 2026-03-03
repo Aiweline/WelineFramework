@@ -18,8 +18,7 @@ use WeShop\Product\Helper\ProductLayoutScanner;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Model\ProductLayout;
 use WeShop\Product\Service\ProductLayoutService;
-use Weline\Framework\Cache\CacheFactory;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Layout\Api\LayoutProviderInterface;
 
 class ProductLayoutProvider implements LayoutProviderInterface
@@ -27,15 +26,20 @@ class ProductLayoutProvider implements LayoutProviderInterface
     private const CACHE_KEY_PREFIX = 'weshop_product_layout_';
     private const CACHE_TTL = 3600;
 
-    private CacheFactory $cacheFactory;
     private ProductLayoutService $layoutService;
 
     public function __construct(
-        CacheFactory $cacheFactory,
         ProductLayoutService $layoutService
     ) {
-        $this->cacheFactory = $cacheFactory;
         $this->layoutService = $layoutService;
+    }
+    
+    /**
+     * 获取缓存池
+     */
+    private function getCache(): CachePoolInterface
+    {
+        return w_cache('product');
     }
 
     /**
@@ -182,9 +186,8 @@ class ProductLayoutProvider implements LayoutProviderInterface
         }
 
         // 将布局配置保存到缓存
-        $cache = $this->cacheFactory->create();
         $cacheKey = $this->getCacheKey($layoutType, $entity);
-        $cache->set($cacheKey, $layoutCode, self::CACHE_TTL);
+        $this->getCache()->set($cacheKey, $layoutCode, self::CACHE_TTL);
         
         return true;
     }
@@ -199,17 +202,15 @@ class ProductLayoutProvider implements LayoutProviderInterface
             $productLayout = $this->layoutService->getProductLayout($entity->getId(), $layoutType);
             if ($productLayout) {
                 // 同时更新缓存
-                $cache = $this->cacheFactory->create();
                 $cacheKey = $this->getCacheKey($layoutType, $entity);
-                $cache->set($cacheKey, $productLayout, self::CACHE_TTL);
+                $this->getCache()->set($cacheKey, $productLayout, self::CACHE_TTL);
                 return $productLayout;
             }
         }
 
         // 从缓存读取
-        $cache = $this->cacheFactory->create();
         $cacheKey = $this->getCacheKey($layoutType, $entity);
-        $layout = $cache->get($cacheKey);
+        $layout = $this->getCache()->get($cacheKey);
         
         return $layout ?: null;
     }
@@ -234,16 +235,15 @@ class ProductLayoutProvider implements LayoutProviderInterface
      */
     public function onLayoutSwitch(string $layoutType, string $oldLayout, string $newLayout): void
     {
-        // 布局切换时清除相关缓存
-        $cache = $this->cacheFactory->create();
-        
-        // 可以在这里实现更复杂的缓存清理逻辑
+        // 布局切换时可以在这里实现更复杂的缓存清理逻辑
         // 例如：清除所有产品列表页缓存
         
         // 记录日志
-        if (function_exists('w_log')) {
-            w_log("产品布局切换: {$layoutType} 从 '{$oldLayout}' 切换到 '{$newLayout}'");
-        }
+        w_log_info("产品布局切换: {layout_type} 从 '{old_layout}' 切换到 '{new_layout}'", [
+            'layout_type' => $layoutType,
+            'old_layout' => $oldLayout,
+            'new_layout' => $newLayout
+        ]);
     }
 
     /**
