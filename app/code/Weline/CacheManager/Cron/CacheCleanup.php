@@ -63,7 +63,7 @@ class CacheCleanup implements CronTaskInterface
             $flush->execute();
             return __('缓存清理完成');  
         } catch (\Exception $e) {
-            error_log(__("缓存清理任务执行失败: %{1}", $e->getMessage()));
+            w_log_error(__("缓存清理任务执行失败: %{1}", $e->getMessage()));
             return __("缓存清理失败: %{1}", $e->getMessage());
         }
     }
