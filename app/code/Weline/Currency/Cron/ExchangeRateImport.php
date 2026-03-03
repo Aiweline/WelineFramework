@@ -144,8 +144,8 @@ class ExchangeRateImport implements CronTaskInterface
             $errorMessage = sprintf('汇率导入任务执行失败: %s', $e->getMessage());
             
             // 记录错误日志
-            error_log($errorMessage);
-            error_log('Stack trace: ' . $e->getTraceAsString());
+            w_log_error($errorMessage);
+            w_log_error('Stack trace: ' . $e->getTraceAsString());
             
             return $errorMessage;
         }

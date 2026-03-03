@@ -541,8 +541,7 @@ class Currency extends Model
         parent::save_after();
         // 清除货币缓存
         try {
-            $currencyCache = new \Weline\Currency\Cache\CurrencyCache();
-            $currencyCache->clear();
+            w_cache('currency')->clear();
         } catch (\Throwable $e) {
             // 缓存清除失败，静默处理
         }
