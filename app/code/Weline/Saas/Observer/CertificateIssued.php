@@ -36,7 +36,7 @@ class CertificateIssued implements ObserverInterface
             $order->setData(ProvisioningOrder::fields_ERROR_MESSAGE, '');
             $order->save();
         } catch (\Throwable $e) {
-            \error_log('[Weline_Saas] ' . __('证书签发后更新配置订单状态失败：%{1}', [$e->getMessage()]));
+            w_log_error('[Weline_Saas] ' . __('证书签发后更新配置订单状态失败：%{1}', [$e->getMessage()]));
         }
     }
 }
