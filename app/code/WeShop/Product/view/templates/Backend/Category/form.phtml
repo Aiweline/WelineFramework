@@ -2,7 +2,12 @@
 /**
  * 分类表单 - 内容模板（iframe用）
  * @var \Weline\Framework\View\Template $this
+ * @var int|null $preset_parent_id 预设的父分类ID（从树形界面添加子分类时传递）
+ * @var string|null $preset_parent_name 预设的父分类名称
  */
+
+$preset_parent_id = $preset_parent_id ?? 0;
+$preset_parent_name = $preset_parent_name ?? '';
 ?>
 <!-- start page message -->
 <div class='row'>
@@ -65,13 +70,13 @@
                                 <select type='text' class='form-control' name='pid' data-parsley-minlength='1'
                                         id='validationCategorySelect'
                                         required='required' data-selected='{{category.category_id}}'>
-                                    <if condition='category.parent_name'>
-                                        <option value='{{category.parent_id}}'>{{category.parent_name}}</option>
-                                        <else/>
-                                        <option value='0'>
-                                            <lang>顶层分类</lang>
-                                        </option>
-                                    </if>
+                                    <?php if (!empty($category) && $category['parent_name']): ?>
+                                        <option value='<?= htmlspecialchars((string)($category['parent_id'] ?? '0')) ?>'><?= htmlspecialchars($category['parent_name']) ?></option>
+                                    <?php elseif ($preset_parent_id > 0): ?>
+                                        <option value='<?= $preset_parent_id ?>'><?= htmlspecialchars($preset_parent_name ?: __('父分类 #%{1}', $preset_parent_id)) ?></option>
+                                    <?php else: ?>
+                                        <option value='0'><lang>顶层分类</lang></option>
+                                    <?php endif; ?>
                                 </select>
                                 <div class='valid-feedback'>
                                     <lang>填写正确！</lang>
@@ -229,27 +234,6 @@
         };
     };
 
-    var throttle = function(func, delay) {
-        var timeoutId;
-        var lastExecTime = 0;
-        return function() {
-            var context = this;
-            var args = arguments;
-            var elapsedTime = new Date().getTime() - lastExecTime;
-            if (elapsedTime > delay) {
-                lastExecTime = new Date().getTime();
-                func.apply(context, args);
-            } else {
-                clearTimeout(timeoutId);
-                timeoutId = setTimeout(function() {
-                    lastExecTime = new Date().getTime();
-                    func.apply(context, args);
-                    timeoutId = null;
-                }, delay - elapsedTime);
-            }
-        };
-    };
-
     var debounceProgressAttributeCode = debounce(function(e) {
         var target = $(e.target);
         var search = target.val();
@@ -289,5 +273,13 @@
     }, 500);
     
     $('#validationCategorySearch').on('input', debounceProgressAttributeCode);
+    
+    // 检测是否有成功消息，通知父窗口刷新
+    $(document).ready(function() {
+        var successMessage = $('.alert-success');
+        if (successMessage.length > 0 && window.parent !== window) {
+            window.parent.postMessage({ type: 'category_saved' }, '*');
+        }
+    });
 })();
 </script>
