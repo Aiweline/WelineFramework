@@ -2,29 +2,28 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <!--订单管理-主菜单-->
-    <add source="Weline_Order::order_manage" name="order_manage" title="订单管理" action="*/backend/order/index"
-         parent="Weline_Backend::business_module" icon="mdi-cart" order="10000"/>
-    <!--订单管理-订单列表-->
-    <add source="Weline_Order::order_list" name="order_list" title="订单列表" action="*/backend/order/index"
-         parent="Weline_Order::order_manage" icon="mdi-format-list-bulleted" order="1"/>
-    <!--订单管理-支付管理
-         说明：此菜单用于引导到订单列表，由订单详情页面中的支付区域完成具体支付管理操作。
-         原 action 指向 payment/process（仅支持 POST 且需要上下文），会导致直接点击菜单出现 404 或参数错误，因此改为跳转订单列表页面。
-    -->
-    <add source="Weline_Order::payment_manage" name="payment_manage" title="支付管理" action="order/backend/order/index"
-         parent="Weline_Order::order_manage" icon="mdi-credit-card" order="2"/>
-    <!--订单管理-发货管理-->
-    <add source="Weline_Order::shipment_manage" name="shipment_manage" title="发货管理" action="*/backend/shipment/create"
-         parent="Weline_Order::order_manage" icon="mdi-truck" order="3"/>
-    <!--订单管理-退款管理-->
-    <add source="Weline_Order::refund_manage" name="refund_manage" title="退款管理" action="*/backend/refund/create"
-         parent="Weline_Order::order_manage" icon="mdi-cash-refund" order="4"/>
-    <!--订单管理-发票管理-->
-    <add source="Weline_Order::invoice_manage" name="invoice_manage" title="发票管理" action="*/backend/invoice/generate"
-         parent="Weline_Order::order_manage" icon="mdi-file-document" order="5"/>
-    <!--订单管理-状态管理-->
-    <add source="Weline_Order::status_manage" name="status_manage" title="订单状态管理" action="order/backend/status/index"
-         parent="Weline_Order::order_manage" icon="mdi-flag" order="6"/>
+    
+    <!-- 订单列表 - 归入业务运营 > 订单管理 -->
+    <menu source="Weline_Order::order_list" name="order_list" title="订单列表" action="*/backend/order/index"
+          parent="Weline_Backend::order_group" icon="mdi mdi-format-list-bulleted" order="10"/>
+    
+    <!-- 支付管理 -->
+    <menu source="Weline_Order::payment_manage" name="payment_manage" title="支付管理" action="order/backend/order/index"
+          parent="Weline_Backend::order_group" icon="mdi mdi-credit-card-outline" order="20"/>
+    
+    <!-- 发货管理 -->
+    <menu source="Weline_Order::shipment_manage" name="shipment_manage" title="发货管理" action="*/backend/shipment/create"
+          parent="Weline_Backend::order_group" icon="mdi mdi-truck-outline" order="30"/>
+    
+    <!-- 退款管理 -->
+    <menu source="Weline_Order::refund_manage" name="refund_manage" title="退款管理" action="*/backend/refund/create"
+          parent="Weline_Backend::order_group" icon="mdi mdi-cash-refund" order="40"/>
+    
+    <!-- 发票管理 -->
+    <menu source="Weline_Order::invoice_manage" name="invoice_manage" title="发票管理" action="*/backend/invoice/generate"
+          parent="Weline_Backend::order_group" icon="mdi mdi-file-document-outline" order="50"/>
+    
+    <!-- 订单状态管理 -->
+    <menu source="Weline_Order::status_manage" name="status_manage" title="订单状态管理" action="order/backend/status/index"
+          parent="Weline_Backend::order_group" icon="mdi mdi-flag-outline" order="60"/>
 </menus>
-
