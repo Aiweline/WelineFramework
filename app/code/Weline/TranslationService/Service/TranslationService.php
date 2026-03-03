@@ -521,7 +521,7 @@ class TranslationService implements TranslationServiceInterface
                 ->save();
         } catch (\Exception $e) {
             // 记录失败不影响翻译功能，只记录日志
-            error_log('Failed to record translation: ' . $e->getMessage());
+            w_log_error('Failed to record translation: ' . $e->getMessage());
         }
     }
 
