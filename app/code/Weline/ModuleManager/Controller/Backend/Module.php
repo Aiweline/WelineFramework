@@ -47,7 +47,7 @@ class Module extends \Weline\Framework\App\Controller\BackendController
                 $registryService->updateAllRegistries(true); // 静默执行
             } catch (\Exception $e) {
                 // 注册表更新失败不影响模块状态更新，只记录日志
-                Env::log_warning('registry_update.log', __('模块状态变更后注册表更新失败: %{1}', [$e->getMessage()]));
+                w_log_warning(__('模块状态变更后注册表更新失败: %{1}', [$e->getMessage()]), [], 'registry_update.log');
             }
             
             return $this->fetchJson(['code' => 200, 'msg' => __('操作成功！'), 'data' => $status]);
