@@ -2,7 +2,8 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <!--模板管理-->
-    <add source="Weline_Taglib::taglib" name="taglib" title="标签" action="taglib/backend/taglib/listing"
-         parent="Weline_Backend::template_management" icon="fa fa-tags" order="30"/>
+    
+    <!-- 标签库 - 归入开发者 > 主题模板 -->
+    <menu source="Weline_Taglib::taglib" name="taglib" title="标签库" action="taglib/backend/taglib/listing"
+         parent="Weline_Backend::template_management" icon="mdi mdi-tag-multiple-outline" order="30"/>
 </menus>

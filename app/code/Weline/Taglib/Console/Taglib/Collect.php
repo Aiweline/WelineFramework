@@ -11,24 +11,23 @@ declare(strict_types=1);
 namespace Weline\Taglib\Console\Taglib;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
-use Weline\Taglib\Cache\TaglibCacheFactory;
 use Weline\Taglib\TaglibInterface;
 use Weline\Taglib\TaglibRegistry;
 
 class Collect implements CommandInterface
 {
     private Printing $printing;
-    private CacheInterface $cache;
+    private CachePoolInterface $cache;
 
     public function __construct(
         Printing $printing
     ) {
         $this->printing = $printing;
-        $this->cache = ObjectManager::getInstance(TaglibCacheFactory::class);
+        $this->cache = w_cache('taglib');
     }
 
     /**
