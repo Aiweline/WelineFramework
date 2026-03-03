@@ -164,20 +164,20 @@ namespace Your\Module\Observer;
 
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\CacheManager;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Router\Cache\RouterCache;
 
 class CheckFullPageCacheObserver implements ObserverInterface
 {
     private Request $request;
-    private CacheInterface $cache;
+    private CacheManager $cacheManager;
 
-    public function __construct(Request $request, CacheInterface $cache)
+    public function __construct(Request $request, CacheManager $cacheManager)
     {
         $this->request = $request;
-        $this->cache = $cache->create();
+        $this->cacheManager = $cacheManager;
     }
 
     public function execute(Event &$event): void
@@ -193,20 +193,21 @@ class CheckFullPageCacheObserver implements ObserverInterface
         }
         
         // 生成缓存键（此时可以生成正确的缓存键）
-        $cacheKey = RouterCache::buildUnifiedRequestCacheKey('', $this->request->getMethod(), $this->request);
+        $cacheKey = KeyBuilder::buildUnifiedRequestCacheKey('', $this->request->getMethod());
         
-        // 检查缓存
-        $cachedContent = $this->cache->get($cacheKey);
+        // 获取路由缓存池并检查缓存
+        $cache = $this->cacheManager->pool('router');
+        $cachedContent = $cache->get($cacheKey);
         
         if ($cachedContent !== false && is_array($cachedContent)) {
             // 如果存在全页缓存，直接输出并退出
-            if (isset($cachedContent[RouterCache::UNIFIED_CACHE_FPC_KEY]) && 
-                !empty($cachedContent[RouterCache::UNIFIED_CACHE_FPC_KEY])) {
+            if (isset($cachedContent[KeyBuilder::UNIFIED_CACHE_FPC_KEY]) && 
+                !empty($cachedContent[KeyBuilder::UNIFIED_CACHE_FPC_KEY])) {
                 
                 // 恢复响应头
-                if (isset($cachedContent[RouterCache::UNIFIED_CACHE_HEADERS_KEY]) && 
-                    is_array($cachedContent[RouterCache::UNIFIED_CACHE_HEADERS_KEY])) {
-                    foreach ($cachedContent[RouterCache::UNIFIED_CACHE_HEADERS_KEY] as $header) {
+                if (isset($cachedContent[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY]) && 
+                    is_array($cachedContent[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY])) {
+                    foreach ($cachedContent[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY] as $header) {
                         header($header);
                     }
                 }
@@ -215,7 +216,7 @@ class CheckFullPageCacheObserver implements ObserverInterface
                 header('X-Weline-FPC: HIT');
                 
                 // 输出缓存内容
-                echo $cachedContent[RouterCache::UNIFIED_CACHE_FPC_KEY];
+                echo $cachedContent[KeyBuilder::UNIFIED_CACHE_FPC_KEY];
                 exit(0);
             }
         }

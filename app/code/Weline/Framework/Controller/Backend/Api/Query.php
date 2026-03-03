@@ -4,16 +4,14 @@ declare(strict_types=1);
 namespace Weline\Framework\Controller\Backend\Api;
 
 use Weline\Framework\App\Controller\BackendRestController;
-use Weline\Framework\App\Session\BackendApiSession;
 use Weline\Framework\Service\Query\FrameworkQueryService;
 
 class Query extends BackendRestController
 {
     public function __construct(
-        BackendApiSession $backendApiSession,
         private readonly FrameworkQueryService $queryService
     ) {
-        parent::__construct($backendApiSession);
+        parent::__construct();
     }
 
     public function postIndex(): string

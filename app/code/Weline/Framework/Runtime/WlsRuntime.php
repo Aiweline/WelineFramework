@@ -196,7 +196,7 @@ class WlsRuntime implements RuntimeInterface
             
             // 如果run_before事件耗时过长，记录警告
             if ($timing['run_before_ms'] > 100) {
-                \error_log('[WLS Performance Warning] run_before event took ' . $timing['run_before_ms'] . 'ms');
+                w_log_warning('[WLS Performance Warning] run_before event took ' . $timing['run_before_ms'] . 'ms');
             }
             
             // URL 解析
@@ -250,7 +250,7 @@ class WlsRuntime implements RuntimeInterface
             
             // 如果run_after事件耗时过长，记录警告
             if ($timing['run_after_ms'] > 100) {
-                \error_log('[WLS Performance Warning] run_after event took ' . $timing['run_after_ms'] . 'ms');
+                w_log_warning('[WLS Performance Warning] run_after event took ' . $timing['run_after_ms'] . 'ms');
             }
             
             // 计算总耗时（用于性能监控）
@@ -306,7 +306,7 @@ class WlsRuntime implements RuntimeInterface
             
             // 如果重定向次数过多，记录警告
             if ($redirectCount > 5) {
-                \error_log("[WLS Redirect Warning] Too many redirects: {$redirectCount}, current URI: {$currentUri}, redirect to: {$redirectUrl}");
+                w_log_warning("[WLS Redirect Warning] Too many redirects: {$redirectCount}, current URI: {$currentUri}, redirect to: {$redirectUrl}");
             }
             
             // 创建重定向响应（空响应体，状态码和 Location 头由 WlsResponse 处理）
@@ -344,7 +344,7 @@ class WlsRuntime implements RuntimeInterface
             if ($isDev) {
                 $this->logWlsError($e);
             } else {
-                \error_log('[WlsRuntime] Request error: ' . $e->getMessage());
+                w_log_error('[WlsRuntime] Request error: ' . $e->getMessage());
             }
             
             // 返回错误响应
@@ -384,10 +384,10 @@ class WlsRuntime implements RuntimeInterface
                     $timing['router_start_call_ms'] ?? 0,
                     $timing['run_after_ms']
                 );
-                \error_log($performanceSummary);
+                w_log_debug($performanceSummary);
                 
                 $performanceLog = '[WLS Performance Detail] ' . \json_encode($timing, \JSON_UNESCAPED_UNICODE);
-                \error_log($performanceLog);
+                w_log_debug($performanceLog);
                 
                 // 写入性能日志到 var/log
                 $logFile = Env::VAR_DIR . 'log' . \DIRECTORY_SEPARATOR . 'wls_timing.log';
@@ -415,7 +415,7 @@ class WlsRuntime implements RuntimeInterface
                         $analysis[] = "run_after事件耗时过长: {$timing['run_after_ms']}ms";
                     }
                     if (!empty($analysis)) {
-                        \error_log('[WLS Performance Analysis] ' . implode('; ', $analysis));
+                        w_log_debug('[WLS Performance Analysis] ' . implode('; ', $analysis));
                     }
                 }
             }
@@ -430,7 +430,7 @@ class WlsRuntime implements RuntimeInterface
         // 防御性检查：如果 parse 缺少 server 字段（如 parserMatchs 早期返回），
         // 则使用 Url::$parserServer 或当前 $_SERVER 作为基础，避免后续代码访问 null
         if (!isset($parse['server']) || !is_array($parse['server'])) {
-            \error_log('[WlsRuntime] processUrlParse: parse[server] is missing! URL parse data may be incomplete. '
+            w_log_warning('[WlsRuntime] processUrlParse: parse[server] is missing! URL parse data may be incomplete. '
                 . 'area=' . ($parse['area'] ?? '(none)') 
                 . ', uri=' . ($parse['uri'] ?? '(none)')
                 . ', REQUEST_URI=' . ($_SERVER['REQUEST_URI'] ?? '(none)')
@@ -466,16 +466,17 @@ class WlsRuntime implements RuntimeInterface
         if (!empty($parse['currency'])) {
             $_SERVER['WELINE_USER_CURRENCY'] = $parse['currency'];
             RequestContext::currency($parse['currency']);
+        } else {
+            // 设置默认值，确保模板访问时不会出现 undefined 警告
+            $_SERVER['WELINE_USER_CURRENCY'] = $_SERVER['WELINE_USER_CURRENCY'] ?? RequestContext::currency();
         }
         if (!empty($parse['language'])) {
             $_SERVER['WELINE_USER_LANG'] = $parse['language'];
             RequestContext::locale($parse['language']);
+        } else {
+            // 设置默认值，确保模板访问时不会出现 undefined 警告
+            $_SERVER['WELINE_USER_LANG'] = $_SERVER['WELINE_USER_LANG'] ?? RequestContext::locale();
         }
-        
-        // 注意：不再设置空字符串默认值
-        // 空字符串会导致 ?? 运算符无法正确回退到默认值
-        // WELINE_USER_LANG 和 WELINE_USER_CURRENCY 应该在 Url::parser() 中被正确设置
-        // 如果 URL 解析未设置，RequestContext 的默认值会被使用（zh_Hans_CN / CNY）
         
         // 存储网站信息到上下文
         if (!empty($_SERVER['WELINE_WEBSITE_ID'])) {
@@ -561,40 +562,33 @@ class WlsRuntime implements RuntimeInterface
     
     /**
      * 处理异常
+     * 
+     * 使用统一的 ErrorResponse 类生成错误响应，支持多语言
+     * 返回格式与 FPM 模式的 JsonRenderer 一致
      */
     private function handleException(\Throwable $e): string
     {
-        $statusCode = 500;
+        $statusCode = \Weline\Framework\Exception\ErrorResponse::getStatusCode($e);
         $message = $e->getMessage() ?: 'Internal Server Error';
-        
-        if ($e instanceof \Weline\Framework\App\Exception) {
-            $statusCode = $e->getCode() ?: 500;
-        }
         
         // DEV 模式下输出 HTML 格式的错误页面（前端可见）
         $isDev = \defined('DEV') && DEV;
         if ($isDev) {
             $this->logWlsError($e);
-            return $this->formatExceptionAsHtml($e, $statusCode, $message);
+            return \Weline\Framework\Http\WlsResponse::fromContent(
+                $this->formatExceptionAsHtml($e, $statusCode, $message),
+                $statusCode
+            )->setHeader('Content-Type', 'text/html; charset=UTF-8')->toHttpString(false);
         }
         
-        if (\defined('DEBUG') && DEBUG) {
-            return \json_encode([
-                'error' => true,
-                'message' => $message,
-                'exception' => \get_class($e),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-        }
+        // DEBUG 和生产模式：使用统一的 ErrorResponse 生成 JSON
+        $isDebug = \defined('DEBUG') && DEBUG;
+        $response = \Weline\Framework\Exception\ErrorResponse::fromException($e, $isDebug);
         
-        // 生产模式：非 App\Exception 不暴露内部错误细节
-        $safeMessage = ($e instanceof \Weline\Framework\App\Exception) ? $message : 'Internal Server Error';
-        return \json_encode([
-            'error' => true,
-            'message' => $safeMessage,
-        ]);
+        return \Weline\Framework\Http\WlsResponse::fromContent(
+            \Weline\Framework\Exception\ErrorResponse::toJson($response),
+            $statusCode
+        )->setHeader('Content-Type', 'application/json; charset=UTF-8')->toHttpString(false);
     }
     
     /**
@@ -742,7 +736,7 @@ class WlsRuntime implements RuntimeInterface
             try {
                 $this->eventManager->dispatch('Weline_Framework::Runtime::reset');
             } catch (\Throwable $e) {
-                \error_log('[WlsRuntime] Reset event error: ' . $e->getMessage());
+                w_log_error('[WlsRuntime] Reset event error: ' . $e->getMessage());
             }
         }
     }
@@ -760,7 +754,7 @@ class WlsRuntime implements RuntimeInterface
             try {
                 $this->eventManager->dispatch('Weline_Framework::Runtime::terminate');
             } catch (\Throwable $e) {
-                \error_log('[WlsRuntime] Terminate event error: ' . $e->getMessage());
+                w_log_error('[WlsRuntime] Terminate event error: ' . $e->getMessage());
             }
         }
         

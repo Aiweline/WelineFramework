@@ -79,6 +79,20 @@ class Request extends Request\RequestAbstract implements RequestInterface
     }
     
     /**
+     * 重置 ParameterBag 实例（WLS 模式下需要在每个请求开始时调用）
+     * 
+     * @return static
+     */
+    public function resetParameterBag(): static
+    {
+        if ($this->parameterBag !== null) {
+            $this->parameterBag->reset();
+        }
+        $this->parameterBag = null;
+        return $this;
+    }
+    
+    /**
      * 获取 FileBag 实例
      * 
      * @return FileBag

@@ -197,7 +197,7 @@ class StateManager
                 $property->setValue(null, $defaultValue);
                 
             } catch (\Throwable $e) {
-                \error_log("[StateManager] Static reset '{$key}' error: " . $e->getMessage());
+                w_log_error("[StateManager] Static reset '{$key}' error: " . $e->getMessage());
             }
         }
     }
@@ -216,7 +216,7 @@ class StateManager
                 try {
                     \Weline\Framework\Manager\ObjectManager::removeInstance($className);
                 } catch (\Throwable $e) {
-                    \error_log("[StateManager] Singleton reset '{$className}' error: " . $e->getMessage());
+                    w_log_error("[StateManager] Singleton reset '{$className}' error: " . $e->getMessage());
                 }
             }
         }
@@ -296,7 +296,7 @@ class StateManager
                 try {
                     $instance->reset();
                 } catch (\Throwable $e) {
-                    \error_log('[StateManager] Pool reset error: ' . $e->getMessage());
+                    w_log_error('[StateManager] Pool reset error: ' . $e->getMessage());
                     return; // 不归还失败的实例
                 }
             }
@@ -323,7 +323,7 @@ class StateManager
             try {
                 $callback();
             } catch (\Throwable $e) {
-                \error_log("[StateManager] Reset callback '{$name}' error: " . $e->getMessage());
+                w_log_error("[StateManager] Reset callback '{$name}' error: " . $e->getMessage());
             }
         }
         
@@ -433,9 +433,6 @@ class StateManager
         // WLS 下如果请求处理过程中抛出异常，标志可能残留为 true，
         // 导致下一个请求跳过关键逻辑（创建 Session、创建缓存驱动等）。
         
-        // SessionManager::$isCreating — 防止 Session 创建时循环调用
-        self::registerStaticReset(\Weline\Framework\Session\SessionManager::class, 'isCreating', false);
-        
         // CacheFactory::$isCreating — 防止缓存工厂创建时循环调用
         self::registerStaticReset(\Weline\Framework\Cache\CacheFactory::class, 'isCreating', false);
         
@@ -464,59 +461,18 @@ class StateManager
         // Env::$user — 当前请求的用户标识，不能泄漏到下一个请求
         self::registerStaticReset(\Weline\Framework\App\Env::class, 'user', '');
         
-        // Session 实例清理 — WLS 下 Session 单例被 ObjectManager 缓存。
-        // Session::$lazyStarted 和 Session::$session（驱动实例）是请求级状态：
-        //   - $lazyStarted 阻止后续请求重新执行 ensureStarted()
-        //   - $session 持有首次请求的 WlsMemorySession（绑定了首次请求的 Cookie/Session ID）
+        // Session 实例清理 — WLS 下 SessionFactory 缓存的 Session 实例是请求级状态。
         // 不重置会导致：不同用户的请求共用同一个 Session ID（安全泄漏），
         //               或重载后新 Cookie 无法被读取（session 丢失）。
         self::registerResetCallback('session_instances', function () {
-            // 清理所有 Session 子类单例，确保下个请求重新创建并读取当前 $_COOKIE
-            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\App\Session\BackendSession::class);
-            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\App\Session\FrontendSession::class);
-            if (\class_exists(\Weline\Framework\App\Session\BackendApiSession::class, false)) {
-                \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\App\Session\BackendApiSession::class);
-            }
-            if (\class_exists(\Weline\Framework\App\Session\FrontendApiSession::class, false)) {
-                \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\App\Session\FrontendApiSession::class);
-            }
-            
-            // 清理 SessionManager 缓存的驱动实例
-            // SessionManager 使用私有 static $instance 单例模式，$_session 缓存了驱动。
-            // 必须清除 $_session 使下个请求根据新的 $_COOKIE 创建新驱动。
-            if (\class_exists(\Weline\Framework\Session\SessionManager::class, false)) {
-                try {
-                    $ref = new \ReflectionClass(\Weline\Framework\Session\SessionManager::class);
-                    $instProp = $ref->getProperty('instance');
-                    $instProp->setAccessible(true);
-                    if ($instProp->isInitialized(null)) {
-                        $manager = $instProp->getValue(null);
-                        $sessProp = $ref->getProperty('_session');
-                        $sessProp->setAccessible(true);
-                        $sessProp->setValue($manager, null);
-                    }
-                } catch (\Throwable $e) {
-                    // 忽略反射错误
-                }
+            // 清理 SessionFactory 缓存的请求级实例
+            if (\class_exists(\Weline\Framework\Session\SessionFactory::class, false)) {
+                \Weline\Framework\Session\SessionFactory::getInstance()->resetRequestInstances();
             }
         });
         
-        // CurrencyCache::$staticCache — 请求内货币缓存
-        self::registerResetCallback('currency_cache', function () {
-            if (\class_exists(\Weline\Currency\Cache\CurrencyCache::class, false)) {
-                $ref = new \ReflectionClass(\Weline\Currency\Cache\CurrencyCache::class);
-                if ($ref->hasProperty('staticCache')) {
-                    $prop = $ref->getProperty('staticCache');
-                    $prop->setAccessible(true);
-                    $prop->setValue(null, null);
-                }
-            }
-        });
-        
-        // LanguageCache::$staticCache — 请求内语言缓存
-        // 语言列表在进程级别应该保持稳定，但为避免语言配置变更后不生效，
-        // 在 cache:clear 或特定事件时应清理（这里不做请求级重置，仅注册以备将来需要）
-        // 注意：语言列表是进程级缓存，不需要每请求重置
+        // 缓存系统已重构为 w_cache() 全局函数，不再使用旧的 XxxCache 类
+        // 缓存池的清理由 CachePoolInterface 统一管理
         
         // ========== 5. 请求级对象实例清理 ==========
         // FPM 下 Response 每次请求都是新实例。
@@ -557,6 +513,60 @@ class StateManager
             }
         });
         
+        // ========== 5.5 模型实例清理 ==========
+        // WLS 下模型被 ObjectManager 缓存为单例，注入到控制器后跨请求复用。
+        // 模型内部持有 items、_data、_model_fields_data 等请求级数据，
+        // 如果不清理，上一请求的数据（包括主键 ID）会残留到下一请求。
+        // 例如：第一个请求 save() 成功设置了 user_id = 5，
+        //       第二个请求复用同一个模型实例，clearData() 不清理 _data 的主键，
+        //       导致新增变成更新，或 unique constraint violation。
+        // 解决：每次请求结束时清理所有 AbstractModel 子类的缓存实例。
+        self::registerResetCallback('model_instances', function () {
+            $instances = \Weline\Framework\Manager\ObjectManager::getInstances();
+            foreach ($instances as $class => $instance) {
+                if ($instance instanceof \Weline\Framework\Database\AbstractModel) {
+                    \Weline\Framework\Manager\ObjectManager::removeInstance($class);
+                }
+            }
+        });
+        
+        // ========== 5.6 Request 实例清理 ==========
+        // WLS 下 Request 被 ObjectManager 缓存复用，其实例属性 request_id 在首次
+        // getId() 调用后不会重置，导致多个请求使用相同的 request_id。
+        // BackendActivityLog 等使用 request_id 作为唯一约束的表会触发冲突。
+        // 解决：每次请求结束后清除 Request 实例，确保下次请求重新创建。
+        self::registerResetCallback('request_instance', function () {
+            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Http\Request::class);
+        });
+        
+        // ========== 5.7 Observer 实例清理 ==========
+        // WLS 下 Observer 被 ObjectManager 缓存为单例，其构造函数注入的 Request 对象
+        // 指向旧请求实例。虽然 WlsRuntime::handle() 会将新 WlsRequest 注册到 ObjectManager，
+        // 但已缓存的 Observer 仍持有旧 Request 引用，导致 request_id 重复。
+        // 例如：BackendControllerInit Observer 调用 $this->request->getId() 获取的是
+        //       上一个请求的 request_id，导致 BackendActivityLog 唯一约束冲突。
+        // 解决：每次请求结束时清理所有 ObserverInterface 实现类的缓存实例，
+        //       确保下次请求重新创建 Observer 并注入最新的 Request。
+        self::registerResetCallback('observer_instances', function () {
+            $instances = \Weline\Framework\Manager\ObjectManager::getInstances();
+            foreach ($instances as $class => $instance) {
+                if ($instance instanceof \Weline\Framework\Event\ObserverInterface) {
+                    \Weline\Framework\Manager\ObjectManager::removeInstance($class);
+                }
+            }
+        });
+        
+        // ========== 5.8 Router 实例清理 ==========
+        // WLS 下 Router\Core 被 ObjectManager 缓存为单例。虽然 __init() 有 $isNewRequest 检测，
+        // 但 ObjectManager 从缓存返回实例时不会再次调用 __init()，导致：
+        // 1. $this->request 仍指向旧请求对象
+        // 2. $this->area_router、$this->is_backend 等属性未更新
+        // 3. 后台请求可能使用前端 area_router，导致 404 错误
+        // 解决：每次请求结束时清理 Router\Core 实例，确保下次请求重新创建并正确初始化。
+        self::registerResetCallback('router_core_instance', function () {
+            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Router\Core::class);
+        });
+        
         // ========== 6. 数据库连接事务清理 ==========
         // FPM 下进程结束时未提交的事务由数据库自动回滚。
         // WLS 下连接池跨请求复用，必须在请求结束时手动回滚残留事务并归还连接。
@@ -591,8 +601,10 @@ class StateManager
         self::registerResetCallback('cache_flushed_observer', function () {
             \Weline\Server\Observer\CacheFlushedObserver::resetRequestState();
         });
-        // CacheFactory 事件分发递归保护
-        self::registerStaticReset(\Weline\Framework\Cache\CacheFactory::class, 'dispatchingCacheEvent', false);
+        // WlsMemoryAdapter 统计重置（仅重置 hits/misses 统计，不清空内存缓存数据）
+        self::registerResetCallback('wls_memory_adapter_reset', function () {
+            \Weline\Framework\Cache\Adapter\WlsMemoryAdapter::resetRequestState();
+        });
         
         // ========== 10. 菜单相关缓存 ==========
         // MenuUrlValidator::$menuPathsCache — 菜单路径验证缓存

@@ -140,38 +140,20 @@ class Env extends DataObject
     private bool $sandboxOverride = false;
 
     public const default_CONFIG = [
-        'env' => 'local',
-        'event'=>[
-            'debug' => false,
-            'scan_enabled' => false, // 是否启用事件扫描回退机制，默认关闭以提升性能
-        ],
-        'cache' => self::default_CACHE,
-        'session' => self::default_SESSION,
-        'log' => self::default_LOG,
-        'php-cs' => false,
-        'lang' => 'zh_Hans_CN',
-        'currency' => 'CNY',
-        'uninstall' => [
-            'backup_dir' => null, // 如果为 null，则使用项目根目录上级的 storage 目录
+        'system' => [
+            'env' => 'local',
+            'deploy' => 'dev',
+            'maintenance' => false,
+            'lang' => 'zh_Hans_CN',
+            'currency' => 'CNY',
         ],
         'db' => [
             'default' => 'sqlite',
             'master' => [
                 'type' => 'sqlite',
                 'path' => APP_PATH . 'etc/db.sqlite',
-//                'hostname' => 'demo',
-//                'database' => 'demo',
-//                'username' => 'demo',
-//                'password' => 'demo',
-//                'type' => 'sqlite',
-//                'hostport' => '3306',
-//                'prefix' => 'm_',
-//                'charset' => 'utf8mb4',
-//                'collate' => 'utf8mb4_general_ci',
             ],
-            'slaves' => [
-
-            ],
+            'slaves' => [],
         ],
         'sandbox_db' => [
             'default' => 'sqlite',
@@ -179,8 +161,20 @@ class Env extends DataObject
                 'type' => 'sqlite',
                 'path' => APP_PATH . 'etc/sandbox_db.sqlite'
             ],
-            'slaves' => [
-            ],
+            'slaves' => [],
+        ],
+        'cache' => self::default_CACHE,
+        'session' => self::default_SESSION,
+        'log' => self::default_LOG,
+        'router' => [
+            'area_routes' => [],
+        ],
+        'dev' => [
+            'php_cs' => false,
+            'static_rand_version' => false,
+            'event_debug' => false,
+            'event_scan' => false,
+            'phpunit_server' => null,
         ],
     ];
 
@@ -363,7 +357,7 @@ class Env extends DataObject
                 $envConfig = [];
             }
         }
-        $this->config = array_merge(self::default_CONFIG, $envConfig);
+        $this->config = array_replace_recursive(self::default_CONFIG, $envConfig);
         $this->setData($this->config);
         return $this;
     }
@@ -534,29 +528,52 @@ class Env extends DataObject
 
     /**
      * Convenience methods for different log levels (PSR-3 inspired)
+     * 
+     * 这些方法现在代理到统一的日志系统 (Weline\Framework\Log)
+     * 使用 $filename 作为日志通道名
      */
     public static function log_error(string $filename, string $message): bool
     {
+        if (function_exists('w_log_error')) {
+            w_log_error($message, [], $filename);
+            return true;
+        }
         return self::log($filename, $message, 'ERROR', true, true, 0);
     }
 
     public static function log_warning(string $filename, string $message): bool
     {
+        if (function_exists('w_log_warning')) {
+            w_log_warning($message, [], $filename);
+            return true;
+        }
         return self::log($filename, $message, 'WARNING', true, true, 0);
     }
 
     public static function log_info(string $filename, string $message): bool
     {
+        if (function_exists('w_log_info')) {
+            w_log_info($message, [], $filename);
+            return true;
+        }
         return self::log($filename, $message, 'INFO', true, true, 0);
     }
 
     public static function log_debug(string $filename, string $message): bool
     {
+        if (function_exists('w_log_debug')) {
+            w_log_debug($message, [], $filename);
+            return true;
+        }
         return self::log($filename, $message, 'DEBUG', true, true, 0);
     }
 
     public static function log_notice(string $filename, string $message): bool
     {
+        if (function_exists('w_log_notice')) {
+            w_log_notice($message, [], $filename);
+            return true;
+        }
         return self::log($filename, $message, 'NOTICE', true, true, 0);
     }
 
@@ -639,7 +656,7 @@ class Env extends DataObject
     public function getConfig(string $name = '', $default = null): mixed
     {
         // 维护模式特殊处理：在常驻内存模式下使用带缓存的检查（支持跨进程通信）
-        if ($name === 'maintenance' && \Weline\Framework\Runtime\Runtime::isPersistent()) {
+        if (($name === 'system.maintenance' || $name === 'maintenance') && \Weline\Framework\Runtime\Runtime::isPersistent()) {
             return $this->checkMaintenanceMode();
         }
         
@@ -778,7 +795,7 @@ class Env extends DataObject
     public function setConfig(string $key, $value = null): bool
     {
         // 维护模式特殊处理：同时管理文件标志（支持 WLS 跨进程通信）
-        if ($key === 'maintenance') {
+        if ($key === 'maintenance' || $key === 'system.maintenance') {
             $this->setMaintenanceFlag((bool) $value);
         }
         if ($key === 'cache') {
@@ -1089,6 +1106,53 @@ class Env extends DataObject
         }
     }
 
+    // ==================== 配置分组便捷方法 ====================
+    
+    /**
+     * 获取 system 分组配置
+     * 
+     * @param string $key 配置键（如 'deploy', 'maintenance'）
+     * @param mixed $default 默认值
+     * @return mixed
+     */
+    public static function system(string $key = '', mixed $default = null): mixed
+    {
+        if ($key === '') {
+            return self::get('system', []);
+        }
+        return self::get('system.' . $key, $default);
+    }
+    
+    /**
+     * 获取 router 分组配置
+     * 
+     * @param string $key 配置键
+     * @param mixed $default 默认值
+     * @return mixed
+     */
+    public static function router(string $key = '', mixed $default = null): mixed
+    {
+        if ($key === '') {
+            return self::get('router', []);
+        }
+        return self::get('router.' . $key, $default);
+    }
+    
+    /**
+     * 获取 dev 分组配置
+     * 
+     * @param string $key 配置键（如 'php_cs', 'event_debug'）
+     * @param mixed $default 默认值
+     * @return mixed
+     */
+    public static function dev(string $key = '', mixed $default = null): mixed
+    {
+        if ($key === '') {
+            return self::get('dev', []);
+        }
+        return self::get('dev.' . $key, $default);
+    }
+    
     // ==================== 区域路由配置方法 ====================
     
     /**
@@ -1098,7 +1162,7 @@ class Env extends DataObject
      */
     public static function getAreaRoutes(): array
     {
-        return self::get('area_routes', []);
+        return self::router('area_routes') ?: [];
     }
     
     /**

@@ -72,7 +72,7 @@ class Set implements \Weline\Framework\Console\CommandInterface
     public function getTypes(): array
     {
         return [
-            'static_file_rand_version' => __('设置静态文件是否末尾添加随机字符，以保证浏览器不缓存文件而得到实时响应修改。接受值：0或1')
+            'dev.static_rand_version' => __('设置静态文件是否末尾添加随机字符，以保证浏览器不缓存文件而得到实时响应修改。接受值：0或1')
         ];
     }
 

@@ -13,6 +13,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\Session\SessionFactory;
 
 class Request extends CommandAbstract
 {
@@ -76,7 +77,8 @@ class Request extends CommandAbstract
         $headers = $args['header'] ?? $args['H'] ?? [];
         $body = $args['data'] ?? $args['d'] ?? '';
         $overridePort = isset($args['port']) || isset($args['P']) ? (int)($args['port'] ?? $args['P']) : null;
-        $overrideHttps = isset($args['https']) ? true : null;
+        // --https 强制 HTTPS，--http 强制 HTTP
+        $overrideHttps = isset($args['https']) ? true : (isset($args['http']) ? false : null);
         $isSse = isset($args['sse']) || isset($args['S']);
         $sessionId = $args['session'] ?? $args['sid'] ?? '';
 
@@ -246,84 +248,32 @@ class Request extends CommandAbstract
     }
 
     /**
-     * 从 session 文件中查找有效的后台登录态
+     * 从 Session 存储中查找有效的后台登录态
+     *
+     * 使用 SessionFactory 透明 API，自动适配 WLS Session Server 或文件存储。
+     *
      * @return array|null ['session_id' => string, 'username' => string, 'user_id' => int] 或 null
      */
     private function findValidBackendSession(): ?array
     {
-        $sessionDir = BP . 'var' . DIRECTORY_SEPARATOR . 'session';
-        if (!is_dir($sessionDir)) {
-            return null;
-        }
+        $storage = SessionFactory::getInstance()->createStorage();
+        $sessions = $storage->list([
+            'filter' => ['type' => 'backend'],
+            'limit' => 10,
+        ]);
         
-        // 获取所有 session 文件，按修改时间倒序排列（最新的优先）
-        $sessionFiles = [];
-        foreach (scandir($sessionDir) as $file) {
-            if ($file === '.' || $file === '..') {
-                continue;
-            }
-            $filePath = $sessionDir . DIRECTORY_SEPARATOR . $file;
-            if (is_file($filePath)) {
-                $sessionFiles[] = [
-                    'path' => $filePath,
-                    'session_id' => $file,
-                    'mtime' => filemtime($filePath)
+        foreach ($sessions as $session) {
+            $data = $session['data'] ?? [];
+            $userId = $data['WF_BACKEND_USER_ID'] ?? null;
+            $username = $data['WF_BACKEND_USER'] ?? null;
+            
+            if ($userId && $username) {
+                return [
+                    'session_id' => $session['session_id'],
+                    'username' => $username,
+                    'user_id' => $userId,
                 ];
             }
-        }
-        
-        // 按修改时间倒序排列
-        usort($sessionFiles, fn($a, $b) => $b['mtime'] <=> $a['mtime']);
-        
-        // 只检查最近的 50 个 session 文件（避免扫描过多文件）
-        $sessionFiles = array_slice($sessionFiles, 0, 50);
-        
-        foreach ($sessionFiles as $sessionFile) {
-            $content = @file_get_contents($sessionFile['path']);
-            if (!$content) {
-                continue;
-            }
-            
-            // 检查是否是后台类型且已登录
-            // Session 格式：PHP serialize，包含 type=backend, WF_BACKEND_USER, WF_BACKEND_USER_ID
-            if (!str_contains($content, '"backend"') && !str_contains($content, 's:7:"backend"')) {
-                continue;
-            }
-            
-            // 检查是否有登录用户
-            if (!str_contains($content, 'WF_BACKEND_USER_ID')) {
-                continue;
-            }
-            
-            // 尝试解析 session 数据
-            $sessionData = @unserialize($content);
-            if (!is_array($sessionData)) {
-                continue;
-            }
-            
-            // 验证是后台 session 且已登录
-            if (($sessionData['type'] ?? '') !== 'backend') {
-                continue;
-            }
-            
-            $userId = $sessionData['WF_BACKEND_USER_ID'] ?? null;
-            $username = $sessionData['WF_BACKEND_USER'] ?? null;
-            
-            if (!$userId || !$username) {
-                continue;
-            }
-            
-            // 检查 session 是否过期（假设 24 小时内有效）
-            $maxAge = 24 * 3600;
-            if ((time() - $sessionFile['mtime']) > $maxAge) {
-                continue;
-            }
-            
-            return [
-                'session_id' => $sessionFile['session_id'],
-                'username' => $username,
-                'user_id' => $userId
-            ];
         }
         
         return null;

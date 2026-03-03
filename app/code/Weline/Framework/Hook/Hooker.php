@@ -72,7 +72,7 @@ class Hooker
                         $e
                     );
                 }
-                Env::log_error('hook', 'Hook 验证失败: ' . $e->getMessage());
+                w_log_error('Hook 验证失败: ' . $e->getMessage(), [], 'hook');
                 // 生产模式下返回空数组，不中断执行
                 return [];
             }

@@ -142,4 +142,15 @@ interface ProcessDriverInterface
      * @param int|null $port 指定端口，null 清除全部
      */
     public function clearPortCache(?int $port = null): void;
+    
+    /**
+     * 批量获取多个进程的详细信息
+     * 
+     * 单次系统调用获取多个进程信息，避免逐个查询的性能开销
+     * 
+     * @param int[] $pids 进程 ID 数组
+     * @return array<int, array{pid: int, exists: bool, name: string, command: string, memory: string, cpu: string, start_time: string}>
+     *               键为 PID，值为进程信息数组
+     */
+    public function batchGetProcessInfo(array $pids): array;
 }

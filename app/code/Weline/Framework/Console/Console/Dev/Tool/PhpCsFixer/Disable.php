@@ -29,8 +29,8 @@ class Disable implements \Weline\Framework\Console\CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
-        Env::getInstance()->setConfig('php-cs', false);
-        $this->printing->success(__('成功禁用php-cs代码美化工具：' . Env::getInstance()->getConfig('php-cs')));
+        Env::getInstance()->setConfig('dev.php_cs', false);
+        $this->printing->success(__('成功禁用php-cs代码美化工具：' . Env::dev('php_cs')));
     }
 
     /**

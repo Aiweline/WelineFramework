@@ -1,0 +1,158 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Weline\Framework\Session\Test;
+
+use PHPUnit\Framework\TestCase;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
+use Weline\Framework\Session\SessionInterface;
+use Weline\Framework\Session\Storage\FileStorage;
+use Weline\Framework\Session\Storage\SessionStorageInterface;
+use Weline\Framework\Session\Strategy\FpmStrategy;
+use Weline\Framework\Session\Strategy\SessionStrategyInterface;
+
+/**
+ * SessionFactory 单元测试
+ *
+ * 测试 Session 工厂的创建功能。
+ */
+class SessionFactoryTest extends TestCase
+{
+    private SessionFactory $factory;
+
+    protected function setUp(): void
+    {
+        SessionFactory::resetAll();
+        
+        $this->factory = new SessionFactory([
+            'default' => 'file',
+            'lifetime' => 3600,
+            'drivers' => [
+                'file' => [
+                    'path' => 'var/test_session/',
+                ],
+            ],
+        ]);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->factory->resetRequestInstances();
+        SessionFactory::resetAll();
+    }
+
+    public function testCreateStorage(): void
+    {
+        $storage = $this->factory->createStorage('file');
+        
+        $this->assertInstanceOf(SessionStorageInterface::class, $storage);
+        $this->assertInstanceOf(FileStorage::class, $storage);
+    }
+
+    public function testCreateStorageCachesSameType(): void
+    {
+        $storage1 = $this->factory->createStorage('file');
+        $storage2 = $this->factory->createStorage('file');
+        
+        $this->assertSame($storage1, $storage2);
+    }
+
+    public function testCreateStrategy(): void
+    {
+        $strategy = $this->factory->createStrategy();
+        
+        $this->assertInstanceOf(SessionStrategyInterface::class, $strategy);
+    }
+
+    public function testCreateSession(): void
+    {
+        $session = $this->factory->createSession();
+        
+        $this->assertInstanceOf(SessionInterface::class, $session);
+    }
+
+    public function testCreateSessionReturnsSameInstance(): void
+    {
+        $session1 = $this->factory->createSession();
+        $session2 = $this->factory->createSession();
+        
+        $this->assertSame($session1, $session2);
+    }
+
+    public function testCreateBackendSession(): void
+    {
+        $session = $this->factory->createBackendSession();
+        
+        $this->assertInstanceOf(AuthenticatedSessionInterface::class, $session);
+        $this->assertEquals('backend', $session->getArea());
+    }
+
+    public function testCreateFrontendSession(): void
+    {
+        $session = $this->factory->createFrontendSession();
+        
+        $this->assertInstanceOf(AuthenticatedSessionInterface::class, $session);
+        $this->assertEquals('frontend', $session->getArea());
+    }
+
+    public function testCreateApiSession(): void
+    {
+        $session = $this->factory->createApiSession();
+        
+        $this->assertInstanceOf(AuthenticatedSessionInterface::class, $session);
+        $this->assertEquals('api', $session->getArea());
+    }
+
+    public function testResetRequestInstances(): void
+    {
+        $session1 = $this->factory->createSession();
+        
+        $this->factory->resetRequestInstances();
+        
+        $session2 = $this->factory->createSession();
+        
+        $this->assertNotSame($session1, $session2);
+    }
+
+    public function testStaticGetInstance(): void
+    {
+        $instance1 = SessionFactory::getInstance();
+        $instance2 = SessionFactory::getInstance();
+        
+        $this->assertSame($instance1, $instance2);
+    }
+
+    public function testStaticSessionMethod(): void
+    {
+        $session = SessionFactory::session();
+        
+        $this->assertInstanceOf(SessionInterface::class, $session);
+    }
+
+    public function testStaticBackendMethod(): void
+    {
+        $session = SessionFactory::backend();
+        
+        $this->assertInstanceOf(AuthenticatedSessionInterface::class, $session);
+        $this->assertEquals('backend', $session->getArea());
+    }
+
+    public function testStaticFrontendMethod(): void
+    {
+        $session = SessionFactory::frontend();
+        
+        $this->assertInstanceOf(AuthenticatedSessionInterface::class, $session);
+        $this->assertEquals('frontend', $session->getArea());
+    }
+
+    public function testGetConfig(): void
+    {
+        $config = $this->factory->getConfig();
+        
+        $this->assertIsArray($config);
+        $this->assertEquals('file', $config['default']);
+        $this->assertEquals(3600, $config['lifetime']);
+    }
+}

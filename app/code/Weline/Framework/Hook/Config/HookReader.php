@@ -11,14 +11,13 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Hook\Config;
 
-use Weline\Framework\Cache\CacheInterface;
-use Weline\Framework\Hook\Cache\HookCache;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\System\File\Scanner;
 use Weline\Framework\System\ModuleFileReader;
 
 class HookReader extends ModuleFileReader
 {
-    private CacheInterface $hookCache;
+    private CachePoolInterface $hookCache;
     protected string $path = 'hooks';
     
     /**
@@ -27,9 +26,9 @@ class HookReader extends ModuleFileReader
      */
     private static array $staticFileListCache = [];
 
-    public function __construct(HookCache $cache, Scanner $scanner, string $path = 'view' . DS . 'hooks')
+    public function __construct(Scanner $scanner, string $path = 'view' . DS . 'hooks')
     {
-        $this->hookCache = $cache->create();
+        $this->hookCache = w_cache('hook');
         parent::__construct($scanner, $path);
     }
 

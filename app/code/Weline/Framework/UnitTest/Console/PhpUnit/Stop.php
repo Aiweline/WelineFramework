@@ -40,7 +40,7 @@ class Stop implements \Weline\Framework\Console\CommandInterface
     public function execute(array $args = [], array $data = [])
     {
         # 提示是否运行：生产环境禁止运行
-        if (Env::get('deploy') !== 'dev') {
+        if (Env::system('deploy') !== 'dev') {
             $this->printing->setup(__('非开发环境禁止运行！如你确认是dev环境，请运行php bin/w deploy:model:set dev 转换环境后运行！'));
             exit(1);
         }
@@ -117,11 +117,11 @@ class Stop implements \Weline\Framework\Console\CommandInterface
         
         $env = include $envFile;
         
-        if (!isset($env['phpunit_server'])) {
-            $env['phpunit_server'] = [];
+        if (!isset($env['dev'])) {
+            $env['dev'] = [];
         }
         
-        $env['phpunit_server'] = [
+        $env['dev']['phpunit_server'] = [
             'host' => '127.0.0.1',
             'port' => 8080,
             'pid' => $pid,

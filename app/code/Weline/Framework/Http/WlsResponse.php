@@ -142,6 +142,10 @@ class WlsResponse
     {
         $response = new self('', $statusCode);
         $response->setHeader('Location', $url);
+        // 禁止浏览器缓存重定向响应，确保每次都向服务器请求
+        $response->setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        $response->setHeader('Pragma', 'no-cache');
+        $response->setHeader('Expires', '0');
         return $response;
     }
     

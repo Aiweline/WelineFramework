@@ -14,7 +14,7 @@ namespace Weline\Framework\Cache\Console\Cache;
 use Weline\Framework\Console\CommandInterface;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Scanner;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;

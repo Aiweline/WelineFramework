@@ -11,7 +11,7 @@ namespace Weline\Framework\Common;
 
 use Weline\Framework\App\Cache\AppCache;
 use Weline\Framework\App\Env;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
 
 class Loader
@@ -20,6 +20,7 @@ class Loader
     {
         require __DIR__ . '/functions.php';
         require __DIR__ . '/func_debug.php';
+        require dirname(__DIR__) . '/func_log.php';
         # 加载模块自定义助手函数
         if (is_file(Env::path_FUNCTIONS_FILE)) {
             require Env::path_FUNCTIONS_FILE;

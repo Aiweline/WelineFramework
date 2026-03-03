@@ -76,7 +76,7 @@ class DriverRegistry
             
             return $drivers;
         } catch (\Exception $e) {
-            error_log("读取驱动映射文件失败: " . $e->getMessage());
+            w_log_error("读取驱动映射文件失败: " . $e->getMessage());
             return [];
         }
     }
@@ -109,7 +109,7 @@ class DriverRegistry
         
         if (!is_dir($driverDir)) {
             if (!mkdir($driverDir, 0755, true)) {
-                error_log("创建驱动映射目录失败: {$driverDir}");
+                w_log_error("创建驱动映射目录失败: {$driverDir}");
                 return false;
             }
         }
@@ -138,7 +138,7 @@ class DriverRegistry
             $result = file_put_contents($driverFile, $content, LOCK_EX);
             
             if ($result === false) {
-                error_log("写入驱动映射文件失败: {$driverFile}");
+                w_log_error("写入驱动映射文件失败: {$driverFile}");
                 return false;
             }
             
@@ -148,7 +148,7 @@ class DriverRegistry
             
             return true;
         } catch (\Exception $e) {
-            error_log("写入驱动映射文件异常: " . $e->getMessage());
+            w_log_error("写入驱动映射文件异常: " . $e->getMessage());
             return false;
         }
     }

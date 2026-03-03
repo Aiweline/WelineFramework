@@ -12,8 +12,7 @@ namespace Weline\Framework\Controller;
 use ReflectionException;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
-use Weline\Framework\Cache\CacheInterface;
-use Weline\Framework\Controller\Cache\ControllerCache;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\MessageManager;
@@ -29,7 +28,7 @@ class PcController extends Core
     private Template $_template;
     protected ?Url $_url = null;
 
-    private CacheInterface $controllerCache;
+    private CachePoolInterface $controllerCache;
     
     /**
      * 布局类型，用于 Theme 模块自动加载对应的布局模板
@@ -122,10 +121,10 @@ class PcController extends Core
         }
     }
 
-    protected function getControllerCache(): CacheInterface
+    protected function getControllerCache(): CachePoolInterface
     {
         if (!isset($this->controllerCache)) {
-            $this->controllerCache = ObjectManager::getInstance(ControllerCache::class)->create();
+            $this->controllerCache = w_cache('controller');
         }
         return $this->controllerCache;
     }
@@ -395,22 +394,25 @@ class PcController extends Core
     //    }
     //
     //
-    protected function exception(\Exception $exception, string $msg = '请求异常！', mixed $data = '', int $code = 403): mixed
+    protected function exception(\Throwable $exception, string $msg = '', mixed $data = '', ?int $code = null): array|string
     {
-        if (!DEBUG) {
+        $statusCode = $code ?? \Weline\Framework\Exception\ErrorResponse::getStatusCode($exception);
+        
+        if (!\defined('DEBUG') || !DEBUG) {
             return $this->getMessageManager()->addException($exception);
-        } else {
-            $return_data['data'] = DEV ? $data : '';
-            $return_data['exception'] = DEV ? $exception : $exception->getMessage();
-            $return_data = DEV ? json_encode($return_data) : '';
-            $msg = DEV ? $exception->getMessage() : __($msg);
-            $msg_title = __('消息');
-            $data_title = __('数据');
-            $html = <<<HTML
-$msg_title:$msg,
-$data_title:$return_data,
-HTML;
-            exit($html);
         }
+        
+        $return_data = [];
+        $return_data['data'] = (\defined('DEV') && DEV) ? $data : '';
+        $return_data['exception'] = (\defined('DEV') && DEV) ? $exception->getMessage() : '';
+        $return_data_json = (\defined('DEV') && DEV) ? \json_encode($return_data, JSON_UNESCAPED_UNICODE) : '';
+        $displayMsg = (\defined('DEV') && DEV) ? $exception->getMessage() : ($msg ?: __('请求异常！'));
+        $msg_title = __('消息');
+        $data_title = __('数据');
+        $html = <<<HTML
+{$msg_title}:{$displayMsg},
+{$data_title}:{$return_data_json},
+HTML;
+        throw new \Weline\Framework\Http\ResponseTerminateException($statusCode, $html, ['Content-Type' => 'text/html; charset=UTF-8']);
     }
 }

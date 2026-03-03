@@ -10,10 +10,11 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Router;
 
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\CacheManager as FrameworkCacheManager;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Router\Cache\RouterCache;
 
 /**
  * CacheManager - 路由缓存管理类
@@ -22,13 +23,19 @@ use Weline\Framework\Router\Cache\RouterCache;
  * 封装缓存键的生成、缓存数据的读写等操作。
  * 
  * @since PHP 8.4
+ * @deprecated 使用 \Weline\Framework\Cache\CacheManager::pool('router') 代替
  */
 class CacheManager
 {
     /**
-     * 缓存接口
+     * 缓存池
      */
-    private ?CacheInterface $cache = null;
+    private ?CachePoolInterface $cache = null;
+    
+    /**
+     * 框架缓存管理器
+     */
+    private ?FrameworkCacheManager $frameworkCacheManager = null;
     
     /**
      * 缓存键
@@ -57,35 +64,42 @@ class CacheManager
      */
     public function init(Request $request): void
     {
+        if ($this->frameworkCacheManager === null) {
+            $this->frameworkCacheManager = ObjectManager::getInstance(FrameworkCacheManager::class);
+        }
+        
         if ($this->cache === null) {
-            $this->cache = ObjectManager::getInstance(RouterCache::class . 'Factory');
+            $this->cache = $this->frameworkCacheManager->pool('router');
         }
         
         $uri = $_SERVER['REQUEST_URI'] ?? $request->getUri();
         $method = $request->getMethod() ?: 'GET';
         
         // 规范化 URI
-        $uri = RouterCache::normalizeUri($uri);
+        $uri = KeyBuilder::normalizeUri($uri);
         
         // 生成各种缓存键
-        $this->urlCacheKey = RouterCache::buildUrlCacheKey($uri, $method, $request);
-        $this->ruleCacheKey = RouterCache::buildRuleCacheKey($uri, $method, $request);
-        $this->routerCacheKey = RouterCache::buildRouterStartCacheKey($uri, $method, $request);
-        $this->unifiedCacheKey = RouterCache::buildUnifiedRequestCacheKey('', $method, $request);
+        $this->urlCacheKey = KeyBuilder::buildUrlCacheKey($uri, $method);
+        $this->ruleCacheKey = KeyBuilder::buildRuleCacheKey($uri, $method);
+        $this->routerCacheKey = KeyBuilder::buildRouterStartCacheKey($uri, $method);
+        $this->unifiedCacheKey = KeyBuilder::buildUnifiedRequestCacheKey('', $method);
         
         // 重置统一缓存数据
         $this->unifiedCacheData = null;
     }
     
     /**
-     * 获取缓存接口
+     * 获取缓存池
      * 
-     * @return CacheInterface
+     * @return CachePoolInterface
      */
-    public function getCache(): CacheInterface
+    public function getCache(): CachePoolInterface
     {
         if ($this->cache === null) {
-            $this->cache = ObjectManager::getInstance(RouterCache::class . 'Factory');
+            if ($this->frameworkCacheManager === null) {
+                $this->frameworkCacheManager = ObjectManager::getInstance(FrameworkCacheManager::class);
+            }
+            $this->cache = $this->frameworkCacheManager->pool('router');
         }
         return $this->cache;
     }
@@ -143,7 +157,7 @@ class CacheManager
     {
         if ($this->unifiedCacheData === null) {
             $cached = $this->getCache()->get($this->unifiedCacheKey);
-            $this->unifiedCacheData = ($cached === false) ? null : $cached;
+            $this->unifiedCacheData = ($cached === false || $cached === null) ? null : $cached;
         }
         
         return is_array($this->unifiedCacheData) ? $this->unifiedCacheData : null;
@@ -169,7 +183,7 @@ class CacheManager
     public function getCachedUrl(): ?string
     {
         $data = $this->getUnifiedCacheData();
-        return $data[RouterCache::UNIFIED_CACHE_URL_KEY] ?? null;
+        return $data[KeyBuilder::UNIFIED_CACHE_URL_KEY] ?? null;
     }
     
     /**
@@ -180,7 +194,7 @@ class CacheManager
     public function getCachedRouter(): ?array
     {
         $data = $this->getUnifiedCacheData();
-        $router = $data[RouterCache::UNIFIED_CACHE_ROUTER_KEY] ?? null;
+        $router = $data[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY] ?? null;
         return is_array($router) && !empty($router) ? $router : null;
     }
     
@@ -192,7 +206,7 @@ class CacheManager
     public function getCachedRule(): ?array
     {
         $data = $this->getUnifiedCacheData();
-        $rule = $data[RouterCache::UNIFIED_CACHE_RULE_KEY] ?? null;
+        $rule = $data[KeyBuilder::UNIFIED_CACHE_RULE_KEY] ?? null;
         return is_array($rule) ? $rule : null;
     }
     
@@ -204,7 +218,7 @@ class CacheManager
     public function getCachedFpcHtml(): ?string
     {
         $data = $this->getUnifiedCacheData();
-        return $data[RouterCache::UNIFIED_CACHE_FPC_KEY] ?? null;
+        return $data[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? null;
     }
     
     /**
@@ -215,7 +229,7 @@ class CacheManager
     public function getCachedParams(): array
     {
         $data = $this->getUnifiedCacheData();
-        $params = $data[RouterCache::UNIFIED_CACHE_PARAMS_KEY] ?? [];
+        $params = $data[KeyBuilder::UNIFIED_CACHE_PARAMS_KEY] ?? [];
         return is_array($params) ? $params : [];
     }
     
@@ -229,7 +243,7 @@ class CacheManager
     public function getUrlCache(): ?string
     {
         $cached = $this->getCache()->get($this->urlCacheKey);
-        return $cached !== false ? $cached : null;
+        return ($cached !== false && $cached !== null) ? $cached : null;
     }
     
     /**
@@ -312,14 +326,14 @@ class CacheManager
     ): void {
         // 保存统一缓存
         $unifiedData = [
-            RouterCache::UNIFIED_CACHE_URL_KEY => $url,
-            RouterCache::UNIFIED_CACHE_RULE_KEY => $rule,
-            RouterCache::UNIFIED_CACHE_ROUTER_KEY => $router,
-            RouterCache::UNIFIED_CACHE_PARAMS_KEY => $params,
+            KeyBuilder::UNIFIED_CACHE_URL_KEY => $url,
+            KeyBuilder::UNIFIED_CACHE_RULE_KEY => $rule,
+            KeyBuilder::UNIFIED_CACHE_ROUTER_KEY => $router,
+            KeyBuilder::UNIFIED_CACHE_PARAMS_KEY => $params,
         ];
         
         if ($fpcHtml !== null) {
-            $unifiedData[RouterCache::UNIFIED_CACHE_FPC_KEY] = $fpcHtml;
+            $unifiedData[KeyBuilder::UNIFIED_CACHE_FPC_KEY] = $fpcHtml;
         }
         
         $this->setUnifiedCacheData($unifiedData);

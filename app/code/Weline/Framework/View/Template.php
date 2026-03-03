@@ -12,7 +12,7 @@ namespace Weline\Framework\View;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\State;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Controller\PcController;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
@@ -23,7 +23,6 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Ui\FormKey;
-use Weline\Framework\View\Cache\ViewCache;
 use Weline\Framework\View\Data\DataInterface;
 
 class Template extends DataObject
@@ -67,7 +66,7 @@ class Template extends DataObject
     /**
      * @var CacheInterface 缓存
      */
-    private CacheInterface $viewCache;
+    private CachePoolInterface $viewCache;
 
     private static ?Template $instance = null;
 
@@ -139,7 +138,7 @@ class Template extends DataObject
         $this->initLanguage();
             $this->theme ?? $this->theme = Env::getInstance()->getConfig('theme', Env::default_theme_DATA);
             $this->eventsManager ?? $this->eventsManager = ObjectManager::getInstance(EventsManager::class);
-            $this->viewCache ?? $this->viewCache = ObjectManager::getInstance(ViewCache::class)->create();
+            $this->viewCache ?? $this->viewCache = w_cache('view');
         $this->request = ObjectManager::getInstance(Request::class);
 
         if (!CLI) {

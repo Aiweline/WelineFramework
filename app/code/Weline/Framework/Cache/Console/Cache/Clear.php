@@ -13,7 +13,7 @@ use Weline\Framework\Console\CommandInterface;
 
 use Weline\Framework\Cache\CacheFactory;
 use Weline\Framework\Cache\CacheFactoryInterface;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Scanner;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
@@ -48,8 +48,8 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         $caches   = $this->scanner->getCaches();
         
         $totalStats = [
-            'app' => ['count' => 0, 'size' => 0],
-            'framework' => ['count' => 0, 'size' => 0]
+            'app' => ['count' => 0, 'size' => 0, 'classes' => 0, 'files' => 0],
+            'framework' => ['count' => 0, 'size' => 0, 'classes' => 0, 'files' => 0]
         ];
         
         foreach ($caches as $form => $modules_caches) {
@@ -131,8 +131,8 @@ class Clear implements \Weline\Framework\Console\CommandInterface
                             $totalSize += $result['size'];
                             $totalFiles += $result['files'];
                         }
-                    } elseif ($cacheObjectManager instanceof CacheInterface) {
-                        /**@var CacheInterface $cacheObjectManager */
+                    } elseif ($cacheObjectManager instanceof CachePoolInterface) {
+                        /** @var CachePoolInterface $cacheObjectManager */
                         $result = $this->clearCacheWithStats($cacheObjectManager);
                         $totalCount += $result['count'];
                         $totalSize += $result['size'];
@@ -157,12 +157,11 @@ class Clear implements \Weline\Framework\Console\CommandInterface
     /**
      * 清理缓存并获取统计信息
      * 
-     * @param CacheInterface $cache 缓存对象
+     * @param CachePoolInterface $cache 缓存对象
      * @return array 清理统计信息
      */
-    private function clearCacheWithStats(CacheInterface $cache): array
+    private function clearCacheWithStats(CachePoolInterface $cache): array
     {
-        // 获取缓存统计信息
         $stats = $this->getCacheStats($cache);
         $cache->clear();
         
@@ -176,17 +175,14 @@ class Clear implements \Weline\Framework\Console\CommandInterface
     /**
      * 获取缓存统计信息
      * 
-     * @param CacheInterface $cache 缓存对象
+     * @param CachePoolInterface $cache 缓存对象
      * @return array 缓存统计信息
      */
-    private function getCacheStats(CacheInterface $cache): array
+    private function getCacheStats(CachePoolInterface $cache): array
     {
-        // 尝试获取缓存的统计信息
         try {
-            // 调用接口定义的 getStats 方法
             return $cache->getStats();
         } catch (\Exception $e) {
-            // 如果获取统计信息失败，返回默认值
             return [
                 'items' => 1,
                 'size' => 0,

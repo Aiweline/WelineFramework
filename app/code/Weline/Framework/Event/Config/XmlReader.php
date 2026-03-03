@@ -10,17 +10,16 @@
 namespace Weline\Framework\Event\Config;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Cache\CacheInterface;
-use Weline\Framework\Event\Cache\EventCache;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\System\File\Scanner;
 use Weline\Framework\Xml\Parser;
 
 class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
 {
     /**
-     * @var CacheInterface
+     * @var CachePoolInterface
      */
-    private CacheInterface $eventCache;
+    private CachePoolInterface $eventCache;
     
     /**
      * 静态变量：记录已经输出过的错误信息，避免重复输出
@@ -29,14 +28,13 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
     private static array $loggedErrors = [];
 
     public function __construct(
-        EventCache $eventCache,
         Scanner    $scanner,
         Parser     $parser,
                    $path = 'etc' . DS . 'event.xml'
     )
     {
         parent::__construct($scanner, $parser, $path);
-        $this->eventCache = $eventCache->create();
+        $this->eventCache = w_cache('event');
     }
 
     /**
@@ -60,7 +58,7 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
         try {
             $configs = parent::read();
         } catch (\Throwable $e) {
-            error_log('事件配置读取失败: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+            w_log_error('事件配置读取失败: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
             throw $e;
         }
         // 合并掉所有相同名字的事件的观察者，方便获取
@@ -71,7 +69,7 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
             if (empty($moduleName)) {
                 // 使用文件路径作为唯一标识，避免重复输出
                 if (!isset(self::$loggedErrors[$module_and_file . '_empty_module'])) {
-                    error_log(__('无法从文件路径提取模块名：%{1}', [$module_and_file]));
+                    w_log_warning(__('无法从文件路径提取模块名：%{1}', [$module_and_file]));
                     self::$loggedErrors[$module_and_file . '_empty_module'] = true;
                 }
                 continue;
@@ -91,9 +89,9 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
                 $errorKey = $module_and_file . ($isEmpty ? '_empty' : '_invalid_format');
                 if (!isset(self::$loggedErrors[$errorKey])) {
                     if ($isEmpty) {
-                        error_log(__('跳过空的事件配置文件：%{1}（文件为空，如需使用请添加有效内容）', [$module_and_file]));
+                        w_log_warning(__('跳过空的事件配置文件：%{1}（文件为空，如需使用请添加有效内容）', [$module_and_file]));
                     } else {
-                        error_log(__('跳过格式不正确的配置文件：%{1}（请检查XML格式是否正确）', [$module_and_file]));
+                        w_log_warning(__('跳过格式不正确的配置文件：%{1}（请检查XML格式是否正确）', [$module_and_file]));
                     }
                     self::$loggedErrors[$errorKey] = true;
                 }
@@ -102,7 +100,7 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
             if (!isset($config['config']['_attribute']) || !is_array($config['config']['_attribute'])) {
                 // 使用文件路径作为唯一标识，避免重复输出
                 if (!isset(self::$loggedErrors[$module_and_file . '_missing_attributes'])) {
-                    error_log(__('跳过缺少属性的配置文件：%{1}', [$module_and_file]));
+                    w_log_warning(__('跳过缺少属性的配置文件：%{1}', [$module_and_file]));
                     self::$loggedErrors[$module_and_file . '_missing_attributes'] = true;
                 }
                 continue;
@@ -137,7 +135,7 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
                     } catch (\RuntimeException $e) {
                         // 只记录警告，不中断流程
                         // 使用框架的日志系统记录警告
-                        \Weline\Framework\App\Env::log_warning('event_spec_validation.log', '事件规约验证警告: ' . $e->getMessage());
+                        w_log_warning('事件规约验证警告: ' . $e->getMessage(), [], 'event_spec_validation.log');
                     }
                     
                     // 检查 _value 是否存在
@@ -202,7 +200,7 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
                 } catch (\RuntimeException $e) {
                     // 只记录警告，不中断流程
                     // 使用框架的日志系统记录警告
-                    \Weline\Framework\App\Env::log_warning('event_spec_validation.log', '事件规约验证警告: ' . $e->getMessage());
+                    w_log_warning('事件规约验证警告: ' . $e->getMessage(), [], 'event_spec_validation.log');
                 }
                 
                 // 检查 _value 是否存在

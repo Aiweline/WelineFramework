@@ -272,7 +272,7 @@ class RequestContext
                 $callback();
             } catch (\Throwable $e) {
                 // 记录错误但不中断清理流程
-                \error_log('[RequestContext] Cleanup callback error: ' . $e->getMessage());
+                w_log_error('[RequestContext] Cleanup callback error: ' . $e->getMessage());
             }
         }
         

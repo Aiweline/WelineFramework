@@ -188,7 +188,7 @@ class Parser
             try {
                 // 先访问缓存
                 /**@var \Weline\Framework\Cache\CacheInterface $phraseCache */
-                $phraseCache = ObjectManager::getInstance(\Weline\Framework\Phrase\Cache\PhraseCache::class . 'Factory');
+                $phraseCache = w_cache('phrase');
                 // 获取翻译模式（支持 translation.mode 和 i18n.translate_mode）
                 $translate_mode = Env::get('translation.mode','default');
 

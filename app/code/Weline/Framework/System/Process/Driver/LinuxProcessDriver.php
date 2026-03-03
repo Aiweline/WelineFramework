@@ -802,4 +802,58 @@ class LinuxProcessDriver extends AbstractProcessDriver
         $this->clearPortCache($port);
         return !$this->isPortInUse($port);
     }
+    
+    /**
+     * @inheritDoc
+     * 
+     * 批量获取进程信息，通过 /proc 文件系统并行读取
+     * Linux 上 /proc 是虚拟文件系统，批量读取开销很小
+     */
+    public function batchGetProcessInfo(array $pids): array
+    {
+        $result = [];
+        
+        foreach ($pids as $pid) {
+            $result[$pid] = $this->getDefaultProcessInfo($pid);
+        }
+        
+        $validPids = \array_filter($pids, fn($pid) => $this->isValidPid($pid));
+        if (empty($validPids)) {
+            return $result;
+        }
+        
+        foreach ($validPids as $pid) {
+            if (!\is_dir("/proc/{$pid}")) {
+                continue;
+            }
+            
+            $result[$pid]['exists'] = true;
+            
+            $commFile = "/proc/{$pid}/comm";
+            if (\is_file($commFile)) {
+                $comm = @\file_get_contents($commFile);
+                if ($comm !== false) {
+                    $result[$pid]['name'] = \trim($comm);
+                }
+            }
+            
+            $cmdlineFile = "/proc/{$pid}/cmdline";
+            if (\is_file($cmdlineFile)) {
+                $cmdline = @\file_get_contents($cmdlineFile);
+                if ($cmdline !== false) {
+                    $result[$pid]['command'] = \str_replace("\0", ' ', \trim($cmdline));
+                }
+            }
+            
+            $statusFile = "/proc/{$pid}/status";
+            if (\is_file($statusFile)) {
+                $status = @\file_get_contents($statusFile);
+                if ($status !== false && \preg_match('/VmRSS:\s+(\d+)\s+kB/', $status, $m)) {
+                    $result[$pid]['memory'] = \round(((int) $m[1]) / 1024, 2) . ' MB';
+                }
+            }
+        }
+        
+        return $result;
+    }
 }
