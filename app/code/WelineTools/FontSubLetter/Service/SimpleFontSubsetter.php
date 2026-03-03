@@ -161,7 +161,7 @@ class SimpleFontSubsetter
             return true;
 
         } catch (\Exception $e) {
-            error_log('创建字体子集失败: ' . $e->getMessage());
+            w_log_error('创建字体子集失败: ' . $e->getMessage());
             return false;
         }
     }
