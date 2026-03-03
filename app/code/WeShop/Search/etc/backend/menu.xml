@@ -4,7 +4,7 @@
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     
     <!-- 搜索引擎配置管理菜单 -->
-    <add source="WeShop_Search::search_engine_management" 
+    <menu source="WeShop_Search::search_engine_management" 
          name="search_engine_management" 
          title="搜索引擎配置" 
          action="search/backend/engine/index"

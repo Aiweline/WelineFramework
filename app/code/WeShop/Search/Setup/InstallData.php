@@ -42,7 +42,7 @@ class InstallData
             ]);
             
         } catch (\Exception $e) {
-            error_log("注册搜索引擎驱动失败: " . $e->getMessage());
+            w_log_error("注册搜索引擎驱动失败: " . $e->getMessage());
         }
     }
     
@@ -85,7 +85,7 @@ class InstallData
             );
             
         } catch (\Exception $e) {
-            error_log("安装默认搜索配置失败: " . $e->getMessage());
+            w_log_error("安装默认搜索配置失败: " . $e->getMessage());
         }
     }
 }

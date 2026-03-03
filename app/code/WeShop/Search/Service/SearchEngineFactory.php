@@ -69,7 +69,7 @@ class SearchEngineFactory
                     return ObjectManager::getInstance($driverClass);
                 } catch (\Throwable $e) {
                     // 如果实例化失败，回退到硬编码方式
-                    error_log("搜索引擎驱动实例化失败: {$driverClass} - " . $e->getMessage());
+                    w_log_error("搜索引擎驱动实例化失败: {$driverClass} - " . $e->getMessage());
                 }
             }
         } catch (\Throwable $e) {
