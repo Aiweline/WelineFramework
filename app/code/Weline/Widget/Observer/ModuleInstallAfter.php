@@ -35,7 +35,7 @@ class ModuleInstallAfter implements ObserverInterface
             $paramSchemaRegistry = ObjectManager::getInstance(ParamSchemaRegistry::class);
             $paramSchemaRegistry->refresh();
         } catch (\Exception $e) {
-            Env::log_error('WidgetObserver', '模块安装后收集注册表时出错: ' . $e->getMessage());
+            w_log_error('模块安装后收集注册表时出错: ' . $e->getMessage(), [], 'WidgetObserver');
         }
     }
 }

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Widget\Taglib;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Block;
 use Weline\Framework\View\Template;
@@ -158,7 +159,7 @@ class Widget implements TaglibInterface
 
                 return $html;
             } catch (\Exception $e) {
-                error_log("Widget 标签渲染错误: " . $e->getMessage());
+                w_log_error("Widget 标签渲染错误: " . $e->getMessage(), [], 'WidgetTaglib');
                 return "<!-- Widget 错误: " . htmlspecialchars($e->getMessage()) . " -->";
             }
         };
@@ -276,7 +277,7 @@ class Widget implements TaglibInterface
 
             return '<!-- Widget 错误: Block 类缺少 render() 方法 -->';
         } catch (\Exception $e) {
-            error_log("Widget Block 渲染错误: " . $e->getMessage());
+            w_log_error("Widget Block 渲染错误: " . $e->getMessage(), [], 'WidgetTaglib');
             return '<!-- Widget 错误: ' . htmlspecialchars($e->getMessage()) . ' -->';
         }
     }
@@ -296,14 +297,14 @@ class Widget implements TaglibInterface
         static $renderingTemplates = []; // 跟踪正在渲染的模板，防止循环引用
         
         if ($renderDepth >= $maxDepth) {
-            error_log("Widget 模板渲染递归深度超限: {$templatePath}");
+            w_log_error("Widget 模板渲染递归深度超限: {$templatePath}", [], 'WidgetTaglib');
             return '<!-- Widget 错误: 模板渲染递归深度超限 -->';
         }
         
         // 检查循环引用
         $templateKey = md5($templatePath . serialize($params));
         if (isset($renderingTemplates[$templateKey])) {
-            error_log("Widget 模板渲染检测到循环引用: {$templatePath}");
+            w_log_error("Widget 模板渲染检测到循环引用: {$templatePath}", [], 'WidgetTaglib');
             return '<!-- Widget 错误: 模板渲染循环引用 -->';
         }
         
@@ -323,7 +324,7 @@ class Widget implements TaglibInterface
         } catch (\Exception $e) {
             $renderDepth--;
             unset($renderingTemplates[$templateKey]);
-            error_log("Widget 模板渲染错误: " . $e->getMessage());
+            w_log_error("Widget 模板渲染错误: " . $e->getMessage(), [], 'WidgetTaglib');
             return '<!-- Widget 错误: ' . htmlspecialchars($e->getMessage()) . ' -->';
         }
     }

@@ -35,7 +35,7 @@ class SetupUpgradeAfter implements ObserverInterface
             $paramSchemaRegistry = ObjectManager::getInstance(ParamSchemaRegistry::class);
             $paramSchemaRegistry->refresh();
         } catch (\Exception $e) {
-            Env::log_error('WidgetObserver', '系统升级后收集注册表时出错: ' . $e->getMessage());
+            w_log_error('系统升级后收集注册表时出错: ' . $e->getMessage(), [], 'WidgetObserver');
         }
     }
 }
