@@ -1,3 +1,5 @@
+用户ID无效,用户ID无效
+用户不存在,"User does not exist"
 修改成功！,"Modified successfully!"
 修改失败！,"Modification failed!"
 添加成功！,"Added successfully!"
@@ -9,9 +11,29 @@
 激活失败！,"Activation failed!"
 禁用成功！,"Disabled successfully!"
 禁用失败！,"Disable failed!"
+用户名不能为空,"Username cannot be empty"
+邮箱不能为空,"Email cannot be empty"
+邮箱格式不正确,"Email format is incorrect"
+新增用户必须设置密码,"Password is required for new user"
+新增,Add
+修改,Edit
+%{1}管理员成功,"%{1} administrator successfully"
+保存失败,"Save failed"
+超级管理员不能被删除,"Super administrator cannot be deleted"
+删除成功,删除成功
+删除失败,删除失败
+超级管理员状态不能被修改,"Super administrator status cannot be modified"
+无效的操作类型,"Invalid operation type"
+用户已激活,"User has been activated"
+用户已禁用,"User has been disabled"
+操作失败,"Operation failed"
 不能给自己分配权限！,"Cannot assign permissions to yourself!"
 角色分配成功！,"Role assigned successfully!"
 角色分配失败！,"Role assignment failed!"
+不能修改自己的角色,"You cannot modify your own role"
+已取消角色分配,"Role assignment has been removed"
+角色分配成功,"Role assigned successfully"
+角色分配失败,"Role assignment failed"
 欢迎使用WelineFramework框架后台系统！,"Welcome to WelineFramework Backend System!"
 WelineFramework,WelineFramework
 你的账户因尝试多次登录，已被锁定！请联系其他管理员开通。,"Your account has been locked due to multiple login attempts! Please contact another administrator to unlock it."
@@ -23,9 +45,12 @@ WelineFramework,WelineFramework
 您的账户尚未分配角色，无法登录后台。请联系系统管理员为您分配角色。,您的账户尚未分配角色，无法登录后台。请联系系统管理员为您分配角色。
 登录凭据错误！,"Invalid login credentials!"
 系统菜单无法删除！,"System menu cannot be deleted!"
+"该菜单下有 %{1} 个子菜单，请先删除子菜单！","该菜单下有 %{1} 个子菜单，请先删除子菜单！"
 关键参数ID不存在！,"Key parameter ID does not exist!"
-系统消息通知,"System Notification"
-"用于跨模块发送系统消息通知，由 Weline_Admin 模块监听并写入消息中心。任何模块都可以触发此事件来发送系统消息给管理员。","Used for cross-module system message notifications, monitored by Weline_Admin module and written to the message center. Any module can trigger this event to send system messages to administrators."
+参数错误：缺少排序数据,参数错误：缺少排序数据
+排序更新成功,排序更新成功
+参数错误：缺少菜单ID,参数错误：缺少菜单ID
+菜单不存在,菜单不存在
 后台首页顶部统计卡片,后台首页顶部统计卡片
 在后台首页顶部区域渲染统计卡片，例如访客数、事件数、站点数等。,在后台首页顶部区域渲染统计卡片，例如访客数、事件数、站点数等。
 后台首页主要概览,后台首页主要概览
@@ -62,37 +87,37 @@ content,content
 <var>title</var>,<var>title</var>
 <var>tip</var>,<var>tip</var>
 通知,Notification
-查看全部,"View All"
-查看更多,"View More"
+全部已读,全部已读
+暂无通知,暂无通知
+管理订阅,管理订阅
 确定删除该菜单吗？,"Are you sure you want to delete this menu?"
 删除后不可恢复！,"Cannot be recovered after deletion!"
 取消,Cancel
-确定,OK
+确定,Confirm
 删除!,Delete!
 知道了,"Got it"
 value,value
 "Weline Admin 管理面板","Weline Admin Management Panel"
-管理员用户角色归属分配,"Admin User Role Assignment"
+角色归配,"Role Assignment"
 系统,System
 管理员,Administrator
-管理员角色分配,"Admin Role Assignment"
-调整管理员角色,"Adjust Admin Role"
-返回,Back
-ID,ID
-邮箱,Email
-角色分配,"Role Assignment"
-创建于,"Created At"
-更新于,"Updated At"
-操作,Operation
-未分配角色,"Unassigned Role"
-暂无记录,"No records"
-分配,Assign
+返回列表,"Back to List"
+选择角色后自动保存，无需手动提交。当前用户无法修改自己的角色。,"Roles are saved automatically after selection. You cannot modify your own role."
+用户信息,"User Info"
+当前角色,"Current Role"
+状态,Status
+"-- 未分配角色 --","-- No Role Assigned --"
+未分配,Unassigned
+（当前登录）,"(Currently logged in)"
+已分配,Assigned
+暂无管理员数据,"No administrator data"
+网络错误，请检查网络后重试,"Network error, please check your network and try again"
 用户管理,"User Management"
-编辑,Edit
-新增,"Add New"
+编辑,编辑
 用户名,Username
 用户名称验证成功,"Username validation successful"
 请输入用户名称,"Please enter username"
+邮箱,Email
 邮箱验证成功,"Email validation successful"
 请输入用户邮箱,"Please enter email"
 密码,Password
@@ -103,17 +128,31 @@ ID,ID
 请输入邮箱,请输入邮箱
 请输入密码,请输入密码
 管理员管理,"Administrator Management"
-名称,Name
-状态,Status
+新增管理员,"Add Administrator"
 创建时间,"Create time"
-更新时间,"Update time"
+操作,Operation
+超管,超管
 已删除,Deleted
-使用中...,"In Use..."
+已激活,已激活
 已禁用,Disabled
-删除,Delete
-激活,Activate
+受保护,受保护
+请输入有效邮箱,请输入有效邮箱
+留空则不修改密码,"Leave empty to keep current password"
+保存,Save
+保存中...,Saving...
 禁用,Disable
-超级管理员,"Super Administrator"
+激活,Activate
+删除,Delete
+编辑管理员,"Edit Administrator"
+保存成功,"Saved successfully"
+确定要删除用户「%{1}」吗？此操作不可恢复。,"Are you sure you want to delete user ""%{1}""? This action cannot be undone."
+确定要激活此用户吗？,"Are you sure you want to activate this user?"
+确定要禁用此用户吗？禁用后该用户将无法登录。,"Are you sure you want to disable this user? Once disabled, this user will not be able to log in."
+操作成功,"Operation successful"
+请填写必填项,"Please fill in the required fields"
+确认删除,"Confirm Delete"
+激活用户,"Activate User"
+禁用用户,"Disable User"
 搜索菜单,"Search Menu"
 搜索菜单...,"Search Menu..."
 常用菜单,"Frequently Used Menus"
@@ -168,6 +207,7 @@ RTL模式,"RTL Mode"
 十二月,December
 订单统计,"Order Statistics"
 区域营收,"Regional Revenue"
+查看更多,"View More"
 最近成交,"Recent Transactions"
 "Weline 登录面板","Weline Login Panel"
 记住我,"Remember Me"
@@ -192,29 +232,54 @@ Cms内容管理,"CMS Content Management"
 内容管理,"Content Management"
 后台可视化建设页面等的内容管理。,"Content management for backend visual page building, etc."
 系统事件,"System Events"
-观察事件,"Observer Events"
-此列表是系统中可监听的事件列表，方便开发者使用观察者模式查阅并订阅系统事件消息。,"This list shows all observable events in the system, allowing developers to browse and subscribe to system event messages using the observer pattern."
-事件名,"Event Name"
-示例类,"Example Class"
-是否禁用,是否禁用
-是否共享,Shared
-菜单管理,"Menu Management"
-菜单编辑器,"Menu Editor"
-菜单名,"Menu Name"
-标题,Title
-资源,Resource
-父资源,"Parent Resource"
-动作,Action
-模组,Module
-Icon图标,Icon
+查看系统中所有已注册的事件和观察者，方便开发者使用观察者模式订阅系统事件,查看系统中所有已注册的事件和观察者，方便开发者使用观察者模式订阅系统事件
+配置文件,配置文件
+事件类型,事件类型
+观察者总数,观察者总数
+已启用,已启用
+搜索事件名、观察者、实例类...,搜索事件名、观察者、实例类...
+所有状态,所有状态
+所有模块,所有模块
+所有事件,所有事件
+展开全部,展开全部
+折叠全部,折叠全部
+暂无事件配置,暂无事件配置
+个事件,个事件
+个观察者,个观察者
+观察者名,观察者名
+实例类,实例类
+共享,共享
 排序,Sort
-是否系统菜单,"Is System Menu"
-确认删除,确认删除
-确定要删除这个菜单吗？,确定要删除这个菜单吗？
-确定删除,确定删除
-删除成功,删除成功
-删除失败,删除失败
+独占,独占
+找到,找到
+个观察者，来自,个观察者，来自
+个配置文件,个配置文件
+菜单管理,"Menu Management"
+菜单树,菜单树
+新增菜单,新增菜单
+暂无菜单数据,暂无菜单数据
+资源标识,资源标识
+模块,模块
+自定义,自定义
+添加子菜单,添加子菜单
+系统菜单无法删除,系统菜单无法删除
+总计,总计
+系统菜单,系统菜单
+自定义菜单,自定义菜单
+顶级菜单,顶级菜单
+编辑菜单,编辑菜单
+菜单名称,菜单名称
+菜单标题,菜单标题
+父级资源,父级资源
+无（顶级菜单）,无（顶级菜单）
+动作URL,动作URL
+所属模块,所属模块
+图标类,图标类
+启用,Enable
+获取菜单信息失败,获取菜单信息失败
 请求失败,请求失败
+确定要删除菜单,确定要删除菜单
+吗？,吗？
 模组管理,"Module Management"
 系统中安装的模组。,"Modules installed in the system."
 模组名,"Module Name"
@@ -225,23 +290,77 @@ Icon图标,Icon
 版本,Version
 描述,Description
 路由管理,路由管理
-路由列表,路由列表
-模块,模块
+查看和管理系统中所有已注册的路由，支持按模块分组浏览,查看和管理系统中所有已注册的路由，支持按模块分组浏览
+路由总数,路由总数
+涉及模块,涉及模块
+"GET 路由","GET 路由"
+"POST 路由","POST 路由"
+搜索路由路径、控制器...,搜索路由路径、控制器...
+所有方法,所有方法
+暂无路由数据,暂无路由数据
+条路由,条路由
+方法,方法
+路由路径,路由路径
 控制器信息,"Controller Information"
+控制器,控制器
+设为首页,设为首页
+条路由，来自,条路由，来自
+个模块,个模块
+插件管理,"Plugin Management"
+查看系统中所有已注册的插件（拦截器），了解函数修改情况,查看系统中所有已注册的插件（拦截器），了解函数修改情况
+插件数,插件数
+搜索插件类、实例类、名称...,搜索插件类、实例类、名称...
+暂无插件配置,暂无插件配置
+个拦截器,个拦截器
+插件：,插件：
+拦截器名,拦截器名
+目标类,目标类
+个拦截器，来自,个拦截器，来自
+系统消息通知,"System Notification"
+"用于跨模块发送系统消息通知，由 Weline_Admin 模块监听并写入消息中心。任何模块都可以触发此事件来发送系统消息给管理员。","Used for cross-module system message notifications, monitored by Weline_Admin module and written to the message center. Any module can trigger this event to send system messages to administrators."
+查看全部,"View All"
+观察事件,"Observer Events"
+此列表是系统中可监听的事件列表，方便开发者使用观察者模式查阅并订阅系统事件消息。,"This list shows all observable events in the system, allowing developers to browse and subscribe to system event messages using the observer pattern."
+ID,ID
+事件名,"Event Name"
+示例类,"Example Class"
+是否禁用,是否禁用
+是否共享,Shared
+路由列表,路由列表
 控制器类信息：,"Controller Class Information:"
 设为开始页面,"Set as Start Page"
-插件管理,"Plugin Management"
 开发者使用插件功能修改函数的情况。,"Cases where developers use plugin functionality to modify functions."
 插件类,"Plugin Class"
 插件配置文件：,"Plugin Configuration File:"
 插件名：,"Plugin Name:"
+菜单编辑器,"Menu Editor"
+菜单名,"Menu Name"
+标题,Title
+资源,Resource
+父资源,"Parent Resource"
+动作,Action
+模组,Module
+Icon图标,Icon
+是否系统菜单,"Is System Menu"
+更新时间,"Update time"
+确定要删除这个菜单吗？,确定要删除这个菜单吗？
+确定删除,确定删除
+正常,Active
+超级管理员,"Super Administrator"
+管理员用户角色归属分配,"Admin User Role Assignment"
+管理员角色分配,"Admin Role Assignment"
+调整管理员角色,"Adjust Admin Role"
+返回,Back
+创建于,"Created At"
+更新于,"Updated At"
+未分配角色,"Unassigned Role"
+暂无记录,"No records"
+分配,Assign
+名称,Name
+使用中...,"In Use..."
 用户,User
 像素,像素
-用户不存在,"User does not exist"
-用户名不能为空,"Username cannot be empty"
 用户名长度必须在3-50字符之间,"Username length must be between 3-50 characters"
-邮箱不能为空,"Email cannot be empty"
-邮箱格式不正确,"Invalid email format"
 密码不能为空,"Password cannot be empty"
 密码长度不能少于6个字符,"Password length must be at least 6 characters"
 用户名已存在,"Username already exists"
@@ -265,7 +384,6 @@ API用户,"API User"
 编辑用户,"Edit User"
 权限分配,"Permission Assignment"
 为API用户分配权限资源,"Assign Permission Resources for API User"
-保存,Save
 菜单,Menu
 链接,Link
 其他,Other
@@ -289,7 +407,6 @@ API用户,"API User"
 "已复制到剪贴�?) ?>","已复制到剪贴�?) ?>"
 API用户管理,"API User Management"
 API用户列表,"API User List"
-启用,Enable
 "Weline Framework","Weline Framework"
 "Weline Framework - 后台管理","Weline Framework - Backend Management"
 "Weline Framework - 现代化的PHP框架后台管理","Weline Framework - Modern PHP Framework Backend Management"
@@ -313,3 +430,4 @@ API用户列表,"API User List"
 展开所有菜单,"Expand All Menus"
 收起菜单组,"Collapse Menu Group"
 访问次数:,"Visit Count:"
+搜索用户名或邮箱,"Search username or email"

@@ -2,8 +2,7 @@
 /**
  * 管理员列表页面（内容模板）
  * 
- * 只包含页面内容，由布局系统自动包裹 HTML 框架
- * 布局由 BackendController::$layoutType = 'default.default' 控制
+ * 简化版：所有操作在当前页面完成，编辑使用侧边抽屉
  *
  * @var \Weline\Framework\View\Template $this
  */
@@ -12,12 +11,10 @@
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0">
-                <lang>管理员</lang>
-            </h4>
+            <h4 class="mb-sm-0"><lang>管理员管理</lang></h4>
             <div class="page-title-right">
                 <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="javascript: void(0);"><lang>系统</lang></a></li>
+                    <li class="breadcrumb-item"><a href="javascript:void(0);"><lang>系统</lang></a></li>
                     <li class="breadcrumb-item active"><lang>管理员</lang></li>
                 </ol>
             </div>
@@ -25,128 +22,579 @@
     </div>
 </div>
 
-<!-- 消息 -->
-<div class='row'>
-    <template>Weline_Component::message.phtml</template>
-</div>
-
 <!-- 管理员列表 -->
 <div class="row">
     <div class="col-12">
         <div class="card">
             <div class="card-body">
-                <h4 class="card-title"><lang>管理员管理</lang></h4>
-                <div class="card-title-desc">
-                    <div class='row'>
-                        <div class='col-6'>
-                            <div class="col-md-6">
-                                <block class='Weline\Component\Block\Form\Search' id='acl-search'
-                                       action='*/backend/user/listing'
-                                       method='get'
-                                       keyword='search' value=''
-                                       params=''
-                                       placeholder='请输入搜索词'></block>
-                            </div>
-                        </div>
-                        <div class='col-6'>
-                            <acl source="Weline_Admin::system_user_add">
-                                <a class='btn btn-primary pull-right mt-1 mb-1'
-                                   href="@backend-url('*/backend/user/add')">
-                                    <lang>新增</lang>
-                                </a>
-                            </acl>
-                        </div>
+                <!-- 工具栏 -->
+                <div class="weline-user-toolbar d-flex justify-content-between align-items-center mb-3">
+                    <div class="weline-user-search">
+                        <block class='Weline\Component\Block\Form\Search' id='user-search'
+                               action='*/backend/user/listing'
+                               method='get'
+                               keyword='search' value=''
+                               params=''
+                               placeholder='搜索用户名或邮箱'></block>
                     </div>
+                    <acl source="Weline_Admin::system_user_add">
+                        <button type="button" class="btn btn-primary" id="weline-user-add-btn">
+                            <i class="mdi mdi-plus me-1"></i><lang>新增管理员</lang>
+                        </button>
+                    </acl>
                 </div>
-                <div class='table-responsive mCustomScrollbar' data-mcs-axis='x' data-mcs-theme='dark'>
-                    <table class="table table-editable table-nowrap align-middle table-edits">
+
+                <!-- 用户列表 -->
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle weline-user-table">
                         <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th><lang>名称</lang></th>
-                            <th><lang>邮箱</lang></th>
-                            <th><lang>头像</lang></th>
-                            <th><lang>状态</lang></th>
-                            <th><lang>创建时间</lang></th>
-                            <th><lang>更新时间</lang></th>
-                            <th><lang>操作</lang></th>
-                        </tr>
+                            <tr>
+                                <th style="width: 60px;">ID</th>
+                                <th><lang>用户信息</lang></th>
+                                <th><lang>状态</lang></th>
+                                <th><lang>创建时间</lang></th>
+                                <th style="width: 200px;"><lang>操作</lang></th>
+                            </tr>
                         </thead>
                         <tbody>
-                        <foreach name="users">
-                            <tr data-id='{{v.user_id}}'>
-                                <td data-field='user_id'>{{v.user_id}}</td>
-                                <td data-field='username'>{{v.username}}</td>
-                                <td data-field='email'>{{v.email}}</td>
-                                <td data-field='create_time'>
-                                    <if condition="v.avatar">{{v.avatar}}
-                                        <else/>
-                                        <i class='fas fa-user-shield'></i>
-                                    </if>
-                                </td>
-                                <td data-field='status'>
-                                    <if condition="v.is_deleted === 1">
-                                        <span class="badge bg-danger"><lang>已删除</lang></span>
-                                        <else/>
-                                        <if condition="v.is_enabled === 1">
-                                            <span class="badge bg-success"><lang>使用中...</lang></span>
+                        <foreach name="users" item="user" key="k">
+                            <tr data-user-id="{{user.user_id}}" data-username="{{user.username}}" data-email="{{user.email}}">
+                                <td>{{user.user_id}}</td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="weline-user-avatar me-3">
+                                            <if condition="user.avatar">
+                                                <img src="{{user.avatar}}" alt="{{user.username}}" class="rounded-circle" width="40" height="40">
                                             <else/>
-                                            <span class="badge bg-danger"><lang>已禁用</lang></span>
+                                                <div class="weline-user-avatar-placeholder">
+                                                    <i class="mdi mdi-shield-account"></i>
+                                                </div>
+                                            </if>
+                                        </div>
+                                        <div>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <span class="fw-semibold">{{user.username}}</span>
+                                                <if condition="user.user_id == 1">
+                                                    <span class="weline-superadmin-badge-sm">
+                                                        <i class="mdi mdi-shield-crown"></i>
+                                                        <lang>超管</lang>
+                                                    </span>
+                                                </if>
+                                            </div>
+                                            <div class="text-muted small">{{user.email}}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <if condition="user.is_deleted == 1">
+                                        <span class="badge bg-secondary"><lang>已删除</lang></span>
+                                    <else/>
+                                        <if condition="user.is_enabled == 1">
+                                            <span class="badge bg-success"><lang>已激活</lang></span>
+                                        <else/>
+                                            <span class="badge bg-warning text-dark"><lang>已禁用</lang></span>
                                         </if>
                                     </if>
                                 </td>
-                                <td data-field='create_time'>{{v.create_time}}</td>
-                                <td data-field='update_time'>{{v.update_time}}</td>
+                                <td class="text-muted small">{{user.create_time}}</td>
                                 <td>
-                                    <if condition="v.user_id !== 1">
-                                        <div class="d-flex gap-2">
-                                            <acl source="Weline_Admin::system_user_delete_post">
-                                                <form action="@backend-url('*/backend/user/delete')" method='post'>
-                                                    <input type='hidden' name='id' value='{{v.user_id}}'>
-                                                    <button type='submit' class='btn btn-danger btn-sm ajax-confirm'>
-                                                        <lang>删除</lang>
-                                                    </button>
-                                                </form>
-                                            </acl>
-                                            <acl source="Weline_Admin::system_user_active_post">
-                                                <form action="@backend-url('*/backend/user/active')" method='post'>
-                                                    <input type='hidden' name='id' value='{{v.user_id}}'>
-                                                    <button type='submit' class='btn btn-success btn-sm ajax-confirm'>
-                                                        <lang>激活</lang>
-                                                    </button>
-                                                </form>
-                                            </acl>
-                                            <acl source="Weline_Admin::system_user_inactive_post">
-                                                <form action="@backend-url('*/backend/user/inActive')" method='post'>
-                                                    <input type='hidden' name='id' value='{{v.user_id}}'>
-                                                    <button type='submit' class='btn btn-danger btn-sm ajax-confirm'>
-                                                        <lang>禁用</lang>
-                                                    </button>
-                                                </form>
-                                            </acl>
+                                    <if condition="user.user_id != 1">
+                                        <div class="weline-user-actions">
                                             <acl source="Weline_Admin::system_user_edit_post">
-                                                <a class='btn btn-info btn-sm'
-                                                   href="@backend-url('*/backend/user/edit')?id={{v.user_id}}">
-                                                    <lang>编辑</lang>
-                                                </a>
+                                                <button type="button" class="btn btn-outline-primary weline-user-edit-btn"
+                                                        data-user-id="{{user.user_id}}"
+                                                        data-username="{{user.username}}"
+                                                        data-email="{{user.email}}"
+                                                        title="@lang{编辑}">
+                                                    <i class="mdi mdi-pencil"></i>
+                                                </button>
+                                            </acl>
+                                            <if condition="user.is_enabled == 1">
+                                                <acl source="Weline_Admin::system_user_inactive_post">
+                                                    <button type="button" class="btn btn-outline-warning weline-user-toggle-btn"
+                                                            data-user-id="{{user.user_id}}"
+                                                            data-action="disable"
+                                                            title="@lang{禁用}">
+                                                        <i class="mdi mdi-account-off"></i>
+                                                    </button>
+                                                </acl>
+                                            <else/>
+                                                <acl source="Weline_Admin::system_user_active_post">
+                                                    <button type="button" class="btn btn-outline-success weline-user-toggle-btn"
+                                                            data-user-id="{{user.user_id}}"
+                                                            data-action="enable"
+                                                            title="@lang{激活}">
+                                                        <i class="mdi mdi-account-check"></i>
+                                                    </button>
+                                                </acl>
+                                            </if>
+                                            <acl source="Weline_Admin::system_user_delete_post">
+                                                <button type="button" class="btn btn-outline-danger weline-user-delete-btn"
+                                                        data-user-id="{{user.user_id}}"
+                                                        data-username="{{user.username}}"
+                                                        title="@lang{删除}">
+                                                    <i class="mdi mdi-delete"></i>
+                                                </button>
                                             </acl>
                                         </div>
-                                        <else/>
-                                        <b class="disabled"><lang>超级管理员</lang></b>
+                                    <else/>
+                                        <span class="text-muted small"><i class="mdi mdi-lock-outline me-1"></i><lang>受保护</lang></span>
                                     </if>
                                 </td>
                             </tr>
                         </foreach>
+                        <empty name="users">
+                            <tr>
+                                <td colspan="5" class="text-center py-4">
+                                    <div class="text-muted">
+                                        <i class="mdi mdi-account-search-outline" style="font-size: 3rem;"></i>
+                                        <p class="mt-2 mb-0"><lang>暂无管理员数据</lang></p>
+                                    </div>
+                                </td>
+                            </tr>
+                        </empty>
                         </tbody>
                     </table>
                 </div>
+                <var>pagination</var>
             </div>
         </div>
-        <var>pagination</var>
     </div>
 </div>
 
-<!-- Table Editable plugin -->
-<script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
-<script src="@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)"></script>
-<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
+<!-- 用户编辑/新增 Offcanvas 抽屉 -->
+<div class="offcanvas offcanvas-end weline-user-offcanvas" tabindex="-1" id="welineUserOffcanvas">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="welineUserOffcanvasTitle"><lang>新增管理员</lang></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <form id="welineUserForm" novalidate>
+            <input type="hidden" name="user_id" id="weline-user-id">
+            
+            <div class="mb-3">
+                <label for="weline-user-username" class="form-label"><lang>用户名</lang> <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="weline-user-username" name="username" 
+                       placeholder="@lang{请输入用户名}" required>
+                <div class="invalid-feedback"><lang>请输入用户名</lang></div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="weline-user-email" class="form-label"><lang>邮箱</lang> <span class="text-danger">*</span></label>
+                <input type="email" class="form-control" id="weline-user-email" name="email" 
+                       placeholder="@lang{请输入邮箱}" required>
+                <div class="invalid-feedback"><lang>请输入有效邮箱</lang></div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="weline-user-password" class="form-label">
+                    <lang>密码</lang> <span class="text-danger weline-password-required">*</span>
+                </label>
+                <div class="input-group">
+                    <input type="password" class="form-control" id="weline-user-password" name="password" 
+                           placeholder="@lang{请输入密码}">
+                    <button class="btn btn-outline-secondary weline-toggle-password" type="button">
+                        <i class="mdi mdi-eye"></i>
+                    </button>
+                </div>
+                <div class="form-text weline-password-hint" style="display:none;"><lang>留空则不修改密码</lang></div>
+                <div class="invalid-feedback"><lang>请输入密码</lang></div>
+            </div>
+            
+            <div class="d-grid gap-2 mt-4">
+                <button type="submit" class="btn btn-primary" id="weline-user-submit">
+                    <span class="weline-submit-text"><lang>保存</lang></span>
+                    <span class="weline-submit-loading d-none">
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                        <lang>保存中...</lang>
+                    </span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 组件样式 -->
+<style>
+.weline-user-table th {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    font-weight: 600;
+    border-bottom: 2px solid var(--backend-color-border-default, #dee2e6);
+}
+.weline-user-table td {
+    color: var(--backend-color-text-primary, #212529);
+    vertical-align: middle;
+}
+.weline-user-table tbody tr:hover {
+    background: var(--backend-color-table-bg-hover, #f8f9fa);
+}
+.weline-user-avatar-placeholder {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary, #556ee6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+}
+.weline-user-offcanvas {
+    width: 400px !important;
+    background: var(--backend-color-card-bg, #fff);
+}
+.weline-user-offcanvas .offcanvas-header {
+    border-bottom: 1px solid var(--backend-color-border-default, #dee2e6);
+}
+.weline-user-offcanvas .offcanvas-title {
+    color: var(--backend-color-text-primary, #212529);
+}
+.weline-user-offcanvas .form-label {
+    color: var(--backend-color-text-primary, #212529);
+    font-weight: 500;
+}
+.weline-user-offcanvas .form-control {
+    background: var(--backend-color-input-bg, #fff);
+    border-color: var(--backend-color-border-default, #dee2e6);
+    color: var(--backend-color-text-primary, #212529);
+}
+.weline-user-offcanvas .form-control:focus {
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: var(--backend-focus-ring, 0 0 0 0.15rem rgba(85, 110, 230, 0.25));
+}
+.weline-user-toolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.weline-user-search {
+    min-width: 250px;
+}
+
+/* 操作按钮组美化 */
+.weline-user-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.weline-user-actions .btn {
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    border-width: 2px;
+}
+.weline-user-actions .btn i {
+    font-size: 1.25rem;
+}
+.weline-user-actions .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--backend-shadow-sm, 0 2px 4px rgba(0,0,0,0.1));
+}
+.weline-user-actions .btn-outline-primary:hover {
+    background: var(--backend-color-primary, #556ee6);
+    color: #fff;
+}
+.weline-user-actions .btn-outline-warning:hover {
+    background: var(--backend-color-warning, #f1b44c);
+    color: #fff;
+}
+.weline-user-actions .btn-outline-success:hover {
+    background: var(--backend-color-success, #34c38f);
+    color: #fff;
+}
+.weline-user-actions .btn-outline-danger:hover {
+    background: var(--backend-color-danger, #f46a6a);
+    color: #fff;
+}
+
+/* 超级管理员小标签（用户名旁） */
+.weline-superadmin-badge-sm {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 8px;
+    background: linear-gradient(135deg, var(--backend-color-info, #50a5f1) 0%, var(--backend-color-primary, #556ee6) 100%);
+    color: #fff;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.weline-superadmin-badge-sm i {
+    font-size: 0.75rem;
+}
+
+@media (max-width: 576px) {
+    .weline-user-offcanvas {
+        width: 100% !important;
+    }
+    .weline-user-actions .btn {
+        width: 34px;
+        height: 34px;
+    }
+    .weline-user-actions .btn i {
+        font-size: 1.1rem;
+    }
+}
+</style>
+
+<!-- 组件脚本 -->
+<script>
+(function() {
+    'use strict';
+
+    var config = {
+        apiSave: '<?= $this->getBackendUrl("*/backend/user/api-save") ?>',
+        apiDelete: '<?= $this->getBackendUrl("*/backend/user/api-delete") ?>',
+        apiToggle: '<?= $this->getBackendUrl("*/backend/user/api-toggle") ?>',
+        text: {
+            addTitle: '<?= addslashes(__("新增管理员")) ?>',
+            editTitle: '<?= addslashes(__("编辑管理员")) ?>',
+            saveSuccess: '<?= addslashes(__("保存成功")) ?>',
+            saveFail: '<?= addslashes(__("保存失败")) ?>',
+            deleteConfirm: '<?= addslashes(__("确定要删除用户「%{1}」吗？此操作不可恢复。")) ?>',
+            deleteSuccess: '<?= addslashes(__("删除成功")) ?>',
+            deleteFail: '<?= addslashes(__("删除失败")) ?>',
+            enableConfirm: '<?= addslashes(__("确定要激活此用户吗？")) ?>',
+            disableConfirm: '<?= addslashes(__("确定要禁用此用户吗？禁用后该用户将无法登录。")) ?>',
+            toggleSuccess: '<?= addslashes(__("操作成功")) ?>',
+            toggleFail: '<?= addslashes(__("操作失败")) ?>',
+            networkError: '<?= addslashes(__("网络错误，请检查网络后重试")) ?>',
+            validationError: '<?= addslashes(__("请填写必填项")) ?>'
+        }
+    };
+
+    var offcanvasEl = document.getElementById('welineUserOffcanvas');
+    var offcanvas = null;
+    var form = document.getElementById('welineUserForm');
+    var isEditMode = false;
+
+    function initOffcanvas() {
+        if (typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
+            offcanvas = new bootstrap.Offcanvas(offcanvasEl);
+        }
+    }
+
+    function openOffcanvas(mode, userData) {
+        isEditMode = mode === 'edit';
+        var title = isEditMode ? config.text.editTitle : config.text.addTitle;
+        document.getElementById('welineUserOffcanvasTitle').textContent = title;
+        
+        form.reset();
+        form.classList.remove('was-validated');
+        
+        if (isEditMode && userData) {
+            document.getElementById('weline-user-id').value = userData.userId;
+            document.getElementById('weline-user-username').value = userData.username;
+            document.getElementById('weline-user-email').value = userData.email;
+            document.getElementById('weline-user-password').removeAttribute('required');
+            document.querySelector('.weline-password-required').style.display = 'none';
+            document.querySelector('.weline-password-hint').style.display = 'block';
+        } else {
+            document.getElementById('weline-user-id').value = '';
+            document.getElementById('weline-user-password').setAttribute('required', '');
+            document.querySelector('.weline-password-required').style.display = 'inline';
+            document.querySelector('.weline-password-hint').style.display = 'none';
+        }
+        
+        if (offcanvas) {
+            offcanvas.show();
+        }
+    }
+
+    function closeOffcanvas() {
+        if (offcanvas) {
+            offcanvas.hide();
+        }
+    }
+
+    function setLoading(loading) {
+        var btn = document.getElementById('weline-user-submit');
+        btn.disabled = loading;
+        btn.querySelector('.weline-submit-text').classList.toggle('d-none', loading);
+        btn.querySelector('.weline-submit-loading').classList.toggle('d-none', !loading);
+    }
+
+    function handleSave(e) {
+        e.preventDefault();
+        
+        if (!form.checkValidity()) {
+            form.classList.add('was-validated');
+            BackendToast.warning(config.text.validationError);
+            return;
+        }
+        
+        setLoading(true);
+        
+        var formData = new FormData(form);
+        var data = {};
+        formData.forEach(function(value, key) {
+            data[key] = value;
+        });
+        
+        fetch(config.apiSave, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(result) {
+            setLoading(false);
+            if (result.success) {
+                BackendToast.success(result.msg || config.text.saveSuccess);
+                closeOffcanvas();
+                setTimeout(function() { location.reload(); }, 800);
+            } else {
+                BackendToast.error(result.msg || config.text.saveFail);
+            }
+        })
+        .catch(function(error) {
+            setLoading(false);
+            BackendToast.error(config.text.networkError + (error.message ? ': ' + error.message : ''));
+        });
+    }
+
+    function handleDelete(userId, username) {
+        var message = config.text.deleteConfirm.replace('%{1}', username);
+        
+        BackendConfirm.show(message, {
+            title: '<?= addslashes(__("确认删除")) ?>',
+            confirmText: '<?= addslashes(__("删除")) ?>',
+            cancelText: '<?= addslashes(__("取消")) ?>',
+            type: 'danger'
+        }).then(function(confirmed) {
+            if (!confirmed) return;
+            
+            fetch(config.apiDelete, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ id: userId })
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(result) {
+                if (result.success) {
+                    BackendToast.success(result.msg || config.text.deleteSuccess);
+                    var row = document.querySelector('tr[data-user-id="' + userId + '"]');
+                    if (row) {
+                        row.style.transition = 'opacity 0.3s';
+                        row.style.opacity = '0';
+                        setTimeout(function() { row.remove(); }, 300);
+                    }
+                } else {
+                    BackendToast.error(result.msg || config.text.deleteFail);
+                }
+            })
+            .catch(function(error) {
+                BackendToast.error(config.text.networkError + (error.message ? ': ' + error.message : ''));
+            });
+        });
+    }
+
+    function handleToggle(userId, action) {
+        var message = action === 'enable' ? config.text.enableConfirm : config.text.disableConfirm;
+        var type = action === 'enable' ? 'info' : 'warning';
+        
+        BackendConfirm.show(message, {
+            title: action === 'enable' ? '<?= addslashes(__("激活用户")) ?>' : '<?= addslashes(__("禁用用户")) ?>',
+            confirmText: '<?= addslashes(__("确定")) ?>',
+            cancelText: '<?= addslashes(__("取消")) ?>',
+            type: type
+        }).then(function(confirmed) {
+            if (!confirmed) return;
+            
+            fetch(config.apiToggle, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ id: userId, action: action })
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(result) {
+                if (result.success) {
+                    BackendToast.success(result.msg || config.text.toggleSuccess);
+                    setTimeout(function() { location.reload(); }, 800);
+                } else {
+                    BackendToast.error(result.msg || config.text.toggleFail);
+                }
+            })
+            .catch(function(error) {
+                BackendToast.error(config.text.networkError + (error.message ? ': ' + error.message : ''));
+            });
+        });
+    }
+
+    function togglePasswordVisibility(btn) {
+        var input = btn.closest('.input-group').querySelector('input');
+        var icon = btn.querySelector('i');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.remove('mdi-eye');
+            icon.classList.add('mdi-eye-off');
+        } else {
+            input.type = 'password';
+            icon.classList.remove('mdi-eye-off');
+            icon.classList.add('mdi-eye');
+        }
+    }
+
+    function init() {
+        initOffcanvas();
+        
+        var addBtn = document.getElementById('weline-user-add-btn');
+        if (addBtn) {
+            addBtn.addEventListener('click', function() {
+                openOffcanvas('add');
+            });
+        }
+        
+        document.querySelectorAll('.weline-user-edit-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                openOffcanvas('edit', {
+                    userId: this.dataset.userId,
+                    username: this.dataset.username,
+                    email: this.dataset.email
+                });
+            });
+        });
+        
+        document.querySelectorAll('.weline-user-delete-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                handleDelete(this.dataset.userId, this.dataset.username);
+            });
+        });
+        
+        document.querySelectorAll('.weline-user-toggle-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                handleToggle(this.dataset.userId, this.dataset.action);
+            });
+        });
+        
+        document.querySelectorAll('.weline-toggle-password').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                togglePasswordVisibility(this);
+            });
+        });
+        
+        form.addEventListener('submit', handleSave);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+</script>

@@ -1,10 +1,529 @@
 <?php
 /**
- * 系统事件页面（内容模板）
+ * 系统事件管理页面
  *
  * @var \Weline\Framework\View\Template $this
  */
+
+$events = $this->getData('events') ?: [];
+
+$totalFiles = count($events);
+$totalEvents = 0;
+$totalObservers = 0;
+$enabledObservers = 0;
+$disabledObservers = 0;
+$sharedObservers = 0;
+$eventNames = [];
+$moduleSet = [];
+
+foreach ($events as $file => $eventGroups) {
+    $moduleName = explode('::', $file)[0] ?? '';
+    if ($moduleName) {
+        $moduleSet[$moduleName] = true;
+    }
+    foreach ($eventGroups as $name => $observers) {
+        $totalEvents++;
+        $eventNames[$name] = ($eventNames[$name] ?? 0) + count($observers);
+        foreach ($observers as $observer) {
+            $totalObservers++;
+            $disabled = $observer['disabled'] ?? 'false';
+            if ($disabled === 'true' || $disabled === true || $disabled === '1') {
+                $disabledObservers++;
+            } else {
+                $enabledObservers++;
+            }
+            $shared = $observer['shared'] ?? 'true';
+            if ($shared === 'true' || $shared === true || $shared === '1') {
+                $sharedObservers++;
+            }
+        }
+    }
+}
+$moduleCount = count($moduleSet);
+$uniqueEventCount = count($eventNames);
 ?>
+
+<style>
+.weline-event-page {
+    --event-card-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.weline-event-header {
+    background: linear-gradient(135deg, var(--backend-color-warning, #f1b44c) 0%, var(--backend-color-danger, #f46a6a) 100%);
+    border-radius: var(--backend-border-radius-lg, 12px);
+    padding: var(--backend-spacing-lg, 24px);
+    margin-bottom: var(--backend-spacing-lg, 24px);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.weline-event-header h2 {
+    margin: 0 0 var(--backend-spacing-xs, 4px) 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.weline-event-header-subtitle {
+    opacity: 0.9;
+    font-size: 0.95rem;
+}
+
+.weline-event-stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--backend-spacing-md, 16px);
+    margin-bottom: var(--backend-spacing-lg, 24px);
+}
+
+.weline-event-stat-card {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: var(--backend-border-radius-md, 8px);
+    padding: var(--backend-spacing-md, 16px);
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-md, 16px);
+    transition: all 0.2s ease;
+    box-shadow: var(--event-card-shadow);
+}
+
+.weline-event-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.weline-event-stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--backend-border-radius, 6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+
+.weline-event-stat-icon.primary {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-event-stat-icon.success {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+    color: var(--backend-color-success, #34c38f);
+}
+
+.weline-event-stat-icon.warning {
+    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.1));
+    color: var(--backend-color-warning, #f1b44c);
+}
+
+.weline-event-stat-icon.danger {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
+    color: var(--backend-color-danger, #f46a6a);
+}
+
+.weline-event-stat-icon.info {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    color: var(--backend-color-info, #50a5f1);
+}
+
+.weline-event-stat-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.weline-event-stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--backend-color-text-primary, #212529);
+    line-height: 1.2;
+}
+
+.weline-event-stat-label {
+    font-size: 0.85rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+    margin-top: 2px;
+}
+
+.weline-event-toolbar {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: var(--backend-border-radius-md, 8px);
+    padding: var(--backend-spacing-md, 16px);
+    margin-bottom: var(--backend-spacing-md, 16px);
+    box-shadow: var(--event-card-shadow);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--backend-spacing-md, 16px);
+    align-items: center;
+}
+
+.weline-event-search-box {
+    flex: 1;
+    min-width: 280px;
+    max-width: 400px;
+    position: relative;
+}
+
+.weline-event-search-box i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    font-size: 1.1rem;
+    pointer-events: none;
+}
+
+.weline-event-search-box input {
+    width: 100%;
+    padding: 10px 40px 10px 40px;
+    border: 2px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-input-bg, #fff);
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+}
+
+.weline-event-search-box input:focus {
+    outline: none;
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: var(--backend-focus-ring, 0 0 0 3px rgba(85, 110, 230, 0.15));
+}
+
+.weline-event-search-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    cursor: pointer;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.weline-event-search-box input:not(:placeholder-shown) + .weline-event-search-clear {
+    opacity: 1;
+}
+
+.weline-event-filters {
+    display: flex;
+    gap: var(--backend-spacing-sm, 8px);
+    flex-wrap: wrap;
+}
+
+.weline-event-filter-select {
+    min-width: 140px;
+    padding: 10px 32px 10px 12px;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-input-bg, #fff);
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.weline-event-filter-select:focus {
+    outline: none;
+    border-color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-event-actions {
+    display: flex;
+    gap: var(--backend-spacing-xs, 4px);
+}
+
+.weline-event-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-card-bg, #fff);
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.weline-event-action-btn:hover {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.weline-event-file-card {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: var(--backend-border-radius-md, 8px);
+    margin-bottom: var(--backend-spacing-md, 16px);
+    box-shadow: var(--event-card-shadow);
+    overflow: hidden;
+}
+
+.weline-event-file-header {
+    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 20px);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.weline-event-file-header:hover {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+}
+
+.weline-event-file-title {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--backend-color-text-primary, #212529);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    word-break: break-all;
+}
+
+.weline-event-file-title i {
+    color: var(--backend-color-warning, #f1b44c);
+    flex-shrink: 0;
+}
+
+.weline-event-file-badges {
+    display: flex;
+    gap: var(--backend-spacing-xs, 4px);
+    flex-shrink: 0;
+}
+
+.weline-event-file-badge {
+    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.1));
+    color: var(--backend-color-warning, #f1b44c);
+    padding: 4px 10px;
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.weline-event-file-toggle {
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    transition: transform 0.2s ease;
+    margin-left: var(--backend-spacing-sm, 8px);
+}
+
+.weline-event-file-header.collapsed .weline-event-file-toggle {
+    transform: rotate(-90deg);
+}
+
+.weline-event-file-body {
+    max-height: 1200px;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.weline-event-file-body.collapsed {
+    max-height: 0;
+}
+
+.weline-event-group {
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+.weline-event-group:last-child {
+    border-bottom: none;
+}
+
+.weline-event-group-header {
+    padding: var(--backend-spacing-sm, 12px) var(--backend-spacing-lg, 20px);
+    background: var(--backend-color-card-bg, #fff);
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-sm, 8px);
+    font-weight: 500;
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 0.9rem;
+}
+
+.weline-event-group-header i {
+    color: var(--backend-color-danger, #f46a6a);
+}
+
+.weline-event-name {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.85rem;
+    color: var(--backend-color-danger, #f46a6a);
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.08));
+    padding: 4px 10px;
+    border-radius: var(--backend-border-radius-sm, 4px);
+}
+
+.weline-event-observer-count {
+    font-size: 0.75rem;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    margin-left: auto;
+}
+
+.weline-event-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.weline-event-table th {
+    padding: 10px 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.75rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.weline-event-table td {
+    padding: 12px 16px;
+    font-size: 0.85rem;
+    color: var(--backend-color-text-primary, #212529);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    vertical-align: middle;
+}
+
+.weline-event-table tbody tr:hover td {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+
+.weline-event-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.weline-event-observer-name {
+    font-weight: 500;
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.weline-event-instance {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.8rem;
+    color: var(--backend-color-primary, #556ee6);
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.08));
+    padding: 4px 8px;
+    border-radius: var(--backend-border-radius-sm, 4px);
+    display: inline-block;
+    word-break: break-all;
+    max-width: 400px;
+}
+
+.weline-event-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.weline-event-status.enabled {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.15));
+    color: var(--backend-color-success, #34c38f);
+}
+
+.weline-event-status.disabled {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.15));
+    color: var(--backend-color-danger, #f46a6a);
+}
+
+.weline-event-shared {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.weline-event-shared.yes {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.15));
+    color: var(--backend-color-info, #50a5f1);
+}
+
+.weline-event-shared.no {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.weline-event-sort {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    height: 28px;
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-secondary, #6c757d);
+    border-radius: var(--backend-border-radius, 6px);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.weline-event-empty {
+    padding: var(--backend-spacing-xl, 40px);
+    text-align: center;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+.weline-event-empty i {
+    font-size: 3rem;
+    opacity: 0.3;
+    margin-bottom: var(--backend-spacing-md, 16px);
+    display: block;
+}
+
+.weline-event-result-info {
+    display: none;
+    padding: 10px 16px;
+    margin-bottom: var(--backend-spacing-md, 16px);
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    border: 1px solid var(--backend-color-info, #50a5f1);
+    border-radius: var(--backend-border-radius, 6px);
+    color: var(--backend-color-info, #50a5f1);
+    font-size: 0.9rem;
+}
+
+.weline-event-result-info.visible {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+@media (max-width: 768px) {
+    .weline-event-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .weline-event-search-box {
+        max-width: 100%;
+    }
+    
+    .weline-event-stats-row {
+        grid-template-columns: 1fr 1fr;
+    }
+    
+    .weline-event-table {
+        display: block;
+        overflow-x: auto;
+    }
+}
+</style>
 
 <div class='row'>
     <div class='col-12'>
@@ -24,66 +543,334 @@
     <template>Weline_Component::message.phtml</template>
 </div>
 
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'><?= __('观察事件') ?></h4>
-                <p class='card-title-desc'><?= __('此列表是系统中可监听的事件列表，方便开发者使用观察者模式查阅并订阅系统事件消息。') ?></p>
-                <?php
-                $events = $this->getData('events');
-                ?>
-                <div class='table-rep-plugin'>
-                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
-                        <table id='tech-companies-1' class='table table-striped table-bordered'>
-                            <thead>
-                            <tr>
-                                <th data-priority='1'><?= __('ID') ?></th>
-                                <th data-priority='1'><?= __('事件名') ?></th>
-                                <th data-priority='3'><?= __('示例类') ?></th>
-                                <th data-priority='1'><?= __('是否禁用') ?></th>
-                                <th data-priority='3'><?= __('是否共享') ?></th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <?php
-                            foreach ($events as $file => $event) :
-                                ?>
-                                <tr>
-                                    <td></td>
-                                    <th colspan="4" class='co-name'><?= $file ?></th>
-                                </tr>
-                                <?php
-                                foreach ($event as $name => $instances) {
-                                    ?>
-                                    <tr>
-                                        <td></td>
-                                        <th colspan="4" class='co-name'><?= $name ?></th>
-                                    </tr>
-                                    <?php
-                                    foreach ($instances as $key => $instance) {
-                                        ?>
-                                        <tr>
-                                            <th class="co-name"><?= $key ?></th>
-                                            <td><?= $instance['name'] ?></td>
-                                            <td><?= $instance['instance'] ?></td>
-                                            <td><?= $instance['disabled'] ?></td>
-                                            <td><?= $instance['shared'] ?></td>
-                                        </tr>
-                                        <?php
-                                    }
-                                    ?>
-                                    <?php
-                                }
-                                ?>
-                            <?php
-                            endforeach;
-                            ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+<div class="weline-event-page">
+    <!-- 顶部信息卡片 -->
+    <div class="weline-event-header">
+        <h2><i class="mdi mdi-lightning-bolt"></i> <?= __('系统事件') ?></h2>
+        <p class="weline-event-header-subtitle"><?= __('查看系统中所有已注册的事件和观察者，方便开发者使用观察者模式订阅系统事件') ?></p>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="weline-event-stats-row">
+        <div class="weline-event-stat-card">
+            <div class="weline-event-stat-icon primary">
+                <i class="mdi mdi-file-document-outline"></i>
+            </div>
+            <div class="weline-event-stat-content">
+                <div class="weline-event-stat-value"><?= $totalFiles ?></div>
+                <div class="weline-event-stat-label"><?= __('配置文件') ?></div>
+            </div>
+        </div>
+        <div class="weline-event-stat-card">
+            <div class="weline-event-stat-icon warning">
+                <i class="mdi mdi-lightning-bolt"></i>
+            </div>
+            <div class="weline-event-stat-content">
+                <div class="weline-event-stat-value"><?= $uniqueEventCount ?></div>
+                <div class="weline-event-stat-label"><?= __('事件类型') ?></div>
+            </div>
+        </div>
+        <div class="weline-event-stat-card">
+            <div class="weline-event-stat-icon info">
+                <i class="mdi mdi-eye-outline"></i>
+            </div>
+            <div class="weline-event-stat-content">
+                <div class="weline-event-stat-value"><?= $totalObservers ?></div>
+                <div class="weline-event-stat-label"><?= __('观察者总数') ?></div>
+            </div>
+        </div>
+        <div class="weline-event-stat-card">
+            <div class="weline-event-stat-icon success">
+                <i class="mdi mdi-check-circle-outline"></i>
+            </div>
+            <div class="weline-event-stat-content">
+                <div class="weline-event-stat-value"><?= $enabledObservers ?></div>
+                <div class="weline-event-stat-label"><?= __('已启用') ?></div>
+            </div>
+        </div>
+        <div class="weline-event-stat-card">
+            <div class="weline-event-stat-icon danger">
+                <i class="mdi mdi-close-circle-outline"></i>
+            </div>
+            <div class="weline-event-stat-content">
+                <div class="weline-event-stat-value"><?= $disabledObservers ?></div>
+                <div class="weline-event-stat-label"><?= __('已禁用') ?></div>
             </div>
         </div>
     </div>
+
+    <!-- 工具栏 -->
+    <div class="weline-event-toolbar">
+        <!-- 搜索框 -->
+        <div class="weline-event-search-box">
+            <i class="mdi mdi-magnify"></i>
+            <input type="text" id="event-search" placeholder="<?= __('搜索事件名、观察者、实例类...') ?>">
+            <button type="button" class="weline-event-search-clear" id="event-search-clear">
+                <i class="mdi mdi-close"></i>
+            </button>
+        </div>
+        
+        <!-- 筛选器 -->
+        <div class="weline-event-filters">
+            <select id="event-filter-status" class="weline-event-filter-select">
+                <option value=""><?= __('所有状态') ?></option>
+                <option value="enabled"><?= __('已启用') ?></option>
+                <option value="disabled"><?= __('已禁用') ?></option>
+            </select>
+            <select id="event-filter-module" class="weline-event-filter-select">
+                <option value=""><?= __('所有模块') ?></option>
+                <?php foreach (array_keys($moduleSet) as $mod): ?>
+                <option value="<?= htmlspecialchars($mod) ?>"><?= htmlspecialchars($mod) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <select id="event-filter-event" class="weline-event-filter-select">
+                <option value=""><?= __('所有事件') ?></option>
+                <?php foreach (array_keys($eventNames) as $eName): ?>
+                <option value="<?= htmlspecialchars($eName) ?>"><?= htmlspecialchars($eName) ?> (<?= $eventNames[$eName] ?>)</option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        
+        <!-- 操作按钮 -->
+        <div class="weline-event-actions">
+            <button type="button" class="weline-event-action-btn" id="expand-all">
+                <i class="mdi mdi-unfold-more-horizontal"></i> <?= __('展开全部') ?>
+            </button>
+            <button type="button" class="weline-event-action-btn" id="collapse-all">
+                <i class="mdi mdi-unfold-less-horizontal"></i> <?= __('折叠全部') ?>
+            </button>
+        </div>
+    </div>
+
+    <!-- 搜索结果提示 -->
+    <div id="event-result-info" class="weline-event-result-info">
+        <i class="mdi mdi-information-outline"></i>
+        <span id="event-result-text"></span>
+    </div>
+
+    <!-- 事件列表 -->
+    <?php if (empty($events)): ?>
+    <div class="weline-event-file-card">
+        <div class="weline-event-empty">
+            <i class="mdi mdi-lightning-bolt-outline"></i>
+            <p><?= __('暂无事件配置') ?></p>
+        </div>
+    </div>
+    <?php else: ?>
+    <?php foreach ($events as $file => $eventGroups): ?>
+    <?php
+    $moduleName = explode('::', $file)[0] ?? '';
+    $fileEventCount = count($eventGroups);
+    $fileObserverCount = 0;
+    foreach ($eventGroups as $observers) {
+        $fileObserverCount += count($observers);
+    }
+    ?>
+    <div class="weline-event-file-card" data-file="<?= htmlspecialchars(strtolower($file)) ?>" data-module="<?= htmlspecialchars($moduleName) ?>">
+        <div class="weline-event-file-header" onclick="toggleEventFile(this)">
+            <span class="weline-event-file-title">
+                <i class="mdi mdi-file-code-outline"></i>
+                <?= htmlspecialchars($file) ?>
+            </span>
+            <div class="weline-event-file-badges">
+                <span class="weline-event-file-badge"><?= $fileEventCount ?> <?= __('个事件') ?></span>
+                <span class="weline-event-file-badge" style="background: var(--backend-color-info-bg-subtle); color: var(--backend-color-info);"><?= $fileObserverCount ?> <?= __('个观察者') ?></span>
+                <span class="weline-event-file-toggle">
+                    <i class="mdi mdi-chevron-down"></i>
+                </span>
+            </div>
+        </div>
+        <div class="weline-event-file-body collapsed">
+            <?php foreach ($eventGroups as $eventName => $observers): ?>
+            <div class="weline-event-group" data-event-name="<?= htmlspecialchars(strtolower($eventName)) ?>">
+                <div class="weline-event-group-header">
+                    <i class="mdi mdi-lightning-bolt"></i>
+                    <span class="weline-event-name"><?= htmlspecialchars($eventName) ?></span>
+                    <span class="weline-event-observer-count"><?= count($observers) ?> <?= __('个观察者') ?></span>
+                </div>
+                <table class="weline-event-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 150px;"><?= __('观察者名') ?></th>
+                            <th><?= __('实例类') ?></th>
+                            <th style="width: 90px;"><?= __('状态') ?></th>
+                            <th style="width: 90px;"><?= __('共享') ?></th>
+                            <th style="width: 70px;"><?= __('排序') ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($observers as $observer): ?>
+                        <?php
+                        $disabled = $observer['disabled'] ?? 'false';
+                        $isDisabled = ($disabled === 'true' || $disabled === true || $disabled === '1');
+                        $statusClass = $isDisabled ? 'disabled' : 'enabled';
+                        $statusText = $isDisabled ? __('已禁用') : __('已启用');
+                        
+                        $shared = $observer['shared'] ?? 'true';
+                        $isShared = ($shared === 'true' || $shared === true || $shared === '1');
+                        $sharedClass = $isShared ? 'yes' : 'no';
+                        $sharedText = $isShared ? __('共享') : __('独占');
+                        ?>
+                        <tr data-status="<?= $statusClass ?>" data-searchable="<?= htmlspecialchars(strtolower(($observer['name'] ?? '') . ' ' . ($observer['instance'] ?? '') . ' ' . $eventName)) ?>">
+                            <td>
+                                <span class="weline-event-observer-name"><?= htmlspecialchars($observer['name'] ?? '-') ?></span>
+                            </td>
+                            <td>
+                                <span class="weline-event-instance" title="<?= htmlspecialchars($observer['instance'] ?? '-') ?>"><?= htmlspecialchars($observer['instance'] ?? '-') ?></span>
+                            </td>
+                            <td>
+                                <span class="weline-event-status <?= $statusClass ?>">
+                                    <i class="mdi mdi-<?= $isDisabled ? 'close-circle' : 'check-circle' ?>"></i>
+                                    <?= $statusText ?>
+                                </span>
+                            </td>
+                            <td>
+                                <span class="weline-event-shared <?= $sharedClass ?>">
+                                    <i class="mdi mdi-<?= $isShared ? 'share-variant' : 'lock' ?>"></i>
+                                    <?= $sharedText ?>
+                                </span>
+                            </td>
+                            <td>
+                                <span class="weline-event-sort"><?= htmlspecialchars($observer['sort'] ?? '10000') ?></span>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <?php endforeach; ?>
+    <?php endif; ?>
 </div>
+
+<script>
+(function() {
+    'use strict';
+    
+    var searchTimeout = null;
+    
+    window.toggleEventFile = function(header) {
+        var body = header.nextElementSibling;
+        header.classList.toggle('collapsed');
+        body.classList.toggle('collapsed');
+    };
+    
+    document.getElementById('expand-all').addEventListener('click', function() {
+        document.querySelectorAll('.weline-event-file-header').forEach(function(header) {
+            header.classList.remove('collapsed');
+            header.nextElementSibling.classList.remove('collapsed');
+        });
+    });
+    
+    document.getElementById('collapse-all').addEventListener('click', function() {
+        document.querySelectorAll('.weline-event-file-header').forEach(function(header) {
+            header.classList.add('collapsed');
+            header.nextElementSibling.classList.add('collapsed');
+        });
+    });
+    
+    document.getElementById('event-search').addEventListener('keyup', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function() {
+            filterEvents();
+        }, 300);
+    });
+    
+    document.getElementById('event-search-clear').addEventListener('click', function() {
+        document.getElementById('event-search').value = '';
+        filterEvents();
+    });
+    
+    document.getElementById('event-filter-status').addEventListener('change', filterEvents);
+    document.getElementById('event-filter-module').addEventListener('change', filterEvents);
+    document.getElementById('event-filter-event').addEventListener('change', filterEvents);
+    
+    function filterEvents() {
+        var searchVal = document.getElementById('event-search').value.trim().toLowerCase();
+        var statusFilter = document.getElementById('event-filter-status').value;
+        var moduleFilter = document.getElementById('event-filter-module').value;
+        var eventFilter = document.getElementById('event-filter-event').value.toLowerCase();
+        
+        var visibleFiles = 0;
+        var visibleObservers = 0;
+        
+        document.querySelectorAll('.weline-event-file-card').forEach(function(card) {
+            var fileText = card.getAttribute('data-file') || '';
+            var cardModule = card.getAttribute('data-module') || '';
+            
+            if (moduleFilter && cardModule !== moduleFilter) {
+                card.style.display = 'none';
+                return;
+            }
+            
+            var fileVisible = false;
+            
+            card.querySelectorAll('.weline-event-group').forEach(function(group) {
+                var groupEventName = group.getAttribute('data-event-name') || '';
+                var groupVisible = false;
+                
+                if (eventFilter && groupEventName !== eventFilter.toLowerCase()) {
+                    group.style.display = 'none';
+                    return;
+                }
+                
+                group.querySelectorAll('.weline-event-table tbody tr').forEach(function(row) {
+                    var rowSearchable = row.getAttribute('data-searchable') || '';
+                    var rowStatus = row.getAttribute('data-status') || '';
+                    
+                    var searchMatch = !searchVal || fileText.includes(searchVal) || rowSearchable.includes(searchVal);
+                    var statusMatch = !statusFilter || rowStatus === statusFilter;
+                    
+                    if (searchMatch && statusMatch) {
+                        row.style.display = '';
+                        groupVisible = true;
+                        visibleObservers++;
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+                
+                if (groupVisible) {
+                    group.style.display = '';
+                    fileVisible = true;
+                } else {
+                    group.style.display = 'none';
+                }
+            });
+            
+            if (fileVisible) {
+                card.style.display = '';
+                visibleFiles++;
+                
+                if (searchVal || statusFilter || moduleFilter || eventFilter) {
+                    var header = card.querySelector('.weline-event-file-header');
+                    var body = card.querySelector('.weline-event-file-body');
+                    header.classList.remove('collapsed');
+                    body.classList.remove('collapsed');
+                }
+            } else {
+                card.style.display = 'none';
+            }
+        });
+        
+        var resultInfo = document.getElementById('event-result-info');
+        var resultText = document.getElementById('event-result-text');
+        
+        if (searchVal || statusFilter || moduleFilter || eventFilter) {
+            resultText.textContent = '<?= __("找到") ?> ' + visibleObservers + ' <?= __("个观察者，来自") ?> ' + visibleFiles + ' <?= __("个配置文件") ?>';
+            resultInfo.classList.add('visible');
+        } else {
+            resultInfo.classList.remove('visible');
+        }
+    }
+    
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+            e.preventDefault();
+            document.getElementById('event-search').focus();
+        }
+    });
+})();
+</script>
