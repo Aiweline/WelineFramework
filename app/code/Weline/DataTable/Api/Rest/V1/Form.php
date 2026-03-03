@@ -83,8 +83,8 @@ class Form extends BackendRestController
                     }
                 }
             } catch (\Exception $e) {
-                error_log("DataTable Form API: 获取字段信息失败: " . $e->getMessage());
-                error_log("DataTable Form API: 异常堆栈: " . $e->getTraceAsString());
+                w_log_error("DataTable Form API: 获取字段信息失败: " . $e->getMessage());
+                w_log_error("DataTable Form API: 异常堆栈: " . $e->getTraceAsString());
             }
 
             // 过滤空字段名
@@ -524,7 +524,7 @@ class Form extends BackendRestController
             ]);
 
         } catch (\Exception $e) {
-            error_log("DataTable Form API Error: " . $e->getMessage());
+            w_log_error("DataTable Form API Error: " . $e->getMessage());
             return $this->error(__('获取记录失败: %{1}', [$e->getMessage()]));
         }
     }

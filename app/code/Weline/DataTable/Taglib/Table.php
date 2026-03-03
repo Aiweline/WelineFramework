@@ -114,7 +114,7 @@ class Table implements TaglibInterface
 
             // 验证多模型配置的有效性
             if (!empty($modelConfig['models']) && count($modelConfig['models']) > 1 && empty($join)) {
-                error_log("DataTable Warning: 多模型配置但未指定JOIN条件，可能导致查询错误");
+                w_log_warning("DataTable Warning: 多模型配置但未指定JOIN条件，可能导致查询错误");
             }
 
             // 处理基本属性
@@ -1055,7 +1055,7 @@ DOC;
 
             } catch (\Exception $e) {
                 // 记录错误日志，但不抛出异常，使用默认字段
-                error_log("DataTable: 无法实例化模型 {$model}: " . $e->getMessage());
+                w_log_error("DataTable: 无法实例化模型 {$model}: " . $e->getMessage());
                 $fields = self::getDefaultFields($model);
             }
         }
@@ -1215,7 +1215,7 @@ HTML;
                 }
             }
         } catch (\Throwable $e) {
-            error_log("DataTable: columns()异常: " . $e->getMessage());
+            w_log_error("DataTable: columns()异常: " . $e->getMessage());
         }
         // 方法4: 尝试调用getTableFields方法
         try {
@@ -1234,7 +1234,7 @@ HTML;
                 }
             }
         } catch (\Throwable $e) {
-            error_log("DataTable: getTableFields()异常: " . $e->getMessage());
+            w_log_error("DataTable: getTableFields()异常: " . $e->getMessage());
         }
         // 方法5: 尝试调用getSchema方法
         try {
@@ -1249,7 +1249,7 @@ HTML;
                 }
             }
         } catch (\Throwable $e) {
-            error_log("DataTable: getSchema()异常: " . $e->getMessage());
+            w_log_error("DataTable: getSchema()异常: " . $e->getMessage());
         }
         // 方法6: 尝试调用getFieldConfig方法
         try {
@@ -1263,7 +1263,7 @@ HTML;
                 }
             }
         } catch (\Throwable $e) {
-            error_log("DataTable: getFieldConfig()异常: " . $e->getMessage());
+            w_log_error("DataTable: getFieldConfig()异常: " . $e->getMessage());
         }
         // 方法7: 反射获取属性
         try {
@@ -1279,7 +1279,7 @@ HTML;
                 return array_values($fields);
             }
         } catch (\Throwable $e) {
-            error_log("DataTable: 反射获取属性异常: " . $e->getMessage());
+            w_log_error("DataTable: 反射获取属性异常: " . $e->getMessage());
         }
         // 方法8: 表名推断字段
         try {
@@ -1293,7 +1293,7 @@ HTML;
                 }
             }
         } catch (\Throwable $e) {
-            error_log("DataTable: getTable()异常: " . $e->getMessage());
+            w_log_error("DataTable: getTable()异常: " . $e->getMessage());
         }
         // 所有方法都失败，返回默认字段
         $fields = self::getDefaultFields($modelClass);
@@ -1340,7 +1340,7 @@ HTML;
                     $fields[] = $newField;
                 }
             } catch (\Exception $e) {
-                error_log("DataTable: 无法获取模型 {$modelClass} 的字段: " . $e->getMessage());
+                w_log_error("DataTable: 无法获取模型 {$modelClass} 的字段: " . $e->getMessage());
                 continue;
             }
         }

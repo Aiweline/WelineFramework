@@ -284,7 +284,7 @@ class TransactionManager
         );
         
         // 这里可以使用框架的日志系统
-        error_log($logMessage);
+        w_log_info($logMessage);
     }
 
     /**
