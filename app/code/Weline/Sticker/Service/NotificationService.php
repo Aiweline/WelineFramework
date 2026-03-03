@@ -38,7 +38,7 @@ class NotificationService
                 ['icon' => $icon, 'source_module' => 'Weline_Sticker']
             );
         } catch (\Exception $e) {
-            Env::log_error('sticker', "发送 Sticker 系统消息失败: " . $e->getMessage());
+            w_log_error("发送 Sticker 系统消息失败: " . $e->getMessage(), [], 'sticker');
         }
     }
     /**
