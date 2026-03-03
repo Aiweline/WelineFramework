@@ -14,78 +14,170 @@ $search = $this->getData('search') ?: '';
 ?>
 
 <style>
-    .pagebuilder-website-badge {
-        font-size: 0.75rem;
-        padding: 0.25em 0.5em;
-    }
-    
-    .pagebuilder-website-usage-guide {
-        background: var(--backend-color-card-bg, #fff);
-        border: 1px solid var(--backend-color-border-default, #dee2e6);
-        border-left: 4px solid var(--backend-color-primary, #556ee6);
-        padding: 16px 20px;
-        border-radius: var(--backend-border-radius-md, 8px);
-        margin-bottom: 20px;
-        box-shadow: var(--backend-card-shadow, 0 0 13px 0 rgba(74, 53, 107, 0.05));
-    }
-    
-    .pagebuilder-website-usage-guide-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        cursor: pointer;
-        user-select: none;
-        transition: color 0.2s ease;
-    }
-    
-    .pagebuilder-website-usage-guide-header:hover h6 {
-        color: var(--backend-color-primary, #556ee6);
-    }
-    
-    .pagebuilder-website-usage-guide-header h6 {
-        margin: 0;
-        color: var(--backend-color-text-primary, #212529);
-        font-weight: 600;
-        transition: color 0.2s ease;
-    }
-    
-    .pagebuilder-website-usage-guide-header i {
-        color: var(--backend-color-text-secondary, #6c757d);
-        transition: transform 0.3s ease, color 0.2s ease;
-    }
-    
-    .pagebuilder-website-usage-guide-header:hover i {
-        color: var(--backend-color-primary, #556ee6);
-    }
-    
-    .pagebuilder-website-usage-guide-body {
-        margin-top: 12px;
-        display: none;
-    }
-    
-    .pagebuilder-website-usage-guide-body.show {
-        display: block;
-    }
-    
-    .pagebuilder-website-usage-guide-body p {
-        color: var(--backend-color-text-primary, #212529);
-    }
-    
-    .pagebuilder-website-usage-guide-body ul {
-        margin: 8px 0 0 0;
-        padding-left: 20px;
-        color: var(--backend-color-text-secondary, #6c757d);
-    }
-    
-    .pagebuilder-website-usage-guide-body li {
-        margin-bottom: 6px;
-        font-size: 0.9rem;
-        color: var(--backend-color-text-secondary, #6c757d);
-    }
-    
-    .pagebuilder-website-usage-guide-body li strong {
-        color: var(--backend-color-text-primary, #212529);
-    }
+/* ============================================
+   组件：PageBuilder Website Management
+   模块：GuoLaiRen_PageBuilder
+   前缀：pagebuilder-website-
+   ============================================ */
+.pagebuilder-website-badge {
+    font-size: 0.75rem;
+    padding: 0.25em 0.5em;
+}
+
+.pagebuilder-website-usage-guide {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-left: 4px solid var(--backend-color-primary, #556ee6);
+    padding: 16px 20px;
+    border-radius: var(--backend-border-radius-md, 8px);
+    margin-bottom: 20px;
+    box-shadow: var(--backend-card-shadow, 0 0 13px 0 rgba(74, 53, 107, 0.05));
+}
+
+.pagebuilder-website-usage-guide-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.2s ease;
+}
+
+.pagebuilder-website-usage-guide-header:hover h6 {
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.pagebuilder-website-usage-guide-header h6 {
+    margin: 0;
+    color: var(--backend-color-text-primary, #212529);
+    font-weight: 600;
+    transition: color 0.2s ease;
+}
+
+.pagebuilder-website-usage-guide-header i {
+    color: var(--backend-color-text-secondary, #6c757d);
+    transition: transform 0.3s ease, color 0.2s ease;
+}
+
+.pagebuilder-website-usage-guide-header:hover i {
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.pagebuilder-website-usage-guide-body {
+    margin-top: 12px;
+    display: none;
+}
+
+.pagebuilder-website-usage-guide-body.show {
+    display: block;
+}
+
+.pagebuilder-website-usage-guide-body p {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.pagebuilder-website-usage-guide-body ul {
+    margin: 8px 0 0 0;
+    padding-left: 20px;
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.pagebuilder-website-usage-guide-body li {
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.pagebuilder-website-usage-guide-body li strong {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+/* 页面标题适配 */
+.page-title-box h4 {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.page-title-box .breadcrumb-item a {
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.page-title-box .breadcrumb-item.active {
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+/* 卡片样式适配 */
+.pagebuilder-website-card,
+#pagebuilder-website-table-container .card,
+.row > .col-12 > .card {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-md, 8px);
+}
+
+.pagebuilder-website-card .card-body,
+#pagebuilder-website-table-container .card-body,
+.row > .col-12 > .card > .card-body {
+    background: var(--backend-color-card-bg, #fff);
+}
+
+.pagebuilder-website-card .card-title,
+#pagebuilder-website-table-container .card-title,
+.row > .col-12 > .card .card-title {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+/* 表格样式适配 */
+#pagebuilder-website-table-container .table {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+#pagebuilder-website-table-container .table thead th {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    border-color: var(--backend-color-border-default, #dee2e6);
+}
+
+#pagebuilder-website-table-container .table tbody td {
+    border-color: var(--backend-color-border-light, #e9ecef);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+#pagebuilder-website-table-container .table-hover tbody tr:hover {
+    background: var(--backend-color-table-bg-hover, #f8f9fa);
+}
+
+#pagebuilder-website-table-container .table code {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-danger, #f46a6a);
+    padding: 2px 6px;
+    border-radius: var(--backend-border-radius-sm, 4px);
+}
+
+#pagebuilder-website-table-container .table .text-muted {
+    color: var(--backend-color-text-tertiary, #adb5bd) !important;
+}
+
+/* 搜索表单适配 */
+#pagebuilder-website-search-form .form-control {
+    background: var(--backend-color-input-bg, #fff);
+    border-color: var(--backend-color-border-default, #dee2e6);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+#pagebuilder-website-search-form .form-control:focus {
+    border-color: var(--backend-color-primary, #556ee6);
+    background: var(--backend-color-input-bg, #fff);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+#pagebuilder-website-search-form .form-control::placeholder {
+    color: var(--backend-color-text-placeholder, #adb5bd);
+}
+
+/* 空状态样式 */
+#pagebuilder-website-table-container .table td[colspan] {
+    background: var(--backend-color-card-bg, #fff);
+}
 </style>
 
 <!-- 页面标题 -->

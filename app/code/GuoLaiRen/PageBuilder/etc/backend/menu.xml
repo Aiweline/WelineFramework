@@ -3,122 +3,111 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     
-    <!-- 页面管理顶级菜单 -->
-    <add source="GuoLaiRen_PageBuilder::menu_page_management" 
-         name="page_management" 
-         title="页面管理" 
-         action=""
-         parent="" 
-         icon="mdi mdi-file-document-multiple" 
-         order="40"/>
+    <!-- ==================== 页面构建分组 ==================== -->
     
     <!-- 快速建站父级菜单 -->
-    <add source="GuoLaiRen_PageBuilder::quick_build" 
+    <menu source="GuoLaiRen_PageBuilder::quick_build" 
          name="quick_build" 
          title="快速建站" 
          action=""
-         parent="GuoLaiRen_PageBuilder::menu_page_management" 
-         icon="mdi mdi-rocket-launch" 
-         order="5"/>
+         parent="Weline_Backend::page_builder_group" 
+         icon="mdi mdi-rocket-launch-outline" 
+         order="10">
 
-    <!-- 新建站点向导 -->
-    <add source="GuoLaiRen_PageBuilder::quick_build_wizard" 
-         name="quick_build_wizard" 
-         title="新建站点" 
-         action="pagebuilder/backend/quickBuild/wizard"
-         parent="GuoLaiRen_PageBuilder::quick_build" 
-         icon="mdi mdi-creation" 
-         order="10"/>
+        <!-- 新建站点向导 -->
+        <menu source="GuoLaiRen_PageBuilder::quick_build_wizard" 
+             name="quick_build_wizard" 
+             title="新建站点" 
+             action="pagebuilder/backend/quickBuild/wizard"
+             icon="mdi mdi-creation" 
+             order="10"/>
 
-    <!-- 配置订单状态 -->
-    <add source="GuoLaiRen_PageBuilder::quick_build_orders" 
-         name="quick_build_orders" 
-         title="配置订单" 
-         action="pagebuilder/backend/quickBuild/orders"
-         parent="GuoLaiRen_PageBuilder::quick_build" 
-         icon="mdi mdi-clipboard-list" 
-         order="20"/>
+        <!-- 配置订单状态 -->
+        <menu source="GuoLaiRen_PageBuilder::quick_build_orders" 
+             name="quick_build_orders" 
+             title="配置订单" 
+             action="pagebuilder/backend/quickBuild/orders"
+             icon="mdi mdi-clipboard-list-outline" 
+             order="20"/>
+    </menu>
 
-    <!-- 网站构建器子菜单 -->
-    <add source="GuoLaiRen_PageBuilder::page_builder" 
+    <!-- 网站构建器 -->
+    <menu source="GuoLaiRen_PageBuilder::page_builder" 
          name="page_builder" 
          title="网站构建器" 
          action="pagebuilder/backend/page/index"
-         parent="GuoLaiRen_PageBuilder::menu_page_management" 
-         icon="mdi mdi-file-document-edit" 
-         order="10"/>
-    
-    <!-- 表单提交管理子菜单 -->
-    <add source="GuoLaiRen_PageBuilder::form_submissions" 
-         name="form_submissions" 
-         title="表单提交管理" 
-         action="pagebuilder/backend/submission/index"
-         parent="GuoLaiRen_PageBuilder::menu_page_management" 
-         icon="mdi mdi-email-open" 
+         parent="Weline_Backend::page_builder_group" 
+         icon="mdi mdi-file-document-edit-outline" 
          order="20"/>
     
-    <!-- 模板管理子菜单 -->
-    <add source="GuoLaiRen_PageBuilder::template_management" 
+    <!-- 表单提交管理 -->
+    <menu source="GuoLaiRen_PageBuilder::form_submissions" 
+         name="form_submissions" 
+         title="表单提交" 
+         action="pagebuilder/backend/submission/index"
+         parent="Weline_Backend::page_builder_group" 
+         icon="mdi mdi-email-open-outline" 
+         order="30"/>
+    
+    <!-- 模板管理 -->
+    <menu source="GuoLaiRen_PageBuilder::template_management" 
          name="template_management" 
          title="模板管理" 
          action="pagebuilder/backend/template/index"
-         parent="GuoLaiRen_PageBuilder::menu_page_management" 
-         icon="mdi mdi-palette" 
-         order="30"/>
+         parent="Weline_Backend::page_builder_group" 
+         icon="mdi mdi-palette-outline" 
+         order="40"/>
     
     <!-- 网站管理父级菜单 -->
-    <add source="GuoLaiRen_PageBuilder::website_management" 
+    <menu source="GuoLaiRen_PageBuilder::website_management" 
          name="website_management" 
          title="网站管理" 
          action=""
-         parent="GuoLaiRen_PageBuilder::menu_page_management" 
+         parent="Weline_Backend::page_builder_group" 
          icon="mdi mdi-web" 
-         order="40"/>
-    
-    <!-- 网站列表子菜单 -->
-    <add source="GuoLaiRen_PageBuilder::website_listing" 
-         name="website_listing" 
-         title="网站列表" 
-         action="pagebuilder/backend/websiteManagement/index"
-         parent="GuoLaiRen_PageBuilder::website_management" 
-         icon="mdi mdi-format-list-bulleted" 
-         order="10"/>
-    
-    <!-- 站点分配子菜单 -->
-    <add source="GuoLaiRen_PageBuilder::website_assignment" 
-         name="website_assignment" 
-         title="站点分配" 
-         action="pagebuilder/backend/website/index"
-         parent="GuoLaiRen_PageBuilder::website_management" 
-         icon="mdi mdi-shield-account" 
-         order="20"/>
+         order="50">
+        
+        <!-- 网站列表 -->
+        <menu source="GuoLaiRen_PageBuilder::website_listing" 
+             name="website_listing" 
+             title="网站列表" 
+             action="pagebuilder/backend/websiteManagement/index"
+             icon="mdi mdi-format-list-bulleted" 
+             order="10"/>
+        
+        <!-- 站点分配 -->
+        <menu source="GuoLaiRen_PageBuilder::website_assignment" 
+             name="website_assignment" 
+             title="站点分配" 
+             action="pagebuilder/backend/website/index"
+             icon="mdi mdi-shield-account-outline" 
+             order="20"/>
 
-    <!-- 域名管理子菜单 -->
-    <add source="GuoLaiRen_PageBuilder::domain_management" 
-         name="domain_management" 
-         title="域名管理" 
-         action="pagebuilder/backend/domainManagement/index"
-         parent="GuoLaiRen_PageBuilder::website_management" 
-         icon="mdi mdi-dns" 
-         order="30"/>
+        <!-- 域名管理 -->
+        <menu source="GuoLaiRen_PageBuilder::domain_management" 
+             name="domain_management" 
+             title="域名管理" 
+             action="pagebuilder/backend/domainManagement/index"
+             icon="mdi mdi-dns-outline" 
+             order="30"/>
+    </menu>
     
-    <!-- 配置子菜单 -->
-    <add source="GuoLaiRen_PageBuilder::config" 
-         name="config" 
-         title="配置" 
-         action="pagebuilder/backend/config/index"
-         parent="GuoLaiRen_PageBuilder::menu_page_management" 
-         icon="mdi mdi-cog" 
-         order="50"/>
-    
-    <!-- SEO 管理子菜单（嵌入式） -->
-    <add source="GuoLaiRen_PageBuilder::seo_management" 
+    <!-- SEO管理 -->
+    <menu source="GuoLaiRen_PageBuilder::seo_management" 
          name="seo_management" 
          title="SEO管理" 
          action="pagebuilder/backend/seo/index"
-         parent="GuoLaiRen_PageBuilder::menu_page_management" 
+         parent="Weline_Backend::page_builder_group" 
          icon="mdi mdi-chart-line" 
-         order="45"/>
+         order="60"/>
+    
+    <!-- 配置 -->
+    <menu source="GuoLaiRen_PageBuilder::config" 
+         name="config" 
+         title="构建器配置" 
+         action="pagebuilder/backend/config/index"
+         parent="Weline_Backend::page_builder_group" 
+         icon="mdi mdi-cog-outline" 
+         order="90"/>
     
 </menus>
-

@@ -396,10 +396,10 @@ class Component extends BackendController
             $this->syncLayoutConfigToPage($targetPageId, $layoutConfig);
             
             // 记录日志
-            error_log("[Component API add()] Page ID: {$pageId}, Type: {$pageType}, IsHome: " . ($isHomePage ? 'yes' : 'no'));
-            error_log("[Component API add()] Target Page ID: {$targetPageId}, Region: {$region}, Component: {$componentCode}");
-            error_log("[Component API add()] Instance ID: {$instanceId}, Position: {$actualPosition}");
-            error_log("[Component API add()] Saved to PageLayout successfully");
+            w_log_debug("[Component API add()] Page ID: {$pageId}, Type: {$pageType}, IsHome: " . ($isHomePage ? 'yes' : 'no'));
+            w_log_debug("[Component API add()] Target Page ID: {$targetPageId}, Region: {$region}, Component: {$componentCode}");
+            w_log_debug("[Component API add()] Instance ID: {$instanceId}, Position: {$actualPosition}");
+            w_log_debug("[Component API add()] Saved to PageLayout successfully");
             
             // ========== 局部刷新：渲染组件 HTML ==========
             $componentHtml = '';
@@ -420,7 +420,7 @@ class Component extends BackendController
                 if ($renderResult->isSuccess()) {
                     $componentHtml = $renderResult->getHtml();
                 } else {
-                    error_log("[Component API add()] Render warning: " . $renderResult->getMessage());
+                    w_log_warning("[Component API add()] Render warning: " . $renderResult->getMessage());
                 }
             }
             
@@ -439,7 +439,7 @@ class Component extends BackendController
                 'saved_to_home' => $isGlobalRegion && !$isHomePage,
             ]);
         } catch (\Exception $e) {
-            error_log("[Component API add()] Error: " . $e->getMessage());
+            w_log_error("[Component API add()] Error: " . $e->getMessage());
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -601,7 +601,7 @@ class Component extends BackendController
                 $page->save();
             }
         } catch (\Throwable $e) {
-            error_log("[Component API syncLayoutConfigToPage()] Error: " . $e->getMessage());
+            w_log_error("[Component API syncLayoutConfigToPage()] Error: " . $e->getMessage());
         }
     }
     
@@ -743,7 +743,7 @@ class Component extends BackendController
             ]);
             
         } catch (\Exception $e) {
-            error_log("[Component API validate()] Error: " . $e->getMessage());
+            w_log_error("[Component API validate()] Error: " . $e->getMessage());
             return $this->fetchJson([
                 'success' => false,
                 'valid' => false,
@@ -810,7 +810,7 @@ class Component extends BackendController
             }
             
         } catch (\Exception $e) {
-            error_log("[Component API compatible()] Error: " . $e->getMessage());
+            w_log_error("[Component API compatible()] Error: " . $e->getMessage());
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -852,7 +852,7 @@ class Component extends BackendController
             ]);
             
         } catch (\Exception $e) {
-            error_log("[Component API slots()] Error: " . $e->getMessage());
+            w_log_error("[Component API slots()] Error: " . $e->getMessage());
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -922,8 +922,8 @@ class Component extends BackendController
             $layout = $this->layoutService->getOrCreate($targetPageId);
             
             // 记录日志
-            error_log("[Component API remove()] Page ID: {$pageId}, Type: {$pageType}, IsHome: " . ($isHomePage ? 'yes' : 'no'));
-            error_log("[Component API remove()] Target Page ID: {$targetPageId}, Region: {$region}, Component: {$componentCode}");
+            w_log_debug("[Component API remove()] Page ID: {$pageId}, Type: {$pageType}, IsHome: " . ($isHomePage ? 'yes' : 'no'));
+            w_log_debug("[Component API remove()] Target Page ID: {$targetPageId}, Region: {$region}, Component: {$componentCode}");
             
             // 根据区域类型处理删除
             $removedCount = 0;
@@ -993,7 +993,7 @@ class Component extends BackendController
             // 同步到 Page.layout_config 保持向后兼容
             $this->syncLayoutConfigToPage($targetPageId, $layoutConfig);
             
-            error_log("[Component API remove()] Removed {$removedCount} component(s) from PageLayout");
+            w_log_info("[Component API remove()] Removed {$removedCount} component(s) from PageLayout");
             
             return $this->fetchJson([
                 'success' => true,
@@ -1007,7 +1007,7 @@ class Component extends BackendController
                 'removed_from_home' => $isGlobalRegion && !$isHomePage,
             ]);
         } catch (\Exception $e) {
-            error_log("[Component API remove()] Error: " . $e->getMessage());
+            w_log_error("[Component API remove()] Error: " . $e->getMessage());
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),

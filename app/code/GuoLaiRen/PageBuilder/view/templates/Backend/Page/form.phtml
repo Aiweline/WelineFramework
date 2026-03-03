@@ -2345,16 +2345,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (currentHandle && lastCheckedHandle === currentHandle && !isHandleValid) {
                 event.preventDefault();
                 event.stopPropagation();
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: '<?= __('提示') ?>',
-                        text: '<?= __('页面句柄已被使用，请使用其他句柄后再提交！') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('页面句柄已被使用，请使用其他句柄后再提交！') ?>');
-                }
+                BackendToast.warning('<?= __('页面句柄已被使用，请使用其他句柄后再提交！') ?>');
                 handleInput.focus();
                 handleInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return false;
@@ -2384,16 +2375,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // 显示错误提示
                     setTimeout(() => {
-                        if (typeof Swal !== 'undefined') {
-                            Swal.fire({
-                                icon: 'error',
-                                title: '<?= __('表单验证失败') ?>',
-                                text: errorMessage,
-                                confirmButtonText: '<?= __('确定') ?>'
-                            });
-                        } else {
-                            console.error('表单验证失败:', errorMessage);
-                        }
+                        BackendToast.error(errorMessage);
                     }, 100);
                 }
                 
@@ -2410,16 +2392,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (styleSelect && !styleSelect.value) {
                 event.preventDefault();
                 event.stopPropagation();
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: '<?= __('提示') ?>',
-                        text: '<?= __('请先选择页面样式模板！') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('请先选择页面样式模板！') ?>');
-                }
+                BackendToast.warning('<?= __('请先选择页面样式模板！') ?>');
                 // 滚动到样式选择区域
                 const styleSection = document.querySelector('#styleCardsContainer') || styleSelect;
                 if (styleSection) {
@@ -2463,16 +2436,7 @@ window.publishPage = function() {
     
     if (!statusSelect || !form) {
         console.error('❌ 找不到状态选择器或表单');
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('系统错误') ?>',
-                text: '<?= __('请刷新页面重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('系统错误，请刷新页面重试') ?>');
-        }
+        BackendToast.error('<?= __('系统错误，请刷新页面重试') ?>');
         return;
     }
     
@@ -2493,16 +2457,7 @@ window.publishPage = function() {
         form.submit();
     } catch (error) {
         console.error('❌ 发布失败:', error);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('发布失败') ?>',
-                text: '<?= __('请重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('发布失败，请重试') ?>');
-        }
+        BackendToast.error('<?= __('发布失败，请重试') ?>');
         
         // 恢复按钮状态
         publishBtn.disabled = false;
@@ -3142,16 +3097,7 @@ function removeLocaleTag(localeCode) {
     // 检查是否是默认语言，默认语言不能删除
     const defaultLocale = document.getElementById('default_locale').value;
     if (localeCode === defaultLocale) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('默认语言不能从支持的语言列表中删除！如需更改，请先切换默认语言。') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('默认语言不能从支持的语言列表中删除！如需更改，请先切换默认语言。') ?>');
-        }
+        BackendToast.warning('<?= __('默认语言不能从支持的语言列表中删除！如需更改，请先切换默认语言。') ?>');
         return false;
     }
     
@@ -4216,16 +4162,7 @@ if (refreshStyleBtn) {
             
         } catch (error) {
             console.error('❌ 刷新失败:', error);
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('刷新失败') ?>',
-                    text: '刷新样式配置失败：' + error.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('刷新样式配置失败：', error.message);
-            }
+            BackendToast.error('<?= __('刷新失败') ?>：' + error.message);
         } finally {
             // 恢复按钮状态
             this.disabled = false;
@@ -4470,16 +4407,7 @@ document.addEventListener('click', function(e) {
  */
 function openStyleConfigTranslation(configKey, configLabel, currentValue) {
     if (!pageIdForm || pageIdForm === 'null') {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('只有在编辑模式下才能翻译配置项') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('只有在编辑模式下才能翻译配置项') ?>');
-        }
+        BackendToast.warning('<?= __('只有在编辑模式下才能翻译配置项') ?>');
         return;
     }
     
@@ -4843,16 +4771,7 @@ function showToast(type, title, message) {
                 setTimeout(() => document.body.removeChild(toast), 300);
             }, 3000);
         } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'info',
-                    title: title,
-                    text: message || '',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.log(title + '\n' + (message || ''));
-            }
+            BackendToast.info(title + (message ? ': ' + message : ''));
         }
     }
 }
@@ -4890,30 +4809,12 @@ window.generateTemplateConfig = function() {
     }
     
     if (pageId <= 0) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('页面ID不能为空') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('页面ID不能为空') ?>');
-        }
+        BackendToast.warning('<?= __('页面ID不能为空') ?>');
         return;
     }
     
     if (!styleCode) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('模板代码不能为空') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('模板代码不能为空') ?>');
-        }
+        BackendToast.warning('<?= __('模板代码不能为空') ?>');
         return;
     }
     
@@ -4928,19 +4829,8 @@ window.generateTemplateConfig = function() {
     window.isAiGenerating = true;
 
     // 弹出“正在生成”等待框，禁止用户关闭（直到成功或失败）
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            icon: 'info',
-            title: '<?= __('AI正在生成配置') ?>',
-            text: '<?= __('请稍候，生成完成后将展示预览并让你确认是否应用。') ?>',
-            allowOutsideClick: false,
-            allowEscapeKey: false,
-            showConfirmButton: false,
-            didOpen: () => {
-                Swal.showLoading();
-            }
-        });
-    }
+    // 显示"正在生成"提示
+    BackendToast.info('<?= __('AI正在生成配置，请稍候...') ?>', 0);
     
     // 显示加载状态
     btn.disabled = true;
@@ -4974,43 +4864,20 @@ window.generateTemplateConfig = function() {
         // 检查响应数据
         if (!data) {
             console.error('[AI生成配置] 响应数据为空');
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('错误') ?>',
-                    text: '<?= __('响应数据为空') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            }
+            BackendToast.error('<?= __('响应数据为空') ?>');
             return;
         }
         
         if (!data.success) {
             console.error('[AI生成配置] 生成失败:', data.message || '未知错误');
             const errorMessage = data.message || '<?= __('生成失败') ?>';
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('生成失败') ?>',
-                    text: errorMessage,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('生成失败:', errorMessage);
-            }
+            BackendToast.error(errorMessage);
             return;
         }
         
         if (!data.data || (typeof data.data === 'object' && Object.keys(data.data).length === 0)) {
             console.warn('[AI生成配置] 没有生成任何配置项');
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'warning',
-                    title: '<?= __('提示') ?>',
-                    text: '<?= __('AI没有生成任何配置项') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            }
+            BackendToast.warning('<?= __('AI没有生成任何配置项') ?>');
             return;
         }
         
@@ -5147,94 +5014,53 @@ window.generateTemplateConfig = function() {
         }
         
         // 关闭等待中的“正在生成”弹窗，然后显示预览弹窗
-        if (typeof Swal !== 'undefined') {
-            // 先关闭前一个弹窗，等待一小段时间确保完全关闭
-            Swal.close();
+        if (configItems.length > 0) {
             
-            // 延迟显示预览弹窗，确保前一个弹窗已完全关闭
-            setTimeout(function() {
-                console.log('[AI生成配置] 使用SweetAlert显示提示面板');
-                Swal.fire({
-                    icon: configItems.length > 0 ? 'info' : 'warning',
-                    title: '<?= __('AI生成配置完成') ?>',
-                    html: previewHtml + summaryText,
-                    showCancelButton: configItems.length > 0,  // 只有可以填充时才显示取消按钮
-                    confirmButtonText: configItems.length > 0 ? '<?= __('确认应用') ?>' : '<?= __('确定') ?>',
-                    cancelButtonText: '<?= __('取消') ?>',
-                    width: '800px',
-                    allowOutsideClick: false,  // 禁止点击外部关闭
-                    allowEscapeKey: false,     // 禁止按ESC键关闭
-                    showCloseButton: false,    // 隐藏关闭按钮
-                    customClass: {
-                        popup: 'ai-fill-preview-modal'
-                    }
-                }).then((result) => {
-                    console.log('[AI生成配置] 用户操作结果:', result);
-                    if (result.isConfirmed && configItems.length > 0) {
-                        // 用户点击确认应用后执行回填
-                        console.log('[AI生成配置] 用户确认，开始执行回填');
-                        // 检查 performConfigFill 是否在全局作用域
-                        if (typeof window.performConfigFill === 'function') {
-                            window.performConfigFill(configItems, filledInputs);
-                        } else if (typeof performConfigFill === 'function') {
-                            performConfigFill(configItems, filledInputs);
-                        } else {
-                            console.error('[AI生成配置] performConfigFill 函数未定义');
-                            // 降级处理：直接填充
-                            configItems.forEach(function(item) {
-                                if (item.input) {
-                                    item.input.value = item.value;
-                                    item.input.dispatchEvent(new Event('change', { bubbles: true }));
-                                    item.input.dispatchEvent(new Event('input', { bubbles: true }));
-                                    item.input.classList.add('ai-filled-field');
-                                    item.input.style.borderColor = '#0d6efd';
-                                    item.input.style.borderWidth = '2px';
-                                    item.input.style.borderStyle = 'solid';
-                                }
-                            });
-                            if (typeof showToast === 'function') {
-                                showToast('success', '<?= __('生成成功') ?>', `<?= __('已生成并填充') ?> ${configItems.length} <?= __('个配置项') ?>`);
-                            }
-                        }
-                    } else {
-                        console.log('[AI生成配置] 用户取消或没有可填充的配置项');
-                    }
-                }).catch((error) => {
-                    console.error('[AI生成配置] SweetAlert错误:', error);
-                });
-            }, 300); // 等待300ms确保前一个弹窗完全关闭
-        } else {
-            console.warn('[AI生成配置] SweetAlert未加载，使用原生confirm');
-            // 如果没有SweetAlert，使用原生confirm确认
-            if (configItems.length > 0) {
-                const confirmMessage = '<?= __('即将回填') ?> ' + configItems.length + ' <?= __('个配置项，是否确认应用？') ?>';
-                if (confirm(confirmMessage)) {
+            // 使用 BackendConfirm 显示确认弹窗
+            console.log('[AI生成配置] 显示确认弹窗');
+            const confirmMessage = '<?= __('AI生成配置完成') ?>：<?= __('即将回填') ?> ' + configItems.length + ' <?= __('个配置项，是否确认应用？') ?>';
+            BackendConfirm.show(confirmMessage, {
+                title: '<?= __('AI生成配置完成') ?>',
+                confirmText: '<?= __('确认应用') ?>',
+                cancelText: '<?= __('取消') ?>',
+                type: 'info'
+            }).then(function(confirmed) {
+                console.log('[AI生成配置] 用户操作结果:', confirmed);
+                if (confirmed) {
+                    // 用户点击确认应用后执行回填
+                    console.log('[AI生成配置] 用户确认，开始执行回填');
                     // 检查 performConfigFill 是否在全局作用域
                     if (typeof window.performConfigFill === 'function') {
                         window.performConfigFill(configItems, filledInputs);
                     } else if (typeof performConfigFill === 'function') {
                         performConfigFill(configItems, filledInputs);
                     } else {
-                        // 降级处理
+                        console.error('[AI生成配置] performConfigFill 函数未定义');
+                        // 降级处理：直接填充
                         configItems.forEach(function(item) {
                             if (item.input) {
                                 item.input.value = item.value;
                                 item.input.dispatchEvent(new Event('change', { bubbles: true }));
                                 item.input.dispatchEvent(new Event('input', { bubbles: true }));
+                                item.input.classList.add('ai-filled-field');
+                                item.input.style.borderColor = '#0d6efd';
+                                item.input.style.borderWidth = '2px';
+                                item.input.style.borderStyle = 'solid';
                             }
                         });
+                        BackendToast.success('<?= __('已生成并填充') ?> ' + configItems.length + ' <?= __('个配置项') ?>');
                     }
+                } else {
+                    console.log('[AI生成配置] 用户取消');
                 }
-            } else {
-                alert('<?= __('共') ?> ' + allConfigItems.length + ' <?= __('个配置项生成，但未找到对应的输入框') ?>');
-            }
+            });
+        } else {
+            BackendToast.warning('<?= __('共') ?> ' + allConfigItems.length + ' <?= __('个配置项生成，但未找到对应的输入框') ?>');
         }
     })
     .catch(error => {
         // 关闭等待中的“正在生成”弹窗
-        if (typeof Swal !== 'undefined') {
-            Swal.close();
-        }
+        // Toast 自动消失，无需手动关闭
         // 清除AI生成状态标志，允许关闭可视化配置
         window.isAiGenerating = false;
         
@@ -5243,16 +5069,7 @@ window.generateTemplateConfig = function() {
         btn.innerHTML = originalHtml;
         
         console.error('AI生成配置错误:', error);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('错误') ?>',
-                text: '<?= __('生成请求失败，请稍后重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('生成请求失败，请稍后重试') ?>');
-        }
+        BackendToast.error('<?= __('生成请求失败，请稍后重试') ?>');
     });
 }
 
@@ -5569,30 +5386,12 @@ window.generatePageContent = function() {
     }
     
     if (!description) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('请输入页面描述，或确保页面有标题、SEO信息或内容') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('请输入页面描述，或确保页面有标题、SEO信息或内容') ?>');
-        }
+        BackendToast.warning('<?= __('请输入页面描述，或确保页面有标题、SEO信息或内容') ?>');
         return;
     }
     <?php else: ?>
     if (!description) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('请输入页面描述') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('请输入页面描述') ?>');
-        }
+        BackendToast.warning('<?= __('请输入页面描述') ?>');
         return;
     }
     <?php endif; ?>
@@ -5807,19 +5606,7 @@ window.generatePageContent = function() {
             if (modal) modal.hide();
 
             // 显示成功消息
-            if (typeof showToast === 'function') {
-                showToast('success', '<?= __('生成成功') ?>', '<?= __('AI已成功生成页面内容，请检查并调整') ?>');
-            } else if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('生成成功') ?>',
-                    text: '<?= __('AI已成功生成页面内容，请检查并调整') ?>',
-                    timer: 2000,
-                    showConfirmButton: false
-                });
-            } else {
-                console.log('<?= __('生成成功') ?>');
-            }
+            BackendToast.success('<?= __('AI已成功生成页面内容，请检查并调整') ?>');
         } else {
             // 清理错误消息中的HTML标签（双重保险）
             let errorMessage = data.message || '<?= __('生成失败') ?>';
@@ -5830,16 +5617,7 @@ window.generatePageContent = function() {
                 errorMessage = tempDiv.textContent || tempDiv.innerText || errorMessage;
             }
             
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('生成失败') ?>',
-                    text: errorMessage,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('生成失败:', errorMessage);
-            }
+            BackendToast.error(errorMessage);
         }
     })
     .catch(error => {
@@ -5872,16 +5650,7 @@ window.generatePageContent = function() {
         submitBtn.innerHTML = originalHtml;
 
         console.error('AI生成错误:', error);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('错误') ?>',
-                text: '<?= __('生成请求失败，请稍后重试') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('生成请求失败，请稍后重试') ?>');
-        }
+        BackendToast.error('<?= __('生成请求失败，请稍后重试') ?>');
     });
 };
 
@@ -5899,16 +5668,7 @@ window.openFrontendPreview = function() {
     
     // 首页类型且没有handle时，允许预览（直接使用网站地址）
     if (!handle && !isHomePage) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('页面句柄不能为空，无法预览') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            alert('<?= __('页面句柄不能为空，无法预览') ?>');
-        }
+        BackendToast.warning('<?= __('页面句柄不能为空，无法预览') ?>');
         return;
     }
     

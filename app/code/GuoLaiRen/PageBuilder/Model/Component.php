@@ -839,6 +839,12 @@ class Component extends Model
             $sortOrder = $isSystem ? 0 : 10;
         }
         
+        // 检查是否是 AI 生成的组件
+        // 条件1: 来自 _ai_generated 模板目录
+        // 条件2: 组件代码包含 -ai- 模式（如 header-ai-2602081802）
+        $isAiGenerated = ($styleCode === self::STYLE_CODE_AI_GENERATED) 
+            || (bool)preg_match('/-ai-\d+$/', $componentCode);
+        
         $data = [
             self::fields_CODE => $componentCode,
             self::fields_NAME => $metadata['name'] ?? self::formatName($componentCode),
@@ -854,6 +860,7 @@ class Component extends Model
             self::fields_IS_SYSTEM => (int)($isSystem ? 1 : 0),
             self::fields_IS_ACTIVE => 1,
             self::fields_SORT_ORDER => (int)$sortOrder,
+            self::fields_IS_AI_GENERATED => $isAiGenerated ? 1 : 0,
         ];
         
         if ($existing->getId()) {
@@ -917,6 +924,12 @@ class Component extends Model
         }
         $isSystem = ($config['is_default'] ?? false) ? 1 : 0;
         
+        // 检查是否是 AI 生成的组件
+        // 条件1: 来自 _ai_generated 模板目录
+        // 条件2: 组件代码包含 -ai- 模式（如 header-ai-2602081802）
+        $isAiGenerated = ($styleCode === self::STYLE_CODE_AI_GENERATED) 
+            || (bool)preg_match('/-ai-\d+$/', $componentCode);
+        
         $data = [
             self::fields_CODE => $componentCode,
             self::fields_NAME => $config['name'] ?? self::formatName($componentCode),
@@ -932,6 +945,7 @@ class Component extends Model
             self::fields_IS_SYSTEM => (int)$isSystem,
             self::fields_IS_ACTIVE => 1,
             self::fields_SORT_ORDER => (int)$sortOrder,
+            self::fields_IS_AI_GENERATED => $isAiGenerated ? 1 : 0,
         ];
         
         // 额外存储 region 和 icon 信息到 config_schema
@@ -1162,6 +1176,12 @@ class Component extends Model
             ->find()
             ->fetch();
         
+        // 检查是否是 AI 生成的组件
+        // 条件1: 来自 _ai_generated 模板目录
+        // 条件2: 组件代码包含 -ai- 模式（如 header-ai-2602081802）
+        $isAiGenerated = ($styleCode === self::STYLE_CODE_AI_GENERATED) 
+            || (bool)preg_match('/-ai-\d+$/', $componentCode);
+        
         $data = [
             self::fields_CODE => $componentCode,
             self::fields_NAME => $section['name'],
@@ -1174,6 +1194,7 @@ class Component extends Model
             self::fields_IS_SYSTEM => 0,
             self::fields_IS_ACTIVE => 1,
             self::fields_SORT_ORDER => $section['sort_order'] ?? 10,
+            self::fields_IS_AI_GENERATED => $isAiGenerated ? 1 : 0,
         ];
         
         if ($existing->getId()) {
@@ -1531,7 +1552,7 @@ class Component extends Model
                 }
             } catch (\Exception $e) {
                 // 记录错误但不中断保存流程
-                error_log("[Component] Failed to sync AI component entity file: " . $e->getMessage());
+                w_log_error("[Component] Failed to sync AI component entity file: " . $e->getMessage());
                 $this->syncingEntityFile = false;
             }
         }

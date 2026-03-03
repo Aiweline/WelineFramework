@@ -732,35 +732,137 @@ HTML;
     }
     
     /**
-     * 删除 AI 组件
+     * 获取组件被引用的页面列表
+     * 
+     * 检查组件在 PageLayout 中的引用情况：
+     * - header_component / footer_component 直接引用
+     * - content_components JSON 数组中的引用
      * 
      * @param int $componentId 组件 ID
-     * @return bool
+     * @return array 引用信息 ['has_references' => bool, 'references' => [...]]
      */
-    public function delete(int $componentId): bool
+    public function getComponentReferences(int $componentId): array
     {
         $componentModel = ObjectManager::getInstance(Component::class);
         $component = clone $componentModel;
         $component->load($componentId);
         
         if (!$component->getId()) {
-            return false;
+            return ['has_references' => false, 'references' => []];
+        }
+        
+        $componentCode = $component->getData(Component::fields_CODE);
+        $references = [];
+        
+        $pageLayoutModel = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Model\PageLayout::class);
+        $pageModel = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Model\Page::class);
+        
+        $layouts = clone $pageLayoutModel;
+        $layouts->clear()
+            ->where(\GuoLaiRen\PageBuilder\Model\PageLayout::fields_IS_ACTIVE, 1)
+            ->select()
+            ->fetch();
+        
+        foreach ($layouts->getItems() as $layout) {
+            $pageId = (int)$layout->getData(\GuoLaiRen\PageBuilder\Model\PageLayout::fields_PAGE_ID);
+            $usedIn = [];
+            
+            $headerComponent = $layout->getData(\GuoLaiRen\PageBuilder\Model\PageLayout::fields_HEADER_COMPONENT);
+            if ($headerComponent === $componentCode) {
+                $usedIn[] = 'header';
+            }
+            
+            $footerComponent = $layout->getData(\GuoLaiRen\PageBuilder\Model\PageLayout::fields_FOOTER_COMPONENT);
+            if ($footerComponent === $componentCode) {
+                $usedIn[] = 'footer';
+            }
+            
+            $contentComponents = $layout->getContentComponents();
+            foreach ($contentComponents as $contentComp) {
+                $code = $contentComp['component'] ?? $contentComp['code'] ?? '';
+                if ($code === $componentCode) {
+                    $usedIn[] = 'content';
+                    break;
+                }
+            }
+            
+            if (!empty($usedIn)) {
+                $page = clone $pageModel;
+                $page->load($pageId);
+                
+                if ($page->getId()) {
+                    $references[] = [
+                        'page_id' => $pageId,
+                        'page_name' => $page->getData(\GuoLaiRen\PageBuilder\Model\Page::fields_NAME) ?: $page->getData(\GuoLaiRen\PageBuilder\Model\Page::fields_TITLE),
+                        'page_handle' => $page->getData(\GuoLaiRen\PageBuilder\Model\Page::fields_HANDLE),
+                        'used_in' => $usedIn,
+                    ];
+                }
+            }
+        }
+        
+        return [
+            'has_references' => !empty($references),
+            'references' => $references,
+            'component_code' => $componentCode,
+            'component_name' => $component->getData(Component::fields_NAME),
+        ];
+    }
+    
+    /**
+     * 删除 AI 组件
+     * 
+     * @param int $componentId 组件 ID
+     * @param bool $force 强制删除（忽略引用检查）
+     * @return array 删除结果 ['success' => bool, 'message' => string, 'references' => array]
+     * @throws \Exception
+     */
+    public function delete(int $componentId, bool $force = false): array
+    {
+        $componentModel = ObjectManager::getInstance(Component::class);
+        $component = clone $componentModel;
+        $component->load($componentId);
+        
+        if (!$component->getId()) {
+            return [
+                'success' => false,
+                'message' => __('组件不存在'),
+                'references' => [],
+            ];
         }
         
         if (!$component->isAIGenerated()) {
-            throw new \Exception('只能删除 AI 生成的组件');
+            throw new \Exception(__('只能删除 AI 生成的组件'));
         }
         
-        // 删除实体文件
+        if (!$force) {
+            $refResult = $this->getComponentReferences($componentId);
+            if ($refResult['has_references']) {
+                $pageNames = array_map(fn($r) => $r['page_name'], $refResult['references']);
+                return [
+                    'success' => false,
+                    'message' => __('无法删除：组件「%{1}」正在被 %{2} 个页面使用，请先从这些页面中移除该组件后再删除。', [
+                        $refResult['component_name'],
+                        count($refResult['references']),
+                    ]),
+                    'references' => $refResult['references'],
+                    'component_code' => $refResult['component_code'],
+                    'component_name' => $refResult['component_name'],
+                ];
+            }
+        }
+        
         $this->entityFileManager->deleteEntityFile($component);
         
-        // 删除数据库记录
         $component->delete();
         
-        // 更新 component.json
         $this->entityFileManager->updateComponentJson();
         
-        return true;
+        return [
+            'success' => true,
+            'message' => __('AI 组件已删除'),
+            'references' => [],
+        ];
     }
     
     /**

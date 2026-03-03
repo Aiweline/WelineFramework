@@ -1,0 +1,392 @@
+<?php
+/**
+ * AI Component Framework - Footer
+ * 
+ * 底部组件框架模板，包含固定的版权和链接结构
+ * AI只需填充特定区域的代码
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var \GuoLaiRen\PageBuilder\Model\Page $page
+ * @var array $component_config 组件配置
+ * 
+ * @component_start
+ * name => {{COMPONENT_NAME}}
+ * name_en => {{COMPONENT_NAME_EN}}
+ * description => {{COMPONENT_DESC}}
+ * category => footer
+ * type => section
+ * sort_order => 90
+ * compatible_styles => *
+ * ai_generated => true
+ * @component_end
+ * 
+ * @fields_start
+ * 
+ * group:brand => 品牌信息
+ * brand.logo => Logo图片:textarea:|留空使用文字
+ * brand.name => 品牌名称:text:Brand Name
+ * brand.description => 品牌描述:textarea:Your trusted partner for quality services.
+ * 
+ * group:links => 链接设置
+ * links.column1_title => 第一列标题:text:Quick Links
+ * links.column1_items => 第一列链接:textarea:Home=>/\nAbout=>/about\nServices=>/services\nContact=>/contact|格式：名称=>链接
+ * links.column2_title => 第二列标题:text:Legal
+ * links.column2_items => 第二列链接:textarea:Privacy Policy=>/privacy\nTerms of Service=>/terms|格式：名称=>链接
+ * 
+ * group:social => 社交媒体
+ * social.show => 显示社交图标:select:yes|yes,no
+ * social.facebook => Facebook链接:text:
+ * social.twitter => Twitter链接:text:
+ * social.instagram => Instagram链接:text:
+ * social.linkedin => LinkedIn链接:text:
+ * 
+ * group:copyright => 版权信息
+ * copyright.text => 版权文字:text:All rights reserved.
+ * copyright.year => 起始年份:text:2024
+ * 
+ * group:style => 样式设置
+ * style.bg_color => 背景颜色:color:#1a1a2e
+ * style.text_color => 文字颜色:color:#a0a0b8
+ * style.title_color => 标题颜色:color:#ffffff
+ * style.link_color => 链接颜色:color:#a0a0b8
+ * style.link_hover_color => 链接悬停颜色:color:#6366f1
+ * style.accent_color => 强调色:color:#6366f1
+ * 
+ * {{EXTRA_FIELDS}}
+ * 
+ * @fields_end
+ */
+
+// ===== 固定的PHP数据获取部分 =====
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$parseLinks = function($raw) {
+    $items = [];
+    $lines = preg_split('/\r?\n/', $raw ?? '');
+    foreach ($lines as $line) {
+        $line = trim($line ?? '');
+        if (empty($line)) continue;
+        if (strpos($line, '=>') !== false) {
+            $parts = explode('=>', $line, 2);
+            $text = trim($parts[0] ?? '');
+            $href = trim($parts[1] ?? '#');
+            if (!empty($text)) {
+                $items[] = ['text' => $text, 'href' => $href ?: '#'];
+            }
+        }
+    }
+    return $items;
+};
+
+$componentId = 'footer-' . substr(uniqid(), -8);
+$cls = $componentId;
+
+// 品牌配置
+$brandLogo = $getConfig('brand.logo', '');
+$brandName = $getConfig('brand.name', 'Brand Name');
+$brandDesc = $getConfig('brand.description', 'Your trusted partner for quality services.');
+
+// 链接配置
+$col1Title = $getConfig('links.column1_title', 'Quick Links');
+$col1Items = $parseLinks($getConfig('links.column1_items', "Home=>/\nAbout=>/about\nServices=>/services\nContact=>/contact"));
+$col2Title = $getConfig('links.column2_title', 'Legal');
+$col2Items = $parseLinks($getConfig('links.column2_items', "Privacy Policy=>/privacy\nTerms of Service=>/terms"));
+
+// 社交媒体配置
+$showSocial = $getConfig('social.show', 'yes') !== 'no';
+$socialLinks = [];
+if ($getConfig('social.facebook')) $socialLinks['facebook'] = $getConfig('social.facebook');
+if ($getConfig('social.twitter')) $socialLinks['twitter'] = $getConfig('social.twitter');
+if ($getConfig('social.instagram')) $socialLinks['instagram'] = $getConfig('social.instagram');
+if ($getConfig('social.linkedin')) $socialLinks['linkedin'] = $getConfig('social.linkedin');
+
+// 版权配置
+$copyrightText = $getConfig('copyright.text', 'All rights reserved.');
+$startYear = $getConfig('copyright.year', date('Y'));
+$currentYear = date('Y');
+$yearDisplay = $startYear == $currentYear ? $currentYear : $startYear . '-' . $currentYear;
+
+// 样式配置
+$bgColor = $getConfig('style.bg_color', '#1a1a2e');
+$textColor = $getConfig('style.text_color', '#a0a0b8');
+$titleColor = $getConfig('style.title_color', '#ffffff');
+$linkColor = $getConfig('style.link_color', '#a0a0b8');
+$linkHoverColor = $getConfig('style.link_hover_color', '#6366f1');
+$accentColor = $getConfig('style.accent_color', '#6366f1');
+
+// ===== AI生成的额外PHP变量 =====
+try {
+    $cls = $componentId;
+} catch (\Throwable $e) {
+    w_log_error('[AI Component Error] ' . $componentId . ': ' . $e->getMessage());
+}
+?>
+<footer id="<?= $componentId ?>" class="<?= $componentId ?>-footer" role="contentinfo">
+    <div class="<?= $componentId ?>-container">
+        <div class="<?= $componentId ?>-main">
+            <!-- 品牌区域 -->
+            <div class="<?= $componentId ?>-brand">
+                <?php if ($brandLogo): ?>
+                <div class="<?= $componentId ?>-logo-wrapper">
+                    <img src="<?= htmlspecialchars($brandLogo) ?>" alt="<?= htmlspecialchars($brandName) ?>" class="<?= $componentId ?>-logo" loading="lazy">
+                </div>
+                <?php endif; ?>
+                <div class="<?= $componentId ?>-brand-info">
+                    <h2 class="<?= $componentId ?>-brand-name"><?= htmlspecialchars($brandName) ?></h2>
+                    <p class="<?= $componentId ?>-brand-desc"><?= htmlspecialchars($brandDesc) ?></p>
+                </div>
+            </div>
+
+            <!-- 链接区域 -->
+            <div class="<?= $componentId ?>-links-grid">
+                <!-- 第一列：快速链接 -->
+                <div class="<?= $componentId ?>-column">
+                    <h3 class="<?= $componentId ?>-column-title"><?= htmlspecialchars($col1Title) ?></h3>
+                    <ul class="<?= $componentId ?>-column-list">
+                        <?php foreach ($col1Items as $item): ?>
+                        <li class="<?= $componentId ?>-column-item">
+                            <a href="<?= htmlspecialchars($item['href']) ?>" class="<?= $componentId ?>-column-link"><?= htmlspecialchars($item['text']) ?></a>
+                        </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+
+                <!-- 第二列：法律条款 -->
+                <div class="<?= $componentId ?>-column">
+                    <h3 class="<?= $componentId ?>-column-title"><?= htmlspecialchars($col2Title) ?></h3>
+                    <ul class="<?= $componentId ?>-column-list">
+                        <?php foreach ($col2Items as $item): ?>
+                        <li class="<?= $componentId ?>-column-item">
+                            <a href="<?= htmlspecialchars($item['href']) ?>" class="<?= $componentId ?>-column-link"><?= htmlspecialchars($item['text']) ?></a>
+                        </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+
+                <!-- 第三列：关于我们与政策（拜金风格专属） -->
+                <div class="<?= $componentId ?>-column">
+                    <h3 class="<?= $componentId ?>-column-title">关于我们</h3>
+                    <ul class="<?= $componentId ?>-column-list">
+                        <li class="<?= $componentId ?>-column-item">
+                            <a href="/about" class="<?= $componentId ?>-column-link">公司介绍</a>
+                        </li>
+                        <li class="<?= $componentId ?>-column-item">
+                            <a href="/team" class="<?= $componentId ?>-column-link">团队风采</a>
+                        </li>
+                        <li class="<?= $componentId ?>-column-item">
+                            <a href="/honors" class="<?= $componentId ?>-column-link">荣誉资质</a>
+                        </li>
+                        <li class="<?= $componentId ?>-column-item">
+                            <a href="/partners" class="<?= $componentId ?>-column-link">合作伙伴</a>
+                        </li>
+                        <li class="<?= $componentId ?>-column-item">
+                            <a href="/contact" class="<?= $componentId ?>-column-link">联系我们</a>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- 第四列：棋牌政策 -->
+                <div class="<?= $componentId ?>-column">
+                    <h3 class="<?= $componentId ?>-column-title">棋牌政策</h3>
+                    <ul class="<?= $componentId ?>-column-list">
+                        <li class="<?= $componentId ?>-column-item">
+                            <a href="/responsible-gaming" class="<?= $componentId ?>-column-link">责任游戏</a>
+                        </li>
+                        <li class="<?= $componentId ?>-column-item">
+                            <a href="/fair-play" class="<?= $componentId ?>-column-link">公平游戏</a>
+                        </li>
+                        <li class="<?= $componentId ?>-column-item">
+                            <a href="/privacy-policy" class="<?= $componentId ?>-column-link">隐私政策</a>
+                        </li>
+                        <li class="<?= $componentId ?>-column-item">
+                            <a href="/terms" class="<?= $componentId ?>-column-link">服务条款</a>
+                        </li>
+                        <li class="<?= $componentId ?>-column-item">
+                            <a href="/aml-policy" class="<?= $componentId ?>-column-link">反洗钱政策</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 社交媒体 -->
+            <?php if ($showSocial && !empty($socialLinks)): ?>
+            <div class="<?= $componentId ?>-social">
+                <h3 class="<?= $componentId ?>-social-title">关注我们</h3>
+                <div class="<?= $componentId ?>-social-icons">
+                    <?php foreach ($socialLinks as $platform => $url): ?>
+                    <a href="<?= htmlspecialchars($url) ?>" class="<?= $componentId ?>-social-icon <?= $componentId ?>-social-<?= htmlspecialchars($platform) ?>" target="_blank" rel="noopener noreferrer" aria-label="<?= htmlspecialchars(ucfirst($platform)) ?>">
+                        <span class="<?= $componentId ?>-social-icon-inner"></span>
+                    </a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- 版权区域 -->
+        <div class="<?= $componentId ?>-copyright">
+            <div class="<?= $componentId ?>-copyright-content">
+                <p class="<?= $componentId ?>-copyright-text">
+                    &copy; <?= htmlspecialchars($yearDisplay) ?> <?= htmlspecialchars($brandName) ?>. <?= htmlspecialchars($copyrightText) ?>
+                </p>
+                <div class="<?= $componentId ?>-legal-links">
+                    <a href="/privacy" class="<?= $componentId ?>-legal-link">隐私政策</a>
+                    <span class="<?= $componentId ?>-legal-separator">|</span>
+                    <a href="/terms" class="<?= $componentId ?>-legal-link">服务条款</a>
+                    <span class="<?= $componentId ?>-legal-separator">|</span>
+                    <a href="/responsible-gaming" class="<?= $componentId ?>-legal-link">责任游戏</a>
+                    <span class="<?= $componentId ?>-legal-separator">|</span>
+                    <a href="/aml-policy" class="<?= $componentId ?>-legal-link">反洗钱政策</a>
+                </div>
+            </div>
+            <div class="<?= $componentId ?>-gold-badge">
+                <div class="<?= $componentId ?>-badge-icon">♠</div>
+                <span class="<?= $componentId ?>-badge-text">合法合规棋牌平台</span>
+            </div>
+        </div>
+    </div>
+</footer>
+<style>
+@media (max-width: 1024px) {
+    #<?= $componentId ?> .<?= $componentId ?>-main {
+        grid-template-columns: 1fr;
+        gap: 40px;
+    }
+    
+    #<?= $componentId ?> .<?= $componentId ?>-links-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 32px 24px;
+    }
+    
+    #<?= $componentId ?> .<?= $componentId ?>-brand {
+        flex-direction: row;
+        align-items: center;
+        gap: 24px;
+    }
+    
+    #<?= $componentId ?> .<?= $componentId ?>-logo-wrapper {
+        flex-shrink: 0;
+    }
+}
+
+@media (max-width: 768px) {
+    #<?= $componentId ?> .<?= $componentId ?>-container {
+        padding: 40px 20px 28px;
+    }
+    
+    #<?= $componentId ?> .<?= $componentId ?>-main {
+        gap: 32px;
+        margin-bottom: 40px;
+    }
+    
+    #<?= $componentId ?> .<?= $componentId ?>-brand {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 20px;
+    }
+    
+    #<?= $componentId ?> .<?= $componentId ?>-links-grid {
+        grid-template-columns: 1fr;
+        gap: 32px;
+    }
+    
+    #<?= $componentId ?> .<?= $componentId ?>-copyright {
+        flex-direction: column;
+        gap: 24px;
+        align-items: flex-start;
+    }
+    
+    #<?= $componentId ?> .<?= $componentId ?>-legal-links {
+        flex-wrap: wrap;
+    }
+    
+    #<?= $componentId ?> .<?= $componentId ?>-gold-badge {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    #<?= $componentId ?> .<?= $componentId ?>-container {
+        padding: 32px 16px 24px;
+    }
+    
+    #<?= $componentId ?> .<?= $componentId ?>-social-icons {
+        justify-content: center;
+    }
+    
+    #<?= $componentId ?> .<?= $componentId ?>-copyright-content {
+        text-align: center;
+    }
+    
+    #<?= $componentId ?> .<?= $componentId ?>-legal-links {
+        justify-content: center;
+    }
+}
+</style>
+<script>
+// 社交图标悬停效果增强
+const socialIcons = component.querySelectorAll('[class*="-social-icon"]');
+socialIcons.forEach(icon => {
+    icon.addEventListener('mouseenter', () => {
+        icon.style.transform = 'translateY(-4px) scale(1.1)';
+        icon.style.boxShadow = '0 8px 20px rgba(255, 215, 0, 0.2)';
+    });
+    
+    icon.addEventListener('mouseleave', () => {
+        icon.style.transform = 'translateY(0) scale(1)';
+        icon.style.boxShadow = 'none';
+    });
+});
+
+// 链接点击动画
+const columnLinks = component.querySelectorAll('[class*="-column-link"]');
+columnLinks.forEach(link => {
+    link.addEventListener('click', (e) => {
+        // 添加点击反馈
+        link.style.transform = 'translateX(8px)';
+        setTimeout(() => {
+            link.style.transform = '';
+        }, 300);
+    });
+});
+
+// 金牌徽章闪烁效果
+const goldBadge = component.querySelector('[class*="-gold-badge"]');
+if (goldBadge) {
+    setInterval(() => {
+        goldBadge.style.boxShadow = '0 0 20px rgba(255, 215, 0, 0.3)';
+        setTimeout(() => {
+            goldBadge.style.boxShadow = 'none';
+        }, 1000);
+    }, 3000);
+}
+
+// 滚动时显示边框效果
+let lastScrollTop = 0;
+const footer = component;
+
+const handleScroll = () => {
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    const scrollDirection = scrollTop > lastScrollTop ? 'down' : 'up';
+    
+    if (scrollDirection === 'up' && scrollTop < 100) {
+        footer.style.borderTop = '2px solid rgba(255, 215, 0, 0.5)';
+    } else {
+        footer.style.borderTop = 'none';
+    }
+    
+    lastScrollTop = scrollTop;
+};
+
+// 监听滚动
+window.addEventListener('scroll', handleScroll);
+handleScroll(); // 初始调用
+</script>
