@@ -79,7 +79,7 @@ class TranslationObserver implements ObserverInterface
                 $event->setData('success', true);
             }
         } catch (\Exception $e) {
-            error_log('[CustomerService] TranslationObserver error: ' . $e->getMessage());
+            w_log_error('[CustomerService] TranslationObserver error: ' . $e->getMessage());
             $event->setData('success', false);
             $event->setData('error', $e->getMessage());
         }
@@ -123,7 +123,7 @@ class TranslationObserver implements ObserverInterface
 
             return $translatedText ?: $text;
         } catch (\Exception $e) {
-            error_log('[CustomerService] Translation failed: ' . $e->getMessage());
+            w_log_error('[CustomerService] Translation failed: ' . $e->getMessage());
             // 翻译失败时返回原文
             return $text;
         }
