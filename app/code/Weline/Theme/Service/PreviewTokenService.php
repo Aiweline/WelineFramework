@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
@@ -35,7 +35,7 @@ class PreviewTokenService
     /** Cookie 有效期（秒）：默认 1 小时 */
     private const COOKIE_TTL = 3600;
 
-    private CacheInterface $cache;
+    private CachePoolInterface $cache;
     private Request $request;
     
     /** 当前请求的预览数据缓存 */
@@ -49,7 +49,7 @@ class PreviewTokenService
     ) {
         $this->request = $request;
         // 使用框架缓存
-        $this->cache = ObjectManager::getInstance(CacheInterface::class . 'Factory');
+        $this->cache = w_cache('theme');
     }
 
     /**

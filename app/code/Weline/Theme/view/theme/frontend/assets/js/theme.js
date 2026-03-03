@@ -2593,4 +2593,249 @@
         }, 500);
     })();
 
+    // ========== 全局 HTTP 错误处理拦截器 ==========
+    /**
+     * 全局友好错误提示
+     * 错误信息从后端 JSON 响应中获取（已支持多语言）
+     * 
+     * JSON 响应格式：
+     * {
+     *   "error": true,
+     *   "code": 500,
+     *   "title": "服务器错误",        // 可选，后端翻译
+     *   "message": "服务器内部错误",   // 后端翻译
+     *   "icon": "⚠️",                 // 可选
+     *   "retry_after": 15             // 可选，自动重试秒数
+     * }
+     */
+    (function initGlobalErrorHandler() {
+        const STATUS_ICONS = {
+            500: '⚠️', 502: '🔄', 503: '🔧', 504: '⏱️', 0: '📡'
+        };
+
+        let errorOverlayVisible = false;
+        let autoRetryTimer = null;
+
+        /**
+         * 显示错误覆盖层
+         * @param {Object} options - 错误信息对象
+         * @param {number} options.status - HTTP 状态码
+         * @param {string} options.title - 错误标题（后端已翻译）
+         * @param {string} options.message - 错误消息（后端已翻译）
+         * @param {string} options.icon - 图标（可选）
+         * @param {number} options.retryAfter - 自动重试秒数（可选）
+         */
+        function showErrorOverlay(options) {
+            if (errorOverlayVisible) {
+                return;
+            }
+
+            const statusCode = options.status || 500;
+            const title = options.title || `HTTP ${statusCode}`;
+            const message = options.message || '';
+            const icon = options.icon || STATUS_ICONS[statusCode] || STATUS_ICONS[500];
+            const retryAfter = options.retryAfter || (statusCode === 502 || statusCode === 503 ? 15 : 0);
+            const retryBtnText = options.retryBtnText || __('立即重试');
+            const closeBtnText = options.closeBtnText || __('关闭');
+
+            errorOverlayVisible = true;
+
+            const overlay = document.createElement('div');
+            overlay.id = 'weline-error-overlay';
+            overlay.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0, 0, 0, 0.75); display: flex; align-items: center;
+                justify-content: center; z-index: 99999;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            `;
+
+            const content = document.createElement('div');
+            content.style.cssText = `
+                background: var(--color-card-bg, #fff); border-radius: 12px; padding: 32px;
+                max-width: 480px; width: 90%; text-align: center;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            `;
+
+            const iconEl = document.createElement('div');
+            iconEl.style.cssText = 'font-size: 56px; margin-bottom: 16px;';
+            iconEl.textContent = icon;
+
+            const titleEl = document.createElement('h2');
+            titleEl.style.cssText = `
+                font-size: 22px; font-weight: 600; color: var(--color-text-primary, #1f2937);
+                margin: 0 0 12px 0;
+            `;
+            titleEl.textContent = title;
+
+            const messageEl = document.createElement('p');
+            messageEl.style.cssText = `
+                font-size: 15px; color: var(--color-text-secondary, #6b7280);
+                margin: 0 0 8px 0; line-height: 1.6;
+            `;
+            messageEl.textContent = message;
+
+            const statusEl = document.createElement('p');
+            statusEl.style.cssText = `
+                font-size: 13px; color: var(--color-text-tertiary, #9ca3af);
+                margin: 0 0 24px 0;
+            `;
+            statusEl.textContent = statusCode > 0 ? `HTTP ${statusCode}` : '';
+
+            const countdownEl = document.createElement('div');
+            countdownEl.id = 'weline-error-countdown';
+            countdownEl.style.cssText = `
+                font-size: 13px; color: var(--color-text-tertiary, #9ca3af);
+                margin-bottom: 20px;
+            `;
+
+            const btnContainer = document.createElement('div');
+            btnContainer.style.cssText = 'display: flex; gap: 12px; justify-content: center;';
+
+            const retryBtn = document.createElement('button');
+            retryBtn.style.cssText = `
+                background: var(--color-primary, #3b82f6); border: none; border-radius: 8px;
+                padding: 10px 20px; font-size: 14px; color: #fff; cursor: pointer; transition: all 0.2s;
+            `;
+            retryBtn.textContent = retryBtnText;
+            retryBtn.onclick = () => {
+                closeErrorOverlay();
+                window.location.reload();
+            };
+
+            const closeBtn = document.createElement('button');
+            closeBtn.style.cssText = `
+                background: var(--color-card-bg-hover, #f3f4f6); border: none; border-radius: 8px;
+                padding: 10px 20px; font-size: 14px; color: var(--color-text-secondary, #6b7280);
+                cursor: pointer; transition: all 0.2s;
+            `;
+            closeBtn.textContent = closeBtnText;
+            closeBtn.onclick = closeErrorOverlay;
+
+            btnContainer.appendChild(retryBtn);
+            btnContainer.appendChild(closeBtn);
+
+            content.appendChild(iconEl);
+            content.appendChild(titleEl);
+            content.appendChild(messageEl);
+            content.appendChild(statusEl);
+            content.appendChild(countdownEl);
+            content.appendChild(btnContainer);
+            overlay.appendChild(content);
+            document.body.appendChild(overlay);
+
+            if (retryAfter > 0) {
+                startAutoRetry(countdownEl, retryAfter);
+            }
+        }
+
+        function closeErrorOverlay() {
+            const overlay = document.getElementById('weline-error-overlay');
+            if (overlay) {
+                overlay.remove();
+            }
+            errorOverlayVisible = false;
+            if (autoRetryTimer) {
+                clearInterval(autoRetryTimer);
+                autoRetryTimer = null;
+            }
+        }
+
+        function startAutoRetry(countdownEl, retryAfter) {
+            let countdown = retryAfter;
+
+            const updateCountdown = () => {
+                countdownEl.textContent = __('将在 %{seconds} 秒后自动重试...', { seconds: countdown });
+            };
+
+            updateCountdown();
+
+            autoRetryTimer = setInterval(() => {
+                countdown--;
+                if (countdown <= 0) {
+                    closeErrorOverlay();
+                    window.location.reload();
+                } else {
+                    updateCountdown();
+                }
+            }, 1000);
+        }
+
+        /**
+         * 从 Response 解析错误信息
+         */
+        async function parseErrorFromResponse(response) {
+            const contentType = response.headers.get('content-type') || '';
+            const options = {
+                status: response.status,
+                title: '',
+                message: '',
+                icon: '',
+                retryAfter: 0
+            };
+
+            if (contentType.includes('application/json')) {
+                try {
+                    const json = await response.clone().json();
+                    options.title = json.title || json.error_title || '';
+                    options.message = json.message || json.msg || json.error || '';
+                    options.icon = json.icon || '';
+                    options.retryAfter = json.retry_after || 0;
+                } catch (e) {
+                    // JSON 解析失败
+                }
+            }
+
+            return options;
+        }
+
+        const originalFetch = window.fetch;
+        window.fetch = function (...args) {
+            return originalFetch.apply(this, args)
+                .then(async response => {
+                    if (response.status >= 500 && response.status < 600) {
+                        const contentType = response.headers.get('content-type') || '';
+                        if (contentType.includes('application/json')) {
+                            const errorOptions = await parseErrorFromResponse(response);
+                            if (errorOptions.message) {
+                                showErrorOverlay(errorOptions);
+                            }
+                        } else if (contentType.includes('text/html')) {
+                            showErrorOverlay({
+                                status: response.status,
+                                title: __('服务器错误'),
+                                message: __('服务器内部错误，请稍后重试。')
+                            });
+                        }
+                    }
+                    return response;
+                })
+                .catch(error => {
+                    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                        showErrorOverlay({
+                            status: 0,
+                            title: __('网络错误'),
+                            message: __('无法连接到服务器，请检查网络连接。')
+                        });
+                    }
+                    throw error;
+                });
+        };
+
+        window.addEventListener('weline:http:error', (event) => {
+            const detail = event.detail || {};
+            showErrorOverlay({
+                status: detail.status || detail.code || 500,
+                title: detail.title || '',
+                message: detail.message || detail.msg || '',
+                icon: detail.icon || '',
+                retryAfter: detail.retry_after || detail.retryAfter || 0
+            });
+        });
+
+        window.WelineErrorHandler = {
+            show: showErrorOverlay,
+            close: closeErrorOverlay,
+        };
+    })();
+
 })(window, document);

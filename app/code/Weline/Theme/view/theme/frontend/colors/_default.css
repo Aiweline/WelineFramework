@@ -88,4 +88,10 @@
     --color-header-shadow: rgba(0, 0, 0, 0.1);
     --color-header-focus-ring: rgba(74, 144, 226, 0.3);
     --color-header-dropdown-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+
+    /* ========== 滚动条 ========== */
+    --scrollbar-width: 4px;
+    --scrollbar-thumb: #c1c1c1;
+    --scrollbar-thumb-hover: #a8a8a8;
+    --scrollbar-track: transparent;
 }

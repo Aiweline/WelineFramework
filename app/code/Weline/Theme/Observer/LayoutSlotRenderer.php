@@ -167,7 +167,7 @@ class LayoutSlotRenderer implements ObserverInterface
             // 开发模式下可以输出到控制台
             if (defined('DEV') && DEV) {
                 foreach ($orphans as $orphan) {
-                    error_log('[Widget Orphan] ' . ($orphan['message'] ?? 'Unknown orphan widget'));
+                    w_log_warning('[Widget Orphan] ' . ($orphan['message'] ?? 'Unknown orphan widget'));
                 }
             }
         }

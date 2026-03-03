@@ -156,18 +156,8 @@ class PreviewManager
     {
         try {
             // 清除主题缓存
-            /** @var \Weline\Framework\Cache\CacheInterface $cache */
-            $cache = ObjectManager::getInstance(\Weline\Framework\Cache\CacheInterface::class . 'Factory');
-            
-            $cacheTags = ['theme', 'preview'];
-            if ($themeId) {
-                $cacheTags[] = "theme_{$themeId}";
-            }
-            if ($area) {
-                $cacheTags[] = "area_{$area}";
-            }
-            
-            $cache->clean($cacheTags);
+            $cache = w_cache('theme');
+            $cache->clear();
             
             // 清除CSS编译缓存（通过删除生成的CSS文件）
             if ($themeId) {
@@ -195,7 +185,7 @@ class PreviewManager
         } catch (\Exception $e) {
             // 清除缓存失败不影响其他操作
             if (defined('DEV') && DEV) {
-                error_log('清除预览缓存失败: ' . $e->getMessage());
+                w_log_error('清除预览缓存失败: ' . $e->getMessage());
             }
         }
     }

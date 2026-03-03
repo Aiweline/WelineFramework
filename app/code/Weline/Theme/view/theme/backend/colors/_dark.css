@@ -103,4 +103,9 @@
     --backend-color-input-border: rgba(255, 255, 255, 0.1);
     --backend-color-input-focus-border: var(--backend-color-primary);
     --backend-color-input-disabled-bg: #2E3548;
+
+    /* 滚动条（暗色主题） */
+    --backend-scrollbar-thumb: #5a6577;
+    --backend-scrollbar-thumb-hover: #7a8597;
+    --backend-scrollbar-track: transparent;
 }
