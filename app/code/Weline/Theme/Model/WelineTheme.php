@@ -11,14 +11,12 @@ namespace Weline\Theme\Model;
 
 use Weline\Framework\App;
 use Weline\Framework\App\Env;
-use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Framework\Setup\Db\Setup;
-use Weline\Theme\Cache\ThemeCache;
 
 class WelineTheme extends Model
 {

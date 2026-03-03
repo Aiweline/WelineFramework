@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -33,11 +33,11 @@ class EditorLockService
     /** 接管等待时间（秒）：5 分钟后可强制接管 */
     private const TAKEOVER_WAIT = 300;
 
-    private CacheInterface $cache;
+    private CachePoolInterface $cache;
 
     public function __construct()
     {
-        $this->cache = ObjectManager::getInstance(CacheInterface::class);
+        $this->cache = w_cache('theme');
     }
 
     /**

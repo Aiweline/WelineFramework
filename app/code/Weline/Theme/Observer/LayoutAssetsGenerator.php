@@ -9,7 +9,6 @@
 
 namespace Weline\Theme\Observer;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
@@ -40,36 +39,36 @@ class LayoutAssetsGenerator implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
-        Env::log_debug('theme_assets', __('LayoutAssetsGenerator: 开始执行'));
+        w_log_debug(__('LayoutAssetsGenerator: 开始执行'), [], 'theme_assets');
         
         /** @var \Weline\Framework\DataObject\DataObject $eventData */
         $eventData = $event->getData('data');
         if (!$eventData instanceof \Weline\Framework\DataObject\DataObject) {
-            Env::log_debug('theme_assets', __('LayoutAssetsGenerator: eventData不是DataObject实例，跳过处理'));
+            w_log_debug(__('LayoutAssetsGenerator: eventData不是DataObject实例，跳过处理'), [], 'theme_assets');
             return;
         }
         
         $layoutType = $eventData->getData('layoutType');
         // 关键检查：只有当控制器设置了 layoutType 时才处理
         if (empty($layoutType)) {
-            Env::log_debug('theme_assets', __('LayoutAssetsGenerator: layoutType为空，跳过处理'));
+            w_log_debug(__('LayoutAssetsGenerator: layoutType为空，跳过处理'), [], 'theme_assets');
             return;
         }
         
         $content = $eventData->getData('content');
         if (empty($content)) {
-            Env::log_debug('theme_assets', __('LayoutAssetsGenerator: content为空，跳过处理'));
+            w_log_debug(__('LayoutAssetsGenerator: content为空，跳过处理'), [], 'theme_assets');
             return;
         }
         
-        Env::log_debug('theme_assets', __('LayoutAssetsGenerator: layoutType=%{1}, content长度=%{2}', [$layoutType, strlen($content)]));
+        w_log_debug(__('LayoutAssetsGenerator: layoutType=%{1}, content长度=%{2}', [$layoutType, strlen($content)]), [], 'theme_assets');
         
         try {
             // 从模板实例获取布局信息
             $template = \Weline\Framework\View\Template::getInstance();
             $themeData = $template->getData('theme');
             if (empty($themeData)) {
-                Env::log_debug('theme_assets', __('LayoutAssetsGenerator: 模板实例中没有theme数据，跳过处理'));
+                w_log_debug(__('LayoutAssetsGenerator: 模板实例中没有theme数据，跳过处理'), [], 'theme_assets');
                 return;
             }
             
@@ -78,7 +77,7 @@ class LayoutAssetsGenerator implements ObserverInterface
             $theme = $themeData['theme'] ?? null;
             
             if (!$theme || !($theme instanceof \Weline\Theme\Model\WelineTheme)) {
-                Env::log_debug('theme_assets', __('LayoutAssetsGenerator: 无法获取主题对象，跳过处理'));
+                w_log_debug(__('LayoutAssetsGenerator: 无法获取主题对象，跳过处理'), [], 'theme_assets');
                 return;
             }
             
@@ -91,13 +90,13 @@ class LayoutAssetsGenerator implements ObserverInterface
             $cssUrl = $assetsManager->getCssUrl($area, $layoutType, $layoutOption, $theme);
             $jsUrl = $assetsManager->getJsUrl($area, $layoutType, $layoutOption, $theme);
             
-            Env::log_debug('theme_assets', __('LayoutAssetsGenerator: 开始处理布局资源 - area: %{1}, layoutType: %{2}, layoutOption: %{3}, CSS URL: %{4}, JS URL: %{5}', [
+            w_log_debug(__('LayoutAssetsGenerator: 开始处理布局资源 - area: %{1}, layoutType: %{2}, layoutOption: %{3}, CSS URL: %{4}, JS URL: %{5}', [
                 $area,
                 $layoutType,
                 $layoutOption,
                 $cssUrl,
                 $jsUrl
-            ]));
+            ]), [], 'theme_assets');
             
             // 从最终HTML中提取CSS/JS
             /** @var AssetsExtractor $extractor */
@@ -107,7 +106,7 @@ class LayoutAssetsGenerator implements ObserverInterface
             $css = trim($extraction['css'] ?? '');
             $js = trim($extraction['js'] ?? '');
             
-            Env::log_debug('theme_assets', __('LayoutAssetsGenerator: 提取结果 - CSS长度: %{1}, JS长度: %{2}', [strlen($css), strlen($js)]));
+            w_log_debug(__('LayoutAssetsGenerator: 提取结果 - CSS长度: %{1}, JS长度: %{2}', [strlen($css), strlen($js)]), [], 'theme_assets');
             
             // 更新编译后的tpl文件：移除内联标签（开发模式下留下注释）
             $this->updateCompiledTplFiles($eventData, $extractor, $cssUrl, $jsUrl, $layoutType, $layoutOption);
@@ -119,13 +118,13 @@ class LayoutAssetsGenerator implements ObserverInterface
             // 只要有CSS文件生成（即使没有提取到CSS内容，也会生成包含CSS变量的文件），就添加链接
             $content = $this->updateTplContent($extraction['content'], $cssUrl, $jsUrl, $layoutType, $layoutOption, $hasCssFile, !empty($js));
             
-            Env::log_debug('theme_assets', __('LayoutAssetsGenerator: 处理完成，内容长度: %{1}', [strlen($content)]));
+            w_log_debug(__('LayoutAssetsGenerator: 处理完成，内容长度: %{1}', [strlen($content)]), [], 'theme_assets');
             
             // 更新事件数据中的内容
             $eventData->setData('content', $content);
             
         } catch (\Exception $e) {
-            Env::log_error('theme_assets', __('布局资源生成失败: %{1}', [$e->getMessage()]));
+            w_log_error(__('布局资源生成失败: %{1}', [$e->getMessage()]), [], 'theme_assets');
             // 不抛出异常，避免影响页面输出
         }
     }
@@ -184,10 +183,10 @@ class LayoutAssetsGenerator implements ObserverInterface
             $this->writeFile($jsPath, $js);
         }
         
-        Env::log_debug('theme_assets', __('LayoutAssetsGenerator: 文件生成完成 - CSS: %{1}, JS: %{2}', [
+        w_log_debug(__('LayoutAssetsGenerator: 文件生成完成 - CSS: %{1}, JS: %{2}', [
             is_file($cssPath) ? '存在' : '不存在',
             is_file($jsPath) ? '存在' : '不存在'
-        ]));
+        ]), [], 'theme_assets');
         
         return $hasCssFile;
     }
@@ -239,7 +238,7 @@ class LayoutAssetsGenerator implements ObserverInterface
         try {
             return JSMin::minify($js);
         } catch (\Exception $e) {
-            Env::log_warning('theme_assets', __('JS压缩失败，使用原始内容: %{1}', [$e->getMessage()]));
+            w_log_warning(__('JS压缩失败，使用原始内容: %{1}', [$e->getMessage()]), [], 'theme_assets');
             return $js;
         }
     }
@@ -294,12 +293,12 @@ class LayoutAssetsGenerator implements ObserverInterface
                 if (preg_match('/(<\/head>)/i', $content)) {
                     $cssLink = "\n<!-- 布局CSS（自动生成）：{$layoutType}/{$layoutOption} -->\n<link href=\"{$cssUrl}\" rel=\"stylesheet\" type=\"text/css\"/>";
                     $content = preg_replace('/(<\/head>)/i', $cssLink . "\n$1", $content, 1);
-                    Env::log_debug('theme_assets', __('LayoutAssetsGenerator: 已添加CSS链接 - %{1}', [$cssUrl]));
+                    w_log_debug(__('LayoutAssetsGenerator: 已添加CSS链接 - %{1}', [$cssUrl]), [], 'theme_assets');
                 } else {
-                    Env::log_warning('theme_assets', __('LayoutAssetsGenerator: 未找到</head>标签，无法添加CSS链接 - %{1}', [$cssUrl]));
+                    w_log_warning(__('LayoutAssetsGenerator: 未找到</head>标签，无法添加CSS链接 - %{1}', [$cssUrl]), [], 'theme_assets');
                 }
             } else {
-                Env::log_debug('theme_assets', __('LayoutAssetsGenerator: CSS链接已存在，跳过添加 - %{1}', [$cssUrl]));
+                w_log_debug(__('LayoutAssetsGenerator: CSS链接已存在，跳过添加 - %{1}', [$cssUrl]), [], 'theme_assets');
             }
         }
         
@@ -314,12 +313,12 @@ class LayoutAssetsGenerator implements ObserverInterface
             if (!$hasJsLink && preg_match('/(<\/body>)/i', $content)) {
                 $jsScript = "\n<!-- 布局JS（自动生成）：{$layoutType}/{$layoutOption} -->\n<script src=\"{$jsUrl}\"></script>";
                 $content = preg_replace('/(<\/body>)/i', $jsScript . "\n$1", $content, 1);
-                Env::log_debug('theme_assets', __('LayoutAssetsGenerator: 已添加JS链接 - %{1}', [$jsUrl]));
+                w_log_debug(__('LayoutAssetsGenerator: 已添加JS链接 - %{1}', [$jsUrl]), [], 'theme_assets');
             } else {
                 if ($hasJsLink) {
-                    Env::log_debug('theme_assets', __('LayoutAssetsGenerator: JS链接已存在，跳过添加 - %{1}', [$jsUrl]));
+                    w_log_debug(__('LayoutAssetsGenerator: JS链接已存在，跳过添加 - %{1}', [$jsUrl]), [], 'theme_assets');
                 } else {
-                    Env::log_warning('theme_assets', __('LayoutAssetsGenerator: 未找到</body>标签，无法添加JS链接 - %{1}', [$jsUrl]));
+                    w_log_warning(__('LayoutAssetsGenerator: 未找到</body>标签，无法添加JS链接 - %{1}', [$jsUrl]), [], 'theme_assets');
                 }
             }
         }
@@ -374,7 +373,7 @@ class LayoutAssetsGenerator implements ObserverInterface
             // 如果内容有变化，写回文件
             if ($tplExtraction['content'] !== $tplContent) {
                 file_put_contents($comFileName, $tplExtraction['content'], LOCK_EX);
-                Env::log_debug('theme_assets', __('LayoutAssetsGenerator: 已更新编译文件 - %{1}', [$comFileName]));
+                w_log_debug(__('LayoutAssetsGenerator: 已更新编译文件 - %{1}', [$comFileName]), [], 'theme_assets');
             }
             
             // 如果有内容模板，也处理内容模板的编译文件
@@ -388,19 +387,19 @@ class LayoutAssetsGenerator implements ObserverInterface
                             $contentExtraction = $extractor->extract($contentTplContent, $contentComFileName, $cssUrl, $jsUrl);
                             if ($contentExtraction['content'] !== $contentTplContent) {
                                 file_put_contents($contentComFileName, $contentExtraction['content'], LOCK_EX);
-                                Env::log_debug('theme_assets', __('LayoutAssetsGenerator: 已更新内容模板编译文件 - %{1}', [$contentComFileName]));
+                                w_log_debug(__('LayoutAssetsGenerator: 已更新内容模板编译文件 - %{1}', [$contentComFileName]), [], 'theme_assets');
                             }
                         }
                     }
                 } catch (\Exception $e) {
                     // 内容模板处理失败，不影响主流程
-                    Env::log_warning('theme_assets', __('LayoutAssetsGenerator: 更新内容模板编译文件失败 - %{1}', [$e->getMessage()]));
+                    w_log_warning(__('LayoutAssetsGenerator: 更新内容模板编译文件失败 - %{1}', [$e->getMessage()]), [], 'theme_assets');
                 }
             }
             
         } catch (\Exception $e) {
             // 更新编译文件失败，不影响主流程
-            Env::log_warning('theme_assets', __('LayoutAssetsGenerator: 更新编译文件失败 - %{1}', [$e->getMessage()]));
+            w_log_warning(__('LayoutAssetsGenerator: 更新编译文件失败 - %{1}', [$e->getMessage()]), [], 'theme_assets');
         }
     }
 }
