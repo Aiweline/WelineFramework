@@ -92,8 +92,8 @@ class AssetsExtractor
                 if ($hasNoExtract) {
                     // 保留在HTML中，不提取（无论是否包含PHP代码）
                     if (defined('DEV') && DEV) {
-                        error_log('AssetsExtractor: 跳过提取带有 data-no-extract="true" 的 script 标签');
-                        error_log('AssetsExtractor: script标签内容: ' . substr($scriptContent, 0, 200));
+                        w_log_debug('AssetsExtractor: 跳过提取带有 data-no-extract="true" 的 script 标签');
+                        w_log_debug('AssetsExtractor: script标签内容: ' . substr($scriptContent, 0, 200));
                     }
                     return $matches[0];
                 }
@@ -115,7 +115,7 @@ class AssetsExtractor
                     // 如果有，说明这个标签本来就不应该被提取，直接返回原标签
                     if (preg_match('/data-no-extract\s*=/i', $scriptContent)) {
                         if (defined('DEV') && DEV) {
-                            error_log('AssetsExtractor: 检测到PHP代码，但标签有 data-no-extract 属性，保留在HTML中: ' . $displayPath);
+                            w_log_debug('AssetsExtractor: 检测到PHP代码，但标签有 data-no-extract 属性，保留在HTML中: ' . $displayPath);
                         }
                         return $scriptContent;
                     }

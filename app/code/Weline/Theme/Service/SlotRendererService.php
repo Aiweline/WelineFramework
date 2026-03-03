@@ -81,7 +81,7 @@ class SlotRendererService
             foreach ($slotWidgets as $slotId => $widgets) {
                 $widgetCount += count($widgets);
             }
-            error_log(sprintf(
+            w_log_debug(sprintf(
                 '[SlotRenderer] processSlots: themeId=%d, pageType=%s, status=%s, slots=%d, widgets=%d',
                 $themeId,
                 $pageType,
@@ -90,7 +90,7 @@ class SlotRendererService
                 $widgetCount
             ));
             foreach ($slotWidgets as $slotId => $widgets) {
-                error_log(sprintf('[SlotRenderer]   Slot "%s": %d widgets', $slotId, count($widgets)));
+                w_log_debug(sprintf('[SlotRenderer]   Slot "%s": %d widgets', $slotId, count($widgets)));
             }
         }
 
@@ -649,7 +649,7 @@ class SlotRendererService
                 
                 // 调试日志（开发模式）
                 if (defined('DEV') && DEV) {
-                    error_log(sprintf(
+                    w_log_debug(sprintf(
                         '[SlotRenderer] Organized widget: code=%s, module=%s, slot_id=%s (from db: %s), area=%s',
                         $widget['widget_code'] ?? '',
                         $widget['widget_module'] ?? '',

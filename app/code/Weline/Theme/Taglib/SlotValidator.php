@@ -267,7 +267,7 @@ class SlotValidator
         // 只在 DEV 模式下抛出详细错误
         if (!self::isDevMode()) {
             // 生产模式下记录日志但不中断
-            error_log("[w:slot Error] {$message} in {$file}:{$line}");
+            w_log_error("[w:slot Error] {$message} in {$file}:{$line}");
             return;
         }
         

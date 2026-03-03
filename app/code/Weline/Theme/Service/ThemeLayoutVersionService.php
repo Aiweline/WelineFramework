@@ -281,7 +281,7 @@ readonly class ThemeLayoutVersionService
             $staticVersion = $themeVersion . '_' . time();
             
             // 保存到系统配置
-            Env::getInstance()->setConfig('theme/static_version', $staticVersion);
+            Env::getInstance()->setConfig('theme.static_version', $staticVersion);
         } catch (\Exception $e) {
             // 静默失败，不影响发布流程
         }

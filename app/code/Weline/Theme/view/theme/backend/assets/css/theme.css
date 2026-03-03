@@ -34,10 +34,89 @@
     min-height: calc(100vh - 60px);
 }
 
+/* =============================================
+   表格主题兼容样式 - Bootstrap 变量桥接
+   ============================================= */
+
+/* 表格使用主题变量 */
+.table {
+    --bs-table-color: var(--backend-color-text-primary, #212529);
+    --bs-table-bg: var(--backend-color-table-bg, #fff);
+    --bs-table-border-color: var(--backend-color-table-border, #dee2e6);
+    --bs-table-striped-bg: var(--backend-color-table-bg-striped, #f8f9fa);
+    --bs-table-striped-color: var(--backend-color-text-primary, #212529);
+    --bs-table-hover-bg: var(--backend-color-table-bg-hover, #e9ecef);
+    --bs-table-hover-color: var(--backend-color-text-primary, #212529);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.table > thead {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.table > thead > tr > th {
+    background-color: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    border-bottom-color: var(--backend-color-border-default, #dee2e6);
+}
+
+.table > tbody > tr > td {
+    color: var(--backend-color-text-primary, #212529);
+    border-bottom-color: var(--backend-color-border-light, #e9ecef);
+}
+
+.table > tbody > tr:hover > td {
+    background-color: var(--backend-color-table-bg-hover, #e9ecef);
+}
+
+/* 卡片内表格 */
+.card .table {
+    margin-bottom: 0;
+}
+
+.card .table > thead > tr > th {
+    background-color: var(--backend-color-bg-tertiary, #e9ecef);
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
     .backend-sidebar {
         width: 60px;
     }
+}
+
+/* =============================================
+   极细滚动条样式 - 全局应用
+   ============================================= */
+
+/* Webkit 浏览器（Chrome, Safari, Edge） */
+::-webkit-scrollbar {
+    width: var(--backend-scrollbar-width, 4px);
+    height: var(--backend-scrollbar-width, 4px);
+}
+
+::-webkit-scrollbar-track {
+    background: var(--backend-scrollbar-track, transparent);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--backend-scrollbar-thumb, #c1c1c1);
+    border-radius: 4px;
+    transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--backend-scrollbar-thumb-hover, #a8a8a8);
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* Firefox 浏览器 */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--backend-scrollbar-thumb, #c1c1c1) var(--backend-scrollbar-track, transparent);
 }
 
