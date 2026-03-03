@@ -6,10 +6,9 @@ use Symfony\Component\Intl\Countries;
 use Symfony\Component\Intl\Locales;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\File\Data\File;
-use Weline\I18n\Cache\I18nCache;
 use Weline\I18n\Config\Reader;
 use Weline\I18n\Observer\ParserWordsRegister;
 use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
@@ -19,14 +18,13 @@ class I18n
 {
     private static array $local_words = [];
     private Reader $reader;
-    public CacheInterface $i18nCache;
+    public CachePoolInterface $i18nCache;
 
     public function __construct(
-        Reader    $reader,
-        I18nCache $i18nCache
+        Reader $reader
     ) {
         $this->reader = $reader;
-        $this->i18nCache = $i18nCache->create();
+        $this->i18nCache = w_cache('i18n');
     }
 
     public function getLocalByCode(string $locale_code): string
@@ -468,7 +466,7 @@ class I18n
                         if (php_sapi_name() === 'cli') {
                             echo $relative_path . "  【无法打开文件】\n";
                         } else {
-                            error_log($relative_path . "  【无法打开文件】");
+                            w_log_warning($relative_path . "  【无法打开文件】", [], 'i18n');
                         }
                         $error_count++;
                         continue;
@@ -488,7 +486,7 @@ class I18n
                             if (php_sapi_name() === 'cli') {
                                 echo $relative_path . ":" . $line . "  【没有翻译原文】\n";
                             } else {
-                                error_log($relative_path . ":" . $line . "  【没有翻译原文】");
+                                w_log_warning($relative_path . ":" . $line . "  【没有翻译原文】", [], 'i18n');
                             }
                             $error_count++;
                             $line += 1;
@@ -507,7 +505,7 @@ class I18n
                             if (php_sapi_name() === 'cli') {
                                 echo $relative_path . ":" . $line . "  【没有翻译内容】\n";
                             } else {
-                                error_log($relative_path . ":" . $line . "  【没有翻译内容】");
+                                w_log_warning($relative_path . ":" . $line . "  【没有翻译内容】", [], 'i18n');
                             }
                             $error_count++;
                             $line += 1;
@@ -530,7 +528,7 @@ class I18n
                                 if (php_sapi_name() === 'cli') {
                                     echo $relative_path . ":" . $line . "  【编码不是UTF-8】\n";
                                 } else {
-                                    error_log($relative_path . ":" . $line . "  【编码不是UTF-8】");
+                                    w_log_warning($relative_path . ":" . $line . "  【编码不是UTF-8】", [], 'i18n');
                                 }
                                 $error_count++;
                                 $line += 1;
@@ -586,7 +584,7 @@ class I18n
                     if (php_sapi_name() === 'cli') {
                         echo $relative_path . "  【语言代码 " . $local . " 无效】\n";
                     } else {
-                        error_log($relative_path . "  【语言代码 " . $local . " 无效】");
+                        w_log_warning($relative_path . "  【语言代码 " . $local . " 无效】", [], 'i18n');
                     }
                     $error_count++;
                 }
@@ -671,7 +669,7 @@ class I18n
             
             $file = @fopen($default_local_file, 'w+');
             if ($file === false) {
-                error_log(__("警告：无法创建翻译文件 %{file}", ['file' => $default_local_file]));
+                w_log_warning(__("警告：无法创建翻译文件 %{file}", ['file' => $default_local_file]), [], 'i18n');
             } else {
                 $text = '<?php return ' . var_export($default_local_words, true) . ';';
                 fwrite($file, $text);
@@ -706,7 +704,7 @@ class I18n
                     }
                 }
             } catch (\Exception $e) {
-                error_log("在线翻译模式：从数据库读取翻译失败：" . $e->getMessage());
+                w_log_error("在线翻译模式：从数据库读取翻译失败：" . $e->getMessage(), [], 'i18n');
             }
         }
         
@@ -763,7 +761,7 @@ class I18n
             $result = @file_put_contents($words_file, $text);
             unset($text); // 及时释放导出字符串
             if ($result === false) {
-                error_log(__("警告：无法写入翻译文件 %{file}", ['file' => $words_file]));
+                w_log_warning(__("警告：无法写入翻译文件 %{file}", ['file' => $words_file]), [], 'i18n');
             }
             
             foreach ($words_by_module as $locale => $module_words_data) {
@@ -783,7 +781,7 @@ class I18n
                 try {
                     $file->write($text);
                 } catch (Exception $e) {
-                    error_log(__("警告：无法写入语言文件 %{file}", ['file' => $words_filename]));
+                    w_log_warning(__("警告：无法写入语言文件 %{file}", ['file' => $words_filename]), [], 'i18n');
                 }
                 $file->close();
                 unset($text);

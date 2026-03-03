@@ -10,9 +10,8 @@
 namespace Weline\I18n\Config;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\I18n\Cache\I18nCache;
 use Weline\Framework\System\File\Scanner;
 use Weline\Framework\System\ModuleFileReader;
 
@@ -20,9 +19,9 @@ class Reader extends ModuleFileReader
 {
 
     /**
-     * @var CacheInterface
+     * @var CachePoolInterface
      */
-    protected CacheInterface $i18nCache;
+    protected CachePoolInterface $i18nCache;
 
     /**
      * @var Scanner
@@ -32,15 +31,13 @@ class Reader extends ModuleFileReader
     /**
      * Read 初始函数...
      *
-     * @param Scanner   $scanner
-     * @param I18nCache $cache
+     * @param Scanner $scanner
      */
     public function __construct(
-        Scanner   $scanner,
-        I18nCache $cache
+        Scanner $scanner
     )
     {
-        $this->i18nCache = $cache->create();
+        $this->i18nCache = w_cache('i18n');
         $this->scanner   = $scanner;
         parent::__construct($scanner, 'i18n');
     }

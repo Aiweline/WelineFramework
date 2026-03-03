@@ -16,10 +16,8 @@ namespace Weline\I18n\Observer;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\App\Env;
 use Weline\I18n\Model\I18n;
-use Weline\Framework\Cache\CacheInterface;
-use Weline\I18n\Cache\I18nCache;
-use Weline\Framework\Phrase\Cache\PhraseCache;
 
 /**
  * 系统升级后自动收集语言包观察者
@@ -59,13 +57,8 @@ class SetupUpgradeCollectTranslations implements ObserverInterface
             
             // 清理翻译缓存，确保新翻译生效
             try {
-                /** @var CacheInterface $i18nCache */
-                $i18nCache = ObjectManager::getInstance(I18nCache::class . 'Factory');
-                $i18nCache->clear();
-                
-                /** @var CacheInterface $phraseCache */
-                $phraseCache = ObjectManager::getInstance(PhraseCache::class . 'Factory');
-                $phraseCache->clear();
+                w_cache('i18n')->clear();
+                w_cache('phrase')->clear();
             } catch (\Exception $e) {
                 // 缓存清理失败不影响主流程
                 if (php_sapi_name() === 'cli') {
@@ -79,7 +72,7 @@ class SetupUpgradeCollectTranslations implements ObserverInterface
             
         } catch (\Exception $e) {
             $errorMsg = 'I18n: 系统升级后语言包收集失败 - ' . $e->getMessage();
-            error_log($errorMsg);
+            w_log_error($errorMsg, [], 'i18n');
             if (php_sapi_name() === 'cli') {
                 echo "[I18n] 语言包收集失败：" . $e->getMessage() . "\n";
             }

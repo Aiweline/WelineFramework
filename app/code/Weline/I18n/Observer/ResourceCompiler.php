@@ -14,6 +14,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Helper\JsTranslationsExtractor;
+use Weline\Framework\App\Env;
 use Weline\I18n\Model\I18n;
 
 /**
@@ -155,7 +156,7 @@ class ResourceCompiler implements ObserverInterface
             $eventData->setData('resources', $updatedResources);
         } catch (\Exception $e) {
             // 静默处理错误，避免影响资源编译
-            error_log('I18n资源编译观察者执行失败: ' . $e->getMessage());
+            w_log_error('I18n资源编译观察者执行失败: ' . $e->getMessage(), [], 'i18n');
         }
     }
     
@@ -562,7 +563,7 @@ class ResourceCompiler implements ObserverInterface
                 // 确保目录存在
                 if (!is_dir($targetDir)) {
                     if (!mkdir($targetDir, 0755, true)) {
-                        error_log("无法创建目录：{$targetDir}");
+                        w_log_error("无法创建目录：{$targetDir}", [], 'i18n');
                         continue;
                     }
                 }
@@ -602,7 +603,7 @@ class ResourceCompiler implements ObserverInterface
                 
                 // 写入文件
                 if (file_put_contents($jsonFile, $jsonContent) === false) {
-                    error_log("无法写入模块映射文件：{$jsonFile}");
+                    w_log_error("无法写入模块映射文件：{$jsonFile}", [], 'i18n');
                 }
             }
         }

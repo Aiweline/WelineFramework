@@ -19,6 +19,7 @@ use Weline\Framework\Http\Cookie;
 use Weline\I18n\Controller\Backend\BaseController;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
+use Weline\Framework\App\Env;
 use Weline\I18n\Model\Locale\Name;
 
 class Locales extends BaseController
@@ -315,7 +316,7 @@ class Locales extends BaseController
                 // 忽略回滚错误
             }
             // 静默处理异常，不影响页面显示
-            error_log('Auto update locale data failed: ' . $e->getMessage());
+            w_log_error('Auto update locale data failed: ' . $e->getMessage(), [], 'i18n');
         }
     }
 
@@ -389,7 +390,7 @@ class Locales extends BaseController
             
         } catch (\Exception $e) {
             // 静默处理异常，不影响页面显示
-            error_log('Auto update missing locale names failed: ' . $e->getMessage());
+            w_log_error('Auto update missing locale names failed: ' . $e->getMessage(), [], 'i18n');
         }
     }
 }

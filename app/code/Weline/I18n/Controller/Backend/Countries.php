@@ -18,8 +18,6 @@ use Weline\Framework\App\System;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Phrase\Cache\PhraseCache;
-use Weline\I18n\Cache\I18nCache;
 use Weline\I18n\Model\Countries\Locale\Name;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
@@ -468,12 +466,8 @@ class Countries extends BaseController
                 }
             }
             // 清理i18n缓存
-            /**@var \Weline\Framework\Cache\CacheInterface $i18n */
-            $i18n = ObjectManager::getInstance(I18nCache::class . 'Factory');
-            $i18n->clear();
-            /**@var \Weline\Framework\Cache\CacheInterface $phrase */
-            $phrase = ObjectManager::getInstance(PhraseCache::class . 'Factory');
-            $phrase->clear();
+            w_cache('i18n')->clear();
+            w_cache('phrase')->clear();
             $this->getMessageManager()->addWarning(__('该国家下的所有安装包已删除！'));
         } catch (\Exception $exception) {
             $this->getMessageManager()->addException($exception);
@@ -761,7 +755,7 @@ class Countries extends BaseController
             
         } catch (\Exception $e) {
             // 静默处理异常，不影响页面显示
-            error_log('Auto update missing locale data failed: ' . $e->getMessage());
+            w_log_error('Auto update missing locale data failed: ' . $e->getMessage(), [], 'i18n');
         }
     }
 

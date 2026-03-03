@@ -155,7 +155,7 @@ class AiTranslationObserver implements ObserverInterface
                 ['icon' => $icon, 'source_module' => 'Weline_I18n']
             );
         } catch (\Exception $e) {
-            Env::log_error('i18n', "发送AI翻译事件系统消息失败: " . $e->getMessage());
+            w_log_error("发送AI翻译事件系统消息失败: " . $e->getMessage(), [], 'i18n');
         }
     }
 }
