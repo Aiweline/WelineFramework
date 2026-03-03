@@ -69,7 +69,7 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
             } catch (\Throwable $e) {
                 // 记录错误但继续处理其他站点
                 if (defined('DEV') && DEV) {
-                    error_log(sprintf(
+                    w_log_error(sprintf(
                         '[%s] 同步站点 %d 失败: %s',
                         $this->getModule(),
                         $websiteId,
