@@ -157,7 +157,7 @@ class UltimateFontSubsetter
             if (isset($tempFile) && file_exists($tempFile)) {
                 unlink($tempFile);
             }
-            error_log('Subset generation failed: ' . $e->getMessage());
+            w_log_error('Subset generation failed: ' . $e->getMessage());
             return '';
         }
     }

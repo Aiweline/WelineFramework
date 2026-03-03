@@ -410,7 +410,7 @@ class FontProcessor
         $font->close();
 
         // 记录信息
-        error_log('字体子集生成完成: ' . $fullOutputPath);
+        w_log_info('字体子集生成完成: ' . $fullOutputPath);
     }
 
     /**
@@ -460,7 +460,7 @@ class FontProcessor
         $font->close();
 
         // 记录信息
-        error_log('字体子集生成完成: ' . $fullOutputPath);
+        w_log_info('字体子集生成完成: ' . $fullOutputPath);
     }
 
     /**
@@ -506,7 +506,7 @@ class FontProcessor
     private function validateFileData(array $fileData): void
     {
         // 记录详细的文件信息用于调试
-        error_log('文件数据验证: ' . json_encode([
+        w_log_info('文件数据验证: ' . json_encode([
             'name' => $fileData['name'],
             'size' => $fileData['size'],
             'has_data' => isset($fileData['data'])
@@ -562,7 +562,7 @@ class FontProcessor
         );
         
         // 这里可以记录到日志文件或数据库
-        error_log($logMessage);
+        w_log_info($logMessage);
     }
 
     /**
