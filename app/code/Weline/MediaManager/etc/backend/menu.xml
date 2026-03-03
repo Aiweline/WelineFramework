@@ -3,12 +3,13 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
 
-    <add source="Weline_MediaManager::file_manager"
-         name="file_manager"
-         title="文件管理"
-         action="media/backend/manager"
-         parent="Weline_Cms::menu_page_management"
-         icon="mdi mdi-folder-image"
-         order="50"/>
+    <!-- 文件管理 - 归入内容管理 > 媒体管理 -->
+    <menu source="Weline_MediaManager::file_manager"
+          name="file_manager"
+          title="文件管理"
+          action="media/backend/manager"
+          parent="Weline_Backend::media_group"
+          icon="mdi mdi-folder-image"
+          order="10"/>
 
 </menus>
