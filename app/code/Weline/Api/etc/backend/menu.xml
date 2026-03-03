@@ -2,21 +2,18 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <add source="Weline_Api::integration"
+    <menu source="Weline_Api::integration"
          name="api_integration"
          title="API集成"
          action="api/backend/integration/index"
          parent="Weline_Backend::system_service"
          icon="mdi mdi-api"
-         order="30550"/>
-
-    <add source="Weline_Api::api_user_management"
-         name="api_user_management"
-         title="API管理"
-         action="api/backend/user"
-         parent="Weline_Api::integration"
-         icon="mdi mdi-account-key"
-         order="10"/>
+         order="30550">
+        <menu source="Weline_Api::api_user_management"
+             name="api_user_management"
+             title="API管理"
+             action="api/backend/user"
+             icon="mdi mdi-account-key"
+             order="10"/>
+    </menu>
 </menus>
-
-

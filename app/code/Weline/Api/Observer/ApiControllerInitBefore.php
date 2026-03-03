@@ -16,9 +16,9 @@ use Weline\Api\Service\ApiSecurityService;
 use Weline\Api\Service\IpWhitelistService;
 use Weline\Api\Service\TokenService;
 use Weline\Api\Service\UserAgentRestrictionService;
-use Weline\Backend\Session\BackendSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\App\Env as FrameworkEnv;
-use Weline\Framework\App\Session\BackendApiSession;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
@@ -56,6 +56,9 @@ class ApiControllerInitBefore implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
+        // WLS 兼容：从 ObjectManager 获取当前请求的 Request 实例
+        // Observer 实例在 WLS 中是单例，$this->request 可能指向旧请求
+        $this->request = ObjectManager::getInstance(Request::class);
         // 只处理API请求（后台和前台）
         if (!$this->request->isApiBackend() && !$this->request->isApiFrontend()) {
             return;
@@ -186,9 +189,9 @@ class ApiControllerInitBefore implements ObserverInterface
         $user = null;
 
         // 2.1 优先检查后端Session是否已登录
-        /** @var BackendSession $backendSession */
-        $backendSession = ObjectManager::getInstance(BackendSession::class);
-        if ($backendSession->isLogin()) {
+        /** @var AuthenticatedSessionInterface $backendSession */
+        $backendSession = SessionFactory::getInstance()->createBackendSession();
+        if ($backendSession->isLoggedIn()) {
             $user = $backendSession->getLoginUser();
             if ($user && method_exists($user, 'getIsEnabled') && $user->getIsEnabled()) {
                 $isSessionAuthenticated = true;
@@ -289,37 +292,33 @@ class ApiControllerInitBefore implements ObserverInterface
 
         // 2.1 优先检查前端Session是否已登录
         try {
-            /** @var \Weline\Frontend\Session\FrontendUserSession $frontendSession */
-            $frontendSession = ObjectManager::getInstance(\Weline\Frontend\Session\FrontendUserSession::class);
-            if ($frontendSession->isLogin()) {
-                // 获取前端用户模型类
-                $frontendUserClass = \Weline\Frontend\Model\FrontendUser::class;
-                if (class_exists($frontendUserClass)) {
-                    $user = $frontendSession->getLoginUser($frontendUserClass);
-                    if ($user && $user->getId()) {
-                        // 检查用户是否有getIsEnabled方法，如果有则检查状态
-                        if (method_exists($user, 'getIsEnabled')) {
-                            if ($user->getIsEnabled()) {
-                                $isSessionAuthenticated = true;
-                                // Session认证通过，不需要检查IP白名单和User-Agent限制
-                                // 将用户信息传递到事件中，供RouteBefore使用
-                                $event->setData('user', $user);
-                                $this->applySandboxMode($user);
-                                return;
-                            }
-                        } else {
-                            // 没有getIsEnabled方法，直接认为认证通过
+            /** @var AuthenticatedSessionInterface $frontendSession */
+            $frontendSession = SessionFactory::getInstance()->createFrontendSession();
+            if ($frontendSession->isLoggedIn()) {
+                $user = $frontendSession->getUser();
+                if ($user !== null) {
+                    // 检查用户是否有getIsEnabled方法，如果有则检查状态
+                    if (method_exists($user, 'getIsEnabled')) {
+                        if ($user->getIsEnabled()) {
                             $isSessionAuthenticated = true;
+                            // Session认证通过，不需要检查IP白名单和User-Agent限制
+                            // 将用户信息传递到事件中，供RouteBefore使用
                             $event->setData('user', $user);
                             $this->applySandboxMode($user);
                             return;
                         }
+                    } else {
+                        // 没有getIsEnabled方法，直接认为认证通过
+                        $isSessionAuthenticated = true;
+                        $event->setData('user', $user);
+                        $this->applySandboxMode($user);
+                        return;
                     }
                 }
             }
         } catch (\Exception $e) {
             // Session验证失败，继续使用Token验证
-            error_log('Frontend session validation error: ' . $e->getMessage());
+            w_log_warning('Frontend session validation error: ' . $e->getMessage(), [], 'api');
         }
 
         // 2.2 如果Session未登录，检查API Token
@@ -327,7 +326,7 @@ class ApiControllerInitBefore implements ObserverInterface
             $token = $this->getTokenFromRequest();
             if (empty($token)) {
                 // 调试：记录token获取失败
-                error_log('Frontend API: Token not found in request. URL: ' . $this->request->getUriString());
+                w_log_warning('Frontend API: Token not found in request. URL: ' . $this->request->getUriString(), [], 'api');
                 $this->returnError(401, __('请先登录'));
                 return;
             }
@@ -337,7 +336,7 @@ class ApiControllerInitBefore implements ObserverInterface
             $apiUser = $this->tokenService->validateAccessToken($token);
             if (!$apiUser) {
                 // 调试：记录token验证失败
-                error_log('Frontend API: Token validation failed. Token prefix: ' . substr($token, 0, 20));
+                w_log_warning('Frontend API: Token validation failed. Token prefix: ' . substr($token, 0, 20), [], 'api');
                 $this->returnError(401, __('Token无效或已过期'));
                 return;
             }
@@ -445,17 +444,21 @@ class ApiControllerInitBefore implements ObserverInterface
 
     /**
      * 返回错误响应
+     * 使用 ResponseTerminateException 替代 exit()，确保 WLS 兼容
      */
     private function returnError(int $code, string $message, array $data = []): void
     {
-        http_response_code($code);
-        header('Content-Type: application/json');
-        echo json_encode([
+        $body = json_encode([
             'code' => $code,
             'msg' => $message,
             'data' => $data
         ], JSON_UNESCAPED_UNICODE);
-        exit;
+        
+        throw new \Weline\Framework\Http\ResponseTerminateException(
+            $code,
+            $body,
+            ['Content-Type' => 'application/json; charset=utf-8']
+        );
     }
 
     /**
@@ -464,15 +467,15 @@ class ApiControllerInitBefore implements ObserverInterface
     private function logSecurityViolation(?int $userId, string $type, array $details): void
     {
         // TODO: 记录到数据库 w_api_security_log 表
-        // 暂时记录到错误日志
-        error_log(sprintf(
+        // 暂时记录到警告日志
+        w_log_warning(sprintf(
             '[API Security] User ID: %s, Type: %s, Details: %s, Time: %s, IP: %s',
             $userId ?? 'N/A',
             $type,
             json_encode($details, JSON_UNESCAPED_UNICODE),
             date('Y-m-d H:i:s'),
             $this->request->clientIP()
-        ));
+        ), [], 'api');
     }
 }
 
