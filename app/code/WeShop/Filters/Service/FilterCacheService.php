@@ -7,7 +7,6 @@ namespace WeShop\Filters\Service;
 use WeShop\Filters\Api\FilterResultInterface;
 use WeShop\Filters\Model\FilterCache;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Cache\CacheFactory;
 
 /**
  * 筛选缓存服务
@@ -38,11 +37,6 @@ class FilterCacheService
      * @var array 内存缓存
      */
     private array $memoryCache = [];
-    
-    /**
-     * @var CacheFactory|null
-     */
-    private ?CacheFactory $cacheFactory = null;
     
     public function __construct(int $ttl = self::DEFAULT_TTL)
     {
