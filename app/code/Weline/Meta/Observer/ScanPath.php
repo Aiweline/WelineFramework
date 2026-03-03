@@ -59,7 +59,7 @@ class ScanPath implements ObserverInterface
             // 扫描结果已存储在事件数据中，供其他观察者使用
         } catch (\Exception $e) {
             // 记录错误，但不中断事件流程
-            error_log("元数据扫描失败: 路径={$scanPath}, 错误=" . $e->getMessage());
+            w_log_error("元数据扫描失败: 路径={$scanPath}, 错误=" . $e->getMessage());
         }
     }
 }
