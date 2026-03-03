@@ -132,7 +132,7 @@ class MemoryCacheExpressionParser
         try {
             return $this->parseExpression($expression);
         } catch (\Exception $e) {
-            error_log("表达式解析错误: {$expression}, 错误: " . $e->getMessage());
+            w_log_error("表达式解析错误: {$expression}, 错误: " . $e->getMessage());
             return false;
         }
     }

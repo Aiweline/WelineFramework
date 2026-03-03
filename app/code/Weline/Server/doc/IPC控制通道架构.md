@@ -200,24 +200,71 @@ Dispatcher 硬编码维护页（纯内存 503）
 4. 如果无人监听 → 启动新 Master 进程
 5. 所有子进程重新连接新 Master 并 register
 
-## 日志缓冲
+## 日志系统
 
-所有进程使用 `LogBuffer` 统一管理日志：
-- **未启用日志时**（`env.system.processer.log = false` 且无 `-log` 参数）：零开销，不记录任何内容
-- **启用日志时**：缓冲到内存，每 5 秒批量写磁盘
-- ERROR 级别立即刷新
-- 进程退出时强制 flush
+所有进程使用 `WlsLogger` 统一管理日志：
+- **自动日志级别**：支持 DEBUG、INFO、NOTICE、WARNING、ERROR、FATAL
+- **缓冲输出**：缓冲到内存，每 5 秒批量写磁盘
+- **即时刷新**：ERROR/FATAL 级别立即刷新
+- **进程退出**：自动 flush 所有缓冲日志
+- **配置**：通过 `env.php` 的 `wls.log` 配置
+
+### env.php 日志配置示例
+
+```php
+return [
+    'wls' => [
+        'log' => [
+            'enabled' => true,               // 是否启用日志
+            'path' => 'var/log/wls/',        // 日志目录
+            'level' => 'INFO',               // 最小日志级别
+            // 开发环境：DEBUG（记录所有）
+            // 生产环境：WARNING（只记录警告和错误）
+            'stdout' => 'auto',              // 终端输出：auto | true | false
+            'rotate' => 'daily',             // 日志轮转：daily | size | none
+            'max_files' => 7,                // 保留文件数
+            'max_size' => 52428800,          // 单文件最大 50MB
+        ],
+    ],
+];
+```
+
+### 日志级别说明
+
+| 级别 | 环境 | 说明 |
+|------|------|------|
+| DEBUG | 开发 | 详细调试信息，包括 IPC 消息、连接状态 |
+| INFO | 开发 | 一般信息，启动/停止/重载等事件 |
+| WARNING | 生产 | 警告，非致命问题但需关注 |
+| ERROR | 生产 | 错误，需要处理的问题 |
+| FATAL | 生产 | 致命错误，进程崩溃 |
+
+**生产环境推荐配置**：`'level' => 'WARNING'`，只记录警告和错误，减少磁盘 I/O
 
 ## 文件结构
 
 ```
 app/code/Weline/Server/
+├── Log/
+│   ├── WlsLogger.php           # 统一日志器（单例）
+│   ├── LogLevel.php            # 日志级别定义
+│   ├── LogConfig.php           # 日志配置读取
+│   ├── Error/                  # 错误捕获层
+│   │   ├── ErrorBootstrap.php  # 错误捕获初始化
+│   │   ├── ErrorHandler.php    # Layer 1: set_error_handler
+│   │   ├── ExceptionHandler.php# Layer 2: set_exception_handler
+│   │   ├── ShutdownHandler.php # Layer 3: register_shutdown_function
+│   │   ├── ErrorContext.php    # 进程上下文
+│   │   └── ErrorCollector.php  # 错误收集与格式化
+│   └── Master/                 # Master 层捕获
+│       ├── PipeCapture.php     # Layer 4: 子进程输出捕获
+│       ├── ProcessMonitor.php  # Layer 5: 进程异常退出检测
+│       └── LogAggregator.php   # 日志聚合
 ├── IPC/
 │   ├── ControlMessage.php      # NDJSON 协议编解码 + 消息类型常量
 │   ├── ControlClient.php       # 子进程端 TCP 控制客户端
 │   ├── MasterControlServer.php # Master 端 TCP 控制服务器
-│   ├── MasterResurrector.php   # Master 复活逻辑
-│   └── LogBuffer.php           # 5 秒缓冲日志服务
+│   └── MasterResurrector.php   # Master 复活逻辑
 ├── bin/
 │   ├── worker.php              # HTTP Worker（集成 ControlClient）
 │   ├── worker_ssl.php          # HTTPS Worker（集成 ControlClient）

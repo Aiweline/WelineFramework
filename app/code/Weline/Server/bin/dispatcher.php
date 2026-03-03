@@ -37,6 +37,8 @@ $processName = '';
 $isFrontend = false;
 $controlPort = 0;
 $masterPid = 0;
+$orchestratorEpoch = 0;
+$orchestratorLaunchId = '';
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
         $processName = \substr($arg, 7);
@@ -46,6 +48,10 @@ foreach ($argv as $arg) {
         $controlPort = (int)\substr($arg, 15);
     } elseif (\str_starts_with($arg, '--master-pid=')) {
         $masterPid = (int)\substr($arg, 13);
+    } elseif (\str_starts_with($arg, '--epoch=')) {
+        $orchestratorEpoch = (int)\substr($arg, 8);
+    } elseif (\str_starts_with($arg, '--launch-id=')) {
+        $orchestratorLaunchId = (string)\substr($arg, 12);
     }
 }
 
@@ -74,6 +80,25 @@ if (!\defined('WLS_DEV_MODE')) {
 // 统一自动加载
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 
+// 初始化 WLS 统一错误捕获系统（Layer 1-3）
+use Weline\Server\Log\Error\ErrorBootstrap;
+use Weline\Server\Log\WlsLogger;
+use Weline\Server\Log\LogLevel;
+
+ErrorBootstrap::init('Dispatcher:' . $port, [
+    'port' => $port,
+    'worker_base_port' => $workerBasePort,
+    'worker_count' => $workerCount,
+    'instance' => $instanceName,
+]);
+
+// 前台模式：启用控制台输出
+if ($isFrontend) {
+    WlsLogger::getInstance()
+        ->setStdoutEnabled(true)
+        ->setProcessTag('Dispatcher:' . $port);
+}
+
 // 使用 WlsRuntime 完整初始化框架
 $runtimeError = null;
 try {
@@ -81,75 +106,12 @@ try {
     $runtime->bootstrap();
 } catch (\Throwable $e) {
     $runtimeError = $e->getMessage();
-    \fwrite(STDERR, "[Dispatcher] 框架初始化失败: " . $e->getMessage() . "\n");
-    \error_log('[WLS Dispatcher] Bootstrap error: ' . $e->getMessage());
+    WlsLogger::getInstance()->error("框架初始化失败: " . $e->getMessage());
 }
 
 // 读取 env 配置
 $envConfig = $_wlsEnvConfig;
 unset($_wlsEnvFile, $_wlsEnvConfig, $_wlsDevMode);
-
-// 日志函数
-$dispatcherLog = function (string $message, string $level = 'INFO') use ($isFrontend, $envConfig, $port) {
-    $timestamp = \date('Y-m-d H:i:s');
-    $logMessage = "[{$timestamp}] [Dispatcher] Port:{$port} [{$level}] {$message}\n";
-    
-    $isDev = false;
-    if (\defined('DEV') && DEV) {
-        $isDev = true;
-    } elseif (\defined('WLS_DEV_MODE') && WLS_DEV_MODE) {
-        $isDev = true;
-    } elseif ($envConfig !== null && isset($envConfig['deploy']) && $envConfig['deploy'] === 'dev') {
-        $isDev = true;
-    }
-    
-    // 颜色映射（按级别，每种级别一种颜色，便于快速区分）
-    $color = match($level) {
-        'ERROR'    => "\033[91m",        // 亮红色：错误（严重）
-        'BAN'      => "\033[91;1m",     // 亮红色+粗体：IP 封禁（SSL 握手失败）
-        'SSL_FAIL' => "\033[91m",       // 亮红色：疑似 SSL 握手失败
-        'WARN'     => "\033[33m",       // 黄色：警告
-        'INFO'     => "\033[36m",       // 青色：一般信息
-        'IPC'      => "\033[95m",       // 亮洋红：IPC 通信
-        'ROUTE'    => "\033[92m",       // 亮绿色：新连接/路由分配
-        'CLOSE'    => "\033[37m",       // 白色：连接关闭（低优先级）
-        'DRAIN'    => "\033[93m",       // 亮黄色：排空/恢复
-        'HEALTH'   => "\033[94m",       // 亮蓝色：健康检查/探活
-        'STATS'    => "\033[96m",       // 亮青色：统计摘要（醒目）
-        'DEBUG'    => "\033[90m",       // 暗灰色：调试详情
-        default    => "\033[0m",
-    };
-    
-    // 重要级别始终显示；DEBUG/ROUTE/CLOSE/HEALTH/STATS 仅在前端或 DEV 模式显示
-    $alwaysShow = \in_array($level, ['ERROR', 'BAN', 'SSL_FAIL', 'WARN', 'INFO', 'IPC', 'DRAIN'], true);
-    $shouldPrint = $alwaysShow || $isFrontend || $isDev;
-    
-    if ($shouldPrint) {
-        if (\defined('STDOUT') && \is_resource(STDOUT)) {
-            \fwrite(STDOUT, $color . $logMessage . "\033[0m");
-            \fflush(STDOUT);
-        } elseif (\defined('STDERR') && \is_resource(STDERR)) {
-            \fwrite(STDERR, $color . $logMessage . "\033[0m");
-            \fflush(STDERR);
-        } else {
-            echo $color . $logMessage . "\033[0m";
-            if (\ob_get_level() > 0) {
-                \ob_flush();
-            }
-            \flush();
-        }
-    }
-    
-    if ($isDev) {
-        $logFile = BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'wls.log';
-        $logDir = \dirname($logFile);
-        if (!\is_dir($logDir)) {
-            @\mkdir($logDir, 0755, true);
-        }
-        // 日志文件写入纯文本（剥离 ANSI 码）
-        @\file_put_contents($logFile, $logMessage, \FILE_APPEND | \LOCK_EX);
-    }
-};
 
 // ========== 创建 TCP Socket（使用 socket 扩展）==========
 $socket = @\socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
@@ -207,15 +169,12 @@ $dispatcher->configure([
     ],
 ]);
 
-// 设置日志函数
-$dispatcher->setLogFunction($dispatcherLog);
-
 // DEV 模式：通过 WLS_DEV_MODE 常量或 DEV 常量判断
 $_dispatcherDevMode = (\defined('WLS_DEV_MODE') && WLS_DEV_MODE) || (\defined('DEV') && DEV);
 $dispatcher->setDevMode($_dispatcherDevMode);
 unset($_dispatcherDevMode);
 
-$dispatcherLog("Dispatcher 启动，监听 tcp://{$host}:{$port}，Worker 端口范围: {$workerBasePort} - " . ($workerBasePort + $workerCount - 1), 'INFO');
+WlsLogger::info_("Dispatcher 启动，监听 tcp://{$host}:{$port}，预计 Worker 数: {$workerCount}（实际端口由 Master 动态通知）");
 
 // 连接 IPC 控制通道
 $dispatcher->connectIpc($controlPort);
@@ -224,5 +183,6 @@ $dispatcher->connectIpc($controlPort);
 if ($masterPid > 0) {
     $dispatcher->setMasterPid($masterPid);
 }
+$dispatcher->setLifecycleTokens($orchestratorEpoch, $orchestratorLaunchId);
 
 $dispatcher->run();

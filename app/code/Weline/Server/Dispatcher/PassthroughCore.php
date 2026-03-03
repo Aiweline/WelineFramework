@@ -50,12 +50,12 @@ class PassthroughCore
     private const WORKER_BLACKLIST_RECOVERY_SECONDS = 5;
     
     /**
-     * Worker 基础端口
+     * Worker 基础端口（仅用于兼容初始化，实际端口由动态列表管理）
      */
     private int $workerBasePort;
     
     /**
-     * Worker 数量
+     * Worker 数量（动态计算，等于 workerPorts 数组长度）
      */
     private int $workerCount;
     
@@ -63,6 +63,17 @@ class PassthroughCore
      * Worker 主机地址
      */
     private string $workerHost;
+
+    /**
+     * 动态 Worker 端口列表（由 Master 通过 IPC 通知）
+     * @var int[]
+     */
+    private array $workerPorts = [];
+
+    /**
+     * HTTP 重定向端口（用于明文 HTTP 请求转发到 http_redirect_worker）
+     */
+    private int $httpRedirectPort = 0;
     
     /**
      * 是否启用 SNI 路由
@@ -149,26 +160,18 @@ class PassthroughCore
      * 构造函数
      *
      * @param string $workerHost Worker 主机地址
-     * @param int $workerBasePort Worker 基础端口
-     * @param int $workerCount Worker 数量
+     * @param int $workerBasePort Worker 基础端口（仅用于兼容，实际端口由 Master 通知）
+     * @param int $workerCount Worker 数量（初始值，实际由动态端口列表决定）
      */
     public function __construct(string $workerHost, int $workerBasePort, int $workerCount)
     {
         $this->workerHost = $workerHost;
         $this->workerBasePort = $workerBasePort;
-        $this->workerCount = $workerCount;
+        $this->workerCount = 0; // 初始为 0，等待 Master 通知实际端口
         $this->routingCache = RoutingCacheService::getInstance();
         
-        // 初始化所有 Worker 的健康状态
-        for ($i = 0; $i < $workerCount; $i++) {
-            $port = $workerBasePort + $i;
-            $this->workerHealth[$port] = [
-                'failures' => 0,
-                'blacklisted_at' => 0.0,
-                'last_success' => \microtime(true),
-                'total_failures' => 0,
-            ];
-        }
+        // 不再预初始化端口，由 Master 通过 add_worker 消息动态添加
+        // Worker 端口将在 addWorkerPort() 中注册
     }
     
     /**
@@ -198,6 +201,63 @@ class PassthroughCore
         if (isset($config['cache'])) {
             $this->routingCache->configure($config['cache']);
         }
+        
+        // HTTP 重定向端口
+        if (isset($config['http_redirect_port'])) {
+            $this->httpRedirectPort = (int) $config['http_redirect_port'];
+        }
+    }
+
+    /**
+     * 设置 HTTP 重定向端口
+     */
+    public function setHttpRedirectPort(int $port): void
+    {
+        $this->httpRedirectPort = $port;
+    }
+
+    /**
+     * 获取 HTTP 重定向端口
+     */
+    public function getHttpRedirectPort(): int
+    {
+        return $this->httpRedirectPort;
+    }
+
+    /**
+     * 处理 HTTP 重定向连接（转发给 http_redirect_worker）
+     *
+     * 当 Dispatcher 检测到明文 HTTP 请求时，调用此方法将连接转发到 http_redirect_worker。
+     *
+     * @param resource|\Socket $clientSocket 客户端套接字
+     * @param string $clientIp 客户端 IP
+     * @return bool 是否成功建立连接
+     */
+    public function handleHttpRedirectConnection($clientSocket, string $clientIp): bool
+    {
+        if ($this->httpRedirectPort <= 0) {
+            return false;
+        }
+        
+        // 建立到 http_redirect_worker 的连接
+        $workerSocket = $this->connectToWorker($this->httpRedirectPort);
+        if ($workerSocket === false) {
+            return false;
+        }
+        
+        // 注册连接映射（复用现有结构）
+        $connId = \spl_object_id($clientSocket);
+        $this->connections[$connId] = [
+            'worker' => $workerSocket,
+            'port' => $this->httpRedirectPort,
+            'clientIp' => $clientIp,
+            'sni' => '',
+            'open_time' => \microtime(true),
+        ];
+        
+        $this->stats['active_connections']++;
+        
+        return true;
     }
     
     /**
@@ -323,13 +383,20 @@ class PassthroughCore
      */
     private function connectToAvailableWorker(?int $excludePort, string $sni): array|false
     {
+        // 如果没有可用 Worker，直接返回
+        if (empty($this->workerPorts)) {
+            \fwrite(\STDERR, "[PassthroughCore] 没有可用 Worker 端口！workerPorts 为空\n");
+            return false;
+        }
+
         // 从当前轮询位置开始，遍历所有 Worker
-        $startIndex = $this->connectionCounter % $this->workerCount;
+        $count = \count($this->workerPorts);
+        $startIndex = $this->connectionCounter % $count;
         $this->connectionCounter++;
         
-        for ($i = 0; $i < $this->workerCount; $i++) {
-            $index = ($startIndex + $i) % $this->workerCount;
-            $port = $this->workerBasePort + $index;
+        for ($i = 0; $i < $count; $i++) {
+            $index = ($startIndex + $i) % $count;
+            $port = $this->workerPorts[$index];
             
             // 跳过已尝试的端口
             if ($port === $excludePort) {
@@ -368,9 +435,7 @@ class PassthroughCore
      */
     private function connectToAnyWorker(?int $excludePort): array|false
     {
-        for ($i = 0; $i < $this->workerCount; $i++) {
-            $port = $this->workerBasePort + $i;
-            
+        foreach ($this->workerPorts as $port) {
             if ($port === $excludePort) {
                 continue;
             }
@@ -638,11 +703,18 @@ class PassthroughCore
     }
     
     /**
-     * 动态添加 Worker 端口到负载均衡池（IPC add_worker 命令，维护 Worker 场景）
+     * 动态添加 Worker 端口到负载均衡池（IPC add_worker 命令）
      */
     public function addWorkerPort(int $port): void
     {
-        // 添加到 workerHealth
+        // 添加到动态端口列表
+        if (!\in_array($port, $this->workerPorts, true)) {
+            $this->workerPorts[] = $port;
+            $this->workerCount = \count($this->workerPorts);
+            \fwrite(\STDERR, "[PassthroughCore] 添加 Worker 端口: {$port}, 当前列表: " . \implode(',', $this->workerPorts) . "\n");
+        }
+
+        // 添加或重置健康状态
         if (!isset($this->workerHealth[$port])) {
             $this->workerHealth[$port] = [
                 'failures' => 0,
@@ -655,21 +727,31 @@ class PassthroughCore
             $this->workerHealth[$port]['failures'] = 0;
             $this->workerHealth[$port]['blacklisted_at'] = 0.0;
         }
-        
-        // 增加 workerCount，以便 connectToAvailableWorker 能遍历到新端口
-        // 注意：此方法假设新端口在现有端口范围之外
-        $this->workerCount = \max($this->workerCount, $port - $this->workerBasePort + 1);
+    }
+
+    /**
+     * 获取当前 Worker 端口列表（调试用）
+     * @return int[]
+     */
+    public function getWorkerPorts(): array
+    {
+        return $this->workerPorts;
     }
     
     /**
-     * 从负载均衡池移除 Worker 端口（IPC remove_worker 命令，维护 Worker 关闭）
+     * 从负载均衡池移除 Worker 端口（IPC remove_worker 命令）
      */
     public function removeWorkerPort(int $port): void
     {
-        // 加入黑名单（远未来），阻止路由到该端口
-        $this->blacklistWorker($port);
-        // 可选：清理该端口的健康记录
-        // unset($this->workerHealth[$port]); // 暂不删除，保留历史数据
+        // 从动态端口列表移除
+        $key = \array_search($port, $this->workerPorts, true);
+        if ($key !== false) {
+            \array_splice($this->workerPorts, $key, 1);
+            $this->workerCount = \count($this->workerPorts);
+        }
+
+        // 清理健康记录
+        unset($this->workerHealth[$port]);
     }
     
     /**

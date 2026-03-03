@@ -4,7 +4,7 @@ declare(strict_types=1);
 /**
  * Weline Server - 停止命令
  * 
- * 支持按实例名称停止服务器，树形显示停止的子进程
+ * 发送停止信号给 Master，由 Orchestrator 统一处理所有子进程的停止。
  * 
  * @author Aiweline
  * @email aiweline@qq.com
@@ -19,19 +19,36 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\Console\Console\Server\Stop as CliStop;
 use Weline\Server\Service\CliServerService;
+use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\ServerInstanceManager;
 
 /**
  * server:stop - 停止常驻内存服务器
+ * 
+ * 架构：命令只负责发送信号，所有停止逻辑由 Orchestrator 处理
  */
 class Stop extends CommandAbstract
 {
+    /** IPC 等待超时（秒）- 需要足够时间让 Orchestrator 完成 drain (5s) + disconnect (3s) + cleanup */
+    private const IPC_TIMEOUT = 60;
+    
+    /** 子进程全部退出后等待 Master 退出的最大时间（秒）- Windows 可能需要更长 */
+    private const MASTER_EXIT_TIMEOUT = 10;
+    
+    /** IPC 消息颜色常量 */
+    private const IPC_COLOR_TAG = 'Blue';       // [IPC] 标签颜色
+    private const IPC_COLOR_SUCCESS = 'Green';  // 上报成功：进程排水完成、已退出、已断开
+    private const IPC_COLOR_DRAIN = 'Yellow';   // 通知重载/排水：广播 DRAIN、RELOAD
+    private const IPC_COLOR_STOP = 'Red';       // 通知停止：广播 SHUTDOWN、强制终止
+    private const IPC_COLOR_INFO = 'Blue';      // 一般信息：连接中、等待中
+    private const IPC_COLOR_ERROR = 'Red';      // 错误/失败消息
+    
     /**
      * @inheritDoc
      */
     public function execute(array $args = [], array $data = [])
     {
-        // 解析参数
         $instanceName = $this->parseInstanceName($args);
         $stopAll = isset($args['all']) || isset($args['a']);
         $force = isset($args['force']) || isset($args['f']);
@@ -61,7 +78,7 @@ class Stop extends CommandAbstract
     }
 
     /**
-     * 按端口查找占用该端口的 Weline Server 实例名（端口落在实例的 port ~ port+count-1 内）
+     * 按端口查找占用该端口的 Weline Server 实例名
      */
     public function findWelineServerInstanceNameByPort(int $port): ?string
     {
@@ -90,9 +107,7 @@ class Stop extends CommandAbstract
     }
 
     /**
-     * 若指定端口被 Weline Server 占用则停止该实例（同端口只能存在一个服务器，供 CLI 启动前调用）
-     *
-     * @return bool 是否停止了某个 WLS 实例
+     * 若指定端口被 Weline Server 占用则停止该实例
      */
     public function stopWelineServerOnPort(int $port): bool
     {
@@ -105,392 +120,556 @@ class Stop extends CommandAbstract
     }
     
     /**
-     * 停止单个实例（含 cli/cli-server 委托给 PHP 内置服务器停止逻辑）
+     * 停止单个实例
+     * 
+     * 策略：
+     * 1. 通过 IPC 发送 STOP 命令给 Master
+     * 2. Master 的 Orchestrator 会：广播 DRAIN → 广播 SHUTDOWN → 等待退出 → 清理
+     * 3. 如果 IPC 超时，强制杀死 Master（Orchestrator 会处理残留）
      */
     protected function stopInstance(string $name, bool $force = false): void
     {
+        // CLI 服务器委托给专用处理
         $nameLower = strtolower($name);
         if ($nameLower === 'cli' || $nameLower === 'cli-server') {
             $this->stopCliServer($force);
             return;
         }
 
-        $instanceFile = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $name . '.json';
+        // 通过 ServerInstanceManager 获取实例信息（统一入口）
+        $manager = $this->getInstanceManager();
+        $instanceInfo = $manager->getInstanceInfo($name);
         
-        if (!\is_file($instanceFile)) {
+        if ($instanceInfo === null) {
             $this->printer->warning(__('实例 [%{1}] 不存在', [$name]));
             $this->printer->note(__('使用 server:listing 查看所有实例'));
             return;
         }
         
-        $instanceData = \json_decode(\file_get_contents($instanceFile), true) ?: [];
-        $port = $instanceData['port'] ?? Start::DEFAULT_PORT;
-        $count = $instanceData['count'] ?? 4;
-        $host = $instanceData['host'] ?? '127.0.0.1';
-        $dispatcherEnabled = !empty($instanceData['dispatcher_enabled']);
-        $workerPortBase = (int)($instanceData['worker_port'] ?? $port);
+        $masterPid = $instanceInfo->masterPid;
+        $controlPort = $instanceInfo->controlPort;
+        $count = $instanceInfo->workerCount;
         
         $this->printer->setup(__('停止 Weline Server'));
         echo "\n";
         
-        $this->printer->note(__('╔══════════════════════════════════════════════════════════════╗'));
-        $this->printer->note(__('║                   停止服务器实例                               ║'));
-        $this->printer->note('╠══════════════════════════════════════════════════════════════╣');
-        $this->printer->note(\sprintf('║  实例名称：%-50s║', $name));
-        $portRange = $dispatcherEnabled ? ($workerPortBase . ' - ' . ($workerPortBase + $count - 1) . ' (Worker)') : "{$port} - " . ($port + $count - 1);
-        $this->printer->note(\sprintf('║  端口范围：%-50s║', $portRange));
-        $this->printer->note(\sprintf('║  进程数量：%-50s║', $count));
-        $this->printer->note('╚══════════════════════════════════════════════════════════════╝');
-        echo "\n";
-
-        // 先停止该实例的 Master 进程（Master 通过 IPC 广播 shutdown，子进程收后不复活）
-        $this->stopMasterProcess($name);
-
-        $sslEnabled = !empty($instanceData['ssl_enabled']);
-        $httpRedirectPort = (int)($instanceData['http_redirect_port'] ?? 0);
-        if ($sslEnabled && $httpRedirectPort <= 0) {
-            $httpRedirectPort = $port - 463;
-            if ($httpRedirectPort <= 0 || $httpRedirectPort > 65535) {
-                $httpRedirectPort = 80;
-            }
+        // 检查 Master 是否存在
+        if (!$instanceInfo->isMasterRunning()) {
+            $this->printer->warning(__('Master 进程不存在 (PID: %{1})', [$masterPid]));
+            $this->showInstanceInfo($instanceInfo);
+            // 清理可能残留的进程和文件
+            $this->cleanupResidualProcessesByInfo($name, $instanceInfo);
+            $manager->deleteInstance($name);
+            // 释放启动锁
+            $this->releaseStartLock($name);
+            $this->printer->success(__('实例文件已清理 ✓'));
+            return;
         }
-
-        $this->printer->note(__('停止子进程...'));
-        echo "\n";
         
-        // 使用批量杀死策略
-        $stoppedCount = $this->batchKillChildProcesses(
-            $name,
-            $count,
-            $workerPortBase,
-            $port,
-            $dispatcherEnabled,
-            $sslEnabled,
-            $httpRedirectPort,
-            $instanceData
-        );
-
+        // 显示实例信息
+        $this->showInstanceInfo($instanceInfo);
         echo "\n";
 
+        // 通过 IPC 发送 STOP 命令并等待完整停止
+        $this->printer->note(__('发送 STOP 命令给 Master (通过 IPC)...'));
+        $ipcSuccess = $this->sendStopViaIpcAndWait($name, $controlPort, $masterPid, $force);
+        
+        if ($ipcSuccess) {
+            $this->printer->success(__('所有子进程已完整退出 ✓'));
+        } else {
+            // IPC 失败，强制杀死 Master
+            $this->printer->warning(__('IPC 超时，强制终止 Master...'));
+            Processer::killByPid($masterPid, true);
+            \usleep(500000);
+            
+            // 清理可能残留的子进程
+            $this->cleanupResidualProcessesByInfo($name, $instanceInfo);
+        }
+        
         // 删除实例文件
-        @\unlink($instanceFile);
-
-        // 清理日志文件
-        for ($i = 0; $i < $count; $i++) {
-            $workerPort = $workerPortBase + $i;
-            $logFile = Env::VAR_DIR . 'log' . DS . "worker-{$workerPort}.log";
-            if (\is_file($logFile)) {
-                @\unlink($logFile);
-            }
-        }
-        $dispatcherLogFile = Env::VAR_DIR . 'log' . DS . "dispatcher-{$name}.log";
-        if (\is_file($dispatcherLogFile)) {
-            @\unlink($dispatcherLogFile);
-        }
-        if ($sslEnabled && $httpRedirectPort > 0) {
-            $logFile = Env::VAR_DIR . 'log' . DS . "http_redirect-{$httpRedirectPort}.log";
-            if (\is_file($logFile)) {
-                @\unlink($logFile);
-            }
-        }
-
-        $staleRemoved = Processer::cleanupStalePidFiles();
-        if ($staleRemoved > 0) {
-            $this->printer->note(__('  （已清理 %{1} 个残留 PID 映射文件）', [$staleRemoved]));
-        }
-
+        $manager->deleteInstance($name);
+        
+        // 清理 PID 文件
+        $this->cleanupPidFiles($name, $count);
+        
+        // 释放启动锁
+        $this->releaseStartLock($name);
+        
+        // 最后清理所有 weline-wls 前缀的残留进程
+        $this->cleanupAllWlsProcesses($name);
+        
+        echo "\n";
         $this->printer->success(__('实例 [%{1}] 已停止 ✓', [$name]));
     }
     
     /**
-     * 批量杀死子进程
-     * 
-     * 核心思路：
-     * 1. 收集所有需要清理的进程 PID
-     * 2. 批量发送 kill 信号（而不是逐个等待）
-     * 3. 统一等待一次
-     * 4. 验证并清理残留
-     * 
-     * @return int 成功停止的进程数量
+     * 获取实例管理器
      */
-    protected function batchKillChildProcesses(
-        string $name,
-        int $count,
-        int $workerPortBase,
-        int $dispatcherPort,
-        bool $dispatcherEnabled,
-        bool $sslEnabled,
-        int $httpRedirectPort,
-        array $instanceData
-    ): int {
-        $workerPrefix = 'weline-master-' . $name . '-';
-        $dispatcherName = 'weline-dispatcher-' . $name;
-        $redirectName = MasterProcess::HTTP_REDIRECT_PROCESS_NAME;
-        $masterPrefix = MasterProcess::MASTER_PROCESS_NAME_PREFIX . $name;
-        
-        // ========== 阶段 1：收集所有需要清理的进程 PID ==========
-        $processesToKill = []; // ['label' => string, 'pid' => int, 'port' => int, 'processName' => string]
-        
-        // 收集 Worker 进程
-        for ($i = 0; $i < $count; $i++) {
-            $workerId = $i + 1;
-            $wPort = $workerPortBase + $i;
-            $processName = '--name=weline-master-' . $name . '-worker-' . $workerId;
-            
-            // 尝试从进程名获取 PID
-            $pid = (int) Processer::getData($processName, 'pid');
-            
-            // 如果进程名无 PID，尝试从端口获取
-            if ($pid <= 0 && Processer::isPortInUse($wPort)) {
-                $pid = Processer::getPidByPort($wPort);
-            }
-            
-            // 从实例数据获取
-            if ($pid <= 0) {
-                $workers = $instanceData['workers'] ?? [];
-                foreach ($workers as $w) {
-                    if ((int)($w['port'] ?? 0) === $wPort) {
-                        $pid = (int)($w['pid'] ?? 0);
-                        break;
-                    }
-                }
-            }
-            
-            $stillRunning = ($pid > 0 && Processer::isRunningByPid($pid)) 
-                || Processer::isPortInUse($wPort);
-            
-            if ($stillRunning && $pid > 0) {
-                $processesToKill[] = [
-                    'label' => "Worker #{$workerId}",
-                    'pid' => $pid,
-                    'port' => $wPort,
-                    'processName' => $processName,
-                ];
-            }
-        }
-        
-        // 收集 Dispatcher 进程
-        if ($dispatcherEnabled) {
-            $dProcessName = '--name=' . $dispatcherName;
-            $dispatcherPid = (int) Processer::getData($dProcessName, 'pid');
-            
-            if ($dispatcherPid <= 0 && !empty($instanceData['dispatcher_pid'])) {
-                $dispatcherPid = (int) $instanceData['dispatcher_pid'];
-            }
-            
-            if ($dispatcherPid <= 0 && Processer::isPortInUse($dispatcherPort)) {
-                $dispatcherPid = Processer::getPidByPort($dispatcherPort);
-            }
-            
-            $stillRunning = ($dispatcherPid > 0 && Processer::isRunningByPid($dispatcherPid))
-                || Processer::isPortInUse($dispatcherPort);
-            
-            if ($stillRunning && $dispatcherPid > 0) {
-                $processesToKill[] = [
-                    'label' => 'Dispatcher',
-                    'pid' => $dispatcherPid,
-                    'port' => $dispatcherPort,
-                    'processName' => $dProcessName,
-                ];
-            }
-        }
-        
-        // 收集 HTTP 重定向进程
-        if ($sslEnabled && $httpRedirectPort > 0) {
-            $rProcessName = '--name=' . $redirectName;
-            $redirectPid = (int) Processer::getData($rProcessName, 'pid');
-            
-            if ($redirectPid <= 0 && !empty($instanceData['http_redirect_pid'])) {
-                $redirectPid = (int) $instanceData['http_redirect_pid'];
-            }
-            
-            if ($redirectPid <= 0 && Processer::isPortInUse($httpRedirectPort)) {
-                $redirectPid = Processer::getPidByPort($httpRedirectPort);
-            }
-            
-            $stillRunning = ($redirectPid > 0 && Processer::isRunningByPid($redirectPid))
-                || Processer::isPortInUse($httpRedirectPort);
-            
-            if ($stillRunning && $redirectPid > 0) {
-                $processesToKill[] = [
-                    'label' => 'HTTP Redirect',
-                    'pid' => $redirectPid,
-                    'port' => $httpRedirectPort,
-                    'processName' => $rProcessName,
-                ];
-            }
-        }
-        
-        // 如果没有需要清理的进程，先尝试按前缀批量清理
-        if (empty($processesToKill)) {
-            $prefixKilled = Processer::killByProcessNamePrefix($workerPrefix);
-            if ($prefixKilled > 0) {
-                $this->printer->success(__('  ├─ 按前缀清理 %{1} 个 Worker 进程 ✓', [$prefixKilled]));
-                return $prefixKilled;
-            }
-            $this->printer->success(__('所有子进程已停止 ✓'));
-            return 0;
-        }
-        
-        // ========== 阶段 2：批量发送 kill 信号 ==========
-        $labels = [];
-        $pidsToWait = [];
-        $isWin = \defined('IS_WIN') && IS_WIN;
-        
-        foreach ($processesToKill as $proc) {
-            $pid = $proc['pid'];
-            $label = $proc['label'];
-            $port = $proc['port'];
-            $labels[] = "{$label}(PID:{$pid})";
-            $pidsToWait[$pid] = ['label' => $label, 'port' => $port, 'processName' => $proc['processName']];
-            
-            // Mac/Linux: 使用 posix_kill 发送 SIGTERM
-            if (!$isWin) {
-                if (\function_exists('posix_kill')) {
-                    @\posix_kill($pid, \SIGTERM);
-                }
-            } else {
-                // Windows: 使用 taskkill（不等待）
-                @\exec("taskkill /PID {$pid} /F 2>NUL", $output, $code);
-            }
-        }
-        
-        $this->printer->note(__('批量发送终止信号: %{1}', [\implode(', ', $labels)]));
-        
-        // ========== 阶段 3：统一等待进程退出 ==========
-        $waitTimeout = 3; // 批量杀死后的等待时间（秒）
-        $startTime = \time();
-        
-        while (!empty($pidsToWait) && (\time() - $startTime) < $waitTimeout) {
-            \usleep(200000); // 200ms
-            
-            foreach ($pidsToWait as $pid => $info) {
-                if (!Processer::isRunningByPid($pid)) {
-                    $this->printer->success(__('  ├─ %{1} 已停止 (端口: %{2}) ✓', [$info['label'], $info['port']]));
-                    unset($pidsToWait[$pid]);
-                }
-            }
-        }
-        
-        $stoppedCount = \count($processesToKill) - \count($pidsToWait);
-        
-        // ========== 阶段 4：强制清理残留进程 ==========
-        if (!empty($pidsToWait)) {
-            $this->printer->warning(__('部分进程未响应 SIGTERM，批量发送 SIGKILL...'));
-            
-            // 批量发送 SIGKILL
-            foreach ($pidsToWait as $pid => $info) {
-                if (!$isWin) {
-                    if (\function_exists('posix_kill')) {
-                        @\posix_kill($pid, \SIGKILL);
-                    }
-                }
-                Processer::killProcessTreeByPid($pid, true);
-            }
-            
-            // 等待强制杀死生效
-            \usleep(500000); // 500ms
-            
-            // 验证是否已停止
-            foreach ($pidsToWait as $pid => $info) {
-                if (!Processer::isRunningByPid($pid)) {
-                    $this->printer->success(__('  ├─ %{1} 已强制停止 (PID: %{2}) ✓', [$info['label'], $pid]));
-                    $stoppedCount++;
-                    unset($pidsToWait[$pid]);
-                }
-            }
-        }
-        
-        // ========== 阶段 5：按端口最终清理 ==========
-        $stillRunning = [];
-        foreach ($processesToKill as $proc) {
-            $port = $proc['port'];
-            if ($port > 0 && Processer::isPortInUse($port)) {
-                $stillRunning[] = "{$proc['label']} (端口: {$port})";
-                Processer::killProcessByPort($port);
-            }
-        }
-        
-        if (!empty($stillRunning)) {
-            $this->printer->warning(__('按端口清理: %{1}', [\implode(', ', $stillRunning)]));
-        }
-        
-        // ========== 阶段 6：逃逸进程扫杀（按前缀） ==========
-        $allPrefixes = [
-            $masterPrefix,
-            $workerPrefix,
-            $dispatcherName,
-            $redirectName,
-        ];
-        $sysKilled = 0;
-        foreach ($allPrefixes as $pfx) {
-            $sysKilled += Processer::killByProcessNamePrefix($pfx);
-        }
-        if ($sysKilled > 0) {
-            $this->printer->note(__('  系统级扫杀：额外清理 %{1} 个残留进程', [$sysKilled]));
-            $stoppedCount += $sysKilled;
-        }
-        
-        // ========== 阶段 7：清理 PID 文件 ==========
-        foreach ($processesToKill as $proc) {
-            if (!empty($proc['processName'])) {
-                Processer::removePidFile($proc['processName']);
-            }
-        }
-        Processer::removePidFile('--name=' . $dispatcherName);
-        Processer::removePidFile('--name=' . MasterProcess::getMasterProcessName($name));
-        for ($i = 1; $i <= $count; $i++) {
-            Processer::removePidFile('--name=weline-master-' . $name . '-worker-' . $i);
-        }
-        if ($sslEnabled) {
-            Processer::removePidFile('--name=' . MasterProcess::HTTP_REDIRECT_PROCESS_NAME);
-        }
-        
-        $this->printer->success(__('批量停止完成，共处理 %{1} 个进程', [$stoppedCount]));
-        
-        return $stoppedCount;
-    }
-    
-    /**
-     * 停止指定实例的 Master 进程（如果存在）
-     */
-    protected function stopMasterProcess(string $instanceName = 'default'): void
+    protected function getInstanceManager(): ServerInstanceManager
     {
-        $masterInfo = MasterProcess::getMasterInfo($instanceName);
-        if (!$masterInfo || empty($masterInfo['master_pid'])) {
-            return;
-        }
-        
-        $masterPid = (int)$masterInfo['master_pid'];
-        if (!Processer::processExists($masterPid)) {
-            return;
-        }
-        
-        $this->printer->note(__('停止 Master 进程 (PID: %{1})...', [$masterPid]));
-        
-        // 通过 IPC 控制通道发送停止命令
-        MasterProcess::sendStopCommand($instanceName);
-        
-        // 等待 Master 退出
-        $maxWait = 10;
-        for ($i = 0; $i < $maxWait; $i++) {
-            \sleep(1);
-            if (!Processer::processExists($masterPid)) {
-                $this->printer->success(__('  └─ Master 进程已停止 ✓'));
-                echo "\n";
-                return;
-            }
-        }
-        
-        // 强制终止（统一委托 Processer 驱动）
-        Processer::killByPid($masterPid, true);
-        
-        $this->printer->warning(__('  └─ Master 进程已强制终止'));
-        echo "\n";
+        return ObjectManager::getInstance(ServerInstanceManager::class);
     }
     
     /**
-     * 停止所有实例（含 Weline Server 与 PHP 内置 CLI 服务器）
+     * 显示实例信息（统一入口，使用 ServerInstanceInfo 对象）
+     *
+     * 所有信息都来自 ServerInstanceManager，确保一致性。
+     */
+    protected function showInstanceInfo(ServerInstanceInfo $info): void
+    {
+        $this->printer->note(__('╔══════════════════════════════════════════════════════════════╗'));
+        $this->printer->note(__('║                   停止服务器实例                               ║'));
+        $this->printer->note('╠══════════════════════════════════════════════════════════════╣');
+        $this->printer->note(\sprintf('║  实例名称：%-50s║', $info->name));
+        $this->printer->note(\sprintf('║  Master PID：%-48s║', $info->masterPid > 0 ? $info->masterPid : '(未运行)'));
+        $this->printer->note(\sprintf('║  控制端口：%-50s║', $info->controlPort > 0 ? $info->controlPort : '(未配置)'));
+        $this->printer->note(\sprintf('║  监听地址：%-50s║', $info->getListenAddress()));
+        $this->printer->note(\sprintf('║  SSL 状态：%-50s║', $info->sslEnabled ? '已启用 (HTTPS)' : '未启用 (HTTP)'));
+        
+        if ($info->httpRedirectPort > 0) {
+            $this->printer->note(\sprintf('║  HTTP 跳转：%-49s║', ":{$info->httpRedirectPort} → :{$info->port}"));
+        }
+        
+        $this->printer->note('╠══════════════════════════════════════════════════════════════╣');
+        
+        // 显示所有服务实例（已按优先级排序）
+        $currentRole = '';
+        $roleInstances = [];
+        
+        // 按角色分组
+        foreach ($info->services as $service) {
+            $roleInstances[$service->role][] = $service;
+        }
+        
+        foreach ($roleInstances as $role => $services) {
+            $count = \count($services);
+            $displayName = $services[0]->displayName;
+            
+            $pids = [];
+            $ports = [];
+            foreach ($services as $service) {
+                if ($service->pid > 0) {
+                    $pids[] = $service->pid;
+                }
+                if ($service->port !== null && $service->port > 0) {
+                    $ports[] = $service->port;
+                }
+            }
+            
+            $pidStr = !empty($pids) ? \implode(',', $pids) : '(无 PID)';
+            $portStr = !empty($ports) ? \implode(',', $ports) : '-';
+            
+            $line = \sprintf('║  %s (%d): PID=%s, Port=%s', $displayName, $count, $pidStr, $portStr);
+            $this->printer->note(\sprintf('%-63s║', $line));
+        }
+        
+        $this->printer->note('╠══════════════════════════════════════════════════════════════╣');
+        $this->printer->note(\sprintf('║  启动时间：%-50s║', $info->startedAt ?: '(未知)'));
+        $this->printer->note('╚══════════════════════════════════════════════════════════════╝');
+    }
+    
+    /**
+     * 根据 ServerInstanceInfo 清理残留进程
+     * 
+     * 优化策略：优先使用已知 PID 直接杀（快速），仅在有残留时才按进程名前缀兜底
+     */
+    protected function cleanupResidualProcessesByInfo(string $name, ServerInstanceInfo $info): void
+    {
+        $this->printer->note(__('清理残留进程...'));
+        
+        $totalKilled = 0;
+        $pidsToKill = [];
+        
+        // 收集所有已知 PID（Master + 所有服务）
+        if ($info->masterPid > 0) {
+            $pidsToKill[] = $info->masterPid;
+        }
+        foreach ($info->services as $service) {
+            if ($service->pid > 0) {
+                $pidsToKill[] = $service->pid;
+            }
+        }
+        
+        // 批量杀死所有已知 PID（直接使用 taskkill，速度快）
+        if (!empty($pidsToKill)) {
+            $pidsToKill = \array_unique($pidsToKill);
+            $aliveCount = 0;
+            
+            foreach ($pidsToKill as $pid) {
+                if (Processer::processExists($pid)) {
+                    $aliveCount++;
+                    Processer::killByPid($pid, true);
+                    $totalKilled++;
+                }
+            }
+            
+            if ($aliveCount > 0) {
+                $this->printer->note(__('  已向 %{1} 个进程发送终止信号', [$aliveCount]));
+            }
+        }
+        
+        // 仅在需要时才按进程名前缀兜底（比如有逃逸进程未记录 PID）
+        // 跳过此步骤以加速，因为已知 PID 已处理完毕
+        // 如果用户发现有残留进程，可以手动运行 server:stop --all 进行彻底清理
+        
+        if ($totalKilled > 0) {
+            $this->printer->success(__('  清理了 %{1} 个进程 ✓', [$totalKilled]));
+        } else {
+            $this->printer->note(__('  无残留进程'));
+        }
+    }
+    
+    /**
+     * 格式化 IPC 消息（带颜色）
+     * 
+     * @param string $message 消息内容
+     * @param string $type 消息类型：success, drain, stop, error, info
+     */
+    protected function ipcMsg(string $message, string $type = 'info'): void
+    {
+        $color = match ($type) {
+            'success' => self::IPC_COLOR_SUCCESS,  // 绿色：上报成功
+            'drain' => self::IPC_COLOR_DRAIN,      // 黄色：通知排水/重载
+            'stop' => self::IPC_COLOR_STOP,        // 红色：通知停止
+            'error' => self::IPC_COLOR_ERROR,      // 红色：错误
+            default => self::IPC_COLOR_INFO,       // 蓝色：一般信息
+        };
+        
+        $tag = $this->printer->colorize('[IPC]', self::IPC_COLOR_TAG);
+        $content = $this->printer->colorize($message, $color);
+        echo "  {$tag} {$content}\n";
+    }
+    
+    /**
+     * 格式化 IPC 进度消息（来自 Orchestrator，自动判断颜色）
+     * 
+     * 颜色区分：
+     * - 绿色：上报成功（✓、已退出、已断开、排水完成）
+     * - 黄色：通知排水/重载（广播 DRAIN、RELOAD、等待排水）
+     * - 红色：通知停止（广播 SHUTDOWN、强制终止、阶段停止）
+     * - 蓝色：一般信息
+     */
+    protected function ipcProgress(string $message): void
+    {
+        $tag = $this->printer->colorize('[IPC]', self::IPC_COLOR_TAG);
+        
+        // 根据消息内容自动判断颜色
+        if (\str_contains($message, '✓') || \str_contains($message, '已退出') || \str_contains($message, '已断开') || \str_contains($message, '排水完成')) {
+            // 绿色：上报成功
+            $content = $this->printer->colorize($message, self::IPC_COLOR_SUCCESS);
+        } elseif (\str_contains($message, '✗') || \str_contains($message, '失败') || \str_contains($message, '错误')) {
+            // 红色：错误
+            $content = $this->printer->colorize($message, self::IPC_COLOR_ERROR);
+        } elseif (\str_contains($message, 'SHUTDOWN') || \str_contains($message, '通知子进程退出') || \str_contains($message, '强制') || \str_contains($message, '校验子进程退出') || \str_contains($message, 'Master 即将退出')) {
+            // 红色：通知停止
+            $content = $this->printer->colorize($message, self::IPC_COLOR_STOP);
+        } elseif (\str_contains($message, 'DRAIN') || \str_contains($message, 'RELOAD') || \str_contains($message, '排水') || \str_contains($message, '等待排水') || \str_contains($message, '重载')) {
+            // 黄色：通知排水/重载
+            $content = $this->printer->colorize($message, self::IPC_COLOR_DRAIN);
+        } elseif (\str_contains($message, '阶段') || \str_contains($message, 'Phase')) {
+            // 黄色：阶段信息（作为进度提示）
+            $content = $this->printer->colorize($message, self::IPC_COLOR_DRAIN);
+        } else {
+            // 蓝色：一般信息
+            $content = $this->printer->colorize($message, self::IPC_COLOR_INFO);
+        }
+        
+        echo "  {$tag} {$content}\n";
+    }
+    
+    /**
+     * 通过 IPC 发送 STOP 命令并等待所有子进程完整退出
+     */
+    protected function sendStopViaIpcAndWait(string $instanceName, int $controlPort, int $masterPid, bool $force): bool
+    {
+        if ($controlPort <= 0) {
+            return false;
+        }
+        
+        // 连接 IPC
+        $host = '127.0.0.1';
+        $this->ipcMsg("连接 Master (PID:{$masterPid}) 控制端口 {$host}:{$controlPort}...", 'info');
+        
+        $errno = 0;
+        $errstr = '';
+        $conn = @\stream_socket_client("tcp://{$host}:{$controlPort}", $errno, $errstr, 5);
+        if (!$conn) {
+            $this->ipcMsg("连接失败: {$errstr} (errno:{$errno})", 'error');
+            return false;
+        }
+        
+        $this->ipcMsg("连接成功 ✓", 'success');
+        $this->ipcMsg("发送 STOP 命令...", 'stop');
+        
+        // 发送 STOP 命令
+        $stopMsg = \Weline\Server\IPC\ControlMessage::command(\Weline\Server\IPC\ControlMessage::ACTION_STOP);
+        $written = @\fwrite($conn, $stopMsg);
+        
+        if ($written === false || $written === 0) {
+            $this->ipcMsg("发送命令失败", 'error');
+            @\fclose($conn);
+            return false;
+        }
+        
+        $this->ipcMsg("等待 Orchestrator 停止所有子进程...", 'stop');
+        
+        // 设置流为非阻塞，持续读取直到连接断开（表示 Master 已停止 IPC 服务器）
+        \stream_set_timeout($conn, 1);
+        \stream_set_blocking($conn, false);
+        
+        $timeout = $force ? 30 : self::IPC_TIMEOUT;
+        $deadline = \microtime(true) + $timeout;
+        $lastProgress = '';
+        $masterAboutToExit = false; // 只在收到 "Master 即将退出" 时置 true
+        $exitedPids = []; // 用 PID 去重，防止同一进程的 "已断开" 和 "已退出" 重复计数
+        $totalInstances = 0; // 总实例数
+        
+        while (\microtime(true) < $deadline) {
+            // 优先检查 Master 是否已退出（每次循环都检查）
+            if (!Processer::processExists($masterPid)) {
+                $this->ipcMsg("Master 进程已退出 ✓", 'success');
+                @\fclose($conn);
+                return true;
+            }
+            
+            $read = [$conn];
+            $write = $except = null;
+            // 缩短 select 超时到 0.5 秒，更快响应
+            $ready = @\stream_select($read, $write, $except, 0, 500000);
+            
+            if ($ready === false) {
+                // stream_select 错误，连接可能已断开
+                break;
+            }
+            
+            if ($ready > 0) {
+                $data = @\fread($conn, 4096);
+                if ($data === false || $data === '') {
+                    // 连接断开 - Master 已关闭 IPC
+                    $this->ipcMsg("Master 已关闭连接 ✓", 'success');
+                    @\fclose($conn);
+                    
+                    // 快速等待 Master 进程完全退出
+                    return $this->waitForMasterExit($masterPid);
+                }
+                
+                // 解析消息
+                $lines = \explode("\n", \trim($data));
+                foreach ($lines as $line) {
+                    if (empty($line)) {
+                        continue;
+                    }
+                    $msg = \Weline\Server\IPC\ControlMessage::decode($line);
+                    if ($msg === null) {
+                        continue;
+                    }
+                    
+                    $type = $msg['type'] ?? '';
+                    
+                    // 处理进度消息
+                    if ($type === \Weline\Server\IPC\ControlMessage::TYPE_COMMAND_RESULT) {
+                        $message = $msg['message'] ?? '';
+                        if ($message && $message !== $lastProgress) {
+                            $this->ipcProgress($message);
+                            $lastProgress = $message;
+                            
+                            // 解析进度信息：总实例数
+                            if (\preg_match('/共\s*(\d+)\s*个实例待停止/', $message, $matches)) {
+                                $totalInstances = (int) $matches[1];
+                            }
+                            // 检测单个子进程退出消息，提取 PID 去重
+                            // 格式示例: "✓ HTTP Worker(PID:12345) 已退出" 或 "✓ HTTP Worker(PID:12345) 已断开连接"
+                            if (\preg_match('/PID[:\s]*(\d+)\)?\s*(?:已退出|已断开连接)/', $message, $pidMatch)) {
+                                $exitedPids[(int) $pidMatch[1]] = true;
+                            }
+                            // 只在 Orchestrator 明确发送 "Master 即将退出" 时才结束等待
+                            if (\str_contains($message, 'Master 即将退出') || \str_contains($message, '所有子进程已完整退出')) {
+                                $masterAboutToExit = true;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 只在 Master 明确发送 "即将退出" 后才进入等待退出流程
+            if ($masterAboutToExit) {
+                $this->ipcMsg("所有子进程已退出，等待 Master 清理...", 'success');
+                @\fclose($conn);
+                return $this->waitForMasterExit($masterPid);
+            }
+        }
+        
+        @\fclose($conn);
+        
+        // 超时前最后一次检查 Master 状态
+        if (!Processer::processExists($masterPid)) {
+            $this->ipcMsg("Master 进程已退出 ✓", 'success');
+            return true;
+        }
+        
+        $this->ipcMsg("等待超时（{$timeout}s）", 'error');
+        return false;
+    }
+    
+    /**
+     * 等待 Master 进程退出（子进程已全部退出后调用）
+     * 
+     * 优化策略：使用 hasExitedFast() 快速检测
+     * 当 Master 从 pid_index.json 删除自己的 PID 后，
+     * hasExitedFast() 会立即返回 true，无需调用 tasklist/ps 等外部命令。
+     */
+    protected function waitForMasterExit(int $masterPid): bool
+    {
+        $tag = $this->printer->colorize('[IPC]', self::IPC_COLOR_TAG);
+        $waitMsg = $this->printer->colorize('等待 Master 进程退出', self::IPC_COLOR_INFO);
+        echo "  {$tag} {$waitMsg}";
+        
+        $deadline = \microtime(true) + self::MASTER_EXIT_TIMEOUT;
+        
+        while (\microtime(true) < $deadline) {
+            \usleep(200000); // 200ms
+            echo $this->printer->colorize('.', self::IPC_COLOR_INFO);
+            if (Processer::hasExitedFast($masterPid)) {
+                echo $this->printer->colorize(' 完成 ✓', self::IPC_COLOR_SUCCESS) . "\n";
+                return true;
+            }
+        }
+        
+        // 最后一次检查
+        if (Processer::hasExitedFast($masterPid)) {
+            echo $this->printer->colorize(' 完成 ✓', self::IPC_COLOR_SUCCESS) . "\n";
+            return true;
+        }
+        
+        echo $this->printer->colorize(' 超时', self::IPC_COLOR_ERROR) . "\n";
+        return false;
+    }
+    
+    /**
+     * 清理残留进程
+     * 
+     * 当 Master IPC 失败时，按进程名前缀批量清理
+     */
+    protected function cleanupResidualProcesses(string $name, array $instanceData): void
+    {
+        $this->printer->note(__('清理残留进程...'));
+        
+        $prefixes = [
+            'weline-wls-master-' . $name,
+            'weline-wls-worker-' . $name,
+            'weline-wls-dispatcher-' . $name,
+            'weline-wls-session-' . $name,
+            'weline-wls-redirect-' . $name,
+        ];
+        
+        $totalKilled = 0;
+        foreach ($prefixes as $prefix) {
+            $killed = Processer::killByProcessNamePrefix($prefix);
+            $totalKilled += $killed;
+        }
+        
+        if ($totalKilled > 0) {
+            $this->printer->success(__('  清理了 %{1} 个进程 ✓', [$totalKilled]));
+        } else {
+            $this->printer->note(__('  无残留进程'));
+        }
+    }
+    
+    /**
+     * 清理 PID 文件
+     */
+    protected function cleanupPidFiles(string $name, int $count): void
+    {
+        // Master
+        Processer::removePidFile('--name=' . MasterProcess::getMasterProcessName($name));
+        
+        // Workers
+        for ($i = 1; $i <= $count; $i++) {
+            Processer::removePidFile('--name=weline-wls-worker-' . $name . '-' . $i);
+        }
+        
+        // Dispatcher
+        Processer::removePidFile('--name=weline-wls-dispatcher-' . $name);
+        
+        // SessionServer
+        Processer::removePidFile('--name=weline-wls-session-' . $name);
+        
+        // HTTP Redirect
+        Processer::removePidFile('--name=' . MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name);
+        
+        // 清理残留 PID 文件
+        Processer::cleanupStalePidFiles();
+    }
+    
+    /**
+     * 释放启动锁
+     * 
+     * 服务器停止后删除启动锁文件，允许重新启动实例
+     */
+    protected function releaseStartLock(string $instanceName): void
+    {
+        $lockDir = Env::VAR_DIR . 'server' . DS . 'locks' . DS;
+        $lockFile = $lockDir . 'start_' . $instanceName . '.lock';
+        
+        if (\is_file($lockFile)) {
+            @\unlink($lockFile);
+            $this->printer->note(__('启动锁已释放 ✓'));
+        }
+    }
+    
+    /**
+     * 清理所有 weline-wls 前缀的残留进程
+     * 
+     * 使用快速的 PID 文件查找方式，避免 Windows 上的慢速系统调用
+     */
+    protected function cleanupAllWlsProcesses(string $instanceName): void
+    {
+        // 从 name_index 快速读取并杀死残留进程
+        $nameIndex = Processer::readNameIndex();
+        $currentPid = \getmypid();
+        $totalKilled = 0;
+        
+        // 匹配 weline-wls-*-{instanceName} 的进程
+        $targetPrefix = 'weline-wls-';
+        $instanceSuffix = '-' . $instanceName;
+        
+        foreach ($nameIndex as $pname => $entries) {
+            // 检查是否是 weline-wls 进程且属于当前实例
+            $taskName = $pname;
+            if (\str_starts_with($taskName, '--name=')) {
+                $taskName = \substr($taskName, 7);
+            }
+            
+            if (!\str_starts_with($taskName, $targetPrefix)) {
+                continue;
+            }
+            
+            // 检查是否属于当前实例
+            if (\strpos($taskName, $instanceSuffix) === false) {
+                continue;
+            }
+            
+            // 遍历该 pname 下的所有 PID
+            foreach ($entries as $entry) {
+                $pid = (int) ($entry['pid'] ?? 0);
+                if ($pid <= 0 || $pid === $currentPid) {
+                    continue;
+                }
+                
+                if (Processer::processExists($pid)) {
+                    Processer::killByPid($pid, true);
+                    $totalKilled++;
+                }
+            }
+        }
+        
+        if ($totalKilled > 0) {
+            $this->printer->note(__('清理了 %{1} 个残留 WLS 进程', [$totalKilled]));
+        }
+    }
+    
+    /**
+     * 停止所有实例
      */
     protected function stopAllInstances(bool $force = false): void
     {
@@ -529,7 +708,7 @@ class Stop extends CommandAbstract
     }
 
     /**
-     * 停止 PHP 内置 CLI 服务器（委托给 Console\Console\Server\Stop）
+     * 停止 PHP 内置 CLI 服务器
      */
     protected function stopCliServer(bool $force = false): void
     {
@@ -554,7 +733,7 @@ class Stop extends CommandAbstract
             [
                 '[name]' => __('实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）'),
                 '-a, --all' => __('停止所有运行中的实例（含 Weline Server 与 CLI 服务器）'),
-                '-f, --force' => __('强制停止'),
+                '-f, --force' => __('强制停止（缩短超时时间）'),
                 '--help' => __('显示帮助信息'),
             ],
             [],

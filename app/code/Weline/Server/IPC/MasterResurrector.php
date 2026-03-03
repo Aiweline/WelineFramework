@@ -77,6 +77,11 @@ class MasterResurrector
      */
     public function shouldResurrect(bool $receivedShutdown): bool
     {
+        // 高可用控制面收口：默认禁止子进程复活 Master（Single Writer）
+        if (!$this->isChildResurrectionEnabled()) {
+            return false;
+        }
+
         // 收到过 shutdown（IPC 控制通道下发）→ 不复活；停止/重启时由 Master 广播 shutdown，不依赖文件
         if ($receivedShutdown) {
             return false;
@@ -93,6 +98,19 @@ class MasterResurrector
         }
 
         return true;
+    }
+
+    /**
+     * 是否允许子进程复活 Master（默认关闭）
+     */
+    private function isChildResurrectionEnabled(): bool
+    {
+        try {
+            $config = Env::getInstance()->getConfig() ?: [];
+            return (bool)($config['server']['orchestrator']['allow_child_resurrection'] ?? false);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -157,7 +175,7 @@ class MasterResurrector
             $eventsManager = ObjectManager::getInstance(EventsManager::class);
             $eventsManager->dispatch('Weline_Server::service::master_resurrection_failed', $eventData);
         } catch (\Throwable $e) {
-            \error_log('[MasterResurrector] dispatch master_resurrection_failed event failed: ' . $e->getMessage());
+            w_log_error('[MasterResurrector] dispatch master_resurrection_failed event failed: ' . $e->getMessage());
         }
         return false;
     }

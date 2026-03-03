@@ -15,6 +15,9 @@ declare(strict_types=1);
 
 namespace Weline\Server\Dispatcher;
 
+use Weline\Server\Log\WlsLogger;
+use Weline\Server\Log\LogLevel;
+
 class LoadBalancer
 {
     // 负载均衡策略常量
@@ -309,26 +312,17 @@ class LoadBalancer
     }
 
     /**
-     * 日志函数
-     */
-    private ?\Closure $logFunction = null;
-
-    /**
-     * 设置日志函数
-     */
-    public function setLogFunction(callable $logFunction): void
-    {
-        $this->logFunction = $logFunction instanceof \Closure ? $logFunction : \Closure::fromCallable($logFunction);
-    }
-
-    /**
-     * 内部日志
+     * 内部日志（直接使用 WlsLogger）
      */
     private function log(string $message, string $level = 'INFO'): void
     {
-        if ($this->logFunction !== null) {
-            ($this->logFunction)($message, $level);
-        }
+        $logLevel = match (\strtoupper($level)) {
+            'ERROR' => LogLevel::ERROR,
+            'WARN', 'WARNING' => LogLevel::WARNING,
+            'DEBUG' => LogLevel::DEBUG,
+            default => LogLevel::INFO,
+        };
+        WlsLogger::log_($logLevel, $message);
     }
 
     /**

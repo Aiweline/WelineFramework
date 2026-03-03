@@ -19,13 +19,13 @@ if (PHP_SAPI !== 'cli') {
 
 $configPath = $argv[1] ?? '';
 if (empty($configPath) || !\is_file($configPath)) {
-    \error_log('[FileWatcher] Config file required: php file_watcher.php <config_json_path>');
+    w_log_error('[FileWatcher] Config file required: php file_watcher.php <config_json_path>');
     exit(1);
 }
 
 $config = \json_decode(\file_get_contents($configPath), true);
 if (!\is_array($config)) {
-    \error_log('[FileWatcher] Invalid config JSON');
+    w_log_error('[FileWatcher] Invalid config JSON');
     exit(1);
 }
 
@@ -33,11 +33,11 @@ $watchDirs = $config['watch_dirs'] ?? [];
 $checkInterval = (float) ($config['check_interval'] ?? 1);
 
 if (empty($watchDirs)) {
-    \error_log('[FileWatcher] watch_dirs is required');
+    w_log_error('[FileWatcher] watch_dirs is required');
     exit(1);
 }
 
-// 检测根目录（DS 为 WlsInstanceRegistry -> Env 所需）
+// 检测根目录（DS 为 ServerInstanceManager -> Env 所需）
 $bp = \dirname(__DIR__, 5) . DIRECTORY_SEPARATOR;
 if (!\defined('BP')) {
     \define('BP', $bp);
@@ -51,9 +51,26 @@ require_once BP . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php';
 $watcher = new \Weline\Server\Service\FileWatcher($watchDirs);
 $watcher->setCheckInterval($checkInterval);
 
+// 信号处理（仅 Linux/Mac）
+// 注意：子进程不处理 SIGINT（Ctrl+C），由 Master 通过 IPC 广播 SHUTDOWN 通知退出
+if (\function_exists('pcntl_signal')) {
+    \pcntl_async_signals(true);
+    \pcntl_signal(SIGTERM, function () use ($watcher) {
+        echo "[FileWatcher] 收到 SIGTERM 信号，退出...\n";
+        $watcher->stop();
+    });
+}
+
 $watcher->onChange(function (array $changes) {
+    $ansiBlue = "\033[34m";
+    $ansiYellow = "\033[33m";
+    $ansiReset = "\033[0m";
+    
     $changedFiles = \count($changes);
-    echo '[' . \date('Y-m-d H:i:s') . "] [FileWatcher] 检测到 {$changedFiles} 个文件变更，触发热重载...\n";
+    $tag = $ansiBlue . '[FileWatcher]' . $ansiReset;
+    $msg = $ansiYellow . "检测到 {$changedFiles} 个文件变更，触发热重载..." . $ansiReset;
+    echo '[' . \date('Y-m-d H:i:s') . "] {$tag} {$msg}\n";
+    
     $shown = 0;
     foreach ($changes as $change) {
         if ($shown >= 5) {
@@ -63,7 +80,8 @@ $watcher->onChange(function (array $changes) {
         }
         $type = $change['type'] ?? 'modified';
         $file = \str_replace(BP, '', $change['file']);
-        echo "    [{$type}] {$file}\n";
+        $typeColor = $ansiYellow . "[{$type}]" . $ansiReset;
+        echo "    {$typeColor} {$file}\n";
         $shown++;
     }
     \Weline\Server\Service\FileWatcher::notifyWorkersToReload($changes);

@@ -21,6 +21,8 @@ $instanceName = $argv[4] ?? 'default';
 $processName = '';
 $controlPort = 0;
 $masterPid = 0;
+$orchestratorEpoch = 0;
+$orchestratorLaunchId = '';
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
         $processName = \substr($arg, 7);
@@ -28,6 +30,10 @@ foreach ($argv as $arg) {
         $controlPort = (int)\substr($arg, 15);
     } elseif (\str_starts_with($arg, '--master-pid=')) {
         $masterPid = (int)\substr($arg, 13);
+    } elseif (\str_starts_with($arg, '--epoch=')) {
+        $orchestratorEpoch = (int)\substr($arg, 8);
+    } elseif (\str_starts_with($arg, '--launch-id=')) {
+        $orchestratorLaunchId = (string)\substr($arg, 12);
     }
 }
 
@@ -42,6 +48,32 @@ if (!\defined('DS')) {
 
 // 统一自动加载
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
+
+// 解析 --frontend 参数
+$isFrontend = \in_array('--frontend', $argv, true);
+
+// 初始化 WLS 统一错误捕获系统（Layer 1-3）
+use Weline\Server\Log\Error\ErrorBootstrap;
+use Weline\Server\Log\WlsLogger;
+use Weline\Server\Log\LogLevel;
+
+if ($isFrontend && !\defined('WLS_FRONTEND_MODE')) {
+    \define('WLS_FRONTEND_MODE', true);
+}
+
+ErrorBootstrap::init('HttpRedirect:' . $httpPort, [
+    'http_port' => $httpPort,
+    'https_port' => $httpsPort,
+    'instance' => $instanceName,
+    'process_name' => $processName,
+]);
+
+// 前台模式：启用控制台输出
+if ($isFrontend) {
+    WlsLogger::getInstance()
+        ->setStdoutEnabled(true)
+        ->setProcessTag('HttpRedirect:' . $httpPort);
+}
 
 // 进程日志文件（持久化，跨重启保留）
 if ($processName) {
@@ -62,9 +94,6 @@ if ($processName) {
     }
 }
 
-// 解析 --frontend 参数
-$isFrontend = \in_array('--frontend', $argv, true);
-
 // 读取环境配置
 $envConfig = null;
 $_envFile = BP . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'env.php';
@@ -76,31 +105,6 @@ unset($_envFile);
 $isDev = (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE)
     || ($envConfig !== null && isset($envConfig['deploy']) && $envConfig['deploy'] === 'dev');
 
-// 日志函数（格式与 Dispatcher/Worker 保持一致）
-$redirectLog = function (string $message, string $level = 'INFO') use ($isFrontend, $isDev, $httpPort) {
-    $timestamp = \date('Y-m-d H:i:s');
-    $logMessage = "[{$timestamp}] [Redirect] Port:{$httpPort} [{$level}] {$message}\n";
-
-    $color = match($level) {
-        'ERROR'   => "\033[91m",
-        'WARN'    => "\033[33m",
-        'INFO'    => "\033[36m",
-        'IPC'     => "\033[95m",
-        'DEBUG'   => "\033[90m",
-        default   => "\033[0m",
-    };
-
-    $alwaysShow = \in_array($level, ['ERROR', 'WARN', 'INFO', 'IPC'], true);
-    if ($alwaysShow || $isFrontend || $isDev) {
-        if (\defined('STDOUT') && \is_resource(STDOUT)) {
-            \fwrite(STDOUT, $color . $logMessage . "\033[0m");
-            \fflush(STDOUT);
-        } else {
-            echo $color . $logMessage . "\033[0m";
-            \flush();
-        }
-    }
-};
 
 $context = \stream_context_create([
     'socket' => [
@@ -118,16 +122,16 @@ $socket = @\stream_socket_server(
 );
 
 if (!$socket) {
-    $redirectLog("Failed to bind {$host}:{$httpPort}: {$errstr}", 'ERROR');
+    WlsLogger::error_("Failed to bind {$host}:{$httpPort}: {$errstr}");
     exit(1);
 }
 
 \stream_set_blocking($socket, false);
 
 // 启动日志（与 Dispatcher/Worker 风格一致）
-$redirectLog("Started on tcp://{$host}:{$httpPort}", 'INFO');
-$redirectLog("Instance: {$instanceName}, HTTP→HTTPS 301 Redirect, Target port: {$httpsPort}, PID: " . \getmypid(), 'INFO');
-$redirectLog("DEV=" . ($isDev ? 'ON' : 'OFF') . ", Frontend=" . ($isFrontend ? 'ON' : 'OFF'), 'INFO');
+WlsLogger::info_("Started on tcp://{$host}:{$httpPort}");
+WlsLogger::info_("Instance: {$instanceName}, HTTP→HTTPS 301 Redirect, Target port: {$httpsPort}, PID: " . \getmypid());
+WlsLogger::info_("DEV=" . ($isDev ? 'ON' : 'OFF') . ", Frontend=" . ($isFrontend ? 'ON' : 'OFF'));
 
 // ========== IPC 控制通道 ==========
 $ipcClient = null;
@@ -146,20 +150,20 @@ if ($controlPort <= 0) {
 if ($controlPort > 0) {
     $ipcClient = new \Weline\Server\IPC\ControlClient();
     $ipcClient->setSelfTag('Redirect');
-    $ipcClient->setLogger(function (string $line) use ($redirectLog) {
-        $redirectLog($line, 'IPC');
-    });
     // DEV 模式下输出详细 IPC SEND/RECV 明细
     $ipcClient->setVerboseLog($isDev);
     if ($ipcClient->connect('127.0.0.1', $controlPort)) {
         $ipcClient->register(
             \Weline\Server\IPC\ControlMessage::ROLE_REDIRECT,
             \getmypid(),
-            $httpPort
+            $httpPort,
+            0,
+            $orchestratorEpoch,
+            $orchestratorLaunchId
         );
         
         // 上报就绪
-        $ipcClient->sendReady(\Weline\Server\IPC\ControlMessage::ROLE_REDIRECT, 0, $httpPort);
+        $ipcClient->sendReady(\Weline\Server\IPC\ControlMessage::ROLE_REDIRECT, 0, $httpPort, $orchestratorEpoch, $orchestratorLaunchId);
         
         // 设置消息处理器
         $ipcClient->onMessage(function (array $msg, \Weline\Server\IPC\ControlClient $client) use (&$ipcReceivedShutdown) {
@@ -169,22 +173,13 @@ if ($controlPort > 0) {
         });
         
         // 设置断开处理器（复活优先级 1 = HTTP Redirect，延迟 1 秒）
-        $ipcClient->onDisconnect(function (bool $receivedShutdown, \Weline\Server\IPC\ControlClient $client) use (&$ipcReceivedShutdown, $instanceName, $controlPort, $redirectLog) {
+        $ipcClient->onDisconnect(function (bool $receivedShutdown, \Weline\Server\IPC\ControlClient $client) use (&$ipcReceivedShutdown, $instanceName, $controlPort) {
             // 已收到 shutdown，不做任何复活/重连操作
             if ($receivedShutdown || $ipcReceivedShutdown) {
-                $redirectLog('Master 连接断开（已收到 shutdown，不复活）', 'INFO');
+                WlsLogger::info_('Master 连接断开（已收到 shutdown，不复活）');
                 return;
             }
-            $redirectLog('Master 连接意外断开，尝试复活（优先级 1，延迟 1 秒）...', 'WARN');
-            $resurrector = new \Weline\Server\IPC\MasterResurrector(
-                \Weline\Server\IPC\ControlMessage::RESURRECTION_REDIRECT,
-                $instanceName,
-                '127.0.0.1',
-                $controlPort
-            );
-            if ($resurrector->shouldResurrect($receivedShutdown)) {
-                $resurrector->attemptResurrect();
-            }
+            WlsLogger::warning_('Master 连接意外断开，控制面已收口，不执行子进程复活。');
             $client->tryReconnect();
         });
     } else {
@@ -197,9 +192,9 @@ $connections = [];
 $requestBuffers = [];
 
 // 优雅退出函数（统一使用进程管理器清理）
-$gracefulExit = function (string $reason = '') use ($socket, &$connections, $processName, &$ipcClient, $redirectLog, $httpPort) {
+$gracefulExit = function (string $reason = '') use ($socket, &$connections, $processName, &$ipcClient, $httpPort) {
     if ($reason) {
-        $redirectLog("退出: {$reason}", 'WARN');
+        WlsLogger::warning_("退出: {$reason}");
     }
     
     // 通知 Master 即将退出（IPC exited 消息）
@@ -209,7 +204,7 @@ $gracefulExit = function (string $reason = '') use ($socket, &$connections, $pro
             \getmypid(),
             $httpPort
         ));
-        $redirectLog("已发送 exited 消息给 Master", 'INFO');
+        WlsLogger::info_("已发送 exited 消息给 Master");
     }
     
     // 关闭 IPC 客户端
@@ -230,7 +225,8 @@ $gracefulExit = function (string $reason = '') use ($socket, &$connections, $pro
     exit(0);
 };
 
-// 信号处理
+// 信号处理（仅 Linux/Mac）
+// 注意：子进程不处理 SIGINT（Ctrl+C），由 Master 通过 IPC 广播 SHUTDOWN 通知退出
 if (\function_exists('pcntl_signal')) {
     \pcntl_signal(SIGTERM, function () use ($gracefulExit) {
         $gracefulExit('收到 SIGTERM 信号');
@@ -289,9 +285,9 @@ while (true) {
                 $masterDeadCount = 0;
             } else {
                 $masterDeadCount++;
-                $redirectLog("Master PID {$masterPid} 不可达且 IPC 断开 ({$masterDeadCount}/{$masterDeadThreshold})", 'WARN');
+                WlsLogger::warning_("Master PID {$masterPid} 不可达且 IPC 断开 ({$masterDeadCount}/{$masterDeadThreshold})");
                 if ($masterDeadCount >= $masterDeadThreshold) {
-                    $redirectLog("Master PID {$masterPid} 已死亡，自行退出（孤儿保护）", 'WARN');
+                    WlsLogger::warning_("Master PID {$masterPid} 已死亡，自行退出（孤儿保护）");
                     $gracefulExit('孤儿检测：Master 已死亡');
                 }
             }

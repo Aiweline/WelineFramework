@@ -13,7 +13,6 @@ declare(strict_types=1);
 
 namespace Weline\Server\Observer;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 
@@ -54,7 +53,7 @@ class MasterResurrectionFailedObserver implements ObserverInterface
                 ]
             );
         } catch (\Throwable $e) {
-            Env::log_error('server', '[MasterResurrectionFailedObserver] w_msg failed: ' . $e->getMessage());
+            w_log_error('[MasterResurrectionFailedObserver] w_msg failed: ' . $e->getMessage(), [], 'server');
         }
     }
 }

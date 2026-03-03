@@ -127,7 +127,7 @@ class CertificateAutoRenew implements CronTaskInterface
                     
                     if ($result['success']) {
                         $results['renewed']++;
-                        \error_log(\sprintf(
+                        w_log_info(\sprintf(
                             '[CertificateAutoRenew] %s - %s',
                             $domain,
                             __('续签成功')
@@ -138,7 +138,7 @@ class CertificateAutoRenew implements CronTaskInterface
                             'domain' => $domain,
                             'message' => $result['message'] ?? __('未知错误'),
                         ];
-                        \error_log(\sprintf(
+                        w_log_error(\sprintf(
                             '[CertificateAutoRenew] %s - %s: %s',
                             $domain,
                             __('续签失败'),
@@ -151,7 +151,7 @@ class CertificateAutoRenew implements CronTaskInterface
                         'domain' => $domain,
                         'message' => $e->getMessage(),
                     ];
-                    \error_log(\sprintf(
+                    w_log_error(\sprintf(
                         '[CertificateAutoRenew] %s - %s: %s',
                         $domain,
                         __('续签异常'),
@@ -173,7 +173,7 @@ class CertificateAutoRenew implements CronTaskInterface
             
         } catch (\Throwable $e) {
             $error = __('证书自动续签任务失败：%{1}', [$e->getMessage()]);
-            \error_log('[CertificateAutoRenew] ' . $error);
+            w_log_error('[CertificateAutoRenew] ' . $error);
             return $error;
         }
     }

@@ -222,7 +222,7 @@ class SslCertificateService
      */
     public function isDevelopmentEnvironment(): bool
     {
-        $deployMode = Env::get('deploy', 'prod');
+        $deployMode = Env::system('deploy') ?? 'prod';
         return \in_array($deployMode, ['dev', 'development', 'local'], true);
     }
     
@@ -847,7 +847,7 @@ CNF;
             
         } catch (\Throwable $e) {
             // 数据库更新失败不影响证书生成
-            \error_log('[SslCertificateService] ' . __('更新证书记录失败：%{1}', [$e->getMessage()]));
+            w_log_error('[SslCertificateService] ' . __('更新证书记录失败：%{1}', [$e->getMessage()]));
         }
     }
     
@@ -888,7 +888,7 @@ CNF;
             ]);
         } catch (\Throwable $e) {
             // 事件调度失败不影响主流程
-            \error_log('[SslCertificateService] ' . __('证书签发事件调度失败：%{1}', [$e->getMessage()]));
+            w_log_error('[SslCertificateService] ' . __('证书签发事件调度失败：%{1}', [$e->getMessage()]));
         }
     }
     
@@ -913,7 +913,7 @@ CNF;
                 'reason' => $reason,
             ]);
         } catch (\Throwable $e) {
-            \error_log('[SslCertificateService] ' . __('证书禁用事件调度失败：%{1}', [$e->getMessage()]));
+            w_log_error('[SslCertificateService] ' . __('证书禁用事件调度失败：%{1}', [$e->getMessage()]));
         }
     }
     
@@ -942,7 +942,7 @@ CNF;
                 'new_expires_at' => $newExpiresAt,
             ]);
         } catch (\Throwable $e) {
-            \error_log('[SslCertificateService] ' . __('证书更新事件调度失败：%{1}', [$e->getMessage()]));
+            w_log_error('[SslCertificateService] ' . __('证书更新事件调度失败：%{1}', [$e->getMessage()]));
         }
     }
     
@@ -970,7 +970,7 @@ CNF;
             // 获取事件中填充的域名数据
             return $eventData['domains'] ?? [];
         } catch (\Throwable $e) {
-            \error_log('[SslCertificateService] ' . __('请求域名列表失败：%{1}', [$e->getMessage()]));
+            w_log_error('[SslCertificateService] ' . __('请求域名列表失败：%{1}', [$e->getMessage()]));
             return [];
         }
     }

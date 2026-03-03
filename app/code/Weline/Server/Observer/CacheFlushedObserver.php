@@ -19,7 +19,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\Service\MasterProcess;
-use Weline\Server\Service\WlsInstanceRegistry;
+use Weline\Server\Service\ServerInstanceManager;
 
 /**
  * 缓存清理观察者
@@ -45,24 +45,24 @@ class CacheFlushedObserver implements ObserverInterface
             return;
         }
 
-        /** @var WlsInstanceRegistry $registry */
-        $registry = ObjectManager::getInstance(WlsInstanceRegistry::class);
+        /** @var ServerInstanceManager $manager */
+        $manager = ObjectManager::getInstance(ServerInstanceManager::class);
 
         // 没有运行中的 WLS Worker 则跳过
-        if (!$registry->hasRunningWorkers()) {
+        if (!$manager->hasRunningWorkers()) {
             return;
         }
 
         self::$notifiedInRequest = true;
 
         // 通知 Worker 重载缓存（不重启进程）
-        $this->notifyWorkersToReload($registry);
+        $this->notifyWorkersToReload($manager);
     }
 
     /**
      * 通知 WLS 重载缓存：优先 IPC，回退信号
      */
-    private function notifyWorkersToReload(WlsInstanceRegistry $registry): void
+    private function notifyWorkersToReload(ServerInstanceManager $manager): void
     {
         // 优先使用 IPC 控制通道
         $ipcSuccess = MasterProcess::sendReloadCommand('default', 'cache');
@@ -71,7 +71,7 @@ class CacheFlushedObserver implements ObserverInterface
         }
 
         // 回退：向 Master 发 SIGHUP
-        $masterPids = $registry->getRunningMasterPids();
+        $masterPids = $manager->getRunningMasterPids();
         if (!empty($masterPids) && \defined('SIGHUP')) {
             foreach ($masterPids as $pid) {
                 $pid = (int) $pid;
@@ -83,7 +83,7 @@ class CacheFlushedObserver implements ObserverInterface
         }
 
         // 无 Master 时回退：直接向 Worker 发 SIGUSR1
-        $allWorkerPids = $registry->getRunningWorkerPids();
+        $allWorkerPids = $manager->getRunningWorkerPids();
         if (\defined('SIGUSR1')) {
             foreach ($allWorkerPids as $pid) {
                 $pid = (int) $pid;
