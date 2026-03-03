@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service;
 
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 
 /**
  * 队列服务

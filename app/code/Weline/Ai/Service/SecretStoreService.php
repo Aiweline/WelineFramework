@@ -151,7 +151,7 @@ class SecretStoreService
             return $decrypted !== false ? $decrypted : null;
         } catch (\Throwable $e) {
             // 记录错误但不抛出异常
-            error_log('SecretStore decryption error: ' . $e->getMessage());
+            w_log_error('SecretStore decryption error: ' . $e->getMessage());
             return null;
         }
     }

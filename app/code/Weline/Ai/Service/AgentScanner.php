@@ -80,7 +80,7 @@ class AgentScanner
                         $scannedAgents[] = $agent;
                     }
                 } catch (\Exception $e) {
-                    error_log("[AgentScanner] 加载内置智能体失败: {$agentFile}, 错误: " . $e->getMessage());
+                    w_log_error("[AgentScanner] 加载内置智能体失败: {$agentFile}, 错误: " . $e->getMessage());
                 }
             }
         }
@@ -95,7 +95,7 @@ class AgentScanner
                 $this->registerAgent($agent, $agentFile, $moduleName);
                 $scannedAgents[] = $agent;
             } catch (\Exception $e) {
-                error_log("[AgentScanner] 注册扩展智能体失败: " . $e->getMessage());
+                w_log_error("[AgentScanner] 注册扩展智能体失败: " . $e->getMessage());
             }
         }
 
@@ -151,12 +151,12 @@ class AgentScanner
                             ];
                         }
                     } catch (\Exception $e) {
-                        error_log("[AgentScanner] 加载扩展智能体失败: {$agentFile}, 错误: " . $e->getMessage());
+                        w_log_error("[AgentScanner] 加载扩展智能体失败: {$agentFile}, 错误: " . $e->getMessage());
                     }
                 }
             }
         } catch (\Exception $e) {
-            error_log("[AgentScanner] 扫描扩展智能体失败: " . $e->getMessage());
+            w_log_error("[AgentScanner] 扫描扩展智能体失败: " . $e->getMessage());
         }
 
         return $agents;
@@ -305,7 +305,7 @@ class AgentScanner
         try {
             $agent = new $className();
         } catch (\Exception $e) {
-            error_log("[AgentScanner] 实例化智能体失败: {$className}, 错误: " . $e->getMessage());
+            w_log_error("[AgentScanner] 实例化智能体失败: {$className}, 错误: " . $e->getMessage());
             return $this->loadAgentFromCode($code);
         }
 
@@ -473,7 +473,7 @@ class AgentScanner
                 }
             }
         } catch (\Exception $e) {
-            error_log("[AgentScanner] 从代码加载智能体失败: {$code}, 错误: " . $e->getMessage());
+            w_log_error("[AgentScanner] 从代码加载智能体失败: {$code}, 错误: " . $e->getMessage());
         }
 
         return null;

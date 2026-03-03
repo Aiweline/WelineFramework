@@ -13,10 +13,9 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\Locale\Name;
 use Weline\I18n\Model\I18n;
-use Weline\I18n\Config\Reader;
-use Weline\I18n\Cache\I18NCache;
 
 /**
  * I18n模块集成服务
@@ -75,10 +74,8 @@ class I18nIntegration
     {
         // 从I18n模块获取默认语言，如果没有则使用zh-CN
         try {
-            $i18nModel = new I18n(
-                new Reader(),
-                new I18NCache()
-            );
+            /** @var I18n $i18nModel */
+            $i18nModel = ObjectManager::getInstance(I18n::class);
             return $i18nModel->getLocalByCode('zh-CN');
         } catch (\Exception $e) {
             return 'zh-CN';

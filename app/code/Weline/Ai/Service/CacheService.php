@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service;
 
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 
 /**
  * 缓存服务
@@ -26,9 +26,9 @@ use Weline\Framework\Cache\CacheInterface;
 class CacheService
 {
     /**
-     * @var CacheInterface
+     * @var CachePoolInterface
      */
-    private CacheInterface $cache;
+    private CachePoolInterface $cache;
 
     /**
      * 缓存标识
@@ -46,9 +46,9 @@ class CacheService
     /**
      * 构造函数
      * 
-     * @param CacheInterface $cache
+     * @param CachePoolInterface $cache
      */
-    public function __construct(CacheInterface $cache)
+    public function __construct(CachePoolInterface $cache)
     {
         $this->cache = $cache;
     }

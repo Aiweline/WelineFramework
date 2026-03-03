@@ -13,7 +13,7 @@ declare(strict_types=1);
 namespace Weline\Ai\Service;
 
 use Weline\Framework\App\Exception;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 
 /**
  * 安全服务
@@ -27,9 +27,9 @@ use Weline\Framework\Cache\CacheInterface;
 class SecurityService
 {
     /**
-     * @var CacheInterface
+     * @var CachePoolInterface
      */
-    private CacheInterface $cache;
+    private CachePoolInterface $cache;
 
     /**
      * 速率限制配置
@@ -41,9 +41,9 @@ class SecurityService
     /**
      * 构造函数
      * 
-     * @param CacheInterface $cache
+     * @param CachePoolInterface $cache
      */
-    public function __construct(CacheInterface $cache)
+    public function __construct(CachePoolInterface $cache)
     {
         $this->cache = $cache;
     }
@@ -185,7 +185,7 @@ class SecurityService
     public function logSecurityEvent(string $event, array $data = []): void
     {
         // 记录到日志
-        error_log(sprintf(
+        w_log_warning(sprintf(
             "Security Event: %s | Data: %s | Time: %s",
             $event,
             json_encode($data),
