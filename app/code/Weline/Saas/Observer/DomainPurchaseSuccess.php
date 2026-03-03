@@ -34,7 +34,7 @@ class DomainPurchaseSuccess implements ObserverInterface
             $orderId = $order->getOrderId();
             $service->runStepDns($orderId);
         } catch (\Throwable $e) {
-            \error_log('[Weline_Saas] ' . __('域名购买成功后续 DNS 步骤失败：%{1}', [$e->getMessage()]));
+            w_log_error('[Weline_Saas] ' . __('域名购买成功后续 DNS 步骤失败：%{1}', [$e->getMessage()]));
         }
     }
 }
