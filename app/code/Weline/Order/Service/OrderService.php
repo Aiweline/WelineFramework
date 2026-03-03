@@ -453,7 +453,8 @@ class OrderService
                 throw new \Exception(__('商品数量不能为空'));
             }
             if (!isset($item['price'])) {
-            throw new \Exception(__('商品价格不能为空'));
+                throw new \Exception(__('商品价格不能为空'));
+            }
         }
     }
     
@@ -496,6 +497,5 @@ class OrderService
         $validationService = $this->getDiscountValidationService();
         return $validationService->validateRuleActions($paymentMethodCode, $ruleActions);
     }
-}
 }
 
