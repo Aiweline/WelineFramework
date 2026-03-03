@@ -3,19 +3,20 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     <!--生成式搜索引擎优化菜单-->
-    <add source="Weline_GenerativeEngineOptimization::geo_manager" name="geo_manager" title="生成式搜索引擎优化" action="" 
+    <menu source="Weline_GenerativeEngineOptimization::geo_manager" name="geo_manager" title="生成式搜索引擎优化" action="" 
          parent="Weline_Backend::system_menu"
-         icon="mdi mdi-robot" order="20500"/>
-    
-    <add source="Weline_GenerativeEngineOptimization::platform_list" name="platform_list" title="平台管理" 
-         action="generativeengineoptimization/backend/platform" parent="Weline_GenerativeEngineOptimization::geo_manager"
-         icon="mdi mdi-cloud" order="1"/>
-    
-    <add source="Weline_GenerativeEngineOptimization::feed_list" name="feed_list" title="Feed管理" 
-         action="generativeengineoptimization/backend/feed" parent="Weline_GenerativeEngineOptimization::geo_manager"
-         icon="mdi mdi-rss" order="2"/>
-    
-    <add source="Weline_GenerativeEngineOptimization::push_list" name="push_list" title="推送管理" 
-         action="generativeengineoptimization/backend/push" parent="Weline_GenerativeEngineOptimization::geo_manager"
-         icon="mdi mdi-send" order="3"/>
+         icon="mdi mdi-robot" order="20500">
+        
+        <menu source="Weline_GenerativeEngineOptimization::platform_list" name="platform_list" title="平台管理" 
+             action="generativeengineoptimization/backend/platform"
+             icon="mdi mdi-cloud" order="1"/>
+        
+        <menu source="Weline_GenerativeEngineOptimization::feed_list" name="feed_list" title="Feed管理" 
+             action="generativeengineoptimization/backend/feed"
+             icon="mdi mdi-rss" order="2"/>
+        
+        <menu source="Weline_GenerativeEngineOptimization::push_list" name="push_list" title="推送管理" 
+             action="generativeengineoptimization/backend/push"
+             icon="mdi mdi-send" order="3"/>
+    </menu>
 </menus>
