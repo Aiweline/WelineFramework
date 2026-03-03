@@ -43,7 +43,7 @@ class Disable implements \Weline\Framework\Console\CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
-        Env::getInstance()->setConfig('maintenance', false);
+        Env::getInstance()->setConfig('system.maintenance', false);
         $this->printing->success(__('维护模式已关闭！'));
     }
 
