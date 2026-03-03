@@ -170,11 +170,14 @@ class App
             $config = require $env_filename;
         }
         
+        // 提前加载辅助函数，以便使用 w_array_get 点号语法访问配置
+        require_once __DIR__ . '/Common/functions.php';
+        
         // 开发者模式下的 OpCache 处理
         // 性能优化：不再每次请求都调用 opcache_reset()，改为按需失效
         // opcache_reset() 会清除所有缓存，严重影响性能
         // 建议：在开发环境中配置 opcache.revalidate_freq=0 和 opcache.validate_timestamps=1
-        if (isset($config['deploy']) && $config['deploy'] === 'dev') {
+        if (w_array_get($config, 'system.deploy') === 'dev') {
             // 仅在需要时禁用 OpCache（通过配置控制）
             if (isset($config['opcache_disable']) && $config['opcache_disable'] && function_exists('opcache_get_status')) {
                 if (ini_get('opcache.enable')) {
@@ -248,7 +251,7 @@ class App
             } catch (\Exception $e) {
                 // 如果 Pest 未安装，静默失败（不影响正常应用运行）
                 if (DEBUG) {
-                    Env::log_error('framework_pest', 'Pest 测试框架加载失败: ' . $e->getMessage());
+                    w_log_error('Pest 测试框架加载失败: ' . $e->getMessage(), [], 'framework_pest');
                 }
             }
         }
@@ -261,15 +264,15 @@ class App
 
         // 调试模式
         if (!defined('DEV')) {
-            define('DEV', isset($config['deploy']) && $config['deploy'] === 'dev');
+            define('DEV', w_array_get($config, 'system.deploy') === 'dev');
         };
         if (!defined('PROD')) {
-            define('PROD', isset($config['deploy']) && $config['deploy'] === 'prod');
+            define('PROD', w_array_get($config, 'system.deploy') === 'prod');
         };
         
         // 代码美化模式
         if (!defined('PHP_CS')) {
-            define('PHP_CS', $config['php-cs'] ?? false);
+            define('PHP_CS', w_array_get($config, 'dev.php_cs', false));
         };
         //报告错误
         DEBUG ? error_reporting(E_ALL) : error_reporting(0);

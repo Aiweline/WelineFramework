@@ -12,12 +12,13 @@ declare(strict_types=1);
 namespace Weline\Framework\Router\Observer;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Cache\CacheManager;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Router\Cache\RouterCache;
 
 /**
  * 检查全页缓存 Observer
@@ -90,30 +91,31 @@ class CheckFullPageCache implements ObserverInterface
 
         // 直接使用 WELINE_FULL_REQUEST_URI 构建全页缓存键（包含协议、域名、端口、路径、查询参数等完整信息）
         // 不需要规范化，不需要对比域名，WELINE_FULL_REQUEST_URI 已经包含了所有必要信息
-        $unifiedCacheKey = RouterCache::buildUnifiedRequestCacheKey('', $method, $request);
+        $unifiedCacheKey = KeyBuilder::buildUnifiedRequestCacheKey('', $method);
 
-        // 获取统一缓存实例
-        $cache = ObjectManager::getInstance(RouterCache::class . 'Factory');
+        // 获取路由缓存池
+        $cacheManager = ObjectManager::getInstance(CacheManager::class);
+        $cache = $cacheManager->pool('router');
         $unifiedCache = $cache->get($unifiedCacheKey);
+        
         // 如果存在统一缓存且包含全页缓存，直接输出并退出
-        if (is_array($unifiedCache) && isset($unifiedCache[RouterCache::UNIFIED_CACHE_FPC_KEY]) && !empty($unifiedCache[RouterCache::UNIFIED_CACHE_FPC_KEY])) {
-            // 恢复响应头（先清除已存在的响应头，避免重复）
-            if (isset($unifiedCache[RouterCache::UNIFIED_CACHE_HEADERS_KEY]) && is_array($unifiedCache[RouterCache::UNIFIED_CACHE_HEADERS_KEY]) && !headers_sent()) {
-                foreach ($unifiedCache[RouterCache::UNIFIED_CACHE_HEADERS_KEY] as $header) {
-                    // 解析响应头名称
+        if (is_array($unifiedCache) && isset($unifiedCache[KeyBuilder::UNIFIED_CACHE_FPC_KEY]) && !empty($unifiedCache[KeyBuilder::UNIFIED_CACHE_FPC_KEY])) {
+            // 收集响应头
+            $headers = ['X-Weline-FPC' => 'HIT'];
+            if (isset($unifiedCache[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY]) && is_array($unifiedCache[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY])) {
+                foreach ($unifiedCache[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY] as $header) {
                     if (str_contains($header, ':')) {
-                        $headerName = trim(explode(':', $header, 2)[0]);
-                        // 先移除已存在的同名响应头，避免重复
-                        header_remove($headerName);
+                        [$headerName, $headerValue] = explode(':', $header, 2);
+                        $headers[trim($headerName)] = trim($headerValue);
                     }
-                    // 设置响应头
-                    header($header, true); // true 表示替换已存在的同名 header
                 }
             }
-            // 添加缓存命中标志 header（使用框架独有的标识）
-            header('X-Weline-FPC: HIT');
-            echo $unifiedCache[RouterCache::UNIFIED_CACHE_FPC_KEY];
-            exit(0);
+            // 使用 ResponseTerminateException 替代 exit()，由 Runtime 层统一处理
+            throw new \Weline\Framework\Http\ResponseTerminateException(
+                200,
+                $unifiedCache[KeyBuilder::UNIFIED_CACHE_FPC_KEY],
+                $headers
+            );
         }
     }
 }

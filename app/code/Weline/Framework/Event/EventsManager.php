@@ -45,29 +45,6 @@ class EventsManager
      */
     private static array $moduleStatusCache = [];
 
-    /**
-     * 当前正在执行的事件名栈（支持事件嵌套）
-     * 格式：['Weline_Demo::demo', 'Weline_Other::other']
-     */
-    private static array $currentEventStack = [];
-
-    /**
-     * 循环检测：记录每个事件名调用 Weline_Admin::msg 的次数
-     * 格式：['Weline_Demo::demo' => 3]
-     */
-    private static array $msgCallCounts = [];
-
-    /**
-     * 循环检测：记录已检测到循环的事件名
-     * 格式：['Weline_Demo::demo' => true]
-     */
-    private static array $circularDetected = [];
-
-    /**
-     * 是否正在发送系统消息（防止循环调用）
-     */
-    private static bool $isSendingMsg = false;
-
     public function __construct(
         XmlReader $reader,
         EventRegistry $eventRegistry
@@ -222,212 +199,43 @@ class EventsManager
      */
     public function dispatch(string $eventName, mixed &$data = []): static
     {
-        // 记录当前正在执行的事件名（压入栈）
-        self::$currentEventStack[] = $eventName;
-        try {
-            // 规约和文档检查已在收集阶段（EventRegistry::organizeRegistryData）完成
-            // 这里只检查 Weline_Admin::msg 事件的循环调用
-            if ($eventName === 'Weline_Admin::msg') {
-                $this->checkCircularCall();
-            }
+        // 获取事件监听器（观察者）
+        $observers = $this->getEventObservers($eventName);
+        
+        // 检查是否有监听器，没有则直接跳过
+        if (empty($observers)) {
+            return $this;
+        }
+        
+        if (is_array($data)) {
+            $data['observers'] = $observers;
+            $this->events[$eventName] = (new Event($data))->setName($eventName);
+        } else {
+            $this->events[$eventName] = (new Event(['data' => &$data, 'observers' => $observers]))->setName($eventName);
+        }
+        
+        $this->events[$eventName]->dispatch();
 
-            // 获取事件监听器（观察者）
-            $observers = $this->getEventObservers($eventName);
-            
-            // 检查是否有监听器（Weline_Admin::msg 事件除外，因为它用于发送错误消息）
-            if (empty($observers) && $eventName !== 'Weline_Admin::msg') {
-                // 如果没有监听器，直接跳过，不执行事件
-                return $this;
-            }
-            
-            if (is_array($data)) {
-                $data['observers'] = $observers;
-                $this->events[$eventName] = (new Event($data))->setName($eventName);
-            } else {
-                $this->events[$eventName] = (new Event(['data' => &$data, 'observers' => $observers]))->setName($eventName);
-            }
-            
-            $this->events[$eventName]->dispatch();
-
-            // 将 Observer 修改的 Event 数据回写到调用方的 $data（通过引用）
-            // Event 构造时复制了 $data，Observer 修改的是 Event 内部的 _data，
-            // 必须在 dispatch 完成后同步回去，否则调用方永远读不到 Observer 设置的 result/error 等
-            if (is_array($data)) {
-                $modifiedInner = $this->events[$eventName]->getEvenData();
-                if ($modifiedInner !== null) {
-                    if (array_key_exists('data', $data)) {
-                        // 结构化事件数据（如 ['data' => ['operation' => ...]]）
-                        $data['data'] = $modifiedInner;
-                    } elseif (is_array($modifiedInner)) {
-                        // 扁平事件数据（如 ['provider' => ..., 'result' => null]）
-                        foreach ($modifiedInner as $k => $v) {
-                            $data[$k] = $v;
-                        }
+        // 将 Observer 修改的 Event 数据回写到调用方的 $data（通过引用）
+        // Event 构造时复制了 $data，Observer 修改的是 Event 内部的 _data，
+        // 必须在 dispatch 完成后同步回去，否则调用方永远读不到 Observer 设置的 result/error 等
+        if (is_array($data)) {
+            $modifiedInner = $this->events[$eventName]->getEvenData();
+            if ($modifiedInner !== null) {
+                if (array_key_exists('data', $data)) {
+                    // 结构化事件数据（如 ['data' => ['operation' => ...]]）
+                    $data['data'] = $modifiedInner;
+                } elseif (is_array($modifiedInner)) {
+                    // 扁平事件数据（如 ['provider' => ..., 'result' => null]）
+                    foreach ($modifiedInner as $k => $v) {
+                        $data[$k] = $v;
                     }
                 }
             }
-        } finally {
-            // 事件执行完毕，弹出栈
-            array_pop(self::$currentEventStack);
         }
         
         return $this;
     }
-
-    /**
-     * 检查循环调用（仅用于 Weline_Admin::msg 事件）
-     * 检测触发 Weline_Admin::msg 的事件名，防止循环调用
-     *
-     * @return bool 如果没有循环返回 true，否则返回 false
-     */
-    private function checkCircularCall(): bool
-    {
-        // 获取当前正在执行的事件名（栈中倒数第二个，因为最后一个是我们自己）
-        $stackCount = count(self::$currentEventStack);
-        if ($stackCount < 2) {
-            // 如果栈中只有 Weline_Admin::msg，说明是直接调用，允许执行
-            return true;
-        }
-
-        // 获取触发 Weline_Admin::msg 的事件名（栈中倒数第二个）
-        $sourceEventName = self::$currentEventStack[$stackCount - 2];
-
-        // 如果触发事件是 Weline_Admin::msg 本身，允许执行（避免误判）
-        if ($sourceEventName === 'Weline_Admin::msg') {
-            return true;
-        }
-
-        // 检查是否已检测到循环
-        if (isset(self::$circularDetected[$sourceEventName]) && self::$circularDetected[$sourceEventName]) {
-            // 已检测到循环，直接跳过
-            return false;
-        }
-
-        // 增加调用计数
-        if (!isset(self::$msgCallCounts[$sourceEventName])) {
-            self::$msgCallCounts[$sourceEventName] = 0;
-        }
-        self::$msgCallCounts[$sourceEventName]++;
-
-        // 如果调用次数超过3次，检测到循环
-        if (self::$msgCallCounts[$sourceEventName] > 3) {
-            // 标记为已检测到循环
-            self::$circularDetected[$sourceEventName] = true;
-
-            // 记录一次循环错误消息（只在第4次时记录一次）
-            if (self::$msgCallCounts[$sourceEventName] === 4) {
-                $this->sendCircularErrorMsg($sourceEventName);
-            }
-
-            // 跳过执行
-            return false;
-        }
-
-        // 没有循环，允许执行
-        return true;
-    }
-
-    /**
-     * 发送循环错误消息
-     *
-     * @param string $sourceEventName 触发循环的事件名
-     */
-    private function sendCircularErrorMsg(string $sourceEventName): void
-    {
-        // 防止循环调用
-        if (self::$isSendingMsg) {
-            return;
-        }
-
-        try {
-            self::$isSendingMsg = true;
-
-            $title = __('【超级严重】检测到事件循环调用');
-            $content = __(
-                "检测到事件 '%{sourceEventName}' 循环调用 Weline_Admin::msg 事件。\n\n" .
-                "该事件已被阻止执行，以防止系统阻塞。\n\n" .
-                "调用次数：%{count}\n\n" .
-                "请检查该事件的代码，确保：\n" .
-                "1. 事件处理逻辑中不会再次触发 Weline_Admin::msg 事件\n" .
-                "2. 错误处理逻辑不会导致无限循环\n" .
-                "3. 条件判断逻辑正确，避免重复触发\n\n" .
-                "修复后，需要重启应用以清除循环检测状态。",
-                [
-                    'sourceEventName' => $sourceEventName,
-                    'count' => self::$msgCallCounts[$sourceEventName] ?? 0
-                ]
-            );
-
-            // 直接调用观察者，避免再次触发事件检查
-            $this->sendSystemMessageDirectly($title, $content);
-        } catch (\Exception $e) {
-            // 如果发送失败，记录到错误日志
-            if (defined('DEV') && DEV) {
-                error_log(__('EventsManager Error: Failed to send circular error message - %{error}', ['error' => $e->getMessage()]));
-            }
-        } finally {
-            self::$isSendingMsg = false;
-        }
-    }
-
-    /**
-     * 直接发送系统消息（绕过事件检查）
-     *
-     * @param string $title 标题
-     * @param string $content 内容
-     */
-    private function sendSystemMessageDirectly(string $title, string $content): void
-    {
-        try {
-            // 获取观察者
-            $observers = $this->getEventObservers('Weline_Admin::msg');
-            
-            if (empty($observers)) {
-                // 如果没有观察者，记录到错误日志
-                if (defined('DEV') && DEV) {
-                    error_log(__('EventsManager Warning: No observer found for Weline_Admin::msg'));
-                }
-                return;
-            }
-
-            // 创建事件对象
-            $event = new Event([
-                'data' => [
-                    'title' => $title,
-                    'content' => $content,
-                    'is_read' => false,
-                    'is_icon' => 1,
-                    'is_img' => 0,
-                    'avatar' => 'ri-error-warning-line'
-                ],
-                'observers' => $observers
-            ]);
-            $event->setName('Weline_Admin::msg');
-
-            // 直接执行观察者，不通过 dispatch 方法（避免再次检查）
-            foreach ($observers as $observerConfig) {
-                if (isset($observerConfig['instance'])) {
-                    try {
-                        $observer = ObjectManager::getInstance($observerConfig['instance']);
-                        if ($observer instanceof ObserverInterface) {
-                            $observer->execute($event);
-                        }
-                    } catch (\Exception $e) {
-                        // 忽略观察者执行错误，避免影响主流程
-                        if (defined('DEV') && DEV) {
-                            error_log(__('EventsManager Warning: Observer execution failed - %{error}', ['error' => $e->getMessage()]));
-                        }
-                    }
-                }
-            }
-        } catch (\Exception $e) {
-            // 如果发送失败，记录到错误日志
-            if (defined('DEV') && DEV) {
-                error_log(__('EventsManager Error: Failed to send system message directly - %{error}', ['error' => $e->getMessage()]));
-            }
-        }
-    }
-
 
     /**
      * @DESC          # 读取事件数据 读取非对象数值传输时的事件更改结果 如果是对象数据则不需要这个函数

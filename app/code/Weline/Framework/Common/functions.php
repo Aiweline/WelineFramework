@@ -28,11 +28,28 @@
  */
 
 use Weline\Framework\App\Debug;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\CacheManager;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\FrameworkQueryService;
-use Weline\Framework\View\Cache\ViewCache;
+
+# 数组点号语法取值（支持嵌套数组）
+if (!function_exists('w_array_get')) {
+    function w_array_get(array $array, string $key, mixed $default = null): mixed
+    {
+        if (!str_contains($key, '.')) {
+            return $array[$key] ?? $default;
+        }
+        foreach (explode('.', $key) as $segment) {
+            if (!is_array($array) || !array_key_exists($segment, $array)) {
+                return $default;
+            }
+            $array = $array[$segment];
+        }
+        return $array;
+    }
+}
 
 # obj 模型实例化方法
 if (!function_exists('w_obj')) {
@@ -369,6 +386,35 @@ if (!function_exists('w_msg')) {
         $eventsManager->dispatch('Weline_Backend::application::system_notification', $eventData);
     }
 }
+if (!function_exists('w_cache')) {
+    /**
+     * 获取缓存池
+     *
+     * @param string $identity 池标识（如 router, config, database）
+     * @return CachePoolInterface
+     */
+    function w_cache(string $identity = 'default'): CachePoolInterface
+    {
+        static $manager = null;
+        if ($manager === null) {
+            $manager = ObjectManager::getInstance(CacheManager::class);
+        }
+        return $manager->pool($identity);
+    }
+}
+
+if (!function_exists('w_cache_manager')) {
+    /**
+     * 获取缓存管理器
+     *
+     * @return CacheManager
+     */
+    function w_cache_manager(): CacheManager
+    {
+        return ObjectManager::getInstance(CacheManager::class);
+    }
+}
+
 if (!function_exists('w_get_string_between_quotes')) {
     /**
      * @DESC          # 读取引号之间的内容

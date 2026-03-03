@@ -127,12 +127,12 @@ class AdapterScanner
                     }
                 } catch (\Throwable $e) {
                     // 单个适配器扫描失败不影响其他适配器
-                    error_log("扫描 Framework 适配器 {$subDir} 失败: " . $e->getMessage());
+                    w_log_error("扫描 Framework 适配器 {$subDir} 失败: " . $e->getMessage());
                     continue;
                 }
             }
         } catch (\Exception $e) {
-            error_log("扫描 Framework 适配器失败: " . $e->getMessage());
+            w_log_error("扫描 Framework 适配器失败: " . $e->getMessage());
         }
         
         return $adapters;
@@ -198,14 +198,14 @@ class AdapterScanner
                                     $adapters[strtolower($driverType)] = $className;
                                 }
                             } catch (\Throwable $e) {
-                                error_log("加载扩展适配器失败: {$sourceFile}, 错误: " . $e->getMessage());
+                                w_log_error("加载扩展适配器失败: {$sourceFile}, 错误: " . $e->getMessage());
                             }
                         }
                     }
                 }
             }
         } catch (\Exception $e) {
-            error_log("从 ExtendsData 扫描扩展适配器失败: " . $e->getMessage());
+            w_log_error("从 ExtendsData 扫描扩展适配器失败: " . $e->getMessage());
         }
         
         return $adapters;
@@ -268,21 +268,21 @@ class AdapterScanner
                 try {
                     $reflection = new \ReflectionClass($className);
                 } catch (\ReflectionException $e) {
-                    error_log("适配器类不存在: {$className}, 错误: " . $e->getMessage());
+                    w_log_error("适配器类不存在: {$className}, 错误: " . $e->getMessage());
                     return false;
                 }
             }
             
             // 检查是否实现了接口
             if (!is_subclass_of($className, ConnectorInterface::class)) {
-                error_log("适配器类 {$className} 未实现 ConnectorInterface 接口");
+                w_log_error("适配器类 {$className} 未实现 ConnectorInterface 接口");
                 return false;
             }
             
             return true;
         } catch (\Throwable $e) {
             // 捕获所有异常，避免单个适配器问题影响整个扫描
-            error_log("验证适配器 {$className} 时发生错误: " . $e->getMessage());
+            w_log_error("验证适配器 {$className} 时发生错误: " . $e->getMessage());
             return false;
         }
     }

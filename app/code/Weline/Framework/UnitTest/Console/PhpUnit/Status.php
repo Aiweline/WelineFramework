@@ -41,7 +41,7 @@ class Status implements \Weline\Framework\Console\CommandInterface
     public function execute(array $args = [], array $data = [])
     {
         # 提示是否运行：生产环境禁止运行
-        if (Env::get('deploy') !== 'dev') {
+        if (Env::system('deploy') !== 'dev') {
             $this->printing->setup(__('非开发环境禁止运行！如你确认是dev环境，请运行php bin/w deploy:model:set dev 转换环境后运行！'));
             exit(1);
         }
@@ -76,9 +76,9 @@ class Status implements \Weline\Framework\Console\CommandInterface
         $serverHost = '127.0.0.1';
         if (file_exists($envFile)) {
             $env = include $envFile;
-            if (isset($env['phpunit_server'])) {
-                $serverPort = $env['phpunit_server']['port'] ?? 9980;
-                $serverHost = $env['phpunit_server']['host'] ?? '127.0.0.1';
+            if (isset($env['dev']['phpunit_server'])) {
+                $serverPort = $env['dev']['phpunit_server']['port'] ?? 9980;
+                $serverHost = $env['dev']['phpunit_server']['host'] ?? '127.0.0.1';
             }
         }
         
@@ -89,8 +89,8 @@ class Status implements \Weline\Framework\Console\CommandInterface
             # 显示运行时间
             if (file_exists($envFile)) {
                 $env = include $envFile;
-                if (isset($env['phpunit_server']['start_time'])) {
-                    $startTime = $env['phpunit_server']['start_time'];
+                if (isset($env['dev']['phpunit_server']['start_time'])) {
+                    $startTime = $env['dev']['phpunit_server']['start_time'];
                     $runTime = time() - $startTime;
                     $this->printing->note(__('运行时间: %{1}秒', (string)$runTime));
                     $this->printing->note(__('启动时间: %{1}', date('Y-m-d H:i:s', $startTime)));
@@ -119,13 +119,13 @@ class Status implements \Weline\Framework\Console\CommandInterface
         # 显示env.php中的信息
         if (file_exists($envFile)) {
             $env = include $envFile;
-            if (isset($env['phpunit_server'])) {
+            if (isset($env['dev']['phpunit_server'])) {
                 $this->printing->note(__('================================'));
                 $this->printing->note(__('env.php中的服务器信息:'));
-                $this->printing->note(__('主机: %{1}', $env['phpunit_server']['host'] ?? 'N/A'));
-                $this->printing->note(__('端口: %{1}', (string)($env['phpunit_server']['port'] ?? 'N/A')));
-                $this->printing->note(__('PID: %{1}', (string)($env['phpunit_server']['pid'] ?? 'N/A')));
-                $this->printing->note(__('状态: %{1}', $env['phpunit_server']['status'] ?? 'N/A'));
+                $this->printing->note(__('主机: %{1}', $env['dev']['phpunit_server']['host'] ?? 'N/A'));
+                $this->printing->note(__('端口: %{1}', (string)($env['dev']['phpunit_server']['port'] ?? 'N/A')));
+                $this->printing->note(__('PID: %{1}', (string)($env['dev']['phpunit_server']['pid'] ?? 'N/A')));
+                $this->printing->note(__('状态: %{1}', $env['dev']['phpunit_server']['status'] ?? 'N/A'));
             }
         }
     }

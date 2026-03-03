@@ -104,7 +104,7 @@ final class Connector extends Query implements ConnectorInterface
             $version = (string)$this->link->query('SELECT sqlite_version()')->fetchColumn();
             (new SqliteDialect())->validateVersion($version);
         } catch (\Throwable $e) {
-            \Weline\Framework\App\Env::log_warning('database_version.log', __('SQLite 版本校验未通过（连接已建立，升级可继续）：%{1}', [$e->getMessage()]));
+            w_log_warning(__('SQLite 版本校验未通过（连接已建立，升级可继续）：%{1}', [$e->getMessage()]), [], 'database_version.log');
         }
         $this->wrappedConnection = new PdoConnection($this->link, 'sqlite');
         return $this;

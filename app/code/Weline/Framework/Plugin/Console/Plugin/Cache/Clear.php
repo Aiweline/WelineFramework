@@ -11,16 +11,16 @@ namespace Weline\Framework\Plugin\Console\Plugin\Cache;
 
 use Weline\Framework\Console\CommandInterface;
 
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Plugin\Cache\PluginCache;
 
 class Clear implements \Weline\Framework\Console\CommandInterface
 {
     /**
-     * @var CacheInterface
+     * @var CachePoolInterface
      */
-    private CacheInterface $pluginCache;
+    private CachePoolInterface $pluginCache;
 
     /**
      * @var Printing

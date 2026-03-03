@@ -120,15 +120,86 @@ abstract class AbstractRestController extends Core
         return $xml;
     }
 
-    protected function success(string $msg = '请求成功！', mixed $data = '', int $code = 200): string
+    /**
+     * 返回成功响应
+     * 
+     * @param string $msg 成功消息
+     * @param mixed $data 响应数据
+     * @param int $code HTTP 状态码
+     */
+    protected function success(string $msg = '请求成功！', mixed $data = '', int $code = 200): array|string
     {
-        $result = $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
+        $response = [
+            'success' => true,
+            'error' => false,
+            'code' => $code,
+            'msg' => __($msg),
+            'message' => __($msg),
+            'data' => $data,
+        ];
+        $result = $this->fetch($response);
         return $result ?: '';
     }
 
-    protected function error(string $msg = '请求失败！', mixed $data = '', int $code = 400): string
+    /**
+     * 返回错误响应（支持多语言和前端友好提示）
+     * 
+     * @param string $msg 错误消息
+     * @param mixed $data 额外数据
+     * @param int $code HTTP 状态码
+     * @param string|null $title 错误标题（可选，默认根据状态码生成）
+     */
+    protected function error(string $msg = '请求失败！', mixed $data = '', int $code = 400, ?string $title = null): array|string
     {
-        $result = $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
+        $response = [
+            'success' => false,
+            'error' => true,
+            'code' => $code,
+            'title' => $title ?? \Weline\Framework\Exception\ErrorResponse::getTitle($code),
+            'msg' => __($msg),
+            'message' => __($msg),
+            'icon' => \Weline\Framework\Exception\ErrorResponse::getIcon($code),
+            'data' => $data,
+        ];
+        $result = $this->fetch($response);
+        return $result ?: '';
+    }
+
+    /**
+     * 返回异常响应（支持多语言和前端友好提示）
+     * 
+     * @param \Throwable $exception 异常对象
+     * @param string $msg 自定义错误消息（可选）
+     * @param mixed $data 额外数据
+     * @param int|null $code HTTP 状态码（可选，默认从异常获取）
+     */
+    protected function exception(\Throwable $exception, string $msg = '', mixed $data = '', ?int $code = null): array|string
+    {
+        $statusCode = $code ?? \Weline\Framework\Exception\ErrorResponse::getStatusCode($exception);
+        $message = $msg ?: $exception->getMessage();
+        
+        $response = [
+            'success' => false,
+            'error' => true,
+            'code' => $statusCode,
+            'title' => \Weline\Framework\Exception\ErrorResponse::getTitle($statusCode),
+            'msg' => __($message),
+            'message' => __($message),
+            'icon' => \Weline\Framework\Exception\ErrorResponse::getIcon($statusCode),
+            'data' => $data,
+        ];
+        
+        // DEV 模式添加调试信息
+        if (\defined('DEV') && DEV) {
+            $response['debug'] = [
+                'exception' => get_class($exception),
+                'file' => $exception->getFile(),
+                'line' => $exception->getLine(),
+                'trace' => $exception->getTraceAsString(),
+            ];
+        }
+        
+        $result = $this->fetch($response);
         return $result ?: '';
     }
 }
