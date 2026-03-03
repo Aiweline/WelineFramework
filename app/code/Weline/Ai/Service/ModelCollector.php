@@ -106,7 +106,7 @@ class ModelCollector
                 }
             } catch (\Exception $e) {
                 // 记录错误但继续处理其他模型
-                error_log(__('处理模型配置文件失败: %{file}, 错误: %{msg}', ['file' => $configFile, 'msg' => $e->getMessage()]));
+                w_log_error(__('处理模型配置文件失败: %{file}, 错误: %{msg}', ['file' => $configFile, 'msg' => $e->getMessage()]));
             }
         }
 

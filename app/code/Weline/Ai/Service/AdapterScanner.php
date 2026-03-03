@@ -94,7 +94,7 @@ class AdapterScanner
                         $scannedAdapters[] = $adapter;
                     }
                 } catch (\Exception $e) {
-                    error_log("加载适配器失败: {$adapterFile}, 错误: " . $e->getMessage());
+                    w_log_error("加载适配器失败: {$adapterFile}, 错误: " . $e->getMessage());
                 }
             }
         }
@@ -108,7 +108,7 @@ class AdapterScanner
                 $this->registerAdapter($adapter, $adapterFile);
                 $scannedAdapters[] = $adapter;
             } catch (\Exception $e) {
-                error_log("注册其他模块适配器失败: " . $e->getMessage());
+                w_log_error("注册其他模块适配器失败: " . $e->getMessage());
             }
         }
 
@@ -174,12 +174,12 @@ class AdapterScanner
                             ];
                         }
                     } catch (\Exception $e) {
-                        error_log("加载其他模块适配器失败: {$adapterFile}, 错误: " . $e->getMessage());
+                        w_log_error("加载其他模块适配器失败: {$adapterFile}, 错误: " . $e->getMessage());
                     }
                 }
             }
         } catch (\Exception $e) {
-            error_log("从 ExtendsData 扫描其他模块适配器失败: " . $e->getMessage());
+            w_log_error("从 ExtendsData 扫描其他模块适配器失败: " . $e->getMessage());
         }
         
         return $adapters;
@@ -197,7 +197,7 @@ class AdapterScanner
     {
         // 先加载文件
         if (!file_exists($adapterFile)) {
-            error_log("文件不存在: {$adapterFile}");
+            w_log_error("文件不存在: {$adapterFile}");
             return null;
         }
         
@@ -426,7 +426,7 @@ class AdapterScanner
             if (file_exists($adapterFile)) {
                 require_once $adapterFile;
             } else {
-                error_log("适配器文件不存在: {$adapterFile}，尝试从代码中加载适配器: {$code}");
+                w_log_error("适配器文件不存在: {$adapterFile}，尝试从代码中加载适配器: {$code}");
                 return $this->loadAdapterFromCode($code);
             }
         } else {
@@ -440,26 +440,26 @@ class AdapterScanner
         // 检查类是否存在（先不使用 autoload，因为可能文件已加载但类名格式不对）
         if (!class_exists($className, false)) {
             // 如果文件已加载但类不存在，可能是类名格式问题，尝试从代码中加载
-            error_log("适配器类不存在: {$className}，尝试从代码中加载适配器: {$code}");
+            w_log_error("适配器类不存在: {$className}，尝试从代码中加载适配器: {$code}");
             return $this->loadAdapterFromCode($code);
         }
 
         try {
             $adapter = new $className();
         } catch (\Exception $e) {
-            error_log("实例化适配器失败: {$className}，错误: " . $e->getMessage());
+            w_log_error("实例化适配器失败: {$className}，错误: " . $e->getMessage());
             // 实例化失败，尝试从代码中加载
             return $this->loadAdapterFromCode($code);
         }
         
         if (!$adapter instanceof ScenarioAdapterInterface) {
-            error_log("适配器类 {$className} 未实现 ScenarioAdapterInterface 接口");
+            w_log_error("适配器类 {$className} 未实现 ScenarioAdapterInterface 接口");
             return null;
         }
 
         // 验证适配器代码是否匹配
         if ($adapter->getCode() !== $code) {
-            error_log("适配器代码不匹配: 期望 {$code}，实际 {$adapter->getCode()}");
+            w_log_error("适配器代码不匹配: 期望 {$code}，实际 {$adapter->getCode()}");
             return null;
         }
 
@@ -611,7 +611,7 @@ class AdapterScanner
                 }
             }
         } catch (\Exception $e) {
-            error_log("从代码加载适配器失败: {$code}, 错误: " . $e->getMessage());
+            w_log_error("从代码加载适配器失败: {$code}, 错误: " . $e->getMessage());
         }
         
         return null;
