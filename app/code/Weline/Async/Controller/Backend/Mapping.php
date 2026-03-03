@@ -726,11 +726,11 @@ class Mapping extends BackendController
                     $isValidKey = true;
                 } elseif (strpos($keyContent, 'ssh-') === 0) {
                     // 可能是公钥格式，但我们需要私钥
-                    error_log("SSH key appears to be a public key, private key required");
+                    w_log_warning("SSH key appears to be a public key, private key required");
                 }
                 
                 if (!$isValidKey) {
-                    error_log("Invalid SSH key format for host {$host->getId()}. Key should contain BEGIN/END markers.");
+                    w_log_warning("Invalid SSH key format for host {$host->getId()}. Key should contain BEGIN/END markers.");
                 }
                 
                 // 创建临时密钥文件
@@ -747,13 +747,13 @@ class Mapping extends BackendController
                 
                 $writeResult = file_put_contents($keyFile, $keyContent);
                 if ($writeResult === false) {
-                    error_log("Failed to write SSH key file: {$keyFile}");
+                    w_log_error("Failed to write SSH key file: {$keyFile}");
                 } else {
                     chmod($keyFile, 0600);
                     // 验证文件权限
                     $filePerms = substr(sprintf('%o', fileperms($keyFile)), -4);
                     if ($filePerms !== '0600') {
-                        error_log("SSH key file permissions incorrect: {$filePerms}, expected 0600");
+                        w_log_warning("SSH key file permissions incorrect: {$filePerms}, expected 0600");
                         chmod($keyFile, 0600); // 再次尝试设置
                     }
                     $sshOptions[] = '-i ' . escapeshellarg($keyFile);
@@ -851,30 +851,30 @@ class Mapping extends BackendController
                     strpos($errorMsg, 'Connection') !== false ||
                     strpos($errorMsg, 'Host key verification failed') !== false) {
                     // 真正的错误，记录详细日志
-                    error_log("SSH directory listing failed for {$remotePath}");
-                    error_log("SSH Command: " . substr($sshCmd, 0, 200)); // 记录命令前200字符
-                    error_log("SSH Error: {$errorMsg}");
+                    w_log_error("SSH directory listing failed for {$remotePath}");
+                    w_log_debug("SSH Command: " . substr($sshCmd, 0, 200)); // 记录命令前200字符
+                    w_log_error("SSH Error: {$errorMsg}");
                     
                     $debugInfo = [];
                     $debugInfo[] = "SSH错误: {$errorMsg}";
                     
                     if (!empty($keyFile)) {
                         $keyExists = file_exists($keyFile);
-                        error_log("Key file exists: " . ($keyExists ? 'yes' : 'no'));
+                        w_log_debug("Key file exists: " . ($keyExists ? 'yes' : 'no'));
                         $debugInfo[] = "密钥文件存在: " . ($keyExists ? '是' : '否');
                         
                         if ($keyExists) {
                             $keySize = filesize($keyFile);
                             $keyPerms = substr(sprintf('%o', fileperms($keyFile)), -4);
-                            error_log("Key file size: {$keySize} bytes");
-                            error_log("Key file permissions: {$keyPerms}");
+                            w_log_debug("Key file size: {$keySize} bytes");
+                            w_log_debug("Key file permissions: {$keyPerms}");
                             $debugInfo[] = "密钥文件大小: {$keySize} 字节";
                             $debugInfo[] = "密钥文件权限: {$keyPerms}";
                             
                             // 读取密钥文件前100字符用于调试（不包含敏感内容）
                             $keyPreview = file_get_contents($keyFile, false, null, 0, 100);
                             $preview = substr($keyPreview, 0, 50) . "...";
-                            error_log("Key file preview: {$preview}");
+                            w_log_debug("Key file preview: {$preview}");
                             $debugInfo[] = "密钥文件预览: {$preview}";
                         }
                     } else {
@@ -971,7 +971,7 @@ class Mapping extends BackendController
             
         } catch (\Exception $e) {
             // 记录错误但不抛出异常，返回空树
-            error_log("buildRemoteDirectoryTree exception for {$remotePath}: " . $e->getMessage());
+            w_log_error("buildRemoteDirectoryTree exception for {$remotePath}: " . $e->getMessage());
         } finally {
             // 确保清理临时密钥文件（无论是否发生异常）
             if (!empty($keyFile) && file_exists($keyFile)) {
