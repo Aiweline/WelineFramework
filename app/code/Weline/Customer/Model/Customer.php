@@ -15,11 +15,12 @@ use Weline\Backend\Model\Config;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Database\Db\Ddl\Table;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\Auth\AuthenticableInterface;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Framework\View\Template;
 
-class Customer extends \Weline\Framework\Database\Model
+class Customer extends \Weline\Framework\Database\Model implements AuthenticableInterface
 {
     public const fields_ID            = 'user_id';
     public const fields_username      = 'username';
@@ -198,5 +199,39 @@ class Customer extends \Weline\Framework\Database\Model
     public function setSandboxAccount(bool $flag): static
     {
         return $this->setData(self::fields_is_sandbox, $flag ? 1 : 0);
+    }
+
+    // ==================== AuthenticableInterface 实现 ====================
+
+    /**
+     * @inheritDoc
+     */
+    public function getAuthIdentifier(): int|string
+    {
+        return (int)$this->getId();
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getAuthUsername(): string
+    {
+        return (string)$this->getUsername();
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getAuthSessionId(): string
+    {
+        return (string)$this->getSessionId();
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public static function getAuthModelClass(): string
+    {
+        return self::class;
     }
 }

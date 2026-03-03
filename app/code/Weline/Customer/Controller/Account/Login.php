@@ -11,23 +11,19 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
 use Weline\Customer\Model\Customer;
 use Weline\Customer\Model\CustomerToken;
-use Weline\Customer\Session\CustomerSession;
 
 /**
  * 前端用户登录控制器
  */
 class Login extends \Weline\Framework\App\Controller\FrontendController
 {
-    private CustomerSession $session;
     private Template $template;
 
     protected ?string $layoutType = 'account.auth';
 
     public function __construct(
-        CustomerSession $session,
         Template $template
     ) {
-        $this->session = $session;
         $this->template = $template;
     }
 
@@ -37,14 +33,14 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
     public function getIndex()
     {
         // 如果已登录，跳转到个人中心
-        if ($this->session->isLogin()) {
+        if ($this->isLoggedIn()) {
             $this->redirect('/customer/account');
         }
 
         // 保存来源URL（referer）到session
         $referer = $this->request->getParam('referer') ?: $this->request->getReferer();
         if ($referer && !str_contains($referer, '/account/login')) {
-            $this->session->setData('login_referer', $referer);
+            $this->session->getSession()->set('login_referer', $referer);
         }
 
         // 使用主题认证布局
@@ -56,7 +52,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
      */
     public function postIndex()
     {
-        if ($this->session->isLogin()) {
+        if ($this->isLoggedIn()) {
             return $this->json([
                 'success' => true,
                 'message' => __('您已登录'),
@@ -123,7 +119,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
 
             // 登录成功
             $this->session->login($user);
-            $user->setSessionId($this->session->getSessionId())
+            $user->setSessionId($this->session->getSession()->getSessionId())
                 ->setLoginIp($this->request->clientIP())
                 ->resetAttemptTimes()
                 ->save();
@@ -167,8 +163,8 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
             $eventManager->dispatch('Weline_Customer_Account_Login::login_after', $eventData);
 
             // 获取来源URL
-            $referer = $this->session->getData('login_referer');
-            $this->session->delete('login_referer');
+            $referer = $this->session->getSession()->get('login_referer');
+            $this->session->getSession()->delete('login_referer');
 
             // 确定跳转地址
             $redirectUrl = '/customer/account';
@@ -191,7 +187,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         } catch (\Exception $e) {
             // 记录异常日志
             if (defined('DEV') && DEV) {
-                error_log('登录异常: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+                w_log_error('登录异常: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
             }
             return $this->json([
                 'success' => false,

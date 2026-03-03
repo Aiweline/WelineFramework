@@ -8,21 +8,17 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
 use Weline\Customer\Model\Customer;
-use Weline\Customer\Session\CustomerSession;
 
 /**
  * 前端用户注册控制器
  */
 class Register extends \Weline\Framework\App\Controller\FrontendController
 {
-    private CustomerSession $session;
     private Template $template;
 
     public function __construct(
-        CustomerSession $session,
         Template $template
     ) {
-        $this->session = $session;
         $this->template = $template;
     }
 
@@ -32,7 +28,7 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
     public function getIndex()
     {
         // 如果已登录，跳转到个人中心
-        if ($this->session->isLogin()) {
+        if ($this->isLoggedIn()) {
             $this->redirect('/customer/account');
         }
 
@@ -48,7 +44,7 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
      */
     public function postIndex()
     {
-        if ($this->session->isLogin()) {
+        if ($this->isLoggedIn()) {
             return $this->json([
                 'success' => false,
                 'message' => __('您已登录，无需注册')
@@ -111,7 +107,7 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
 
             // 自动登录
             $this->session->login($newUser);
-            $newUser->setSessionId($this->session->getSessionId())
+            $newUser->setSessionId($this->session->getSession()->getSessionId())
                 ->setLoginIp($this->request->clientIP())
                 ->save();
 
@@ -134,7 +130,7 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
         } catch (\Exception $e) {
             // 记录异常日志
             if (defined('DEV') && DEV) {
-                error_log('注册异常: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+                w_log_error('注册异常: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
             }
             return $this->json([
                 'success' => false,
