@@ -11,17 +11,28 @@ File: Main Js File
     'use strict';
 
     /**
-     * 收起某个菜单项及其所有子菜单（移除 mm-active / mm-show）
+     * 收起某个菜单项及其所有子菜单（强制立即收起，不依赖 MetisMenu API）
      * @param {jQuery} $li - 要收起的 li 元素
      */
     function collapseMenuItem($li) {
         if (!$li || !$li.length) return;
-        $li.removeClass('mm-active');
-        $li.children('a').attr('aria-expanded', 'false');
+        
         var $sub = $li.children('ul.sub-menu');
-        if ($sub.length) {
-            $sub.removeClass('mm-show').addClass('mm-collapse').attr('aria-expanded', 'false').css({ display: '', visibility: '' });
-            $sub.find('> li').each(function() { collapseMenuItem($(this)); });
+        if ($sub.length && $sub.hasClass('mm-show')) {
+            // 直接操作 DOM，不依赖 MetisMenu API，避免 transitioning 状态冲突
+            $sub.removeClass('mm-show mm-collapsing')
+                .addClass('mm-collapse')
+                .css({ height: '', display: '', visibility: '' });
+            $li.removeClass('mm-active');
+            $li.children('a').attr('aria-expanded', 'false');
+            
+            // 递归收起所有子菜单
+            $sub.find('> li').each(function() {
+                collapseMenuItem($(this));
+            });
+        } else {
+            $li.removeClass('mm-active');
+            $li.children('a').attr('aria-expanded', 'false');
         }
     }
 
@@ -29,25 +40,85 @@ File: Main Js File
      * 左侧菜单：只保留当前点击的菜单展开，收起其他所有顶级菜单；
      * 用户主动展开其他菜单时，去掉由路由反选的选中态（active/mm-active），避免一直显示为选中。
      */
-    function initSidebarAccordion() {
+    function _initSidebarAccordion_DEPRECATED() {
+        // 此函数已废弃，由 initSidebarAccordionNew 替代
         var $sideMenu = $('#side-menu');
         if (!$sideMenu.length) return;
         $sideMenu.off('click.sidebarAccordion').on('click.sidebarAccordion', 'a.has-arrow', function(e) {
             var $a = $(this);
             var $li = $a.closest('li');
-            // 找到所属的顶级 li（#side-menu 下的直接子 li）
             var $topLevelLi = $li.closest('#side-menu > li');
             if (!$topLevelLi.length) return;
             // 用户操作后关闭路由反选：去掉由 initActiveMenu 加上的 active，避免“当前页”一直高亮
             $('#sidebar-menu a.active').removeClass('active');
-            // 收起除当前顶级项外的所有顶级菜单（会顺带去掉它们的 mm-active/mm-show）
+            var metisMenuInstance = $sideMenu.data('metisMenu');
+            
             $('#side-menu > li').each(function() {
                 var $top = $(this);
-                if ($top[0] !== $topLevelLi[0]) {
+                if ($top[0] !== $topLevelLi[0] && $top.hasClass('mm-active')) {
                     collapseMenuItem($top);
                 }
             });
-            // 由 metisMenu 在 click 里会再给当前项加 mm-active/mm-show，这里只负责清空其它
+            });
+        
+        $sideMenu.on('shown.metisMenu', function(e) {
+            var $shownMenu = $(e.target);
+            var $topLevelLi = $shownMenu.closest('#side-menu > li');
+            if (!$topLevelLi.length) return;
+            
+            var metisMenuInstance = $sideMenu.data('metisMenu');
+            
+            $('#side-menu > li').each(function() {
+                var $top = $(this);
+                if ($top[0] !== $topLevelLi[0] && $top.hasClass('mm-active')) {
+                    setTimeout(function() {
+                        collapseMenuItem($top);
+                    }, 50);
+                }
+            });
+        });
+    }
+
+    /**
+     * 左侧菜单：只保留当前点击的菜单展开，收起其他所有顶级菜单；
+     * 用户主动展开其他菜单时，去掉由路由反选的选中态（active/mm-active），避免一直显示为选中。
+     * 
+     * 修复菜单重叠问题：使用 show.metisMenu 事件（菜单开始展开时触发）来收起其他菜单，
+     * 这样可以在新菜单展开前就收起其他已展开的菜单，避免视觉重叠。
+     */
+    function initSidebarAccordion() {
+        var $sideMenu = $('#side-menu');
+        if (!$sideMenu.length) return;
+        
+        // 移除旧的事件绑定
+        $sideMenu.off('click.sidebarAccordion');
+        $sideMenu.off('show.metisMenu.accordion');
+        $sideMenu.off('shown.metisMenu');
+        
+        // 监听 show.metisMenu 事件：当任意菜单开始展开时触发
+        // 这比 click 事件更可靠，因为此时 MetisMenu 已经确定要展开哪个菜单
+        $sideMenu.on('show.metisMenu.accordion', function(e) {
+            var $targetMenu = $(e.target); // 即将展开的 ul.sub-menu
+            var $targetLi = $targetMenu.parent('li'); // 包含该子菜单的 li
+            var $topLevelLi = $targetLi.closest('#side-menu > li'); // 所属的顶级 li
+            
+            if (!$topLevelLi.length) return;
+            
+            // 用户操作后关闭路由反选：去掉由 initActiveMenu 加上的 active，避免"当前页"一直高亮
+            $('#sidebar-menu a.active').removeClass('active');
+            
+            // 收起所有其他顶级菜单（不是当前点击所属的顶级菜单）
+            $('#side-menu > li').each(function() {
+                var $top = $(this);
+                // 跳过当前正在展开的菜单所属的顶级菜单
+                if ($top[0] === $topLevelLi[0]) return;
+                // 跳过特殊菜单项（搜索、常用菜单、分组标题）
+                if ($top.hasClass('menu-search-item') || $top.hasClass('menu-frequent-item') || $top.hasClass('menu-title')) return;
+                // 收起其他已展开的顶级菜单
+                if ($top.hasClass('mm-active')) {
+                    collapseMenuItem($top);
+                }
+            });
         });
     }
 
@@ -613,8 +684,23 @@ File: Main Js File
         if (typeof showLoading === 'function') {
             showLoading();
         }
+        
+        var themeConfigUrl;
+        if (typeof window.site !== 'undefined' && window.site.url_host) {
+            var urlHost = window.site.url_host;
+            if (!urlHost.endsWith('/')) {
+                urlHost += '/';
+            }
+            themeConfigUrl = urlHost + 'backend/theme-config/set';
+        } else if (typeof window.frontend_url === 'function') {
+            themeConfigUrl = window.frontend_url('/backend/theme-config/set');
+        } else {
+            var baseUrl = window.location.pathname.split('/').slice(0, 4).join('/');
+            themeConfigUrl = baseUrl + '/backend/theme-config/set';
+        }
+        
         $.ajax({
-            url: window.url('/backend/theme-config/set'),
+            url: themeConfigUrl,
             data: JSON.stringify(layout),
             dataType: 'json',
             type: 'post',

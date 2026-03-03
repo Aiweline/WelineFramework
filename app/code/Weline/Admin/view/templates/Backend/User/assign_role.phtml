@@ -1,129 +1,372 @@
 <?php
 /**
- * 管理员角色分配页面（内容模板）
+ * 管理员角色分配页面（简化版）
  * 
- * 只包含页面内容，由布局系统自动包裹 HTML 框架
- * 布局由 BackendController::$layoutType = 'default.default' 控制
+ * 直接在表格内选择角色并 AJAX 保存，无需独立提交按钮
  *
  * @var \Weline\Framework\View\Template $this
  */
 ?>
 <!-- 页面标题 -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'><lang>管理员用户角色归属分配</lang></h4>
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'>
-                        <a href='javascript: void(0);'><lang>系统</lang></a>
-                    </li>
-                    <li class='breadcrumb-item'>
-                        <a href="@backend-url('*/backend/user/listing')"><lang>管理员</lang></a>
-                    </li>
-                    <li class='breadcrumb-item active'><lang>管理员角色分配</lang></li>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><lang>角色归配</lang></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="javascript:void(0);"><lang>系统</lang></a></li>
+                    <li class="breadcrumb-item"><a href="@backend-url('*/backend/user/listing')"><lang>管理员</lang></a></li>
+                    <li class="breadcrumb-item active"><lang>角色归配</lang></li>
                 </ol>
             </div>
         </div>
     </div>
 </div>
 
-<!-- 消息 -->
-<div class='row'>
-    <template>Weline_Component::message.phtml</template>
-</div>
-
 <!-- 角色分配列表 -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'><lang>管理员角色分配</lang></h4>
-                <p class='card-title-desc'><lang>调整管理员角色</lang></p>
-                <div class='row'>
-                    <div class='col-6'>
-                        <div class='col-md-6'>
-                            <block class='Weline\Component\Block\Form\Search' id='admin-user-search'
-                                   action='*/backend/user'
-                                   method='get'
-                                   keyword='search' value=''
-                                   params=''
-                                   placeholder='请输入搜索词'></block>
-                        </div>
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <!-- 工具栏 -->
+                <div class="weline-assign-toolbar d-flex justify-content-between align-items-center mb-3">
+                    <div class="weline-assign-search">
+                        <block class='Weline\Component\Block\Form\Search' id='assign-role-search'
+                               action='*/backend/user/assign-role'
+                               method='get'
+                               keyword='search' value=''
+                               params=''
+                               placeholder='搜索用户名或邮箱'></block>
                     </div>
-                    <div class='col-6'>
-                        <a class='btn btn-primary pull-right mt-1 mb-1' href="@backend-url('*/backend/user/listing')">
-                            <lang>返回</lang>
-                        </a>
-                    </div>
+                    <a class="btn btn-outline-secondary" href="@backend-url('*/backend/user/listing')">
+                        <i class="mdi mdi-arrow-left me-1"></i><lang>返回列表</lang>
+                    </a>
                 </div>
 
-                <div class='table-rep-plugin'>
-                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
-                        <table id='tech-companies-1' class='table table-striped table-bordered'>
-                            <thead>
+                <!-- 提示信息 -->
+                <div class="alert alert-info alert-dismissible fade show weline-assign-tip" role="alert">
+                    <i class="mdi mdi-information-outline me-2"></i>
+                    <lang>选择角色后自动保存，无需手动提交。当前用户无法修改自己的角色。</lang>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+
+                <!-- 用户角色列表 -->
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle weline-assign-table">
+                        <thead>
                             <tr>
-                                <th data-priority='1'><lang>ID</lang></th>
-                                <th data-priority='1'><lang>管理员</lang></th>
-                                <th data-priority='1'><lang>邮箱</lang></th>
-                                <th data-priority='1'><lang>角色分配</lang></th>
-                                <th data-priority='1'><lang>创建于</lang></th>
-                                <th data-priority='1'><lang>更新于</lang></th>
-                                <th data-priority='1'><lang>操作</lang></th>
+                                <th style="width: 80px;">ID</th>
+                                <th><lang>用户信息</lang></th>
+                                <th style="width: 320px;"><lang>当前角色</lang></th>
+                                <th style="width: 120px;"><lang>状态</lang></th>
                             </tr>
-                            </thead>
-                            <tbody>
-                            <foreach name='users' item='user' key='key'>
-                                <form action="@backend-url('*/backend/user/assignrole')" method="post">
-                                    <tr>
-                                        <td class='co-name'>{{user.user_id}}</td>
-                                        <td class='co-name'>{{user.username}}</td>
-                                        <td class='co-name'>{{user.email}}</td>
-                                        <td class='co-name'>
-                                            <input type="hidden" name="user_id" value="{{user.user_id}}">
-                                            <select class="form-control" name="role_id" id="role_id">
-                                                <option selected><lang>未分配角色</lang></option>
-                                                <foreach name='roles' item='role'>
-                                                    <if condition="user.role_id === role.role_id">
-                                                        <option selected value='{{role.role_id}}'>{{role.role_name}}</option>
-                                                        <else/>
-                                                        <option value='{{role.role_id}}'>{{role.role_name}}</option>
-                                                    </if>
-                                                </foreach>
-                                            </select>
-                                        </td>
-                                        <td class='co-name'>{{user.create_time}}</td>
-                                        <td class='co-name'>{{user.update_time}}</td>
-                                        <td class='co-name'>
-                                            <if condition='user.user_id !== current_user.user_id'>
-                                                <div class='d-grid gap-2 d-md-flex'>
-                                                    <input type="submit" class="btn btn-primary" value="@lang{分配}">
+                        </thead>
+                        <tbody>
+                        <foreach name="users" item="user" key="key">
+                            <tr data-user-id="{{user.user_id}}" class="weline-assign-row">
+                                <td>{{user.user_id}}</td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="weline-assign-avatar me-3">
+                                            <if condition="user.avatar">
+                                                <img src="{{user.avatar}}" alt="{{user.username}}" class="rounded-circle" width="40" height="40">
+                                            <else/>
+                                                <div class="weline-assign-avatar-placeholder">
+                                                    <i class="mdi mdi-shield-account"></i>
                                                 </div>
                                             </if>
-                                        </td>
-                                    </tr>
-                                </form>
-                            </foreach>
-                            <empty name='users'>
-                                <tr>
-                                    <td colspan='5' class='text-center'><lang>暂无记录</lang></td>
-                                </tr>
-                            </empty>
-                            </tbody>
-                        </table>
-                        {{pagination}}
-                    </div>
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold">{{user.username}}</div>
+                                            <div class="text-muted small">{{user.email}}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <if condition="user.user_id != current_user.user_id">
+                                        <div class="weline-role-selector" data-user-id="{{user.user_id}}" data-current-role="{{user.role_id}}">
+                                            <select class="form-select weline-role-select" data-user-id="{{user.user_id}}">
+                                                <option value=""><lang>-- 未分配角色 --</lang></option>
+                                                <foreach name="roles" item="role">
+                                                    <option value="{{role.role_id}}" 
+                                                        <if condition="role.role_id == user.role_id">selected</if>
+                                                    >{{role.role_name}}</option>
+                                                </foreach>
+                                            </select>
+                                            <span class="weline-role-saving d-none">
+                                                <span class="spinner-border spinner-border-sm text-primary"></span>
+                                            </span>
+                                            <span class="weline-role-saved d-none text-success">
+                                                <i class="mdi mdi-check-circle"></i>
+                                            </span>
+                                        </div>
+                                    <else/>
+                                        <div class="weline-current-user-role">
+                                            <span class="badge bg-primary">
+                                                <i class="mdi mdi-shield-account"></i>
+                                                <if condition="user.role_name">{{user.role_name}}<else/><lang>未分配</lang></if>
+                                            </span>
+                                            <span class="text-muted"><lang>（当前登录）</lang></span>
+                                        </div>
+                                    </if>
+                                </td>
+                                <td class="weline-assign-status" data-role-id="{{user.role_id}}">
+                                    <span class="badge weline-status-assigned bg-success" style="display:<?= $user['role_id'] ? 'inline-block' : 'none' ?>;"><lang>已分配</lang></span>
+                                    <span class="badge weline-status-unassigned bg-warning text-dark" style="display:<?= $user['role_id'] ? 'none' : 'inline-block' ?>;"><lang>未分配</lang></span>
+                                </td>
+                            </tr>
+                        </foreach>
+                        <empty name="users">
+                            <tr>
+                                <td colspan="4" class="text-center py-4">
+                                    <div class="text-muted">
+                                        <i class="mdi mdi-account-search-outline" style="font-size: 3rem;"></i>
+                                        <p class="mt-2 mb-0"><lang>暂无管理员数据</lang></p>
+                                    </div>
+                                </td>
+                            </tr>
+                        </empty>
+                        </tbody>
+                    </table>
                 </div>
+                <var>pagination</var>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Table Editable plugin -->
-<script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
-<script src="@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)"></script>
-<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
-<!-- Responsive Table js -->
-<script src='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.js)'></script>
-<!-- Init js -->
-<script src='@static(Weline_Admin::assets/js/pages/table-responsive.init.js)'></script>
+<!-- 组件样式 -->
+<style>
+.weline-assign-table th {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    font-weight: 600;
+    border-bottom: 2px solid var(--backend-color-border-default, #dee2e6);
+    padding: 16px 12px;
+}
+.weline-assign-table td {
+    color: var(--backend-color-text-primary, #212529);
+    vertical-align: middle;
+    padding: 20px 12px;
+}
+.weline-assign-table tbody tr {
+    border-bottom: 1px solid var(--backend-color-border-default, #eee);
+}
+.weline-assign-table tbody tr:hover {
+    background: var(--backend-color-table-bg-hover, #f8f9fa);
+}
+.weline-assign-avatar-placeholder {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.15)) 0%, var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.15)) 100%);
+    color: var(--backend-color-primary, #556ee6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    box-shadow: var(--backend-shadow-sm, 0 2px 4px rgba(0,0,0,0.05));
+}
+.weline-role-selector {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.weline-role-select {
+    flex: 1;
+    min-width: 180px;
+    max-width: 220px;
+    padding: 10px 14px;
+    background: var(--backend-color-input-bg, #fff);
+    border: 2px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: 10px;
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+}
+.weline-role-select:focus {
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: var(--backend-focus-ring, 0 0 0 0.2rem rgba(85, 110, 230, 0.2));
+    outline: none;
+}
+.weline-role-select:hover:not(:focus) {
+    border-color: var(--backend-color-primary-light, #8a9be6);
+}
+.weline-role-saving,
+.weline-role-saved {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.weline-role-saving .spinner-border {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+.weline-role-saved i {
+    font-size: 1.5rem;
+}
+.weline-assign-toolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.weline-assign-search {
+    min-width: 250px;
+}
+.weline-assign-tip {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    border-color: var(--backend-color-info, #50a5f1);
+    color: var(--backend-color-text-primary, #212529);
+    border-radius: 10px;
+    margin-bottom: 24px;
+}
+.weline-assign-row.is-saving {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+/* 当前登录用户角色标签美化 */
+.weline-current-user-role {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.weline-current-user-role .badge {
+    padding: 8px 14px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    border-radius: 20px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.weline-current-user-role .badge i {
+    font-size: 1.1rem;
+}
+.weline-current-user-role .text-muted {
+    font-size: 0.85rem;
+}
+
+/* 状态徽章美化 */
+.weline-assign-table .badge {
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-radius: 16px;
+}
+
+/* 用户信息区域 */
+.weline-assign-table .d-flex.align-items-center {
+    gap: 16px;
+}
+</style>
+
+<!-- 组件脚本 -->
+<script>
+(function() {
+    'use strict';
+
+    var config = {
+        apiAssign: '<?= $this->getBackendUrl("*/backend/user/api-assign-role") ?>',
+        text: {
+            assignSuccess: '<?= addslashes(__("角色分配成功")) ?>',
+            assignFail: '<?= addslashes(__("角色分配失败")) ?>',
+            networkError: '<?= addslashes(__("网络错误，请检查网络后重试")) ?>',
+            cannotAssignSelf: '<?= addslashes(__("不能修改自己的角色")) ?>'
+        }
+    };
+
+    function showSaving(selector) {
+        selector.querySelector('.weline-role-saving').classList.remove('d-none');
+        selector.querySelector('.weline-role-saved').classList.add('d-none');
+        selector.closest('tr').classList.add('is-saving');
+    }
+
+    function showSaved(selector) {
+        selector.querySelector('.weline-role-saving').classList.add('d-none');
+        selector.querySelector('.weline-role-saved').classList.remove('d-none');
+        selector.closest('tr').classList.remove('is-saving');
+        
+        setTimeout(function() {
+            selector.querySelector('.weline-role-saved').classList.add('d-none');
+        }, 2000);
+    }
+
+    function hideSaving(selector) {
+        selector.querySelector('.weline-role-saving').classList.add('d-none');
+        selector.closest('tr').classList.remove('is-saving');
+    }
+
+    function handleRoleChange(e) {
+        var select = e.target;
+        var userId = select.dataset.userId;
+        var roleId = select.value;
+        var selector = select.closest('.weline-role-selector');
+        
+        showSaving(selector);
+        
+        fetch(config.apiAssign, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                user_id: userId,
+                role_id: roleId
+            })
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(result) {
+            if (result.success) {
+                showSaved(selector);
+                BackendToast.success(result.msg || config.text.assignSuccess);
+                
+                var row = select.closest('tr');
+                var statusCell = row.querySelector('.weline-assign-status');
+                if (statusCell) {
+                    var assignedBadge = statusCell.querySelector('.weline-status-assigned');
+                    var unassignedBadge = statusCell.querySelector('.weline-status-unassigned');
+                    if (roleId) {
+                        assignedBadge.style.display = 'inline-block';
+                        unassignedBadge.style.display = 'none';
+                    } else {
+                        assignedBadge.style.display = 'none';
+                        unassignedBadge.style.display = 'inline-block';
+                    }
+                }
+                
+                selector.dataset.currentRole = roleId;
+            } else {
+                hideSaving(selector);
+                BackendToast.error(result.msg || config.text.assignFail);
+                
+                var originalRole = selector.dataset.currentRole || '';
+                select.value = originalRole;
+            }
+        })
+        .catch(function(error) {
+            hideSaving(selector);
+            BackendToast.error(config.text.networkError + (error.message ? ': ' + error.message : ''));
+            
+            var originalRole = selector.dataset.currentRole || '';
+            select.value = originalRole;
+        });
+    }
+
+    function init() {
+        document.querySelectorAll('.weline-role-select').forEach(function(select) {
+            select.addEventListener('change', handleRoleChange);
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+</script>

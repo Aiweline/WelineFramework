@@ -14,7 +14,8 @@ namespace Weline\Admin\Service;
 use Weline\Admin\Model\MenuAccessLog;
 use Weline\Backend\Model\BackendUser;
 use Weline\Backend\Model\Menu;
-use Weline\Backend\Session\BackendSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Http\Request;
 
 /**
@@ -40,25 +41,23 @@ class MenuRenderService
     private MenuAccessLog $menuAccessLogModel;
 
     /**
-     * @var BackendSession
+     * @var AuthenticatedSessionInterface
      */
-    private BackendSession $session;
+    private AuthenticatedSessionInterface $session;
 
     /**
      * 构造函数
      * 
      * @param Menu $menuModel
      * @param MenuAccessLog $menuAccessLogModel
-     * @param BackendSession $session
      */
     public function __construct(
         Menu $menuModel,
-        MenuAccessLog $menuAccessLogModel,
-        BackendSession $session
+        MenuAccessLog $menuAccessLogModel
     ) {
         $this->menuModel = $menuModel;
         $this->menuAccessLogModel = $menuAccessLogModel;
-        $this->session = $session;
+        $this->session = SessionFactory::getInstance()->createBackendSession();
     }
 
     /**
@@ -83,15 +82,16 @@ class MenuRenderService
         // 调试：检测异常的 URL 前缀
         // 正常的后端 URL 应该包含货币和语言路径段，如 /backend/USD/zh_Hans_CN
         // 如果只有 /backend 而没有货币语言，说明 $_SERVER 变量可能未正确设置
-        $backendKey = \Weline\Framework\App\Env::getAreaRoutePrefix('backend');
+        $backendKey = \Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?? '';
         $expectedMinLength = strlen($backendKey) + 10; // backend + /XXX/xx_XX 至少
         if (strlen($prefix) < $expectedMinLength) {
             $lang = $_SERVER['WELINE_USER_LANG'] ?? '(not set)';
             $currency = $_SERVER['WELINE_USER_CURRENCY'] ?? '(not set)';
             $requestUri = $_SERVER['REQUEST_URI'] ?? '(not set)';
-            \Weline\Framework\App\Env::log_warning(
+            w_log_warning(
                 "MenuRenderService::getBackendUrlPrefix returned short prefix: '{$prefix}', " .
                 "WELINE_USER_LANG={$lang}, WELINE_USER_CURRENCY={$currency}, REQUEST_URI={$requestUri}",
+                [],
                 'menu_debug'
             );
         }
