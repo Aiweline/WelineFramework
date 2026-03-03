@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<config>
-    <menu>
-        <item name="system" title="系统" source="Weline_Backend::system">
-            <children>
-                <item name="storage" title="存储配置" source="Weline_Storage::storage_config" action="storage/backend/config" sort="60"/>
-            </children>
-        </item>
-    </menu>
-</config>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    
+    <menu source="Weline_Storage::storage_config" 
+          name="storage_config" 
+          title="存储配置" 
+          action="storage/backend/config"
+          parent="Weline_Backend::system_service_group" 
+          icon="mdi mdi-database" 
+          order="60"/>
+</menus>
