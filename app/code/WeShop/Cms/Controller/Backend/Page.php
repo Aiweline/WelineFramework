@@ -227,7 +227,7 @@ class Page extends BackendController
             $this->getMessageManager()->addError(__('页面创建失败：%1', $exception->getMessage()));
             if (DEV) {
                 $this->getMessageManager()->addException($exception);
-                error_log('WeShop CMS postCreate Error: ' . $exception->getMessage() . "\n" . $exception->getTraceAsString());
+                w_log_error('WeShop CMS postCreate Error: ' . $exception->getMessage() . "\n" . $exception->getTraceAsString());
             }
             $this->redirect('*/backend/page/create');
         }
@@ -494,7 +494,7 @@ class Page extends BackendController
             $this->getMessageManager()->addError(__('页面更新失败：%1', $exception->getMessage()));
             if (DEV) {
                 $this->getMessageManager()->addException($exception);
-                error_log('WeShop CMS postEdit Error: ' . $exception->getMessage() . "\n" . $exception->getTraceAsString());
+                w_log_error('WeShop CMS postEdit Error: ' . $exception->getMessage() . "\n" . $exception->getTraceAsString());
             }
             $pageId = $this->request->getGet('id');
             if ($pageId) {
