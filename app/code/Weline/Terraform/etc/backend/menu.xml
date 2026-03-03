@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
-       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
-       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <add source="Weline_Terraform::terraform_batch_bind"
-         name="terraform_batch_bind"
-         title="Terraform批量绑定"
-         action="*/backend/domain/index"
-         parent="Weline_Cdn::cdn_manager"
-         icon="mdi mdi-terraform"
-         order="25"/>
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    
+    <menu source="Weline_Terraform::terraform_batch_bind" 
+          name="terraform_batch_bind" 
+          title="Terraform批量绑定" 
+          action="terraform/backend/domain/index"
+          parent="Weline_Cdn::cdn_manager" 
+          icon="mdi mdi-terraform" 
+          order="25"/>
 </menus>
