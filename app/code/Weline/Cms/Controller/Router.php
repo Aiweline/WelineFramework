@@ -6,8 +6,7 @@ namespace Weline\Cms\Controller;
 
 use Weline\Cms\Model\Page;
 use Weline\Framework\App\Env;
-use Weline\Framework\Cache\CacheFactory;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\RouterInterface;
 
@@ -27,7 +26,7 @@ class Router implements RouterInterface
     /**
      * 跨请求缓存实例（文件缓存或Redis缓存）
      */
-    private static ?CacheInterface $crossRequestCache = null;
+    private static ?CachePoolInterface $crossRequestCache = null;
     
     /**
      * 缓存配置常量
@@ -217,7 +216,7 @@ class Router implements RouterInterface
         } catch (\Exception $e) {
             // 如果查询失败，记录日志并返回false
             if (DEV) {
-                \Weline\Framework\App\Env::log_error('cms_router', 'Cms Router Error: ' . $e->getMessage());
+                w_log_error('Cms Router Error: ' . $e->getMessage(), [], 'cms_router');
             }
             return false;
         }
@@ -226,13 +225,12 @@ class Router implements RouterInterface
     /**
      * 获取跨请求缓存实例
      * 
-     * @return CacheInterface
+     * @return CachePoolInterface
      */
-    private static function getCrossRequestCache(): CacheInterface
+    private static function getCrossRequestCache(): CachePoolInterface
     {
         if (self::$crossRequestCache === null) {
-            $cacheFactory = new CacheFactory('cms_handle_cache', 'CMS Handle存在性缓存', true);
-            self::$crossRequestCache = $cacheFactory->create();
+            self::$crossRequestCache = w_cache('default');
         }
         return self::$crossRequestCache;
     }

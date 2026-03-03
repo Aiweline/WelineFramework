@@ -623,14 +623,14 @@ class Preview extends BackendController
     {
         try {
             // 调试日志
-            error_log('🔵 resetFieldsToDefault 接口被调用');
+            w_log_debug('🔵 resetFieldsToDefault 接口被调用');
             
             // 获取 JSON 请求体
             $rawBody = file_get_contents('php://input');
-            error_log('🔵 请求体: ' . $rawBody);
+            w_log_debug('🔵 请求体: ' . $rawBody);
             
             $data = json_decode($rawBody ?? '', true); // 第二个参数 true 表示返回数组而不是对象
-            error_log('🔵 解析后数据: ' . json_encode($data));
+            w_log_debug('🔵 解析后数据: ' . json_encode($data));
             
             // 如果 JSON 解析失败，尝试从 POST 获取
             if (!$data || !is_array($data)) {
@@ -647,12 +647,12 @@ class Preview extends BackendController
             $locale = $data['locale'] ?? '';
             $styleCode = $data['style_code'] ?? '';
             
-            error_log('🔵 pageId: ' . $pageId);
-            error_log('🔵 configKeys: ' . json_encode($configKeys));
-            error_log('🔵 locale: ' . $locale);
+            w_log_debug('🔵 pageId: ' . $pageId);
+            w_log_debug('🔵 configKeys: ' . json_encode($configKeys));
+            w_log_debug('🔵 locale: ' . $locale);
             
             if (!$pageId) {
-                error_log('❌ 页面ID不能为空');
+                w_log_warning('❌ 页面ID不能为空');
                 return $this->fetchJson([
                     'success' => false,
                     'message' => __('页面ID不能为空')
@@ -660,20 +660,20 @@ class Preview extends BackendController
             }
             
             if (empty($configKeys) || !is_array($configKeys)) {
-                error_log('❌ 配置键列表不能为空');
+                w_log_warning('❌ 配置键列表不能为空');
                 return $this->fetchJson([
                     'success' => false,
                     'message' => __('配置键列表不能为空')
                 ]);
             }
 
-            error_log('🔵 验证通过，开始加载页面...');
+            w_log_debug('🔵 验证通过，开始加载页面...');
             
             // 加载页面
             $page = clone $this->pageModel;
             $page->load($pageId);
             
-            error_log('🔵 页面加载完成，ID: ' . $page->getId());
+            w_log_debug('🔵 页面加载完成，ID: ' . $page->getId());
             
             if (!$page->getId()) {
                 return $this->fetchJson([
@@ -721,7 +721,7 @@ class Preview extends BackendController
                     }
                 }
                 
-                error_log('✅ 重置成功（LocalDescription），字段数: ' . count($configKeys));
+                w_log_info('✅ 重置成功（LocalDescription），字段数: ' . count($configKeys));
                 return $this->fetchJson([
                     'success' => true,
                     'message' => __('已重置 %{1} 个字段为默认值（语言：%{2}）', count($configKeys), $locale),
@@ -747,7 +747,7 @@ class Preview extends BackendController
                     $page->save();
                 }
                 
-                error_log('✅ 重置成功（Page.style_setting），字段数: ' . count($configKeys));
+                w_log_info('✅ 重置成功（Page.style_setting），字段数: ' . count($configKeys));
                 return $this->fetchJson([
                     'success' => true,
                     'message' => __('已重置 %{1} 个字段为默认值', count($configKeys)),
@@ -757,8 +757,8 @@ class Preview extends BackendController
                 ]);
             }
         } catch (\Exception $e) {
-            error_log('❌ 异常: ' . $e->getMessage());
-            error_log('❌ 异常跟踪: ' . $e->getTraceAsString());
+            w_log_error('❌ 异常: ' . $e->getMessage());
+            w_log_error('❌ 异常跟踪: ' . $e->getTraceAsString());
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage()
