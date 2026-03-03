@@ -4,7 +4,7 @@
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
 
     <!-- RDP 远程桌面管理 -->
-    <add source="Weline_RdpWrapper::rdp_management"
+    <menu source="Weline_RdpWrapper::rdp_management"
          name="rdp_management"
          title="远程桌面管理"
          action="rdpWrapper/backend/index"
