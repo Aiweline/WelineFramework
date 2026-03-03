@@ -181,7 +181,8 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 
 /* 组件面板样式 - 按区域分组 */
 .component-panel {
-    width: 320px;
+    width: 280px;
+    min-width: 280px;
     background: var(--visual-config-panel-bg, #f8f9fa);
     border-left: 1px solid var(--visual-config-border, #dee2e6);
     display: flex;
@@ -201,19 +202,22 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 }
 
 .component-panel-header {
-    padding: 15px;
+    padding: 12px;
     background: var(--visual-config-panel-header-bg, #fff);
     border-bottom: 1px solid var(--visual-config-border, #dee2e6);
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-shrink: 0;
+    gap: 8px;
 }
 
 .component-panel-header h6 {
     margin: 0;
     font-weight: 600;
+    font-size: 14px;
     color: var(--visual-config-text, #212529);
+    white-space: nowrap;
 }
 
 .component-panel.collapsed .component-panel-header h6,
@@ -225,11 +229,12 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 .component-panel-toggle {
     background: none;
     border: none;
-    font-size: 18px;
+    font-size: 16px;
     cursor: pointer;
-    padding: 5px;
+    padding: 4px;
     color: var(--visual-config-text-muted, #6c757d);
-    transition: transform 0.3s ease;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
 }
 
 .component-panel-toggle:hover {
@@ -240,7 +245,7 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 .component-panel.collapsed .component-panel-toggle {
     background: rgba(52, 152, 219, 0.1);
     border-radius: 4px;
-    padding: 8px;
+    padding: 6px;
 }
 
 .component-panel.collapsed .component-panel-toggle i {
@@ -253,7 +258,7 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 }
 
 .component-search {
-    padding: 10px 15px;
+    padding: 8px 12px;
     background: var(--visual-config-panel-header-bg, #fff);
     border-bottom: 1px solid var(--visual-config-border, #dee2e6);
     flex-shrink: 0;
@@ -261,10 +266,10 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 
 .component-search input {
     width: 100%;
-    padding: 8px 12px;
+    padding: 6px 10px;
     border: 1px solid var(--visual-config-input-border, #dee2e6);
-    border-radius: 6px;
-    font-size: 13px;
+    border-radius: 4px;
+    font-size: 12px;
     background: var(--visual-config-input-bg, #fff);
     color: var(--visual-config-input-text, #212529);
 }
@@ -272,7 +277,7 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 .component-search input:focus {
     outline: none;
     border-color: #3498db;
-    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
 }
 
 .component-panel-body {
@@ -317,16 +322,17 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 }
 
 .component-region-header {
-    padding: 12px 15px;
+    padding: 10px 12px;
     background: var(--visual-config-section-bg, #fff);
     cursor: pointer;
     display: flex;
     justify-content: space-between;
     align-items: center;
     font-weight: 600;
-    font-size: 14px;
+    font-size: 13px;
     color: var(--visual-config-text, #495057);
     transition: background 0.2s;
+    gap: 8px;
 }
 
 .component-region-header:hover {
@@ -334,20 +340,30 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 }
 
 .component-region-header .region-icon {
-    margin-right: 8px;
-    font-size: 16px;
+    margin-right: 6px;
+    font-size: 14px;
+}
+
+.component-region-header > span:first-child {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .component-region-header .region-info {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
+    flex-shrink: 0;
 }
 
 .component-region-header .region-info .badge {
-    font-size: 10px;
-    font-weight: normal;
-    padding: 2px 6px;
+    font-size: 9px;
+    font-weight: 500;
+    padding: 2px 5px;
+    border-radius: 3px;
+    white-space: nowrap;
 }
 
 .component-region-header .region-info .badge-warning {
@@ -360,9 +376,18 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
     color: #004085;
 }
 
+.component-region-header .region-info .bg-secondary {
+    background: var(--visual-config-border, #dee2e6) !important;
+    color: var(--visual-config-text-muted, #6c757d);
+    min-width: 18px;
+    text-align: center;
+}
+
 .component-region-header i.chevron {
     transition: transform 0.2s;
     color: var(--visual-config-text-muted, #6c757d);
+    font-size: 14px;
+    flex-shrink: 0;
 }
 
 .component-region.collapsed .component-region-header i.chevron {
@@ -370,11 +395,11 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 }
 
 .component-region-body {
-    padding: 10px;
+    padding: 8px;
     background: var(--visual-config-section-bg, #fff);
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
+    gap: 8px;
 }
 
 .component-region.collapsed .component-region-body {
@@ -384,79 +409,100 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 /* 模板分组（在区域内） */
 .component-template-group {
     grid-column: 1 / -1;
-    margin-bottom: 5px;
+    margin-bottom: 4px;
 }
 
 .component-template-group-header {
-    font-size: 11px;
+    font-size: 10px;
     color: var(--visual-config-text-muted, #6c757d);
-    padding: 5px 0;
+    padding: 4px 0;
     border-bottom: 1px dashed var(--visual-config-border, #dee2e6);
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
 }
 
 .component-template-group-header .star {
     color: #ffc107;
+    font-size: 11px;
 }
 
 .component-template-group-cards {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
+    gap: 8px;
 }
 
 /* 组件卡片 */
 .component-card {
     background: var(--visual-config-card-bg, #fff);
     border: 1px solid var(--visual-config-border, #e9ecef);
-    border-radius: 8px;
-    padding: 10px;
+    border-radius: 6px;
+    padding: 8px;
     cursor: grab;
     transition: all 0.2s;
     text-align: center;
     position: relative;
+    min-width: 0;
 }
 .component-ai-badge {
     position: absolute;
-    top: 6px;
-    right: 6px;
+    top: 4px;
+    right: 4px;
     display: flex;
-    gap: 4px;
+    gap: 2px;
     z-index: 2;
 }
 .component-ai-badge .component-tag {
     margin-top: 0;
+    padding: 1px 3px;
+    font-size: 7px;
 }
 
-.component-refine-btn {
+.component-refine-btn,
+.component-delete-btn {
     position: absolute;
-    bottom: 6px;
-    right: 6px;
+    bottom: 4px;
     z-index: 3;
-    width: 28px;
-    height: 28px;
+    width: 22px;
+    height: 22px;
     padding: 0;
     border: none;
-    border-radius: 6px;
-    background: rgba(102, 126, 234, 0.9);
+    border-radius: 4px;
     color: #fff;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
-    opacity: 0.9;
+    font-size: 12px;
+    opacity: 0;
     transition: opacity 0.2s, transform 0.2s;
+}
+.component-card:hover .component-refine-btn,
+.component-card:hover .component-delete-btn {
+    opacity: 0.9;
+}
+.component-refine-btn {
+    right: 4px;
+    background: rgba(102, 126, 234, 0.9);
+}
+.component-delete-btn {
+    right: 30px;
+    background: rgba(220, 53, 69, 0.9);
 }
 .component-refine-btn:hover {
     opacity: 1;
     background: #667eea;
     transform: scale(1.05);
 }
-.component-refine-btn .mdi { font-size: 16px; }
+.component-delete-btn:hover {
+    opacity: 1;
+    background: #dc3545;
+    transform: scale(1.05);
+}
+.component-refine-btn .mdi,
+.component-delete-btn .mdi { font-size: 13px; }
 
 .component-card:hover {
     border-color: #3498db;
@@ -477,17 +523,18 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 .component-card.recommended::before {
     content: '★';
     position: absolute;
-    top: 5px;
-    right: 5px;
+    top: 4px;
+    left: 4px;
     color: #ffc107;
-    font-size: 14px;
+    font-size: 10px;
+    z-index: 1;
 }
 
 .component-card-thumb {
     width: 100%;
     background: var(--visual-config-input-bg, #f8f9fa);
     border-radius: 4px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -503,10 +550,10 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 
 /* 图标样式 - 直接作为 thumb 子元素时添加最小高度 */
 .component-card-thumb > i {
-    font-size: 24px;
+    font-size: 22px;
     color: var(--visual-config-text-muted, #adb5bd);
     width: 100%;
-    min-height: 80px;
+    min-height: 60px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -568,28 +615,35 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 }
 
 .component-card-name {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 500;
+    line-height: 1.3;
     /* 使用后端主题的文本颜色变量，自动适配亮色/暗色主题 */
     color: var(--backend-color-text-primary, var(--visual-config-text, #212529));
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    max-width: 100%;
+    padding: 0 2px;
 }
 
 .component-card-template {
-    font-size: 10px;
+    font-size: 9px;
     color: var(--visual-config-text-muted, #6c757d);
     margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* 标签样式 */
 .component-tag {
     display: inline-block;
-    padding: 2px 6px;
-    font-size: 9px;
-    border-radius: 3px;
-    margin-top: 4px;
+    padding: 1px 4px;
+    font-size: 8px;
+    border-radius: 2px;
+    margin-top: 3px;
+    line-height: 1.4;
 }
 
 .component-tag.own {
@@ -701,13 +755,19 @@ html[data-theme="dark"] .component-tag.ai-cyan,
 /* 放置区域提示 */
 .drop-zone-hint {
     grid-column: 1 / -1;
-    padding: 15px;
+    padding: 10px 8px;
     text-align: center;
     background: rgba(52, 152, 219, 0.05);
-    border: 2px dashed rgba(52, 152, 219, 0.3);
-    border-radius: 8px;
+    border: 1px dashed rgba(52, 152, 219, 0.3);
+    border-radius: 4px;
     color: var(--visual-config-text-muted, #6c757d);
+    font-size: 10px;
+    line-height: 1.4;
+}
+
+.drop-zone-hint i {
     font-size: 12px;
+    margin-right: 4px;
 }
 
 /* 组件配置弹窗 */
@@ -1386,8 +1446,12 @@ function renderComponentCard(component, region) {
     const codeEsc = _escHtml(component.code || '');
     const styleEsc = _escHtml(component.style_code || component.templateCode || '_ai_generated');
     const nameEsc = _escHtml(component.name || '');
+    const componentId = component.id || component.component_id || 0;
     const refineBtnHtml = component.is_ai_generated
         ? `<button type="button" class="component-refine-btn" onclick="event.stopPropagation();event.preventDefault();openRefineForSavedComponent('${codeEsc}','${styleEsc}')" title="<?= __('微调') ?>"><i class="mdi mdi-tune"></i></button>`
+        : '';
+    const deleteBtnHtml = component.is_ai_generated
+        ? `<button type="button" class="component-delete-btn" onclick="event.stopPropagation();event.preventDefault();deleteAiComponent(${componentId},'${nameEsc}')" title="<?= __('删除') ?>"><i class="mdi mdi-delete"></i></button>`
         : '';
 
     // 来源标识
@@ -1401,10 +1465,12 @@ function renderComponentCard(component, region) {
              data-component-region="${region}"
              data-component-template="${styleEsc}"
              data-component-is-own="${component.isOwn ? 'true' : 'false'}"
+             data-component-id="${componentId}"
              ondragstart="handleDragStart(event)"
              ondragend="handleDragEnd(event)"
              ondblclick="previewComponent('${codeEsc}')">
             ${aiBadgeHtml}
+            ${deleteBtnHtml}
             ${refineBtnHtml}
             <div class="component-card-thumb">
                 ${thumbHtml}
@@ -1624,13 +1690,7 @@ function addComponentToRegion(componentData, region, targetZone) {
 async function previewComponent(componentCode) {
     
     // 显示加载中
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            title: '<?= __('加载预览...') ?>',
-            allowOutsideClick: false,
-            didOpen: () => { Swal.showLoading(); }
-        });
-    }
+    BackendToast.info('<?= __('加载预览...') ?>');
     
     try {
         // 获取当前样式代码
@@ -1747,72 +1807,78 @@ async function previewComponent(componentCode) {
             </html>
         `;
         
-        // 显示预览弹窗
-        if (typeof Swal !== 'undefined') {
-            // 监听 iframe 内容高度变化
-            let heightHandler = null;
-            
-            Swal.fire({
-                title: (componentInfo.name || componentCode) + ' - <?= __('预览') ?>',
-                html: `
-                    <div style="display: flex; flex-direction: column; height: 70vh;">
-                        <div style="text-align: left; margin-bottom: 12px; flex-shrink: 0;">
-                            <span class="badge bg-primary">${componentInfo.region || 'content'}</span>
-                            ${componentInfo.category ? `<span class="badge bg-secondary">${componentInfo.category}</span>` : ''}
+        // 显示预览弹窗（使用 Bootstrap Modal）
+        let heightHandler = null;
+        const modalId = 'componentPreviewModal';
+        let modal = document.getElementById(modalId);
+        
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = modalId;
+            modal.className = 'modal fade';
+            modal.tabIndex = -1;
+            modal.innerHTML = `
+                <div class="modal-dialog modal-xl modal-dialog-centered" style="max-width: 90%;">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title"></h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
-                        <iframe id="componentPreviewFrame" style="width: 100%; flex: 1; border: none; border-radius: 8px; background: #f5f5f5; display: block;"></iframe>
-                        <p style="margin-top: 12px; font-size: 12px; color: #666; text-align: center; flex-shrink: 0;">
-                            <?= __('双击组件卡片预览，拖拽到预览区域添加') ?>
-                        </p>
+                        <div class="modal-body" style="padding: 0;">
+                            <div style="display: flex; flex-direction: column; height: 70vh; padding: 1rem;">
+                                <div class="preview-badges" style="text-align: left; margin-bottom: 12px; flex-shrink: 0;"></div>
+                                <iframe class="preview-iframe" style="width: 100%; flex: 1; border: none; border-radius: 8px; background: var(--backend-color-bg-secondary, #f5f5f5); display: block;"></iframe>
+                                <p style="margin-top: 12px; font-size: 12px; color: var(--backend-color-text-muted, #666); text-align: center; flex-shrink: 0;">
+                                    <?= __('双击组件卡片预览，拖拽到预览区域添加') ?>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('关闭') ?></button>
+                        </div>
                     </div>
-                `,
-                width: '90%',
-                maxWidth: '1200px',
-                showConfirmButton: true,
-                confirmButtonText: '<?= __('关闭') ?>',
-                didOpen: () => {
-                    const iframe = document.getElementById('componentPreviewFrame');
-                    if (iframe) {
-                        // 使用flex布局，iframe自动填充容器，不需要设置固定高度
-                        
-                        // 监听高度变化（可选，用于内容自适应）
-                        heightHandler = (event) => {
-                            if (event.data && event.data.type === 'previewHeight') {
-                                // flex布局下不需要手动设置高度，iframe会自动填满容器
-                            }
-                        };
-                        window.addEventListener('message', heightHandler);
-                        
-                        // 写入 iframe 内容
-                        try {
-                            const doc = iframe.contentDocument || iframe.contentWindow.document;
-                            doc.open();
-                            doc.write(iframeContent);
-                            doc.close();
-                        } catch (e) {
-                            console.error('写入 iframe 内容失败:', e);
-                            iframe.srcdoc = iframeContent;
-                        }
-                    }
-                },
-                didClose: () => {
-                    // 移除监听器
-                    if (heightHandler) {
-                        window.removeEventListener('message', heightHandler);
-                        heightHandler = null;
-                    }
-                }
-            });
+                </div>
+            `;
+            document.body.appendChild(modal);
         }
         
-    } catch (error) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('预览失败') ?>',
-                text: error.message || '<?= __('未知错误') ?>'
-            });
+        modal.querySelector('.modal-title').textContent = (componentInfo.name || componentCode) + ' - <?= __('预览') ?>';
+        modal.querySelector('.preview-badges').innerHTML = `
+            <span class="badge bg-primary">${componentInfo.region || 'content'}</span>
+            ${componentInfo.category ? `<span class="badge bg-secondary">${componentInfo.category}</span>` : ''}
+        `;
+        
+        const iframe = modal.querySelector('.preview-iframe');
+        
+        heightHandler = (event) => {
+            if (event.data && event.data.type === 'previewHeight') {
+                // flex布局下不需要手动设置高度
+            }
+        };
+        window.addEventListener('message', heightHandler);
+        
+        try {
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            doc.open();
+            doc.write(iframeContent);
+            doc.close();
+        } catch (e) {
+            console.error('写入 iframe 内容失败:', e);
+            iframe.srcdoc = iframeContent;
         }
+        
+        const bsModal = new bootstrap.Modal(modal);
+        modal.addEventListener('hidden.bs.modal', function onHidden() {
+            if (heightHandler) {
+                window.removeEventListener('message', heightHandler);
+                heightHandler = null;
+            }
+            modal.removeEventListener('hidden.bs.modal', onHidden);
+        }, { once: true });
+        bsModal.show();
+        
+    } catch (error) {
+        BackendToast.error('<?= __('预览失败') ?>: ' + (error.message || '<?= __('未知错误') ?>'));
     }
 }
 
@@ -2009,13 +2075,134 @@ function checkUnsavedAiComponent() {
 // 当前面板状态
 let _aiWorkshop = { step: 1, params: null, result: null, eventSource: null };
 
+/**
+ * 删除 AI 组件
+ * - 无引用时直接删除
+ * - 有引用时显示引用的页面列表，提示用户先移除引用
+ */
+async function deleteAiComponent(componentId, componentName) {
+    if (!componentId) {
+        BackendToast.warning('<?= __('组件 ID 无效') ?>');
+        return;
+    }
+    
+    const confirmed = await BackendConfirm.show(
+        '<?= __('确定要删除 AI 组件') ?> "' + _escHtml(componentName) + '" <?= __('吗？此操作不可恢复。') ?>',
+        {
+            title: '<?= __('删除确认') ?>',
+            confirmText: '<?= __('删除') ?>',
+            cancelText: '<?= __('取消') ?>',
+            type: 'danger'
+        }
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+        const url = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/delete') ?>';
+        const response = await fetch(url, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ id: componentId })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            BackendToast.success(result.message || '<?= __('AI 组件已删除') ?>');
+            // 刷新组件面板
+            if (typeof initComponentPanel === 'function') {
+                initComponentPanel();
+            }
+        } else {
+            // 有引用时显示引用的页面列表
+            if (result.references && result.references.length > 0) {
+                let refHtml = '<div style="text-align:left;max-height:200px;overflow-y:auto;">';
+                refHtml += '<p style="margin-bottom:10px;">' + result.message + '</p>';
+                refHtml += '<ul style="margin:0;padding-left:20px;">';
+                result.references.forEach(function(ref) {
+                    const usedInText = ref.used_in.map(function(area) {
+                        const areaNames = { header: '<?= __('页头') ?>', footer: '<?= __('页脚') ?>', content: '<?= __('内容') ?>' };
+                        return areaNames[area] || area;
+                    }).join('、');
+                    refHtml += '<li><strong>' + _escHtml(ref.page_name) + '</strong>';
+                    refHtml += ' <span style="color:var(--backend-color-text-muted);">(' + usedInText + ')</span>';
+                    if (ref.page_handle) {
+                        refHtml += ' <a href="<?= $this->getBackendUrl('pagebuilder/backend/page/edit') ?>?id=' + ref.page_id + '" target="_blank" style="margin-left:5px;font-size:12px;"><?= __('编辑') ?></a>';
+                    }
+                    refHtml += '</li>';
+                });
+                refHtml += '</ul></div>';
+                
+                BackendToast.warning(refHtml, { duration: 0, html: true });
+            } else {
+                BackendToast.error(result.message || '<?= __('删除失败') ?>');
+            }
+        }
+    } catch (e) {
+        console.error('deleteAiComponent error:', e);
+        BackendToast.error('<?= __('删除失败：') ?>' + (e.message || '<?= __('网络错误') ?>'));
+    }
+}
+
+// 创建 AI 工坊模态框
+function _createWorkshopModal() {
+    const modalId = 'aiWorkshopModal';
+    let modal = document.getElementById(modalId);
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = modalId;
+        modal.className = 'modal fade';
+        modal.tabIndex = -1;
+        modal.setAttribute('data-bs-backdrop', 'static');
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg modal-dialog-centered" style="max-width: 820px;">
+                <div class="modal-content" style="background: var(--backend-color-card-bg, #1e1e1e); color: var(--backend-color-text-primary, #fff);">
+                    <div class="modal-header border-0">
+                        <h5 class="modal-title"><i class="mdi mdi-auto-fix"></i> <?= __('AI 组件工坊') ?></h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body workshop-content"></div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    return modal;
+}
+
+function _showWorkshopModal(html, onOpen) {
+    const modal = _createWorkshopModal();
+    modal.querySelector('.workshop-content').innerHTML = html;
+    const bsModal = new bootstrap.Modal(modal);
+    if (onOpen) {
+        modal.addEventListener('shown.bs.modal', function onShown() {
+            modal.removeEventListener('shown.bs.modal', onShown);
+            onOpen();
+        }, { once: true });
+    }
+    bsModal.show();
+    return bsModal;
+}
+
+function _closeWorkshopModal() {
+    const modal = document.getElementById('aiWorkshopModal');
+    if (modal) {
+        const bsModal = bootstrap.Modal.getInstance(modal);
+        if (bsModal) bsModal.hide();
+    }
+}
+
 // 对已保存的 AI 组件随时微调：从组件栏点击「微调」打开工坊并进入微调步骤
 async function openRefineForSavedComponent(code, styleCode) {
-    if (typeof Swal === 'undefined') { if (typeof AdminToast !== 'undefined') AdminToast.warning('<?= __('SweetAlert2 未加载') ?>'); return; }
     code = (code || '').trim();
     styleCode = (styleCode || '_ai_generated').trim();
     if (!code) {
-        if (typeof AdminToast !== 'undefined') AdminToast.warning('<?= __('组件代码为空') ?>');
+        BackendToast.warning('<?= __('组件代码为空') ?>');
         return;
     }
     const url = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/info') ?>?code=' + encodeURIComponent(code) + '&include_preview=1';
@@ -2045,32 +2232,21 @@ async function openRefineForSavedComponent(code, styleCode) {
             savedAt: new Date().toISOString()
         };
         _aiWorkshop = { step: 1, params: null, result: null, eventSource: null };
-        Swal.fire({
-            title: '<i class="mdi mdi-auto-fix"></i> <?= __('AI 组件工坊') ?>',
-            html: _buildWorkshopHtml({}),
-            width: '820px',
-            showConfirmButton: false,
-            showCancelButton: false,
-            allowOutsideClick: false,
-            customClass: { container: 'swal2-dark-theme', popup: 'ai-workshop-popup' },
-            didOpen: () => {
-                _workshopGoToStep(1);
-                loadReferenceComponents(recoverable.component.region || 'content', '');
-                _loadAiServiceInfo();
-                _loadAgentList();
-                _recoverToWorkshop(recoverable);
-                setTimeout(function() { _bindWorkshopPreviewButtons(); }, 50);
-            }
+        _showWorkshopModal(_buildWorkshopHtml({}), function() {
+            _workshopGoToStep(1);
+            loadReferenceComponents(recoverable.component.region || 'content', '');
+            _loadAiServiceInfo();
+            _loadAgentList();
+            _recoverToWorkshop(recoverable);
+            setTimeout(function() { _bindWorkshopPreviewButtons(); }, 50);
         });
     } catch (e) {
-        if (typeof AdminToast !== 'undefined') AdminToast.error('<?= __('加载失败') ?>: ' + (e.message || String(e)));
+        BackendToast.error('<?= __('加载失败') ?>: ' + (e.message || String(e)));
     }
 }
 
 // 打开AI组件工坊
 function openAiGenerateComponent() {
-    if (typeof Swal === 'undefined') { alert('SweetAlert2 未加载'); return; }
-    
     _aiWorkshop = { step: 1, params: null, result: null, eventSource: null };
     const saved = loadAiGenerationParams();
     const s = saved || {};
@@ -2078,33 +2254,23 @@ function openAiGenerateComponent() {
     // 检查是否有本地保存的未提交组件（可直接恢复到预览阶段）
     const recoverable = loadGeneratedComponentFromLocal();
     
-    Swal.fire({
-        title: '<i class="mdi mdi-auto-fix"></i> <?= __('AI 组件工坊') ?>',
-        html: _buildWorkshopHtml(s),
-        width: '820px',
-        showConfirmButton: false,
-        showCancelButton: false,
-        allowOutsideClick: false,
-        customClass: { container: 'swal2-dark-theme', popup: 'ai-workshop-popup' },
-        didOpen: () => {
-            loadReferenceComponents(s.region || 'content', s.referenceComponent || '');
-            _loadAiServiceInfo();
-            _loadAgentList();
-            if (recoverable && recoverable.component) {
-                _recoverToWorkshop(recoverable);
-                if (typeof AdminToast !== 'undefined') AdminToast.success('<?= __('已恢复未保存的组件到预览') ?>');
-            } else {
-                _workshopGoToStep(1);
-            }
-            setTimeout(function() { _bindWorkshopPreviewButtons(); }, 50);
+    _showWorkshopModal(_buildWorkshopHtml(s), function() {
+        loadReferenceComponents(s.region || 'content', s.referenceComponent || '');
+        _loadAiServiceInfo();
+        _loadAgentList();
+        if (recoverable && recoverable.component) {
+            _recoverToWorkshop(recoverable);
+            BackendToast.success('<?= __('已恢复未保存的组件到预览') ?>');
+        } else {
+            _workshopGoToStep(1);
         }
+        setTimeout(function() { _bindWorkshopPreviewButtons(); }, 50);
     });
 }
 
-// 工坊弹窗内「刷新预览」「全屏预览」事件委托（Swal 内 inline onclick 可能不执行）
+// 工坊弹窗内「刷新预览」「全屏预览」事件委托
 function _bindWorkshopPreviewButtons() {
-    let popup = typeof Swal !== 'undefined' && Swal.getPopup ? Swal.getPopup() : null;
-    popup = popup || document.querySelector('.swal2-popup') || document.querySelector('.ai-workshop-popup');
+    let popup = document.getElementById('aiWorkshopModal') || document.querySelector('.ai-workshop-popup');
     if (!popup || popup._aiWorkshopPreviewBound) return;
     popup._aiWorkshopPreviewBound = true;
     popup.addEventListener('click', function(e) {
@@ -2347,7 +2513,7 @@ function _buildWorkshopHtml(s) {
         </div>
     </div>
     <div class="ai-ws-footer">
-        <button class="ai-ws-btn-secondary" onclick="Swal.close()"><i class="mdi mdi-close"></i> <?= __('关闭') ?></button>
+        <button class="ai-ws-btn-secondary" onclick="_closeWorkshopModal()"><i class="mdi mdi-close"></i> <?= __('关闭') ?></button>
         <button class="ai-ws-btn-primary" onclick="_workshopStartGenerate()"><i class="mdi mdi-robot"></i> <?= __('开始生成') ?></button>
     </div>
 </div>
@@ -2408,15 +2574,15 @@ function _buildWorkshopHtml(s) {
         </div>
     </div>
     <div class="ai-ws-footer" style="flex-direction:column;align-items:stretch;">
-        <details class="ai-ws-template-file-wrap" open style="width:100%;margin-bottom:12px;border:1px solid #444;border-radius:6px;overflow:hidden;background:#1a1a1a;">
-            <summary style="padding:8px 12px;cursor:pointer;font-size:12px;font-weight:600;color:#e2e8f0;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;">
-                <span style="display:flex;align-items:center;gap:6px;"><i class="mdi mdi-file-document-outline"></i> <?= __('AI 生成的草稿内容') ?> (.phtml) — <?= __('可复制，便于调试') ?></span>
-                <button type="button" class="btn btn-sm btn-outline-light" onclick="event.preventDefault();event.stopPropagation();_copyDraftContent(this);" title="<?= __('复制草稿内容') ?>">
+        <div class="ai-ws-template-file-wrap" style="width:100%;margin-bottom:12px;border:1px solid #444;border-radius:6px;overflow:hidden;background:#1a1a1a;">
+            <div style="padding:8px 12px;font-size:12px;font-weight:600;color:#e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                <span style="display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="this.closest('.ai-ws-template-file-wrap').querySelector('pre').style.display = this.closest('.ai-ws-template-file-wrap').querySelector('pre').style.display === 'none' ? 'block' : 'none'; this.querySelector('.mdi-chevron-down')?.classList.toggle('mdi-rotate-180');"><i class="mdi mdi-chevron-down" style="transition:transform .2s;"></i><i class="mdi mdi-file-document-outline"></i> <?= __('AI 生成的草稿内容') ?> (.phtml) — <?= __('可复制，便于调试') ?></span>
+                <button type="button" class="btn btn-sm btn-outline-light" onclick="_copyDraftContent(this);" title="<?= __('复制草稿内容') ?>">
                     <i class="mdi mdi-content-copy"></i> <?= __('复制') ?>
                 </button>
-            </summary>
+            </div>
             <pre id="ai-ws-template-file-content" style="margin:0;padding:12px;max-height:280px;overflow:auto;font-size:11px;line-height:1.4;color:#94a3b8;font-family:'Consolas',monospace;white-space:pre-wrap;word-break:break-word;border-top:1px solid #333;user-select:all;-webkit-user-select:all;"></pre>
-        </details>
+        </div>
         <div style="display:flex;justify-content:space-between;align-items:center;">
             <div style="display:flex;gap:8px;">
                 <button class="ai-ws-btn-secondary" onclick="_workshopGoToStep(1)"><i class="mdi mdi-arrow-left"></i> <?= __('重新描述') ?></button>
@@ -3775,25 +3941,14 @@ function importAndPreviewJson(jsonData) {
         
     } catch (error) {
         console.error('[导入JSON] 错误:', error);
-        Swal.fire({
-            icon: 'error',
-            title: '<?= __('导入失败') ?>',
-            html: `<div style="text-align: left; white-space: pre-wrap; font-size: 13px;">${error.message || '<?= __('未知错误') ?>'}</div>`,
-            customClass: { container: 'swal2-dark-theme' }
-        });
+        BackendToast.error('<?= __('导入失败') ?>：' + (error.message || '<?= __('未知错误') ?>'));
     }
 }
 
 // 从代码生成预览
 async function generatePreviewFromCode(templateContent, componentData, validation, finalPrompt) {
     // 显示加载状态
-    Swal.fire({
-        title: '<?= __('正在生成预览...') ?>',
-        html: '<div class="spinner-border text-primary" role="status"></div>',
-        allowOutsideClick: false,
-        showConfirmButton: false,
-        customClass: { container: 'swal2-dark-theme' }
-    });
+    BackendToast.info('<?= __('正在生成预览...') ?>', 5000);
     
     try {
         // 调用后端生成预览
@@ -4354,7 +4509,7 @@ async function applyJsonChanges() {
     
     const jsonContent = textarea.value.trim();
     if (!jsonContent) {
-        Swal.showValidationMessage('<?= __('JSON 内容为空') ?>');
+        BackendToast.warning('<?= __('JSON 内容为空') ?>');
         return;
     }
     
@@ -4362,17 +4517,9 @@ async function applyJsonChanges() {
     try {
         jsonData = JSON.parse(jsonContent);
     } catch (e) {
-        Swal.fire({
-            icon: 'error',
-            title: '<?= __('JSON 格式错误') ?>',
-            text: e.message,
-            customClass: { container: 'swal2-dark-theme' }
-        });
+        BackendToast.error('<?= __('JSON 格式错误') ?>：' + e.message);
         return;
     }
-    
-    // 关闭当前弹窗
-    Swal.close();
     
     // 导入并预览
     importAndPreviewJson(jsonData);
@@ -4932,12 +5079,7 @@ async function saveGeneratedComponent(component) {
     const uniquePrefix = 'ai-' + (component.code || '').replace(/[^a-zA-Z0-9-]/g, '-');
     component.css_prefix = uniquePrefix;
     
-    Swal.fire({
-        title: '<?= __('保存中...') ?>',
-        allowOutsideClick: false,
-        didOpen: () => { Swal.showLoading(); },
-        customClass: { container: 'swal2-dark-theme' }
-    });
+    BackendToast.info('<?= __('保存中...') ?>', 3000);
     
     try {
         const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/save-component') ?>', {
@@ -4961,36 +5103,18 @@ async function saveGeneratedComponent(component) {
         // 清除localStorage中的临时组件数据
         clearGeneratedComponentFromLocal();
         
-        Swal.fire({
-            icon: 'success',
-            title: '<?= __('保存成功') ?>',
-            html: '<div><i class="mdi mdi-robot"></i> <?= __('AI 组件已保存到组件库') ?></div>',
-            timer: 1500,
-            showConfirmButton: false,
-            customClass: { container: 'swal2-dark-theme' }
-        }).then(() => {
-            initComponentPanel();
-        });
+        BackendToast.success('<?= __('AI 组件已保存到组件库') ?>');
+        initComponentPanel();
         
     } catch (error) {
-        Swal.fire({
-            icon: 'error',
-            title: '<?= __('保存失败') ?>',
-            text: error.message || '<?= __('未知错误') ?>',
-            customClass: { container: 'swal2-dark-theme' }
-        });
+        BackendToast.error('<?= __('保存失败') ?>：' + (error.message || '<?= __('未知错误') ?>'));
     }
 }
 
 // 显示生成的代码（用于调试）
 function showGeneratedCode() {
     if (!window.currentGeneratedComponent) {
-        Swal.fire({
-            icon: 'warning',
-            title: '<?= __('无代码可显示') ?>',
-            text: '<?= __('请先生成组件') ?>',
-            customClass: { container: 'swal2-dark-theme' }
-        });
+        BackendToast.warning('<?= __('无代码可显示：请先生成组件') ?>');
         return;
     }
     
@@ -4999,12 +5123,7 @@ function showGeneratedCode() {
                  '';
     
     if (!code) {
-        Swal.fire({
-            icon: 'warning',
-            title: '<?= __('代码为空') ?>',
-            text: '<?= __('未找到组件代码') ?>',
-            customClass: { container: 'swal2-dark-theme' }
-        });
+        BackendToast.warning('<?= __('代码为空：未找到组件代码') ?>');
         return;
     }
     
@@ -5060,7 +5179,7 @@ function copyGeneratedCode() {
                  '';
     
     if (!code) {
-        Swal.showValidationMessage('<?= __('没有代码可复制') ?>');
+        BackendToast.warning('<?= __('没有代码可复制') ?>');
         return;
     }
     
@@ -5093,12 +5212,7 @@ function copyGeneratedCode() {
 // 打开微调组件弹窗（已整合到预览页面，此函数现在重新显示预览页面）
 function openRefineComponentDialog() {
     if (!window.currentGeneratedComponent) {
-        Swal.fire({
-            icon: 'error',
-            title: '<?= __('错误') ?>',
-            text: '<?= __('找不到组件数据') ?>',
-            customClass: { container: 'swal2-dark-theme' }
-        });
+        BackendToast.error('<?= __('错误：找不到组件数据') ?>');
         return;
     }
     
@@ -5123,12 +5237,7 @@ function fillRefinePrompt(prompt) {
 // 使用AI微调组件
 async function refineComponentWithAi(adjustmentPrompt) {
     if (!window.currentGeneratedComponent) {
-        Swal.fire({
-            icon: 'error',
-            title: '<?= __('错误') ?>',
-            text: '<?= __('找不到组件数据') ?>',
-            customClass: { container: 'swal2-dark-theme' }
-        });
+        BackendToast.error('<?= __('错误：找不到组件数据') ?>');
         return;
     }
     
@@ -5137,29 +5246,12 @@ async function refineComponentWithAi(adjustmentPrompt) {
     const templateContent = currentComponent.templateContent || currentComponent.component?.phtml_code || '';
     
     if (!refineToken && !templateContent) {
-        Swal.fire({
-            icon: 'error',
-            title: '<?= __('错误') ?>',
-            text: '<?= __('找不到组件代码') ?>',
-            customClass: { container: 'swal2-dark-theme' }
-        });
+        BackendToast.error('<?= __('错误：找不到组件代码') ?>');
         return;
     }
     
     // 显示微调中状态
-    Swal.fire({
-        title: '<?= __('AI 正在微调组件...') ?>',
-        html: `
-            <div class="text-center">
-                <div class="spinner-border text-primary mb-3" role="status"></div>
-                <p class="mb-1"><?= __('正在根据您的要求调整组件...') ?></p>
-                <p class="text-muted small"><?= __('这可能需要 10-30 秒') ?></p>
-            </div>
-        `,
-        allowOutsideClick: false,
-        showConfirmButton: false,
-        customClass: { container: 'swal2-dark-theme' }
-    });
+    BackendToast.info('<?= __('AI 正在微调组件，请稍候...') ?>', 30000);
     
     const refineBody = {
         adjustment_prompt: adjustmentPrompt,

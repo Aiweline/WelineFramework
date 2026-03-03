@@ -207,7 +207,7 @@
                                             
                                             <acl source="GuoLaiRen_PageBuilder::page_builder_publish">
                                                 <button class='btn btn-sm btn-primary d-inline-flex align-items-center'
-                                                        onclick="if(typeof Swal!=='undefined'){Swal.fire({icon:'info',title:'<?= __('提示') ?>',text:'<?= __('功能建设中，敬请期待！') ?>',confirmButtonText:'<?= __('确定') ?>'});}else{console.log('<?= __('功能建设中，敬请期待！') ?>');} return false;"
+                                                        onclick="BackendToast.info('<?= __('功能建设中，敬请期待！') ?>'); return false;"
                                                         style="min-width: 70px; white-space: nowrap;"
                                                         title="<?= __('发布页面') ?>">
                                                     <i class="mdi mdi-publish me-1"></i><?= __('发布') ?>
@@ -390,7 +390,8 @@
                                                     <form action="<?= $this->getBackendUrl('*/backend/page/delete') ?>"
                                                           method='post' 
                                                           style="display:inline;"
-                                                          onsubmit="return confirm('<?= __('确定要删除此页面吗？') ?>');">
+                                                          class="delete-confirm-form"
+                                                          data-confirm-message="<?= __('确定要删除此页面吗？') ?>">
                                                         <input type='hidden' name='id' value='<?= $page->getId() ?>'>
                                                         <button type='submit' class='btn btn-sm btn-danger d-inline-flex align-items-center' style="min-width: 70px; white-space: nowrap;">
                                                             <i class="mdi mdi-delete me-1"></i><?= __('删除') ?>
@@ -490,7 +491,7 @@
                                                                 
                                                                 <acl source="GuoLaiRen_PageBuilder::page_builder_publish">
                                                                     <button class='btn btn-sm btn-primary d-inline-flex align-items-center'
-                                                                            onclick="if(typeof Swal!=='undefined'){Swal.fire({icon:'info',title:'<?= __('提示') ?>',text:'<?= __('功能建设中，敬请期待！') ?>',confirmButtonText:'<?= __('确定') ?>'});}else{console.log('<?= __('功能建设中，敬请期待！') ?>');} return false;"
+                                                                            onclick="BackendToast.info('<?= __('功能建设中，敬请期待！') ?>'); return false;"
                                                                             style="min-width: 70px; white-space: nowrap;"
                                                                             title="<?= __('发布页面') ?>">
                                                                         <i class="mdi mdi-publish me-1"></i><?= __('发布') ?>
@@ -564,7 +565,8 @@
                                                                                 <form action="<?= $this->getBackendUrl('*/backend/page/delete') ?>"
                                                                                       method='post' 
                                                                                       style="display:inline; width: 100%;"
-                                                                                      onsubmit="return confirm('<?= __('确定要删除此子页面吗？') ?>');">
+                                                                                      class="delete-confirm-form"
+                                                                                      data-confirm-message="<?= __('确定要删除此子页面吗？') ?>">
                                                                                     <input type='hidden' name='id' value='<?= $childPage->getId() ?>'>
                                                                                     <button type='submit' class='dropdown-item text-danger'>
                                                                                         <i class="mdi mdi-delete me-2"></i><?= __('删除页面') ?>
@@ -941,116 +943,325 @@
 </div>
 
 <style>
-.step-indicator { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
-.step-indicator .step { 
-    padding: 6px 12px; 
-    background: #e9ecef; 
-    border-radius: 20px; 
+/* ============================================
+   组件：PageBuilder Page Manager
+   模块：GuoLaiRen_PageBuilder
+   前缀：pagebuilder-page-
+   ============================================ */
+
+/* 页面标题适配 */
+.page-title-box h4 {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.page-title-box .breadcrumb-item a {
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.page-title-box .breadcrumb-item.active {
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+/* 卡片适配 */
+.card {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-md, 8px);
+}
+
+.card-body {
+    background: var(--backend-color-card-bg, #fff);
+}
+
+.card-title {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.card-title-desc {
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+/* 表单元素适配 */
+.form-control {
+    background: var(--backend-color-input-bg, #fff);
+    border-color: var(--backend-color-border-default, #dee2e6);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.form-control:focus {
+    background: var(--backend-color-input-bg, #fff);
+    border-color: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.form-control::placeholder {
+    color: var(--backend-color-text-placeholder, #adb5bd);
+}
+
+/* 手风琴适配 */
+.accordion-item {
+    background: var(--backend-color-card-bg, #fff);
+    border-color: var(--backend-color-border-default, #dee2e6) !important;
+}
+
+.accordion-item .bg-light {
+    background: var(--backend-color-bg-secondary, #f8f9fa) !important;
+}
+
+.accordion-item h6 {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.accordion-item .text-muted {
+    color: var(--backend-color-text-secondary, #6c757d) !important;
+}
+
+.accordion-body {
+    background: var(--backend-color-card-bg, #fff);
+}
+
+/* 下拉菜单适配 */
+.dropdown-menu {
+    background: var(--backend-color-card-bg, #fff);
+    border-color: var(--backend-color-border-default, #dee2e6);
+}
+
+.dropdown-item {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.dropdown-item:hover {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.dropdown-item.text-muted {
+    color: var(--backend-color-text-tertiary, #adb5bd) !important;
+}
+
+.dropdown-divider {
+    border-color: var(--backend-color-border-light, #e9ecef);
+}
+
+/* 空状态适配 */
+.text-center.text-muted {
+    color: var(--backend-color-text-tertiary, #adb5bd) !important;
+}
+
+/* 步骤指示器 */
+.step-indicator { 
+    display: flex; 
+    align-items: center; 
+    gap: 10px; 
+    flex-wrap: wrap; 
+    justify-content: center; 
+}
+
+.step-indicator .step {
+    padding: 6px 12px;
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-primary, #212529);
+    border-radius: 20px;
     font-size: 13px;
     transition: all 0.3s;
     white-space: nowrap;
 }
-.step-indicator .step.active { background: #198754; color: white; }
-.step-indicator .step.completed { background: #0d6efd; color: white; }
-.step-indicator .step-divider { color: var(--bs-secondary-color, #6c757d); }
 
-/* 暗色主题下步骤指示器 */
-[data-bs-theme="dark"] .step-indicator .step {
-    background: var(--bs-secondary-bg);
-    color: var(--bs-body-color);
+.step-indicator .step.active { 
+    background: var(--backend-color-success, #34c38f); 
+    color: var(--backend-color-text-inverse, #fff); 
 }
 
-/* 站点选择样式 - 支持亮/暗主题 */
+.step-indicator .step.completed { 
+    background: var(--backend-color-primary, #556ee6); 
+    color: var(--backend-color-text-inverse, #fff); 
+}
+
+.step-indicator .step-divider { 
+    color: var(--backend-color-text-secondary, #6c757d); 
+}
+
+/* 站点选择样式 */
 .website-item {
     cursor: pointer;
     transition: all 0.2s;
-    border-radius: 4px;
-    background: var(--bs-body-bg, #fff);
-    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: var(--backend-border-radius-sm, 4px);
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
     margin-bottom: 2px;
 }
-.website-item:hover { 
-    background: var(--bs-tertiary-bg, #f8f9fa); 
-    border-color: #0d6efd;
-}
-.website-item.selected { 
-    background: rgba(25, 135, 84, 0.15); 
-    border-left: 3px solid #198754 !important;
-    border-color: #198754;
-}
-.website-item.selected .website-check::before {
-    content: "\F0134"; /* mdi-checkbox-marked-circle */
-    color: #198754;
-}
-.website-item .website-check { color: var(--bs-secondary-color, #dee2e6); }
 
-/* 模板卡片样式 - 支持亮/暗主题 */
+.website-item:hover {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-color: var(--backend-color-primary, #556ee6);
+}
+
+.website-item.selected {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+    border-left: 3px solid var(--backend-color-success, #34c38f) !important;
+    border-color: var(--backend-color-success, #34c38f);
+}
+
+.website-item.selected .website-check::before {
+    content: "\F0134";
+    color: var(--backend-color-success, #34c38f);
+}
+
+.website-item .website-check { 
+    color: var(--backend-color-text-tertiary, #adb5bd); 
+}
+
+/* 模板卡片样式 */
 .template-card {
-    border: 2px solid var(--bs-border-color, #dee2e6);
-    border-radius: 6px;
+    border: 2px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
     cursor: pointer;
     transition: all 0.2s;
     height: 100%;
-    background: var(--bs-body-bg, #fff);
+    background: var(--backend-color-card-bg, #fff);
 }
-.template-card:hover { 
-    border-color: #0d6efd; 
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15); 
+
+.template-card:hover {
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: 0 2px 8px rgba(var(--backend-color-primary-rgb, 85, 110, 230), 0.15);
 }
-.template-card.selected { 
-    border-color: #198754; 
-    background: rgba(25, 135, 84, 0.1); 
+
+.template-card.selected {
+    border-color: var(--backend-color-success, #34c38f);
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
 }
+
 .template-card .template-preview {
     height: 80px;
-    background: var(--bs-tertiary-bg, #f8f9fa);
-    border-radius: 4px 4px 0 0;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-radius: var(--backend-border-radius-sm, 4px) var(--backend-border-radius-sm, 4px) 0 0;
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
     position: relative;
 }
-.template-card .template-preview img { max-width: 100%; max-height: 100%; object-fit: cover; }
+
+.template-card .template-preview img { 
+    max-width: 100%; 
+    max-height: 100%; 
+    object-fit: cover; 
+}
+
 .template-card .template-preview .preview-generating {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    color: var(--bs-secondary-color, #6c757d);
-}
-.template-card .template-info { padding: 8px; }
-.template-card .template-name { 
-    font-weight: 600; 
-    font-size: 13px; 
-    margin-bottom: 2px; 
-    color: var(--bs-body-color, #212529); 
-}
-.template-card .template-desc { 
-    font-size: 11px; 
-    color: var(--bs-secondary-color, #6c757d); 
-    line-height: 1.3; 
+    color: var(--backend-color-text-secondary, #6c757d);
 }
 
-/* 暗色主题特定覆盖 */
-[data-bs-theme="dark"] .website-item,
-[data-bs-theme="dark"] .template-card {
-    background: var(--bs-tertiary-bg);
+.template-card .template-info { 
+    padding: 8px; 
 }
-[data-bs-theme="dark"] .website-item:hover {
-    background: rgba(13, 110, 253, 0.15);
+
+.template-card .template-name {
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 2px;
+    color: var(--backend-color-text-primary, #212529);
 }
-[data-bs-theme="dark"] .website-item.selected {
-    background: rgba(25, 135, 84, 0.25);
+
+.template-card .template-desc {
+    font-size: 11px;
+    color: var(--backend-color-text-secondary, #6c757d);
+    line-height: 1.3;
 }
-[data-bs-theme="dark"] .template-card:hover {
-    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+
+/* 模态框适配 */
+.modal-content {
+    background: var(--backend-color-card-bg, #fff);
+    border-color: var(--backend-color-border-default, #dee2e6);
 }
-[data-bs-theme="dark"] .template-card.selected {
-    background: rgba(25, 135, 84, 0.2);
+
+.modal-header {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-color: var(--backend-color-border-default, #dee2e6);
 }
-[data-bs-theme="dark"] .template-card .template-preview {
-    background: var(--bs-secondary-bg);
+
+.modal-title {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.modal-body {
+    background: var(--backend-color-card-bg, #fff);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.modal-footer {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-color: var(--backend-color-border-default, #dee2e6);
+}
+
+/* Badge 徽章适配（使用框架内置颜色，无需额外覆盖） */
+.badge.bg-light {
+    background: var(--backend-color-bg-secondary, #f8f9fa) !important;
+    color: var(--backend-color-text-primary, #212529) !important;
+}
+
+/* 调色板图标 */
+.pagebuilder-page-palette-icon {
+    font-size: 32px;
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+/* 表单 label 适配 */
+.form-label {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+/* 选择框适配 */
+.form-select {
+    background-color: var(--backend-color-input-bg, #fff);
+    border-color: var(--backend-color-border-default, #dee2e6);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.form-select:focus {
+    border-color: var(--backend-color-primary, #556ee6);
+    background-color: var(--backend-color-input-bg, #fff);
+}
+
+/* 分隔线适配 */
+hr {
+    border-color: var(--backend-color-border-light, #e9ecef);
+    opacity: 1;
+}
+
+/* 表格适配 */
+.table {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.table thead th {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    border-color: var(--backend-color-border-default, #dee2e6);
+}
+
+.table tbody td {
+    border-color: var(--backend-color-border-light, #e9ecef);
+    background: var(--backend-color-card-bg, #fff);
+}
+
+.table-hover tbody tr:hover {
+    background: var(--backend-color-table-bg-hover, #f8f9fa);
+}
+
+/* 列表组适配 */
+.list-group-item {
+    background: var(--backend-color-card-bg, #fff);
+    border-color: var(--backend-color-border-light, #e9ecef);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.list-group-item:hover {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
 }
 </style>
 
@@ -1136,45 +1347,30 @@ document.addEventListener('DOMContentLoaded', function() {
     // Toast 通知函数
     function showToast(type, title, message) {
         // 检查是否有全局的 Toast 方法（如 Bootstrap Toast）
-        if (typeof Toastify !== 'undefined') {
-            // 使用 Toastify 库
+        if (typeof BackendToast !== 'undefined') {
+            if (type === 'success') {
+                BackendToast.success(title + (message ? ': ' + message : ''));
+            } else if (type === 'error') {
+                BackendToast.error(title + (message ? ': ' + message : ''));
+            } else {
+                BackendToast.info(title + (message ? ': ' + message : ''));
+            }
+        } else if (typeof Toastify !== 'undefined') {
+            const bgColor = getComputedStyle(document.documentElement).getPropertyValue(
+                type === 'success' ? '--backend-color-success' : '--backend-color-danger'
+            ).trim() || (type === 'success' ? '#34c38f' : '#f46a6a');
             Toastify({
                 text: title + (message ? '<br>' + message : ''),
                 duration: 3000,
                 gravity: "top",
                 position: "right",
-                backgroundColor: type === 'success' ? "#28a745" : "#dc3545",
+                backgroundColor: bgColor,
                 escapeMarkup: false
             }).showToast();
         } else if (typeof toastr !== 'undefined') {
-            // 使用 toastr 库
             toastr[type](message || '', title);
         } else {
-            // 降级为简单的 alert（开发环境可能会用到）
-            if (type === 'success') {
-                // 创建简单的通知元素
-                const toast = document.createElement('div');
-                toast.style.cssText = 'position:fixed;top:20px;right:20px;background:#28a745;color:white;padding:15px 20px;border-radius:5px;box-shadow:0 4px 6px rgba(0,0,0,0.1);z-index:9999;max-width:400px;';
-                toast.innerHTML = '<strong>' + title + '</strong><br>' + (message || '');
-                document.body.appendChild(toast);
-                
-                setTimeout(() => {
-                    toast.style.transition = 'opacity 0.3s';
-                    toast.style.opacity = '0';
-                    setTimeout(() => document.body.removeChild(toast), 300);
-                }, 3000);
-            } else {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'info',
-                        title: title,
-                        text: message || '',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.log(title + '\n' + (message || ''));
-                }
-            }
+            console.log('[' + type.toUpperCase() + '] ' + title + (message ? ': ' + message : ''));
         }
     }
     
@@ -1269,32 +1465,21 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             confirmMessage += '\n\n<?= __("此操作不可恢复！") ?>';
             
-            // 使用 SweetAlert2 如果可用，否则使用原生 confirm
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    title: '<?= __("确认删除站点") ?>',
-                    html: `<div class="text-start">
-                        <p class="mb-2"><strong><?= __("站点名称") ?>:</strong> ${pageName}</p>
-                        ${childCount > 0 ? `<p class="mb-2 text-danger"><strong><?= __("子页面数量") ?>:</strong> ${childCount} <?= __("个") ?></p>` : ''}
-                        <p class="text-danger"><strong><?= __("警告") ?>:</strong> <?= __("此操作将删除该站点及其所有子页面，且不可恢复！") ?></p>
-                    </div>`,
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#dc3545',
-                    cancelButtonColor: '#6c757d',
-                    confirmButtonText: '<?= __("确认删除") ?>',
-                    cancelButtonText: '<?= __("取消") ?>',
-                    focusCancel: true
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        deleteSite(pageId, pageName, button);
-                    }
-                });
-            } else {
-                if (confirm(confirmMessage)) {
+            // 使用 BackendConfirm 确认删除
+            const confirmHtml = childCount > 0 
+                ? `<?= __("站点名称") ?>: ${pageName}\n<?= __("子页面数量") ?>: ${childCount} <?= __("个") ?>\n<?= __("警告") ?>: <?= __("此操作将删除该站点及其所有子页面，且不可恢复！") ?>`
+                : `<?= __("站点名称") ?>: ${pageName}\n<?= __("警告") ?>: <?= __("此操作不可恢复！") ?>`;
+            
+            BackendConfirm.show(confirmHtml, {
+                title: '<?= __("确认删除站点") ?>',
+                confirmText: '<?= __("确认删除") ?>',
+                cancelText: '<?= __("取消") ?>',
+                type: 'warning'
+            }).then(function(confirmed) {
+                if (confirmed) {
                     deleteSite(pageId, pageName, button);
                 }
-            }
+            });
         });
     });
     
@@ -1432,21 +1617,19 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         let thumbnailHtml;
                         if (thumbnail) {
-                            thumbnailHtml = `<img src="${thumbnail}" alt="${style.name}" onerror="this.parentNode.innerHTML='<i class=\\'mdi mdi-palette-outline\\' style=\\'font-size:32px;color:#6c757d;\\'></i>'">`; 
+                            thumbnailHtml = `<img src="${thumbnail}" alt="${style.name}" onerror="this.parentNode.innerHTML='<i class=\\'mdi mdi-palette-outline pagebuilder-page-palette-icon\\'></i>'">`; 
                         } else if (needsPreview) {
-                            // 需要生成预览图 - 显示加载中状态
                             thumbnailHtml = `<div class="preview-generating" data-style-code="${style.code}">
                                 <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
                                 <small class="d-block mt-1" style="font-size:10px;"><?= __('生成中...') ?></small>
                             </div>`;
-                            // 加入队列
                             previewGenerationQueue.push({
                                 code: style.code,
                                 name: style.name,
                                 preview_page_url: style.preview_page_url
                             });
                         } else {
-                            thumbnailHtml = '<i class="mdi mdi-palette-outline" style="font-size:32px;color:#6c757d;"></i>';
+                            thumbnailHtml = '<i class="mdi mdi-palette-outline pagebuilder-page-palette-icon"></i>';
                         }
                         
                         html += `
@@ -1636,12 +1819,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const url = document.getElementById('newWebsiteUrl').value.trim();
         
         if (!name || !code || !url) {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __("提示") ?>',
-                text: '<?= __("请填写完整的站点信息") ?>',
-                confirmButtonText: '<?= __("确定") ?>'
-            });
+            BackendToast.warning('<?= __("请填写完整的站点信息") ?>');
             return;
         }
         
@@ -1693,22 +1871,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 hideQuickWebsiteForm();
                 showToast('success', '<?= __("站点创建成功") ?>', '');
             } else {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __("创建失败") ?>',
-                    text: data.message || '<?= __("未知错误") ?>',
-                    confirmButtonText: '<?= __("确定") ?>'
-                });
+                BackendToast.error('<?= __("创建失败") ?>: ' + (data.message || '<?= __("未知错误") ?>'));
             }
         })
         .catch(error => {
             console.error('创建站点失败:', error);
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __("创建失败") ?>',
-                text: '<?= __("网络错误，请稍后重试") ?>',
-                confirmButtonText: '<?= __("确定") ?>'
-            });
+            BackendToast.error('<?= __("创建失败") ?>: <?= __("网络错误，请稍后重试") ?>');
         });
     };
     
@@ -1774,22 +1942,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const styleCode = document.getElementById('selectedStyleCode').value;
             
             if (!websiteId) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: '<?= __("提示") ?>',
-                    text: '<?= __("请选择一个站点") ?>',
-                    confirmButtonText: '<?= __("确定") ?>'
-                });
+                BackendToast.warning('<?= __("请选择一个站点") ?>');
                 return;
             }
             
             if (!styleCode) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: '<?= __("提示") ?>',
-                    text: '<?= __("请选择一个模板") ?>',
-                    confirmButtonText: '<?= __("确定") ?>'
-                });
+                BackendToast.warning('<?= __("请选择一个模板") ?>');
                 return;
             }
             showStep(2);
@@ -1812,23 +1970,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const styleCode = document.getElementById('selectedStyleCode').value;
         
         if (!siteName || !siteHandle) {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __("提示") ?>',
-                text: '<?= __("请填写完整信息") ?>',
-                confirmButtonText: '<?= __("确定") ?>'
-            });
+            BackendToast.warning('<?= __("请填写完整信息") ?>');
             return;
         }
         
         // 验证handle格式
         if (!/^[a-z0-9-]+$/.test(siteHandle)) {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __("提示") ?>',
-                text: '<?= __("URL前缀只能包含小写字母、数字和连字符") ?>',
-                confirmButtonText: '<?= __("确定") ?>'
-            });
+            BackendToast.warning('<?= __("URL前缀只能包含小写字母、数字和连字符") ?>');
             return;
         }
         
@@ -1942,6 +2090,26 @@ document.addEventListener('DOMContentLoaded', function() {
                     </button>
                 </div>
             `;
+        });
+    });
+});
+
+// 处理删除确认表单 - 使用 BackendConfirm 替代 confirm()
+document.querySelectorAll('.delete-confirm-form').forEach(form => {
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const message = this.dataset.confirmMessage || '<?= __('确定要执行此操作吗？') ?>';
+        const formElement = this;
+        
+        BackendConfirm.show(message, {
+            title: '<?= __('确认删除') ?>',
+            confirmText: '<?= __('确认删除') ?>',
+            cancelText: '<?= __('取消') ?>',
+            type: 'danger'
+        }).then((confirmed) => {
+            if (confirmed) {
+                formElement.submit();
+            }
         });
     });
 });

@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Observer;
 
 use GuoLaiRen\PageBuilder\Model\WebsiteUser;
-use Weline\Backend\Session\BackendSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 
@@ -19,14 +20,13 @@ use Weline\Framework\Event\ObserverInterface;
 class WebsiteUserAutoAssign implements ObserverInterface
 {
     private WebsiteUser $websiteUser;
-    private BackendSession $backendSession;
+    private AuthenticatedSessionInterface $backendSession;
 
     public function __construct(
-        WebsiteUser   $websiteUser,
-        BackendSession $backendSession
+        WebsiteUser   $websiteUser
     ) {
         $this->websiteUser = $websiteUser;
-        $this->backendSession = $backendSession;
+        $this->backendSession = SessionFactory::getInstance()->createBackendSession();
     }
 
     /**
@@ -40,7 +40,7 @@ class WebsiteUserAutoAssign implements ObserverInterface
             return;
         }
 
-        $backendUserId = (int)$this->backendSession->getLoginUserID();
+        $backendUserId = (int)$this->backendSession->getUserId();
         if ($backendUserId <= 0) {
             return;
         }

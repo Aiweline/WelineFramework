@@ -5,7 +5,7 @@
     "description": "AI 自动生成的可视化编辑组件",
     "version": "1.0.0",
     "auto_generated": true,
-    "updated_at": "2026-02-26 03:20:49",
+    "updated_at": "2026-02-28 07:25:04",
     "regions": {
         "header": {
             "name": "头部区域",
@@ -28,13 +28,13 @@
         }
     },
     "components": {
-        "footer-ai-2602260320": {
+        "footer-ai-2602280725": {
             "name": "拜金风格",
             "description": "拜金风格，关于我们等政策齐全，棋牌",
             "region": "footer",
             "category": "footer",
             "type": "section",
-            "file": "footer\/ai-2602260320.phtml",
+            "file": "footer\/ai-2602280725.phtml",
             "icon": "bi-robot",
             "ai_generated": true,
             "ai_version": "2.0",

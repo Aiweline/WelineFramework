@@ -949,6 +949,11 @@ class AiComponent extends BackendController
      * 
      * 请求参数：
      * - id: 组件 ID
+     * - force: 强制删除（可选，默认 false）
+     * 
+     * 返回：
+     * - 如果组件被页面引用，返回 success=false 和 references 数组
+     * - 前端需要提示用户先从这些页面中移除组件
      */
     public function postDelete()
     {
@@ -957,20 +962,49 @@ class AiComponent extends BackendController
             $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
             
             $componentId = (int)($body['id'] ?? 0);
+            $force = (bool)($body['force'] ?? false);
             
             if (!$componentId) {
-                throw new \Exception('请提供组件 ID');
+                throw new \Exception(__('请提供组件 ID'));
             }
             
-            $deleted = $this->generator->delete($componentId);
+            $result = $this->generator->delete($componentId, $force);
             
-            if (!$deleted) {
-                throw new \Exception('删除失败');
+            return $this->fetchJson($result);
+            
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+    
+    /**
+     * API: 获取组件引用信息
+     * GET /backend/visual/api/ai-component/references
+     * 
+     * 请求参数：
+     * - id: 组件 ID
+     * 
+     * 返回：
+     * - has_references: 是否有引用
+     * - references: 引用的页面列表
+     */
+    public function references()
+    {
+        try {
+            $componentId = (int)$this->request->getParam('id', 0);
+            
+            if (!$componentId) {
+                throw new \Exception(__('请提供组件 ID'));
             }
+            
+            $result = $this->generator->getComponentReferences($componentId);
             
             return $this->fetchJson([
                 'success' => true,
-                'message' => __('AI 组件已删除'),
+                ...$result,
             ]);
             
         } catch (\Exception $e) {
@@ -1151,7 +1185,7 @@ class AiComponent extends BackendController
             }
         } catch (\Exception $e) {
             // 记录错误但不中断保存流程
-            error_log("[AIComponent] Failed to save generation history: " . $e->getMessage());
+            w_log_error("[AIComponent] Failed to save generation history: " . $e->getMessage());
         }
     }
     
@@ -1178,7 +1212,7 @@ class AiComponent extends BackendController
                 return is_array($history) ? $history : [];
             }
         } catch (\Exception $e) {
-            error_log("[AIComponent] Failed to load generation history: " . $e->getMessage());
+            w_log_error("[AIComponent] Failed to load generation history: " . $e->getMessage());
         }
         
         return [];
