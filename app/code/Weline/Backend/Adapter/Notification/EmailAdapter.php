@@ -42,7 +42,7 @@ class EmailAdapter implements ChannelAdapterInterface
         try {
             $mailer = ObjectManager::getInstance(\Weline\Smtp\Helper\Mailer::class);
             if (!$mailer) {
-                Env::log_warning('EmailAdapter: Mailer not available');
+                w_log_warning('EmailAdapter: Mailer not available', [], 'email');
                 return false;
             }
 
@@ -55,7 +55,7 @@ class EmailAdapter implements ChannelAdapterInterface
 
             return true;
         } catch (\Exception $e) {
-            Env::log_error('EmailAdapter::send failed: ' . $e->getMessage());
+            w_log_error('EmailAdapter::send failed: ' . $e->getMessage(), [], 'notification');
             return false;
         }
     }

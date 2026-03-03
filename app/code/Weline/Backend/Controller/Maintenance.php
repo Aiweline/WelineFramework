@@ -96,9 +96,9 @@ class Maintenance extends BackendController
             $message = trim($this->request->getPost('message', ''));
             $retryAfter = (int)$this->request->getPost('retry_after', 60);
             
-            $env->setConfig('maintenance', $enabled);
-            $env->setConfig('maintenance_message', $message);
-            $env->setConfig('maintenance_retry_after', $retryAfter);
+            $env->setConfig('system.maintenance', $enabled);
+            $env->setConfig('system.maintenance_message', $message);
+            $env->setConfig('system.maintenance_retry_after', $retryAfter);
             
             // 放行配置
             $bypassConfig = [
@@ -120,17 +120,17 @@ class Maintenance extends BackendController
                 }
             }
             
-            $env->setConfig('maintenance.bypass', $bypassConfig);
+            $env->setConfig('system.maintenance_bypass', $bypassConfig);
             
             // 备份配置（可选）
             $autoBackup = (bool)$this->request->getPost('auto_backup_before_maintenance', false);
             $backupTypes = $this->request->getPost('backup_types', []);
             
             if ($autoBackup) {
-                $backupConfig = $env->getConfig('maintenance.backup', []);
+                $backupConfig = Env::system('maintenance_backup') ?? [];
                 $backupConfig['auto_backup_before_maintenance'] = true;
                 $backupConfig['backup_types'] = $backupTypes;
-                $env->setConfig('maintenance.backup', $backupConfig);
+                $env->setConfig('system.maintenance_backup', $backupConfig);
             }
             
             return $this->jsonResponse(true, __('配置保存成功'));
@@ -147,7 +147,7 @@ class Maintenance extends BackendController
      */
     private function getMaintenanceStatus(): bool
     {
-        return (bool)Env::getInstance()->getConfig('maintenance', false);
+        return (bool)Env::system('maintenance');
     }
     
     /**
@@ -190,9 +190,9 @@ class Maintenance extends BackendController
             }
         }
         
-        $env->setConfig('maintenance', $enabled);
+        $env->setConfig('system.maintenance', $enabled);
         if (!empty($message)) {
-            $env->setConfig('maintenance_message', $message);
+            $env->setConfig('system.maintenance_message', $message);
         }
     }
     

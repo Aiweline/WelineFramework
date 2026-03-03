@@ -270,4 +270,55 @@ class NotificationService
 
         return false;
     }
+
+    /**
+     * 获取单条通知详情
+     */
+    public function getNotificationDetail(int $userId, int $notificationId): ?array
+    {
+        $status = clone $this->statusModel;
+        $status->clearQuery()
+            ->joinModel(
+                SystemNotification::class,
+                'n',
+                'main_table.notification_id = n.notification_id',
+                'inner',
+                'n.topic_code, n.type, n.title, n.content, n.priority, n.avatar, n.is_icon, n.is_img, n.external_channels, n.create_time as notification_time, n.metadata'
+            )
+            ->where(UserNotificationStatus::fields_notification_id, $notificationId)
+            ->where(UserNotificationStatus::fields_user_id, $userId)
+            ->find()
+            ->fetch();
+
+        if (!$status->getId()) {
+            return null;
+        }
+
+        $data = $status->getData();
+        $type = NotificationType::fromString($data['type'] ?? 'info');
+        $topicInfo = $this->topicCollector->getTopicByCode($data['topic_code'] ?? '');
+
+        return [
+            'status_id'         => (int) $data['status_id'],
+            'notification_id'   => (int) $data['notification_id'],
+            'topic_code'        => $data['topic_code'] ?? '',
+            'topic_name'        => $topicInfo['topic_name'] ?? $data['topic_code'],
+            'topic_color'       => $topicInfo['color'] ?? '#50a5f1',
+            'topic_icon'        => $topicInfo['icon'] ?? 'ri-notification-line',
+            'type'              => $data['type'] ?? 'info',
+            'type_label'        => $type->getLabel(),
+            'type_color'        => $type->getHexColor(),
+            'title'             => $data['title'] ?? '',
+            'content'           => $data['content'] ?? '',
+            'priority'          => (int) ($data['priority'] ?? 5),
+            'avatar'            => $data['avatar'] ?? 'ri-notification-line',
+            'is_icon'           => (bool) ($data['is_icon'] ?? true),
+            'is_img'            => (bool) ($data['is_img'] ?? false),
+            'is_read'           => (bool) ($data['is_read'] ?? false),
+            'read_at'           => $data['read_at'] ?? null,
+            'notification_time' => $data['notification_time'] ?? '',
+            'external_channels' => json_decode($data['external_channels'] ?? '[]', true) ?: [],
+            'metadata'          => json_decode($data['metadata'] ?? '[]', true) ?: [],
+        ];
+    }
 }

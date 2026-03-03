@@ -1,0 +1,331 @@
+<?php
+/**
+ * 通知详情页面
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $notification 通知详情
+ */
+$notification = $notification ?? [];
+$typeColor = $notification['type_color'] ?? 'var(--backend-color-info)';
+$typeLabel = $notification['type_label'] ?? __('信息');
+$typeIcon = $notification['avatar'] ?? 'ri-notification-line';
+?>
+
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0 font-size-18">
+                <a href="<?= $this->getBackendUrl('*/backend/notification') ?>" class="text-muted me-2">
+                    <i class="ri-arrow-left-line"></i>
+                </a>
+                <lang>通知详情</lang>
+            </h4>
+            <div>
+                <a href="<?= $this->getBackendUrl('*/backend/notification') ?>" class="btn btn-outline-secondary btn-sm">
+                    <i class="ri-arrow-left-line me-1"></i><lang>返回列表</lang>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card weline-nd-card">
+            <div class="card-body p-0">
+                <div class="weline-nd-header" style="background: <?= $typeColor ?>">
+                    <div class="weline-nd-header-icon">
+                        <i class="<?= htmlspecialchars($typeIcon) ?>"></i>
+                    </div>
+                    <div class="weline-nd-header-info">
+                        <span class="weline-nd-type-badge"><?= $typeLabel ?></span>
+                        <?php if (!empty($notification['topic_name'])): ?>
+                        <span class="weline-nd-topic">
+                            <i class="mdi mdi-tag-outline me-1"></i><?= htmlspecialchars($notification['topic_name']) ?>
+                        </span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <div class="weline-nd-body">
+                    <h2 class="weline-nd-title"><?= htmlspecialchars($notification['title'] ?? '') ?></h2>
+                    
+                    <div class="weline-nd-meta">
+                        <span class="weline-nd-time">
+                            <i class="mdi mdi-clock-outline me-1"></i>
+                            <?= $notification['notification_time'] ?? '' ?>
+                        </span>
+                        <?php if ($notification['is_read'] ?? false): ?>
+                        <span class="weline-nd-read-status weline-nd-read">
+                            <i class="mdi mdi-check-circle me-1"></i><lang>已读</lang>
+                        </span>
+                        <?php else: ?>
+                        <span class="weline-nd-read-status weline-nd-unread">
+                            <i class="mdi mdi-circle me-1"></i><lang>未读</lang>
+                        </span>
+                        <?php endif; ?>
+                    </div>
+
+                    <hr class="weline-nd-divider">
+
+                    <div class="weline-nd-content">
+                        <?= nl2br(htmlspecialchars($notification['content'] ?? '')) ?>
+                    </div>
+
+                    <?php if (!empty($notification['metadata'])): ?>
+                    <div class="weline-nd-metadata mt-4">
+                        <h6 class="weline-nd-metadata-title">
+                            <i class="mdi mdi-information-outline me-1"></i><lang>附加信息</lang>
+                        </h6>
+                        <div class="weline-nd-metadata-content">
+                            <?php foreach ($notification['metadata'] as $key => $value): ?>
+                            <div class="weline-nd-metadata-item">
+                                <span class="weline-nd-metadata-key"><?= htmlspecialchars((string)$key) ?>:</span>
+                                <span class="weline-nd-metadata-value">
+                                    <?= is_array($value) ? htmlspecialchars(json_encode($value, JSON_UNESCAPED_UNICODE)) : htmlspecialchars((string)$value) ?>
+                                </span>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if (!empty($notification['external_channels'])): ?>
+                    <div class="weline-nd-channels mt-4">
+                        <h6 class="weline-nd-channels-title">
+                            <i class="mdi mdi-broadcast me-1"></i><lang>已推送渠道</lang>
+                        </h6>
+                        <div class="weline-nd-channels-list">
+                            <?php foreach ($notification['external_channels'] as $channel): ?>
+                            <span class="weline-nd-channel-tag">
+                                <?= htmlspecialchars((string)$channel) ?>
+                            </span>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                </div>
+
+                <div class="weline-nd-footer">
+                    <a href="<?= $this->getBackendUrl('*/backend/notification') ?>" class="btn btn-light">
+                        <i class="ri-arrow-left-line me-1"></i><lang>返回通知中心</lang>
+                    </a>
+                    <a href="<?= $this->getBackendUrl('*/backend/notificationsubscription') ?>" class="btn btn-outline-primary">
+                        <i class="mdi mdi-cog me-1"></i><lang>订阅设置</lang>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ============================================
+   组件：Backend Notification Detail
+   模块：Weline_Backend
+   前缀：weline-nd-
+   ============================================ */
+.weline-nd-card {
+    border: none;
+    border-radius: var(--backend-border-radius-lg, 12px);
+    box-shadow: var(--backend-shadow-lg, 0 8px 32px rgba(0,0,0,0.1));
+    overflow: hidden;
+}
+
+.weline-nd-header {
+    padding: 32px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.weline-nd-header-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: var(--backend-border-radius-md, 8px);
+    background: rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--backend-color-text-inverse, #fff);
+    font-size: 1.75rem;
+}
+
+.weline-nd-header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.weline-nd-type-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: var(--backend-border-radius-sm, 4px);
+    color: var(--backend-color-text-inverse, #fff);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.weline-nd-topic {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.85rem;
+}
+
+.weline-nd-body {
+    padding: 32px;
+}
+
+.weline-nd-title {
+    margin: 0 0 16px 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+    line-height: 1.4;
+}
+
+.weline-nd-meta {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    font-size: 0.875rem;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+.weline-nd-time {
+    display: inline-flex;
+    align-items: center;
+}
+
+.weline-nd-read-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: var(--backend-border-radius-sm, 4px);
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.weline-nd-read {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+    color: var(--backend-color-success, #34c38f);
+}
+
+.weline-nd-unread {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-nd-divider {
+    margin: 24px 0;
+    border-color: var(--backend-color-border-light, #e9ecef);
+}
+
+.weline-nd-content {
+    font-size: 1rem;
+    line-height: 1.8;
+    color: var(--backend-color-text-secondary, #495057);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.weline-nd-metadata,
+.weline-nd-channels {
+    padding: 16px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-radius: var(--backend-border-radius-md, 8px);
+}
+
+.weline-nd-metadata-title,
+.weline-nd-channels-title {
+    margin: 0 0 12px 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+    display: flex;
+    align-items: center;
+}
+
+.weline-nd-metadata-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.weline-nd-metadata-item {
+    display: flex;
+    gap: 8px;
+    font-size: 0.85rem;
+}
+
+.weline-nd-metadata-key {
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    font-weight: 500;
+}
+
+.weline-nd-metadata-value {
+    color: var(--backend-color-text-secondary, #495057);
+    word-break: break-all;
+}
+
+.weline-nd-channels-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.weline-nd-channel-tag {
+    padding: 4px 12px;
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-sm, 4px);
+    font-size: 0.8rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.weline-nd-footer {
+    padding: 20px 32px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-top: 1px solid var(--backend-color-border-light, #e9ecef);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+@media (max-width: 576px) {
+    .weline-nd-header {
+        padding: 24px;
+    }
+    
+    .weline-nd-body {
+        padding: 24px;
+    }
+    
+    .weline-nd-header-icon {
+        width: 48px;
+        height: 48px;
+        font-size: 1.25rem;
+    }
+    
+    .weline-nd-title {
+        font-size: 1.25rem;
+    }
+    
+    .weline-nd-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .weline-nd-footer {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .weline-nd-footer .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+</style>

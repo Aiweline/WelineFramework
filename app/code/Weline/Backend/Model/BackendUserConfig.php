@@ -11,7 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Model;
 
-use Weline\Backend\Session\BackendSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\App\Env;
 use Weline\Framework\Database\AbstractModel;
 use Weline\Framework\Database\Api\Db\TableInterface;
@@ -85,9 +86,9 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
             return $this->getDefaultConfig($key);
         }
         if ($real) {
-            /**@var BackendSession $userSession */
-            $userSession = ObjectManager::getInstance(BackendSession::class);
-            return $this->clear()->where(self::fields_user_id, $userSession->getLoginUserID())
+            /**@var AuthenticatedSessionInterface $userSession */
+            $userSession = SessionFactory::getInstance()->createBackendSession();
+            return $this->clear()->where(self::fields_user_id, $userSession->getUserId())
                 ->where(self::fields_key, $key)
                 ->find()
                 ->fetchArray()['value'] ?? '';
@@ -97,10 +98,10 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
             return $this->config[$self_config_key];
         }
         # 读取用户全部配置
-        /**@var BackendSession $userSession */
-        $userSession = ObjectManager::getInstance(BackendSession::class);
+        /**@var AuthenticatedSessionInterface $userSession */
+        $userSession = SessionFactory::getInstance()->createBackendSession();
         $this->reset()
-            ->where(self::fields_user_id, $userSession->getLoginUserID())
+            ->where(self::fields_user_id, $userSession->getUserId())
             ->where(self::fields_key, $key);
         if ($module) {
             $this->where(self::fields_module, $module);
@@ -161,12 +162,12 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
         }
 
         # 设置用户配置
-        /**@var BackendSession $userSession */
-        $userSession = ObjectManager::getInstance(BackendSession::class);
+        /**@var AuthenticatedSessionInterface $userSession */
+        $userSession = SessionFactory::getInstance()->createBackendSession();
         return (bool)$this->clear()
             ->setData(self::fields_key, $key, true)
             ->setData(self::fields_value, $value)
-            ->setData(self::fields_user_id, $userSession->getLoginUserID(), true)
+            ->setData(self::fields_user_id, $userSession->getUserId(), true)
             ->setData(self::fields_module, $module, true)
             ->setData(self::fields_name, $name, true)
             ->save(true);
