@@ -11,9 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\SystemConfig\Model;
 
-use Weline\Backend\Cache\BackendCache;
 use Weline\Framework\App\Exception;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Exception\Core;
@@ -42,7 +41,7 @@ class SystemConfig extends \Weline\Framework\Database\Model
     {
         parent::__init();
         if (!isset($this->_cache)) {
-            $this->_cache = ObjectManager::getInstance(BackendCache::class);
+            $this->_cache = w_cache('system_config');
         }
     }
 
