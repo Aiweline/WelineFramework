@@ -17,8 +17,6 @@ use Weline\Ai\Model\AiModel;
 use Weline\Ai\Service\AdapterScanner;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\Message;
-use Weline\Framework\Session\Session;
-use Weline\Framework\Http\Url;
 
 /**
  * AI助手使用控制器
@@ -47,36 +45,20 @@ class Assistant extends FrontendController
     private AdapterScanner $adapterScanner;
 
     /**
-     * @var Session|null
-     */
-    protected ?Session $session;
-
-    /**
-     * @var Url|null
-     */
-    protected ?Url $_url;
-
-    /**
      * 构造函数
      * 
      * @param AiAssistant $aiAssistant
      * @param AiModel $aiModel
      * @param AdapterScanner $adapterScanner
-     * @param Session $session
-     * @param Url $url
      */
     public function __construct(
         AiAssistant $aiAssistant,
         AiModel $aiModel,
-        AdapterScanner $adapterScanner,
-        Session $session,
-        Url $url
+        AdapterScanner $adapterScanner
     ) {
         $this->aiAssistant = $aiAssistant;
         $this->aiModel = $aiModel;
         $this->adapterScanner = $adapterScanner;
-        $this->session = $session;
-        $this->_url = $url;
     }
 
     /**
@@ -86,10 +68,10 @@ class Assistant extends FrontendController
      */
     public function index(): string
     {
-        $isLoggedIn = $this->session && $this->session->isLogin();
+        $isLoggedIn = $this->isLoggedIn();
         
         if ($isLoggedIn) {
-            $userId = $this->session->getLoginUserData('entity_id');
+            $userId = $this->getLoginUserId();
 
             // 获取用户的助手列表
             $assistants = $this->aiAssistant->reset()
@@ -116,7 +98,7 @@ class Assistant extends FrontendController
      */
     public function create(): string
     {
-        if (!$this->session->isLogin()) {
+        if (!$this->isLoggedIn()) {
             Message::warning(__('请先登录'));
             return $this->redirect($this->_url->getFrontendUrl('*/frontend/index'));
         }
@@ -144,7 +126,7 @@ class Assistant extends FrontendController
      */
     public function save(): string
     {
-        if (!$this->session->isLogin()) {
+        if (!$this->isLoggedIn()) {
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('请先登录')
@@ -158,7 +140,7 @@ class Assistant extends FrontendController
             ]);
         }
 
-        $userId = $this->session->getLoginUserData('entity_id');
+        $userId = $this->getLoginUserId();
         $name = $this->request->getPost('name', '');
         $prompt = $this->request->getPost('prompt', '');
         $modelCode = $this->request->getPost('model_code', '');
@@ -210,13 +192,13 @@ class Assistant extends FrontendController
      */
     public function edit(): string
     {
-        if (!$this->session->isLogin()) {
+        if (!$this->isLoggedIn()) {
             Message::warning(__('请先登录'));
             return $this->redirect($this->_url->getFrontendUrl('*/frontend/index'));
         }
 
         $id = (int)$this->request->getGet('id');
-        $userId = $this->session->getLoginUserData('entity_id');
+        $userId = $this->getLoginUserId();
 
         $assistant = $this->aiAssistant->reset()->load($id);
 
@@ -250,7 +232,7 @@ class Assistant extends FrontendController
      */
     public function delete(): string
     {
-        if (!$this->session->isLogin()) {
+        if (!$this->isLoggedIn()) {
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('请先登录')
@@ -258,7 +240,7 @@ class Assistant extends FrontendController
         }
 
         $id = (int)$this->request->getPost('id');
-        $userId = $this->session->getLoginUserData('entity_id');
+        $userId = $this->getLoginUserId();
 
         try {
             $assistant = $this->aiAssistant->reset()->load($id);
@@ -292,13 +274,13 @@ class Assistant extends FrontendController
      */
     public function chat(): string
     {
-        if (!$this->session->isLogin()) {
+        if (!$this->isLoggedIn()) {
             Message::warning(__('请先登录'));
             return $this->redirect($this->_url->getFrontendUrl('*/frontend/index'));
         }
 
         $id = (int)$this->request->getGet('id');
-        $userId = $this->session->getLoginUserData('entity_id');
+        $userId = $this->getLoginUserId();
 
         $assistant = $this->aiAssistant->reset()->load($id);
 

@@ -123,7 +123,7 @@ class MonitoringService
 
         } catch (\Exception $e) {
             // 记录错误但不影响主流程
-            error_log("Monitoring record failed: " . $e->getMessage());
+            w_log_error("Monitoring record failed: " . $e->getMessage());
         }
     }
 
@@ -257,7 +257,7 @@ class MonitoringService
         $this->eventsManager->dispatch('Weline_Ai::ai_monitoring_alert', $eventData);
 
         // 记录告警日志
-        error_log(sprintf(
+        w_log_warning(sprintf(
             "[AI Monitoring Alert] Level: %s, Type: %s, Message: %s",
             $alert['level'],
             $alert['type'],

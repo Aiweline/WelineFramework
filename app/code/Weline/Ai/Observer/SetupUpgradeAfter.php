@@ -125,7 +125,7 @@ class SetupUpgradeAfter implements ObserverInterface
             
         } catch (\Throwable $e) {
             // 捕获所有异常，记录错误但不中断系统升级流程
-            error_log("AI模块资源扫描失败: " . $e->getMessage() . "\n" . $e->getTraceAsString());
+            w_log_error("AI模块资源扫描失败: " . $e->getMessage() . "\n" . $e->getTraceAsString());
             $this->printing->error(__('AI模块资源扫描失败: %{error}', ['error' => $e->getMessage()]));
         }
     }
