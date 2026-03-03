@@ -27,10 +27,8 @@ class Index extends FrontendController
      */
     public function index()
     {
-        // 获取当前登录用户ID
-        /**@var \Weline\Frontend\Session\FrontendSession $session */
-        $session = \Weline\Framework\App\Env::getInstance(\Weline\Frontend\Session\FrontendSession::class);
-        $userId = $session->getLoginUserID() ?? 1;
+        // 获取当前登录用户ID（使用继承的 $this->session）
+        $userId = $this->session->getUserId() ?? 1;
 
         $config = $this->twoFactorAuthService->getUserConfig($userId);
         $isEnabled = $this->twoFactorAuthService->isEnabled($userId);

@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Weline\TwoFactorAuth\Controller\Api;
 
 use Weline\Framework\App\Controller\FrontendRestController;
-use Weline\Frontend\Session\FrontendUserSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 
 /**
  * 检查登录状态API
@@ -15,12 +16,11 @@ use Weline\Frontend\Session\FrontendUserSession;
  */
 class CheckLogin extends FrontendRestController
 {
-    private FrontendUserSession $session;
+    private AuthenticatedSessionInterface $session;
 
-    public function __construct(
-        FrontendUserSession $session
-    ) {
-        $this->session = $session;
+    public function __construct()
+    {
+        $this->session = SessionFactory::getInstance()->createFrontendSession();
         parent::__construct();
     }
 
@@ -30,7 +30,7 @@ class CheckLogin extends FrontendRestController
      */
     public function execute()
     {
-        if ($this->session->isLogin()) {
+        if ($this->session->isLoggedIn()) {
             $user = $this->session->getLoginUser(\Weline\Frontend\Model\FrontendUser::class);
             
             return $this->success([
