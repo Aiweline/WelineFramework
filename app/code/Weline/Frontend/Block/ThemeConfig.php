@@ -12,31 +12,32 @@ declare(strict_types=1);
 namespace Weline\Frontend\Block;
 
 use Weline\Frontend\Model\FrontendUserConfig;
-use Weline\Frontend\Session\FrontendUserSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 
 class ThemeConfig extends \Weline\Framework\View\Block
 {
     public const        area                 = 'frontend_';
     public const        theme_Session_Config = 'frontend_theme_config';
-    private FrontendUserSession $userSession;
+    private AuthenticatedSessionInterface $userSession;
     private FrontendUserConfig $userConfig;
 
-    public function __construct(FrontendUserConfig $userConfig, FrontendUserSession $frontendSession, array $data = [])
+    public function __construct(FrontendUserConfig $userConfig, array $data = [])
     {
         parent::__construct($data);
-        $this->userSession = $frontendSession;
+        $this->userSession = SessionFactory::getInstance()->createFrontendSession();
         $this->userConfig  = $userConfig;
     }
 
     public function __init()
     {
-        $this->userConfig = $this->userSession->getLoginUserID() ? $this->userConfig->load($this->userSession->getLoginUserID()) : $this->userConfig;
+        $this->userConfig = $this->userSession->getUserId() ? $this->userConfig->load($this->userSession->getUserId()) : $this->userConfig;
     }
 
     public function getOriginThemeConfig($key = '')
     {
         $themeConfig = $this->userSession->getData(self::theme_Session_Config);
-        if (empty($themeConfig) and $this->userSession->isLogin()) {
+        if (empty($themeConfig) and $this->userSession->isLoggedIn()) {
             $themeConfig = $this->userConfig->getData(self::theme_Session_Config);
         }
         return $key ? ($themeConfig[$key] ?? '') : ($themeConfig ?: []);
@@ -84,14 +85,14 @@ class ThemeConfig extends \Weline\Framework\View\Block
         if (is_array($key)) {
             $key = array_merge($theme_Config, $key);
             $this->userSession->setData(self::theme_Session_Config, $key);
-            if ($this->userSession->isLogin()) {
-                $this->userConfig->setUserId($this->userSession->getLoginUserID())->addConfig(self::theme_Session_Config, $key)->save();
+            if ($this->userSession->isLoggedIn()) {
+                $this->userConfig->setUserId($this->userSession->getUserId())->addConfig(self::theme_Session_Config, $key)->save();
             }
         } else {
             $theme_Config[$key] = $value;
             $this->userSession->setData(self::theme_Session_Config, $theme_Config);
-            if ($this->userSession->isLogin()) {
-                $this->userConfig->setUserId($this->userSession->getLoginUserID())->addConfig(self::theme_Session_Config, $theme_Config)->save();
+            if ($this->userSession->isLoggedIn()) {
+                $this->userConfig->setUserId($this->userSession->getUserId())->addConfig(self::theme_Session_Config, $theme_Config)->save();
             }
         }
 
