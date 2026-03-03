@@ -335,9 +335,15 @@ class MenuCollector
             if (empty($menu['is_backend'])) {
                 $menu['is_backend'] = true;
             }
-            $router = $module_info['router'];
+            // 回退链：后台优先 backend_router，无则 router，再无则模块名小写（与 Module::getRouter 语义一致）
+            $moduleName = $menu['module'];
+            $backendRouter = $module_info['backend_router'] ?? '';
+            $frontRouter = $module_info['router'] ?? '';
+            $fallback = strtolower($moduleName);
             if ($menu['is_backend']) {
-                $router = $module_info['backend_router'];
+                $router = $backendRouter !== '' ? $backendRouter : ($frontRouter !== '' ? $frontRouter : $fallback);
+            } else {
+                $router = $frontRouter !== '' ? $frontRouter : $fallback;
             }
             $menu[Menu::fields_ACTION] = str_replace('*', $router, $menu[Menu::fields_ACTION]);
         }
