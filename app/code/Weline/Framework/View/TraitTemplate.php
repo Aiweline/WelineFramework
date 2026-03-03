@@ -379,7 +379,7 @@ trait TraitTemplate
             if ($version) {
                 // 始终使用 ? 作为第一个参数分隔符
                 $data .= '?v=' . $version;
-            } elseif (Env::getInstance()->getConfig('static_file_rand_version')) {
+            } elseif (Env::dev('static_rand_version')) {
                 // 回退到随机版本号
                 $version = random_int(10000, 100000);
                 $data .= '?v=' . $version;
@@ -421,7 +421,7 @@ trait TraitTemplate
         }
         
         // 2. 读取系统配置的静态版本号
-        $staticVersion = Env::getInstance()->getConfig('theme/static_version');
+        $staticVersion = Env::getInstance()->getConfig('theme.static_version');
         if ($staticVersion) {
             return $staticVersion;
         }
@@ -493,7 +493,7 @@ trait TraitTemplate
             }
         }
         $url = rtrim($this->getUrlPath($publish_dir), '/') . '/' . basename($publish_target);
-        if ($rand_version_with_system && Env::getInstance()->getConfig('static_file_rand_version')) {
+        if ($rand_version_with_system && Env::dev('static_rand_version')) {
             $url .= '?v=' . random_int(10000, 100000);
         }
         return str_replace('//', '/', str_replace('\\', '/', $url));

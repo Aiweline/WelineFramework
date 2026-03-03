@@ -9,10 +9,8 @@
 
 namespace Weline\Framework\Plugin;
 
-use Weline\Framework\Cache\CacheInterface;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Plugin\Api\Data\InterceptorInterface;
-use Weline\Framework\Plugin\Cache\PluginCache;
 use Weline\Framework\Plugin\Config\PluginXmlReader;
 
 class PluginsManager
@@ -27,17 +25,16 @@ class PluginsManager
     private PluginXmlReader $reader;
 
     /**
-     * @var CacheInterface
+     * @var CachePoolInterface
      */
-    private CacheInterface $pluginCache;
+    private CachePoolInterface $pluginCache;
 
     public function __construct(
-        PluginXmlReader $reader,
-        PluginCache     $pluginCache
+        PluginXmlReader $reader
     )
     {
         $this->reader = $reader;
-        $this->pluginCache = $pluginCache->create();
+        $this->pluginCache = w_cache('plugin');
     }
 
     /**

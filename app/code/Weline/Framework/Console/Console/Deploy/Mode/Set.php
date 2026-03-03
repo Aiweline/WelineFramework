@@ -106,7 +106,7 @@ class Set extends CommandAbstract
     public function deploy(string $type): void
     {
 // 如果当前是线上环境，应当提醒开发者切换到其他模式的风险
-        if ($type !== 'prod' && (Env::getInstance()->getConfig('deploy') === 'prod')) {
+        if ($type !== 'prod' && (Env::system('deploy') === 'prod')) {
             $this->printer->setup(__('当前部署模式为prod(生产模式)，请谨慎操作！你确认要切换到 %{1} 模式么？', (string)$type));
             $input = $this->system->input();
             if (strtolower(chop($input)) !== 'y') {

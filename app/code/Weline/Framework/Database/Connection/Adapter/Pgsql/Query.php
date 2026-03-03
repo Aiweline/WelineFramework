@@ -1024,17 +1024,38 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                     break;
                 default:
                     // IS NULL / IS NOT NULL 条件不需要绑定值
-                    $lowerCondition = strtolower($where[1]);
-                    if ($lowerCondition === 'is null' || $lowerCondition === 'is not null') {
-                        $wheres .= '(' . $field . ' ' . strtoupper($where[1]) . ')';
+                    // 🔧 修复：规范化条件字符串（去除多余空格，转小写）
+                    $conditionStr = $where[1] ?? '';
+                    $lowerCondition = strtolower(trim(preg_replace('/\s+/', ' ', $conditionStr)));
+                    
+                    // 🔧 优化：使用 str_contains 检测 IS NULL 变体，更健壮
+                    $isNullCondition = ($lowerCondition === 'is null' || $lowerCondition === 'is not null');
+                    if (!$isNullCondition && str_contains($lowerCondition, 'is') && str_contains($lowerCondition, 'null')) {
+                        // 可能是 IS NULL 或 IS NOT NULL 的变体（如 "IS  NULL"）
+                        $isNullCondition = true;
+                    }
+                    
+                    if ($isNullCondition) {
+                        // 标准化输出为 IS NULL 或 IS NOT NULL
+                        $nullType = str_contains($lowerCondition, 'not') ? 'IS NOT NULL' : 'IS NULL';
+                        $wheres .= '(' . $field . ' ' . $nullType . ')';
                         if (!$isLast) {
                             $wheres .= ' ' . $currentLogic;
                         }
                         break;
                     }
                     
+                    // 🔧 修复：当值为 null 时，必须使用 IS NULL 语义
+                    // PostgreSQL 不允许字段名作为独立的布尔表达式
                     if ($where[2] === null) {
-                        $wheres .= '(' . $field . ')';
+                        // 根据条件判断使用 IS NULL 还是 IS NOT NULL
+                        // 如果条件包含 NOT（如 != 或 <>），使用 IS NOT NULL
+                        $conditionUpper = strtoupper(trim($conditionStr));
+                        if (in_array($conditionUpper, ['!=', '<>', 'NOT', 'NOT ='], true)) {
+                            $wheres .= '(' . $field . ' IS NOT NULL)';
+                        } else {
+                            $wheres .= '(' . $field . ' IS NULL)';
+                        }
                         if (!$isLast) {
                             $wheres .= ' ' . $currentLogic;
                         }

@@ -581,6 +581,14 @@ class WlsRequest extends Request
     }
     
     /**
+     * 获取 URL 查询参数，供 GlobalsEmulator 设置 $_GET 使用
+     */
+    public function getQueryParams(): array
+    {
+        return $this->parsedGetParams;
+    }
+    
+    /**
      * 获取 POST 参数，供 GlobalsEmulator::populateFromRequest 使用
      */
     public function getPostParams(): array

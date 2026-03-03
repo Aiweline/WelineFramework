@@ -181,6 +181,17 @@ return [
         'description' => __('在创建 Session 驱动实例前触发，允许其他模块（如 Weline_Server）接管驱动，例如 WLS 模式下将 File Session 替换为内存 Session。'),
         'doc' => 'session/driver_create_before.md',
     ],
+    'Weline_Framework_Session::storage_resolve' => [
+        'name' => __('Session 存储解析'),
+        'description' => __('在 SessionFactory 解析存储类型时触发，允许外部模块（如 WLS）声明自己的存储类型和配置。实现 Session 模块与具体存储后端的解耦。'),
+        'doc' => 'session/storage_resolve.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'storage_type' => ['type' => 'string|null', 'required' => false, 'description' => '存储类型（如 wls, file, redis 等），由 Observer 设置'],
+            'storage_config' => ['type' => 'array', 'required' => false, 'description' => '存储配置数组，由 Observer 提供'],
+        ],
+    ],
     
     // ========== 控制台事件 ==========
     'Weline_Framework_Console::compile' => [

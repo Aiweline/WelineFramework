@@ -450,7 +450,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 throw $e;
             }
             // 环境检测本身出错，记录警告但不阻断升级
-            \Weline\Framework\App\Env::log_warning('env_check.log', __('环境依赖检测出错: %{1}', [$e->getMessage()]));
+            w_log_warning(__('环境依赖检测出错: %{1}', [$e->getMessage()]), [], 'env_check.log');
             $this->printing->warning(__('环境依赖检测出错：%{1}，继续执行升级...', [$e->getMessage()]));
         }
     }
@@ -494,7 +494,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     {
         
         // 1. 启用维护模式
-        Env::getInstance()->setConfig('maintenance', true);
+        Env::getInstance()->setConfig('system.maintenance', true);
         $maintenanceEnabled = true;
         $this->printing->note(__('系统已设置为维护模式，开始执行升级...'));
         
@@ -841,7 +841,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         // 3. 关闭维护模式
         if ($maintenanceEnabled) {
             try {
-                $result = Env::getInstance()->setConfig('maintenance', false);
+                $result = Env::getInstance()->setConfig('system.maintenance', false);
                 if ($result) {
                     $this->printing->note(__('维护模式已关闭。'));
                 } else {
@@ -901,12 +901,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 // 在开发环境下，致命错误必须中断系统更新
                 if (defined('DEV') && DEV) {
                     $this->printing->error(__('注册表更新失败（致命错误）: %{1}', [$errorMessage]));
-                    \Weline\Framework\App\Env::log_error('registry_update.log', __('注册表更新失败（致命错误）: %{1}', [$errorMessage]));
+                    w_log_error(__('注册表更新失败（致命错误）: %{1}', [$errorMessage]), [], 'registry_update.log');
                     throw $e; // 重新抛出异常，中断系统更新
                 }
             }
             // 注册表更新失败不影响系统更新，只记录错误日志
-            \Weline\Framework\App\Env::log_warning('registry_update.log', __('注册表更新失败: %{1}', [$e->getMessage()]));
+            w_log_warning(__('注册表更新失败: %{1}', [$e->getMessage()]), [], 'registry_update.log');
             $this->printing->warning(__('注册表更新失败：%{1}，但将继续执行。', [$e->getMessage()]));
         }
         
@@ -927,7 +927,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $this->printing->success(__('✓ 标签注册表已收集完成。'));
             } catch (\Exception $e) {
                 // 标签收集失败不影响系统更新，只记录警告
-                \Weline\Framework\App\Env::log_warning('registry_update.log', __('标签注册表收集失败: %{1}', [$e->getMessage()]));
+                w_log_warning(__('标签注册表收集失败: %{1}', [$e->getMessage()]), [], 'registry_update.log');
                 $this->printing->warning(__('标签注册表收集时发生错误：%{1}，但将继续执行。', [$e->getMessage()]));
             }
         }
@@ -1814,7 +1814,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $this->printing->success(__('✓ modules.json 已生成: %{1}', [$jsonFile]));
         } catch (\Exception $e) {
             // 生成失败不影响系统升级，只记录警告
-            \Weline\Framework\App\Env::log_warning('modules_json.log', __('生成 modules.json 失败: %{1}', [$e->getMessage()]));
+            w_log_warning(__('生成 modules.json 失败: %{1}', [$e->getMessage()]), [], 'modules_json.log');
             $this->printing->warning(__('生成 modules.json 时发生错误：%{1}，但将继续执行。', [$e->getMessage()]));
         }
     }
@@ -2421,7 +2421,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     'description' => '后台 REST API',
                 ],
             ];
-            Env::set('area_routes', $newAreaRoutes);
+            Env::set('router.area_routes', $newAreaRoutes);
         }
         
         // 执行模块升级流程（原 module:upgrade 的功能）
@@ -2533,7 +2533,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     'description' => '后台 REST API',
                 ],
             ];
-            Env::set('area_routes', $newAreaRoutes);
+            Env::set('router.area_routes', $newAreaRoutes);
         }
 
         $this->executeModuleUpgrade([], []);

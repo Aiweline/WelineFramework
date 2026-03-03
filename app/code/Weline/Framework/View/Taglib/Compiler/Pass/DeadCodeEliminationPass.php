@@ -38,10 +38,16 @@ final class DeadCodeEliminationPass implements CompilePassInterface
 {
     /**
      * 有副作用的标签列表（不应移除）
+     * 
+     * 包含：
+     * - 运行时渲染标签：php, include, template, block, hook, csrf, method
+     * - 内容组织标签：push, stack, section, yield, extends, slot, component
+     * - 控制流标签：else, elseif, case, default（控制结构的一部分，不可移除）
      */
     private const SIDE_EFFECT_TAGS = [
         'php', 'include', 'template', 'block', 'hook', 'csrf', 'method',
         'push', 'stack', 'section', 'yield', 'extends', 'slot', 'component',
+        'else', 'elseif', 'case', 'default',
     ];
 
     /**

@@ -16,7 +16,7 @@ class Show extends CommandAbstract
 {
     public function execute(array $args = [], array $data = [])
     {
-        $this->printer->success('当前部署模式：' . Env::getInstance()->getConfig('deploy'));
+        $this->printer->success('当前部署模式：' . Env::system('deploy'));
     }
 
     public function tip(): string

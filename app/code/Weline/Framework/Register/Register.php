@@ -284,7 +284,7 @@ class Register implements RegisterDataInterface
                 $warningMsg .= __('。未找到任何 Register::register 调用。');
             }
             // 使用框架的日志系统记录警告
-            \Weline\Framework\App\Env::log_warning('register_parse.log', $warningMsg);
+            w_log_warning($warningMsg, [], 'register_parse.log');
             // 返回空数组，让调用方跳过该文件
             return [];
         }
