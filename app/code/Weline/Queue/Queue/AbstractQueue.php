@@ -14,11 +14,10 @@ namespace Weline\Queue\Queue;
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
-use Weline\Queue\Cache\QueueCache;
 use Weline\Queue\Model\Queue;
 use Weline\Queue\QueueInterface;
 
@@ -36,12 +35,11 @@ abstract class AbstractQueue extends DataObject implements QueueInterface
 
     public ?Queue $queue;
     protected Printing $printing;
-    protected CacheInterface $cache;
+    protected CachePoolInterface $cache;
 
     public function __construct()
     {
-        $this->cache = ObjectManager::getInstance(QueueCache::class)->create();
-        $this->cache->setStatus(true);
+        $this->cache = w_cache('queue');
         $this->printing = ObjectManager::getInstance(Printing::class);
     }
 

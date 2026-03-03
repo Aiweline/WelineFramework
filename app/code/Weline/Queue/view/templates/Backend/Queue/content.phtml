@@ -1,17 +1,144 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
-
+/**
+ * 队列内容/结果详情页面
+ * @var \Weline\Framework\View\Template $this
+ */
 ?>
+<style>
+.weline-queue-content {
+    background: var(--backend-color-card-bg, #fff);
+}
+
+.weline-queue-content-body {
+    padding: var(--backend-spacing-md, 16px);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-radius: var(--backend-border-radius-md, 8px);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    max-height: 70vh;
+    overflow-y: auto;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.weline-queue-content-empty {
+    text-align: center;
+    padding: var(--backend-spacing-xl, 40px);
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+.weline-queue-content-empty i {
+    font-size: 3rem;
+    margin-bottom: var(--backend-spacing-md, 16px);
+    display: block;
+    opacity: 0.5;
+}
+
+.weline-queue-content-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: var(--backend-spacing-md, 16px);
+}
+
+.weline-queue-content-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: var(--backend-border-radius, 6px);
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.weline-queue-content-btn--copy {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-queue-content-btn--copy:hover {
+    background: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-inverse, #fff);
+}
+</style>
+
 <!-- start page message -->
-            <div class='row'>
-                <template>Weline_Component::message.phtml</template>
-            </div> <!-- end message -->
-            <div class='row'>
-                <div class='col-12'>
-                    <div class='card'>
-                        <div class='card-body'>
-                            {{data}}
-                        </div>
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+<!-- end message -->
+
+<div class='row'>
+    <div class='col-12'>
+        <div class='card weline-queue-content'>
+            <div class='card-body'>
+                <notempty name="data">
+                    <div class="weline-queue-content-body" id="queueContentBody">{{data}}</div>
+                    <div class="weline-queue-content-actions">
+                        <button type="button" class="weline-queue-content-btn weline-queue-content-btn--copy" onclick="WelineQueueContent.copyContent()">
+                            <i class="mdi mdi-content-copy"></i>
+                            <lang>复制内容</lang>
+                        </button>
                     </div>
-                </div> <!-- end col -->
-            </div> <!-- end row -->
+                <else/>
+                    <div class="weline-queue-content-empty">
+                        <i class="mdi mdi-text-box-remove-outline"></i>
+                        <p><lang>暂无内容数据</lang></p>
+                    </div>
+                </notempty>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    
+    window.WelineQueueContent = {
+        copyContent: function() {
+            var contentEl = document.getElementById('queueContentBody');
+            if (!contentEl) return;
+            
+            var text = contentEl.innerText || contentEl.textContent;
+            
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function() {
+                    if (typeof BackendToast !== 'undefined') {
+                        BackendToast.success('@lang(内容已复制到剪贴板)');
+                    }
+                }).catch(function() {
+                    WelineQueueContent.fallbackCopy(text);
+                });
+            } else {
+                WelineQueueContent.fallbackCopy(text);
+            }
+        },
+        
+        fallbackCopy: function(text) {
+            var textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.left = '-9999px';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.success('@lang(内容已复制到剪贴板)');
+                }
+            } catch (err) {
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.error('@lang(复制失败，请手动复制)');
+                }
+            }
+            document.body.removeChild(textarea);
+        }
+    };
+})();
+</script>

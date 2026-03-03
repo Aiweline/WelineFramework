@@ -15,7 +15,8 @@ namespace Weline\Queue\Controller\Backend;
 
 use PHPUnit\Util\Exception;
 use Weline\Backend\Model\BackendUserData;
-use Weline\Backend\Session\BackendSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Cron\Helper\Process;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Framework\Acl\Acl;
@@ -41,26 +42,61 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
     public function index()
     {
         $this->assign('title', __('消息队列'));
+        
+        $module = $this->request->getGet('module');
+        $status = $this->request->getGet('status');
+        $search = $this->request->getGet('q');
+        $id = $this->request->getGet('id');
+        
         $this->queue->joinModel(\Weline\Queue\Model\Queue\Type::class, 't', 'main_table.type_id=t.type_id', 'left');
-        if ($module = $this->request->getGet('module')) {
+        
+        if ($module) {
             $this->queue->where('t.module_name', $module);
         }
-        if ($search = $this->request->getGet('q')) {
+        if ($search) {
             $this->queue->where("concat(main_table.name,main_table.content,main_table.result) like '%$search%'");
         }
-        if ($id = $this->request->getGet('id')) {
+        if ($id) {
             $this->queue->where('main_table.' . $this->queue::fields_ID, $id);
         }
-        // 允许显示所有队列，如果有类型关联则只显示类型启用的
-        // 使用 additional 方法添加原始 SQL 条件，允许显示没有类型或类型启用的队列
+        if ($status) {
+            $this->queue->where('main_table.status', $status);
+        }
+        
         $this->queue->additional('AND (t.enable = 1 OR t.enable IS NULL)')
-            ->order('main_table.queue_id');
-//        $this->queue->additional('order by CASE status WHEN \'' . \Weline\Queue\Model\Queue::status_running . '\' THEN 0 WHEN \'' . \Weline\Queue\Model\Queue::status_pending . '\' THEN 1 WHEN \'' . \Weline\Queue\Model\Queue::status_done . '\' THEN 2  WHEN \'' . \Weline\Queue\Model\Queue::status_error . '\' THEN  3 END ASC,main_table.update_time DESC');
+            ->order('main_table.queue_id', 'DESC');
         $this->queue->pagination()->select()->fetch();
+        
+        $stats = $this->getQueueStats();
+        
         $this->assign('queues', $this->queue->getItems());
         $this->assign('module', $module);
+        $this->assign('status', $status);
+        $this->assign('stats', $stats);
         $this->assign('pagination', $this->queue->getPagination());
         return $this->fetch();
+    }
+    
+    private function getQueueStats(): array
+    {
+        /** @var \Weline\Queue\Model\Queue $queueModel */
+        $queueModel = ObjectManager::make(\Weline\Queue\Model\Queue::class);
+        
+        $allCount = (int)$queueModel->reset()->count('queue_id');
+        $pendingCount = (int)$queueModel->reset()->where('status', \Weline\Queue\Model\Queue::status_pending)->count('queue_id');
+        $runningCount = (int)$queueModel->reset()->where('status', \Weline\Queue\Model\Queue::status_running)->count('queue_id');
+        $doneCount = (int)$queueModel->reset()->where('status', \Weline\Queue\Model\Queue::status_done)->count('queue_id');
+        $errorCount = (int)$queueModel->reset()->where('status', \Weline\Queue\Model\Queue::status_error)->count('queue_id');
+        $stopCount = (int)$queueModel->reset()->where('status', \Weline\Queue\Model\Queue::status_stop)->count('queue_id');
+        
+        return [
+            'all' => $allCount,
+            'pending' => $pendingCount,
+            'running' => $runningCount,
+            'done' => $doneCount,
+            'error' => $errorCount,
+            'stop' => $stopCount,
+        ];
     }
 
     #[Acl('Weline_Queue::form', '编辑或者新增', 'mdi mdi-form-textbox', '编辑或者新增')]
@@ -104,7 +140,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
             $this->assign('queueData', $queue->getData());
             $this->assign('module', $module);
             $this->assign('dir', $dir);
-            return $this->fetch();
+            return $this->fetch('', 'blank');
         }
         $json = ['code' => 404, 'msg' => ''];
         $module = $this->request->getGet('module') ?: $this->request->getModuleName();
@@ -379,20 +415,47 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
     function getDelete()
     {
         $queue_id = $this->request->getGet('id', 0);
+        $isAjax = $this->request->isXmlHttpRequest();
+        
         if (empty($queue_id)) {
-            $this->getMessageManager()->addWarning(__('请选择要操作的队列'));
+            $msg = __('请选择要操作的队列');
+            if ($isAjax) {
+                return $this->fetchJson(['code' => 400, 'msg' => $msg]);
+            }
+            $this->getMessageManager()->addWarning($msg);
             $this->redirect($this->request->getReferer());
         }
+        
         $this->queue->load($queue_id);
-        if ($this->queue->getStatus() !== $this->queue::status_pending) {
-            $this->getMessageManager()->addWarning(__('队列未处于等待状态无法删除！'));
+        if (!$this->queue->getId()) {
+            $msg = __('队列不存在');
+            if ($isAjax) {
+                return $this->fetchJson(['code' => 404, 'msg' => $msg]);
+            }
+            $this->getMessageManager()->addWarning($msg);
             $this->redirect($this->request->getReferer());
         }
+        
+        if ($this->queue->getStatus() === $this->queue::status_running) {
+            $msg = __('队列正在运行中，无法删除！请先暂停队列后再删除。');
+            if ($isAjax) {
+                return $this->fetchJson(['code' => 403, 'msg' => $msg]);
+            }
+            $this->getMessageManager()->addWarning($msg);
+            $this->redirect($this->request->getReferer());
+        }
+        
+        $queueName = $this->queue->getName();
         $this->queue->delete()->fetch();
-        $this->getMessageManager()->addSuccess(__('队列已成功删除！'));
-        # 队列添加事件
+        
         $data = ['queue' => $this->queue];
         $this->getEventManager()->dispatch('Weline_Queue::delete', $data);
+        
+        $msg = __('队列 "%1" 已成功删除！', $queueName);
+        if ($isAjax) {
+            return $this->fetchJson(['code' => 200, 'msg' => $msg]);
+        }
+        $this->getMessageManager()->addSuccess($msg);
         $this->redirect($this->request->getReferer());
     }
 
@@ -427,97 +490,343 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
     #[Acl('Weline_Queue::reset', '重置刊登任务', 'mdi mdi-lock-reset', '重置刊登任务')]
     public function reset()
     {
-        $queue_id = $this->request
-            ->getParam('id', 0);
+        $queue_id = $this->request->getParam('id', 0);
+        $isAjax = $this->request->isXmlHttpRequest();
+        
         $this->queue->load($queue_id);
         if (!$this->queue->getId()) {
-            $this->getMessageManager()->addError(__('队列记录不存在！'));
+            $msg = __('队列记录不存在！');
+            if ($isAjax) {
+                return $this->fetchJson(['code' => 404, 'msg' => $msg]);
+            }
+            $this->getMessageManager()->addError($msg);
             $this->redirect($this->request->getReferer());
         }
-        # 如果队列有进程，杀死进程
+        
         $pid = $this->queue->getPid();
         if ($pid) {
-            $this->getMessageManager()->addError(__('队列有进程，请先杀死进程！进程：%{1}', $pid));
-            $this->redirect($this->request->getReferer());
+            $running = Process::isProcessRunning($pid);
+            if ($running) {
+                $msg = __('队列有正在运行的进程（PID: %{1}），请先暂停队列后再重置！', $pid);
+                if ($isAjax) {
+                    return $this->fetchJson(['code' => 403, 'msg' => $msg]);
+                }
+                $this->getMessageManager()->addError($msg);
+                $this->redirect($this->request->getReferer());
+            }
         }
-        # 重置队列
+        
         $this->queue->setData($this->queue::fields_status, \Weline\Queue\Model\Queue::status_pending);
         $this->queue->setData($this->queue::fields_finished, 0);
+        $this->queue->setData($this->queue::fields_pid, 0);
         $this->queue->save();
-        # 队列添加事件
+        
         $data = ['queue' => $this->queue];
         $this->getEventManager()->dispatch('Weline_Queue::reset', $data);
-        $this->getMessageManager()->addSuccess(__('重置成功！'));
+        
+        $msg = __('队列 "%1" 已重置，等待重新执行！', $this->queue->getName());
+        if ($isAjax) {
+            return $this->fetchJson(['code' => 200, 'msg' => $msg]);
+        }
+        $this->getMessageManager()->addSuccess($msg);
         $this->redirect($this->request->getReferer());
     }
 
     #[Acl('Weline_Queue::stop', '完成刊登任务', 'mdi mdi-lock-reset', '完成刊登任务')]
     public function stop()
     {
-        $queue_id = $this->request
-            ->getParam('id', 0);
+        $queue_id = $this->request->getParam('id', 0);
+        $isAjax = $this->request->isXmlHttpRequest();
+        
         $queue = $this->queue->load($queue_id);
         if (!$queue->getId()) {
-            $this->getMessageManager()->addError(__('队列记录不存在！'));
+            $msg = __('队列记录不存在！');
+            if ($isAjax) {
+                return $this->fetchJson(['code' => 404, 'msg' => $msg]);
+            }
+            $this->getMessageManager()->addError($msg);
             $this->redirect($this->request->getReferer());
         }
-        # 如果队列有进程，杀死进程
+        
         $pid = $queue->getPid();
+        $killMsg = '';
         if ($pid) {
             $running = Process::isProcessRunning($pid);
             if ($running) {
                 $pname = 'queue-' . $queue->getName() . '-' . $queue->getId();
-                $result = Process::killPid($pid, 'queue-' . $queue->getName() . '-' . $queue->getId());
+                $result = Process::killPid($pid, $pname);
                 Process::unsetLogProcessFilePath($pname);
                 if ($result) {
-                    $this->getMessageManager()->addSuccess(__('队列有进程，已成功杀死进程！进程：%{1}', $pid));
+                    $killMsg = __('（进程 PID: %{1} 已终止）', $pid);
                 } else {
-                    $this->getMessageManager()->addError(__('队列有进程，杀死进程失败！进程：%{1}', $pid));
+                    $msg = __('无法终止队列进程（PID: %{1}），请手动结束进程后重试！', $pid);
+                    if ($isAjax) {
+                        return $this->fetchJson(['code' => 500, 'msg' => $msg]);
+                    }
+                    $this->getMessageManager()->addError($msg);
                     $this->redirect($this->request->getReferer());
                 }
             }
             $queue->setPid(0);
         }
-        # 暂停队列
+        
         $queue->setData($queue::fields_status, \Weline\Queue\Model\Queue::status_stop);
         $queue->save();
-        # 队列添加事件
+        
         $data = ['queue' => $this->queue];
         $this->getEventManager()->dispatch('Weline_Queue::stop', $data);
-        $this->getMessageManager()->addSuccess(__('操作成功！'));
+        
+        $msg = __('队列 "%1" 已暂停！', $queue->getName()) . $killMsg;
+        if ($isAjax) {
+            return $this->fetchJson(['code' => 200, 'msg' => $msg]);
+        }
+        $this->getMessageManager()->addSuccess($msg);
         $this->redirect($this->request->getReferer());
     }
 
     #[Acl('Weline_Queue::continue', '继续刊登任务', 'mdi mdi-arrow-right-thin-circle-outline', '继续刊登任务')]
     public function continue()
     {
-        $queue_id = $this->request
-            ->getParam('id', 0);
+        $queue_id = $this->request->getParam('id', 0);
+        $isAjax = $this->request->isXmlHttpRequest();
+        
         $queue = $this->queue->load($queue_id);
         if (!$queue->getId()) {
-            $this->getMessageManager()->addError(__('队列记录不存在！'));
+            $msg = __('队列记录不存在！');
+            if ($isAjax) {
+                return $this->fetchJson(['code' => 404, 'msg' => $msg]);
+            }
+            $this->getMessageManager()->addError($msg);
             $this->redirect($this->request->getReferer());
         }
-        # 如果队列有进程，杀死进程
+        
         $pid = $queue->getPid();
         if ($pid) {
             $running = Process::isProcessRunning($pid);
             if ($running) {
-                $this->getMessageManager()->addError(__('队列有进程，请先杀死进程！进程：%{1}', $pid));
+                $msg = __('队列进程（PID: %{1}）仍在运行中，无法继续！请先暂停队列。', $pid);
+                if ($isAjax) {
+                    return $this->fetchJson(['code' => 403, 'msg' => $msg]);
+                }
+                $this->getMessageManager()->addError($msg);
                 $this->redirect($this->request->getReferer());
-            } else {
-                $queue->setData($queue::fields_pid, 0);
             }
+            $queue->setData($queue::fields_pid, 0);
         }
-        # 继续队列
+        
         $queue->setData($queue::fields_status, \Weline\Queue\Model\Queue::status_pending);
         $queue->setData($queue::fields_finished, 0);
         $queue->setData($queue::fields_pid, 0);
         $queue->save();
-        # 队列添加事件
+        
         $data = ['queue' => $this->queue];
         $this->getEventManager()->dispatch('Weline_Queue::continue', $data);
-        $this->getMessageManager()->addSuccess(__('继续成功！'));
+        
+        $msg = __('队列 "%1" 已恢复，等待继续执行！', $queue->getName());
+        if ($isAjax) {
+            return $this->fetchJson(['code' => 200, 'msg' => $msg]);
+        }
+        $this->getMessageManager()->addSuccess($msg);
         $this->redirect($this->request->getReferer());
+    }
+
+    #[Acl('Weline_Queue::api_action', 'AJAX队列操作', 'mdi mdi-api', 'AJAX队列操作接口')]
+    public function postApiAction(): string
+    {
+        $json = ['success' => false, 'msg' => ''];
+        
+        $data = $this->request->getBodyParams();
+        $action = $data['action'] ?? '';
+        $queueId = (int)($data['id'] ?? 0);
+        
+        if (empty($queueId)) {
+            $json['msg'] = __('请选择要操作的队列');
+            return $this->fetchJson($json);
+        }
+        
+        $this->queue->load($queueId);
+        if (!$this->queue->getId()) {
+            $json['msg'] = __('队列记录不存在');
+            return $this->fetchJson($json);
+        }
+        
+        try {
+            switch ($action) {
+                case 'delete':
+                    if ($this->queue->getStatus() === \Weline\Queue\Model\Queue::status_running) {
+                        $json['msg'] = __('队列正在运行，无法删除！请先暂停队列。');
+                        return $this->fetchJson($json);
+                    }
+                    $this->queue->delete()->fetch();
+                    $eventData = ['queue' => $this->queue];
+                    $this->getEventManager()->dispatch('Weline_Queue::delete', $eventData);
+                    $json['success'] = true;
+                    $json['msg'] = __('队列已成功删除');
+                    break;
+                    
+                case 'stop':
+                    $pid = $this->queue->getPid();
+                    if ($pid) {
+                        $running = Process::isProcessRunning($pid);
+                        if ($running) {
+                            $pname = 'queue-' . $this->queue->getName() . '-' . $this->queue->getId();
+                            $result = Process::killPid($pid, $pname);
+                            Process::unsetLogProcessFilePath($pname);
+                            if (!$result) {
+                                $json['msg'] = __('杀死进程失败！进程ID：%{1}', $pid);
+                                return $this->fetchJson($json);
+                            }
+                        }
+                        $this->queue->setPid(0);
+                    }
+                    $this->queue->setData(\Weline\Queue\Model\Queue::fields_status, \Weline\Queue\Model\Queue::status_stop);
+                    $this->queue->save();
+                    $eventData = ['queue' => $this->queue];
+                    $this->getEventManager()->dispatch('Weline_Queue::stop', $eventData);
+                    $json['success'] = true;
+                    $json['msg'] = __('队列已暂停');
+                    break;
+                    
+                case 'continue':
+                case 'retry':
+                    $pid = $this->queue->getPid();
+                    if ($pid) {
+                        $running = Process::isProcessRunning($pid);
+                        if ($running) {
+                            $json['msg'] = __('队列有进程正在运行，无法继续！进程ID：%{1}', $pid);
+                            return $this->fetchJson($json);
+                        }
+                        $this->queue->setData(\Weline\Queue\Model\Queue::fields_pid, 0);
+                    }
+                    $this->queue->setData(\Weline\Queue\Model\Queue::fields_status, \Weline\Queue\Model\Queue::status_pending);
+                    $this->queue->setData(\Weline\Queue\Model\Queue::fields_finished, 0);
+                    $this->queue->setData(\Weline\Queue\Model\Queue::fields_pid, 0);
+                    $this->queue->save();
+                    $eventData = ['queue' => $this->queue];
+                    $this->getEventManager()->dispatch('Weline_Queue::continue', $eventData);
+                    $json['success'] = true;
+                    $json['msg'] = $action === 'retry' ? __('队列已重试') : __('队列已继续');
+                    break;
+                    
+                case 'reset':
+                    $pid = $this->queue->getPid();
+                    if ($pid && Process::isProcessRunning($pid)) {
+                        $json['msg'] = __('队列有进程正在运行，请先暂停队列！进程ID：%{1}', $pid);
+                        return $this->fetchJson($json);
+                    }
+                    $this->queue->setData(\Weline\Queue\Model\Queue::fields_status, \Weline\Queue\Model\Queue::status_pending);
+                    $this->queue->setData(\Weline\Queue\Model\Queue::fields_finished, 0);
+                    $this->queue->setData(\Weline\Queue\Model\Queue::fields_pid, 0);
+                    $this->queue->save();
+                    $eventData = ['queue' => $this->queue];
+                    $this->getEventManager()->dispatch('Weline_Queue::reset', $eventData);
+                    $json['success'] = true;
+                    $json['msg'] = __('队列已重置');
+                    break;
+                    
+                default:
+                    $json['msg'] = __('不支持的操作类型：%{1}', $action);
+            }
+        } catch (\Exception $e) {
+            $json['msg'] = __('操作失败：%{1}', $e->getMessage());
+        }
+        
+        return $this->fetchJson($json);
+    }
+
+    #[Acl('Weline_Queue::api_batch', '批量队列操作', 'mdi mdi-api', '批量队列操作接口')]
+    public function postApiBatch(): string
+    {
+        $json = ['success' => false, 'msg' => '', 'results' => []];
+        
+        $data = $this->request->getBodyParams();
+        $action = $data['action'] ?? '';
+        $ids = $data['ids'] ?? [];
+        
+        if (empty($ids) || !is_array($ids)) {
+            $json['msg'] = __('请选择要操作的队列');
+            return $this->fetchJson($json);
+        }
+        
+        $successCount = 0;
+        $failCount = 0;
+        $results = [];
+        
+        foreach ($ids as $queueId) {
+            $queueId = (int)$queueId;
+            $queue = ObjectManager::make(\Weline\Queue\Model\Queue::class);
+            $queue->load($queueId);
+            
+            if (!$queue->getId()) {
+                $results[] = ['id' => $queueId, 'success' => false, 'msg' => __('队列不存在')];
+                $failCount++;
+                continue;
+            }
+            
+            try {
+                switch ($action) {
+                    case 'delete':
+                        if ($queue->getStatus() === \Weline\Queue\Model\Queue::status_running) {
+                            $results[] = ['id' => $queueId, 'success' => false, 'msg' => __('正在运行')];
+                            $failCount++;
+                            continue 2;
+                        }
+                        $queue->delete()->fetch();
+                        $eventData = ['queue' => $queue];
+                        $this->getEventManager()->dispatch('Weline_Queue::delete', $eventData);
+                        $successCount++;
+                        $results[] = ['id' => $queueId, 'success' => true];
+                        break;
+                        
+                    case 'stop':
+                        $pid = $queue->getPid();
+                        if ($pid && Process::isProcessRunning($pid)) {
+                            $pname = 'queue-' . $queue->getName() . '-' . $queue->getId();
+                            Process::killPid($pid, $pname);
+                            Process::unsetLogProcessFilePath($pname);
+                            $queue->setPid(0);
+                        }
+                        $queue->setData(\Weline\Queue\Model\Queue::fields_status, \Weline\Queue\Model\Queue::status_stop);
+                        $queue->save();
+                        $eventData = ['queue' => $queue];
+                        $this->getEventManager()->dispatch('Weline_Queue::stop', $eventData);
+                        $successCount++;
+                        $results[] = ['id' => $queueId, 'success' => true];
+                        break;
+                        
+                    case 'continue':
+                        $pid = $queue->getPid();
+                        if ($pid && Process::isProcessRunning($pid)) {
+                            $results[] = ['id' => $queueId, 'success' => false, 'msg' => __('有进程运行')];
+                            $failCount++;
+                            continue 2;
+                        }
+                        $queue->setData(\Weline\Queue\Model\Queue::fields_status, \Weline\Queue\Model\Queue::status_pending);
+                        $queue->setData(\Weline\Queue\Model\Queue::fields_finished, 0);
+                        $queue->setData(\Weline\Queue\Model\Queue::fields_pid, 0);
+                        $queue->save();
+                        $eventData = ['queue' => $queue];
+                        $this->getEventManager()->dispatch('Weline_Queue::continue', $eventData);
+                        $successCount++;
+                        $results[] = ['id' => $queueId, 'success' => true];
+                        break;
+                        
+                    default:
+                        $results[] = ['id' => $queueId, 'success' => false, 'msg' => __('不支持的操作')];
+                        $failCount++;
+                }
+            } catch (\Exception $e) {
+                $results[] = ['id' => $queueId, 'success' => false, 'msg' => $e->getMessage()];
+                $failCount++;
+            }
+        }
+        
+        $json['success'] = $successCount > 0;
+        $json['msg'] = __('操作完成。成功：%{1}，失败：%{2}', [$successCount, $failCount]);
+        $json['results'] = $results;
+        $json['successCount'] = $successCount;
+        $json['failCount'] = $failCount;
+        
+        return $this->fetchJson($json);
     }
 }
