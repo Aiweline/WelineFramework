@@ -115,7 +115,15 @@ class Process
     {
         $path = self::getLogProcessFilePath($pname);
         if (is_file($path)) {
-            unlink($path);
+            // Windows 文件锁竞争：最多重试 3 次，每次间隔 100ms
+            for ($i = 0; $i < 3; $i++) {
+                if (@unlink($path)) {
+                    return true;
+                }
+                if ($i < 2) {
+                    usleep(100000);
+                }
+            }
         }
         return true;
     }
@@ -161,7 +169,17 @@ class Process
     static public function setProcessOutput(string $pname, string $content): false|int
     {
         $path = self::getLogProcessFilePath($pname);
-        return file_put_contents($path, $content, FILE_APPEND);
+        // Windows 文件锁竞争：最多重试 3 次，每次间隔 100ms
+        for ($i = 0; $i < 3; $i++) {
+            $result = @file_put_contents($path, $content, FILE_APPEND | LOCK_EX);
+            if ($result !== false) {
+                return $result;
+            }
+            if ($i < 2) {
+                usleep(100000);
+            }
+        }
+        return false;
     }
 
     static public function getPidByName(string $pname): int
