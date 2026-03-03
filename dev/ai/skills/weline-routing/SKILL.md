@@ -12,7 +12,8 @@ description: |
   
   Keywords: URL, 路由, 路由解析, URL结构, 语言, 货币, currency, language, locale,
   WELINE_USER_LANG, WELINE_USER_CURRENCY, Url::parser, getUrl, getBackendUrl,
-  404, 405, 路由错误, backend, frontend, rest_api, area, 区域
+  404, 405, 路由错误, backend, frontend, rest_api, area, 区域,
+  router, backend_router, env.php, menu, action, 模块路由, weline_order
 globs:
   - "**/Controller/**/*.php"
   - "**/Http/Url.php"
@@ -103,6 +104,15 @@ strlen($code) > 3 && strlen($code) <= 10
 | `backend` | 后台管理 | `/<backendKey>/` |
 | `rest_frontend` | 前台 REST API | `/api/` |
 | `rest_backend` | 后台 REST API | `/<backendKey>/api/` |
+
+### 模块路由配置（router / backend_router）
+
+- **配置位置**：各模块 `etc/env.php`，键 `router`（前端）、`backend_router`（后台）。
+- **默认行为**：未配置时由 `Handle::getEnv()` 设置 `router = strtolower(module_name)`（如 `Weline_Order` → `weline_order`），`backend_router` 未配置时与 `router` 一致。
+- **菜单 action 中的 `*`**：`MenuCollector::replaceModuleAction()` 在收集菜单（`s:up`）时，将 `*/backend/控制器/方法` 中的 `*` 替换为**当前菜单所属模块**的路由；替换时使用回退链：
+  - 后台菜单：优先 `backend_router`，空则用 `router`，再空则 `strtolower(module_name)`；
+  - 前台菜单：优先 `router`，空则 `strtolower(module_name)`。
+- **自定义路由**：在模块 `etc/env.php` 中显式配置 `router` / `backend_router` 时，以配置为准；配置后需执行 `php bin/w s:up` 与 `php bin/w setup:upgrade --route` 使菜单与路由生效。
 
 ---
 
