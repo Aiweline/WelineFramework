@@ -80,11 +80,11 @@ class ErrorHandler
             $exception->getLine()
         );
 
-        error_log($logMessage);
+        w_log_error($logMessage);
 
         // 在开发环境下记录堆栈跟踪
         if (defined('DEV') && DEV) {
-            error_log("Stack trace:\n" . $exception->getTraceAsString());
+            w_log_error("Stack trace:\n" . $exception->getTraceAsString());
         }
     }
 
