@@ -172,7 +172,7 @@ class DomainSyncService
                 'deleted' => $deleted,
             ];
         } catch (\Throwable $e) {
-            Env::log_error('domain_sync', "同步账户 {$accountId} 失败: " . $e->getMessage());
+            w_log_error("同步账户 {$accountId} 失败: " . $e->getMessage(), [], 'domain_sync');
             return [
                 'success' => false,
                 'message' => __('同步失败：%{1}', [$e->getMessage()]),
@@ -574,7 +574,7 @@ class DomainSyncService
                 'is_domain_registrar' => $isDomainRegistrar,
             ];
         } catch (\Throwable $e) {
-            Env::log_error('domain_sync', "获取远程域名列表失败: " . $e->getMessage());
+            w_log_error("获取远程域名列表失败: " . $e->getMessage(), [], 'domain_sync');
             return [
                 'success' => false,
                 'message' => __('获取失败：%{1}', [$e->getMessage()]),
@@ -690,7 +690,7 @@ class DomainSyncService
                             DomainAutoResolveTask::createTask($domainName, $accountId);
                             $autoResolveQueued++;
                         } catch (\Throwable $e) {
-                            Env::log_warning('domain_sync', "创建自动解析任务失败: {$domainName}, " . $e->getMessage());
+                            w_log_warning("创建自动解析任务失败: {$domainName}, " . $e->getMessage(), [], 'domain_sync');
                         }
                     }
                 }
@@ -710,7 +710,7 @@ class DomainSyncService
                 'auto_resolve_queued' => $autoResolve && $autoResolveQueued > 0,
             ];
         } catch (\Throwable $e) {
-            Env::log_error('domain_sync', "导入域名失败: " . $e->getMessage());
+            w_log_error("导入域名失败: " . $e->getMessage(), [], 'domain_sync');
             return [
                 'success' => false,
                 'message' => __('导入失败：%{1}', [$e->getMessage()]),

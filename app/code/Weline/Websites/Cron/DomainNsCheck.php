@@ -11,7 +11,6 @@ declare(strict_types=1);
 namespace Weline\Websites\Cron;
 
 use Weline\Cron\CronTaskInterface;
-use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Service\DnsProviderDetector;
@@ -107,7 +106,7 @@ class DomainNsCheck implements CronTaskInterface
                     }
                 } catch (\Throwable $e) {
                     $errors++;
-                    Env::log_warning('domain_ns_check', "域名 {$row[Domain::fields_DOMAIN]} NS 检测失败: {$e->getMessage()}");
+                    w_log_warning("域名 {$row[Domain::fields_DOMAIN]} NS 检测失败: {$e->getMessage()}", [], 'domain_ns_check');
                 }
             }
 
@@ -120,12 +119,12 @@ class DomainNsCheck implements CronTaskInterface
                 $errors
             );
 
-            Env::log_info('domain_ns_check', $message);
+            w_log_info($message, [], 'domain_ns_check');
 
             return $message;
         } catch (\Throwable $e) {
             $errorMsg = '根域 NS 检测任务异常: ' . $e->getMessage();
-            Env::log_error('domain_ns_check', $errorMsg);
+            w_log_error($errorMsg, [], 'domain_ns_check');
             return $errorMsg;
         }
     }

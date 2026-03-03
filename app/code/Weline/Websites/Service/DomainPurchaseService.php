@@ -231,7 +231,7 @@ class DomainPurchaseService
                 $pool->save();
             }
         } catch (\Exception $e) {
-            \error_log(__('域名入池失败: %{domain}, 错误: %{error}', [
+            w_log_error(__('域名入池失败: %{domain}, 错误: %{error}', [
                 'domain' => $domain,
                 'error' => $e->getMessage(),
             ]));
@@ -272,7 +272,7 @@ class DomainPurchaseService
                 $domainModel->save();
             }
         } catch (\Exception $e) {
-            \error_log(__('域名绑站失败: %{domain}, 错误: %{error}', [
+            w_log_error(__('域名绑站失败: %{domain}, 错误: %{error}', [
                 'domain' => $domain,
                 'error' => $e->getMessage(),
             ]));
@@ -287,7 +287,7 @@ class DomainPurchaseService
         try {
             DomainAutoResolveTask::createTask($domain, $accountId);
         } catch (\Exception $e) {
-            \error_log(__('创建自动解析任务失败: %{domain}, 错误: %{error}', [
+            w_log_error(__('创建自动解析任务失败: %{domain}, 错误: %{error}', [
                 'domain' => $domain,
                 'error' => $e->getMessage(),
             ]));

@@ -196,7 +196,7 @@ class DomainAutoResolve implements CronTaskInterface
 
             return \sprintf('购买任务处理: 共%d个, 成功%d, 重试%d, 失败%d', $total, $success, $skipped, $failed);
         } catch (\Throwable $e) {
-            Env::log_error('domain_auto_resolve', '处理购买任务异常: ' . $e->getMessage());
+            w_log_error('处理购买任务异常: ' . $e->getMessage(), [], 'domain_auto_resolve');
             return '购买任务异常: ' . $e->getMessage();
         }
     }
@@ -251,12 +251,12 @@ class DomainAutoResolve implements CronTaskInterface
             }
 
             if ($errors !== []) {
-                Env::log_warning('domain_auto_resolve', "全局解析失败详情:\n" . \implode("\n", \array_slice($errors, 0, 10)));
+                w_log_warning("全局解析失败详情:\n" . \implode("\n", \array_slice($errors, 0, 10)), [], 'domain_auto_resolve');
             }
 
             return \sprintf('全局解析: 共%d个, 成功%d, 失败%d', $total, $success, $failed);
         } catch (\Throwable $e) {
-            Env::log_error('domain_auto_resolve', '全局自动解析异常: ' . $e->getMessage());
+            w_log_error('全局自动解析异常: ' . $e->getMessage(), [], 'domain_auto_resolve');
             return '';
         }
     }
