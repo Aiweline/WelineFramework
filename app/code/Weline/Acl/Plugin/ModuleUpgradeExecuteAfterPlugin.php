@@ -56,7 +56,7 @@ class ModuleUpgradeExecuteAfterPlugin
         } catch (\Exception $e) {
             // 清空表失败不影响升级流程，只记录错误
             if (defined('DEV') && DEV) {
-                error_log("清空ACL表失败: " . $e->getMessage());
+                w_log_error("清空ACL表失败: " . $e->getMessage());
             }
         }
     }

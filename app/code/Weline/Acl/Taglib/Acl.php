@@ -12,12 +12,11 @@ declare(strict_types=1);
 
 namespace Weline\Acl\Taglib;
 
-use Weline\Acl\Cache\AclCache;
 use Weline\Acl\Model\RoleAccess;
 use Weline\Backend\Model\BackendUser;
-use Weline\Backend\Session\BackendSession;
-use Weline\Framework\App\Session\FrontendSession;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -134,15 +133,15 @@ class Acl implements TaglibInterface
             return self::$permissionCache[$source];
         }
         
-        // WLS 修复：每次从 ObjectManager 获取最新的 Request 和 Session 实例
+        // WLS 修复：每次从 SessionFactory 获取最新的 Session 实例
         // 不能使用静态缓存，否则会跨请求保留旧用户的 Session
         $request = ObjectManager::getInstance(Request::class);
-        $session = ObjectManager::getInstance(
-            $request->isBackend() ? BackendSession::class : FrontendSession::class
-        );
+        $session = $request->isBackend() 
+            ? SessionFactory::getInstance()->createBackendSession()
+            : SessionFactory::getInstance()->createFrontendSession();
         
         // 获取对应用户和角色
-        $user = $session->getLoginUser();
+        $user = $session->getUser();
         $role = $user->getRoleModel();
         
         // 超级管理员直接返回 true
@@ -162,8 +161,7 @@ class Acl implements TaglibInterface
         }
         
         // 获取权限列表（使用文件缓存，不受 WLS 影响）
-        /**@var CacheInterface $cache */
-        $cache = ObjectManager::getInstance(AclCache::class . 'Factory');
+        $cache = w_cache('acl');
         $cacheKey = 'acl_' . $role->getId() . '_source';
         $accesses = $cache->get($cacheKey);
         

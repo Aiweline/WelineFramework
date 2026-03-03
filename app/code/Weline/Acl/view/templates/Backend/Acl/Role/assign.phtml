@@ -3,15 +3,459 @@
  * 内容模板
  * @var \Weline\Framework\View\Template $this
  */
+
+$statistics = $this->getData('tree_statistics') ?: [];
+$totalAll = 0;
+$selectedAll = 0;
+foreach ($statistics as $stat) {
+    $totalAll += $stat['total'];
+    $selectedAll += $stat['selected'];
+}
+$selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
 ?>
 <link rel='stylesheet' href='@static(Weline_Acl::libs/vakata-jstree-3.3.14-0/dist/themes/default/style.min.css)'/>
+
+<style>
+.weline-acl-page {
+    --acl-card-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.weline-acl-header {
+    background: linear-gradient(135deg, var(--backend-color-primary, #556ee6) 0%, var(--backend-color-info, #50a5f1) 100%);
+    border-radius: var(--backend-border-radius-lg, 12px);
+    padding: var(--backend-spacing-lg, 24px);
+    margin-bottom: var(--backend-spacing-lg, 24px);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.weline-acl-header h2 {
+    margin: 0 0 var(--backend-spacing-xs, 4px) 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.weline-acl-header-subtitle {
+    opacity: 0.9;
+    font-size: 0.95rem;
+}
+
+.weline-acl-role-info {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-sm, 8px);
+    margin-top: var(--backend-spacing-md, 16px);
+    flex-wrap: wrap;
+}
+
+.weline-acl-role-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(4px);
+    padding: 8px 16px;
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    font-weight: 500;
+}
+
+.weline-acl-role-badge i {
+    font-size: 1.1rem;
+}
+
+.weline-acl-role-arrow {
+    font-size: 1.2rem;
+    opacity: 0.7;
+}
+
+.weline-acl-stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--backend-spacing-md, 16px);
+    margin-bottom: var(--backend-spacing-lg, 24px);
+}
+
+.weline-acl-stat-card {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: var(--backend-border-radius-md, 8px);
+    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 20px);
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-md, 16px);
+    transition: all 0.2s ease;
+    box-shadow: var(--acl-card-shadow);
+}
+
+.weline-acl-stat-card:hover {
+    border-color: var(--backend-color-border-default, #dee2e6);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.weline-acl-stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--backend-border-radius, 6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+
+.weline-acl-stat-icon.primary {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-acl-stat-icon.success {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+    color: var(--backend-color-success, #34c38f);
+}
+
+.weline-acl-stat-icon.info {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    color: var(--backend-color-info, #50a5f1);
+}
+
+.weline-acl-stat-icon.warning {
+    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.1));
+    color: var(--backend-color-warning, #f1b44c);
+}
+
+.weline-acl-stat-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.weline-acl-stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--backend-color-text-primary, #212529);
+    line-height: 1.2;
+}
+
+.weline-acl-stat-label {
+    font-size: 0.85rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+    margin-top: 2px;
+}
+
+.weline-acl-progress-card {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: var(--backend-border-radius-md, 8px);
+    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 20px);
+    box-shadow: var(--acl-card-shadow);
+}
+
+.weline-acl-progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--backend-spacing-sm, 8px);
+}
+
+.weline-acl-progress-title {
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.weline-acl-progress-percent {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-acl-progress-bar {
+    height: 8px;
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    overflow: hidden;
+}
+
+.weline-acl-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--backend-color-primary, #556ee6), var(--backend-color-success, #34c38f));
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    transition: width 0.5s ease;
+}
+
+.weline-acl-toolbar {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: var(--backend-border-radius-md, 8px);
+    padding: var(--backend-spacing-md, 16px);
+    margin-bottom: var(--backend-spacing-md, 16px);
+    box-shadow: var(--acl-card-shadow);
+}
+
+.weline-acl-toolbar-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--backend-spacing-md, 16px);
+    align-items: center;
+}
+
+.weline-acl-search-box {
+    flex: 1;
+    min-width: 280px;
+    max-width: 400px;
+}
+
+.weline-acl-search-input {
+    position: relative;
+}
+
+.weline-acl-search-input i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    font-size: 1.1rem;
+}
+
+.weline-acl-search-input input {
+    width: 100%;
+    padding: 10px 40px 10px 40px;
+    border: 2px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-input-bg, #fff);
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+}
+
+.weline-acl-search-input input:focus {
+    outline: none;
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: var(--backend-focus-ring, 0 0 0 3px rgba(85, 110, 230, 0.15));
+}
+
+.weline-acl-search-input input::placeholder {
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+.weline-acl-search-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    cursor: pointer;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.weline-acl-search-input input:not(:placeholder-shown) + .weline-acl-search-clear {
+    opacity: 1;
+}
+
+.weline-acl-search-clear:hover {
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.weline-acl-filters {
+    display: flex;
+    gap: var(--backend-spacing-sm, 8px);
+    flex-wrap: wrap;
+}
+
+.weline-acl-filter-select {
+    min-width: 140px;
+    padding: 8px 32px 8px 12px;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-input-bg, #fff);
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.weline-acl-filter-select:focus {
+    outline: none;
+    border-color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-acl-actions {
+    display: flex;
+    gap: var(--backend-spacing-xs, 4px);
+    flex-wrap: wrap;
+}
+
+.weline-acl-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-card-bg, #fff);
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.weline-acl-action-btn:hover {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    border-color: var(--backend-color-border-emphasis, #adb5bd);
+}
+
+.weline-acl-action-btn.primary {
+    background: var(--backend-color-primary, #556ee6);
+    border-color: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.weline-acl-action-btn.primary:hover {
+    background: var(--backend-color-primary-hover, #4857d4);
+    border-color: var(--backend-color-primary-hover, #4857d4);
+}
+
+.weline-acl-action-btn.success {
+    background: var(--backend-color-success, #34c38f);
+    border-color: var(--backend-color-success, #34c38f);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.weline-acl-action-btn.success:hover {
+    filter: brightness(0.95);
+}
+
+.weline-acl-search-result {
+    display: none;
+    padding: 10px 16px;
+    margin-bottom: var(--backend-spacing-md, 16px);
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    border: 1px solid var(--backend-color-info, #50a5f1);
+    border-radius: var(--backend-border-radius, 6px);
+    color: var(--backend-color-info, #50a5f1);
+    font-size: 0.9rem;
+}
+
+.weline-acl-search-result.visible {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.weline-acl-tree-card {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: var(--backend-border-radius-md, 8px);
+    box-shadow: var(--acl-card-shadow);
+    overflow: hidden;
+}
+
+.weline-acl-tree-header {
+    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 20px);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.weline-acl-tree-title {
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.weline-acl-tree-title i {
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-acl-tree-body {
+    padding: var(--backend-spacing-md, 16px);
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.weline-acl-save-form {
+    position: sticky;
+    bottom: 0;
+    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 20px);
+    background: var(--backend-color-card-bg, #fff);
+    border-top: 1px solid var(--backend-color-border-light, #e9ecef);
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--backend-spacing-sm, 8px);
+}
+
+#acl .jstree-node {
+    margin-bottom: 2px;
+}
+
+#acl .jstree-anchor {
+    padding: 6px 8px;
+    border-radius: var(--backend-border-radius-sm, 4px);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+#acl .jstree-anchor:hover {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+
+#acl .jstree-clicked {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1)) !important;
+    color: var(--backend-color-primary, #556ee6) !important;
+}
+
+#acl .jstree-wholerow-clicked {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1)) !important;
+}
+
+#acl .jstree-wholerow-hovered {
+    background: var(--backend-color-bg-secondary, #f8f9fa) !important;
+}
+
+.weline-acl-module-badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: var(--backend-border-radius-sm, 4px);
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-secondary, #6c757d);
+    margin-left: 8px;
+}
+
+@media (max-width: 768px) {
+    .weline-acl-toolbar-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .weline-acl-search-box {
+        max-width: 100%;
+    }
+    
+    .weline-acl-stats-row {
+        grid-template-columns: 1fr 1fr;
+    }
+    
+    .weline-acl-role-info {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+</style>
 
 <!-- start page title -->
 <div class='row'>
     <div class='col-12'>
         <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
             <h4 class='mb-sm-0'>
-                <lang>Acl权限分配</lang>
+                <lang>权限分配</lang>
             </h4>
 
             <div class='page-title-right'>
@@ -22,17 +466,12 @@
                         </a>
                     </li>
                     <li class='breadcrumb-item'>
-                        <a href="@backend-url('*/backend/acl')">
-                            <lang>Acl权限管理</lang>
-                        </a>
-                    </li>
-                    <li class='breadcrumb-item'>
                         <a href="@backend-url('*/backend/acl/role')">
-                            <lang>Acl角色管理</lang>
+                            <lang>角色管理</lang>
                         </a>
                     </li>
                     <li class='breadcrumb-item active'>
-                        <lang>Acl角色权限分配</lang>
+                        <lang>权限分配</lang>
                     </li>
                 </ol>
             </div>
@@ -41,136 +480,282 @@
     </div>
 </div>
 <!-- end page title -->
+
 <!-- start page message -->
 <div class='row'>
     <template>Weline_Component::message.phtml</template>
-</div> <!-- end message -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'>
-                    <lang>Acl权限管理</lang>
-                </h4>
-                <p class='card-title-desc'>
-                    <lang>选择角色所管理的权限</lang>
-                </p>
-                <p>
-                    <lang>当前角色</lang>
-                    <b class="text-info">{{user_role.role_name}}</b>
-                    <lang>正在为角色</lang>
-                    <b class="text-info">{{assign_role.role_name}}</b>
-                    <lang>分配权限</lang>
-                </p>
-                <div class='button-items mb-1 mt-1'>
-                    <form action="@backend-url('*/backend/acl/role/assign')" id="aclForm" method="post">
-                        <input type="hidden" name="role_id" value="{{assign_role.role_id}}">
-                        <button type='submit' id='save_button'
-                                class='btn btn-primary waves-effect waves-light'>
-                            <lang>保存</lang>
-                        </button>
-                    </form>
-                </div>
-                <div id='acl' class='acl-container'>
-                    <ul>
-                        <foreach name='trees' item='tree'>
-                            <?php
-                            $attr = getLiAttr($tree);
-                            ?>
-                            <li id='{{tree.source_id}}' {{attr}}>{{tree.source_name}}
-                                <if condition="tree.method">
-                                    ({{tree.method}})
-                                <else/>
-                                    (ALL)
-                                </if>
-                                <?php
-                                /**@var \Weline\Acl\Model\Acl $tree */
-                                echo getTreeNode($tree);
-                                ?>
-                            </li>
-                        </foreach>
-                    </ul>
-                    <?php
-                    /**@var \Weline\Acl\Model\Acl $tree */
-                    function getTreeNode(\Weline\Acl\Model\RoleAccess|\Weline\Acl\Model\Acl $tree): string
-                    {
-                        $result = '';
-                        if ($tree->getSub()) {
-                            $result .= '<ul>';
-                            /**@var \Weline\Acl\Model\Acl $sub */
-                            foreach ($tree->getSub() as $sub) {
-                                $method = $sub->getMethod() ? "({$sub->getMethod()})" : '(ALL)';
-                                $attr = getLiAttr($sub);
-                                $result .= "<li id='{$sub->getSourceId()}' {$attr}>{$sub->getSourceName()}{$method}";
-                                $result .= getTreeNode($sub);
-                                $result .= '</li>';
-                            }
-                            $result .= '</ul>';
-                        }
-                        return $result;
-                    }
+</div>
 
-                    /**@@var \Weline\Acl\Model\Acl $acl */
-                    function getLiAttr(\Weline\Acl\Model\RoleAccess|\Weline\Acl\Model\Acl $acl): string
-                    {
-                        $type = $acl->getType() ? __($acl->getType()) : '';
-                        $icon = $acl->getIcon();
-                        if (empty($icon))
-                            $icon = match ($type) {
-                                'menus' => 'mdi mdi-microsoft-xbox-controller-menu',
-                                'pc' => 'mdi mdi-shield-link-variant-outline',
-                                '' => ''
-                            };
-                        if (empty($icon)) {
-                            if ($acl->getMethod()) {
-                                $icon = match (strtolower($acl->getMethod())) {
-                                    'get' => 'mdi mdi-eye-check-outline',
-                                    'post' => 'ri-save-3-line',
-                                    'delete' => 'ri-delete-bin-6-line',
-                                    'put' => 'ri-edit-box-line',
-                                    'update' => 'mdi mdi-autorenew',
-                                    default => 'fas fa-fingerprint'
-                                };
-                            }
-                        }
-                        $desc = $acl->getDocument() ? __($acl->getDocument()) : '';
-                        if (empty($desc)) {
-                            $desc = match ($type) {
-                                'menus' => __('菜单'),
-                                'pc' => __('链接'),
-                                '' => __('其他')
-                            };
-                        }
-                        $desc .= "({$acl->getSourceId()})";
-                        $access = $acl->getData('role_id') ? 'true' : 'false';
-                        return " class='show_tooltip' title='{$desc}' data-jstree='{\"disabled\":false,\"opened\":true,\"selected\":{$access},
-                        \"icon\":\"$icon\"}' ";
-                    }
+<div class="weline-acl-page">
+    <!-- 顶部信息卡片 -->
+    <div class="weline-acl-header">
+        <h2><i class="mdi mdi-shield-key-outline"></i> <lang>角色权限配置</lang></h2>
+        <p class="weline-acl-header-subtitle"><lang>为角色分配系统访问权限，控制菜单和功能的可见性</lang></p>
+        <div class="weline-acl-role-info">
+            <span class="weline-acl-role-badge">
+                <i class="mdi mdi-account-circle"></i>
+                <lang>操作者</lang>: {{user_role.role_name}}
+            </span>
+            <span class="weline-acl-role-arrow"><i class="mdi mdi-arrow-right"></i></span>
+            <span class="weline-acl-role-badge" style="background: rgba(255, 255, 255, 0.35);">
+                <i class="mdi mdi-account-edit"></i>
+                <lang>配置角色</lang>: <strong>{{assign_role.role_name}}</strong>
+            </span>
+        </div>
+    </div>
 
-                    ?>
-                </div>
+    <!-- 统计卡片 -->
+    <div class="weline-acl-stats-row">
+        <div class="weline-acl-stat-card">
+            <div class="weline-acl-stat-icon success">
+                <i class="mdi mdi-checkbox-marked-circle-outline"></i>
+            </div>
+            <div class="weline-acl-stat-content">
+                <div class="weline-acl-stat-value" id="stat-selected"><?php echo $selectedAll; ?></div>
+                <div class="weline-acl-stat-label"><lang>已授权权限</lang></div>
             </div>
         </div>
-    </div> <!-- end col -->
-</div> <!-- end row -->
+        <div class="weline-acl-stat-card">
+            <div class="weline-acl-stat-icon primary">
+                <i class="mdi mdi-format-list-bulleted"></i>
+            </div>
+            <div class="weline-acl-stat-content">
+                <div class="weline-acl-stat-value"><?php echo $totalAll; ?></div>
+                <div class="weline-acl-stat-label"><lang>权限总数</lang></div>
+            </div>
+        </div>
+        <div class="weline-acl-stat-card">
+            <div class="weline-acl-stat-icon info">
+                <i class="mdi mdi-folder-multiple-outline"></i>
+            </div>
+            <div class="weline-acl-stat-content">
+                <div class="weline-acl-stat-value"><?php echo count($statistics); ?></div>
+                <div class="weline-acl-stat-label"><lang>权限分组</lang></div>
+            </div>
+        </div>
+        <div class="weline-acl-progress-card">
+            <div class="weline-acl-progress-header">
+                <span class="weline-acl-progress-title"><lang>授权进度</lang></span>
+                <span class="weline-acl-progress-percent" id="stat-percent"><?php echo $selectedPercent; ?>%</span>
+            </div>
+            <div class="weline-acl-progress-bar">
+                <div class="weline-acl-progress-fill" id="stat-progress" style="width: <?php echo $selectedPercent; ?>%;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="weline-acl-toolbar">
+        <div class="weline-acl-toolbar-row">
+            <!-- 搜索框 -->
+            <div class="weline-acl-search-box">
+                <div class="weline-acl-search-input">
+                    <i class="mdi mdi-magnify"></i>
+                    <input type="text" id="acl-search" placeholder="<?php echo __('搜索权限名称、ID 或描述...'); ?>">
+                    <button type="button" class="weline-acl-search-clear" id="acl-search-clear">
+                        <i class="mdi mdi-close"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 筛选器 -->
+            <div class="weline-acl-filters">
+                <select id="acl-filter-module" class="weline-acl-filter-select" title="<?php echo __('按模块筛选'); ?>">
+                    <option value=""><?php echo __('所有模块'); ?></option>
+                    <?php foreach ($this->getData('module_list') ?: [] as $module): ?>
+                    <option value="<?php echo htmlspecialchars($module); ?>"><?php echo htmlspecialchars($module); ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <select id="acl-filter-type" class="weline-acl-filter-select" title="<?php echo __('按类型筛选'); ?>">
+                    <option value=""><?php echo __('所有类型'); ?></option>
+                    <?php foreach ($this->getData('type_list') ?: [] as $type): ?>
+                    <option value="<?php echo htmlspecialchars($type); ?>"><?php echo $type === 'menus' ? __('菜单') : ($type === 'pc' ? __('接口') : htmlspecialchars($type)); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            
+            <!-- 操作按钮 -->
+            <div class="weline-acl-actions">
+                <button type="button" class="weline-acl-action-btn" id="acl-expand-all" title="<?php echo __('展开所有'); ?>">
+                    <i class="mdi mdi-unfold-more-horizontal"></i> <lang>展开</lang>
+                </button>
+                <button type="button" class="weline-acl-action-btn" id="acl-collapse-all" title="<?php echo __('折叠所有'); ?>">
+                    <i class="mdi mdi-unfold-less-horizontal"></i> <lang>折叠</lang>
+                </button>
+                <button type="button" class="weline-acl-action-btn" id="acl-select-all" title="<?php echo __('全选'); ?>">
+                    <i class="mdi mdi-checkbox-multiple-marked"></i> <lang>全选</lang>
+                </button>
+                <button type="button" class="weline-acl-action-btn" id="acl-deselect-all" title="<?php echo __('清空'); ?>">
+                    <i class="mdi mdi-checkbox-multiple-blank-outline"></i> <lang>清空</lang>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 搜索结果提示 -->
+    <div id="acl-search-result" class="weline-acl-search-result">
+        <i class="mdi mdi-information-outline"></i>
+        <span id="acl-search-result-text"></span>
+    </div>
+
+    <!-- 权限树卡片 -->
+    <div class="weline-acl-tree-card">
+        <div class="weline-acl-tree-header">
+            <span class="weline-acl-tree-title">
+                <i class="mdi mdi-file-tree-outline"></i>
+                <lang>权限列表</lang>
+            </span>
+            <span style="font-size: 0.85rem; color: var(--backend-color-text-secondary);">
+                <lang>勾选需要授予的权限，子权限会自动关联父权限</lang>
+            </span>
+        </div>
+        <div class="weline-acl-tree-body">
+                
+<?php
+            /**
+             * 使用闭包替代全局函数，避免 WLS 常驻内存模式下 "Cannot redeclare function" 错误
+             */
+            $getLiAttr = function (\Weline\Acl\Model\RoleAccess|\Weline\Acl\Model\Acl $acl): string {
+                $type = $acl->getType() ?: '';
+                $icon = $acl->getIcon();
+                if (empty($icon)) {
+                    $icon = match ($type) {
+                        'menus' => 'mdi mdi-menu',
+                        'pc' => 'mdi mdi-link-variant',
+                        default => ''
+                    };
+                }
+                if (empty($icon)) {
+                    if ($acl->getMethod()) {
+                        $icon = match (strtolower($acl->getMethod())) {
+                            'get' => 'mdi mdi-eye-outline',
+                            'post' => 'mdi mdi-content-save-outline',
+                            'delete' => 'mdi mdi-delete-outline',
+                            'put' => 'mdi mdi-pencil-outline',
+                            'update' => 'mdi mdi-refresh',
+                            default => 'mdi mdi-key-outline'
+                        };
+                    } else {
+                        $icon = 'mdi mdi-key-outline';
+                    }
+                }
+                $desc = $acl->getDocument() ? htmlspecialchars(__($acl->getDocument()), ENT_QUOTES) : '';
+                if (empty($desc)) {
+                    $desc = match ($type) {
+                        'menus' => __('菜单权限'),
+                        'pc' => __('接口权限'),
+                        default => __('访问权限')
+                    };
+                }
+                $sourceId = htmlspecialchars($acl->getSourceId(), ENT_QUOTES);
+                $desc .= " ({$sourceId})";
+                $access = $acl->getData('role_id') ? 'true' : 'false';
+                return " class='show_tooltip' title='{$desc}' data-jstree='{\"disabled\":false,\"opened\":false,\"selected\":{$access},\"icon\":\"$icon\"}' ";
+            };
+
+            $getTreeNode = function (\Weline\Acl\Model\RoleAccess|\Weline\Acl\Model\Acl $tree) use (&$getTreeNode, $getLiAttr): string {
+                $result = '';
+                if ($tree->getSub()) {
+                    $result .= '<ul>';
+                    foreach ($tree->getSub() as $sub) {
+                        $method = $sub->getMethod() ? "({$sub->getMethod()})" : '';
+                        $attr = $getLiAttr($sub);
+                        $sourceName = htmlspecialchars($sub->getSourceName());
+                        $result .= "<li id='{$sub->getSourceId()}' {$attr}>{$sourceName}{$method}";
+                        $result .= $getTreeNode($sub);
+                        $result .= '</li>';
+                    }
+                    $result .= '</ul>';
+                }
+                return $result;
+            };
+            ?>
+            <div id='acl' class='acl-container'>
+                <ul>
+                    <foreach name='trees' item='tree'>
+                        <?php 
+                        $attr = $getLiAttr($tree);
+                        $sourceId = $tree->getSourceId();
+                        $stat = $statistics[$sourceId] ?? null;
+                        $statBadge = '';
+                        if ($stat) {
+                            $selectedCount = $stat['selected'];
+                            $totalCount = $stat['total'];
+                            $badgeClass = $selectedCount === $totalCount ? 'bg-success' : ($selectedCount > 0 ? 'bg-warning text-dark' : 'bg-secondary');
+                            $statBadge = " <span class='weline-acl-module-badge {$badgeClass}'>{$selectedCount}/{$totalCount}</span>";
+                        }
+                        ?>
+                        <li id='{{tree.source_id}}' {{attr}} data-module="<?php echo htmlspecialchars($tree->getModule()); ?>" data-type="<?php echo htmlspecialchars($tree->getType()); ?>">{{tree.source_name}}
+                            <if condition="tree.method">
+                                ({{tree.method}})
+                            </if>
+                            <?php echo $statBadge; ?>
+                            <?php echo $getTreeNode($tree); ?>
+                        </li>
+                    </foreach>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- 保存表单 -->
+        <div class="weline-acl-save-form">
+            <form action="@backend-url('*/backend/acl/role/assign')" id="aclForm" method="post" style="display: flex; gap: 8px;">
+                <input type="hidden" name="role_id" value="{{assign_role.role_id}}">
+                <a href="@backend-url('*/backend/acl/role')" class="weline-acl-action-btn">
+                    <i class="mdi mdi-arrow-left"></i> <lang>返回列表</lang>
+                </a>
+                <button type='submit' id='save_button' class='weline-acl-action-btn success'>
+                    <i class="mdi mdi-content-save-outline"></i> <lang>保存权限配置</lang>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
 
 <script src='@static(Weline_Acl::libs/vakata-jstree-3.3.14-0/dist/jstree.min.js)'></script>
 <script>
 (function() {
     'use strict';
     
-    var aclData = $('#acl').jstree({
+    var searchTimeout = null;
+    var totalPermissions = <?php echo $totalAll; ?>;
+    
+    var aclTree = $('#acl').jstree({
         'core': {
             'themes': {
-                'variant': 'large'
-            }
+                'variant': 'large',
+                'responsive': true
+            },
+            'animation': 150
         },
         'checkbox': {
             'keep_selected_style': false,
-            'three_state': false,
-            'cascade': ''
+            'three_state': true,
+            'cascade': 'up+down+undetermined'
         },
-        'plugins': ['wholerow', 'checkbox']
+        'search': {
+            'show_only_matches': true,
+            'show_only_matches_children': true,
+            'search_leaves_only': false,
+            'fuzzy': true
+        },
+        'plugins': ['wholerow', 'checkbox', 'search']
+    });
+    
+    function updateStatistics() {
+        var tree = $('#acl').jstree(true);
+        if (!tree) return;
+        
+        var selectedCount = tree.get_selected().length;
+        var percent = totalPermissions > 0 ? Math.round((selectedCount / totalPermissions) * 100) : 0;
+        
+        $('#stat-selected').text(selectedCount);
+        $('#stat-percent').text(percent + '%');
+        $('#stat-progress').css('width', percent + '%');
+    }
+    
+    $('#acl').on('ready.jstree', function() {
+        updateStatistics();
     });
     
     $('#acl').on('select_node.jstree', function (e, data) {
@@ -181,6 +766,8 @@
             var parentNode = tree.get_node(node.parent);
             tree.select_node(parentNode, true);
         }
+        
+        updateStatistics();
     });
     
     $('#acl').on('deselect_node.jstree', function (e, data) {
@@ -202,13 +789,129 @@
                 tree.deselect_node(childId);
             });
         }
+        
+        updateStatistics();
     });
     
-    $('#save_button').on('click', function () {
+    $('#save_button').on('click', function (e) {
         var selectedNodes = $('#acl').jstree('get_selected', true);
+        
+        $('#aclForm input[name="ids[]"]').remove();
+        
         $.each(selectedNodes, function () {
-            $('#aclForm').append('<input type="hidden" name="ids[]" value="' + this.id + '">')
+            $('#aclForm').append('<input type="hidden" name="ids[]" value="' + this.id + '">');
         });
+        
+        var $btn = $(this);
+        var originalHtml = $btn.html();
+        $btn.prop('disabled', true).html('<i class="mdi mdi-loading mdi-spin"></i> <?php echo __("保存中..."); ?>');
+        
+        setTimeout(function() {
+            $btn.closest('form').submit();
+        }, 100);
+    });
+    
+    $('#acl-search').on('keyup', function() {
+        var searchVal = $(this).val().trim();
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function() {
+            if (searchVal.length > 0) {
+                $('#acl').jstree('search', searchVal);
+            } else {
+                $('#acl').jstree('clear_search');
+                $('#acl-search-result').removeClass('visible');
+            }
+        }, 300);
+    });
+    
+    $('#acl').on('search.jstree', function(e, data) {
+        var count = data.nodes.length;
+        var $result = $('#acl-search-result');
+        var $text = $('#acl-search-result-text');
+        
+        if (count > 0) {
+            $text.text('<?php echo __("找到"); ?> ' + count + ' <?php echo __("个匹配权限"); ?>');
+            $result.addClass('visible');
+        } else if ($('#acl-search').val().trim().length > 0) {
+            $text.text('<?php echo __("未找到匹配的权限，请尝试其他关键词"); ?>');
+            $result.addClass('visible');
+        }
+    });
+    
+    $('#acl').on('clear_search.jstree', function() {
+        $('#acl-search-result').removeClass('visible');
+    });
+    
+    $('#acl-search-clear').on('click', function() {
+        $('#acl-search').val('').focus();
+        $('#acl').jstree('clear_search');
+        $('#acl-search-result').removeClass('visible');
+    });
+    
+    $('#acl-select-all').on('click', function() {
+        $('#acl').jstree('select_all');
+        if (typeof BackendToast !== 'undefined') {
+            BackendToast.info('<?php echo __("已全选所有权限"); ?>');
+        }
+    });
+    
+    $('#acl-deselect-all').on('click', function() {
+        $('#acl').jstree('deselect_all');
+        if (typeof BackendToast !== 'undefined') {
+            BackendToast.info('<?php echo __("已清空所有选择"); ?>');
+        }
+    });
+    
+    $('#acl-expand-all').on('click', function() {
+        $('#acl').jstree('open_all');
+    });
+    
+    $('#acl-collapse-all').on('click', function() {
+        $('#acl').jstree('close_all');
+    });
+    
+    function applyFilters() {
+        var moduleFilter = $('#acl-filter-module').val();
+        var typeFilter = $('#acl-filter-type').val();
+        var tree = $('#acl').jstree(true);
+        var visibleCount = 0;
+        
+        $('#acl li[data-module]').each(function() {
+            var $node = $(this);
+            var nodeModule = $node.attr('data-module') || '';
+            var nodeType = $node.attr('data-type') || '';
+            var nodeId = $node.attr('id');
+            
+            var moduleMatch = !moduleFilter || nodeModule.indexOf(moduleFilter) !== -1;
+            var typeMatch = !typeFilter || nodeType === typeFilter;
+            
+            if (moduleMatch && typeMatch) {
+                tree.show_node(nodeId);
+                visibleCount++;
+            } else {
+                tree.hide_node(nodeId);
+            }
+        });
+        
+        if ((moduleFilter || typeFilter) && typeof BackendToast !== 'undefined') {
+            BackendToast.info('<?php echo __("筛选结果"); ?>: ' + visibleCount + ' <?php echo __("个分组"); ?>');
+        }
+    }
+    
+    $('#acl-filter-module, #acl-filter-type').on('change', function() {
+        applyFilters();
+    });
+    
+    $(document).on('keydown', function(e) {
+        if (e.ctrlKey || e.metaKey) {
+            if (e.key === 'f' || e.key === 'F') {
+                e.preventDefault();
+                $('#acl-search').focus();
+            } else if (e.key === 's' || e.key === 'S') {
+                e.preventDefault();
+                $('#save_button').click();
+            }
+        }
     });
 })();
 </script>
