@@ -57,7 +57,7 @@ class Compiler
                 ['icon' => $icon, 'source_module' => 'Weline_Sticker']
             );
         } catch (\Exception $e) {
-            Env::log_error('sticker', "发送 Sticker 系统消息失败: " . $e->getMessage());
+            w_log_error("发送 Sticker 系统消息失败: " . $e->getMessage(), [], 'sticker');
         }
     }
 
@@ -376,7 +376,7 @@ class Compiler
                 'ri-search-line'
             );
         } catch (\Exception $e) {
-            error_log("记录 Sticker 日志失败: " . $e->getMessage());
+            w_log_error("记录 Sticker 日志失败: " . $e->getMessage());
         }
     }
 
@@ -417,7 +417,7 @@ class Compiler
                 'ri-alert-line'
             );
         } catch (\Exception $e) {
-            error_log("记录 Sticker 日志失败: " . $e->getMessage());
+            w_log_error("记录 Sticker 日志失败: " . $e->getMessage());
         }
     }
 
