@@ -623,7 +623,7 @@ final class CodeGenerator
                         if ($a->name === 'item') $item = $a->staticValue ?? $a->rawValue;
                     }
                     
-                    $item = $item ?: 'item';
+                    $item = $item ?: 'v';
                     $expr = $key ? "\${$name} as \${$key} => \${$item}" : "\${$name} as \${$item}";
                     break;
                 }

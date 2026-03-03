@@ -67,7 +67,7 @@ class BackgroundOptimize extends CommandAbstract
             $this->log($logFile, '');
             
             // 记录到错误日志
-            Env::log_error('setup_background_optimize.log', '后台优化任务失败: ' . $e->getMessage());
+            w_log_error('后台优化任务失败: ' . $e->getMessage(), [], 'setup_background_optimize.log');
             
             $this->printer->error(__('后台优化任务失败: %{1}', [$e->getMessage()]));
         }

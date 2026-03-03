@@ -826,4 +826,103 @@ class WindowsProcessDriver extends AbstractProcessDriver
         $this->clearPortCache($port);
         return !$this->isPortInUse($port);
     }
+    
+    /**
+     * @inheritDoc
+     * 
+     * 批量获取进程信息，单次系统调用获取所有进程
+     * 
+     * 性能策略（快→慢）：
+     * 1. tasklist（最快，约 200-500ms，足够获取 PID/内存/进程名）
+     * 2. PowerShell CIM（较慢，约 2-3s 启动开销，但能获取完整命令行）
+     */
+    public function batchGetProcessInfo(array $pids): array
+    {
+        $result = [];
+        
+        $validPids = \array_filter($pids, fn($pid) => $this->isValidPid($pid));
+        if (empty($validPids)) {
+            foreach ($pids as $pid) {
+                $result[$pid] = $this->getDefaultProcessInfo($pid);
+            }
+            return $result;
+        }
+        
+        foreach ($pids as $pid) {
+            $result[$pid] = $this->getDefaultProcessInfo($pid);
+        }
+        
+        // 方案1：tasklist 批量查询（最快，单次调用约 200-500ms）
+        $output = [];
+        $this->executeCommand('tasklist /FO CSV /NH 2>NUL', $output);
+        
+        $pidSet = \array_flip($validPids);
+        $foundCount = 0;
+        foreach ($output as $line) {
+            $parts = \str_getcsv(\trim($line), ',', '"', '');
+            if (\count($parts) >= 5) {
+                $parsedPid = $this->sanitizePid($parts[1]);
+                if ($parsedPid > 0 && isset($pidSet[$parsedPid]) && isset($result[$parsedPid])) {
+                    $result[$parsedPid]['name'] = $parts[0] ?? '';
+                    $result[$parsedPid]['exists'] = true;
+                    $memStr = $parts[4] ?? '';
+                    $memKb = (int) \preg_replace('/[^\d]/', '', $memStr);
+                    if ($memKb > 0) {
+                        $result[$parsedPid]['memory'] = \round($memKb / 1024, 2) . ' MB';
+                    }
+                    $foundCount++;
+                }
+            }
+        }
+        
+        // tasklist 已找到所有进程，直接返回（无需 PowerShell）
+        if ($foundCount === \count($validPids)) {
+            return $result;
+        }
+        
+        // 方案2：PowerShell CIM 补充（仅当 tasklist 未找到或需要命令行时）
+        // 注：通常不会执行到这里，因为 tasklist 已经能找到所有运行中的进程
+        if ($this->isPowerShellAvailable()) {
+            $missingPids = [];
+            foreach ($validPids as $pid) {
+                if (!($result[$pid]['exists'] ?? false)) {
+                    $missingPids[] = $pid;
+                }
+            }
+            
+            if (!empty($missingPids)) {
+                $pidFilter = \implode(',', $missingPids);
+                $ps = "powershell -NoProfile -Command \"Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { \$_.ProcessId -in @({$pidFilter}) } | Select-Object ProcessId,Name,CommandLine,WorkingSetSize | ConvertTo-Json -Compress\"";
+                $out = [];
+                $code = 0;
+                $this->executeCommand($ps, $out, $code);
+                
+                if ($code === 0 && !empty($out)) {
+                    $json = \implode('', $out);
+                    $data = \json_decode($json, true);
+                    
+                    if ($data !== null) {
+                        if (isset($data['ProcessId'])) {
+                            $data = [$data];
+                        }
+                        
+                        foreach ($data as $proc) {
+                            $pid = (int) ($proc['ProcessId'] ?? 0);
+                            if ($pid > 0 && isset($result[$pid])) {
+                                $result[$pid]['exists'] = true;
+                                $result[$pid]['name'] = (string) ($proc['Name'] ?? '');
+                                $result[$pid]['command'] = (string) ($proc['CommandLine'] ?? '');
+                                $ws = (int) ($proc['WorkingSetSize'] ?? 0);
+                                if ($ws > 0) {
+                                    $result[$pid]['memory'] = \round($ws / 1024 / 1024, 2) . ' MB';
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        return $result;
+    }
 }

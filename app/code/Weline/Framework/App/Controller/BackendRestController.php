@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /*
  * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
  * 邮箱：aiweline@qq.com
@@ -10,26 +12,25 @@
 namespace Weline\Framework\App\Controller;
 
 use Weline\Backend\Model\BackendUser;
-use Weline\Framework\App\Session\BackendApiSession;
 use Weline\Framework\Controller\AbstractRestController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 
 class BackendRestController extends AbstractRestController
 {
-    protected BackendApiSession $session;
+    protected AuthenticatedSessionInterface $session;
 
-    public function __construct(
-        BackendApiSession $backendApiSession,
-    )
+    public function __construct()
     {
         parent::__construct();
-        $this->session = $backendApiSession;
+        $this->session = SessionFactory::getInstance()->createAuthenticatedSession('rest_backend');
         
         // 检查是否已登录
-        if (!$this->session->isLogin()) {
+        if (!$this->session->isLoggedIn()) {
             // 尝试通过session ID查找用户
-            $sessionId = $this->session->getSessionId();
-            if ($sessionId) {
+            $sessionId = $this->session->getSession()->getId();
+            if ($sessionId !== '') {
                 /** @var BackendUser $user */
                 $user = ObjectManager::getInstance(BackendUser::class);
                 $user->where('sess_id', $sessionId)->find()->fetch();
@@ -57,23 +58,19 @@ class BackendRestController extends AbstractRestController
     }
 
         
-    protected function success(string $msg = '请求成功！', mixed $data = '', int $code = 200): string
+    protected function success(string $msg = '请求成功！', mixed $data = '', int $code = 200): array|string
     {
-        $result = $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
-        return $result ?: '';
+        return parent::success($msg, $data, $code);
     }
 
-    protected function error(string $msg = '请求失败！', mixed $data = '', int $code = 404): string
+    protected function error(string $msg = '请求失败！', mixed $data = '', int $code = 400, ?string $title = null): array|string
     {
-        $result = $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
-        return $result ?: '';
+        return parent::error($msg, $data, $code, $title);
     }
 
-    protected function exception(\Exception $exception, string $msg = '请求失败！', mixed $data = '', int $code = 403): mixed
+    protected function exception(\Throwable $exception, string $msg = '', mixed $data = '', ?int $code = null): array|string
     {
-        $return_data['data']      = $data;
-        $return_data['exception'] = DEV ? $exception : $exception->getMessage();
-        return $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
+        return parent::exception($exception, $msg, $data, $code);
     }
     
 }

@@ -11,8 +11,7 @@ namespace Weline\Framework\Database;
 
 use Weline\Framework\App\Debug;
 use Weline\Framework\App\Exception;
-use Weline\Framework\Cache\CacheInterface;
-use Weline\Framework\Database\Cache\DbModelCache;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Database\DbManager\ConfigProvider;
@@ -113,7 +112,7 @@ abstract class AbstractModel extends DataObject
     private DbManager|null $dbManager = null;
     private ?QueryInterface $_bind_query = null;
     private ?QueryInterface $current_query = null;
-    public ?CacheInterface $_cache = null;
+    public ?CachePoolInterface $_cache = null;
     private array $_fetch_data = [];
     public array $items = [];
     private mixed $_query_data = null;
@@ -161,7 +160,7 @@ abstract class AbstractModel extends DataObject
         }
         # 重置查询
         if (!isset($this->_cache)) {
-            $this->_cache = ObjectManager::getInstance(DbModelCache::class . 'Factory');
+            $this->_cache = w_cache('database');
         }
         # dbManager
         if (empty($this->dbManager)) {

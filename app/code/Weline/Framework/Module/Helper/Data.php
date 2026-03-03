@@ -783,7 +783,7 @@ class Data extends AbstractHelper
                 $registryService = ObjectManager::getInstance(RegistryUpdateService::class);
                 $registryService->updateAllRegistries(true);
             } catch (\Exception $e) {
-                Env::log_warning('registry_update.log', __('模块列表更新后注册表刷新失败: %{1}', [$e->getMessage()]));
+                w_log_warning(__('模块列表更新后注册表刷新失败: %{1}', [$e->getMessage()]), [], 'registry_update.log');
             }
         }
     }

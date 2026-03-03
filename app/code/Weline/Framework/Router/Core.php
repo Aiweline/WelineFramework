@@ -11,14 +11,14 @@ namespace Weline\Framework\Router;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\CacheManager as FrameworkCacheManager;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Router\Cache\RouterCache;
-use Weline\Framework\Router\Cache\ProcessUrlCache;
 
 class Core
 {
@@ -35,14 +35,12 @@ class Core
     private bool $is_backend;
     private bool $is_match = false;
 
-    private CacheInterface $cache;
-
-    private ?ProcessUrlCache $processUrlCache = null;
+    private ?CachePoolInterface $cache = null;
     
     /**
-     * 缓存管理器 - 统一缓存操作
+     * 框架缓存管理器
      */
-    private ?CacheManager $cacheManager = null;
+    private ?FrameworkCacheManager $frameworkCacheManager = null;
     
     /**
      * URL 处理器 - URL 规范化和解析
@@ -70,7 +68,7 @@ class Core
     // 注意：cache->get() 可能返回 false，所以使用 mixed 类型
     private mixed $unifiedCacheData = null;
     
-    // 统一缓存结构键名（已移至 RouterCache 类，请使用 RouterCache::UNIFIED_CACHE_*_KEY）
+    // 统一缓存结构键名（已移至 KeyBuilder 类，请使用 KeyBuilder::UNIFIED_CACHE_*_KEY）
 
     /**
      * 上次初始化的请求标识
@@ -120,11 +118,14 @@ class Core
             $this->request = ObjectManager::getInstance(Request::class);
         }
         
-        if (empty($this->cache)) {
-            $this->cache = ObjectManager::getInstance(RouterCache::class . 'Factory');
+        // 初始化框架缓存管理器
+        if ($this->frameworkCacheManager === null) {
+            $this->frameworkCacheManager = ObjectManager::getInstance(FrameworkCacheManager::class);
         }
-        if ($this->processUrlCache === null) {
-            $this->processUrlCache = new ProcessUrlCache();
+        
+        // 获取 router 缓存池
+        if ($this->cache === null) {
+            $this->cache = $this->frameworkCacheManager->pool('router');
         }
 
         // 每次新请求都需要重新获取请求级数据
@@ -154,18 +155,12 @@ class Core
         $method = $this->request->getMethod() ?: 'GET';
         
         // 规范化 URI（去除查询参数），确保缓存键的一致性
-        $uri = RouterCache::normalizeUri($uri);
+        $uri = KeyBuilder::normalizeUri($uri);
         
-        $this->url_cache_key = RouterCache::buildUrlCacheKey($uri, $method, $this->request);
-        $this->rule_cache_key = RouterCache::buildRuleCacheKey($uri, $method, $this->request);
-        $this->_router_cache_key = RouterCache::buildRouterStartCacheKey($uri, $method, $this->request);
-        $this->unified_cache_key = RouterCache::buildUnifiedRequestCacheKey('', $method, $this->request);
-        
-        // 初始化 CacheManager
-        if ($this->cacheManager === null) {
-            $this->cacheManager = new CacheManager();
-        }
-        $this->cacheManager->init($this->request);
+        $this->url_cache_key = KeyBuilder::buildUrlCacheKey($uri, $method);
+        $this->rule_cache_key = KeyBuilder::buildRuleCacheKey($uri, $method);
+        $this->_router_cache_key = KeyBuilder::buildRouterStartCacheKey($uri, $method);
+        $this->unified_cache_key = KeyBuilder::buildUnifiedRequestCacheKey('', $method);
         
         // 初始化 UrlProcessor
         if ($this->urlProcessor === null) {
@@ -206,17 +201,29 @@ class Core
     }
     
     /**
-     * 获取缓存管理器
+     * 获取框架缓存管理器
      * 
-     * @return CacheManager
+     * @return FrameworkCacheManager
      */
-    public function getCacheManager(): CacheManager
+    public function getCacheManager(): FrameworkCacheManager
     {
-        if ($this->cacheManager === null) {
-            $this->cacheManager = new CacheManager();
-            $this->cacheManager->init($this->request);
+        if ($this->frameworkCacheManager === null) {
+            $this->frameworkCacheManager = ObjectManager::getInstance(FrameworkCacheManager::class);
         }
-        return $this->cacheManager;
+        return $this->frameworkCacheManager;
+    }
+    
+    /**
+     * 获取路由缓存池
+     * 
+     * @return CachePoolInterface
+     */
+    public function getRouterCache(): CachePoolInterface
+    {
+        if ($this->cache === null) {
+            $this->cache = $this->getCacheManager()->pool('router');
+        }
+        return $this->cache;
     }
     
     /**
@@ -265,8 +272,8 @@ class Core
         }
         
         // 优先从统一缓存中读取 router
-        if (is_array($this->unifiedCacheData) && isset($this->unifiedCacheData[RouterCache::UNIFIED_CACHE_ROUTER_KEY]) && !empty($this->unifiedCacheData[RouterCache::UNIFIED_CACHE_ROUTER_KEY])) {
-            $this->router = $this->unifiedCacheData[RouterCache::UNIFIED_CACHE_ROUTER_KEY];
+        if (is_array($this->unifiedCacheData) && isset($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY]) && !empty($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY])) {
+            $this->router = $this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY];
             return $this->route();
         }
         
@@ -307,7 +314,7 @@ class Core
         // 非开发模式（匹配不到任何路由将报错）
         if (PROD) {
             // 诊断日志：记录 PROD 模式路由 404
-            \error_log('[Router 404] No route matched in PROD mode | URL: ' . ($this->url ?? '(empty)')
+            w_log_warning('[Router 404] No route matched in PROD mode | URL: ' . ($this->url ?? '(empty)')
                 . ' | REQUEST_URI: ' . ($_SERVER['REQUEST_URI'] ?? '(empty)')
                 . ' | WELINE_AREA: ' . ($_SERVER['WELINE_AREA'] ?? '(empty)')
                 . ' | request_area: ' . ($this->request_area ?? '(empty)')
@@ -406,13 +413,13 @@ class Core
         if (is_array($this->unifiedCacheData) && !empty($this->unifiedCacheData)) {
             $unifiedCache = $this->unifiedCacheData;
             // 从统一缓存中提取数据
-            $url = $unifiedCache[RouterCache::UNIFIED_CACHE_URL_KEY] ?? null;
-            $ruleFromCache = $unifiedCache[RouterCache::UNIFIED_CACHE_RULE_KEY] ?? [];
-            $cachedGeneratedGetParams = $unifiedCache[RouterCache::UNIFIED_CACHE_PARAMS_KEY] ?? [];
+            $url = $unifiedCache[KeyBuilder::UNIFIED_CACHE_URL_KEY] ?? null;
+            $ruleFromCache = $unifiedCache[KeyBuilder::UNIFIED_CACHE_RULE_KEY] ?? [];
+            $cachedGeneratedGetParams = $unifiedCache[KeyBuilder::UNIFIED_CACHE_PARAMS_KEY] ?? [];
             
             // 如果统一缓存中有路由信息，也设置到 router 属性
-            if (isset($unifiedCache[RouterCache::UNIFIED_CACHE_ROUTER_KEY])) {
-                $this->router = $unifiedCache[RouterCache::UNIFIED_CACHE_ROUTER_KEY];
+            if (isset($unifiedCache[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY])) {
+                $this->router = $unifiedCache[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY];
             }
             
             // 验证缓存的有效性
@@ -430,37 +437,26 @@ class Core
             }
         }
         
-        // 尝试从 ProcessUrlCache 读取缓存（可通过 env 配置禁用：cache.status.process_url_cache = 0）
-        $processUrlCacheKey = $this->url_cache_key;
-        $processUrlCacheData = $this->processUrlCache->getProcessedUrl($processUrlCacheKey);
-        if ($processUrlCacheData !== null) {
-            // 从 ProcessUrlCache 获取缓存数据
-            $url = $processUrlCacheData['url'];
-            $ruleFromCache = $processUrlCacheData['rule'];
-            $cachedGeneratedGetParams = $processUrlCacheData['generated_get_params'];
-            $this->url_cache_data = $url;
-            $this->rule_cache_data = $ruleFromCache;
-            $this->routerGeneratedGetParams = $cachedGeneratedGetParams;
-            if (!empty($this->routerGeneratedGetParams)) {
-                $this->applyRouterGeneratedGetParams();
-            }
-            # 将规则设置到请求类
-            $this->request->setRule($ruleFromCache);
-            $this->request->setData($ruleFromCache);
-        } else {
-            // 回退到旧的缓存方式（兼容性）
-            $url = $this->cache->get($this->url_cache_key);
+        // 从缓存池读取 URL 缓存
+        $url = $this->cache->get($this->url_cache_key);
+        {
             # 如果后缀是静态文件后缀 .css,.js,.jpg,.png,.jpeg,.gif,.svg,.ico,.woff,.woff2,.eot,.ttf,.otf,.ttf2,.woff3,.mp4,.mp3,.m3u8,.webp
             $isStaticFile = $this->isStaticFile();
             if ($isStaticFile) {
-                try {
-                    // StaticFile 会抛出 StaticFileException，由 Runtime 层统一处理
-                    $this->StaticFile($url, true);
-                } catch (\Weline\Framework\Http\StaticFileException $e) {
-                    // 静态文件响应异常，直接向上抛出由 Runtime 层处理
-                    throw $e;
-                } catch (\ReflectionException|Exception $e) {
-                    $this->request->getResponse()->noRouter();
+                // 确保 $url 不为 null，缓存未命中时从请求中获取
+                if ($url === null || $url === false || $url === '') {
+                    $url = $_SERVER['WELINE_PARSER_URL'] ?? '';
+                }
+                if ($url !== '') {
+                    try {
+                        // StaticFile 会抛出 StaticFileException，由 Runtime 层统一处理
+                        $this->StaticFile($url, true);
+                    } catch (\Weline\Framework\Http\StaticFileException $e) {
+                        // 静态文件响应异常，直接向上抛出由 Runtime 层处理
+                        throw $e;
+                    } catch (\ReflectionException|Exception $e) {
+                        $this->request->getResponse()->noRouter();
+                    }
                 }
             }
             $ruleCache = $this->cache->get($this->rule_cache_key);
@@ -508,14 +504,6 @@ class Core
 
                 $url = $this->normalizeUrlTail($url);
                 
-                // 保存到 ProcessUrlCache（可通过 env 配置禁用：cache.status.process_url_cache = 0）
-                $this->processUrlCache->setProcessedUrl(
-                    $processUrlCacheKey,
-                    $url,
-                    $rule,
-                    $this->routerGeneratedGetParams,
-                    !empty($rule)
-                );
             }
         }
         return $url;
@@ -631,7 +619,7 @@ class Core
         // 如果是PC后端请求，找不到路由就直接404
         if ($is_pc_admin) {
             // 诊断日志：记录后台路由 404 的关键信息，便于排查间歇性 404 问题
-            \error_log('[Router 404] Backend route not found | URL: ' . $url 
+            w_log_warning('[Router 404] Backend route not found | URL: ' . $url 
                 . ' | Method: ' . ($requestMethod ?? 'GET')
                 . ' | REQUEST_URI: ' . ($_SERVER['REQUEST_URI'] ?? '(empty)')
                 . ' | WELINE_AREA: ' . ($_SERVER['WELINE_AREA'] ?? '(empty)')
@@ -812,11 +800,11 @@ class Core
             }
             
             // 优先从统一缓存中读取
-            if (is_array($this->unifiedCacheData) && isset($this->unifiedCacheData[RouterCache::UNIFIED_CACHE_FPC_KEY]) && !empty($this->unifiedCacheData[RouterCache::UNIFIED_CACHE_FPC_KEY])) {
+            if (is_array($this->unifiedCacheData) && isset($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_FPC_KEY]) && !empty($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_FPC_KEY])) {
                 $unifiedCache = $this->unifiedCacheData;
                 // 恢复响应头（先清除已存在的响应头，避免重复）
-                if (isset($unifiedCache[RouterCache::UNIFIED_CACHE_HEADERS_KEY]) && is_array($unifiedCache[RouterCache::UNIFIED_CACHE_HEADERS_KEY]) && !headers_sent()) {
-                    foreach ($unifiedCache[RouterCache::UNIFIED_CACHE_HEADERS_KEY] as $header) {
+                if (isset($unifiedCache[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY]) && is_array($unifiedCache[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY]) && !headers_sent()) {
+                    foreach ($unifiedCache[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY] as $header) {
                         // 解析响应头名称
                         if (str_contains($header, ':')) {
                             $headerName = trim(explode(':', $header, 2)[0]);
@@ -829,11 +817,12 @@ class Core
                 }
                 // 添加缓存命中标志 header（使用框架独有的标识）
                 header('X-Weline-FPC: HIT');
-                return $unifiedCache[RouterCache::UNIFIED_CACHE_FPC_KEY];
+                return $unifiedCache[KeyBuilder::UNIFIED_CACHE_FPC_KEY];
             }
             
             // 回退到旧的缓存方式（兼容性）
-            $cache_key = $this->cache->buildWithRequestKey('router_route_fpc_cache_key_' . Cookie::getLangLocal());
+            $fullUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? ($_SERVER['REQUEST_URI'] ?? '/');
+            $cache_key = KeyBuilder::build('router', 'fpc:' . $fullUri . ':' . Cookie::getLangLocal());
             if (PROD && $html = $this->cache->get($cache_key)) {
                 // 添加缓存命中标志 header（使用框架独有的标识）
                 header('X-Weline-FPC: HIT');
@@ -961,18 +950,16 @@ class Core
         if (!$this->is_backend && !$isEditorMode && $routerCacheEnabled && $frontendCacheEnabled && !empty($fpcHtml)) {
             // 构建统一缓存结构，包含所有请求相关数据
             $unifiedCacheData = [
-                \Weline\Framework\Router\Cache\RouterCache::UNIFIED_CACHE_URL_KEY => $this->url,
-                \Weline\Framework\Router\Cache\RouterCache::UNIFIED_CACHE_RULE_KEY => $this->request->getRule(),
-                \Weline\Framework\Router\Cache\RouterCache::UNIFIED_CACHE_ROUTER_KEY => $this->router,
-                \Weline\Framework\Router\Cache\RouterCache::UNIFIED_CACHE_PARAMS_KEY => $this->routerGeneratedGetParams,
-                \Weline\Framework\Router\Cache\RouterCache::UNIFIED_CACHE_FPC_KEY => $fpcHtml, // 全页缓存 HTML
-                \Weline\Framework\Router\Cache\RouterCache::UNIFIED_CACHE_HEADERS_KEY => $responseHeaders, // 全页缓存响应头
+                KeyBuilder::UNIFIED_CACHE_URL_KEY => $this->url,
+                KeyBuilder::UNIFIED_CACHE_RULE_KEY => $this->request->getRule(),
+                KeyBuilder::UNIFIED_CACHE_ROUTER_KEY => $this->router,
+                KeyBuilder::UNIFIED_CACHE_PARAMS_KEY => $this->routerGeneratedGetParams,
+                KeyBuilder::UNIFIED_CACHE_FPC_KEY => $fpcHtml,
+                KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => $responseHeaders,
             ];
             
             // 保存统一缓存（使用较长的过期时间，因为包含全页缓存）
-            // 确保使用正确的缓存键（基于 WELINE_FULL_REQUEST_URI）
-            // 在保存前重新生成缓存键，确保与读取时一致
-            $saveCacheKey = RouterCache::buildUnifiedRequestCacheKey('', $this->request->getMethod() ?: 'GET', $this->request);
+            $saveCacheKey = KeyBuilder::buildUnifiedRequestCacheKey('', $this->request->getMethod() ?: 'GET');
             $this->cache->set($saveCacheKey, $unifiedCacheData, 3600);
         }
         // 兼容性：如果 url_cache_data 为空，也保存到旧的缓存键

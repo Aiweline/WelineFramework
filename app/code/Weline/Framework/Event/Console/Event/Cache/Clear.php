@@ -9,30 +9,23 @@
 
 namespace Weline\Framework\Event\Console\Event\Cache;
 
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\CacheManager;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Console\CommandInterface;
-use Weline\Framework\Event\Cache\EventCache;
 use Weline\Framework\Output\Cli\Printing;
 
 class Clear implements CommandInterface
 {
-    /**
-     * @var Printing
-     */
     private Printing $printing;
-
-    /**
-     * @var CacheInterface
-     */
-    private CacheInterface $eventCache;
+    private CachePoolInterface $eventCache;
 
     public function __construct(
-        EventCache $eventCache,
-        Printing   $printing
+        CacheManager $cacheManager,
+        Printing     $printing
     )
     {
         $this->printing   = $printing;
-        $this->eventCache = $eventCache->create();
+        $this->eventCache = $cacheManager->pool('event');
     }
 
     /**

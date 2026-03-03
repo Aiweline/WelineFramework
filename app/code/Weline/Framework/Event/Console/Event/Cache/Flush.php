@@ -9,30 +9,23 @@
 
 namespace Weline\Framework\Event\Console\Event\Cache;
 
+use Weline\Framework\Cache\CacheManager;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Console\CommandInterface;
-
-use Weline\Framework\Event\Cache\EventCache;
 use Weline\Framework\Output\Cli\Printing;
 
-class Flush implements \Weline\Framework\Console\CommandInterface
+class Flush implements CommandInterface
 {
-    /**
-     * @var Printing
-     */
     private Printing $printing;
-
-    /**
-     * @var EventCache
-     */
-    private EventCache $eventCache;
+    private CachePoolInterface $eventCache;
 
     public function __construct(
-        EventCache $eventCache,
-        Printing   $printing
+        CacheManager $cacheManager,
+        Printing     $printing
     )
     {
         $this->printing   = $printing;
-        $this->eventCache = $eventCache;
+        $this->eventCache = $cacheManager->pool('event');
     }
 
     /**
@@ -40,7 +33,7 @@ class Flush implements \Weline\Framework\Console\CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
-        $this->eventCache->create()->flush();
+        $this->eventCache->clear();
 
         return $this->printing->success(__('清理完毕！'), '系统事件缓存');
     }

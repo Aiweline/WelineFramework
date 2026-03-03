@@ -260,8 +260,11 @@ class RequestFilter extends DataObject
             $this->StopAttack($key, $value, $cookiefilter);
         }
         if (file_exists('updateSafeScan.php')) {
-            echo '请重命名文件updateSafeScan.php，防止黑客利用<br/>';
-            die();
+            throw new \Weline\Framework\Http\ResponseTerminateException(
+                403,
+                '请重命名文件updateSafeScan.php，防止黑客利用<br/>',
+                ['Content-Type' => 'text/html; charset=UTF-8']
+            );
         }
     }
 
@@ -275,8 +278,11 @@ class RequestFilter extends DataObject
                 dd($matches);
             }
             $this->slog('<br><br>操作IP: ' . $_SERVER['REMOTE_ADDR'] . '<br>操作时间: ' . date('%Y-%m-%d %H:%M:%S') . '<br>操作页面:' . $_SERVER['PHP_SELF'] . '<br>提交方式: ' . $_SERVER['REQUEST_METHOD'] . '<br>提交参数: ' . $StrFiltKey . '<br>提交数据: ' . $StrFiltValue);
-            print 'WelineFramework 警告:非法操作！';
-            exit();
+            throw new \Weline\Framework\Http\ResponseTerminateException(
+                403,
+                'WelineFramework 警告:非法操作！',
+                ['Content-Type' => 'text/html; charset=UTF-8']
+            );
         }
     }
 
