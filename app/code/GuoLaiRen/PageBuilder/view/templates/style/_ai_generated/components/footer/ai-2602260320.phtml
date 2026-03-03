@@ -127,7 +127,7 @@ try {
     
 } catch (\Throwable $e) {
     // 静默处理AI生成代码的错误，记录日志
-    error_log('[AI Component Error] ' . $componentId . ': ' . $e->getMessage());
+    w_log_error('[AI Component Error] ' . $componentId . ': ' . $e->getMessage());
 }
 ?>
 <div id="<?= $componentId ?>" class="ai-footer" style="background-color: <?= htmlspecialchars($bgColor) ?>; color: <?= htmlspecialchars($textColor) ?>;">

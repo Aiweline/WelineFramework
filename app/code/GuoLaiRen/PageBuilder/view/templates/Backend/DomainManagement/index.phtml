@@ -169,6 +169,25 @@ $statusOptions = $this->getData('statusOptions') ?? [];
     background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
     color: var(--backend-color-info, #50a5f1);
 }
+.pb-dm-badge--error {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
+    color: var(--backend-color-danger, #f46a6a);
+    cursor: help;
+}
+.pb-dm-badge--error i {
+    margin-right: 0.25rem;
+}
+.pb-dm-error-detail {
+    margin-top: 0.35rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.08));
+    border-left: 3px solid var(--backend-color-danger, #f46a6a);
+    border-radius: 4px;
+    font-size: 0.8rem;
+    color: var(--backend-color-danger, #f46a6a);
+    word-break: break-all;
+    line-height: 1.4;
+}
 .pb-dm-badge--cf {
     background: linear-gradient(135deg, #f38020 0%, #faad3f 100%);
     color: #fff;
@@ -3190,9 +3209,16 @@ $statusOptions = $this->getData('statusOptions') ?? [];
             '</tr></thead><tbody>';
 
         results.forEach(function(item, idx) {
-            var badge = item.available
-                ? '<span class="pb-dm-badge pb-dm-badge--ok">' + (item.premium ? '<?= __('溢价可注册') ?>' : '<?= __('可注册') ?>') + '</span>'
-                : '<span class="pb-dm-badge pb-dm-badge--no"><?= __('已注册') ?></span>';
+            var badge;
+            if (item.available) {
+                badge = '<span class="pb-dm-badge pb-dm-badge--ok">' + (item.premium ? '<?= __('溢价可注册') ?>' : '<?= __('可注册') ?>') + '</span>';
+            } else if (item.message) {
+                badge = '<span class="pb-dm-badge pb-dm-badge--error" title="' + item.message.replace(/"/g, '&quot;') + '">' +
+                    '<i class="mdi mdi-alert-circle"></i> <?= __('查询失败') ?></span>' +
+                    '<div class="pb-dm-error-detail">' + item.message + '</div>';
+            } else {
+                badge = '<span class="pb-dm-badge pb-dm-badge--no"><?= __('已注册') ?></span>';
+            }
             var price = item.price ? ('$' + parseFloat(item.price).toFixed(2)) : '-';
             var action = item.available
                 ? '<button class="pb-dm-btn pb-dm-btn-success pb-dm-btn-sm pb-dm-buy-one" ' +

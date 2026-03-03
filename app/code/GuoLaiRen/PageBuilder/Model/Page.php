@@ -901,7 +901,7 @@ class Page extends Model
             } catch (\Exception $e) {
                 // 升级失败，记录日志但不中断
                 if (defined('DEV') && DEV) {
-                    error_log('PageBuilder Page Model Upgrade Error (handle null): ' . $e->getMessage());
+                    w_log_error('PageBuilder Page Model Upgrade Error (handle null): ' . $e->getMessage());
                 }
             }
         }
@@ -1165,7 +1165,7 @@ class Page extends Model
         } catch (\Throwable $e) {
             // SEO 提交失败不应影响页面保存流程，静默处理
             if (defined('DEV') && DEV) {
-                error_log('PageBuilder SEO URL Submit Error: ' . $e->getMessage());
+                w_log_error('PageBuilder SEO URL Submit Error: ' . $e->getMessage());
             }
         }
     }

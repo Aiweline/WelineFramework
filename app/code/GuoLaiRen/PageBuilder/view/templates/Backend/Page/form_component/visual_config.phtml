@@ -118,32 +118,49 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
 
 /* 顶部工具栏 */
 .visual-toolbar {
-    height: 60px;
+    height: 50px;
+    min-height: 50px;
     background: var(--visual-config-toolbar-bg, #2c3e50);
     color: var(--visual-config-toolbar-text, #fff);
     display: flex;
     align-items: center;
-    padding: 0 20px;
+    padding: 0 12px;
     justify-content: space-between;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    flex-shrink: 0;
+    gap: 8px;
 }
 
 .visual-toolbar-left {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 8px;
+    flex-shrink: 0;
 }
 
 .visual-toolbar-center {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 6px;
+    flex-shrink: 0;
 }
 
 .visual-toolbar-right {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 6px;
+    flex-shrink: 0;
+    flex-wrap: nowrap;
+}
+
+.visual-toolbar .btn {
+    white-space: nowrap;
+    font-size: 12px;
+    padding: 5px 10px;
+}
+
+.visual-toolbar .btn i {
+    font-size: 14px;
 }
 
 /* 设备切换按钮 */
@@ -151,10 +168,19 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     background: rgba(255,255,255,0.1);
     border: none;
     color: #fff;
-    padding: 8px 15px;
+    padding: 6px 10px;
     border-radius: 4px;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: all 0.2s;
+    font-size: 12px;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.device-btn i {
+    font-size: 14px;
 }
 
 .device-btn:hover {
@@ -167,10 +193,11 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
 
 /* 自动保存状态 */
 .save-status {
-    padding: 5px 10px;
+    padding: 4px 8px;
     border-radius: 4px;
-    font-size: 13px;
+    font-size: 11px;
     background: rgba(255,255,255,0.1);
+    white-space: nowrap;
 }
 
 .save-status.saving {
@@ -194,7 +221,8 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
 
 /* 左侧配置面板 */
 .config-panel {
-    width: 400px;
+    width: 360px;
+    min-width: 360px;
     background: var(--visual-config-panel-bg, #f8f9fa);
     border-right: 1px solid var(--visual-config-border, #dee2e6);
     display: flex;
@@ -204,28 +232,30 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     position: relative;
     z-index: 10;
     pointer-events: auto;
+    flex-shrink: 0;
 }
 
 .config-panel-header {
-    padding: 15px 20px;
+    padding: 12px 15px;
     background: var(--visual-config-panel-header-bg, #fff);
     border-bottom: 1px solid var(--visual-config-border, #dee2e6);
     font-weight: 600;
+    font-size: 14px;
     color: var(--visual-config-text, #212529);
 }
 
 /* 配置搜索框 */
 .config-search-box {
-    margin-top: 10px;
+    margin-top: 8px;
     position: relative;
 }
 
 .config-search-box input {
     width: 100%;
-    padding: 8px 35px 8px 12px;
+    padding: 6px 30px 6px 10px;
     border: 1px solid var(--visual-config-input-border, #dee2e6);
     border-radius: 4px;
-    font-size: 14px;
+    font-size: 12px;
     background: var(--visual-config-input-bg, #fff);
     color: var(--visual-config-input-text, #212529);
 }
@@ -728,24 +758,24 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
 .language-switcher-visual {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-left: 20px;
-    padding-left: 20px;
+    gap: 6px;
+    margin-left: 8px;
+    padding-left: 8px;
     border-left: 1px solid rgba(255,255,255,0.2);
 }
 
 .language-switcher-visual i {
     color: #fff;
-    font-size: 18px;
+    font-size: 14px;
 }
 
 .language-switcher-visual .form-select {
     background: rgba(255,255,255,0.1);
     border: 1px solid rgba(255,255,255,0.2);
     color: #fff;
-    font-size: 13px;
-    padding: 5px 30px 5px 10px;
-    min-width: 120px;
+    font-size: 11px;
+    padding: 4px 24px 4px 8px;
+    min-width: 90px;
 }
 
 .language-switcher-visual .form-select:focus {
@@ -806,11 +836,11 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     background: rgba(255,255,255,0.1);
     border: 1px solid rgba(255,255,255,0.2);
     color: #fff;
-    padding: 8px 16px;
-    border-radius: 6px;
+    padding: 6px 10px;
+    border-radius: 4px;
     cursor: pointer;
-    transition: all 0.3s;
-    margin-left: 10px;
+    transition: all 0.2s;
+    margin-left: 4px;
 }
 
 .fullscreen-btn:hover {
@@ -823,7 +853,38 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
 }
 
 .fullscreen-btn i {
-    font-size: 18px;
+    font-size: 14px;
+}
+
+/* 工具栏标题 */
+.visual-toolbar h5 {
+    font-size: 13px;
+    margin: 0;
+    white-space: nowrap;
+}
+
+/* 工具栏按钮文字隐藏（小屏幕只显示图标） */
+@media (max-width: 1400px) {
+    .visual-toolbar-right .btn span,
+    .visual-toolbar-right .btn:not(.save-status) {
+        font-size: 11px;
+    }
+    .visual-toolbar-right .btn i {
+        margin-right: 0;
+    }
+}
+
+@media (max-width: 1200px) {
+    .visual-toolbar-right .btn {
+        padding: 4px 8px;
+    }
+    .device-btn {
+        padding: 5px 8px;
+    }
+    .device-btn span,
+    .visual-toolbar-right .btn-text {
+        display: none;
+    }
 }
 
 /* 悬浮展开按钮 */
@@ -1043,8 +1104,8 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
             <h5 class="mb-0 text-white"><?= __('可视化配置') ?></h5>
             <span id="templateInfoBadge" class="ms-2 small text-light" style="opacity:.85; display:none;"></span>
             <?php if (isset($this) && $this->getData('is_template_config_mode')): ?>
-            <span class="system-test-badge" style="background: #f39c12; color: #fff; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">
-                <i class="mdi mdi-test-tube"></i> <?= __('系统测试页面') ?>
+            <span class="system-test-badge" style="background: #f39c12; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;">
+                <i class="mdi mdi-test-tube"></i> <?= __('测试') ?>
             </span>
             <?php endif; ?>
         </div>
@@ -1829,16 +1890,7 @@ window.isAiGenerating = false;
 function closeVisualConfig() {
     // 如果正在AI生成，禁止关闭
     if (window.isAiGenerating) {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'info',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('AI正在生成配置，请等待生成完成') ?>',
-                timer: 2000,
-                showConfirmButton: false
-            });
-        } else {
-        }
+        BackendToast.info('<?= __('AI正在生成配置，请等待生成完成') ?>');
         return;
     }
     document.getElementById('visualConfigWrapper').classList.remove('active');
@@ -3151,16 +3203,7 @@ window.refreshVisualStyleConfig = async function(event) {
         }
     } catch (error) {
         console.error('刷新样式配置失败:', error);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('刷新失败') ?>',
-                text: error && error.message ? error.message : 'Unknown error',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('刷新失败：', error && error.message ? error.message : 'Unknown error');
-        }
+        BackendToast.error('<?= __('刷新失败') ?>：' + (error && error.message ? error.message : 'Unknown error'));
     } finally {
         const btn = event ? (event.target.closest('button') || event.target) : document.querySelector('button[onclick*="refreshVisualStyleConfig"]');
         const icon = btn ? btn.querySelector('i') : null;
@@ -3289,16 +3332,7 @@ window.openPageSpeedMobile = function(){
     if (btn) {
         const isPublished = btn.getAttribute('data-is-published') === '1';
         if (!isPublished) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'warning',
-                    title: '<?= __('无法测试') ?>',
-                    html: '<?= __('页面未发布，无法进行 PageSpeed 测试。') ?><br><br><?= __('原因：PageSpeed Insights 需要访问已发布的公开页面才能进行分析。') ?><br><br><?= __('解决方法：请先在页面编辑表单中将页面状态设置为"已发布"，然后再进行测试。') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('页面未发布，无法进行 PageSpeed 测试。原因：PageSpeed Insights 需要访问已发布的公开页面才能进行分析。解决方法：请先在页面编辑表单中将页面状态设置为"已发布"，然后再进行测试。') ?>');
-            }
+            BackendToast.warning('<?= __('无法测试：页面未发布，无法进行 PageSpeed 测试。原因：PageSpeed Insights 需要访问已发布的公开页面才能进行分析。解决方法：请先在页面编辑表单中将页面状态设置为"已发布"，然后再进行测试。') ?>');
             return;
         }
     }
@@ -3316,16 +3350,7 @@ window.openPageSpeedMobile = function(){
     }
     
     if (!handle){
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: '<?= __('提示') ?>',
-                text: '<?= __('页面句柄不能为空，无法测试 PageSpeed') ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('页面句柄不能为空，无法测试 PageSpeed') ?>');
-        }
+        BackendToast.warning('<?= __('页面句柄不能为空，无法测试 PageSpeed') ?>');
         return;
     }
     
@@ -3414,18 +3439,7 @@ window.exportPageConfig = async function() {
         }
         
         if (!pageId || !styleCode) {
-            if (typeof showToast === 'function') {
-                showToast('error', '<?= __("导出失败") ?>', '<?= __("请先选择样式模板") ?>');
-            } else if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __("导出失败") ?>',
-                    text: '<?= __("请先选择样式模板") ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __("导出失败：请先选择样式模板") ?>');
-            }
+            BackendToast.error('<?= __("导出失败：请先选择样式模板") ?>');
             return;
         }
         
@@ -3490,18 +3504,7 @@ window.exportPageConfig = async function() {
         }
     } catch (error) {
         console.error('导出配置失败:', error);
-        if (typeof showToast === 'function') {
-            showToast('error', '<?= __("导出失败") ?>', error.message || '<?= __("未知错误") ?>');
-        } else if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __("导出失败") ?>',
-                text: error.message || '<?= __("未知错误") ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __("导出失败") ?>: ', error.message || '<?= __("未知错误") ?>');
-        }
+        BackendToast.error('<?= __("导出失败") ?>：' + (error.message || '<?= __("未知错误") ?>'));
         
         // 恢复按钮状态
         const exportBtn = document.getElementById('exportConfigBtn');
@@ -3571,18 +3574,7 @@ async function handleConfigImport(event) {
         const result = await response.json();
         
         if (result.success) {
-            if (typeof showToast === 'function') {
-                showToast('success', '<?= __("导入成功") ?>', result.message || '<?= __("配置已导入") ?>');
-            } else if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __("导入成功") ?>',
-                    text: result.message || '<?= __("配置已导入") ?>',
-                    timer: 2000,
-                    showConfirmButton: false
-                });
-            } else {
-            }
+            BackendToast.success('<?= __("导入成功") ?>：' + (result.message || '<?= __("配置已导入") ?>'));
             
             // 重新加载配置
             if (window.isTemplateConfigMode && typeof loadTemplateStyleConfig === 'function') {
@@ -3612,18 +3604,7 @@ async function handleConfigImport(event) {
         event.target.value = '';
     } catch (error) {
         console.error('导入配置失败:', error);
-        if (typeof showToast === 'function') {
-            showToast('error', '<?= __("导入失败") ?>', error.message || '<?= __("未知错误") ?>');
-        } else if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __("导入失败") ?>',
-                text: error.message || '<?= __("未知错误") ?>',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __("导入失败") ?>: ', error.message || '<?= __("未知错误") ?>');
-        }
+        BackendToast.error('<?= __("导入失败") ?>：' + (error.message || '<?= __("未知错误") ?>'));
         
         // 恢复按钮状态
         const importBtn = document.getElementById('importConfigBtn');
@@ -3740,18 +3721,18 @@ function showResetConfigConfirmModal(title, message, details, onConfirm) {
     // 检查 bootstrap 是否可用
     if (typeof bootstrap === 'undefined') {
         console.error('❌ Bootstrap 未加载！');
-        if (confirm(message)) {
-            onConfirm();
-        }
+        BackendConfirm.show(message, { title: title }).then((confirmed) => {
+            if (confirmed) onConfirm();
+        });
         return;
     }
     
     const modalElement = document.getElementById('resetConfigConfirmModal');
     if (!modalElement) {
         console.error('❌ 找不到确认模态框');
-        if (confirm(message)) {
-            onConfirm();
-        }
+        BackendConfirm.show(message, { title: title }).then((confirmed) => {
+            if (confirmed) onConfirm();
+        });
         return;
     }
     
@@ -4159,18 +4140,7 @@ window.performConfigFill = function(configItems, filledInputs) {
     });
     
     // 显示成功消息
-    if (typeof showToast === 'function') {
-        showToast('success', '<?= __('生成成功') ?>', `<?= __('已生成并填充') ?> ${filledCount} <?= __('个配置项') ?>`);
-    } else if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            icon: 'success',
-            title: '<?= __('生成成功') ?>',
-            text: `<?= __('已生成并填充') ?> ${filledCount} <?= __('个配置项') ?>`,
-            timer: 2000,
-            showConfirmButton: false
-        });
-    } else {
-    }
+    BackendToast.success(`<?= __('生成成功：已生成并填充') ?> ${filledCount} <?= __('个配置项') ?>`);
     
     // 自动保存
     if (typeof window.autoSaveConfig === 'function') {
@@ -4772,29 +4742,26 @@ function handlePreviewDrop(e) {
         
         // 检查区域匹配
         if (data.region !== targetRegion) {
-            window.parent.Swal.fire({
-                icon: 'warning',
-                title: '<?= __('区域不匹配') ?>',
-                text: '<?= __('此组件只能放置在') ?> ' + data.region + ' <?= __('区域') ?>'
-            });
+            if (window.parent.BackendToast) {
+                window.parent.BackendToast.warning('<?= __('区域不匹配：此组件只能放置在') ?> ' + data.region + ' <?= __('区域') ?>');
+            }
             return;
         }
         
         // 检查唯一性
         const existingComponents = this.querySelectorAll('.tpmst-component-wrapper').length;
         if (!isMultiple && existingComponents > 0) {
-            window.parent.Swal.fire({
-                title: '<?= __('替换组件？') ?>',
-                text: '<?= __('此区域只能放置一个组件，是否替换现有组件？') ?>',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: '<?= __('确认替换') ?>',
-                cancelButtonText: '<?= __('取消') ?>'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.parent.addComponentToLayout(data, targetRegion, true);
-                }
-            });
+            if (window.parent.BackendConfirm) {
+                window.parent.BackendConfirm.show('<?= __('此区域只能放置一个组件，是否替换现有组件？') ?>', {
+                    title: '<?= __('替换组件？') ?>',
+                    confirmText: '<?= __('确认替换') ?>',
+                    cancelText: '<?= __('取消') ?>'
+                }).then((confirmed) => {
+                    if (confirmed) {
+                        window.parent.addComponentToLayout(data, targetRegion, true);
+                    }
+                });
+            }
             return;
         }
         
@@ -5106,12 +5073,7 @@ async function saveComponentOrder() {
             }
         } else {
             console.error('排序失败:', result.message);
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('排序失败') ?>',
-                text: result.message || '<?= __('未知错误') ?>',
-                customClass: { container: 'swal2-dark-theme' }
-            });
+            BackendToast.error('<?= __('排序失败') ?>：' + (result.message || '<?= __('未知错误') ?>'));
             // 如果失败，恢复原来的顺序
             if (typeof refreshPreview === 'function') {
                 refreshPreview();
@@ -5119,12 +5081,7 @@ async function saveComponentOrder() {
         }
     } catch (err) {
         console.error('排序错误:', err);
-        Swal.fire({
-            icon: 'error',
-            title: '<?= __('排序失败') ?>',
-            text: err.message || '<?= __('未知错误') ?>',
-            customClass: { container: 'swal2-dark-theme' }
-        });
+        BackendToast.error('<?= __('排序失败') ?>：' + (err.message || '<?= __('未知错误') ?>'));
         // 如果出错，恢复原来的顺序
         if (typeof refreshPreview === 'function') {
             refreshPreview();
@@ -5150,12 +5107,7 @@ window.addComponentToLayout = async function(componentData, region, replace = fa
     }
     
     if (!pageId) {
-        Swal.fire({
-            icon: 'error',
-            title: '<?= __('错误') ?>',
-            text: '<?= __('页面ID未定义，请刷新页面重试') ?>',
-            customClass: { container: 'swal2-dark-theme' }
-        });
+        BackendToast.error('<?= __('错误：页面ID未定义，请刷新页面重试') ?>');
         return;
     }
     
@@ -5190,31 +5142,14 @@ window.addComponentToLayout = async function(componentData, region, replace = fa
                 refreshPreview({ scrollX: savedScrollX, scrollY: savedScrollY });
             }
             
-            Swal.fire({
-                icon: 'success',
-                title: '<?= __('组件已添加') ?>',
-                text: componentData.name + ' - ' + region,
-                timer: 1500,
-                showConfirmButton: false,
-                customClass: { container: 'swal2-dark-theme' }
-            });
+            BackendToast.success('<?= __('组件已添加') ?>：' + componentData.name + ' - ' + region);
         } else {
             console.error('❌ API返回失败:', result.message);
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('添加失败') ?>',
-                text: result.message || '<?= __('未知错误') ?>',
-                customClass: { container: 'swal2-dark-theme' }
-            });
+            BackendToast.error('<?= __('添加失败') ?>：' + (result.message || '<?= __('未知错误') ?>'));
         }
     } catch (error) {
         console.error('❌ 添加组件失败:', error);
-        Swal.fire({
-            icon: 'error',
-            title: '<?= __('添加失败') ?>',
-            text: error.message || '<?= __('网络错误') ?>',
-            customClass: { container: 'swal2-dark-theme' }
-        });
+        BackendToast.error('<?= __('添加失败') ?>：' + (error.message || '<?= __('网络错误') ?>'));
     }
 };
 
@@ -5240,22 +5175,12 @@ window.editComponentInPreview = async function(wrapper) {
     }
     
     if (!pageId) {
-        Swal.fire({
-            icon: 'error',
-            title: '<?= __('错误') ?>',
-            text: '<?= __('页面ID未定义') ?>',
-            customClass: { container: 'swal2-dark-theme' }
-        });
+        BackendToast.error('<?= __('错误：页面ID未定义') ?>');
         return;
     }
     
     // 显示加载中
-    Swal.fire({
-        title: '<?= __('加载配置...') ?>',
-        allowOutsideClick: false,
-        customClass: { container: 'swal2-dark-theme' },
-        didOpen: () => { Swal.showLoading(); }
-    });
+    BackendToast.info('<?= __('加载配置...') ?>', 2000);
     
     try {
         // 获取组件实际所属的模板代码（优先从组件 wrapper 获取，支持跨模板组件）
@@ -5391,21 +5316,15 @@ window.editComponentInPreview = async function(wrapper) {
         
         formHtml += '</div>';
         
-        // 显示配置弹窗（适配后端暗色主题）
-        const result = await Swal.fire({
+        // 显示配置弹窗（使用自定义 Bootstrap Modal）
+        const result = await showComponentConfigModal({
             title: '<?= __('组件配置') ?> - ' + (metadata.name || componentCode),
             html: formHtml,
-            width: 520,
-            showCancelButton: true,
-            confirmButtonText: '<?= __('保存') ?>',
-            cancelButtonText: '<?= __('取消') ?>',
-            customClass: {
-                container: 'swal2-dark-theme',
-                popup: 'swal2-dark-popup'
-            },
-            didOpen: () => {
+            confirmText: '<?= __('保存') ?>',
+            cancelText: '<?= __('取消') ?>',
+            onOpen: (modalElement) => {
                 // 颜色选择器同步
-                document.querySelectorAll('.swal2-popup input[type="color"]').forEach(colorInput => {
+                modalElement.querySelectorAll('input[type="color"]').forEach(colorInput => {
                     const textInput = document.getElementById(colorInput.id + '_text');
                     if (textInput) {
                         colorInput.addEventListener('input', () => {
@@ -5469,20 +5388,14 @@ window.editComponentInPreview = async function(wrapper) {
                                 }
                                 
                                 if (filledCount > 0) {
-                                    // 显示成功提示
-                                    const toast = document.createElement('div');
-                                    toast.className = 'ai-success-toast';
-                                    toast.innerHTML = '<i class="mdi mdi-check-circle"></i> <?= __('已生成') ?> ' + filledCount + ' <?= __('个配置项') ?>';
-                                    toast.style.cssText = 'position: fixed; top: 20px; right: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13px; z-index: 99999; animation: fadeInOut 3s ease-in-out;';
-                                    document.body.appendChild(toast);
-                                    setTimeout(() => toast.remove(), 3000);
+                                    BackendToast.success('<?= __('已生成') ?> ' + filledCount + ' <?= __('个配置项') ?>');
                                 }
                             } else {
-                                alert(data.message || '<?= __('生成失败') ?>');
+                                BackendToast.error(data.message || '<?= __('生成失败') ?>');
                             }
                         } catch (error) {
                             console.error('AI生成组件配置错误:', error);
-                            alert('<?= __('生成请求失败，请稍后重试') ?>');
+                            BackendToast.error('<?= __('生成请求失败，请稍后重试') ?>');
                         } finally {
                             aiBtn.disabled = false;
                             aiBtn.innerHTML = originalHtml;
@@ -5495,19 +5408,14 @@ window.editComponentInPreview = async function(wrapper) {
         if (result.isConfirmed) {
             // 收集配置数据
             const newConfig = { ...currentConfig };
-            document.querySelectorAll('.swal2-popup [data-field]').forEach(input => {
+            document.querySelectorAll('.weline-component-config-modal [data-field]').forEach(input => {
                 const fieldKey = input.getAttribute('data-field');
                 newConfig[fieldKey] = input.value;
             });
             
             
             // 显示保存中
-            Swal.fire({
-                title: '<?= __('保存中...') ?>',
-                allowOutsideClick: false,
-                customClass: { container: 'swal2-dark-theme' },
-                didOpen: () => { Swal.showLoading(); }
-            });
+            BackendToast.info('<?= __('保存中...') ?>', 2000);
             
             // 调用API保存配置
             const saveResponse = await fetch('<?= $this->getBackendUrl('*/backend/visual/api/component/updateConfig') ?>', {
@@ -5528,13 +5436,7 @@ window.editComponentInPreview = async function(wrapper) {
             const saveResult = await saveResponse.json();
             
             if (saveResult.success) {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('保存成功') ?>',
-                    timer: 1500,
-                    showConfirmButton: false,
-                    customClass: { container: 'swal2-dark-theme' }
-                });
+                BackendToast.success('<?= __('保存成功') ?>');
                 
                 // 刷新预览，传入编辑前保存的滚动位置
                 if (typeof refreshPreview === 'function') {
@@ -5547,14 +5449,65 @@ window.editComponentInPreview = async function(wrapper) {
         
     } catch (error) {
         console.error('❌ 编辑组件失败:', error);
-        Swal.fire({
-            icon: 'error',
-            title: '<?= __('编辑失败') ?>',
-            text: error.message || '<?= __('未知错误') ?>',
-            customClass: { container: 'swal2-dark-theme' }
-        });
+        BackendToast.error('<?= __('编辑失败') ?>：' + (error.message || '<?= __('未知错误') ?>'));
     }
 };
+
+// 组件配置 Modal 函数（替代 Swal.fire 表单弹窗）
+function showComponentConfigModal(options) {
+    return new Promise((resolve) => {
+        const modalId = 'componentConfigModal_' + Date.now();
+        
+        // 创建 modal HTML
+        const modalHtml = `
+            <div class="modal fade weline-component-config-modal" id="${modalId}" tabindex="-1" aria-hidden="true" style="z-index: 10000;">
+                <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width: 520px;">
+                    <div class="modal-content" style="background: var(--backend-color-card-bg); border: 1px solid var(--backend-color-border); border-radius: 8px;">
+                        <div class="modal-header" style="border-bottom: 1px solid var(--backend-color-border); padding: 12px 16px;">
+                            <h5 class="modal-title" style="color: var(--backend-color-text-primary); font-size: 16px; font-weight: 600;">${options.title || '<?= __('配置') ?>'}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="filter: var(--backend-btn-close-filter, none);"></button>
+                        </div>
+                        <div class="modal-body" style="padding: 16px; max-height: 60vh; overflow-y: auto;">
+                            ${options.html || ''}
+                        </div>
+                        <div class="modal-footer" style="border-top: 1px solid var(--backend-color-border); padding: 12px 16px; gap: 8px;">
+                            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">${options.cancelText || '<?= __('取消') ?>'}</button>
+                            <button type="button" class="btn btn-primary btn-sm" id="${modalId}_confirmBtn">${options.confirmText || '<?= __('确定') ?>'}</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // 插入到 body
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modalElement = document.getElementById(modalId);
+        const modal = new bootstrap.Modal(modalElement, { backdrop: 'static', keyboard: false });
+        
+        // 确认按钮事件
+        const confirmBtn = document.getElementById(modalId + '_confirmBtn');
+        confirmBtn.addEventListener('click', () => {
+            modal.hide();
+            resolve({ isConfirmed: true });
+        });
+        
+        // 关闭/取消事件
+        modalElement.addEventListener('hidden.bs.modal', () => {
+            // 如果还没有确认过，说明是取消
+            modalElement.remove();
+        });
+        
+        // 显示 modal
+        modal.show();
+        
+        // 触发 onOpen 回调
+        if (typeof options.onOpen === 'function') {
+            modalElement.addEventListener('shown.bs.modal', () => {
+                options.onOpen(modalElement);
+            }, { once: true });
+        }
+    });
+}
 
 // HTML 转义函数
 function escapeHtml(text) {
@@ -5585,29 +5538,18 @@ window.removeComponentInPreview = async function(wrapper) {
         console.warn('无法获取滚动位置:', e);
     }
     
-    const result = await Swal.fire({
+    const confirmed = await BackendConfirm.show('<?= __('确定要删除此组件吗？') ?>', {
         title: '<?= __('删除组件？') ?>',
-        text: '<?= __('确定要删除此组件吗？') ?>',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: '<?= __('确认删除') ?>',
-        cancelButtonText: '<?= __('取消') ?>',
-        confirmButtonColor: '#d33',
-        customClass: { container: 'swal2-dark-theme' }
+        confirmText: '<?= __('确认删除') ?>',
+        cancelText: '<?= __('取消') ?>',
+        type: 'danger'
     });
     
-    if (!result.isConfirmed) return;
+    if (!confirmed) return;
     
     try {
         // 显示加载提示
-        Swal.fire({
-            title: '<?= __('删除中...') ?>',
-            allowOutsideClick: false,
-            customClass: { container: 'swal2-dark-theme' },
-            didOpen: () => {
-                Swal.showLoading();
-            }
-        });
+        BackendToast.info('<?= __('删除中...') ?>', 2000);
         
         const requestData = {
             page_id: pageId,
@@ -5639,30 +5581,13 @@ window.removeComponentInPreview = async function(wrapper) {
                 refreshPreview({ scrollX: savedScrollX, scrollY: savedScrollY });
             }
             
-            Swal.fire({
-                icon: 'success',
-                title: '<?= __('已删除') ?>',
-                text: data.is_global ? '<?= __('全局组件已删除') ?>' : '',
-                timer: 1500,
-                showConfirmButton: false,
-                customClass: { container: 'swal2-dark-theme' }
-            });
+            BackendToast.success(data.is_global ? '<?= __('全局组件已删除') ?>' : '<?= __('已删除') ?>');
         } else {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('删除失败') ?>',
-                text: data.message || '<?= __('未知错误') ?>',
-                customClass: { container: 'swal2-dark-theme' }
-            });
+            BackendToast.error('<?= __('删除失败') ?>：' + (data.message || '<?= __('未知错误') ?>'));
         }
     } catch (error) {
         console.error('❌ 删除组件失败:', error);
-        Swal.fire({
-            icon: 'error',
-            title: '<?= __('删除失败') ?>',
-            text: error.message || '<?= __('网络错误') ?>',
-            customClass: { container: 'swal2-dark-theme' }
-        });
+        BackendToast.error('<?= __('删除失败') ?>：' + (error.message || '<?= __('网络错误') ?>'));
     }
 };
 

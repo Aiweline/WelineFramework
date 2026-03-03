@@ -59,7 +59,7 @@ class ComponentService
             
             // 如果有错误且不是强制模式，返回警告但仍继续扫描
             if (!$validation['valid'] && !$throwOnError) {
-                error_log("[ComponentService] 模板 {$styleCode} 组件验证有错误: " . implode('; ', $validation['errors']));
+                w_log_error("[ComponentService] 模板 {$styleCode} 组件验证有错误: " . implode('; ', $validation['errors']));
             }
         }
         
