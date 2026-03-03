@@ -13,7 +13,8 @@ declare(strict_types=1);
 namespace Weline\BackendActivity\Observer;
 
 use Weline\Acl\Model\Acl;
-use Weline\Backend\Session\BackendSession;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
 use Weline\BackendActivity\Model\BackendActivityLog;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -24,13 +25,13 @@ use Weline\Framework\Output\Log;
 class BackendControllerInit implements ObserverInterface
 {
     private Request $request;
-    private BackendSession $backendSession;
+    private AuthenticatedSessionInterface $backendSession;
     private Acl $acl;
 
-    function __construct(Request $request, BackendSession $backendSession, Acl $acl)
+    function __construct(Request $request, Acl $acl)
     {
         $this->request = $request;
-        $this->backendSession = $backendSession;
+        $this->backendSession = SessionFactory::getInstance()->createBackendSession();
         $this->acl = $acl;
     }
 
@@ -56,7 +57,7 @@ class BackendControllerInit implements ObserverInterface
         $activityLogger = ObjectManager::getInstance(BackendActivityLog::class);
         try {
             $activityLogger->setName($name)
-                ->setUserId($this->backendSession->getLoginUserID() ?? 0)
+                ->setUserId($this->backendSession->getUserId() ?? 0)
                 ->setAclId(intval($acl->getAclId()))
                 ->setPath($this->request->getRouteUrlPath())
                 ->setModule($this->request->getData('router/module'))
