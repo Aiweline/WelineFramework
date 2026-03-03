@@ -85,7 +85,7 @@ class ContentUpdateObserver
                 }
             }
         } catch (\Exception $e) {
-            error_log('ContentUpdateObserver error: ' . $e->getMessage());
+            w_log_error('ContentUpdateObserver error: ' . $e->getMessage());
         }
     }
 
@@ -170,7 +170,7 @@ class ContentUpdateObserver
                 $pushService->pushFeed($feed, $platform, null, \Weline\GenerativeEngineOptimization\Model\PushLog::TYPE_AUTO);
             }
         } catch (\Exception $e) {
-            error_log('Auto push error: ' . $e->getMessage());
+            w_log_error('Auto push error: ' . $e->getMessage());
         }
     }
 }

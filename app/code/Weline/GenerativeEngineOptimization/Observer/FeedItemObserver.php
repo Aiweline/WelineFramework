@@ -51,7 +51,7 @@ class FeedItemObserver implements ObserverInterface
                     break;
             }
         } catch (\Exception $e) {
-            error_log("FeedItemObserver error [{$eventName}]: " . $e->getMessage());
+            w_log_error("FeedItemObserver error [{$eventName}]: " . $e->getMessage());
         }
     }
 
@@ -65,7 +65,7 @@ class FeedItemObserver implements ObserverInterface
     {
         // 验证必需字段
         if (empty($data['feed_id']) || empty($data['item_type']) || empty($data['item_id'])) {
-            error_log('FeedItemObserver: Missing required fields for feed_item_add');
+            w_log_warning('FeedItemObserver: Missing required fields for feed_item_add');
             return;
         }
 
@@ -107,7 +107,7 @@ class FeedItemObserver implements ObserverInterface
     {
         // 验证必需字段
         if (empty($data['feed_id']) || empty($data['item_type']) || empty($data['item_id'])) {
-            error_log('FeedItemObserver: Missing required fields for feed_item_update');
+            w_log_warning('FeedItemObserver: Missing required fields for feed_item_update');
             return;
         }
 
@@ -140,7 +140,7 @@ class FeedItemObserver implements ObserverInterface
     {
         // 验证必需字段
         if (empty($data['feed_id']) || empty($data['item_type']) || empty($data['item_id'])) {
-            error_log('FeedItemObserver: Missing required fields for feed_item_delete');
+            w_log_warning('FeedItemObserver: Missing required fields for feed_item_delete');
             return;
         }
 
@@ -247,7 +247,7 @@ class FeedItemObserver implements ObserverInterface
             // 入队推送任务（空数组表示所有平台）
             $queueService->enqueueFeedPush($feed->getId(), [], \Weline\GenerativeEngineOptimization\Model\PushLog::TYPE_AUTO);
         } catch (\Exception $e) {
-            error_log('Enqueue auto push error: ' . $e->getMessage());
+            w_log_error('Enqueue auto push error: ' . $e->getMessage());
         }
     }
 }
