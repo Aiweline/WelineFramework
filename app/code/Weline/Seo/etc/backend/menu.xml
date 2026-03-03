@@ -2,58 +2,45 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <!-- SEO 管理主菜单 -->
-    <add source="Weline_Seo::seo_management"
-         name="seo_management"
-         title="SEO管理"
-         action=""
-         parent="Weline_Backend::business_module"
-         icon="mdi mdi-google-analytics"
-         order="5000"/>
+    
+    <!-- SEO 管理 - 归入应用工具 > SEO管理 -->
+    <menu source="Weline_Seo::seo_dashboard"
+          name="seo_dashboard"
+          title="SEO总览"
+          action="seo/backend/dashboard"
+          parent="Weline_Backend::seo_group"
+          icon="mdi mdi-view-dashboard-outline"
+          order="10"/>
 
-    <add source="Weline_Seo::seo_dashboard"
-         name="seo_dashboard"
-         title="SEO总览"
-         action="seo/backend/dashboard"
-         parent="Weline_Seo::seo_management"
-         icon="mdi mdi-view-dashboard-outline"
-         order="10"/>
+    <menu source="Weline_Seo::seo_subject_detail"
+          name="seo_subject_detail"
+          title="主体详情"
+          action="seo/backend/dashboard/subject"
+          parent="Weline_Backend::seo_group"
+          icon="mdi mdi-file-chart-outline"
+          order="20"/>
 
-    <add source="Weline_Seo::seo_subject_detail"
-         name="seo_subject_detail"
-         title="主体详情"
-         action="seo/backend/dashboard/subject"
-         parent="Weline_Seo::seo_management"
-         icon="mdi mdi-file-chart-outline"
-         order="20"/>
+    <menu source="Weline_Seo::seo_account"
+          name="seo_account"
+          title="SEO账户"
+          action="seo/backend/account/index"
+          parent="Weline_Backend::seo_group"
+          icon="mdi mdi-account-key-outline"
+          order="30"/>
 
-    <!-- SEO 账户管理 -->
-    <add source="Weline_Seo::seo_account"
-         name="seo_account"
-         title="SEO账户"
-         action="seo/backend/account/index"
-         parent="Weline_Seo::seo_management"
-         icon="mdi mdi-account-key"
-         order="30"/>
+    <menu source="Weline_Seo::website_account"
+          name="website_account"
+          title="站点账户绑定"
+          action="seo/backend/websiteAccount"
+          parent="Weline_Backend::seo_group"
+          icon="mdi mdi-link-variant"
+          order="40"/>
 
-    <!-- 站点SEO账户关联 -->
-    <add source="Weline_Seo::website_account"
-         name="website_account"
-         title="站点账户绑定"
-         action="seo/backend/websiteAccount"
-         parent="Weline_Seo::seo_management"
-         icon="mdi mdi-link-variant"
-         order="35"/>
-
-    <!-- Sitemap 管理 -->
-    <add source="Weline_Seo::sitemap_management"
-         name="sitemap_management"
-         title="Sitemap管理"
-         action="seo/backend/sitemap"
-         parent="Weline_Seo::seo_management"
-         icon="mdi mdi-sitemap"
-         order="40"/>
+    <menu source="Weline_Seo::sitemap_management"
+          name="sitemap_management"
+          title="Sitemap管理"
+          action="seo/backend/sitemap"
+          parent="Weline_Backend::seo_group"
+          icon="mdi mdi-sitemap-outline"
+          order="50"/>
 </menus>
-
-
-
