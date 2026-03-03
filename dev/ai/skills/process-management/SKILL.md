@@ -227,6 +227,45 @@ Processer::removePidFile($processName);  // 清理残留
 
 **重要**：`var/process/pid` 目录累积文件的原因就是直接 `killByPid`/`killProcessByPort` 而没有清理 PID 文件！
 
+### 5. 优雅停止与批量管理（2026-03 新增）
+
+WLS 场景下，Worker 需要更长时间处理完当前请求再退出。以下方法提供可配置超时的优雅停止：
+
+```php
+// ✅ 优雅停止单个进程（带超时）
+// 先发 SIGTERM，等待 $timeout 秒，仍存活则 SIGKILL
+$success = Processer::gracefulKill($pid, timeout: 5.0);
+
+// ✅ 批量优雅停止多个进程
+// 同时向所有进程发 SIGTERM，统一等待，超时后统一 SIGKILL
+// 比逐个停止更高效，因为所有进程可以并行处理退出逻辑
+$result = Processer::batchGracefulKill($pids, timeout: 5.0);
+// 返回: ['killed' => 3, 'failed' => 0, 'remaining' => []]
+
+// ✅ 批量检查进程状态
+$statuses = Processer::batchCheckRunning([1234, 5678, 9012]);
+// 返回: [1234 => true, 5678 => false, 9012 => true]
+
+// ✅ 等待多个进程退出
+$result = Processer::waitForExit($pids, timeout: 5.0);
+// 返回: ['exited' => [1234, 5678], 'remaining' => [9012]]
+
+// ✅ 按进程名前缀优雅停止（适合停止某实例的所有 Worker）
+$result = Processer::gracefulKillByPrefix('weline-master-default-', timeout: 5.0);
+// 返回: ['killed' => 4, 'failed' => 0]
+```
+
+**场景对比**：
+
+| 场景 | 推荐方法 | 说明 |
+|-----|---------|------|
+| 停止单个已知进程 | `destroy($pname)` | 最常用，自动清理 PID 文件 |
+| 需要更长等待时间 | `gracefulKill($pid, 10.0)` | 如 Worker 处理大请求 |
+| 停止多个进程 | `batchGracefulKill($pids)` | 并行发送信号更高效 |
+| 停止实例所有 Worker | `gracefulKillByPrefix('weline-master-default-')` | 按前缀匹配并批量停止 |
+| 检查多个进程状态 | `batchCheckRunning($pids)` | 批量返回状态 |
+| 等待进程自然退出 | `waitForExit($pids)` | 不发信号，仅等待 |
+
 #### 按前缀杀逃逸进程（var/process + killByProcessNamePrefix）
 
 进程名在 `var/process/pid/name_index.json` 中有索引。杀逃逸 Master 时：先用 **getProcessNamesByPrefix** 从 var/process 按前缀枚举匹配的进程名，再调用 **killByProcessNamePrefix** 按前缀杀（仅杀框架己方进程）。
@@ -499,6 +538,21 @@ if (\function_exists('posix_kill')) {
 4. **进程名只用于** - 注册进程、判断是否可以安全杀死（避免误杀非框架进程）
 5. **端口检测** - 启动服务前检查端口可用性
 6. **使用 `destroy()` 清理** - 确保清理 PID 和日志文件
+
+### WLS 高可用控制面（2026-03 更新）
+
+当遇到“子进程窗口累积/孤儿进程增多/PID 不可信”时，优先采用以下策略：
+
+1. **Single Writer**：仅 Master/Orchestrator 控制进程生命周期，子进程禁止复活 Master。
+2. **代际隔离**：进程身份以 `process_name + epoch + launch_id` 为主，PID 只作观测值。
+3. **持续收敛**：周期执行 reconcile（补齐缺失、回收超额、清理旧 epoch）。
+4. **周期扫尾**：按前缀执行 orphan sweeper + stale pid file 清理。
+
+常见误区：
+- 误区1：把 Windows 非阻塞启动返回的瞬时 PID 当真实 PID。
+- 误区2：让 Worker/Dispatcher/Redirect 进程在断连时各自复活 Master。
+- 误区3：仅依赖一次 stop/restart 操作，不做持续状态收敛。
+- 误区4：把重型 orphan sweeper（按前缀 kill）放到主循环高频执行，导致 IPC 轮询被阻塞、`register_timeout` 误判。
 
 ## 检测流程（必须遵循！）
 

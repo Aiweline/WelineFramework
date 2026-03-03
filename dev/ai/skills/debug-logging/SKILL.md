@@ -327,77 +327,300 @@ Debug::env('item', false, 100);     // 改为调试 id=100
 
 ---
 
-## Env 日志方法（框架级日志）
+## 统一日志系统（唯一标准）⭐⭐⭐
 
-除了 `agent_log()` 用于调试外，框架还提供 `Env::log_*` 方法用于生产环境日志记录：
+**框架日志 API 已统一为 `w_log_*()` 全局函数，这是唯一推荐的日志方式！**
 
-### 方法签名
+### 设计原则（SOLID）
+
+- **单一职责 (SRP)**：`w_log_*` 专注日志记录，不混杂文件名参数
+- **开闭原则 (OCP)**：通过 LoggerFactory 可扩展不同 Handler
+- **依赖倒置 (DIP)**：依赖 LoggerInterface 抽象，不依赖具体实现
+
+### 全局日志函数（唯一标准）
 
 ```php
-// 通用日志方法
-Env::log(
-    string $filename,        // 日志文件名（不含路径，自动添加 .log）
-    string $content,         // 日志消息内容
-    string $level = 'INFO',  // 日志级别: INFO, ERROR, WARNING, NOTICE, DEBUG, QUERY
-    bool $compact = true,    // true=紧凑单行格式, false=详细多行格式
-    bool $append = true,     // true=追加, false=覆盖
-    int $debug_level = 0     // 回溯深度（0=立即调用者）
-): bool
+// 记录任意级别的日志
+w_log(string $level, string $message, array $context = [], ?string $channel = null): void
 
 // 便捷方法（PSR-3 风格）
-Env::log_error(string $filename, string $message): bool
-Env::log_warning(string $filename, string $message): bool
-Env::log_info(string $filename, string $message): bool
-Env::log_debug(string $filename, string $message): bool
-Env::log_notice(string $filename, string $message): bool
+w_log_error(string $message, array $context = [], ?string $channel = null): void
+w_log_warning(string $message, array $context = [], ?string $channel = null): void
+w_log_info(string $message, array $context = [], ?string $channel = null): void
+w_log_debug(string $message, array $context = [], ?string $channel = null): void
+w_log_notice(string $message, array $context = [], ?string $channel = null): void
+w_log_critical(string $message, array $context = [], ?string $channel = null): void
+w_log_alert(string $message, array $context = [], ?string $channel = null): void
+w_log_emergency(string $message, array $context = [], ?string $channel = null): void
 
-// SQL 查询日志
-Env::sql_log(string $filename, string $sql, bool $compact = true): bool
+// 异常日志
+w_log_exception(\Throwable $exception, ?string $message = null, ?string $channel = null): void
+
+// SQL 日志
+w_log_sql(string $sql, array $bindings = [], ?float $executionTime = null): void
+
+// 获取日志实例
+w_logger(?string $channel = null): LoggerInterface
+```
+
+### 使用示例
+
+```php
+// 简单日志
+w_log_info('User logged in');
+
+// 带上下文的日志
+w_log_info('User {user} logged in from {ip}', [
+    'user' => $username,
+    'ip' => $clientIp,
+]);
+
+// 指定通道
+w_log_error('Payment failed', ['order_id' => $orderId], 'payment');
+
+// 异常日志
+try {
+    // ...
+} catch (\Exception $e) {
+    w_log_exception($e, 'Failed to process order');
+}
+
+// 获取日志实例
+$logger = w_logger('my_module');
+$logger->info('Processing started');
+$logger->error('Processing failed');
+```
+
+### 日志级别
+
+| 级别 | 值 | 说明 |
+|------|-----|------|
+| EMERGENCY | 800 | 系统不可用 |
+| ALERT | 700 | 必须立即采取行动 |
+| CRITICAL | 600 | 紧急情况 |
+| ERROR | 500 | 运行时错误 |
+| WARNING | 400 | 警告 |
+| NOTICE | 300 | 普通但重要的事件 |
+| INFO | 200 | 有趣的事件 |
+| DEBUG | 100 | 详细的调试信息 |
+
+### 日志配置（env.php）
+
+```php
+'log' => [
+    'min_level' => 'INFO',           // 全局最小级别
+    'path' => 'var/log',             // 日志目录
+    'rotate' => [
+        'strategy' => 'daily',       // 轮转策略：daily, size, none
+        'max_files' => 7,            // 最大保留文件数
+    ],
+    'channels' => [
+        'sql' => ['enabled' => false, 'min_level' => 'DEBUG'],
+    ],
+    'module_levels' => [
+        'Weline_Framework' => 'WARNING',  // 模块级别覆盖
+    ],
+    'include_trace' => true,         // 启用链路追踪 ID（默认开启）
+],
+```
+
+---
+
+## 链路追踪（Tracing）⭐
+
+框架内置链路追踪支持，每个请求自动生成唯一的 Trace ID，便于：
+- 跨服务/模块的日志关联
+- 请求链路分析
+- 分布式系统调试
+
+### 日志输出示例
+
+**紧凑格式：**
+```
+[2026-03-01 12:00:00.123456] [INFO] [abc12345] payment:Order.php:50 - Order created
+[2026-03-01 12:00:00.234567] [INFO] [abc12345] payment:Payment.php:100 - Payment processed
+[2026-03-01 12:00:00.345678] [ERROR] [abc12345] payment:Email.php:200 - Failed to send email
+```
+
+同一请求的日志有相同的 Trace ID `[abc12345]`，可以快速过滤。
+
+**详细格式：**
+```
+================================================================================
+[2026-03-01 12:00:00.123456] [INFO] [payment]
+Trace ID: abc1234567890def1234567890abcdef
+Span ID: 1234567890abcdef
+Request Duration: 123.45ms
+File: app/code/Payment/Service/Order.php
+Line: 50
+Message: Order created
+Context: {"order_id": "12345"}
+--------------------------------------------------------------------------------
+```
+
+### 分布式追踪（W3C 标准）
+
+支持通过 HTTP 请求头传入外部 Trace ID：
+
+```bash
+# 自定义请求头
+curl -H "X-Trace-Id: my-trace-id-12345" https://example.com/api
+
+# W3C traceparent 标准
+curl -H "traceparent: 00-abc1234567890def1234567890abcdef-1234567890abcdef-01" https://example.com/api
+```
+
+### 在代码中使用 TraceContext
+
+```php
+use Weline\Framework\Log\Context\TraceContext;
+
+// 获取当前请求的 Trace ID
+$traceId = TraceContext::getTraceId();
+// 返回：abc1234567890def1234567890abcdef
+
+// 获取短格式（前 8 位，用于日志显示）
+$shortId = substr(TraceContext::getTraceId(), 0, 8);
+// 返回：abc12345
+
+// 获取 Span ID
+$spanId = TraceContext::getSpanId();
+
+// 获取请求耗时（毫秒）
+$duration = TraceContext::getRequestDuration();
+
+// 创建子 Span（用于追踪子操作）
+$childSpan = TraceContext::createChildSpan();
+// 返回：['span_id' => '...', 'parent_span_id' => '...']
+
+// 设置响应头（返回 Trace ID 给客户端）
+TraceContext::setResponseHeaders();
+// 设置：X-Trace-Id: ..., X-Span-Id: ...
+
+// 重置（WLS 模式下每个请求结束后调用）
+TraceContext::reset();
+```
+
+### 配置开关
+
+```php
+// env.php
+'log' => [
+    'include_trace' => true,  // 开启（默认）
+    // 'include_trace' => false, // 关闭链路追踪
+],
+```
+
+### JSON 格式日志中的链路追踪
+
+使用 `JsonLineFormatter` 时，链路追踪信息会自动包含：
+
+```json
+{
+  "@timestamp": "2026-03-01T12:00:00.123456+08:00",
+  "level": "info",
+  "channel": "payment",
+  "message": "Order created",
+  "trace_id": "abc1234567890def1234567890abcdef",
+  "span_id": "1234567890abcdef",
+  "parent_span_id": "abcdef1234567890",
+  "request_duration_ms": 123.45,
+  "context": {"order_id": "12345"},
+  "file": "app/code/Payment/Service/Order.php",
+  "line": 50,
+  "pid": 12345
+}
 ```
 
 ### 日志文件位置
 
 | 日志类型 | 默认路径 | 用途 |
 |----------|----------|------|
-| 错误日志 | `var/log/error.log` | `Env::log_error()` |
-| 异常日志 | `var/log/exception.log` | 异常记录 |
-| 警告日志 | `var/log/warning.log` | `Env::log_warning()` |
-| 通知日志 | `var/log/notice.log` | `Env::log_notice()` |
-| 调试日志 | `var/log/debug.log` | `Env::log_debug()` / `Debug::log()` |
+| 错误日志 | `var/log/error.log` | `w_log_error()` |
+| 异常日志 | `var/log/exception.log` | `w_log_exception()` |
+| 警告日志 | `var/log/warning.log` | `w_log_warning()` |
+| 通知日志 | `var/log/notice.log` | `w_log_notice()` |
+| 调试日志 | `var/log/debug.log` | `w_log_debug()` |
+| SQL 日志 | `var/log/sql.log` | `w_log_sql()` |
 | Agent 调试 | `.cursor/debug.log` | `agent_log()` |
 | WLS 日志 | `var/log/wls.log` | WLS 请求/错误日志 |
-| WLS 性能 | `var/log/wls_timing.log` | WLS 性能监控 |
+| 自定义通道 | `var/log/{channel}.log` | `w_log_*(..., 'channel')` |
 
-### 使用示例
+---
 
-```php
-use Weline\Framework\App\Env;
-
-// 记录错误
-Env::log_error('my_module', '操作失败：' . $e->getMessage());
-
-// 记录警告
-Env::log_warning('my_module', '配置缺失，使用默认值');
-
-// 记录调试信息
-Env::log_debug('my_module', 'SQL: ' . $sql);
-
-// 通用日志（自定义级别）
-Env::log('custom_module', '处理完成', 'INFO', true, true, 0);
-```
-
-### 禁止使用
+## 禁止使用（强制）⛔
 
 ```php
-// ❌ 禁止
-error_log('错误信息');
-echo "debug: " . $var;
-print_r($data);
+// ❌ 绝对禁止 - 原生 PHP 日志/调试输出
+error_log('错误信息');                              // 原生 PHP error_log
+error_log('[Module] Error: ' . $e->getMessage());   // 禁止！
+echo "debug: " . $var;                              // echo 调试
+print_r($data);                                     // print_r 调试
+var_dump($data);                                    // var_dump 调试
 
-// ✅ 正确
-Env::log_error('module_name', '错误信息');
-Env::log_debug('module_name', '调试信息');
+// ❌ 已废弃（框架内禁止使用）
+Env::log_error('module_name', '错误信息');          // 旧 API
+Env::log_warning('module_name', '警告信息');        // 旧 API
+Env::log_debug('module_name', '调试信息');          // 旧 API
+Env::log_info('module_name', '信息');               // 旧 API
+Env::log_notice('module_name', '通知');             // 旧 API
+
+// ✅ 唯一正确方式 - w_log_*() 函数
+w_log_error('错误信息', ['context' => $data], 'module_name');
+w_log_warning('警告信息', [], 'module_name');
+w_log_debug('调试信息', ['sql' => $sql], 'module_name');
+w_log_info('处理完成', ['result' => $result], 'module_name');
+w_log_exception($exception, '操作失败', 'module_name');
 ```
+
+### error_log() → w_log_*() 替换规则
+
+| error_log 内容特征 | 替换为 |
+|-------------------|--------|
+| 包含 `error`/`fail`/`failed`/`exception` | `w_log_error()` |
+| 包含 `warn`/`warning` | `w_log_warning()` |
+| 包含 `debug`/`🔵` | `w_log_debug()` |
+| 其他一般日志 | `w_log_info()` |
+
+**示例替换：**
+```php
+// ❌ 旧写法
+error_log('[Module] Failed to process: ' . $e->getMessage());
+error_log('Debug: processing item ' . $id);
+error_log('Warning: deprecated feature used');
+error_log('Item saved successfully');
+
+// ✅ 新写法
+w_log_error('[Module] Failed to process: ' . $e->getMessage());
+w_log_debug('Debug: processing item ' . $id);
+w_log_warning('Warning: deprecated feature used');
+w_log_info('Item saved successfully');
+```
+
+---
+
+## 迁移对照表
+
+| 旧方式（已废弃） | 新方式（唯一标准） |
+|------------------|-------------------|
+| `Env::log_error('channel', $msg)` | `w_log_error($msg, [], 'channel')` |
+| `Env::log_warning('channel', $msg)` | `w_log_warning($msg, [], 'channel')` |
+| `Env::log_info('channel', $msg)` | `w_log_info($msg, [], 'channel')` |
+| `Env::log_debug('channel', $msg)` | `w_log_debug($msg, [], 'channel')` |
+| `Env::log_notice('channel', $msg)` | `w_log_notice($msg, [], 'channel')` |
+| `Env::sql_log('channel', $sql)` | `w_log_sql($sql, [], null)` |
+| `Env::log('file', $msg, 'ERROR')` | `w_log_error($msg, [], 'file')` |
+
+---
+
+## Env 日志方法（已废弃）⚠️
+
+**`Env::log_*` 方法已废弃，框架内代码已全部迁移到 `w_log_*`。**
+
+旧 API 仍保留向后兼容（内部代理到 `w_log_*`），但：
+- ❌ **框架内代码禁止使用**
+- ❌ **新代码禁止使用**
+- ⚠️ 仅允许第三方模块过渡期使用
 
 ---
 
@@ -410,5 +633,5 @@ Env::log_debug('module_name', '调试信息');
 ---
 
 **创建日期**: 2026-02-04
-**最后更新**: 2026-02-25
-**版本**: 2.1.0（新增 Env::log_* 方法文档）
+**最后更新**: 2026-03-01
+**版本**: 3.3.0（新增 error_log 替换规则、迁移示例）

@@ -512,6 +512,16 @@ StateManager::registerResetCallback('my_reset', function () {
 #### 6. 控制器实例
 - 清理所有 `Controller\Core` 子类实例
 
+#### 6.5 Observer 实例
+- 清理所有 `ObserverInterface` 实现类实例
+- 原因：Observer 通过构造函数注入 Request，WLS 下 Observer 被缓存后仍持有旧 Request 引用
+- 典型问题：`BackendControllerInit` 的 `$this->request->getId()` 返回上一请求的 request_id，导致 BackendActivityLog 唯一约束冲突
+
+#### 6.6 Router 实例
+- 清理 `Router\Core` 实例
+- 原因：Router\Core 被 ObjectManager 缓存后，`__init()` 不会再被调用，导致 `$this->request`、`$this->area_router`、`$this->is_backend` 等属性未更新
+- 典型问题：后台请求使用前端 area_router，导致 `[Router 404] Backend route not found | area_router: frontend` 错误
+
 #### 7. 数据库连接事务
 - `ConnectionPool::requestEndCleanup()` — 回滚残留事务并归还连接
 
