@@ -9,20 +9,165 @@
 <w:js>Weline_Backend::/backend/lib/vue/vue2.6.11.js</w:js>
 <w:css>Weline_Eav::libs/bootstrap-colorpicker/bootstrap-colorpicker.min.css</w:css>
 <style>
-    .weline-queue-input-group-addon {
-        display: inline-block;
-        width: 40px;
-        height: 38px;
-        border: 1px solid var(--backend-color-border);
-        border-radius: 4px;
-    }
+.weline-queue-form {
+    background: var(--backend-color-card-bg, #fff);
+}
 
-    span.required {
-        color: red
-    }
+.weline-queue-input-group-addon {
+    display: inline-block;
+    width: 40px;
+    height: 38px;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+}
+
+span.required {
+    color: var(--backend-color-danger, #f46a6a);
+}
+
+.weline-queue-wizard-nav {
+    display: flex;
+    justify-content: space-between;
+    list-style: none;
+    padding: 0;
+    margin: 0 0 var(--backend-spacing-lg, 24px) 0;
+}
+
+.weline-queue-wizard-step {
+    flex: 1;
+    text-align: center;
+    padding: var(--backend-spacing-md, 16px);
+    cursor: pointer;
+    border-bottom: 3px solid var(--backend-color-border-light, #e9ecef);
+    transition: all 0.3s ease;
+}
+
+.weline-queue-wizard-step:hover {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+
+.weline-queue-wizard-step.active {
+    border-bottom-color: var(--backend-color-primary, #556ee6);
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.05));
+}
+
+.weline-queue-wizard-step .step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-weight: 600;
+    margin-right: 8px;
+    transition: all 0.3s ease;
+}
+
+.weline-queue-wizard-step.active .step-number {
+    background: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.weline-queue-wizard-step .step-title {
+    font-weight: 500;
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.weline-queue-wizard-step .help-block {
+    display: block;
+    font-size: 0.8125rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+    margin-top: 4px;
+}
+
+.weline-queue-type-select {
+    width: 100%;
+    min-height: 300px;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-md, 8px);
+    background: var(--backend-color-input-bg, #fff);
+}
+
+.weline-queue-type-select option {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+.weline-queue-type-select option:hover {
+    background: var(--backend-color-table-bg-hover, #f8f9fa);
+}
+
+.weline-queue-type-tip {
+    padding: var(--backend-spacing-md, 16px);
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    border-radius: var(--backend-border-radius-md, 8px);
+    border-left: 4px solid var(--backend-color-info, #50a5f1);
+    min-height: 200px;
+}
+
+.weline-queue-confirm-section {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    padding: var(--backend-spacing-lg, 24px);
+    border-radius: var(--backend-border-radius-md, 8px);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+.weline-queue-confirm-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+    margin-bottom: var(--backend-spacing-md, 16px);
+    padding-bottom: var(--backend-spacing-sm, 12px);
+    border-bottom: 2px solid var(--backend-color-primary, #556ee6);
+}
+
+.weline-queue-confirm-item {
+    display: flex;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+.weline-queue-confirm-item:last-child {
+    border-bottom: none;
+}
+
+.weline-queue-confirm-label {
+    flex: 0 0 120px;
+    font-weight: 500;
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.weline-queue-confirm-value {
+    flex: 1;
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.weline-queue-btn-group {
+    display: flex;
+    justify-content: space-between;
+    margin-top: var(--backend-spacing-lg, 24px);
+    padding-top: var(--backend-spacing-md, 16px);
+    border-top: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+.weline-queue-params-empty {
+    text-align: center;
+    padding: var(--backend-spacing-xl, 40px);
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-radius: var(--backend-border-radius-md, 8px);
+}
+
+.weline-queue-params-empty i {
+    font-size: 2.5rem;
+    margin-bottom: var(--backend-spacing-sm, 12px);
+    display: block;
+}
 </style>
 
-<div class="layout-wrapper overflow-hidden" id="QueuePage">
+<div class="weline-queue-form" id="QueuePage">
     <div class='row'>
         <template>Weline_Component::message.phtml</template>
     </div>

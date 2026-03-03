@@ -1,41 +1,254 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
-
+/**
+ * 队列类型详情页面
+ * @var \Weline\Framework\View\Template $this
+ */
 ?>
+<style>
+.weline-queue-type-detail {
+    background: var(--backend-color-card-bg, #fff);
+}
+
+.weline-queue-type-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-bottom: var(--backend-spacing-md, 16px);
+    margin-bottom: var(--backend-spacing-md, 16px);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+.weline-queue-type-detail-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary, #556ee6);
+    border-radius: var(--backend-border-radius-md, 8px);
+    font-size: 1.5rem;
+}
+
+.weline-queue-type-detail-title {
+    flex: 1;
+}
+
+.weline-queue-type-detail-title h4 {
+    margin: 0 0 4px 0;
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.weline-queue-type-detail-title p {
+    margin: 0;
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.875rem;
+}
+
+.weline-queue-type-detail-info {
+    display: grid;
+    gap: var(--backend-spacing-md, 16px);
+}
+
+.weline-queue-type-detail-row {
+    display: flex;
+    flex-wrap: wrap;
+    padding: var(--backend-spacing-sm, 12px) 0;
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+.weline-queue-type-detail-row:last-child {
+    border-bottom: none;
+}
+
+.weline-queue-type-detail-label {
+    flex: 0 0 140px;
+    font-weight: 500;
+    color: var(--backend-color-text-secondary, #6c757d);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.weline-queue-type-detail-label i {
+    font-size: 1rem;
+    opacity: 0.7;
+}
+
+.weline-queue-type-detail-value {
+    flex: 1;
+    color: var(--backend-color-text-primary, #212529);
+    word-break: break-all;
+}
+
+.weline-queue-type-detail-code {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.875rem;
+    padding: 8px 12px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-radius: var(--backend-border-radius, 6px);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+.weline-queue-type-detail-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    font-weight: 500;
+}
+
+.weline-queue-type-detail-status--enabled {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+    color: var(--backend-color-success, #34c38f);
+}
+
+.weline-queue-type-detail-status--disabled {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
+    color: var(--backend-color-danger, #f46a6a);
+}
+
+.weline-queue-type-detail-tip {
+    padding: var(--backend-spacing-md, 16px);
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    border-radius: var(--backend-border-radius-md, 8px);
+    border-left: 4px solid var(--backend-color-info, #50a5f1);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.weline-queue-type-detail-tip-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--backend-color-info, #50a5f1);
+}
+
+.weline-queue-type-detail-module {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary, #556ee6);
+    border-radius: var(--backend-border-radius-sm, 4px);
+    font-size: 0.875rem;
+}
+</style>
+
 <!-- start page message -->
-            <div class='row'>
-                <template>Weline_Component::message.phtml</template>
-            </div> <!-- end message -->
-            <div class='row'>
-                <div class='col-12'>
-                    <div class='card'>
-                        <div class='card-body'>
-                            <h4 class='card-title'>
-                                <lang>队列类型查看</lang>
-                            </h4>
-                            <p class='card-title-desc'>
-                                <lang>查看队列类型详细信息</lang>
-                            </p>
-                            <!--ID-->
-                            <p>
-                                <b><lang>ID</lang></b>
-                                : {{type.type_id}}<br></p>
-                            <p>
-                                <b><lang>队列类型名称</lang></b>
-                                : {{type.name}}<br></p>
-                            <p>
-                               <b> <lang>队列类型执行注意项</lang></b>
-                                : {{type.tip}}<br></p>
-                            <p>
-                                <b><lang>队列类型执行类</lang></b>
-                                : {{type.class}}<br></p>
-                            <p>
-                                <b><lang>创建时间</lang></b>
-                                : {{type.create_time}}<br></p>
-                            <p>
-                                <b><lang>更新时间</lang></b>
-                                : {{type.update_time}}<br></p>
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+<!-- end message -->
+
+<div class='row'>
+    <div class='col-12'>
+        <div class='card weline-queue-type-detail'>
+            <div class='card-body'>
+                <!-- Header -->
+                <div class="weline-queue-type-detail-header">
+                    <div class="weline-queue-type-detail-icon">
+                        <i class="mdi mdi-cog-sync-outline"></i>
+                    </div>
+                    <div class="weline-queue-type-detail-title">
+                        <h4>{{type.name}}</h4>
+                        <p><lang>队列类型详细信息</lang></p>
+                    </div>
+                    <if condition="type.enable == 1">
+                        <span class="weline-queue-type-detail-status weline-queue-type-detail-status--enabled">
+                            <i class="mdi mdi-check-circle"></i>
+                            <lang>已启用</lang>
+                        </span>
+                    <else/>
+                        <span class="weline-queue-type-detail-status weline-queue-type-detail-status--disabled">
+                            <i class="mdi mdi-close-circle"></i>
+                            <lang>已禁用</lang>
+                        </span>
+                    </if>
+                </div>
+                
+                <!-- Info Grid -->
+                <div class="weline-queue-type-detail-info">
+                    <div class="weline-queue-type-detail-row">
+                        <div class="weline-queue-type-detail-label">
+                            <i class="mdi mdi-identifier"></i>
+                            <lang>类型 ID</lang>
+                        </div>
+                        <div class="weline-queue-type-detail-value">
+                            <strong>{{type.type_id}}</strong>
                         </div>
                     </div>
-                </div> <!-- end col -->
-            </div> <!-- end row -->
+                    
+                    <div class="weline-queue-type-detail-row">
+                        <div class="weline-queue-type-detail-label">
+                            <i class="mdi mdi-tag-outline"></i>
+                            <lang>类型名称</lang>
+                        </div>
+                        <div class="weline-queue-type-detail-value">
+                            <strong>{{type.name}}</strong>
+                        </div>
+                    </div>
+                    
+                    <div class="weline-queue-type-detail-row">
+                        <div class="weline-queue-type-detail-label">
+                            <i class="mdi mdi-package-variant-closed"></i>
+                            <lang>所属模块</lang>
+                        </div>
+                        <div class="weline-queue-type-detail-value">
+                            <span class="weline-queue-type-detail-module">
+                                <i class="mdi mdi-puzzle"></i>
+                                {{type.module_name}}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="weline-queue-type-detail-row">
+                        <div class="weline-queue-type-detail-label">
+                            <i class="mdi mdi-code-braces"></i>
+                            <lang>执行类</lang>
+                        </div>
+                        <div class="weline-queue-type-detail-value">
+                            <div class="weline-queue-type-detail-code">{{type.class}}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="weline-queue-type-detail-row">
+                        <div class="weline-queue-type-detail-label">
+                            <i class="mdi mdi-clock-outline"></i>
+                            <lang>创建时间</lang>
+                        </div>
+                        <div class="weline-queue-type-detail-value">
+                            {{type.create_time}}
+                        </div>
+                    </div>
+                    
+                    <div class="weline-queue-type-detail-row">
+                        <div class="weline-queue-type-detail-label">
+                            <i class="mdi mdi-update"></i>
+                            <lang>更新时间</lang>
+                        </div>
+                        <div class="weline-queue-type-detail-value">
+                            {{type.update_time}}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tip Section -->
+                <notempty name="type.tip">
+                    <div class="weline-queue-type-detail-tip mt-4">
+                        <div class="weline-queue-type-detail-tip-title">
+                            <i class="mdi mdi-information-outline"></i>
+                            <lang>执行注意事项</lang>
+                        </div>
+                        <div>{{type.tip}}</div>
+                    </div>
+                </notempty>
+            </div>
+        </div>
+    </div>
+</div>
