@@ -73,24 +73,23 @@ class HealthCheck implements CronTaskInterface
             $results = $healthService->checkAllDomains();
             
             // 构建结果消息
-            $message = \sprintf(
-                __('健康检查完成：共 %{1} 个域名，健康 %{2} 个，不健康 %{3} 个，HTTPS 状态更新 %{4} 个'),
+            $message = __('健康检查完成：共 %{1} 个域名，健康 %{2} 个，不健康 %{3} 个，HTTPS 状态更新 %{4} 个', [
                 $results['total'],
                 $results['healthy'],
                 $results['unhealthy'],
                 $results['https_updated']
-            );
+            ]);
             
             // 记录日志
             if ($results['unhealthy'] > 0) {
-                \error_log('[HealthCheck] ' . $message);
+                w_log_warning('[HealthCheck] ' . $message);
             }
             
             return $message;
             
         } catch (\Throwable $e) {
             $error = __('健康检查失败：%{1}', [$e->getMessage()]);
-            \error_log('[HealthCheck] ' . $error);
+            w_log_error('[HealthCheck] ' . $error);
             return $error;
         }
     }

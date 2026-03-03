@@ -304,7 +304,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
                 'account_id' => $account->getAccountId(),
             ];
         } catch (\Throwable $e) {
-            Env::log_error('domain_management', (string)__('保存账号失败：%{1}', $e->getMessage()));
+            w_log_error((string)__('保存账号失败：%{1}', $e->getMessage()), [], 'domain_management');
             return ['success' => false, 'message' => (string)__('保存失败：%{1}', $e->getMessage())];
         }
     }
@@ -353,7 +353,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
             }
             return $adapter->getDomainList($account->getCredentials());
         } catch (\Throwable $e) {
-            Env::log_error('domain_management', (string)__('获取域名列表失败：%{1}', $e->getMessage()));
+            w_log_error((string)__('获取域名列表失败：%{1}', $e->getMessage()), [], 'domain_management');
             return [];
         }
     }
@@ -400,7 +400,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
             }
             return $results;
         } catch (\Throwable $e) {
-            Env::log_error('domain_management', (string)__('检查可用性失败：%{1}', $e->getMessage()));
+            w_log_error((string)__('检查可用性失败：%{1}', $e->getMessage()), [], 'domain_management');
             return [];
         }
     }
@@ -418,7 +418,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
             $purchaseService = ObjectManager::getInstance(DomainPurchaseService::class);
             return $purchaseService->createAndProcessOrder($accountId, $items, $autoResolve);
         } catch (\Throwable $e) {
-            Env::log_error('domain_management', (string)__('域名购买异常：%{1}', $e->getMessage()));
+            w_log_error((string)__('域名购买异常：%{1}', $e->getMessage()), [], 'domain_management');
             return ['success' => false, 'message' => (string)__('域名购买异常：%{1}', $e->getMessage())];
         }
     }
@@ -465,7 +465,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
             }
             return $adapter->getConfigFields();
         } catch (\Throwable $e) {
-            Env::log_error('domain_management', (string)__('获取配置字段失败：%{1}', $e->getMessage()));
+            w_log_error((string)__('获取配置字段失败：%{1}', $e->getMessage()), [], 'domain_management');
             return [];
         }
     }
@@ -490,7 +490,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
                 'config_help'   => $adapter->getConfigHelp(),
             ];
         } catch (\Throwable $e) {
-            Env::log_error('domain_management', (string)__('获取注册商信息失败：%{1}', $e->getMessage()));
+            w_log_error((string)__('获取注册商信息失败：%{1}', $e->getMessage()), [], 'domain_management');
             return [];
         }
     }
@@ -531,7 +531,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
             $credentials = $account->getCredentials();
             return $adapter->modifyDns($domain, $nameservers, $credentials);
         } catch (\Throwable $e) {
-            Env::log_error('domain_management', (string)__('修改 DNS 失败：%{1}', $e->getMessage()));
+            w_log_error((string)__('修改 DNS 失败：%{1}', $e->getMessage()), [], 'domain_management');
             return ['success' => false, 'message' => $e->getMessage()];
         }
     }
