@@ -261,7 +261,7 @@ class CdnQueryProvider implements QueryProviderInterface
                 'account_id' => (int)$account->getId(),
             ];
         } catch (\Throwable $e) {
-            Env::log_error('cdn_query', (string)__('保存账户失败：%{1}', $e->getMessage()));
+            w_log_error((string)__('保存账户失败：%{1}', $e->getMessage()), [], 'cdn_query');
             return ['success' => false, 'message' => (string)__('保存失败：%{1}', $e->getMessage())];
         }
     }
@@ -369,7 +369,7 @@ class CdnQueryProvider implements QueryProviderInterface
                 'data'    => $zoneInfo,
             ];
         } catch (\Throwable $e) {
-            Env::log_error('cdn_query', (string)__('ensureZone 失败：%{1}', $e->getMessage()));
+            w_log_error((string)__('ensureZone 失败：%{1}', $e->getMessage()), [], 'cdn_query');
             return ['success' => false, 'message' => $e->getMessage()];
         }
     }

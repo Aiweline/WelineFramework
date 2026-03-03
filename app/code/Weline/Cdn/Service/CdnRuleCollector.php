@@ -564,7 +564,7 @@ class CdnRuleCollector
                 $this->eventsManager->dispatch('Weline_Cdn::push_rules', $event);
             } catch (\Exception $e) {
                 // 记录错误但不中断
-                error_log("CDN实时规则推送失败 [域名: {$domain->getData(Domain::fields_DOMAIN_NAME)}]: " . $e->getMessage());
+                w_log_error("CDN实时规则推送失败 [域名: {$domain->getData(Domain::fields_DOMAIN_NAME)}]: " . $e->getMessage());
             }
         }
     }
