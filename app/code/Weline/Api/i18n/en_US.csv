@@ -77,7 +77,6 @@ API文档导入测试成功,"API documentation import test successful"
 请先登录,"Please login first"
 IP地址不在白名单中,"IP address is not in whitelist"
 用户代理不匹配,"User agent does not match"
-API文档缓存,"API Documentation Cache"
 API模块配置,API模块配置
 配置API令牌刷新周期等参数,配置API令牌刷新周期等参数
 令牌刷新配置,令牌刷新配置
@@ -165,3 +164,4 @@ API,API
 默认604800（7天），范围：86400-2592000（1-30天）,默认604800（7天），范围：86400-2592000（1-30天）
 默认2592000（30天），范围：604800-7776000（7-90天）,默认2592000（30天），范围：604800-7776000（7-90天）
 已复制到剪贴板,已复制到剪贴板
+API文档缓存,"API Documentation Cache"

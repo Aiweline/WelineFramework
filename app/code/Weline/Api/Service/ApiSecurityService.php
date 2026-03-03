@@ -62,7 +62,7 @@ class ApiSecurityService
             return true;
             
         } catch (\Exception $e) {
-            error_log('ApiSecurityService isPublicApi error: ' . $e->getMessage());
+            w_log_error('ApiSecurityService isPublicApi error: ' . $e->getMessage());
             return false;
         }
     }
