@@ -57,7 +57,7 @@ class WebsiteAccountBind implements ObserverInterface
             );
         } catch (\Exception $e) {
             // 记录错误日志，但不中断流程
-            error_log(sprintf(
+            w_log_error(sprintf(
                 '[Weline_Seo] WebsiteAccountBind error: website_id=%d, account_id=%d, error=%s',
                 $websiteId,
                 $accountId,

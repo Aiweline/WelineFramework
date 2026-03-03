@@ -93,7 +93,7 @@ class SitemapSubmit implements CronTaskInterface
                         $stats['collected_websites']++;
                     }
                 } catch (\Exception $e) {
-                    error_log(sprintf(
+                    w_log_error(sprintf(
                         '[Weline_Seo] SitemapSubmit provider error: %s - %s',
                         $provider->getModule(),
                         $e->getMessage()
@@ -130,7 +130,7 @@ class SitemapSubmit implements CronTaskInterface
                         $stats['unbound_websites'][] = $website['name'] ?? "站点ID: {$websiteId}";
                     }
                 } catch (\Exception $e) {
-                    error_log(sprintf(
+                    w_log_error(sprintf(
                         '[Weline_Seo] SitemapSubmit generate error: website_id=%d - %s',
                         $websiteId,
                         $e->getMessage()
@@ -199,7 +199,7 @@ class SitemapSubmit implements CronTaskInterface
                             $stats['errors']++;
                         }
                     } catch (\Exception $e) {
-                        error_log(sprintf(
+                        w_log_error(sprintf(
                             '[Weline_Seo] SitemapSubmit submit error: website_id=%d, account_id=%d - %s',
                             $websiteId,
                             $accountId,
@@ -223,7 +223,7 @@ class SitemapSubmit implements CronTaskInterface
                         ['source_module' => 'Weline_Seo', 'icon' => 'ri-sitemap-line']
                     );
                 } catch (\Exception $e) {
-                    error_log('[Weline_Seo] SitemapSubmit message error: ' . $e->getMessage());
+                    w_log_error('[Weline_Seo] SitemapSubmit message error: ' . $e->getMessage());
                 }
             }
 
