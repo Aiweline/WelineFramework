@@ -13,11 +13,11 @@ declare(strict_types=1);
 
 namespace Weline\Acl\Observer;
 
-use Weline\Acl\Cache\AclCache;
 use Weline\Acl\Model\Acl;
 use Weline\Acl\Model\WhiteAclSource;
-use Weline\Backend\Session\BackendSession;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Request;
@@ -27,24 +27,22 @@ use Weline\Framework\Manager\ObjectManager;
 class RouteBefore implements \Weline\Framework\Event\ObserverInterface
 {
     /**
-     * @var \Weline\Backend\Session\BackendSession
+     * @var AuthenticatedSessionInterface
      */
-    private BackendSession $session;
+    private AuthenticatedSessionInterface $session;
     /**
      * @var \Weline\Acl\Model\WhiteAclSource
      */
     private WhiteAclSource $whiteAclSource;
     /**
-     * @var CacheInterface
+     * @var CachePoolInterface
      */
-    private CacheInterface $aclCache;
+    private CachePoolInterface $aclCache;
 
     public function __construct(
-        BackendSession $session,
-        WhiteAclSource $whiteAclSource,
-        AclCache       $aclCache
+        WhiteAclSource $whiteAclSource
     )
-    {$this->session = $session;$this->whiteAclSource = $whiteAclSource;$this->aclCache = $aclCache->create();}
+    {$this->session = SessionFactory::getInstance()->createBackendSession();$this->whiteAclSource = $whiteAclSource;$this->aclCache = w_cache('acl');}
 
     /**
      * @inheritDoc
@@ -149,19 +147,20 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 $role = $eventRole;
                 $access_sources = $eventAccessSources ?? [];
             } else {
+                // WLS 兼容：从 SessionFactory 获取当前请求的 BackendSession 实例
+                // Observer 实例在 WLS 中是单例，$this->session 可能指向旧请求的 session
+                $this->session = SessionFactory::getInstance()->createBackendSession();
                 // 使用Session认证（传统方式）
                 if ($request->isApiBackend()) {
-                    // API请求：优先使用BackendApiSession，其次BackendSession
-                    $backendApiSession = ObjectManager::getInstance(\Weline\Framework\App\Session\BackendApiSession::class);
-                    if ($backendApiSession->isLogin()) {
-                        $user = $backendApiSession->getApiUser();
-                    } elseif ($this->session->isLogin()) {
-                        $user = $this->session->getLoginUser();
+                    // API后台请求：使用统一的 BackendSession
+                    // API Token 认证已由 Api\Observer\ApiControllerInitBefore 处理
+                    if ($this->session->isLoggedIn()) {
+                        $user = $this->session->getUser();
                     }
                 } else {
                     // 后台请求：使用BackendSession
-                    if ($this->session->isLogin()) {
-                        $user = $this->session->getLoginUser();
+                    if ($this->session->isLoggedIn()) {
+                        $user = $this->session->getUser();
                     }
                 }
                 
@@ -442,10 +441,10 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             $access_sources = $eventAccessSources ?? [];
         } else {
             // 使用Session认证（传统方式）
-            /** @var \Weline\Frontend\Session\FrontendUserSession $frontendSession */
-            $frontendSession = ObjectManager::getInstance(\Weline\Frontend\Session\FrontendUserSession::class);
-            if ($frontendSession->isLogin()) {
-                $user = $frontendSession->getLoginUser();
+            /** @var AuthenticatedSessionInterface $frontendSession */
+            $frontendSession = SessionFactory::getInstance()->createFrontendSession();
+            if ($frontendSession->isLoggedIn()) {
+                $user = $frontendSession->getUser();
                 // 前端用户可能没有角色，这里可以根据需要实现
             }
         }
@@ -474,17 +473,15 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
 
     /**
      * 返回API错误响应
+     * 使用 ResponseTerminateException 替代 exit()，确保 WLS 兼容
      */
     private function returnApiError(int $code, string $message, Request $request): void
     {
-        http_response_code($code);
-        header('Content-Type: application/json');
-        echo json_encode([
-            'code' => $code,
-            'msg' => $message,
-            'data' => null
-        ]);
-        exit;
+        throw new \Weline\Framework\Http\ResponseTerminateException(
+            $code,
+            \json_encode(['code' => $code, 'msg' => $message, 'data' => null], JSON_UNESCAPED_UNICODE),
+            ['Content-Type' => 'application/json; charset=utf-8']
+        );
     }
 
     private function findAccessUrlRouteToRedirect(Request &$request, array &$access_sources)
@@ -532,7 +529,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
      */
     private function getCanReferer(string $referer, Request $request): bool
     {
-        $can_referer = $referer && ($request->getFullUrl() !== $referer) && $this->session->isLogin();
+        $can_referer = $referer && ($request->getFullUrl() !== $referer) && $this->session->isLoggedIn();
         # 跳过添加和编辑页面
         if (!self::canReferer($referer)) {
             $can_referer = false;
