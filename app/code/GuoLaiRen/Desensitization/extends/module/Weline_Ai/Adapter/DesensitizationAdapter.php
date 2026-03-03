@@ -641,7 +641,7 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
         foreach ($patterns as $type => $pattern) {
             if (preg_match($pattern, $response)) {
                 // 如果发现未脱敏的敏感信息，记录日志
-                error_log("警告：脱敏后仍发现未处理的{$type}信息");
+                w_log_warning("脱敏后仍发现未处理的{$type}信息");
             }
         }
         
