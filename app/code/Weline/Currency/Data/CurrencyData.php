@@ -13,8 +13,7 @@ namespace Weline\Currency\Data;
 
 use Weline\Currency\Helper\CurrencyFormatter;
 use Weline\Currency\Model\Currency;
-use Weline\Framework\Cache\CacheInterface;
-use Weline\Framework\Cache\CacheFactory;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -24,11 +23,6 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class CurrencyData
 {
-    /**
-     * 缓存标识
-     */
-    private const CACHE_TAG = 'currency_data';
-    
     /**
      * 缓存时间（1小时）
      */
@@ -41,11 +35,11 @@ class CurrencyData
      */
     public static function getCurrencies(): array
     {
-        $cacheKey = self::CACHE_TAG . '_all_currencies';
-        $cache = self::getCache();
+        $cacheKey = 'all_currencies';
+        $cache = w_cache('currency');
         
         $cached = $cache->get($cacheKey);
-        if ($cached !== false) {
+        if ($cached !== false && is_array($cached)) {
             return $cached;
         }
         
@@ -70,11 +64,11 @@ class CurrencyData
      */
     public static function getCurrency(string $currencyCode): ?array
     {
-        $cacheKey = self::CACHE_TAG . '_currency_' . strtoupper($currencyCode);
-        $cache = self::getCache();
+        $cacheKey = 'currency_' . strtoupper($currencyCode);
+        $cache = w_cache('currency');
         
         $cached = $cache->get($cacheKey);
-        if ($cached !== false) {
+        if ($cached !== false && is_array($cached) && !empty($cached)) {
             return $cached;
         }
         
@@ -115,19 +109,7 @@ class CurrencyData
      */
     public static function clearCache(): void
     {
-        $cache = self::getCache();
-        $cache->clean([self::CACHE_TAG]);
-    }
-
-    /**
-     * 获取缓存实例
-     * 
-     * @return CacheInterface
-     */
-    private static function getCache(): CacheInterface
-    {
-        $cacheFactory = new CacheFactory(self::CACHE_TAG, __('货币数据缓存'), false);
-        return $cacheFactory->create();
+        w_cache('currency')->clear();
     }
 }
 

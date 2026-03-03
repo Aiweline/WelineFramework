@@ -32,7 +32,6 @@ API服务暂时不可用，请稍后重试,"API service is temporarily unavailab
 不能删除基准货币,"Cannot delete base currency"
 删除成功！,"Delete successful!"
 "删除失败: %{1}","Delete failed: %{1}"
-货币数据缓存,"Currency data cache"
 "货币格式错误,示例:2,4","Currency format error, example: 2,4"
 千分位分隔符不能为空,"Thousand separator cannot be empty"
 小数分隔符不能为空,"Decimal separator cannot be empty"
@@ -171,6 +170,7 @@ ID,ID
 删除,Delete
 搜索货币代码、名称或符号,"Search currency code, name or symbol"
 确定要删除该货币吗？,"Are you sure you want to delete this currency?"
+货币数据缓存,"Currency data cache"
 "请求失败: %{1}","Request failed: %{1}"
 未知错误,"Unknown error"
 "建议：切换基准货币前，先备份当前汇率数据，然后执行手动导入""更新所有汇率""","建议：切换基准货币前，先备份当前汇率数据，然后执行手动导入""更新所有汇率"""
