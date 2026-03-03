@@ -63,7 +63,7 @@ class WarmupRunner
                 $success++;
             } catch (\Exception $e) {
                 $fail++;
-                error_log("预热URL失败: {$warmupUrl->getData(WarmupUrl::fields_URL)}, 错误: " . $e->getMessage());
+                w_log_error("预热URL失败: {$warmupUrl->getData(WarmupUrl::fields_URL)}, 错误: " . $e->getMessage());
             }
         }
 
