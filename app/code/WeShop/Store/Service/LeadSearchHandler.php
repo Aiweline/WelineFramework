@@ -88,7 +88,7 @@ class LeadSearchHandler implements SourceTypeHandlerInterface
                 }
             } catch (\Throwable $e) {
                 // 静默失败，使用默认值
-                error_log('LeadSearchHandler: Failed to get website language/currency: ' . $e->getMessage());
+                w_log_error('LeadSearchHandler: Failed to get website language/currency: ' . $e->getMessage());
             }
         }
         

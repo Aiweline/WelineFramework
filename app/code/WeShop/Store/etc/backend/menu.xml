@@ -2,13 +2,15 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <!--顶层：系统配置-->
-    <add source="WeShop_Store::main" name="main" title="店铺" action=""
+    
+    <!-- 店铺管理 - 归入 WeShop 商城 -->
+    <menu source="WeShop_Store::main" name="store_main" title="店铺管理" action=""
          parent="WeShop_Shop::main"
-         icon="ri-store-3-line"
-         order="20"/>
-    <add source="WeShop_Store::listing" name="main" title="列表" action="shop-store/backend/store"
-         parent="WeShop_Store::main"
-         icon="ri-store-3-line"
-         order="10"/>
+         icon="mdi mdi-storefront-outline"
+         order="20">
+        
+        <menu source="WeShop_Store::listing" name="store_listing" title="店铺列表" action="shop-store/backend/store"
+             icon="mdi mdi-format-list-bulleted"
+             order="10"/>
+    </menu>
 </menus>

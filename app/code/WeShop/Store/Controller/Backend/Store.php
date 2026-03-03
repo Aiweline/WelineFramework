@@ -144,7 +144,7 @@ class Store extends BackendController
         if ($this->request->isGet()) {
             $id = $this->request->getGet('id');
             if (!$id) {
-                die(__('参数错误！'));
+                throw new \Weline\Framework\Http\ResponseTerminateException(400, __('参数错误！'), ['Content-Type' => 'text/html; charset=UTF-8']);
             }
             $store = $this->store->load($id);
             if (!$store->getId()) {
