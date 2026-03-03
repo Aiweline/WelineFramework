@@ -22,7 +22,7 @@ namespace Weline\Server\Strategy;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\System\Process\Processer;
-use Weline\Server\Service\ServerInstanceService;
+use Weline\Server\Service\ServerInstanceManager;
 
 /**
  * Linux 直连策略（SO_REUSEPORT）
@@ -184,7 +184,7 @@ class LinuxDirectStrategy implements ServerStrategyInterface
      */
     private function startSingleWorker(ServerConfig $config, string $workerScript, int $port, int $workerId): int
     {
-        $processName = 'weline-worker-' . $config->instanceName . '-' . $workerId;
+        $processName = 'weline-wls-worker-' . $config->instanceName . '-' . $workerId;
         
         // 构建命令
         $command = "\"{$config->phpBinary}\" \"{$workerScript}\" {$config->host} {$port} {$workerId} {$config->instanceName}";
@@ -225,7 +225,7 @@ class LinuxDirectStrategy implements ServerStrategyInterface
             return 0;
         }
         
-        $processName = 'weline-http-redirect-' . $config->instanceName;
+        $processName = 'weline-wls-redirect-' . $config->instanceName;
         $command = "\"{$config->phpBinary}\" \"{$script}\" {$config->host} {$config->httpRedirectPort} {$config->port} {$config->instanceName}";
         $command .= " --name={$processName}";
         
@@ -312,7 +312,7 @@ class LinuxDirectStrategy implements ServerStrategyInterface
             'start_time' => \time(),
         ];
         
-        ServerInstanceService::atomicWriteJson($instanceFile, $data);
+        ServerInstanceManager::atomicWriteJsonStatic($instanceFile, $data);
     }
     
     /**
@@ -350,7 +350,7 @@ class LinuxDirectStrategy implements ServerStrategyInterface
         $this->log(__('Worker 进程已停止 (%{1} 个)', [\count($workerPids)]));
         
         // 停止 HTTP 重定向 Worker
-        $httpRedirectName = 'weline-http-redirect-' . $instanceName;
+        $httpRedirectName = 'weline-wls-redirect-' . $instanceName;
         $httpRedirectPid = Processer::getPid($httpRedirectName);
         if ($httpRedirectPid > 0) {
             Processer::killByPid($httpRedirectPid);

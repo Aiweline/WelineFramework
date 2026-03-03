@@ -11,11 +11,19 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
+use Weline\Framework\App\Env;
+
 /**
  * WLS 内存缓存服务
  * 
  * 使用 PHP 静态数组存储缓存（Dispatcher 常驻内存）
  * 提供高性能的内存级全页缓存能力
+ * 
+ * 内存控制策略：
+ * 1. 硬性限制：缓存数据总量不超过 maxSize
+ * 2. 软性限制：PHP 进程内存使用超过 memoryLimit 的 80% 时触发紧急清理
+ * 3. 自动淘汰：LRU（最近最少使用）策略
+ * 4. 定期清理：过期缓存自动删除
  * 
  * @package Weline_Server
  */
@@ -24,7 +32,7 @@ class MemoryCacheService
     /**
      * 缓存存储
      * 
-     * @var array<string, array{response: string, headers: array, created_at: int, ttl: int}>
+     * @var array<string, array{response: string, headers: array, created_at: int, ttl: int, last_access: int}>
      */
     private static array $cache = [];
 
@@ -52,7 +60,7 @@ class MemoryCacheService
     /**
      * 统计信息
      * 
-     * @var array{hits: int, misses: int, sets: int, purges: int, size: int}
+     * @var array{hits: int, misses: int, sets: int, purges: int, size: int, evictions: int, emergency_cleanups: int}
      */
     private static array $stats = [
         'hits' => 0,
@@ -60,14 +68,149 @@ class MemoryCacheService
         'sets' => 0,
         'purges' => 0,
         'size' => 0,
+        'evictions' => 0,
+        'emergency_cleanups' => 0,
     ];
 
     /**
-     * 最大缓存大小（字节）
+     * 最大缓存大小（字节）- 缓存数据本身的限制
      * 
      * @var int
      */
-    private static int $maxSize = 104857600; // 100MB
+    private static int $maxSize = 67108864; // 64MB（默认值，可通过配置覆盖）
+
+    /**
+     * PHP 进程内存限制（字节）- 用于紧急清理判断
+     * 
+     * @var int
+     */
+    private static int $memoryLimit = 134217728; // 128MB
+
+    /**
+     * 内存压力阈值（0.0-1.0）- 超过此比例触发紧急清理
+     * 
+     * @var float
+     */
+    private static float $memoryPressureThreshold = 0.8;
+
+    /**
+     * 最大条目数 - 防止 key 过多导致内存碎片
+     * 
+     * @var int
+     */
+    private static int $maxEntries = 10000;
+
+    /**
+     * 是否已初始化配置
+     * 
+     * @var bool
+     */
+    private static bool $initialized = false;
+
+    /**
+     * 上次内存检查时间
+     * 
+     * @var int
+     */
+    private static int $lastMemoryCheck = 0;
+
+    /**
+     * 内存检查间隔（秒）
+     * 
+     * @var int
+     */
+    private static int $memoryCheckInterval = 30;
+
+    /**
+     * 初始化配置（从 env.php 读取）
+     */
+    private static function initConfig(): void
+    {
+        if (self::$initialized) {
+            return;
+        }
+
+        $config = Env::getInstance()->getConfig('server') ?? [];
+        $memoryConfig = $config['memory_cache'] ?? [];
+
+        if (isset($memoryConfig['max_size'])) {
+            self::$maxSize = self::parseSize($memoryConfig['max_size']);
+        }
+
+        if (isset($memoryConfig['max_entries'])) {
+            self::$maxEntries = (int) $memoryConfig['max_entries'];
+        }
+
+        if (isset($memoryConfig['memory_pressure_threshold'])) {
+            self::$memoryPressureThreshold = (float) $memoryConfig['memory_pressure_threshold'];
+        }
+
+        if (isset($memoryConfig['memory_check_interval'])) {
+            self::$memoryCheckInterval = (int) $memoryConfig['memory_check_interval'];
+        }
+
+        $phpLimit = \ini_get('memory_limit');
+        if ($phpLimit && $phpLimit !== '-1') {
+            self::$memoryLimit = self::parseSize($phpLimit);
+        }
+
+        self::$initialized = true;
+    }
+
+    /**
+     * 解析大小字符串（如 '64M', '1G'）为字节
+     */
+    private static function parseSize(string|int $size): int
+    {
+        if (\is_int($size)) {
+            return $size;
+        }
+
+        $size = \trim($size);
+        $unit = \strtoupper(\substr($size, -1));
+        $value = (int) $size;
+
+        return match ($unit) {
+            'G' => $value * 1073741824,
+            'M' => $value * 1048576,
+            'K' => $value * 1024,
+            default => $value,
+        };
+    }
+
+    /**
+     * 检查内存压力并在必要时清理
+     */
+    private static function checkMemoryPressure(): void
+    {
+        $now = \time();
+        if ($now - self::$lastMemoryCheck < self::$memoryCheckInterval) {
+            return;
+        }
+        self::$lastMemoryCheck = $now;
+
+        $memoryUsage = \memory_get_usage(true);
+        $threshold = (int) (self::$memoryLimit * self::$memoryPressureThreshold);
+
+        if ($memoryUsage > $threshold) {
+            self::emergencyCleanup();
+        }
+    }
+
+    /**
+     * 紧急清理（内存压力过大时触发）
+     */
+    private static function emergencyCleanup(): void
+    {
+        self::$stats['emergency_cleanups']++;
+
+        self::cleanExpired();
+
+        $targetSize = (int) (self::$maxSize * 0.5);
+        while (self::$stats['size'] > $targetSize && \count(self::$cache) > 0) {
+            self::evictOldest((int) (self::$stats['size'] * 0.2));
+        }
+    }
 
     /**
      * 获取缓存
@@ -77,6 +220,8 @@ class MemoryCacheService
      */
     public static function get(string $key): ?array
     {
+        self::initConfig();
+
         if (!isset(self::$cache[$key])) {
             self::$stats['misses']++;
             return null;
@@ -85,19 +230,21 @@ class MemoryCacheService
         $entry = self::$cache[$key];
         
         // 检查是否过期
-        if ($entry['ttl'] > 0 && (time() - $entry['created_at']) > $entry['ttl']) {
+        if ($entry['ttl'] > 0 && (\time() - $entry['created_at']) > $entry['ttl']) {
             self::delete($key);
             self::$stats['misses']++;
             return null;
         }
 
         self::$stats['hits']++;
+
+        self::$cache[$key]['last_access'] = \time();
         
         return [
             'response' => $entry['response'],
             'headers' => $entry['headers'],
             'created_at' => $entry['created_at'],
-            'age' => time() - $entry['created_at'],
+            'age' => \time() - $entry['created_at'],
         ];
     }
 
@@ -122,39 +269,50 @@ class MemoryCacheService
         string $host = '',
         string $url = ''
     ): bool {
-        // 检查缓存大小限制
-        $responseSize = strlen($response);
-        if (self::$stats['size'] + $responseSize > self::$maxSize) {
-            // 清理过期缓存
+        self::initConfig();
+        self::checkMemoryPressure();
+
+        $responseSize = \strlen($response);
+
+        if ($responseSize > self::$maxSize * 0.1) {
+            return false;
+        }
+
+        if (\count(self::$cache) >= self::$maxEntries) {
             self::cleanExpired();
-            
-            // 如果还是超过限制，使用 LRU 策略清理
-            if (self::$stats['size'] + $responseSize > self::$maxSize) {
-                self::evictOldest((int)($responseSize * 1.5));
+            if (\count(self::$cache) >= self::$maxEntries) {
+                self::evictOldest($responseSize);
             }
         }
 
-        // 如果 key 已存在，先删除旧的
+        if (self::$stats['size'] + $responseSize > self::$maxSize) {
+            self::cleanExpired();
+            
+            if (self::$stats['size'] + $responseSize > self::$maxSize) {
+                $needed = self::$stats['size'] + $responseSize - self::$maxSize;
+                self::evictOldest((int) ($needed * 1.5));
+            }
+        }
+
         if (isset(self::$cache[$key])) {
             self::delete($key);
         }
 
-        // 存储缓存
+        $now = \time();
         self::$cache[$key] = [
             'response' => $response,
             'headers' => $headers,
-            'created_at' => time(),
+            'created_at' => $now,
+            'last_access' => $now,
             'ttl' => $ttl,
         ];
 
-        // 存储元数据
         self::$metadata[$key] = [
             'tags' => $tags,
             'host' => $host,
             'url' => $url,
         ];
 
-        // 更新 Tag 索引
         foreach ($tags as $tag) {
             if (!isset(self::$tagIndex[$tag])) {
                 self::$tagIndex[$tag] = [];
@@ -162,7 +320,6 @@ class MemoryCacheService
             self::$tagIndex[$tag][] = $key;
         }
 
-        // 更新 Host 索引
         if ($host) {
             if (!isset(self::$hostIndex[$host])) {
                 self::$hostIndex[$host] = [];
@@ -170,7 +327,6 @@ class MemoryCacheService
             self::$hostIndex[$host][] = $key;
         }
 
-        // 更新统计
         self::$stats['sets']++;
         self::$stats['size'] += $responseSize;
 
@@ -354,24 +510,26 @@ class MemoryCacheService
     }
 
     /**
-     * 驱逐最旧的缓存（LRU）
+     * 驱逐最少使用的缓存（LRU）
      * 
      * @param int $targetFreeBytes 目标释放字节数
      * @return int 释放的字节数
      */
     private static function evictOldest(int $targetFreeBytes): int
     {
-        // 按创建时间排序
         $sorted = self::$cache;
-        uasort($sorted, fn($a, $b) => $a['created_at'] <=> $b['created_at']);
+        \uasort($sorted, function ($a, $b) {
+            return ($a['last_access'] ?? $a['created_at']) <=> ($b['last_access'] ?? $b['created_at']);
+        });
 
         $freedBytes = 0;
-        foreach (array_keys($sorted) as $key) {
+        foreach (\array_keys($sorted) as $key) {
             if ($freedBytes >= $targetFreeBytes) {
                 break;
             }
-            $freedBytes += strlen(self::$cache[$key]['response']);
+            $freedBytes += \strlen(self::$cache[$key]['response']);
             self::delete($key);
+            self::$stats['evictions']++;
         }
 
         return $freedBytes;
@@ -384,13 +542,48 @@ class MemoryCacheService
      */
     public static function getStats(): array
     {
-        return array_merge(self::$stats, [
-            'entries' => count(self::$cache),
+        self::initConfig();
+
+        $memoryUsage = \memory_get_usage(true);
+        $total = self::$stats['hits'] + self::$stats['misses'];
+
+        return \array_merge(self::$stats, [
+            'entries' => \count(self::$cache),
+            'max_entries' => self::$maxEntries,
             'max_size' => self::$maxSize,
-            'hit_rate' => self::$stats['hits'] + self::$stats['misses'] > 0
-                ? round(self::$stats['hits'] / (self::$stats['hits'] + self::$stats['misses']) * 100, 2)
+            'max_size_human' => self::formatBytes(self::$maxSize),
+            'size_human' => self::formatBytes(self::$stats['size']),
+            'usage_percent' => self::$maxSize > 0
+                ? \round(self::$stats['size'] / self::$maxSize * 100, 2)
+                : 0,
+            'hit_rate' => $total > 0
+                ? \round(self::$stats['hits'] / $total * 100, 2)
+                : 0,
+            'php_memory_usage' => $memoryUsage,
+            'php_memory_usage_human' => self::formatBytes($memoryUsage),
+            'php_memory_limit' => self::$memoryLimit,
+            'php_memory_limit_human' => self::formatBytes(self::$memoryLimit),
+            'memory_pressure' => self::$memoryLimit > 0
+                ? \round($memoryUsage / self::$memoryLimit * 100, 2)
                 : 0,
         ]);
+    }
+
+    /**
+     * 格式化字节数
+     */
+    private static function formatBytes(int $bytes): string
+    {
+        if ($bytes >= 1073741824) {
+            return \round($bytes / 1073741824, 2) . ' GB';
+        }
+        if ($bytes >= 1048576) {
+            return \round($bytes / 1048576, 2) . ' MB';
+        }
+        if ($bytes >= 1024) {
+            return \round($bytes / 1024, 2) . ' KB';
+        }
+        return $bytes . ' B';
     }
 
     /**

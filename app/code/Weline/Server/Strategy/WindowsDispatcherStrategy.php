@@ -23,7 +23,7 @@ namespace Weline\Server\Strategy;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\System\Process\Processer;
-use Weline\Server\Service\ServerInstanceService;
+use Weline\Server\Service\ServerInstanceManager;
 
 /**
  * Windows Dispatcher 策略（TCP 透传）
@@ -192,7 +192,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
      */
     private function startSingleWorker(ServerConfig $config, string $workerScript, int $port, int $workerId): int
     {
-        $processName = 'weline-worker-' . $config->instanceName . '-' . $workerId;
+        $processName = 'weline-wls-worker-' . $config->instanceName . '-' . $workerId;
         
         // 构建命令
         $command = "\"{$config->phpBinary}\" \"{$workerScript}\" {$config->host} {$port} {$workerId} {$config->instanceName}";
@@ -251,7 +251,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
         }
         
         // 统一进程名
-        $processName = 'weline-dispatcher-' . $config->instanceName;
+        $processName = 'weline-wls-dispatcher-' . $config->instanceName;
         
         // 构建命令（参数格式: <host> <port> <worker_base_port> <worker_count> <instance_name>）
         $command = "\"{$config->phpBinary}\" \"{$dispatcherScript}\" {$config->host} {$config->port} {$config->workerBasePort} {$config->workerCount} {$config->instanceName}";
@@ -302,7 +302,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
             return 0;
         }
         
-        $processName = 'weline-http-redirect-' . $config->instanceName;
+        $processName = 'weline-wls-redirect-' . $config->instanceName;
         
         $command = "\"{$config->phpBinary}\" \"{$script}\" {$config->host} {$config->httpRedirectPort} {$config->port} {$config->instanceName}";
         $command .= " --name={$processName}";
@@ -403,7 +403,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
             'start_time' => \time(),
         ];
         
-        ServerInstanceService::atomicWriteJson($instanceFile, $data);
+        ServerInstanceManager::atomicWriteJsonStatic($instanceFile, $data);
     }
     
     /**
