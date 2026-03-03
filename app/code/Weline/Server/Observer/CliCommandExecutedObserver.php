@@ -19,7 +19,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\Service\MasterProcess;
-use Weline\Server\Service\WlsInstanceRegistry;
+use Weline\Server\Service\ServerInstanceManager;
 
 /**
  * CLI 命令执行完成观察者
@@ -105,8 +105,8 @@ class CliCommandExecutedObserver implements ObserverInterface
 
         /** @var Printing $printer */
         $printer = ObjectManager::getInstance(Printing::class);
-        /** @var WlsInstanceRegistry $registry */
-        $registry = ObjectManager::getInstance(WlsInstanceRegistry::class);
+        /** @var ServerInstanceManager $manager */
+        $manager = ObjectManager::getInstance(ServerInstanceManager::class);
 
         // 优先使用 IPC 控制通道（TCP，跨平台即时生效）
         $ipcReloadType = ($reloadType === self::RELOAD_TYPE_CACHE) ? 'cache' : 'code';
@@ -120,7 +120,7 @@ class CliCommandExecutedObserver implements ObserverInterface
         
         // IPC 失败：回退到信号方式
         if ($reloadType === self::RELOAD_TYPE_CODE) {
-            $masterPids = $registry->getRunningMasterPids();
+            $masterPids = $manager->getRunningMasterPids();
             if (!empty($masterPids) && \defined('SIGHUP')) {
                 $notified = 0;
                 foreach ($masterPids as $pid) {
@@ -137,13 +137,13 @@ class CliCommandExecutedObserver implements ObserverInterface
         }
 
         // 无 Master 时回退：直接通知 Worker
-        $stats = $registry->getRunningStats();
+        $stats = $manager->getRunningStats();
         if ($stats['workers'] === 0) {
             $printer->note(__('WLS 重载：未检测到运行中的 WLS，已跳过'));
             return;
         }
 
-        $allWorkerPids = $registry->getRunningWorkerPids();
+        $allWorkerPids = $manager->getRunningWorkerPids();
         $totalWorkers = $stats['workers'];
         $reloadedWorkers = 0;
 

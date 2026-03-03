@@ -180,7 +180,7 @@ class Start implements CommandInterface
         echo "\n";
 
         # 检查部署模式，如果是生产环境给出强烈警告
-        $currentMode = Env::get('deploy');
+        $currentMode = Env::system('deploy');
         if ($currentMode === 'prod' || $currentMode === 'production') {
             $this->printer->error(__('⚠️  警告：当前处于生产环境模式（%{1}）！', [$currentMode]));
             $this->printer->error(__('⚠️  PHP内置服务器仅供开发和测试使用，不适合生产环境！'));

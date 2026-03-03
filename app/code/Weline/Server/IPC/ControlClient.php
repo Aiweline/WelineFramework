@@ -15,6 +15,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\IPC;
 
+use Weline\Server\Log\WlsLogger;
+
 class ControlClient
 {
     /** TCP 连接 */
@@ -40,9 +42,6 @@ class ControlClient
 
     /** Master 断开回调：function(bool $receivedShutdown, self $client): void */
     private $disconnectHandler = null;
-
-    /** IPC 日志回调：function(string $logLine): void */
-    private $logger = null;
 
     /** 本端角色标识（用于日志打印） */
     private string $selfTag = 'Client';
@@ -163,18 +162,6 @@ class ControlClient
     private bool $verboseLog = false;
 
     /**
-     * 设置 IPC 日志回调
-     *
-     * 所有收发的 IPC 消息都会通过此回调打印。
-     *
-     * @param callable $logger function(string $logLine): void
-     */
-    public function setLogger(callable $logger): void
-    {
-        $this->logger = $logger;
-    }
-
-    /**
      * 设置详细日志模式（DEV 模式下打印每条 SEND/RECV 明细）
      */
     public function setVerboseLog(bool $verbose): void
@@ -193,13 +180,11 @@ class ControlClient
     }
 
     /**
-     * 打印 IPC 日志（始终输出：CONNECT/DISCONNECT/错误等关键事件）
+     * 打印 IPC 日志（直接使用 WlsLogger）
      */
     private function ipcLog(string $message): void
     {
-        if ($this->logger) {
-            ($this->logger)($message);
-        }
+        WlsLogger::info_($message);
     }
 
     /**
@@ -207,8 +192,8 @@ class ControlClient
      */
     private function ipcVerboseLog(string $message): void
     {
-        if ($this->verboseLog && $this->logger) {
-            ($this->logger)($message);
+        if ($this->verboseLog) {
+            WlsLogger::debug_($message);
         }
     }
 
@@ -236,7 +221,14 @@ class ControlClient
     /**
      * 发送 register 消息
      */
-    public function register(string $role, int $pid, int $port = 0, int $workerId = 0): bool
+    public function register(
+        string $role,
+        int $pid,
+        int $port = 0,
+        int $workerId = 0,
+        int $epoch = 0,
+        string $launchId = ''
+    ): bool
     {
         // 保存注册信息，用于重连后自动重新注册
         $this->registerInfo = [
@@ -244,24 +236,34 @@ class ControlClient
             'pid'       => $pid,
             'port'      => $port,
             'worker_id' => $workerId,
+            'epoch'     => $epoch,
+            'launch_id' => $launchId,
         ];
 
-        return $this->send(ControlMessage::register($role, $pid, $port, $workerId));
+        return $this->send(ControlMessage::register($role, $pid, $port, $workerId, $epoch, $launchId));
     }
 
     /**
      * 发送 ready 消息（框架初始化 + 端口监听完成后调用）
      */
-    public function sendReady(string $role = '', int $workerId = 0, int $port = 0): bool
+    public function sendReady(
+        string $role = '',
+        int $workerId = 0,
+        int $port = 0,
+        int $epoch = 0,
+        string $launchId = ''
+    ): bool
     {
         if ($role === '' && $this->registerInfo) {
             $role     = $this->registerInfo['role'];
             $workerId = $this->registerInfo['worker_id'];
             $port     = $this->registerInfo['port'];
+            $epoch    = (int)($this->registerInfo['epoch'] ?? 0);
+            $launchId = (string)($this->registerInfo['launch_id'] ?? '');
         }
 
         $this->isReady = true;
-        return $this->send(ControlMessage::ready($role, $workerId, $port));
+        return $this->send(ControlMessage::ready($role, $workerId, $port, $epoch, $launchId));
     }
 
     /**
@@ -316,11 +318,30 @@ class ControlClient
             return [];
         }
 
+        // 非阻塞读取：先用 stream_select 确认是否有数据
+        $read = [$this->socket];
+        $write = [];
+        $except = [];
+        $changed = @\stream_select($read, $write, $except, 0, 0);
+        
+        // 没有数据可读，直接返回（不是断开）
+        if ($changed === 0) {
+            return [];
+        }
+        
         $data = @\fread($this->socket, 65536);
 
-        // 连接断开：stream_select 已确认可读，fread 返回空即为 TCP FIN
-        if ($data === '' || $data === false) {
+        // 连接断开判断：
+        // 1. fread 返回 false 表示错误
+        // 2. fread 返回空字符串 + feof() 为 true 表示 TCP FIN
+        // 注意：非阻塞模式下空字符串不一定是断开，需要配合 feof 判断
+        if ($data === false || ($data === '' && @\feof($this->socket))) {
             $this->handleDisconnect();
+            return [];
+        }
+        
+        // 没有数据但也没断开（非阻塞模式正常情况）
+        if ($data === '') {
             return [];
         }
 
@@ -342,6 +363,11 @@ class ControlClient
 
                 case ControlMessage::TYPE_SHUTDOWN:
                     $this->receivedShutdown = true;
+                    $this->ipcLog("[IPC-{$this->selfTag}] RECV <-- Master: SHUTDOWN 收到停止命令，准备退出...");
+                    break;
+                    
+                case ControlMessage::TYPE_DRAIN:
+                    $this->ipcLog("[IPC-{$this->selfTag}] RECV <-- Master: DRAIN 收到排水命令，停止接收新请求...");
                     break;
             }
 
@@ -426,7 +452,9 @@ class ControlClient
                 $this->registerInfo['role'],
                 $this->registerInfo['pid'],
                 $this->registerInfo['port'],
-                $this->registerInfo['worker_id']
+                $this->registerInfo['worker_id'],
+                (int)($this->registerInfo['epoch'] ?? 0),
+                (string)($this->registerInfo['launch_id'] ?? '')
             );
 
             // 如果之前已就绪，重新发送 ready

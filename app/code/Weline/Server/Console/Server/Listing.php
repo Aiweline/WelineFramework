@@ -14,22 +14,23 @@ namespace Weline\Server\Console\Server;
 
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
-use Weline\Server\Service\ServerInstanceService;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Service\CliServerService;
+use Weline\Server\Service\ServerInstanceManager;
 
 /**
  * server:listing - 列出所有服务器实例
  */
 class Listing extends CommandAbstract
 {
-    private ServerInstanceService $instanceService;
+    private ServerInstanceManager $instanceManager;
     private CliServerService $cliServerService;
     
     public function __construct(
-        ServerInstanceService $instanceService,
+        ServerInstanceManager $instanceManager,
         CliServerService $cliServerService
     ) {
-        $this->instanceService = $instanceService;
+        $this->instanceManager = $instanceManager;
         $this->cliServerService = $cliServerService;
     }
     
@@ -60,6 +61,8 @@ class Listing extends CommandAbstract
     
     /**
      * 收集所有服务器实例（CLI + Weline Server）
+     *
+     * 使用 ServerInstanceManager 获取 Weline Server 的统一实例信息
      */
     protected function collectAllInstances(?string $typeFilter, bool $runningOnly): array
     {
@@ -75,22 +78,73 @@ class Listing extends CommandAbstract
             }
         }
         
-        // 2. 获取所有 Weline Server 实例
+        // 2. 获取所有 Weline Server 实例（通过 ServerInstanceManager）
         if ($typeFilter === null || $typeFilter === 'weline') {
-            $welineInstances = $this->instanceService->getAllInstances(false);
-            foreach ($welineInstances as $name => $info) {
-                $name = (string) $name;
-                $status = $this->instanceService->getInstanceStatus($name);
-                $status['type'] = 'weline';
-                $status['type_name'] = __('Weline Server');
+            $manager = $this->getInstanceManager();
+            $allInfo = $manager->getAllInstanceInfo();
+            
+            foreach ($allInfo as $name => $info) {
+                $isRunning = $info->isMasterRunning() || $info->getServiceStats()['running'] > 0;
                 
-                if (!$runningOnly || ($status['status'] ?? '') === 'running') {
-                    $allInstances[$name] = $status;
+                if ($runningOnly && !$isRunning) {
+                    continue;
                 }
+                
+                $status = [
+                    'name' => $info->name,
+                    'type' => 'weline',
+                    'type_name' => __('Weline Server'),
+                    'status' => $isRunning ? 'running' : 'stopped',
+                    'is_running' => $isRunning,
+                    'pid' => $info->masterPid > 0 ? $info->masterPid : null,
+                    'host' => $info->host,
+                    'port' => $info->port,
+                    'count' => $info->workerCount,
+                    'daemon' => true,
+                    'started_at' => $info->startedAt,
+                    'running_time' => $this->formatRunningTime($info->startedTimestamp),
+                ];
+                
+                $allInstances[$name] = $status;
             }
         }
         
         return $allInstances;
+    }
+    
+    /**
+     * 格式化运行时长
+     */
+    protected function formatRunningTime(int $startedTimestamp): string
+    {
+        if ($startedTimestamp <= 0) {
+            return '-';
+        }
+        
+        $seconds = \time() - $startedTimestamp;
+        if ($seconds < 60) {
+            return "{$seconds}s";
+        }
+        if ($seconds < 3600) {
+            $minutes = (int) ($seconds / 60);
+            return "{$minutes}m";
+        }
+        if ($seconds < 86400) {
+            $hours = (int) ($seconds / 3600);
+            $minutes = (int) (($seconds % 3600) / 60);
+            return "{$hours}h {$minutes}m";
+        }
+        $days = (int) ($seconds / 86400);
+        $hours = (int) (($seconds % 86400) / 3600);
+        return "{$days}d {$hours}h";
+    }
+    
+    /**
+     * 获取实例管理器
+     */
+    protected function getInstanceManager(): ServerInstanceManager
+    {
+        return ObjectManager::getInstance(ServerInstanceManager::class);
     }
     
     /**
@@ -154,14 +208,13 @@ class Listing extends CommandAbstract
         
         $total = count($instances);
         $totalRunning = $welineRunning + $cliRunning;
-        $summaryLine = sprintf(
-            '│  总计: %d  |  Weline: ●%d ○%d  |  CLI: ●%d',
-            $total,
-            $welineRunning,
-            $welineStopped,
-            $cliRunning
-        );
-        $summaryLine = str_pad($summaryLine, 91) . '│';
+        $summaryLine = '│  ' . __('总计：%{total}  |  Weline: ●%{wrun} ○%{wstop}  |  CLI: ●%{clirun}', [
+            'total' => $total,
+            'wrun' => $welineRunning,
+            'wstop' => $welineStopped,
+            'clirun' => $cliRunning,
+        ]);
+        $summaryLine = \str_pad($summaryLine, 91) . '│';
         $this->printer->note($summaryLine);
         
         $this->printer->note(__('└──────────────────────────────────────────────────────────────────────────────────────┘'));

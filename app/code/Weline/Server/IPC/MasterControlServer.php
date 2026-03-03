@@ -15,6 +15,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\IPC;
 
+use Weline\Server\Log\WlsLogger;
+
 class MasterControlServer
 {
     // ========== Worker 状态常量 ==========
@@ -56,9 +58,6 @@ class MasterControlServer
 
     /** 客户端断开回调：function(int $clientId, array $clientInfo, self $server): void */
     private $disconnectHandler = null;
-
-    /** IPC 日志回调：function(string $logLine): void */
-    private $logger = null;
 
     /**
      * 启动控制服务器
@@ -157,18 +156,6 @@ class MasterControlServer
     private bool $verboseLog = false;
 
     /**
-     * 设置 IPC 日志回调
-     *
-     * 所有收发的 IPC 消息都会通过此回调打印。
-     *
-     * @param callable $logger function(string $logLine): void
-     */
-    public function setLogger(callable $logger): void
-    {
-        $this->logger = $logger;
-    }
-
-    /**
      * 设置详细日志模式（DEV 模式下打印每条 SEND/RECV 明细）
      */
     public function setVerboseLog(bool $verbose): void
@@ -177,22 +164,20 @@ class MasterControlServer
     }
 
     /**
-     * 打印 IPC 日志（始终输出：CONNECT/DISCONNECT/错误等关键事件）
+     * 打印 IPC 日志（直接使用 WlsLogger）
      */
     private function ipcLog(string $message): void
     {
-        if ($this->logger) {
-            ($this->logger)($message);
-        }
+        WlsLogger::info_($message);
     }
 
     /**
-     * 打印 IPC 详细日志（仅 DEV 模式输出：SEND/RECV 明细）
+     * 打印 IPC 详细日志（仅 DEV 模式输出）
      */
     private function ipcVerboseLog(string $message): void
     {
-        if ($this->verboseLog && $this->logger) {
-            ($this->logger)($message);
+        if ($this->verboseLog) {
+            WlsLogger::debug_($message);
         }
     }
 
@@ -257,6 +242,8 @@ class MasterControlServer
             'pid'                   => 0,
             'port'                  => 0,
             'worker_id'             => 0,
+            'epoch'                 => 0,
+            'launch_id'             => '',
             'state'                 => null,
             'resurrection_priority' => ControlMessage::RESURRECTION_NONE,
         ];
@@ -335,11 +322,15 @@ class MasterControlServer
         $pid      = (int) ($msg['pid'] ?? 0);
         $port     = (int) ($msg['port'] ?? 0);
         $workerId = (int) ($msg['worker_id'] ?? 0);
+        $epoch    = (int) ($msg['epoch'] ?? 0);
+        $launchId = (string) ($msg['launch_id'] ?? '');
 
         $this->clients[$clientId]['role']      = $role;
         $this->clients[$clientId]['pid']       = $pid;
         $this->clients[$clientId]['port']      = $port;
         $this->clients[$clientId]['worker_id'] = $workerId;
+        $this->clients[$clientId]['epoch']     = $epoch;
+        $this->clients[$clientId]['launch_id'] = $launchId;
         $this->clients[$clientId]['state']     = self::STATE_REGISTERED;
 
         // 计算复活优先级
@@ -425,11 +416,27 @@ class MasterControlServer
      */
     public function broadcast(string $message, ?string $role = null): void
     {
+        $decoded = ControlMessage::decode(\rtrim($message, "\n"));
+        $type = $decoded['type'] ?? 'raw';
+        
+        // 对于重要的广播消息（SHUTDOWN、DRAIN），总是输出日志
+        $isImportantBroadcast = \in_array($type, [
+            ControlMessage::TYPE_SHUTDOWN,
+            ControlMessage::TYPE_DRAIN,
+            ControlMessage::TYPE_RELOAD,
+        ], true);
+        
+        $targets = [];
         foreach ($this->clients as $clientId => $client) {
             if ($role !== null && $client['role'] !== $role) {
                 continue;
             }
+            $targets[] = $this->formatClientTag($clientId);
             $this->sendTo($clientId, $message);
+        }
+        
+        if ($isImportantBroadcast && !empty($targets)) {
+            $this->ipcLog("[IPC-Master] BROADCAST {$type} -> " . \implode(', ', $targets));
         }
     }
 
@@ -483,6 +490,8 @@ class MasterControlServer
                 'pid'                   => $client['pid'],
                 'port'                  => $client['port'],
                 'worker_id'             => $client['worker_id'],
+                'epoch'                 => (int)($client['epoch'] ?? 0),
+                'launch_id'             => (string)($client['launch_id'] ?? ''),
                 'state'                 => $client['state'],
                 'resurrection_priority' => $client['resurrection_priority'],
             ];

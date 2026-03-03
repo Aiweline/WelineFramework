@@ -24,7 +24,8 @@ namespace Weline\Server\Dispatcher;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlClient;
 use Weline\Server\IPC\ControlMessage;
-use Weline\Server\IPC\MasterResurrector;
+use Weline\Server\Log\WlsLogger;
+use Weline\Server\Log\LogLevel;
 use Weline\Server\Security\AttackDetector;
 use Weline\Server\Service\AttackLogService;
 use Weline\Server\Service\AttackSignalFileService;
@@ -72,6 +73,11 @@ class Dispatcher
      * 当前实例是否启用 HTTPS（用于同端口 HTTP→HTTPS 301）
      */
     private bool $httpsEnabled = false;
+
+    /**
+     * HTTP 重定向端口（用于将明文 HTTP 请求转发到 http_redirect_worker）
+     */
+    private int $httpRedirectPort = 0;
     
     /**
      * 活跃的客户端连接
@@ -166,11 +172,6 @@ class Dispatcher
      */
     private bool $isDevMode = false;
     
-    /**
-     * 日志函数
-     */
-    private ?\Closure $logFunction = null;
-    
     // ========== IPC 控制通道 ==========
     
     /**
@@ -192,6 +193,8 @@ class Dispatcher
      * Master PID（用于孤儿检测）
      */
     private int $masterPid = 0;
+    private int $orchestratorEpoch = 0;
+    private string $orchestratorLaunchId = '';
     
     private int $lastMasterPidCheck = 0;
     private int $masterDeadCount = 0;
@@ -310,18 +313,17 @@ class Dispatcher
         if (isset($config['attack_rules'])) {
             $this->attackDetector->updateRules($config['attack_rules']);
         }
+        
+        // HTTP 重定向端口配置
+        if (isset($config['http_redirect_port'])) {
+            $this->httpRedirectPort = (int) $config['http_redirect_port'];
+            $this->passthroughCore->setHttpRedirectPort($this->httpRedirectPort);
+        }
     }
     
     /**
      * 设置日志函数
      *
-     * @param callable $logFunction 日志函数
-     */
-    public function setLogFunction(callable $logFunction): void
-    {
-        $this->logFunction = $logFunction instanceof \Closure ? $logFunction : \Closure::fromCallable($logFunction);
-    }
-    
     /**
      * 设置开发模式
      * DEV 模式下打印详细的活动信息（连接路由、数据转发、探活等）
@@ -335,13 +337,17 @@ class Dispatcher
     }
     
     /**
-     * 内部日志方法
+     * 内部日志方法（直接使用 WlsLogger）
      */
     private function log(string $message, string $level = 'INFO'): void
     {
-        if ($this->logFunction !== null) {
-            ($this->logFunction)($message, $level);
-        }
+        $logLevel = match (\strtoupper($level)) {
+            'ERROR', 'BAN', 'SSL_FAIL' => LogLevel::ERROR,
+            'WARN', 'WARNING' => LogLevel::WARNING,
+            'DEBUG', 'CLOSE', 'HEALTH', 'STATS' => LogLevel::DEBUG,
+            default => LogLevel::INFO,
+        };
+        WlsLogger::log_($logLevel, $message);
     }
 
     private function socketId($socket): int
@@ -361,6 +367,15 @@ class Dispatcher
     public function setMasterPid(int $pid): void
     {
         $this->masterPid = $pid;
+    }
+
+    /**
+     * 设置 Orchestrator 生命周期令牌
+     */
+    public function setLifecycleTokens(int $epoch, string $launchId): void
+    {
+        $this->orchestratorEpoch = $epoch;
+        $this->orchestratorLaunchId = $launchId;
     }
     
     /**
@@ -387,9 +402,6 @@ class Dispatcher
         
         $this->ipcClient = new ControlClient();
         $this->ipcClient->setSelfTag('Dispatcher');
-        $this->ipcClient->setLogger(function (string $line) {
-            $this->log($line, 'IPC');
-        });
         // DEV 模式下输出详细 IPC SEND/RECV 明细
         $this->ipcClient->setVerboseLog($this->isDevMode);
         if (!$this->ipcClient->connect('127.0.0.1', $this->controlPort)) {
@@ -398,7 +410,14 @@ class Dispatcher
             return;
         }
         
-        $this->ipcClient->register(ControlMessage::ROLE_DISPATCHER, \getmypid(), $this->port);
+        $this->ipcClient->register(
+            ControlMessage::ROLE_DISPATCHER,
+            \getmypid(),
+            $this->port,
+            0,
+            $this->orchestratorEpoch,
+            $this->orchestratorLaunchId
+        );
         $this->log("IPC 控制通道已连接 (端口: {$this->controlPort})", 'INFO');
         
         // 设置消息处理器
@@ -413,22 +432,18 @@ class Dispatcher
                 $this->log('Master 连接断开（已收到 shutdown，不复活）', 'INFO');
                 return;
             }
-            $this->log('Master 连接意外断开，尝试复活...', 'WARN');
-            
-            $resurrector = new MasterResurrector(
-                ControlMessage::RESURRECTION_DISPATCHER,
-                $this->instanceName,
-                '127.0.0.1',
-                $this->controlPort
-            );
-            if ($resurrector->shouldResurrect($receivedShutdown)) {
-                $resurrector->attemptResurrect();
-            }
+            $this->log('Master 连接意外断开，控制面已收口，不执行子进程复活。', 'WARN');
             $client->tryReconnect();
         });
         
         // 上报就绪
-        $this->ipcClient->sendReady(ControlMessage::ROLE_DISPATCHER, 0, $this->port);
+        $this->ipcClient->sendReady(
+            ControlMessage::ROLE_DISPATCHER,
+            0,
+            $this->port,
+            $this->orchestratorEpoch,
+            $this->orchestratorLaunchId
+        );
     }
     
     /**
@@ -440,12 +455,18 @@ class Dispatcher
         
         switch ($type) {
             case ControlMessage::TYPE_DRAIN:
-                // 将指定端口加入黑名单
                 $ports = $msg['ports'] ?? [];
-                foreach ($ports as $port) {
-                    $this->passthroughCore->blacklistWorker((int)$port);
+                if (!empty($ports)) {
+                    // 指定端口加入黑名单（热重载时使用）
+                    foreach ($ports as $port) {
+                        $this->passthroughCore->blacklistWorker((int)$port);
+                    }
+                    $this->log('Drain: 端口 ' . \implode(',', $ports) . ' 已加入黑名单', 'DRAIN');
+                } else {
+                    // 全局 drain（stopAll 时使用），Dispatcher 自己不需要排水，直接完成
+                    $this->log('Received global drain signal, completing immediately...', 'DRAIN');
+                    $this->ipcClient?->sendDrainingComplete(0, $this->port);
                 }
-                $this->log('Drain: 端口 ' . \implode(',', $ports) . ' 已加入黑名单', 'DRAIN');
                 break;
                 
             case ControlMessage::TYPE_UNDRAIN:
@@ -460,10 +481,11 @@ class Dispatcher
             case ControlMessage::TYPE_ADD_WORKER:
                 // 动态添加 Worker 端口到负载均衡池
                 $ports = $msg['ports'] ?? [];
+                $this->log('收到 ADD_WORKER 消息，端口列表: ' . \json_encode($ports), 'INFO');
                 foreach ($ports as $port) {
                     $this->passthroughCore->addWorkerPort((int)$port);
                 }
-                $this->log('添加 Worker 端口: ' . \implode(',', $ports), 'INFO');
+                $this->log('已添加 Worker 端口到负载均衡池: ' . \implode(',', $ports) . ', 当前总数: ' . $this->passthroughCore->getWorkerCount(), 'INFO');
                 break;
                 
             case ControlMessage::TYPE_REMOVE_WORKER:
@@ -479,6 +501,12 @@ class Dispatcher
                 $this->log('收到 shutdown 命令', 'WARN');
                 $this->ipcReceivedShutdown = true;
                 $this->running = false;
+                break;
+                
+            case ControlMessage::TYPE_SET_REDIRECT_PORT:
+                $this->httpRedirectPort = (int) ($msg['port'] ?? 0);
+                $this->passthroughCore->setHttpRedirectPort($this->httpRedirectPort);
+                $this->log("HTTP Redirect 端口设置为: {$this->httpRedirectPort}", 'INFO');
                 break;
         }
     }
@@ -905,9 +933,11 @@ class Dispatcher
     }
 
     /**
-     * HTTPS 模式下识别并处理明文 HTTP 请求，返回同端口 https 301
+     * HTTPS 模式下识别并处理明文 HTTP 请求
      *
-     * @return bool true=已处理并关闭连接；false=非明文 HTTP，继续走 TCP 透传
+     * 优先将连接转发给 http_redirect_worker 处理，若转发失败则回退到内联 301。
+     *
+     * @return bool true=已处理（转发或内联 301）；false=非明文 HTTP，继续走 TCP 透传
      */
     private function handlePlainHttpRedirect($clientSocket, int $connId, string $clientIp): bool
     {
@@ -937,6 +967,41 @@ class Dispatcher
             return false;
         }
 
+        // 优先转发到 http_redirect_worker
+        $redirectPort = $this->passthroughCore->getHttpRedirectPort();
+        if ($redirectPort > 0) {
+            // 设置非阻塞
+            @\socket_set_nonblock($clientSocket);
+            
+            if ($this->passthroughCore->handleHttpRedirectConnection($clientSocket, $clientIp)) {
+                // 成功建立到 redirect_worker 的连接
+                $this->clientConnections[$connId] = $clientSocket;
+                $this->connectionAcceptTime[$connId] = \microtime(true);
+                $this->connectionLastActivity[$connId] = \microtime(true);
+                $this->connectionBytes[$connId] = ['in' => 0, 'out' => 0];
+                $this->requestCount++;
+                
+                if ($this->isDevMode) {
+                    $this->log("HTTP→Redirect: {$clientIp} (connId: {$connId}) → redirect_worker:{$redirectPort}", 'ROUTE');
+                }
+                return true;
+            }
+            // 连接失败，回退到内联 301
+        }
+
+        // 回退：内联返回 301
+        return $this->sendInlineHttpRedirect($clientSocket, $connId, $clientIp);
+    }
+
+    /**
+     * 内联返回 HTTP→HTTPS 301 重定向响应
+     *
+     * 当无法转发到 http_redirect_worker 时的回退方案。
+     *
+     * @return bool 始终返回 true（已处理并关闭连接）
+     */
+    private function sendInlineHttpRedirect($clientSocket, int $connId, string $clientIp): bool
+    {
         // 非阻塞读取请求头，短超时（约 300ms），避免 Windows 下阻塞整条 accept 导致大批请求排队
         @\socket_set_nonblock($clientSocket);
         $raw = '';
@@ -1008,7 +1073,7 @@ class Dispatcher
             }
         }
         @\socket_close($clientSocket);
-        $this->log("HTTP->HTTPS 301: {$clientIp} (connId: {$connId}) => {$redirectUrl}", 'ROUTE');
+        $this->log("HTTP->HTTPS 301 (inline): {$clientIp} (connId: {$connId}) => {$redirectUrl}", 'ROUTE');
         return true;
     }
     
@@ -1273,7 +1338,9 @@ class Dispatcher
     }
     
     /**
-     * 注册信号处理
+     * 注册信号处理（仅 Linux/Mac）
+     * 
+     * 注意：子进程不处理 SIGINT（Ctrl+C），由 Master 通过 IPC 广播 SHUTDOWN 通知退出
      */
     private function registerSignals(): void
     {
@@ -1283,11 +1350,6 @@ class Dispatcher
         
         \pcntl_signal(SIGTERM, function () {
             $this->log('收到 SIGTERM 信号', 'WARN');
-            $this->running = false;
-        });
-        
-        \pcntl_signal(SIGINT, function () {
-            $this->log('收到 SIGINT 信号', 'WARN');
             $this->running = false;
         });
     }
