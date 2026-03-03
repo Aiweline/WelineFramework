@@ -13,25 +13,22 @@ declare(strict_types=1);
 
 namespace Weline\UrlManager\Observer;
 
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Http\Url;
-use Weline\UrlManager\Cache\UrlRewriteCache;
 use Weline\UrlManager\Model\UrlRewrite;
 
 class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
 {
-    // 优化：延迟加载，避免实例化时立即创建数据库连接
     private ?UrlRewrite $urlRewrite = null;
     
-    // URL重写缓存实例
-    private ?UrlRewriteCache $cache = null;
+    private ?CachePoolInterface $cache = null;
 
     public function __construct(
         ?UrlRewrite $urlRewrite = null
     )
     {
-        // 延迟加载，不立即赋值
         if ($urlRewrite !== null) {
             $this->urlRewrite = $urlRewrite;
         }
@@ -51,10 +48,10 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
     /**
      * 获取缓存实例
      */
-    private function getCache(): UrlRewriteCache
+    private function getCache(): CachePoolInterface
     {
         if ($this->cache === null) {
-            $this->cache = new UrlRewriteCache();
+            $this->cache = w_cache('url_rewrite');
         }
         return $this->cache;
     }
@@ -88,6 +85,14 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
     }
 
     /**
+     * 生成缓存键（包含 websiteId 隔离）
+     */
+    private function getCacheKey(string $uri, int $websiteId): string
+    {
+        return 'website_' . $websiteId . '_' . $uri;
+    }
+
+    /**
      * @inheritDoc
      */
     public function execute(Event &$event): void
@@ -95,57 +100,48 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
         $uri = ltrim($event->getData(), '/');
         $cache = $this->getCache();
         $websiteId = $this->getCurrentWebsiteId();
+        $cacheKey = $this->getCacheKey($uri, $websiteId);
         
         // 尝试从缓存获取（缓存按 website_id 隔离）
         // 返回值说明：
         // - array: 找到缓存，包含path
         // - null: 缓存了"未找到"的结果
         // - false: 缓存未命中，需要查询数据库
-        $rewriteData = $cache->get($uri, $websiteId);
+        $rewriteData = $cache->get($cacheKey);
         
         if (is_array($rewriteData) && isset($rewriteData['path'])) {
-            // 找到缓存，应用重写
             $this->applyRewrite($event, $rewriteData['path'], $uri);
             return;
         } elseif ($rewriteData === null) {
-            // 缓存了"未找到"的结果，直接返回
             return;
         }
         
         // $rewriteData === false，缓存未命中，查询数据库
-        // 按 (website_id, rewrite) 查询，不回退到 website_id=0
         $rewrite = $this->findRewriteByWebsiteAndRewrite($websiteId, $uri);
         if (!$rewrite->getId()) {
-            // 尝试带斜杠的版本
             $rewrite = $this->findRewriteByWebsiteAndRewrite($websiteId, '/' . $uri);
         }
         
         if ($rewrite->getId()) {
-            // 缓存查询结果
             $path = $rewrite->getData('path');
             $rewriteData = ['path' => $path];
-            $cache->set($uri, $rewriteData, $websiteId);
+            $cache->set($cacheKey, $rewriteData);
             
-            // 应用重写
             $this->applyRewrite($event, $path, $uri);
         } else {
-            # 找不到尝试使用path匹配
             $path = Url::parse_url($uri, 'path');
             $rewrite = $this->findRewriteByWebsiteAndRewrite($websiteId, $path);
             if (!$rewrite->getId()) {
                 $rewrite = $this->findRewriteByWebsiteAndRewrite($websiteId, '/' . $path);
             }
             if ($rewrite->getId()) {
-                // 缓存查询结果
                 $rewritePath = $rewrite->getData('path');
                 $rewriteData = ['path' => $rewritePath];
-                $cache->set($uri, $rewriteData, $websiteId);
+                $cache->set($cacheKey, $rewriteData);
                 
-                // 应用重写
                 $this->applyRewrite($event, $rewritePath, $uri);
             } else {
-                // 缓存未找到的结果（避免重复查询）
-                $cache->set($uri, null, $websiteId);
+                $cache->set($cacheKey, null);
             }
         }
     }
