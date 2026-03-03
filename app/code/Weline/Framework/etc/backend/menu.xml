@@ -7,11 +7,15 @@
  * @email aiweline@qq.com
  */
 -->
-<config>
-    <menu>
-        <!-- 系统菜单下的环境管理 -->
-        <item name="system" title="系统管理" class="bi-gear" sort="100">
-            <item name="env-manager" title="环境管理" url="backend/framework/env-manager" class="bi-cpu" sort="90"/>
-        </item>
-    </menu>
-</config>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    
+    <!-- 环境管理 -->
+    <menu source="Weline_Framework::env_manager" 
+          name="env_manager" 
+          title="环境管理" 
+          action="backend/framework/env-manager"
+          parent="Weline_Backend::system_service_group" 
+          icon="bi-cpu" 
+          order="90"/>
+</menus>

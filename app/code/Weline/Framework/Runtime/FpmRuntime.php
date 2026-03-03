@@ -147,10 +147,16 @@ class FpmRuntime implements RuntimeInterface
         if ($parse['currency']) {
             $_SERVER['WELINE_USER_CURRENCY'] = $parse['currency'];
             RequestContext::currency($parse['currency']);
+        } else {
+            // 设置默认值，确保模板访问时不会出现 undefined 警告
+            $_SERVER['WELINE_USER_CURRENCY'] = $_SERVER['WELINE_USER_CURRENCY'] ?? RequestContext::currency();
         }
         if ($parse['language']) {
             $_SERVER['WELINE_USER_LANG'] = $parse['language'];
             RequestContext::locale($parse['language']);
+        } else {
+            // 设置默认值，确保模板访问时不会出现 undefined 警告
+            $_SERVER['WELINE_USER_LANG'] = $_SERVER['WELINE_USER_LANG'] ?? RequestContext::locale();
         }
         
         foreach ($default_cookies as $key) {

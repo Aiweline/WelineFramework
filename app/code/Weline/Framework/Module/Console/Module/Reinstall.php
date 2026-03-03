@@ -80,7 +80,7 @@ class Reinstall extends CommandAbstract
         $this->args = $args;
         
         // 1. 检查是否在开发模式
-        $deploy_mode = Env::get('deploy', 'prod');
+        $deploy_mode = Env::system('deploy') ?? 'prod';
         if ($deploy_mode !== 'dev' && $deploy_mode !== 'development') {
             $this->printer->error(__('错误：此命令只能在开发模式下运行！'));
             $this->printer->note(__('当前部署模式：%{1}', [$deploy_mode]));

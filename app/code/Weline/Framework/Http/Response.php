@@ -203,12 +203,12 @@ class Response implements ResponseInterface
         
         // 如果重定向次数过多，记录警告
         if ($redirectCount > 5) {
-            \error_log("[Redirect Warning] Too many redirects: {$redirectCount}, current URI: {$currentUri}, redirect to: {$url}");
+            w_log_warning("[Redirect Warning] Too many redirects: {$redirectCount}, current URI: {$currentUri}, redirect to: {$url}");
         }
         
         // 如果重定向次数超过10次，停止重定向循环
         if ($redirectCount > 10) {
-            \error_log("[Redirect Error] Redirect loop detected! Stopping redirect. Current URI: {$currentUri}, Attempted redirect to: {$url}");
+            w_log_error("[Redirect Error] Redirect loop detected! Stopping redirect. Current URI: {$currentUri}, Attempted redirect to: {$url}");
             throw new \RuntimeException("Redirect loop detected after {$redirectCount} redirects");
         }
         

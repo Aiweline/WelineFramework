@@ -11,11 +11,11 @@ namespace Weline\Framework\Http\Request;
 
 use Weline\Framework\App\Debug;
 use Weline\Framework\App\State;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Controller\Data\DataInterface;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
-use Weline\Framework\Http\Cache\RequestCache;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
@@ -41,9 +41,9 @@ abstract class RequestAbstract extends RequestFilter
     private string $origin_uri = '';
 
     /**
-     * @var CacheInterface|null
+     * @var CachePoolInterface|null
      */
-    public ?CacheInterface $cache = null;
+    public ?CachePoolInterface $cache = null;
 
     private array $parse_url = [];
 
@@ -82,20 +82,20 @@ abstract class RequestAbstract extends RequestFilter
             }
         }
         if (empty($this->cache)) {
-            $this->cache = ObjectManager::getInstance(RequestCache::class . 'Factory');
+            $this->cache = w_cache('request');
         }
         // 使用统一的缓存键生成方法，自动包含域名信息
         // 如果 uri_cache_key 为空或不包含域名信息（旧格式），则重新生成
         $uri = $this->getServer('REQUEST_URI') ?? '';
         $method = $this->getMethod() ?: 'GET';
-        $expected_cache_key = RequestCache::buildUriCacheKey($uri, $method, $this);
+        $expected_cache_key = KeyBuilder::buildRouteKey($uri, $method);
         
         // 检查是否需要重新生成缓存键（旧格式不包含域名信息）
         if (empty($this->uri_cache_key)) {
             $this->uri_cache_key = $expected_cache_key;
         } else {
             // 检查缓存键是否包含域名信息
-            $domain_key = RequestCache::getDomainKey($this);
+            $domain_key = KeyBuilder::getDomainKey();
             $host = $this->getServer('HTTP_HOST') ?? '';
             if (!str_contains($this->uri_cache_key, $domain_key) && !str_contains($this->uri_cache_key, $host)) {
                 $this->uri_cache_key = $expected_cache_key;
@@ -453,19 +453,19 @@ abstract class RequestAbstract extends RequestFilter
             return $this->uri;
         }
         $uri = $this->getServer('REQUEST_URI') ?? '';
-        $uri = RequestCache::normalizeUri($uri);
+        $uri = KeyBuilder::normalizeUri($uri);
 
         // 使用统一的缓存键生成方法，确保 uri_cache_key 包含域名信息
         if (empty($this->uri_cache_key)) {
             $method = $this->getMethod() ?: 'GET';
-            $this->uri_cache_key = RequestCache::buildUriCacheKey($uri, $method, $this);
+            $this->uri_cache_key = KeyBuilder::buildRouteKey($uri, $method);
         } else {
             // 检查缓存键是否包含域名信息（旧格式可能不包含）
-            $domain_key = RequestCache::getDomainKey($this);
+            $domain_key = KeyBuilder::getDomainKey();
             $host = $this->getServer('HTTP_HOST') ?? '';
             if (!str_contains($this->uri_cache_key, $domain_key) && !str_contains($this->uri_cache_key, $host)) {
                 $method = $this->getMethod() ?: 'GET';
-                $this->uri_cache_key = RequestCache::buildUriCacheKey($uri, $method, $this);
+                $this->uri_cache_key = KeyBuilder::buildRouteKey($uri, $method);
             }
         }
 

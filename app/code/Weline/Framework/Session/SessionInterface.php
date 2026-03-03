@@ -2,41 +2,18 @@
 
 declare(strict_types=1);
 
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- */
-
 namespace Weline\Framework\Session;
 
-use Weline\Framework\Database\AbstractModel;
-use Weline\Framework\Database\Model;
-
-interface SessionInterface
+/**
+ * 完整 Session 接口（组合数据存取 + 生命周期）
+ *
+ * 遵循 ISP（接口隔离原则）：
+ * - 需要完整 Session 功能的模块依赖此接口
+ * - 只需要数据存取的模块可以只依赖 SessionDataInterface
+ * - 只需要生命周期管理的模块可以只依赖 SessionLifecycleInterface
+ *
+ * 注意：此接口不包含认证逻辑，认证由独立的 AuthenticatedSessionInterface 负责。
+ */
+interface SessionInterface extends SessionDataInterface, SessionLifecycleInterface
 {
-    public function start(string $session_id);
-
-    public function getData(string $name);
-
-    public function setData(string $name, mixed $value);
-
-    public function isLogin();
-
-    public function login(Model $user);
-
-    public function getLoginUser(string $model): ?AbstractModel;
-
-    public function getLoginUsername();
-
-    public function getLoginUserID();
-
-    public function logout();
-
-    public function getOriginSession();
-
-    public function destroy();
-
-    public function delete(string $name);
 }

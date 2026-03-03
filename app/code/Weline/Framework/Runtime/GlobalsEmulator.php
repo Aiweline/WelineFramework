@@ -104,9 +104,22 @@ class GlobalsEmulator
      */
     private function populateFromRequest(Request $request): void
     {
-        // 获取请求数据
-        $_GET = $request->getParams() ?? [];
+        // WLS 兼容：先设置 $_POST，再设置 $_GET
+        // 必须先设置超全局变量，然后再重置 ParameterBag
         $_POST = $request->getPostParams() ?? [];
+        
+        // 获取 GET 参数：WlsRequest 有 getQueryParams()，普通 Request 没有
+        if (\method_exists($request, 'getQueryParams')) {
+            $_GET = $request->getQueryParams() ?? [];
+        } else {
+            // 普通 Request 不应该出现在 WLS 中
+            $_GET = [];
+        }
+        
+        // 重置 Request 的 ParameterBag，强制它重新从新的 $_GET/$_POST 初始化
+        if (\method_exists($request, 'resetParameterBag')) {
+            $request->resetParameterBag();
+        }
         
         // 获取 Cookie
         $_COOKIE = [];

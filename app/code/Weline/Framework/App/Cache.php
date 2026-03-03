@@ -9,7 +9,7 @@
 
 namespace Weline\Framework\App;
 
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\CacheFactory;
 
 class Cache
@@ -26,7 +26,7 @@ class Cache
         $this->cacheManager = $cacheManager;
     }
 
-    public function cache(string $driver = ''): CacheInterface
+    public function cache(string $driver = ''): CachePoolInterface
     {
         return $this->cacheManager->create($driver);
     }
