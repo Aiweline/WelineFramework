@@ -40,13 +40,13 @@ class SystemUpdateObserver implements ObserverInterface
             $source = strpos($eventName, 'module_install') !== false ? '模块安装后' : '系统更新后';
             
             if ($result['updated']) {
-                error_log("I18n: {$source}自动更新了 " . $result['updated_count'] . ' 个国家信息');
+                w_log_info("I18n: {$source}自动更新了 " . $result['updated_count'] . ' 个国家信息', [], 'i18n');
             } else {
-                error_log("I18n: {$source}国家信息检查完成 - " . $result['message']);
+                w_log_info("I18n: {$source}国家信息检查完成 - " . $result['message'], [], 'i18n');
             }
             
         } catch (\Exception $e) {
-            error_log('I18n: 国家信息自动更新失败 - ' . $e->getMessage());
+            w_log_error('I18n: 国家信息自动更新失败 - ' . $e->getMessage(), [], 'i18n');
         }
     }
 }

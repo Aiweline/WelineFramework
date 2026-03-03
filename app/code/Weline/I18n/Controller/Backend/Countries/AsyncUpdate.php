@@ -20,6 +20,7 @@ use Weline\I18n\Model\Countries;
 use Weline\I18n\Model\Countries\Locale\Name;
 use Weline\I18n\Model\Locale;
 use Weline\I18n\Model\Locale\Name as LocaleName;
+use Weline\Framework\App\Env;
 use Weline\I18n\Model\I18n;
 
 class AsyncUpdate extends BaseController
@@ -264,7 +265,7 @@ class AsyncUpdate extends BaseController
                 }
             } catch (\Exception $e) {
                 // 跳过无法获取区域的国家
-                error_log("无法获取国家 {$countryCode} 的区域信息: " . $e->getMessage());
+                w_log_warning("无法获取国家 {$countryCode} 的区域信息: " . $e->getMessage(), [], 'i18n');
             }
             
             $processed++;

@@ -13,28 +13,27 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Observer;
 
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Phrase\Parser;
-use Weline\I18n\Cache\I18nCache;
 
 class ParserWordsRegister implements \Weline\Framework\Event\ObserverInterface
 {
     public const WORDS_CACHE_KEY = 'WELINE_FRAMEWORK_SYSTEM_WORDS_CACHE_KEY';
     public const FRONTEND_WORDS_CACHE_KEY = 'WELINE_FRAMEWORK_SYSTEM_WORDS_CACHE_KEY_FRONTEND';
     public const BACKEND_WORDS_CACHE_KEY = 'WELINE_FRAMEWORK_SYSTEM_WORDS_CACHE_KEY_BACKEND';
-    private \Weline\Framework\Cache\CacheInterface $cache;
+    private CachePoolInterface $cache;
     /**
      * @var \Weline\Framework\Http\Request
      */
     private Request $request;
 
     public function __construct(
-        I18nCache $cache,
-        Request   $request
+        Request $request
     )
     {
-        $this->cache = $cache->create();
+        $this->cache = w_cache('i18n');
         $this->request = $request;
     }
 

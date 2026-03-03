@@ -75,11 +75,11 @@ class Countries extends \Weline\Framework\Database\Model
             // 检查是否已经有数据，如果有则跳过
             $existingCount = $this->clearQuery()->count()->fetch()->getFirst();
             if ($existingCount > 0) {
-                error_log('I18n: Countries already installed, skipping. Count: ' . $existingCount);
+                w_log_info('I18n: Countries already installed, skipping. Count: ' . $existingCount, [], 'i18n');
                 return;
             }
             
-            error_log('I18n: Starting countries installation...');
+            w_log_info('I18n: Starting countries installation...', [], 'i18n');
             
             // 获取I18n服务
             $i18n = ObjectManager::getInstance(\Weline\I18n\Model\I18n::class);
@@ -87,7 +87,7 @@ class Countries extends \Weline\Framework\Database\Model
             
             // 获取所有可用的国家信息
             $countries = $i18n->getCountries('en'); // 使用英语作为显示语言
-            error_log('I18n: Found ' . count($countries) . ' available countries');
+            w_log_info('I18n: Found ' . count($countries) . ' available countries', [], 'i18n');
             
             $insert_countries = [];
             $insert_countries_display = [];
@@ -108,7 +108,7 @@ class Countries extends \Weline\Framework\Database\Model
             
             // 批量插入数据
             if (!empty($insert_countries)) {
-                error_log('I18n: Inserting ' . count($insert_countries) . ' countries...');
+                w_log_info('I18n: Inserting ' . count($insert_countries) . ' countries...', [], 'i18n');
                 $this->clearQuery();
                 $this->insert($insert_countries, self::fields_CODE)->fetch();
                 
@@ -119,15 +119,15 @@ class Countries extends \Weline\Framework\Database\Model
                     $localeNames::fields_DISPLAY_NAME
                 ])->fetch();
                 
-                error_log('I18n: Successfully installed ' . count($insert_countries) . ' countries');
+                w_log_info('I18n: Successfully installed ' . count($insert_countries) . ' countries', [], 'i18n');
             } else {
-                error_log('I18n: No countries to insert');
+                w_log_info('I18n: No countries to insert', [], 'i18n');
             }
             
         } catch (\Exception $e) {
             // 记录错误但不中断安装过程
-            error_log('I18n global countries installation failed: ' . $e->getMessage());
-            error_log('I18n installation trace: ' . $e->getTraceAsString());
+            w_log_error('I18n global countries installation failed: ' . $e->getMessage(), [], 'i18n');
+            w_log_error('I18n installation trace: ' . $e->getTraceAsString(), [], 'i18n');
         }
     }
 

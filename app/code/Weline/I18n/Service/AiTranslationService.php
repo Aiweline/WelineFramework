@@ -227,7 +227,7 @@ class AiTranslationService
     private function getUntranslatedWords(string $targetLocale, int $limit): array
     {
         // 获取所有词典中的词
-        $allWords = $this->dictionary->clearInstance()
+        $allWords = $this->dictionary->clear()
             ->pagination(1, $limit)
             ->select()
             ->fetch()
@@ -243,7 +243,7 @@ class AiTranslationService
 
             // 检查是否已存在翻译
             $md5 = LocaleDictionary::generateMd5($word, $targetLocale);
-            $existingTranslation = $this->localeDictionary->clearInstance()
+            $existingTranslation = $this->localeDictionary->clear()
                 ->where(LocaleDictionary::fields_MD5, $md5)
                 ->find()
                 ->fetch();
@@ -270,14 +270,14 @@ class AiTranslationService
         $md5 = LocaleDictionary::generateMd5($word, $localeCode);
 
         // 检查是否已存在
-        $existingTranslation = $this->localeDictionary->clearInstance()
+        $existingTranslation = $this->localeDictionary->clear()
             ->where(LocaleDictionary::fields_MD5, $md5)
             ->find()
             ->fetch();
 
         if ($existingTranslation->getId()) {
             // 更新现有翻译
-            $this->localeDictionary->clearInstance()
+            $this->localeDictionary->clear()
                 ->where(LocaleDictionary::fields_MD5, $md5)
                 ->update([
                     LocaleDictionary::fields_TRANSLATE => $translation
@@ -285,7 +285,7 @@ class AiTranslationService
                 ->fetch();
         } else {
             // 创建新翻译
-            $this->localeDictionary->clearInstance()
+            $this->localeDictionary->clear()
                 ->insert([
                     LocaleDictionary::fields_MD5 => $md5,
                     LocaleDictionary::fields_WORD => $word,
@@ -342,7 +342,7 @@ class AiTranslationService
                 try {
                     // 保存翻译（如果已存在则跳过）
                     $md5 = LocaleDictionary::generateMd5($word, $localeCode);
-                    $existing = $this->localeDictionary->clearInstance()
+                    $existing = $this->localeDictionary->clear()
                         ->where(LocaleDictionary::fields_MD5, $md5)
                         ->find()
                         ->fetch();
@@ -519,7 +519,7 @@ class AiTranslationService
                 ['icon' => $icon, 'source_module' => 'Weline_I18n']
             );
         } catch (\Exception $e) {
-            \Weline\Framework\App\Env::log_error('i18n', "发送AI翻译系统消息失败: " . $e->getMessage());
+            w_log_error("发送AI翻译系统消息失败: " . $e->getMessage(), [], 'i18n');
         }
     }
 }

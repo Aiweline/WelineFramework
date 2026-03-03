@@ -15,8 +15,8 @@ namespace Weline\I18n\Model;
 
 use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Setup\Data\Context;
+use Weline\Framework\App\Env;
 use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\I18n\Cache\LanguageCache;
 
 class Locals extends \Weline\Framework\Database\Model
 {
@@ -44,7 +44,52 @@ class Locals extends \Weline\Framework\Database\Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // TODO: Implement upgrade() method.
+        // 1.0.3: 添加 code + target_code 组合唯一索引（PostgreSQL ON CONFLICT 需要）
+        if ($setup->tableExist()) {
+            $this->ensureUniqueIndex($setup);
+        }
+        
+        // 重新安装全球语言包
+        $this->installAllGlobalLocales();
+    }
+    
+    /**
+     * 确保唯一索引存在（用于 ON CONFLICT）
+     */
+    private function ensureUniqueIndex(ModelSetup $setup): void
+    {
+        $table = $setup->getTable();
+        $connector = $this->getConnection()->getConnector();
+        $isPostgresql = $connector instanceof \Weline\Framework\Database\Connection\Adapter\Pgsql\Connector;
+        
+        // 检查唯一索引是否已存在
+        if ($setup->hasIndex('idx_code_target')) {
+            return;
+        }
+        
+        try {
+            if ($isPostgresql) {
+                // PostgreSQL: 先删除旧索引，再创建唯一索引
+                $setup->query("DROP INDEX IF EXISTS \"idx_{$table}_idx_code\"");
+                $setup->query("DROP INDEX IF EXISTS \"idx_{$table}_idx_target_code\"");
+                $setup->query("CREATE UNIQUE INDEX IF NOT EXISTS \"idx_{$table}_idx_code_target\" ON public.\"{$table}\" (\"code\", \"target_code\")");
+            } else {
+                // MySQL: 使用 ALTER TABLE
+                try {
+                    $setup->query("ALTER TABLE `{$table}` DROP INDEX `idx_code`");
+                } catch (\Throwable $e) {
+                    // 索引不存在，忽略
+                }
+                try {
+                    $setup->query("ALTER TABLE `{$table}` DROP INDEX `idx_target_code`");
+                } catch (\Throwable $e) {
+                    // 索引不存在，忽略
+                }
+                $setup->query("ALTER TABLE `{$table}` ADD UNIQUE INDEX `idx_code_target` (`code`, `target_code`)");
+            }
+        } catch (\Throwable $e) {
+            w_log_error('I18n upgrade failed to create unique index: ' . $e->getMessage(), [], 'i18n');
+        }
     }
 
     /**
@@ -61,8 +106,7 @@ class Locals extends \Weline\Framework\Database\Model
                 ->addColumn(self::fields_IS_ACTIVE, TableInterface::column_type_SMALLINT, 1, 'not null default 0', '启用状态')
                 ->addColumn(self::fields_IS_INSTALL, TableInterface::column_type_SMALLINT, 1, 'not null default 0', '是否安装')
                 ->addColumn(self::fields_FLAG, TableInterface::column_type_TEXT, 20000, '', 'svg国旗')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_code', self::fields_CODE, '区码索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_target_code', self::fields_TARGET_CODE, '目标区码索引')
+                ->addIndex(TableInterface::index_type_UNIQUE, 'idx_code_target', [self::fields_CODE, self::fields_TARGET_CODE], '区码+目标区码唯一索引')
                 ->addIndex(TableInterface::index_type_KEY, 'idx_name', self::fields_NAME, '名字索引')
                 ->addIndex(TableInterface::index_type_KEY, 'idx_is_active', self::fields_IS_ACTIVE, '状态索引')
                 ->addIndex(TableInterface::index_type_KEY, 'idx_is_install', self::fields_IS_INSTALL, '安装索引')
@@ -94,7 +138,7 @@ class Locals extends \Weline\Framework\Database\Model
                 } catch (\Exception $e) {
                     // 如果获取名称失败，使用locale代码作为名称，并跳过这个locale
                     if (defined('DEV') && DEV) {
-                        error_log("I18n: 无法获取locale '{$locale}' 的名称，跳过: " . $e->getMessage());
+                        w_log_warning("I18n: 无法获取locale '{$locale}' 的名称，跳过: " . $e->getMessage(), [], 'i18n');
                     }
                     continue;
                 }
@@ -135,7 +179,7 @@ class Locals extends \Weline\Framework\Database\Model
             
         } catch (\Exception $e) {
             // 记录错误但不中断安装过程
-            error_log('I18n global locales installation failed: ' . $e->getMessage());
+            w_log_error('I18n global locales installation failed: ' . $e->getMessage(), [], 'i18n');
         }
     }
 
@@ -148,8 +192,7 @@ class Locals extends \Weline\Framework\Database\Model
         parent::save_after();
         // 清除语言缓存
         try {
-            $languageCache = new LanguageCache();
-            $languageCache->clear();
+            w_cache('i18n')->clear();
         } catch (\Throwable $e) {
             // 缓存清除失败，静默处理
         }

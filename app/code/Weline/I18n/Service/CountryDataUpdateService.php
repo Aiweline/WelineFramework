@@ -18,6 +18,7 @@ use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\Countries;
 use Weline\I18n\Model\Countries\Locale\Name;
+use Weline\Framework\App\Env;
 use Weline\I18n\Model\I18n;
 
 class CountryDataUpdateService
@@ -53,7 +54,7 @@ class CountryDataUpdateService
             return true;
 
         } catch (\Exception $e) {
-            error_log('Country data update failed: ' . $e->getMessage());
+            w_log_error('Country data update failed: ' . $e->getMessage(), [], 'i18n');
             return false;
         }
     }
