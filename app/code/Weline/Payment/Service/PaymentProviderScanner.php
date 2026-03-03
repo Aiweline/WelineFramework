@@ -103,13 +103,13 @@ class PaymentProviderScanner
                                 $providers[] = $className;
                             }
                         } catch (\Throwable $e) {
-                            error_log("检查支付提供商接口失败: {$className}, 错误: " . $e->getMessage());
+                            w_log_error("检查支付提供商接口失败: {$className}, 错误: " . $e->getMessage());
                         }
                     }
                 }
             }
         } catch (\Exception $e) {
-            error_log("扫描支付提供商失败: " . $e->getMessage());
+            w_log_error("扫描支付提供商失败: " . $e->getMessage());
         }
         
         $this->cachedProviders = $providers;
@@ -170,7 +170,7 @@ class PaymentProviderScanner
                     }
                 }
             } catch (\Throwable $e) {
-                error_log("实例化支付提供商失败: {$className}, 错误: " . $e->getMessage());
+                w_log_error("实例化支付提供商失败: {$className}, 错误: " . $e->getMessage());
             }
         }
         
