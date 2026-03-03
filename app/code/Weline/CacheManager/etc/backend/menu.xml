@@ -2,19 +2,19 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <!--缓存服务分组菜单-->
-    <add source="Weline_CacheManager::cache_service" name="cache_service" title="缓存服务" action="" parent="Weline_Backend::system_service"
-         icon="mdi mdi-cached" order="30100"/>
     
-    <!--缓存服务-->
-    <add source="Weline_CacheManager::system_cache" name="system_cache" title="缓存管理" action="admin/system/cache"
-         parent="Weline_CacheManager::cache_service" icon="mdi mdi-cached" order="10"/>
-    
-    <!--缓存清理管理-->
-    <add source="Weline_CacheManager::cache_cleanup" name="cache_cleanup" title="缓存清理" action="admin/backend/cachecleanup/index"
-         parent="Weline_CacheManager::cache_service" icon="mdi mdi-broom" order="20"/>
-    
-    <!--定时任务状态-->
-    <add source="Weline_CacheManager::cron_status" name="cron_status" title="定时任务状态" action="admin/backend/cachecleanup/cronstatus"
-         parent="Weline_CacheManager::cache_service" icon="mdi mdi-clock" order="30"/>
+    <!-- 缓存服务 - 归入系统管理 > 系统服务 -->
+    <menu source="Weline_CacheManager::cache_service" name="cache_service" title="缓存服务"
+          parent="Weline_Backend::system_service_group"
+          icon="mdi mdi-cached" order="10">
+        
+        <menu source="Weline_CacheManager::system_cache" name="system_cache" title="缓存管理" action="*/system/cache"
+              icon="mdi mdi-database-cog-outline" order="10"/>
+        
+        <menu source="Weline_CacheManager::cache_cleanup" name="cache_cleanup" title="缓存清理" action="*/backend/cachecleanup"
+              icon="mdi mdi-broom" order="20"/>
+        
+        <menu source="Weline_CacheManager::cron_status" name="cron_status" title="定时任务状态" action="*/backend/cachecleanup/cron-status"
+              icon="mdi mdi-clock-check-outline" order="30"/>
+    </menu>
 </menus>

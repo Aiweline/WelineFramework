@@ -1,49 +1,167 @@
 <?php
 /**
- * 定时任务状态 - 内容模板
+ * 定时任务列表 - 内容模板
  * @var \Weline\Framework\View\Template $this
+ * @var array $cronTasks
  */
+
+use Weline\Cron\Model\CronTask;
 ?>
 <style>
-    .weline-cron-output {
-        background: var(--backend-color-card-bg-secondary, #f8f9fa);
-        border: 1px solid var(--backend-color-border, #dee2e6);
-        border-radius: 8px;
-        padding: 20px;
-        margin: 20px 0;
-        font-family: 'Courier New', monospace;
-        font-size: 14px;
-        line-height: 1.5;
-        white-space: pre-wrap;
-        max-height: 600px;
-        overflow-y: auto;
+    .weline-cron-table-container {
+        background: var(--backend-color-card-bg, #fff);
+        border: 1px solid var(--backend-color-border-default, #dee2e6);
+        border-radius: var(--backend-border-radius-md, 8px);
+        overflow: hidden;
+    }
+    .weline-cron-table {
+        width: 100%;
+        margin: 0;
+        border-collapse: collapse;
+    }
+    .weline-cron-table thead th {
+        background: var(--backend-color-bg-secondary, #f8f9fa);
+        color: var(--backend-color-text-primary, #212529);
+        font-weight: 600;
+        padding: 12px 16px;
+        text-align: left;
+        border-bottom: 2px solid var(--backend-color-border-default, #dee2e6);
+        white-space: nowrap;
+    }
+    .weline-cron-table tbody td {
+        padding: 12px 16px;
+        color: var(--backend-color-text-primary, #333);
+        border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+        vertical-align: top;
+    }
+    .weline-cron-table tbody tr:hover td {
+        background: var(--backend-color-table-bg-hover, #f8f9fa);
+    }
+    .weline-cron-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+    .weline-cron-code {
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        font-size: 13px;
+        color: var(--backend-color-primary, #556ee6);
+        background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+        padding: 2px 6px;
+        border-radius: 4px;
+        word-break: break-all;
+    }
+    .weline-cron-name {
+        font-weight: 500;
+        color: var(--backend-color-text-primary, #212529);
+    }
+    .weline-cron-tip {
+        color: var(--backend-color-text-secondary, #6c757d);
+        font-size: 13px;
+        max-width: 300px;
+    }
+    .weline-cron-time {
+        font-family: 'SFMono-Regular', Consolas, monospace;
+        font-size: 12px;
+        background: var(--backend-color-bg-tertiary, #e9ecef);
+        padding: 2px 8px;
+        border-radius: 4px;
+        color: var(--backend-color-text-secondary, #6c757d);
+    }
+    .weline-cron-status {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    .weline-cron-status-pending {
+        background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.15));
+        color: var(--backend-color-warning, #f1b44c);
+    }
+    .weline-cron-status-running {
+        background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.15));
+        color: var(--backend-color-info, #50a5f1);
+    }
+    .weline-cron-status-success {
+        background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.15));
+        color: var(--backend-color-success, #34c38f);
+    }
+    .weline-cron-status-error {
+        background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.15));
+        color: var(--backend-color-danger, #f46a6a);
     }
     .weline-cron-btn-refresh {
-        background: linear-gradient(45deg, #007bff, #0056b3);
+        background: var(--backend-color-primary, #556ee6);
         border: none;
-        color: white;
+        color: var(--backend-color-text-inverse, #fff);
         padding: 10px 20px;
         border-radius: 5px;
-        font-weight: bold;
+        font-weight: 500;
         transition: all 0.3s ease;
     }
     .weline-cron-btn-refresh:hover {
+        background: var(--backend-color-primary-hover, #4857d4);
         transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        color: white;
+        box-shadow: var(--backend-shadow-md);
+        color: var(--backend-color-text-inverse, #fff);
+    }
+    .weline-cron-summary {
+        display: flex;
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+    .weline-cron-summary-item {
+        background: var(--backend-color-card-bg, #fff);
+        border: 1px solid var(--backend-color-border-default, #dee2e6);
+        border-radius: var(--backend-border-radius-md, 8px);
+        padding: 16px 24px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .weline-cron-summary-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+    }
+    .weline-cron-summary-icon-total {
+        background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.15));
+        color: var(--backend-color-primary, #556ee6);
+    }
+    .weline-cron-summary-number {
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--backend-color-text-primary, #212529);
+    }
+    .weline-cron-summary-label {
+        font-size: 13px;
+        color: var(--backend-color-text-secondary, #6c757d);
+    }
+    .weline-cron-empty {
+        text-align: center;
+        padding: 60px 20px;
+        color: var(--backend-color-text-tertiary, #999);
+    }
+    .weline-cron-empty i {
+        font-size: 48px;
+        opacity: 0.3;
+        margin-bottom: 16px;
     }
 </style>
 
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1 class="h3 mb-0"><?= $title ?? __('定时任务状态') ?></h1>
+            <h1 class="h3 mb-0"><?= $title ?? __('定时任务列表') ?></h1>
             <div class="btn-group">
                 <button type="button" class="btn weline-cron-btn-refresh" onclick="location.reload()">
-                    <i class="fas fa-sync-alt"></i> <?= __('刷新状态') ?>
+                    <i class="fas fa-sync-alt"></i> <?= __('刷新') ?>
                 </button>
                 <a href="<?= $this->getUrl('*/cachecleanup/index') ?>" class="btn btn-secondary">
-                    <i class="fas fa-arrow-left"></i> <?= __('返回缓存清理') ?>
+                    <i class="fas fa-arrow-left"></i> <?= __('返回') ?>
                 </a>
             </div>
         </div>
@@ -56,26 +174,72 @@
     </div>
 </div>
 
-<!-- 定时任务状态说明 -->
-<div class="alert alert-info">
-    <h5><i class="fas fa-info-circle"></i> <?= __('定时任务说明') ?></h5>
-    <ul class="mb-0">
-        <li><strong><?= __('缓存清理任务：') ?></strong><?= __('每10分钟自动清理过期的缓存文件') ?></li>
-        <li><strong><?= __('执行时间：') ?></strong><code>*/10 * * * *</code> (<?= __('每10分钟') ?>)</li>
-        <li><strong><?= __('清理策略：') ?></strong><?= __('删除7天前的过期缓存文件') ?></li>
-        <li><strong><?= __('安全机制：') ?></strong><?= __('只清理过期文件，不影响正在使用的缓存') ?></li>
-    </ul>
+<?php
+$taskTotal = count($cronTasks ?? []);
+?>
+
+<!-- 统计摘要 -->
+<div class="weline-cron-summary">
+    <div class="weline-cron-summary-item">
+        <div class="weline-cron-summary-icon weline-cron-summary-icon-total">
+            <i class="fas fa-clock"></i>
+        </div>
+        <div>
+            <div class="weline-cron-summary-number"><?= $taskTotal ?></div>
+            <div class="weline-cron-summary-label"><?= __('定时任务总数') ?></div>
+        </div>
+    </div>
 </div>
 
-<!-- 定时任务输出 -->
+<!-- 定时任务表格 -->
 <div class="card">
     <div class="card-header">
         <h5 class="mb-0">
-            <i class="fas fa-terminal"></i> <?= __('定时任务列表') ?>
+            <i class="fas fa-list"></i> <?= __('任务列表') ?>
         </h5>
     </div>
-    <div class="card-body">
-        <div class="weline-cron-output"><?= htmlspecialchars($cronOutput ?? __('暂无定时任务信息')) ?></div>
+    <div class="card-body p-0">
+        <if condition="$taskTotal > 0">
+            <div class="weline-cron-table-container">
+                <table class="weline-cron-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;">#</th>
+                            <th><?= __('任务代码') ?></th>
+                            <th><?= __('任务名称') ?></th>
+                            <th><?= __('执行频率') ?></th>
+                            <th><?= __('说明') ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php $index = 0; ?>
+                        <foreach name="cronTasks" item="task">
+                            <?php $index++; ?>
+                            <tr>
+                                <td><?= $index ?></td>
+                                <td>
+                                    <span class="weline-cron-code"><?= htmlspecialchars($task->getData(CronTask::fields_EXECUTE_NAME) ?? '') ?></span>
+                                </td>
+                                <td>
+                                    <span class="weline-cron-name"><?= htmlspecialchars($task->getData(CronTask::fields_NAME) ?? '') ?></span>
+                                </td>
+                                <td>
+                                    <span class="weline-cron-time"><?= htmlspecialchars($task->getData(CronTask::fields_CRON_TIME) ?? '') ?></span>
+                                </td>
+                                <td>
+                                    <span class="weline-cron-tip"><?= nl2br(htmlspecialchars($task->getData(CronTask::fields_TIP) ?? '')) ?></span>
+                                </td>
+                            </tr>
+                        </foreach>
+                    </tbody>
+                </table>
+            </div>
+        <else/>
+            <div class="weline-cron-empty">
+                <i class="fas fa-inbox"></i>
+                <p><?= __('暂无定时任务') ?></p>
+            </div>
+        </if>
     </div>
 </div>
 
@@ -83,17 +247,16 @@
 <div class="card mt-4">
     <div class="card-header">
         <h5 class="mb-0">
-            <i class="fas fa-cogs"></i> <?= __('操作说明') ?>
+            <i class="fas fa-terminal"></i> <?= __('命令行操作') ?>
         </h5>
     </div>
     <div class="card-body">
         <div class="row">
             <div class="col-md-6">
-                <h6><?= __('命令行操作：') ?></h6>
+                <h6><?= __('任务管理：') ?></h6>
                 <ul class="list-unstyled">
                     <li><code>php bin/w cron:task:listing</code> - <?= __('查看所有定时任务') ?></li>
-                    <li><code>php bin/w cron:task:run cache_cleanup</code> - <?= __('手动执行缓存清理任务') ?></li>
-                    <li><code>php bin/w cache:flush</code> - <?= __('直接清理过期缓存') ?></li>
+                    <li><code>php bin/w cron:task:run &lt;task_code&gt;</code> - <?= __('手动执行指定任务') ?></li>
                 </ul>
             </div>
             <div class="col-md-6">
@@ -101,7 +264,7 @@
                 <ul class="list-unstyled">
                     <li><code>php bin/w cron:install</code> - <?= __('安装系统定时任务') ?></li>
                     <li><code>php bin/w cron:exist</code> - <?= __('检查定时任务是否存在') ?></li>
-                    <li><code>php bin/w cron:remove</code> - <?= __('移除系统定时任务') ?></li> 
+                    <li><code>php bin/w cron:remove</code> - <?= __('移除系统定时任务') ?></li>
                 </ul>
             </div>
         </div>
