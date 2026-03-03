@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Widget\Service;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\View\Template;
 
 /**
@@ -76,7 +77,7 @@ class WidgetTemplateParser
 
             return $result;
         } catch (\Exception $e) {
-            error_log("解析部件模板失败: {$templatePath}, 错误: " . $e->getMessage());
+            w_log_error("解析部件模板失败: {$templatePath}, 错误: " . $e->getMessage(), [], 'WidgetTemplateParser');
             return null;
         }
     }

@@ -40,7 +40,7 @@
 - [x] 新增 `Service/ParamSchemaRegistry.php`：管理 `generated/param_schemas.php` 的读写与缓存；提供 `expandParams()` 展开语义化 type。
 - [x] `WidgetConfigService` 注入 `ParamSchemaRegistry`，`getParamDefinitions()` 返回前 `expandParams()`，`getRegisteredTypes()` 合并 schema types。
 - [x] `Console/Widget/Refresh.php` 在 widget 注册表刷新后同步刷新 ParamSchema 注册表。
-- [x] 三个 Observer（SetupUpgradeAfter / ModuleUpgradeAfter / ModuleInstallAfter）同步刷新 ParamSchema，日志改用 `Env::log_error()`。
+- [x] 三个 Observer（SetupUpgradeAfter / ModuleUpgradeAfter / ModuleInstallAfter）同步刷新 ParamSchema，日志改用 `w_log_error()`。
 
 ### 涉及文件
 
