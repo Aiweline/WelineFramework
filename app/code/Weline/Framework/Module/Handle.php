@@ -175,7 +175,7 @@ class Handle implements HandleInterface, RegisterInterface
                 $registryService->updateAllRegistries(true); // 静默执行
             } catch (\Exception $e) {
                 // 注册表更新失败不影响模块卸载，只记录日志
-                \Weline\Framework\App\Env::log_warning('registry_update.log', __('模块卸载后注册表更新失败: %{1}', [$e->getMessage()]));
+                w_log_warning(__('模块卸载后注册表更新失败: %{1}', [$e->getMessage()]), [], 'registry_update.log');
             }
         }
         

@@ -48,7 +48,7 @@ class Set implements CommandInterface
         switch ($param) {
             case 'online':
                 $input = 'y';
-                if ('prod' === Env::getInstance()->getConfig('deploy')) {
+                if ('prod' === Env::system('deploy')) {
                     $this->printing->setup(__('当前生产环境：确认切换实时翻译模式么？Y/n'));
                     $input = $this->system->input();
                 }

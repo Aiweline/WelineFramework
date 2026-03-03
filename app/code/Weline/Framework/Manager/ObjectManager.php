@@ -12,8 +12,9 @@ namespace Weline\Framework\Manager;
 use ReflectionClass;
 use Weline\Framework\App\Debug;
 use Weline\Framework\App\Exception;
-use Weline\Framework\Cache\CacheInterface;
-use Weline\Framework\Manager\Cache\ObjectCache;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
+use Weline\Framework\Cache\Adapter\FileAdapter;
+use Weline\Framework\Cache\Pool\CachePool;
 use Weline\Framework\Manager\FactoryObjectInterface;
 
 class ObjectManager implements ManagerInterface
@@ -22,7 +23,7 @@ class ObjectManager implements ManagerInterface
         \PDO::class,
         \WeakMap::class
     ];
-    private static ?CacheInterface $cache = null;
+    private static ?CachePoolInterface $cache = null;
 
     private static ?ObjectManager $instance = null;
 
@@ -104,10 +105,11 @@ class ObjectManager implements ManagerInterface
     /**
      * PHP 8 性能优化：使用 isset 替代 empty（isset 更快）
      */
-    private static function getCache(): CacheInterface
+    private static function getCache(): CachePoolInterface
     {
         if (!isset(self::$cache)) {
-            self::$cache = (new ObjectCache())->create();
+            $adapter = new FileAdapter('object');
+            self::$cache = new CachePool('object', $adapter, '对象缓存', true, 86400);
         }
         return self::$cache;
     }
@@ -813,7 +815,7 @@ class ObjectManager implements ManagerInterface
     private static function processFactoryClass(string $class, $factoryObject): mixed
     {
         // 提前返回特殊处理：这些类名以 Factory 结尾但 create() 需要参数，实例已由 getInstance 提供
-        if (self::isDbManagerFactory($class) || self::isConnectionFactory($class)) {
+        if (self::isDbManagerFactory($class) || self::isConnectionFactory($class) || self::isParameterizedFactory($class)) {
             return $factoryObject;
         }
         
@@ -838,6 +840,25 @@ class ObjectManager implements ManagerInterface
     private static function isConnectionFactory(string $class): bool
     {
         return $class === \Weline\Framework\Database\ConnectionFactory::class;
+    }
+    
+    /**
+     * 需要参数的工厂类列表（create 方法需要参数，不能无参调用）
+     */
+    private static array $parameterizedFactories = [
+        \Weline\Framework\Cache\AdapterFactory::class,
+        \Weline\Framework\Session\SessionFactory::class,
+    ];
+    
+    /**
+     * 检查是否为需要参数的工厂类
+     * 
+     * @param string $class 类名
+     * @return bool
+     */
+    private static function isParameterizedFactory(string $class): bool
+    {
+        return in_array($class, self::$parameterizedFactories, true);
     }
     
     /**

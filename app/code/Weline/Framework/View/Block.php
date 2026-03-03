@@ -12,14 +12,13 @@ declare(strict_types=1);
 namespace Weline\Framework\View;
 
 use Weline\Framework\App\Exception;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Database\AbstractModel;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\View\Cache\ViewCache;
 
 class Block extends Template implements BlockInterface
 {
-    public ?CacheInterface $_cache = null;
+    public ?CachePoolInterface $_cache = null;
     protected string $_template = '';
     protected bool $is_init = false;
 
@@ -32,7 +31,7 @@ class Block extends Template implements BlockInterface
     {
         parent::__init();
         if (empty($this->_cache)) {
-            $this->_cache = ObjectManager::getInstance(ViewCache::class . 'Factory');
+            $this->_cache = w_cache('view');
         }
         $this->is_init = true;
     }

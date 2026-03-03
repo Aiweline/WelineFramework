@@ -476,7 +476,7 @@ class FileHelper
                         $error = error_get_last();
                         if ($error && (strpos($error['message'], 'Permission denied') !== false || 
                                        strpos($error['message'], 'errno=13') !== false)) {
-                            error_log(__("文件写入权限错误，重试第 %{1} 次: %{2}", [($i + 1), $filePath]));
+                            w_log_warning(__("文件写入权限错误，重试第 %{1} 次: %{2}", [($i + 1), $filePath]));
                             usleep($retryDelay);
                             continue;
                         }
@@ -489,7 +489,7 @@ class FileHelper
                         $error = error_get_last();
                         if ($error && (strpos($error['message'], 'Permission denied') !== false || 
                                        strpos($error['message'], 'errno=13') !== false)) {
-                            error_log(__("文件写入异常，重试第 %{1} 次: %{2} - %{3}", [($i + 1), $filePath, $e->getMessage()]));
+                            w_log_warning(__("文件写入异常，重试第 %{1} 次: %{2} - %{3}", [($i + 1), $filePath, $e->getMessage()]));
                             usleep($retryDelay);
                             continue;
                         }
@@ -501,7 +501,7 @@ class FileHelper
             throw new Exception(__("文件写入最终失败: %{1}", [$filePath]));
             
         } catch (Exception $e) {
-            error_log(__("文件写入失败: %{1}", [$e->getMessage()]));
+            w_log_error(__("文件写入失败: %{1}", [$e->getMessage()]));
             throw $e;
         }
     }
@@ -519,12 +519,12 @@ class FileHelper
         $filePath = self::normalizePath($filePath);
         
         if (!file_exists($filePath)) {
-            error_log(__("文件不存在: %{1}", [$filePath]));
+            w_log_warning(__("文件不存在: %{1}", [$filePath]));
             return false;
         }
 
         if (!self::isReadable($filePath)) {
-            error_log(__("文件不可读: %{1}", [$filePath]));
+            w_log_warning(__("文件不可读: %{1}", [$filePath]));
             return false;
         }
 
@@ -541,22 +541,22 @@ class FileHelper
                     $error = error_get_last();
                     if ($error && (strpos($error['message'], 'Permission denied') !== false || 
                                    strpos($error['message'], 'errno=13') !== false)) {
-                        error_log(__("文件读取权限错误，重试第 %{1} 次: %{2}", [($i + 1), $filePath]));
+                        w_log_warning(__("文件读取权限错误，重试第 %{1} 次: %{2}", [($i + 1), $filePath]));
                         usleep($retryDelay);
                         continue;
                     }
                 }
                 
-                error_log(__("文件读取失败: %{1}", [$filePath]));
+                w_log_error(__("文件读取失败: %{1}", [$filePath]));
                 return false;
                 
             } catch (Exception $e) {
                 if ($i < $maxRetries - 1) {
-                    error_log(__("文件读取异常，重试第 %{1} 次: %{2} - %{3}", [($i + 1), $filePath, $e->getMessage()]));
+                    w_log_warning(__("文件读取异常，重试第 %{1} 次: %{2} - %{3}", [($i + 1), $filePath, $e->getMessage()]));
                     usleep($retryDelay);
                     continue;
                 }
-                error_log(__("文件读取最终失败: %{1} - %{2}", [$filePath, $e->getMessage()]));
+                w_log_error(__("文件读取最终失败: %{1} - %{2}", [$filePath, $e->getMessage()]));
                 return false;
             }
         }

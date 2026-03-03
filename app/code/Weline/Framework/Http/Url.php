@@ -73,18 +73,20 @@ class Url implements UrlInterface
      */
     public static function detectLanguage(string &$uri, string $code): bool
     {
-        // 优化：使用语言缓存类，避免重复数据库查询
-        $languageCache = new \Weline\I18n\Cache\LanguageCache();
-        $checkResult = $languageCache->checkLanguage($code);
+        // 优化：使用语言缓存，避免重复数据库查询
+        $cache = w_cache('i18n');
+        $checkCacheKey = 'lang_check_' . strtolower($code);
+        $checkResult = $cache->get($checkCacheKey);
         
-        if ($checkResult === true) {
-            // 找到语言，更新URI并设置
-            if (str_starts_with($uri, '/' . $code)) {
-                $uri = substr($uri, strlen('/' . $code));
+        if ($checkResult !== false) {
+            if ((bool)$checkResult) {
+                // 找到语言，更新URI并设置
+                if (str_starts_with($uri, '/' . $code)) {
+                    $uri = substr($uri, strlen('/' . $code));
+                }
+                self::$parserServer['WELINE_USER_LANG'] = $code;
+                return true;
             }
-            self::$parserServer['WELINE_USER_LANG'] = $code;
-            return true;
-        } elseif ($checkResult === false) {
             // 明确知道语言不存在，直接返回
             return false;
         }
@@ -103,7 +105,7 @@ class Url implements UrlInterface
         $result = $data->getData('result');
         
         // 保存检查结果到缓存
-        $languageCache->setLanguageCheck($code, $result);
+        $cache->set($checkCacheKey, $result ? 1 : 0);
         
         if ($result) {
             if (str_starts_with($uri, '/' . $code)) {
@@ -129,11 +131,12 @@ class Url implements UrlInterface
             return true;
         }
         
-        // 优化：使用货币缓存类，避免重复数据库查询
-        $currencyCache = new \Weline\Currency\Cache\CurrencyCache();
-        $currency = $currencyCache->getByCode($code);
+        // 优化：使用货币缓存，避免重复数据库查询
+        $cache = w_cache('currency');
+        $currencyCacheKey = 'currency_code_' . $codeUpper;
+        $currency = $cache->get($currencyCacheKey);
         
-        if ($currency !== null && isset($currency['code'])) {
+        if ($currency !== false && is_array($currency) && isset($currency['code'])) {
             // 找到货币，更新URI并设置
             if (str_starts_with($uri, '/' . $code)) {
                 $uri = substr($uri, strlen('/' . $code));
@@ -769,14 +772,14 @@ class Url implements UrlInterface
             and preg_match('/\.(jpg|jpeg|png|webp|gif|css|js|ico|woff|woff2|txt|pdf|doc|docx|xls|xlsx|ppt|pptx)$/', $_SERVER['REQUEST_URI'])) {
             return $url;
         }
-        // 优化：使用缓存类跨请求缓存网站数据，避免每次请求都查询数据库
+        // 优化：使用缓存跨请求缓存网站数据，避免每次请求都查询数据库
         // 如果 self::$parserSites 已经初始化，直接使用，避免重复查询和事件分发
         if (empty(self::$parserSites)) {
-            // 使用网站缓存类
-            $websiteCache = new \Weline\Websites\Cache\WebsiteCache();
-            $cachedSites = $websiteCache->getAllSites();
+            // 使用网站缓存
+            $websiteCache = w_cache('website');
+            $cachedSites = $websiteCache->get('all_sites');
             
-            if ($cachedSites !== null && is_array($cachedSites)) {
+            if ($cachedSites !== false && is_array($cachedSites)) {
                 // 使用缓存数据，转换为 self::$parserSites 格式
                 foreach ($cachedSites as $site) {
                     $site_url = $site['url'] ?? '';
@@ -808,7 +811,7 @@ class Url implements UrlInterface
                     $detectWebsiteEnd = \microtime(true);
                     $detectWebsiteDuration = \round(($detectWebsiteEnd - $detectWebsiteStart) * 1000, 2);
                     if ($detectWebsiteDuration > 100) {
-                        \error_log('[WLS Performance] detect_website event took ' . $detectWebsiteDuration . 'ms');
+                        w_log_warning('[WLS Performance] detect_website event took ' . $detectWebsiteDuration . 'ms');
                     }
                     $sites = $detect_website_data->getData('sites');
                     # 找出站点链接最长的，依次写入self::$parserSites
@@ -825,7 +828,7 @@ class Url implements UrlInterface
                     }
                     
                     // 将查询结果保存到缓存
-                    $websiteCache->setAllSites($sites);
+                    $websiteCache->set('all_sites', $sites);
                 } finally {
                     // 确保无论成功或异常都重置标志
                     self::$parsingInProgress = false;
@@ -1026,16 +1029,23 @@ class Url implements UrlInterface
                     break;
             }
         } else {
-            // 未匹配到配置的区域前缀，检查路径中是否有 "admin" 或 "backend" 段
-            // 支持 /网站码/admin/login 或 /网站码/模块/backend/控制器 格式
+            // 未匹配到配置的区域前缀，检查路径中是否有 "admin" 段
+            // 只支持 /网站码/admin/login 格式的后台访问
+            // 
+            // 安全修复（2026-02-28）：移除了对 URL 中 "backend" 段的检测
+            // 问题：之前的逻辑会将任何包含 "backend" 段的 URL（如 /acl/backend/acl/role）
+            //       视为后台请求，导致安全漏洞——用户可以绕过正确的后台入口（需要 backendKey）
+            //       直接访问后台控制器
+            // 修复：后台请求必须通过以下方式之一访问：
+            //       1. 使用配置的 backendKey 作为 URL 首段（由上方 Env::getAreaByRoutePrefix() 处理）
+            //       2. 使用 /网站码/admin/xxx 格式（由下方 adminSegmentIndex 逻辑处理）
+            //       如果 URL 中仅包含 "backend" 字符串但首段不是有效的 backendKey，
+            //       则视为前台请求并返回 404
             $adminSegmentIndex = null;
-            $backendSegmentIndex = null;
             foreach ($splits as $idx => $seg) {
                 if ($seg === 'admin' && $adminSegmentIndex === null) {
                     $adminSegmentIndex = $idx;
-                }
-                if ($seg === 'backend' && $idx >= 1 && $backendSegmentIndex === null) {
-                    $backendSegmentIndex = $idx;
+                    break;
                 }
             }
             
@@ -1046,17 +1056,10 @@ class Url implements UrlInterface
                 $uri = '/' . implode('/', array_slice($splits, $adminSegmentIndex));
                 $has_area = true;
                 self::$parserServer['REQUEST_URI'] = $uri;
-            } elseif ($backendSegmentIndex !== null) {
-                // 无 admin 段但有 backend 段：/网站码/模块/backend/控制器
-                // 不需要额外添加 /admin/ 前缀，直接使用原始路径
-                $backendPath = implode('/', array_slice($splits, $backendSegmentIndex - 1));
-                self::$parserServer['WELINE_AREA'] = 'backend';
-                self::$parserServer['WELINE_AREA_ROUTE'] = '';
-                $uri = '/' . $backendPath;
-                $has_area = true;
-                self::$parserServer['REQUEST_URI'] = $uri;
             } else {
                 // 默认：前端区域
+                // 注意：如果 URL 包含 "backend" 但没有通过正确的后台入口访问，
+                //       将被路由到前台，最终返回 404
                 self::$parserServer['WELINE_AREA'] = 'frontend';
                 self::$parserServer['WELINE_AREA_ROUTE'] = '';
                 $uri = '/' . implode('/', $splits);

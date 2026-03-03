@@ -9,8 +9,7 @@
 
 namespace Weline\Framework\Plugin\Config;
 
-use Weline\Framework\Cache\CacheInterface;
-use Weline\Framework\Plugin\Cache\PluginCache;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\System\File\Scanner;
 use Weline\Framework\Xml\Parser;
@@ -18,19 +17,18 @@ use Weline\Framework\Xml\Parser;
 class PluginXmlReader extends \Weline\Framework\Config\Reader\XmlReader
 {
     /**
-     * @var CacheInterface
+     * @var CachePoolInterface
      */
-    private CacheInterface $pluginCache;
+    private CachePoolInterface $pluginCache;
 
     public function __construct(
-        PluginCache $pluginCache,
         Scanner     $scanner,
         Parser      $parser,
                     $path = 'etc'.DS.'plugin.xml'
     )
     {
         parent::__construct($scanner, $parser, $path);
-        $this->pluginCache = $pluginCache->create();
+        $this->pluginCache = w_cache('plugin');
     }
 
     /**

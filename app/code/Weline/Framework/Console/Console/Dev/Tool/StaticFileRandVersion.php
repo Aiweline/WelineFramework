@@ -32,11 +32,11 @@ class StaticFileRandVersion implements \Weline\Framework\Console\CommandInterfac
      */
     public function execute(array $args = [], array $data = [])
     {
-        if (Env::getInstance()->getConfig('static_file_rand_version')) {
-            Env::getInstance()->setConfig('static_file_rand_version', false);
+        if (Env::dev('static_rand_version')) {
+            Env::getInstance()->setConfig('dev.static_rand_version', false);
             $this->printing->success(__('成功关闭随机静态文件版本号！'));
         } else {
-            Env::getInstance()->setConfig('static_file_rand_version', true);
+            Env::getInstance()->setConfig('dev.static_rand_version', true);
             $this->printing->success(__('成功开启随机静态文件版本号！'));
         }
     }

@@ -102,7 +102,7 @@ class File
                 if ($error && (strpos($error['message'], 'Permission denied') !== false || 
                                strpos($error['message'], 'errno=13') !== false ||
                                strpos($error['message'], 'Resource temporarily unavailable') !== false)) {
-                    error_log(__("文件打开权限错误，重试第 %{1} 次: %{2}", [($i + 1), $filename]));
+                    w_log_warning(__("文件打开权限错误，重试第 %{1} 次: %{2}", [($i + 1), $filename]));
                     usleep($retryDelay);
                     continue;
                 }

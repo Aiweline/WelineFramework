@@ -155,7 +155,7 @@ class ExtendsScanner
         $docFile = rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'extends.md';
         if (!file_exists($docFile)) {
             // 记录警告，但不阻止处理
-            error_log("警告: 模块 {$moduleName} 定义了 extends.php 但缺少 extends.md 文档");
+            w_log_warning("警告: 模块 {$moduleName} 定义了 extends.php 但缺少 extends.md 文档");
         }
 
         return $config;
@@ -342,7 +342,7 @@ class ExtendsScanner
                 $result[$targetModule][] = $extendInfo;
             }
         } catch (\Exception $e) {
-            error_log("扫描模块扩展失败: {$sourceModule}, 错误: " . $e->getMessage());
+            w_log_error("扫描模块扩展失败: {$sourceModule}, 错误: " . $e->getMessage());
         }
     }
     

@@ -253,7 +253,7 @@ class EventRegistry
                 }
             }
         } catch (\Exception $e) {
-            \Weline\Framework\App\Env::log_warning('event_registry.log', __('收集模块观察者失败: %{1}', [$e->getMessage()]));
+            w_log_warning(__('收集模块观察者失败: %{1}', [$e->getMessage()]), [], 'event_registry.log');
         }
         
         return $observersData;
@@ -431,7 +431,7 @@ class EventRegistry
             }
         } catch (\Exception $e) {
             // 如果收集观察者失败，记录错误但不中断流程
-            error_log('收集观察者失败: ' . $e->getMessage());
+            w_log_error('收集观察者失败: ' . $e->getMessage());
         }
         
         return $observersData;
@@ -494,12 +494,12 @@ class EventRegistry
                             "[事件注册警告] 动态事件模式 '%s' (%s 模块) %s。建议在构建注册表时修复。",
                             $eventName,
                             $moduleName,
-                            implode('，', $warnings)
-                        );
-                        error_log($warningMessage);
-                    }
-                    
-                    $dynamicEventPatterns[$eventName] = [
+                        implode('，', $warnings)
+                    );
+                    w_log_warning($warningMessage);
+                }
+                
+                $dynamicEventPatterns[$eventName] = [
                         'name' => $eventInfo['name'] ?? $eventName,
                         'description' => $eventInfo['description'] ?? '',
                         'doc' => $eventInfo['doc'] ?? '',
@@ -549,7 +549,7 @@ class EventRegistry
                         $moduleName,
                         implode('，', $warnings)
                     );
-                    error_log($warningMessage);
+                    w_log_warning($warningMessage);
                 }
                 
                 // 添加新事件

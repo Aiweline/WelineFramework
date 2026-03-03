@@ -161,7 +161,7 @@ class Event extends \Weline\Framework\DataObject\DataObject
         // 获取配置中的 event.debug 设置（使用静态缓存，避免每次 dispatch 都读取配置）
         static $eventDebugConfig = null;
         if ($eventDebugConfig === null) {
-            $eventDebugConfig = Env::getInstance()->getConfig('event.debug');
+            $eventDebugConfig = Env::dev('event_debug');
         }
         
         // 判断是否需要调试
