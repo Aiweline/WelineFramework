@@ -379,7 +379,7 @@ class Domain extends BackendController
                     $this->getRuleManager()->pushRules($domain);
                 } catch (\Exception $e) {
                     // 规则推送失败不影响域名保存，记录日志即可
-                    error_log("推送默认规则失败: " . $e->getMessage());
+                    w_log_error("推送默认规则失败: " . $e->getMessage());
                 }
             }
 
