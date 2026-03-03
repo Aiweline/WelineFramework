@@ -210,7 +210,7 @@ class ValidationManager
             $count = $query->count();
             return $count > 0;
         } catch (\Exception $e) {
-            error_log("Unique check error: " . $e->getMessage());
+            w_log_error("Unique check error: " . $e->getMessage());
             return false;
         }
     }
@@ -345,7 +345,7 @@ class ValidationManager
                 }
             }
         } catch (\Exception $e) {
-            error_log("Generate rules error: " . $e->getMessage());
+            w_log_error("Generate rules error: " . $e->getMessage());
         }
 
         return $rules;

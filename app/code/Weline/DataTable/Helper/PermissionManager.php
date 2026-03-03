@@ -120,7 +120,7 @@ class PermissionManager
 
             return true;
         } catch (\Exception $e) {
-            error_log("Permission check error: " . $e->getMessage());
+            w_log_error("Permission check error: " . $e->getMessage());
             return false;
         }
     }

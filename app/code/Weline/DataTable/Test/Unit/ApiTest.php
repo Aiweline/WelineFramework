@@ -15,8 +15,8 @@ use Weline\DataTable\Exception\DataTableException;
 use Weline\DataTable\Helper\ErrorHandler;
 use Weline\DataTable\Helper\ValidationManager;
 use Weline\DataTable\Helper\PermissionManager;
-use Weline\Framework\App\Session\BackendApiSession;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 
 class ApiTest extends TestCase
 {
@@ -24,26 +24,26 @@ class ApiTest extends TestCase
     private $formApi;
     private $trashApi;
     private $importApi;
-    private $mockBackendApiSession;
+    private $mockSession;
     private $mockRequest;
 
     protected function setUp(): void
     {
         parent::setUp();
         
-        // 创建 BackendApiSession 模拟对象
-        $this->mockBackendApiSession = $this->createMock(BackendApiSession::class);
-        $this->mockBackendApiSession->method('isLogin')
+        // 创建 AuthenticatedSessionInterface 模拟对象
+        $this->mockSession = $this->createMock(AuthenticatedSessionInterface::class);
+        $this->mockSession->method('isLoggedIn')
             ->willReturn(true);
         
         // 创建 Request 模拟对象
         $this->mockRequest = $this->createMock(Request::class);
         
-        // 创建 API 实例
-        $this->dataTableApi = new DataTable($this->mockBackendApiSession);
-        $this->formApi = new Form($this->mockBackendApiSession);
-        $this->trashApi = new Trash($this->mockBackendApiSession);
-        $this->importApi = new Import($this->mockBackendApiSession);
+        // 创建 API 实例（不再需要传入 session，由父类自动处理）
+        $this->dataTableApi = new DataTable();
+        $this->formApi = new Form();
+        $this->trashApi = new Trash();
+        $this->importApi = new Import();
         
         // 使用反射设置 request 属性
         $this->setRequestProperty($this->dataTableApi);

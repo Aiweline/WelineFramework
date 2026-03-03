@@ -212,7 +212,7 @@ class TableHeader implements TaglibInterface
             return $fieldsHtml;
 
         } catch (\Exception $e) {
-            error_log("TableHeader: 自动生成字段失败: " . $e->getMessage());
+            w_log_error("TableHeader: 自动生成字段失败: " . $e->getMessage());
             return '<w:field belong="t-header" name="id" sortable="true" width="80">ID</w:field>';
         }
     }

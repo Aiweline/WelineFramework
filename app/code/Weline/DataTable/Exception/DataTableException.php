@@ -208,11 +208,11 @@ class DataTableException extends FrameworkException
             );
         }
 
-        error_log($logMessage);
+        w_log_error($logMessage);
 
         // 在开发环境下记录堆栈跟踪
         if (defined('DEV') && DEV) {
-            error_log("Stack trace:\n" . $this->getTraceAsString());
+            w_log_error("Stack trace:\n" . $this->getTraceAsString());
         }
     }
 }

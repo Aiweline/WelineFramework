@@ -66,7 +66,7 @@ trait SoftDelete
             }
         } catch (\Exception $e) {
             // 静默处理，避免影响正常功能
-            error_log('SoftDelete field creation failed: ' . $e->getMessage());
+            w_log_error('SoftDelete field creation failed: ' . $e->getMessage());
         }
     }
 
@@ -83,7 +83,7 @@ trait SoftDelete
             $this->setData($this->softDeleteField, date('Y-m-d H:i:s'));
             return $this->save();
         } catch (\Exception $e) {
-            error_log('Soft delete failed: ' . $e->getMessage());
+            w_log_error('Soft delete failed: ' . $e->getMessage());
             return false;
         }
     }
@@ -101,7 +101,7 @@ trait SoftDelete
             $this->setData($this->softDeleteField, null);
             return $this->save();
         } catch (\Exception $e) {
-            error_log('Restore failed: ' . $e->getMessage());
+            w_log_error('Restore failed: ' . $e->getMessage());
             return false;
         }
     }
@@ -285,7 +285,7 @@ trait SoftDelete
             
             return $deletedCount;
         } catch (\Exception $e) {
-            error_log('Cleanup expired soft deleted records failed: ' . $e->getMessage());
+            w_log_error('Cleanup expired soft deleted records failed: ' . $e->getMessage());
             return 0;
         }
     }
