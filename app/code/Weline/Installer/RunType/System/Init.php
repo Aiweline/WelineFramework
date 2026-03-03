@@ -30,8 +30,12 @@ class Init
         if (empty($env)) {
             throw new Exception('环境为空！');
         }
-        // 使用新的 area_routes 分组结构
-        $env['area_routes'] = [
+        // 确保 router 分组存在
+        if (!isset($env['router']) || !is_array($env['router'])) {
+            $env['router'] = [];
+        }
+        // 使用新的 router.area_routes 分组结构
+        $env['router']['area_routes'] = [
             'backend' => [
                 'prefix' => $params['admin'] ?? $params['backend'] ?? '',
                 'description' => '后台管理',
@@ -53,8 +57,8 @@ class Init
         $file->close();
 
         return ['data' => [
-            'backend' => $env['area_routes']['backend']['prefix'],
-            'rest_backend' => $env['area_routes']['rest_backend']['prefix'],
+            'backend' => $env['router']['area_routes']['backend']['prefix'],
+            'rest_backend' => $env['router']['area_routes']['rest_backend']['prefix'],
         ], 'hasErr' => false, 'msg' => '-------  配置环境初始化...  -------'];
     }
 }
