@@ -118,20 +118,20 @@ class AutoPushFeed implements CronTaskInterface
                     $queueService->enqueueFeedPush($feed->getId(), [], PushLog::TYPE_SCHEDULED);
                     $totalEnqueued++;
                 } catch (\Exception $e) {
-                    error_log("Enqueue push failed - Feed ID: {$feed->getId()}, Error: {$e->getMessage()}");
+                    w_log_error("Enqueue push failed - Feed ID: {$feed->getId()}, Error: {$e->getMessage()}");
                 }
             }
 
             // 记录执行结果
             $message = "自动推送任务入队完成 - 已入队: {$totalEnqueued} 个Feed";
             if ($totalEnqueued > 0) {
-                error_log($message);
+                w_log_info($message);
             }
             
             return $message;
         } catch (\Exception $e) {
             $errorMessage = "自动推送任务执行失败: " . $e->getMessage();
-            error_log($errorMessage);
+            w_log_error($errorMessage);
             return $errorMessage;
         }
     }
