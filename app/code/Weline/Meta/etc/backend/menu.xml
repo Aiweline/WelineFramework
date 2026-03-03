@@ -3,21 +3,17 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     <!--元数据管理菜单-->
-    <add source="Weline_Meta::meta_manager" name="meta_manager" title="元数据管理" action="" 
+    <menu source="Weline_Meta::meta_manager" name="meta_manager" title="元数据管理" action="" 
          parent="Weline_Eav::data_management"
-         icon="mdi mdi-file-document-edit" order="20410"/>
-    
-    <add source="Weline_Meta::meta_list" name="meta_list" title="元数据列表" 
-         action="meta/backend/meta" parent="Weline_Meta::meta_manager"
-         icon="mdi mdi-format-list-bulleted" order="1"/>
-    
-    <add source="Weline_Meta::meta_scanner" name="meta_scanner" title="扫描元数据" 
-         action="meta/backend/scanner" parent="Weline_Meta::meta_manager"
-         icon="mdi mdi-file-search" order="2"/>
-
-    <add source="Weline_Meta::meta_config_files" name="meta_config_files" title="元数据配置管理"
-         action="meta/backend/config/file"
-         parent="Weline_Meta::meta_manager"
-         icon="mdi mdi-file-tree" order="3"/>
+         icon="mdi mdi-file-document-edit" order="20410">
+        <menu source="Weline_Meta::meta_list" name="meta_list" title="元数据列表" 
+             action="meta/backend/meta"
+             icon="mdi mdi-format-list-bulleted" order="1"/>
+        <menu source="Weline_Meta::meta_scanner" name="meta_scanner" title="扫描元数据" 
+             action="meta/backend/scanner"
+             icon="mdi mdi-file-search" order="2"/>
+        <menu source="Weline_Meta::meta_config_files" name="meta_config_files" title="元数据配置管理"
+             action="meta/backend/config/file"
+             icon="mdi mdi-file-tree" order="3"/>
+    </menu>
 </menus>
-

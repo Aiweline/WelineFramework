@@ -605,7 +605,7 @@ class File extends BackendController
                         $savedCount++;
                     } catch (\Throwable $e) {
                         // 记录错误但继续处理其他参数
-                        error_log("MetaConfig save error for {$configKey}: " . $e->getMessage());
+                        w_log_error("MetaConfig save error for {$configKey}: " . $e->getMessage());
                         throw new \Exception(__('保存参数 %{param} 失败：%{error}', [
                             'param' => $paramName,
                             'error' => $e->getMessage()

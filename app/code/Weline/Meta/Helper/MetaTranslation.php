@@ -164,7 +164,7 @@ class MetaTranslation
             if (php_sapi_name() === 'cli') {
                 echo "  [!] MetaTranslation 保存失败: {$metaIdentify}.{$configKey} ({$locale}) - " . $e->getMessage() . "\n";
             } else {
-                error_log("MetaTranslation 保存失败: {$metaIdentify}.{$configKey} ({$locale}) - " . $e->getMessage());
+                w_log_error("MetaTranslation 保存失败: {$metaIdentify}.{$configKey} ({$locale}) - " . $e->getMessage());
             }
             return false;
         }
