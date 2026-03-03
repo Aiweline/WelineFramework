@@ -706,7 +706,7 @@ class AiService
             }
             
             // 记录错误
-            error_log("AI API调用失败: " . $e->getMessage());
+            w_log_error("AI API调用失败: " . $e->getMessage());
             throw new Exception("AI生成失败: " . $e->getMessage());
         }
     }
@@ -796,7 +796,7 @@ class AiService
             }
             
             // 记录错误（保留原始信息用于日志）
-            error_log("AI流式API调用失败: " . $e->getMessage());
+            w_log_error("AI流式API调用失败: " . $e->getMessage());
             // 清理 ANSI 颜色码后再抛出，避免前端显示乱码
             $cleanMessage = preg_replace('/\x1b\[[0-9;]*m/', '', $e->getMessage());
             throw new Exception("AI流式生成失败: " . $cleanMessage);
@@ -868,7 +868,7 @@ class AiService
             $this->usageLog->save();
         } catch (\Exception $e) {
             // 记录失败不影响主流程
-            error_log("记录AI使用量失败: " . $e->getMessage());
+            w_log_error("记录AI使用量失败: " . $e->getMessage());
         }
     }
 
@@ -1040,7 +1040,7 @@ class AiService
             
         } catch (\Exception $e) {
             // 记录使用情况失败不应该影响主要功能
-            error_log("记录AI使用情况失败: " . $e->getMessage());
+            w_log_error("记录AI使用情况失败: " . $e->getMessage());
         }
     }
     

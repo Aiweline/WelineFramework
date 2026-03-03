@@ -96,7 +96,7 @@ class ModuleUpgradeAdapterScanObserver implements ObserverInterface
             
         } catch (\Throwable $e) {
             // 捕获所有异常，静默处理，避免影响模块升级流程
-            error_log("场景适配器扫描失败: " . $e->getMessage() . "\n" . $e->getTraceAsString());
+            w_log_error("场景适配器扫描失败: " . $e->getMessage() . "\n" . $e->getTraceAsString());
             // 不输出错误信息，避免干扰升级流程
         }
     }
