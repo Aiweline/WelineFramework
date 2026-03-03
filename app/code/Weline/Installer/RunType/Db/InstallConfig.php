@@ -147,7 +147,7 @@ class InstallConfig
         }
         $tmp['数据库：2、调试Debug数据库信息安装...'] = '系统';
         try {
-            Env::getInstance()->setConfig('debug_db', $sandbox_db_conf);
+            Env::getInstance()->setConfig('sandbox_db', $sandbox_db_conf);
             $msg = '数据库安装初始化成功【✔】';
             if (CLI) {
                 $this->printer->success($msg, 'OK');
