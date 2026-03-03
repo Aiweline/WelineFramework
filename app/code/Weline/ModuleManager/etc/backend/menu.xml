@@ -2,7 +2,8 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <!--模组管理-->
-    <add source="Weline_ModuleManager::module-manager" name="module-manager" title="模组管理" action="module-manager/backend/listing"
-         parent="Weline_Backend::system_menu" icon="ri-sound-module-line" order="20800" is_backend="1"/>
+    
+    <!-- 模组管理 - 归入开发者 > 模组管理 -->
+    <menu source="Weline_ModuleManager::module-manager" name="module-manager" title="已安装模块" action="module-manager/backend/listing"
+          parent="Weline_Backend::module_group" icon="mdi mdi-package-variant-closed" order="10" is_backend="1"/>
 </menus>
