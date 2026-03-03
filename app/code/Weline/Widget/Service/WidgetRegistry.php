@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Widget\Service;
 
+use Weline\Framework\App\Env;
+
 /**
  * 部件注册表管理
  * 管理 generated/widgets.php 文件的读取和写入
@@ -130,7 +132,7 @@ class WidgetRegistry
 
             return false;
         } catch (\Exception $e) {
-            error_log("保存部件注册表失败: " . $e->getMessage());
+            w_log_error("保存部件注册表失败: " . $e->getMessage(), [], 'WidgetRegistry');
             return false;
         }
     }
