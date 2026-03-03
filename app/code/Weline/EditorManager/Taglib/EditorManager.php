@@ -3,12 +3,11 @@
 namespace Weline\EditorManager\Taglib;
 
 use Weline\Backend\Model\BackendUserConfig;
-use Weline\EditorManager\Cache\EditorManagerCacheFactory;
 use Weline\EditorManager\EditorManager\Local;
 use Weline\EditorManager\EditorManagerInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\File\Scan;
@@ -77,8 +76,8 @@ class EditorManager implements TaglibInterface
                 $userConfigEditorManager = 'local';
             }
             $cacheKey = json_encode(func_get_args()) . $userConfigEditorManager;
-            /**@var CacheInterface $cache */
-            $cache = ObjectManager::getInstance(EditorManagerCacheFactory::class);
+            /**@var CachePoolInterface $cache */
+            $cache = w_cache('editor');
             $editorManager = $cache->get($cacheKey);
             if (!$editorManager) {
                 /**@var Scan $fileScan $ */
