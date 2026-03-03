@@ -16,9 +16,6 @@ use Weline\Ai\Model\AiApiKey;
 use Weline\Ai\Model\AiAssistant;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\Message;
-use Weline\Framework\Http\Request;
-use Weline\Framework\Session\Session;
-use Weline\Framework\Http\Url;
 
 /**
  * 用户个人中心控制器
@@ -42,44 +39,19 @@ class Center extends FrontendController
     private AiAssistant $aiAssistant;
 
     /**
-     * @var Session|null
-     */
-    protected ?Session $session;
-
-    /**
-     * @var Url|null
-     */
-    protected ?Url $_url;
-
-    /**
      * 构造函数
      * 
      * @param AiApiKey $aiApiKey
      * @param AiAssistant $aiAssistant
-     * @param Session $session
-     * @param Url $url
      */
     public function __construct(
         AiApiKey $aiApiKey,
-        AiAssistant $aiAssistant,
-        Session $session,
-        Url $url
+        AiAssistant $aiAssistant
     ) {
         $this->aiApiKey = $aiApiKey;
         $this->aiAssistant = $aiAssistant;
-        $this->session = $session;
-        $this->_url = $url;
     }
 
-    /**
-     * 检查用户登录状态
-     * 
-     * @return bool
-     */
-    private function checkLogin(): bool
-    {
-        return $this->session && $this->session->isLogin();
-    }
 
     /**
      * 个人中心首页
@@ -88,10 +60,10 @@ class Center extends FrontendController
      */
     public function index(): string
     {
-        $isLoggedIn = $this->checkLogin();
+        $isLoggedIn = $this->isLoggedIn();
         
         if ($isLoggedIn) {
-            $userId = $this->session->getLoginUserData('entity_id');
+            $userId = $this->getLoginUserId();
 
             // 获取用户的API密钥数量
             $apiKeyCount = $this->aiApiKey->reset()
@@ -109,7 +81,7 @@ class Center extends FrontendController
 
             $this->assign('api_key_count', $apiKeyCount);
             $this->assign('assistant_count', $assistantCount);
-            $this->assign('user', $this->session->getLoginUserData());
+            $this->assign('user', $this->getLoginUser());
         } else {
             $this->assign('api_key_count', 0);
             $this->assign('assistant_count', 0);
@@ -129,11 +101,12 @@ class Center extends FrontendController
      */
     public function apiKeys(): string
     {
-        if (!$this->checkLogin()) {
-            return $this->redirect($this->_url->getFrontendUrl('*/frontend/index'));
+        if (!$this->isLoggedIn()) {
+            $this->redirect($this->_url->getFrontendUrl('*/frontend/index'));
+            return '';
         }
 
-        $userId = $this->session->getLoginUserData('entity_id');
+        $userId = $this->getLoginUserId();
 
         // 获取用户的API密钥列表
         $apiKeys = $this->aiApiKey->reset()
@@ -155,7 +128,7 @@ class Center extends FrontendController
      */
     public function createApiKey(): string
     {
-        if (!$this->checkLogin()) {
+        if (!$this->isLoggedIn()) {
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('请先登录')
@@ -169,7 +142,7 @@ class Center extends FrontendController
             ]);
         }
 
-        $userId = $this->session->getLoginUserData('entity_id');
+        $userId = $this->getLoginUserId();
         $name = $this->request->getPost('name', '');
 
         if (empty($name)) {
@@ -222,7 +195,7 @@ class Center extends FrontendController
      */
     public function deleteApiKey(): string
     {
-        if (!$this->checkLogin()) {
+        if (!$this->isLoggedIn()) {
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('请先登录')
@@ -230,7 +203,7 @@ class Center extends FrontendController
         }
 
         $id = (int)$this->request->getPost('id');
-        $userId = $this->session->getLoginUserData('entity_id');
+        $userId = $this->getLoginUserId();
 
         try {
             $apiKey = $this->aiApiKey->reset()->load($id);
@@ -264,11 +237,12 @@ class Center extends FrontendController
      */
     public function assistants(): string
     {
-        if (!$this->checkLogin()) {
-            return $this->redirect($this->_url->getFrontendUrl('*/frontend/index'));
+        if (!$this->isLoggedIn()) {
+            $this->redirect($this->_url->getFrontendUrl('*/frontend/index'));
+            return '';
         }
 
-        $userId = $this->session->getLoginUserData('entity_id');
+        $userId = $this->getLoginUserId();
 
         // 获取用户的助手列表
         $assistants = $this->aiAssistant->reset()
@@ -290,11 +264,12 @@ class Center extends FrontendController
      */
     public function statistics(): string
     {
-        if (!$this->checkLogin()) {
-            return $this->redirect($this->_url->getFrontendUrl('*/frontend/index'));
+        if (!$this->isLoggedIn()) {
+            $this->redirect($this->_url->getFrontendUrl('*/frontend/index'));
+            return '';
         }
 
-        $userId = $this->session->getLoginUserData('entity_id');
+        $userId = $this->getLoginUserId();
 
         // TODO: 实现使用统计逻辑
         $stats = [
@@ -319,12 +294,13 @@ class Center extends FrontendController
      */
     public function settings(): string
     {
-        if (!$this->checkLogin()) {
-            return $this->redirect($this->_url->getFrontendUrl('*/frontend/index'));
+        if (!$this->isLoggedIn()) {
+            $this->redirect($this->_url->getFrontendUrl('*/frontend/index'));
+            return '';
         }
 
         $this->assign('page_title', __('个人设置'));
-        $this->assign('user', $this->session->getLoginUserData());
+        $this->assign('user', $this->getLoginUser());
 
         return $this->fetch();
     }

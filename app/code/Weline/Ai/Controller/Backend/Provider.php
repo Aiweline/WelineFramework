@@ -113,7 +113,7 @@ class Provider extends BaseController
                     $formattedAccounts[] = $accountData;
                 } catch (\Exception $e) {
                     // 如果格式化失败，记录错误但继续处理其他记录
-                    error_log("格式化账户数据失败: " . $e->getMessage());
+                    w_log_error("格式化账户数据失败: " . $e->getMessage());
                     continue;
                 }
             }

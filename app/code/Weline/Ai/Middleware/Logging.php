@@ -163,7 +163,7 @@ class Logging
         );
 
         // 写入框架日志
-        error_log($logMessage);
+        w_log_info($logMessage);
         
         // TODO: 集成框架的 Logger 系统
         // $logger = ObjectManager::getInstance(\Weline\Framework\Logger\Logger::class);

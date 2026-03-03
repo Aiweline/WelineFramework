@@ -15,7 +15,8 @@ namespace Weline\Ai\Service;
 
 use Weline\Ai\Model\AiDefaultModel;
 use Weline\Ai\Service\DefaultModelManager;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\CacheManager;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\App\Exception;
 
 /**
@@ -41,9 +42,9 @@ class TranslationService
     private AiService $aiService;
 
     /**
-     * @var CacheInterface
+     * @var CachePoolInterface
      */
-    private CacheInterface $cache;
+    private CachePoolInterface $cache;
 
     /**
      * @var I18nIntegration
@@ -59,18 +60,18 @@ class TranslationService
      * 构造函数
      * 
      * @param AiService $aiService
-     * @param CacheInterface $cache
+     * @param CacheManager $cacheManager
      * @param I18nIntegration $i18nIntegration
      * @param DefaultModelManager $defaultModelManager
      */
     public function __construct(
         AiService $aiService,
-        CacheInterface $cache,
+        CacheManager $cacheManager,
         I18nIntegration $i18nIntegration,
         DefaultModelManager $defaultModelManager
     ) {
         $this->aiService = $aiService;
-        $this->cache = $cache;
+        $this->cache = $cacheManager->pool('ai_translation');
         $this->i18nIntegration = $i18nIntegration;
         $this->defaultModelManager = $defaultModelManager;
     }

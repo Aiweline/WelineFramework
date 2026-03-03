@@ -18,8 +18,6 @@ use Weline\Ai\Service\AiService;
 use Weline\Ai\Service\AdapterScanner;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\Message;
-use Weline\Framework\Session\Session;
-use Weline\Framework\Http\Url;
 
 /**
  * AI聊天界面控制器
@@ -53,39 +51,23 @@ class Chat extends FrontendController
     private AdapterScanner $adapterScanner;
 
     /**
-     * @var Session|null
-     */
-    protected ?Session $session;
-
-    /**
-     * @var Url|null
-     */
-    protected ?Url $_url;
-
-    /**
      * 构造函数
      * 
      * @param AiService $aiService
      * @param AiModel $aiModel
      * @param AiApiKey $aiApiKey
      * @param AdapterScanner $adapterScanner
-     * @param Session $session
-     * @param Url $url
      */
     public function __construct(
         AiService $aiService,
         AiModel $aiModel,
         AiApiKey $aiApiKey,
-        AdapterScanner $adapterScanner,
-        Session $session,
-        Url $url
+        AdapterScanner $adapterScanner
     ) {
         $this->aiService = $aiService;
         $this->aiModel = $aiModel;
         $this->aiApiKey = $aiApiKey;
         $this->adapterScanner = $adapterScanner;
-        $this->session = $session;
-        $this->_url = $url;
     }
 
     /**
@@ -96,7 +78,7 @@ class Chat extends FrontendController
     public function index(): string
     {
         // 允许未登录用户访问（演示模式）
-        $isLoggedIn = $this->session && $this->session->isLogin();
+        $isLoggedIn = $this->isLoggedIn();
 
         // 获取可用的AI模型
         $models = $this->aiModel->reset()
@@ -122,7 +104,7 @@ class Chat extends FrontendController
      */
     public function send(): string
     {
-        if (!$this->session->isLogin()) {
+        if (!$this->isLoggedIn()) {
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('请先登录')
@@ -182,7 +164,7 @@ class Chat extends FrontendController
      */
     public function stream(): void
     {
-        if (!$this->session->isLogin()) {
+        if (!$this->isLoggedIn()) {
             echo "event: error\n";
             echo "data: " . json_encode(['message' => __('请先登录')]) . "\n\n";
             flush();
@@ -239,8 +221,8 @@ class Chat extends FrontendController
      */
     public function history(): string
     {
-        if (!$this->session->isLogin()) {
-            return $this->jsonResponse([
+        if (!$this->isLoggedIn()) {
+            return $this->fetchJson([
                 'success' => false,
                 'message' => __('请先登录')
             ]);
@@ -249,7 +231,7 @@ class Chat extends FrontendController
         // TODO: 实现聊天历史记录功能
         $history = [];
 
-        return $this->jsonResponse([
+        return $this->fetchJson([
             'success' => true,
             'data' => $history
         ]);
@@ -262,8 +244,8 @@ class Chat extends FrontendController
      */
     public function clearHistory(): string
     {
-        if (!$this->session->isLogin()) {
-            return $this->jsonResponse([
+        if (!$this->isLoggedIn()) {
+            return $this->fetchJson([
                 'success' => false,
                 'message' => __('请先登录')
             ]);
@@ -271,7 +253,7 @@ class Chat extends FrontendController
 
         // TODO: 实现清空聊天历史功能
 
-        return $this->jsonResponse([
+        return $this->fetchJson([
             'success' => true,
             'message' => __('聊天历史已清空')
         ]);

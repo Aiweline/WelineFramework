@@ -194,7 +194,7 @@ class ComprehensiveErrorHandler
         );
         
         // 使用框架日志系统
-        error_log($logMessage);
+        w_log_error($logMessage);
         
         // CLI输出
         if (php_sapi_name() === 'cli') {

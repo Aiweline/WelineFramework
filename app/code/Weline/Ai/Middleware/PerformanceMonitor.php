@@ -26,7 +26,7 @@ class PerformanceMonitor
         $memoryUsed = memory_get_usage() - $startMemory;
         
         // 记录性能指标
-        error_log(sprintf(
+        w_log_debug(sprintf(
             'Performance: %s - %dms, %dKB',
             $request->getUri(),
             $duration * 1000,
