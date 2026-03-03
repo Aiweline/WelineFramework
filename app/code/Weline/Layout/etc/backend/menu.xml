@@ -1,37 +1,30 @@
-<?xml version="1.0"?>
-<!--
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 作者：Admin
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- * 描述：Weline_Layout 模块后台菜单配置
--->
-<config>
-    <menus>
-        <!-- 布局管理菜单 -->
-        <menu id="Weline_Layout::layout_management" 
-              name="布局管理" 
-              icon="mdi mdi-view-dashboard-variant"
-              parent_id="Weline_Backend::system_menu" 
-              action="*/backend/layout"
-              position="80"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!-- 布局管理菜单 -->
+    <menu source="Weline_Layout::layout_management" 
+         name="layout_management" 
+         title="布局管理"
+         action="*/backend/layout"
+         parent="Weline_Backend::system_menu"
+         icon="mdi mdi-view-dashboard-variant"
+         order="80">
         
         <!-- 布局列表 -->
-        <menu id="Weline_Layout::layout_list" 
-              name="布局列表" 
-              icon="mdi mdi-format-list-bulleted"
-              parent_id="Weline_Layout::layout_management" 
-              action="*/backend/layout"
-              position="10"/>
+        <menu source="Weline_Layout::layout_list" 
+             name="layout_list" 
+             title="布局列表"
+             action="*/backend/layout"
+             icon="mdi mdi-format-list-bulleted"
+             order="10"/>
         
         <!-- 布局计划 -->
-        <menu id="Weline_Layout::layout_schedule" 
-              name="布局计划" 
-              icon="mdi mdi-calendar-clock"
-              parent_id="Weline_Layout::layout_management" 
-              action="*/backend/layout/schedule"
-              position="20"/>
-    </menus>
-</config>
-
+        <menu source="Weline_Layout::layout_schedule" 
+             name="layout_schedule" 
+             title="布局计划"
+             action="*/backend/layout/schedule"
+             icon="mdi mdi-calendar-clock"
+             order="20"/>
+    </menu>
+</menus>
