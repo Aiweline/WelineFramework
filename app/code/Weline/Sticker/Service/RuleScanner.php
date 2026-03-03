@@ -109,7 +109,7 @@ class RuleScanner
                 }
             }
         } catch (\Exception $e) {
-            error_log("扫描模块 Sticker 失败: {$sourceModule}, 错误: " . $e->getMessage());
+            w_log_error("扫描模块 Sticker 失败: {$sourceModule}, 错误: " . $e->getMessage());
         }
 
         return $stickers;
@@ -146,7 +146,7 @@ class RuleScanner
                 $stickers = array_merge($stickers, $themeStickers);
             }
         } catch (\Exception $e) {
-            error_log("扫描主题 Sticker 失败: {$sourceModule}, 错误: " . $e->getMessage());
+            w_log_error("扫描主题 Sticker 失败: {$sourceModule}, 错误: " . $e->getMessage());
         }
 
         return $stickers;
