@@ -12,17 +12,16 @@ declare(strict_types=1);
 namespace Weline\Frontend\Block\System;
 
 use Weline\Admin\Model\System\SystemNotification;
-use Weline\Frontend\Cache\FrontendCache;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
 
 class Notification extends \Weline\Framework\View\Block
 {
-    private CacheInterface $cache;
+    private CachePoolInterface $cache;
 
-    public function __construct(FrontendCache $backendCache, array $data = [])
+    public function __construct(array $data = [])
     {
-        $this->cache = $backendCache->create();
+        $this->cache = w_cache('default');
         parent::__construct($data);
     }
 
