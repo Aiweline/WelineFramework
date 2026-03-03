@@ -8,21 +8,13 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Customer\Model\CustomerToken;
-use Weline\Customer\Session\CustomerSession;
 
 /**
  * 用户登出控制器
  */
 class Logout extends \Weline\Framework\App\Controller\FrontendController
 {
-    private CustomerSession $session;
     protected ?string $layoutType = 'account.logout';
-    
-    public function __construct(
-        CustomerSession $session
-    ) {
-        $this->session = $session;
-    }
 
     /**
      * 统一执行登出逻辑
@@ -30,7 +22,7 @@ class Logout extends \Weline\Framework\App\Controller\FrontendController
     protected function logoutUser(): void
     {
         // 获取当前用户ID
-        $userId = $this->session->getLoginUserID();
+        $userId = $this->session->getUserId();
         
         // 登出
         $this->session->logout();

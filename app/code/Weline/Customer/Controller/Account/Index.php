@@ -6,22 +6,18 @@ namespace Weline\Customer\Controller\Account;
 
 use Weline\Framework\View\Template;
 use Weline\Customer\Model\Customer;
-use Weline\Customer\Session\CustomerSession;
 
 /**
  * 个人中心控制器
  */
 class Index extends \Weline\Framework\App\Controller\FrontendController
 {
-    private CustomerSession $session;
     private Template $template;
     protected ?string $layoutType = 'account.dashboard';
 
     public function __construct(
-        CustomerSession $session,
         Template $template
     ) {
-        $this->session = $session;
         $this->template = $template;
     }
 
@@ -31,7 +27,7 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
     public function getIndex()
     {
         // 检查是否登录
-        if (!$this->session->isLogin()) {
+        if (!$this->isLoggedIn()) {
             // 保存当前URL作为来源
             $currentUrl = $this->request->getUrlBuilder()->getCurrentUrl();
             $this->redirect('/customer/account/login?referer=' . urlencode($currentUrl));
@@ -40,7 +36,7 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
 
         // 获取登录用户
         /** @var Customer $user */
-        $user = $this->session->getLoginUser();
+        $user = $this->getLoginUser();
         // 设置用户数据
         $this->assign('user', $user);
         
@@ -57,7 +53,7 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
      */
     public function postUpdate()
     {
-        if (!$this->session->isLogin()) {
+        if (!$this->isLoggedIn()) {
             return $this->json([
                 'success' => false,
                 'message' => __('请先登录')
@@ -65,7 +61,7 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
         }
 
         /** @var Customer $user */
-        $user = $this->session->getLoginUser();
+        $user = $this->getLoginUser();
 
         $avatar = $this->request->getPost('avatar');
         if ($avatar) {
