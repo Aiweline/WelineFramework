@@ -3,10 +3,9 @@
 namespace Weline\FileManager\Taglib;
 
 use Weline\Backend\Model\BackendUserConfig;
-use Weline\FileManager\Cache\FileManagerCacheFactory;
 use Weline\FileManager\FileManagerInterface;
 use Weline\Framework\App\Env;
-use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\File\Scan;
@@ -85,8 +84,8 @@ class FileManager implements TaglibInterface
                 $userConfigFileManager = ObjectManager::getInstance(BackendUserConfig::class)->getConfig('file_manager') ?: 'weline_media';
             }
             $cacheKey = json_encode(func_get_args()) . $userConfigFileManager;
-            /**@var CacheInterface $cache */
-            $cache = ObjectManager::getInstance(FileManagerCacheFactory::class);
+            /**@var CachePoolInterface $cache */
+            $cache = w_cache('file_manager');
             $result = $cache->get($cacheKey);
             if ($result) {
                 return $result;
