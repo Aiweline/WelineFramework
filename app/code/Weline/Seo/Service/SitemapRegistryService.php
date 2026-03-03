@@ -114,13 +114,13 @@ class SitemapRegistryService
                             } catch (\Throwable $e) {
                                 // 忽略单个 provider 错误
                                 if (defined('DEV') && DEV) {
-                                    error_log('SitemapRegistryService: 无法实例化 ' . $class . ': ' . $e->getMessage());
+                                    w_log_error('SitemapRegistryService: 无法实例化 ' . $class . ': ' . $e->getMessage());
                                 }
                             }
                         } else {
                             // 类不存在时记录日志（帮助调试）
                             if (defined('DEV') && DEV) {
-                                error_log('SitemapRegistryService: 类不存在 ' . ($class ?? 'null') . ', source_module=' . $sourceModule . ', file_path=' . $filePath);
+                                w_log_error('SitemapRegistryService: 类不存在 ' . ($class ?? 'null') . ', source_module=' . $sourceModule . ', file_path=' . $filePath);
                             }
                         }
                     }
@@ -239,13 +239,13 @@ class SitemapRegistryService
                                 }
                             } catch (\Throwable $e) {
                                 if (defined('DEV') && DEV) {
-                                    error_log('SitemapRegistryService: 无法实例化 ' . $class . ': ' . $e->getMessage());
+                                    w_log_error('SitemapRegistryService: 无法实例化 ' . $class . ': ' . $e->getMessage());
                                 }
                             }
                         } else {
                             // 类不存在时记录日志（帮助调试）
                             if (defined('DEV') && DEV) {
-                                error_log('SitemapRegistryService (URL): 类不存在 ' . ($class ?? 'null') . ', source_module=' . $sourceModule . ', file_path=' . $filePath);
+                                w_log_error('SitemapRegistryService (URL): 类不存在 ' . ($class ?? 'null') . ', source_module=' . $sourceModule . ', file_path=' . $filePath);
                             }
                         }
                     }
