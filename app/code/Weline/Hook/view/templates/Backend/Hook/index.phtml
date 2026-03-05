@@ -806,20 +806,13 @@ select.form-control-sm {
         // 构建 AJAX URL
         const searchUrl = backendUrlPrefix + '/hook/backend/hook/search-ajax?' + params.toString();
         
-        // 发送 AJAX 请求
-        fetch(searchUrl, {
-            method: 'GET',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        })
+        var opts = { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } };
+        window.Weline.Api.get(searchUrl, opts)
         .then(function(response) {
-            if (!response.ok) {
-                throw new Error('HTTP error! status: ' + response.status);
+            var data = (response && response.data) || response;
+            if (!response || response.ok === false) {
+                throw new Error((data && (data.message || data.msg)) || 'HTTP error');
             }
-            return response.json();
-        })
-        .then(function(data) {
             if (data.success) {
                 // 更新列表内容
                 if (data.html) {
@@ -1034,22 +1027,12 @@ select.form-control-sm {
             // 打开 offcanvas
             showOffcanvas();
             
-            // AJAX 加载详情
             const backendUrlPrefix = '<?= $backendUrlPrefix ?>';
             const detailUrl = backendUrlPrefix + '/hook/backend/hook/detail?hook=' + encodeURIComponent(hookName) + '&isAjax=1';
-            fetch(detailUrl, {
-                method: 'GET',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
+            var opts = { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } };
+            window.Weline.Api.get(detailUrl, opts)
             .then(function(response) {
-                if (!response.ok) {
-                    throw new Error('HTTP error! status: ' + response.status);
-                }
-                return response.json();
-            })
-            .then(function(data) {
+                var data = (response && response.data) || response;
                 if (data.success && data.html) {
                     offcanvasBody.innerHTML = data.html;
                     if (data.title) {

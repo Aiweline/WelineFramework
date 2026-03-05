@@ -26,15 +26,23 @@ class Rebuild extends CommandAbstract
         if (!isset($this->printer)) {
             $this->__init();
         }
+
+        $moduleNames = $this->parseModuleArgs($args);
         
         try {
-            $this->printer->setup(__('开始重建钩子注册表...'));
+            $this->printer->setup(
+                !empty($moduleNames)
+                    ? __('开始增量重建模块 %{1} 的钩子注册表...', [implode(', ', $moduleNames)])
+                    : __('开始重建钩子注册表...')
+            );
 
             /** @var HookRegistry $registry */
             $registry = ObjectManager::getInstance(HookRegistry::class);
 
             // 允许 solo 冲突，以便能够完成重建（冲突会在开发环境下显示警告）
-            $ok = $registry->refresh(true);
+            $ok = !empty($moduleNames)
+                ? $registry->refreshForModules($moduleNames, true)
+                : $registry->refresh(true);
             if ($ok) {
                 $this->printer->success(__('✓ 钩子注册表已重建完成。'));
                 $this->printer->note(__('位置：generated/hooks.php'));
@@ -134,16 +142,19 @@ class Rebuild extends CommandAbstract
             'hook:rebuild',
             '扫描所有模块的 hook.php 规约文件并重建钩子注册表',
             [
+                '-m, --module=<模块名>' => '仅重建指定模块的钩子（增量更新）',
                 '--debug' => '显示调试信息（可选）',
             ],
             [
-                '执行后会在项目根目录的 generated/hooks.php 写入全量钩子规约信息。',
+                '执行后会在项目根目录的 generated/hooks.php 写入钩子规约信息。',
+                '指定 -m 时为增量更新，仅刷新指定模块相关的 Hook 规约和实现。',
                 '所有钩子必须同时具备规约文件 (hook.php) 和 HookInterface 常量定义才能正常使用。',
             ],
             [
-                '直接重建' => 'php bin/w hook:rebuild',
+                '全量重建' => 'php bin/w hook:rebuild',
+                '增量重建指定模块' => 'php bin/w hook:rebuild -m Weline_Backend',
             ],
-            'php bin/w hook:rebuild'
+            'php bin/w hook:rebuild [-m|--module=<模块名>]'
         );
     }
 }
