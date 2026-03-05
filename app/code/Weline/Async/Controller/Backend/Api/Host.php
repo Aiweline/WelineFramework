@@ -34,7 +34,7 @@ class Host extends BackendRestController
     public function getList()
     {
         $hosts = $this->syncHost->clear()
-            ->order(SyncHost::fields_CREATED_AT, 'DESC')
+            ->order(SyncHost::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetch()
             ->getItems();
@@ -43,12 +43,12 @@ class Host extends BackendRestController
         foreach ($hosts as $host) {
             $data[] = [
                 'host_id' => $host->getId(),
-                'name' => $host->getData(SyncHost::fields_NAME),
-                'host' => $host->getData(SyncHost::fields_HOST),
-                'port' => $host->getData(SyncHost::fields_PORT),
-                'user' => $host->getData(SyncHost::fields_USER),
-                'description' => $host->getData(SyncHost::fields_DESCRIPTION),
-                'created_at' => $host->getData(SyncHost::fields_CREATED_AT),
+                'name' => $host->getData(SyncHost::schema_fields_NAME),
+                'host' => $host->getData(SyncHost::schema_fields_HOST),
+                'port' => $host->getData(SyncHost::schema_fields_PORT),
+                'user' => $host->getData(SyncHost::schema_fields_USER),
+                'description' => $host->getData(SyncHost::schema_fields_DESCRIPTION),
+                'created_at' => $host->getData(SyncHost::schema_fields_CREATED_AT),
             ];
         }
 
@@ -72,14 +72,14 @@ class Host extends BackendRestController
 
         $data = [
             'host_id' => $host->getId(),
-            'name' => $host->getData(SyncHost::fields_NAME),
-            'host' => $host->getData(SyncHost::fields_HOST),
-            'port' => $host->getData(SyncHost::fields_PORT),
-            'user' => $host->getData(SyncHost::fields_USER),
-            'key_path' => $host->getData(SyncHost::fields_KEY_PATH), // 已废弃，使用 key_content
-            'has_key' => !empty($host->getData(SyncHost::fields_KEY_CONTENT)),
-            'description' => $host->getData(SyncHost::fields_DESCRIPTION),
-            'created_at' => $host->getData(SyncHost::fields_CREATED_AT),
+            'name' => $host->getData(SyncHost::schema_fields_NAME),
+            'host' => $host->getData(SyncHost::schema_fields_HOST),
+            'port' => $host->getData(SyncHost::schema_fields_PORT),
+            'user' => $host->getData(SyncHost::schema_fields_USER),
+            'key_path' => $host->getData(SyncHost::schema_fields_KEY_PATH), // 已废弃，使用 key_content
+            'has_key' => !empty($host->getData(SyncHost::schema_fields_KEY_CONTENT)),
+            'description' => $host->getData(SyncHost::schema_fields_DESCRIPTION),
+            'created_at' => $host->getData(SyncHost::schema_fields_CREATED_AT),
         ];
 
         return $this->success('获取成功', $data);
@@ -128,8 +128,8 @@ class Host extends BackendRestController
                 if ($id) {
                     $existingHost = $this->syncHost->clear()->load($id);
                     if ($existingHost->getId()) {
-                        $existingPassword = $existingHost->getData(SyncHost::fields_PASSWORD);
-                        $existingKeyContent = $existingHost->getData(SyncHost::fields_KEY_CONTENT);
+                        $existingPassword = $existingHost->getData(SyncHost::schema_fields_PASSWORD);
+                        $existingKeyContent = $existingHost->getData(SyncHost::schema_fields_KEY_CONTENT);
                         if (empty($existingPassword) && empty($existingKeyContent)) {
                             return $this->error('SSH密码或密钥至少需要提供一个');
                         }
@@ -150,27 +150,27 @@ class Host extends BackendRestController
                 }
             }
 
-            $hostModel->setData(SyncHost::fields_NAME, $name);
-            $hostModel->setData(SyncHost::fields_HOST, $host);
-            $hostModel->setData(SyncHost::fields_PORT, $port);
-            $hostModel->setData(SyncHost::fields_USER, $user);
+            $hostModel->setData(SyncHost::schema_fields_NAME, $name);
+            $hostModel->setData(SyncHost::schema_fields_HOST, $host);
+            $hostModel->setData(SyncHost::schema_fields_PORT, $port);
+            $hostModel->setData(SyncHost::schema_fields_USER, $user);
             
             if (!empty($password)) {
-                $hostModel->setData(SyncHost::fields_PASSWORD, $password);
+                $hostModel->setData(SyncHost::schema_fields_PASSWORD, $password);
             }
             
             // 保存密钥内容（如果提供了）
             if (!empty($finalKeyContent)) {
-                $hostModel->setData(SyncHost::fields_KEY_CONTENT, $finalKeyContent);
+                $hostModel->setData(SyncHost::schema_fields_KEY_CONTENT, $finalKeyContent);
             }
             
             // 临时保存密钥路径（用于读取，保存后会被清除）
             if (!empty($keyPath)) {
-                $hostModel->setData(SyncHost::fields_KEY_PATH, $keyPath);
+                $hostModel->setData(SyncHost::schema_fields_KEY_PATH, $keyPath);
             }
             
             if (!empty($description)) {
-                $hostModel->setData(SyncHost::fields_DESCRIPTION, $description);
+                $hostModel->setData(SyncHost::schema_fields_DESCRIPTION, $description);
             }
 
             $hostModel->save();

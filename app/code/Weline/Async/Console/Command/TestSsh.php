@@ -47,9 +47,9 @@ class TestSsh extends CommandAbstract
         }
 
         $this->printer->print("正在测试SSH连接...");
-        $this->printer->print("主机: {$host->getData(SyncHost::fields_NAME)} ({$host->getData(SyncHost::fields_HOST)})");
-        $this->printer->print("用户: {$host->getData(SyncHost::fields_USER)}");
-            $port = $host->getData(SyncHost::fields_PORT);
+        $this->printer->print("主机: {$host->getData(SyncHost::schema_fields_NAME)} ({$host->getData(SyncHost::schema_fields_HOST)})");
+        $this->printer->print("用户: {$host->getData(SyncHost::schema_fields_USER)}");
+            $port = $host->getData(SyncHost::schema_fields_PORT);
             $this->printer->print("端口: " . ($port ?: 22));
         $this->printer->print("");
 
@@ -95,9 +95,9 @@ class TestSsh extends CommandAbstract
             $this->printer->print("3. 检查服务器上的文件权限:");
             $this->printer->print("   - ~/.ssh 目录权限应为 700");
             $this->printer->print("   - ~/.ssh/authorized_keys 文件权限应为 600");
-            $sshPort = $host->getData(SyncHost::fields_PORT) ?: 22;
-            $sshUser = $host->getData(SyncHost::fields_USER);
-            $sshHost = $host->getData(SyncHost::fields_HOST);
+            $sshPort = $host->getData(SyncHost::schema_fields_PORT) ?: 22;
+            $sshUser = $host->getData(SyncHost::schema_fields_USER);
+            $sshHost = $host->getData(SyncHost::schema_fields_HOST);
             $this->printer->print("4. 尝试手动SSH连接: ssh -p {$sshPort} {$sshUser}@{$sshHost}");
         }
     }
