@@ -29,12 +29,10 @@ $rulesJson = (string)$this->getData('rulesJson');
             return;
         }
         try {
-            const response = await fetch('<?= $this->getUrl('server/backend/server-monitor/save-security-rules') ?>', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({rules: textarea.value})
-            });
-            const result = await response.json();
+            var url = '<?= $this->getUrl('server/backend/server-monitor/save-security-rules') ?>';
+            var opts = { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({rules: textarea.value}) };
+            var response = await window.Weline.Api.request(url, opts);
+            var result = (response && response.data) !== undefined ? response.data : response;
             if (result.success) {
                 AdminToast.success(result.message || __('保存成功'));
             } else {

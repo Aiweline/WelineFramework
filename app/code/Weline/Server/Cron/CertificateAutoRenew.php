@@ -99,10 +99,10 @@ class CertificateAutoRenew implements CronTaskInterface
             $webroot = BP . 'pub';
             
             foreach ($expiringCerts as $certData) {
-                $domain = $certData[SslCertificate::fields_DOMAIN];
-                $certId = (int) $certData[SslCertificate::fields_ID];
-                $autoRenew = (bool) $certData[SslCertificate::fields_AUTO_RENEW];
-                $issuer = $certData[SslCertificate::fields_ISSUER] ?? '';
+                $domain = $certData[SslCertificate::schema_fields_DOMAIN];
+                $certId = (int) $certData[SslCertificate::schema_fields_ID];
+                $autoRenew = (bool) $certData[SslCertificate::schema_fields_AUTO_RENEW];
+                $issuer = $certData[SslCertificate::schema_fields_ISSUER] ?? '';
                 
                 // 跳过未启用自动续签的证书
                 if (!$autoRenew) {
@@ -190,10 +190,10 @@ class CertificateAutoRenew implements CronTaskInterface
         $now = \date('Y-m-d H:i:s');
         
         return $certModel->clearQuery()
-            ->where(SslCertificate::fields_STATUS, SslCertificate::STATUS_ACTIVE)
-            ->where(SslCertificate::fields_EXPIRES_AT, $renewBeforeDate, '<=')
-            ->where(SslCertificate::fields_EXPIRES_AT, $now, '>')
-            ->order(SslCertificate::fields_EXPIRES_AT, 'ASC')
+            ->where(SslCertificate::schema_fields_STATUS, SslCertificate::STATUS_ACTIVE)
+            ->where(SslCertificate::schema_fields_EXPIRES_AT, $renewBeforeDate, '<=')
+            ->where(SslCertificate::schema_fields_EXPIRES_AT, $now, '>')
+            ->order(SslCertificate::schema_fields_EXPIRES_AT, 'ASC')
             ->select()
             ->fetchArray();
     }
