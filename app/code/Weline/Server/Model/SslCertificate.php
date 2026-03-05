@@ -1,6 +1,5 @@
 <?php
 declare(strict_types=1);
-
 /**
  * Weline Server - SSL 证书模型
  * 
@@ -9,129 +8,65 @@ declare(strict_types=1);
  * @author Aiweline
  * @email aiweline@qq.com
  */
-
 namespace Weline\Server\Model;
-
-use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
-/**
- * SSL 证书模型
- * 
- * 存储每个域名的证书信息、到期时间、状态等
- */
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+/** SSL 证书模型 - 存储每个域名的证书信息、到期时间、状态等 */
+#[Table(comment: 'SSL证书表')]
+#[Index(name: 'uk_domain', columns: ['domain'], type: 'UNIQUE')]
+#[Index(name: 'idx_website', columns: ['website_id'])]
+#[Index(name: 'idx_status', columns: ['status'])]
+#[Index(name: 'idx_expires', columns: ['expires_at'])]
 class SslCertificate extends Model
 {
-    public const fields_ID = 'cert_id';
-    public const fields_DOMAIN = 'domain';              // 主域名
-    public const fields_CERT_TYPE = 'cert_type';        // 证书类型：exact（精确域名）/ wildcard（泛域名）
-    public const fields_WEBSITE_ID = 'website_id';      // 关联的网站 ID
-    public const fields_CERT_PATH = 'cert_path';        // 证书文件路径
-    public const fields_KEY_PATH = 'key_path';          // 私钥文件路径
-    public const fields_CHAIN_PATH = 'chain_path';      // 证书链路径（可选）
-    public const fields_ISSUER = 'issuer';              // 颁发机构
-    public const fields_PROVIDER = 'provider';          // 证书申请服务商
-    public const fields_ISSUED_AT = 'issued_at';        // 颁发时间
-    public const fields_EXPIRES_AT = 'expires_at';      // 到期时间
-    public const fields_STATUS = 'status';              // 状态：pending/active/expired/revoked
-    public const fields_AUTO_RENEW = 'auto_renew';      // 是否自动续签
-    public const fields_HTTPS_ENABLED = 'https_enabled';// 是否启用 HTTPS
-    public const fields_LAST_RENEW_AT = 'last_renew_at';// 最后续签时间
-    public const fields_RENEW_ERROR = 'renew_error';    // 续签错误信息
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
-    
-    // 证书状态
-    public const STATUS_PENDING = 'pending';     // 待申请
-    public const STATUS_ACTIVE = 'active';       // 有效
-    public const STATUS_EXPIRED = 'expired';     // 已过期
-    public const STATUS_REVOKED = 'revoked';     // 已吊销
-    public const STATUS_ERROR = 'error';         // 申请失败
-    
-    // 证书类型
-    public const CERT_TYPE_EXACT = 'exact';         // 精确域名（如 www.example.com）
-    public const CERT_TYPE_WILDCARD = 'wildcard';   // 泛域名（如 *.example.com）
-    
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 如果表不存在，执行安装
-        if (!$setup->tableExist()) {
-            $this->install($setup, $context);
-            return;
-        }
-        // 新增 cert_type 字段（证书类型：exact/wildcard）
-        if (!$setup->hasField(self::fields_CERT_TYPE)) {
-            $setup->alterTable()->addColumn(
-                self::fields_CERT_TYPE,
-                self::fields_DOMAIN,
-                TableInterface::column_type_VARCHAR,
-                20,
-                "default 'exact'",
-                '证书类型（exact/wildcard）'
-            )->alter();
-        }
-        // 新增 provider 字段（证书申请服务商）
-        if (!$setup->hasField(self::fields_PROVIDER)) {
-            $setup->alterTable()->addColumn(
-                self::fields_PROVIDER,
-                self::fields_ISSUER,
-                TableInterface::column_type_VARCHAR,
-                30,
-                "default 'letsencrypt'",
-                '证书申请服务商'
-            )->alter();
-        }
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist()) {
-            return;
-        }
-        
-        $setup->createTable('SSL证书表')
-            ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 11, 'primary key auto_increment', '证书ID')
-            ->addColumn(self::fields_DOMAIN, TableInterface::column_type_VARCHAR, 255, 'not null', '主域名')
-            ->addColumn(self::fields_CERT_TYPE, TableInterface::column_type_VARCHAR, 20, "default 'exact'", '证书类型（exact/wildcard）')
-            ->addColumn(self::fields_WEBSITE_ID, TableInterface::column_type_INTEGER, 11, 'default 0', '关联网站ID')
-            ->addColumn(self::fields_CERT_PATH, TableInterface::column_type_VARCHAR, 500, '', '证书文件路径')
-            ->addColumn(self::fields_KEY_PATH, TableInterface::column_type_VARCHAR, 500, '', '私钥文件路径')
-            ->addColumn(self::fields_CHAIN_PATH, TableInterface::column_type_VARCHAR, 500, '', '证书链路径')
-            ->addColumn(self::fields_ISSUER, TableInterface::column_type_VARCHAR, 100, "default 'Let''s Encrypt'", '颁发机构')
-            ->addColumn(self::fields_PROVIDER, TableInterface::column_type_VARCHAR, 30, "default 'letsencrypt'", '证书申请服务商')
-            ->addColumn(self::fields_ISSUED_AT, TableInterface::column_type_DATETIME, 0, '', '颁发时间')
-            ->addColumn(self::fields_EXPIRES_AT, TableInterface::column_type_DATETIME, 0, '', '到期时间')
-            ->addColumn(self::fields_STATUS, TableInterface::column_type_VARCHAR, 20, "default 'pending'", '状态')
-            ->addColumn(self::fields_AUTO_RENEW, TableInterface::column_type_INTEGER, 1, 'default 1', '自动续签')
-            ->addColumn(self::fields_HTTPS_ENABLED, TableInterface::column_type_INTEGER, 1, 'default 0', '启用HTTPS')
-            ->addColumn(self::fields_LAST_RENEW_AT, TableInterface::column_type_DATETIME, 0, '', '最后续签时间')
-            ->addColumn(self::fields_RENEW_ERROR, TableInterface::column_type_TEXT, 0, '', '续签错误信息')
-            ->addColumn(self::fields_CREATED_AT, TableInterface::column_type_DATETIME, 0, '', '创建时间')
-            ->addColumn(self::fields_UPDATED_AT, TableInterface::column_type_DATETIME, 0, '', '更新时间')
-            ->addIndex(TableInterface::index_type_UNIQUE, 'uk_domain', self::fields_DOMAIN)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_website', self::fields_WEBSITE_ID)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_status', self::fields_STATUS)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_expires', self::fields_EXPIRES_AT)
-            ->create();
-    }
-    
-    /**
+    public const schema_table = 'weline_server_ssl_certificate';
+    public const schema_primary_key = 'cert_id';
+    #[Col('int', 11, primaryKey: true, autoIncrement: true, nullable: false, comment: '证书ID')]
+    public const schema_fields_ID = 'cert_id';
+    #[Col('varchar', 255, nullable: false, comment: '主域名')]
+    public const schema_fields_DOMAIN = 'domain';
+    #[Col('varchar', 20, default: 'exact', comment: '证书类型')]
+    public const schema_fields_CERT_TYPE = 'cert_type';
+    #[Col('int', 11, default: 0, comment: '关联网站ID')]
+    public const schema_fields_WEBSITE_ID = 'website_id';
+    #[Col('varchar', 500, comment: '证书文件路径')]
+    public const schema_fields_CERT_PATH = 'cert_path';
+    #[Col('varchar', 500, comment: '私钥文件路径')]
+    public const schema_fields_KEY_PATH = 'key_path';
+    #[Col('varchar', 500, comment: '证书链路径')]
+    public const schema_fields_CHAIN_PATH = 'chain_path';
+    #[Col('varchar', 100, default: "Let's Encrypt", comment: '颁发机构')]
+    public const schema_fields_ISSUER = 'issuer';
+    #[Col('varchar', 30, default: 'letsencrypt', comment: '证书申请服务商')]
+    public const schema_fields_PROVIDER = 'provider';
+    #[Col('datetime', comment: '颁发时间')]
+    public const schema_fields_ISSUED_AT = 'issued_at';
+    #[Col('datetime', comment: '到期时间')]
+    public const schema_fields_EXPIRES_AT = 'expires_at';
+    #[Col('varchar', 20, default: 'pending', comment: '状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col('int', 1, default: 1, comment: '自动续签')]
+    public const schema_fields_AUTO_RENEW = 'auto_renew';
+    #[Col('int', 1, default: 0, comment: '启用HTTPS')]
+    public const schema_fields_HTTPS_ENABLED = 'https_enabled';
+    #[Col('datetime', comment: '最后续签时间')]
+    public const schema_fields_LAST_RENEW_AT = 'last_renew_at';
+    #[Col('text', comment: '续签错误信息')]
+    public const schema_fields_RENEW_ERROR = 'renew_error';
+    #[Col('datetime', comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col('datetime', comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
+    public const STATUS_PENDING = 'pending';
+    public const STATUS_ACTIVE = 'active';
+    public const STATUS_EXPIRED = 'expired';
+    public const STATUS_REVOKED = 'revoked';
+    public const STATUS_ERROR = 'error';
+    public const CERT_TYPE_EXACT = 'exact';
+    public const CERT_TYPE_WILDCARD = 'wildcard';
+/**
      * 保存前自动更新时间戳
      */
     public function save_before(): void
@@ -139,10 +74,10 @@ class SslCertificate extends Model
         parent::save_before();
         
         $now = \date('Y-m-d H:i:s');
-        $this->setData(self::fields_UPDATED_AT, $now);
+        $this->setData(self::schema_fields_UPDATED_AT, $now);
         
-        if (!$this->getData(self::fields_ID)) {
-            $this->setData(self::fields_CREATED_AT, $now);
+        if (!$this->getData(self::schema_fields_ID)) {
+            $this->setData(self::schema_fields_CREATED_AT, $now);
         }
     }
     
@@ -150,29 +85,29 @@ class SslCertificate extends Model
     
     public function getCertId(): int
     {
-        return (int) $this->getData(self::fields_ID);
+        return (int) $this->getData(self::schema_fields_ID);
     }
     
     public function setDomain(string $domain): self
     {
-        $this->setData(self::fields_DOMAIN, \strtolower(\trim($domain)));
+        $this->setData(self::schema_fields_DOMAIN, \strtolower(\trim($domain)));
         return $this;
     }
     
     public function getDomain(): string
     {
-        return (string) $this->getData(self::fields_DOMAIN);
+        return (string) $this->getData(self::schema_fields_DOMAIN);
     }
     
     public function setCertType(string $certType): self
     {
-        $this->setData(self::fields_CERT_TYPE, $certType);
+        $this->setData(self::schema_fields_CERT_TYPE, $certType);
         return $this;
     }
     
     public function getCertType(): string
     {
-        return (string) ($this->getData(self::fields_CERT_TYPE) ?: self::CERT_TYPE_EXACT);
+        return (string) ($this->getData(self::schema_fields_CERT_TYPE) ?: self::CERT_TYPE_EXACT);
     }
     
     public function isWildcard(): bool
@@ -182,145 +117,145 @@ class SslCertificate extends Model
     
     public function setWebsiteId(int $websiteId): self
     {
-        $this->setData(self::fields_WEBSITE_ID, $websiteId);
+        $this->setData(self::schema_fields_WEBSITE_ID, $websiteId);
         return $this;
     }
     
     public function getWebsiteId(): int
     {
-        return (int) $this->getData(self::fields_WEBSITE_ID);
+        return (int) $this->getData(self::schema_fields_WEBSITE_ID);
     }
     
     public function setCertPath(string $path): self
     {
-        $this->setData(self::fields_CERT_PATH, $path);
+        $this->setData(self::schema_fields_CERT_PATH, $path);
         return $this;
     }
     
     public function getCertPath(): string
     {
-        return (string) $this->getData(self::fields_CERT_PATH);
+        return (string) $this->getData(self::schema_fields_CERT_PATH);
     }
     
     public function setKeyPath(string $path): self
     {
-        $this->setData(self::fields_KEY_PATH, $path);
+        $this->setData(self::schema_fields_KEY_PATH, $path);
         return $this;
     }
     
     public function getKeyPath(): string
     {
-        return (string) $this->getData(self::fields_KEY_PATH);
+        return (string) $this->getData(self::schema_fields_KEY_PATH);
     }
     
     public function setChainPath(string $path): self
     {
-        $this->setData(self::fields_CHAIN_PATH, $path);
+        $this->setData(self::schema_fields_CHAIN_PATH, $path);
         return $this;
     }
     
     public function getChainPath(): string
     {
-        return (string) $this->getData(self::fields_CHAIN_PATH);
+        return (string) $this->getData(self::schema_fields_CHAIN_PATH);
     }
     
     public function setIssuer(string $issuer): self
     {
-        $this->setData(self::fields_ISSUER, $issuer);
+        $this->setData(self::schema_fields_ISSUER, $issuer);
         return $this;
     }
     
     public function getIssuer(): string
     {
-        return (string) $this->getData(self::fields_ISSUER);
+        return (string) $this->getData(self::schema_fields_ISSUER);
     }
     
     public function setProvider(string $provider): self
     {
-        $this->setData(self::fields_PROVIDER, \strtolower(\trim($provider)));
+        $this->setData(self::schema_fields_PROVIDER, \strtolower(\trim($provider)));
         return $this;
     }
     
     public function getProvider(): string
     {
-        return (string) $this->getData(self::fields_PROVIDER);
+        return (string) $this->getData(self::schema_fields_PROVIDER);
     }
     
     public function setIssuedAt(string $datetime): self
     {
-        $this->setData(self::fields_ISSUED_AT, $datetime);
+        $this->setData(self::schema_fields_ISSUED_AT, $datetime);
         return $this;
     }
     
     public function getIssuedAt(): string
     {
-        return (string) $this->getData(self::fields_ISSUED_AT);
+        return (string) $this->getData(self::schema_fields_ISSUED_AT);
     }
     
     public function setExpiresAt(string $datetime): self
     {
-        $this->setData(self::fields_EXPIRES_AT, $datetime);
+        $this->setData(self::schema_fields_EXPIRES_AT, $datetime);
         return $this;
     }
     
     public function getExpiresAt(): string
     {
-        return (string) $this->getData(self::fields_EXPIRES_AT);
+        return (string) $this->getData(self::schema_fields_EXPIRES_AT);
     }
     
     public function setStatus(string $status): self
     {
-        $this->setData(self::fields_STATUS, $status);
+        $this->setData(self::schema_fields_STATUS, $status);
         return $this;
     }
     
     public function getStatus(): string
     {
-        return (string) $this->getData(self::fields_STATUS);
+        return (string) $this->getData(self::schema_fields_STATUS);
     }
     
     public function setAutoRenew(bool $autoRenew): self
     {
-        $this->setData(self::fields_AUTO_RENEW, $autoRenew ? 1 : 0);
+        $this->setData(self::schema_fields_AUTO_RENEW, $autoRenew ? 1 : 0);
         return $this;
     }
     
     public function isAutoRenew(): bool
     {
-        return (bool) $this->getData(self::fields_AUTO_RENEW);
+        return (bool) $this->getData(self::schema_fields_AUTO_RENEW);
     }
     
     public function setHttpsEnabled(bool $enabled): self
     {
-        $this->setData(self::fields_HTTPS_ENABLED, $enabled ? 1 : 0);
+        $this->setData(self::schema_fields_HTTPS_ENABLED, $enabled ? 1 : 0);
         return $this;
     }
     
     public function isHttpsEnabled(): bool
     {
-        return (bool) $this->getData(self::fields_HTTPS_ENABLED);
+        return (bool) $this->getData(self::schema_fields_HTTPS_ENABLED);
     }
     
     public function setLastRenewAt(string $datetime): self
     {
-        $this->setData(self::fields_LAST_RENEW_AT, $datetime);
+        $this->setData(self::schema_fields_LAST_RENEW_AT, $datetime);
         return $this;
     }
     
     public function getLastRenewAt(): string
     {
-        return (string) $this->getData(self::fields_LAST_RENEW_AT);
+        return (string) $this->getData(self::schema_fields_LAST_RENEW_AT);
     }
     
     public function setRenewError(string $error): self
     {
-        $this->setData(self::fields_RENEW_ERROR, $error);
+        $this->setData(self::schema_fields_RENEW_ERROR, $error);
         return $this;
     }
     
     public function getRenewError(): string
     {
-        return (string) $this->getData(self::fields_RENEW_ERROR);
+        return (string) $this->getData(self::schema_fields_RENEW_ERROR);
     }
     
     // =============== 业务方法 ===============
@@ -386,7 +321,7 @@ class SslCertificate extends Model
     public function loadByDomain(string $domain): self
     {
         $this->clearQuery()
-            ->where(self::fields_DOMAIN, \strtolower(\trim($domain)))
+            ->where(self::schema_fields_DOMAIN, \strtolower(\trim($domain)))
             ->find()
             ->fetch();
         return $this;
@@ -398,8 +333,8 @@ class SslCertificate extends Model
     public function getActiveCertificates(): array
     {
         return $this->clearQuery()
-            ->where(self::fields_HTTPS_ENABLED, 1)
-            ->where(self::fields_STATUS, self::STATUS_ACTIVE)
+            ->where(self::schema_fields_HTTPS_ENABLED, 1)
+            ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
             ->select()
             ->fetchArray();
     }
@@ -412,9 +347,9 @@ class SslCertificate extends Model
         $warningDate = \date('Y-m-d H:i:s', \time() + ($days * 86400));
         
         return $this->clearQuery()
-            ->where(self::fields_AUTO_RENEW, 1)
-            ->where(self::fields_STATUS, self::STATUS_ACTIVE)
-            ->where(self::fields_EXPIRES_AT, $warningDate, '<=')
+            ->where(self::schema_fields_AUTO_RENEW, 1)
+            ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
+            ->where(self::schema_fields_EXPIRES_AT, $warningDate, '<=')
             ->select()
             ->fetchArray();
     }
@@ -431,8 +366,8 @@ class SslCertificate extends Model
         
         // 1. 先查精确匹配
         $this->clearQuery()
-            ->where(self::fields_DOMAIN, $domain)
-            ->where(self::fields_STATUS, self::STATUS_ACTIVE)
+            ->where(self::schema_fields_DOMAIN, $domain)
+            ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
             ->find()
             ->fetch();
         
@@ -448,9 +383,9 @@ class SslCertificate extends Model
             $wildcardDomain = '*.' . \implode('.', $parts);
             
             $this->clearQuery()
-                ->where(self::fields_DOMAIN, $wildcardDomain)
-                ->where(self::fields_CERT_TYPE, self::CERT_TYPE_WILDCARD)
-                ->where(self::fields_STATUS, self::STATUS_ACTIVE)
+                ->where(self::schema_fields_DOMAIN, $wildcardDomain)
+                ->where(self::schema_fields_CERT_TYPE, self::CERT_TYPE_WILDCARD)
+                ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
                 ->find()
                 ->fetch();
             
@@ -473,9 +408,9 @@ class SslCertificate extends Model
         $wildcardDomain = '*.' . \strtolower(\trim($rootDomain));
         
         $this->clearQuery()
-            ->where(self::fields_DOMAIN, $wildcardDomain)
-            ->where(self::fields_CERT_TYPE, self::CERT_TYPE_WILDCARD)
-            ->where(self::fields_STATUS, self::STATUS_ACTIVE)
+            ->where(self::schema_fields_DOMAIN, $wildcardDomain)
+            ->where(self::schema_fields_CERT_TYPE, self::CERT_TYPE_WILDCARD)
+            ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
             ->find()
             ->fetch();
         

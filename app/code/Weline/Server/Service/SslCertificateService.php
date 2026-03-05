@@ -1004,22 +1004,22 @@ CNF;
     public function getCertificateMap(): array
     {
         $certificates = $this->certModel->clearQuery()
-            ->where(SslCertificate::fields_STATUS, SslCertificate::STATUS_ACTIVE)
-            ->where(SslCertificate::fields_HTTPS_ENABLED, 1)
+            ->where(SslCertificate::schema_fields_STATUS, SslCertificate::STATUS_ACTIVE)
+            ->where(SslCertificate::schema_fields_HTTPS_ENABLED, 1)
             ->select()
             ->fetchArray();
         
         $map = [];
         foreach ($certificates as $cert) {
-            $domain = $cert[SslCertificate::fields_DOMAIN];
-            $certPath = $cert[SslCertificate::fields_CERT_PATH];
-            $keyPath = $cert[SslCertificate::fields_KEY_PATH];
+            $domain = $cert[SslCertificate::schema_fields_DOMAIN];
+            $certPath = $cert[SslCertificate::schema_fields_CERT_PATH];
+            $keyPath = $cert[SslCertificate::schema_fields_KEY_PATH];
             
             if (\is_file($certPath) && \is_file($keyPath)) {
                 $map[$domain] = [
                     'cert' => $certPath,
                     'key' => $keyPath,
-                    'chain' => $cert[SslCertificate::fields_CHAIN_PATH] ?? '',
+                    'chain' => $cert[SslCertificate::schema_fields_CHAIN_PATH] ?? '',
                 ];
             }
         }

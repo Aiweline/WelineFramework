@@ -41,7 +41,7 @@ class SslCertificate extends BaseController
     {
         // 获取所有证书
         $certificates = $this->certModel->clearQuery()
-            ->order(CertModel::fields_DOMAIN)
+            ->order(CertModel::schema_fields_DOMAIN)
             ->select()
             ->fetchArray();
         
@@ -59,14 +59,14 @@ class SslCertificate extends BaseController
         
         foreach ($certificates as &$cert) {
             // 计算状态
-            if ($cert[CertModel::fields_STATUS] === CertModel::STATUS_ACTIVE) {
+            if ($cert[CertModel::schema_fields_STATUS] === CertModel::STATUS_ACTIVE) {
                 $stats['active']++;
             }
-            if ($cert[CertModel::fields_HTTPS_ENABLED]) {
+            if ($cert[CertModel::schema_fields_HTTPS_ENABLED]) {
                 $stats['https_enabled']++;
             }
             
-            $expiresAt = $cert[CertModel::fields_EXPIRES_AT] ?? '';
+            $expiresAt = $cert[CertModel::schema_fields_EXPIRES_AT] ?? '';
             if ($expiresAt) {
                 $expiresTime = \strtotime($expiresAt);
                 if ($expiresTime < $now) {
@@ -100,7 +100,7 @@ class SslCertificate extends BaseController
     public function getList(): string
     {
         $certificates = $this->certModel->clearQuery()
-            ->order(CertModel::fields_DOMAIN)
+            ->order(CertModel::schema_fields_DOMAIN)
             ->select()
             ->fetchArray();
         
@@ -218,7 +218,7 @@ class SslCertificate extends BaseController
         
         // 删除数据库记录
         $cert->clearQuery()
-            ->where(CertModel::fields_ID, $cert->getCertId())
+            ->where(CertModel::schema_fields_ID, $cert->getCertId())
             ->delete()
             ->fetch();
         

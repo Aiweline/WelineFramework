@@ -356,6 +356,14 @@ class MasterControlServer
     }
 
     /**
+     * 主动关闭指定客户端连接（进程已退出时调用，避免超时等待）
+     */
+    public function closeClient(int $clientId): void
+    {
+        $this->removeClient($clientId);
+    }
+
+    /**
      * 移除客户端连接（断开时）
      */
     public function removeClient(int $clientId): void

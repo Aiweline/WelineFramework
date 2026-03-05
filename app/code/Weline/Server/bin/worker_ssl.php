@@ -850,11 +850,13 @@ $gracefulExit = function (string $reason = '') use ($socket, &$connections, &$re
     $requestBuffers = [];
     $connectionLastActivity = [];
     
-    // 通知 Master 即将退出（IPC exited 消息）
+    // 通知 Master 即将退出（先发送退出原因，再发送 exited）
     if ($ipcClient && $ipcClient->isConnected()) {
         $exitRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
+        $exitReason = $reason !== '' ? $reason : 'graceful';
+        @$ipcClient->send(\Weline\Server\IPC\ControlMessage::exitReason($exitReason, 0));
         $ipcClient->send(\Weline\Server\IPC\ControlMessage::exited($exitRole, \getmypid(), $port, $workerId));
-        WlsLogger::info_("已发送 exited 消息给 Master");
+        WlsLogger::info_("已发送 exit_reason + exited 消息给 Master");
     }
     
     // 使用进程管理器清理 PID 文件
