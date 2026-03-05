@@ -190,7 +190,7 @@ class ImportDefault extends CommandAbstract
             
             // 先清除旧的评论数据
             $reviewModel->reset()
-                ->where(Review::fields_PRODUCT_ID, $productIds, 'in')
+                ->where(Review::schema_fields_PRODUCT_ID, $productIds, 'in')
                 ->delete()
                 ->fetch();
             
@@ -220,12 +220,12 @@ class ImportDefault extends CommandAbstract
                     $rating = $this->getWeightedRating();
                     
                     $reviewData = [
-                        Review::fields_PRODUCT_ID => $productId,
-                        Review::fields_CUSTOMER_ID => random_int(1, 100),
-                        Review::fields_RATING => $rating,
-                        Review::fields_TITLE => $sampleTitles[array_rand($sampleTitles)],
-                        Review::fields_CONTENT => $sampleContents[array_rand($sampleContents)],
-                        Review::fields_STATUS => Review::STATUS_APPROVED,
+                        Review::schema_fields_PRODUCT_ID => $productId,
+                        Review::schema_fields_CUSTOMER_ID => random_int(1, 100),
+                        Review::schema_fields_RATING => $rating,
+                        Review::schema_fields_TITLE => $sampleTitles[array_rand($sampleTitles)],
+                        Review::schema_fields_CONTENT => $sampleContents[array_rand($sampleContents)],
+                        Review::schema_fields_STATUS => Review::STATUS_APPROVED,
                     ];
                     
                     $reviewModel->reset()->insert($reviewData)->fetch();
@@ -302,7 +302,7 @@ class ImportDefault extends CommandAbstract
                 foreach ($initialData as $typeData) {
                     $code = $typeData[\Weline\Eav\Schema\EavAttributeTypeSchema::FIELD_CODE];
                     $existing = $typeModel->reset()
-                        ->where(Type::fields_code, $code)
+                        ->where(Type::schema_fields_code, $code)
                         ->find()
                         ->fetch();
                     
@@ -310,8 +310,8 @@ class ImportDefault extends CommandAbstract
                         $typeModel->reset()->clearData();
                         // 使用Schema的字段常量映射到Model的字段
                         $fieldMap = [
-                            \Weline\Eav\Schema\EavAttributeTypeSchema::FIELD_CODE => Type::fields_code,
-                            \Weline\Eav\Schema\EavAttributeTypeSchema::FIELD_NAME => Type::fields_name,
+                            \Weline\Eav\Schema\EavAttributeTypeSchema::FIELD_CODE => Type::schema_fields_code,
+                            \Weline\Eav\Schema\EavAttributeTypeSchema::FIELD_NAME => Type::schema_fields_name,
                             \Weline\Eav\Schema\EavAttributeTypeSchema::FIELD_ELEMENT => 'element',
                             \Weline\Eav\Schema\EavAttributeTypeSchema::FIELD_MODEL_CLASS => 'model_class',
                             \Weline\Eav\Schema\EavAttributeTypeSchema::FIELD_MODEL_CLASS_DATA => 'model_class_data',
@@ -322,7 +322,7 @@ class ImportDefault extends CommandAbstract
                             \Weline\Eav\Schema\EavAttributeTypeSchema::FIELD_SWATCH_TEXT => 'swatch_text',
                             \Weline\Eav\Schema\EavAttributeTypeSchema::FIELD_FRONTEND_ATTRS => 'frontend_attrs',
                             \Weline\Eav\Schema\EavAttributeTypeSchema::FIELD_REQUIRED => 'required',
-                            \Weline\Eav\Schema\EavAttributeTypeSchema::FIELD_FIELD_TYPE => Type::fields_field_type,
+                            \Weline\Eav\Schema\EavAttributeTypeSchema::FIELD_FIELD_TYPE => Type::schema_fields_field_type,
                             \Weline\Eav\Schema\EavAttributeTypeSchema::FIELD_FIELD_LENGTH => 'field_length',
                         ];
                         
@@ -333,7 +333,7 @@ class ImportDefault extends CommandAbstract
                             }
                         }
                         
-                        $typeModel->forceCheck(true, [Type::fields_code]);
+                        $typeModel->forceCheck(true, [Type::schema_fields_code]);
                         $typeId = $typeModel->save();
                         
                         if ($typeId) {
@@ -474,8 +474,8 @@ class ImportDefault extends CommandAbstract
     {
         $eavEntityId = $this->product->getEavEntityId();
         $set = $this->attributeSet->reset()
-            ->where(Set::fields_code, 'default')
-            ->where(Set::fields_eav_entity_id, $eavEntityId)
+            ->where(Set::schema_fields_code, 'default')
+            ->where(Set::schema_fields_eav_entity_id, $eavEntityId)
             ->find()
             ->fetch();
 
@@ -531,8 +531,8 @@ class ImportDefault extends CommandAbstract
         
         // 检查属性是否存在
         $existing = $attributeModel->reset()
-            ->where(EavAttribute::fields_code, $code)
-            ->where(EavAttribute::fields_eav_entity_id, $eavEntityId)
+            ->where(EavAttribute::schema_fields_code, $code)
+            ->where(EavAttribute::schema_fields_eav_entity_id, $eavEntityId)
             ->find()
             ->fetch();
         
@@ -552,18 +552,18 @@ class ImportDefault extends CommandAbstract
         
         // 创建属性
         $attributeModel->reset()->clearData();
-        $attributeModel->setData(EavAttribute::fields_code, $code)
-            ->setData(EavAttribute::fields_eav_entity_id, $eavEntityId)
-            ->setData(EavAttribute::fields_set_id, $setId)
-            ->setData(EavAttribute::fields_group_id, $groupId)
-            ->setData(EavAttribute::fields_type_id, $typeId)
-            ->setData(EavAttribute::fields_name, $config['name'])
-            ->setData(EavAttribute::fields_is_enable, 1)
-            ->setData(EavAttribute::fields_is_filterable, 1)  // 可筛选
-            ->setData(EavAttribute::fields_is_system, 0)
-            ->setData(EavAttribute::fields_has_option, 1);  // 有选项
+        $attributeModel->setData(EavAttribute::schema_fields_code, $code)
+            ->setData(EavAttribute::schema_fields_eav_entity_id, $eavEntityId)
+            ->setData(EavAttribute::schema_fields_set_id, $setId)
+            ->setData(EavAttribute::schema_fields_group_id, $groupId)
+            ->setData(EavAttribute::schema_fields_type_id, $typeId)
+            ->setData(EavAttribute::schema_fields_name, $config['name'])
+            ->setData(EavAttribute::schema_fields_is_enable, 1)
+            ->setData(EavAttribute::schema_fields_is_filterable, 1)  // 可筛选
+            ->setData(EavAttribute::schema_fields_is_system, 0)
+            ->setData(EavAttribute::schema_fields_has_option, 1);  // 有选项
         
-        $attributeModel->forceCheck(true, [EavAttribute::fields_code, EavAttribute::fields_eav_entity_id]);
+        $attributeModel->forceCheck(true, [EavAttribute::schema_fields_code, EavAttribute::schema_fields_eav_entity_id]);
         
         try {
             $attributeId = $attributeModel->save();
@@ -595,17 +595,17 @@ class ImportDefault extends CommandAbstract
         
         foreach ($options as $code => $optionConfig) {
             $optionModel->reset()->clearData();
-            $optionModel->setData(Option::fields_eav_entity_id, $eavEntityId)
-                ->setData(Option::fields_attribute_id, $attributeId)
-                ->setData(Option::fields_code, $code)
-                ->setData(Option::fields_value, $optionConfig['value']);
+            $optionModel->setData(Option::schema_fields_eav_entity_id, $eavEntityId)
+                ->setData(Option::schema_fields_attribute_id, $attributeId)
+                ->setData(Option::schema_fields_code, $code)
+                ->setData(Option::schema_fields_value, $optionConfig['value']);
             
             // 添加色块颜色（如果有）
             if (isset($optionConfig['swatch_color'])) {
-                $optionModel->setData(Option::fields_swatch_color, $optionConfig['swatch_color']);
+                $optionModel->setData(Option::schema_fields_swatch_color, $optionConfig['swatch_color']);
             }
             
-            $optionModel->forceCheck(true, [Option::fields_attribute_id, Option::fields_code]);
+            $optionModel->forceCheck(true, [Option::schema_fields_attribute_id, Option::schema_fields_code]);
             $optionId = $optionModel->save();
             
             if ($optionId) {
@@ -631,8 +631,8 @@ class ImportDefault extends CommandAbstract
             
             // 检查数据库中是否存在
             $existing = $optionModel->reset()
-                ->where(Option::fields_attribute_id, $attributeId)
-                ->where(Option::fields_code, $code)
+                ->where(Option::schema_fields_attribute_id, $attributeId)
+                ->where(Option::schema_fields_code, $code)
                 ->find()
                 ->fetch();
             
@@ -643,16 +643,16 @@ class ImportDefault extends CommandAbstract
             
             // 创建新选项
             $optionModel->reset()->clearData();
-            $optionModel->setData(Option::fields_eav_entity_id, $eavEntityId)
-                ->setData(Option::fields_attribute_id, $attributeId)
-                ->setData(Option::fields_code, $code)
-                ->setData(Option::fields_value, $optionConfig['value']);
+            $optionModel->setData(Option::schema_fields_eav_entity_id, $eavEntityId)
+                ->setData(Option::schema_fields_attribute_id, $attributeId)
+                ->setData(Option::schema_fields_code, $code)
+                ->setData(Option::schema_fields_value, $optionConfig['value']);
             
             if (isset($optionConfig['swatch_color'])) {
-                $optionModel->setData(Option::fields_swatch_color, $optionConfig['swatch_color']);
+                $optionModel->setData(Option::schema_fields_swatch_color, $optionConfig['swatch_color']);
             }
             
-            $optionModel->forceCheck(true, [Option::fields_attribute_id, Option::fields_code]);
+            $optionModel->forceCheck(true, [Option::schema_fields_attribute_id, Option::schema_fields_code]);
             $optionId = $optionModel->save();
             
             if ($optionId) {
@@ -676,7 +676,7 @@ class ImportDefault extends CommandAbstract
         /** @var Option $optionModel */
         $optionModel = ObjectManager::getInstance(Option::class);
         $options = $optionModel->reset()
-            ->where(Option::fields_attribute_id, $attributeId)
+            ->where(Option::schema_fields_attribute_id, $attributeId)
             ->select()
             ->fetchArray();
         
@@ -751,8 +751,8 @@ class ImportDefault extends CommandAbstract
             /** @var EavAttribute $attribute */
             $attribute = ObjectManager::getInstance(EavAttribute::class);
             $attribute->reset()
-                ->where(EavAttribute::fields_code, $attributeCode)
-                ->where(EavAttribute::fields_eav_entity_id, $product->getEavEntityId())
+                ->where(EavAttribute::schema_fields_code, $attributeCode)
+                ->where(EavAttribute::schema_fields_eav_entity_id, $product->getEavEntityId())
                 ->find()
                 ->fetch();
             
@@ -808,8 +808,8 @@ class ImportDefault extends CommandAbstract
         /** @var EavAttribute $attributeModel */
         $attributeModel = ObjectManager::getInstance(EavAttribute::class);
         $existing = $attributeModel->reset()
-            ->where(EavAttribute::fields_code, $attributeCode)
-            ->where(EavAttribute::fields_eav_entity_id, $eavEntityId)
+            ->where(EavAttribute::schema_fields_code, $attributeCode)
+            ->where(EavAttribute::schema_fields_eav_entity_id, $eavEntityId)
             ->find()
             ->fetch();
         
@@ -859,8 +859,8 @@ class ImportDefault extends CommandAbstract
         if (!isset($this->attributeCache[$attributeCode])) {
             // 尝试再次从数据库加载，可能创建成功了但缓存没设置
             $created = $attributeModel->reset()
-                ->where(EavAttribute::fields_code, $attributeCode)
-                ->where(EavAttribute::fields_eav_entity_id, $eavEntityId)
+                ->where(EavAttribute::schema_fields_code, $attributeCode)
+                ->where(EavAttribute::schema_fields_eav_entity_id, $eavEntityId)
                 ->find()
                 ->fetch();
             
@@ -894,8 +894,8 @@ class ImportDefault extends CommandAbstract
         /** @var Option $optionModel */
         $optionModel = ObjectManager::getInstance(Option::class);
         $existing = $optionModel->reset()
-            ->where(Option::fields_attribute_id, $attributeId)
-            ->where(Option::fields_code, $optionCode)
+            ->where(Option::schema_fields_attribute_id, $attributeId)
+            ->where(Option::schema_fields_code, $optionCode)
             ->find()
             ->fetch();
         
@@ -919,16 +919,16 @@ class ImportDefault extends CommandAbstract
         
         // 创建选项
         $optionModel->reset()->clearData();
-        $optionModel->setData(Option::fields_eav_entity_id, $eavEntityId)
-            ->setData(Option::fields_attribute_id, $attributeId)
-            ->setData(Option::fields_code, $optionCode)
-            ->setData(Option::fields_value, $optionValue);
+        $optionModel->setData(Option::schema_fields_eav_entity_id, $eavEntityId)
+            ->setData(Option::schema_fields_attribute_id, $attributeId)
+            ->setData(Option::schema_fields_code, $optionCode)
+            ->setData(Option::schema_fields_value, $optionValue);
         
         if ($swatchColor) {
-            $optionModel->setData(Option::fields_swatch_color, $swatchColor);
+            $optionModel->setData(Option::schema_fields_swatch_color, $swatchColor);
         }
         
-        $optionModel->forceCheck(true, [Option::fields_attribute_id, Option::fields_code]);
+        $optionModel->forceCheck(true, [Option::schema_fields_attribute_id, Option::schema_fields_code]);
         $optionId = $optionModel->save();
         
         if ($optionId) {
@@ -1051,9 +1051,9 @@ class ImportDefault extends CommandAbstract
         /** @var \Weline\Eav\Model\EavAttribute\Group $groupModel */
         $groupModel = ObjectManager::getInstance(\Weline\Eav\Model\EavAttribute\Group::class);
         $group = $groupModel->reset()
-            ->where(\Weline\Eav\Model\EavAttribute\Group::fields_code, 'default')
-            ->where(\Weline\Eav\Model\EavAttribute\Group::fields_set_id, $setId)
-            ->where(\Weline\Eav\Model\EavAttribute\Group::fields_eav_entity_id, $eavEntityId)
+            ->where(\Weline\Eav\Model\EavAttribute\Group::schema_fields_code, 'default')
+            ->where(\Weline\Eav\Model\EavAttribute\Group::schema_fields_set_id, $setId)
+            ->where(\Weline\Eav\Model\EavAttribute\Group::schema_fields_eav_entity_id, $eavEntityId)
             ->find()
             ->fetch();
         
@@ -1068,7 +1068,7 @@ class ImportDefault extends CommandAbstract
         /** @var Type $typeModel */
         $typeModel = ObjectManager::getInstance(Type::class);
         $type = $typeModel->reset()
-            ->where(Type::fields_code, $typeCode)
+            ->where(Type::schema_fields_code, $typeCode)
             ->find()
             ->fetch();
         
@@ -1086,7 +1086,7 @@ class ImportDefault extends CommandAbstract
         if (isset($typeCodeMap[$typeCode])) {
             foreach ($typeCodeMap[$typeCode] as $fallbackCode) {
                 $type = $typeModel->reset()
-                    ->where(Type::fields_code, $fallbackCode)
+                    ->where(Type::schema_fields_code, $fallbackCode)
                     ->find()
                     ->fetch();
                 
@@ -1098,7 +1098,7 @@ class ImportDefault extends CommandAbstract
         
         // 最后尝试使用input_string作为兜底
         $type = $typeModel->reset()
-            ->where(Type::fields_code, 'input_string')
+            ->where(Type::schema_fields_code, 'input_string')
             ->find()
             ->fetch();
         
@@ -1145,8 +1145,8 @@ class ImportDefault extends CommandAbstract
             
             // 查找分类（支持完整路径或最后一部分）
             $found = $category->reset()
-                ->where(Category::fields_HANDLE, $finalHandle)
-                ->where(Category::fields_IS_ACTIVE, 1)
+                ->where(Category::schema_fields_HANDLE, $finalHandle)
+                ->where(Category::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
             
@@ -1182,9 +1182,9 @@ class ImportDefault extends CommandAbstract
         
         foreach ($parts as $handle) {
             $found = $category->reset()
-                ->where(Category::fields_HANDLE, $handle)
-                ->where(Category::fields_PARENT_ID, $parentId)
-                ->where(Category::fields_IS_ACTIVE, 1)
+                ->where(Category::schema_fields_HANDLE, $handle)
+                ->where(Category::schema_fields_PARENT_ID, $parentId)
+                ->where(Category::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
             
@@ -1212,7 +1212,7 @@ class ImportDefault extends CommandAbstract
             
             // 先删除旧关联
             $productCategory->reset()
-                ->where(ProductCategory::fields_product_id, $productId)
+                ->where(ProductCategory::schema_fields_product_id, $productId)
                 ->delete()
                 ->fetch();
             

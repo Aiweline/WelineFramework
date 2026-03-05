@@ -15,20 +15,17 @@ declare(strict_types=1);
 namespace WeShop\Product\Helper;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Theme\Helper\LayoutScanner;
-use Weline\Theme\Model\WelineTheme;
 
 class ProductLayoutScanner
 {
     /**
      * 扫描产品模块的专属布局文件
-     * 
+     *
      * @param string $layoutType 布局类型
-     * @param WelineTheme|null $theme 主题对象（可选，用于主题继承）
+     * @param bool $includeTheme 是否包含当前主题的布局（通过 theme 查询器）
      * @return array 布局选项数组
      */
-    public static function scanProductLayouts(string $layoutType, ?WelineTheme $theme = null): array
+    public static function scanProductLayouts(string $layoutType, bool $includeTheme = true): array
     {
         $layouts = [];
         $modules = Env::getInstance()->getModuleList();
@@ -66,55 +63,19 @@ class ProductLayoutScanner
             ];
         }
 
-        // 如果提供了主题，尝试从主题继承中查找布局
-        if ($theme) {
-            $themeLayouts = self::scanThemeLayouts($layoutType, $theme);
-            $layouts = array_merge($layouts, $themeLayouts);
-        }
-
-        return $layouts;
-    }
-
-    /**
-     * 从主题继承中扫描布局
-     */
-    private static function scanThemeLayouts(string $layoutType, WelineTheme $theme): array
-    {
-        $layouts = [];
-        $themePath = $theme->getPath();
-        
-        if (empty($themePath) || !is_dir($themePath)) {
-            return $layouts;
-        }
-
-        // 主题布局路径：{theme_path}/view/theme/frontend/layouts/{layoutType}/
-        $layoutsDir = rtrim($themePath, DS) . DS . 'view' . DS . 'theme' . DS . 'frontend' . DS . 'layouts' . DS . $layoutType;
-        
-        if (!is_dir($layoutsDir)) {
-            // 尝试父主题
-            $parentTheme = $theme->getParentTheme();
-            if ($parentTheme) {
-                return self::scanThemeLayouts($layoutType, $parentTheme);
+        // 通过 theme 查询器获取主题布局（避免跨模块直接调用）
+        if ($includeTheme) {
+            try {
+                $themeLayouts = w_query('theme', 'scanThemeLayoutsByType', [
+                    'layout_type' => $layoutType,
+                    'area' => 'frontend',
+                ], 'frontend');
+                if (is_array($themeLayouts) && $themeLayouts !== []) {
+                    $layouts = array_merge($layouts, $themeLayouts);
+                }
+            } catch (\Throwable $e) {
+                // 主题扫描失败，仅返回模块布局
             }
-            return $layouts;
-        }
-
-        $files = glob($layoutsDir . DS . '*.phtml');
-        
-        foreach ($files as $file) {
-            $fileName = basename($file, '.phtml');
-            // 主题布局使用主题路径格式
-            $layoutPath = $theme->getCode() . '::theme/frontend/layouts/' . $layoutType . '/' . $fileName;
-            
-            $meta = self::parseLayoutMeta($file);
-            
-            $layouts[$fileName] = [
-                'name' => $meta['name'] ?? ucfirst($fileName),
-                'description' => $meta['description'] ?? '',
-                'template' => $layoutPath,
-                'preview_image' => $meta['preview_image'] ?? '',
-                'config' => $meta['config'] ?? []
-            ];
         }
 
         return $layouts;
