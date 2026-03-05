@@ -52,11 +52,11 @@ class GenerateFeed implements CommandInterface
             $feedContent = $feedGenerator->generateFeed($feed, $format);
 
             // 更新最后生成时间
-            $feed->setData(Feed::fields_LAST_GENERATED_AT, time());
+            $feed->setData(Feed::schema_fields_LAST_GENERATED_AT, time());
             $feed->save();
 
             echo "Feed生成成功！\n";
-            echo "Feed名称: {$feed->getData(Feed::fields_FEED_NAME)}\n";
+            echo "Feed名称: {$feed->getData(Feed::schema_fields_FEED_NAME)}\n";
             echo "格式: {$format}\n";
             echo "内容长度: " . strlen($feedContent) . " 字节\n";
 

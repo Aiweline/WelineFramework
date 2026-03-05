@@ -79,37 +79,37 @@ class Install implements InstallInterface
         $queueType = ObjectManager::getInstance(Type::class);
 
         // 注册Feed生成队列类型
-        $generateType = $queueType->where(Type::fields_class, 'Weline\GenerativeEngineOptimization\Queue\FeedGenerateQueue')
+        $generateType = $queueType->where(Type::schema_fields_class, 'Weline\GenerativeEngineOptimization\Queue\FeedGenerateQueue')
             ->find()
             ->fetch();
 
         if (!$generateType->getId()) {
             $generateType = ObjectManager::getInstance(Type::class);
             $generateType->setData([
-                Type::fields_name => 'GEO Feed生成队列',
-                Type::fields_tip => '生成Feed文件并保存到pub目录',
-                Type::fields_module_name => 'Weline_GenerativeEngineOptimization',
-                Type::fields_class => 'Weline\GenerativeEngineOptimization\Queue\FeedGenerateQueue',
-                Type::fields_attributes => '',
-                Type::fields_enable => 1,
+                Type::schema_fields_name => 'GEO Feed生成队列',
+                Type::schema_fields_tip => '生成Feed文件并保存到pub目录',
+                Type::schema_fields_module_name => 'Weline_GenerativeEngineOptimization',
+                Type::schema_fields_class => 'Weline\GenerativeEngineOptimization\Queue\FeedGenerateQueue',
+                Type::schema_fields_attributes => '',
+                Type::schema_fields_enable => 1,
             ]);
             $generateType->save();
         }
 
         // 注册Feed推送队列类型
-        $pushType = $queueType->where(Type::fields_class, 'Weline\GenerativeEngineOptimization\Queue\FeedPushQueue')
+        $pushType = $queueType->where(Type::schema_fields_class, 'Weline\GenerativeEngineOptimization\Queue\FeedPushQueue')
             ->find()
             ->fetch();
 
         if (!$pushType->getId()) {
             $pushType = ObjectManager::getInstance(Type::class);
             $pushType->setData([
-                Type::fields_name => 'GEO Feed推送队列',
-                Type::fields_tip => '推送Feed到AI搜索引擎平台',
-                Type::fields_module_name => 'Weline_GenerativeEngineOptimization',
-                Type::fields_class => 'Weline\GenerativeEngineOptimization\Queue\FeedPushQueue',
-                Type::fields_attributes => '',
-                Type::fields_enable => 1,
+                Type::schema_fields_name => 'GEO Feed推送队列',
+                Type::schema_fields_tip => '推送Feed到AI搜索引擎平台',
+                Type::schema_fields_module_name => 'Weline_GenerativeEngineOptimization',
+                Type::schema_fields_class => 'Weline\GenerativeEngineOptimization\Queue\FeedPushQueue',
+                Type::schema_fields_attributes => '',
+                Type::schema_fields_enable => 1,
             ]);
             $pushType->save();
         }

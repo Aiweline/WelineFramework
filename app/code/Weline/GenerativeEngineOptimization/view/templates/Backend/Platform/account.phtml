@@ -138,12 +138,11 @@ function testConnection(accountId) {
     const formData = new FormData();
     formData.append('account_id', accountId);
     
-    fetch('<?= $this->getUrl('generativeengineoptimization/backend/platform/testConnection') ?>', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
+    var testUrl = '<?= $this->getUrl('generativeengineoptimization/backend/platform/testConnection') ?>';
+    var testOpts = { method: 'POST', body: formData };
+    window.Weline.Api.request(testUrl, testOpts)
+    .then(function(res) {
+        var data = (res && res.data) !== undefined ? res.data : res;
         if (typeof Swal !== 'undefined') {
             Swal.fire({
                 icon: data.success ? 'success' : 'error',
@@ -179,12 +178,11 @@ document.getElementById('account-form').addEventListener('submit', function(e) {
     
     const formData = new FormData(this);
     
-    fetch('<?= $this->getUrl('generativeengineoptimization/backend/platform/saveAccount') ?>', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
+    var saveUrl = '<?= $this->getUrl('generativeengineoptimization/backend/platform/saveAccount') ?>';
+    var saveOpts = { method: 'POST', body: formData };
+    window.Weline.Api.request(saveUrl, saveOpts)
+    .then(function(res) {
+        var data = (res && res.data) !== undefined ? res.data : res;
         if (data.success) {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
