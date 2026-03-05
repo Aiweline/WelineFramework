@@ -80,6 +80,8 @@ $themeConfigPayload = [
         window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
     })();
 </script>
+<!-- Weline.Api 同步回退（确保 request 立即可用） -->
+<script src="<?= $isDev ? '/Weline/Frontend/view/statics/js/weline-api-fallback.js' : '/static/Weline/Frontend/js/weline-api-fallback.js' ?>"></script>
 <!-- 注意：Theme JS 和初始化由 Theme 模块的 head partial 负责，不在此处加载 -->
 <!--加载配置页头-->
 <?php

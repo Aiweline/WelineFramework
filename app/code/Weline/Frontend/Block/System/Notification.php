@@ -45,7 +45,7 @@ class Notification extends \Weline\Framework\View\Block
         /**@var SystemNotification $notificationsModel */
         $notificationsModel = ObjectManager::getInstance(SystemNotification::class);
         //        $this->cache->set($cache_key, $notices);
-        return $notificationsModel->where(SystemNotification::fields_is_read, false)->select()->fetch();
+        return $notificationsModel->where(SystemNotification::schema_fields_is_read, false)->select()->fetch();
     }
 //
 //    function getTotals()
@@ -56,7 +56,7 @@ class Notification extends \Weline\Framework\View\Block
 //        }
 //        /**@var FrontendNotification $notificationsModel */
 //        $notificationsModel = ObjectManager::getInstance(FrontendNotification::class);
-//        $total = $notificationsModel->where(FrontendNotification::fields_is_read, false)->total();
+//        $total = $notificationsModel->where(FrontendNotification::schema_fields_is_read, false)->total();
 //        $this->cache->set($cache_key, $total);
 //        return $total;
 //    }

@@ -1,4 +1,4 @@
-﻿# assets/ 目录文档
+# assets/ 目录文档
 
 ## 目录概述
 
@@ -361,8 +361,8 @@ body {
 
 **主要API**：
 ```javascript
-// API请求
-Weline.Api.request(url, options)
+// API 请求（必须使用，禁止 fetch/$.ajax）— 详见 Weline_Frontend::doc/Weline.Api使用指南.md
+Weline.Api.request(url, options)  // 维护/404 自动感知，统一错误提示
 
 // 账户管理
 Weline.Account.frontendLogin(username, password)
@@ -419,6 +419,12 @@ window.WelineConfig = {
 - 用户中心页面：自动预加载 `api` 和 `account` 模块
 - API相关页面：自动预加载 `api` 模块
 - 购物车相关页面：自动预加载 `api` 模块
+
+**Weline.Api 说明**（详见 `Weline_Frontend::doc/Weline.Api使用指南.md`）：
+- **为什么用**：维护模式自动感知、404/5xx 友好提示、统一错误处理
+- **响应结构**：`{ ok, status, data, headers }`；错误时 `catch(err)` 含 `err.response`、`err.status`、`err.maintenance`
+- **错误提示**：使用 `BackendToast`/`FrontendToast`，禁止 `alert`/`confirm`/`prompt`
+- **建议**：所有业务 Ajax 必须使用 `Weline.Api.request`，禁止直接 `fetch`/`$.ajax`
 
 **特点**：
 - 按需加载，减少初始加载时间
