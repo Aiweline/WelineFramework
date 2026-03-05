@@ -307,12 +307,12 @@ class RdpWrapperService
         try {
             $user = ObjectManager::getInstance(RdpUser::class);
             $user->setData([
-                RdpUser::fields_USERNAME     => $username,
-                RdpUser::fields_DISPLAY_NAME => $displayName ?: $username,
-                RdpUser::fields_PASSWORD_HINT => mb_substr($password, 0, 1) . '***' . mb_substr($password, -1),
-                RdpUser::fields_IS_ADMIN     => $isAdmin ? 1 : 0,
-                RdpUser::fields_STATUS       => RdpUser::STATUS_ENABLED,
-                RdpUser::fields_REMARK       => $remark,
+                RdpUser::schema_fields_USERNAME     => $username,
+                RdpUser::schema_fields_DISPLAY_NAME => $displayName ?: $username,
+                RdpUser::schema_fields_PASSWORD_HINT => mb_substr($password, 0, 1) . '***' . mb_substr($password, -1),
+                RdpUser::schema_fields_IS_ADMIN     => $isAdmin ? 1 : 0,
+                RdpUser::schema_fields_STATUS       => RdpUser::STATUS_ENABLED,
+                RdpUser::schema_fields_REMARK       => $remark,
             ])->save();
         } catch (\Exception $e) {
             // 数据库保存失败不影响用户创建
@@ -358,7 +358,7 @@ class RdpWrapperService
         try {
             $user = ObjectManager::getInstance(RdpUser::class);
             $user->reset()
-                ->where(RdpUser::fields_USERNAME, $username)
+                ->where(RdpUser::schema_fields_USERNAME, $username)
                 ->find()
                 ->fetch();
             if ($user->getId()) {
@@ -399,11 +399,11 @@ class RdpWrapperService
         try {
             $user = ObjectManager::getInstance(RdpUser::class);
             $user->reset()
-                ->where(RdpUser::fields_USERNAME, $username)
+                ->where(RdpUser::schema_fields_USERNAME, $username)
                 ->find()
                 ->fetch();
             if ($user->getId()) {
-                $user->setData(RdpUser::fields_STATUS, $enable ? RdpUser::STATUS_ENABLED : RdpUser::STATUS_DISABLED)
+                $user->setData(RdpUser::schema_fields_STATUS, $enable ? RdpUser::STATUS_ENABLED : RdpUser::STATUS_DISABLED)
                     ->save();
             }
         } catch (\Exception $e) {
@@ -446,11 +446,11 @@ class RdpWrapperService
         try {
             $user = ObjectManager::getInstance(RdpUser::class);
             $user->reset()
-                ->where(RdpUser::fields_USERNAME, $username)
+                ->where(RdpUser::schema_fields_USERNAME, $username)
                 ->find()
                 ->fetch();
             if ($user->getId()) {
-                $user->setData(RdpUser::fields_PASSWORD_HINT, mb_substr($newPassword, 0, 1) . '***' . mb_substr($newPassword, -1))
+                $user->setData(RdpUser::schema_fields_PASSWORD_HINT, mb_substr($newPassword, 0, 1) . '***' . mb_substr($newPassword, -1))
                     ->save();
             }
         } catch (\Exception $e) {
