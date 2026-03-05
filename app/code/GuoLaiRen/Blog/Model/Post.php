@@ -23,6 +23,7 @@ use Weline\Framework\Setup\Db\ModelSetup;
 #[Index(name: 'idx_published_at', columns: ['published_at'], comment: '发布时间索引')]
 #[Index(name: 'idx_is_featured', columns: ['is_featured'], comment: '精选索引')]
 #[Index(name: 'idx_trend_profile_id', columns: ['trend_profile_id'], comment: '趋势画像索引')]
+#[Index(name: 'idx_site_profile_source', columns: ['site_id', 'trend_profile_id', 'source_keyword'], comment: '站点+画像+来源关键词，用于排重')]
 class Post extends Model
 {
     public const schema_table = 'guolairen_blog_post';
@@ -62,6 +63,8 @@ class Post extends Model
     public const schema_fields_UPDATED_AT     = 'updated_at';
     #[Col(type: 'int', nullable: false, default: 0, comment: '趋势画像ID（自动发文时填充）')]
     public const schema_fields_TREND_PROFILE_ID = 'trend_profile_id';
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: '生成时的来源关键词，用于排重')]
+    public const schema_fields_SOURCE_KEYWORD = 'source_keyword';
 
     // 状态常量
     public const STATUS_DRAFT     = 0;
