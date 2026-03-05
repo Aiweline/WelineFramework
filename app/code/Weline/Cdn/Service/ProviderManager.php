@@ -76,11 +76,11 @@ class ProviderManager
     public function getAccounts(string $adapterCode = ''): array
     {
         $query = $this->accountModel->reset()
-            ->where(Account::fields_STATUS, Account::STATUS_ACTIVE)
-            ->order(Account::fields_NAME, 'ASC');
+            ->where(Account::schema_fields_STATUS, Account::STATUS_ACTIVE)
+            ->order(Account::schema_fields_NAME, 'ASC');
 
         if ($adapterCode !== '') {
-            $query->where(Account::fields_ADAPTER, $adapterCode);
+            $query->where(Account::schema_fields_ADAPTER, $adapterCode);
         }
 
         $accounts = $query->select()->fetchArray();

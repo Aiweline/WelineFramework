@@ -26,7 +26,7 @@ class SyncSecurityRulesToCdn implements ObserverInterface
 
         $domains = $this->domainModel
             ->reset()
-            ->where(Domain::fields_ENABLED, 1)
+            ->where(Domain::schema_fields_ENABLED, 1)
             ->select()
             ->fetch();
         foreach ($domains as $domain) {

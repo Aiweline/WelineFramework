@@ -226,12 +226,10 @@ $statistics = $this->getData('statistics') ?: [];
                 confirmButtonColor: '#28a745'
             }).then(function(result) {
                 if (result.isConfirmed) {
-                    fetch(executeUrl, {
-                        method: 'POST'
-                    })
-                    .then(function(response) { return response.json(); })
-                    .then(function(data) {
-                        if (data.success) {
+                    window.Weline.Api.request(executeUrl, { method: 'POST' })
+                    .then(function(response) {
+                        var data = response.data;
+                        if (response.ok && data && data.success) {
                             Swal.fire({
                                 icon: 'success',
                                 title: '<?= __('成功') ?>',
@@ -261,16 +259,14 @@ $statistics = $this->getData('statistics') ?: [];
         },
         
         toggleEnable: function(id, enabled) {
-            fetch(toggleEnableUrl, {
+            window.Weline.Api.request(toggleEnableUrl, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: 'id=' + id + '&enabled=' + enabled
             })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
-                if (data.success) {
+            .then(function(response) {
+                var data = response.data;
+                if (response.ok && data && data.success) {
                     Swal.fire({
                         icon: 'success',
                         title: '<?= __('成功') ?>',
@@ -293,17 +289,14 @@ $statistics = $this->getData('statistics') ?: [];
             if (!confirm('<?= __('确定要删除此URL吗？') ?>')) {
                 return;
             }
-            
-            fetch(deleteUrl, {
+            window.Weline.Api.request(deleteUrl, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: 'id=' + id
             })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
-                if (data.success) {
+            .then(function(response) {
+                var data = response.data;
+                if (response.ok && data && data.success) {
                     Swal.fire({
                         icon: 'success',
                         title: '<?= __('成功') ?>',

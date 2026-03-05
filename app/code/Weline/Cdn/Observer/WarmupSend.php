@@ -104,17 +104,17 @@ class WarmupSend implements ObserverInterface
             // 如果启用去重，检查URL是否已存在
             if ($dedupe) {
                 $existing = $this->warmupUrlModel->reset()
-                    ->where(WarmupUrl::fields_URL, $url)
-                    ->where(WarmupUrl::fields_MODULE, $module)
+                    ->where(WarmupUrl::schema_fields_URL, $url)
+                    ->where(WarmupUrl::schema_fields_MODULE, $module)
                     ->find()
                     ->fetch();
 
-                if ($existing->getData(WarmupUrl::fields_WARMUP_URL_ID)) {
+                if ($existing->getData(WarmupUrl::schema_fields_WARMUP_URL_ID)) {
                     // 更新现有记录
-                    $existing->setData(WarmupUrl::fields_SITE_ID, $siteId);
-                    $existing->setData(WarmupUrl::fields_DOMAIN_ID, $domainId);
-                    $existing->setData(WarmupUrl::fields_PROVIDER, $provider);
-                    $existing->setData(WarmupUrl::fields_UPDATED_AT, time());
+                    $existing->setData(WarmupUrl::schema_fields_SITE_ID, $siteId);
+                    $existing->setData(WarmupUrl::schema_fields_DOMAIN_ID, $domainId);
+                    $existing->setData(WarmupUrl::schema_fields_PROVIDER, $provider);
+                    $existing->setData(WarmupUrl::schema_fields_UPDATED_AT, time());
                     $existing->save();
                     $updatedCount++;
                     continue;
@@ -123,18 +123,18 @@ class WarmupSend implements ObserverInterface
 
             // 创建新记录
             $warmupUrl = $this->warmupUrlModel->reset();
-            $warmupUrl->setData(WarmupUrl::fields_MODULE, $module);
-            $warmupUrl->setData(WarmupUrl::fields_PROVIDER, $provider);
-            $warmupUrl->setData(WarmupUrl::fields_URL, $url);
-            $warmupUrl->setData(WarmupUrl::fields_SITE_ID, $siteId);
-            $warmupUrl->setData(WarmupUrl::fields_DOMAIN_ID, $domainId);
-            $warmupUrl->setData(WarmupUrl::fields_STATUS, WarmupUrl::STATUS_PENDING);
-            $warmupUrl->setData(WarmupUrl::fields_TARGET_COUNT, 1);
-            $warmupUrl->setData(WarmupUrl::fields_PROCESSED_COUNT, 0);
-            $warmupUrl->setData(WarmupUrl::fields_SUCCESS_COUNT, 0);
-            $warmupUrl->setData(WarmupUrl::fields_FAIL_COUNT, 0);
-            $warmupUrl->setData(WarmupUrl::fields_RETRIES, 0);
-            $warmupUrl->setData(WarmupUrl::fields_ENABLED, 1);
+            $warmupUrl->setData(WarmupUrl::schema_fields_MODULE, $module);
+            $warmupUrl->setData(WarmupUrl::schema_fields_PROVIDER, $provider);
+            $warmupUrl->setData(WarmupUrl::schema_fields_URL, $url);
+            $warmupUrl->setData(WarmupUrl::schema_fields_SITE_ID, $siteId);
+            $warmupUrl->setData(WarmupUrl::schema_fields_DOMAIN_ID, $domainId);
+            $warmupUrl->setData(WarmupUrl::schema_fields_STATUS, WarmupUrl::STATUS_PENDING);
+            $warmupUrl->setData(WarmupUrl::schema_fields_TARGET_COUNT, 1);
+            $warmupUrl->setData(WarmupUrl::schema_fields_PROCESSED_COUNT, 0);
+            $warmupUrl->setData(WarmupUrl::schema_fields_SUCCESS_COUNT, 0);
+            $warmupUrl->setData(WarmupUrl::schema_fields_FAIL_COUNT, 0);
+            $warmupUrl->setData(WarmupUrl::schema_fields_RETRIES, 0);
+            $warmupUrl->setData(WarmupUrl::schema_fields_ENABLED, 1);
             $warmupUrl->save();
             $insertedCount++;
         }

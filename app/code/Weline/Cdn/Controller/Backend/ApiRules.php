@@ -60,15 +60,15 @@ class ApiRules extends BackendController
             
             // 按模块筛选
             if (!empty($module)) {
-                $query->where(ApiRule::fields_MODULE, $module);
+                $query->where(ApiRule::schema_fields_MODULE, $module);
             }
             
             // 按触发方式筛选
             if (!empty($trigger)) {
-                $query->where(ApiRule::fields_TRIGGER, $trigger);
+                $query->where(ApiRule::schema_fields_TRIGGER, $trigger);
             }
             
-            $rules = $query->order(ApiRule::fields_CREATED_AT, 'DESC')
+            $rules = $query->order(ApiRule::schema_fields_CREATED_AT, 'DESC')
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -76,7 +76,7 @@ class ApiRules extends BackendController
             // 按模块分组
             $groupedRules = [];
             foreach ($rules as $rule) {
-                $moduleName = $rule->getData(ApiRule::fields_MODULE);
+                $moduleName = $rule->getData(ApiRule::schema_fields_MODULE);
                 if (!isset($groupedRules[$moduleName])) {
                     $groupedRules[$moduleName] = [];
                 }
@@ -183,7 +183,7 @@ class ApiRules extends BackendController
                 ]);
             }
             
-            $rule->setData(ApiRule::fields_ENABLED, $enabled ? 1 : 0)
+            $rule->setData(ApiRule::schema_fields_ENABLED, $enabled ? 1 : 0)
                 ->save();
             
             return $this->jsonResponse([

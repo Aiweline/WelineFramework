@@ -82,7 +82,7 @@ class PushRules implements CronTaskInterface
     {
         // 1. 获取所有启用的域名
         $domains = $this->domainModel->clear()
-            ->where(Domain::fields_ENABLED, 1)
+            ->where(Domain::schema_fields_ENABLED, 1)
             ->select()
             ->fetch();
 
@@ -104,7 +104,7 @@ class PushRules implements CronTaskInterface
                 $event = new Event([
                     'domain' => $domain,
                     'rules' => $rules, // 通用规则，所有适配器都可以使用
-                    'adapter_code' => $domain->getData(Domain::fields_ADAPTER), // 用于适配器过滤
+                    'adapter_code' => $domain->getData(Domain::schema_fields_ADAPTER), // 用于适配器过滤
                     'trigger_type' => 'cron' // 标记为定时触发
                 ]);
                 
@@ -115,7 +115,7 @@ class PushRules implements CronTaskInterface
             } catch (\Exception $e) {
                 $failedCount++;
                 // 记录错误日志
-                w_log_error("CDN规则推送失败 [域名: {$domain->getData(Domain::fields_DOMAIN_NAME)}]: " . $e->getMessage());
+                w_log_error("CDN规则推送失败 [域名: {$domain->getData(Domain::schema_fields_DOMAIN_NAME)}]: " . $e->getMessage());
             }
         }
 

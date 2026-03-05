@@ -86,12 +86,12 @@ class RulesImport extends CommandAbstract implements CommandInterface
                 $domainObj = $domainModel->reset()->load((int)$domain);
             } else {
                 $domainObj = $domainModel->reset()
-                    ->where(Domain::fields_DOMAIN_NAME, $domain)
+                    ->where(Domain::schema_fields_DOMAIN_NAME, $domain)
                     ->find()
                     ->fetch();
             }
 
-            if (!$domainObj->getData(Domain::fields_DOMAIN_ID)) {
+            if (!$domainObj->getData(Domain::schema_fields_DOMAIN_ID)) {
                 $this->printer->error(__('域名不存在：%{1}', [$domain]));
                 return;
             }

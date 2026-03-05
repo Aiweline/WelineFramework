@@ -179,8 +179,8 @@ class AttackSignalHandler implements ObserverInterface
                 ]));
                 // 更新日志状态为失败
                 if ($attackLog) {
-                    $attackLog->setData(AttackLog::fields_STATUS, AttackLog::STATUS_FAILED);
-                    $attackLog->setData(AttackLog::fields_CDN_RESPONSE, \json_encode(['error' => 'Adapter not found']));
+                    $attackLog->setData(AttackLog::schema_fields_STATUS, AttackLog::STATUS_FAILED);
+                    $attackLog->setData(AttackLog::schema_fields_CDN_RESPONSE, \json_encode(['error' => 'Adapter not found']));
                     $attackLog->save();
                 }
                 return;
@@ -192,7 +192,7 @@ class AttackSignalHandler implements ObserverInterface
                     \get_class($adapter),
                 ]));
                 if ($attackLog) {
-                    $attackLog->setData(AttackLog::fields_CDN_RESPONSE, \json_encode(['error' => 'Adapter does not support attack mode']));
+                    $attackLog->setData(AttackLog::schema_fields_CDN_RESPONSE, \json_encode(['error' => 'Adapter does not support attack mode']));
                     $attackLog->save();
                 }
                 return;
@@ -222,8 +222,8 @@ class AttackSignalHandler implements ObserverInterface
                 ]));
                 // 更新攻击日志
                 if ($attackLog) {
-                    $attackLog->setData(AttackLog::fields_ACTION, AttackLog::ACTION_CDN_NOTIFIED);
-                    $attackLog->setData(AttackLog::fields_CDN_RESPONSE, \json_encode($result, JSON_UNESCAPED_UNICODE));
+                    $attackLog->setData(AttackLog::schema_fields_ACTION, AttackLog::ACTION_CDN_NOTIFIED);
+                    $attackLog->setData(AttackLog::schema_fields_CDN_RESPONSE, \json_encode($result, JSON_UNESCAPED_UNICODE));
                     $attackLog->save();
                 }
             } else {
@@ -233,8 +233,8 @@ class AttackSignalHandler implements ObserverInterface
                 ]));
                 // 更新日志状态为失败
                 if ($attackLog) {
-                    $attackLog->setData(AttackLog::fields_STATUS, AttackLog::STATUS_FAILED);
-                    $attackLog->setData(AttackLog::fields_CDN_RESPONSE, \json_encode($result, JSON_UNESCAPED_UNICODE));
+                    $attackLog->setData(AttackLog::schema_fields_STATUS, AttackLog::STATUS_FAILED);
+                    $attackLog->setData(AttackLog::schema_fields_CDN_RESPONSE, \json_encode($result, JSON_UNESCAPED_UNICODE));
                     $attackLog->save();
                 }
             }
@@ -242,8 +242,8 @@ class AttackSignalHandler implements ObserverInterface
             $this->log->error(__('CDN 攻击信号处理异常: %{1}', [$e->getMessage()]));
             // 更新日志状态为失败
             if ($attackLog) {
-                $attackLog->setData(AttackLog::fields_STATUS, AttackLog::STATUS_FAILED);
-                $attackLog->setData(AttackLog::fields_CDN_RESPONSE, \json_encode(['exception' => $e->getMessage()]));
+                $attackLog->setData(AttackLog::schema_fields_STATUS, AttackLog::STATUS_FAILED);
+                $attackLog->setData(AttackLog::schema_fields_CDN_RESPONSE, \json_encode(['exception' => $e->getMessage()]));
                 $attackLog->save();
             }
         }

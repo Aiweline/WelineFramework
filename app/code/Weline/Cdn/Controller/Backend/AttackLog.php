@@ -53,24 +53,24 @@ class AttackLog extends BackendController
 
         // 状态过滤
         if (!empty($status)) {
-            $query->where(AttackLogModel::fields_STATUS, $status);
+            $query->where(AttackLogModel::schema_fields_STATUS, $status);
         }
 
         // 攻击类型过滤
         if (!empty($attackType)) {
-            $query->where(AttackLogModel::fields_ATTACK_TYPE, $attackType);
+            $query->where(AttackLogModel::schema_fields_ATTACK_TYPE, $attackType);
         }
 
         // 日期范围过滤
         if (!empty($dateFrom)) {
-            $query->where(AttackLogModel::fields_CREATED_AT, '>=', $dateFrom . ' 00:00:00');
+            $query->where(AttackLogModel::schema_fields_CREATED_AT, '>=', $dateFrom . ' 00:00:00');
         }
         if (!empty($dateTo)) {
-            $query->where(AttackLogModel::fields_CREATED_AT, '<=', $dateTo . ' 23:59:59');
+            $query->where(AttackLogModel::schema_fields_CREATED_AT, '<=', $dateTo . ' 23:59:59');
         }
 
         // 按创建时间倒序
-        $query->order(AttackLogModel::fields_CREATED_AT, 'DESC');
+        $query->order(AttackLogModel::schema_fields_CREATED_AT, 'DESC');
 
         // 分页查询
         $result = $query->pagination($page, $pageSize)->fetch();
@@ -139,7 +139,7 @@ class AttackLog extends BackendController
         }
 
         // 解析 CDN 响应
-        $cdnResponse = $log->getData(AttackLogModel::fields_CDN_RESPONSE);
+        $cdnResponse = $log->getData(AttackLogModel::schema_fields_CDN_RESPONSE);
         if (\is_string($cdnResponse)) {
             $cdnResponse = \json_decode($cdnResponse, true) ?: [];
         }
@@ -242,7 +242,7 @@ class AttackLog extends BackendController
             $cutoff = \date('Y-m-d H:i:s', \strtotime("-{$days} days"));
             
             $result = $this->getLogModel()->reset()
-                ->where(AttackLogModel::fields_CREATED_AT, '<', $cutoff)
+                ->where(AttackLogModel::schema_fields_CREATED_AT, '<', $cutoff)
                 ->delete();
             
             return $this->fetchJson([
@@ -271,19 +271,19 @@ class AttackLog extends BackendController
         $query = $this->getLogModel()->reset()->select();
 
         if (!empty($status)) {
-            $query->where(AttackLogModel::fields_STATUS, $status);
+            $query->where(AttackLogModel::schema_fields_STATUS, $status);
         }
         if (!empty($attackType)) {
-            $query->where(AttackLogModel::fields_ATTACK_TYPE, $attackType);
+            $query->where(AttackLogModel::schema_fields_ATTACK_TYPE, $attackType);
         }
         if (!empty($dateFrom)) {
-            $query->where(AttackLogModel::fields_CREATED_AT, '>=', $dateFrom . ' 00:00:00');
+            $query->where(AttackLogModel::schema_fields_CREATED_AT, '>=', $dateFrom . ' 00:00:00');
         }
         if (!empty($dateTo)) {
-            $query->where(AttackLogModel::fields_CREATED_AT, '<=', $dateTo . ' 23:59:59');
+            $query->where(AttackLogModel::schema_fields_CREATED_AT, '<=', $dateTo . ' 23:59:59');
         }
 
-        $query->order(AttackLogModel::fields_CREATED_AT, 'DESC');
+        $query->order(AttackLogModel::schema_fields_CREATED_AT, 'DESC');
         $logs = $query->select()->fetchArray();
 
         // 生成 CSV
@@ -316,18 +316,18 @@ class AttackLog extends BackendController
         // 数据行
         foreach ($logs as $log) {
             \fputcsv($output, [
-                $log[AttackLogModel::fields_LOG_ID],
-                $log[AttackLogModel::fields_DOMAIN],
-                $log[AttackLogModel::fields_ATTACK_TYPE],
-                $log[AttackLogModel::fields_ATTACKER_IP],
-                $log[AttackLogModel::fields_ATTACK_COUNT],
-                $log[AttackLogModel::fields_REASON],
-                $log[AttackLogModel::fields_ACTION],
-                $log[AttackLogModel::fields_STATUS],
-                $log[AttackLogModel::fields_DURATION] ?? '',
-                $log[AttackLogModel::fields_STARTED_AT],
-                $log[AttackLogModel::fields_ENDED_AT] ?? '',
-                $log[AttackLogModel::fields_CREATED_AT],
+                $log[AttackLogModel::schema_fields_LOG_ID],
+                $log[AttackLogModel::schema_fields_DOMAIN],
+                $log[AttackLogModel::schema_fields_ATTACK_TYPE],
+                $log[AttackLogModel::schema_fields_ATTACKER_IP],
+                $log[AttackLogModel::schema_fields_ATTACK_COUNT],
+                $log[AttackLogModel::schema_fields_REASON],
+                $log[AttackLogModel::schema_fields_ACTION],
+                $log[AttackLogModel::schema_fields_STATUS],
+                $log[AttackLogModel::schema_fields_DURATION] ?? '',
+                $log[AttackLogModel::schema_fields_STARTED_AT],
+                $log[AttackLogModel::schema_fields_ENDED_AT] ?? '',
+                $log[AttackLogModel::schema_fields_CREATED_AT],
             ]);
         }
         
@@ -345,24 +345,24 @@ class AttackLog extends BackendController
         // 今日攻击数
         $today = \date('Y-m-d');
         $todayCount = $model->reset()
-            ->where(AttackLogModel::fields_CREATED_AT, '>=', $today . ' 00:00:00')
+            ->where(AttackLogModel::schema_fields_CREATED_AT, '>=', $today . ' 00:00:00')
             ->count();
 
         // 活跃攻击数
         $activeCount = $model->reset()
-            ->where(AttackLogModel::fields_STATUS, AttackLogModel::STATUS_ACTIVE)
+            ->where(AttackLogModel::schema_fields_STATUS, AttackLogModel::STATUS_ACTIVE)
             ->count();
 
         // 本周攻击数
         $weekStart = \date('Y-m-d', \strtotime('monday this week'));
         $weekCount = $model->reset()
-            ->where(AttackLogModel::fields_CREATED_AT, '>=', $weekStart . ' 00:00:00')
+            ->where(AttackLogModel::schema_fields_CREATED_AT, '>=', $weekStart . ' 00:00:00')
             ->count();
 
         // 本月攻击数
         $monthStart = \date('Y-m-01');
         $monthCount = $model->reset()
-            ->where(AttackLogModel::fields_CREATED_AT, '>=', $monthStart . ' 00:00:00')
+            ->where(AttackLogModel::schema_fields_CREATED_AT, '>=', $monthStart . ' 00:00:00')
             ->count();
 
         return [

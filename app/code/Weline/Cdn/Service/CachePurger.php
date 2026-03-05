@@ -60,15 +60,15 @@ class CachePurger
         }
 
         // 获取适配器
-        $adapter = $this->adapterResolver->getAdapter($domainModel->getData(Domain::fields_ADAPTER));
+        $adapter = $this->adapterResolver->getAdapter($domainModel->getData(Domain::schema_fields_ADAPTER));
         if (!$adapter) {
-            throw new Core(__('适配器不存在：%{1}', [$domainModel->getData(Domain::fields_ADAPTER)]));
+            throw new Core(__('适配器不存在：%{1}', [$domainModel->getData(Domain::schema_fields_ADAPTER)]));
         }
 
         // 获取凭据
         $credentials = $this->getCredentials($domainModel);
         
-        $zoneId = $domainModel->getData(Domain::fields_ZONE_ID);
+        $zoneId = $domainModel->getData(Domain::schema_fields_ZONE_ID);
         
         // 根据模式调用不同的清理方法
         switch ($mode) {
@@ -122,10 +122,10 @@ class CachePurger
         if (is_numeric($domain)) {
             $domainModel->reset()->load((int)$domain);
         } else {
-            $domainModel->reset()->where(Domain::fields_DOMAIN_NAME, $domain)->find()->fetch();
+            $domainModel->reset()->where(Domain::schema_fields_DOMAIN_NAME, $domain)->find()->fetch();
         }
         
-        return $domainModel->getData(Domain::fields_DOMAIN_ID) ? $domainModel : null;
+        return $domainModel->getData(Domain::schema_fields_DOMAIN_ID) ? $domainModel : null;
     }
 
     /**
@@ -143,10 +143,10 @@ class CachePurger
         }
 
         // 否则使用账户凭据
-        $accountId = $domain->getData(Domain::fields_ACCOUNT_ID);
+        $accountId = $domain->getData(Domain::schema_fields_ACCOUNT_ID);
         if (!$accountId) {
             // 如果没有账户ID，尝试获取默认账户
-            $defaultAccount = $this->accountManager->getDefaultAccount($domain->getData(Domain::fields_ADAPTER));
+            $defaultAccount = $this->accountManager->getDefaultAccount($domain->getData(Domain::schema_fields_ADAPTER));
             if ($defaultAccount) {
                 return $defaultAccount->getCredentialsArray();
             }
@@ -157,7 +157,7 @@ class CachePurger
         /** @var Account $account */
         $account = $this->objectManager->getInstance(Account::class)->reset()->load($accountId);
         
-        if (!$account->getData(Account::fields_ACCOUNT_ID)) {
+        if (!$account->getData(Account::schema_fields_ACCOUNT_ID)) {
             throw new Core(__('账户不存在'));
         }
 

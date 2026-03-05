@@ -34,22 +34,22 @@ class WarmupUrlTest extends TestCase
      */
     public function testFieldConstants(): void
     {
-        $this->assertEquals('warmup_url_id', WarmupUrl::fields_WARMUP_URL_ID);
-        $this->assertEquals('module', WarmupUrl::fields_MODULE);
-        $this->assertEquals('provider', WarmupUrl::fields_PROVIDER);
-        $this->assertEquals('url', WarmupUrl::fields_URL);
-        $this->assertEquals('site_id', WarmupUrl::fields_SITE_ID);
-        $this->assertEquals('domain_id', WarmupUrl::fields_DOMAIN_ID);
-        $this->assertEquals('status', WarmupUrl::fields_STATUS);
-        $this->assertEquals('target_count', WarmupUrl::fields_TARGET_COUNT);
-        $this->assertEquals('processed_count', WarmupUrl::fields_PROCESSED_COUNT);
-        $this->assertEquals('success_count', WarmupUrl::fields_SUCCESS_COUNT);
-        $this->assertEquals('fail_count', WarmupUrl::fields_FAIL_COUNT);
-        $this->assertEquals('retries', WarmupUrl::fields_RETRIES);
-        $this->assertEquals('enabled', WarmupUrl::fields_ENABLED);
-        $this->assertEquals('last_warmed_at', WarmupUrl::fields_LAST_WARMED_AT);
-        $this->assertEquals('created_at', WarmupUrl::fields_CREATED_AT);
-        $this->assertEquals('updated_at', WarmupUrl::fields_UPDATED_AT);
+        $this->assertEquals('warmup_url_id', WarmupUrl::schema_fields_WARMUP_URL_ID);
+        $this->assertEquals('module', WarmupUrl::schema_fields_MODULE);
+        $this->assertEquals('provider', WarmupUrl::schema_fields_PROVIDER);
+        $this->assertEquals('url', WarmupUrl::schema_fields_URL);
+        $this->assertEquals('site_id', WarmupUrl::schema_fields_SITE_ID);
+        $this->assertEquals('domain_id', WarmupUrl::schema_fields_DOMAIN_ID);
+        $this->assertEquals('status', WarmupUrl::schema_fields_STATUS);
+        $this->assertEquals('target_count', WarmupUrl::schema_fields_TARGET_COUNT);
+        $this->assertEquals('processed_count', WarmupUrl::schema_fields_PROCESSED_COUNT);
+        $this->assertEquals('success_count', WarmupUrl::schema_fields_SUCCESS_COUNT);
+        $this->assertEquals('fail_count', WarmupUrl::schema_fields_FAIL_COUNT);
+        $this->assertEquals('retries', WarmupUrl::schema_fields_RETRIES);
+        $this->assertEquals('enabled', WarmupUrl::schema_fields_ENABLED);
+        $this->assertEquals('last_warmed_at', WarmupUrl::schema_fields_LAST_WARMED_AT);
+        $this->assertEquals('created_at', WarmupUrl::schema_fields_CREATED_AT);
+        $this->assertEquals('updated_at', WarmupUrl::schema_fields_UPDATED_AT);
     }
 
     /**
@@ -68,30 +68,30 @@ class WarmupUrlTest extends TestCase
     public function testSetAndGetData(): void
     {
         $testData = [
-            WarmupUrl::fields_MODULE => 'TestModule',
-            WarmupUrl::fields_PROVIDER => 'test_provider',
-            WarmupUrl::fields_URL => 'https://example.com/page',
-            WarmupUrl::fields_SITE_ID => 1,
-            WarmupUrl::fields_DOMAIN_ID => 1,
-            WarmupUrl::fields_STATUS => WarmupUrl::STATUS_PENDING,
-            WarmupUrl::fields_TARGET_COUNT => 10,
-            WarmupUrl::fields_PROCESSED_COUNT => 0,
-            WarmupUrl::fields_SUCCESS_COUNT => 0,
-            WarmupUrl::fields_FAIL_COUNT => 0,
-            WarmupUrl::fields_RETRIES => 0,
-            WarmupUrl::fields_ENABLED => 1
+            WarmupUrl::schema_fields_MODULE => 'TestModule',
+            WarmupUrl::schema_fields_PROVIDER => 'test_provider',
+            WarmupUrl::schema_fields_URL => 'https://example.com/page',
+            WarmupUrl::schema_fields_SITE_ID => 1,
+            WarmupUrl::schema_fields_DOMAIN_ID => 1,
+            WarmupUrl::schema_fields_STATUS => WarmupUrl::STATUS_PENDING,
+            WarmupUrl::schema_fields_TARGET_COUNT => 10,
+            WarmupUrl::schema_fields_PROCESSED_COUNT => 0,
+            WarmupUrl::schema_fields_SUCCESS_COUNT => 0,
+            WarmupUrl::schema_fields_FAIL_COUNT => 0,
+            WarmupUrl::schema_fields_RETRIES => 0,
+            WarmupUrl::schema_fields_ENABLED => 1
         ];
 
         $this->model->setData($testData);
 
-        $this->assertEquals('TestModule', $this->model->getData(WarmupUrl::fields_MODULE));
-        $this->assertEquals('test_provider', $this->model->getData(WarmupUrl::fields_PROVIDER));
-        $this->assertEquals('https://example.com/page', $this->model->getData(WarmupUrl::fields_URL));
-        $this->assertEquals(1, $this->model->getData(WarmupUrl::fields_SITE_ID));
-        $this->assertEquals(1, $this->model->getData(WarmupUrl::fields_DOMAIN_ID));
-        $this->assertEquals(WarmupUrl::STATUS_PENDING, $this->model->getData(WarmupUrl::fields_STATUS));
-        $this->assertEquals(10, $this->model->getData(WarmupUrl::fields_TARGET_COUNT));
-        $this->assertEquals(0, $this->model->getData(WarmupUrl::fields_PROCESSED_COUNT));
+        $this->assertEquals('TestModule', $this->model->getData(WarmupUrl::schema_fields_MODULE));
+        $this->assertEquals('test_provider', $this->model->getData(WarmupUrl::schema_fields_PROVIDER));
+        $this->assertEquals('https://example.com/page', $this->model->getData(WarmupUrl::schema_fields_URL));
+        $this->assertEquals(1, $this->model->getData(WarmupUrl::schema_fields_SITE_ID));
+        $this->assertEquals(1, $this->model->getData(WarmupUrl::schema_fields_DOMAIN_ID));
+        $this->assertEquals(WarmupUrl::STATUS_PENDING, $this->model->getData(WarmupUrl::schema_fields_STATUS));
+        $this->assertEquals(10, $this->model->getData(WarmupUrl::schema_fields_TARGET_COUNT));
+        $this->assertEquals(0, $this->model->getData(WarmupUrl::schema_fields_PROCESSED_COUNT));
     }
 
     /**
@@ -99,10 +99,10 @@ class WarmupUrlTest extends TestCase
      */
     public function testIsEnabled(): void
     {
-        $this->model->setData(WarmupUrl::fields_ENABLED, 1);
+        $this->model->setData(WarmupUrl::schema_fields_ENABLED, 1);
         $this->assertTrue($this->model->isEnabled());
 
-        $this->model->setData(WarmupUrl::fields_ENABLED, 0);
+        $this->model->setData(WarmupUrl::schema_fields_ENABLED, 0);
         $this->assertFalse($this->model->isEnabled());
     }
 
@@ -112,18 +112,18 @@ class WarmupUrlTest extends TestCase
     public function testBeforeSaveSetsTimestamps(): void
     {
         $this->model->setData([
-            WarmupUrl::fields_URL => 'https://example.com/test',
-            WarmupUrl::fields_MODULE => 'TestModule',
-            WarmupUrl::fields_PROVIDER => 'test'
+            WarmupUrl::schema_fields_URL => 'https://example.com/test',
+            WarmupUrl::schema_fields_MODULE => 'TestModule',
+            WarmupUrl::schema_fields_PROVIDER => 'test'
         ]);
 
         $beforeSave = $this->model->beforeSave();
 
         $this->assertInstanceOf(WarmupUrl::class, $beforeSave);
-        $this->assertNotNull($this->model->getData(WarmupUrl::fields_CREATED_AT));
-        $this->assertNotNull($this->model->getData(WarmupUrl::fields_UPDATED_AT));
-        $this->assertIsInt($this->model->getData(WarmupUrl::fields_CREATED_AT));
-        $this->assertIsInt($this->model->getData(WarmupUrl::fields_UPDATED_AT));
+        $this->assertNotNull($this->model->getData(WarmupUrl::schema_fields_CREATED_AT));
+        $this->assertNotNull($this->model->getData(WarmupUrl::schema_fields_UPDATED_AT));
+        $this->assertIsInt($this->model->getData(WarmupUrl::schema_fields_CREATED_AT));
+        $this->assertIsInt($this->model->getData(WarmupUrl::schema_fields_UPDATED_AT));
     }
 
     /**
@@ -139,7 +139,7 @@ class WarmupUrlTest extends TestCase
      */
     public function testTableConstant(): void
     {
-        $this->assertEquals('cdn_warmup_url', WarmupUrl::table);
+        $this->assertEquals('cdn_warmup_url', WarmupUrl::schema_table);
     }
 }
 

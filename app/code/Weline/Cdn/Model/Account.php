@@ -12,112 +12,59 @@ declare(strict_types=1);
 namespace Weline\Cdn\Model;
 
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\Framework\Setup\Data\Context;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 /**
  * CDN账户模型
- * 
  * @package Weline_Cdn
  */
+#[Table(comment: 'CDN账户表')]
+#[Index(name: 'idx_adapter', columns: ['adapter'])]
+#[Index(name: 'idx_status', columns: ['status'])]
+#[Index(name: 'idx_adapter_default', columns: ['adapter', 'is_default'])]
 class Account extends Model
 {
-    public const table = 'cdn_account';
-    
-    /**
-     * Primary key
-     */
+    public const schema_table = 'cdn_account';
+    public const schema_primary_key = 'account_id';
     public string $_primary_key = 'account_id';
-    
-    /**
-     * Primary keys
-     */
     public array $_unit_primary_keys = ['account_id'];
-    
-    /**
-     * Field name constants
-     */
-    public const fields_ACCOUNT_ID = 'account_id';
-    public const fields_ADAPTER = 'adapter';
-    public const fields_NAME = 'name';
-    public const fields_DESCRIPTION = 'description';
-    public const fields_CREDENTIALS = 'credentials';
-    public const fields_IS_DEFAULT = 'is_default';
-    public const fields_STATUS = 'status';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
 
-    /**
-     * Status constants
-     */
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '账户ID')]
+    public const schema_fields_ACCOUNT_ID = 'account_id';
+    #[Col(type: 'varchar', length: 50, nullable: false, comment: '适配器代码')]
+    public const schema_fields_ADAPTER = 'adapter';
+    #[Col(type: 'varchar', length: 128, nullable: false, comment: '账户名称')]
+    public const schema_fields_NAME = 'name';
+    #[Col(type: 'text', nullable: true, comment: '账户描述')]
+    public const schema_fields_DESCRIPTION = 'description';
+    #[Col(type: 'text', nullable: false, comment: '凭据JSON')]
+    public const schema_fields_CREDENTIALS = 'credentials';
+    #[Col(type: 'int', length: 1, default: 0, comment: '是否默认账户')]
+    public const schema_fields_IS_DEFAULT = 'is_default';
+    #[Col(type: 'varchar', length: 20, default: 'active', comment: '状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col(type: 'int', default: 0, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col(type: 'int', default: 0, comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
+
     public const STATUS_ACTIVE = 'active';
     public const STATUS_INACTIVE = 'inactive';
 
-    /**
-     * Initialize model
-     */
     public function _init(): void
     {
         $this->useMainDbMaster();
     }
 
-    /**
-     * 获取主键字段名
-     * 
-     * @return string
-     */
     public function getIdFieldName(): string
     {
-        return self::fields_ACCOUNT_ID;
+        return self::schema_fields_ACCOUNT_ID;
     }
 
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist() === false) {
-            $setup->createTable('CDN账户表')
-                ->addColumn(self::fields_ACCOUNT_ID, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', '账户ID')
-                ->addColumn(self::fields_ADAPTER, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 50, 'not null', '适配器代码')
-                ->addColumn(self::fields_NAME, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 128, 'not null', '账户名称')
-                ->addColumn(self::fields_DESCRIPTION, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, 'null', '账户描述')
-                ->addColumn(self::fields_CREDENTIALS, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, 'not null', '凭据JSON')
-                ->addColumn(self::fields_IS_DEFAULT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, 1, 'default 0', '是否默认账户')
-                ->addColumn(self::fields_STATUS, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'default \'active\'', '状态')
-                ->addColumn(self::fields_CREATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
-                ->addColumn(self::fields_UPDATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
-                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_adapter', self::fields_ADAPTER, '适配器索引')
-                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_status', self::fields_STATUS, '状态索引')
-                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_adapter_default', [self::fields_ADAPTER, self::fields_IS_DEFAULT], '适配器默认值复合索引')
-                ->create();
-        }
-    }
-
-    /**
-     * 获取凭据数组
-     * 
-     * @return array
-     */
     public function getCredentialsArray(): array
     {
-        $credentials = $this->getData(self::fields_CREDENTIALS);
+        $credentials = $this->getData(self::schema_fields_CREDENTIALS);
         if (is_string($credentials)) {
             $decoded = json_decode($credentials, true);
             return is_array($decoded) ? $decoded : [];
@@ -125,51 +72,28 @@ class Account extends Model
         return is_array($credentials) ? $credentials : [];
     }
 
-    /**
-     * 设置凭据数组
-     * 
-     * @param array $credentials
-     * @return self
-     */
     public function setCredentialsArray(array $credentials): self
     {
-        $this->setData(self::fields_CREDENTIALS, json_encode($credentials, JSON_UNESCAPED_UNICODE));
+        $this->setData(self::schema_fields_CREDENTIALS, json_encode($credentials, JSON_UNESCAPED_UNICODE));
         return $this;
     }
 
-    /**
-     * 检查是否默认账户
-     * 
-     * @return bool
-     */
     public function isDefault(): bool
     {
-        return (int)$this->getData(self::fields_IS_DEFAULT) === 1;
+        return (int)$this->getData(self::schema_fields_IS_DEFAULT) === 1;
     }
 
-    /**
-     * 检查是否激活
-     * 
-     * @return bool
-     */
     public function isActive(): bool
     {
-        return $this->getData(self::fields_STATUS) === self::STATUS_ACTIVE;
+        return $this->getData(self::schema_fields_STATUS) === self::STATUS_ACTIVE;
     }
 
-    /**
-     * 保存前处理
-     * 
-     * @return void
-     */
     public function save_before(): void
     {
         $now = time();
-        // 判断是否为新建记录（通过检查是否有ID）
         if (!$this->getId()) {
-            $this->setData(self::fields_CREATED_AT, $now);
+            $this->setData(self::schema_fields_CREATED_AT, $now);
         }
-        $this->setData(self::fields_UPDATED_AT, $now);
+        $this->setData(self::schema_fields_UPDATED_AT, $now);
     }
 }
-

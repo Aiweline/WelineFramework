@@ -106,12 +106,12 @@ class CdnRequest implements ObserverInterface
         if ($domain) {
             $domainModel = clone $this->domainModel;
             $domainModel->reset()
-                ->where(Domain::fields_DOMAIN_NAME, $domain)
-                ->where(Domain::fields_IS_ENABLED, 1)
+                ->where(Domain::schema_fields_DOMAIN_NAME, $domain)
+                ->where(Domain::schema_fields_IS_ENABLED, 1)
                 ->find()
                 ->fetch();
             
-            if ($domainModel->getData(Domain::fields_DOMAIN_ID)) {
+            if ($domainModel->getData(Domain::schema_fields_DOMAIN_ID)) {
                 return $domainModel;
             }
         }
@@ -123,11 +123,11 @@ class CdnRequest implements ObserverInterface
             $domainModel = clone $this->domainModel;
             $domainModel->reset()
                 ->where('website_id', $websiteId)
-                ->where(Domain::fields_IS_ENABLED, 1)
+                ->where(Domain::schema_fields_IS_ENABLED, 1)
                 ->find()
                 ->fetch();
             
-            if ($domainModel->getData(Domain::fields_DOMAIN_ID)) {
+            if ($domainModel->getData(Domain::schema_fields_DOMAIN_ID)) {
                 return $domainModel;
             }
         }
@@ -135,13 +135,13 @@ class CdnRequest implements ObserverInterface
         // 尝试获取默认域名
         $domainModel = clone $this->domainModel;
         $domainModel->reset()
-            ->where(Domain::fields_IS_ENABLED, 1)
-            ->order(Domain::fields_DOMAIN_ID, 'ASC')
+            ->where(Domain::schema_fields_IS_ENABLED, 1)
+            ->order(Domain::schema_fields_DOMAIN_ID, 'ASC')
             ->limit(1)
             ->find()
             ->fetch();
         
-        return $domainModel->getData(Domain::fields_DOMAIN_ID) ? $domainModel : null;
+        return $domainModel->getData(Domain::schema_fields_DOMAIN_ID) ? $domainModel : null;
     }
 
     /**
@@ -150,7 +150,7 @@ class CdnRequest implements ObserverInterface
     private function handlePurgeAll(Domain $domain): array
     {
         $result = $this->cachePurger->purge(
-            $domain->getData(Domain::fields_DOMAIN_ID),
+            $domain->getData(Domain::schema_fields_DOMAIN_ID),
             'everything'
         );
 
@@ -176,7 +176,7 @@ class CdnRequest implements ObserverInterface
         }
 
         $result = $this->cachePurger->purge(
-            $domain->getData(Domain::fields_DOMAIN_ID),
+            $domain->getData(Domain::schema_fields_DOMAIN_ID),
             'urls',
             ['urls' => $urls]
         );
@@ -206,7 +206,7 @@ class CdnRequest implements ObserverInterface
             // 使用 RuleManager 推送规则
             foreach ($rules as $rule) {
                 $this->ruleManager->saveRule([
-                    'domain_id' => $domain->getData(Domain::fields_DOMAIN_ID),
+                    'domain_id' => $domain->getData(Domain::schema_fields_DOMAIN_ID),
                     'rule_type' => $rule['type'] ?? 'bypass',
                     'rule_name' => $rule['name'] ?? '',
                     'rule_expression' => $rule['expression'] ?? '',
@@ -244,7 +244,7 @@ class CdnRequest implements ObserverInterface
             ];
         }
 
-        $adapter = $this->adapterResolver->getAdapter($domain->getData(Domain::fields_ADAPTER));
+        $adapter = $this->adapterResolver->getAdapter($domain->getData(Domain::schema_fields_ADAPTER));
         
         // 检测适配器能力
         $supportsApiPurge = false;
@@ -257,8 +257,8 @@ class CdnRequest implements ObserverInterface
             'success' => true,
             'message' => __('CDN 能力检测完成'),
             'data' => [
-                'adapter' => $domain->getData(Domain::fields_ADAPTER),
-                'domain' => $domain->getData(Domain::fields_DOMAIN_NAME),
+                'adapter' => $domain->getData(Domain::schema_fields_ADAPTER),
+                'domain' => $domain->getData(Domain::schema_fields_DOMAIN_NAME),
             ],
             'supports_api_purge' => $supportsApiPurge,
             'cdn_enabled' => true,
