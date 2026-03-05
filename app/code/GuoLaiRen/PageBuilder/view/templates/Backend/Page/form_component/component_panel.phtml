@@ -770,6 +770,10 @@ html[data-theme="dark"] .component-tag.ai-cyan,
     margin-right: 4px;
 }
 
+/* AI 组件工坊 modal 需要高于可视化编辑器(9999)、全屏(99999)、asset_manager(100003) */
+.ai-workshop-modal { z-index: 100010 !important; }
+body:has(.ai-workshop-modal.show) .modal-backdrop { z-index: 100009 !important; }
+
 /* 组件配置弹窗 */
 .component-config-modal {
     position: fixed;
@@ -1036,10 +1040,11 @@ let regionConfig = { ...defaultRegionConfig };
 // 当前布局的区域顺序（初始化后由 API 返回的数据更新）
 let regionOrder = ['header', 'content', 'footer'];
 
-// 安全解析 JSON（处理 BOM、JSON 后有多余输出如 PHP 警告等）
+// 安全解析 JSON（处理 BOM、JSON 后有多余输出如 PHP 警告等；支持 API 已解析的对象）
 function safeJsonParse(responseText) {
-    if (!responseText) return null;
-    const text = responseText.replace(/^\uFEFF/, '');
+    if (responseText == null) return null;
+    if (typeof responseText === 'object') return responseText;
+    const text = String(responseText).replace(/^\uFEFF/, '');
     try {
         return JSON.parse(text);
     } catch (err) {
@@ -1122,14 +1127,15 @@ async function initComponentPanel() {
         var opts = { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' }, silent: true };
         var res = await window.Weline.Api.request(apiUrl, opts);
         var responseText = (res && res.data) !== undefined ? res.data : (typeof res === 'string' ? res : '');
-        console.log('[组件面板] 响应长度:', responseText.length, '字符');
+        var responseStr = typeof responseText === 'string' ? responseText : JSON.stringify(responseText);
+        console.log('[组件面板] 响应长度:', responseStr.length, '字符');
         
         let result;
         try {
             result = safeJsonParse(responseText);
         } catch (parseError) {
             console.error('[组件面板] JSON解析失败:', parseError);
-            console.error('[组件面板] 响应内容前500字符:', responseText.substring(0, 500));
+            console.error('[组件面板] 响应内容前500字符:', responseStr.substring(0, 500));
             showComponentError('JSON解析失败: ' + parseError.message);
             return;
         }
@@ -1401,7 +1407,7 @@ function renderComponentCard(component, region) {
         const previewHtml = decodedPreviewHtml.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         thumbHtml = `<div class="component-preview-container">
             <iframe 
-                srcdoc="<!DOCTYPE html><html><head><meta charset='utf-8'><style>*{box-sizing:border-box;}body{margin:0;padding:0;overflow:hidden;background:#fff;min-height:100vh;}</style></head><body>${previewHtml}</body></html>"
+                srcdoc="<!DOCTYPE html><html><head><meta charset='utf-8'><style>*{box-sizing:border-box;}body{margin:0;padding:0;overflow:hidden;background:#fff;min-height:100vh;}</style></head><body><script>var component=document.body.querySelector(&quot;[id]&quot;)||document.body;<\/script>${previewHtml}</body></html>"
                 frameborder="0"
                 scrolling="no">
             </iframe>
@@ -2128,7 +2134,7 @@ function _createWorkshopModal() {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = modalId;
-        modal.className = 'modal fade';
+        modal.className = 'modal fade ai-workshop-modal';
         modal.tabIndex = -1;
         modal.setAttribute('data-bs-backdrop', 'static');
         modal.innerHTML = `
@@ -2907,7 +2913,7 @@ function _workshopShowResult(result) {
     // 预览
     const iframe = document.getElementById('ai-ws-preview-iframe');
     if (iframe && preview) {
-        iframe.srcdoc = preview;
+        iframe.srcdoc = _ensureComponentInPreviewHtml(preview);
     }
     
     // 代码与草稿内容（可复制，便于调试）
@@ -3462,12 +3468,12 @@ async function _refreshPreviewFromDraft() {
     const draftId = _aiWorkshop?.result?.draft_id || 0;
     const componentId = _aiWorkshop?.result?.component_id || 0;
     const iframe = document.getElementById('ai-ws-preview-iframe');
-    const wrap = (h) => '<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;}</style></head><body>' + h + '</body></html>';
+    const wrap = (h) => '<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;}</style></head><body><script>var component=document.body.querySelector("[id]")||document.body;<\/script>' + h + '</body></html>';
     if (!draftId && !componentId) {
         // 无 ID 时用当前 result.preview 重新填入 iframe，保证按钮有可见效果
         const cached = (_aiWorkshop?.result?.preview != null) ? (_aiWorkshop.result.preview?.html || _aiWorkshop.result.preview) : '';
         if (iframe && cached) {
-            iframe.srcdoc = (String(cached).indexOf('<!DOCTYPE') === 0 || String(cached).indexOf('<!doctype') === 0) ? cached : wrap(cached);
+            iframe.srcdoc = _ensureComponentInPreviewHtml((String(cached).indexOf('<!DOCTYPE') === 0 || String(cached).indexOf('<!doctype') === 0) ? cached : wrap(cached));
             if (typeof AdminToast !== 'undefined') AdminToast.success('<?= __('已使用当前预览刷新') ?>');
         } else {
             if (typeof AdminToast !== 'undefined') AdminToast.warning('<?= __('当前无草稿 ID，无法刷新预览') ?>');
@@ -3480,7 +3486,7 @@ async function _refreshPreviewFromDraft() {
         if (typeof AdminToast !== 'undefined') AdminToast.error('<?= __('预览拉取失败') ?>');
         return;
     }
-    if (iframe) iframe.srcdoc = (html.indexOf('<!DOCTYPE') === 0 || html.indexOf('<!doctype') === 0) ? html : wrap(html);
+    if (iframe) iframe.srcdoc = _ensureComponentInPreviewHtml((html.indexOf('<!DOCTYPE') === 0 || html.indexOf('<!doctype') === 0) ? html : wrap(html));
     if (_aiWorkshop?.result) _aiWorkshop.result.preview = html;
     if (typeof AdminToast !== 'undefined') AdminToast.success('<?= __('预览已更新') ?>');
 }
@@ -3504,6 +3510,15 @@ function _copyDraftContent(btnEl) {
     }).catch(function() {
         if (typeof AdminToast !== 'undefined') AdminToast.error('<?= __('复制失败') ?>');
     });
+}
+
+// 确保预览 iframe 内脚本可用的 component 变量（避免 "component is not defined"）
+function _ensureComponentInPreviewHtml(html) {
+    if (!html || typeof html !== 'string') return html;
+    var script = '<script>var component=document.body.querySelector("[id]")||document.body;<\/script>';
+    if (html.indexOf('<body>') !== -1) return html.replace('<body>', '<body>' + script);
+    if (html.indexOf('<body ') !== -1) return html.replace(/\<body\s[^>]*\>/, function(m) { return m + script; });
+    return html;
 }
 
 // 从 AI 生成的组件数据构建预览 HTML
@@ -3711,7 +3726,7 @@ async function _workshopRefine() {
             const fullPreviewHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 :root{--pb-primary:#667eea;--pb-accent:#7c3aed;--pb-bg:#fff;--pb-text:#333;--pb-heading:#1a1a1a;--pb-link:#667eea;--pb-link-hover:#5a6fd6;--pb-text-muted:#888;--pb-border:#e5e7eb;}
 body{margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--pb-text);background:var(--pb-bg);}
-</style></head><body>${renderedHtml}</body></html>`;
+</style></head><body><script>var component=document.body.querySelector("[id]")||document.body;<\/script>${renderedHtml}</body></html>`;
             const dstIframe = document.getElementById('ai-ws-refine-preview');
             if (dstIframe) dstIframe.srcdoc = fullPreviewHtml;
             // 也更新步骤3的预览
@@ -4573,7 +4588,8 @@ window.openFullscreenPreview = function openFullscreenPreview() {
     targetDoc.body.appendChild(overlay);
     var fullscreenIframe = targetDoc.getElementById('fullscreen-preview-iframe');
     if (fullscreenIframe) {
-        fullscreenIframe.srcdoc = (previewHtml && typeof previewHtml === 'string') ? previewHtml : fullscreenPlaceholder;
+        var raw = (previewHtml && typeof previewHtml === 'string') ? previewHtml : fullscreenPlaceholder;
+        fullscreenIframe.srcdoc = (typeof _ensureComponentInPreviewHtml === 'function') ? _ensureComponentInPreviewHtml(raw) : raw;
     }
     if (typeof setPreviewDevice === 'function') {
         setPreviewDevice('desktop');
@@ -4938,12 +4954,13 @@ async function executeInlineRefine() {
         if (!response || response.ok === false) {
             throw new Error('<?= __('服务器错误') ?>');
         }
-        const responseText = (response && response.data) !== undefined ? String(response.data) : '';
+        const responseText = (response && response.data) !== undefined ? (typeof response.data === 'object' ? response.data : String(response.data)) : '';
+        const responseStr = typeof responseText === 'string' ? responseText : JSON.stringify(responseText);
         let result;
         try {
             result = safeJsonParse(responseText);
         } catch (parseError) {
-            console.error('<?= __('响应解析失败') ?>:', responseText.substring(0, 500));
+            console.error('<?= __('响应解析失败') ?>:', responseStr.substring(0, 500));
             throw new Error('<?= __('服务器返回了无效的响应') ?>');
         }
         
@@ -5204,13 +5221,14 @@ async function refineComponentWithAi(adjustmentPrompt) {
         var refineOpts = { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(refineBody) };
         var response = await window.Weline.Api.request(refineUrl, refineOpts);
         if (!response || response.ok === false) { throw new Error('<?= __('服务器错误') ?>'); }
-        const responseText = (response && response.data) !== undefined ? (typeof response.data === 'object' ? JSON.stringify(response.data) : String(response.data)) : '';
+        const responseText = (response && response.data) !== undefined ? (typeof response.data === 'object' ? response.data : String(response.data)) : '';
+        const responseStr = typeof responseText === 'string' ? responseText : JSON.stringify(responseText);
         let result;
         if (response.data && typeof response.data === 'object' && 'success' in response.data) { result = response.data; } else {
         try {
             result = safeJsonParse(responseText);
         } catch (parseError) {
-            console.error('<?= __('响应解析失败') ?>:', responseText.substring(0, 500));
+            console.error('<?= __('响应解析失败') ?>:', responseStr.substring(0, 500));
             throw new Error('<?= __('服务器返回了无效的响应，可能是代码执行错误。请尝试重新微调。') ?>');
         } }
         
