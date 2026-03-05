@@ -47,8 +47,8 @@ class Dashboard extends BaseController
         
         // 获取所有启用的SEO主体
         $subjects = $subjectModel->reset()
-            ->where(SeoSubject::fields_STATUS, SeoSubject::STATUS_ENABLED)
-            ->order(SeoSubject::fields_UPDATED_AT, 'DESC')
+            ->where(SeoSubject::schema_fields_STATUS, SeoSubject::STATUS_ENABLED)
+            ->order(SeoSubject::schema_fields_UPDATED_AT, 'DESC')
             ->select()
             ->fetchArray();
 
@@ -58,9 +58,9 @@ class Dashboard extends BaseController
         
         foreach ($subjects as &$subject) {
             $keywords = $keywordModel->reset()
-                ->where(SeoKeyword::fields_SUBJECT_ID, $subject['subject_id'])
-                ->where(SeoKeyword::fields_STATUS, SeoKeyword::STATUS_ENABLED)
-                ->order(SeoKeyword::fields_PRIORITY, 'DESC')
+                ->where(SeoKeyword::schema_fields_SUBJECT_ID, $subject['subject_id'])
+                ->where(SeoKeyword::schema_fields_STATUS, SeoKeyword::STATUS_ENABLED)
+                ->order(SeoKeyword::schema_fields_PRIORITY, 'DESC')
                 ->limit(5)
                 ->select()
                 ->fetchArray();
@@ -103,9 +103,9 @@ class Dashboard extends BaseController
         /** @var SeoKeyword $keywordModel */
         $keywordModel = $this->objectManager->getInstance(SeoKeyword::class);
         $keywords = $keywordModel->reset()
-            ->where(SeoKeyword::fields_SUBJECT_ID, $subjectId)
-            ->where(SeoKeyword::fields_STATUS, SeoKeyword::STATUS_ENABLED)
-            ->order(SeoKeyword::fields_PRIORITY, 'DESC')
+            ->where(SeoKeyword::schema_fields_SUBJECT_ID, $subjectId)
+            ->where(SeoKeyword::schema_fields_STATUS, SeoKeyword::STATUS_ENABLED)
+            ->order(SeoKeyword::schema_fields_PRIORITY, 'DESC')
             ->select()
             ->fetchArray();
 
@@ -113,9 +113,9 @@ class Dashboard extends BaseController
         /** @var SeoSuggestion $suggestionModel */
         $suggestionModel = $this->objectManager->getInstance(SeoSuggestion::class);
         $suggestion = $suggestionModel->reset()
-            ->where(SeoSuggestion::fields_SUBJECT_ID, $subjectId)
-            ->where(SeoSuggestion::fields_STATUS, SeoSuggestion::STATUS_ACTIVE)
-            ->order(SeoSuggestion::fields_CREATED_AT, 'DESC')
+            ->where(SeoSuggestion::schema_fields_SUBJECT_ID, $subjectId)
+            ->where(SeoSuggestion::schema_fields_STATUS, SeoSuggestion::STATUS_ACTIVE)
+            ->order(SeoSuggestion::schema_fields_CREATED_AT, 'DESC')
             ->find()
             ->fetch();
         
@@ -149,11 +149,11 @@ class Dashboard extends BaseController
         }
         
         if ($status !== '') {
-            $query->where(SeoSubject::fields_STATUS, (int)$status);
+            $query->where(SeoSubject::schema_fields_STATUS, (int)$status);
         }
         
         // 获取所有主体
-        $subjects = $query->order(SeoSubject::fields_UPDATED_AT, 'DESC')
+        $subjects = $query->order(SeoSubject::schema_fields_UPDATED_AT, 'DESC')
             ->select()
             ->fetchArray();
 
@@ -163,7 +163,7 @@ class Dashboard extends BaseController
         
         foreach ($subjects as &$subject) {
             $keywordCount = $keywordModel->reset()
-                ->where(SeoKeyword::fields_SUBJECT_ID, $subject['subject_id'])
+                ->where(SeoKeyword::schema_fields_SUBJECT_ID, $subject['subject_id'])
                 ->count();
             $subject['keyword_count'] = $keywordCount;
         }

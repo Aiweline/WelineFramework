@@ -745,12 +745,11 @@ $isAjax = $this->request->isAjax() || $this->request->getHeader('X-Requested-Wit
         
         const formData = new FormData(event.target);
         
-        fetch('<?= $this->getBackendUrl('seo/backend/websiteaccount/save') ?>', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
+        var url = '<?= $this->getBackendUrl('seo/backend/websiteaccount/save') ?>';
+        var opts = { method: 'POST', body: formData };
+        window.Weline.Api.request(url, opts)
+        .then(function(res) {
+            var data = (res && res.data) !== undefined ? res.data : res;
             if (data.success) {
                 // 显示成功消息
                 if (typeof Swal !== 'undefined') {

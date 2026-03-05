@@ -132,13 +132,13 @@ class Verify implements CommandInterface
                 
                 // 验证 URL 数据完整性
                 $urls = $this->sitemapUrlModel->reset()
-                    ->where(SitemapUrl::fields_WEBSITE_ID, $websiteId)
-                    ->where(SitemapUrl::fields_STATUS, 1)
+                    ->where(SitemapUrl::schema_fields_WEBSITE_ID, $websiteId)
+                    ->where(SitemapUrl::schema_fields_STATUS, 1)
                     ->select()
                     ->fetchArray();
                 
                 foreach ($urls as $url) {
-                    if (empty($url[SitemapUrl::fields_URL])) {
+                    if (empty($url[SitemapUrl::schema_fields_URL])) {
                         $this->addWarning("站点 {$websiteCode} 存在空 URL");
                     }
                 }

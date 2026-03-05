@@ -75,8 +75,8 @@ class StatsSync implements CronTaskInterface
             $messages = [];
             
             foreach ($allBindings as $binding) {
-                $websiteId = (int)($binding[SeoWebsiteAccount::fields_WEBSITE_ID] ?? 0);
-                $accountId = (int)($binding[SeoWebsiteAccount::fields_ACCOUNT_ID] ?? 0);
+                $websiteId = (int)($binding[SeoWebsiteAccount::schema_fields_WEBSITE_ID] ?? 0);
+                $accountId = (int)($binding[SeoWebsiteAccount::schema_fields_ACCOUNT_ID] ?? 0);
                 
                 if ($websiteId <= 0 || $accountId <= 0) {
                     continue;

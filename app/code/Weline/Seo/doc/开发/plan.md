@@ -29,7 +29,7 @@ class NotificationTopicProvider implements NotificationTopicProviderInterface
                 'name' => __('站点地图提交'),
                 'group' => 'seo_management',
                 'group_name' => __('SEO 管理'),
-                'icon' => 'ri-sitemap-line',
+                'icon' => 'ri-file-list-line',
                 'color' => '#34c38f',
             ],
             [

@@ -161,17 +161,17 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
     protected function getExistingUrls(int $websiteId, string $scope, string $module): array
     {
         $rows = $this->sitemapUrlModel->reset()
-            ->where(SitemapUrl::fields_WEBSITE_ID, $websiteId)
-            ->where(SitemapUrl::fields_SCOPE, $scope)
-            ->where(SitemapUrl::fields_MODULE, $module)
+            ->where(SitemapUrl::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(SitemapUrl::schema_fields_SCOPE, $scope)
+            ->where(SitemapUrl::schema_fields_MODULE, $module)
             ->select()
             ->fetchArray();
         
         $existing = [];
         foreach ($rows as $row) {
             // 使用 entity_type + entity_id 构建 url_key
-            $entityType = $row[SitemapUrl::fields_ENTITY_TYPE] ?? '';
-            $entityId = $row[SitemapUrl::fields_ENTITY_ID] ?? 0;
+            $entityType = $row[SitemapUrl::schema_fields_ENTITY_TYPE] ?? '';
+            $entityId = $row[SitemapUrl::schema_fields_ENTITY_ID] ?? 0;
             if ($entityType && $entityId) {
                 $urlKey = $entityType . '-' . $entityId;
                 $existing[$urlKey] = $row;
@@ -213,7 +213,7 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
                 // 已存在，检查是否需要更新
                 $existingRow = $existingUrls[$urlKey];
                 if ($this->needsUpdate($urlData, $existingRow)) {
-                    $this->updateUrl($existingRow[SitemapUrl::fields_ID], $urlData);
+                    $this->updateUrl($existingRow[SitemapUrl::schema_fields_ID], $urlData);
                     $updated++;
                 }
             } else {
@@ -226,7 +226,7 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
         // 删除不再存在的 URL
         foreach ($existingUrls as $urlKey => $existingRow) {
             if (!in_array($urlKey, $newUrlKeys, true)) {
-                $this->deleteUrl($existingRow[SitemapUrl::fields_ID]);
+                $this->deleteUrl($existingRow[SitemapUrl::schema_fields_ID]);
                 $deleted++;
             }
         }
@@ -250,10 +250,10 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
     {
         // 对比关键字段（注意字段映射）
         $comparisons = [
-            'url' => SitemapUrl::fields_URL,  // newData['url'] vs existingRow['url']
-            'lastmod' => SitemapUrl::fields_LASTMOD,
-            'changefreq' => SitemapUrl::fields_CHANGEFREQ,
-            'priority' => SitemapUrl::fields_PRIORITY,
+            'url' => SitemapUrl::schema_fields_URL,  // newData['url'] vs existingRow['url']
+            'lastmod' => SitemapUrl::schema_fields_LASTMOD,
+            'changefreq' => SitemapUrl::schema_fields_CHANGEFREQ,
+            'priority' => SitemapUrl::schema_fields_PRIORITY,
         ];
         
         foreach ($comparisons as $newField => $dbField) {
@@ -272,16 +272,16 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
     {
         $model = clone $this->sitemapUrlModel;
         $model->setData([
-            SitemapUrl::fields_WEBSITE_ID => $websiteId,
-            SitemapUrl::fields_SCOPE => $scope,
-            SitemapUrl::fields_MODULE => $module,
-            SitemapUrl::fields_ENTITY_TYPE => $urlData['entity_type'] ?? '',
-            SitemapUrl::fields_ENTITY_ID => $urlData['entity_id'] ?? 0,
-            SitemapUrl::fields_URL => $urlData['url'], // 使用 url 字段
-            SitemapUrl::fields_LASTMOD => $urlData['lastmod'],
-            SitemapUrl::fields_CHANGEFREQ => $urlData['changefreq'],
-            SitemapUrl::fields_PRIORITY => $urlData['priority'],
-            SitemapUrl::fields_STATUS => 1, // active
+            SitemapUrl::schema_fields_WEBSITE_ID => $websiteId,
+            SitemapUrl::schema_fields_SCOPE => $scope,
+            SitemapUrl::schema_fields_MODULE => $module,
+            SitemapUrl::schema_fields_ENTITY_TYPE => $urlData['entity_type'] ?? '',
+            SitemapUrl::schema_fields_ENTITY_ID => $urlData['entity_id'] ?? 0,
+            SitemapUrl::schema_fields_URL => $urlData['url'], // 使用 url 字段
+            SitemapUrl::schema_fields_LASTMOD => $urlData['lastmod'],
+            SitemapUrl::schema_fields_CHANGEFREQ => $urlData['changefreq'],
+            SitemapUrl::schema_fields_PRIORITY => $urlData['priority'],
+            SitemapUrl::schema_fields_STATUS => 1, // active
         ]);
         $model->save();
     }
@@ -294,10 +294,10 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
         $model = clone $this->sitemapUrlModel;
         $model->load($id);
         $model->setData([
-            SitemapUrl::fields_URL => $urlData['url'], // 使用 url 字段
-            SitemapUrl::fields_LASTMOD => $urlData['lastmod'],
-            SitemapUrl::fields_CHANGEFREQ => $urlData['changefreq'],
-            SitemapUrl::fields_PRIORITY => $urlData['priority'],
+            SitemapUrl::schema_fields_URL => $urlData['url'], // 使用 url 字段
+            SitemapUrl::schema_fields_LASTMOD => $urlData['lastmod'],
+            SitemapUrl::schema_fields_CHANGEFREQ => $urlData['changefreq'],
+            SitemapUrl::schema_fields_PRIORITY => $urlData['priority'],
         ]);
         $model->save();
     }

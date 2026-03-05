@@ -279,8 +279,8 @@ URL,URL
 "点击上方""添加主体""按钮创建第一个SEO主体。","点击上方""添加主体""按钮创建第一个SEO主体。"
 添加SEO主体,"Add SEO Subject"
 删除,删除
-确定要删除该SEO主体吗？,"Are you sure you want to delete this SEO subject?"
 删除失败,删除失败
+确定要删除该SEO主体吗？,"Are you sure you want to delete this SEO subject?"
 Sitemap管理,"Sitemap Management"
 "SEO 模块工作原理","SEO Module Workflow"
 点击查看,"Click to View"
@@ -406,6 +406,7 @@ URL推送,URL推送
 Sitemap提交,"Sitemap Submit"
 共,共
 过滤条件,Filter
+"Weline.Api 未加载","Weline.Api 未加载"
 请求失败，请检查网络连接后重试,"Request failed"
 正在加载表单...,"Loading form..."
 正在加载站点列表...,正在加载站点列表...

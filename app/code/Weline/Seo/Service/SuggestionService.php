@@ -57,9 +57,9 @@ class SuggestionService
             /** @var SeoSuggestion $existingSuggestion */
             $existingSuggestion = $this->objectManager->getInstance(SeoSuggestion::class);
             $existingSuggestion->reset()
-                ->where(SeoSuggestion::fields_SUBJECT_ID, $subjectId)
-                ->where(SeoSuggestion::fields_STATUS, SeoSuggestion::STATUS_ACTIVE)
-                ->order(SeoSuggestion::fields_CREATED_AT, 'DESC')
+                ->where(SeoSuggestion::schema_fields_SUBJECT_ID, $subjectId)
+                ->where(SeoSuggestion::schema_fields_STATUS, SeoSuggestion::STATUS_ACTIVE)
+                ->order(SeoSuggestion::schema_fields_CREATED_AT, 'DESC')
                 ->find()
                 ->fetch();
             
@@ -72,9 +72,9 @@ class SuggestionService
         /** @var SeoKeyword $keywordModel */
         $keywordModel = $this->objectManager->getInstance(SeoKeyword::class);
         $keywords = $keywordModel->reset()
-            ->where(SeoKeyword::fields_SUBJECT_ID, $subjectId)
-            ->where(SeoKeyword::fields_STATUS, SeoKeyword::STATUS_ENABLED)
-            ->order(SeoKeyword::fields_PRIORITY, 'DESC')
+            ->where(SeoKeyword::schema_fields_SUBJECT_ID, $subjectId)
+            ->where(SeoKeyword::schema_fields_STATUS, SeoKeyword::STATUS_ENABLED)
+            ->order(SeoKeyword::schema_fields_PRIORITY, 'DESC')
             ->select()
             ->fetchArray();
 

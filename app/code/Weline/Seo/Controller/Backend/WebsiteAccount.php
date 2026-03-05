@@ -53,7 +53,7 @@ class WebsiteAccount extends BackendController
                 $websiteId = (int)($website['website_id'] ?? $website['id'] ?? 0);
                 if ($websiteId > 0) {
                     $bindings = $websiteAccountModel->reset()
-                        ->where(SeoWebsiteAccount::fields_WEBSITE_ID, $websiteId)
+                        ->where(SeoWebsiteAccount::schema_fields_WEBSITE_ID, $websiteId)
                         ->select()
                         ->fetchArray();
                     $bindingCounts[$websiteId] = count($bindings);
@@ -106,7 +106,7 @@ class WebsiteAccount extends BackendController
         // 如果没有传入 scope 参数，尝试从站点数据中获取
         // 这样可以自动按站点的业务来源过滤 SEO 账户
         if ($scope === '' && $websiteModel->getId()) {
-            $scope = $websiteModel->getData(Website::fields_SCOPE) ?? '';
+            $scope = $websiteModel->getData(Website::schema_fields_SCOPE) ?? '';
         }
 
         // 获取SEO账户列表（按scope过滤）
@@ -117,12 +117,12 @@ class WebsiteAccount extends BackendController
         if ($scope !== '') {
             // 方式1: 查询指定scope的账户
             $query1 = $accountModel->reset()->select();
-            $query1->where(SeoAccount::fields_SCOPE, $scope);
+            $query1->where(SeoAccount::schema_fields_SCOPE, $scope);
             $accounts1 = $query1->fetchArray();
             
             // 方式2: 查询空scope的通用账户
             $query2 = $accountModel->reset()->select();
-            $query2->where(SeoAccount::fields_SCOPE, '');
+            $query2->where(SeoAccount::schema_fields_SCOPE, '');
             $accounts2 = $query2->fetchArray();
             
             // 合并并去重
@@ -140,7 +140,7 @@ class WebsiteAccount extends BackendController
             // 未指定过滤条件，获取所有账户
             $accounts = $accountModel->reset()
                 ->select()
-                ->order(SeoAccount::fields_CREATED_AT, 'DESC')
+                ->order(SeoAccount::schema_fields_CREATED_AT, 'DESC')
                 ->fetchArray();
         }
 
@@ -148,7 +148,7 @@ class WebsiteAccount extends BackendController
         /** @var SeoWebsiteAccount $websiteAccountModel */
         $websiteAccountModel = $this->objectManager->getInstance(SeoWebsiteAccount::class);
         $bindings = $websiteAccountModel->reset()
-            ->where(SeoWebsiteAccount::fields_WEBSITE_ID, $websiteId)
+            ->where(SeoWebsiteAccount::schema_fields_WEBSITE_ID, $websiteId)
             ->select()
             ->fetchArray();
 
@@ -203,14 +203,14 @@ class WebsiteAccount extends BackendController
 
             // 先删除该站点的所有现有绑定
             $existingBindings = $websiteAccountModel->reset()
-                ->where(SeoWebsiteAccount::fields_WEBSITE_ID, $websiteId)
+                ->where(SeoWebsiteAccount::schema_fields_WEBSITE_ID, $websiteId)
                 ->select()
                 ->fetch();
             
             while ($existingBindings->getId()) {
                 $existingBindings->delete();
                 $existingBindings = $websiteAccountModel->reset()
-                    ->where(SeoWebsiteAccount::fields_WEBSITE_ID, $websiteId)
+                    ->where(SeoWebsiteAccount::schema_fields_WEBSITE_ID, $websiteId)
                     ->find()
                     ->fetch();
             }
@@ -285,8 +285,8 @@ class WebsiteAccount extends BackendController
             $websiteAccountModel = $this->objectManager->getInstance(SeoWebsiteAccount::class);
             
             $binding = $websiteAccountModel->reset()
-                ->where(SeoWebsiteAccount::fields_WEBSITE_ID, $websiteId)
-                ->where(SeoWebsiteAccount::fields_ACCOUNT_ID, $accountId)
+                ->where(SeoWebsiteAccount::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(SeoWebsiteAccount::schema_fields_ACCOUNT_ID, $accountId)
                 ->find()
                 ->fetch();
 

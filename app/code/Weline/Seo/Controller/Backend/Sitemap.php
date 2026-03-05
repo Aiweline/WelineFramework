@@ -370,8 +370,8 @@ class Sitemap extends BackendController
                             'account_id' => $account->getId(),
                             'account_name' => $account->getData('name') ?: $account->getData('provider'),
                             'is_active' => $account->isActive(),
-                            'is_auto_submit' => (int)($binding[\Weline\Seo\Model\SeoWebsiteAccount::fields_IS_AUTO_SUBMIT] ?? 0) === 1,
-                            'sitemap_frequency' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::fields_SITEMAP_FREQUENCY] ?? 'daily',
+                            'is_auto_submit' => (int)($binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_IS_AUTO_SUBMIT] ?? 0) === 1,
+                            'sitemap_frequency' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_SITEMAP_FREQUENCY] ?? 'daily',
                             'enable_cron_push' => (int)$account->getData('enable_cron_push_urls') === 1,
                             'enable_cron_sitemap' => (int)$account->getData('enable_cron_sitemap') === 1,
                         ];
