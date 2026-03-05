@@ -13,8 +13,8 @@ namespace Weline\ModuleManager\Service;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
-use Weline\ModuleManager\Model\Module\Backup as BackupModel;
-use Weline\ModuleManager\Model\Module\Table as ModuleTableModel;
+use Weline\Framework\Setup\Model\ModuleBackup;
+use Weline\Framework\Setup\Model\ModuleTable;
 
 class ModuleBackupService
 {
@@ -44,10 +44,10 @@ class ModuleBackupService
         $timestamp  = date('Ymd_His');
         $backupDate = date('Y-m-d H:i:s');
 
-        /** @var ModuleTableModel $moduleTableModel */
-        $moduleTableModel = ObjectManager::getInstance(ModuleTableModel::class);
+        /** @var ModuleTable $moduleTableModel */
+        $moduleTableModel = ObjectManager::getInstance(ModuleTable::class);
         $moduleTables     = $moduleTableModel
-            ->where(ModuleTableModel::fields_module_name, $moduleName)
+            ->where(ModuleTable::schema_fields_module_name, $moduleName)
             ->select()
             ->fetch()
             ->getItems();
@@ -127,14 +127,14 @@ class ModuleBackupService
         }
 
         // 记录备份信息
-        /** @var BackupModel $backup */
-        $backup = ObjectManager::getInstance(BackupModel::class);
+        /** @var ModuleBackup $backup */
+        $backup = ObjectManager::getInstance(ModuleBackup::class);
         $backup->setModuleName($moduleName)
             ->setBackupTimestamp($timestamp)
             ->setBackupDate($backupDate)
             ->setTableCount($tableCount)
             ->setTables($tables)
-            ->setStatus(BackupModel::status_active)
+            ->setStatus(ModuleBackup::status_active)
             ->save();
 
         $backupId = (int)$backup->getId();
@@ -222,7 +222,7 @@ class ModuleBackupService
         }
 
         // 更新备份状态
-        $backup->setStatus(BackupModel::status_restored)
+        $backup->setStatus(ModuleBackup::status_restored)
             ->setRestoredAt(date('Y-m-d H:i:s'))
             ->save();
 
@@ -238,11 +238,11 @@ class ModuleBackupService
      */
     public function getModuleBackups(string $moduleName): array
     {
-        /** @var BackupModel $backupModel */
-        $backupModel = ObjectManager::getInstance(BackupModel::class);
+        /** @var ModuleBackup $backupModel */
+        $backupModel = ObjectManager::getInstance(ModuleBackup::class);
         $models      = $backupModel
-            ->where(BackupModel::fields_MODULE_NAME, $moduleName)
-            ->order(BackupModel::fields_BACKUP_TIMESTAMP, 'DESC')
+            ->where(ModuleBackup::schema_fields_MODULE_NAME, $moduleName)
+            ->order(ModuleBackup::schema_fields_BACKUP_TIMESTAMP, 'DESC')
             ->select()
             ->fetch()
             ->getItems();
@@ -269,11 +269,11 @@ class ModuleBackupService
      */
     public function deleteBackup(string $moduleName, string $backupTimestamp): array
     {
-        /** @var BackupModel $backupModel */
-        $backupModel = ObjectManager::getInstance(BackupModel::class);
+        /** @var ModuleBackup $backupModel */
+        $backupModel = ObjectManager::getInstance(ModuleBackup::class);
         $items       = $backupModel
-            ->where(BackupModel::fields_MODULE_NAME, $moduleName)
-            ->where(BackupModel::fields_BACKUP_TIMESTAMP, $backupTimestamp)
+            ->where(ModuleBackup::schema_fields_MODULE_NAME, $moduleName)
+            ->where(ModuleBackup::schema_fields_BACKUP_TIMESTAMP, $backupTimestamp)
             ->select()
             ->fetch()
             ->getItems();
@@ -285,9 +285,9 @@ class ModuleBackupService
             ];
         }
 
-        /** @var BackupModel $backup */
+        /** @var ModuleBackup $backup */
         $backup = reset($items);
-        $backup->setStatus(BackupModel::status_deleted)->save();
+        $backup->setStatus(ModuleBackup::status_deleted)->save();
 
         return [
             'success' => true,
@@ -298,18 +298,18 @@ class ModuleBackupService
     /**
      * 获取最近一次或指定时间戳的备份模型
      */
-    private function getLatestBackupModel(string $moduleName, ?string $backupTimestamp = null): ?BackupModel
+    private function getLatestBackupModel(string $moduleName, ?string $backupTimestamp = null): ?ModuleBackup
     {
-        /** @var BackupModel $backupModel */
-        $backupModel = ObjectManager::getInstance(BackupModel::class);
-        $backupModel->where(BackupModel::fields_MODULE_NAME, $moduleName);
+        /** @var ModuleBackup $backupModel */
+        $backupModel = ObjectManager::getInstance(ModuleBackup::class);
+        $backupModel->where(ModuleBackup::schema_fields_MODULE_NAME, $moduleName);
 
         if ($backupTimestamp) {
-            $backupModel->where(BackupModel::fields_BACKUP_TIMESTAMP, $backupTimestamp);
+            $backupModel->where(ModuleBackup::schema_fields_BACKUP_TIMESTAMP, $backupTimestamp);
         }
 
         $items = $backupModel
-            ->order(BackupModel::fields_BACKUP_TIMESTAMP, 'DESC')
+            ->order(ModuleBackup::schema_fields_BACKUP_TIMESTAMP, 'DESC')
             ->select()
             ->fetch()
             ->getItems();
@@ -318,7 +318,7 @@ class ModuleBackupService
             return null;
         }
 
-        /** @var BackupModel $backup */
+        /** @var ModuleBackup $backup */
         $backup = reset($items);
         return $backup;
     }
