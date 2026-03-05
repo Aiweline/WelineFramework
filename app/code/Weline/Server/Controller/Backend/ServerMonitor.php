@@ -170,18 +170,18 @@ class ServerMonitor extends BackendController
         $attacks = $this->attackLog->clearQuery();
         
         if ($instance) {
-            $attacks->where(AttackLog::fields_INSTANCE, $instance);
+            $attacks->where(AttackLog::schema_fields_INSTANCE, $instance);
         }
         
         $total = $attacks->count();
         
         $attacks = $attacks->clearQuery();
         if ($instance) {
-            $attacks->where(AttackLog::fields_INSTANCE, $instance);
+            $attacks->where(AttackLog::schema_fields_INSTANCE, $instance);
         }
         
         $list = $attacks
-            ->order(AttackLog::fields_CREATED_AT, 'DESC')
+            ->order(AttackLog::schema_fields_CREATED_AT, 'DESC')
             ->pagination($page, $limit)
             ->select()
             ->fetchArray();

@@ -55,6 +55,9 @@ class ControlMessage
     /** 子进程 → Master：进程即将退出（Master 可从等待列表移除） */
     public const TYPE_EXITED = 'exited';
 
+    /** 子进程 → Master：退出原因（best-effort，Fatal 时可能缺失） */
+    public const TYPE_EXIT_REASON = 'exit_reason';
+
     /** 子进程 → Master：上报运行状态 */
     public const TYPE_STATUS_REPORT = 'status_report';
 
@@ -393,6 +396,21 @@ class ControlMessage
             'data'    => $data,
             'message' => $message,
         ]);
+    }
+
+    /**
+     * 构建 exit_reason 消息（退出前发送，Master 记录用于决策和排查）
+     *
+     * @param string $reason 退出原因
+     * @param int $code 可选退出码
+     */
+    public static function exitReason(string $reason, int $code = 0): string
+    {
+        $data = ['type' => self::TYPE_EXIT_REASON, 'reason' => $reason];
+        if ($code !== 0) {
+            $data['code'] = $code;
+        }
+        return self::encode($data);
     }
 
     /**
