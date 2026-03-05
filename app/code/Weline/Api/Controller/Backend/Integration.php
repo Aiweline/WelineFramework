@@ -55,14 +55,14 @@ class Integration extends BackendController
 
         $totalUsers = (int)$apiUser->reset()->count();
         $enabledUsers = (int)$apiUser->reset()
-            ->where(ApiUser::fields_is_enabled, 1)
+            ->where(ApiUser::schema_fields_is_enabled, 1)
             ->count();
         $sandboxUsers = (int)$apiUser->reset()
-            ->where(ApiUser::fields_is_sandbox, 1)
+            ->where(ApiUser::schema_fields_is_sandbox, 1)
             ->count();
         $activeTokens = (int)$tokenModel->reset()
-            ->where(ApiUserToken::fields_type, ApiUserToken::TYPE_ACCESS_TOKEN)
-            ->where(ApiUserToken::fields_token_expire_time, time(), '>')
+            ->where(ApiUserToken::schema_fields_type, ApiUserToken::TYPE_ACCESS_TOKEN)
+            ->where(ApiUserToken::schema_fields_token_expire_time, time(), '>')
             ->count();
 
         return [
@@ -81,7 +81,7 @@ class Integration extends BackendController
         /** @var ApiUser $apiUser */
         $apiUser = ObjectManager::getInstance(ApiUser::class, [], false);
         $items = $apiUser->reset()
-            ->order(ApiUser::fields_ID, 'DESC')
+            ->order(ApiUser::schema_fields_ID, 'DESC')
             ->pagination(1, 5)
             ->select()
             ->fetch()
@@ -90,11 +90,11 @@ class Integration extends BackendController
         return array_map(static function ($item) {
             $data = is_object($item) ? $item->getData() : (array)$item;
             return [
-                'user_id' => $data[ApiUser::fields_ID] ?? null,
-                'username' => $data[ApiUser::fields_username] ?? '',
-                'email' => $data[ApiUser::fields_email] ?? '',
-                'is_enabled' => (int)($data[ApiUser::fields_is_enabled] ?? 0),
-                'is_sandbox' => (int)($data[ApiUser::fields_is_sandbox] ?? 0),
+                'user_id' => $data[ApiUser::schema_fields_ID] ?? null,
+                'username' => $data[ApiUser::schema_fields_username] ?? '',
+                'email' => $data[ApiUser::schema_fields_email] ?? '',
+                'is_enabled' => (int)($data[ApiUser::schema_fields_is_enabled] ?? 0),
+                'is_sandbox' => (int)($data[ApiUser::schema_fields_is_sandbox] ?? 0),
                 'created_at' => $data['created_at'] ?? '',
             ];
         }, $items);

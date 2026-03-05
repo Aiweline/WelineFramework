@@ -11,44 +11,27 @@ declare(strict_types=1);
 
 namespace Weline\Api\Model;
 
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
-class ApiUserRole extends \Weline\Framework\Database\Model
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: 'API用户角色关联表')]
+#[Index(name: 'idx_w_api_user_role_user_role', columns: ['user_id', 'role_id'], type: 'UNIQUE', comment: '用户角色唯一')]
+#[Index(name: 'idx_w_api_user_role_user_id', columns: ['user_id'], comment: '用户ID')]
+#[Index(name: 'idx_w_api_user_role_role_id', columns: ['role_id'], comment: '角色ID')]
+class ApiUserRole extends Model
 {
-    public const fields_ID = 'id';
-    public const fields_user_id = 'user_id';
-    public const fields_role_id = 'role_id';
+    public const schema_table = 'm_api_user_role';
+    public const schema_primary_key = 'id';
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'ID')]
+    public const schema_fields_ID = 'id';
+    #[Col(type: 'int', nullable: false, comment: 'API用户ID')]
+    public const schema_fields_user_id = 'user_id';
+    #[Col(type: 'int', nullable: false, comment: '角色ID')]
+    public const schema_fields_role_id = 'role_id';
 
-    public array $_unit_primary_keys = ['id'];
+    public array $_unit_primary_keys = [self::schema_fields_ID];
     public array $_index_sort_keys = ['user_id', 'role_id'];
-
-    public string $table = 'm_api_user_role';
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 数据库升级逻辑
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        // 表结构已在 Setup/Install.php 中创建
-    }
 
     /**
      * 获取ID
@@ -63,7 +46,7 @@ class ApiUserRole extends \Weline\Framework\Database\Model
      */
     public function getUserId(): int
     {
-        return (int)($this->getData(self::fields_user_id) ?? 0);
+        return (int)($this->getData(self::schema_fields_user_id) ?? 0);
     }
 
     /**
@@ -71,7 +54,7 @@ class ApiUserRole extends \Weline\Framework\Database\Model
      */
     public function setUserId(int $userId): self
     {
-        return $this->setData(self::fields_user_id, $userId);
+        return $this->setData(self::schema_fields_user_id, $userId);
     }
 
     /**
@@ -79,7 +62,7 @@ class ApiUserRole extends \Weline\Framework\Database\Model
      */
     public function getRoleId(): int
     {
-        return (int)($this->getData(self::fields_role_id) ?? 0);
+        return (int)($this->getData(self::schema_fields_role_id) ?? 0);
     }
 
     /**
@@ -87,7 +70,7 @@ class ApiUserRole extends \Weline\Framework\Database\Model
      */
     public function setRoleId(int $roleId): self
     {
-        return $this->setData(self::fields_role_id, $roleId);
+        return $this->setData(self::schema_fields_role_id, $roleId);
     }
 
     /**
@@ -101,4 +84,5 @@ class ApiUserRole extends \Weline\Framework\Database\Model
         parent::save_before();
     }
 }
+
 
