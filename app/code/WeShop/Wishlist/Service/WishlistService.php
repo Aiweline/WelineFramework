@@ -27,8 +27,8 @@ class WishlistService
         
         // 检查是否已存在
         $existing = $wishlist->clear()
-            ->where(Wishlist::fields_CUSTOMER_ID, $customerId)
-            ->where(Wishlist::fields_PRODUCT_ID, $productId)
+            ->where(Wishlist::schema_fields_CUSTOMER_ID, $customerId)
+            ->where(Wishlist::schema_fields_PRODUCT_ID, $productId)
             ->find()
             ->fetch();
         
@@ -38,8 +38,8 @@ class WishlistService
         
         // 创建新记录
         $wishlist->clearData()
-            ->setData(Wishlist::fields_CUSTOMER_ID, $customerId)
-            ->setData(Wishlist::fields_PRODUCT_ID, $productId)
+            ->setData(Wishlist::schema_fields_CUSTOMER_ID, $customerId)
+            ->setData(Wishlist::schema_fields_PRODUCT_ID, $productId)
             ->save();
         
         return $wishlist;
@@ -63,7 +63,7 @@ class WishlistService
         }
         
         // 验证客户ID
-        if ((int)$wishlist->getData(Wishlist::fields_CUSTOMER_ID) !== $customerId) {
+        if ((int)$wishlist->getData(Wishlist::schema_fields_CUSTOMER_ID) !== $customerId) {
             throw new \Exception(__('无权移除此愿望清单项'));
         }
         
@@ -82,8 +82,8 @@ class WishlistService
         $wishlist = ObjectManager::getInstance(Wishlist::class);
         
         $items = $wishlist->clear()
-            ->where(Wishlist::fields_CUSTOMER_ID, $customerId)
-            ->order(Wishlist::fields_CREATED_AT, 'DESC')
+            ->where(Wishlist::schema_fields_CUSTOMER_ID, $customerId)
+            ->order(Wishlist::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetchArray();
         
@@ -115,8 +115,8 @@ class WishlistService
         $wishlist = ObjectManager::getInstance(Wishlist::class);
         
         $item = $wishlist->clear()
-            ->where(Wishlist::fields_CUSTOMER_ID, $customerId)
-            ->where(Wishlist::fields_PRODUCT_ID, $productId)
+            ->where(Wishlist::schema_fields_CUSTOMER_ID, $customerId)
+            ->where(Wishlist::schema_fields_PRODUCT_ID, $productId)
             ->find()
             ->fetch();
         
