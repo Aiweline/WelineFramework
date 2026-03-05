@@ -34,7 +34,7 @@ class Generate extends FrontendController
 
             $recordModel = ObjectManager::getInstance(FontRecord::class);
             $record = $recordModel->select()
-                                 ->where(FontRecord::fields_ID, $recordId)
+                                 ->where(FontRecord::schema_fields_ID, $recordId)
                                  ->limit(1)
                                  ->find()
                                  ->fetch();
