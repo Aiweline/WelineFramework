@@ -56,11 +56,11 @@ class BackupService
             
             // 保存备份记录
             $this->backupModel->setData([
-                MigrationBackup::fields_MIGRATION_ID => $migrationId,
-                MigrationBackup::fields_TABLE_NAME => $tableName,
-                MigrationBackup::fields_BACKUP_DATA => json_encode($data, JSON_UNESCAPED_UNICODE),
-                MigrationBackup::fields_BACKUP_TYPE => 'table',
-                MigrationBackup::fields_CREATED_AT => date('Y-m-d H:i:s')
+                MigrationBackup::schema_fields_MIGRATION_ID => $migrationId,
+                MigrationBackup::schema_fields_TABLE_NAME => $tableName,
+                MigrationBackup::schema_fields_BACKUP_DATA => json_encode($data, JSON_UNESCAPED_UNICODE),
+                MigrationBackup::schema_fields_BACKUP_TYPE => 'table',
+                MigrationBackup::schema_fields_CREATED_AT => date('Y-m-d H:i:s')
             ]);
             $this->backupModel->save();
             
@@ -100,11 +100,11 @@ class BackupService
             
             // 保存备份记录
             $this->backupModel->setData([
-                MigrationBackup::fields_MIGRATION_ID => $migrationId,
-                MigrationBackup::fields_TABLE_NAME => $tableName,
-                MigrationBackup::fields_BACKUP_DATA => json_encode($data, JSON_UNESCAPED_UNICODE),
-                MigrationBackup::fields_BACKUP_TYPE => 'column',
-                MigrationBackup::fields_CREATED_AT => date('Y-m-d H:i:s')
+                MigrationBackup::schema_fields_MIGRATION_ID => $migrationId,
+                MigrationBackup::schema_fields_TABLE_NAME => $tableName,
+                MigrationBackup::schema_fields_BACKUP_DATA => json_encode($data, JSON_UNESCAPED_UNICODE),
+                MigrationBackup::schema_fields_BACKUP_TYPE => 'column',
+                MigrationBackup::schema_fields_CREATED_AT => date('Y-m-d H:i:s')
             ]);
             $this->backupModel->save();
             
@@ -138,7 +138,7 @@ class BackupService
                 return true;
             }
             
-            $data = json_decode($backup->getData(MigrationBackup::fields_BACKUP_DATA), true);
+            $data = json_decode($backup->getData(MigrationBackup::schema_fields_BACKUP_DATA), true);
             if (empty($data)) {
                 $this->printing->warning(__("表 %{1} 的备份数据为空", $tableName));
                 return true;
@@ -185,7 +185,7 @@ class BackupService
                 return true;
             }
             
-            $data = json_decode($backup->getData(MigrationBackup::fields_BACKUP_DATA), true);
+            $data = json_decode($backup->getData(MigrationBackup::schema_fields_BACKUP_DATA), true);
             if (empty($data)) {
                 $this->printing->warning(__("表 %{1} 列 %{2} 的备份数据为空", [$tableName, $columnName]));
                 return true;
@@ -221,9 +221,9 @@ class BackupService
     private function getBackupData(int $migrationId, string $tableName, string $backupType): ?MigrationBackup
     {
         $items = $this->backupModel->reset()
-            ->where(MigrationBackup::fields_MIGRATION_ID, $migrationId)
-            ->where(MigrationBackup::fields_TABLE_NAME, $tableName)
-            ->where(MigrationBackup::fields_BACKUP_TYPE, $backupType)
+            ->where(MigrationBackup::schema_fields_MIGRATION_ID, $migrationId)
+            ->where(MigrationBackup::schema_fields_TABLE_NAME, $tableName)
+            ->where(MigrationBackup::schema_fields_BACKUP_TYPE, $backupType)
             ->limit(1)
             ->select()
             ->fetch()
@@ -241,7 +241,7 @@ class BackupService
     {
         try {
             $backups = $this->backupModel->reset()
-                ->where(MigrationBackup::fields_MIGRATION_ID, $migrationId)
+                ->where(MigrationBackup::schema_fields_MIGRATION_ID, $migrationId)
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -274,16 +274,16 @@ class BackupService
                 throw new \Exception(__("备份记录不存在: %{1}", $backupId));
             }
 
-            $tableName  = $backup->getData(MigrationBackup::fields_TABLE_NAME);
-            $backupType = $backup->getData(MigrationBackup::fields_BACKUP_TYPE);
-            $migrationId = (int) $backup->getData(MigrationBackup::fields_MIGRATION_ID);
+            $tableName  = $backup->getData(MigrationBackup::schema_fields_TABLE_NAME);
+            $backupType = $backup->getData(MigrationBackup::schema_fields_BACKUP_TYPE);
+            $migrationId = (int) $backup->getData(MigrationBackup::schema_fields_MIGRATION_ID);
 
             if ($backupType === MigrationBackup::TYPE_TABLE) {
                 return $this->restoreTableData($tableName, $migrationId);
             }
 
             if ($backupType === MigrationBackup::TYPE_COLUMN) {
-                $data = json_decode($backup->getData(MigrationBackup::fields_BACKUP_DATA), true);
+                $data = json_decode($backup->getData(MigrationBackup::schema_fields_BACKUP_DATA), true);
                 if (!empty($data) && is_array($data)) {
                     $firstRow = reset($data);
                     $columns  = array_keys($firstRow);
@@ -324,7 +324,7 @@ class BackupService
     public function getBackupStats(int $migrationId): array
     {
         $backups = $this->backupModel->reset()
-            ->where(MigrationBackup::fields_MIGRATION_ID, $migrationId)
+            ->where(MigrationBackup::schema_fields_MIGRATION_ID, $migrationId)
             ->select()
             ->fetch()
             ->getItems();
@@ -338,7 +338,7 @@ class BackupService
         ];
         
         foreach ($backups as $backup) {
-            $backupType = $backup->getData(MigrationBackup::fields_BACKUP_TYPE);
+            $backupType = $backup->getData(MigrationBackup::schema_fields_BACKUP_TYPE);
             switch ($backupType) {
                 case MigrationBackup::TYPE_TABLE:
                     $stats['tables']++;
@@ -354,7 +354,7 @@ class BackupService
                     break;
             }
             
-            $data = json_decode($backup->getData(MigrationBackup::fields_BACKUP_DATA), true);
+            $data = json_decode($backup->getData(MigrationBackup::schema_fields_BACKUP_DATA), true);
             if (is_array($data)) {
                 $stats['total_records'] += count($data);
             }
@@ -393,11 +393,11 @@ class BackupService
             
             // 保存备份记录
             $this->backupModel->reset()->setData([
-                MigrationBackup::fields_MIGRATION_ID => $migrationId,
-                MigrationBackup::fields_TABLE_NAME => $tableName,
-                MigrationBackup::fields_BACKUP_DATA => $ddl,
-                MigrationBackup::fields_BACKUP_TYPE => MigrationBackup::TYPE_STRUCTURE,
-                MigrationBackup::fields_CREATED_AT => date('Y-m-d H:i:s')
+                MigrationBackup::schema_fields_MIGRATION_ID => $migrationId,
+                MigrationBackup::schema_fields_TABLE_NAME => $tableName,
+                MigrationBackup::schema_fields_BACKUP_DATA => $ddl,
+                MigrationBackup::schema_fields_BACKUP_TYPE => MigrationBackup::TYPE_STRUCTURE,
+                MigrationBackup::schema_fields_CREATED_AT => date('Y-m-d H:i:s')
             ])->save();
             
             $this->printing->info(__("表 %{1} 结构备份完成", $tableName));
@@ -430,7 +430,7 @@ class BackupService
                 return false;
             }
             
-            $ddl = $backup->getData(MigrationBackup::fields_BACKUP_DATA);
+            $ddl = $backup->getData(MigrationBackup::schema_fields_BACKUP_DATA);
             if (empty($ddl)) {
                 $this->printing->warning(__("表 %{1} 的结构备份为空", $tableName));
                 return false;
@@ -521,11 +521,11 @@ class BackupService
     private function saveBackupChunk(string $tableName, array $chunk, int $migrationId, int $chunkIndex): void
     {
         $this->backupModel->reset()->setData([
-            MigrationBackup::fields_MIGRATION_ID => $migrationId,
-            MigrationBackup::fields_TABLE_NAME => "{$tableName}:chunk:{$chunkIndex}",
-            MigrationBackup::fields_BACKUP_DATA => json_encode($chunk, JSON_UNESCAPED_UNICODE),
-            MigrationBackup::fields_BACKUP_TYPE => MigrationBackup::TYPE_CHUNK,
-            MigrationBackup::fields_CREATED_AT => date('Y-m-d H:i:s')
+            MigrationBackup::schema_fields_MIGRATION_ID => $migrationId,
+            MigrationBackup::schema_fields_TABLE_NAME => "{$tableName}:chunk:{$chunkIndex}",
+            MigrationBackup::schema_fields_BACKUP_DATA => json_encode($chunk, JSON_UNESCAPED_UNICODE),
+            MigrationBackup::schema_fields_BACKUP_TYPE => MigrationBackup::TYPE_CHUNK,
+            MigrationBackup::schema_fields_CREATED_AT => date('Y-m-d H:i:s')
         ])->save();
     }
     
@@ -544,10 +544,10 @@ class BackupService
             
             // 获取所有分块备份
             $backups = $this->backupModel->reset()
-                ->where(MigrationBackup::fields_MIGRATION_ID, $migrationId)
-                ->where(MigrationBackup::fields_TABLE_NAME, "{$tableName}:chunk:%", 'LIKE')
-                ->where(MigrationBackup::fields_BACKUP_TYPE, MigrationBackup::TYPE_CHUNK)
-                ->order(MigrationBackup::fields_TABLE_NAME, 'ASC')
+                ->where(MigrationBackup::schema_fields_MIGRATION_ID, $migrationId)
+                ->where(MigrationBackup::schema_fields_TABLE_NAME, "{$tableName}:chunk:%", 'LIKE')
+                ->where(MigrationBackup::schema_fields_BACKUP_TYPE, MigrationBackup::TYPE_CHUNK)
+                ->order(MigrationBackup::schema_fields_TABLE_NAME, 'ASC')
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -565,7 +565,7 @@ class BackupService
             
             $totalRows = 0;
             foreach ($backups as $backup) {
-                $data = json_decode($backup->getData(MigrationBackup::fields_BACKUP_DATA), true);
+                $data = json_decode($backup->getData(MigrationBackup::schema_fields_BACKUP_DATA), true);
                 if (empty($data)) {
                     continue;
                 }

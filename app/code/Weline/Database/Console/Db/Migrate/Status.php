@@ -69,8 +69,8 @@ class Status implements CommandInterface
             if (!empty($installedMigrations)) {
                 $this->printing->printing(__("=== 已安装的迁移 ==="));
                 foreach ($installedMigrations as $migration) {
-                    $status = $this->getStatusText($migration->getData(Migration::fields_STATUS));
-                    $this->printing->printing(__("✓ %{1} - %{2}", [$migration->getData(Migration::fields_FILE), $status]));
+                    $status = $this->getStatusText($migration->getData(Migration::schema_fields_STATUS));
+                    $this->printing->printing(__("✓ %{1} - %{2}", [$migration->getData(Migration::schema_fields_FILE), $status]));
                 }
                 $this->printing->printing('');
             }
