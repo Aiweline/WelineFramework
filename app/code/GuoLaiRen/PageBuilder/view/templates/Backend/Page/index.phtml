@@ -742,19 +742,38 @@
                                                 <i class="mdi mdi-plus"></i> <?= __('快速新建站点') ?>
                                             </button>
                                         </div>
-                                        <!-- 快速新建站点表单 -->
+                                        <!-- 快速新建站点表单：从域名池选择域名（与 Website 建站逻辑一致） -->
                                         <div id="quickWebsiteForm" class="d-none mt-2 p-2 bg-body-secondary rounded">
                                             <div class="mb-2">
+                                                <label class="form-label small mb-1"><i class="mdi mdi-domain me-1"></i><?= __('从域名池选择域名') ?> <span class="text-warning">*</span></label>
+                                                <w:websites:domain:select
+                                                    id="quick_site_domain_select"
+                                                    name="quick_site_domain"
+                                                    value="''"
+                                                    display="'<?= addslashes(__('点击选择域名')) ?>'"
+                                                    class="w-100"
+                                                    site-ready-only="true"
+                                                    value-type="domain"
+                                                    auto-fill-name="newWebsiteName"
+                                                    auto-fill-code="newWebsiteCode"
+                                                    auto-fill-url="newWebsiteUrl"
+                                                />
+                                                <div class="form-text small"><?= __('仅显示可建站的域名池域名，选择后将自动填充下方信息') ?></div>
+                                            </div>
+                                            <div class="mb-2">
+                                                <label class="form-label small mb-1"><?= __('站点名称') ?></label>
                                                 <input type="text" class="form-control form-control-sm" id="newWebsiteName" 
-                                                       placeholder="<?= __('站点名称') ?>">
+                                                       placeholder="<?= __('由域名自动生成，可修改') ?>">
                                             </div>
                                             <div class="mb-2">
+                                                <label class="form-label small mb-1"><?= __('站点代码') ?></label>
                                                 <input type="text" class="form-control form-control-sm" id="newWebsiteCode" 
-                                                       placeholder="<?= __('站点代码（如：my-site）') ?>">
+                                                       placeholder="<?= __('如：my_site，由域名自动生成') ?>">
                                             </div>
                                             <div class="mb-2">
+                                                <label class="form-label small mb-1"><?= __('站点URL') ?></label>
                                                 <input type="text" class="form-control form-control-sm" id="newWebsiteUrl" 
-                                                       placeholder="<?= __('站点URL（如：https://example.com）') ?>">
+                                                       placeholder="<?= __('如：https://www.example.com') ?>">
                                             </div>
                                             <div class="d-flex gap-1">
                                                 <button type="button" class="btn btn-success btn-sm flex-grow-1" onclick="createQuickWebsite()">
@@ -1492,16 +1511,11 @@ document.addEventListener('DOMContentLoaded', function() {
         button.disabled = true;
         button.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i> <?= __("删除中...") ?>';
         
-        fetch('<?= $this->getBackendUrl("*/backend/page/deleteSite") ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({ id: pageId })
-        })
-        .then(response => response.json())
-        .then(data => {
+        var url = '<?= $this->getBackendUrl("*/backend/page/deleteSite") ?>';
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ id: pageId }) };
+        var req = window.Weline.Api.request(url, opts);
+        req.then(function(res) {
+            var data = (res && res.data) || res;
             if (data.success) {
                 showToast('success', '<?= __("删除成功") ?>', data.message || ('<?= __("站点") ?> "' + pageName + '" <?= __("已删除") ?>'));
                 // 刷新页面
@@ -1603,9 +1617,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // 加载模板列表
     function loadTemplates() {
         const container = document.getElementById('templateSelector');
-        fetch('<?= $this->getBackendUrl("*/backend/page/getStyles") ?>')
-            .then(response => response.json())
-            .then(data => {
+        var url = '<?= $this->getBackendUrl("*/backend/page/getStyles") ?>';
+        var req = window.Weline.Api.get(url, { silent: true });
+        req.then(function(res) {
+            var data = (res && res.data) || res;
                 if (data.success && data.data && data.data.length > 0) {
                     globalUploadUrl = data.upload_url || '';
                     let html = '';
@@ -1746,12 +1761,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     formData.append('style_code', task.code);
                     formData.append('image_data', imageData);
                     
-                    const response = await fetch(globalUploadUrl, {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    const result = await response.json();
+                    var opts = { method: 'POST', body: formData };
+                    var res = await window.Weline.Api.request(globalUploadUrl, opts);
+                    const result = (res && res.data) || res;
                     
                     if (result.success && result.preview_url) {
                         // 更新预览图显示
@@ -1804,12 +1816,16 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('quickWebsiteForm').classList.remove('d-none');
     };
     
-    // 隐藏快速新建站点表单
+    // 隐藏快速新建站点表单，并清空域名池选择器
     window.hideQuickWebsiteForm = function() {
         document.getElementById('quickWebsiteForm').classList.add('d-none');
         document.getElementById('newWebsiteName').value = '';
         document.getElementById('newWebsiteCode').value = '';
         document.getElementById('newWebsiteUrl').value = '';
+        var quickDomainVal = document.getElementById('quick_site_domain_select_value');
+        var quickDomainDisp = document.getElementById('quick_site_domain_select_display');
+        if (quickDomainVal) { quickDomainVal.value = ''; quickDomainVal.removeAttribute('data-domain'); quickDomainVal.removeAttribute('data-poolid'); }
+        if (quickDomainDisp) quickDomainDisp.textContent = '<?= addslashes(__('点击选择域名')) ?>';
     };
     
     // 创建快速站点
@@ -1819,7 +1835,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const url = document.getElementById('newWebsiteUrl').value.trim();
         
         if (!name || !code || !url) {
-            BackendToast.warning('<?= __("请填写完整的站点信息") ?>');
+            BackendToast.warning('<?= __("请先从域名池选择域名，或填写完整的站点名称、代码与URL") ?>');
             return;
         }
         
@@ -1830,12 +1846,10 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.append('url', url);
         formData.append('default_timezone', 'Asia/Shanghai');
         
-        fetch('<?= $this->getBackendUrl("websites/admin/website/quickSave") ?>', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
+        var apiUrl = '<?= $this->getBackendUrl("websites/admin/website/quickSave") ?>';
+        var req = window.Weline.Api.request(apiUrl, { method: 'POST', body: formData });
+        req.then(function(res) {
+            var data = (res && res.data) || res;
             if (data.success) {
                 // 添加新站点到列表
                 const selector = document.getElementById('websiteSelector');
@@ -2013,12 +2027,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         creationLog.innerHTML = '<div class="text-muted"><?= __("开始创建...") ?></div>';
         
-        fetch('<?= $this->getBackendUrl("*/backend/page/quickSite") ?>', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
+        var url = '<?= $this->getBackendUrl("*/backend/page/quickSite") ?>';
+        var req = window.Weline.Api.request(url, { method: 'POST', body: formData });
+        req.then(function(res) {
+            var data = (res && res.data) || res;
             if (data.success) {
                 progressBar.style.width = '100%';
                 progressBar.textContent = '100%';

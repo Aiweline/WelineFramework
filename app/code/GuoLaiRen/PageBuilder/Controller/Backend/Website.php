@@ -55,7 +55,7 @@ class Website extends BackendController
                     // 先删除该站点之前的归属关系（一个站点只能绑定一个用户）
                     $cleaner = clone $this->websiteUserModel;
                     $cleaner->clear()
-                        ->where(WebsiteUserModel::fields_WEBSITE_ID, $websiteId)
+                        ->where(WebsiteUserModel::schema_fields_WEBSITE_ID, $websiteId)
                         ->delete()
                         ->fetch();
 
@@ -63,9 +63,9 @@ class Website extends BackendController
                     if ($backendUserId > 0) {
                         $newMapping = clone $this->websiteUserModel;
                         $newMapping->clear()
-                            ->setData(WebsiteUserModel::fields_WEBSITE_ID, $websiteId)
-                            ->setData(WebsiteUserModel::fields_BACKEND_USER_ID, $backendUserId)
-                            ->setData(WebsiteUserModel::fields_IS_OWNER, 0)
+                            ->setData(WebsiteUserModel::schema_fields_WEBSITE_ID, $websiteId)
+                            ->setData(WebsiteUserModel::schema_fields_BACKEND_USER_ID, $backendUserId)
+                            ->setData(WebsiteUserModel::schema_fields_IS_OWNER, 0)
                             ->save(true);
                     }
                 }
@@ -77,7 +77,7 @@ class Website extends BackendController
         // 获取所有站点（拥有站点分配权限的用户可以看到所有站点）
         $websiteCollection = clone $this->websiteModel;
         $websites = $websiteCollection->clearQuery()
-            ->order(WebsiteModel::fields_ID, 'ASC')
+            ->order(WebsiteModel::schema_fields_ID, 'ASC')
             ->select()
             ->fetchArray();
 
@@ -88,12 +88,12 @@ class Website extends BackendController
                 $websiteId = (int)($website['website_id'] ?? 0);
                 $mapping = clone $this->websiteUserModel;
                 $mapping->clear()
-                    ->where(WebsiteUserModel::fields_WEBSITE_ID, $websiteId)
+                    ->where(WebsiteUserModel::schema_fields_WEBSITE_ID, $websiteId)
                     ->find()
                     ->fetch();
 
                 if ($mapping->getId()) {
-                    $assignedMap[$websiteId] = (int)$mapping->getData(WebsiteUserModel::fields_BACKEND_USER_ID);
+                    $assignedMap[$websiteId] = (int)$mapping->getData(WebsiteUserModel::schema_fields_BACKEND_USER_ID);
                 }
             }
         }
@@ -101,9 +101,9 @@ class Website extends BackendController
         // 获取所有后台用户（用于下拉选择）
         $backendUserCollection = clone $this->backendUserModel;
         $backendUsers = $backendUserCollection->clear()
-            ->where(BackendUser::fields_is_deleted, 0)
-            ->where(BackendUser::fields_is_enabled, 1)
-            ->order(BackendUser::fields_ID, 'ASC')
+            ->where(BackendUser::schema_fields_is_deleted, 0)
+            ->where(BackendUser::schema_fields_is_enabled, 1)
+            ->order(BackendUser::schema_fields_ID, 'ASC')
             ->select()
             ->fetchArray();
 

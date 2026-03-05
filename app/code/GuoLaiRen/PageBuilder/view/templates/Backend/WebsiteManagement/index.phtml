@@ -328,27 +328,10 @@ $search = $this->getData('search') ?: '';
         var ajaxUrl = searchUrl + (params.toString() ? '?' + params.toString() : '');
         
         // 发送 AJAX 请求
-        fetch(ajaxUrl, {
-            method: 'GET',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        })
-        .then(function(response) {
-            if (!response.ok) {
-                throw new Error('HTTP error! status: ' + response.status);
-            }
-            return response.text();
-        })
-        .then(function(text) {
-            try {
-                return JSON.parse(text);
-            } catch (e) {
-                console.error('JSON parse error:', e, text);
-                throw new Error('<?= __("服务器返回的不是有效的JSON数据") ?>');
-            }
-        })
-        .then(function(data) {
+        var opts = { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' }, silent: true };
+        var req = window.Weline.Api.request(ajaxUrl, opts);
+        req.then(function(res) {
+            var data = (res && res.data) !== undefined ? res.data : res;
             if (data.success) {
                 // 更新表格内容
                 tableContainer.innerHTML = data.html;

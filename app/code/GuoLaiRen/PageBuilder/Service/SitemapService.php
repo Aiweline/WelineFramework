@@ -11,7 +11,6 @@ namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Websites\Model\Website;
 
 /**
  * Sitemap 生成服务
@@ -21,17 +20,15 @@ use Weline\Websites\Model\Website;
 class SitemapService
 {
     private Page $pageModel;
-    private Website $websiteModel;
-    
+
     /**
      * Sitemap 存储目录（相对于项目根目录）
      */
     private const SITEMAP_DIR = 'pub/sitemaps';
-    
+
     public function __construct()
     {
         $this->pageModel = ObjectManager::getInstance(Page::class);
-        $this->websiteModel = ObjectManager::getInstance(Website::class);
     }
     
     /**
@@ -42,10 +39,8 @@ class SitemapService
      */
     public function generateForWebsite(int $websiteId): ?string
     {
-        $website = clone $this->websiteModel;
-        $website->load($websiteId);
-        
-        if (!$website->getId()) {
+        $website = w_query('websites', 'getWebsiteById', ['website_id' => $websiteId]);
+        if ($website === null) {
             return null;
         }
         
@@ -56,11 +51,11 @@ class SitemapService
             return null;
         }
         
-        // 生成 Sitemap XML 内容
+        // 生成 Sitemap XML 内容（$website 为数组）
         $xml = $this->buildSitemapXml($website, $pages);
         
         // 确保目录存在
-        $websiteCode = $website->getCode() ?: ('website_' . $websiteId);
+        $websiteCode = ($website['code'] ?? '') ?: ('website_' . $websiteId);
         $dir = BP . DS . self::SITEMAP_DIR . DS . $websiteCode;
         if (!is_dir($dir)) {
             mkdir($dir, 0755, true);
@@ -87,15 +82,12 @@ class SitemapService
     public function generateForAllWebsites(): array
     {
         $sitemapUrls = [];
-        
-        // 获取所有站点
-        $websites = $this->websiteModel->reset()
-            ->select()
-            ->fetch()
-            ->getItems();
-        
+
+        // 获取所有站点（通过查询器，避免跨模块直接调用）
+        $websites = w_query('websites', 'getWebsiteList', []);
+
         foreach ($websites as $website) {
-            $websiteId = (int)$website->getId();
+            $websiteId = (int)($website['website_id'] ?? 0);
             $url = $this->generateForWebsite($websiteId);
             if ($url !== null) {
                 $sitemapUrls[] = $url;
@@ -114,10 +106,10 @@ class SitemapService
     private function getPublishedPages(int $websiteId): array
     {
         return $this->pageModel->reset()
-            ->where(Page::fields_WEBSITE_ID, $websiteId)
-            ->where(Page::fields_STATUS, Page::STATUS_PUBLISHED)
-            ->order(Page::fields_TYPE, 'ASC')
-            ->order(Page::fields_UPDATE_TIME, 'DESC')
+            ->where(Page::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(Page::schema_fields_STATUS, Page::STATUS_PUBLISHED)
+            ->order(Page::schema_fields_TYPE, 'ASC')
+            ->order(Page::schema_fields_UPDATE_TIME, 'DESC')
             ->select()
             ->fetch()
             ->getItems();
@@ -125,22 +117,22 @@ class SitemapService
     
     /**
      * 构建 Sitemap XML 内容
-     * 
-     * @param Website $website 站点对象
+     *
+     * @param array $website 站点信息（来自 websites 查询器）
      * @param array $pages 页面列表
      * @return string XML 内容
      */
-    private function buildSitemapXml(Website $website, array $pages): string
+    private function buildSitemapXml(array $website, array $pages): string
     {
-        $baseUrl = rtrim($website->getUrl(), '/');
+        $baseUrl = rtrim($website['url'] ?? '', '/');
         
         $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
         $xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
         
         foreach ($pages as $page) {
-            $handle = $page->getData(Page::fields_HANDLE);
-            $pageType = $page->getData(Page::fields_TYPE);
-            $updateTime = $page->getData(Page::fields_UPDATE_TIME);
+            $handle = $page->getData(Page::schema_fields_HANDLE);
+            $pageType = $page->getData(Page::schema_fields_TYPE);
+            $updateTime = $page->getData(Page::schema_fields_UPDATE_TIME);
             
             // 首页特殊处理
             if ($pageType === Page::TYPE_HOME) {
@@ -223,14 +215,12 @@ class SitemapService
      */
     public function getSitemapPath(int $websiteId): ?string
     {
-        $website = clone $this->websiteModel;
-        $website->load($websiteId);
-        
-        if (!$website->getId()) {
+        $website = w_query('websites', 'getWebsiteById', ['website_id' => $websiteId]);
+        if ($website === null) {
             return null;
         }
-        
-        $websiteCode = $website->getCode() ?: ('website_' . $websiteId);
+
+        $websiteCode = ($website['code'] ?? '') ?: ('website_' . $websiteId);
         $filePath = BP . DS . self::SITEMAP_DIR . DS . $websiteCode . DS . 'sitemap.xml';
         
         return file_exists($filePath) ? $filePath : null;
@@ -244,21 +234,19 @@ class SitemapService
      */
     public function getSitemapUrl(int $websiteId): ?string
     {
-        $website = clone $this->websiteModel;
-        $website->load($websiteId);
-        
-        if (!$website->getId()) {
+        $website = w_query('websites', 'getWebsiteById', ['website_id' => $websiteId]);
+        if ($website === null) {
             return null;
         }
-        
-        $websiteCode = $website->getCode() ?: ('website_' . $websiteId);
+
+        $websiteCode = ($website['code'] ?? '') ?: ('website_' . $websiteId);
         $filePath = BP . DS . self::SITEMAP_DIR . DS . $websiteCode . DS . 'sitemap.xml';
         
         if (!file_exists($filePath)) {
             return null;
         }
-        
-        $baseUrl = rtrim($website->getUrl(), '/');
+
+        $baseUrl = rtrim($website['url'] ?? '', '/');
         return $baseUrl . '/sitemaps/' . $websiteCode . '/sitemap.xml';
     }
 }

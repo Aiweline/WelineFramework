@@ -96,9 +96,11 @@ $statusOptions = $this->getData('statusOptions') ?? [];
     transition: all 0.2s ease;
     white-space: nowrap;
     font-size: 0.875rem;
+    line-height: 1.25;
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    box-sizing: border-box;
 }
 .pb-dm-btn-primary {
     background: var(--backend-color-primary, #556ee6);
@@ -121,7 +123,7 @@ $statusOptions = $this->getData('statusOptions') ?? [];
     border: 1px solid var(--backend-color-border-default, #dee2e6);
     color: var(--backend-color-text-primary, #333);
 }
-.pb-dm-btn-sm { padding: 4px 12px; font-size: 0.8rem; }
+.pb-dm-btn-sm { padding: 3px 10px; font-size: 0.8rem; line-height: 1.25; align-self: center; }
 .pb-dm-btn:hover { opacity: 0.88; }
 .pb-dm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .pb-dm-table {
@@ -1139,7 +1141,9 @@ $statusOptions = $this->getData('statusOptions') ?? [];
         Object.keys(data).forEach(function(k) {
             fd.append(k, typeof data[k] === 'object' ? JSON.stringify(data[k]) : data[k]);
         });
-        return fetch(url, { method: 'POST', body: fd }).then(function(r) { return r.json(); });
+        var opts = { method: 'POST', body: fd };
+        var req = window.Weline.Api.request(url, opts);
+        return req.then(function(res) { return (res && res.data) !== undefined ? res.data : res; });
     }
 
     function setBtnLoading(btn, loading, originalHtml) {
@@ -2010,9 +2014,10 @@ $statusOptions = $this->getData('statusOptions') ?? [];
 
         container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--backend-color-text-tertiary);"><i class="mdi mdi-loading mdi-spin"></i> <?= __('加载中...') ?></div>';
 
-        fetch(API.getDnsRecords + '?domain_id=' + currentDnsManageDomainId)
-            .then(function(r) { return r.json(); })
-            .then(function(res) {
+        var url = API.getDnsRecords + '?domain_id=' + currentDnsManageDomainId;
+        var req = window.Weline.Api.get(url, { silent: true });
+        req.then(function(res) {
+                var res = (res && res.data) !== undefined ? res.data : res;
                 if (res.success) {
                     renderDnsRecords(res.data.records || []);
                 } else {
@@ -2451,9 +2456,9 @@ $statusOptions = $this->getData('statusOptions') ?? [];
         select.innerHTML = '<option value=""><?= __('-- 加载中... --') ?></option>';
         if (accountNoDataTip) accountNoDataTip.style.display = 'none';
 
-        fetch(API.getRegistrarAccounts)
-            .then(function(r) { return r.json(); })
-            .then(function(res) {
+        var req = window.Weline.Api.get(API.getRegistrarAccounts, { silent: true });
+        req.then(function(res) {
+                var res = (res && res.data) !== undefined ? res.data : res;
                 var accounts = (res.data && res.data.accounts) ? res.data.accounts : [];
                 if ((res.success || res.code === 200) && accounts.length > 0) {
                     pbDmRegistrarAccounts = accounts;
@@ -2669,9 +2674,9 @@ $statusOptions = $this->getData('statusOptions') ?? [];
         var domainIds = selected.map(function(d) { return d.domain_id; });
         pbDmBatchAddDnsSelectedIds = domainIds;
 
-        fetch(API.refreshServerIp)
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
+        var req = window.Weline.Api.get(API.refreshServerIp, { silent: true });
+        req.then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.code === 200 && data.data && data.data.ip) {
                     pbDmServerIp = data.data.ip;
                 }
@@ -3612,9 +3617,10 @@ $statusOptions = $this->getData('statusOptions') ?? [];
     }
 
     function loadDnsAccountsForBatchSet() {
-        fetch(API.getDnsAccounts, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } };
+        var req = window.Weline.Api.request(API.getDnsAccounts, opts);
+        req.then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success && data.data) {
                     var dnsSelect = document.getElementById('pb-dm-batch-set-dns-account');
                     var cdnSelect = document.getElementById('pb-dm-batch-set-cdn-account');
