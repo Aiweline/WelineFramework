@@ -18,19 +18,29 @@ class TrendingKeywordLog extends Model
 {
     public const schema_table = 'guolairen_blog_trending_keyword_log';
     public const schema_primary_key = 'log_id';
-    public const schema_fields_ID             = 'log_id';
-    public const schema_fields_PROFILE_ID    = 'profile_id';
-    public const schema_fields_KEYWORD       = 'keyword';
-    public const schema_fields_TREND_VALUE   = 'trend_value';
+
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '日志ID')]
+    public const schema_fields_ID = 'log_id';
+    #[Col(type: 'int', nullable: false, default: 0, comment: '画像ID')]
+    public const schema_fields_PROFILE_ID = 'profile_id';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '关键词')]
+    public const schema_fields_KEYWORD = 'keyword';
+    #[Col(type: 'int', nullable: false, default: 0, comment: '当前趋势值')]
+    public const schema_fields_TREND_VALUE = 'trend_value';
     #[Col(type: 'int', nullable: false, default: 0, comment: '对比期趋势值')]
     public const schema_fields_PREVIOUS_VALUE = 'previous_value';
-    public const schema_fields_CHANGE_RATE   = 'change_rate';
+    #[Col(type: 'decimal', length: '10,4', nullable: false, default: 0, comment: '变化率')]
+    public const schema_fields_CHANGE_RATE = 'change_rate';
     #[Col(type: 'varchar', length: 16, nullable: false, default: 'day', comment: '比较类型:day日环比,week周环比')]
     public const schema_fields_COMPARISON_TYPE = 'comparison_type';
-    public const schema_fields_TREND_DATE    = 'trend_date';
-    public const schema_fields_SOURCE        = 'source';
-    public const schema_fields_USED_AT       = 'used_at';
-    public const schema_fields_CREATED_AT    = 'created_at';
+    #[Col(type: 'date', nullable: false, comment: '趋势日期')]
+    public const schema_fields_TREND_DATE = 'trend_date';
+    #[Col(type: 'varchar', length: 64, nullable: true, comment: '数据来源')]
+    public const schema_fields_SOURCE = 'source';
+    #[Col(type: 'datetime', nullable: true, comment: '已使用时间')]
+    public const schema_fields_USED_AT = 'used_at';
+    #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
     public const COMPARISON_DAY = 'day';
     public const COMPARISON_WEEK = 'week';
 }
