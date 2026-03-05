@@ -37,22 +37,22 @@ class Transaction extends BackendController
         $query = $transaction->select();
         
         if ($keyword) {
-            $query->where(PaymentTransaction::fields_TRANSACTION_NO, 'like', "%{$keyword}%")
-                ->orWhere(PaymentTransaction::fields_ORDER_ID, 'like', "%{$keyword}%");
+            $query->where(PaymentTransaction::schema_fields_TRANSACTION_NO, 'like', "%{$keyword}%")
+                ->orWhere(PaymentTransaction::schema_fields_ORDER_ID, 'like', "%{$keyword}%");
         }
         
         if ($status) {
-            $query->where(PaymentTransaction::fields_STATUS, $status);
+            $query->where(PaymentTransaction::schema_fields_STATUS, $status);
         }
         
         if ($methodCode) {
-            $query->where(PaymentTransaction::fields_METHOD_CODE, $methodCode);
+            $query->where(PaymentTransaction::schema_fields_METHOD_CODE, $methodCode);
         }
         
         $total = $query->count();
         $totalPages = (int)ceil($total / $limit);
         
-        $transactions = $query->order(PaymentTransaction::fields_CREATED_AT, 'DESC')
+        $transactions = $query->order(PaymentTransaction::schema_fields_CREATED_AT, 'DESC')
             ->limit($limit, ($page - 1) * $limit)
             ->fetch();
         
@@ -118,7 +118,7 @@ class Transaction extends BackendController
         try {
             /** @var \Weline\Payment\Service\PaymentService $paymentService */
             $paymentService = ObjectManager::getInstance(\Weline\Payment\Service\PaymentService::class);
-            $paymentService->queryPaymentStatus($transaction->getData(PaymentTransaction::fields_TRANSACTION_NO));
+            $paymentService->queryPaymentStatus($transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO));
             
             return $this->success(__('支付状态查询成功'));
         } catch (\Exception $e) {
