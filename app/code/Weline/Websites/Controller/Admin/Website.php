@@ -470,7 +470,7 @@ class Website extends BackendController
             // 检查code是否已存在
             $existingWebsite = clone $this->website;
             $existingWebsite->clear()
-                ->where(\Weline\Websites\Model\Website::fields_CODE, $code)
+                ->where(\Weline\Websites\Model\Website::schema_fields_CODE, $code)
                 ->find()
                 ->fetch();
             
@@ -485,19 +485,19 @@ class Website extends BackendController
             // 使用新的模型实例，确保没有残留数据
             $newWebsite = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
             $newWebsite->clearData()  // 清除所有数据
-                ->setData(\Weline\Websites\Model\Website::fields_NAME, $name)
-                ->setData(\Weline\Websites\Model\Website::fields_CODE, $code)
-                ->setData(\Weline\Websites\Model\Website::fields_URL, rtrim($url, '/'))
-                ->setData(\Weline\Websites\Model\Website::fields_DEFAULT_TIMEZONE, $defaultTimezone);
+                ->setData(\Weline\Websites\Model\Website::schema_fields_NAME, $name)
+                ->setData(\Weline\Websites\Model\Website::schema_fields_CODE, $code)
+                ->setData(\Weline\Websites\Model\Website::schema_fields_URL, rtrim($url, '/'))
+                ->setData(\Weline\Websites\Model\Website::schema_fields_DEFAULT_TIMEZONE, $defaultTimezone);
             
             // 设置业务范围标识
             if (!empty($scope)) {
-                $newWebsite->setData(\Weline\Websites\Model\Website::fields_SCOPE, $scope);
+                $newWebsite->setData(\Weline\Websites\Model\Website::schema_fields_SCOPE, $scope);
             }
             
             // 确保主键字段被清除（防止主键冲突）
-            if ($newWebsite->hasData(\Weline\Websites\Model\Website::fields_ID)) {
-                $newWebsite->unsetData(\Weline\Websites\Model\Website::fields_ID);
+            if ($newWebsite->hasData(\Weline\Websites\Model\Website::schema_fields_ID)) {
+                $newWebsite->unsetData(\Weline\Websites\Model\Website::schema_fields_ID);
             }
             
             $newWebsite->save(true);
@@ -507,10 +507,10 @@ class Website extends BackendController
                 'message' => __('站点创建成功'),
                 'website' => [
                     'website_id' => $newWebsite->getId(),
-                    'name' => $newWebsite->getData(\Weline\Websites\Model\Website::fields_NAME),
-                    'code' => $newWebsite->getData(\Weline\Websites\Model\Website::fields_CODE),
-                    'url' => $newWebsite->getData(\Weline\Websites\Model\Website::fields_URL),
-                    'scope' => $newWebsite->getData(\Weline\Websites\Model\Website::fields_SCOPE) ?? '',
+                    'name' => $newWebsite->getData(\Weline\Websites\Model\Website::schema_fields_NAME),
+                    'code' => $newWebsite->getData(\Weline\Websites\Model\Website::schema_fields_CODE),
+                    'url' => $newWebsite->getData(\Weline\Websites\Model\Website::schema_fields_URL),
+                    'scope' => $newWebsite->getData(\Weline\Websites\Model\Website::schema_fields_SCOPE) ?? '',
                 ],
             ]);
         } catch (\Exception $e) {
@@ -565,8 +565,8 @@ class Website extends BackendController
         try {
             $currencyModel = ObjectManager::getInstance(Currency::class);
             $currencies = $currencyModel->clearQuery()
-                ->where(Currency::fields_STATUS, 1)
-                ->order(Currency::fields_CODE, 'ASC')
+                ->where(Currency::schema_fields_STATUS, 1)
+                ->order(Currency::schema_fields_CODE, 'ASC')
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -596,8 +596,8 @@ class Website extends BackendController
         $localsModel = ObjectManager::getInstance(Locals::class);
         $locales = $localsModel
             ->clearQuery()
-            ->where(Locals::fields_TARGET_CODE, $targetCode)
-            ->where(Locals::fields_IS_ACTIVE, 1)
+            ->where(Locals::schema_fields_TARGET_CODE, $targetCode)
+            ->where(Locals::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetchArray();
         
@@ -607,9 +607,9 @@ class Website extends BackendController
         if (!$locales) {
             $allLocales = $localsModel
                 ->clearQuery()
-                ->where(Locals::fields_IS_INSTALL, 1)
-                ->where(Locals::fields_IS_ACTIVE, 1)
-                ->order(Locals::fields_CODE, 'ASC')
+                ->where(Locals::schema_fields_IS_INSTALL, 1)
+                ->where(Locals::schema_fields_IS_ACTIVE, 1)
+                ->order(Locals::schema_fields_CODE, 'ASC')
                 ->select()
                 ->fetchArray();
             
@@ -762,7 +762,7 @@ class Website extends BackendController
         /** @var WebsiteDomain $model */
         $model = ObjectManager::getInstance(WebsiteDomain::class);
         $model->clearQuery()
-            ->where(WebsiteDomain::fields_WEBSITE_ID, $websiteId)
+            ->where(WebsiteDomain::schema_fields_WEBSITE_ID, $websiteId)
             ->delete()
             ->fetch();
         $isFirst = true;
@@ -798,8 +798,8 @@ class Website extends BackendController
         $rows = $model->getWebsiteDomains($websiteId);
         $lines = [];
         foreach ($rows as $row) {
-            $domain = $row[WebsiteDomain::fields_DOMAIN] ?? '';
-            $subPath = $row[WebsiteDomain::fields_SUB_PATH] ?? '';
+            $domain = $row[WebsiteDomain::schema_fields_DOMAIN] ?? '';
+            $subPath = $row[WebsiteDomain::schema_fields_SUB_PATH] ?? '';
             $lines[] = $domain . $subPath;
         }
         return \implode("\n", $lines);

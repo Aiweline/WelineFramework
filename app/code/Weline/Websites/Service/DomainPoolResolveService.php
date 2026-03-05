@@ -26,12 +26,15 @@ class DomainPoolResolveService
      * 检测单个域名池域名的解析状态
      *
      * @param DomainPool $poolDomain 域名池模型
-     * @return array{resolved: bool, ipv4: string, ipv6: string, is_local: bool, site_ready: bool, error: string}
+     * @return array{resolved: bool, ipv4: string, ipv6: string, is_local: bool, site_ready: bool, error: string, resolve_off_local?: bool}
+     *   resolve_off_local 为 true 时表示：上次指向本站，本次不再指向
      */
     public function checkResolve(DomainPool $poolDomain): array
     {
         $domainName = $poolDomain->getDomain();
         $now = \date('Y-m-d H:i:s');
+
+        $wasLocalBefore = (bool) ($poolDomain->getData(DomainPool::schema_fields_IS_LOCAL_SERVER) ?? false);
 
         $ipv4 = '';
         $ipv6 = '';
@@ -80,7 +83,9 @@ class DomainPoolResolveService
         
         $poolDomain->save();
 
-        return [
+        $resolveOffLocal = $wasLocalBefore && !$isLocal;
+
+        $result = [
             'resolved' => $resolved,
             'ipv4' => $ipv4,
             'ipv6' => $ipv6,
@@ -88,6 +93,10 @@ class DomainPoolResolveService
             'site_ready' => $siteReady,
             'error' => \trim($error, '; '),
         ];
+        if ($resolveOffLocal) {
+            $result['resolve_off_local'] = true;
+        }
+        return $result;
     }
 
     /**

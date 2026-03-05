@@ -9,26 +9,47 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Model;
 
-use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 
+#[Table(comment: 'DNS解析记录表')]
+#[Index(name: 'idx_domain_id', columns: ['domain_id'])]
+#[Index(name: 'idx_record_type', columns: ['record_type'])]
+#[Index(name: 'uk_domain_type_host', columns: ['domain_id', 'record_type', 'host'], type: 'UNIQUE')]
 class DomainDnsRecord extends Model
 {
-    public const fields_ID = 'record_id';
-    public const fields_DOMAIN_ID = 'domain_id';
-    public const fields_RECORD_TYPE = 'record_type';
-    public const fields_HOST = 'host';
-    public const fields_VALUE = 'value';
-    public const fields_TTL = 'ttl';
-    public const fields_PRIORITY = 'priority';
-    public const fields_REMOTE_RECORD_ID = 'remote_record_id';
-    public const fields_IS_LOCAL_IP = 'is_local_ip';
-    public const fields_RESOLVE_STATUS = 'resolve_status';
-    public const fields_SYNCED_AT = 'synced_at';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
+    public const schema_table = 'weline_websites_domain_dns_record';
+    public const schema_primary_key = 'record_id';
+
+
+    #[Col('int', 11, nullable: false, primaryKey: true, autoIncrement: true, comment: '记录ID')]
+    public const schema_fields_ID = 'record_id';
+    #[Col('int', 11, nullable: false, comment: '域名ID')]
+    public const schema_fields_DOMAIN_ID = 'domain_id';
+    #[Col('varchar', 10, nullable: false, default: 'A', comment: '记录类型')]
+    public const schema_fields_RECORD_TYPE = 'record_type';
+    #[Col('varchar', 255, nullable: false, default: '@', comment: '主机记录')]
+    public const schema_fields_HOST = 'host';
+    #[Col('varchar', 500, nullable: false, comment: '记录值')]
+    public const schema_fields_VALUE = 'value';
+    #[Col('int', 11, nullable: true, default: 600, comment: 'TTL秒数')]
+    public const schema_fields_TTL = 'ttl';
+    #[Col('int', 11, nullable: true, default: 0, comment: '优先级(MX/SRV)')]
+    public const schema_fields_PRIORITY = 'priority';
+    #[Col('varchar', 100, nullable: true, default: '', comment: '远程记录ID')]
+    public const schema_fields_REMOTE_RECORD_ID = 'remote_record_id';
+    #[Col('smallint', 1, nullable: true, default: 0, comment: '是否指向本服务器')]
+    public const schema_fields_IS_LOCAL_IP = 'is_local_ip';
+    #[Col('varchar', 20, nullable: true, default: 'pending', comment: '解析状态')]
+    public const schema_fields_RESOLVE_STATUS = 'resolve_status';
+    #[Col('datetime', nullable: true, comment: '同步时间')]
+    public const schema_fields_SYNCED_AT = 'synced_at';
+    #[Col('datetime', nullable: true, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col('datetime', nullable: true, comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
 
     // 记录类型常量
     public const TYPE_A = 'A';
@@ -46,53 +67,6 @@ class DomainDnsRecord extends Model
     public const RESOLVE_ERROR = 'error';
 
     /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $this->install($setup, $context);
-        }
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist()) {
-            return;
-        }
-
-        $setup->createTable('DNS解析记录表')
-            ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 11, 'primary key auto_increment', '记录ID')
-            ->addColumn(self::fields_DOMAIN_ID, TableInterface::column_type_INTEGER, 11, 'not null', '域名ID')
-            ->addColumn(self::fields_RECORD_TYPE, TableInterface::column_type_VARCHAR, 10, "not null default 'A'", '记录类型')
-            ->addColumn(self::fields_HOST, TableInterface::column_type_VARCHAR, 255, "not null default '@'", '主机记录')
-            ->addColumn(self::fields_VALUE, TableInterface::column_type_VARCHAR, 500, 'not null', '记录值')
-            ->addColumn(self::fields_TTL, TableInterface::column_type_INTEGER, 11, 'default 600', 'TTL秒数')
-            ->addColumn(self::fields_PRIORITY, TableInterface::column_type_INTEGER, 11, 'default 0', '优先级(MX/SRV)')
-            ->addColumn(self::fields_REMOTE_RECORD_ID, TableInterface::column_type_VARCHAR, 100, "default ''", '远程记录ID')
-            ->addColumn(self::fields_IS_LOCAL_IP, TableInterface::column_type_SMALLINT, 1, 'default 0', '是否指向本服务器')
-            ->addColumn(self::fields_RESOLVE_STATUS, TableInterface::column_type_VARCHAR, 20, "default 'pending'", '解析状态')
-            ->addColumn(self::fields_SYNCED_AT, TableInterface::column_type_DATETIME, 0, '', '同步时间')
-            ->addColumn(self::fields_CREATED_AT, TableInterface::column_type_DATETIME, 0, '', '创建时间')
-            ->addColumn(self::fields_UPDATED_AT, TableInterface::column_type_DATETIME, 0, '', '更新时间')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_domain_id', self::fields_DOMAIN_ID)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_record_type', self::fields_RECORD_TYPE)
-            ->addIndex(TableInterface::index_type_UNIQUE, 'uk_domain_type_host', [self::fields_DOMAIN_ID, self::fields_RECORD_TYPE, self::fields_HOST])
-            ->create();
-    }
-
-    /**
      * 保存前自动更新时间戳
      */
     public function save_before(): void
@@ -100,10 +74,10 @@ class DomainDnsRecord extends Model
         parent::save_before();
 
         $now = \date('Y-m-d H:i:s');
-        $this->setData(self::fields_UPDATED_AT, $now);
+        $this->setData(self::schema_fields_UPDATED_AT, $now);
 
-        if (!$this->getData(self::fields_ID)) {
-            $this->setData(self::fields_CREATED_AT, $now);
+        if (!$this->getData(self::schema_fields_ID)) {
+            $this->setData(self::schema_fields_CREATED_AT, $now);
         }
     }
 
@@ -111,116 +85,116 @@ class DomainDnsRecord extends Model
 
     public function getRecordId(): int
     {
-        return (int) $this->getData(self::fields_ID);
+        return (int) $this->getData(self::schema_fields_ID);
     }
 
     public function getDomainId(): int
     {
-        return (int) $this->getData(self::fields_DOMAIN_ID);
+        return (int) $this->getData(self::schema_fields_DOMAIN_ID);
     }
 
     public function setDomainId(int $domainId): self
     {
-        $this->setData(self::fields_DOMAIN_ID, $domainId);
+        $this->setData(self::schema_fields_DOMAIN_ID, $domainId);
         return $this;
     }
 
     public function getRecordType(): string
     {
-        return (string) $this->getData(self::fields_RECORD_TYPE);
+        return (string) $this->getData(self::schema_fields_RECORD_TYPE);
     }
 
     public function setRecordType(string $type): self
     {
-        $this->setData(self::fields_RECORD_TYPE, \strtoupper($type));
+        $this->setData(self::schema_fields_RECORD_TYPE, \strtoupper($type));
         return $this;
     }
 
     public function getHost(): string
     {
-        return (string) $this->getData(self::fields_HOST);
+        return (string) $this->getData(self::schema_fields_HOST);
     }
 
     public function setHost(string $host): self
     {
-        $this->setData(self::fields_HOST, $host);
+        $this->setData(self::schema_fields_HOST, $host);
         return $this;
     }
 
     public function getValue(): string
     {
-        return (string) $this->getData(self::fields_VALUE);
+        return (string) $this->getData(self::schema_fields_VALUE);
     }
 
     public function setValue(string $value): self
     {
-        $this->setData(self::fields_VALUE, $value);
+        $this->setData(self::schema_fields_VALUE, $value);
         return $this;
     }
 
     public function getTtl(): int
     {
-        return (int) ($this->getData(self::fields_TTL) ?: 600);
+        return (int) ($this->getData(self::schema_fields_TTL) ?: 600);
     }
 
     public function setTtl(int $ttl): self
     {
-        $this->setData(self::fields_TTL, $ttl);
+        $this->setData(self::schema_fields_TTL, $ttl);
         return $this;
     }
 
     public function getPriority(): int
     {
-        return (int) $this->getData(self::fields_PRIORITY);
+        return (int) $this->getData(self::schema_fields_PRIORITY);
     }
 
     public function setPriority(int $priority): self
     {
-        $this->setData(self::fields_PRIORITY, $priority);
+        $this->setData(self::schema_fields_PRIORITY, $priority);
         return $this;
     }
 
     public function getRemoteRecordId(): string
     {
-        return (string) $this->getData(self::fields_REMOTE_RECORD_ID);
+        return (string) $this->getData(self::schema_fields_REMOTE_RECORD_ID);
     }
 
     public function setRemoteRecordId(string $remoteId): self
     {
-        $this->setData(self::fields_REMOTE_RECORD_ID, $remoteId);
+        $this->setData(self::schema_fields_REMOTE_RECORD_ID, $remoteId);
         return $this;
     }
 
     public function isLocalIp(): bool
     {
-        return (bool) $this->getData(self::fields_IS_LOCAL_IP);
+        return (bool) $this->getData(self::schema_fields_IS_LOCAL_IP);
     }
 
     public function setIsLocalIp(bool $isLocal): self
     {
-        $this->setData(self::fields_IS_LOCAL_IP, $isLocal ? 1 : 0);
+        $this->setData(self::schema_fields_IS_LOCAL_IP, $isLocal ? 1 : 0);
         return $this;
     }
 
     public function getResolveStatus(): string
     {
-        return (string) ($this->getData(self::fields_RESOLVE_STATUS) ?: self::RESOLVE_PENDING);
+        return (string) ($this->getData(self::schema_fields_RESOLVE_STATUS) ?: self::RESOLVE_PENDING);
     }
 
     public function setResolveStatus(string $status): self
     {
-        $this->setData(self::fields_RESOLVE_STATUS, $status);
+        $this->setData(self::schema_fields_RESOLVE_STATUS, $status);
         return $this;
     }
 
     public function getSyncedAt(): string
     {
-        return (string) $this->getData(self::fields_SYNCED_AT);
+        return (string) $this->getData(self::schema_fields_SYNCED_AT);
     }
 
     public function setSyncedAt(string $datetime): self
     {
-        $this->setData(self::fields_SYNCED_AT, $datetime);
+        $this->setData(self::schema_fields_SYNCED_AT, $datetime);
         return $this;
     }
 
@@ -232,9 +206,9 @@ class DomainDnsRecord extends Model
     public function getByDomainId(int $domainId): array
     {
         return $this->clearQuery()
-            ->where(self::fields_DOMAIN_ID, $domainId)
-            ->order(self::fields_RECORD_TYPE, 'ASC')
-            ->order(self::fields_HOST, 'ASC')
+            ->where(self::schema_fields_DOMAIN_ID, $domainId)
+            ->order(self::schema_fields_RECORD_TYPE, 'ASC')
+            ->order(self::schema_fields_HOST, 'ASC')
             ->select()
             ->fetchArray();
     }
@@ -245,9 +219,9 @@ class DomainDnsRecord extends Model
     public function getByDomainAndType(int $domainId, string $type): array
     {
         return $this->clearQuery()
-            ->where(self::fields_DOMAIN_ID, $domainId)
-            ->where(self::fields_RECORD_TYPE, \strtoupper($type))
-            ->order(self::fields_HOST, 'ASC')
+            ->where(self::schema_fields_DOMAIN_ID, $domainId)
+            ->where(self::schema_fields_RECORD_TYPE, \strtoupper($type))
+            ->order(self::schema_fields_HOST, 'ASC')
             ->select()
             ->fetchArray();
     }
@@ -262,7 +236,7 @@ class DomainDnsRecord extends Model
 
         if ($count > 0) {
             $this->clearQuery()
-                ->where(self::fields_DOMAIN_ID, $domainId)
+                ->where(self::schema_fields_DOMAIN_ID, $domainId)
                 ->delete()
                 ->fetch();
         }
@@ -296,9 +270,9 @@ class DomainDnsRecord extends Model
 
             $model = clone $this;
             $model->clearQuery()
-                ->where(self::fields_DOMAIN_ID, $domainId)
-                ->where(self::fields_RECORD_TYPE, $type)
-                ->where(self::fields_HOST, $host)
+                ->where(self::schema_fields_DOMAIN_ID, $domainId)
+                ->where(self::schema_fields_RECORD_TYPE, $type)
+                ->where(self::schema_fields_HOST, $host)
                 ->find()
                 ->fetch();
 
@@ -331,9 +305,9 @@ class DomainDnsRecord extends Model
         $deleted = 0;
         $allRecords = $this->getByDomainId($domainId);
         foreach ($allRecords as $row) {
-            if (!\in_array((int) $row[self::fields_ID], $existingIds, true)) {
+            if (!\in_array((int) $row[self::schema_fields_ID], $existingIds, true)) {
                 $this->clearQuery()
-                    ->where(self::fields_ID, $row[self::fields_ID])
+                    ->where(self::schema_fields_ID, $row[self::schema_fields_ID])
                     ->delete()
                     ->fetch();
                 $deleted++;
@@ -365,3 +339,4 @@ class DomainDnsRecord extends Model
         ];
     }
 }
+
