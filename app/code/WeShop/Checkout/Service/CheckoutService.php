@@ -52,13 +52,13 @@ class CheckoutService
             /** @var OrderItem $orderItem */
             $orderItem = ObjectManager::getInstance(OrderItem::class);
             $orderItem->clearData()
-                ->setData(OrderItem::fields_ORDER_ID, $order->getId())
-                ->setData(OrderItem::fields_PRODUCT_ID, $cartItem['product_id'] ?? 0)
-                ->setData(OrderItem::fields_PRODUCT_NAME, $cartItem['product']['name'] ?? '')
-                ->setData(OrderItem::fields_PRODUCT_SKU, $cartItem['product']['sku'] ?? '')
-                ->setData(OrderItem::fields_QUANTITY, $cartItem['quantity'] ?? 1)
-                ->setData(OrderItem::fields_PRICE, $cartItem['price'] ?? 0)
-                ->setData(OrderItem::fields_TOTAL, ($cartItem['price'] ?? 0) * ($cartItem['quantity'] ?? 1))
+                ->setData(OrderItem::schema_fields_ORDER_ID, $order->getId())
+                ->setData(OrderItem::schema_fields_PRODUCT_ID, $cartItem['product_id'] ?? 0)
+                ->setData(OrderItem::schema_fields_PRODUCT_NAME, $cartItem['product']['name'] ?? '')
+                ->setData(OrderItem::schema_fields_PRODUCT_SKU, $cartItem['product']['sku'] ?? '')
+                ->setData(OrderItem::schema_fields_QUANTITY, $cartItem['quantity'] ?? 1)
+                ->setData(OrderItem::schema_fields_PRICE, $cartItem['price'] ?? 0)
+                ->setData(OrderItem::schema_fields_TOTAL, ($cartItem['price'] ?? 0) * ($cartItem['quantity'] ?? 1))
                 ->save();
         }
         
