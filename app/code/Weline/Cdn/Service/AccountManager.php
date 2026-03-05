@@ -59,21 +59,21 @@ class AccountManager
     {
         $account = $this->getAccountModel()->reset()->load($accountId);
         
-        if (!$account->getData(Account::fields_ACCOUNT_ID)) {
+        if (!$account->getData(Account::schema_fields_ACCOUNT_ID)) {
             throw new \InvalidArgumentException(__('账户不存在'));
         }
 
-        $adapter = $account->getData(Account::fields_ADAPTER);
+        $adapter = $account->getData(Account::schema_fields_ADAPTER);
         
         // 先取消该适配器的所有默认账户
         $this->getAccountModel()->reset()
-            ->where(Account::fields_ADAPTER, $adapter)
-            ->where(Account::fields_IS_DEFAULT, 1)
-            ->update([Account::fields_IS_DEFAULT => 0])
+            ->where(Account::schema_fields_ADAPTER, $adapter)
+            ->where(Account::schema_fields_IS_DEFAULT, 1)
+            ->update([Account::schema_fields_IS_DEFAULT => 0])
             ->fetch();
         
         // 设置新的默认账户
-        $account->setData(Account::fields_IS_DEFAULT, 1)->save();
+        $account->setData(Account::schema_fields_IS_DEFAULT, 1)->save();
     }
 
     /**
@@ -85,9 +85,9 @@ class AccountManager
     public function getDefaultAccount(string $adapter): ?Account
     {
         $account = $this->getAccountModel()->reset()
-            ->where(Account::fields_ADAPTER, $adapter)
-            ->where(Account::fields_IS_DEFAULT, 1)
-            ->where(Account::fields_STATUS, Account::STATUS_ACTIVE)
+            ->where(Account::schema_fields_ADAPTER, $adapter)
+            ->where(Account::schema_fields_IS_DEFAULT, 1)
+            ->where(Account::schema_fields_STATUS, Account::STATUS_ACTIVE)
             ->find()
             ->fetch();
         
@@ -103,7 +103,7 @@ class AccountManager
     public function getAccountDomains(int $accountId): array
     {
         $domains = $this->getDomainModel()->reset()
-            ->where(Domain::fields_ACCOUNT_ID, $accountId)
+            ->where(Domain::schema_fields_ACCOUNT_ID, $accountId)
             ->select()
             ->fetch();
         

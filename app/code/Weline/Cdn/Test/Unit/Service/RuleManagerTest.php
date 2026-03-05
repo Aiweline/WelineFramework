@@ -178,8 +178,8 @@ class RuleManagerTest extends TestCase
 
         $domain = $this->createMock(Domain::class);
         $domain->method('getData')->willReturnMap([
-            [Domain::fields_ADAPTER, 'cloudflare'],
-            [Domain::fields_ZONE_ID, 'zone-123']
+            [Domain::schema_fields_ADAPTER, 'cloudflare'],
+            [Domain::schema_fields_ZONE_ID, 'zone-123']
         ]);
         $domain->method('getCredentialsArray')->willReturn(['api_token' => 'test-token']);
         $domain->method('isInheritDefault')->willReturn(false);
@@ -234,8 +234,8 @@ class RuleManagerTest extends TestCase
 
         $domain = $this->createMock(Domain::class);
         $domain->method('getData')->willReturnMap([
-            [Domain::fields_ADAPTER, 'cloudflare'],
-            [Domain::fields_ZONE_ID, 'zone-123']
+            [Domain::schema_fields_ADAPTER, 'cloudflare'],
+            [Domain::schema_fields_ZONE_ID, 'zone-123']
         ]);
         $domain->method('getRulesOverrideArray')->willReturn([]);
         $domain->method('getCredentialsArray')->willReturn($credentials);
