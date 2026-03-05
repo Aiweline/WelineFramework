@@ -28,7 +28,7 @@ class BackupServiceTest extends TestCore
         parent::tearDown();
         // 清理测试备份数据
         $this->backupModel->reset()
-            ->where(MigrationBackup::fields_MIGRATION_ID, 99999)
+            ->where(MigrationBackup::schema_fields_MIGRATION_ID, 99999)
             ->delete()
             ->fetch();
     }
