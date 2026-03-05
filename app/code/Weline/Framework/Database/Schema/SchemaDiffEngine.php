@@ -31,7 +31,7 @@ final class SchemaDiffEngine
                 $ops[] = new SchemaDiffOp(SchemaDiffOp::KIND_ADD_COLUMN, $tableName, $col, $modelClass);
             } else {
                 $existing = $actualCols[$col->name];
-                if (!$this->columnEquals($col, $existing)) {
+                if (!$this->columnEquals($col, $existing) && !$this->skipTimestampCompatibleModify($col, $existing)) {
                     $ops[] = new SchemaDiffOp(SchemaDiffOp::KIND_MODIFY_COLUMN, $tableName, $col, $modelClass, $existing);
                 }
             }
@@ -136,6 +136,18 @@ final class SchemaDiffEngine
             && (string) ($a->default ?? '') === (string) ($b->default ?? '');
     }
 
+    /** timestamp/datetime/date 间变更易触发 PostgreSQL USING/UPDATE 转换错误，跳过兼容的 MODIFY */
+    private function skipTimestampCompatibleModify(ColumnDefinition $declared, ColumnDefinition $actual): bool
+    {
+        $tsTypes = ['timestamp', 'datetime', 'timestamptz', 'date', 'timestamp with time zone', 'timestamp without time zone'];
+        $declaredNorm = $this->normalizeType($declared->type);
+        $actualType = strtolower($actual->type);
+        if (!in_array($actualType, $tsTypes, true)) {
+            return false;
+        }
+        return $declaredNorm === 'timestamp' || $declaredNorm === 'date';
+    }
+
     private function normalizeType(string $type): string
     {
         $t = strtolower($type);
@@ -146,6 +158,11 @@ final class SchemaDiffEngine
             'smallint' => 'smallint',
             'tinyint' => 'tinyint',
             'mediumint' => 'mediumint',
+            'datetime' => 'timestamp',
+            'timestamptz' => 'timestamp',
+            'date' => 'date',
+            'timestamp with time zone' => 'timestamp',
+            'timestamp without time zone' => 'timestamp',
         ];
         return $map[$t] ?? $t;
     }
