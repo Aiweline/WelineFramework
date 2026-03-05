@@ -68,7 +68,7 @@ class OrderIntegrationTest extends TestCase
         $orderId = $order->getId();
         
         $this->assertNotEmpty($orderId);
-        $this->assertEquals(Order::STATUS_PENDING, $order->getData(Order::fields_STATUS));
+        $this->assertEquals(Order::STATUS_PENDING, $order->getData(Order::schema_fields_STATUS));
         
         // 2. 处理支付
         $paymentData = [
@@ -91,7 +91,7 @@ class OrderIntegrationTest extends TestCase
         
         // 4. 验证订单状态
         $finalOrder = $this->orderService->getOrder($orderId);
-        $this->assertEquals(Order::STATUS_FULFILLED, $finalOrder->getData(Order::fields_STATUS));
+        $this->assertEquals(Order::STATUS_FULFILLED, $finalOrder->getData(Order::schema_fields_STATUS));
     }
     
     /**
