@@ -76,15 +76,11 @@ function saveConfig() {
         data[key] = value;
     }
     
-    fetch('<?= $this->getBackendUrl("customerservice/backend/config/save") ?>', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams(data)
-    })
-    .then(response => response.json())
-    .then(data => {
+    var url = '<?= $this->getBackendUrl("customerservice/backend/config/save") ?>';
+    var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(data) };
+    var req = window.Weline.Api.request(url, opts);
+    req.then(function(res) {
+        var data = (res && res.data) || res;
         if (data.success) {
             alert('<?= __('保存成功') ?>');
         } else {

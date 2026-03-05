@@ -209,14 +209,14 @@ class Chat extends FrontendController
             /** @var ServiceAgent $agentModel */
             $agentModel = ObjectManager::getInstance(ServiceAgent::class);
             $agents = $agentModel->reset()
-                ->where(ServiceAgent::fields_is_active, 1)
+                ->where(ServiceAgent::schema_fields_is_active, 1)
                 ->select()
                 ->fetch()
                 ->getItems();
 
             $hasOnlineAgent = false;
             foreach ($agents as $a) {
-                $lastHb = $a[ServiceAgent::fields_last_heartbeat] ?? null;
+                $lastHb = $a[ServiceAgent::schema_fields_last_heartbeat] ?? null;
                 if ($lastHb && (time() - strtotime($lastHb)) < ServiceAgent::HEARTBEAT_TIMEOUT) {
                     $hasOnlineAgent = true;
                     break;

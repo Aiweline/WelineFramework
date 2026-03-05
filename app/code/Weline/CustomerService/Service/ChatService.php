@@ -50,7 +50,7 @@ class ChatService
 
         // 如果提供了会话令牌，尝试查找现有会话
         if (!empty($sessionToken)) {
-            $session->where(ChatSession::fields_session_token, $sessionToken)
+            $session->where(ChatSession::schema_fields_session_token, $sessionToken)
                 ->find()
                 ->fetch();
             
@@ -62,8 +62,8 @@ class ChatService
         // 如果提供了客户ID，尝试查找该客户的活跃会话
         if ($customerId) {
             $session->reset()
-                ->where(ChatSession::fields_customer_id, $customerId)
-                ->where(ChatSession::fields_status, ChatSession::STATUS_ACTIVE)
+                ->where(ChatSession::schema_fields_customer_id, $customerId)
+                ->where(ChatSession::schema_fields_status, ChatSession::STATUS_ACTIVE)
                 ->find()
                 ->fetch();
             
@@ -79,8 +79,8 @@ class ChatService
             ->setCustomerLocale($customerLocale)
             ->setAgentLocale('zh_Hans_CN') // 默认客服语言
             ->setStatus(ChatSession::STATUS_WAITING)
-            ->setData(ChatSession::fields_created_at, date('Y-m-d H:i:s'))
-            ->setData(ChatSession::fields_updated_at, date('Y-m-d H:i:s'))
+            ->setData(ChatSession::schema_fields_created_at, date('Y-m-d H:i:s'))
+            ->setData(ChatSession::schema_fields_updated_at, date('Y-m-d H:i:s'))
             ->save();
 
         // 尝试分配客服
@@ -102,7 +102,7 @@ class ChatService
         $agent = ObjectManager::getInstance(ServiceAgent::class);
         
         $agents = $agent->reset()
-            ->where(ServiceAgent::fields_is_active, 1)
+            ->where(ServiceAgent::schema_fields_is_active, 1)
             ->select()
             ->fetch()
             ->getItems();
@@ -118,7 +118,7 @@ class ChatService
                 $session->setAgentId($agent->getId())
                     ->setAgentLocale($agent->getLocale())
                     ->setStatus(ChatSession::STATUS_ACTIVE)
-                    ->setData(ChatSession::fields_updated_at, date('Y-m-d H:i:s'))
+                    ->setData(ChatSession::schema_fields_updated_at, date('Y-m-d H:i:s'))
                     ->save();
                 
                 return true;
@@ -140,8 +140,8 @@ class ChatService
         $session = ObjectManager::getInstance(ChatSession::class);
         
         $count = $session->reset()
-            ->where(ChatSession::fields_agent_id, $agentId)
-            ->where(ChatSession::fields_status, ChatSession::STATUS_ACTIVE)
+            ->where(ChatSession::schema_fields_agent_id, $agentId)
+            ->where(ChatSession::schema_fields_status, ChatSession::STATUS_ACTIVE)
             ->count();
         
         return (int)$count;
@@ -198,11 +198,11 @@ class ChatService
             ->setSourceLocale($sourceLocale)
             ->setTargetLocale($targetLocale)
             ->setIsTranslated($translatedContent !== $content)
-            ->setData(ChatMessage::fields_created_at, date('Y-m-d H:i:s'))
+            ->setData(ChatMessage::schema_fields_created_at, date('Y-m-d H:i:s'))
             ->save();
 
         // 更新会话时间
-        $session->setData(ChatSession::fields_updated_at, date('Y-m-d H:i:s'))
+        $session->setData(ChatSession::schema_fields_updated_at, date('Y-m-d H:i:s'))
             ->save();
 
         return $message;
@@ -222,8 +222,8 @@ class ChatService
         $message = ObjectManager::getInstance(ChatMessage::class);
         
         $messages = $message->reset()
-            ->where(ChatMessage::fields_session_id, $sessionId)
-            ->order(ChatMessage::fields_created_at, 'DESC')
+            ->where(ChatMessage::schema_fields_session_id, $sessionId)
+            ->order(ChatMessage::schema_fields_created_at, 'DESC')
             ->limit($limit, $offset)
             ->select()
             ->fetch()
@@ -250,17 +250,17 @@ class ChatService
         $language = ObjectManager::getInstance(CustomerLanguage::class);
 
         if ($customerId) {
-            $language->where(CustomerLanguage::fields_customer_id, $customerId)
+            $language->where(CustomerLanguage::schema_fields_customer_id, $customerId)
                 ->find()
                 ->fetch();
         } elseif ($sessionId) {
             $language->reset()
-                ->where(CustomerLanguage::fields_session_id, $sessionId)
+                ->where(CustomerLanguage::schema_fields_session_id, $sessionId)
                 ->find()
                 ->fetch();
         } elseif ($email) {
             $language->reset()
-                ->where(CustomerLanguage::fields_email, $email)
+                ->where(CustomerLanguage::schema_fields_email, $email)
                 ->find()
                 ->fetch();
         }
@@ -292,17 +292,17 @@ class ChatService
 
         // 查找现有配置
         if ($customerId) {
-            $language->where(CustomerLanguage::fields_customer_id, $customerId)
+            $language->where(CustomerLanguage::schema_fields_customer_id, $customerId)
                 ->find()
                 ->fetch();
         } elseif ($sessionId) {
             $language->reset()
-                ->where(CustomerLanguage::fields_session_id, $sessionId)
+                ->where(CustomerLanguage::schema_fields_session_id, $sessionId)
                 ->find()
                 ->fetch();
         } elseif ($email) {
             $language->reset()
-                ->where(CustomerLanguage::fields_email, $email)
+                ->where(CustomerLanguage::schema_fields_email, $email)
                 ->find()
                 ->fetch();
         }
@@ -312,10 +312,10 @@ class ChatService
             ->setSessionId($sessionId)
             ->setEmail($email)
             ->setTargetLocale($locale)
-            ->setData(CustomerLanguage::fields_updated_at, date('Y-m-d H:i:s'));
+            ->setData(CustomerLanguage::schema_fields_updated_at, date('Y-m-d H:i:s'));
         
         if (!$language->getId()) {
-            $language->setData(CustomerLanguage::fields_created_at, date('Y-m-d H:i:s'));
+            $language->setData(CustomerLanguage::schema_fields_created_at, date('Y-m-d H:i:s'));
         }
         
         $language->save();

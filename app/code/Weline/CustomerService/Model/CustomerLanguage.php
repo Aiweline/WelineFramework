@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
+ * 本文件由 秋枫科技 编写，所有解释权归 weline 所有。
  * 邮箱：aiweline@qq.com
  * 网址：aiweline.com
  * 论坛：https://bbs.aiweline.com
@@ -11,95 +11,80 @@ declare(strict_types=1);
 
 namespace Weline\CustomerService\Model;
 
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 
+#[Table(comment: '客户语言配置表')]
+#[Index(name: 'idx_customer_id', columns: ['customer_id'])]
+#[Index(name: 'idx_session_id', columns: ['session_id'])]
+#[Index(name: 'idx_email', columns: ['email'])]
 class CustomerLanguage extends Model
 {
-    public const table = 'customer_language';
-    public const fields_ID = 'language_id';
-    public const fields_customer_id = 'customer_id';
-    public const fields_session_id = 'session_id';
-    public const fields_email = 'email';
-    public const fields_target_locale = 'target_locale';
-    public const fields_created_at = 'created_at';
-    public const fields_updated_at = 'updated_at';
+
+    public const schema_table = 'customer_language';
+    public const schema_primary_key = 'language_id';
+
+    #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: '语言配置ID')]
+    public const schema_fields_ID = 'language_id';
+    #[Col('int', comment: '客户ID')]
+    public const schema_fields_customer_id = 'customer_id';
+    #[Col('varchar', 255, comment: '会话ID')]
+    public const schema_fields_session_id = 'session_id';
+    #[Col('varchar', 255, comment: '邮箱')]
+    public const schema_fields_email = 'email';
+    #[Col('varchar', 20, nullable: false, default: 'zh_Hans_CN', comment: '目标语言代码')]
+    public const schema_fields_target_locale = 'target_locale';
+    #[Col('datetime', comment: '创建时间')]
+    public const schema_fields_created_at = 'created_at';
+    #[Col('datetime', comment: '更新时间')]
+    public const schema_fields_updated_at = 'updated_at';
 
     public function _init(): void
     {
-        $this->_primary_key = self::fields_ID;
-        $this->_table = self::table;
-    }
-
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑
-    }
-
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('客户语言配置表')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'primary key auto_increment', '语言配置ID')
-                ->addColumn(self::fields_customer_id, TableInterface::column_type_INTEGER, 0, '', '客户ID')
-                ->addColumn(self::fields_session_id, TableInterface::column_type_VARCHAR, 255, '', '会话ID')
-                ->addColumn(self::fields_email, TableInterface::column_type_VARCHAR, 255, '', '邮箱')
-                ->addColumn(self::fields_target_locale, TableInterface::column_type_VARCHAR, 20, 'not null default "zh_Hans_CN"', '目标语言代码')
-                ->addColumn(self::fields_created_at, TableInterface::column_type_DATETIME, 0, '', '创建时间')
-                ->addColumn(self::fields_updated_at, TableInterface::column_type_DATETIME, 0, '', '更新时间')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_customer_id', self::fields_customer_id, '客户ID索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_session_id', self::fields_session_id, '会话ID索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_email', self::fields_email, '邮箱索引')
-                ->create();
-        }
+        $this->_primary_key = self::schema_fields_ID;
+        $this->_table = self::schema_table;
     }
 
     public function getCustomerId(): ?int
     {
-        $id = $this->getData(self::fields_customer_id);
+        $id = $this->getData(self::schema_fields_customer_id);
         return $id ? (int)$id : null;
     }
 
     public function setCustomerId(?int $customerId): static
     {
-        return $this->setData(self::fields_customer_id, $customerId);
+        return $this->setData(self::schema_fields_customer_id, $customerId);
     }
 
     public function getSessionId(): ?string
     {
-        return $this->getData(self::fields_session_id);
+        return $this->getData(self::schema_fields_session_id);
     }
 
     public function setSessionId(?string $sessionId): static
     {
-        return $this->setData(self::fields_session_id, $sessionId);
+        return $this->setData(self::schema_fields_session_id, $sessionId);
     }
 
     public function getEmail(): ?string
     {
-        return $this->getData(self::fields_email);
+        return $this->getData(self::schema_fields_email);
     }
 
     public function setEmail(?string $email): static
     {
-        return $this->setData(self::fields_email, $email);
+        return $this->setData(self::schema_fields_email, $email);
     }
 
     public function getTargetLocale(): string
     {
-        return (string)$this->getData(self::fields_target_locale);
+        return (string)$this->getData(self::schema_fields_target_locale);
     }
 
     public function setTargetLocale(string $targetLocale): static
     {
-        return $this->setData(self::fields_target_locale, $targetLocale);
+        return $this->setData(self::schema_fields_target_locale, $targetLocale);
     }
 }
-
