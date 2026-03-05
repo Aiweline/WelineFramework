@@ -82,7 +82,7 @@ class Chat extends FrontendController
 
         // 获取可用的AI模型
         $models = $this->aiModel->reset()
-            ->where(AiModel::fields_IS_ACTIVE, 1)
+            ->where(AiModel::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetch();
 

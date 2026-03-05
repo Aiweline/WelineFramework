@@ -341,15 +341,15 @@ class AiService
         if ($modelCode) {
             // 优先取已激活模型
             $model = $this->aiModel->reset()
-                ->where(AiModel::fields_MODEL_CODE, $modelCode)
-                ->where(AiModel::fields_IS_ACTIVE, 1)
+                ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
+                ->where(AiModel::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
 
             if (!$model->getId()) {
                 // 若未激活，则放宽激活限制，用于连接测试等场景
                 $model = $this->aiModel->reset()
-                    ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                    ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                     ->find()
                     ->fetch();
             }
@@ -370,8 +370,8 @@ class AiService
         // 4. 如果找不到默认模型，使用任意一个已激活的默认标记模型
         if (!$model || !$model->getId()) {
             $model = $this->aiModel->reset()
-                ->where(AiModel::fields_IS_ACTIVE, 1)
-                ->where(AiModel::fields_IS_DEFAULT, 1)
+                ->where(AiModel::schema_fields_IS_ACTIVE, 1)
+                ->where(AiModel::schema_fields_IS_DEFAULT, 1)
                 ->find()
                 ->fetch();
         }
@@ -402,7 +402,7 @@ class AiService
             // 合并配置：config 的值覆盖 provider_config 的值
             $mergedProviderConfig = array_merge($providerConfig, $config);
             // 更新 provider_config（仅在内存中，不保存到数据库）
-            $model->setData(AiModel::fields_PROVIDER_CONFIG, json_encode($mergedProviderConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+            $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, json_encode($mergedProviderConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
         }
     }
     
@@ -420,12 +420,12 @@ class AiService
         // 检查指定模型
         if ($modelCode) {
             $model = $this->aiModel->reset()
-                ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                 ->find()
                 ->fetch();
             if (!$model->getId()) {
                 $reasons[] = __('指定的模型 "%{1}" 不存在', [$modelCode]);
-            } elseif (!$model->getData(AiModel::fields_IS_ACTIVE)) {
+            } elseif (!$model->getData(AiModel::schema_fields_IS_ACTIVE)) {
                 $reasons[] = __('指定的模型 "%{1}" 未激活', [$modelCode]);
             }
         }
@@ -436,14 +436,14 @@ class AiService
             if (!$defaultConfig) {
                 $reasons[] = __('场景 "%{1}" 未配置默认模型', [$scenarioCode]);
             } else {
-                $modelCode = $defaultConfig->getData(\Weline\Ai\Model\AiDefaultModel::fields_MODEL_CODE);
+                $modelCode = $defaultConfig->getData(\Weline\Ai\Model\AiDefaultModel::schema_fields_MODEL_CODE);
                 $model = $this->aiModel->reset()
-                    ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                    ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                     ->find()
                     ->fetch();
                 if (!$model->getId()) {
                     $reasons[] = __('场景 "%{1}" 的默认模型 "%{2}" 不存在', [$scenarioCode, $modelCode]);
-                } elseif (!$model->getData(AiModel::fields_IS_ACTIVE)) {
+                } elseif (!$model->getData(AiModel::schema_fields_IS_ACTIVE)) {
                     $reasons[] = __('场景 "%{1}" 的默认模型 "%{2}" 未激活', [$scenarioCode, $modelCode]);
                 }
             }
@@ -454,22 +454,22 @@ class AiService
         if (!$globalDefault) {
             $reasons[] = __('未配置全局默认模型');
         } else {
-            $modelCode = $globalDefault->getData(\Weline\Ai\Model\AiDefaultModel::fields_MODEL_CODE);
+            $modelCode = $globalDefault->getData(\Weline\Ai\Model\AiDefaultModel::schema_fields_MODEL_CODE);
             $model = $this->aiModel->reset()
-                ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                 ->find()
                 ->fetch();
             if (!$model->getId()) {
                 $reasons[] = __('全局默认模型 "%{1}" 不存在', [$modelCode]);
-            } elseif (!$model->getData(AiModel::fields_IS_ACTIVE)) {
+            } elseif (!$model->getData(AiModel::schema_fields_IS_ACTIVE)) {
                 $reasons[] = __('全局默认模型 "%{1}" 未激活', [$modelCode]);
             }
         }
         
         // 检查是否有已激活的默认标记模型
         $activeDefaultCount = $this->aiModel->reset()
-            ->where(AiModel::fields_IS_ACTIVE, 1)
-            ->where(AiModel::fields_IS_DEFAULT, 1)
+            ->where(AiModel::schema_fields_IS_ACTIVE, 1)
+            ->where(AiModel::schema_fields_IS_DEFAULT, 1)
             ->count();
         if ($activeDefaultCount == 0) {
             $reasons[] = __('系统中没有已激活的默认模型');
@@ -477,7 +477,7 @@ class AiService
         
         // 检查是否有任何已激活的模型
         $activeModelCount = $this->aiModel->reset()
-            ->where(AiModel::fields_IS_ACTIVE, 1)
+            ->where(AiModel::schema_fields_IS_ACTIVE, 1)
             ->count();
         if ($activeModelCount == 0) {
             $reasons[] = __('系统中没有任何已激活的AI模型');
@@ -586,7 +586,7 @@ class AiService
         $usage = [];
         try {
             // 1. 获取供应商代码
-            $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::fields_MODEL_CODE));
+            $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::schema_fields_MODEL_CODE));
             if (!$providerCode) {
                 throw new Exception('无法确定模型的供应商');
             }
@@ -659,7 +659,7 @@ class AiService
                     ]);
 
                     // 非智能体生成：写入 ai_activity.log
-                    $modelCode = $model->getData(AiModel::fields_MODEL_CODE) ?? '';
+                    $modelCode = $model->getData(AiModel::schema_fields_MODEL_CODE) ?? '';
                     $reasoning = $result['reasoning_content'] ?? '';
                     if ($reasoning !== '') {
                         $line = '[' . date('Y-m-d H:i:s') . '][generate] model=' . $modelCode . ' reasoning=' . (mb_strlen($reasoning) > 800 ? mb_substr($reasoning, 0, 800) . '...' : $reasoning);
@@ -736,7 +736,7 @@ class AiService
         
         try {
             // 1. 获取供应商代码
-            $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::fields_MODEL_CODE));
+            $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::schema_fields_MODEL_CODE));
             if (!$providerCode) {
                 throw new Exception('无法确定模型的供应商');
             }
@@ -754,7 +754,7 @@ class AiService
             $provider = $this->providerFactory->getProvider($model);
 
             // 4.1 包装 callback：流式 chunk 写入 ai_activity.log
-            $modelCode = $model->getData(AiModel::fields_MODEL_CODE) ?? '';
+            $modelCode = $model->getData(AiModel::schema_fields_MODEL_CODE) ?? '';
             $wrappedCallback = function ($chunk) use ($callback, $modelCode) {
                 $line = '[' . date('Y-m-d H:i:s') . '][stream] model=' . $modelCode . ' chunk=' . (is_string($chunk) && mb_strlen($chunk) > 500 ? mb_substr($chunk, 0, 500) . '...' : (is_string($chunk) ? $chunk : json_encode($chunk, JSON_UNESCAPED_UNICODE)));
                 if (mb_strlen($line) > 2000) {
@@ -817,22 +817,22 @@ class AiService
         
         // 注入账户配置
         $modelConfig['api_key'] = $account->getDecryptedApiKey();
-        if ($account->getData(Account::fields_API_SECRET)) {
-            $modelConfig['api_secret'] = $account->getData(Account::fields_API_SECRET);
+        if ($account->getData(Account::schema_fields_API_SECRET)) {
+            $modelConfig['api_secret'] = $account->getData(Account::schema_fields_API_SECRET);
         }
-        if ($account->getData(Account::fields_BASE_URL)) {
-            $modelConfig['base_url'] = $account->getData(Account::fields_BASE_URL);
-            $modelConfig['api_url'] = $account->getData(Account::fields_BASE_URL);
+        if ($account->getData(Account::schema_fields_BASE_URL)) {
+            $modelConfig['base_url'] = $account->getData(Account::schema_fields_BASE_URL);
+            $modelConfig['api_url'] = $account->getData(Account::schema_fields_BASE_URL);
         }
         
         // 注入代理配置
         $proxyConfig = $account->getProxyConfig();
         if (!empty($proxyConfig['enabled'])) {
-            $model->setData(AiModel::fields_PROXY_INFO, json_encode($proxyConfig));
+            $model->setData(AiModel::schema_fields_PROXY_INFO, json_encode($proxyConfig));
         }
         
         // 更新模型配置
-        $model->setData(AiModel::fields_CONFIG, json_encode($modelConfig));
+        $model->setData(AiModel::schema_fields_CONFIG, json_encode($modelConfig));
         
         // 保存账户引用（供后续使用）
         $model->setData('_provider_account', $account);
@@ -939,8 +939,8 @@ class AiService
         // 验证模型代码
         if (isset($params['model_code']) && !empty($params['model_code'])) {
             $model = $this->aiModel->reset()
-                ->where(AiModel::fields_CODE, $params['model_code'])
-                ->where(AiModel::fields_STATUS, 'active')
+                ->where(AiModel::schema_fields_MODEL_CODE, $params['model_code'])
+                ->where(AiModel::schema_fields_STATUS, 'active')
                 ->find()
                 ->fetch();
             
@@ -976,7 +976,7 @@ class AiService
     {
         $modelStats = [];
         $models = $this->aiModel->reset()
-            ->where(AiModel::fields_STATUS, 'active')
+            ->where(AiModel::schema_fields_STATUS, 'active')
             ->select()
             ->fetch();
 
@@ -1115,10 +1115,10 @@ class AiService
         }
 
         // 3. 注入供应商账户配置（base_url、api_key、proxy 等）
-        $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::fields_MODEL_CODE));
+        $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::schema_fields_MODEL_CODE));
         Env::log('ai_agent_debug.log', sprintf(
             '[executeAgent] modelCode=%s, providerCode=%s',
-            $model->getData(AiModel::fields_MODEL_CODE),
+            $model->getData(AiModel::schema_fields_MODEL_CODE),
             $providerCode ?: 'null'
         ), 'DEBUG');
         

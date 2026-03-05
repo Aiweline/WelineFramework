@@ -227,24 +227,24 @@ class AgentScanner
         $relativePath = $this->getRelativePath($agentFile);
 
         $existing = $this->agentModel->reset()
-            ->where(AiAgent::fields_CODE, $code)
+            ->where(AiAgent::schema_fields_CODE, $code)
             ->find()
             ->fetch();
 
         $currentTime = time();
         $data = [
-            AiAgent::fields_CODE => $code,
-            AiAgent::fields_NAME => $agent->getName(),
-            AiAgent::fields_DESCRIPTION => $agent->getDescription(),
-            AiAgent::fields_VERSION => $agent->getVersion(),
-            AiAgent::fields_CLASS_NAME => get_class($agent),
-            AiAgent::fields_FILE_PATH => $relativePath,
-            AiAgent::fields_SCENARIOS => json_encode($agent->getScenarios(), JSON_UNESCAPED_UNICODE),
-            AiAgent::fields_TOOLS_COUNT => count($agent->getTools()),
-            AiAgent::fields_MAX_ITERATIONS => $agent->getMaxIterations(),
-            AiAgent::fields_MODULE => $moduleName,
-            AiAgent::fields_IS_ACTIVE => 1,
-            AiAgent::fields_UPDATED_TIME => $currentTime,
+            AiAgent::schema_fields_CODE => $code,
+            AiAgent::schema_fields_NAME => $agent->getName(),
+            AiAgent::schema_fields_DESCRIPTION => $agent->getDescription(),
+            AiAgent::schema_fields_VERSION => $agent->getVersion(),
+            AiAgent::schema_fields_CLASS_NAME => get_class($agent),
+            AiAgent::schema_fields_FILE_PATH => $relativePath,
+            AiAgent::schema_fields_SCENARIOS => json_encode($agent->getScenarios(), JSON_UNESCAPED_UNICODE),
+            AiAgent::schema_fields_TOOLS_COUNT => count($agent->getTools()),
+            AiAgent::schema_fields_MAX_ITERATIONS => $agent->getMaxIterations(),
+            AiAgent::schema_fields_MODULE => $moduleName,
+            AiAgent::schema_fields_IS_ACTIVE => 1,
+            AiAgent::schema_fields_UPDATED_TIME => $currentTime,
         ];
 
         if ($existing->getId()) {
@@ -255,7 +255,7 @@ class AgentScanner
             $existing->save();
         } else {
             // 新增
-            $data[AiAgent::fields_CREATED_TIME] = $currentTime;
+            $data[AiAgent::schema_fields_CREATED_TIME] = $currentTime;
             $newAgent = new AiAgent();
             $newAgent->setData($data)->save();
         }
@@ -273,8 +273,8 @@ class AgentScanner
         }
 
         $record = $this->agentModel->reset()
-            ->where(AiAgent::fields_CODE, $code)
-            ->where(AiAgent::fields_IS_ACTIVE, 1)
+            ->where(AiAgent::schema_fields_CODE, $code)
+            ->where(AiAgent::schema_fields_IS_ACTIVE, 1)
             ->find()
             ->fetch();
 
@@ -282,13 +282,13 @@ class AgentScanner
             return $this->loadAgentFromCode($code);
         }
 
-        $className = $record->getData(AiAgent::fields_CLASS_NAME);
+        $className = $record->getData(AiAgent::schema_fields_CLASS_NAME);
         if (empty($className)) {
             return $this->loadAgentFromCode($code);
         }
 
         // 加载文件
-        $relativePath = $record->getData(AiAgent::fields_FILE_PATH);
+        $relativePath = $record->getData(AiAgent::schema_fields_FILE_PATH);
         if (!empty($relativePath)) {
             $agentFile = BP . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relativePath);
             if (file_exists($agentFile)) {
@@ -327,7 +327,7 @@ class AgentScanner
     public function getAgentsForScenario(string $scenarioCode): array
     {
         $records = $this->agentModel->reset()
-            ->where(AiAgent::fields_IS_ACTIVE, 1)
+            ->where(AiAgent::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetch();
 
@@ -347,7 +347,7 @@ class AgentScanner
                 continue;
             }
 
-            $scenarios = $record->getData(AiAgent::fields_SCENARIOS);
+            $scenarios = $record->getData(AiAgent::schema_fields_SCENARIOS);
             if (is_string($scenarios)) {
                 $scenarioList = json_decode($scenarios, true) ?: [];
             } else {
@@ -355,7 +355,7 @@ class AgentScanner
             }
 
             if (in_array($scenarioCode, $scenarioList, true)) {
-                $code = $record->getData(AiAgent::fields_CODE);
+                $code = $record->getData(AiAgent::schema_fields_CODE);
                 $agent = $this->getAgent($code);
                 if ($agent) {
                     $agents[$code] = $agent;
@@ -372,7 +372,7 @@ class AgentScanner
     public function getAllActiveAgents(): array
     {
         $records = $this->agentModel->reset()
-            ->where(AiAgent::fields_IS_ACTIVE, 1)
+            ->where(AiAgent::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetch();
 
@@ -391,7 +391,7 @@ class AgentScanner
             if (!is_object($record)) {
                 continue;
             }
-            $code = $record->getData(AiAgent::fields_CODE);
+            $code = $record->getData(AiAgent::schema_fields_CODE);
             $agent = $this->getAgent($code);
             if ($agent) {
                 $agents[$code] = $agent;

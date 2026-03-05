@@ -56,9 +56,9 @@ class I18nIntegration
         $supportedLocales = [];
         foreach ($locales as $locale) {
             $supportedLocales[] = [
-                'locale_code' => $locale->getData(Name::fields_LOCALE_CODE),
-                'display_locale_code' => $locale->getData(Name::fields_DISPLAY_LOCALE_CODE),
-                'display_name' => $locale->getData(Name::fields_DISPLAY_NAME)
+                'locale_code' => $locale->getData(Name::schema_fields_LOCALE_CODE),
+                'display_locale_code' => $locale->getData(Name::schema_fields_DISPLAY_LOCALE_CODE),
+                'display_name' => $locale->getData(Name::schema_fields_DISPLAY_NAME)
             ];
         }
         
@@ -91,7 +91,7 @@ class I18nIntegration
     public function isLocaleSupported(string $localeCode): bool
     {
         $locale = $this->i18nLocaleName->reset()
-            ->where(Name::fields_LOCALE_CODE, $localeCode)
+            ->where(Name::schema_fields_LOCALE_CODE, $localeCode)
             ->find()
             ->fetch();
         
@@ -107,7 +107,7 @@ class I18nIntegration
     public function getLocaleInfo(string $localeCode): ?array
     {
         $locale = $this->i18nLocaleName->reset()
-            ->where(Name::fields_LOCALE_CODE, $localeCode)
+            ->where(Name::schema_fields_LOCALE_CODE, $localeCode)
             ->find()
             ->fetch();
         
@@ -116,9 +116,9 @@ class I18nIntegration
         }
         
         return [
-            'locale_code' => $locale->getData(Name::fields_LOCALE_CODE),
-            'display_locale_code' => $locale->getData(Name::fields_DISPLAY_LOCALE_CODE),
-            'display_name' => $locale->getData(Name::fields_DISPLAY_NAME)
+            'locale_code' => $locale->getData(Name::schema_fields_LOCALE_CODE),
+            'display_locale_code' => $locale->getData(Name::schema_fields_DISPLAY_LOCALE_CODE),
+            'display_name' => $locale->getData(Name::schema_fields_DISPLAY_NAME)
         ];
     }
 

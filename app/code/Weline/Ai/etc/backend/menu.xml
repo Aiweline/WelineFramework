@@ -3,7 +3,7 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     
-    <!-- AI助手主菜单 - 归入应用工具 > AI助手 -->
+    <!-- AI中心主菜单 - 精简后仅保留 AI 管理、场景配置 -->
     <menu source="Weline_Ai::ai" 
           name="ai_main" 
           title="AI 中心" 
@@ -11,250 +11,20 @@
           icon="mdi mdi-robot-outline"
           order="10">
         
-        <!-- ==================== 📊 概览与监控 ==================== -->
-        <menu source="Weline_Ai::ai_overview" 
-              name="ai_overview" 
-              title="概览与监控" 
-              icon="mdi mdi-monitor-dashboard"
-              order="10">
-            
-            <menu source="Weline_Ai::ai_dashboard" 
-                  name="ai_dashboard" 
-                  title="运营概览" 
-                  action="ai/backend/dashboard" 
-                  icon="mdi mdi-view-dashboard-outline"
-                  order="10"/>
-            
-            <menu source="Weline_Ai::ai_business_insights" 
-                  name="ai_business_insights" 
-                  title="商业洞察" 
-                  action="ai/backend/insights" 
-                  icon="mdi mdi-chart-line"
-                  order="20"/>
-        </menu>
-        
-        <!-- ==================== 🤖 模型中心 ==================== -->
-        <menu source="Weline_Ai::ai_model_center" 
-              name="ai_model_center" 
-              title="模型中心" 
-              icon="mdi mdi-cube-outline"
-              order="20">
-            
-            <menu source="Weline_Ai::ai_model_manager" 
-                  name="ai_model_manager" 
-                  title="AI模型列表" 
-                  action="ai/backend/model" 
-                  icon="mdi mdi-robot-outline"
-                  order="10"/>
-            
-            <menu source="Weline_Ai::ai_adapter_manager" 
-                  name="ai_adapter_manager" 
-                  title="场景适配器" 
-                  action="ai/backend/adapter" 
-                  icon="mdi mdi-puzzle-outline"
-                  order="20"/>
-            
-            <menu source="Weline_Ai::ai_default_model" 
-                  name="ai_default_model" 
-                  title="默认模型" 
-                  action="ai/backend/defaultmodel" 
-                  icon="mdi mdi-star-settings-outline"
-                  order="30"/>
-            
-            <menu source="Weline_Ai::ai_model_deployment" 
-                  name="ai_model_deployment" 
-                  title="模型部署" 
-                  action="ai/backend/modeldeployment" 
-                  icon="mdi mdi-rocket-launch-outline"
-                  order="40"/>
-            
-            <menu source="Weline_Ai::ai_model_versioning" 
-                  name="ai_model_versioning" 
-                  title="版本管理" 
-                  action="ai/backend/modelversioning" 
-                  icon="mdi mdi-source-branch"
-                  order="50"/>
-            
-            <menu source="Weline_Ai::ai_model_benchmark" 
-                  name="ai_model_benchmark" 
-                  title="基准测试" 
-                  action="ai/backend/modelbenchmark" 
-                  icon="mdi mdi-speedometer"
-                  order="60"/>
-        </menu>
-        
-        <!-- ==================== 👤 助手管理 ==================== -->
-        <menu source="Weline_Ai::ai_assistant_center" 
-              name="ai_assistant_center" 
-              title="助手管理" 
-              icon="mdi mdi-account-supervisor-circle-outline"
-              order="30">
-            
-            <menu source="Weline_Ai::ai_assistant_manager" 
-                  name="ai_assistant_manager" 
-                  title="助手列表" 
-                  action="ai/backend/assistant" 
-                  icon="mdi mdi-account-supervisor-outline"
-                  order="10"/>
-            
-            <menu source="Weline_Ai::ai_market" 
-                  name="ai_market" 
-                  title="助手市场" 
-                  action="ai/backend/market" 
-                  icon="mdi mdi-store-outline"
-                  order="20"/>
-            
-            <menu source="Weline_Ai::ai_rating_mylist" 
-                  name="ai_rating_mylist" 
-                  title="我的评分" 
-                  action="ai/backend/rating/mylist" 
-                  icon="mdi mdi-star-outline"
-                  order="30"/>
-        </menu>
-        
-        <!-- ==================== 🛠️ 开发与测试 ==================== -->
-        <menu source="Weline_Ai::ai_development" 
-              name="ai_development" 
-              title="开发与测试" 
-              icon="mdi mdi-code-tags"
-              order="40">
-            
-            <menu source="Weline_Ai::ai_developer_tools" 
-                  name="ai_developer_tools" 
-                  title="开发者工具" 
-                  action="ai/backend/developertools" 
-                  icon="mdi mdi-tools"
-                  order="10"/>
-            
-            <menu source="Weline_Ai::ai_api_manager" 
-                  name="ai_api_manager" 
-                  title="API管理" 
-                  action="ai/backend/api" 
-                  icon="mdi mdi-api"
-                  order="20"/>
-            
-            <menu source="Weline_Ai::ai_test_tools" 
-                  name="ai_test_tools" 
-                  title="测试工具" 
-                  action="ai/backend/test" 
-                  icon="mdi mdi-test-tube"
-                  order="30"/>
-            
-            <menu source="Weline_Ai::ai_ab_testing" 
-                  name="ai_ab_testing" 
-                  title="A/B测试" 
-                  action="ai/backend/abtesting" 
-                  icon="mdi mdi-chart-box-outline"
-                  order="40"/>
-        </menu>
-        
-        <!-- ==================== 🔒 内容与安全 ==================== -->
-        <menu source="Weline_Ai::ai_security" 
-              name="ai_security" 
-              title="内容与安全" 
-              icon="mdi mdi-shield-check-outline"
-              order="50">
-            
-            <menu source="Weline_Ai::ai_content_safety" 
-                  name="ai_content_safety" 
-                  title="内容安全" 
-                  action="ai/backend/contentsafety" 
-                  icon="mdi mdi-shield-alert-outline"
-                  order="10"/>
-            
-            <menu source="Weline_Ai::ai_security_scan" 
-                  name="ai_security_scan" 
-                  title="安全扫描" 
-                  action="ai/backend/securityscan" 
-                  icon="mdi mdi-shield-search"
-                  order="20"/>
-        </menu>
-        
-        <!-- ==================== 📈 营销与支持 ==================== -->
-        <menu source="Weline_Ai::ai_marketing" 
-              name="ai_marketing" 
-              title="营销与支持" 
-              icon="mdi mdi-bullhorn-outline"
-              order="60">
-            
-            <menu source="Weline_Ai::ai_marketing_tools" 
-                  name="ai_marketing_tools" 
-                  title="营销工具" 
-                  action="ai/backend/marketingtools" 
-                  icon="mdi mdi-bullhorn-variant-outline"
-                  order="10"/>
-            
-            <menu source="Weline_Ai::ai_customer_support" 
-                  name="ai_customer_support" 
-                  title="客户支持" 
-                  action="ai/backend/customersupport" 
-                  icon="mdi mdi-headset"
-                  order="20"/>
-        </menu>
-        
-        <!-- ==================== ⚙️ 账户与配置 ==================== -->
-        <menu source="Weline_Ai::ai_account" 
-              name="ai_account" 
-              title="账户与配置" 
+        <!-- AI 管理：模型 | 适配器 | 供应商账户 聚合页 -->
+        <menu source="Weline_Ai::ai_manager" 
+              name="ai_manager" 
+              title="AI 管理" 
+              action="ai/backend/manager" 
               icon="mdi mdi-cog-outline"
-              order="70">
-            
-            <menu source="Weline_Ai::ai_user_manager" 
-                  name="ai_user_manager" 
-                  title="用户管理" 
-                  action="ai/backend/user" 
-                  icon="mdi mdi-account-multiple-outline"
-                  order="10"/>
-            
-            <menu source="Weline_Ai::ai_tenant_manager" 
-                  name="ai_tenant_manager" 
-                  title="租户管理" 
-                  action="ai/backend/tenant" 
-                  icon="mdi mdi-office-building-outline"
-                  order="20"/>
-            
-            <menu source="Weline_Ai::ai_provider_account" 
-                  name="ai_provider_account" 
-                  title="供应商账户" 
-                  action="ai/backend/provider" 
-                  icon="mdi mdi-account-key-outline"
-                  order="30"/>
-            
-            <menu source="Weline_Ai::ai_apikey_manager" 
-                  name="ai_apikey_manager" 
-                  title="API密钥" 
-                  action="ai/backend/apikey" 
-                  icon="mdi mdi-key-outline"
-                  order="40"/>
-            
-            <menu source="Weline_Ai::ai_recharge" 
-                  name="ai_recharge" 
-                  title="账户充值" 
-                  action="ai/backend/recharge" 
-                  icon="mdi mdi-cash-plus"
-                  order="50"/>
-        </menu>
+              order="10"/>
         
-        <!-- ==================== 🔌 集成与数据 ==================== -->
-        <menu source="Weline_Ai::ai_integration" 
-              name="ai_integration" 
-              title="集成与数据" 
-              icon="mdi mdi-link-variant"
-              order="80">
-            
-            <menu source="Weline_Ai::ai_third_party_integration" 
-                  name="ai_third_party_integration" 
-                  title="第三方集成" 
-                  action="ai/backend/thirdpartyintegration" 
-                  icon="mdi mdi-connection"
-                  order="10"/>
-            
-            <menu source="Weline_Ai::ai_training_data" 
-                  name="ai_training_data" 
-                  title="训练数据" 
-                  action="ai/backend/trainingdata" 
-                  icon="mdi mdi-database-outline"
-                  order="20"/>
-        </menu>
+        <!-- 场景配置（场景适配器） -->
+        <menu source="Weline_Ai::ai_adapter_manager" 
+              name="ai_adapter_manager" 
+              title="场景配置" 
+              action="ai/backend/adapter" 
+              icon="mdi mdi-puzzle-outline"
+              order="20"/>
     </menu>
 </menus>

@@ -32,9 +32,9 @@ class DefaultModelManager
     public function getDefaultModelForService(string $serviceType): ?AiDefaultModel
     {
         $model = clone $this->defaultModel;
-        $result = $model->where(AiDefaultModel::fields_SERVICE_TYPE, $serviceType)
-            ->where(AiDefaultModel::fields_IS_DEFAULT, 1)
-            ->order(AiDefaultModel::fields_PRIORITY, 'DESC')
+        $result = $model->where(AiDefaultModel::schema_fields_SERVICE_TYPE, $serviceType)
+            ->where(AiDefaultModel::schema_fields_IS_DEFAULT, 1)
+            ->order(AiDefaultModel::schema_fields_PRIORITY, 'DESC')
             ->find()
             ->fetch();
 
@@ -51,8 +51,8 @@ class DefaultModelManager
     {
         $results = [];
         $collection = clone $this->defaultModel;
-        $items = $collection->where(AiDefaultModel::fields_SERVICE_TYPE, $serviceType)
-            ->order(AiDefaultModel::fields_PRIORITY, 'DESC')
+        $items = $collection->where(AiDefaultModel::schema_fields_SERVICE_TYPE, $serviceType)
+            ->order(AiDefaultModel::schema_fields_PRIORITY, 'DESC')
             ->select()
             ->fetch();
 
@@ -82,11 +82,11 @@ class DefaultModelManager
 
         $model = clone $this->defaultModel;
         $model->setData([
-            AiDefaultModel::fields_MODEL_CODE => $modelCode,
-            AiDefaultModel::fields_SERVICE_TYPE => $serviceType,
-            AiDefaultModel::fields_IS_DEFAULT => 1,
-            AiDefaultModel::fields_PRIORITY => $priority,
-            AiDefaultModel::fields_IS_ACTIVE => $isActive,
+            AiDefaultModel::schema_fields_MODEL_CODE => $modelCode,
+            AiDefaultModel::schema_fields_SERVICE_TYPE => $serviceType,
+            AiDefaultModel::schema_fields_IS_DEFAULT => 1,
+            AiDefaultModel::schema_fields_PRIORITY => $priority,
+            AiDefaultModel::schema_fields_IS_ACTIVE => $isActive,
         ]);
         $model->save();
 
@@ -102,8 +102,8 @@ class DefaultModelManager
     public function clearDefaults(string $serviceType): void
     {
         $model = clone $this->defaultModel;
-        $model->where(AiDefaultModel::fields_SERVICE_TYPE, $serviceType)
-            ->update([AiDefaultModel::fields_IS_DEFAULT => 0]);
+        $model->where(AiDefaultModel::schema_fields_SERVICE_TYPE, $serviceType)
+            ->update([AiDefaultModel::schema_fields_IS_DEFAULT => 0]);
     }
 
     /**
@@ -132,9 +132,9 @@ class DefaultModelManager
     public function getAllDefaultModels(): array
     {
         $collection = clone $this->defaultModel;
-        $items = $collection->where(AiDefaultModel::fields_IS_DEFAULT, 1)
-            ->order(AiDefaultModel::fields_SERVICE_TYPE, 'ASC')
-            ->order(AiDefaultModel::fields_PRIORITY, 'DESC')
+        $items = $collection->where(AiDefaultModel::schema_fields_IS_DEFAULT, 1)
+            ->order(AiDefaultModel::schema_fields_SERVICE_TYPE, 'ASC')
+            ->order(AiDefaultModel::schema_fields_PRIORITY, 'DESC')
             ->select()
             ->fetch();
 
@@ -180,16 +180,16 @@ class DefaultModelManager
             
             // Find existing configuration with same model_code and service_type
             $model = clone $this->defaultModel;
-            $existing = $model->where(AiDefaultModel::fields_SERVICE_TYPE, $serviceType)
-                ->where(AiDefaultModel::fields_MODEL_CODE, $modelCode)
+            $existing = $model->where(AiDefaultModel::schema_fields_SERVICE_TYPE, $serviceType)
+                ->where(AiDefaultModel::schema_fields_MODEL_CODE, $modelCode)
                 ->find()
                 ->fetch();
 
             if ($existing && $existing->getId()) {
                 // Update existing
-                $existing->setData(AiDefaultModel::fields_IS_DEFAULT, 1);
-                $existing->setData(AiDefaultModel::fields_PRIORITY, $priority);
-                $existing->setData(AiDefaultModel::fields_IS_ACTIVE, $isActive);
+                $existing->setData(AiDefaultModel::schema_fields_IS_DEFAULT, 1);
+                $existing->setData(AiDefaultModel::schema_fields_PRIORITY, $priority);
+                $existing->setData(AiDefaultModel::schema_fields_IS_ACTIVE, $isActive);
                 $existing->save();
             } else {
                 // Create new
@@ -212,8 +212,8 @@ class DefaultModelManager
     {
         try {
             $model = clone $this->defaultModel;
-            $model->where(AiDefaultModel::fields_SERVICE_TYPE, $serviceType)
-                ->update([AiDefaultModel::fields_IS_DEFAULT => 0])
+            $model->where(AiDefaultModel::schema_fields_SERVICE_TYPE, $serviceType)
+                ->update([AiDefaultModel::schema_fields_IS_DEFAULT => 0])
                 ->fetch();
             return true;
         } catch (\Exception $e) {
@@ -230,8 +230,8 @@ class DefaultModelManager
     public function isProtectedModel(string $modelCode): bool
     {
         $model = clone $this->defaultModel;
-        $count = $model->where(AiDefaultModel::fields_MODEL_CODE, $modelCode)
-            ->where(AiDefaultModel::fields_IS_DEFAULT, 1)
+        $count = $model->where(AiDefaultModel::schema_fields_MODEL_CODE, $modelCode)
+            ->where(AiDefaultModel::schema_fields_IS_DEFAULT, 1)
             ->count();
 
         return $count > 0;
@@ -246,15 +246,15 @@ class DefaultModelManager
     public function getProtectionReason(string $modelCode): string
     {
         $model = clone $this->defaultModel;
-        $configs = $model->where(AiDefaultModel::fields_MODEL_CODE, $modelCode)
-            ->where(AiDefaultModel::fields_IS_DEFAULT, 1)
+        $configs = $model->where(AiDefaultModel::schema_fields_MODEL_CODE, $modelCode)
+            ->where(AiDefaultModel::schema_fields_IS_DEFAULT, 1)
             ->select()
             ->fetch();
 
         $serviceTypes = [];
         if ($configs && method_exists($configs, 'getItems')) {
             foreach ($configs->getItems() as $config) {
-                $serviceTypes[] = $config->getData(AiDefaultModel::fields_SERVICE_TYPE);
+                $serviceTypes[] = $config->getData(AiDefaultModel::schema_fields_SERVICE_TYPE);
             }
         }
 
@@ -274,8 +274,8 @@ class DefaultModelManager
     public function getModelUsageAsDefault(string $modelCode): array
     {
         $model = clone $this->defaultModel;
-        $configs = $model->where(AiDefaultModel::fields_MODEL_CODE, $modelCode)
-            ->where(AiDefaultModel::fields_IS_DEFAULT, 1)
+        $configs = $model->where(AiDefaultModel::schema_fields_MODEL_CODE, $modelCode)
+            ->where(AiDefaultModel::schema_fields_IS_DEFAULT, 1)
             ->select()
             ->fetch();
 
@@ -283,8 +283,8 @@ class DefaultModelManager
         if ($configs && method_exists($configs, 'getItems')) {
             foreach ($configs->getItems() as $config) {
                 $usage[] = [
-                    'service_type' => $config->getData(AiDefaultModel::fields_SERVICE_TYPE),
-                    'priority' => $config->getData(AiDefaultModel::fields_PRIORITY),
+                    'service_type' => $config->getData(AiDefaultModel::schema_fields_SERVICE_TYPE),
+                    'priority' => $config->getData(AiDefaultModel::schema_fields_PRIORITY),
                 ];
             }
         }
@@ -301,7 +301,7 @@ class DefaultModelManager
     {
         // Check if defaults already exist
         $model = clone $this->defaultModel;
-        $count = $model->where(AiDefaultModel::fields_IS_DEFAULT, 1)->count();
+        $count = $model->where(AiDefaultModel::schema_fields_IS_DEFAULT, 1)->count();
 
         if ($count > 0) {
             return false; // Already initialized
@@ -346,9 +346,9 @@ class DefaultModelManager
             return null;
         }
 
-        $modelCode = $defaultModelConfig->getData(AiDefaultModel::fields_MODEL_CODE);
+        $modelCode = $defaultModelConfig->getData(AiDefaultModel::schema_fields_MODEL_CODE);
         $aiModel = ObjectManager::getInstance(\Weline\Ai\Model\AiModel::class);
-        $model = $aiModel->where(\Weline\Ai\Model\AiModel::fields_MODEL_CODE, $modelCode)
+        $model = $aiModel->where(\Weline\Ai\Model\AiModel::schema_fields_MODEL_CODE, $modelCode)
             ->find()
             ->fetch();
 
