@@ -1,128 +1,39 @@
 <?php
-
 declare(strict_types=1);
-
 namespace Weline\AiKnowledge\Model;
-
 use Weline\Framework\Database\Model;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Data\DataInterface;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 /**
  * Call History Model
- * 
+ *
  * Stores AI call history for analytics and debugging.
  * Tracks MCP tool calls, search queries, and usage patterns.
  */
-class CallHistory extends Model implements DataInterface
+#[Table(comment: 'AI call history')]
+#[Index(name: 'idx_method', columns: ['method'], comment: 'MCP method name')]
+#[Index(name: 'idx_created_at', columns: ['created_at'], comment: 'Created timestamp')]
+class CallHistory extends Model
 {
-    public string $table = 'ai_knowledge_call_history';
-    
-    public const fields_ID = 'id';
-    public const fields_METHOD = 'method';
-    public const fields_PARAMS = 'params';
-    public const fields_RESULT_TYPE = 'result_type';
-    public const fields_RESULT_COUNT = 'result_count';
-    public const fields_DURATION_MS = 'duration_ms';
-    public const fields_CLIENT_INFO = 'client_info';
-    public const fields_CREATED_AT = 'created_at';
-    
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // No upgrade needed for now
-        // Future upgrades can be added here
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable()
-                ->addColumn(
-                    self::fields_ID,
-                    TableInterface::column_type_INTEGER,
-                    11,
-                    'primary key auto_increment',
-                    'ID'
-                )
-                ->addColumn(
-                    self::fields_METHOD,
-                    TableInterface::column_type_VARCHAR,
-                    100,
-                    'not null',
-                    'MCP method name'
-                )
-                ->addColumn(
-                    self::fields_PARAMS,
-                    TableInterface::column_type_TEXT,
-                    null,
-                    '',
-                    'Request parameters (JSON)'
-                )
-                ->addColumn(
-                    self::fields_RESULT_TYPE,
-                    TableInterface::column_type_VARCHAR,
-                    50,
-                    'default "success"',
-                    'Result type (success/error)'
-                )
-                ->addColumn(
-                    self::fields_RESULT_COUNT,
-                    TableInterface::column_type_INTEGER,
-                    11,
-                    'default 0',
-                    'Number of results returned'
-                )
-                ->addColumn(
-                    self::fields_DURATION_MS,
-                    TableInterface::column_type_INTEGER,
-                    11,
-                    'default 0',
-                    'Request duration in milliseconds'
-                )
-                ->addColumn(
-                    self::fields_CLIENT_INFO,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    '',
-                    'Client information'
-                )
-                ->addColumn(
-                    self::fields_CREATED_AT,
-                    TableInterface::column_type_TIMESTAMP,
-                    null,
-                    'default CURRENT_TIMESTAMP',
-                    'Created timestamp'
-                )
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'idx_method',
-                    self::fields_METHOD
-                )
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'idx_created_at',
-                    self::fields_CREATED_AT
-                )
-                ->create();
-        }
-    }
-    
+    public const schema_table = 'ai_knowledge_call_history';
+    public const schema_primary_key = 'id';
+    #[Col(type: 'integer', length: 11, nullable: false, primaryKey: true, autoIncrement: true, comment: 'ID')]
+    public const schema_fields_ID = 'id';
+    #[Col(type: 'varchar', length: 100, nullable: false, comment: 'MCP method name')]
+    public const schema_fields_METHOD = 'method';
+    #[Col(type: 'text', nullable: true, comment: 'Request parameters (JSON)')]
+    public const schema_fields_PARAMS = 'params';
+    #[Col(type: 'varchar', length: 50, nullable: true, default: 'success', comment: 'Result type (success/error)')]
+    public const schema_fields_RESULT_TYPE = 'result_type';
+    #[Col(type: 'integer', length: 11, nullable: true, default: 0, comment: 'Number of results returned')]
+    public const schema_fields_RESULT_COUNT = 'result_count';
+    #[Col(type: 'integer', length: 11, nullable: true, default: 0, comment: 'Request duration in milliseconds')]
+    public const schema_fields_DURATION_MS = 'duration_ms';
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: 'Client information')]
+    public const schema_fields_CLIENT_INFO = 'client_info';
+    #[Col(type: 'timestamp', nullable: true, default: 'CURRENT_TIMESTAMP', comment: 'Created timestamp')]
+    public const schema_fields_CREATED_AT = 'created_at';
     /**
      * Record a call
      */
@@ -135,51 +46,45 @@ class CallHistory extends Model implements DataInterface
         string $clientInfo = ''
     ): self {
         $this->setData([
-            self::fields_METHOD => $method,
-            self::fields_PARAMS => json_encode($params),
-            self::fields_RESULT_TYPE => $resultType,
-            self::fields_RESULT_COUNT => $resultCount,
-            self::fields_DURATION_MS => $durationMs,
-            self::fields_CLIENT_INFO => $clientInfo,
+            self::schema_fields_METHOD => $method,
+            self::schema_fields_PARAMS => json_encode($params),
+            self::schema_fields_RESULT_TYPE => $resultType,
+            self::schema_fields_RESULT_COUNT => $resultCount,
+            self::schema_fields_DURATION_MS => $durationMs,
+            self::schema_fields_CLIENT_INFO => $clientInfo,
         ]);
-        
-        return $this->save();
+        $this->save();
+        return $this;
     }
-    
     /**
      * Get call statistics
      */
     public function getStatistics(int $days = 30): array
     {
         $since = date('Y-m-d H:i:s', strtotime("-{$days} days"));
-        
         // Total calls
         $totalCalls = $this->clear()
-            ->where(self::fields_CREATED_AT, $since, '>=')
+            ->where(self::schema_fields_CREATED_AT, $since, '>=')
             ->count();
-        
         // Calls by method
         $byMethod = $this->clear()
-            ->fields([self::fields_METHOD, 'COUNT(*) as count'])
-            ->where(self::fields_CREATED_AT, $since, '>=')
-            ->group(self::fields_METHOD)
+            ->fields([self::schema_fields_METHOD, 'COUNT(*) as count'])
+            ->where(self::schema_fields_CREATED_AT, $since, '>=')
+            ->group(self::schema_fields_METHOD)
             ->order('count', 'DESC')
             ->select()
             ->fetchArray();
-        
         // Average duration
         $avgDuration = $this->clear()
-            ->fields(['AVG(' . self::fields_DURATION_MS . ') as avg_ms'])
-            ->where(self::fields_CREATED_AT, $since, '>=')
+            ->fields(['AVG(' . self::schema_fields_DURATION_MS . ') as avg_ms'])
+            ->where(self::schema_fields_CREATED_AT, $since, '>=')
             ->find()
             ->fetch();
-        
         // Error rate
         $errorCount = $this->clear()
-            ->where(self::fields_CREATED_AT, $since, '>=')
-            ->where(self::fields_RESULT_TYPE, 'error')
+            ->where(self::schema_fields_CREATED_AT, $since, '>=')
+            ->where(self::schema_fields_RESULT_TYPE, 'error')
             ->count();
-        
         return [
             'total_calls' => $totalCalls,
             'by_method' => $byMethod,
@@ -189,28 +94,25 @@ class CallHistory extends Model implements DataInterface
             'period_days' => $days,
         ];
     }
-    
     /**
      * Get recent calls
      */
     public function getRecentCalls(int $limit = 100): array
     {
         return $this->clear()
-            ->order(self::fields_CREATED_AT, 'DESC')
+            ->order(self::schema_fields_CREATED_AT, 'DESC')
             ->limit($limit)
             ->select()
             ->fetchArray();
     }
-    
     /**
      * Clean up old records
      */
     public function cleanup(int $keepDays = 90): int
     {
         $cutoff = date('Y-m-d H:i:s', strtotime("-{$keepDays} days"));
-        
         return $this->clear()
-            ->where(self::fields_CREATED_AT, $cutoff, '<')
+            ->where(self::schema_fields_CREATED_AT, $cutoff, '<')
             ->delete()
             ->fetch();
     }
