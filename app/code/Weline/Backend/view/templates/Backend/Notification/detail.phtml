@@ -1,29 +1,57 @@
 <?php
 /**
- * 通知详情页面
+ * 通知详情页面（支持上一条/下一条翻页、键盘快捷键）
  *
  * @var \Weline\Framework\View\Template $this
  * @var array $notification 通知详情
+ * @var int|null $prev_id 上一条通知 ID
+ * @var string|null $prev_title 上一条标题（用于 tooltip）
+ * @var int|null $next_id 下一条通知 ID
+ * @var string|null $next_title 下一条标题（用于 tooltip）
  */
 $notification = $notification ?? [];
+$prevId = $prev_id ?? null;
+$prevTitle = $prev_title ?? '';
+$nextId = $next_id ?? null;
+$nextTitle = $next_title ?? '';
 $typeColor = $notification['type_color'] ?? 'var(--backend-color-info)';
 $typeLabel = $notification['type_label'] ?? __('信息');
 $typeIcon = $notification['avatar'] ?? 'ri-notification-line';
+$listUrl = $this->getBackendUrl('system/backend/notification');
+$detailUrlBase = $this->getBackendUrl('system/backend/notification/detail');
 ?>
 
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-sm-0 font-size-18">
-                <a href="<?= $this->getBackendUrl('*/backend/notification') ?>" class="text-muted me-2">
+                <a href="<?= $listUrl ?>" class="text-muted me-2" title="<?= __('返回列表') ?>">
                     <i class="ri-arrow-left-line"></i>
                 </a>
                 <lang>通知详情</lang>
             </h4>
-            <div>
-                <a href="<?= $this->getBackendUrl('*/backend/notification') ?>" class="btn btn-outline-secondary btn-sm">
-                    <i class="ri-arrow-left-line me-1"></i><lang>返回列表</lang>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <?php if ($prevId): ?>
+                <a href="<?= $detailUrlBase ?>?id=<?= (int)$prevId ?>" class="btn btn-outline-secondary btn-sm weline-nd-nav-btn" title="<?= htmlspecialchars($prevTitle) ?>">
+                    <i class="ri-arrow-up-line me-1"></i><lang>上一条</lang>
                 </a>
+                <?php else: ?>
+                <span class="btn btn-outline-secondary btn-sm disabled weline-nd-nav-btn" title="<lang>已是第一条</lang>">
+                    <i class="ri-arrow-up-line me-1"></i><lang>上一条</lang>
+                </span>
+                <?php endif; ?>
+                <a href="<?= $listUrl ?>" class="btn btn-outline-secondary btn-sm">
+                    <i class="ri-list-unordered me-1"></i><lang>返回列表</lang>
+                </a>
+                <?php if ($nextId): ?>
+                <a href="<?= $detailUrlBase ?>?id=<?= (int)$nextId ?>" class="btn btn-outline-secondary btn-sm weline-nd-nav-btn" title="<?= htmlspecialchars($nextTitle) ?>">
+                    <lang>下一条</lang><i class="ri-arrow-down-line ms-1"></i>
+                </a>
+                <?php else: ?>
+                <span class="btn btn-outline-secondary btn-sm disabled weline-nd-nav-btn" title="<?= __('已是最后一条') ?>">
+                    <lang>下一条</lang><i class="ri-arrow-down-line ms-1"></i>
+                </span>
+                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -107,12 +135,33 @@ $typeIcon = $notification['avatar'] ?? 'ri-notification-line';
                 </div>
 
                 <div class="weline-nd-footer">
-                    <a href="<?= $this->getBackendUrl('*/backend/notification') ?>" class="btn btn-light">
-                        <i class="ri-arrow-left-line me-1"></i><lang>返回通知中心</lang>
-                    </a>
-                    <a href="<?= $this->getBackendUrl('*/backend/notificationsubscription') ?>" class="btn btn-outline-primary">
-                        <i class="mdi mdi-cog me-1"></i><lang>订阅设置</lang>
-                    </a>
+                    <div class="weline-nd-footer-nav">
+                        <?php if ($prevId): ?>
+                        <a href="<?= $detailUrlBase ?>?id=<?= (int)$prevId ?>" class="btn btn-outline-secondary btn-sm weline-nd-footer-prev" title="<?= htmlspecialchars($prevTitle) ?>">
+                            <i class="ri-arrow-left-s-line me-1"></i><lang>上一条</lang>
+                        </a>
+                        <?php else: ?>
+                        <span class="btn btn-outline-secondary btn-sm disabled"><i class="ri-arrow-left-s-line me-1"></i><lang>上一条</lang></span>
+                        <?php endif; ?>
+                        <a href="<?= $listUrl ?>" class="btn btn-light btn-sm">
+                            <i class="ri-home-4-line me-1"></i><lang>返回通知中心</lang>
+                        </a>
+                        <?php if ($nextId): ?>
+                        <a href="<?= $detailUrlBase ?>?id=<?= (int)$nextId ?>" class="btn btn-outline-secondary btn-sm weline-nd-footer-next" title="<?= htmlspecialchars($nextTitle) ?>">
+                            <lang>下一条</lang><i class="ri-arrow-right-s-line ms-1"></i>
+                        </a>
+                        <?php else: ?>
+                        <span class="btn btn-outline-secondary btn-sm disabled"><lang>下一条</lang><i class="ri-arrow-right-s-line ms-1"></i></span>
+                        <?php endif; ?>
+                    </div>
+                    <div class="weline-nd-footer-actions">
+                        <span class="weline-nd-keyboard-hint text-muted small">
+                            <i class="ri-keyboard-line me-1"></i><lang>使用 ← → 方向键可切换上/下一条</lang>
+                        </span>
+                        <a href="<?= $this->getBackendUrl('system/backend/notificationsubscription') ?>" class="btn btn-outline-primary btn-sm">
+                            <i class="mdi mdi-cog me-1"></i><lang>订阅设置</lang>
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -286,11 +335,35 @@ $typeIcon = $notification['avatar'] ?? 'ri-notification-line';
 
 .weline-nd-footer {
     padding: 20px 32px;
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-    border-top: 1px solid var(--backend-color-border-light, #e9ecef);
+    background: var(--backend-color-bg-secondary);
+    border-top: 1px solid var(--backend-color-border-light);
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.weline-nd-footer-nav {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.weline-nd-footer-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.weline-nd-keyboard-hint {
+    color: var(--backend-color-text-tertiary);
+    font-size: 0.8rem;
+}
+
+.weline-nd-nav-btn.disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
 }
 
 @media (max-width: 576px) {
@@ -321,11 +394,37 @@ $typeIcon = $notification['avatar'] ?? 'ri-notification-line';
     .weline-nd-footer {
         flex-direction: column;
         gap: 12px;
+        align-items: stretch;
     }
     
-    .weline-nd-footer .btn {
-        width: 100%;
-        justify-content: center;
+    .weline-nd-footer-nav {
+        justify-content: space-between;
+    }
+    
+    .weline-nd-footer-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .weline-nd-keyboard-hint {
+        text-align: center;
     }
 }
 </style>
+<script>
+(function() {
+    'use strict';
+    var prevUrl = <?= $prevId ? json_encode($detailUrlBase . '?id=' . (int)$prevId) : 'null' ?>;
+    var nextUrl = <?= $nextId ? json_encode($detailUrlBase . '?id=' . (int)$nextId) : 'null' ?>;
+    document.addEventListener('keydown', function(e) {
+        if (/input|textarea|select/i.test(document.activeElement && document.activeElement.tagName || '')) {
+            return;
+        }
+        if (e.key === 'ArrowLeft' && prevUrl) {
+            window.location.href = prevUrl;
+        } else if (e.key === 'ArrowRight' && nextUrl) {
+            window.location.href = nextUrl;
+        }
+    });
+})();
+</script>

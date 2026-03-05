@@ -30,10 +30,10 @@ class UserContactService
     public function getDefaultContactByChannel(int $userId, string $channelCode): ?array
     {
         $contact = $this->contactModel->clearQuery()
-            ->where(UserContact::fields_user_id, $userId)
-            ->where(UserContact::fields_channel_code, $channelCode)
-            ->where(UserContact::fields_is_enabled, 1)
-            ->where(UserContact::fields_is_default, 1)
+            ->where(UserContact::schema_fields_user_id, $userId)
+            ->where(UserContact::schema_fields_channel_code, $channelCode)
+            ->where(UserContact::schema_fields_is_enabled, 1)
+            ->where(UserContact::schema_fields_is_default, 1)
             ->select()
             ->fetch();
 
@@ -42,10 +42,10 @@ class UserContactService
         }
 
         $contact = $this->contactModel->clearQuery()
-            ->where(UserContact::fields_user_id, $userId)
-            ->where(UserContact::fields_channel_code, $channelCode)
-            ->where(UserContact::fields_is_enabled, 1)
-            ->order(UserContact::fields_ID)
+            ->where(UserContact::schema_fields_user_id, $userId)
+            ->where(UserContact::schema_fields_channel_code, $channelCode)
+            ->where(UserContact::schema_fields_is_enabled, 1)
+            ->order(UserContact::schema_fields_ID)
             ->select()
             ->fetch();
 
@@ -66,11 +66,11 @@ class UserContactService
     public function getContactsByChannel(int $userId, string $channelCode): array
     {
         return $this->contactModel->clearQuery()
-            ->where(UserContact::fields_user_id, $userId)
-            ->where(UserContact::fields_channel_code, $channelCode)
-            ->where(UserContact::fields_is_enabled, 1)
-            ->order(UserContact::fields_is_default, 'DESC')
-            ->order(UserContact::fields_ID)
+            ->where(UserContact::schema_fields_user_id, $userId)
+            ->where(UserContact::schema_fields_channel_code, $channelCode)
+            ->where(UserContact::schema_fields_is_enabled, 1)
+            ->order(UserContact::schema_fields_is_default, 'DESC')
+            ->order(UserContact::schema_fields_ID)
             ->select()
             ->fetchArray();
     }
@@ -84,10 +84,10 @@ class UserContactService
     public function getUserContacts(int $userId): array
     {
         return $this->contactModel->clearQuery()
-            ->where(UserContact::fields_user_id, $userId)
-            ->where(UserContact::fields_is_enabled, 1)
-            ->order(UserContact::fields_channel_code)
-            ->order(UserContact::fields_is_default, 'DESC')
+            ->where(UserContact::schema_fields_user_id, $userId)
+            ->where(UserContact::schema_fields_is_enabled, 1)
+            ->order(UserContact::schema_fields_channel_code)
+            ->order(UserContact::schema_fields_is_default, 'DESC')
             ->select()
             ->fetchArray();
     }
@@ -104,7 +104,11 @@ class UserContactService
         $grouped = [];
 
         foreach ($contacts as $contact) {
-            $channel = $contact['channel_code'];
+            $channel = $contact['channel_code'] ?? $contact['channelCode'] ?? '';
+            $channel = strtolower(trim((string) $channel));
+            if ($channel === '') {
+                continue;
+            }
             if (!isset($grouped[$channel])) {
                 $grouped[$channel] = [];
             }
@@ -126,9 +130,9 @@ class UserContactService
     public function createContact(int $userId, string $channelCode, string $contactValue, array $options = []): int|false
     {
         $existing = $this->contactModel->clearQuery()
-            ->where(UserContact::fields_user_id, $userId)
-            ->where(UserContact::fields_channel_code, $channelCode)
-            ->where(UserContact::fields_contact_value, $contactValue)
+            ->where(UserContact::schema_fields_user_id, $userId)
+            ->where(UserContact::schema_fields_channel_code, $channelCode)
+            ->where(UserContact::schema_fields_contact_value, $contactValue)
             ->select()
             ->fetch();
 
@@ -241,9 +245,9 @@ class UserContactService
     private function clearDefaultContact(int $userId, string $channelCode): void
     {
         $contacts = $this->contactModel->clearQuery()
-            ->where(UserContact::fields_user_id, $userId)
-            ->where(UserContact::fields_channel_code, $channelCode)
-            ->where(UserContact::fields_is_default, 1)
+            ->where(UserContact::schema_fields_user_id, $userId)
+            ->where(UserContact::schema_fields_channel_code, $channelCode)
+            ->where(UserContact::schema_fields_is_default, 1)
             ->select()
             ->fetchArray();
 
