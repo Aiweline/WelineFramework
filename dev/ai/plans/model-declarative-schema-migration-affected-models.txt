@@ -1,0 +1,122 @@
+# Model 声明式迁移 - 受影响 Model 清单（含 install/upgrade/setup）
+
+生成说明：扫描 app/code/**/Model/**/*.php 中含 public function (install|upgrade|setup)( 的文件，按 Vendor_Module 分组。
+处理要求：每项改为 #[Col] 声明式或纳入排除列表（bootstrap/Eav 等）；完成后在「迁移」列标记 [x]。
+Setup 逻辑迁移（计划 3.10）：种子/业务初始化已迁至 Setup/Install.php 的模块：Backend、Acl、Websites、Visitor、Currency、Customer、Frontend、Ai。
+
+格式：模块 | 相对路径 Model/... | 迁移
+---
+## Agent
+Agent_WeeklyReport | Model/WeeklyReport.php, Model/WeeklyTask.php | [x]
+
+## Aws
+Aws_Domains | Model/AwsConfig.php, Model/DomainOperation.php | [x]
+
+## GuoLaiRen
+GuoLaiRen_Blog | Model/Category.php, Model/Post.php, Model/TrendProfile.php, Model/TrendingKeywordLog.php, Model/TrendSiteQuota.php | [x]
+GuoLaiRen_Desensitization | Model/DesensitizationLog.php, Model/DesensitizationRule.php | [x]
+GuoLaiRen_PageBuilder | Model/AiComponentDraft.php, Model/Component.php, Model/FormSubmission.php, Model/Page.php, Model/PageLayout.php, Model/Style.php, Model/WebsiteUser.php | [x]
+
+## Weline
+Weline_Acl | Model/Acl.php, Model/IpWhitelist.php, Model/Role.php, Model/RoleAccess.php, Model/SecurityLog.php, Model/WhiteAclSource.php | [x]
+Weline_Admin | Model/MenuAccessLog.php, Model/System/SystemNotification.php | [x]
+Weline_Api | Model/ApiUser.php, Model/ApiUserRole.php, Model/ApiUserToken.php, Model/SandboxTest.php | [x]
+Weline_Async | Model/SyncHost.php, Model/SyncMapping.php | [x]
+Weline_AutoLeadAgent | Model/AgentConfig.php, Model/AgentToken.php, Model/LeadCandidate.php, Model/SearchEngineMapping.php, Model/SearchTask.php, Model/TargetWebsite.php, Model/WasmHash.php | [x]
+Weline_Backend | Model/Backend/Acl/UserRole.php, Model/BackendUser.php, Model/BackendUserConfig.php, Model/BackendUserData.php, Model/BackendUserToken.php, Model/Menu.php, Model/NotificationChannel.php, Model/NotificationTopic.php, Model/SystemNotification.php, Model/UserContact.php, Model/UserNotificationStatus.php, Model/UserNotificationSubscription.php | [x]
+Weline_BackendActivity | Model/BackendActivityLog.php | [x]
+Weline_Bt_Center | Model/BtServer.php | [x]
+Weline_CacheManager | Model/Cache.php | [x]
+Weline_Captcha | Model/Config.php, Model/CaptchaResult.php, Model/FailedAttempt.php | [x]
+Weline_Checkout | Model/Order.php, Model/OrderItem.php, Model/PaymentTransaction.php | [x]
+Weline_Cdn | Model/Account.php, Model/ApiRule.php, Model/AttackLog.php, Model/Domain.php, Model/WarmupUrl.php | [x]
+Weline_Cms | Model/FormSubmission.php, Model/Page.php, Model/Style.php | [x]
+Weline_Component | Model/Component.php | [x]
+Weline_Cron | Model/CronTask.php | [x]
+Weline_Currency | Model/Currency.php | [x]
+Weline_Customer | Model/Customer.php, Model/CustomerToken.php | [x]
+Weline_CustomerService | Model/ChatMessage.php, Model/ChatSession.php, Model/CustomerLanguage.php, Model/CustomerServiceConfig.php, Model/ServiceAgent.php | [x]
+Weline_DataTable | Model/TestOrder.php, Model/TestProduct.php, Model/TestUser.php, Model/TestUserAddress.php, Model/TestUserProfile.php | [x]
+Weline_DeveloperWorkspace | Model/Document.php, Model/Document/Catalog.php | [x]
+Weline_Eav | Model/EavAttribute.php, Model/EavAttribute/Group.php, Model/EavAttribute/LocalDescription.php, Model/EavAttribute/Option.php, Model/EavAttribute/Set.php, Model/EavAttribute/Type.php, Model/EavAttribute/Type/Value.php, Model/EavEntity.php, Model/Test.php | 已排除/Eav
+Weline_Frontend | Model/FrontendUser.php, Model/FrontendUserConfig.php, Model/FrontendUserToken.php, Model/System/FrontendNotification.php | [x]
+Weline_GenerativeEngineOptimization | Model/Feed.php, Model/FeedItem.php, Model/Platform.php, Model/PlatformAccount.php, Model/PushLog.php | [x]
+Weline_I18n | Model/Countries.php, Model/Countries/Locale/Name.php, Model/Dictionary.php, Model/Locale.php, Model/Locale/Dictionary.php, Model/Locals.php | [x]
+Weline_Index | Model/Backend/Setting.php, Model/Contact.php | [x]
+Weline_Indexer | Model/Indexer.php | [x]
+Weline_Layout | Model/Layout.php, Model/LayoutSchedule.php | [x]
+Weline_Maintenance | Model/Backup.php | [x]
+Weline_Marketing | Model/Coupon/Coupon.php, Model/Rule/Rule.php, Model/RuleUsage/RuleUsage.php, Model/Campaign/Campaign.php | [x]
+Weline_Meta | Model/Meta.php, Model/MetaConfig.php, Model/MetaLocal.php | [x]
+Weline_ModuleManager | Model/Module.php, Model/Module/Backup.php, Model/Module/Table.php | [x]
+Weline_Multipass | Model/MultipassSite.php | [x]
+Weline_Order | Model/Order.php, Model/OrderHistory.php, Model/OrderInvoice.php, Model/OrderItem.php, Model/OrderPayment.php, Model/OrderRefund.php, Model/OrderShipment.php, Model/OrderStatus.php, Model/OrderStatusTranslation.php | [x]
+Weline_Payment | Model/PaymentMethod.php, Model/PaymentTransaction.php | [x]
+Weline_Queue | Model/Queue.php, Model/Queue/Type.php, Model/Queue/Type/Attributes.php | [x]
+Weline_RdpWrapper | Model/RdpUser.php | [x]
+Weline_Saas | Model/ProvisioningOrder.php, Model/ProvisioningStep.php | [x]
+Weline_Seo | Model/SeoAccount.php, Model/SeoKeyword.php, Model/SeoKeywordTrend.php, Model/SeoSuggestion.php, Model/SeoSubject.php, Model/SeoTask.php, Model/SeoWebsiteAccount.php, Model/SeoWebsiteStats.php, Model/SitemapUrl.php | [x]
+Weline_Server | Model/AttackLog.php, Model/ServerStatusLog.php, Model/SslCertificate.php | [x]
+Weline_SessionManager | Model/Session.php | [x]
+Weline_Shipping | Model/Carrier.php, Model/DeliveryAddress.php, Model/FreeShippingRule.php, Model/RateTemplate.php, Model/Region.php, Model/ShippingAddress.php, Model/ShippingService.php, Model/Tracking.php, Model/TrackingNode.php, Model/Zone.php, Model/ZoneRegion.php | [x]
+Weline_Smtp | Model/SmtpSendLog.php | [x]
+Weline_Storage | Model/StorageConfig.php | [x]
+Weline_Sticker | Model/StickerLog.php | [x]
+Weline_SystemConfig | Model/SystemConfig.php | [x]
+Weline_Taglib | Model/Taglib.php, Model/UserScope.php | [x]
+Weline_Terraform | Model/Batch.php, Model/BatchItem.php | [x]
+Weline_Theme | Model/ThemeLayout.php, Model/ThemeLayoutVersion.php, Model/WelineTheme.php | [x]
+Weline_TranslationService | Model/TranslationProvider.php, Model/TranslationRecord.php | [x]
+Weline_TwoFactorAuth | Model/TotpAccount.php, Model/TwoFactorConfig.php, Model/UserTwoFactor.php | [x]
+Weline_UrlManager | Model/UrlManager.php, Model/UrlRewrite.php | [x]
+Weline_Visitor | Model/AbTest.php, Model/Pixel.php, Model/PixelAdditional.php, Model/PixelEncryptionToken.php, Model/PixelSource.php | [x]
+Weline_Websites | Model/Domain.php, Model/DomainAutoResolveTask.php, Model/DomainConfig.php, Model/DomainDnsRecord.php, Model/DomainPool.php, Model/DomainPurchaseItem.php, Model/DomainPurchaseOrder.php, Model/DomainRegistrar.php, Model/DomainRegistrarAccount.php, Model/Website.php, Model/WebsiteCurrency.php, Model/WebsiteDomain.php, Model/WebsiteLanguage.php | [x]
+Weline_Widget | Model/Page.php, Model/Widget/LocalDescription.php | [x]
+
+## Weline (Framework/Database - bootstrap 已排除)
+Weline_Framework | Setup/Db/Model/FieldBackup.php, Setup/Db/Model/FieldBackupConflict.php, Setup/Db/Model/FieldDefinitionBackup.php | 已排除 SchemaDiff（EXCLUDE_MODEL_CLASSES）
+Weline_Framework | Database/Model/Migration.php, Database/Model/MigrationBackup.php | 已排除 SchemaDiff（EXCLUDE_MODEL_CLASSES）
+Weline_Database | Model/Migration.php, Model/MigrationBackup.php, Model/ModuleVersion.php, Model/ModuleVersionHistory.php | 已排除或待迁移至 Framework
+
+## Weline (Ai 等，数量多)
+Weline_Ai | Model/AiAgent.php, Model/AiApiKey.php, Model/AiApiCallLog.php, Model/AiApiQuota.php, Model/AiAssistant.php, Model/AiAssistantConversation.php, Model/AiAssistantPromptTemplate.php, Model/AiAssistantRating.php, Model/AiAssistantRevenue.php, Model/AiAssistantRental.php, Model/AiAuditLogDetail.php, Model/AiBillingInvoice.php, Model/AiBillingPlan.php, Model/AiBillingRecordDetail.php, Model/AiContentSafety.php, Model/AiDefaultModel.php, Model/AiDeveloperTool.php, Model/AiI18nContent.php, Model/AiMarketingCampaign.php, Model/AiMobileDevice.php, Model/AiMobileNotification.php, Model/AiModel.php, Model/AiModelBenchmark.php, Model/AiModelDeployment.php, Model/AiModelMonitoring.php, Model/AiModelVersion.php, Model/AiPerformanceMetricDetail.php, Model/AiScenarioAdapter.php, Model/AiScenarioAdapterConfig.php, Model/AiSecurityScan.php, Model/AiSupportTicket.php, Model/AiTenant.php, Model/AiTenantConfig.php, Model/AiTenantUser.php, Model/AiThirdPartyIntegration.php, Model/AiTrainingData.php, Model/AiUsageLog.php, Model/AiUserBill.php, Model/AiUserRecharge.php, Model/Provider/Account.php, Model/Provider/UsageRecord.php, Model/AiAbTest.php | [x]
+Weline_AiKnowledge | Model/CallHistory.php | [x]
+Weline_AliDdnsServer | Model/DdnsDomains.php | [x]
+
+## WeShop
+WeShop_Address | Model/Address.php | [x]
+WeShop_Affiliate | Model/Affiliate.php | [x]
+WeShop_B2B | Model/Company.php | [x]
+WeShop_Cart | Model/Cart.php | [x]
+WeShop_Catalog | Model/Category.php | [x]
+WeShop_Compare | Model/Compare.php | [x]
+WeShop_Compliance | Model/CookieConsent.php | [x]
+WeShop_Customer | Model/Customer.php | [x]
+WeShop_Filters | Model/CategoryFilterConfig.php, Model/FilterCache.php, Model/PriceRange.php | [x]
+WeShop_GiftCard | Model/GiftCard.php | [x]
+WeShop_Inventory | Model/Source.php, Model/SourceItem.php | [x]
+WeShop_Invoice | Model/Invoice.php | [x]
+WeShop_Logistics | Model/Tracking.php | [x]
+WeShop_Membership | Model/Membership.php | [x]
+WeShop_Notification | Model/Notification.php | [x]
+WeShop_Order | Model/Order.php, Model/OrderItem.php | [x]
+WeShop_Product | Model/Product.php, Model/ProductCategory.php, Model/ProductLayout.php, Model/ProductLayoutSchedule.php, Model/ProductWebsite.php, Model/Product/OptionId.php, Model/Test.php | [x]
+WeShop_Promotion | Model/Coupon.php | [x]
+WeShop_QA | Model/Question.php | [x]
+WeShop_RecentlyViewed | Model/RecentlyViewed.php | [x]
+WeShop_Review | Model/Review.php | [x]
+WeShop_RMA | Model/Rma.php | [x]
+WeShop_Search | Model/SearchEngineConfig.php, Model/SearchHistory.php | [x]
+WeShop_Social | Model/SocialShare.php | [x]
+WeShop_Store | Model/Store.php, Model/Store/Currency.php | [x]
+WeShop_Subscription | Model/Subscription.php, Model/SubscriptionHistory.php, Model/SubscriptionPlan.php | [x]
+WeShop_Wishlist | Model/Wishlist.php | [x]
+
+## WelineTools
+WelineTools_FontSubLetter | Model/CharMap.php, Model/FontRecord.php | [x]
+
+---
+说明：
+- 排除（不参与 SchemaDiff）：Migration、MigrationBackup、ModuleVersion、ModuleVersionHistory、FieldBackup*、Module\Table、Module\Backup 已配置在 SchemaDiffStage::EXCLUDE_*。
+- Eav 动态表：由 EavSchemaStage 创建，对应 Model 可保留空 install/upgrade/setup 或后续由 SchemaProvider 提供。
+- 其余项：需逐文件改为 #[Table]/#[Col]（及 Index/ForeignKey），并删除 install/upgrade/setup 实现；迁移完成后在本文件对应行末标记 [x]。

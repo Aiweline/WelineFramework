@@ -70,33 +70,15 @@ if (!$setup->tableColumnExist(self::fields_IS_PUBLISHED)) {
 }
 ```
 
-### 正确写法
-```php
-// ✅ 正确：使用 hasField 方法检查字段是否存在
-public function upgrade(ModelSetup $setup, Context $context): void
-{
-    // 必须先检查表是否存在
-    if ($setup->tableExist() && !$setup->hasField(self::fields_IS_PUBLISHED)) {
-        $setup->alterTable()->addColumn(
-            self::fields_IS_PUBLISHED,        // 字段名
-            self::fields_IS_ACTIVE,           // 插入位置（after字段）
-            TableInterface::column_type_SMALLINT,
-            1,
-            'not null default 0',
-            '是否发布'
-        )
-        ->addIndex(TableInterface::index_type_KEY, 'idx_is_published', [self::fields_IS_PUBLISHED], '发布状态索引')
-        ->alter();  // 必须调用 alter() 提交变更
-    }
-}
-```
+### 正确写法（当前机制）
+
+**已废弃**：Model 的 `upgrade()`、`hasField()`、`alterTable()` 等表结构维护方式已废弃。
+
+**当前做法**：在 Model 上使用 **#[Col]**、**[Table]**、**[Index]** 声明表结构，执行 `php bin/w setup:upgrade` 由 SchemaDiffStage 同步；业务初始化放在 **Setup/Install.php**、**Setup/Upgrade.php**。详见 database-model-standards、module-development 技能。
 
 ### 要点
-- 使用 `$setup->hasField($fieldName)` 而不是 `tableColumnExist()`
-- 添加字段前必须先检查表是否存在：`$setup->tableExist()`
-- 使用 `$setup->alterTable()->addColumn()->alter()` 完成字段添加
-- 必须调用 `alter()` 方法提交变更
-- 不直接使用 `getConnection()->getTable()`，统一通过 `ModelSetup` 操作
+- 表结构：用 #[Col]/#[Table] 声明，运行 `setup:upgrade` 同步；禁止在 Model 内写 install/upgrade/setup 建表改表。
+- 不再使用 `hasField()`、`tableColumnExist()`、`alterTable()` 做表结构变更。
 
 ---
 
@@ -707,20 +689,8 @@ $result = $connection->query("SELECT * FROM users WHERE id = 1")->fetch();
 $user = $result[0] ?? null;
 ```
 
-#### 使用 ModelSetup 的 hasField() 方法（推荐）
-```php
-// ✅ 正确：使用 hasField() 检查字段是否存在（推荐方式）
-if ($setup->tableExist() && !$setup->hasField('field_name')) {
-    $setup->alterTable()->addColumn(
-        'field_name',
-        '',
-        TableInterface::column_type_VARCHAR,
-        100,
-        '',
-        '字段注释'
-    )->alter();
-}
-```
+#### 表结构/加字段（已废弃 hasField/alterTable）
+表结构改用 **声明式 #[Col]/#[Table]**，执行 `php bin/w setup:upgrade` 同步。不再在 Model 的 upgrade() 中用 hasField/alterTable 加字段。见 database-model-standards 技能。
 
 ### 常见场景和正确用法
 
@@ -910,7 +880,7 @@ $model->setData('name', 'test')->save();
 1. **必须使用 ORM 方法**：所有数据查询、更新、删除操作必须使用 ORM 方法
 2. **必须调用 fetch()**：ORM 使用惰性执行机制，必须调用 `fetch()` 或 `fetchArray()` 才会真正执行
 3. **禁止直接 SQL**：在 Model 和 Controller 的业务逻辑中，禁止直接使用 `query()` 执行 SELECT 查询
-4. **DDL 操作例外**：表结构变更（ALTER TABLE、CREATE TABLE 等）可以在 `setup()` 和 `upgrade()` 方法中使用原生 SQL
+4. **DDL 操作**：表结构改用 **#[Col]/#[Table]** 声明式，执行 `setup:upgrade` 同步；不在 Model 的 setup/upgrade 中写 DDL 或原生 SQL
 
 ### 错误示例
 
@@ -1122,11 +1092,10 @@ $model->where('status', 0)->delete()->fetch();
 
 以下情况可以使用原生 SQL：
 
-1. **表结构变更（DDL）**：在 `setup()` 和 `upgrade()` 方法中
+1. **表结构变更（DDL）**：已废弃在 Model 的 setup/upgrade 中写 DDL。当前做法：在 Model 上用 #[Col]/#[Table] 声明，执行 `php bin/w setup:upgrade`。历史示例（仅供参考）：
    ```php
-   public function upgrade(ModelSetup $setup, Context $context): void
+   public function upgrade(ModelSetup $setup, Context $context): void  // 已废弃
    {
-       // ✅ 正确：表结构变更可以使用原生 SQL
        if (!$setup->hasField('new_field')) {
            $setup->query("ALTER TABLE {$this->getTable()} ADD new_field VARCHAR(100)");
        }
@@ -1233,7 +1202,7 @@ if (!empty($user)) {
    - **推荐使用 `fetchArray()`**：当不需要 Model 对象的方法时，使用 `fetchArray()` 更高效
 
 4. **例外情况**：
-   - 表结构变更（`setup()`, `upgrade()` 方法中）可以使用原生 SQL
+   - 表结构变更：用 #[Col]/#[Table] 声明 + setup:upgrade，不在 Model 内写 DDL
    - 复杂统计查询可以使用原生 SQL
    - 数据库管理操作可以使用原生 SQL
 
@@ -1567,7 +1536,7 @@ return [
 
 2. **禁止使用的方法示例**：
    - ❌ `fetchOne()` - 不存在，使用 `find()->fetch()` 替代
-   - ❌ `tableColumnExist()` - 不存在，使用 `hasField()` 替代
+   - ❌ `tableColumnExist()`、`hasField()`（Model 表结构）— 已废弃，表结构用 #[Col]+setup:upgrade
    - ❌ 任何自己想象的方法
 
 3. **正确验证流程**：
@@ -1594,7 +1563,7 @@ return [
 - [ ] **禁止创造方法**：是否使用了任何自己想象或创造的方法（禁止）
 
 - [ ] `register.php` 文件是否包含完整的 `Register::register()` 调用，参数是否完整
-- [ ] 数据库升级方法是否使用 `hasField()` 而不是 `tableColumnExist()`
+- [ ] 表结构是否使用 #[Col]/#[Table] 声明式，是否已执行 setup:upgrade（已废弃 Model hasField/upgrade）
 - [ ] 接口实现的方法签名是否与接口定义完全一致（参数类型、返回类型）
 - [ ] 子类属性的访问级别是否与父类一致或更宽松
 - [ ] 子类属性的类型声明是否与父类完全一致
@@ -2135,7 +2104,7 @@ class YourController extends BaseController
 - [ ] **PHP 8.2+ 兼容性**：所有字符串函数参数是否处理了可能的 null 值
 - [ ] **禁止使用 fetchOne()**：所有 Model 查询是否使用 `->find()->fetch()` 而不是 `->fetchOne()`
 - [ ] **禁止使用 fetchOne()**：所有 ConnectionFactory 查询是否使用 `->query()->fetch()` 而不是 `->fetchOne()`
-- [ ] **禁止使用 fetchOne()**：字段检查是否使用 `hasField()` 或 `query()->fetch()` 而不是 `fetchOne()`
+- [ ] **禁止使用 fetchOne()**：表结构用 #[Col]+setup:upgrade（已废弃 hasField 等）
 - [ ] **ORM 操作必须使用 fetch 或 fetchArray**：所有 ORM 查询操作（`select()`、`find()`、`update()`、`delete()`、`insert()`）是否都调用了 `->fetch()` 或 `->fetchArray()`
 - [ ] **禁止使用 fetchOne()**：代码中是否使用了 `->fetchOne()`（禁止，方法不存在）
 - [ ] **ORM 使用规范**：所有业务逻辑查询是否使用 ORM 方法而不是直接 SQL

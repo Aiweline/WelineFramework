@@ -86,7 +86,7 @@ __('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count]
 | 触发事件 | `$data = [...]; dispatch('name', $data);` |
 | 获取事件数据 | `$event->getData('data')` |
 | Hook 依赖事件 | 确保事件在 Hook 渲染前触发 |
-| **模块升级** | 修改 Model 的 `upgrade()` 后必须更新 `register.php` 版本号 |
+| **模块升级** | 已废弃：Model 的 `upgrade()` 不再使用。表结构用 #[Col]/#[Table]，执行 `php bin/w setup:upgrade` 触发 SchemaDiff；业务初始化放 Setup/Install.php、Upgrade.php |
 | **依赖注入** | 控制器/服务使用的模型必须在构造函数注入 |
 | **i18n 占位符** | 使用 `%{1}` 或 `%{name}`，**绝对不要用 `%1`** |
 | 主题安装报“父主题不存在” | 子主题 `theme register` 先于父主题安装，且未按 `parent` 做依赖排序 | 在 `Weline\Theme\Register\Installer` 中按 `parent` 拓扑排序后安装，父主题先装 |
@@ -110,9 +110,9 @@ __('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count]
 
 | 错误 | 原因 | 解决方案 |
 |------|------|----------|
-| `upgrade()` 方法不执行 | `register.php` 版本号未更新 | 递增版本号（如 1.0.5 → 1.0.6） |
-| 数据库字段未添加 | 模块版本未变化 | 更新版本号后运行 `php bin/w s:up` |
-| 升级逻辑被跳过 | 框架比较版本号决定是否升级 | 每次有 upgrade 改动必须更新版本 |
+| `upgrade()` 方法不执行 | 已废弃：Model upgrade() 不再被调用 | 表结构用 #[Col] 声明，运行 `php bin/w setup:upgrade`；业务初始化放 Setup/Install.php、Upgrade.php |
+| 数据库字段未添加 | 未用声明式 schema 或未执行 setup:upgrade | 在 Model 上增加 #[Col]，执行 `php bin/w setup:upgrade` |
+| 升级逻辑被跳过 | 已废弃：不再通过版本号触发 Model upgrade | 数据/种子迁移写在 Setup/Upgrade.php，表结构用 #[Col]+setup:upgrade |
 | `Call to undefined method columnExist()` | 方法名错误 | 使用 `$setup->hasField()` 检查字段 |
 | `addColumn()` 直接在 setup 调用失败 | 需要先获取 alterTable | 使用 `$setup->alterTable()->addColumn()` |
 | `Argument #3 ($type) must be of type string` | alterTable 和 createTable 签名不同 | alterTable: `(name, after, type, len, opt, comment)` |

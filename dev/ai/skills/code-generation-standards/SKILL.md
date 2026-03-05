@@ -201,6 +201,8 @@ class Index extends BackendController
 
 ### 3. Model Template
 
+表结构使用 **声明式 #[Table]/#[Col]/#[Index]**，由 `php bin/w setup:upgrade` 触发 SchemaDiff 同步；业务初始化/种子数据放在模块 **Setup/Install.php**。Model 仅保留 `columns()` 与注解。
+
 ```php
 <?php
 declare(strict_types=1);
@@ -208,88 +210,37 @@ declare(strict_types=1);
 namespace Vendor\ModuleName\Model;
 
 use Weline\Framework\Database\Model;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 
-/**
- * @DESC | Model description
- */
+#[Table(comment: '表描述')]
+#[Index(name: 'idx_name', columns: ['name'], comment: '名称索引')]
 class YourModel extends Model
 {
-    // Field constants (REQUIRED)
+    #[Col('int', 0, nullable: false, primaryKey: true, autoIncrement: true, comment: 'ID')]
+    protected mixed $id = null;
+    #[Col('varchar', 255, nullable: false, comment: '名称')]
+    protected mixed $name = null;
+    #[Col('smallint', 1, nullable: false, default: 1, comment: '状态')]
+    protected mixed $status = null;
+    #[Col('datetime', nullable: true, comment: '创建时间')]
+    protected mixed $created_at = null;
+    #[Col('datetime', nullable: true, comment: '更新时间')]
+    protected mixed $updated_at = null;
+
     public const fields_ID = 'id';
     public const fields_NAME = 'name';
     public const fields_STATUS = 'status';
     public const fields_CREATED_AT = 'created_at';
     public const fields_UPDATED_AT = 'updated_at';
-    
-    // Primary key
+
     public array $_unit_primary_keys = ['id'];
-    
-    // Index fields
     public array $_index_sort_keys = ['id', 'name'];
-    
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
+
+    public function columns(): array
     {
-        $this->install($setup, $context);
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // Upgrade logic
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable(__('表描述'))  // ✅ Use __()
-                ->addColumn(
-                    self::fields_ID,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'primary key auto_increment',
-                    'ID'
-                )
-                ->addColumn(
-                    self::fields_NAME,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    __('名称')  // ✅ Use __()
-                )
-                ->addColumn(
-                    self::fields_STATUS,
-                    TableInterface::column_type_SMALLINT,
-                    1,
-                    'not null default 1',
-                    __('状态')
-                )
-                ->addColumn(
-                    self::fields_CREATED_AT,
-                    TableInterface::column_type_DATETIME,
-                    0,
-                    'default current_timestamp',
-                    __('创建时间')
-                )
-                ->addColumn(
-                    self::fields_UPDATED_AT,
-                    TableInterface::column_type_DATETIME,
-                    0,
-                    '',
-                    __('更新时间')
-                )
-                ->create();
-        }
+        return $this->getModelFields();
     }
 }
 ```

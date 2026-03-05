@@ -845,17 +845,21 @@ $eventsManager->dispatch('WeShop_Catalog::category_load_after', $eventData);
 
 ## [2026-01-28] 模块 upgrade() 方法不执行 - register.php 版本号未更新
 
-**错误类型**: 框架约定 / 模块升级
+**⚠️ 已废弃（Phase 7/8）**：Model 的 `install()`/`upgrade()`/`setup()` 已不再被调用。表结构改用 **#[Col]/#[Table]** 声明，执行 `php bin/w setup:upgrade` 由 SchemaDiffStage 同步；业务初始化放在 **Setup/Install.php**、**Setup/Upgrade.php**。以下为历史记录。
+
+**错误类型**: 框架约定 / 模块升级（历史）
 
 **错误表现**: 
 修改了 Model 的 `upgrade()` 方法添加新字段，但运行 `php bin/w s:up` 后数据库表结构没有变化。
 
-**根本原因**: 
-Weline 框架通过比较 `register.php` 中声明的版本号与数据库记录的版本号来决定是否执行 `upgrade()` 方法。
-如果版本号没有变化，框架认为模块没有更新，会跳过 `upgrade()` 方法的执行。
+**根本原因（历史）**: 
+此前框架通过比较 `register.php` 版本号与数据库记录决定是否执行 `upgrade()`；版本号未变则跳过。
 
-**解决方案**: 
-每次修改 Model 的 `install()` 或 `upgrade()` 方法后，必须更新模块的 `register.php` 版本号：
+**当前做法**: 
+表结构在 Model 上用 #[Col]/#[Table] 声明，运行 `php bin/w setup:upgrade`；不再依赖 register.php 版本号触发 Model 升级。
+
+**历史解决方案（仅供参考）**: 
+此前需在修改 Model 的 `install()` 或 `upgrade()` 后更新 `register.php` 版本号：
 
 ```php
 // 修改前：版本 1.0.5

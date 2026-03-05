@@ -1400,10 +1400,19 @@ window.__WelineThemeConfig = {
 ```
 
 ```javascript
-// JavaScript 中直接使用
-fetch(Weline.config.api.addToCart, {
+// JavaScript 中必须使用 Weline.Api
+Weline.Api.request(Weline.config.api.addToCart, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ product_id: 123 })
+}).then(function (response) {
+    if (response.ok && response.data) {
+        BackendToast.success('已加入购物车');
+    } else {
+        BackendToast.error(response.data?.msg || '操作失败');
+    }
+}).catch(function (err) {
+    if (!err.maintenance) BackendToast.error(err.message || '请求失败');
 });
 ```
 
@@ -1411,64 +1420,49 @@ fetch(Weline.config.api.addToCart, {
 
 ## 4. API 请求规范
 
-### 4.1 使用 Weline.Api 模块（推荐）
+### 4.1 必须使用 Weline.Api 模块
+
+**禁止**在业务代码中使用原生 `fetch()` 或 `$.ajax()`。所有 Ajax 请求必须通过 `Weline.Api.request`，以便：
+
+- 维护模式自动感知并弹窗提示
+- 404/5xx 友好错误提示
+- 统一错误处理：请求级 `onError`/`onHttpError`（返回 `true` 即接管）、全局 `onHttpError`、默认 Toast；DEV 下完整错误暴露
+
+详见：`Weline_Frontend::doc/Weline.Api使用指南.md`
 
 ```javascript
-// 加载 API 模块
+// 加载 API 模块（后台 head 通常已加载）
 Weline.declare('api');
 
 // POST 请求
 Weline.Api.request('/backend/theme-editor/save-widget', {
     method: 'POST',
-    headers: {
-        'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-        theme_id: 5,
-        widget_code: 'header-logo',
-        config: { width: 200 }
-    })
-}).then(response => {
-    if (response.success) {
-        BackendToast.success('保存成功');
-    } else {
-        BackendToast.error('保存失败: ' + response.message);
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ theme_id: 5, widget_code: 'header-logo', config: { width: 200 } })
+}).then(function (response) {
+    var data = response.data;
+    if (!response.ok) {
+        BackendToast.error(data?.msg || '保存失败');
+        return;
     }
-}).catch(error => {
-    BackendToast.error('请求失败: ' + error.message);
+    BackendToast.success(data?.msg || '保存成功');
+}).catch(function (error) {
+    if (!error.maintenance) BackendToast.error(error.message || '请求失败');
 });
 
 // GET 请求
-Weline.Api.request('/backend/theme-editor/widgets?theme_id=5', {
-    method: 'GET'
-}).then(data => {
-    console.log('部件列表:', data);
-});
+Weline.Api.request('/backend/theme-editor/widgets?theme_id=5', { method: 'GET' })
+    .then(function (response) {
+        if (response.ok) {
+            var list = response.data;
+            // 使用 list
+        }
+    });
 ```
 
-### 4.2 使用原生 Fetch（次选）
+### 4.2 禁止使用原生 fetch/$.ajax
 
-```javascript
-fetch('/backend/theme-editor/save-widget', {
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-        theme_id: 5,
-        widget_code: 'header-logo'
-    })
-})
-.then(response => response.json())
-.then(data => {
-    if (data.success) {
-        BackendToast.success('保存成功');
-    }
-})
-.catch(error => {
-    BackendToast.error('请求失败');
-});
-```
+业务代码中**禁止**直接使用 `fetch()` 或 `$.ajax()`。两者无法感知维护模式与 404/5xx，也无法统一错误处理。若需静默请求（不自动 Toast），可使用 `Weline.Api.request(url, { silent: true })`。
 
 ---
 

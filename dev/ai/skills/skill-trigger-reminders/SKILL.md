@@ -17,6 +17,7 @@ description: |
   - **提示、通知、消息、弹窗、确认、toast、alert、confirm、dialog、notification** ⭐⭐
   - **分页、pagination、pageSize、翻页、列表、getItems、getPagination、limit、offset** ⭐
   - **菜单、menu、menu.xml、ACL、权限、#[Acl]、parent_source、菜单消失、菜单层级** ⭐
+  - **#[Col]、#[Table]、schema diff、声明式 schema、加字段（改为注解）、表结构、setup:upgrade、SchemaParser、column does not exist、LocalModel、LocalDescription** → database-model-standards / module-development
 globs: []
 alwaysApply: false
 ---
@@ -164,6 +165,9 @@ Service 开发 → service-development:
   (中文) 分页, 翻页, 页码, 每页, 分页查询, 列表查询, 数据列表, 获取列表, 分页列表,
   总数, 总页数, 第几页, 上一页, 下一页, 首页, 末页, 条目, 记录数,
   ORM, 模型, Model, 查询, select, fetch, fetchArray, 链式查询,
+  表结构, 声明式 schema, #[Col], #[Table], SchemaDiff, SchemaParser, setup:upgrade,
+  LocalModel, LocalDescription, schema_primary_keys, 联合主键,
+  column does not exist, 列不存在, 列欠缺, page_id, xxx_id,
   (English) pagination, paging, page, pageSize, paginated, paged query, paged list,
   limit, offset, total, totalSize, lastPage, getItems, getPagination, items,
   per page, records, count, page number, page count

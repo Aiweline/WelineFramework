@@ -216,9 +216,9 @@ $url = $this->url->getBackendUrl('module/controller/action');
 | `json_decode`, `getContent`, POST | `weline-routing` |
 | 前台, 后台, `AdminToast`, URL | `theme-development` |
 | `alert`, `confirm`, 原生弹窗 | `friendly-notifications` |
-| `register.php`, `upgrade()` | `error-tracking/ERROR_LOG.md` |
+| `register.php`, `upgrade()`（已废弃） | 表结构用 #[Col]+setup:upgrade；见 `error-tracking/ERROR_LOG.md`、`database-model-standards` |
 | 事件, `dispatch`, Observer | `create-event` |
-| 数据库, Model, `install()`, `delete` | `database-model-standards`, `create-weshop-model` |
+| 数据库, Model, `install()`（已废弃）, `delete` | `database-model-standards`（#[Col]、Schema diff）、`create-weshop-model` |
 | `delete()->fetch()`, 删除失败 | `database-model-standards`, `error-tracking` |
 
 ### 5. 知识库自动更新

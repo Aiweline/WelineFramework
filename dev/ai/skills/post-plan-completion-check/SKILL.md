@@ -55,7 +55,7 @@ alwaysApply: false
 ## 二、模块依赖与配置
 
 - **register.php**：本次涉及的模块是否在 `register.php` 的依赖数组中声明了**实际用到的**其他模块（如使用 `Website` 则声明 Weline_Websites，使用 `AiService` 则声明 Weline_Ai，后台页则通常需 Weline_Backend 等）。
-- **版本号**：若本次包含数据库 schema 变更或 upgrade 逻辑，`register.php` 版本号是否已递增。
+- **Schema 变更**：若本次包含表结构变更，是否已在 Model 上用 #[Col]/#[Table] 声明并执行 `php bin/w setup:upgrade`（不再依赖 register.php 版本号触发 Model upgrade）。
 
 **输出**：若缺少依赖或未升版，指出并建议补全/升版。
 
