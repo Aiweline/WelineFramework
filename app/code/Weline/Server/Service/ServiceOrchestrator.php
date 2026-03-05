@@ -333,6 +333,16 @@ class ServiceOrchestrator
 
             WlsLogger::info_("[Orchestrator] 启动服务 {$displayName} (role={$role}, instances={$instanceCount}, priority={$provider->getPriority()})");
 
+            // 启动 Session Server 前释放其端口，避免残留进程导致 Address already in use
+            if ($role === 'session_server') {
+                $sessionPort = $provider->getPort(1, $context);
+                if ($sessionPort > 0) {
+                    Processer::killProcessByPort($sessionPort);
+                    Processer::forceReleasePort($sessionPort);
+                    \usleep(500000);
+                }
+            }
+
             // 使用 Fiber 批量并发启动同一服务类型的所有实例
             $instances = $this->startInstancesBatch($provider, $instanceCount, $context);
             
@@ -405,6 +415,7 @@ class ServiceOrchestrator
         
         // 委托给 Manager 持久化
         $manager->updateServices($context->instanceName, $services);
+        $manager->updateMasterPid($context->instanceName, $context->masterPid);
         WlsLogger::debug_('[Orchestrator] 服务实例信息已持久化');
     }
 

@@ -142,11 +142,13 @@ final class SessionServer
         $errno = 0;
         $errstr = '';
 
+        $ctx = \stream_context_create(['socket' => ['so_reuseaddr' => true]]);
         $this->serverSocket = @\stream_socket_server(
             "tcp://{$this->host}:{$this->port}",
             $errno,
             $errstr,
-            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+            $ctx
         );
 
         if (!$this->serverSocket) {
