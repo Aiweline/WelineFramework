@@ -50,7 +50,7 @@ class Index extends BaseController
             $order = $orderService->getOrder($orderId);
             
             // 验证订单是否属于当前用户
-            if ($order && (int)$order->getData(\WeShop\Order\Model\Order::fields_customer_id) !== $customer->getId()) {
+            if ($order && (int)$order->getData(\WeShop\Order\Model\Order::schema_fields_customer_id) !== $customer->getId()) {
                 $this->getMessageManager()->addError(__('无权访问此订单'));
                 return $this->redirect('weshop/order/list');
             }
@@ -72,10 +72,10 @@ class Index extends BaseController
         if ($order) {
             $orderData = [
                 'order_id' => $order->getId(),
-                'increment_id' => $order->getData(\WeShop\Order\Model\Order::fields_increment_id) ?? '',
-                'status' => $order->getData(\WeShop\Order\Model\Order::fields_status) ?? '',
-                'total' => $order->getData(\WeShop\Order\Model\Order::fields_total) ?? 0,
-                'created_at' => $order->getData(\WeShop\Order\Model\Order::fields_created_at) ?? '',
+                'increment_id' => $order->getData(\WeShop\Order\Model\Order::schema_fields_increment_id) ?? '',
+                'status' => $order->getData(\WeShop\Order\Model\Order::schema_fields_status) ?? '',
+                'total' => $order->getData(\WeShop\Order\Model\Order::schema_fields_total) ?? 0,
+                'created_at' => $order->getData(\WeShop\Order\Model\Order::schema_fields_created_at) ?? '',
             ];
         }
         
