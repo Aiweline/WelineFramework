@@ -111,7 +111,7 @@ class Register extends BaseController
             $customer = ObjectManager::getInstance(Customer::class);
             
             // 检查邮箱是否已存在
-            $existingCustomer = $customer->reset()->load(Customer::fields_EMAIL, $email);
+            $existingCustomer = $customer->reset()->load(Customer::schema_fields_EMAIL, $email);
             if ($existingCustomer->getId()) {
                 $this->getMessageManager()->addError(__('该邮箱已被注册'));
                 return $this->redirect('weshop/customer/account/register');
@@ -121,12 +121,12 @@ class Register extends BaseController
             // 注意：Customer模型可能没有password字段，需要先创建User或扩展Customer表结构
             // 这里先保存基本信息和password（如果表结构支持动态字段）
             $customer->clearData()
-                ->setData(Customer::fields_FIRST_NAME, $firstName)
-                ->setData(Customer::fields_LAST_NAME, $lastName)
-                ->setData(Customer::fields_EMAIL, $email)
+                ->setData(Customer::schema_fields_FIRST_NAME, $firstName)
+                ->setData(Customer::schema_fields_LAST_NAME, $lastName)
+                ->setData(Customer::schema_fields_EMAIL, $email)
                 ->setData('password', password_hash($password, PASSWORD_DEFAULT)) // TODO: 如果Customer表没有password字段，需要扩展表结构或使用User表
-                ->setData(Customer::fields_STATUS, 'active')
-                ->setData(Customer::fields_CREATED_AT, date('Y-m-d H:i:s'))
+                ->setData(Customer::schema_fields_STATUS, 'active')
+                ->setData(Customer::schema_fields_CREATED_AT, date('Y-m-d H:i:s'))
                 ->save();
             
             if ($customer->getId()) {
