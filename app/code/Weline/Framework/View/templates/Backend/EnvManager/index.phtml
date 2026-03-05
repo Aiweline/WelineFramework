@@ -272,13 +272,11 @@ function retryInstall(type, name, btn) {
     btn.disabled = true;
     btn.innerHTML = '<i class="bi bi-hourglass-split"></i> <?= __('安装中...') ?>';
 
-    fetch('<?= $this->getUrl('backend/framework/env-manager/retry-install') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
-        body: 'type=' + encodeURIComponent(type) + '&name=' + encodeURIComponent(name)
-    })
-    .then(r => r.json())
-    .then(data => {
+    var retryUrl = '<?= $this->getUrl('backend/framework/env-manager/retry-install') ?>';
+    var retryOpts = { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'}, body: 'type=' + encodeURIComponent(type) + '&name=' + encodeURIComponent(name) };
+    window.Weline.Api.request(retryUrl, retryOpts)
+    .then(function(res) {
+        var data = (res && res.data) !== undefined ? res.data : res;
         if (data.code === 200) {
             AdminToast ? AdminToast.success(data.msg) : alert(data.msg);
         } else {
@@ -296,12 +294,11 @@ function retryInstall(type, name, btn) {
 function resetAllStatuses() {
     if (!confirm('<?= __('确定要重置所有安装记录吗？下次 env:install 将重新尝试所有推荐项。') ?>')) return;
 
-    fetch('<?= $this->getUrl('backend/framework/env-manager/reset-all') ?>', {
-        method: 'POST',
-        headers: {'X-Requested-With': 'XMLHttpRequest'}
-    })
-    .then(r => r.json())
-    .then(data => {
+    var resetUrl = '<?= $this->getUrl('backend/framework/env-manager/reset-all') ?>';
+    var resetOpts = { method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'} };
+    window.Weline.Api.request(resetUrl, resetOpts)
+    .then(function(res) {
+        var data = (res && res.data) !== undefined ? res.data : res;
         AdminToast ? AdminToast.success(data.msg) : alert(data.msg);
         setTimeout(() => location.reload(), 1000);
     });

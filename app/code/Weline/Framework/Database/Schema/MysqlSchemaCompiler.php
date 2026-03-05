@@ -6,7 +6,9 @@ namespace Weline\Framework\Database\Schema;
 
 /**
  * MySQL 8.0+ DDL 编译
- * @since 1.0.0 支持 MySQL 8.0+
+ *
+ * @deprecated 方言已下沉至 Mysql Connector，使用 Connector::getDefaultTableAdditional()
+ * @since 1.0.0
  */
 final class MysqlSchemaCompiler implements SchemaCompilerInterface
 {

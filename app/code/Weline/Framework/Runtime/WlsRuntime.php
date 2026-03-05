@@ -454,6 +454,21 @@ class WlsRuntime implements RuntimeInterface
         foreach ($parse['server'] as $key => $value) {
             $_SERVER[$key] = $value;
         }
+
+        // 确保 WELINE_AREA 与本次解析结果一致（防御 cache/合并遗漏导致 MessageManager、ACL 等误判区域）
+        if (isset($parse['area']) && $parse['area'] !== '') {
+            $_SERVER['WELINE_AREA'] = $parse['area'];
+            RequestContext::area($parse['area']);
+        }
+
+        // 合并后确保 WELINE_FULL_REQUEST_URI 有效（防御 parser 未设置或覆盖）
+        $fullUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? '';
+        if ($fullUri === '' || !\str_contains($fullUri, '://')) {
+            $scheme = $_SERVER['REQUEST_SCHEME'] ?? 'http';
+            $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+            $path = $_SERVER['REQUEST_URI'] ?? '/';
+            $_SERVER['WELINE_FULL_REQUEST_URI'] = $scheme . '://' . $host . (\str_starts_with($path, '/') ? '' : '/') . $path;
+        }
         
         // 设置后端标识
         $welineArea = $_SERVER['WELINE_AREA'] ?? '';

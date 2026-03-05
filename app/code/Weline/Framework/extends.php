@@ -75,6 +75,24 @@ return [
                 ],
             ],
         ],
+        // Schema 扩展点（声明式表结构提供者，由 SchemaDiffStage 统一执行）
+        'Schema' => [
+            'path' => 'extends/module/Weline_Framework/Schema',
+            'type' => ['module'],
+            'description' => 'Schema 提供者扩展点，实现 SchemaProviderInterface 提供 TableSchema 列表，参与 setup:upgrade 的声明式 diff',
+            'required' => false,
+            'multiple' => true,
+            'interface' => 'Weline\Framework\Database\Schema\SchemaProviderInterface',
+            'details' => [
+                'interface' => [
+                    'interface' => 'Weline\Framework\Database\Schema\SchemaProviderInterface',
+                    'description' => '必须实现 getTableSchemas(): array，返回 TableSchema[]',
+                    'required_methods' => [
+                        'getTableSchemas' => '返回本提供者声明的表结构列表',
+                    ],
+                ],
+            ],
+        ],
         // Session 驱动扩展点
         'Session' => [
             'path' => 'extends/module/Weline_Framework/Session',

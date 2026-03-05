@@ -18,6 +18,9 @@ use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 
 interface QueryInterface
 {
+    /** 存在则更新：冲突时更新所有字段（语义常量，各适配器转为本方言语法） */
+    public const EXIST_UPDATE_ALL_FIELDS = 'DO UPDATE SET ALL_FIELDS';
+
     public const attr_IDENTITY_FIELD = 'identity_field';
     public const attr_TABLE = 'table';
     public const attr_TABLE_ALIA = 'table_alias';

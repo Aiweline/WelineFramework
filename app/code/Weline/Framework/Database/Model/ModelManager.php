@@ -48,38 +48,7 @@ class ModelManager
         if (!in_array($type, ['setup', 'upgrade', 'install'])) {
             throw new Exception(__('$type允许的值不在：%{1} 中', "'setup','upgrade','install'"));
         }
-        $model_files_data = $this->moduleReader->readClass($module, 'Model');
-        // 按照目录层级和类名长度排序：层级越低、名字越短的越先升级
-        $model_files_data = $this->sortModelsByPriority($model_files_data);
-        foreach ($model_files_data as $key => $model_class) {
-            $this->printing->note($model_class, __('Model升级'));
-            // 先检查是否是 trait 或 interface，这些不需要升级
-            if (trait_exists($model_class) || interface_exists($model_class)) {
-                continue;
-            }
-            if (class_exists($model_class)) {
-                // 跳过抽象类、trait、接口和静态类
-                $reflection = new \ReflectionClass($model_class);
-                if ($reflection->isAbstract() || $reflection->isTrait() || $reflection->isInterface()) {
-                    continue;
-                }
-                if (ObjectManager::isStaticClass($model_class)) {
-                    continue;
-                }
-                $model = ObjectManager::getInstance($model_class);
-                if ($model instanceof AbstractModel) {
-                    $data = new DataObject(['model' => $model, 'type' => $type, 'object' => $this, 'module' => $module]);
-                    $this->getEvenManager()->dispatch('Weline_Framework_Database::model_update_before', $data);
-                    if (PROD) {
-                        $this->printing->printing($model::class);
-                    }
-                    $this->setupModel($model, $type, $context);
-                    $this->getEvenManager()->dispatch('Weline_Framework_Database::model_update_after', $data);
-                }
-            } else {
-                $this->printing->error($model_class, __('Model升级'));
-            }
-        }
+        // Phase 7：表结构由 SchemaDiffStage + bootstrap 负责，业务初始化由各模块 Setup/Install.php、Upgrade.php 负责；不再调用 Model 的 install/upgrade/setup。
     }
 
     public function getEvenManager(): EventsManager

@@ -246,9 +246,6 @@ class Handle implements HandleInterface, RegisterInterface
         }
 
         // 模块路径
-        // 模型管理器
-        /**@var ModelManager $modelManager */
-        $modelManager = ObjectManager::getInstance(ModelManager::class);
         // 检测配置文件完整
         $router = '';
         $filepath = $param['base_path'] . DS . DataInterface::file_etc_Env;
@@ -358,7 +355,6 @@ class Handle implements HandleInterface, RegisterInterface
             'module_version' => $module->getVersion(),
             'module_description' => $module->getDescription()
         ], '__construct');
-        $modelManager = $this->getModelManager();
         // 已经存在模块则更新
         if ($this->helper->isInstalled($this->old_modules, $module->getName())) {
             if ($this->helper->isDisabled($this->modules, $module->getName())) {
@@ -368,31 +364,16 @@ class Handle implements HandleInterface, RegisterInterface
                 // 是否更新模块：是则加载模块下的Setup模块下的文件进行更新
                 $old_version = $this->old_modules[$module->getName()]['version'] ?? '1.0.0';
                 if ($this->helper->isUpgrade($old_version, $module->getVersion())) {
-                    $this->printer->note(__('扩展 %{1} 升级中...', $module->getName()));
+                    $this->printer->note(__('扩展 %{1} 升级中...', [$module->getName()]));
                     $this->printer->setup(__('升级 %{1} 到 %{2}', [$old_version, $module->getVersion()]));
-
-                    # 升级模块的模型
-                    $modelManager->update($module, $setup_context, 'upgrade');
                 }
-                # 升级模块的模型
-                if (DEV) {
-                    $this->printer->setup($module->getName() . '：模型升级...', '开发');
-                    $modelManager->update($module, $setup_context, 'setup');
-                    $this->printer->setup($module->getName() . '：模型升级完成...', '开发');
-                }
+                // Phase 7：不再调用 ModelManager::update(install/upgrade/setup)，表结构由 SchemaDiffStage、业务初始化由 Setup 脚本负责
                 $this->printer->success(str_pad($module->getName(), 45) . __('已更新！'));
             }
         } else {
             $this->printer->setup("扩展{$module->getName()}安装中...");
-            $this->printer->note('模型安装install...');
-            # 模型安装install
-            $modelManager->update($module, $setup_context, 'install');
-            // 全新安装
             $module->setStatus(true);
-            # 执行模型setup
-            if (DEV) {
-                $modelManager->update($module, $setup_context, 'setup');
-            }
+            // Phase 7：不再调用 ModelManager::update(install/setup)，表结构由 SchemaDiffStage、业务初始化由 Setup/Install.php 负责
             $this->printer->success(str_pad($module->getName(), 45) . __('已安装！'));
         }
         return $module;
@@ -456,10 +437,7 @@ class Handle implements HandleInterface, RegisterInterface
                     }
                 }
             }
-            /** @var ModelManager $modelManager */
-            $modelManager = ObjectManager::getInstance(ModelManager::class);
-            $modelManager->update($module, $setup_context, 'setup');
-            $modelManager->update($module, $setup_context, 'upgrade');
+            // Phase 7：不再调用 ModelManager::update(setup/upgrade)，表结构由 SchemaDiffStage、业务初始化由 Setup/Upgrade.php 负责
             $module->unsetData('upgrading');
             $this->modules[$module->getName()] = $module->getData();
             $this->printer->success(str_pad($module->getName(), 45) . __('已更新！'));
@@ -481,12 +459,24 @@ class Handle implements HandleInterface, RegisterInterface
                     $this->printer->warning(__('安装文件不存在：%{1}', [$setup_file]));
                 }
             }
-            # 扫描Model
-            /** @var ModelManager $modelManager */
-            $modelManager = ObjectManager::getInstance(ModelManager::class);
-            $modelManager->update($module, $setup_context, 'install');
+            // Phase 7：不再调用 ModelManager::update(install)，表结构由 SchemaDiffStage、业务初始化由 Setup/Install.php 负责
             $this->printer->success(str_pad($module->getName(), 45) . __('已安装！'));
             $module->unsetData('installing');
+        } elseif (defined('DEV') && DEV && isset($module['dev_force_run_install']) && $module['dev_force_run_install']) {
+            // 开发环境：强制执行 Install.php 的 setup()，不修改模块状态，使 Setup 内初始化/种子数据可被更新
+            $this->printer->setup(__('开发环境：重跑安装脚本 %{1}...', [$module->getName()]));
+            foreach (\Weline\Framework\Setup\Data\DataInterface::install_FILES as $install_FILE) {
+                $setup_file = $setup_dir . DS . $install_FILE . '.php';
+                if (file_exists($setup_file)) {
+                    $this->printer->note(__('执行安装文件：%{1}', [$setup_file]));
+                    $setup = ObjectManager::getInstance($setup_namespace . $install_FILE);
+                    $this->setup_data->setModuleContext($setup_context);
+                    $setup->setup($this->setup_data, $setup_context);
+                    $this->printer->success(__('安装文件执行完成：%{1}', [$install_FILE]));
+                }
+            }
+            $module->unsetData('dev_force_run_install');
+            $this->printer->success(str_pad($module->getName(), 45) . __('开发环境重跑安装脚本完成'));
         } else {
             // 调试：如果没有 installing 标志，输出调试信息
             if (DEV) {

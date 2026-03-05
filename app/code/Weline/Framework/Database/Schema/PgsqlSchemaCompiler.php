@@ -6,7 +6,9 @@ namespace Weline\Framework\Database\Schema;
 
 /**
  * PostgreSQL 16+ DDL 编译
- * @since 1.0.0 支持 PostgreSQL 16+
+ *
+ * @deprecated 方言已下沉至 Pgsql Connector
+ * @since 1.0.0
  */
 final class PgsqlSchemaCompiler implements SchemaCompilerInterface
 {
