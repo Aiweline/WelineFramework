@@ -48,14 +48,14 @@ class View extends FrontendController
         }
 
         // 验证客户权限
-        if ((int)$this->subscription->getData(Subscription::fields_CUSTOMER_ID) !== $customerId) {
+        if ((int)$this->subscription->getData(Subscription::schema_fields_CUSTOMER_ID) !== $customerId) {
             $this->getMessageManager()->addError(__('无权查看此订阅'));
             $this->redirect($this->getUrl('*/subscription/subscriptionList'));
             return '';
         }
 
         // 加载订阅计划
-        $planId = (int)$this->subscription->getData(Subscription::fields_PLAN_ID);
+        $planId = (int)$this->subscription->getData(Subscription::schema_fields_PLAN_ID);
         $this->subscriptionPlan->load($planId);
 
         // 获取历史记录
