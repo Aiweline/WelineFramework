@@ -24,12 +24,12 @@ class ReviewService
         $review = ObjectManager::getInstance(Review::class);
         
         $review->clearData()
-            ->setData(Review::fields_PRODUCT_ID, $reviewData['product_id'] ?? 0)
-            ->setData(Review::fields_CUSTOMER_ID, $reviewData['customer_id'] ?? 0)
-            ->setData(Review::fields_RATING, $reviewData['rating'] ?? 5)
-            ->setData(Review::fields_TITLE, $reviewData['title'] ?? '')
-            ->setData(Review::fields_CONTENT, $reviewData['content'] ?? '')
-            ->setData(Review::fields_STATUS, Review::STATUS_PENDING)
+            ->setData(Review::schema_fields_PRODUCT_ID, $reviewData['product_id'] ?? 0)
+            ->setData(Review::schema_fields_CUSTOMER_ID, $reviewData['customer_id'] ?? 0)
+            ->setData(Review::schema_fields_RATING, $reviewData['rating'] ?? 5)
+            ->setData(Review::schema_fields_TITLE, $reviewData['title'] ?? '')
+            ->setData(Review::schema_fields_CONTENT, $reviewData['content'] ?? '')
+            ->setData(Review::schema_fields_STATUS, Review::STATUS_PENDING)
             ->save();
         
         return $review;
@@ -49,9 +49,9 @@ class ReviewService
         $review = ObjectManager::getInstance(Review::class);
         
         $review->clear()
-            ->where(Review::fields_PRODUCT_ID, $productId)
-            ->where(Review::fields_STATUS, Review::STATUS_APPROVED)
-            ->order(Review::fields_CREATED_AT, 'DESC')
+            ->where(Review::schema_fields_PRODUCT_ID, $productId)
+            ->where(Review::schema_fields_STATUS, Review::STATUS_APPROVED)
+            ->order(Review::schema_fields_CREATED_AT, 'DESC')
             ->pagination($page, $pageSize);
         
         $items = $review->select()->fetchArray();
@@ -80,7 +80,7 @@ class ReviewService
             throw new \Exception(__('评价不存在'));
         }
         
-        $review->setData(Review::fields_STATUS, $status)->save();
+        $review->setData(Review::schema_fields_STATUS, $status)->save();
         
         return $review;
     }
