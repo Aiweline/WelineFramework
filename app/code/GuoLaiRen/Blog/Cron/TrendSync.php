@@ -47,7 +47,7 @@ class TrendSync implements CronTaskInterface
         /** @var TrendProfile $profileModel */
         $profileModel = ObjectManager::getInstance(TrendProfile::class);
         $profiles = $profileModel->clear()
-            ->where(TrendProfile::fields_IS_ACTIVE, 1)
+            ->where(TrendProfile::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetch()
             ->getItems();
@@ -68,7 +68,7 @@ class TrendSync implements CronTaskInterface
         $inserted = 0;
 
         foreach ($profiles as $profile) {
-            $profileId = (int)$profile->getData(TrendProfile::fields_ID);
+            $profileId = (int)$profile->getData(TrendProfile::schema_fields_ID);
             $keywords = $profile->getKeywordsArray();
             if (empty($keywords)) {
                 continue;
@@ -127,9 +127,9 @@ class TrendSync implements CronTaskInterface
         // 去重检查：同一 profile_id + keyword + trend_date 不重复插入
         $existsModel = ObjectManager::getInstance(TrendingKeywordLog::class);
         $exists = $existsModel->clear()
-            ->where(TrendingKeywordLog::fields_PROFILE_ID, $profileId)
-            ->where(TrendingKeywordLog::fields_KEYWORD, $keyword)
-            ->where(TrendingKeywordLog::fields_TREND_DATE, $trendDate)
+            ->where(TrendingKeywordLog::schema_fields_PROFILE_ID, $profileId)
+            ->where(TrendingKeywordLog::schema_fields_KEYWORD, $keyword)
+            ->where(TrendingKeywordLog::schema_fields_TREND_DATE, $trendDate)
             ->find()
             ->fetch();
 
@@ -139,14 +139,14 @@ class TrendSync implements CronTaskInterface
         }
 
         $logModel->clear()
-            ->setData(TrendingKeywordLog::fields_PROFILE_ID, $profileId)
-            ->setData(TrendingKeywordLog::fields_KEYWORD, $keyword)
-            ->setData(TrendingKeywordLog::fields_TREND_VALUE, $trendValue)
-            ->setData(TrendingKeywordLog::fields_PREVIOUS_VALUE, $previousValue)
-            ->setData(TrendingKeywordLog::fields_CHANGE_RATE, round($changeRate, 2))
-            ->setData(TrendingKeywordLog::fields_COMPARISON_TYPE, $comparisonType)
-            ->setData(TrendingKeywordLog::fields_TREND_DATE, $trendDate)
-            ->setData(TrendingKeywordLog::fields_SOURCE, 'google_trends')
+            ->setData(TrendingKeywordLog::schema_fields_PROFILE_ID, $profileId)
+            ->setData(TrendingKeywordLog::schema_fields_KEYWORD, $keyword)
+            ->setData(TrendingKeywordLog::schema_fields_TREND_VALUE, $trendValue)
+            ->setData(TrendingKeywordLog::schema_fields_PREVIOUS_VALUE, $previousValue)
+            ->setData(TrendingKeywordLog::schema_fields_CHANGE_RATE, round($changeRate, 2))
+            ->setData(TrendingKeywordLog::schema_fields_COMPARISON_TYPE, $comparisonType)
+            ->setData(TrendingKeywordLog::schema_fields_TREND_DATE, $trendDate)
+            ->setData(TrendingKeywordLog::schema_fields_SOURCE, 'google_trends')
             ->save();
 
         return true;

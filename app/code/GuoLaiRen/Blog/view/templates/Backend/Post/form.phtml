@@ -288,7 +288,7 @@ $isEdit = $post && $post->getId();
     </div>
 </form>
 
-<!-- Offcanvas 新建站点 -->
+<!-- Offcanvas 新建站点（遵循 Websites 站点建立逻辑） -->
 <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasNewSite" aria-labelledby="offcanvasNewSiteLabel">
     <div class="offcanvas-header border-bottom">
         <h5 class="offcanvas-title" id="offcanvasNewSiteLabel">
@@ -298,7 +298,27 @@ $isEdit = $post && $post->getId();
     </div>
     <div class="offcanvas-body">
         <form id="quickSiteForm" class="needs-validation" novalidate>
-            <!-- 站点名称 -->
+            <!-- 可选：从域名池选择域名（自动填充下方字段） -->
+            <div class="mb-3">
+                <label class="form-label">
+                    <i class="mdi mdi-domain me-1"></i> <?= __('选择域名（可选）') ?>
+                </label>
+                <w:websites:domain:select
+                    id="quick_site_domain_select"
+                    name="quick_site_domain"
+                    value="''"
+                    display="点击选择域名"
+                    class="w-100"
+                    multiple="false"
+                    site-ready-only="true"
+                    auto-fill-name="new_site_name"
+                    auto-fill-code="new_site_code"
+                    auto-fill-url="new_site_url"
+                />
+                <div class="form-text"><?= __('从域名池选择后可自动填充站点名称、代码和URL') ?></div>
+            </div>
+            
+            <!-- 站点名称（必填） -->
             <div class="mb-3">
                 <label for="new_site_name" class="form-label">
                     <?= __('站点名称') ?> <span class="text-danger">*</span>
@@ -306,13 +326,30 @@ $isEdit = $post && $post->getId();
                 <input type="text" 
                        class="form-control" 
                        id="new_site_name" 
-                       name="site_name" 
+                       name="name" 
                        placeholder="<?= __('例如：我的博客站点') ?>"
                        required>
                 <div class="invalid-feedback"><?= __('请输入站点名称') ?></div>
             </div>
             
-            <!-- 站点URL -->
+            <!-- 站点代码（必填） -->
+            <div class="mb-3">
+                <label for="new_site_code" class="form-label">
+                    <?= __('站点代码') ?> <span class="text-danger">*</span>
+                </label>
+                <input type="text" 
+                       class="form-control" 
+                       id="new_site_code" 
+                       name="code" 
+                       placeholder="<?= __('例如：my_blog，仅小写字母、数字、下划线') ?>"
+                       pattern="[a-z0-9_]+"
+                       title="<?= __('只能包含小写字母、数字和下划线') ?>"
+                       required>
+                <div class="form-text"><?= __('唯一标识，可由选择域名自动生成') ?></div>
+                <div class="invalid-feedback"><?= __('请输入有效的站点代码') ?></div>
+            </div>
+            
+            <!-- 站点URL（必填） -->
             <div class="mb-3">
                 <label for="new_site_url" class="form-label">
                     <?= __('站点URL') ?> <span class="text-danger">*</span>
@@ -320,48 +357,10 @@ $isEdit = $post && $post->getId();
                 <input type="url" 
                        class="form-control" 
                        id="new_site_url" 
-                       name="site_url" 
+                       name="url" 
                        placeholder="<?= __('例如：https://example.com') ?>"
                        required>
                 <div class="invalid-feedback"><?= __('请输入有效的站点URL') ?></div>
-            </div>
-            
-            <!-- 密钥（自动生成） -->
-            <div class="mb-3">
-                <label for="new_secret_key" class="form-label">
-                    <?= __('加密密钥') ?>
-                </label>
-                <div class="input-group">
-                    <input type="text" 
-                           class="form-control" 
-                           id="new_secret_key" 
-                           name="secret_key" 
-                           placeholder="<?= __('留空自动生成') ?>"
-                           readonly>
-                    <button class="btn btn-outline-secondary" type="button" onclick="generateSecretKey()">
-                        <i class="mdi mdi-refresh"></i> <?= __('生成') ?>
-                    </button>
-                </div>
-                <div class="form-text"><?= __('用于数据加密传输，建议自动生成') ?></div>
-            </div>
-            
-            <!-- 用户类型 -->
-            <div class="mb-3">
-                <label for="new_user_type" class="form-label"><?= __('用户类型') ?></label>
-                <select class="form-select" id="new_user_type" name="user_type">
-                    <option value="frontend"><?= __('前台用户') ?></option>
-                    <option value="backend"><?= __('后台用户') ?></option>
-                </select>
-            </div>
-            
-            <!-- 是否启用 -->
-            <div class="mb-4">
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="new_is_enabled" name="is_enabled" value="1" checked>
-                    <label class="form-check-label" for="new_is_enabled">
-                        <?= __('启用站点') ?>
-                    </label>
-                </div>
             </div>
             
             <!-- 提交按钮 -->
@@ -392,22 +391,7 @@ document.getElementById('title')?.addEventListener('input', function() {
     }
 });
 
-// 生成随机密钥
-function generateSecretKey() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let key = '';
-    for (let i = 0; i < 32; i++) {
-        key += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    document.getElementById('new_secret_key').value = key;
-}
-
-// 页面加载时自动生成密钥
-document.addEventListener('DOMContentLoaded', function() {
-    generateSecretKey();
-});
-
-// 快速创建站点表单提交
+// 快速创建站点表单提交（使用 Websites 的 quickSave 接口）
 document.getElementById('quickSiteForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -427,37 +411,41 @@ document.getElementById('quickSiteForm')?.addEventListener('submit', async funct
     submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span><?= __("保存中...") ?>';
     
     try {
-        const formData = new FormData(form);
+        const formData = new FormData();
+        formData.append('name', document.getElementById('new_site_name').value.trim());
+        formData.append('code', document.getElementById('new_site_code').value.trim());
+        formData.append('url', document.getElementById('new_site_url').value.trim());
+        formData.append('default_timezone', 'Asia/Shanghai');
         
-        // 发送AJAX请求
-        const response = await fetch('<?= $this->getBackendUrl("multipass/backend/site/quickSave") ?>', {
-            method: 'POST',
-            body: formData
-        });
+        // 发送到 Websites 的 quickSave 接口（与 PageBuilder 一键建站保持一致）
+        var url = '<?= $this->getBackendUrl("websites/admin/website/quickSave") ?>';
+        var opts = { method: 'POST', body: formData };
+        var response = await window.Weline.Api.request(url, opts);
+        var result = (response && response.data) !== undefined ? response.data : response;
         
-        const result = await response.json();
-        
-        if (result.success) {
+        if (result.success && result.website) {
+            var w = result.website;
             // 显示成功提示
             alertDiv.innerHTML = '<div class="alert alert-success alert-dismissible fade show" role="alert">' +
-                '<i class="mdi mdi-check-circle me-1"></i>' + result.message +
+                '<i class="mdi mdi-check-circle me-1"></i>' + (result.message || '<?= __("站点创建成功") ?>') +
                 '<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>';
             alertDiv.style.display = 'block';
             
-            // 将新站点添加到下拉列表并选中
+            // 将新站点添加到下拉列表并选中（Blog 使用 website_id 作为 site_id）
             const siteSelect = document.getElementById('site_id');
-            const option = new Option(result.site.site_name, result.site.site_id, true, true);
+            const option = new Option(w.name || w.site_name, w.website_id, true, true);
             siteSelect.add(option);
             
-            // 重置表单并生成新密钥
+            // 重置表单
             form.reset();
             form.classList.remove('was-validated');
-            generateSecretKey();
             
-            // 2秒后关闭offcanvas
-            setTimeout(() => {
-                const offcanvas = bootstrap.Offcanvas.getInstance(document.getElementById('offcanvasNewSite'));
-                offcanvas?.hide();
+            // 2秒后关闭 offcanvas
+            setTimeout(function() {
+                var oc = document.getElementById('offcanvasNewSite');
+                if (oc && bootstrap.Offcanvas.getInstance(oc)) {
+                    bootstrap.Offcanvas.getInstance(oc).hide();
+                }
                 alertDiv.style.display = 'none';
             }, 1500);
         } else {
@@ -474,7 +462,6 @@ document.getElementById('quickSiteForm')?.addEventListener('submit', async funct
             '<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>';
         alertDiv.style.display = 'block';
     } finally {
-        // 恢复按钮状态
         submitBtn.disabled = false;
         submitBtn.innerHTML = '<i class="mdi mdi-content-save"></i> <?= __("保存站点") ?>';
     }

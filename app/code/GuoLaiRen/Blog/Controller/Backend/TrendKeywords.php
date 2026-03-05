@@ -48,7 +48,7 @@ class TrendKeywords extends BackendController
                         ]);
                         $top10 = $service->topByValue($trends, 10);
                         $this->assign('top10', $top10);
-                        $this->assign('profile_name', $profileModel->getData(TrendProfile::fields_NAME));
+                        $this->assign('profile_name', $profileModel->getData(TrendProfile::schema_fields_NAME));
                     } catch (\Throwable $e) {
                         $this->assign('error', $e->getMessage());
                     }
@@ -68,16 +68,16 @@ class TrendKeywords extends BackendController
         /** @var TrendProfile $profile */
         $profile = ObjectManager::getInstance(TrendProfile::class);
         $items = $profile->clear()
-            ->where(TrendProfile::fields_IS_ACTIVE, 1)
-            ->order(TrendProfile::fields_SORT, 'ASC')
+            ->where(TrendProfile::schema_fields_IS_ACTIVE, 1)
+            ->order(TrendProfile::schema_fields_SORT, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
         $out = [['profile_id' => 0, 'name' => __('请选择画像')]];
         foreach ($items as $p) {
             $out[] = [
-                'profile_id' => (int)$p->getData(TrendProfile::fields_ID),
-                'name' => $p->getData(TrendProfile::fields_NAME),
+                'profile_id' => (int)$p->getData(TrendProfile::schema_fields_ID),
+                'name' => $p->getData(TrendProfile::schema_fields_NAME),
             ];
         }
         return $out;

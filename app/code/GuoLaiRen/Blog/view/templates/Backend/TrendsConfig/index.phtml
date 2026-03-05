@@ -202,17 +202,17 @@ $growthComparison = $configs['guolairen_blog_trends_growth_comparison'] ?? 'both
         fd.forEach(function(v, k) {
             if (k.indexOf('config[') === 0) config[k] = v;
         });
-        fetch('<?= $this->getUrl('blog/backend/trends-config/save') ?>', {
-            method: 'POST',
-            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams(fd)
-        }).then(function(r) { return r.json(); }).then(function(res) {
-            var msg = res.success ? (res.message || '') : (res.message || 'Error');
+        var trendsUrl = '<?= $this->getUrl('blog/backend/trends-config/save') ?>';
+        var trendsOpts = { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(fd) };
+        window.Weline.Api.request(trendsUrl, trendsOpts)
+        .then(function(res) {
+            var data = (res && res.data) !== undefined ? res.data : res;
+            var msg = data.success ? (data.message || '') : (data.message || 'Error');
             if (typeof AdminToast !== 'undefined') {
-                if (res.success) AdminToast.success(msg); else AdminToast.error(msg);
+                if (data.success) AdminToast.success(msg); else AdminToast.error(msg);
             } else {
                 var el = document.getElementById('trends-config-msg');
-                if (el) { el.textContent = msg; el.className = 'alert alert-' + (res.success ? 'success' : 'danger'); el.style.display = 'block'; }
+                if (el) { el.textContent = msg; el.className = 'alert alert-' + (data.success ? 'success' : 'danger'); el.style.display = 'block'; }
             }
         }).catch(function() {
             var errMsg = '<?= __('保存失败，请重试') ?>';

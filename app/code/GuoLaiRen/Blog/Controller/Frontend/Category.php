@@ -64,11 +64,11 @@ class Category extends FrontendController
         // 加载分类
         $category = clone $this->categoryModel;
         $query = $category->clear()
-            ->where(CategoryModel::fields_SLUG, $slug)
-            ->where(CategoryModel::fields_STATUS, CategoryModel::STATUS_ENABLED);
+            ->where(CategoryModel::schema_fields_SLUG, $slug)
+            ->where(CategoryModel::schema_fields_STATUS, CategoryModel::STATUS_ENABLED);
 
         if ($websiteId) {
-            $query->where(CategoryModel::fields_SITE_ID, $websiteId);
+            $query->where(CategoryModel::schema_fields_SITE_ID, $websiteId);
         }
 
         $query->find()->fetch();
@@ -81,14 +81,14 @@ class Category extends FrontendController
         // 获取分类下的文章
         $listModel = clone $this->postModel;
         $listModel->clear()
-            ->where(Post::fields_STATUS, Post::STATUS_PUBLISHED)
-            ->where(Post::fields_CATEGORY_ID, $category->getId());
+            ->where(Post::schema_fields_STATUS, Post::STATUS_PUBLISHED)
+            ->where(Post::schema_fields_CATEGORY_ID, $category->getId());
 
         if ($websiteId) {
-            $listModel->where(Post::fields_SITE_ID, $websiteId);
+            $listModel->where(Post::schema_fields_SITE_ID, $websiteId);
         }
 
-        $listModel->order(Post::fields_PUBLISHED_AT, 'DESC')
+        $listModel->order(Post::schema_fields_PUBLISHED_AT, 'DESC')
             ->page($page, $pageSize);
 
         $collection = $listModel->select()->fetch();
@@ -96,29 +96,29 @@ class Category extends FrontendController
 
         $posts = [];
         foreach ($items as $item) {
-            $postSlug = (string)$item->getData(Post::fields_SLUG);
+            $postSlug = (string)$item->getData(Post::schema_fields_SLUG);
             $posts[] = [
                 'post_id'      => (int)$item->getId(),
-                'title'        => (string)$item->getData(Post::fields_TITLE),
-                'summary'      => (string)$item->getData(Post::fields_SUMMARY),
+                'title'        => (string)$item->getData(Post::schema_fields_TITLE),
+                'summary'      => (string)$item->getData(Post::schema_fields_SUMMARY),
                 'slug'         => $postSlug,
                 'url'          => '/blog/' . $postSlug,
-                'cover_image'  => (string)$item->getData(Post::fields_COVER_IMAGE),
-                'author'       => (string)$item->getData(Post::fields_AUTHOR),
-                'published_at' => (string)$item->getData(Post::fields_PUBLISHED_AT),
-                'view_count'   => (int)$item->getData(Post::fields_VIEW_COUNT),
+                'cover_image'  => (string)$item->getData(Post::schema_fields_COVER_IMAGE),
+                'author'       => (string)$item->getData(Post::schema_fields_AUTHOR),
+                'published_at' => (string)$item->getData(Post::schema_fields_PUBLISHED_AT),
+                'view_count'   => (int)$item->getData(Post::schema_fields_VIEW_COUNT),
             ];
         }
 
         // 当前分类数据
         $currentCategory = [
             'category_id'  => $category->getId(),
-            'name'         => $category->getData(CategoryModel::fields_NAME),
-            'slug'         => $category->getData(CategoryModel::fields_SLUG),
-            'description'  => $category->getData(CategoryModel::fields_DESCRIPTION),
-            'cover_image'  => $category->getData(CategoryModel::fields_COVER_IMAGE),
-            'meta_title'   => $category->getData(CategoryModel::fields_META_TITLE),
-            'meta_description' => $category->getData(CategoryModel::fields_META_DESCRIPTION),
+            'name'         => $category->getData(CategoryModel::schema_fields_NAME),
+            'slug'         => $category->getData(CategoryModel::schema_fields_SLUG),
+            'description'  => $category->getData(CategoryModel::schema_fields_DESCRIPTION),
+            'cover_image'  => $category->getData(CategoryModel::schema_fields_COVER_IMAGE),
+            'meta_title'   => $category->getData(CategoryModel::schema_fields_META_TITLE),
+            'meta_description' => $category->getData(CategoryModel::schema_fields_META_DESCRIPTION),
         ];
 
         // 获取所有博客分类列表
@@ -174,9 +174,9 @@ class Category extends FrontendController
         $homeConfig = $blogPage->getHomePageConfig();
 
         // 页面使用自己的样式设置（如果没有设置，才使用首页的）
-        $pageStyle = $blogPage->getData(Page::fields_STYLE);
+        $pageStyle = $blogPage->getData(Page::schema_fields_STYLE);
         if (empty($pageStyle) && !empty($homeConfig['style'])) {
-            $blogPage->setData(Page::fields_STYLE, $homeConfig['style']);
+            $blogPage->setData(Page::schema_fields_STYLE, $homeConfig['style']);
         }
 
         // 样式配置：页面自己的配置优先，首页配置作为基础
@@ -187,31 +187,31 @@ class Category extends FrontendController
         }
 
         // 设置页面标题（使用分类名称）
-        $blogPage->setData(Page::fields_TITLE, $currentCategory['name']);
-        $blogPage->setData(Page::fields_META_TITLE, $currentCategory['meta_title'] ?: $currentCategory['name']);
+        $blogPage->setData(Page::schema_fields_TITLE, $currentCategory['name']);
+        $blogPage->setData(Page::schema_fields_META_TITLE, $currentCategory['meta_title'] ?: $currentCategory['name']);
         if (!empty($currentCategory['meta_description'])) {
-            $blogPage->setData(Page::fields_META_DESCRIPTION, $currentCategory['meta_description']);
+            $blogPage->setData(Page::schema_fields_META_DESCRIPTION, $currentCategory['meta_description']);
         } elseif (!empty($currentCategory['description'])) {
-            $blogPage->setData(Page::fields_META_DESCRIPTION, mb_substr($currentCategory['description'], 0, 160));
+            $blogPage->setData(Page::schema_fields_META_DESCRIPTION, mb_substr($currentCategory['description'], 0, 160));
         }
 
         // Logo 和 Icon：页面自己的优先，没有则从首页继承
-        if (empty($blogPage->getData(Page::fields_LOGO)) && !empty($homeConfig['logo'])) {
-            $blogPage->setData(Page::fields_LOGO, $homeConfig['logo']);
+        if (empty($blogPage->getData(Page::schema_fields_LOGO)) && !empty($homeConfig['logo'])) {
+            $blogPage->setData(Page::schema_fields_LOGO, $homeConfig['logo']);
         }
-        if (empty($blogPage->getData(Page::fields_ICON)) && !empty($homeConfig['icon'])) {
-            $blogPage->setData(Page::fields_ICON, $homeConfig['icon']);
+        if (empty($blogPage->getData(Page::schema_fields_ICON)) && !empty($homeConfig['icon'])) {
+            $blogPage->setData(Page::schema_fields_ICON, $homeConfig['icon']);
         }
 
         // 统计代码：页面自己的优先，没有则从首页继承
-        if (empty($blogPage->getData(Page::fields_GA4_ID)) && !empty($homeConfig['ga4_id'])) {
-            $blogPage->setData(Page::fields_GA4_ID, $homeConfig['ga4_id']);
+        if (empty($blogPage->getData(Page::schema_fields_GA4_ID)) && !empty($homeConfig['ga4_id'])) {
+            $blogPage->setData(Page::schema_fields_GA4_ID, $homeConfig['ga4_id']);
         }
-        if (empty($blogPage->getData(Page::fields_GTM_ID)) && !empty($homeConfig['gtm_id'])) {
-            $blogPage->setData(Page::fields_GTM_ID, $homeConfig['gtm_id']);
+        if (empty($blogPage->getData(Page::schema_fields_GTM_ID)) && !empty($homeConfig['gtm_id'])) {
+            $blogPage->setData(Page::schema_fields_GTM_ID, $homeConfig['gtm_id']);
         }
-        if (empty($blogPage->getData(Page::fields_FB_PIXEL_ID)) && !empty($homeConfig['fb_pixel_id'])) {
-            $blogPage->setData(Page::fields_FB_PIXEL_ID, $homeConfig['fb_pixel_id']);
+        if (empty($blogPage->getData(Page::schema_fields_FB_PIXEL_ID)) && !empty($homeConfig['fb_pixel_id'])) {
+            $blogPage->setData(Page::schema_fields_FB_PIXEL_ID, $homeConfig['fb_pixel_id']);
         }
 
         // 设置请求对象
@@ -244,11 +244,11 @@ class Category extends FrontendController
 
         $page = clone $this->pageModel;
         $page->clear()
-            ->where(Page::fields_TYPE, Page::TYPE_BLOG_CATEGORY)
-            ->where(Page::fields_STATUS, Page::STATUS_PUBLISHED);
+            ->where(Page::schema_fields_TYPE, Page::TYPE_BLOG_CATEGORY)
+            ->where(Page::schema_fields_STATUS, Page::STATUS_PUBLISHED);
 
         if ($websiteId) {
-            $page->where(Page::fields_WEBSITE_ID, $websiteId);
+            $page->where(Page::schema_fields_WEBSITE_ID, $websiteId);
         }
 
         $page->find()->fetch();
@@ -257,11 +257,11 @@ class Category extends FrontendController
         if (!$page->getId()) {
             $page = clone $this->pageModel;
             $page->clear()
-                ->where(Page::fields_TYPE, Page::TYPE_BLOG_LIST)
-                ->where(Page::fields_STATUS, Page::STATUS_PUBLISHED);
+                ->where(Page::schema_fields_TYPE, Page::TYPE_BLOG_LIST)
+                ->where(Page::schema_fields_STATUS, Page::STATUS_PUBLISHED);
 
             if ($websiteId) {
-                $page->where(Page::fields_WEBSITE_ID, $websiteId);
+                $page->where(Page::schema_fields_WEBSITE_ID, $websiteId);
             }
 
             $page->find()->fetch();
@@ -286,26 +286,26 @@ class Category extends FrontendController
         $websiteId = WebsiteData::getWebsiteId();
         $categories = clone $this->categoryModel;
         $query = $categories->clear()
-            ->where(CategoryModel::fields_STATUS, 1);
+            ->where(CategoryModel::schema_fields_STATUS, 1);
 
         if ($websiteId) {
-            $query->where(CategoryModel::fields_SITE_ID, $websiteId);
+            $query->where(CategoryModel::schema_fields_SITE_ID, $websiteId);
         }
 
-        $items = $query->order(CategoryModel::fields_SORT_ORDER, 'ASC')
+        $items = $query->order(CategoryModel::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
 
         $result = [];
         foreach ($items as $cat) {
-            $slug = $cat->getData(CategoryModel::fields_SLUG);
+            $slug = $cat->getData(CategoryModel::schema_fields_SLUG);
             $result[] = [
                 'category_id' => $cat->getId(),
-                'name' => $cat->getData(CategoryModel::fields_NAME),
+                'name' => $cat->getData(CategoryModel::schema_fields_NAME),
                 'slug' => $slug,
                 'url' => '/blog/category/' . $slug,
-                'description' => $cat->getData(CategoryModel::fields_DESCRIPTION),
+                'description' => $cat->getData(CategoryModel::schema_fields_DESCRIPTION),
             ];
         }
 
@@ -320,13 +320,13 @@ class Category extends FrontendController
         $websiteId = WebsiteData::getWebsiteId();
         $posts = clone $this->postModel;
         $query = $posts->clear()
-            ->where(Post::fields_STATUS, Post::STATUS_PUBLISHED);
+            ->where(Post::schema_fields_STATUS, Post::STATUS_PUBLISHED);
 
         if ($websiteId) {
-            $query->where(Post::fields_SITE_ID, $websiteId);
+            $query->where(Post::schema_fields_SITE_ID, $websiteId);
         }
 
-        $items = $query->order(Post::fields_PUBLISHED_AT, 'DESC')
+        $items = $query->order(Post::schema_fields_PUBLISHED_AT, 'DESC')
             ->limit($limit)
             ->select()
             ->fetch()
@@ -334,14 +334,14 @@ class Category extends FrontendController
 
         $result = [];
         foreach ($items as $item) {
-            $slug = $item->getData(Post::fields_SLUG);
+            $slug = $item->getData(Post::schema_fields_SLUG);
             $result[] = [
                 'post_id' => $item->getId(),
-                'title' => $item->getData(Post::fields_TITLE),
+                'title' => $item->getData(Post::schema_fields_TITLE),
                 'slug' => $slug,
                 'url' => '/blog/' . $slug,
-                'cover_image' => $item->getData(Post::fields_COVER_IMAGE),
-                'published_at' => $item->getData(Post::fields_PUBLISHED_AT),
+                'cover_image' => $item->getData(Post::schema_fields_COVER_IMAGE),
+                'published_at' => $item->getData(Post::schema_fields_PUBLISHED_AT),
             ];
         }
 
