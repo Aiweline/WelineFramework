@@ -333,6 +333,20 @@ HTTPS 请求 → Dispatcher (443) → 负载均衡 → Worker (10443+N)
 | 完全重启 | `server:restart -r` | Master + Dispatcher + Worker | 修改 Dispatcher、Master 或启动参数 |
 | 缓存清理 | `cache:clear` | opcache + ObjectManager + WLS内存缓存 | 配置变更、模板变更、静态文件变更等 |
 
+### 热重载期间自旋等待
+
+Dispatcher 模式下，当所有 Worker 暂时不可用（如热重载空窗期）时，PassthroughCore 会**自旋等待**最多 3 秒（默认），每 50ms 重试连接，避免请求直接失败（404/连接拒绝）。可通过 `spin_wait_max_seconds`（秒）、`spin_wait_interval_ms`（毫秒）配置。
+
+### 完全重启 (-r -f) 推荐流程
+
+`server:start -r -f` 会直接停再启，**不会**自动开启维护模式。若希望重启期间用户看到维护页而非连接错误，推荐流程：
+
+1. **先启用维护模式**：`php bin/w server:maintenance enable` — 启动维护 Worker，新请求返回 503 维护页
+2. **执行完全重启**：`php bin/w server:start -r -f` — 停止旧进程并启动新进程
+3. **启动完成后关闭维护模式**：`php bin/w server:maintenance disable`
+
+注意：维护 Worker 随 Master 停止而退出，-r -f 切换期间仍有一段无服务窗口；维护页主要用于切换前告知用户“正在升级”。
+
 ### 缓存清理详情
 
 执行 `cache:clear` 时，WLS 会自动清理以下缓存：
