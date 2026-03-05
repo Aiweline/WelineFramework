@@ -25,7 +25,7 @@ class AffiliateService
         
         // 检查是否已存在
         $existing = $affiliate->clear()
-            ->where(Affiliate::fields_CUSTOMER_ID, $customerId)
+            ->where(Affiliate::schema_fields_CUSTOMER_ID, $customerId)
             ->find()
             ->fetch();
         
@@ -37,10 +37,10 @@ class AffiliateService
         $referralCode = $this->generateReferralCode($customerId);
         
         $affiliate->clearData()
-            ->setData(Affiliate::fields_CUSTOMER_ID, $customerId)
-            ->setData(Affiliate::fields_REFERRAL_CODE, $referralCode)
-            ->setData(Affiliate::fields_COMMISSION_RATE, 0.1) // 默认10%
-            ->setData(Affiliate::fields_STATUS, 'active')
+            ->setData(Affiliate::schema_fields_CUSTOMER_ID, $customerId)
+            ->setData(Affiliate::schema_fields_REFERRAL_CODE, $referralCode)
+            ->setData(Affiliate::schema_fields_COMMISSION_RATE, 0.1) // 默认10%
+            ->setData(Affiliate::schema_fields_STATUS, 'active')
             ->save();
         
         return $affiliate;
@@ -68,13 +68,13 @@ class AffiliateService
     {
         /** @var Affiliate $affiliate */
         $affiliate = ObjectManager::getInstance(Affiliate::class);
-        $affiliate->load(Affiliate::fields_REFERRAL_CODE, $referralCode);
+        $affiliate->load(Affiliate::schema_fields_REFERRAL_CODE, $referralCode);
         
-        if (!$affiliate->getId() || $affiliate->getData(Affiliate::fields_STATUS) !== 'active') {
+        if (!$affiliate->getId() || $affiliate->getData(Affiliate::schema_fields_STATUS) !== 'active') {
             return 0;
         }
         
-        $rate = (float)$affiliate->getData(Affiliate::fields_COMMISSION_RATE);
+        $rate = (float)$affiliate->getData(Affiliate::schema_fields_COMMISSION_RATE);
         return $orderTotal * $rate;
     }
 }
