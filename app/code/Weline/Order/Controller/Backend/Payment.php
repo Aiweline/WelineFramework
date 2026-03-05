@@ -79,7 +79,7 @@ class Payment extends BackendController
         
         try {
             $payment = $this->paymentService->refundPayment($paymentId, $amount);
-            $orderId = (int)$payment->getData(\Weline\Order\Model\OrderPayment::fields_ORDER_ID);
+            $orderId = (int)$payment->getData(\Weline\Order\Model\OrderPayment::schema_fields_ORDER_ID);
             $this->getMessageManager()->addSuccess(__('退款成功'));
             // 退款成功后返回订单详情
             $this->redirect('order/backend/order/view?id=' . $orderId);

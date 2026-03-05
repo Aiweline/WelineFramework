@@ -41,8 +41,8 @@ class OrderStatusService
         if ($this->statusCache === null) {
             /** @var OrderStatus $statusModel */
             $statusModel = $this->objectManager->getInstance(OrderStatus::class);
-            $this->statusCache = $statusModel->where(OrderStatus::fields_IS_ACTIVE, 1)
-                ->order(OrderStatus::fields_SORT_ORDER, 'ASC')
+            $this->statusCache = $statusModel->where(OrderStatus::schema_fields_IS_ACTIVE, 1)
+                ->order(OrderStatus::schema_fields_SORT_ORDER, 'ASC')
                 ->select()
                 ->fetch();
         }
@@ -60,7 +60,7 @@ class OrderStatusService
     {
         /** @var OrderStatus $statusModel */
         $statusModel = $this->objectManager->getInstance(OrderStatus::class);
-        $statusModel->load(OrderStatus::fields_CODE, $code);
+        $statusModel->load(OrderStatus::schema_fields_CODE, $code);
         
         if (!$statusModel->getId()) {
             return null;
@@ -95,7 +95,7 @@ class OrderStatusService
         if ($locale !== null) {
             $translation = $this->getTranslation($code, $locale);
             if ($translation) {
-                return $translation->getData(OrderStatusTranslation::fields_NAME);
+                return $translation->getData(OrderStatusTranslation::schema_fields_NAME);
             }
         }
 
@@ -105,7 +105,7 @@ class OrderStatusService
         
         // 如果翻译不存在，返回状态默认名称
         if ($translated === $translationKey) {
-            return $status->getData(OrderStatus::fields_NAME);
+            return $status->getData(OrderStatus::schema_fields_NAME);
         }
         
         return $translated;
@@ -132,8 +132,8 @@ class OrderStatusService
         
         /** @var OrderStatusTranslation $translationModel */
         $translationModel = $this->objectManager->getInstance(OrderStatusTranslation::class);
-        $translationModel->where(OrderStatusTranslation::fields_STATUS_CODE, $code)
-            ->where(OrderStatusTranslation::fields_LOCALE, $locale)
+        $translationModel->where(OrderStatusTranslation::schema_fields_STATUS_CODE, $code)
+            ->where(OrderStatusTranslation::schema_fields_LOCALE, $locale)
             ->find()
             ->fetch();
         
@@ -155,7 +155,7 @@ class OrderStatusService
     {
         $status = $this->getStatusByCode($code);
         if ($status) {
-            return $status->getData(OrderStatus::fields_COLOR) ?? 'secondary';
+            return $status->getData(OrderStatus::schema_fields_COLOR) ?? 'secondary';
         }
         
         // 默认映射
@@ -182,7 +182,7 @@ class OrderStatusService
     {
         $status = $this->getStatusByCode($code);
         if ($status) {
-            return $status->getData(OrderStatus::fields_ICON);
+            return $status->getData(OrderStatus::schema_fields_ICON);
         }
         
         return null;
@@ -266,11 +266,11 @@ class OrderStatusService
         
         foreach ($defaultStatuses as $statusData) {
             $statusModel->reset();
-            $statusModel->load(OrderStatus::fields_CODE, $statusData['code']);
+            $statusModel->load(OrderStatus::schema_fields_CODE, $statusData['code']);
             
             if (!$statusModel->getId()) {
                 $statusModel->setData($statusData)
-                    ->setData(OrderStatus::fields_IS_ACTIVE, 1)
+                    ->setData(OrderStatus::schema_fields_IS_ACTIVE, 1)
                     ->save();
             }
         }

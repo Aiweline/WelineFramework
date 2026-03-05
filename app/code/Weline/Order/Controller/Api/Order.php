@@ -112,14 +112,14 @@ class Order extends BackendRestController
             // 获取订单历史
             $historyModel = ObjectManager::getInstance(\Weline\Order\Model\OrderHistory::class);
             $history = $historyModel->reset()
-                ->where(\Weline\Order\Model\OrderHistory::fields_ORDER_ID, $orderId)
-                ->order(\Weline\Order\Model\OrderHistory::fields_CREATED_AT, 'DESC')
+                ->where(\Weline\Order\Model\OrderHistory::schema_fields_ORDER_ID, $orderId)
+                ->order(\Weline\Order\Model\OrderHistory::schema_fields_CREATED_AT, 'DESC')
                 ->select()
                 ->fetch()
                 ->getItems();
             
             // 获取可用状态转换
-            $currentStatus = $order->getData(\Weline\Order\Model\Order::fields_STATUS);
+            $currentStatus = $order->getData(\Weline\Order\Model\Order::schema_fields_STATUS);
             $availableTransitions = $this->stateMachine->getAvailableTransitions($currentStatus);
             
             return $this->success(__('获取订单详情成功'), [
@@ -166,7 +166,7 @@ class Order extends BackendRestController
             
             return $this->success(__('订单创建成功'), [
                 'order_id' => $order->getId(),
-                'order_number' => $order->getData(\Weline\Order\Model\Order::fields_ORDER_NUMBER),
+                'order_number' => $order->getData(\Weline\Order\Model\Order::schema_fields_ORDER_NUMBER),
             ], 201);
             
         } catch (\Exception $e) {
@@ -339,7 +339,7 @@ class Order extends BackendRestController
             
             return $this->success(__('发票生成成功'), [
                 'invoice_id' => $invoice->getId(),
-                'invoice_number' => $invoice->getData(\Weline\Order\Model\OrderInvoice::fields_INVOICE_NUMBER),
+                'invoice_number' => $invoice->getData(\Weline\Order\Model\OrderInvoice::schema_fields_INVOICE_NUMBER),
             ]);
             
         } catch (\Exception $e) {

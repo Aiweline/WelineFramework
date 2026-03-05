@@ -93,16 +93,16 @@ class OrderService
             $order = $this->getOrderModel()->reset();
             
             // 生成订单号
-            if (empty($data[Order::fields_ORDER_NUMBER])) {
-                $data[Order::fields_ORDER_NUMBER] = $order->generateOrderNumber();
+            if (empty($data[Order::schema_fields_ORDER_NUMBER])) {
+                $data[Order::schema_fields_ORDER_NUMBER] = $order->generateOrderNumber();
             }
             
             // 设置默认值
-            $data[Order::fields_STATUS] = $data[Order::fields_STATUS] ?? Order::STATUS_PENDING;
-            $data[Order::fields_STATE] = $data[Order::fields_STATE] ?? Order::STATUS_PENDING;
-            $data[Order::fields_PAYMENT_STATUS] = $data[Order::fields_PAYMENT_STATUS] ?? Order::PAYMENT_STATUS_PENDING;
-            $data[Order::fields_FULFILLMENT_STATUS] = $data[Order::fields_FULFILLMENT_STATUS] ?? Order::FULFILLMENT_STATUS_PENDING;
-            $data[Order::fields_CURRENCY] = $data[Order::fields_CURRENCY] ?? 'CNY';
+            $data[Order::schema_fields_STATUS] = $data[Order::schema_fields_STATUS] ?? Order::STATUS_PENDING;
+            $data[Order::schema_fields_STATE] = $data[Order::schema_fields_STATE] ?? Order::STATUS_PENDING;
+            $data[Order::schema_fields_PAYMENT_STATUS] = $data[Order::schema_fields_PAYMENT_STATUS] ?? Order::PAYMENT_STATUS_PENDING;
+            $data[Order::schema_fields_FULFILLMENT_STATUS] = $data[Order::schema_fields_FULFILLMENT_STATUS] ?? Order::FULFILLMENT_STATUS_PENDING;
+            $data[Order::schema_fields_CURRENCY] = $data[Order::schema_fields_CURRENCY] ?? 'CNY';
             
             $order->setData($data);
             
@@ -112,8 +112,8 @@ class OrderService
             }
             
             // 验证优惠规则（如果提供了支付方式和优惠规则）
-            if (!empty($data[Order::fields_PAYMENT_METHOD]) && !empty($data['discount_rules'])) {
-                $this->validateDiscountRules($order, $data[Order::fields_PAYMENT_METHOD], $data['discount_rules']);
+            if (!empty($data[Order::schema_fields_PAYMENT_METHOD]) && !empty($data['discount_rules'])) {
+                $this->validateDiscountRules($order, $data[Order::schema_fields_PAYMENT_METHOD], $data['discount_rules']);
             }
             
             $order->save();
@@ -162,7 +162,7 @@ class OrderService
         try {
             // 更新订单数据
             foreach ($data as $key => $value) {
-                if ($key !== 'items' && $key !== Order::fields_ORDER_ID) {
+                if ($key !== 'items' && $key !== Order::schema_fields_ORDER_ID) {
                     $order->setData($key, $value);
                 }
             }
@@ -171,7 +171,7 @@ class OrderService
             if (isset($data['items']) && is_array($data['items'])) {
                 // 删除旧订单项
                 $this->getOrderItemModel()->reset()
-                    ->where(OrderItem::fields_ORDER_ID, $orderId)
+                    ->where(OrderItem::schema_fields_ORDER_ID, $orderId)
                     ->delete();
                 
                 // 创建新订单项
@@ -185,7 +185,7 @@ class OrderService
             $order->save();
             
             // 记录订单历史
-            $this->addHistory($orderId, $order->getData(Order::fields_STATUS), __('订单已更新'));
+            $this->addHistory($orderId, $order->getData(Order::schema_fields_STATUS), __('订单已更新'));
             
             // 提交事务
             $connection->commit();
@@ -263,34 +263,34 @@ class OrderService
         
         // 应用过滤条件
         if (isset($filters['status']) && $filters['status']) {
-            $model->where(Order::fields_STATUS, $filters['status']);
+            $model->where(Order::schema_fields_STATUS, $filters['status']);
         }
         
         if (isset($filters['customer_id']) && $filters['customer_id']) {
-            $model->where(Order::fields_CUSTOMER_ID, $filters['customer_id']);
+            $model->where(Order::schema_fields_CUSTOMER_ID, $filters['customer_id']);
         }
         
         if (isset($filters['order_number']) && $filters['order_number']) {
-            $model->where(Order::fields_ORDER_NUMBER, $filters['order_number']);
+            $model->where(Order::schema_fields_ORDER_NUMBER, $filters['order_number']);
         }
         
         if (isset($filters['payment_status']) && $filters['payment_status']) {
-            $model->where(Order::fields_PAYMENT_STATUS, $filters['payment_status']);
+            $model->where(Order::schema_fields_PAYMENT_STATUS, $filters['payment_status']);
         }
         
         if (isset($filters['fulfillment_status']) && $filters['fulfillment_status']) {
-            $model->where(Order::fields_FULFILLMENT_STATUS, $filters['fulfillment_status']);
+            $model->where(Order::schema_fields_FULFILLMENT_STATUS, $filters['fulfillment_status']);
         }
         
         if (isset($filters['keyword']) && $filters['keyword']) {
             $keyword = "%{$filters['keyword']}%";
-            $model->where(Order::fields_ORDER_NUMBER, $keyword, 'LIKE', 'OR')
-                  ->where(Order::fields_CUSTOMER_NAME, $keyword, 'LIKE', 'OR')
-                  ->where(Order::fields_CUSTOMER_EMAIL, $keyword, 'LIKE');
+            $model->where(Order::schema_fields_ORDER_NUMBER, $keyword, 'LIKE', 'OR')
+                  ->where(Order::schema_fields_CUSTOMER_NAME, $keyword, 'LIKE', 'OR')
+                  ->where(Order::schema_fields_CUSTOMER_EMAIL, $keyword, 'LIKE');
         }
         
         // 排序
-        $model->order(Order::fields_CREATED_AT, 'DESC');
+        $model->order(Order::schema_fields_CREATED_AT, 'DESC');
         
         // 分页
         if (isset($filters['page']) && isset($filters['page_size'])) {
@@ -325,19 +325,19 @@ class OrderService
                 $taxAmount += $itemTax;
                 $discountAmount += $itemDiscount;
             } elseif ($item instanceof OrderItem) {
-                $subtotal += (float)$item->getData(OrderItem::fields_ROW_TOTAL);
-                $taxAmount += (float)$item->getData(OrderItem::fields_TAX_AMOUNT);
-                $discountAmount += (float)$item->getData(OrderItem::fields_DISCOUNT_AMOUNT);
+                $subtotal += (float)$item->getData(OrderItem::schema_fields_ROW_TOTAL);
+                $taxAmount += (float)$item->getData(OrderItem::schema_fields_TAX_AMOUNT);
+                $discountAmount += (float)$item->getData(OrderItem::schema_fields_DISCOUNT_AMOUNT);
             }
         }
         
-        $shippingAmount = (float)$order->getData(Order::fields_SHIPPING_AMOUNT) ?? 0;
+        $shippingAmount = (float)$order->getData(Order::schema_fields_SHIPPING_AMOUNT) ?? 0;
         $grandTotal = $subtotal + $shippingAmount + $taxAmount - $discountAmount;
         
-        $order->setData(Order::fields_SUBTOTAL, $subtotal);
-        $order->setData(Order::fields_TAX_AMOUNT, $taxAmount);
-        $order->setData(Order::fields_DISCOUNT_AMOUNT, $discountAmount);
-        $order->setData(Order::fields_GRAND_TOTAL, $grandTotal);
+        $order->setData(Order::schema_fields_SUBTOTAL, $subtotal);
+        $order->setData(Order::schema_fields_TAX_AMOUNT, $taxAmount);
+        $order->setData(Order::schema_fields_DISCOUNT_AMOUNT, $discountAmount);
+        $order->setData(Order::schema_fields_GRAND_TOTAL, $grandTotal);
     }
     
     /**
@@ -351,19 +351,19 @@ class OrderService
     {
         foreach ($items as $itemData) {
             $item = $this->getOrderItemModel()->reset();
-            $item->setData(OrderItem::fields_ORDER_ID, $orderId);
+            $item->setData(OrderItem::schema_fields_ORDER_ID, $orderId);
             
             // 映射字段
             $fieldMap = [
-                'product_id' => OrderItem::fields_PRODUCT_ID,
-                'product_sku' => OrderItem::fields_PRODUCT_SKU,
-                'product_name' => OrderItem::fields_PRODUCT_NAME,
-                'product_type' => OrderItem::fields_PRODUCT_TYPE,
-                'qty_ordered' => OrderItem::fields_QTY_ORDERED,
-                'quantity' => OrderItem::fields_QTY_ORDERED,
-                'price' => OrderItem::fields_PRICE,
-                'discount_amount' => OrderItem::fields_DISCOUNT_AMOUNT,
-                'tax_amount' => OrderItem::fields_TAX_AMOUNT,
+                'product_id' => OrderItem::schema_fields_PRODUCT_ID,
+                'product_sku' => OrderItem::schema_fields_PRODUCT_SKU,
+                'product_name' => OrderItem::schema_fields_PRODUCT_NAME,
+                'product_type' => OrderItem::schema_fields_PRODUCT_TYPE,
+                'qty_ordered' => OrderItem::schema_fields_QTY_ORDERED,
+                'quantity' => OrderItem::schema_fields_QTY_ORDERED,
+                'price' => OrderItem::schema_fields_PRICE,
+                'discount_amount' => OrderItem::schema_fields_DISCOUNT_AMOUNT,
+                'tax_amount' => OrderItem::schema_fields_TAX_AMOUNT,
             ];
             
             foreach ($fieldMap as $source => $target) {
@@ -374,12 +374,12 @@ class OrderService
             
             // 计算行总计
             $rowTotal = $item->calculateRowTotal();
-            $item->setData(OrderItem::fields_ROW_TOTAL, $rowTotal);
+            $item->setData(OrderItem::schema_fields_ROW_TOTAL, $rowTotal);
             
             // 设置默认值
-            $item->setData(OrderItem::fields_QTY_SHIPPED, 0);
-            $item->setData(OrderItem::fields_QTY_REFUNDED, 0);
-            $item->setData(OrderItem::fields_QTY_CANCELLED, 0);
+            $item->setData(OrderItem::schema_fields_QTY_SHIPPED, 0);
+            $item->setData(OrderItem::schema_fields_QTY_REFUNDED, 0);
+            $item->setData(OrderItem::schema_fields_QTY_CANCELLED, 0);
             
             $item->save();
         }
@@ -394,7 +394,7 @@ class OrderService
     public function getOrderItems(int $orderId): array
     {
         $collection = $this->getOrderItemModel()->reset()
-            ->where(OrderItem::fields_ORDER_ID, $orderId)
+            ->where(OrderItem::schema_fields_ORDER_ID, $orderId)
             ->select()
             ->fetch();
         
@@ -414,10 +414,10 @@ class OrderService
     {
         /** @var OrderHistory $history */
         $history = $this->objectManager->getInstance(OrderHistory::class);
-        $history->setData(OrderHistory::fields_ORDER_ID, $orderId)
-                ->setData(OrderHistory::fields_STATUS, $status)
-                ->setData(OrderHistory::fields_COMMENT, $comment)
-                ->setData(OrderHistory::fields_IS_CUSTOMER_NOTIFIED, $notifyCustomer ? 1 : 0)
+        $history->setData(OrderHistory::schema_fields_ORDER_ID, $orderId)
+                ->setData(OrderHistory::schema_fields_STATUS, $status)
+                ->setData(OrderHistory::schema_fields_COMMENT, $comment)
+                ->setData(OrderHistory::schema_fields_IS_CUSTOMER_NOTIFIED, $notifyCustomer ? 1 : 0)
                 ->save();
     }
     
