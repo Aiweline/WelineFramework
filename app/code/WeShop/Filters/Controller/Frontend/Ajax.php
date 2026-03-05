@@ -8,7 +8,6 @@ use Weline\Framework\Controller\PcController;
 use WeShop\Filters\Service\FilterService;
 use WeShop\Filters\Service\FilterUrlService;
 use WeShop\Filters\Service\FilterCountService;
-use WeShop\Catalog\Service\CategoryService;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Model\ProductCategory;
 use Weline\Framework\Manager\ObjectManager;
@@ -33,21 +32,14 @@ class Ajax extends PcController
      */
     private FilterCountService $countService;
     
-    /**
-     * @var CategoryService
-     */
-    private CategoryService $categoryService;
-    
     public function __construct(
         FilterService $filterService,
         FilterUrlService $urlService,
-        FilterCountService $countService,
-        CategoryService $categoryService
+        FilterCountService $countService
     ) {
         $this->filterService = $filterService;
         $this->urlService = $urlService;
         $this->countService = $countService;
-        $this->categoryService = $categoryService;
     }
     
     /**
@@ -171,23 +163,22 @@ class Ajax extends PcController
      */
     private function getCategoryProductIds(int $categoryId): array
     {
-        // 获取当前分类及所有子分类的ID
-        $categoryIds = $this->categoryService->getAllDescendantCategoryIds($categoryId);
-        $categoryIds[] = $categoryId;
+        // 获取当前分类及所有子分类的ID（通过 catalog 查询器）
+        $categoryIds = w_query('catalog', 'getAllDescendantCategoryIds', ['category_id' => $categoryId]);
         
         /** @var ProductCategory $productCategory */
         $productCategory = ObjectManager::getInstance(ProductCategory::class);
         // 使用框架默认的表别名 main_table，避免 PostgreSQL SQL 语法问题
         $productCategory->reset()
-            ->fields('main_table.' . ProductCategory::fields_product_id)
-            ->where('main_table.' . ProductCategory::fields_category_id, $categoryIds, 'in')
+            ->fields('main_table.' . ProductCategory::schema_fields_product_id)
+            ->where('main_table.' . ProductCategory::schema_fields_category_id, $categoryIds, 'in')
             ->joinProduct()
-            ->where('product.' . Product::fields_status, 1)
-            ->groupBy('main_table.' . ProductCategory::fields_product_id);
+            ->where('product.' . Product::schema_fields_status, 1)
+            ->groupBy('main_table.' . ProductCategory::schema_fields_product_id);
         
         $results = $productCategory->select()->fetchArray();
         
-        return array_column($results, ProductCategory::fields_product_id);
+        return array_column($results, ProductCategory::schema_fields_product_id);
     }
     
     /**
@@ -202,22 +193,22 @@ class Ajax extends PcController
         /** @var Product $productModel */
         $productModel = ObjectManager::getInstance(Product::class);
         $productModel->reset()
-            ->where(Product::fields_ID, $productIds, 'in')
-            ->where(Product::fields_status, 1);
+            ->where(Product::schema_fields_ID, $productIds, 'in')
+            ->where(Product::schema_fields_status, 1);
         
         $results = $productModel->select()->fetchArray();
         
         $products = [];
         foreach ($results as $row) {
             $products[] = [
-                'product_id' => $row[Product::fields_ID],
-                'name' => $row[Product::fields_name] ?? '',
-                'price' => (float)($row[Product::fields_price] ?? 0),
-                'image' => $row[Product::fields_image] ?? '',
-                'sku' => $row[Product::fields_sku] ?? '',
-                'handle' => $row[Product::fields_HANDLE] ?? '',
-                'stock' => (int)($row[Product::fields_stock] ?? 0),
-                'in_stock' => ((int)($row[Product::fields_stock] ?? 0)) > 0,
+                'product_id' => $row[Product::schema_fields_ID],
+                'name' => $row[Product::schema_fields_name] ?? '',
+                'price' => (float)($row[Product::schema_fields_price] ?? 0),
+                'image' => $row[Product::schema_fields_image] ?? '',
+                'sku' => $row[Product::schema_fields_sku] ?? '',
+                'handle' => $row[Product::schema_fields_HANDLE] ?? '',
+                'stock' => (int)($row[Product::schema_fields_stock] ?? 0),
+                'in_stock' => ((int)($row[Product::schema_fields_stock] ?? 0)) > 0,
             ];
         }
         

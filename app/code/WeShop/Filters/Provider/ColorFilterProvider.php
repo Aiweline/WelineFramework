@@ -4,11 +4,6 @@ declare(strict_types=1);
 
 namespace WeShop\Filters\Provider;
 
-use WeShop\Product\Model\Product;
-use Weline\Eav\Model\EavAttribute;
-use Weline\Eav\Model\EavAttribute\Option;
-use Weline\Framework\Manager\ObjectManager;
-
 /**
  * 颜色筛选提供者
  * 
@@ -53,25 +48,22 @@ class ColorFilterProvider extends AbstractFilterProvider
         }
         
         try {
-            $attribute = $this->getColorAttribute();
-            if (!$attribute || !$attribute->getId()) {
+            $info = $this->getProductAttributeInfo($this->attributeCode);
+            if (!$info || !($info['attribute_id'] ?? 0)) {
                 return [];
             }
-            
-            // 获取产品的颜色值
-            $colorValues = $this->getProductColorValues($productIds, $attribute);
-            
+            $colorValues = $this->getProductEavValues(
+                (int)$info['attribute_id'],
+                (string)($info['type_code'] ?? 'input_string'),
+                $productIds
+            );
             if (empty($colorValues)) {
                 return [];
             }
-            
-            // 统计每个颜色的产品数量
             $colorCounts = array_count_values($colorValues);
-            
-            // 获取颜色选项标签和色块
             $options = [];
-            if ($attribute->hasOption()) {
-                $optionLabels = $this->getOptionLabels($attribute, array_keys($colorCounts));
+            if (!empty($info['has_option'])) {
+                $optionLabels = $this->getOptionLabelsByAttributeId((int)$info['attribute_id'], array_keys($colorCounts));
                 foreach ($colorCounts as $value => $count) {
                     $optionInfo = $optionLabels[$value] ?? null;
                     $label = $optionInfo ? ($optionInfo['value'] ?: $optionInfo['code']) : $value;
@@ -132,63 +124,21 @@ class ColorFilterProvider extends AbstractFilterProvider
         }
         
         try {
-            $attribute = $this->getColorAttribute();
-            if (!$attribute || !$attribute->getId()) {
+            $info = $this->getProductAttributeInfo($this->attributeCode);
+            if (!$info || !($info['attribute_id'] ?? 0)) {
                 return $productIds;
             }
-            return $this->getProductIdsByEavValues($attribute, $productIds, $filterValues);
+            return $this->getProductIdsByEavValues(
+                (int)$info['attribute_id'],
+                (string)($info['type_code'] ?? 'input_string'),
+                $productIds,
+                $filterValues
+            );
         } catch (\Throwable $e) {
             return $productIds;
         }
     }
     
-    /**
-     * 获取颜色属性
-     */
-    private function getColorAttribute(): ?EavAttribute
-    {
-        try {
-            /** @var Product $productModel */
-            $productModel = ObjectManager::getInstance(Product::class);
-            return $productModel->getAttribute($this->attributeCode);
-        } catch (\Throwable $e) {
-            return null;
-        }
-    }
-    
-    /**
-     * 获取产品的颜色值
-     */
-    private function getProductColorValues(array $productIds, EavAttribute $attribute): array
-    {
-        return $this->getProductEavValues($attribute, $productIds);
-    }
-    
-    /**
-     * 获取选项标签和色块
-     */
-    private function getOptionLabels(EavAttribute $attribute, array $optionIds): array
-    {
-        /** @var Option $optionModel */
-        $optionModel = ObjectManager::getInstance(Option::class);
-        $optionModel->reset()
-            ->where('attribute_id', $attribute->getId())
-            ->where('option_id', $optionIds, 'in');
-        
-        $results = $optionModel->select()->fetchArray();
-        
-        $labels = [];
-        foreach ($results as $row) {
-            $labels[$row['option_id']] = [
-                'code' => $row['code'] ?? '',
-                'value' => $row['value'] ?? '',
-                'swatch_color' => $row['swatch_color'] ?? null,
-                'swatch_image' => $row['swatch_image'] ?? null,
-            ];
-        }
-        
-        return $labels;
-    }
     
     /**
      * @inheritDoc
@@ -196,18 +146,13 @@ class ColorFilterProvider extends AbstractFilterProvider
     public function getValueLabel(string $value): string
     {
         try {
-            $attribute = $this->getColorAttribute();
-            if (!$attribute || !$attribute->getId()) {
+            $info = $this->getProductAttributeInfo($this->attributeCode);
+            if (!$info || !($info['attribute_id'] ?? 0) || empty($info['has_option'])) {
                 return $value;
             }
-            
-            if ($attribute->hasOption()) {
-                $labels = $this->getOptionLabels($attribute, [$value]);
-                $info = $labels[$value] ?? null;
-                return $info ? ($info['value'] ?: $info['code']) : $value;
-            }
-            
-            return $value;
+            $labels = $this->getOptionLabelsByAttributeId((int)$info['attribute_id'], [$value]);
+            $labelInfo = $labels[$value] ?? null;
+            return $labelInfo ? ($labelInfo['value'] ?: $labelInfo['code']) : $value;
         } catch (\Throwable $e) {
             return $value;
         }
