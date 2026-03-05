@@ -1,86 +1,55 @@
 <?php
-
 declare(strict_types=1);
-
 /*
  * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
  * 邮箱：aiweline@qq.com
  * 网址：aiweline.com
  * 论坛：https://bbs.aiweline.com
  */
-
 namespace Weline\DataTable\Model;
-
-use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: '测试产品表')]
+#[Index(name: 'idx_sku', columns: ['sku'], type: 'UNIQUE')]
 class TestProduct extends Model
 {
-    public const table = 'datatable_test_products';
-
-    public const fields_ID = 'id';
-    public const fields_name = 'name';
-    public const fields_sku = 'sku';
-    public const fields_description = 'description';
-    public const fields_price = 'price';
-    public const fields_cost = 'cost';
-    public const fields_stock = 'stock';
-    public const fields_category_id = 'category_id';
-    public const fields_brand = 'brand';
-    public const fields_weight = 'weight';
-    public const fields_dimensions = 'dimensions';
-    public const fields_status = 'status';
-    public const fields_featured = 'featured';
-    public const fields_image = 'image';
-    public const fields_created_at = 'created_at';
-    public const fields_updated_at = 'updated_at';
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('测试产品表')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'auto_increment primary key', '产品ID')
-                ->addColumn(self::fields_name, TableInterface::column_type_VARCHAR, 200, 'not null', '产品名称')
-                ->addColumn(self::fields_sku, TableInterface::column_type_VARCHAR, 100, 'not null unique', '产品SKU')
-                ->addColumn(self::fields_description, TableInterface::column_type_TEXT, 0, '', '产品描述')
-                ->addColumn(self::fields_price, TableInterface::column_type_DECIMAL, '10,2', 'default 0.00', '产品价格')
-                ->addColumn(self::fields_cost, TableInterface::column_type_DECIMAL, '10,2', 'default 0.00', '产品成本')
-                ->addColumn(self::fields_stock, TableInterface::column_type_INTEGER, 0, 'default 0', '库存数量')
-                ->addColumn(self::fields_category_id, TableInterface::column_type_INTEGER, 0, 'default 0', '分类ID')
-                ->addColumn(self::fields_brand, TableInterface::column_type_VARCHAR, 100, '', '品牌')
-                ->addColumn(self::fields_weight, TableInterface::column_type_DECIMAL, '8,2', 'default 0.00', '重量(kg)')
-                ->addColumn(self::fields_dimensions, TableInterface::column_type_VARCHAR, 50, '', '尺寸(长x宽x高)')
-                ->addColumn(self::fields_status, TableInterface::column_type_INTEGER, 1, 'default 1', '状态：1-上架，0-下架')
-                ->addColumn(self::fields_featured, TableInterface::column_type_INTEGER, 1, 'default 0', '是否推荐：1-是，0-否')
-                ->addColumn(self::fields_image, TableInterface::column_type_VARCHAR, 255, '', '产品图片')
-                ->addColumn(self::fields_created_at, TableInterface::column_type_DATETIME, 0, 'default CURRENT_TIMESTAMP', '创建时间')
-                ->addColumn(self::fields_updated_at, TableInterface::column_type_DATETIME, 0, 'default CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP', '更新时间')
-                ->create();
-        }
-    }
-
-    /**
+    public const schema_table = 'datatable_test_products';
+    public const schema_primary_key = 'id';
+    #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: '产品ID')]
+    public const schema_fields_ID = 'id';
+    #[Col('varchar', 200, nullable: false, comment: '产品名称')]
+    public const schema_fields_name = 'name';
+    #[Col('varchar', 100, nullable: false, comment: '产品SKU')]
+    public const schema_fields_sku = 'sku';
+    #[Col('text', comment: '产品描述')]
+    public const schema_fields_description = 'description';
+    #[Col('decimal', '10,2', default: '0.00', comment: '产品价格')]
+    public const schema_fields_price = 'price';
+    #[Col('decimal', '10,2', default: '0.00', comment: '产品成本')]
+    public const schema_fields_cost = 'cost';
+    #[Col('int', default: 0, comment: '库存数量')]
+    public const schema_fields_stock = 'stock';
+    #[Col('int', default: 0, comment: '分类ID')]
+    public const schema_fields_category_id = 'category_id';
+    #[Col('varchar', 100, comment: '品牌')]
+    public const schema_fields_brand = 'brand';
+    #[Col('decimal', '8,2', default: '0.00', comment: '重量(kg)')]
+    public const schema_fields_weight = 'weight';
+    #[Col('varchar', 50, comment: '尺寸')]
+    public const schema_fields_dimensions = 'dimensions';
+    #[Col('int', 1, default: 1, comment: '状态')]
+    public const schema_fields_status = 'status';
+    #[Col('int', 1, default: 0, comment: '是否推荐')]
+    public const schema_fields_featured = 'featured';
+    #[Col('varchar', 255, comment: '产品图片')]
+    public const schema_fields_image = 'image';
+    #[Col('datetime', default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
+    public const schema_fields_created_at = 'created_at';
+    #[Col('datetime', default: 'CURRENT_TIMESTAMP', comment: '更新时间')]
+    public const schema_fields_updated_at = 'updated_at';
+/**
      * 获取测试数据
      */
     public function getTestData(): array
@@ -268,7 +237,6 @@ class TestProduct extends Model
             ]
         ];
     }
-
     /**
      * 获取状态选项
      */
@@ -279,7 +247,6 @@ class TestProduct extends Model
             ['value' => 0, 'label' => '下架']
         ];
     }
-
     /**
      * 获取推荐选项
      */
@@ -290,7 +257,6 @@ class TestProduct extends Model
             ['value' => 0, 'label' => '否']
         ];
     }
-
     /**
      * 状态获取器
      */
@@ -298,7 +264,6 @@ class TestProduct extends Model
     {
         return $value == 1 ? '上架' : '下架';
     }
-
     /**
      * 推荐获取器
      */
@@ -306,7 +271,6 @@ class TestProduct extends Model
     {
         return $value == 1 ? '是' : '否';
     }
-
     /**
      * 价格获取器（格式化）
      */
@@ -314,7 +278,6 @@ class TestProduct extends Model
     {
         return '¥' . number_format($value, 2);
     }
-
     /**
      * 成本获取器（格式化）
      */
