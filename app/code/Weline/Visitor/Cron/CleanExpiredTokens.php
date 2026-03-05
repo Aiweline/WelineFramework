@@ -37,8 +37,8 @@ class CleanExpiredTokens
             
             // 查找已删除且删除时间超过90天的token
             $expiredTokens = $tokenModel->reset()
-                ->where(PixelEncryptionToken::fields_IS_DELETED, 1)
-                ->where(PixelEncryptionToken::fields_DELETED_AT, $ninetyDaysAgo, '<=')
+                ->where(PixelEncryptionToken::schema_fields_IS_DELETED, 1)
+                ->where(PixelEncryptionToken::schema_fields_DELETED_AT, $ninetyDaysAgo, '<=')
                 ->select()
                 ->fetchArray();
             

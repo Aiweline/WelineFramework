@@ -119,14 +119,14 @@ class Statistics extends FrontendRestController
             // 如果有时间范围，使用条件查询
             if ($startDate || $endDate) {
                 $model = w_obj(Pixel::class)->reset()
-                    ->where(Pixel::fields_WEBSITE_ID, $websiteId)
-                    ->where(Pixel::fields_EVENT, $event);
+                    ->where(Pixel::schema_fields_WEBSITE_ID, $websiteId)
+                    ->where(Pixel::schema_fields_EVENT, $event);
                 
                 if ($startDate) {
-                    $model->where(Pixel::fields_CREATED_AT, $startDate, '>=');
+                    $model->where(Pixel::schema_fields_CREATED_AT, $startDate, '>=');
                 }
                 if ($endDate) {
-                    $model->where(Pixel::fields_CREATED_AT, $endDate, '<=');
+                    $model->where(Pixel::schema_fields_CREATED_AT, $endDate, '<=');
                 }
                 
                 $count = (int)$model->count();
@@ -379,14 +379,14 @@ class Statistics extends FrontendRestController
             $eventStats = [];
             foreach ($eventList as $event) {
                 $model = w_obj(Pixel::class)->reset()
-                    ->where(Pixel::fields_WEBSITE_ID, $websiteId)
-                    ->where(Pixel::fields_EVENT, $event);
+                    ->where(Pixel::schema_fields_WEBSITE_ID, $websiteId)
+                    ->where(Pixel::schema_fields_EVENT, $event);
                 
                 if ($startDate) {
-                    $model->where(Pixel::fields_CREATED_AT, $startDate, '>=');
+                    $model->where(Pixel::schema_fields_CREATED_AT, $startDate, '>=');
                 }
                 if ($endDate) {
-                    $model->where(Pixel::fields_CREATED_AT, $endDate, '<=');
+                    $model->where(Pixel::schema_fields_CREATED_AT, $endDate, '<=');
                 }
                 
                 $count = (int)$model->count();
@@ -450,14 +450,14 @@ class Statistics extends FrontendRestController
             
             foreach ($eventList as $event) {
                 $model = w_obj(Pixel::class)->reset()
-                    ->where(Pixel::fields_WEBSITE_ID, $websiteId)
-                    ->where(Pixel::fields_EVENT, $event);
+                    ->where(Pixel::schema_fields_WEBSITE_ID, $websiteId)
+                    ->where(Pixel::schema_fields_EVENT, $event);
                 
                 if ($startDate) {
-                    $model->where(Pixel::fields_CREATED_AT, $startDate, '>=');
+                    $model->where(Pixel::schema_fields_CREATED_AT, $startDate, '>=');
                 }
                 if ($endDate) {
-                    $model->where(Pixel::fields_CREATED_AT, $endDate, '<=');
+                    $model->where(Pixel::schema_fields_CREATED_AT, $endDate, '<=');
                 }
                 
                 $count = (int)$model->count();
@@ -524,19 +524,19 @@ class Statistics extends FrontendRestController
             
             // 计算总价值
             $pixels = Pixel::getPixelsByWebsiteId($websiteId, [
-                Pixel::fields_CREATED_AT => [
+                Pixel::schema_fields_CREATED_AT => [
                     'operator' => '>=',
                     'value' => $startDate
                 ]
             ]);
             
             $pixels = array_filter($pixels, function($pixel) use ($endDate) {
-                return ($pixel[Pixel::fields_CREATED_AT] ?? '') <= $endDate;
+                return ($pixel[Pixel::schema_fields_CREATED_AT] ?? '') <= $endDate;
             });
             
             $totalValue = 0;
             foreach ($pixels as $pixel) {
-                $totalValue += (float)($pixel[Pixel::fields_VALUE] ?? 0);
+                $totalValue += (float)($pixel[Pixel::schema_fields_VALUE] ?? 0);
             }
             
             $stats['total_value'] = $totalValue;
@@ -580,9 +580,9 @@ class Statistics extends FrontendRestController
             
             // 获取最近N分钟的数据
             $model = w_obj(Pixel::class)->reset()
-                ->where(Pixel::fields_WEBSITE_ID, $websiteId)
-                ->where(Pixel::fields_CREATED_AT, $startTime, '>=')
-                ->where(Pixel::fields_CREATED_AT, $endTime, '<=');
+                ->where(Pixel::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(Pixel::schema_fields_CREATED_AT, $startTime, '>=')
+                ->where(Pixel::schema_fields_CREATED_AT, $endTime, '<=');
             
             $totalCount = (int)$model->count();
             
@@ -590,21 +590,21 @@ class Statistics extends FrontendRestController
             $pixels = $model->select()->fetchArray();
             $totalValue = 0;
             foreach ($pixels as $pixel) {
-                $totalValue += (float)($pixel[Pixel::fields_VALUE] ?? 0);
+                $totalValue += (float)($pixel[Pixel::schema_fields_VALUE] ?? 0);
             }
             
             // 获取事件统计
             $eventModel = w_obj(Pixel::class)->reset()
-                ->where(Pixel::fields_WEBSITE_ID, $websiteId)
-                ->where(Pixel::fields_CREATED_AT, $startTime, '>=')
-                ->where(Pixel::fields_CREATED_AT, $endTime, '<=')
-                ->field(Pixel::fields_EVENT)
-                ->group(Pixel::fields_EVENT);
+                ->where(Pixel::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(Pixel::schema_fields_CREATED_AT, $startTime, '>=')
+                ->where(Pixel::schema_fields_CREATED_AT, $endTime, '<=')
+                ->field(Pixel::schema_fields_EVENT)
+                ->group(Pixel::schema_fields_EVENT);
             
             $eventResult = $eventModel->select()->fetchArray();
             $events = [];
             foreach ($eventResult as $row) {
-                $event = $row[Pixel::fields_EVENT] ?? '';
+                $event = $row[Pixel::schema_fields_EVENT] ?? '';
                 if ($event) {
                     $events[$event] = Pixel::countPixelsByWebsiteIdAndEvent($websiteId, $event);
                 }

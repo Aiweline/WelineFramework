@@ -66,18 +66,18 @@ class PixelStatisticsService
                         
                         // 计算当天的总价值
                         $pixels = Pixel::getPixelsByWebsiteId($siteId, [
-                            Pixel::fields_CREATED_AT => [
+                            Pixel::schema_fields_CREATED_AT => [
                                 'operator' => '>=',
                                 'value' => $dayStart
                             ]
                         ]);
                         
                         $pixels = array_filter($pixels, function($pixel) use ($dayEnd) {
-                            return ($pixel[Pixel::fields_CREATED_AT] ?? '') <= $dayEnd;
+                            return ($pixel[Pixel::schema_fields_CREATED_AT] ?? '') <= $dayEnd;
                         });
                         
                         foreach ($pixels as $pixel) {
-                            $dayValue += (float)($pixel[Pixel::fields_VALUE] ?? 0);
+                            $dayValue += (float)($pixel[Pixel::schema_fields_VALUE] ?? 0);
                         }
                     }
                     
@@ -111,14 +111,14 @@ class PixelStatisticsService
                 if ($event !== null) {
                     // 单个事件统计
                     $model = w_obj(Pixel::class)->reset()
-                        ->where(Pixel::fields_WEBSITE_ID, $websiteId)
-                        ->where(Pixel::fields_EVENT, $event);
+                        ->where(Pixel::schema_fields_WEBSITE_ID, $websiteId)
+                        ->where(Pixel::schema_fields_EVENT, $event);
                     
                     if ($startDate) {
-                        $model->where(Pixel::fields_CREATED_AT, $startDate, '>=');
+                        $model->where(Pixel::schema_fields_CREATED_AT, $startDate, '>=');
                     }
                     if ($endDate) {
-                        $model->where(Pixel::fields_CREATED_AT, $endDate, '<=');
+                        $model->where(Pixel::schema_fields_CREATED_AT, $endDate, '<=');
                     }
                     
                     return (int)$model->count();
@@ -129,14 +129,14 @@ class PixelStatisticsService
                     
                     foreach ($eventList as $evt) {
                         $model = w_obj(Pixel::class)->reset()
-                            ->where(Pixel::fields_WEBSITE_ID, $websiteId)
-                            ->where(Pixel::fields_EVENT, $evt);
+                            ->where(Pixel::schema_fields_WEBSITE_ID, $websiteId)
+                            ->where(Pixel::schema_fields_EVENT, $evt);
                         
                         if ($startDate) {
-                            $model->where(Pixel::fields_CREATED_AT, $startDate, '>=');
+                            $model->where(Pixel::schema_fields_CREATED_AT, $startDate, '>=');
                         }
                         if ($endDate) {
-                            $model->where(Pixel::fields_CREATED_AT, $endDate, '<=');
+                            $model->where(Pixel::schema_fields_CREATED_AT, $endDate, '<=');
                         }
                         
                         $count = (int)$model->count();
@@ -225,14 +225,14 @@ class PixelStatisticsService
             
             foreach ($eventList as $event) {
                 $model = w_obj(Pixel::class)->reset()
-                    ->where(Pixel::fields_WEBSITE_ID, $websiteId)
-                    ->where(Pixel::fields_EVENT, $event);
+                    ->where(Pixel::schema_fields_WEBSITE_ID, $websiteId)
+                    ->where(Pixel::schema_fields_EVENT, $event);
                 
                 if ($startDate) {
-                    $model->where(Pixel::fields_CREATED_AT, $startDate, '>=');
+                    $model->where(Pixel::schema_fields_CREATED_AT, $startDate, '>=');
                 }
                 if ($endDate) {
-                    $model->where(Pixel::fields_CREATED_AT, $endDate, '<=');
+                    $model->where(Pixel::schema_fields_CREATED_AT, $endDate, '<=');
                 }
                 
                 $count = (int)$model->count();
@@ -355,7 +355,7 @@ class PixelStatisticsService
             // 累计总价值
             $pixels = Pixel::getPixelsByWebsiteId((int)$websiteId);
             foreach ($pixels as $pixel) {
-                $totalValue += (float)($pixel[Pixel::fields_VALUE] ?? 0);
+                $totalValue += (float)($pixel[Pixel::schema_fields_VALUE] ?? 0);
             }
 
             // 收集所有事件及数量

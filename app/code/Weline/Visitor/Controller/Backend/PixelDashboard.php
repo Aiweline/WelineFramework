@@ -53,7 +53,7 @@ class PixelDashboard extends BackendController
                 // 累计总价值
                 $pixels = Pixel::getPixelsByWebsiteId($websiteId);
                 foreach ($pixels as $pixel) {
-                    $totalValue += (float)($pixel[Pixel::fields_VALUE] ?? 0);
+                    $totalValue += (float)($pixel[Pixel::schema_fields_VALUE] ?? 0);
                 }
                 
                 // 收集所有事件
@@ -240,34 +240,34 @@ class PixelDashboard extends BackendController
             $eventStats = [];
             foreach ($eventList as $event) {
                 $model = w_obj(Pixel::class)->reset()
-                    ->where(Pixel::fields_WEBSITE_ID, $websiteId)
-                    ->where(Pixel::fields_EVENT, $event);
+                    ->where(Pixel::schema_fields_WEBSITE_ID, $websiteId)
+                    ->where(Pixel::schema_fields_EVENT, $event);
                 
                 if ($startDate) {
-                    $model->where(Pixel::fields_CREATED_AT, $startDate, '>=');
+                    $model->where(Pixel::schema_fields_CREATED_AT, $startDate, '>=');
                 }
                 if ($endDate) {
-                    $model->where(Pixel::fields_CREATED_AT, $endDate, '<=');
+                    $model->where(Pixel::schema_fields_CREATED_AT, $endDate, '<=');
                 }
                 
                 $count = (int)$model->count();
                 
                 // 计算总价值
                 $valueModel = w_obj(Pixel::class)->reset()
-                    ->where(Pixel::fields_WEBSITE_ID, $websiteId)
-                    ->where(Pixel::fields_EVENT, $event);
+                    ->where(Pixel::schema_fields_WEBSITE_ID, $websiteId)
+                    ->where(Pixel::schema_fields_EVENT, $event);
                 
                 if ($startDate) {
-                    $valueModel->where(Pixel::fields_CREATED_AT, $startDate, '>=');
+                    $valueModel->where(Pixel::schema_fields_CREATED_AT, $startDate, '>=');
                 }
                 if ($endDate) {
-                    $valueModel->where(Pixel::fields_CREATED_AT, $endDate, '<=');
+                    $valueModel->where(Pixel::schema_fields_CREATED_AT, $endDate, '<=');
                 }
                 
                 $pixels = $valueModel->select()->fetchArray();
                 $totalValue = 0;
                 foreach ($pixels as $pixel) {
-                    $totalValue += (float)($pixel[Pixel::fields_VALUE] ?? 0);
+                    $totalValue += (float)($pixel[Pixel::schema_fields_VALUE] ?? 0);
                 }
                 
                 $eventStats[] = [
@@ -310,14 +310,14 @@ class PixelDashboard extends BackendController
             $model = w_obj(Pixel::class)->reset();
             
             if ($websiteId > 0) {
-                $model->where(Pixel::fields_WEBSITE_ID, $websiteId);
+                $model->where(Pixel::schema_fields_WEBSITE_ID, $websiteId);
             }
             
             if ($startDate) {
-                $model->where(Pixel::fields_CREATED_AT, $startDate, '>=');
+                $model->where(Pixel::schema_fields_CREATED_AT, $startDate, '>=');
             }
             if ($endDate) {
-                $model->where(Pixel::fields_CREATED_AT, $endDate, '<=');
+                $model->where(Pixel::schema_fields_CREATED_AT, $endDate, '<=');
             }
             
             // 限制导出数量
@@ -398,18 +398,18 @@ class PixelDashboard extends BackendController
                 
                 // 计算当天的总价值
                 $pixels = Pixel::getPixelsByWebsiteId($siteId, [
-                    Pixel::fields_CREATED_AT => [
+                    Pixel::schema_fields_CREATED_AT => [
                         'operator' => '>=',
                         'value' => $dayStart
                     ]
                 ]);
                 
                 $pixels = array_filter($pixels, function($pixel) use ($dayEnd) {
-                    return ($pixel[Pixel::fields_CREATED_AT] ?? '') <= $dayEnd;
+                    return ($pixel[Pixel::schema_fields_CREATED_AT] ?? '') <= $dayEnd;
                 });
                 
                 foreach ($pixels as $pixel) {
-                    $dayValue += (float)($pixel[Pixel::fields_VALUE] ?? 0);
+                    $dayValue += (float)($pixel[Pixel::schema_fields_VALUE] ?? 0);
                 }
             }
             

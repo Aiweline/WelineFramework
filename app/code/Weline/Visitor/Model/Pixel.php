@@ -1,38 +1,55 @@
 <?php
-
 namespace Weline\Visitor\Model;
-
-use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: 'weline 访客像素统计')]
+#[Index(name: 'idx_event', columns: ['event'])]
+#[Index(name: 'idx_currency', columns: ['currency'])]
+#[Index(name: 'idx_lang', columns: ['lang'])]
+#[Index(name: 'idx_website_id', columns: ['website_id'])]
+#[Index(name: 'idx_module', columns: ['module'])]
+#[Index(name: 'idx_source', columns: ['source'])]
+#[Index(name: 'idx_cron_deal', columns: ['cron_deal'])]
 class Pixel extends Model
 {
-
-    public const fields_ID = 'pixel_id';
-    public const fields_URL = 'url';
-    public const fields_MODULE = 'module';
-    public const fields_NAME = 'name';
-    public const fields_REFERER = 'referer';
-    public const fields_SOURCE = 'source';
-    public const fields_USER_ID = 'user_id';
-    public const fields_USER_AGENT = 'user_agent';
-    public const fields_IP = 'ip';
-    public const fields_EVENT = 'event';
-    # 网站
-    public const fields_WEBSITE_ID = 'website_id';
-    # 语言
-    public const fields_LANG = 'lang';
-    # 货币
-    public const fields_CURRENCY = 'currency';
-    # 价值
-    public const fields_VALUE = 'value';
-
-    public const fields_BROWSER_INFO = 'browser_info';
-    public const fields_CRON_DEAL = 'cron_deal';
-    public const fields_CREATED_AT = 'created_at';
-
+    public const schema_table = 'w_pixel';
+    public const schema_primary_key = 'pixel_id';
+    #[Col('bigint', 0, nullable: false, primaryKey: true, autoIncrement: true, comment: 'ID')]
+    public const schema_fields_ID = 'pixel_id';
+    #[Col('varchar', 255, comment: 'URL')]
+    public const schema_fields_URL = 'url';
+    #[Col('varchar', 255, nullable: false, comment: '模块')]
+    public const schema_fields_MODULE = 'module';
+    #[Col('varchar', 255, comment: '名称')]
+    public const schema_fields_NAME = 'name';
+    #[Col('varchar', 255, comment: 'referer来源')]
+    public const schema_fields_REFERER = 'referer';
+    #[Col('varchar', 255, comment: '来源')]
+    public const schema_fields_SOURCE = 'source';
+    #[Col('int', 0, comment: '用户ID')]
+    public const schema_fields_USER_ID = 'user_id';
+    #[Col('varchar', 255, comment: '用户代理')]
+    public const schema_fields_USER_AGENT = 'user_agent';
+    #[Col('varchar', 45, comment: 'IP地址')]
+    public const schema_fields_IP = 'ip';
+    #[Col('varchar', 255, nullable: false, comment: '事件')]
+    public const schema_fields_EVENT = 'event';
+    #[Col('int', 0, nullable: false, comment: '网站ID')]
+    public const schema_fields_WEBSITE_ID = 'website_id';
+    #[Col('varchar', 255, nullable: false, comment: '语言')]
+    public const schema_fields_LANG = 'lang';
+    #[Col('varchar', 255, nullable: false, comment: '货币')]
+    public const schema_fields_CURRENCY = 'currency';
+    #[Col('int', 0, nullable: false, comment: '价值')]
+    public const schema_fields_VALUE = 'value';
+    #[Col('text', comment: '浏览器信息')]
+    public const schema_fields_BROWSER_INFO = 'browser_info';
+    #[Col('int', 0, nullable: false, default: 0, comment: '定时处理')]
+    public const schema_fields_CRON_DEAL = 'cron_deal';
+    #[Col('datetime', comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
     /**
      * 获取未处理的像素记录
      * 
@@ -41,11 +58,11 @@ class Pixel extends Model
      */
     public static function getUnDeaPixels(?int $websiteId = null): array
     {
-        $model = w_obj(self::class)->reset()->where(self::fields_CRON_DEAL, 0);
+        $model = w_obj(self::class)->reset()->where(self::schema_fields_CRON_DEAL, 0);
         
         // 如果提供了站点ID，则添加站点ID过滤条件
         if ($websiteId !== null && $websiteId > 0) {
-            $model->where(self::fields_WEBSITE_ID, $websiteId);
+            $model->where(self::schema_fields_WEBSITE_ID, $websiteId);
         }
         
         return $model->select()->fetchArray();
@@ -62,7 +79,7 @@ class Pixel extends Model
      */
     public static function getPixelsByWebsiteId(int $websiteId, array $conditions = [], ?int $limit = null, ?int $offset = null): array
     {
-        $model = w_obj(self::class)->reset()->where(self::fields_WEBSITE_ID, $websiteId);
+        $model = w_obj(self::class)->reset()->where(self::schema_fields_WEBSITE_ID, $websiteId);
         
         // 应用额外的查询条件
         foreach ($conditions as $field => $value) {
@@ -89,7 +106,7 @@ class Pixel extends Model
         }
         
         // 使用索引字段排序，提高查询性能
-        $model->order(self::fields_CREATED_AT . ' DESC');
+        $model->order(self::schema_fields_CREATED_AT . ' DESC');
         
         return $model->select()->fetchArray();
     }
@@ -104,8 +121,8 @@ class Pixel extends Model
     public static function getPixelsByWebsiteIdAndEvent(int $websiteId, string $event): array
     {
         return w_obj(self::class)->reset()
-            ->where(self::fields_WEBSITE_ID, $websiteId)
-            ->where(self::fields_EVENT, $event)
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(self::schema_fields_EVENT, $event)
             ->select()
             ->fetchArray();
     }
@@ -119,7 +136,7 @@ class Pixel extends Model
      */
     public static function countPixelsByWebsiteId(int $websiteId, array $conditions = []): int
     {
-        $model = w_obj(self::class)->reset()->where(self::fields_WEBSITE_ID, $websiteId);
+        $model = w_obj(self::class)->reset()->where(self::schema_fields_WEBSITE_ID, $websiteId);
         
         // 应用额外的查询条件
         foreach ($conditions as $field => $value) {
@@ -145,8 +162,8 @@ class Pixel extends Model
     public static function countPixelsByWebsiteIdAndEvent(int $websiteId, string $event): int
     {
         return (int)w_obj(self::class)->reset()
-            ->where(self::fields_WEBSITE_ID, $websiteId)
-            ->where(self::fields_EVENT, $event)
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(self::schema_fields_EVENT, $event)
             ->count();
     }
     
@@ -170,10 +187,10 @@ class Pixel extends Model
             
             // 使用索引字段查询，提高性能
             // website_id字段已有索引 idx_website_id
-            $sql = "SELECT DISTINCT `" . self::fields_WEBSITE_ID . "` 
+            $sql = "SELECT DISTINCT `" . self::schema_fields_WEBSITE_ID . "` 
                     FROM `{$tableName}` 
-                    WHERE `" . self::fields_WEBSITE_ID . "` IS NOT NULL 
-                    ORDER BY `" . self::fields_WEBSITE_ID . "` ASC
+                    WHERE `" . self::schema_fields_WEBSITE_ID . "` IS NOT NULL 
+                    ORDER BY `" . self::schema_fields_WEBSITE_ID . "` ASC
                     LIMIT 1000"; // 限制最大返回数量，避免性能问题
             
             $result = $connector->query($sql)->fetch();
@@ -182,7 +199,7 @@ class Pixel extends Model
                 return [];
             }
             
-            return array_column($result, self::fields_WEBSITE_ID);
+            return array_column($result, self::schema_fields_WEBSITE_ID);
         } catch (\Exception $e) {
             // 如果查询失败，返回空数组
             return [];
@@ -198,13 +215,13 @@ class Pixel extends Model
     public static function getEventsByWebsiteId(int $websiteId): array
     {
         $result = w_obj(self::class)->reset()
-            ->where(self::fields_WEBSITE_ID, $websiteId)
-            ->field(self::fields_EVENT)
-            ->group(self::fields_EVENT)
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->field(self::schema_fields_EVENT)
+            ->group(self::schema_fields_EVENT)
             ->select()
             ->fetchArray();
         
-        return array_column($result, self::fields_EVENT);
+        return array_column($result, self::schema_fields_EVENT);
     }
     
     /**
@@ -247,14 +264,14 @@ class Pixel extends Model
      */
     public static function getWebsiteStatsByDateRange(int $websiteId, ?string $startDate = null, ?string $endDate = null): array
     {
-        $model = w_obj(self::class)->reset()->where(self::fields_WEBSITE_ID, $websiteId);
+        $model = w_obj(self::class)->reset()->where(self::schema_fields_WEBSITE_ID, $websiteId);
         
         // 添加时间范围条件（使用created_at字段）
         if ($startDate !== null) {
-            $model->where(self::fields_CREATED_AT, $startDate, '>=');
+            $model->where(self::schema_fields_CREATED_AT, $startDate, '>=');
         }
         if ($endDate !== null) {
-            $model->where(self::fields_CREATED_AT, $endDate, '<=');
+            $model->where(self::schema_fields_CREATED_AT, $endDate, '<=');
         }
         
         $totalCount = (int)$model->count();
@@ -262,32 +279,32 @@ class Pixel extends Model
         // 获取事件统计（需要重新获取，因为时间范围可能影响事件列表）
         // 先获取该时间范围内所有事件
         $eventModel = w_obj(self::class)->reset()
-            ->where(self::fields_WEBSITE_ID, $websiteId)
-            ->field(self::fields_EVENT)
-            ->group(self::fields_EVENT);
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->field(self::schema_fields_EVENT)
+            ->group(self::schema_fields_EVENT);
         
         if ($startDate !== null) {
-            $eventModel->where(self::fields_CREATED_AT, $startDate, '>=');
+            $eventModel->where(self::schema_fields_CREATED_AT, $startDate, '>=');
         }
         if ($endDate !== null) {
-            $eventModel->where(self::fields_CREATED_AT, $endDate, '<=');
+            $eventModel->where(self::schema_fields_CREATED_AT, $endDate, '<=');
         }
         
         $eventResult = $eventModel->select()->fetchArray();
-        $eventList = array_column($eventResult, self::fields_EVENT);
+        $eventList = array_column($eventResult, self::schema_fields_EVENT);
         
         // 统计每个事件的数量
         $events = [];
         foreach ($eventList as $event) {
             $eventCountModel = w_obj(self::class)->reset()
-                ->where(self::fields_WEBSITE_ID, $websiteId)
-                ->where(self::fields_EVENT, $event);
+                ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(self::schema_fields_EVENT, $event);
             
             if ($startDate !== null) {
-                $eventCountModel->where(self::fields_CREATED_AT, $startDate, '>=');
+                $eventCountModel->where(self::schema_fields_CREATED_AT, $startDate, '>=');
             }
             if ($endDate !== null) {
-                $eventCountModel->where(self::fields_CREATED_AT, $endDate, '<=');
+                $eventCountModel->where(self::schema_fields_CREATED_AT, $endDate, '<=');
             }
             
             $events[$event] = (int)$eventCountModel->count();
@@ -804,385 +821,140 @@ class Pixel extends Model
             throw new \Exception(__('获取A/B测试数据失败：%{1}', [$e->getMessage()]));
         }
     }
-
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
+public function getPixelId(): int
     {
-        $this->install($setup, $context);
+        return (int)$this->getData(self::schema_fields_ID);
     }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 检查并添加created_at字段（如果不存在）
-        if ($setup->tableExist() && !$setup->hasField(self::fields_CREATED_AT)) {
-            $setup->alterTable()
-                ->addColumn(
-                    self::fields_CREATED_AT,
-                    self::fields_CRON_DEAL,
-                    TableInterface::column_type_DATETIME,
-                    null,
-                    'not null default CURRENT_TIMESTAMP',
-                    '创建时间'
-                )
-                ->alter();
-        }
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-//        $setup->dropTable();
-        if ($setup->tableExist()) {
-            return;
-        }
-        $setup->createTable('weline 访客像素统计')
-            ->addColumn(
-                self::fields_ID,
-                TableInterface::column_type_BIGINT,
-                0,
-                'primary key auto_increment',
-                'ID'
-            )
-            ->addColumn(
-                self::fields_URL,
-                TableInterface::column_type_VARCHAR,
-                255,
-                '',
-                'URL'
-            )
-            ->addColumn(
-                self::fields_MODULE,
-                TableInterface::column_type_VARCHAR,
-                255,
-                'not null',
-                '模块'
-            )
-            ->addColumn(
-                self::fields_NAME,
-                TableInterface::column_type_VARCHAR,
-                255,
-                '',
-                '名称'
-            )
-            ->addColumn(
-                self::fields_REFERER,
-                TableInterface::column_type_VARCHAR,
-                255,
-                '',
-                'referer来源'
-            )
-            ->addColumn(
-                self::fields_SOURCE,
-                TableInterface::column_type_VARCHAR,
-                255,
-                '',
-                '来源'
-            )
-            ->addColumn(
-                self::fields_USER_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                '',
-                '用户ID'
-            )
-            ->addColumn(
-                self::fields_USER_AGENT,
-                TableInterface::column_type_VARCHAR,
-                255,
-                '',
-                '用户代理'
-            )
-            ->addColumn(
-                self::fields_IP,
-                TableInterface::column_type_VARCHAR,
-                45,
-                '',
-                'IP地址'
-            )
-            ->addColumn(
-                self::fields_EVENT,
-                TableInterface::column_type_VARCHAR,
-                255,
-                'not null',
-                '事件'
-            )
-            ->addColumn(
-                self::fields_WEBSITE_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                'not null',
-                '网站ID'
-            )
-            ->addColumn(
-                self::fields_LANG,
-                TableInterface::column_type_VARCHAR,
-                255,
-                'not null',
-                '语言'
-            )
-            ->addColumn(
-                self::fields_CURRENCY,
-                TableInterface::column_type_VARCHAR,
-                255,
-                'not null',
-                '货币'
-            )
-            ->addColumn(
-                self::fields_VALUE,
-                TableInterface::column_type_INTEGER,
-                0,
-                'not null',
-                '价值'
-            )
-            ->addColumn(
-                self::fields_BROWSER_INFO,
-                TableInterface::column_type_JSON,
-                null,
-                '',
-                '浏览器信息'
-            )
-            ->addColumn(
-                self::fields_CRON_DEAL,
-                TableInterface::column_type_INTEGER,
-                0,
-                'default 0',
-                '定时处理：0未处理 1已处理'
-            )
-            ->addColumn(
-                self::fields_CREATED_AT,
-                TableInterface::column_type_DATETIME,
-                null,
-                'not null default CURRENT_TIMESTAMP',
-                '创建时间'
-            )
-            // 事件
-            ->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_event',
-                self::fields_EVENT,
-                '事件名索引'
-            )
-            // 货币
-            ->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_currency',
-                self::fields_CURRENCY,
-                '货币索引'
-            )
-            // 语言
-            ->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_lang',
-                self::fields_LANG,
-                '语言索引'
-            )
-            // 网站
-            ->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_website_id',
-                self::fields_WEBSITE_ID,
-                '网站索引'
-            )
-            // 模块
-            ->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_module',
-                self::fields_MODULE,
-                '模块索引'
-            )
-            // 来源
-            ->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_source',
-                self::fields_SOURCE,
-                '来源索引'
-            )
-            // 定时处理hash索引
-            ->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_cron_deal',
-                self::fields_CRON_DEAL,
-                '定时处理hash索引'
-            )
-            ->create();
-    }
-
-    public function getPixelId(): int
-    {
-        return (int)$this->getData(self::fields_ID);
-    }
-
     public function getUrl(): string
     {
-        return (string)$this->getData(self::fields_URL);
+        return (string)$this->getData(self::schema_fields_URL);
     }
-
     public function getModule(): string
     {
-        return (string)$this->getData(self::fields_MODULE);
+        return (string)$this->getData(self::schema_fields_MODULE);
     }
-
     public function getName(): string
     {
-        return (string)$this->getData(self::fields_NAME);
+        return (string)$this->getData(self::schema_fields_NAME);
     }
-
     public function getReferer(): string
     {
-        return (string)$this->getData(self::fields_REFERER);
+        return (string)$this->getData(self::schema_fields_REFERER);
     }
-
     public function getSource(): string
     {
-        return (string)$this->getData(self::fields_SOURCE);
+        return (string)$this->getData(self::schema_fields_SOURCE);
     }
-
     public function getUserId(): int
     {
-        return (int)$this->getData(self::fields_USER_ID);
+        return (int)$this->getData(self::schema_fields_USER_ID);
     }
-
     public function getUserAgent(): string
     {
-        return (string)$this->getData(self::fields_USER_AGENT);
+        return (string)$this->getData(self::schema_fields_USER_AGENT);
     }
-
     public function getIp(): string
     {
-        return (string)$this->getData(self::fields_IP);
+        return (string)$this->getData(self::schema_fields_IP);
     }
-
     public function getEvent(): string
     {
-        return (string)$this->getData(self::fields_EVENT);
+        return (string)$this->getData(self::schema_fields_EVENT);
     }
-
     public function getWebsiteId(): int
     {
-        return (int)$this->getData(self::fields_WEBSITE_ID);
+        return (int)$this->getData(self::schema_fields_WEBSITE_ID);
     }
-
     public function getLang(): string
     {
-        return (string)$this->getData(self::fields_LANG);
+        return (string)$this->getData(self::schema_fields_LANG);
     }
-
     public function getCurrency(): string
     {
-        return (string)$this->getData(self::fields_CURRENCY);
+        return (string)$this->getData(self::schema_fields_CURRENCY);
     }
-
     public function getValue(): int
     {
-        return (int)$this->getData(self::fields_VALUE);
+        return (int)$this->getData(self::schema_fields_VALUE);
     }
-
     public function getBrowserInfo(): array
     {
-        return (array)$this->getData(self::fields_BROWSER_INFO);
+        return (array)$this->getData(self::schema_fields_BROWSER_INFO);
     }
-
     public function getCronDeal(): int
     {
-        return (int)$this->getData(self::fields_CRON_DEAL);
+        return (int)$this->getData(self::schema_fields_CRON_DEAL);
     }
-
     public function setPixelId(int $pixel_id): static
     {
-        return $this->setData(self::fields_ID, $pixel_id);
+        return $this->setData(self::schema_fields_ID, $pixel_id);
     }
-
     public function setUrl(string $url): static
     {
-        return $this->setData(self::fields_URL, $url);
+        return $this->setData(self::schema_fields_URL, $url);
     }
-
     public function setModule(string $module): static
     {
-        return $this->setData(self::fields_MODULE, $module);
+        return $this->setData(self::schema_fields_MODULE, $module);
     }
-
     public function setName(string $name): static
     {
-        return $this->setData(self::fields_NAME, $name);
+        return $this->setData(self::schema_fields_NAME, $name);
     }
-
     public function setReferer(string $referer): static
     {
-        return $this->setData(self::fields_REFERER, $referer);
+        return $this->setData(self::schema_fields_REFERER, $referer);
     }
-
     public function setSource(string $source): static
     {
-        return $this->setData(self::fields_SOURCE, $source);
+        return $this->setData(self::schema_fields_SOURCE, $source);
     }
-
     public function setUserId(int $user_id): static
     {
-        return $this->setData(self::fields_USER_ID, $user_id);
+        return $this->setData(self::schema_fields_USER_ID, $user_id);
     }
-
     public function setUserAgent(string $user_agent): static
     {
-        return $this->setData(self::fields_USER_AGENT, $user_agent);
+        return $this->setData(self::schema_fields_USER_AGENT, $user_agent);
     }
-
     public function setIp(string $ip): static
     {
-        return $this->setData(self::fields_IP, $ip);
+        return $this->setData(self::schema_fields_IP, $ip);
     }
-
     public function setEvent(string $event): static
     {
-        return $this->setData(self::fields_EVENT, $event);
+        return $this->setData(self::schema_fields_EVENT, $event);
     }
-
     public function setWebsiteId(int $website_id): static
     {
-        return $this->setData(self::fields_WEBSITE_ID, $website_id);
+        return $this->setData(self::schema_fields_WEBSITE_ID, $website_id);
     }
-
     public function setLang(string $lang): static
     {
-        return $this->setData(self::fields_LANG, $lang);
+        return $this->setData(self::schema_fields_LANG, $lang);
     }
-
     public function setCurrency(string $currency): static
     {
-        return $this->setData(self::fields_CURRENCY, $currency);
+        return $this->setData(self::schema_fields_CURRENCY, $currency);
     }
-
     public function setValue(int $value): static
     {
-        return $this->setData(self::fields_VALUE, $value);
+        return $this->setData(self::schema_fields_VALUE, $value);
     }
-
     public function setBrowserInfo(array $browser_info): static
     {
-        return $this->setData(self::fields_BROWSER_INFO, $browser_info);
+        return $this->setData(self::schema_fields_BROWSER_INFO, $browser_info);
     }
-
     public function setCronDeal(int $cron_deal): static
     {
-        return $this->setData(self::fields_CRON_DEAL, $cron_deal);
+        return $this->setData(self::schema_fields_CRON_DEAL, $cron_deal);
     }
-
     public function getCreatedAt(): string
     {
-        return (string)$this->getData(self::fields_CREATED_AT);
+        return (string)$this->getData(self::schema_fields_CREATED_AT);
     }
-
     public function setCreatedAt(string $created_at): static
     {
-        return $this->setData(self::fields_CREATED_AT, $created_at);
+        return $this->setData(self::schema_fields_CREATED_AT, $created_at);
     }
-
 }
