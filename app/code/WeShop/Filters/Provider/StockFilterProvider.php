@@ -92,16 +92,16 @@ class StockFilterProvider extends AbstractFilterProvider
         foreach ($filterValues as $value) {
             switch ($value) {
                 case self::STOCK_IN:
-                    $conditions[] = Product::fields_stock . ' > 0';
+                    $conditions[] = Product::schema_fields_stock . ' > 0';
                     break;
                 case self::STOCK_OUT:
-                    $conditions[] = Product::fields_stock . ' <= 0';
+                    $conditions[] = Product::schema_fields_stock . ' <= 0';
                     break;
                 case self::STOCK_LOW:
                     $conditions[] = sprintf(
                         '%s > 0 AND %s <= %d',
-                        Product::fields_stock,
-                        Product::fields_stock,
+                        Product::schema_fields_stock,
+                        Product::schema_fields_stock,
                         $this->lowStockThreshold
                     );
                     break;
@@ -115,13 +115,13 @@ class StockFilterProvider extends AbstractFilterProvider
         /** @var Product $productModel */
         $productModel = ObjectManager::getInstance(Product::class);
         $productModel->reset()
-            ->fields(Product::fields_ID)
-            ->where(Product::fields_ID, $productIds, 'in')
+            ->fields(Product::schema_fields_ID)
+            ->where(Product::schema_fields_ID, $productIds, 'in')
             ->where('(' . implode(' OR ', $conditions) . ')');
         
         $results = $productModel->select()->fetchArray();
         
-        return array_column($results, Product::fields_ID);
+        return array_column($results, Product::schema_fields_ID);
     }
     
     /**
@@ -135,15 +135,15 @@ class StockFilterProvider extends AbstractFilterProvider
         // 有货数量
         $productModel->reset()
             ->fields('COUNT(*) as count')
-            ->where(Product::fields_ID, $productIds, 'in')
-            ->where(Product::fields_stock, 0, '>');
+            ->where(Product::schema_fields_ID, $productIds, 'in')
+            ->where(Product::schema_fields_stock, 0, '>');
         $inStock = (int)($productModel->find()->fetchArray()['count'] ?? 0);
         
         // 缺货数量
         $productModel->reset()
             ->fields('COUNT(*) as count')
-            ->where(Product::fields_ID, $productIds, 'in')
-            ->where(Product::fields_stock, 0, '<=');
+            ->where(Product::schema_fields_ID, $productIds, 'in')
+            ->where(Product::schema_fields_stock, 0, '<=');
         $outOfStock = (int)($productModel->find()->fetchArray()['count'] ?? 0);
         
         return [
