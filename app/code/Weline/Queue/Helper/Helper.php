@@ -43,30 +43,30 @@ class Helper
                 } catch (\Exception $e) {
                     continue;
                 }
-                $type->reset()->where(Type::fields_class, $queue::class)
+                $type->reset()->where(Type::schema_fields_class, $queue::class)
                     ->find()
                     ->fetch();
                 $type_id = (int)$type->getId();
                 if ($type_id) {
                     $type->reset()->clearData();
-                    $type->where($type::fields_ID, $type_id);
+                    $type->where($type::schema_fields_ID, $type_id);
                     $type->update([
-                        Type::fields_name => $queue->name(),
-                        Type::fields_module_name => $module['name'],
-                        Type::fields_tip => $queue->tip(),
-                        Type::fields_class => $queue::class,
-                        Type::fields_enable => method_exists($queue, 'enable') ? $queue->enable() : true
+                        Type::schema_fields_name => $queue->name(),
+                        Type::schema_fields_module_name => $module['name'],
+                        Type::schema_fields_tip => $queue->tip(),
+                        Type::schema_fields_class => $queue::class,
+                        Type::schema_fields_enable => method_exists($queue, 'enable') ? $queue->enable() : true
                     ])
                         ->fetch();
                 } else {
                     $type->reset()->clearData();
                     $type_id = $type->setModelFieldsData([
-                        Type::fields_name => $queue->name(),
-                        Type::fields_module_name => $module['name'],
-                        Type::fields_tip => $queue->tip(),
-                        Type::fields_class => $queue::class,
-                        Type::fields_attributes => '',
-                        Type::fields_enable => method_exists($queue, 'enable') ? $queue->enable() : true
+                        Type::schema_fields_name => $queue->name(),
+                        Type::schema_fields_module_name => $module['name'],
+                        Type::schema_fields_tip => $queue->tip(),
+                        Type::schema_fields_class => $queue::class,
+                        Type::schema_fields_attributes => '',
+                        Type::schema_fields_enable => method_exists($queue, 'enable') ? $queue->enable() : true
                     ])->save(true);
                 }
                 # 属性更新
@@ -84,31 +84,31 @@ class Helper
                     return $attr->getCode();
                 }, $attrs);
                 if ($attrsCodes) {
-                    $type->reset()->where($type::fields_ID, $type_id)
-                        ->update($type::fields_attributes, implode(',', $attrsCodes))
+                    $type->reset()->where($type::schema_fields_ID, $type_id)
+                        ->update($type::schema_fields_attributes, implode(',', $attrsCodes))
                         ->fetch();
                 }
                 # 写入类型属性
                 $attrIds = [];
                 foreach ($attrs as $attr) {
                     $queueTypeAttributeModel->clearData()->reset()
-                        ->where($queueTypeAttributeModel::fields_type_id, $type_id)
-                        ->where($queueTypeAttributeModel::fields_code, $attr->getCode())
+                        ->where($queueTypeAttributeModel::schema_fields_type_id, $type_id)
+                        ->where($queueTypeAttributeModel::schema_fields_code, $attr->getCode())
                         ->find()
                         ->fetch();
                     if ($queueTypeAttributeModel->getId()) {
                         $queueTypeAttributeModel->reset()
-                            ->where($queueTypeAttributeModel::fields_code, $attr->getCode())
-                            ->where($queueTypeAttributeModel::fields_type_id, $type_id)
-                            ->update($queueTypeAttributeModel::fields_name, $attr->getName())
-                            ->update($queueTypeAttributeModel::fields_attribute_id, $attr->getId())
+                            ->where($queueTypeAttributeModel::schema_fields_code, $attr->getCode())
+                            ->where($queueTypeAttributeModel::schema_fields_type_id, $type_id)
+                            ->update($queueTypeAttributeModel::schema_fields_name, $attr->getName())
+                            ->update($queueTypeAttributeModel::schema_fields_attribute_id, $attr->getId())
                             ->fetch();
                     } else {
                         $queueTypeAttributeModel
                             ->setTypeId($type_id)
                             ->setAttributeId((int)$attr->getId())
-                            ->setData($queueTypeAttributeModel::fields_code, $attr->getCode())
-                            ->setData($queueTypeAttributeModel::fields_name, $attr->getName())
+                            ->setData($queueTypeAttributeModel::schema_fields_code, $attr->getCode())
+                            ->setData($queueTypeAttributeModel::schema_fields_name, $attr->getName())
                             ->save();
                     }
                     $attrIds[] = $attr->getId();
@@ -117,8 +117,8 @@ class Helper
 //                p($queueTypeAttributeModel
 //                    ->clearData()
 //                    ->reset()
-//                    ->where($queueTypeAttributeModel::fields_type_id, $type_id)
-//                    ->where($queueTypeAttributeModel::fields_attribute_id, $attrIds, 'not in')
+//                    ->where($queueTypeAttributeModel::schema_fields_type_id, $type_id)
+//                    ->where($queueTypeAttributeModel::schema_fields_attribute_id, $attrIds, 'not in')
 //                    ->getQuery()
 //                    ->delete()->bound_values);
                 if ($attrIds) {
@@ -126,8 +126,8 @@ class Helper
                     $notBeLongTypeAttrs = $queueTypeAttributeModel
                         ->clearData()
                         ->reset()
-                        ->where($queueTypeAttributeModel::fields_type_id, $type_id)
-                        ->where($queueTypeAttributeModel::fields_attribute_id, $attrIds, 'not in')
+                        ->where($queueTypeAttributeModel::schema_fields_type_id, $type_id)
+                        ->where($queueTypeAttributeModel::schema_fields_attribute_id, $attrIds, 'not in')
                         ->select()
                         ->fetch()
                         ->getItems();
@@ -152,8 +152,8 @@ class Helper
                     $queueTypeAttributeModel
                         ->clearData()
                         ->reset()
-                        ->where($queueTypeAttributeModel::fields_type_id, $type_id)
-                        ->where($queueTypeAttributeModel::fields_attribute_id, $attrIds, 'not in')
+                        ->where($queueTypeAttributeModel::schema_fields_type_id, $type_id)
+                        ->where($queueTypeAttributeModel::schema_fields_attribute_id, $attrIds, 'not in')
                         ->delete()
                         ->fetch();
                 }
