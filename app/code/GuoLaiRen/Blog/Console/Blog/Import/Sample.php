@@ -59,7 +59,7 @@ class Sample extends CommandAbstract
                 $this->printer->error("网站ID {$siteId} 不存在");
                 return;
             }
-            $this->printer->success("选择网站: {$website->getData(Website::fields_NAME)} (ID: {$siteId})");
+            $this->printer->success("选择网站: {$website->getData(Website::schema_fields_NAME)} (ID: {$siteId})");
         } else {
             $this->printer->note('导入到全局（site_id = 0）');
         }
@@ -127,9 +127,9 @@ class Sample extends CommandAbstract
         $websiteList = [];
         foreach ($websites as $website) {
             $id = $website->getId();
-            $name = $website->getData(Website::fields_NAME);
-            $code = $website->getData(Website::fields_CODE);
-            $url = $website->getData(Website::fields_URL);
+            $name = $website->getData(Website::schema_fields_NAME);
+            $code = $website->getData(Website::schema_fields_CODE);
+            $url = $website->getData(Website::schema_fields_URL);
             $websiteList[$id] = $website;
             $this->printer->note("  [{$id}] {$name} ({$code}) - {$url}");
         }
@@ -173,8 +173,8 @@ class Sample extends CommandAbstract
             try {
                 // 检查slug是否已存在
                 $existing = $this->categoryModel->reset()
-                    ->where(Category::fields_SLUG, $categoryData['slug'])
-                    ->where(Category::fields_SITE_ID, $siteId)
+                    ->where(Category::schema_fields_SLUG, $categoryData['slug'])
+                    ->where(Category::schema_fields_SITE_ID, $siteId)
                     ->find()
                     ->fetch();
                 
@@ -188,17 +188,17 @@ class Sample extends CommandAbstract
                 // 创建分类
                 $category = clone $this->categoryModel;
                 $category->clearData();
-                $category->setData(Category::fields_SITE_ID, $siteId);
-                $category->setData(Category::fields_NAME, $categoryData['name']);
-                $category->setData(Category::fields_SLUG, $categoryData['slug']);
-                $category->setData(Category::fields_DESCRIPTION, $categoryData['description']);
-                $category->setData(Category::fields_COVER_IMAGE, $categoryData['cover_image'] ?? '');
-                $category->setData(Category::fields_PARENT_ID, 0);
-                $category->setData(Category::fields_SORT_ORDER, $categoryData['sort_order']);
-                $category->setData(Category::fields_STATUS, Category::STATUS_ENABLED);
-                $category->setData(Category::fields_META_TITLE, $categoryData['meta_title'] ?? $categoryData['name']);
-                $category->setData(Category::fields_META_DESCRIPTION, $categoryData['meta_description'] ?? $categoryData['description']);
-                $category->setData(Category::fields_META_KEYWORDS, $categoryData['meta_keywords'] ?? '');
+                $category->setData(Category::schema_fields_SITE_ID, $siteId);
+                $category->setData(Category::schema_fields_NAME, $categoryData['name']);
+                $category->setData(Category::schema_fields_SLUG, $categoryData['slug']);
+                $category->setData(Category::schema_fields_DESCRIPTION, $categoryData['description']);
+                $category->setData(Category::schema_fields_COVER_IMAGE, $categoryData['cover_image'] ?? '');
+                $category->setData(Category::schema_fields_PARENT_ID, 0);
+                $category->setData(Category::schema_fields_SORT_ORDER, $categoryData['sort_order']);
+                $category->setData(Category::schema_fields_STATUS, Category::STATUS_ENABLED);
+                $category->setData(Category::schema_fields_META_TITLE, $categoryData['meta_title'] ?? $categoryData['name']);
+                $category->setData(Category::schema_fields_META_DESCRIPTION, $categoryData['meta_description'] ?? $categoryData['description']);
+                $category->setData(Category::schema_fields_META_KEYWORDS, $categoryData['meta_keywords'] ?? '');
                 
                 $categoryId = $category->save();
                 
@@ -230,8 +230,8 @@ class Sample extends CommandAbstract
             try {
                 // 检查slug是否已存在
                 $existing = $this->postModel->reset()
-                    ->where(Post::fields_SLUG, $postData['slug'])
-                    ->where(Post::fields_SITE_ID, $siteId)
+                    ->where(Post::schema_fields_SLUG, $postData['slug'])
+                    ->where(Post::schema_fields_SITE_ID, $siteId)
                     ->find()
                     ->fetch();
                 
@@ -250,19 +250,19 @@ class Sample extends CommandAbstract
                 // 创建文章
                 $post = clone $this->postModel;
                 $post->clearData();
-                $post->setData(Post::fields_SITE_ID, $siteId);
-                $post->setData(Post::fields_CATEGORY_ID, $categoryId);
-                $post->setData(Post::fields_TITLE, $postData['title']);
-                $post->setData(Post::fields_SLUG, $postData['slug']);
-                $post->setData(Post::fields_SUMMARY, $postData['summary']);
-                $post->setData(Post::fields_CONTENT, $postData['content']);
-                $post->setData(Post::fields_COVER_IMAGE, $postData['cover_image'] ?? '');
-                $post->setData(Post::fields_AUTHOR, $postData['author']);
-                $post->setData(Post::fields_TAGS, $postData['tags']);
-                $post->setData(Post::fields_VIEW_COUNT, rand(100, 5000));
-                $post->setData(Post::fields_STATUS, Post::STATUS_PUBLISHED);
-                $post->setData(Post::fields_IS_FEATURED, $postData['is_featured'] ?? 0);
-                $post->setData(Post::fields_PUBLISHED_AT, $postData['published_at'] ?? date('Y-m-d H:i:s'));
+                $post->setData(Post::schema_fields_SITE_ID, $siteId);
+                $post->setData(Post::schema_fields_CATEGORY_ID, $categoryId);
+                $post->setData(Post::schema_fields_TITLE, $postData['title']);
+                $post->setData(Post::schema_fields_SLUG, $postData['slug']);
+                $post->setData(Post::schema_fields_SUMMARY, $postData['summary']);
+                $post->setData(Post::schema_fields_CONTENT, $postData['content']);
+                $post->setData(Post::schema_fields_COVER_IMAGE, $postData['cover_image'] ?? '');
+                $post->setData(Post::schema_fields_AUTHOR, $postData['author']);
+                $post->setData(Post::schema_fields_TAGS, $postData['tags']);
+                $post->setData(Post::schema_fields_VIEW_COUNT, rand(100, 5000));
+                $post->setData(Post::schema_fields_STATUS, Post::STATUS_PUBLISHED);
+                $post->setData(Post::schema_fields_IS_FEATURED, $postData['is_featured'] ?? 0);
+                $post->setData(Post::schema_fields_PUBLISHED_AT, $postData['published_at'] ?? date('Y-m-d H:i:s'));
                 
                 $postId = $post->save();
                 

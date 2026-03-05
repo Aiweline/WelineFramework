@@ -46,7 +46,7 @@ class Post extends BackendController
     private function getSiteOptions(): array
     {
         $websites = $this->websiteModel->clear()
-            ->order(Website::fields_NAME, 'ASC')
+            ->order(Website::schema_fields_NAME, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
@@ -75,17 +75,17 @@ class Post extends BackendController
         // 根据当前网站过滤
         $websiteId = WebsiteData::getWebsiteId();
         if ($websiteId) {
-            $listModel->where(PostModel::fields_SITE_ID, $websiteId);
+            $listModel->where(PostModel::schema_fields_SITE_ID, $websiteId);
         }
 
         if ($keyword = $this->request->getGet('search')) {
             $keyword = "%{$keyword}%";
-            $listModel->where(PostModel::fields_TITLE, $keyword, 'like')
-                ->where(PostModel::fields_SLUG, $keyword, 'like', 'OR');
+            $listModel->where(PostModel::schema_fields_TITLE, $keyword, 'like')
+                ->where(PostModel::schema_fields_SLUG, $keyword, 'like', 'OR');
         }
 
         $posts = $listModel
-            ->order(PostModel::fields_ID, 'DESC')
+            ->order(PostModel::schema_fields_ID, 'DESC')
             ->pagination()
             ->select()
             ->fetch();
@@ -134,9 +134,9 @@ class Post extends BackendController
             // 别名唯一性校验（同一网站内唯一）
             $exists = clone $this->postModel;
             $exists->clear()
-                ->where(PostModel::fields_SLUG, $slug);
+                ->where(PostModel::schema_fields_SLUG, $slug);
             if ($websiteId) {
-                $exists->where(PostModel::fields_SITE_ID, $websiteId);
+                $exists->where(PostModel::schema_fields_SITE_ID, $websiteId);
             }
             $exists->find()->fetch();
             if ($exists->getId()) {
@@ -156,18 +156,18 @@ class Post extends BackendController
             }
 
             $post = clone $this->postModel;
-            $post->setData(PostModel::fields_TITLE, $title)
-                ->setData(PostModel::fields_SLUG, $slug)
-                ->setData(PostModel::fields_SITE_ID, $websiteId)
-                ->setData(PostModel::fields_SUMMARY, (string)($data['summary'] ?? ''))
-                ->setData(PostModel::fields_CONTENT, (string)($data['content'] ?? ''))
-                ->setData(PostModel::fields_COVER_IMAGE, (string)($data['cover_image'] ?? ''))
-                ->setData(PostModel::fields_CATEGORY_ID, (int)($data['category_id'] ?? 0))
-                ->setData(PostModel::fields_AUTHOR, (string)($data['author'] ?? ''))
-                ->setData(PostModel::fields_TAGS, (string)($data['tags'] ?? ''))
-                ->setData(PostModel::fields_IS_FEATURED, isset($data['is_featured']) ? 1 : 0)
-                ->setData(PostModel::fields_STATUS, $status)
-                ->setData(PostModel::fields_PUBLISHED_AT, $published_at)
+            $post->setData(PostModel::schema_fields_TITLE, $title)
+                ->setData(PostModel::schema_fields_SLUG, $slug)
+                ->setData(PostModel::schema_fields_SITE_ID, $websiteId)
+                ->setData(PostModel::schema_fields_SUMMARY, (string)($data['summary'] ?? ''))
+                ->setData(PostModel::schema_fields_CONTENT, (string)($data['content'] ?? ''))
+                ->setData(PostModel::schema_fields_COVER_IMAGE, (string)($data['cover_image'] ?? ''))
+                ->setData(PostModel::schema_fields_CATEGORY_ID, (int)($data['category_id'] ?? 0))
+                ->setData(PostModel::schema_fields_AUTHOR, (string)($data['author'] ?? ''))
+                ->setData(PostModel::schema_fields_TAGS, (string)($data['tags'] ?? ''))
+                ->setData(PostModel::schema_fields_IS_FEATURED, isset($data['is_featured']) ? 1 : 0)
+                ->setData(PostModel::schema_fields_STATUS, $status)
+                ->setData(PostModel::schema_fields_PUBLISHED_AT, $published_at)
                 ->save();
 
             MessageManager::success(__('博客文章已创建'));
@@ -228,7 +228,7 @@ class Post extends BackendController
             // 获取当前网站ID（优先使用表单提交的，否则从文章现有数据或WebsiteData获取）
             $websiteId = (int)($data['site_id'] ?? 0);
             if (!$websiteId) {
-                $websiteId = (int)($post->getData(PostModel::fields_SITE_ID) ?? 0);
+                $websiteId = (int)($post->getData(PostModel::schema_fields_SITE_ID) ?? 0);
             }
             if (!$websiteId) {
                 $websiteId = (int)(WebsiteData::getWebsiteId() ?? 0);
@@ -237,10 +237,10 @@ class Post extends BackendController
             // 别名唯一性校验（排除当前记录，同一网站内唯一）
             $exists = clone $this->postModel;
             $exists->clear()
-                ->where(PostModel::fields_SLUG, $slug)
-                ->where(PostModel::fields_ID, $id, '!=', 'AND');
+                ->where(PostModel::schema_fields_SLUG, $slug)
+                ->where(PostModel::schema_fields_ID, $id, '!=', 'AND');
             if ($websiteId) {
-                $exists->where(PostModel::fields_SITE_ID, $websiteId);
+                $exists->where(PostModel::schema_fields_SITE_ID, $websiteId);
             }
             $exists->find()->fetch();
             if ($exists->getId()) {
@@ -253,18 +253,18 @@ class Post extends BackendController
                 $published_at = date('Y-m-d H:i:s');
             }
 
-            $post->setData(PostModel::fields_TITLE, $title)
-                ->setData(PostModel::fields_SLUG, $slug)
-                ->setData(PostModel::fields_SITE_ID, $websiteId)
-                ->setData(PostModel::fields_SUMMARY, (string)($data['summary'] ?? ''))
-                ->setData(PostModel::fields_CONTENT, (string)($data['content'] ?? ''))
-                ->setData(PostModel::fields_COVER_IMAGE, (string)($data['cover_image'] ?? ''))
-                ->setData(PostModel::fields_CATEGORY_ID, (int)($data['category_id'] ?? 0))
-                ->setData(PostModel::fields_AUTHOR, (string)($data['author'] ?? ''))
-                ->setData(PostModel::fields_TAGS, (string)($data['tags'] ?? ''))
-                ->setData(PostModel::fields_IS_FEATURED, isset($data['is_featured']) ? 1 : 0)
-                ->setData(PostModel::fields_STATUS, $status)
-                ->setData(PostModel::fields_PUBLISHED_AT, $published_at)
+            $post->setData(PostModel::schema_fields_TITLE, $title)
+                ->setData(PostModel::schema_fields_SLUG, $slug)
+                ->setData(PostModel::schema_fields_SITE_ID, $websiteId)
+                ->setData(PostModel::schema_fields_SUMMARY, (string)($data['summary'] ?? ''))
+                ->setData(PostModel::schema_fields_CONTENT, (string)($data['content'] ?? ''))
+                ->setData(PostModel::schema_fields_COVER_IMAGE, (string)($data['cover_image'] ?? ''))
+                ->setData(PostModel::schema_fields_CATEGORY_ID, (int)($data['category_id'] ?? 0))
+                ->setData(PostModel::schema_fields_AUTHOR, (string)($data['author'] ?? ''))
+                ->setData(PostModel::schema_fields_TAGS, (string)($data['tags'] ?? ''))
+                ->setData(PostModel::schema_fields_IS_FEATURED, isset($data['is_featured']) ? 1 : 0)
+                ->setData(PostModel::schema_fields_STATUS, $status)
+                ->setData(PostModel::schema_fields_PUBLISHED_AT, $published_at)
                 ->save();
 
             MessageManager::success(__('博客文章已保存'));
@@ -289,6 +289,8 @@ class Post extends BackendController
         // 使用框架内置的 SseWriter，兼容 WLS 与 FPM 模式
         $sse = new \Weline\Framework\Http\Sse\SseWriter();
         $sse->start();
+        // 立即发送 start，便于前端识别连接成功；任何后续错误都会通过 error 事件返回
+        $sse->sendEvent('start', ['message' => __('正在初始化...')]);
 
         try {
             /** @var AiPublish $cron */
@@ -297,7 +299,13 @@ class Post extends BackendController
                 $sse->sendEvent($event, $data);
             });
         } catch (\Throwable $e) {
-            $sse->sendEvent('error', ['message' => $e->getMessage()]);
+            $msg = $e->getMessage();
+            $code = $e->getCode();
+            $sse->sendEvent('error', [
+                'message' => $msg,
+                'code' => \is_int($code) ? $code : 0,
+                'detail' => __('执行出错：%{message}', ['message' => $msg]),
+            ]);
         }
 
         // 注意：不要在此处 exit，WlsRuntime 会根据 SseContext 判断并避免重复输出响应
@@ -358,12 +366,12 @@ class Post extends BackendController
                 throw new \Exception(__('博客文章不存在'));
             }
 
-            if ((int)$post->getData(PostModel::fields_STATUS) === PostModel::STATUS_PUBLISHED) {
+            if ((int)$post->getData(PostModel::schema_fields_STATUS) === PostModel::STATUS_PUBLISHED) {
                 throw new \Exception(__('该文章已经是发布状态'));
             }
 
-            $post->setData(PostModel::fields_STATUS, PostModel::STATUS_PUBLISHED)
-                ->setData(PostModel::fields_PUBLISHED_AT, date('Y-m-d H:i:s'))
+            $post->setData(PostModel::schema_fields_STATUS, PostModel::STATUS_PUBLISHED)
+                ->setData(PostModel::schema_fields_PUBLISHED_AT, date('Y-m-d H:i:s'))
                 ->save();
 
             MessageManager::success(__('文章已审批发布'));

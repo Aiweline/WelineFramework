@@ -57,14 +57,14 @@ class Index extends FrontendController
         $websiteId = WebsiteData::getWebsiteId();
         $listModel = clone $this->postModel;
         $listModel->clear()
-            ->where(Post::fields_STATUS, Post::STATUS_PUBLISHED);
+            ->where(Post::schema_fields_STATUS, Post::STATUS_PUBLISHED);
         
         // 根据当前网站过滤
         if ($websiteId) {
-            $listModel->where(Post::fields_SITE_ID, $websiteId);
+            $listModel->where(Post::schema_fields_SITE_ID, $websiteId);
         }
         
-        $listModel->order(Post::fields_PUBLISHED_AT, 'DESC')
+        $listModel->order(Post::schema_fields_PUBLISHED_AT, 'DESC')
             ->page($page, $pageSize);
 
         $collection = $listModel->select()->fetch();
@@ -73,29 +73,29 @@ class Index extends FrontendController
         $posts = [];
         foreach ($items as $item) {
             /** @var Post $item */
-            $slug = (string)$item->getData(Post::fields_SLUG);
+            $slug = (string)$item->getData(Post::schema_fields_SLUG);
             
             // 获取分类名称
             $categoryName = '';
-            $categoryId = $item->getData(Post::fields_CATEGORY_ID);
+            $categoryId = $item->getData(Post::schema_fields_CATEGORY_ID);
             if ($categoryId) {
                 $cat = clone $this->categoryModel;
                 $cat->load($categoryId);
                 if ($cat->getId()) {
-                    $categoryName = $cat->getData(Category::fields_NAME);
+                    $categoryName = $cat->getData(Category::schema_fields_NAME);
                 }
             }
 
             $posts[] = [
                 'post_id'      => (int)$item->getId(),
-                'title'        => (string)$item->getData(Post::fields_TITLE),
-                'summary'      => (string)$item->getData(Post::fields_SUMMARY),
+                'title'        => (string)$item->getData(Post::schema_fields_TITLE),
+                'summary'      => (string)$item->getData(Post::schema_fields_SUMMARY),
                 'slug'         => $slug,
                 'url'          => '/blog/' . $slug,
-                'cover_image'  => (string)$item->getData(Post::fields_COVER_IMAGE),
-                'author'       => (string)$item->getData(Post::fields_AUTHOR),
-                'published_at' => (string)$item->getData(Post::fields_PUBLISHED_AT),
-                'view_count'   => (int)$item->getData(Post::fields_VIEW_COUNT),
+                'cover_image'  => (string)$item->getData(Post::schema_fields_COVER_IMAGE),
+                'author'       => (string)$item->getData(Post::schema_fields_AUTHOR),
+                'published_at' => (string)$item->getData(Post::schema_fields_PUBLISHED_AT),
+                'view_count'   => (int)$item->getData(Post::schema_fields_VIEW_COUNT),
                 'category_id'  => $categoryId,
                 'category_name' => $categoryName,
             ];
@@ -147,9 +147,9 @@ class Index extends FrontendController
         $homeConfig = $blogPage->getHomePageConfig();
         
         // 页面使用自己的样式设置（如果没有设置，才使用首页的）
-        $pageStyle = $blogPage->getData(Page::fields_STYLE);
+        $pageStyle = $blogPage->getData(Page::schema_fields_STYLE);
         if (empty($pageStyle) && !empty($homeConfig['style'])) {
-            $blogPage->setData(Page::fields_STYLE, $homeConfig['style']);
+            $blogPage->setData(Page::schema_fields_STYLE, $homeConfig['style']);
         }
         
         // 样式配置：页面自己的配置优先，首页配置作为基础
@@ -166,22 +166,22 @@ class Index extends FrontendController
         // - content 使用布局拥有者页面的配置
         
         // Logo 和 Icon：页面自己的优先，没有则从首页继承
-        if (empty($blogPage->getData(Page::fields_LOGO)) && !empty($homeConfig['logo'])) {
-            $blogPage->setData(Page::fields_LOGO, $homeConfig['logo']);
+        if (empty($blogPage->getData(Page::schema_fields_LOGO)) && !empty($homeConfig['logo'])) {
+            $blogPage->setData(Page::schema_fields_LOGO, $homeConfig['logo']);
         }
-        if (empty($blogPage->getData(Page::fields_ICON)) && !empty($homeConfig['icon'])) {
-            $blogPage->setData(Page::fields_ICON, $homeConfig['icon']);
+        if (empty($blogPage->getData(Page::schema_fields_ICON)) && !empty($homeConfig['icon'])) {
+            $blogPage->setData(Page::schema_fields_ICON, $homeConfig['icon']);
         }
         
         // 统计代码：页面自己的优先，没有则从首页继承
-        if (empty($blogPage->getData(Page::fields_GA4_ID)) && !empty($homeConfig['ga4_id'])) {
-            $blogPage->setData(Page::fields_GA4_ID, $homeConfig['ga4_id']);
+        if (empty($blogPage->getData(Page::schema_fields_GA4_ID)) && !empty($homeConfig['ga4_id'])) {
+            $blogPage->setData(Page::schema_fields_GA4_ID, $homeConfig['ga4_id']);
         }
-        if (empty($blogPage->getData(Page::fields_GTM_ID)) && !empty($homeConfig['gtm_id'])) {
-            $blogPage->setData(Page::fields_GTM_ID, $homeConfig['gtm_id']);
+        if (empty($blogPage->getData(Page::schema_fields_GTM_ID)) && !empty($homeConfig['gtm_id'])) {
+            $blogPage->setData(Page::schema_fields_GTM_ID, $homeConfig['gtm_id']);
         }
-        if (empty($blogPage->getData(Page::fields_FB_PIXEL_ID)) && !empty($homeConfig['fb_pixel_id'])) {
-            $blogPage->setData(Page::fields_FB_PIXEL_ID, $homeConfig['fb_pixel_id']);
+        if (empty($blogPage->getData(Page::schema_fields_FB_PIXEL_ID)) && !empty($homeConfig['fb_pixel_id'])) {
+            $blogPage->setData(Page::schema_fields_FB_PIXEL_ID, $homeConfig['fb_pixel_id']);
         }
         
         // 设置请求对象
@@ -214,11 +214,11 @@ class Index extends FrontendController
         
         $page = clone $this->pageModel;
         $page->clear()
-            ->where(Page::fields_TYPE, Page::TYPE_BLOG_LIST)
-            ->where(Page::fields_STATUS, Page::STATUS_PUBLISHED);
+            ->where(Page::schema_fields_TYPE, Page::TYPE_BLOG_LIST)
+            ->where(Page::schema_fields_STATUS, Page::STATUS_PUBLISHED);
         
         if ($websiteId) {
-            $page->where(Page::fields_WEBSITE_ID, $websiteId);
+            $page->where(Page::schema_fields_WEBSITE_ID, $websiteId);
         }
         
         $page->find()->fetch();
@@ -242,27 +242,27 @@ class Index extends FrontendController
         $websiteId = WebsiteData::getWebsiteId();
         $categories = clone $this->categoryModel;
         $query = $categories->clear()
-            ->where(Category::fields_STATUS, 1);
+            ->where(Category::schema_fields_STATUS, 1);
         
         // 根据当前网站过滤
         if ($websiteId) {
-            $query->where(Category::fields_SITE_ID, $websiteId);
+            $query->where(Category::schema_fields_SITE_ID, $websiteId);
         }
         
-        $items = $query->order(Category::fields_SORT_ORDER, 'ASC')
+        $items = $query->order(Category::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
         
         $result = [];
         foreach ($items as $cat) {
-            $slug = $cat->getData(Category::fields_SLUG);
+            $slug = $cat->getData(Category::schema_fields_SLUG);
             $result[] = [
                 'category_id' => $cat->getId(),
-                'name' => $cat->getData(Category::fields_NAME),
+                'name' => $cat->getData(Category::schema_fields_NAME),
                 'slug' => $slug,
                 'url' => '/blog/category/' . $slug,
-                'description' => $cat->getData(Category::fields_DESCRIPTION),
+                'description' => $cat->getData(Category::schema_fields_DESCRIPTION),
             ];
         }
         
@@ -277,14 +277,14 @@ class Index extends FrontendController
         $websiteId = WebsiteData::getWebsiteId();
         $posts = clone $this->postModel;
         $query = $posts->clear()
-            ->where(Post::fields_STATUS, Post::STATUS_PUBLISHED);
+            ->where(Post::schema_fields_STATUS, Post::STATUS_PUBLISHED);
         
         // 根据当前网站过滤
         if ($websiteId) {
-            $query->where(Post::fields_SITE_ID, $websiteId);
+            $query->where(Post::schema_fields_SITE_ID, $websiteId);
         }
         
-        $items = $query->order(Post::fields_PUBLISHED_AT, 'DESC')
+        $items = $query->order(Post::schema_fields_PUBLISHED_AT, 'DESC')
             ->limit($limit)
             ->select()
             ->fetch()
@@ -292,14 +292,14 @@ class Index extends FrontendController
         
         $result = [];
         foreach ($items as $item) {
-            $slug = $item->getData(Post::fields_SLUG);
+            $slug = $item->getData(Post::schema_fields_SLUG);
             $result[] = [
                 'post_id' => $item->getId(),
-                'title' => $item->getData(Post::fields_TITLE),
+                'title' => $item->getData(Post::schema_fields_TITLE),
                 'slug' => $slug,
                 'url' => '/blog/' . $slug,
-                'cover_image' => $item->getData(Post::fields_COVER_IMAGE),
-                'published_at' => $item->getData(Post::fields_PUBLISHED_AT),
+                'cover_image' => $item->getData(Post::schema_fields_COVER_IMAGE),
+                'published_at' => $item->getData(Post::schema_fields_PUBLISHED_AT),
             ];
         }
         
