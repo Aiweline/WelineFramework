@@ -1,81 +1,65 @@
 <?php
-
 declare(strict_types=1);
-
 /*
  * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
  * 邮箱：aiweline@qq.com
  * 网址：aiweline.com
  * 论坛：https://bbs.aiweline.com
  */
-
 namespace Weline\Api\Model;
-
 use Weline\Acl\Model\Role;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
-class ApiUser extends \Weline\Framework\Database\Model
+#[Table(comment: 'API用户表')]
+#[Index(name: 'idx_w_api_user_username', columns: ['username'], type: 'UNIQUE', comment: '用户名唯一')]
+#[Index(name: 'idx_w_api_user_email', columns: ['email'], type: 'UNIQUE', comment: '邮箱唯一')]
+#[Index(name: 'idx_w_api_user_api_key', columns: ['api_key'], type: 'UNIQUE', comment: 'API密钥唯一')]
+#[Index(name: 'idx_w_api_user_is_enabled', columns: ['is_enabled'], comment: '启用状态')]
+#[Index(name: 'idx_w_api_user_is_deleted', columns: ['is_deleted'], comment: '删除状态')]
+#[Index(name: 'idx_w_api_user_is_sandbox', columns: ['is_sandbox'], comment: '沙盒状态')]
+#[Index(name: 'idx_w_api_user_ip_whitelist_enabled', columns: ['ip_whitelist_enabled'], comment: 'IP白名单')]
+#[Index(name: 'idx_w_api_user_user_agent_restriction_enabled', columns: ['user_agent_restriction_enabled'], comment: 'UA限制')]
+class ApiUser extends Model
 {
     public const fields_ID = 'user_id';
-    public const fields_username = 'username';
-    public const fields_email = 'email';
-    public const fields_password = 'password';
-    public const fields_api_key = 'api_key';
-    public const fields_api_secret = 'api_secret';
-    public const fields_token_expire_time = 'token_expire_time';
-    public const fields_refresh_token_expire_time = 'refresh_token_expire_time';
-    public const fields_is_enabled = 'is_enabled';
-    public const fields_is_deleted = 'is_deleted';
-    public const fields_ip_whitelist_enabled = 'ip_whitelist_enabled';
-    public const fields_allowed_ips = 'allowed_ips';
-    public const fields_user_agent_restriction_enabled = 'user_agent_restriction_enabled';
-    public const fields_allowed_user_agents = 'allowed_user_agents';
-    public const fields_is_sandbox = 'is_sandbox';
-
     public string $table = 'm_api_user';
+
+    #[Col(type: 'integer', length: 11, nullable: false, primaryKey: true, autoIncrement: true, comment: '用户ID')]
+    public const schema_fields_ID = 'user_id';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '用户名')]
+    public const schema_fields_username = 'username';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '邮箱')]
+    public const schema_fields_email = 'email';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '密码')]
+    public const schema_fields_password = 'password';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: 'API密钥')]
+    public const schema_fields_api_key = 'api_key';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: 'API Secret')]
+    public const schema_fields_api_secret = 'api_secret';
+    #[Col(type: 'integer', length: 11, nullable: false, comment: '访问令牌有效期')]
+    public const schema_fields_token_expire_time = 'token_expire_time';
+    #[Col(type: 'integer', length: 11, nullable: false, comment: '刷新令牌有效期')]
+    public const schema_fields_refresh_token_expire_time = 'refresh_token_expire_time';
+    #[Col(type: 'integer', length: 1, nullable: false, comment: '是否启用')]
+    public const schema_fields_is_enabled = 'is_enabled';
+    #[Col(type: 'integer', length: 1, nullable: false, comment: '是否删除')]
+    public const schema_fields_is_deleted = 'is_deleted';
+    #[Col(type: 'integer', length: 1, nullable: false, comment: '是否启用IP白名单')]
+    public const schema_fields_ip_whitelist_enabled = 'ip_whitelist_enabled';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '允许的IP地址列表')]
+    public const schema_fields_allowed_ips = 'allowed_ips';
+    #[Col(type: 'integer', length: 1, nullable: false, comment: '是否启用用户代理限制')]
+    public const schema_fields_user_agent_restriction_enabled = 'user_agent_restriction_enabled';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '允许的用户代理列表')]
+    public const schema_fields_allowed_user_agents = 'allowed_user_agents';
+    #[Col(type: 'integer', length: 1, nullable: false, comment: '是否沙盒账户')]
+    public const schema_fields_is_sandbox = 'is_sandbox';
 
     public array $_unit_primary_keys = ['user_id'];
     public array $_index_sort_keys = ['user_id', 'username', 'email', 'api_key'];
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->hasField(self::fields_is_sandbox)) {
-            $setup->alterTable()
-                ->addColumn(
-                    self::fields_is_sandbox,
-                    self::fields_is_deleted,
-                    TableInterface::column_type_INTEGER,
-                    1,
-                    'default 0',
-                    '是否沙盒账户'
-                )
-                ->alter();
-        }
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        // 表结构已在 Setup/Install.php 中创建
-        // 这里可以添加初始数据
-    }
-
     /**
      * 获取用户ID
      */
@@ -83,55 +67,48 @@ class ApiUser extends \Weline\Framework\Database\Model
     {
         return (int)parent::getId($default);
     }
-
     /**
      * 获取用户名
      */
     public function getUsername(): string
     {
-        return (string)($this->getData(self::fields_username) ?? '');
+        return (string)($this->getData(self::schema_fields_username) ?? '');
     }
-
     /**
      * 设置用户名
      */
     public function setUsername(string $username): self
     {
-        return $this->setData(self::fields_username, $username);
+        return $this->setData(self::schema_fields_username, $username);
     }
-
     /**
      * 获取邮箱
      */
     public function getEmail(): string
     {
-        return (string)($this->getData(self::fields_email) ?? '');
+        return (string)($this->getData(self::schema_fields_email) ?? '');
     }
-
     /**
      * 设置邮箱
      */
     public function setEmail(string $email): self
     {
-        return $this->setData(self::fields_email, $email);
+        return $this->setData(self::schema_fields_email, $email);
     }
-
     /**
      * 获取密码（加密后的）
      */
     public function getPassword(): string
     {
-        return (string)($this->getData(self::fields_password) ?? '');
+        return (string)($this->getData(self::schema_fields_password) ?? '');
     }
-
     /**
      * 设置密码（自动加密）
      */
     public function setPassword(string $password): self
     {
-        return $this->setData(self::fields_password, password_hash($password, PASSWORD_DEFAULT));
+        return $this->setData(self::schema_fields_password, password_hash($password, PASSWORD_DEFAULT));
     }
-
     /**
      * 验证密码
      */
@@ -143,39 +120,34 @@ class ApiUser extends \Weline\Framework\Database\Model
         }
         return password_verify($password, $hashedPassword);
     }
-
     /**
      * 获取API Key
      */
     public function getApiKey(): string
     {
-        return (string)($this->getData(self::fields_api_key) ?? '');
+        return (string)($this->getData(self::schema_fields_api_key) ?? '');
     }
-
     /**
      * 设置API Key
      */
     public function setApiKey(string $apiKey): self
     {
-        return $this->setData(self::fields_api_key, $apiKey);
+        return $this->setData(self::schema_fields_api_key, $apiKey);
     }
-
     /**
      * 获取API Secret（加密后的）
      */
     public function getApiSecret(): string
     {
-        return (string)($this->getData(self::fields_api_secret) ?? '');
+        return (string)($this->getData(self::schema_fields_api_secret) ?? '');
     }
-
     /**
      * 设置API Secret（自动加密）
      */
     public function setApiSecret(string $apiSecret): self
     {
-        return $this->setData(self::fields_api_secret, password_hash($apiSecret, PASSWORD_DEFAULT));
+        return $this->setData(self::schema_fields_api_secret, password_hash($apiSecret, PASSWORD_DEFAULT));
     }
-
     /**
      * 验证API Secret
      */
@@ -187,7 +159,6 @@ class ApiUser extends \Weline\Framework\Database\Model
         }
         return password_verify($apiSecret, $hashedSecret);
     }
-
     /**
      * 生成API Key和Secret
      * 
@@ -206,7 +177,6 @@ class ApiUser extends \Weline\Framework\Database\Model
             'api_secret' => $apiSecret
         ];
     }
-
     /**
      * 自动生成并设置API Key和Secret
      */
@@ -219,15 +189,13 @@ class ApiUser extends \Weline\Framework\Database\Model
         $this->setData('raw_api_secret', $credentials['api_secret']);
         return $this;
     }
-
     /**
      * 获取访问令牌有效期（秒）
      */
     public function getTokenExpireTime(): int
     {
-        return (int)($this->getData(self::fields_token_expire_time) ?? 604800); // 默认7天
+        return (int)($this->getData(self::schema_fields_token_expire_time) ?? 604800); // 默认7天
     }
-
     /**
      * 设置访问令牌有效期（秒）
      */
@@ -237,17 +205,15 @@ class ApiUser extends \Weline\Framework\Database\Model
         $minSeconds = 86400; // 1天
         $maxSeconds = 2592000; // 30天
         $seconds = max($minSeconds, min($maxSeconds, $seconds));
-        return $this->setData(self::fields_token_expire_time, $seconds);
+        return $this->setData(self::schema_fields_token_expire_time, $seconds);
     }
-
     /**
      * 获取刷新令牌有效期（秒）
      */
     public function getRefreshTokenExpireTime(): int
     {
-        return (int)($this->getData(self::fields_refresh_token_expire_time) ?? 2592000); // 默认30天
+        return (int)($this->getData(self::schema_fields_refresh_token_expire_time) ?? 2592000); // 默认30天
     }
-
     /**
      * 设置刷新令牌有效期（秒）
      */
@@ -257,73 +223,64 @@ class ApiUser extends \Weline\Framework\Database\Model
         $minSeconds = 604800; // 7天
         $maxSeconds = 7776000; // 90天
         $seconds = max($minSeconds, min($maxSeconds, $seconds));
-        return $this->setData(self::fields_refresh_token_expire_time, $seconds);
+        return $this->setData(self::schema_fields_refresh_token_expire_time, $seconds);
     }
-
     /**
      * 是否启用
      */
     public function getIsEnabled(): bool
     {
-        return (bool)($this->getData(self::fields_is_enabled) ?? true);
+        return (bool)($this->getData(self::schema_fields_is_enabled) ?? true);
     }
-
     /**
      * 设置是否启用
      */
     public function setIsEnabled(bool $enabled): self
     {
-        return $this->setData(self::fields_is_enabled, (int)$enabled);
+        return $this->setData(self::schema_fields_is_enabled, (int)$enabled);
     }
-
     /**
      * 是否沙盒账户
      */
     public function isSandboxAccount(): bool
     {
-        return (bool)($this->getData(self::fields_is_sandbox) ?? false);
+        return (bool)($this->getData(self::schema_fields_is_sandbox) ?? false);
     }
-
     /**
      * 设置沙盒账户
      */
     public function setSandboxAccount(bool $sandbox): self
     {
-        return $this->setData(self::fields_is_sandbox, (int)$sandbox);
+        return $this->setData(self::schema_fields_is_sandbox, (int)$sandbox);
     }
-
     /**
      * 是否删除
      */
     public function getIsDeleted(): bool
     {
-        return (bool)($this->getData(self::fields_is_deleted) ?? false);
+        return (bool)($this->getData(self::schema_fields_is_deleted) ?? false);
     }
-
     /**
      * 设置是否删除
      */
     public function setIsDeleted(bool $deleted): self
     {
-        return $this->setData(self::fields_is_deleted, (int)$deleted);
+        return $this->setData(self::schema_fields_is_deleted, (int)$deleted);
     }
-
     /**
      * 是否启用IP白名单
      */
     public function isIpWhitelistEnabled(): bool
     {
-        return (bool)($this->getData(self::fields_ip_whitelist_enabled) ?? false);
+        return (bool)($this->getData(self::schema_fields_ip_whitelist_enabled) ?? false);
     }
-
     /**
      * 设置是否启用IP白名单
      */
     public function setIpWhitelistEnabled(bool $enabled): self
     {
-        return $this->setData(self::fields_ip_whitelist_enabled, (int)$enabled);
+        return $this->setData(self::schema_fields_ip_whitelist_enabled, (int)$enabled);
     }
-
     /**
      * 获取允许的IP地址列表
      * 
@@ -331,7 +288,7 @@ class ApiUser extends \Weline\Framework\Database\Model
      */
     public function getAllowedIps(): array
     {
-        $ips = $this->getData(self::fields_allowed_ips);
+        $ips = $this->getData(self::schema_fields_allowed_ips);
         if (empty($ips)) {
             return [];
         }
@@ -345,7 +302,6 @@ class ApiUser extends \Weline\Framework\Database\Model
         // 如果不是JSON，按换行符分割
         return array_filter(array_map('trim', explode("\n", $ips)));
     }
-
     /**
      * 设置允许的IP地址列表
      * 
@@ -356,25 +312,22 @@ class ApiUser extends \Weline\Framework\Database\Model
         if (is_array($ips)) {
             $ips = json_encode($ips, JSON_UNESCAPED_UNICODE);
         }
-        return $this->setData(self::fields_allowed_ips, $ips);
+        return $this->setData(self::schema_fields_allowed_ips, $ips);
     }
-
     /**
      * 是否启用用户代理限制
      */
     public function isUserAgentRestrictionEnabled(): bool
     {
-        return (bool)($this->getData(self::fields_user_agent_restriction_enabled) ?? false);
+        return (bool)($this->getData(self::schema_fields_user_agent_restriction_enabled) ?? false);
     }
-
     /**
      * 设置是否启用用户代理限制
      */
     public function setUserAgentRestrictionEnabled(bool $enabled): self
     {
-        return $this->setData(self::fields_user_agent_restriction_enabled, (int)$enabled);
+        return $this->setData(self::schema_fields_user_agent_restriction_enabled, (int)$enabled);
     }
-
     /**
      * 获取允许的用户代理列表
      * 
@@ -382,7 +335,7 @@ class ApiUser extends \Weline\Framework\Database\Model
      */
     public function getAllowedUserAgents(): array
     {
-        $userAgents = $this->getData(self::fields_allowed_user_agents);
+        $userAgents = $this->getData(self::schema_fields_allowed_user_agents);
         if (empty($userAgents)) {
             return [];
         }
@@ -396,7 +349,6 @@ class ApiUser extends \Weline\Framework\Database\Model
         // 如果不是JSON，按换行符分割
         return array_filter(array_map('trim', explode("\n", $userAgents)));
     }
-
     /**
      * 设置允许的用户代理列表
      * 
@@ -407,9 +359,8 @@ class ApiUser extends \Weline\Framework\Database\Model
         if (is_array($userAgents)) {
             $userAgents = json_encode($userAgents, JSON_UNESCAPED_UNICODE);
         }
-        return $this->setData(self::fields_allowed_user_agents, $userAgents);
+        return $this->setData(self::schema_fields_allowed_user_agents, $userAgents);
     }
-
     /**
      * 获取角色模型
      * 
@@ -439,7 +390,6 @@ class ApiUser extends \Weline\Framework\Database\Model
         
         return $role->getId() ? $role : null;
     }
-
     /**
      * 分配角色
      * 
@@ -463,7 +413,6 @@ class ApiUser extends \Weline\Framework\Database\Model
         
         return $this;
     }
-
     /**
      * 移除角色
      * 
@@ -479,7 +428,6 @@ class ApiUser extends \Weline\Framework\Database\Model
         
         return $this;
     }
-
     /**
      * 保存前自动生成API Key和Secret（如果不存在）
      */
@@ -501,4 +449,3 @@ class ApiUser extends \Weline\Framework\Database\Model
         parent::save_before();
     }
 }
-
