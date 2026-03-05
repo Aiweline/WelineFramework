@@ -24,9 +24,9 @@ class ConsentService
         $consent = ObjectManager::getInstance(CookieConsent::class);
         
         $consent->clearData()
-            ->setData(CookieConsent::fields_CUSTOMER_ID, $consentData['customer_id'] ?? 0)
-            ->setData(CookieConsent::fields_CONSENT_TYPE, $consentData['consent_type'] ?? 'cookie')
-            ->setData(CookieConsent::fields_IS_ACCEPTED, $consentData['is_accepted'] ?? 0)
+            ->setData(CookieConsent::schema_fields_CUSTOMER_ID, $consentData['customer_id'] ?? 0)
+            ->setData(CookieConsent::schema_fields_CONSENT_TYPE, $consentData['consent_type'] ?? 'cookie')
+            ->setData(CookieConsent::schema_fields_IS_ACCEPTED, $consentData['is_accepted'] ?? 0)
             ->save();
         
         return $consent;
@@ -45,9 +45,9 @@ class ConsentService
         $consent = ObjectManager::getInstance(CookieConsent::class);
         
         $consent->clear()
-            ->where(CookieConsent::fields_CUSTOMER_ID, $customerId)
-            ->where(CookieConsent::fields_CONSENT_TYPE, $consentType)
-            ->where(CookieConsent::fields_IS_ACCEPTED, 1)
+            ->where(CookieConsent::schema_fields_CUSTOMER_ID, $customerId)
+            ->where(CookieConsent::schema_fields_CONSENT_TYPE, $consentType)
+            ->where(CookieConsent::schema_fields_IS_ACCEPTED, 1)
             ->find()
             ->fetch();
         
