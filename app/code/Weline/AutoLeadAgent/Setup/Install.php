@@ -270,11 +270,11 @@ class Install implements InstallInterface
         foreach ($defaultMappings as $mapping) {
             try {
                 $mappingModel->clear()
-                    ->setData(SearchEngineMapping::fields_REGION, $mapping['region'])
-                    ->setData(SearchEngineMapping::fields_LANGUAGE, $mapping['language'])
+                    ->setData(SearchEngineMapping::schema_fields_REGION, $mapping['region'])
+                    ->setData(SearchEngineMapping::schema_fields_LANGUAGE, $mapping['language'])
                     ->setSearchEnginesArray($mapping['engines'])
-                    ->setData(SearchEngineMapping::fields_IS_ACTIVE, 1)
-                    ->setData(SearchEngineMapping::fields_SORT_ORDER, $mapping['sort'])
+                    ->setData(SearchEngineMapping::schema_fields_IS_ACTIVE, 1)
+                    ->setData(SearchEngineMapping::schema_fields_SORT_ORDER, $mapping['sort'])
                     ->save();
                 $insertedCount++;
             } catch (\Throwable $e) {
@@ -412,13 +412,13 @@ class Install implements InstallInterface
         foreach ($defaultWebsites as $website) {
             try {
                 $targetWebsiteModel->clear()
-                    ->setData(TargetWebsite::fields_NAME, $website['name'])
-                    ->setData(TargetWebsite::fields_DOMAIN, $website['domain'])
-                    ->setData(TargetWebsite::fields_SEARCH_SYNTAX_TEMPLATE, $website['search_syntax_template'])
-                    ->setData(TargetWebsite::fields_IS_ACTIVE, $website['is_active'])
-                    ->setData(TargetWebsite::fields_SORT_ORDER, $website['sort_order'])
-                    ->setData(TargetWebsite::fields_DESCRIPTION, $website['description'])
-                    ->setData(TargetWebsite::fields_ICON_URL, $website['icon_url'])
+                    ->setData(TargetWebsite::schema_fields_NAME, $website['name'])
+                    ->setData(TargetWebsite::schema_fields_DOMAIN, $website['domain'])
+                    ->setData(TargetWebsite::schema_fields_SEARCH_SYNTAX_TEMPLATE, $website['search_syntax_template'])
+                    ->setData(TargetWebsite::schema_fields_IS_ACTIVE, $website['is_active'])
+                    ->setData(TargetWebsite::schema_fields_SORT_ORDER, $website['sort_order'])
+                    ->setData(TargetWebsite::schema_fields_DESCRIPTION, $website['description'])
+                    ->setData(TargetWebsite::schema_fields_ICON_URL, $website['icon_url'])
                     ->save();
                 $insertedCount++;
             } catch (\Throwable $e) {

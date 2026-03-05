@@ -59,18 +59,18 @@ class SearchEngineMappingServiceTest extends TestCase
     private function ensureTestMapping(string $region, string $language, array $engines): void
     {
         $existing = $this->mappingModel->clear()
-            ->where(SearchEngineMapping::fields_REGION, $region)
-            ->where(SearchEngineMapping::fields_LANGUAGE, $language)
+            ->where(SearchEngineMapping::schema_fields_REGION, $region)
+            ->where(SearchEngineMapping::schema_fields_LANGUAGE, $language)
             ->find()
             ->fetch();
         
         if (!$existing || !$existing->getId()) {
             $this->mappingModel->clear()
-                ->setData(SearchEngineMapping::fields_REGION, $region)
-                ->setData(SearchEngineMapping::fields_LANGUAGE, $language)
+                ->setData(SearchEngineMapping::schema_fields_REGION, $region)
+                ->setData(SearchEngineMapping::schema_fields_LANGUAGE, $language)
                 ->setSearchEnginesArray($engines)
-                ->setData(SearchEngineMapping::fields_IS_ACTIVE, 1)
-                ->setData(SearchEngineMapping::fields_SORT_ORDER, 9999)
+                ->setData(SearchEngineMapping::schema_fields_IS_ACTIVE, 1)
+                ->setData(SearchEngineMapping::schema_fields_SORT_ORDER, 9999)
                 ->save();
             
             // 清除缓存
