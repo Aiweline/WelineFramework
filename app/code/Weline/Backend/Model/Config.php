@@ -11,26 +11,15 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Model;
 
-use Weline\SystemConfig\Model\SystemConfig;
-
+/**
+ * 后端配置 - 通过统一查询器访问系统配置，避免模块间直接调用
+ */
 class Config
 {
-    public SystemConfig $systemConfig;
-
-    public function __construct(
-        SystemConfig $systemConfig
-    )
-    {
-        $this->systemConfig = $systemConfig;
-    }
+    private const AREA_BACKEND = 'backend';
 
     /**
      * @DESC          # 【后端】读取配置
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * @DateTime: 2021/9/14 22:18
-     * 参数区：
      *
      * @param string $key
      * @param string $module
@@ -39,26 +28,29 @@ class Config
      */
     public function getConfig(string $key, string $module): mixed
     {
-        return $this->systemConfig->getConfig($key, $module, SystemConfig::area_BACKEND);
+        return w_query('system_config', 'getConfig', [
+            'key' => $key,
+            'module' => $module,
+            'area' => self::AREA_BACKEND,
+        ]);
     }
 
     /**
      * @DESC          # 【后端】设置配置
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * @DateTime: 2021/9/14 22:19
-     * 参数区：
      *
      * @param string $key
      * @param string $value
      * @param string $module
      *
      * @return bool
-     * @throws \Weline\Framework\App\Exception
      */
     public function setConfig(string $key, string $value, string $module): bool
     {
-        return $this->systemConfig->setConfig($key, $value, $module, SystemConfig::area_BACKEND);
+        return (bool)w_query('system_config', 'setConfig', [
+            'key' => $key,
+            'value' => $value,
+            'module' => $module,
+            'area' => self::AREA_BACKEND,
+        ]);
     }
 }

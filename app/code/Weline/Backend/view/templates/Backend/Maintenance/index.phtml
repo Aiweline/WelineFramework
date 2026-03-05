@@ -104,12 +104,11 @@ $maintenanceMessage = $maintenance_message ?? __('系统维护中，请稍后再
             var formData = new FormData(event.target);
             formData.append('enabled', document.getElementById('is_maintenance').checked ? '1' : '0');
             
-            fetch('<?= $this->getBackendUrl('*/backend/maintenance/toggle') ?>', {
-                method: 'POST',
-                body: formData
-            })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
+            var url = '<?= $this->getBackendUrl('*/backend/maintenance/toggle') ?>';
+            var opts = { method: 'POST', body: formData };
+            window.Weline.Api.request(url, opts)
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
                     AdminToast.success(data.message);
                     setTimeout(function() {

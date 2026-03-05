@@ -11,135 +11,76 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Model;
 
-use Aiweline\AliDdnsServer\Model\DdnsDomains;
 use Weline\Acl\Model\Role;
 use Weline\Backend\Model\Backend\Acl\UserRole;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Auth\AuthenticableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
-class BackendUser extends \Weline\Framework\Database\Model implements AuthenticableInterface
+#[Table(comment: '管理员表')]
+#[Index(name: 'uk_email', columns: ['email'], type: 'UNIQUE', comment: '邮箱唯一')]
+#[Index(name: 'uk_username', columns: ['username'], type: 'UNIQUE', comment: '用户名唯一')]
+class BackendUser extends Model implements AuthenticableInterface
 {
-    public const fields_ID = 'user_id';
-    public const fields_email = 'email';
-    public const fields_username = 'username';
-    public const fields_password = 'password';
-    public const fields_avatar = 'avatar';
-    public const fields_login_ip = 'login_ip';
-    public const fields_attempt_ip = 'attempt_ip';
-    public const fields_attempt_times = 'attempt_times';
-    public const fields_sess_id = 'sess_id';
-    public const fields_is_deleted = 'is_deleted';
-    public const fields_is_enabled = 'is_enabled';
-    public const fields_is_sandbox = 'is_sandbox';
 
-    public array $_unit_primary_keys = ['user_id'];
+    #[Col('int', 0, nullable: false, primaryKey: true, autoIncrement: true, comment: '用户ID')]
+    public const schema_fields_ID = 'user_id';
+    #[Col('varchar', 255, nullable: false, comment: '邮箱')]
+    public const schema_fields_email = 'email';
+    #[Col('varchar', 128, nullable: false, comment: '用户名')]
+    public const schema_fields_username = 'username';
+    #[Col('varchar', 255, nullable: false, comment: '密码')]
+    public const schema_fields_password = 'password';
+    #[Col('varchar', 255, comment: '头像')]
+    public const schema_fields_avatar = 'avatar';
+    #[Col('varchar', 255, comment: '登录IP')]
+    public const schema_fields_login_ip = 'login_ip';
+    #[Col('varchar', 255, comment: '尝试登录IP')]
+    public const schema_fields_attempt_ip = 'attempt_ip';
+    #[Col('int', 0, default: 0, comment: '尝试登录次数')]
+    public const schema_fields_attempt_times = 'attempt_times';
+    #[Col('varchar', 32, comment: '管理员Session ID')]
+    public const schema_fields_sess_id = 'sess_id';
+    #[Col('int', 1, default: 0, comment: '是否删除')]
+    public const schema_fields_is_deleted = 'is_deleted';
+    #[Col('int', 1, default: 1, comment: '是否启用')]
+    public const schema_fields_is_enabled = 'is_enabled';
+    #[Col('int', 1, default: 0, comment: '是否沙盒账户')]
+    public const schema_fields_is_sandbox = 'is_sandbox';
+
+    public array $_unit_primary_keys = [self::schema_fields_ID];
     public array $_index_sort_keys = ['user_id', 'email', 'username'];
 
     private bool $_is_new_user = false;
 
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-//        $setup->dropTable();
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        # 检查字段
-        if (!$setup->hasField(self::fields_is_enabled)) {
-            $setup->query("
-            alter table {$this->getTable()}
-    add is_enabled int default 1 null comment '是否启用' after attempt_ip;
-            ");
-        }
-        if (!$setup->hasField(self::fields_is_deleted)) {
-            $setup->query("
-    alter table {$this->getTable()}
-    add is_deleted int default 0 null comment '是否删除' after is_enabled;
-            ");
-        }
-        if (!$setup->hasField(self::fields_is_sandbox)) {
-            $setup->alterTable()
-                ->addColumn(
-                    self::fields_is_sandbox,
-                    self::fields_is_deleted,
-                    TableInterface::column_type_INTEGER,
-                    1,
-                    'default 0',
-                    '是否沙盒账户'
-                )
-                ->alter();
-        }
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        /*$setup->alterTable()
-              ->addColumn(self::fields_email, 'user_id', TableInterface::column_type_VARCHAR, 255, 'not null unique', '邮箱')
-              ->alter();*/
-//        $setup->forceDropTable();
-        if (!$setup->tableExist()) {
-            $setup->createTable('管理员表')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, null, 'auto_increment primary key', '用户ID')
-                ->addColumn(self::fields_email, TableInterface::column_type_VARCHAR, 255, 'not null unique', '邮箱')
-                ->addColumn(self::fields_username, TableInterface::column_type_VARCHAR, 128, 'not null unique', '用户名')
-                ->addColumn(self::fields_password, TableInterface::column_type_VARCHAR, 255, 'not null', '密码')
-                ->addColumn(self::fields_avatar, TableInterface::column_type_VARCHAR, 255, '', '头像')
-                ->addColumn(self::fields_login_ip, TableInterface::column_type_VARCHAR, 255, '', '登录IP')
-                ->addColumn(self::fields_sess_id, TableInterface::column_type_VARCHAR, 32, '', '管理员Session ID')
-                ->addColumn(self::fields_attempt_times, TableInterface::column_type_INTEGER, 0, 'default 0', '尝试登录次数')
-                ->addColumn(self::fields_attempt_ip, TableInterface::column_type_VARCHAR, 255, '', '尝试登录IP')
-                ->addColumn(self::fields_is_enabled, TableInterface::column_type_INTEGER, 1, 'default 1', '是否启用')
-                ->addColumn(self::fields_is_deleted, TableInterface::column_type_INTEGER, 1, 'default 0', '是否删除')
-                ->addColumn(self::fields_is_sandbox, TableInterface::column_type_INTEGER, 1, 'default 0', '是否沙盒账户')
-                ->create();
-
-            # 初始化超管和管理员账户
-            $this->clear()->setUsername('admin')
-                ->setEmail('admin@weline.com')
-                ->setPassword('admin')
-                ->save();
-        }
-    }
-
     public function getAttemptTimes(): int
     {
-        return intval($this->getData(self::fields_attempt_times));
+        return intval($this->getData(self::schema_fields_attempt_times));
     }
 
     public function addAttemptTimes(): static
     {
-        $this->setData(self::fields_attempt_times, intval($this->getData(self::fields_attempt_times)) + 1)
+        $this->setData(self::schema_fields_attempt_times, intval($this->getData(self::schema_fields_attempt_times)) + 1)
             ->forceCheck();
         return $this;
     }
 
     public function getAttemptIp()
     {
-        return $this->getData(self::fields_attempt_ip);
+        return $this->getData(self::schema_fields_attempt_ip);
     }
 
     public function setAttemptIp($ip): BackendUser
     {
-        return $this->setData(self::fields_attempt_ip, $ip)->forceCheck();
+        return $this->setData(self::schema_fields_attempt_ip, $ip)->forceCheck();
     }
 
     public function resetAttemptTimes(): static
     {
-        $this->setData(self::fields_attempt_times, 0);
+        $this->setData(self::schema_fields_attempt_times, 0);
         $this->save();
         return $this;
     }
@@ -151,24 +92,24 @@ class BackendUser extends \Weline\Framework\Database\Model implements Authentica
 
     public function getIsDeleted(): bool
     {
-        return (bool)$this->getData(self::fields_is_deleted);
+        return (bool)$this->getData(self::schema_fields_is_deleted);
     }
 
 
     public function setIsDeleted(bool $isDeleted = true): static
     {
-        return $this->setData(self::fields_is_deleted, (int)$isDeleted);
+        return $this->setData(self::schema_fields_is_deleted, (int)$isDeleted);
     }
 
     public function getIsEnabled(): bool
     {
-        return (bool)$this->getData(self::fields_is_enabled);
+        return (bool)$this->getData(self::schema_fields_is_enabled);
     }
 
 
     public function setIsEnabled(bool $isEnabled = true): static
     {
-        return $this->setData(self::fields_is_enabled, (int)$isEnabled);
+        return $this->setData(self::schema_fields_is_enabled, (int)$isEnabled);
     }
 
     public function setUsername(string $username): BackendUser
@@ -209,32 +150,32 @@ class BackendUser extends \Weline\Framework\Database\Model implements Authentica
 
     public function getSessionId()
     {
-        return $this->getData(self::fields_sess_id);
+        return $this->getData(self::schema_fields_sess_id);
     }
 
     public function setSessionId(string $sess_id): BackendUser
     {
-        return $this->setData(self::fields_sess_id, $sess_id)->forceCheck();
+        return $this->setData(self::schema_fields_sess_id, $sess_id)->forceCheck();
     }
 
     public function getLoginIp()
     {
-        return $this->getData(self::fields_login_ip);
+        return $this->getData(self::schema_fields_login_ip);
     }
 
     public function setLoginIp(string $ip): BackendUser
     {
-        return $this->setData(self::fields_login_ip, $ip);
+        return $this->setData(self::schema_fields_login_ip, $ip);
     }
 
     public function isSandboxAccount(): bool
     {
-        return (bool)$this->getData(self::fields_is_sandbox);
+        return (bool)$this->getData(self::schema_fields_is_sandbox);
     }
 
     public function setSandboxAccount(bool $flag): static
     {
-        return $this->setData(self::fields_is_sandbox, $flag ? 1 : 0);
+        return $this->setData(self::schema_fields_is_sandbox, $flag ? 1 : 0);
     }
 
     public function getRole(): Backend\Acl\UserRole
@@ -246,10 +187,14 @@ class BackendUser extends \Weline\Framework\Database\Model implements Authentica
         $userRole = ObjectManager::getInstance(UserRole::class);
         try {
             $userRole->clear()->joinModel(Role::class, 'r', 'main_table.role_id=r.role_id')
-                ->where('main_table.' . self::fields_ID, $this->getId())
+                ->where('main_table.' . self::schema_fields_ID, $this->getId())
                 ->find()->fetch();
         } catch (\Throwable $e) {
             throw $e;
+        }
+        // user_id=1 视为超管：若关联表无记录则虚拟为 role_id=1，保证菜单与权限逻辑一致
+        if ((int) $this->getId() === 1 && !$userRole->getRoleId()) {
+            $userRole->setUserId((int) $this->getId())->setRoleId(1);
         }
         $this->setData('user_role', $userRole);
         return $userRole;
@@ -278,7 +223,7 @@ class BackendUser extends \Weline\Framework\Database\Model implements Authentica
 
     public function save_before(): void
     {
-        $this->_is_new_user = !$this->getOriginData(self::fields_ID);
+        $this->_is_new_user = !$this->getOriginData(self::schema_fields_ID);
     }
 
     public function save_after(): void
@@ -338,3 +283,4 @@ class BackendUser extends \Weline\Framework\Database\Model implements Authentica
         return self::class;
     }
 }
+

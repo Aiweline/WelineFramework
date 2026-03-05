@@ -25,8 +25,8 @@ class UserRegisteredObserverTest extends TestCase
         
         $userModel = ObjectManager::getInstance(BackendUser::class);
         $user = $userModel->clearQuery()
-            ->where(BackendUser::fields_is_enabled, 1)
-            ->order(BackendUser::fields_ID)
+            ->where(BackendUser::schema_fields_is_enabled, 1)
+            ->order(BackendUser::schema_fields_ID)
             ->select()
             ->fetch();
         
@@ -116,8 +116,8 @@ class UserRegisteredObserverTest extends TestCase
         
         $contactModel = ObjectManager::getInstance(UserContact::class);
         $beforeCount = $contactModel->clearQuery()
-            ->where(UserContact::fields_user_id, $this->testUserId)
-            ->where(UserContact::fields_contact_value, $testEmail)
+            ->where(UserContact::schema_fields_user_id, $this->testUserId)
+            ->where(UserContact::schema_fields_contact_value, $testEmail)
             ->total();
         
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
@@ -130,8 +130,8 @@ class UserRegisteredObserverTest extends TestCase
         ]);
         
         $afterCount = $contactModel->clearQuery()
-            ->where(UserContact::fields_user_id, $this->testUserId)
-            ->where(UserContact::fields_contact_value, $testEmail)
+            ->where(UserContact::schema_fields_user_id, $this->testUserId)
+            ->where(UserContact::schema_fields_contact_value, $testEmail)
             ->total();
         
         $this->assertEquals($beforeCount, $afterCount, '非新用户不应创建新联系人');

@@ -1,13 +1,26 @@
 <?php
 /**
- * 通知中心页面
+ * 通知中心页面（支持关键词、类型、已读状态过滤）
  *
  * @var \Weline\Framework\View\Template $this
  * @var array $notifications 通知列表
  * @var array $pagination 分页信息
+ * @var array $filter 当前过滤条件 keyword, type, read
+ * @var array $type_options 类型下拉选项
  */
 $notifications = $notifications ?? [];
 $pagination = $pagination ?? ['page' => 1, 'pages' => 1, 'total' => 0];
+$filter = $filter ?? ['keyword' => '', 'type' => '', 'read' => 'all'];
+$typeOptions = $type_options ?? [];
+$baseUrl = $this->getBackendUrl('system/backend/notification');
+$queryParams = function ($overrides = []) use ($filter) {
+    $q = array_filter([
+        'keyword' => $filter['keyword'] ?? '',
+        'type' => $filter['type'] ?? '',
+        'read' => ($filter['read'] ?? 'all') !== 'all' ? ($filter['read'] ?? '') : '',
+    ]);
+    return array_merge($q, $overrides);
+};
 ?>
 
 <div class="row">
@@ -17,7 +30,7 @@ $pagination = $pagination ?? ['page' => 1, 'pages' => 1, 'total' => 0];
                 <i class="ri-notification-3-line me-2"></i><lang>通知中心</lang>
             </h4>
             <div class="d-flex gap-2">
-                <a href="<?= $this->getBackendUrl('*/backend/notificationsubscription') ?>" class="btn btn-outline-secondary btn-sm">
+                <a href="<?= $this->getBackendUrl('system/backend/notificationsubscription') ?>" class="btn btn-outline-secondary btn-sm">
                     <i class="mdi mdi-cog me-1"></i><lang>管理订阅</lang>
                 </a>
                 <?php if (!empty($notifications)): ?>
@@ -33,6 +46,46 @@ $pagination = $pagination ?? ['page' => 1, 'pages' => 1, 'total' => 0];
 <div class='row'>
     <div class="col-12">
         <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card weline-nc-filter-card">
+            <div class="card-body py-3">
+                <form method="get" action="<?= $baseUrl ?>" class="weline-nc-filter-form row g-2 align-items-end">
+                    <input type="hidden" name="page" value="1">
+                    <div class="col-12 col-md-4">
+                        <label class="form-label small mb-1"><lang>关键词</lang></label>
+                        <input type="text" name="keyword" class="form-control form-control-sm" placeholder="<?= __('搜索标题或内容') ?>"
+                               value="<?= htmlspecialchars($filter['keyword'] ?? '') ?>">
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label small mb-1"><lang>类型</lang></label>
+                        <select name="type" class="form-select form-select-sm">
+                            <option value=""><lang>全部类型</lang></option>
+                            <?php foreach ($typeOptions as $val => $label): ?>
+                            <option value="<?= htmlspecialchars($val) ?>" <?= ($filter['type'] ?? '') === $val ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label small mb-1"><lang>状态</lang></label>
+                        <select name="read" class="form-select form-select-sm">
+                            <option value="all" <?= ($filter['read'] ?? 'all') === 'all' ? 'selected' : '' ?>><?= __('全部') ?></option>
+                            <option value="unread" <?= ($filter['read'] ?? '') === 'unread' ? 'selected' : '' ?>><?= __('未读') ?></option>
+                            <option value="read" <?= ($filter['read'] ?? '') === 'read' ? 'selected' : '' ?>><?= __('已读') ?></option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-auto d-flex gap-2">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="ri-search-line me-1"></i><lang>搜索</lang>
+                        </button>
+                        <a href="<?= $baseUrl ?>" class="btn btn-outline-secondary btn-sm"><lang>重置</lang></a>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -56,7 +109,7 @@ $pagination = $pagination ?? ['page' => 1, 'pages' => 1, 'total' => 0];
             $typeLabel = $notification['type_label'] ?? __('信息');
             $typeIcon = $notification['avatar'] ?? 'ri-notification-line';
             ?>
-            <a href="<?= $this->getBackendUrl('*/backend/notification/detail', ['id' => $notification['notification_id'] ?? 0]) ?>" 
+            <a href="<?= $this->getBackendUrl('system/backend/notification/detail', ['id' => $notification['notification_id'] ?? 0]) ?>" 
                class="weline-nc-item <?= $isRead ? 'weline-nc-item-read' : '' ?>">
                 <div class="weline-nc-item-icon" style="background: <?= $typeColor ?>">
                     <i class="<?= htmlspecialchars($typeIcon) ?>"></i>
@@ -91,13 +144,19 @@ $pagination = $pagination ?? ['page' => 1, 'pages' => 1, 'total' => 0];
         </div>
 
         <?php if ($pagination['pages'] > 1): ?>
+        <?php
+        $pageLink = function ($pageNum) use ($baseUrl, $queryParams) {
+            $params = array_filter($queryParams(['page' => $pageNum]));
+            return $params ? $baseUrl . '?' . http_build_query($params) : $baseUrl;
+        };
+        ?>
         <div class="card mt-3">
             <div class="card-body">
                 <nav aria-label="Page navigation">
                     <ul class="pagination justify-content-center mb-0">
                         <?php if ($pagination['page'] > 1): ?>
                         <li class="page-item">
-                            <a class="page-link" href="<?= $this->getBackendUrl('*/backend/notification', ['page' => $pagination['page'] - 1]) ?>">
+                            <a class="page-link" href="<?= $pageLink($pagination['page'] - 1) ?>">
                                 <i class="mdi mdi-chevron-left"></i>
                             </a>
                         </li>
@@ -105,13 +164,13 @@ $pagination = $pagination ?? ['page' => 1, 'pages' => 1, 'total' => 0];
                         
                         <?php for ($i = max(1, $pagination['page'] - 2); $i <= min($pagination['pages'], $pagination['page'] + 2); $i++): ?>
                         <li class="page-item <?= $i === $pagination['page'] ? 'active' : '' ?>">
-                            <a class="page-link" href="<?= $this->getBackendUrl('*/backend/notification', ['page' => $i]) ?>"><?= $i ?></a>
+                            <a class="page-link" href="<?= $pageLink($i) ?>"><?= $i ?></a>
                         </li>
                         <?php endfor; ?>
                         
                         <?php if ($pagination['page'] < $pagination['pages']): ?>
                         <li class="page-item">
-                            <a class="page-link" href="<?= $this->getBackendUrl('*/backend/notification', ['page' => $pagination['page'] + 1]) ?>">
+                            <a class="page-link" href="<?= $pageLink($pagination['page'] + 1) ?>">
                                 <i class="mdi mdi-chevron-right"></i>
                             </a>
                         </li>
@@ -134,6 +193,16 @@ $pagination = $pagination ?? ['page' => 1, 'pages' => 1, 'total' => 0];
    模块：Weline_Backend
    前缀：weline-nc-
    ============================================ */
+.weline-nc-filter-card {
+    background: var(--backend-color-card-bg);
+    border: 1px solid var(--backend-color-border-light);
+    border-radius: var(--backend-border-radius-md);
+}
+
+.weline-nc-filter-form .form-label {
+    color: var(--backend-color-text-secondary);
+}
+
 .weline-nc-empty {
     color: var(--backend-color-text-tertiary, #adb5bd);
 }
@@ -284,12 +353,11 @@ $pagination = $pagination ?? ['page' => 1, 'pages' => 1, 'total' => 0];
             BackendConfirm.show('<?= __('确定要将所有通知标记为已读吗？') ?>').then(function(confirmed) {
                 if (!confirmed) return;
 
-                fetch('<?= $this->getBackendUrl('*/api/notification/markAllRead') ?>', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                })
-                .then(function(response) { return response.json(); })
-                .then(function(data) {
+                var url = '<?= $this->getBackendUrl('*/backend/notification/markAllRead') ?>';
+                var opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
+                window.Weline.Api.request(url, opts)
+                .then(function(res) {
+                    var data = (res && res.data) !== undefined ? res.data : res;
                     if (data.success) {
                         BackendToast.success(data.message || '<?= __('已标记全部已读') ?>');
                         setTimeout(function() { window.location.reload(); }, 800);

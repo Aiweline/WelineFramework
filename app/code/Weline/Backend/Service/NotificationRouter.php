@@ -23,6 +23,7 @@ class NotificationRouter
     private SystemNotification $notificationModel;
     private BackendUser $userModel;
     private UserContactService $contactService;
+    private ChannelAdapterCollector $adapterCollector;
 
     public function __construct(
         UserNotificationSubscription $subscriptionModel,
@@ -31,7 +32,8 @@ class NotificationRouter
         NotificationTopic $topicModel,
         SystemNotification $notificationModel,
         BackendUser $userModel,
-        UserContactService $contactService
+        UserContactService $contactService,
+        ChannelAdapterCollector $adapterCollector
     ) {
         $this->subscriptionModel = $subscriptionModel;
         $this->statusModel = $statusModel;
@@ -40,6 +42,7 @@ class NotificationRouter
         $this->notificationModel = $notificationModel;
         $this->userModel = $userModel;
         $this->contactService = $contactService;
+        $this->adapterCollector = $adapterCollector;
     }
 
     /**
@@ -93,11 +96,11 @@ class NotificationRouter
     private function getTargetUsers(array $specifiedUsers = []): array
     {
         $query = $this->userModel->clearQuery()
-            ->where(BackendUser::fields_is_enabled, 1)
-            ->where(BackendUser::fields_is_deleted, 0);
+            ->where(BackendUser::schema_fields_is_enabled, 1)
+            ->where(BackendUser::schema_fields_is_deleted, 0);
 
         if (!empty($specifiedUsers)) {
-            $query->where(BackendUser::fields_ID, $specifiedUsers, 'IN');
+            $query->where(BackendUser::schema_fields_ID, $specifiedUsers, 'IN');
         }
 
         return $query->select()->fetchArray();
@@ -178,7 +181,7 @@ class NotificationRouter
     private function getEnabledChannels(): array
     {
         return $this->channelModel->clearQuery()
-            ->where(NotificationChannel::fields_is_enabled, 1)
+            ->where(NotificationChannel::schema_fields_is_enabled, 1)
             ->select()
             ->fetchArray();
     }
@@ -188,15 +191,7 @@ class NotificationRouter
      */
     private function getChannelAdapter(string $channelCode): ?ChannelAdapterInterface
     {
-        $adapters = ObjectManager::getInstances(ChannelAdapterInterface::class);
-
-        foreach ($adapters as $adapter) {
-            if ($adapter->getChannelCode() === $channelCode) {
-                return $adapter;
-            }
-        }
-
-        return null;
+        return $this->adapterCollector->getAdapterByCode($channelCode);
     }
 
     /**
@@ -223,10 +218,10 @@ class NotificationRouter
     public function isUserSubscribed(int $userId, string $topicCode, string $channel, string $messageType): bool
     {
         $subscription = $this->subscriptionModel->clearQuery()
-            ->where(UserNotificationSubscription::fields_user_id, $userId)
-            ->where(UserNotificationSubscription::fields_topic_code, $topicCode)
-            ->where(UserNotificationSubscription::fields_channel, $channel)
-            ->where(UserNotificationSubscription::fields_is_enabled, 1)
+            ->where(UserNotificationSubscription::schema_fields_user_id, $userId)
+            ->where(UserNotificationSubscription::schema_fields_topic_code, $topicCode)
+            ->where(UserNotificationSubscription::schema_fields_channel, $channel)
+            ->where(UserNotificationSubscription::schema_fields_is_enabled, 1)
             ->select()
             ->fetch();
 
@@ -244,9 +239,9 @@ class NotificationRouter
     public function getUserSubscribedChannels(int $userId, string $topicCode, string $messageType): array
     {
         $subscriptions = $this->subscriptionModel->clearQuery()
-            ->where(UserNotificationSubscription::fields_user_id, $userId)
-            ->where(UserNotificationSubscription::fields_topic_code, $topicCode)
-            ->where(UserNotificationSubscription::fields_is_enabled, 1)
+            ->where(UserNotificationSubscription::schema_fields_user_id, $userId)
+            ->where(UserNotificationSubscription::schema_fields_topic_code, $topicCode)
+            ->where(UserNotificationSubscription::schema_fields_is_enabled, 1)
             ->select()
             ->fetchArray();
 

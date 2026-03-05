@@ -55,7 +55,7 @@ class NotificationServiceTest extends TestCase
         $this->assertGreaterThan($initialCount, $afterCount, 'w_msg() 应该创建一条新通知');
         
         $notificationModel->clearQuery()
-            ->where(SystemNotification::fields_title, $testTitle)
+            ->where(SystemNotification::schema_fields_title, $testTitle)
             ->find()
             ->fetch();
         
@@ -84,7 +84,7 @@ class NotificationServiceTest extends TestCase
             );
             
             $notificationModel->clearQuery()
-                ->where(SystemNotification::fields_title, $testTitle)
+                ->where(SystemNotification::schema_fields_title, $testTitle)
                 ->find()
                 ->fetch();
             
@@ -105,7 +105,7 @@ class NotificationServiceTest extends TestCase
         
         w_msg('system_info', 'urgent', $urgentTitle, '测试紧急消息优先级');
         $notificationModel->clearQuery()
-            ->where(SystemNotification::fields_title, $urgentTitle)
+            ->where(SystemNotification::schema_fields_title, $urgentTitle)
             ->find()
             ->fetch();
         $urgentPriority = $notificationModel->getPriority();
@@ -113,7 +113,7 @@ class NotificationServiceTest extends TestCase
         
         w_msg('system_info', 'info', $infoTitle, '测试普通消息优先级');
         $notificationModel->clearQuery()
-            ->where(SystemNotification::fields_title, $infoTitle)
+            ->where(SystemNotification::schema_fields_title, $infoTitle)
             ->find()
             ->fetch();
         $infoPriority = $notificationModel->getPriority();
@@ -139,7 +139,7 @@ class NotificationServiceTest extends TestCase
         ]);
         
         $notificationModel->clearQuery()
-            ->where(SystemNotification::fields_title, $testTitle)
+            ->where(SystemNotification::schema_fields_title, $testTitle)
             ->find()
             ->fetch();
         
@@ -154,8 +154,8 @@ class NotificationServiceTest extends TestCase
     {
         $userModel = ObjectManager::getInstance(BackendUser::class);
         $user = $userModel->clearQuery()
-            ->where(BackendUser::fields_is_enabled, 1)
-            ->order(BackendUser::fields_ID)
+            ->where(BackendUser::schema_fields_is_enabled, 1)
+            ->order(BackendUser::schema_fields_ID)
             ->select()
             ->fetch();
         
@@ -181,8 +181,8 @@ class NotificationServiceTest extends TestCase
     {
         $userModel = ObjectManager::getInstance(BackendUser::class);
         $user = $userModel->clearQuery()
-            ->where(BackendUser::fields_is_enabled, 1)
-            ->order(BackendUser::fields_ID)
+            ->where(BackendUser::schema_fields_is_enabled, 1)
+            ->order(BackendUser::schema_fields_ID)
             ->select()
             ->fetch();
         

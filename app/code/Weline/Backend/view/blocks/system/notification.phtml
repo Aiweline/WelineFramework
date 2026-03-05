@@ -55,16 +55,20 @@ $unreadCount = $block->getUnreadCount();
             $typeColor = $block->getTypeColor($type);
             $typeIcon = $block->getTypeIcon($type);
             $typeLabel = $block->getTypeLabel($type);
+            $avatar = $notification['avatar'] ?? '';
+            if ($avatar === 'ri-sitemap-line') {
+                $avatar = 'ri-file-list-line';
+            }
             $isRead = (bool) ($notification['is_read'] ?? false);
             $notificationId = $notification['notification_id'] ?? 0;
-            $detailUrl = $this->getBackendUrl('*/backend/notification/detail', ['id' => $notificationId]);
+            $detailUrl = $this->getBackendUrl('system/backend/notification/detail', ['id' => $notificationId]);
             ?>
             <a href="<?= $detailUrl ?>" 
                class="text-reset notification-item weline-notification-item <?= $isRead ? '' : 'weline-notification-unread' ?>"
                data-notification-id="<?= $notificationId ?>">
                 <div class="weline-notification-icon-wrap" style="background: <?= $typeColor ?>">
-                    <?php if (!empty($notification['is_icon']) && !empty($notification['avatar'])): ?>
-                    <i class="<?= htmlspecialchars($notification['avatar']) ?>"></i>
+                    <?php if (!empty($notification['is_icon']) && $avatar !== ''): ?>
+                    <i class="<?= htmlspecialchars($avatar) ?>"></i>
                     <?php else: ?>
                     <i class="<?= $typeIcon ?>"></i>
                     <?php endif; ?>
@@ -74,6 +78,9 @@ $unreadCount = $block->getUnreadCount();
                         <h6 class="weline-notification-title"><?= htmlspecialchars($notification['title'] ?? '') ?></h6>
                         <span class="weline-notification-type-badge" style="background: <?= $typeColor ?>">
                             <?= $typeLabel ?>
+                        </span>
+                        <span class="weline-notification-read-badge weline-notification-read-badge--<?= $isRead ? 'read' : 'unread' ?>">
+                            <?= $isRead ? __('已读') : __('未读') ?>
                         </span>
                     </div>
                     <p class="weline-notification-content"><?= htmlspecialchars(mb_substr(strip_tags($notification['content'] ?? ''), 0, 80)) ?><?= mb_strlen(strip_tags($notification['content'] ?? '')) > 80 ? '...' : '' ?></p>
@@ -100,12 +107,12 @@ $unreadCount = $block->getUnreadCount();
         </div>
         <div class="p-2 border-top weline-notification-footer">
             <div class="d-flex justify-content-between align-items-center gap-2">
-                <a class="btn btn-sm btn-primary flex-grow-1" 
-                   href="<?= $this->getBackendUrl('*/backend/notification') ?>">
+                <a class="btn btn-sm btn-primary weline-notification-btn-viewall flex-grow-1" 
+                   href="<?= $this->getBackendUrl('system/backend/notification') ?>">
                     <i class="ri-notification-3-line me-1"></i> <?= __('查看全部') ?>
                 </a>
                 <a class="btn btn-sm btn-outline-secondary" 
-                   href="<?= $this->getBackendUrl('*/backend/notificationsubscription') ?>"
+                   href="<?= $this->getBackendUrl('system/backend/notificationsubscription') ?>"
                    title="<?= __('管理订阅') ?>">
                     <i class="mdi mdi-cog"></i>
                 </a>
@@ -315,6 +322,24 @@ $unreadCount = $block->getUnreadCount();
     color: var(--backend-color-text-inverse, #fff);
 }
 
+.weline-notification-read-badge {
+    flex-shrink: 0;
+    font-size: 0.65rem;
+    font-weight: 500;
+    padding: 2px 6px;
+    border-radius: var(--backend-border-radius-sm, 4px);
+}
+
+.weline-notification-read-badge--unread {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.15));
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-notification-read-badge--read {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
 .weline-notification-content {
     margin: 0 0 8px 0;
     display: -webkit-box;
@@ -363,12 +388,28 @@ $unreadCount = $block->getUnreadCount();
     align-items: center;
     justify-content: center;
     gap: 6px;
-    color: var(--backend-color-primary, #556ee6);
     font-weight: 500;
 }
 
-.weline-notification-footer .btn:hover {
-    color: var(--backend-color-primary-dark, #4757d4);
+/* 查看全部：主按钮用反色文字，避免绿底蓝字不协调 */
+.weline-notification-footer .weline-notification-btn-viewall,
+.weline-notification-footer .weline-notification-btn-viewall:hover {
+    color: var(--backend-color-text-inverse, #fff) !important;
+    background: var(--backend-color-primary, #556ee6);
+    border-color: var(--backend-color-primary, #556ee6);
+}
+
+.weline-notification-footer .weline-notification-btn-viewall:hover {
+    background: var(--backend-color-primary-dark, #4757d4);
+    border-color: var(--backend-color-primary-dark, #4757d4);
+}
+
+.weline-notification-footer .btn-outline-secondary {
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.weline-notification-footer .btn-outline-secondary:hover {
+    color: var(--backend-color-text-primary, #212529);
 }
 
 .weline-notification-mark-all {
@@ -394,12 +435,10 @@ $unreadCount = $block->getUnreadCount();
 
     var WelineNotification = {
         markAllRead: function() {
-            fetch('<?= $this->getBackendUrl('*/api/notification/markAllRead') ?>', {
-                method: 'POST'
-            })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
-                if (data.success) {
+            window.Weline.Api.request('<?= $this->getBackendUrl('*/backend/notification/markAllRead') ?>', { method: 'POST' })
+            .then(function(response) {
+                var data = response.data;
+                if (response.ok && data && data.success) {
                     BackendToast.success(data.message || '<?= __('已标记全部已读') ?>');
                     setTimeout(function() { window.location.reload(); }, 500);
                 }

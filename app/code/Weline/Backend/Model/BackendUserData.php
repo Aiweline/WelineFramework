@@ -1,111 +1,56 @@
 <?php
-
+declare(strict_types=1);
 namespace Weline\Backend\Model;
 
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Database\Model;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
 
+#[Table(comment: '后台用户数据表')]
 class BackendUserData extends Model
 {
-    public const fields_ID = 'backend_user_data_id';
-    public const fields_BACKEND_USER_ID = 'backend_user_id';
-    public const fields_scope = 'scope';
-    public const fields_JSON = 'json';
+    public const schema_table = 'weline_backend_user_data';
+    public const schema_primary_key = 'backend_user_data_id';
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '后台用户数据ID')]
+    public const schema_fields_ID = 'backend_user_data_id';
+    #[Col(type: 'int', nullable: false, comment: '后台用户ID')]
+    public const schema_fields_BACKEND_USER_ID = 'backend_user_id';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '作用域')]
+    public const schema_fields_scope = 'scope';
+    #[Col(type: 'text', nullable: false, comment: 'json数据')]
+    public const schema_fields_JSON = 'json';
 
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
+    public function getScope(string $scope): array
     {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // TODO: Implement upgrade() method.
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        # 检查表存在否
-//        $setup->dropTable();
-        if (!$setup->tableExist()) {
-            $setup->createTable()
-                ->addColumn(
-                    self::fields_ID,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'primary key auto_increment',
-                    '后台用户数据ID'
-                )
-                ->addColumn(
-                    self::fields_BACKEND_USER_ID,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'not null',
-                    '后台用户ID'
-                )
-                ->addColumn(
-                    self::fields_scope,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    '作用域'
-                )
-                ->addColumn(
-                    self::fields_JSON,
-                    'json',
-                    0,
-                    "not null",
-                    'json数据'
-                )
-                ->create();
-        }
-    }
-
-    function getScope(string $scope): array
-    {
-        /**
-         * @var AuthenticatedSessionInterface $session
-         */
+        /** @var AuthenticatedSessionInterface $session */
         $session = SessionFactory::getInstance()->createBackendSession();
         if (!$session->getUserId()) {
             return [];
         }
-        $data = $this->where(self::fields_BACKEND_USER_ID, $session->getUserId())
-            ->where(self::fields_scope, $scope)
+        $this->where(self::schema_fields_BACKEND_USER_ID, $session->getUserId())
+            ->where(self::schema_fields_scope, $scope)
             ->find()
             ->fetch();
-        $json = $data['json'] ?? null;
+        $json = $this->getData(self::schema_fields_JSON);
         if (!$json) {
             return [];
         }
-        return json_decode($json, true);
+        $decoded = json_decode((string) $json, true);
+        return is_array($decoded) ? $decoded : [];
     }
 
-    function deleteScope(string $scope): BackendUserData
+    public function deleteScope(string $scope): self
     {
-        /**
-         * @var AuthenticatedSessionInterface $session
-         */
+        /** @var AuthenticatedSessionInterface $session */
         $session = SessionFactory::getInstance()->createBackendSession();
-        if ($user_id = $session->getUserId()) {
-            $this->where(self::fields_BACKEND_USER_ID, $user_id)
-                ->where(self::fields_scope, $scope)
-                ->delete()
-                ->fetch();
+        if ($session->getUserId()) {
+            $this->where(self::schema_fields_BACKEND_USER_ID, $session->getUserId())
+                ->where(self::schema_fields_scope, $scope)
+                ->delete();
         }
         return $this;
     }
 }
+

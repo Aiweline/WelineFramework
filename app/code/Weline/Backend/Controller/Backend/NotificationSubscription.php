@@ -31,10 +31,13 @@ class NotificationSubscription extends BackendController
     {
         $userId = (int) $this->session->getLoginUserId();
 
+        // 先同步消息主题到数据库（各模块 Provider 注册的主题）
+        $this->topicCollector->collect();
+
         $topicsGrouped = $this->topicCollector->getTopicsGrouped();
 
         $subscriptions = $this->subscriptionModel->clearQuery()
-            ->where(UserNotificationSubscription::fields_user_id, $userId)
+            ->where(UserNotificationSubscription::schema_fields_user_id, $userId)
             ->select()
             ->fetchArray();
 
@@ -83,9 +86,9 @@ class NotificationSubscription extends BackendController
         }
 
         $existing = $this->subscriptionModel->clearQuery()
-            ->where(UserNotificationSubscription::fields_user_id, $userId)
-            ->where(UserNotificationSubscription::fields_topic_code, $topicCode)
-            ->where(UserNotificationSubscription::fields_channel, $channel)
+            ->where(UserNotificationSubscription::schema_fields_user_id, $userId)
+            ->where(UserNotificationSubscription::schema_fields_topic_code, $topicCode)
+            ->where(UserNotificationSubscription::schema_fields_channel, $channel)
             ->select()
             ->fetch();
 
@@ -123,9 +126,9 @@ class NotificationSubscription extends BackendController
         }
 
         $existing = $this->subscriptionModel->clearQuery()
-            ->where(UserNotificationSubscription::fields_user_id, $userId)
-            ->where(UserNotificationSubscription::fields_topic_code, $topicCode)
-            ->where(UserNotificationSubscription::fields_channel, $channel)
+            ->where(UserNotificationSubscription::schema_fields_user_id, $userId)
+            ->where(UserNotificationSubscription::schema_fields_topic_code, $topicCode)
+            ->where(UserNotificationSubscription::schema_fields_channel, $channel)
             ->select()
             ->fetch();
 

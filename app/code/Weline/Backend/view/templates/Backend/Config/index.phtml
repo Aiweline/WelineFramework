@@ -168,15 +168,11 @@ $configs = $configs ?? [];
             }
         }
         
-        fetch('<?= $this->getBackendUrl('*/backend/config/save') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: new URLSearchParams(data)
-        })
-        .then(response => response.json())
-        .then(data => {
+        var url = '<?= $this->getBackendUrl('*/backend/config/save') ?>';
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(data) };
+        window.Weline.Api.request(url, opts)
+        .then(function(res) {
+            var data = (res && res.data) !== undefined ? res.data : res;
             if (data.success) {
                 AdminToast.success(data.message);
                 setTimeout(() => {

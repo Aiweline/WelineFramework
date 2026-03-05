@@ -1,81 +1,45 @@
 <?php
-
 declare(strict_types=1);
-
 /*
  * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
  * 邮箱：aiweline@qq.com
  * 网址：aiweline.com
  * 论坛：https://bbs.aiweline.com
  */
-
 namespace Weline\Backend\Model;
-
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\App\Env;
 use Weline\Framework\Database\AbstractModel;
-use Weline\Framework\Database\Api\Db\TableInterface;
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
-class BackendUserConfig extends \Weline\Framework\Database\Model
+#[Table(comment: '后台用户配置表')]
+#[Index(name: 'idx_user_key', columns: ['user_id', 'key'], type: 'UNIQUE', comment: '管理员配置唯一索引')]
+#[Index(name: 'idx_module', columns: ['module'], comment: '模组索引')]
+#[Index(name: 'idx_name', columns: ['name'], comment: '配置名')]
+class BackendUserConfig extends Model
 {
-    public const fields_ID = 'id';
-    public const fields_user_id = 'user_id';
-    public const fields_value = 'value';
-    public const fields_key = 'key';
-    public const fields_module = 'module';
-    public const fields_name = 'name';
-
+    public const schema_primary_keys = ['user_id', 'key'];
+    #[Col('int', 0, nullable: false, primaryKey: true, autoIncrement: true, comment: 'ID')]
+    public const schema_fields_ID = 'id';
+    #[Col('int', 0, nullable: false, default: 0, comment: '管理员ID')]
+    public const schema_fields_user_id = 'user_id';
+    #[Col('text', comment: '配置信息')]
+    public const schema_fields_value = 'value';
+    #[Col('varchar', 50, nullable: false, comment: '配置key')]
+    public const schema_fields_key = 'key';
+    #[Col('varchar', 255, nullable: false, comment: '模组')]
+    public const schema_fields_module = 'module';
+    #[Col('varchar', 255, nullable: false, comment: '配置名')]
+    public const schema_fields_name = 'name';
     private array $config = [];
     private array $default_config = [];
-
-    public array $_index_sort_keys = [self::fields_ID, self::fields_user_id, self::fields_key, self::fields_name, self::fields_module];
-    public array $_unit_primary_keys = [self::fields_user_id, self::fields_key];
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        //        $setup->dropTable();
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // TODO: Implement upgrade() method.
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-    //    $setup->dropTable();
-        if (!$setup->tableExist()) {
-            $setup->createTable()
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
-                ->addColumn(self::fields_user_id, TableInterface::column_type_INTEGER, null, 'not null default 0', '管理员ID')
-                ->addColumn(self::fields_key, TableInterface::column_type_VARCHAR, 50, 'not null', '配置key')
-                ->addColumn(self::fields_value, TableInterface::column_type_TEXT, 0, '', '配置信息')
-                ->addColumn(self::fields_module, TableInterface::column_type_VARCHAR, 255, 'not null', '模组')
-                ->addColumn(self::fields_name, TableInterface::column_type_VARCHAR, 255, 'not null', '配置名')
-                # 建立唯一索引：管理员ID和key的组合必须唯一
-                ->addIndex(TableInterface::index_type_UNIQUE, 'idx_user_key', [self::fields_user_id, self::fields_key], '管理员配置唯一索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_module', self::fields_module, '模组索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_name', self::fields_name, '配置名')
-                ->addAdditional('ENGINE=InnoDB;')
-                ->create();
-        }
-    }
-
-    /** 返回配置
+    public array $_index_sort_keys = [self::schema_fields_ID, self::schema_fields_user_id, self::schema_fields_key, self::schema_fields_name, self::schema_fields_module];
+    public array $_unit_primary_keys = [self::schema_fields_user_id, self::schema_fields_key];
+/** 返回配置
      * @param string $key
      * @param bool $real
      * @return string
@@ -88,8 +52,8 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
         if ($real) {
             /**@var AuthenticatedSessionInterface $userSession */
             $userSession = SessionFactory::getInstance()->createBackendSession();
-            return $this->clear()->where(self::fields_user_id, $userSession->getUserId())
-                ->where(self::fields_key, $key)
+            return $this->clear()->where(self::schema_fields_user_id, $userSession->getUserId())
+                ->where(self::schema_fields_key, $key)
                 ->find()
                 ->fetchArray()['value'] ?? '';
         }
@@ -101,13 +65,13 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
         /**@var AuthenticatedSessionInterface $userSession */
         $userSession = SessionFactory::getInstance()->createBackendSession();
         $this->reset()
-            ->where(self::fields_user_id, $userSession->getUserId())
-            ->where(self::fields_key, $key);
+            ->where(self::schema_fields_user_id, $userSession->getUserId())
+            ->where(self::schema_fields_key, $key);
         if ($module) {
-            $this->where(self::fields_module, $module);
+            $this->where(self::schema_fields_module, $module);
         }
         if ($name) {
-            $this->where(self::fields_name, $name);
+            $this->where(self::schema_fields_name, $name);
         }
         $config = $this
             ->find()
@@ -115,7 +79,6 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
         $this->config[$self_config_key] = $config['value'] ?? '';
         return $this->config[$self_config_key];
     }
-
     public function getDefaultConfig(string $key): string
     {
         if (isset($this->default_config[$key])) {
@@ -124,7 +87,7 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
         # 读取默认配置
         try {
             $config = $this->clear()
-                ->where(self::fields_user_id, 0)
+                ->where(self::schema_fields_user_id, 0)
                 ->find()
                 ->fetchArray();
         } catch (\Throwable $e) {
@@ -133,7 +96,6 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
         $this->default_config[$key] = $config['value'] ?? '';
         return $this->default_config[$key];
     }
-
     /**
      * 设置用户配置
      * @param string $key
@@ -160,24 +122,21 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
                 return false;
             }
         }
-
         # 设置用户配置
         /**@var AuthenticatedSessionInterface $userSession */
         $userSession = SessionFactory::getInstance()->createBackendSession();
         return (bool)$this->clear()
-            ->setData(self::fields_key, $key, true)
-            ->setData(self::fields_value, $value)
-            ->setData(self::fields_user_id, $userSession->getUserId(), true)
-            ->setData(self::fields_module, $module, true)
-            ->setData(self::fields_name, $name, true)
+            ->setData(self::schema_fields_key, $key, true)
+            ->setData(self::schema_fields_value, $value)
+            ->setData(self::schema_fields_user_id, $userSession->getUserId(), true)
+            ->setData(self::schema_fields_module, $module, true)
+            ->setData(self::schema_fields_name, $name, true)
             ->save(true);
     }
-
     private static function key(string $key, string $module = '', string $name = ''): string
     {
         return ($module ? $module . '::' : '') . ($name ? $name . '::' : '') . $key;
     }
-
     /**
      * 设置默认配置
      * @param string $key
@@ -202,14 +161,13 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
         }
         # 设置默认配置
         return (bool)$this->clear()
-            ->setData(self::fields_key, $key, true)
-            ->setData(self::fields_value, $value)
-            ->setData(self::fields_user_id, 0, true)
-            ->setData(self::fields_module, $module, true)
-            ->setData(self::fields_name, $name, true)
+            ->setData(self::schema_fields_key, $key, true)
+            ->setData(self::schema_fields_value, $value)
+            ->setData(self::schema_fields_user_id, 0, true)
+            ->setData(self::schema_fields_module, $module, true)
+            ->setData(self::schema_fields_name, $name, true)
             ->save();
     }
-
     public function save(string|array|bool|AbstractModel $data = [], string|array|null $sequence = ''): bool|int
     {
         $this->forceCheck();

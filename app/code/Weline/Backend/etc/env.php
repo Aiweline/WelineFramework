@@ -9,8 +9,8 @@ declare(strict_types=1);
  * 论坛：https://bbs.aiweline.com
  */
 return [
-    // 路由
-    'router'       => 'backend',
+    // 路由：使用 system 避免与 area 名 backend 冲突导致 backend/backend 重复
+    'router'       => 'system',
     'dependencies' => [
         'Weline_SystemConfig'
     ]
