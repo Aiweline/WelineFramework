@@ -308,7 +308,7 @@ class GnameRegistrar implements DomainRegistrarInterface
 
             foreach ($list as $item) {
                 $statusRaw = $item['ztstr'] ?? $item['zt'] ?? $item['status'] ?? '';
-                $dnsStr = (string) ($item['dns'] ?? '');
+                $dnsStr = (string) ($item['dns'] ?? $item['ymdns'] ?? '');
                 $nameservers = $dnsStr !== '' ? \array_map('trim', \explode(',', $dnsStr)) : [];
 
                 $allDomains[] = [
@@ -588,7 +588,10 @@ class GnameRegistrar implements DomainRegistrarInterface
 
         $ch = \curl_init();
 
-        \curl_setopt_array($ch, [
+        $deployMode = Env::system('deploy') ?? 'prod';
+        $isDev = \in_array($deployMode, ['dev', 'development', 'local'], true);
+
+        $curlOpts = [
             CURLOPT_URL => $url,
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => \http_build_query($data),
@@ -606,15 +609,22 @@ class GnameRegistrar implements DomainRegistrarInterface
                 'Cache-Control: no-cache',
                 'Pragma: no-cache',
             ],
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => 0,
+            CURLOPT_SSL_VERIFYPEER => !$isDev,
+            CURLOPT_SSL_VERIFYHOST => $isDev ? 0 : 2,  // 开发环境禁用 SSL 主机名验证
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS => 3,
             CURLOPT_ENCODING => '',
-        ]);
+        ];
 
-        // 注：SSL 验证已在 curl_setopt_array 中禁用（CURLOPT_SSL_VERIFYPEER => false）
-        // 不再调用 configSsl()，避免生产环境下被覆盖回 true
+        // 开发环境：完全禁用 SSL 验证，强制 TLS 1.2 以避免 unexpected eof
+        if ($isDev) {
+            $curlOpts[CURLOPT_SSLVERSION] = \CURL_SSLVERSION_TLSv1_2;
+            if (\defined('CURLSSLOPT_NO_REVOKE')) {
+                $curlOpts[CURLOPT_SSL_OPTIONS] = \CURLSSLOPT_NO_REVOKE;
+            }
+        }
+
+        \curl_setopt_array($ch, $curlOpts);
 
         $responseBody = \curl_exec($ch);
         $httpCode = \curl_getinfo($ch, CURLINFO_HTTP_CODE);

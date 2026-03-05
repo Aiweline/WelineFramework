@@ -264,6 +264,10 @@ class WebsitesQueryProvider implements QueryProviderInterface
             if ($isEditMode && $isPassword) {
                 continue;
             }
+            // 编辑模式下，api_key 未回显（列表不返回敏感字段），留空表示不修改，不参与必填校验
+            if ($isEditMode && $mapping === 'api_key') {
+                continue;
+            }
             
             $value = '';
             
