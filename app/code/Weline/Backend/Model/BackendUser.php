@@ -25,6 +25,8 @@ use Weline\Framework\Session\Auth\AuthenticableInterface;
 #[Index(name: 'uk_username', columns: ['username'], type: 'UNIQUE', comment: '用户名唯一')]
 class BackendUser extends Model implements AuthenticableInterface
 {
+    public const schema_table = 'backend_user';
+    public const schema_primary_key = 'user_id';
 
     #[Col('int', 0, nullable: false, primaryKey: true, autoIncrement: true, comment: '用户ID')]
     public const schema_fields_ID = 'user_id';
