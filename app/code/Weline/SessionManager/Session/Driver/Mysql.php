@@ -37,7 +37,7 @@ class Mysql extends AbstractSessionDriverHandler
     {
         // 删除过期的Session
         try {
-            $this->session->reset()->where("TIMESTAMPDIFF(SECOND, " . $this->session::fields_UPDATE_TIME . ", NOW()) > $max_lifetime")->delete();
+            $this->session->reset()->where("TIMESTAMPDIFF(SECOND, " . $this->session::schema_fields_UPDATE_TIME . ", NOW()) > $max_lifetime")->delete();
             return true;
         } catch (\ReflectionException|Core|Exception $e) {
             return false;
@@ -51,16 +51,16 @@ class Mysql extends AbstractSessionDriverHandler
 
     public function read(string $id): string|false
     {
-        return $this->session->reset()->load($id)[$this->session::fields_SESSION_DATA] ?? '';
+        return $this->session->reset()->load($id)[$this->session::schema_fields_SESSION_DATA] ?? '';
     }
 
     public function write(string $id, string $data): bool
     {
         try {
             $this->session->reset()->insert([
-                $this->session::fields_ID => $id,
-                $this->session::fields_SESSION_DATA => $data,
-            ], $this->session::fields_ID)->fetch();
+                $this->session::schema_fields_ID => $id,
+                $this->session::schema_fields_SESSION_DATA => $data,
+            ], $this->session::schema_fields_ID)->fetch();
             return true;
         } catch (\ReflectionException|Core|Exception $e) {
             return false;
