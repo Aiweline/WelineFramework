@@ -42,13 +42,16 @@ class SyncMapping extends Model
     public const schema_fields_HOST_ID = 'host_id';
     #[Col(type: 'varchar', length: 1000, nullable: false, comment: '本地路径')]
     public const schema_fields_LOCAL_PATH = 'local_path';
-    public const schema_fields_REMOTE_PATH = 'remote_path'; // 保留用于兼容，新数据使用 remote_paths
-    public const schema_fields_REMOTE_PATHS = 'remote_paths'; // 多个远程路径（JSON数组）
+    #[Col(type: 'varchar', length: 1000, nullable: true, comment: '远程路径（兼容）')]
+    public const schema_fields_REMOTE_PATH = 'remote_path';
+    #[Col(type: 'text', nullable: true, comment: '多个远程路径（JSON数组）')]
+    public const schema_fields_REMOTE_PATHS = 'remote_paths';
     #[Col(type: 'text', nullable: true, comment: '排除模式（JSON数组）')]
     public const schema_fields_EXCLUDE_PATTERNS = 'exclude_patterns';
     #[Col(type: 'text', nullable: true, comment: '要同步的目录（JSON数组）')]
     public const schema_fields_INCLUDE_PATHS = 'include_paths';
-    public const schema_fields_STATUS = 'status'; // 0=关闭, 1=开启
+    #[Col(type: 'int', nullable: true, default: 0, comment: '状态 0=关闭 1=开启')]
+    public const schema_fields_STATUS = 'status';
     #[Col(type: 'int', nullable: true, default: 0, comment: '创建时间')]
     public const schema_fields_CREATED_AT = 'created_at';
     #[Col(type: 'int', nullable: true, default: 0, comment: '更新时间')]
