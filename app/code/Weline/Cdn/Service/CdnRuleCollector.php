@@ -485,34 +485,34 @@ class CdnRuleCollector
     {
         // 查找是否已存在
         $existing = $this->apiRuleModel->clear()
-            ->where(ApiRule::fields_MODULE, $moduleName)
-            ->where(ApiRule::fields_CLASS, $className)
-            ->where(ApiRule::fields_METHOD, $methodName)
+            ->where(ApiRule::schema_fields_MODULE, $moduleName)
+            ->where(ApiRule::schema_fields_CLASS, $className)
+            ->where(ApiRule::schema_fields_METHOD, $methodName)
             ->find()
             ->fetch();
         
         if ($existing->getId()) {
             // 更新现有规则
-            $existing->setData(ApiRule::fields_EXPRESSION, $rule['expression'])
+            $existing->setData(ApiRule::schema_fields_EXPRESSION, $rule['expression'])
                 ->setActionArray($rule['action'])
-                ->setData(ApiRule::fields_DESCRIPTION, $rule['description'] ?? '')
-                ->setData(ApiRule::fields_ENABLED, $rule['enabled'] ? 1 : 0)
-                ->setData(ApiRule::fields_TRIGGER, $rule['trigger'] ?? 'cron')
+                ->setData(ApiRule::schema_fields_DESCRIPTION, $rule['description'] ?? '')
+                ->setData(ApiRule::schema_fields_ENABLED, $rule['enabled'] ? 1 : 0)
+                ->setData(ApiRule::schema_fields_TRIGGER, $rule['trigger'] ?? 'cron')
                 ->save();
             
             return $existing;
         } else {
             // 创建新规则
             $apiRule = $this->apiRuleModel->clear();
-            $apiRule->setData(ApiRule::fields_MODULE, $moduleName)
-                ->setData(ApiRule::fields_CLASS, $className)
-                ->setData(ApiRule::fields_METHOD, $methodName)
-                ->setData(ApiRule::fields_ROUTE, $this->extractRouteFromExpression($rule['expression']))
-                ->setData(ApiRule::fields_EXPRESSION, $rule['expression'])
+            $apiRule->setData(ApiRule::schema_fields_MODULE, $moduleName)
+                ->setData(ApiRule::schema_fields_CLASS, $className)
+                ->setData(ApiRule::schema_fields_METHOD, $methodName)
+                ->setData(ApiRule::schema_fields_ROUTE, $this->extractRouteFromExpression($rule['expression']))
+                ->setData(ApiRule::schema_fields_EXPRESSION, $rule['expression'])
                 ->setActionArray($rule['action'])
-                ->setData(ApiRule::fields_DESCRIPTION, $rule['description'] ?? '')
-                ->setData(ApiRule::fields_ENABLED, $rule['enabled'] ? 1 : 0)
-                ->setData(ApiRule::fields_TRIGGER, $rule['trigger'] ?? 'cron')
+                ->setData(ApiRule::schema_fields_DESCRIPTION, $rule['description'] ?? '')
+                ->setData(ApiRule::schema_fields_ENABLED, $rule['enabled'] ? 1 : 0)
+                ->setData(ApiRule::schema_fields_TRIGGER, $rule['trigger'] ?? 'cron')
                 ->save();
             
             return $apiRule;
@@ -544,7 +544,7 @@ class CdnRuleCollector
     {
         // 获取所有启用的域名（不区分适配器）
         $domains = $this->domainModel->clear()
-            ->where(Domain::fields_ENABLED, 1)
+            ->where(Domain::schema_fields_ENABLED, 1)
             ->select()
             ->fetch();
         
@@ -557,14 +557,14 @@ class CdnRuleCollector
                 $event = new Event([
                     'domain' => $domain,
                     'rules' => $rules, // 通用规则，所有适配器都可以使用
-                    'adapter_code' => $domain->getData(Domain::fields_ADAPTER), // 用于适配器过滤
+                    'adapter_code' => $domain->getData(Domain::schema_fields_ADAPTER), // 用于适配器过滤
                     'trigger_type' => 'realtime' // 标记为实时触发
                 ]);
                 
                 $this->eventsManager->dispatch('Weline_Cdn::push_rules', $event);
             } catch (\Exception $e) {
                 // 记录错误但不中断
-                w_log_error("CDN实时规则推送失败 [域名: {$domain->getData(Domain::fields_DOMAIN_NAME)}]: " . $e->getMessage());
+                w_log_error("CDN实时规则推送失败 [域名: {$domain->getData(Domain::schema_fields_DOMAIN_NAME)}]: " . $e->getMessage());
             }
         }
     }

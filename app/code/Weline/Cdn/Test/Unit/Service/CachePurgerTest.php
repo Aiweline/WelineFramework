@@ -64,9 +64,9 @@ class CachePurgerTest extends TestCase
     {
         $domain = $this->createMock(Domain::class);
         $domain->method('getData')->willReturnMap([
-            [Domain::fields_DOMAIN_ID, 1],
-            [Domain::fields_ADAPTER, 'cloudflare'],
-            [Domain::fields_ZONE_ID, 'zone-123']
+            [Domain::schema_fields_DOMAIN_ID, 1],
+            [Domain::schema_fields_ADAPTER, 'cloudflare'],
+            [Domain::schema_fields_ZONE_ID, 'zone-123']
         ]);
         $domain->method('isEnabled')->willReturn(false);
 

@@ -115,11 +115,11 @@ class RuleManager
         $apiRuleModel = $this->objectManager->getInstance(ApiRule::class);
         
         $query = $apiRuleModel->clear()
-            ->where(ApiRule::fields_ENABLED, 1);
+            ->where(ApiRule::schema_fields_ENABLED, 1);
         
         // 如果指定了触发类型，只获取对应类型的规则
         if ($triggerType !== null) {
-            $query->where(ApiRule::fields_TRIGGER, $triggerType);
+            $query->where(ApiRule::schema_fields_TRIGGER, $triggerType);
         }
         
         $apiRules = $query->select()->fetch();
@@ -141,9 +141,9 @@ class RuleManager
      */
     public function importRules(Domain $domain): array
     {
-        $adapter = $this->adapterResolver->getAdapter($domain->getData(Domain::fields_ADAPTER));
+        $adapter = $this->adapterResolver->getAdapter($domain->getData(Domain::schema_fields_ADAPTER));
         if (!$adapter) {
-            throw new Core(__('适配器不存在：%{1}', [$domain->getData(Domain::fields_ADAPTER)]));
+            throw new Core(__('适配器不存在：%{1}', [$domain->getData(Domain::schema_fields_ADAPTER)]));
         }
 
         // 获取凭据
@@ -152,7 +152,7 @@ class RuleManager
             throw new Core(__('未配置账户凭据'));
         }
 
-        $zoneId = $domain->getData(Domain::fields_ZONE_ID);
+        $zoneId = $domain->getData(Domain::schema_fields_ZONE_ID);
         $rules = $adapter->getRules($zoneId, $credentials);
 
         return [
@@ -171,9 +171,9 @@ class RuleManager
      */
     public function pushRules(Domain $domain): array
     {
-        $adapter = $this->adapterResolver->getAdapter($domain->getData(Domain::fields_ADAPTER));
+        $adapter = $this->adapterResolver->getAdapter($domain->getData(Domain::schema_fields_ADAPTER));
         if (!$adapter) {
-            throw new Core(__('适配器不存在：%{1}', [$domain->getData(Domain::fields_ADAPTER)]));
+            throw new Core(__('适配器不存在：%{1}', [$domain->getData(Domain::schema_fields_ADAPTER)]));
         }
 
         // 获取合并后的规则
@@ -185,7 +185,7 @@ class RuleManager
             throw new Core(__('未配置账户凭据'));
         }
 
-        $zoneId = $domain->getData(Domain::fields_ZONE_ID);
+        $zoneId = $domain->getData(Domain::schema_fields_ZONE_ID);
         $result = $adapter->putRules($zoneId, $rules, $credentials);
 
         return $result;
@@ -206,7 +206,7 @@ class RuleManager
         }
 
         // 2. 如果指定了 account_id，使用该账户的凭据
-        $accountId = $domain->getData(Domain::fields_ACCOUNT_ID);
+        $accountId = $domain->getData(Domain::schema_fields_ACCOUNT_ID);
         if ($accountId) {
             $account = $this->objectManager->getInstance(Account::class)->reset()->load($accountId);
             if ($account->getId()) {
@@ -219,7 +219,7 @@ class RuleManager
 
         // 3. 如果继承默认账户，使用默认账户的凭据
         if ($domain->isInheritDefault()) {
-            $adapter = $domain->getData(Domain::fields_ADAPTER);
+            $adapter = $domain->getData(Domain::schema_fields_ADAPTER);
             $defaultAccount = $this->accountManager->getDefaultAccount($adapter);
             if ($defaultAccount) {
                 $defaultCredentials = $defaultAccount->getCredentialsArray();

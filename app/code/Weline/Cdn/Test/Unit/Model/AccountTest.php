@@ -34,15 +34,15 @@ class AccountTest extends TestCase
      */
     public function testFieldConstants(): void
     {
-        $this->assertEquals('account_id', Account::fields_ACCOUNT_ID);
-        $this->assertEquals('adapter', Account::fields_ADAPTER);
-        $this->assertEquals('name', Account::fields_NAME);
-        $this->assertEquals('description', Account::fields_DESCRIPTION);
-        $this->assertEquals('credentials', Account::fields_CREDENTIALS);
-        $this->assertEquals('is_default', Account::fields_IS_DEFAULT);
-        $this->assertEquals('status', Account::fields_STATUS);
-        $this->assertEquals('created_at', Account::fields_CREATED_AT);
-        $this->assertEquals('updated_at', Account::fields_UPDATED_AT);
+        $this->assertEquals('account_id', Account::schema_fields_ACCOUNT_ID);
+        $this->assertEquals('adapter', Account::schema_fields_ADAPTER);
+        $this->assertEquals('name', Account::schema_fields_NAME);
+        $this->assertEquals('description', Account::schema_fields_DESCRIPTION);
+        $this->assertEquals('credentials', Account::schema_fields_CREDENTIALS);
+        $this->assertEquals('is_default', Account::schema_fields_IS_DEFAULT);
+        $this->assertEquals('status', Account::schema_fields_STATUS);
+        $this->assertEquals('created_at', Account::schema_fields_CREATED_AT);
+        $this->assertEquals('updated_at', Account::schema_fields_UPDATED_AT);
     }
 
     /**
@@ -60,20 +60,20 @@ class AccountTest extends TestCase
     public function testSetAndGetData(): void
     {
         $testData = [
-            Account::fields_ADAPTER => 'cloudflare',
-            Account::fields_NAME => 'Test Account',
-            Account::fields_DESCRIPTION => 'Test Description',
-            Account::fields_STATUS => Account::STATUS_ACTIVE,
-            Account::fields_IS_DEFAULT => 0
+            Account::schema_fields_ADAPTER => 'cloudflare',
+            Account::schema_fields_NAME => 'Test Account',
+            Account::schema_fields_DESCRIPTION => 'Test Description',
+            Account::schema_fields_STATUS => Account::STATUS_ACTIVE,
+            Account::schema_fields_IS_DEFAULT => 0
         ];
 
         $this->model->setData($testData);
 
-        $this->assertEquals('cloudflare', $this->model->getData(Account::fields_ADAPTER));
-        $this->assertEquals('Test Account', $this->model->getData(Account::fields_NAME));
-        $this->assertEquals('Test Description', $this->model->getData(Account::fields_DESCRIPTION));
-        $this->assertEquals(Account::STATUS_ACTIVE, $this->model->getData(Account::fields_STATUS));
-        $this->assertEquals(0, $this->model->getData(Account::fields_IS_DEFAULT));
+        $this->assertEquals('cloudflare', $this->model->getData(Account::schema_fields_ADAPTER));
+        $this->assertEquals('Test Account', $this->model->getData(Account::schema_fields_NAME));
+        $this->assertEquals('Test Description', $this->model->getData(Account::schema_fields_DESCRIPTION));
+        $this->assertEquals(Account::STATUS_ACTIVE, $this->model->getData(Account::schema_fields_STATUS));
+        $this->assertEquals(0, $this->model->getData(Account::schema_fields_IS_DEFAULT));
     }
 
     /**
@@ -119,7 +119,7 @@ class AccountTest extends TestCase
      */
     public function testTableConstant(): void
     {
-        $this->assertEquals('cdn_account', Account::table);
+        $this->assertEquals('cdn_account', Account::schema_table);
     }
 }
 
