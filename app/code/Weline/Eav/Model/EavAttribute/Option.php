@@ -33,89 +33,85 @@ class Option extends \Weline\Framework\Database\Model
     public array $_unit_primary_keys = ['option_id', 'attribute_id', 'code'];
     public array $_index_sort_keys = ['option_id', 'attribute_id', 'code'];
 
-    // 表结构已迁移到 Schema/EavAttributeOptionSchema.php
-    // 由 Setup/Install.php 统一管理表创建
-    public function setup(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void {}
-    public function upgrade(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void {}
-    public function install(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void {}
+    // 表结构已迁移到 Schema/EavAttributeOptionSchema.php，由 Setup/Install.php 统一管理表创建；此处不再定义 setup/upgrade/install，使用父类空实现。
 
     function getOptionId(): int
     {
-        return (int)$this->getData(self::fields_option_id);
+        return (int)$this->getData(self::schema_fields_option_id);
     }
 
     function setOptionId(int $option_id): static
     {
-        return $this->setData(self::fields_option_id, $option_id);
+        return $this->setData(self::schema_fields_option_id, $option_id);
     }
 
     function getEavEntityId(): int
     {
-        return (int)$this->getData(self::fields_eav_entity_id);
+        return (int)$this->getData(self::schema_fields_eav_entity_id);
     }
 
     function setEntityId(int $eav_entity_id): static
     {
-        return $this->setData(self::fields_eav_entity_id, $eav_entity_id);
+        return $this->setData(self::schema_fields_eav_entity_id, $eav_entity_id);
     }
 
     function getAttributeId(): int
     {
-        return (int)$this->getData(self::fields_attribute_id);
+        return (int)$this->getData(self::schema_fields_attribute_id);
     }
 
     function setAttributeId(int $attribute_id): static
     {
-        return $this->setData(self::fields_attribute_id, $attribute_id);
+        return $this->setData(self::schema_fields_attribute_id, $attribute_id);
     }
 
     function getCode(): string
     {
-        return $this->getData(self::fields_code);
+        return $this->getData(self::schema_fields_code);
     }
 
     function setCode(string $code): static
     {
-        return $this->setData(self::fields_code, $code);
+        return $this->setData(self::schema_fields_code, $code);
     }
 
     function getValue(): string
     {
-        return $this->getData(self::fields_value);
+        return $this->getData(self::schema_fields_value);
     }
 
     function setValue(string $value): static
     {
-        return $this->setData(self::fields_value, $value);
+        return $this->setData(self::schema_fields_value, $value);
     }
 
     function getSwatchImage(): string
     {
-        return $this->getData(self::fields_swatch_image);
+        return $this->getData(self::schema_fields_swatch_image);
     }
 
     function setSwatchImage(string $swatch_image): static
     {
-        return $this->setData(self::fields_swatch_image, $swatch_image);
+        return $this->setData(self::schema_fields_swatch_image, $swatch_image);
     }
 
     function getSwatchColor(): string
     {
-        return $this->getData(self::fields_swatch_color);
+        return $this->getData(self::schema_fields_swatch_color);
     }
 
     function setSwatchColor(string $swatch_color): static
     {
-        return $this->setData(self::fields_swatch_color, $swatch_color);
+        return $this->setData(self::schema_fields_swatch_color, $swatch_color);
     }
 
     function getSwatchText(): string
     {
-        return $this->getData(self::fields_swatch_text);
+        return $this->getData(self::schema_fields_swatch_text);
     }
 
     function setSwatchText(string $swatch_text): static
     {
-        return $this->setData(self::fields_swatch_text, $swatch_text);
+        return $this->setData(self::schema_fields_swatch_text, $swatch_text);
     }
 }

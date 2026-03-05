@@ -129,18 +129,18 @@ window.EavSetManager = window.EavSetManager || {
         contentEl.innerHTML = '<div class="text-center py-3"><i class="mdi mdi-loading mdi-spin"></i> <?= __('加载中...') ?></div>';
         
         // 加载属性集详情
-        fetch(apiBase + '/set/detail?id=' + setId)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    this.renderSetDetail(widgetId, data.data);
-                } else {
-                    contentEl.innerHTML = '<div class="alert alert-danger">' + (data.message || '<?= __('加载失败') ?>') + '</div>';
-                }
-            })
-            .catch(error => {
-                contentEl.innerHTML = '<div class="alert alert-danger"><?= __('网络错误') ?>: ' + error.message + '</div>';
-            });
+        var url = apiBase + '/set/detail?id=' + setId;
+        var req = window.Weline.Api.get(url, { silent: true });
+        req.then(function(res) {
+            var data = (res && res.data) || res;
+            if (data && data.success) {
+                this.renderSetDetail(widgetId, data.data);
+            } else {
+                contentEl.innerHTML = '<div class="alert alert-danger">' + ((data && data.message) || '<?= __('加载失败') ?>') + '</div>';
+            }
+        }.bind(this)).catch(function(error) {
+            contentEl.innerHTML = '<div class="alert alert-danger"><?= __('网络错误') ?>: ' + (error && error.message || '') + '</div>';
+        });
     },
     
     renderSetDetail: function(widgetId, setData) {
@@ -207,49 +207,52 @@ window.EavSetManager = window.EavSetManager || {
             formData.append(key, data[key]);
         }
         
-        fetch(apiBase + '/set/save', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(result => {
-            if (result.success) {
-                alert(result.message || '<?= __('保存成功') ?>');
+        var req = window.Weline.Api.request(apiBase + '/set/save', { method: 'POST', body: formData, silent: true });
+        req.then(function(res) {
+            var result = (res && res.data) || res;
+            if (result && result.success) {
+                if (typeof BackendToast !== 'undefined') BackendToast.success(result.message || '<?= __('保存成功') ?>');
+                else if (typeof alert === 'function') alert(result.message || '<?= __('保存成功') ?>');
                 location.reload();
             } else {
-                alert(result.message || '<?= __('保存失败') ?>');
+                if (typeof BackendToast !== 'undefined') BackendToast.error((result && result.message) || '<?= __('保存失败') ?>');
+                else if (typeof alert === 'function') alert((result && result.message) || '<?= __('保存失败') ?>');
             }
-        })
-        .catch(error => {
-            alert('<?= __('网络错误') ?>: ' + error.message);
+        }).catch(function(error) {
+            var msg = '<?= __('网络错误') ?>: ' + (error && error.message || '');
+            if (typeof BackendToast !== 'undefined') BackendToast.error(msg);
+            else if (typeof alert === 'function') alert(msg);
         });
     },
     
     deleteSet: function(widgetId, setId) {
-        if (!confirm('<?= __('确定要删除此属性集吗？') ?>')) return;
-        
-        const container = document.getElementById(widgetId);
-        const apiBase = container.dataset.apiBase;
-        
-        const formData = new FormData();
-        formData.append('id', setId);
-        
-        fetch(apiBase + '/set/delete', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(result => {
-            if (result.success) {
-                alert(result.message || '<?= __('删除成功') ?>');
-                location.reload();
-            } else {
-                alert(result.message || '<?= __('删除失败') ?>');
-            }
-        })
-        .catch(error => {
-            alert('<?= __('网络错误') ?>: ' + error.message);
-        });
+        var doDel = function() {
+            const container = document.getElementById(widgetId);
+            const apiBase = container.dataset.apiBase;
+            const formData = new FormData();
+            formData.append('id', setId);
+            var req = window.Weline.Api.request(apiBase + '/set/delete', { method: 'POST', body: formData, silent: true });
+            req.then(function(res) {
+                var result = (res && res.data) || res;
+                if (result && result.success) {
+                    if (typeof BackendToast !== 'undefined') BackendToast.success(result.message || '<?= __('删除成功') ?>');
+                    else if (typeof alert === 'function') alert(result.message || '<?= __('删除成功') ?>');
+                    location.reload();
+                } else {
+                    if (typeof BackendToast !== 'undefined') BackendToast.error((result && result.message) || '<?= __('删除失败') ?>');
+                    else if (typeof alert === 'function') alert((result && result.message) || '<?= __('删除失败') ?>');
+                }
+            }).catch(function(error) {
+                var msg = '<?= __('网络错误') ?>: ' + (error && error.message || '');
+                if (typeof BackendToast !== 'undefined') BackendToast.error(msg);
+                else if (typeof alert === 'function') alert(msg);
+            });
+        };
+        if (typeof BackendConfirm !== 'undefined' && BackendConfirm.show) {
+            BackendConfirm.show('<?= __('确定要删除此属性集吗？') ?>').then(function(ok) { if (ok) doDel(); });
+        } else if (typeof confirm === 'function' && confirm('<?= __('确定要删除此属性集吗？') ?>')) {
+            doDel();
+        }
     }
 };
 </script>

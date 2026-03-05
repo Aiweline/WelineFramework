@@ -32,41 +32,39 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class EavAttribute extends \Weline\Framework\Database\Model
 {
-    public const fields_ID = 'attribute_id';
-    public const fields_attribute_id = 'attribute_id';
-    public const fields_code = 'code';
-    public const fields_name = 'name';
-    public const fields_type_id = 'type_id';
-    public const fields_set_id = 'set_id';
-    public const fields_group_id = 'group_id';
-    public const fields_eav_entity_id = 'eav_entity_id';
-    public const fields_is_system = 'is_system';
-    public const fields_model_class = 'model_class';
-    public const fields_default_value = 'default_value';
-    public const fields_dependence = 'dependence'; # 多个依赖以英文逗号隔开,demo1,demo2
-    
-    // 基本设置组 (basic_)
-    public const fields_basic_is_enable = 'basic_is_enable';
-    
-    // 前端显示组 (frontend_)
-    public const fields_frontend_is_visible = 'frontend_is_visible';
-    public const fields_frontend_is_filterable = 'frontend_is_filterable';
-    
-    // 数据配置组 (data_)
-    public const fields_data_is_multiple = 'data_is_multiple';
-    public const fields_data_has_option = 'data_has_option';
-    
-    // 兼容旧字段常量（已废弃）
-    /** @deprecated use fields_data_is_multiple */
-    public const fields_multiple_valued = 'data_is_multiple';
-    /** @deprecated use fields_data_has_option */
-    public const fields_has_option = 'data_has_option';
-    /** @deprecated use fields_basic_is_enable */
-    public const fields_is_enable = 'basic_is_enable';
-    /** @deprecated use fields_frontend_is_filterable */
-    public const fields_is_filterable = 'frontend_is_filterable';
-    /** @deprecated use fields_frontend_is_visible */
-    public const fields_is_visible_on_front = 'frontend_is_visible';
+    public const schema_table = 'eav_attribute';
+    /** @var list<string> */
+    public const schema_primary_keys = ['eav_entity_id', 'code'];
+
+    public const schema_fields_ID = 'attribute_id';
+    public const schema_fields_attribute_id = 'attribute_id';
+    public const schema_fields_code = 'code';
+    public const schema_fields_name = 'name';
+    public const schema_fields_type_id = 'type_id';
+    public const schema_fields_set_id = 'set_id';
+    public const schema_fields_group_id = 'group_id';
+    public const schema_fields_eav_entity_id = 'eav_entity_id';
+    public const schema_fields_is_system = 'is_system';
+    public const schema_fields_model_class = 'model_class';
+    public const schema_fields_default_value = 'default_value';
+    public const schema_fields_dependence = 'dependence';
+
+    public const schema_fields_basic_is_enable = 'basic_is_enable';
+    public const schema_fields_frontend_is_visible = 'frontend_is_visible';
+    public const schema_fields_frontend_is_filterable = 'frontend_is_filterable';
+    public const schema_fields_data_is_multiple = 'data_is_multiple';
+    public const schema_fields_data_has_option = 'data_has_option';
+
+    /** @deprecated use schema_fields_data_is_multiple */
+    public const schema_fields_multiple_valued = 'data_is_multiple';
+    /** @deprecated use schema_fields_data_has_option */
+    public const schema_fields_has_option = 'data_has_option';
+    /** @deprecated use schema_fields_basic_is_enable */
+    public const schema_fields_is_enable = 'basic_is_enable';
+    /** @deprecated use schema_fields_frontend_is_filterable */
+    public const schema_fields_is_filterable = 'frontend_is_filterable';
+    /** @deprecated use schema_fields_frontend_is_visible */
+    public const schema_fields_is_visible_on_front = 'frontend_is_visible';
 
     public const value_key = 'value';
     public const swatch_value_key = 'swatch_value';
@@ -84,12 +82,8 @@ class EavAttribute extends \Weline\Framework\Database\Model
     private ?EavModel $currentEntity = null;
     private array $exist_types = [];
 
-    // 表结构已迁移到 Schema/EavAttributeSchema.php
-    // 由 Setup/Install.php 统一管理表创建
-    public function setup(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void {}
-    public function upgrade(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void {}
-    public function install(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void {}
-    
+    // 表结构已迁移到 Schema/EavAttributeSchema.php，由 Setup/Install.php 统一管理表创建；此处不再定义 setup/upgrade/install，使用父类空实现。
+
     public function loadByAttributeId(int $attribute_id): AbstractModel
     {
         return parent::load('main_table.attribute_id', $attribute_id);
@@ -97,7 +91,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
 
     public function getEavEntityId(): int
     {
-        return (int)$this->getData(self::fields_eav_entity_id);
+        return (int)$this->getData(self::schema_fields_eav_entity_id);
     }
 
     public function getEntityModel(): EavModel
@@ -122,71 +116,71 @@ class EavAttribute extends \Weline\Framework\Database\Model
 
     public function getCode(): string
     {
-        return $this->getData(self::fields_code) ?: '';
+        return $this->getData(self::schema_fields_code) ?: '';
     }
 
     public function setCode(string $code): static
     {
-        return $this->setData(self::fields_code, $code);
+        return $this->setData(self::schema_fields_code, $code);
     }
 
     public function getDependence(): string
     {
-        return $this->getData(self::fields_dependence) ?: '';
+        return $this->getData(self::schema_fields_dependence) ?: '';
     }
 
     public function setDependence(string $dependence): static
     {
-        return $this->setData(self::fields_dependence, $dependence);
+        return $this->setData(self::schema_fields_dependence, $dependence);
     }
 
     public function getTypeId(): int
     {
-        return (int)$this->getData(self::fields_type_id) ?: 0;
+        return (int)$this->getData(self::schema_fields_type_id) ?: 0;
     }
 
     public function getModelClass(): string
     {
-        return $this->getData(self::fields_model_class) ?: '';
+        return $this->getData(self::schema_fields_model_class) ?: '';
     }
 
     public function setModelClass(string $model_class): static
     {
-        return $this->setData(self::fields_model_class, $model_class);
+        return $this->setData(self::schema_fields_model_class, $model_class);
     }
 
     public function getDefaultValue()
     {
-        return $this->getData(self::fields_default_value) ?: '';
+        return $this->getData(self::schema_fields_default_value) ?: '';
     }
 
     public function setDefaultValue(string $default_value): static
     {
-        return $this->setData(self::fields_default_value, $default_value);
+        return $this->setData(self::schema_fields_default_value, $default_value);
     }
 
     public function setTypeId(int $type_id): static
     {
-        return $this->setData(self::fields_type_id, $type_id);
+        return $this->setData(self::schema_fields_type_id, $type_id);
     }
 
 
     public function getName(): string
     {
-        return $this->getData(self::fields_name) ?: '';
+        return $this->getData(self::schema_fields_name) ?: '';
     }
 
     public function setName(string $name): static
     {
-        return $this->setData(self::fields_name, $name);
+        return $this->setData(self::schema_fields_name, $name);
     }
 
     public function hasOption(bool|null $has_option = null): bool|static
     {
         if (is_bool($has_option)) {
-            return $this->setData(self::fields_data_has_option, $has_option);
+            return $this->setData(self::schema_fields_data_has_option, $has_option);
         }
-        return (bool)$this->getData(self::fields_data_has_option);
+        return (bool)$this->getData(self::schema_fields_data_has_option);
     }
 
     public function getOptions(): array
@@ -195,7 +189,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
             return $this->getData('options');
         }
         $this->setData('options', ObjectManager::getInstance(Option::class)->reset()
-            ->where(self::fields_ID, $this->getId())
+            ->where(self::schema_fields_ID, $this->getId())
             ->select()
             ->fetchArray());
         return $this->getData('options');
@@ -210,7 +204,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
         $values = $this->getValue();
         if(is_string($values)){
              foreach ($options as $op_key => $option) {
-                if ($option[Option::fields_option_id] == $values) {
+                if ($option[Option::schema_fields_option_id] == $values) {
                     $option['selected'] = 1;
                     $options[$op_key] = $option;
                 } else {
@@ -225,7 +219,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
         }elseif(is_array($values)){
             foreach ($values as $value) {
                 foreach ($options as $op_key => $option) {
-                    if ($option[Option::fields_option_id] == $value) {
+                    if ($option[Option::schema_fields_option_id] == $value) {
                         $option['selected'] = 1;
                         $options[$op_key] = $option;
                     } else {
@@ -257,14 +251,14 @@ class EavAttribute extends \Weline\Framework\Database\Model
         /**@var Option $option */
         foreach ($options as $option) {
             $insert_attribute_options[] = [
-                EavAttribute\Option::fields_option_id => $option->getId(),
-                EavAttribute\Option::fields_code => $option->getCode(),
-                EavAttribute\Option::fields_value => $option->getValue(),
-                EavAttribute\Option::fields_eav_entity_id => $option->getEavEntityId(),
-                EavAttribute\Option::fields_attribute_id => $option->getAttributeId(),
-                EavAttribute\Option::fields_swatch_image => $option->getSwatchImage(),
-                EavAttribute\Option::fields_swatch_color => $option->getSwatchColor(),
-                EavAttribute\Option::fields_swatch_text => $option->getSwatchText(),
+                EavAttribute\Option::schema_fields_option_id => $option->getId(),
+                EavAttribute\Option::schema_fields_code => $option->getCode(),
+                EavAttribute\Option::schema_fields_value => $option->getValue(),
+                EavAttribute\Option::schema_fields_eav_entity_id => $option->getEavEntityId(),
+                EavAttribute\Option::schema_fields_attribute_id => $option->getAttributeId(),
+                EavAttribute\Option::schema_fields_swatch_image => $option->getSwatchImage(),
+                EavAttribute\Option::schema_fields_swatch_color => $option->getSwatchColor(),
+                EavAttribute\Option::schema_fields_swatch_text => $option->getSwatchText(),
             ];
         }
         /**@var EavAttribute\Option $optionModel */
@@ -282,17 +276,17 @@ class EavAttribute extends \Weline\Framework\Database\Model
     public function isSystem(bool|null $is_system = null): bool|static
     {
         if (is_bool($is_system)) {
-            return $this->setData(self::fields_is_system, $is_system);
+            return $this->setData(self::schema_fields_is_system, $is_system);
         }
-        return (bool)$this->getData(self::fields_is_system);
+        return (bool)$this->getData(self::schema_fields_is_system);
     }
 
     public function isEnable(bool|null $is_enable = null): bool|static
     {
         if (is_bool($is_enable)) {
-            return $this->setData(self::fields_basic_is_enable, $is_enable);
+            return $this->setData(self::schema_fields_basic_is_enable, $is_enable);
         }
-        return (bool)$this->getData(self::fields_basic_is_enable);
+        return (bool)$this->getData(self::schema_fields_basic_is_enable);
     }
 
     /**
@@ -304,9 +298,9 @@ class EavAttribute extends \Weline\Framework\Database\Model
     public function isFilterable(bool|null $is_filterable = null): bool|static
     {
         if (is_bool($is_filterable)) {
-            return $this->setData(self::fields_frontend_is_filterable, $is_filterable ? 1 : 0);
+            return $this->setData(self::schema_fields_frontend_is_filterable, $is_filterable ? 1 : 0);
         }
-        return (bool)$this->getData(self::fields_frontend_is_filterable);
+        return (bool)$this->getData(self::schema_fields_frontend_is_filterable);
     }
 
     /**
@@ -318,19 +312,19 @@ class EavAttribute extends \Weline\Framework\Database\Model
     public function isVisibleOnFront(bool|null $is_visible_on_front = null): bool|static
     {
         if (is_bool($is_visible_on_front)) {
-            return $this->setData(self::fields_frontend_is_visible, $is_visible_on_front ? 1 : 0);
+            return $this->setData(self::schema_fields_frontend_is_visible, $is_visible_on_front ? 1 : 0);
         }
-        return (bool)$this->getData(self::fields_frontend_is_visible);
+        return (bool)$this->getData(self::schema_fields_frontend_is_visible);
     }
 
     public function getMultipleValued(): bool
     {
-        return (bool)$this->getData(self::fields_data_is_multiple);
+        return (bool)$this->getData(self::schema_fields_data_is_multiple);
     }
 
     public function setMultipleValued(bool $is_multiple_valued = false): static
     {
-        return $this->setData(self::fields_data_is_multiple, $is_multiple_valued ? '1' : '0');
+        return $this->setData(self::schema_fields_data_is_multiple, $is_multiple_valued ? '1' : '0');
     }
 
     public function getValue(string|int|null $entity_id = null, bool $return_attribute = false)
@@ -353,9 +347,9 @@ class EavAttribute extends \Weline\Framework\Database\Model
         if ($entity_id) {
             $valueModel = $this->w_getValueModel();
             $valueModel
-                ->fields(Value::fields_value)
-                ->where(Value::fields_attribute_id, $this->getId())
-                ->where(Value::fields_entity_id, $entity_id);
+                ->fields(Value::schema_fields_value)
+                ->where(Value::schema_fields_attribute_id, $this->getId())
+                ->where(Value::schema_fields_entity_id, $entity_id);
 
             if ($this->getMultipleValued()) {
                 $values = $valueModel->select()->fetchArray();
@@ -412,8 +406,8 @@ class EavAttribute extends \Weline\Framework\Database\Model
             $valueModel->setAttribute($this);
             $attribute->clearQuery()
                 ->fields('main_table.code,main_table.eav_entity_id,main_table.name,main_table.type_id,v.value')
-                ->where($attribute::fields_eav_entity_id, $attribute->getEavEntityId())
-                ->where($attribute::fields_code, $attribute->getCode())
+                ->where($attribute::schema_fields_eav_entity_id, $attribute->getEavEntityId())
+                ->where($attribute::schema_fields_code, $attribute->getCode())
                 ->where('v.value', null, 'IS NOT NULL')
                 ->where('v.value', '', '!=');
             $attribute->joinModel(
@@ -611,41 +605,41 @@ class EavAttribute extends \Weline\Framework\Database\Model
     {
         /**@var \Weline\Eav\Model\EavAttribute\Option $optionModel */
         $optionModel = ObjectManager::getInstance(\Weline\Eav\Model\EavAttribute\Option::class);
-        return clone $optionModel->reset()->clearData()->where($optionModel::fields_attribute_id, $this->getId())
-            ->where($optionModel::fields_eav_entity_id, $this->getEavEntityId());
+        return clone $optionModel->reset()->clearData()->where($optionModel::schema_fields_attribute_id, $this->getId())
+            ->where($optionModel::schema_fields_eav_entity_id, $this->getEavEntityId());
     }
 
     public function getGroupId(): int
     {
-        return (int)$this->getData(self::fields_group_id);
+        return (int)$this->getData(self::schema_fields_group_id);
     }
 
     public function setGroupId(int $groupId): static
     {
-        $this->setData(self::fields_group_id, $groupId);
+        $this->setData(self::schema_fields_group_id, $groupId);
         return $this;
     }
 
     public function getSetId(): int
     {
-        return (int)$this->getData(self::fields_set_id);
+        return (int)$this->getData(self::schema_fields_set_id);
     }
 
     public function setSetId(int $setId): static
     {
-        $this->setData(self::fields_set_id, $setId);
+        $this->setData(self::schema_fields_set_id, $setId);
         return $this;
     }
 
     public function setEavEntityId(int $eav_entity_id): static
     {
-        $this->setData(self::fields_eav_entity_id, $eav_entity_id);
+        $this->setData(self::schema_fields_eav_entity_id, $eav_entity_id);
         return $this;
     }
 
     public function setAttributeId(int $attributeId): static
     {
-        $this->setData(self::fields_attribute_id, $attributeId);
+        $this->setData(self::schema_fields_attribute_id, $attributeId);
         return $this;
     }
 

@@ -25,11 +25,15 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class Set extends \Weline\Framework\Database\Model
 {
-    public const fields_ID = 'set_id';
-    public const fields_SET_ID = 'set_id';
-    public const fields_code = 'code';
-    public const fields_eav_entity_id = 'eav_entity_id';
-    public const fields_name = 'name';
+    public const schema_table = 'eav_attribute_set';
+    /** @var list<string> */
+    public const schema_primary_keys = ['set_id', 'eav_entity_id', 'code'];
+
+    public const schema_fields_ID = 'set_id';
+    public const schema_fields_SET_ID = 'set_id';
+    public const schema_fields_code = 'code';
+    public const schema_fields_eav_entity_id = 'eav_entity_id';
+    public const schema_fields_name = 'name';
 
     public array $_unit_primary_keys = ['set_id', 'eav_entity_id', 'code'];
     public array $_index_sort_keys = ['set_id', 'eav_entity_id', 'code'];
@@ -42,39 +46,39 @@ class Set extends \Weline\Framework\Database\Model
 
     function setCode(string $code): static
     {
-        return $this->setData(self::fields_code, $code);
+        return $this->setData(self::schema_fields_code, $code);
     }
 
     function getCode()
     {
-        return $this->getData(self::fields_code);
+        return $this->getData(self::schema_fields_code);
     }
 
     function setEntityId(int $eav_entity_id): Set
     {
-        return $this->setData(self::fields_eav_entity_id, $eav_entity_id);
+        return $this->setData(self::schema_fields_eav_entity_id, $eav_entity_id);
     }
 
     function getEavEntityId()
     {
-        return $this->getData(self::fields_eav_entity_id);
+        return $this->getData(self::schema_fields_eav_entity_id);
     }
 
     function getName()
     {
-        return $this->getData(self::fields_name);
+        return $this->getData(self::schema_fields_name);
     }
 
     function setName(string $name): Set
     {
-        return $this->setData(self::fields_name, $name);
+        return $this->setData(self::schema_fields_name, $name);
     }
 
     function hasAttributes(): bool
     {
         /**@var EavAttribute $attributeModel */
         $attributeModel = ObjectManager::getInstance(EavAttribute::class);
-        $set = $attributeModel->reset()->where(EavAttribute::fields_set_id, $this->getId())
+        $set = $attributeModel->reset()->where(EavAttribute::schema_fields_set_id, $this->getId())
             ->find()->fetch();
         if ($set->getId()) {
             return true;
@@ -86,7 +90,7 @@ class Set extends \Weline\Framework\Database\Model
     {
         /**@var Group $group */
         $group = ObjectManager::getInstance(Group::class);
-        $group = $group->reset()->where(EavAttribute::fields_set_id, $this->getId())
+        $group = $group->reset()->where(EavAttribute::schema_fields_set_id, $this->getId())
             ->find()->fetch();
         if ($group->getId()) {
             return true;
@@ -100,14 +104,14 @@ class Set extends \Weline\Framework\Database\Model
         // 将使用此属性集的属性集ID设置为0
         /**@var EavAttribute $attribute */
         $attribute = ObjectManager::getInstance(EavAttribute::class);
-        $attribute->where(EavAttribute::fields_set_id, $this->getId())
-            ->update(EavAttribute::fields_set_id, 0)
+        $attribute->where(EavAttribute::schema_fields_set_id, $this->getId())
+            ->update(EavAttribute::schema_fields_set_id, 0)
             ->fetch();
         // 将使用此属性集的属性组ID设置为0
         /**@var Group $group */
         $group = ObjectManager::getInstance(Group::class);
-        $group->where(Group::fields_set_id, $this->getId())
-            ->update(Group::fields_set_id, 0)
+        $group->where(Group::schema_fields_set_id, $this->getId())
+            ->update(Group::schema_fields_set_id, 0)
             ->fetch();
     }
 
@@ -124,7 +128,7 @@ class Set extends \Weline\Framework\Database\Model
     {
         /**@var EavAttribute $attrbiute */
         $attrbiute = ObjectManager::getInstance(EavAttribute::class);
-        $attrbiute->where(EavAttribute::fields_set_id, $this->getId());
+        $attrbiute->where(EavAttribute::schema_fields_set_id, $this->getId());
         return $attrbiute;
     }
 
@@ -141,7 +145,7 @@ class Set extends \Weline\Framework\Database\Model
     {
         /**@var Group $group */
         $group = ObjectManager::getInstance(Group::class);
-        $group->where(Group::fields_set_id, $this->getId());
+        $group->where(Group::schema_fields_set_id, $this->getId());
         return $group;
     }
 
