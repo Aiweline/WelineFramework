@@ -99,10 +99,10 @@ class Editor extends BackendController
             }
 
             // 检查 handle 是否已存在（排除当前页面）
-            if (!$page->getId() || $page->getData(Page::fields_HANDLE) !== $handle) {
+            if (!$page->getId() || $page->getData(Page::schema_fields_HANDLE) !== $handle) {
                 $existing = clone $this->pageModel;
                 $existing->clear()
-                    ->where(Page::fields_HANDLE, $handle)
+                    ->where(Page::schema_fields_HANDLE, $handle)
                     ->find()
                     ->fetch();
                 
@@ -124,17 +124,17 @@ class Editor extends BackendController
             }
 
             // 保存页面
-            $page->setData(Page::fields_TITLE, $title)
-                 ->setData(Page::fields_HANDLE, $handle)
-                 ->setData(Page::fields_CONTENT, $content)
+            $page->setData(Page::schema_fields_TITLE, $title)
+                 ->setData(Page::schema_fields_HANDLE, $handle)
+                 ->setData(Page::schema_fields_CONTENT, $content)
                  ->setMetaData($metaDataArray)
-                 ->setData(Page::fields_STATUS, $status);
+                 ->setData(Page::schema_fields_STATUS, $status);
 
             if ($page->getId()) {
-                $page->setData(Page::fields_UPDATE_TIME, date('Y-m-d H:i:s'));
+                $page->setData(Page::schema_fields_UPDATE_TIME, date('Y-m-d H:i:s'));
             } else {
-                $page->setData(Page::fields_CREATE_TIME, date('Y-m-d H:i:s'));
-                $page->setData(Page::fields_UPDATE_TIME, date('Y-m-d H:i:s'));
+                $page->setData(Page::schema_fields_CREATE_TIME, date('Y-m-d H:i:s'));
+                $page->setData(Page::schema_fields_UPDATE_TIME, date('Y-m-d H:i:s'));
             }
 
             $page->save();
@@ -182,11 +182,11 @@ class Editor extends BackendController
                 'success' => true,
                 'data' => [
                     'page_id' => $page->getId(),
-                    'title' => $page->getData(Page::fields_TITLE),
-                    'handle' => $page->getData(Page::fields_HANDLE),
-                    'content' => $page->getData(Page::fields_CONTENT),
+                    'title' => $page->getData(Page::schema_fields_TITLE),
+                    'handle' => $page->getData(Page::schema_fields_HANDLE),
+                    'content' => $page->getData(Page::schema_fields_CONTENT),
                     'meta_data' => $page->getMetaData(),
-                    'status' => $page->getData(Page::fields_STATUS)
+                    'status' => $page->getData(Page::schema_fields_STATUS)
                 ]
             ]);
         } catch (\Exception $e) {
