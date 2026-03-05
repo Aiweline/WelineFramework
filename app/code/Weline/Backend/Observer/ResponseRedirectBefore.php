@@ -283,13 +283,25 @@ class ResponseRedirectBefore implements ObserverInterface
     }
 
     /**
-     * 使用当前请求的 scheme+host 生成后台登录 URL，保证与 Cookie 同源，避免 admin ↔ login 循环重定向。
+     * 使用当前请求的 scheme+host 及后台路由前缀生成登录 URL（如 .../admin_xxx/CNY/zh_Hans_CN/admin/login）。
      */
     protected function getBackendLoginUrlSameOrigin(): string
     {
-        $pathPart = $this->request->getUrlBuilder()->getBackendUrlPath('admin/login');
+        $pathPart = $this->getBackendPathWithPrefix('admin/login');
         $scheme = $this->request->isSecure() ? 'https' : 'http';
         $host = $this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost';
         return $scheme . '://' . $host . $pathPart;
+    }
+
+    /**
+     * 获取带后台路由前缀的路径，避免重定向到缺少 admin_xxx 的地址。
+     */
+    protected function getBackendPathWithPrefix(string $path): string
+    {
+        $areaRoute = $this->request->getServer('WELINE_AREA_ROUTE') ?? '';
+        if ($areaRoute !== '') {
+            return '/' . \trim($areaRoute, '/') . '/' . \ltrim($path, '/');
+        }
+        return $this->request->getUrlBuilder()->getBackendUrlPath($path);
     }
 }
