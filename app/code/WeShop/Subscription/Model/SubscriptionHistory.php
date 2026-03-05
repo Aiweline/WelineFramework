@@ -1,31 +1,36 @@
 <?php
-
 declare(strict_types=1);
-
 namespace WeShop\Subscription\Model;
-
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 /**
  * @DESC | 订阅历史记录模型
  */
-class SubscriptionHistory extends \Weline\Framework\Database\Model
+#[Table(comment: 'WeShop订阅历史表')]
+#[Index(name: 'idx_subscription_id', columns: ['subscription_id'], type: 'KEY', comment: '订阅ID索引')]
+#[Index(name: 'idx_action', columns: ['action'], type: 'KEY', comment: '操作类型索引')]
+class SubscriptionHistory extends Model
 {
-    public const table = 'weshop_subscription_history';
-    public const primary_key = 'history_id';
-
-    public const fields_ID = 'history_id';
-    public const fields_SUBSCRIPTION_ID = 'subscription_id';
-    public const fields_ORDER_ID = 'order_id';
-    public const fields_ACTION = 'action';
-    public const fields_AMOUNT = 'amount';
-    public const fields_NOTE = 'note';
-    public const fields_OPERATOR = 'operator';
-    public const fields_CREATED_AT = 'created_at';
-
-    // 操作类型常量
+    public const schema_table = 'weshop_subscription_history';
+    public const schema_primary_key = 'history_id';
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '历史ID')]
+    public const schema_fields_ID = 'history_id';
+    #[Col(type: 'int', nullable: false, comment: '订阅ID')]
+    public const schema_fields_SUBSCRIPTION_ID = 'subscription_id';
+    #[Col(type: 'int', nullable: true, default: 0, comment: '关联订单ID')]
+    public const schema_fields_ORDER_ID = 'order_id';
+    #[Col(type: 'varchar', length: 30, nullable: false, comment: '操作类型')]
+    public const schema_fields_ACTION = 'action';
+    #[Col(type: 'decimal', length: '10,2', nullable: true, default: '0.00', comment: '金额')]
+    public const schema_fields_AMOUNT = 'amount';
+    #[Col(type: 'varchar', length: 500, nullable: true, comment: '备注')]
+    public const schema_fields_NOTE = 'note';
+    #[Col(type: 'varchar', length: 100, nullable: true, comment: '操作者')]
+    public const schema_fields_OPERATOR = 'operator';
+    #[Col(type: 'datetime', nullable: false, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
     public const ACTION_CREATED = 'created';
     public const ACTION_RENEWED = 'renewed';
     public const ACTION_CANCELLED = 'cancelled';
@@ -37,53 +42,10 @@ class SubscriptionHistory extends \Weline\Framework\Database\Model
     public const ACTION_PAYMENT_FAILED = 'payment_failed';
     public const ACTION_TRIAL_STARTED = 'trial_started';
     public const ACTION_TRIAL_ENDED = 'trial_ended';
-
     public string $indexer = 'subscription_history_indexer';
     public array $_unit_primary_keys = ['history_id'];
     public array $_index_sort_keys = ['subscription_id', 'action', 'created_at'];
 
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('WeShop订阅历史表')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'auto_increment primary key', '历史ID')
-                ->addColumn(self::fields_SUBSCRIPTION_ID, TableInterface::column_type_INTEGER, 0, 'not null', '订阅ID')
-                ->addColumn(self::fields_ORDER_ID, TableInterface::column_type_INTEGER, 0, 'default 0', '关联订单ID')
-                ->addColumn(self::fields_ACTION, TableInterface::column_type_VARCHAR, 30, 'not null', '操作类型')
-                ->addColumn(self::fields_AMOUNT, TableInterface::column_type_DECIMAL, '10,2', 'default 0.00', '金额')
-                ->addColumn(self::fields_NOTE, TableInterface::column_type_VARCHAR, 500, '', '备注')
-                ->addColumn(self::fields_OPERATOR, TableInterface::column_type_VARCHAR, 100, '', '操作者')
-                ->addColumn(self::fields_CREATED_AT, TableInterface::column_type_DATETIME, 0, 'not null default CURRENT_TIMESTAMP', '创建时间')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_subscription_id', self::fields_SUBSCRIPTION_ID, '订阅ID索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_action', self::fields_ACTION, '操作类型索引')
-                ->create();
-        }
-    }
-
-    /**
-     * 获取操作类型选项
-     *
-     * @return array
-     */
     public static function getActionOptions(): array
     {
         return [
@@ -100,16 +62,10 @@ class SubscriptionHistory extends \Weline\Framework\Database\Model
             self::ACTION_TRIAL_ENDED    => __('试用结束'),
         ];
     }
-
-    /**
-     * 获取操作显示文本
-     *
-     * @return string
-     */
     public function getActionLabel(): string
     {
         $options = self::getActionOptions();
-        $action = $this->getData(self::fields_ACTION);
+        $action = $this->getData(self::schema_fields_ACTION);
         return $options[$action] ?? $action;
     }
 }

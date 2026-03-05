@@ -134,16 +134,11 @@ $billing_cycles = $billing_cycles ?? [];
                 cancelButtonText: '<?= __('取消') ?>'
             }).then(function(result) {
                 if (result.isConfirmed) {
-                    fetch(self.deleteUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        body: 'id=' + id
-                    })
-                    .then(function(r) { return r.json(); })
-                    .then(function(data) {
+                    var url = self.deleteUrl;
+                    var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' }, body: 'id=' + id };
+                    window.Weline.Api.request(url, opts)
+                    .then(function(res) {
+                        var data = (res && res.data) !== undefined ? res.data : res;
                         if (data.code === 200) {
                             location.reload();
                         } else {
