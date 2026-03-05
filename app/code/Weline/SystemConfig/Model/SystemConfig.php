@@ -1,42 +1,41 @@
 <?php
-
 declare(strict_types=1);
-
 /*
  * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
  * 邮箱：aiweline@qq.com
  * 网址：aiweline.com
  * 论坛：https://bbs.aiweline.com
  */
-
 namespace Weline\SystemConfig\Model;
-
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+#[Table(comment: '系统配置表')]
+#[Index(name: 'idx_key_module_area', columns: ['key', 'module', 'area'])]
+#[Index(name: 'idx_module', columns: ['module'])]
 class SystemConfig extends \Weline\Framework\Database\Model
 {
-    public const primary_key = 'key';
-
-    public const fields_KEY = 'key';
-    public const fields_VALUE = 'v';
-    public const fields_MODULE = 'module';
-    public const fields_AREA = 'area';
-
+    public const schema_table = 'system_config';
+    /** @var list<string> 复合主键 */
+    public const schema_primary_keys = ['key', 'module', 'area'];
+    #[Col('varchar', 120, nullable: false, comment: '键')]
+    public const schema_fields_KEY = 'key';
+    #[Col('text', comment: '值')]
+    public const schema_fields_VALUE = 'v';
+    #[Col('varchar', 120, nullable: false, comment: '模块')]
+    public const schema_fields_MODULE = 'module';
+    #[Col('varchar', 120, nullable: false, default: 'frontend', comment: '区域')]
+    public const schema_fields_AREA = 'area';
     public const area_BACKEND = 'backend';
     public const area_FRONTEND = 'frontend';
-
     public array $_index_sort_keys = ['key', 'module', 'area'];
     public array $_unit_primary_keys = ['key', 'module', 'area'];
-
     static $configs = [];
-
     public function __init()
     {
         parent::__init();
@@ -44,7 +43,6 @@ class SystemConfig extends \Weline\Framework\Database\Model
             $this->_cache = w_cache('system_config');
         }
     }
-
     public function getConfigByModule(string $module, string $area = self::area_FRONTEND): array|null
     {
         if (isset(self::$configs[$area][$module])) {
@@ -53,7 +51,6 @@ class SystemConfig extends \Weline\Framework\Database\Model
         self::$configs[$area][$module] = $this->clear()->reset()->where([['area', $area], ['module', $module]])->select()->fetchArray();
         return self::$configs[$area][$module];
     }
-
     /**
      * @DESC          # 获取配置
      *
@@ -99,7 +96,6 @@ class SystemConfig extends \Weline\Framework\Database\Model
             }
         }
         $this->_cache->set($cache_key, $result);
-
         // 派发配置读取事件，允许其他模块拦截或修改返回值
         $eventData = [
             'key' => $key,
@@ -110,11 +106,9 @@ class SystemConfig extends \Weline\Framework\Database\Model
         /** @var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
         $eventsManager->dispatch('Weline_SystemConfig::domain::config_get', $eventData);
-
         // 观察者可能修改了 value
         return $eventData['value'] ?? $result;
     }
-
     /**
      * @DESC          # 设置配置
      *
@@ -136,7 +130,6 @@ class SystemConfig extends \Weline\Framework\Database\Model
         try {
             /** @var EventsManager $eventsManager */
             $eventsManager = ObjectManager::getInstance(EventsManager::class);
-
             // 派发配置设置前事件，允许其他模块验证或修改配置值
             $beforeEventData = [
                 'key' => $key,
@@ -145,10 +138,8 @@ class SystemConfig extends \Weline\Framework\Database\Model
                 'area' => $area,
             ];
             $eventsManager->dispatch('Weline_SystemConfig::domain::config_set_before', $beforeEventData);
-
             // 观察者可能修改了 value
             $value = (string) ($beforeEventData['value'] ?? $value);
-
             // 使用新模型实例，避免复用旧实例可能残留的查询状态
             /** @var SystemConfig $config */
             $config = ObjectManager::getInstance(SystemConfig::class);
@@ -156,33 +147,32 @@ class SystemConfig extends \Weline\Framework\Database\Model
             // 先查询是否存在（不使用事务，避免 ON CONFLICT 需要 UNIQUE 约束的问题）
             $existing = $config->clear()->reset()
                 ->where([
-                    [self::fields_KEY, $key],
-                    [self::fields_MODULE, $module],
-                    [self::fields_AREA, $area]
+                    [self::schema_fields_KEY, $key],
+                    [self::schema_fields_MODULE, $module],
+                    [self::schema_fields_AREA, $area]
                 ])
                 ->find()
                 ->fetch();
-
-            $oldValue = $existing[self::fields_VALUE] ?? null;
+            $oldValue = $existing[self::schema_fields_VALUE] ?? null;
             
-            if ($existing && isset($existing[self::fields_KEY])) {
+            if ($existing && isset($existing[self::schema_fields_KEY])) {
                 // 存在则更新
                 $config->clear()->reset()
                     ->where([
-                        [self::fields_KEY, $key],
-                        [self::fields_MODULE, $module],
-                        [self::fields_AREA, $area]
+                        [self::schema_fields_KEY, $key],
+                        [self::schema_fields_MODULE, $module],
+                        [self::schema_fields_AREA, $area]
                     ])
-                    ->update([self::fields_VALUE => $value])
+                    ->update([self::schema_fields_VALUE => $value])
                     ->fetch();
             } else {
                 // 不存在则插入（不使用 ON CONFLICT）
                 $config->clear()->reset()
                     ->insert([
-                        self::fields_KEY => $key,
-                        self::fields_VALUE => $value,
-                        self::fields_MODULE => $module,
-                        self::fields_AREA => $area
+                        self::schema_fields_KEY => $key,
+                        self::schema_fields_VALUE => $value,
+                        self::schema_fields_MODULE => $module,
+                        self::schema_fields_AREA => $area
                     ], [], '', true)  // ignore_primary_key=true 避免生成 ON CONFLICT
                     ->fetch();
             }
@@ -190,7 +180,6 @@ class SystemConfig extends \Weline\Framework\Database\Model
             // 设置配置缓存
             $cache_key = 'system_config_cache_' . $key . '_' . $area . '_' . $module;
             $this->_cache->set($cache_key, $value);
-
             // 派发配置设置后事件，通知其他模块配置已变更
             $afterEventData = [
                 'key' => $key,
@@ -200,51 +189,9 @@ class SystemConfig extends \Weline\Framework\Database\Model
                 'old_value' => $oldValue,
             ];
             $eventsManager->dispatch('Weline_SystemConfig::domain::config_set_after', $afterEventData);
-
             return true;
         } catch (\Exception $e) {
             throw new Exception($e->getMessage());
-        }
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-//        $setup->dropTable();
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->getPrinting()->printing('安装', $setup->getTable());
-            $setup->createTable('系统配置表')
-                ->addColumn(self::fields_KEY, TableInterface::column_type_VARCHAR, 120, 'not null', '键')
-                ->addColumn(self::fields_VALUE, TableInterface::column_type_TEXT, 0, '', '值')
-                ->addColumn(self::fields_MODULE, TableInterface::column_type_VARCHAR, 120, 'not null', '模块')
-                ->addColumn(self::fields_AREA, TableInterface::column_type_VARCHAR, 120, "NOT NULL DEFAULT 'frontend'", '区域：backend/frontend')
-                ->addIndex(\Weline\Framework\Database\Connection\Api\Sql\TableInterface::index_type_KEY,
-                    'idx_key_module_area',
-                    [self::fields_KEY, self::fields_MODULE, self::fields_AREA],
-                    '键名索引')
-                ->addIndex(\Weline\Framework\Database\Connection\Api\Sql\TableInterface::index_type_KEY,
-                    'idx_module',
-                    self::fields_MODULE,
-                    '模型名索引'
-                )
-                ->create();
         }
     }
 }
