@@ -26,6 +26,8 @@ class ApiUser extends Model
 {
     public const fields_ID = 'user_id';
     public string $table = 'm_api_user';
+    /** 主键列名，避免 Schema 解析时把父类 id 一并建表导致 PostgreSQL 报 multiple primary keys */
+    public const schema_primary_key = 'user_id';
 
     #[Col(type: 'integer', length: 11, nullable: false, primaryKey: true, autoIncrement: true, comment: '用户ID')]
     public const schema_fields_ID = 'user_id';
