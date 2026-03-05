@@ -53,13 +53,6 @@
 "获取部件预览 HTML","获取部件预览 HTML"
 部件配置,部件配置
 "获取已注册的 ParamType 类型名列表","获取已注册的 ParamType 类型名列表"
-部件多语言翻译表,部件多语言翻译表
-部件唯一标识符（格式：module_type_name）,部件唯一标识符（格式：module_type_name）
-语言代码,语言代码
-部件名称（翻译）,部件名称（翻译）
-部件描述（翻译）,部件描述（翻译）
-创建时间,"Created At"
-更新时间,"Updated At"
 删除,Delete
 基本信息,基本信息
 样式设置,样式设置
@@ -150,6 +143,13 @@ FAQ部件,FAQ部件
 版本,Version
 操作,Actions
 详情,Details
+部件多语言翻译表,部件多语言翻译表
+部件唯一标识符（格式：module_type_name）,部件唯一标识符（格式：module_type_name）
+语言代码,语言代码
+部件名称（翻译）,部件名称（翻译）
+部件描述（翻译）,部件描述（翻译）
+创建时间,"Created At"
+更新时间,"Updated At"
 编辑代码,"Edit Code"
 取消,Cancel
 部件详情,"Widget Details"
