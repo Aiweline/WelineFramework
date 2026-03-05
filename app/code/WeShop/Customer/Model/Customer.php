@@ -4,76 +4,50 @@ declare(strict_types=1);
 
 namespace WeShop\Customer\Model;
 
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Session\Auth\AuthenticableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
 /**
  * 客户模型（WeShop扩展）
  */
-class Customer extends \Weline\Framework\Database\Model implements AuthenticableInterface
+#[Table(comment: 'WeShop客户表')]
+#[Index(name: 'idx_user_id', columns: ['user_id'], type: 'UNIQUE', comment: '用户ID唯一索引')]
+#[Index(name: 'idx_email', columns: ['email'], comment: '邮箱索引')]
+class Customer extends Model implements AuthenticableInterface
 {
-    public const table = 'weshop_customer';
-    public const primary_key = 'customer_id';
+    public const schema_table = 'weshop_customer';
+    public const schema_primary_key = 'customer_id';
     public string $indexer = 'customer_indexer';
-    
-    public const fields_ID = 'customer_id';
-    public const fields_USER_ID = 'user_id';
-    public const fields_FIRST_NAME = 'first_name';
-    public const fields_LAST_NAME = 'last_name';
-    public const fields_EMAIL = 'email';
-    public const fields_PHONE = 'phone';
-    public const fields_GENDER = 'gender';
-    public const fields_BIRTHDAY = 'birthday';
-    public const fields_AVATAR = 'avatar';
-    public const fields_STATUS = 'status';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
-    
+
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '客户ID')]
+    public const schema_fields_ID = 'customer_id';
+    #[Col(type: 'int', nullable: false, comment: '用户ID')]
+    public const schema_fields_USER_ID = 'user_id';
+    #[Col(type: 'varchar', length: 50, nullable: true, comment: '名')]
+    public const schema_fields_FIRST_NAME = 'first_name';
+    #[Col(type: 'varchar', length: 50, nullable: true, comment: '姓')]
+    public const schema_fields_LAST_NAME = 'last_name';
+    #[Col(type: 'varchar', length: 100, nullable: true, comment: '邮箱')]
+    public const schema_fields_EMAIL = 'email';
+    #[Col(type: 'varchar', length: 20, nullable: true, comment: '电话')]
+    public const schema_fields_PHONE = 'phone';
+    #[Col(type: 'varchar', length: 10, nullable: true, comment: '性别')]
+    public const schema_fields_GENDER = 'gender';
+    #[Col(type: 'date', nullable: true, comment: '生日')]
+    public const schema_fields_BIRTHDAY = 'birthday';
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: '头像')]
+    public const schema_fields_AVATAR = 'avatar';
+    #[Col(type: 'varchar', length: 20, nullable: true, default: 'active', comment: '状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col(type: 'datetime', nullable: false, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col(type: 'datetime', nullable: false, comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
+
     public array $_unit_primary_keys = ['customer_id'];
     public array $_index_sort_keys = ['user_id', 'email', 'status'];
-    
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('WeShop客户表')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'auto_increment primary key', '客户ID')
-                ->addColumn(self::fields_USER_ID, TableInterface::column_type_INTEGER, 0, 'not null unique', '用户ID')
-                ->addColumn(self::fields_FIRST_NAME, TableInterface::column_type_VARCHAR, 50, '', '名')
-                ->addColumn(self::fields_LAST_NAME, TableInterface::column_type_VARCHAR, 50, '', '姓')
-                ->addColumn(self::fields_EMAIL, TableInterface::column_type_VARCHAR, 100, '', '邮箱')
-                ->addColumn(self::fields_PHONE, TableInterface::column_type_VARCHAR, 20, '', '电话')
-                ->addColumn(self::fields_GENDER, TableInterface::column_type_VARCHAR, 10, '', '性别')
-                ->addColumn(self::fields_BIRTHDAY, TableInterface::column_type_DATE, 0, '', '生日')
-                ->addColumn(self::fields_AVATAR, TableInterface::column_type_VARCHAR, 255, '', '头像')
-                ->addColumn(self::fields_STATUS, TableInterface::column_type_VARCHAR, 20, "default 'active'", '状态')
-                ->addColumn(self::fields_CREATED_AT, TableInterface::column_type_DATETIME, 0, 'not null default CURRENT_TIMESTAMP', '创建时间')
-                ->addColumn(self::fields_UPDATED_AT, TableInterface::column_type_DATETIME, 0, 'not null default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP', '更新时间')
-                ->addIndex(TableInterface::index_type_UNIQUE, 'idx_user_id', self::fields_USER_ID, '用户ID唯一索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_email', self::fields_EMAIL, '邮箱索引')
-                ->create();
-        }
-    }
 
     // ==================== AuthenticableInterface 实现 ====================
 
@@ -90,7 +64,7 @@ class Customer extends \Weline\Framework\Database\Model implements Authenticable
      */
     public function getAuthUsername(): string
     {
-        return (string) ($this->getData(self::fields_EMAIL) ?? '');
+        return (string) ($this->getData(self::schema_fields_EMAIL) ?? '');
     }
 
     /**
@@ -116,9 +90,9 @@ class Customer extends \Weline\Framework\Database\Model implements Authenticable
      */
     public function getFullName(): string
     {
-        $firstName = (string) ($this->getData(self::fields_FIRST_NAME) ?? '');
-        $lastName = (string) ($this->getData(self::fields_LAST_NAME) ?? '');
-        
+        $firstName = (string) ($this->getData(self::schema_fields_FIRST_NAME) ?? '');
+        $lastName = (string) ($this->getData(self::schema_fields_LAST_NAME) ?? '');
+
         return \trim($firstName . ' ' . $lastName);
     }
 
@@ -127,6 +101,6 @@ class Customer extends \Weline\Framework\Database\Model implements Authenticable
      */
     public function getIsEnabled(): bool
     {
-        return $this->getData(self::fields_STATUS) === 'active';
+        return $this->getData(self::schema_fields_STATUS) === 'active';
     }
 }
