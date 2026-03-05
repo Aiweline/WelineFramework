@@ -1440,6 +1440,37 @@ function handleRequest(
         // 如果以 "HTTP/" 开头，说明已经是完整的 HTTP 响应，直接返回
         if (\is_string($result) && \str_starts_with($result, 'HTTP/')) {
             WlsLogger::info_("返回已格式化的 HTTP 响应（可能是重定向）");
+            // 合并 Runtime 保存的 Cookie（登录 302 等必须随响应发送 Set-Cookie，与 worker_ssl 一致）
+            $pendingCookies = $runtime->consumePendingCookies();
+            if (!empty($pendingCookies)) {
+                $headerEnd = \strpos($result, "\r\n\r\n");
+                if ($headerEnd !== false) {
+                    $cookieHeaders = '';
+                    foreach ($pendingCookies as $cookie) {
+                        $parts = [\urlencode($cookie['name']) . '=' . \urlencode($cookie['value'])];
+                        if (isset($cookie['expire']) && $cookie['expire'] !== 0) {
+                            $parts[] = 'Expires=' . \gmdate('D, d M Y H:i:s T', $cookie['expire']);
+                        }
+                        if (!empty($cookie['path'])) {
+                            $parts[] = 'Path=' . $cookie['path'];
+                        }
+                        if (!empty($cookie['domain'])) {
+                            $parts[] = 'Domain=' . $cookie['domain'];
+                        }
+                        if (!empty($cookie['secure'])) {
+                            $parts[] = 'Secure';
+                        }
+                        if (!empty($cookie['httpOnly'])) {
+                            $parts[] = 'HttpOnly';
+                        }
+                        if (!empty($cookie['sameSite'])) {
+                            $parts[] = 'SameSite=' . $cookie['sameSite'];
+                        }
+                        $cookieHeaders .= 'Set-Cookie: ' . \implode('; ', $parts) . "\r\n";
+                    }
+                    $result = \substr($result, 0, $headerEnd) . "\r\n" . $cookieHeaders . \substr($result, $headerEnd);
+                }
+            }
             $sni = \Weline\Server\Service\RouteHintService::extractSniFromRawRequest($rawRequest);
             $result = \Weline\Server\Service\RouteHintService::addHintToResponse($result, $sni);
             // HEAD 请求只返回头，不返回 body
