@@ -76,29 +76,29 @@ class Mapping extends BackendController
             $mappingModel->clear();
             
             if (!empty($region)) {
-                $mappingModel->where(SearchEngineMapping::fields_REGION, '%' . $region . '%', 'like');
+                $mappingModel->where(SearchEngineMapping::schema_fields_REGION, '%' . $region . '%', 'like');
             }
             
             if (!empty($language)) {
-                $mappingModel->where(SearchEngineMapping::fields_LANGUAGE, '%' . $language . '%', 'like');
+                $mappingModel->where(SearchEngineMapping::schema_fields_LANGUAGE, '%' . $language . '%', 'like');
             }
             
             if ($isActive !== '') {
-                $mappingModel->where(SearchEngineMapping::fields_IS_ACTIVE, (int)$isActive);
+                $mappingModel->where(SearchEngineMapping::schema_fields_IS_ACTIVE, (int)$isActive);
             }
             
             if (!empty($search)) {
                 $mappingModel->where(
-                    '(' . SearchEngineMapping::fields_REGION . ' LIKE ? OR ' . 
-                    SearchEngineMapping::fields_LANGUAGE . ' LIKE ?)',
+                    '(' . SearchEngineMapping::schema_fields_REGION . ' LIKE ? OR ' . 
+                    SearchEngineMapping::schema_fields_LANGUAGE . ' LIKE ?)',
                     ['%' . $search . '%', '%' . $search . '%']
                 );
             }
             
             // 分页查询
-            $mappingModel->order(SearchEngineMapping::fields_SORT_ORDER, 'ASC')
-                ->order(SearchEngineMapping::fields_REGION, 'ASC')
-                ->order(SearchEngineMapping::fields_LANGUAGE, 'ASC')
+            $mappingModel->order(SearchEngineMapping::schema_fields_SORT_ORDER, 'ASC')
+                ->order(SearchEngineMapping::schema_fields_REGION, 'ASC')
+                ->order(SearchEngineMapping::schema_fields_LANGUAGE, 'ASC')
                 ->pagination($page, $pageSize)
                 ->select()
                 ->fetch();
@@ -110,14 +110,14 @@ class Mapping extends BackendController
             $data = [];
             foreach ($items as $item) {
                 $data[] = [
-                    'mapping_id' => $item->getData(SearchEngineMapping::fields_ID),
-                    'region' => $item->getData(SearchEngineMapping::fields_REGION),
-                    'language' => $item->getData(SearchEngineMapping::fields_LANGUAGE),
+                    'mapping_id' => $item->getData(SearchEngineMapping::schema_fields_ID),
+                    'region' => $item->getData(SearchEngineMapping::schema_fields_REGION),
+                    'language' => $item->getData(SearchEngineMapping::schema_fields_LANGUAGE),
                     'search_engines' => $item->getSearchEnginesArray(),
-                    'is_active' => (bool)$item->getData(SearchEngineMapping::fields_IS_ACTIVE),
-                    'sort_order' => (int)$item->getData(SearchEngineMapping::fields_SORT_ORDER),
-                    'created_at' => $item->getData(SearchEngineMapping::fields_CREATED_AT),
-                    'updated_at' => $item->getData(SearchEngineMapping::fields_UPDATED_AT),
+                    'is_active' => (bool)$item->getData(SearchEngineMapping::schema_fields_IS_ACTIVE),
+                    'sort_order' => (int)$item->getData(SearchEngineMapping::schema_fields_SORT_ORDER),
+                    'created_at' => $item->getData(SearchEngineMapping::schema_fields_CREATED_AT),
+                    'updated_at' => $item->getData(SearchEngineMapping::schema_fields_UPDATED_AT),
                 ];
             }
             
@@ -200,8 +200,8 @@ class Mapping extends BackendController
             } else {
                 // 检查是否已存在相同的地区-语言组合
                 $existing = $mappingModel->clear()
-                    ->where(SearchEngineMapping::fields_REGION, $region)
-                    ->where(SearchEngineMapping::fields_LANGUAGE, $language)
+                    ->where(SearchEngineMapping::schema_fields_REGION, $region)
+                    ->where(SearchEngineMapping::schema_fields_LANGUAGE, $language)
                     ->find()
                     ->fetch();
                 
@@ -214,11 +214,11 @@ class Mapping extends BackendController
             }
             
             // 设置数据
-            $mappingModel->setData(SearchEngineMapping::fields_REGION, $region)
-                ->setData(SearchEngineMapping::fields_LANGUAGE, $language)
+            $mappingModel->setData(SearchEngineMapping::schema_fields_REGION, $region)
+                ->setData(SearchEngineMapping::schema_fields_LANGUAGE, $language)
                 ->setSearchEnginesArray($searchEngines)
-                ->setData(SearchEngineMapping::fields_IS_ACTIVE, $isActive)
-                ->setData(SearchEngineMapping::fields_SORT_ORDER, $sortOrder);
+                ->setData(SearchEngineMapping::schema_fields_IS_ACTIVE, $isActive)
+                ->setData(SearchEngineMapping::schema_fields_SORT_ORDER, $sortOrder);
             
             // 验证
             if (!$mappingModel->validate()) {
@@ -343,12 +343,12 @@ class Mapping extends BackendController
             return $this->fetchJson([
                 'success' => true,
                 'data' => [
-                    'mapping_id' => $mappingModel->getData(SearchEngineMapping::fields_ID),
-                    'region' => $mappingModel->getData(SearchEngineMapping::fields_REGION),
-                    'language' => $mappingModel->getData(SearchEngineMapping::fields_LANGUAGE),
+                    'mapping_id' => $mappingModel->getData(SearchEngineMapping::schema_fields_ID),
+                    'region' => $mappingModel->getData(SearchEngineMapping::schema_fields_REGION),
+                    'language' => $mappingModel->getData(SearchEngineMapping::schema_fields_LANGUAGE),
                     'search_engines' => $mappingModel->getSearchEnginesArray(),
-                    'is_active' => (bool)$mappingModel->getData(SearchEngineMapping::fields_IS_ACTIVE),
-                    'sort_order' => (int)$mappingModel->getData(SearchEngineMapping::fields_SORT_ORDER),
+                    'is_active' => (bool)$mappingModel->getData(SearchEngineMapping::schema_fields_IS_ACTIVE),
+                    'sort_order' => (int)$mappingModel->getData(SearchEngineMapping::schema_fields_SORT_ORDER),
                 ],
             ]);
         } catch (\Throwable $e) {
@@ -399,10 +399,10 @@ class Mapping extends BackendController
                 ]);
             }
             
-            $currentStatus = (int)$mappingModel->getData(SearchEngineMapping::fields_IS_ACTIVE);
+            $currentStatus = (int)$mappingModel->getData(SearchEngineMapping::schema_fields_IS_ACTIVE);
             $newStatus = $currentStatus ? 0 : 1;
             
-            $mappingModel->setData(SearchEngineMapping::fields_IS_ACTIVE, $newStatus)
+            $mappingModel->setData(SearchEngineMapping::schema_fields_IS_ACTIVE, $newStatus)
                 ->save();
             
             return $this->fetchJson([
