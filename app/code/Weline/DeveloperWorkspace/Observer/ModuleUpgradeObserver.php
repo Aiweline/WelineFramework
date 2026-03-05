@@ -32,7 +32,7 @@ class ModuleUpgradeObserver implements ObserverInterface
 
         // 1. 确保只有一个系统分类"模块文档"，删除多余的系统创建的同名分类（及其文档）
         $existing = $catalogModel->reset()
-            ->where(CatalogModel::fields_NAME, '模块文档')
+            ->where(CatalogModel::schema_fields_NAME, '模块文档')
             ->select()
             ->fetch()
             ->getItems();
@@ -45,12 +45,12 @@ class ModuleUpgradeObserver implements ObserverInterface
         if (empty($existing)) {
             // 创建根分类
             $root = ObjectManager::make(CatalogModel::class);
-            $root->reset()->setData(CatalogModel::fields_NAME, '模块文档')
-                ->setData(CatalogModel::fields_DESCRIPTION, '系统导入的模块开发文档')
-                ->setData(CatalogModel::fields_PID, 0)
+            $root->reset()->setData(CatalogModel::schema_fields_NAME, '模块文档')
+                ->setData(CatalogModel::schema_fields_DESCRIPTION, '系统导入的模块开发文档')
+                ->setData(CatalogModel::schema_fields_PID, 0)
                 ->setData('level', 1)
-                ->setData(CatalogModel::fields_is_system, 1)
-                ->setData(CatalogModel::fields_is_active, 1)
+                ->setData(CatalogModel::schema_fields_is_system, 1)
+                ->setData(CatalogModel::schema_fields_is_active, 1)
                 ->save();
             $rootId = $root->getId();
         } else {
@@ -63,7 +63,7 @@ class ModuleUpgradeObserver implements ObserverInterface
                 $updateRoot = ObjectManager::make(CatalogModel::class);
                 $updateRoot->load($rootId);
                 if ($updateRoot->getId()) {
-                    $updateRoot->setData(CatalogModel::fields_is_system, 1)->save();
+                    $updateRoot->setData(CatalogModel::schema_fields_is_system, 1)->save();
                 }
             }
 
@@ -73,7 +73,7 @@ class ModuleUpgradeObserver implements ObserverInterface
                         continue;
                     }
                     // 删除该分类下的文档
-                    $documentModel->reset()->where(DocumentModel::fields_CATEGORY_ID, $rec['id'])->delete()->fetch();
+                    $documentModel->reset()->where(DocumentModel::schema_fields_CATEGORY_ID, $rec['id'])->delete()->fetch();
                     // 删除分类
                     $tmp = ObjectManager::make(CatalogModel::class);
                     $tmp->load($rec['id']);
@@ -154,16 +154,16 @@ class ModuleUpgradeObserver implements ObserverInterface
         foreach ($moduleDocs as $moduleName => $info) {
             // 先确保模块根分类存在
             $moduleCat = ObjectManager::make(CatalogModel::class);
-            $found = $moduleCat->reset()->where(CatalogModel::fields_NAME, $moduleName)->where(CatalogModel::fields_PID, $rootId)->find()->fetch();
+            $found = $moduleCat->reset()->where(CatalogModel::schema_fields_NAME, $moduleName)->where(CatalogModel::schema_fields_PID, $rootId)->find()->fetch();
             $moduleCatId = $found->getId() ?: 0;
             if (!$moduleCatId) {
                 $moduleCat = ObjectManager::make(CatalogModel::class);
-                $moduleCat->setData(CatalogModel::fields_NAME, $moduleName)
-                    ->setData(CatalogModel::fields_DESCRIPTION, "模块文档: {$moduleName}")
-                    ->setData(CatalogModel::fields_PID, $rootId)
+                $moduleCat->setData(CatalogModel::schema_fields_NAME, $moduleName)
+                    ->setData(CatalogModel::schema_fields_DESCRIPTION, "模块文档: {$moduleName}")
+                    ->setData(CatalogModel::schema_fields_PID, $rootId)
                     ->setData('level', 2)
-                    ->setData(CatalogModel::fields_is_system, 1)
-                    ->setData(CatalogModel::fields_is_active, 1)
+                    ->setData(CatalogModel::schema_fields_is_system, 1)
+                    ->setData(CatalogModel::schema_fields_is_active, 1)
                     ->save();
                 $moduleCatId = $moduleCat->getId();
             }
@@ -182,17 +182,17 @@ class ModuleUpgradeObserver implements ObserverInterface
                     $acc = $acc . '/' . $seg;
                     // 检查是否存在该分类（同名且父级为 parentId）
                     $tmp = ObjectManager::make(CatalogModel::class);
-                    $found = $tmp->reset()->where(CatalogModel::fields_NAME, $seg)->where(CatalogModel::fields_PID, $parentId)->find()->fetch();
+                    $found = $tmp->reset()->where(CatalogModel::schema_fields_NAME, $seg)->where(CatalogModel::schema_fields_PID, $parentId)->find()->fetch();
                     $foundId = $found->getId() ?: 0;
                     if (!$foundId) {
                         try {
                             $tmp = ObjectManager::make(CatalogModel::class);
-                            $tmp->setData(CatalogModel::fields_NAME, $seg)
-                                ->setData(CatalogModel::fields_DESCRIPTION, "模块文档: {$moduleName}/{$path}")
-                                ->setData(CatalogModel::fields_PID, $parentId)
+                            $tmp->setData(CatalogModel::schema_fields_NAME, $seg)
+                                ->setData(CatalogModel::schema_fields_DESCRIPTION, "模块文档: {$moduleName}/{$path}")
+                                ->setData(CatalogModel::schema_fields_PID, $parentId)
                                 ->setData('level', $level)
-                                ->setData(CatalogModel::fields_is_system, 1)
-                                ->setData(CatalogModel::fields_is_active, 1)
+                                ->setData(CatalogModel::schema_fields_is_system, 1)
+                                ->setData(CatalogModel::schema_fields_is_active, 1)
                                 ->save();
                             $foundId = $tmp->getId();
                         } catch (\Exception $e) {
@@ -200,8 +200,8 @@ class ModuleUpgradeObserver implements ObserverInterface
                             // 这次不限制 pid，只用 name 查找第一个匹配的记录
                             $retry = ObjectManager::make(CatalogModel::class);
                             $retryFound = $retry->reset()
-                                ->where(CatalogModel::fields_NAME, $seg)
-                                ->where(CatalogModel::fields_PID, $parentId)
+                                ->where(CatalogModel::schema_fields_NAME, $seg)
+                                ->where(CatalogModel::schema_fields_PID, $parentId)
                                 ->find()
                                 ->fetch();
                             $foundId = $retryFound->getId() ?: 0;

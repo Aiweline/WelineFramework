@@ -35,20 +35,20 @@ class Document extends BackendRestController
         try {
             // 获取所有有文档的模块（去重）
             $modules = $this->documentModel->clear()
-                ->fields(DocumentModel::fields_MODULE_NAME)
-                ->where(DocumentModel::fields_MODULE_NAME, '', '!=')
-                ->group(DocumentModel::fields_MODULE_NAME)
+                ->fields(DocumentModel::schema_fields_MODULE_NAME)
+                ->where(DocumentModel::schema_fields_MODULE_NAME, '', '!=')
+                ->group(DocumentModel::schema_fields_MODULE_NAME)
                 ->select()
                 ->fetch()
                 ->getItems();
             
             $moduleList = [];
             foreach ($modules as $module) {
-                $moduleName = $module->getData(DocumentModel::fields_MODULE_NAME) ?? '';
+                $moduleName = $module->getData(DocumentModel::schema_fields_MODULE_NAME) ?? '';
                 if ($moduleName) {
                     // 统计该模块的文档数量
                     $count = $this->documentModel->clear()
-                        ->where(DocumentModel::fields_MODULE_NAME, $moduleName)
+                        ->where(DocumentModel::schema_fields_MODULE_NAME, $moduleName)
                         ->count();
                     
                     $moduleList[] = [
@@ -87,17 +87,17 @@ class Document extends BackendRestController
             // 注意：由于框架限制，使用 OR 条件需要分别执行查询后合并，或使用 SQL 原生查询
             // 这里简化处理：仅搜索标题字段
             if ($keyword) {
-                $query->where(DocumentModel::fields_TITLE, '%' . $keyword . '%', 'like');
+                $query->where(DocumentModel::schema_fields_TITLE, '%' . $keyword . '%', 'like');
             }
             
             // 模块过滤
             if ($module && $module !== 'all') {
-                $query->where(DocumentModel::fields_MODULE_NAME, $module);
+                $query->where(DocumentModel::schema_fields_MODULE_NAME, $module);
             }
             
             // 排序
-            $query->order(DocumentModel::fields_SORT_ORDER, 'ASC')
-                  ->order(DocumentModel::fields_ID, 'DESC');
+            $query->order(DocumentModel::schema_fields_SORT_ORDER, 'ASC')
+                  ->order(DocumentModel::schema_fields_ID, 'DESC');
             
             // 先获取总数（不带分页限制）
             $total = $query->count();
@@ -105,13 +105,13 @@ class Document extends BackendRestController
             // 重新构建查询并添加分页
             $query = $this->documentModel->clear();
             if ($keyword) {
-                $query->where(DocumentModel::fields_TITLE, '%' . $keyword . '%', 'like');
+                $query->where(DocumentModel::schema_fields_TITLE, '%' . $keyword . '%', 'like');
             }
             if ($module && $module !== 'all') {
-                $query->where(DocumentModel::fields_MODULE_NAME, $module);
+                $query->where(DocumentModel::schema_fields_MODULE_NAME, $module);
             }
-            $query->order(DocumentModel::fields_SORT_ORDER, 'ASC')
-                  ->order(DocumentModel::fields_ID, 'DESC');
+            $query->order(DocumentModel::schema_fields_SORT_ORDER, 'ASC')
+                  ->order(DocumentModel::schema_fields_ID, 'DESC');
             
             // 添加分页
             $offset = ($page - 1) * $pageSize;
@@ -126,7 +126,7 @@ class Document extends BackendRestController
                 $items[] = [
                     'id' => $doc->getId(),
                     'title' => $doc->getTitle(),
-                    'summary' => $doc->getData(DocumentModel::fields_summary),
+                    'summary' => $doc->getData(DocumentModel::schema_fields_summary),
                     'module_name' => $doc->getModuleName(),
                     'module_display' => $this->formatModuleName($doc->getModuleName()),
                     'file_name' => $doc->getFileName(),
@@ -186,7 +186,7 @@ class Document extends BackendRestController
             return $this->success('success', [
                 'id' => $doc->getId(),
                 'title' => $doc->getTitle(),
-                'summary' => $doc->getData(DocumentModel::fields_summary),
+                'summary' => $doc->getData(DocumentModel::schema_fields_summary),
                 'content' => $doc->getDecodeContent(),
                 'module_name' => $doc->getModuleName(),
                 'module_display' => $this->formatModuleName($doc->getModuleName()),
@@ -208,9 +208,9 @@ class Document extends BackendRestController
     {
         try {
             $catalogs = $this->catalogModel->clear()
-                ->where(Catalog::fields_is_active, 1)
-                ->order(Catalog::fields_position, 'ASC')
-                ->order(Catalog::fields_ID, 'ASC')
+                ->where(Catalog::schema_fields_is_active, 1)
+                ->order(Catalog::schema_fields_position, 'ASC')
+                ->order(Catalog::schema_fields_ID, 'ASC')
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -237,8 +237,8 @@ class Document extends BackendRestController
                     'id' => $catalog->getId(),
                     'name' => $catalog->getName(),
                     'description' => $catalog->getDescription(),
-                    'level' => $catalog->getData(Catalog::fields_level),
-                    'is_system' => $catalog->getData(Catalog::fields_is_system),
+                    'level' => $catalog->getData(Catalog::schema_fields_level),
+                    'is_system' => $catalog->getData(Catalog::schema_fields_is_system),
                     'children' => $this->buildCatalogTree($catalogs, (int)$catalog->getId())
                 ];
                 $tree[] = $node;
