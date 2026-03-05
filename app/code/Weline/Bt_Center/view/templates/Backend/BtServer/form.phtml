@@ -182,15 +182,11 @@ $description = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServ
             data[entry[0]] = entry[1];
         }
 
-        fetch('<?= $this->getBackendUrl('bt_center/backend/bt_server/save') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: new URLSearchParams(data)
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(resp) {
+        var btSaveUrl = '<?= $this->getBackendUrl('bt_center/backend/bt_server/save') ?>';
+        var btSaveOpts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(data) };
+        window.Weline.Api.request(btSaveUrl, btSaveOpts)
+        .then(function(r) {
+            var resp = (r && r.data) !== undefined ? r.data : r;
             if (resp.success) {
                 if (typeof AdminToast !== 'undefined') {
                     AdminToast.success(resp.message);
