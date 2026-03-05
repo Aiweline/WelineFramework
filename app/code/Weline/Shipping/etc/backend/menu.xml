@@ -17,37 +17,9 @@
              icon="mdi mdi-truck-delivery-outline" order="20"/>
     </menu>
     
-    <!-- 配送系统分组 -->
-    <menu source="Weline_Shipping::shipping_system" name="shipping_system" title="配送系统" action="" 
+    <!-- 配送系统：Manager 聚合页（地区管理|配送区域|快递公司|费用模板|免邮规则|配送服务|物流跟踪） -->
+    <menu source="Weline_Shipping::shipping_system" name="shipping_system" title="配送系统" 
+         action="shipping/backend/manager"
          parent="Weline_Backend::shipping_group"
-         icon="mdi mdi-truck-delivery-outline" order="20">
-        
-        <menu source="Weline_Shipping::region_list" name="region_list" title="地区管理" 
-             action="shipping/backend/region"
-             icon="mdi mdi-map-marker-outline" order="10"/>
-        
-        <menu source="Weline_Shipping::zone_list" name="zone_list" title="配送区域" 
-             action="shipping/backend/zone"
-             icon="mdi mdi-map-outline" order="20"/>
-        
-        <menu source="Weline_Shipping::carrier_list" name="carrier_list" title="快递公司" 
-             action="shipping/backend/carrier"
-             icon="mdi mdi-truck-outline" order="30"/>
-        
-        <menu source="Weline_Shipping::rate_template_list" name="rate_template_list" title="费用模板" 
-             action="shipping/backend/ratetemplate"
-             icon="mdi mdi-calculator-variant-outline" order="40"/>
-        
-        <menu source="Weline_Shipping::free_shipping_rule_list" name="free_shipping_rule_list" title="免邮规则" 
-             action="shipping/backend/freeshippingrule"
-             icon="mdi mdi-gift-outline" order="50"/>
-        
-        <menu source="Weline_Shipping::shipping_service_list" name="shipping_service_list" title="配送服务" 
-             action="shipping/backend/shippingservice"
-             icon="mdi mdi-truck-fast-outline" order="60"/>
-        
-        <menu source="Weline_Shipping::tracking_list" name="tracking_list" title="物流跟踪" 
-             action="shipping/backend/tracking"
-             icon="mdi mdi-map-search-outline" order="70"/>
-    </menu>
+         icon="mdi mdi-truck-delivery-outline" order="20"/>
 </menus>

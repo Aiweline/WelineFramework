@@ -74,15 +74,15 @@ class TrackingService
         
         // 如果不是强制刷新且记录存在且最近更新过（1小时内），直接返回缓存
         if (!$forceRefresh && $tracking && $tracking->getId()) {
-            $lastTracked = $tracking->getData(Tracking::fields_LAST_TRACKED_AT);
+            $lastTracked = $tracking->getData(Tracking::schema_fields_LAST_TRACKED_AT);
             if ($lastTracked && strtotime($lastTracked) > time() - 3600) {
                 return $this->formatTrackingResponse($tracking, $carrier);
             }
         }
         
         // 根据快递公司类型查询
-        $carrierType = $carrier->getData(Carrier::fields_CARRIER_TYPE);
-        $trackingSupportStatus = $carrier->getData(Carrier::fields_TRACKING_SUPPORT_STATUS);
+        $carrierType = $carrier->getData(Carrier::schema_fields_CARRIER_TYPE);
+        $trackingSupportStatus = $carrier->getData(Carrier::schema_fields_TRACKING_SUPPORT_STATUS);
         
         if ($carrierType === Carrier::TYPE_API && $trackingSupportStatus === Carrier::TRACKING_SUPPORTED) {
             // API类型，调用第三方API
@@ -109,8 +109,8 @@ class TrackingService
             // 目前返回模拟数据
             
             $apiConfig = $carrier->getApiConfig();
-            $apiEndpoint = $carrier->getData(Carrier::fields_TRACKING_API_ENDPOINT);
-            $apiMethod = $carrier->getData(Carrier::fields_TRACKING_API_METHOD) ?: 'GET';
+            $apiEndpoint = $carrier->getData(Carrier::schema_fields_TRACKING_API_ENDPOINT);
+            $apiMethod = $carrier->getData(Carrier::schema_fields_TRACKING_API_METHOD) ?: 'GET';
             
             // 模拟API响应
             $apiResponse = [
@@ -157,15 +157,15 @@ class TrackingService
     private function queryManual(string $trackingNumber, Carrier $carrier, ?Tracking $existingTracking): array
     {
         $trackingUrl = $carrier->generateTrackingUrl($trackingNumber);
-        $trackingSupportStatus = $carrier->getData(Carrier::fields_TRACKING_SUPPORT_STATUS);
+        $trackingSupportStatus = $carrier->getData(Carrier::schema_fields_TRACKING_SUPPORT_STATUS);
         
         // 创建或更新跟踪记录
         if (!$existingTracking || !$existingTracking->getId()) {
             $tracking = $this->getTrackingModel();
             $tracking->setData([
-                Tracking::fields_TRACKING_NUMBER => $trackingNumber,
-                Tracking::fields_CARRIER_ID => $carrier->getId(),
-                Tracking::fields_STATUS => Tracking::STATUS_NOT_SUPPORTED,
+                Tracking::schema_fields_TRACKING_NUMBER => $trackingNumber,
+                Tracking::schema_fields_CARRIER_ID => $carrier->getId(),
+                Tracking::schema_fields_STATUS => Tracking::STATUS_NOT_SUPPORTED,
             ]);
             $tracking->save();
         } else {
@@ -175,14 +175,14 @@ class TrackingService
         // 返回标准格式（不支持追踪）
         $status = Tracking::STATUS_NOT_SUPPORTED;
         $trackingModel = $this->getTrackingModel();
-        $trackingModel->setData(Tracking::fields_STATUS, $status);
+        $trackingModel->setData(Tracking::schema_fields_STATUS, $status);
         
         return [
             'success' => false,
             'tracking_number' => $trackingNumber,
             'carrier' => [
-                'code' => $carrier->getData(Carrier::fields_CARRIER_CODE),
-                'name' => $carrier->getData(Carrier::fields_CARRIER_NAME),
+                'code' => $carrier->getData(Carrier::schema_fields_CARRIER_CODE),
+                'name' => $carrier->getData(Carrier::schema_fields_CARRIER_NAME),
             ],
             'status' => $status,
             'status_label' => $trackingModel->getStatusLabel($status), // 添加翻译后的状态标签
@@ -212,20 +212,20 @@ class TrackingService
         } else {
             $tracking = $this->getTrackingModel();
             $tracking->setData([
-                Tracking::fields_TRACKING_NUMBER => $trackingNumber,
-                Tracking::fields_CARRIER_ID => $carrier->getId(),
+                Tracking::schema_fields_TRACKING_NUMBER => $trackingNumber,
+                Tracking::schema_fields_CARRIER_ID => $carrier->getId(),
             ]);
         }
         
         $tracking->setData([
-            Tracking::fields_STATUS => $apiResponse['status'] ?? Tracking::STATUS_PENDING,
-            Tracking::fields_CURRENT_LOCATION => $apiResponse['current_location'] ?? null,
-            Tracking::fields_ESTIMATED_DELIVERY_DATE => $apiResponse['estimated_delivery_date'] ?? null,
-            Tracking::fields_TRACKING_DATA => json_encode($apiResponse, JSON_UNESCAPED_UNICODE),
+            Tracking::schema_fields_STATUS => $apiResponse['status'] ?? Tracking::STATUS_PENDING,
+            Tracking::schema_fields_CURRENT_LOCATION => $apiResponse['current_location'] ?? null,
+            Tracking::schema_fields_ESTIMATED_DELIVERY_DATE => $apiResponse['estimated_delivery_date'] ?? null,
+            Tracking::schema_fields_TRACKING_DATA => json_encode($apiResponse, JSON_UNESCAPED_UNICODE),
         ]);
         
         if (isset($apiResponse['status']) && $apiResponse['status'] === Tracking::STATUS_DELIVERED) {
-            $tracking->setData(Tracking::fields_ACTUAL_DELIVERY_DATE, date('Y-m-d H:i:s'));
+            $tracking->setData(Tracking::schema_fields_ACTUAL_DELIVERY_DATE, date('Y-m-d H:i:s'));
         }
         
         $tracking->incrementTrackingCount();
@@ -252,30 +252,30 @@ class TrackingService
         $nodeList = [];
         foreach ($nodes->getItems() as $node) {
             $nodeList[] = [
-                'time' => $node->getData(TrackingNode::fields_NODE_TIME),
-                'location' => $node->getData(TrackingNode::fields_NODE_LOCATION),
-                'status' => $node->getData(TrackingNode::fields_NODE_STATUS),
-                'description' => $node->getData(TrackingNode::fields_NODE_DESCRIPTION),
-                'type' => $node->getData(TrackingNode::fields_NODE_TYPE),
+                'time' => $node->getData(TrackingNode::schema_fields_NODE_TIME),
+                'location' => $node->getData(TrackingNode::schema_fields_NODE_LOCATION),
+                'status' => $node->getData(TrackingNode::schema_fields_NODE_STATUS),
+                'description' => $node->getData(TrackingNode::schema_fields_NODE_DESCRIPTION),
+                'type' => $node->getData(TrackingNode::schema_fields_NODE_TYPE),
                 'type_label' => $node->getTypeLabel(), // 添加翻译后的类型标签
             ];
         }
         
-        $status = $tracking->getData(Tracking::fields_STATUS);
+        $status = $tracking->getData(Tracking::schema_fields_STATUS);
         
         return [
             'success' => true,
-            'tracking_number' => $tracking->getData(Tracking::fields_TRACKING_NUMBER),
+            'tracking_number' => $tracking->getData(Tracking::schema_fields_TRACKING_NUMBER),
             'carrier' => [
-                'code' => $carrier->getData(Carrier::fields_CARRIER_CODE),
-                'name' => $carrier->getData(Carrier::fields_CARRIER_NAME),
+                'code' => $carrier->getData(Carrier::schema_fields_CARRIER_CODE),
+                'name' => $carrier->getData(Carrier::schema_fields_CARRIER_NAME),
             ],
             'status' => $status,
             'status_label' => $tracking->getStatusLabel(), // 添加翻译后的状态标签
-            'current_location' => $tracking->getData(Tracking::fields_CURRENT_LOCATION),
-            'estimated_delivery_date' => $tracking->getData(Tracking::fields_ESTIMATED_DELIVERY_DATE),
+            'current_location' => $tracking->getData(Tracking::schema_fields_CURRENT_LOCATION),
+            'estimated_delivery_date' => $tracking->getData(Tracking::schema_fields_ESTIMATED_DELIVERY_DATE),
             'nodes' => $nodeList,
-            'tracking_url' => $carrier->generateTrackingUrl($tracking->getData(Tracking::fields_TRACKING_NUMBER)),
+            'tracking_url' => $carrier->generateTrackingUrl($tracking->getData(Tracking::schema_fields_TRACKING_NUMBER)),
         ];
     }
 
@@ -291,14 +291,14 @@ class TrackingService
     {
         $status = Tracking::STATUS_EXCEPTION;
         $trackingModel = $this->getTrackingModel();
-        $trackingModel->setData(Tracking::fields_STATUS, $status);
+        $trackingModel->setData(Tracking::schema_fields_STATUS, $status);
         
         return [
             'success' => false,
             'tracking_number' => $trackingNumber,
             'carrier' => [
-                'code' => $carrier->getData(Carrier::fields_CARRIER_CODE),
-                'name' => $carrier->getData(Carrier::fields_CARRIER_NAME),
+                'code' => $carrier->getData(Carrier::schema_fields_CARRIER_CODE),
+                'name' => $carrier->getData(Carrier::schema_fields_CARRIER_NAME),
             ],
             'status' => $status,
             'status_label' => $trackingModel->getStatusLabel($status), // 添加翻译后的状态标签

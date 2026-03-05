@@ -1,212 +1,112 @@
 <?php
-
 declare(strict_types=1);
-
 /*
  * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
  * 邮箱：aiweline@qq.com
  * 网址：aiweline.com
  * 论坛：https://bbs.aiweline.com
  */
-
 namespace Weline\Shipping\Model;
-
 use Weline\Framework\Database\AbstractModel;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: '配送地区表')]
+#[Index(name: 'idx_country_code', columns: ['country_code'])]
+#[Index(name: 'idx_parent_region_id', columns: ['parent_region_id'])]
+#[Index(name: 'idx_region_code', columns: ['region_code'])]
+#[Index(name: 'idx_region_type', columns: ['region_type'])]
 class Region extends AbstractModel
 {
-    public const table = 'w_shipping_regions';
-    
-    public const fields_ID = 'region_id';
-    public const fields_COUNTRY_CODE = 'country_code';
-    public const fields_PARENT_REGION_ID = 'parent_region_id';
-    public const fields_REGION_CODE = 'region_code';
-    public const fields_REGION_NAME = 'region_name';
-    public const fields_REGION_TYPE = 'region_type';
-    public const fields_POSTAL_CODE_PATTERN = 'postal_code_pattern';
-    public const fields_IS_ACTIVE = 'is_active';
-    public const fields_SORT_ORDER = 'sort_order';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
-
+    public const schema_table = 'w_shipping_regions';
+    public const schema_primary_key = 'region_id';
+    public const schema_primary_keys = ['region_id'];
+    #[Col('int', null, nullable: false, primaryKey: true, autoIncrement: true, comment: '地区ID')]
+    public const schema_fields_ID = 'region_id';
+    #[Col('varchar', 2, nullable: false, comment: 'ISO国家代码')]
+    public const schema_fields_COUNTRY_CODE = 'country_code';
+    #[Col('int', null, comment: '父级地区ID')]
+    public const schema_fields_PARENT_REGION_ID = 'parent_region_id';
+    #[Col('varchar', 50, nullable: false, comment: '地区代码')]
+    public const schema_fields_REGION_CODE = 'region_code';
+    #[Col('varchar', 255, nullable: false, comment: '地区名称')]
+    public const schema_fields_REGION_NAME = 'region_name';
+    #[Col('varchar', 20, nullable: false, comment: '地区类型')]
+    public const schema_fields_REGION_TYPE = 'region_type';
+    #[Col('varchar', 100, comment: '邮政编码格式')]
+    public const schema_fields_POSTAL_CODE_PATTERN = 'postal_code_pattern';
+    #[Col('int', 1, nullable: false, default: 1, comment: '是否启用')]
+    public const schema_fields_IS_ACTIVE = 'is_active';
+    #[Col('int', null, nullable: false, default: 0, comment: '排序')]
+    public const schema_fields_SORT_ORDER = 'sort_order';
+    #[Col('datetime', comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col('datetime', comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
     // 地区类型常量
     public const TYPE_COUNTRY = 'country';
     public const TYPE_PROVINCE = 'province';
     public const TYPE_CITY = 'city';
     public const TYPE_DISTRICT = 'district';
-
-    /**
-     * 主键字段
-     */
-    public array $_unit_primary_keys = ['region_id'];
-
     /**
      * 索引排序键
      */
     public array $_index_sort_keys = ['region_id', 'country_code', 'parent_region_id', 'region_type'];
-
     /**
      * 初始化模型
      */
     public function _init(): void
     {
-        $this->_table = self::table;
-        $this->_primary_key = self::fields_ID;
     }
-
     /**
      * 获取表名
      */
     public function getTable(string $table = ''): string
     {
-        return self::table;
-    }
-
-    /**
-     * 安装表结构
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('配送地区表')
-                ->addColumn(
-                    self::fields_ID,
-                    TableInterface::column_type_INTEGER,
-                    null,
-                    'primary key auto_increment',
-                    '地区ID'
-                )
-                ->addColumn(
-                    self::fields_COUNTRY_CODE,
-                    TableInterface::column_type_VARCHAR,
-                    2,
-                    'not null',
-                    'ISO国家代码，关联i18n_countries.code'
-                )
-                ->addColumn(
-                    self::fields_PARENT_REGION_ID,
-                    TableInterface::column_type_INTEGER,
-                    null,
-                    'default null',
-                    '父级地区ID（支持层级结构）'
-                )
-                ->addColumn(
-                    self::fields_REGION_CODE,
-                    TableInterface::column_type_VARCHAR,
-                    50,
-                    'not null',
-                    '地区代码（如省代码、市代码）'
-                )
-                ->addColumn(
-                    self::fields_REGION_NAME,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    '地区名称'
-                )
-                ->addColumn(
-                    self::fields_REGION_TYPE,
-                    TableInterface::column_type_VARCHAR,
-                    20,
-                    'not null',
-                    '地区类型：country/province/city/district'
-                )
-                ->addColumn(
-                    self::fields_POSTAL_CODE_PATTERN,
-                    TableInterface::column_type_VARCHAR,
-                    100,
-                    'default null',
-                    '邮政编码格式（正则表达式）'
-                )
-                ->addColumn(
-                    self::fields_IS_ACTIVE,
-                    TableInterface::column_type_INTEGER,
-                    1,
-                    'default 1',
-                    '是否启用：1-是，0-否'
-                )
-                ->addColumn(
-                    self::fields_SORT_ORDER,
-                    TableInterface::column_type_INTEGER,
-                    null,
-                    'default 0',
-                    '排序'
-                )
-                ->addColumn(
-                    self::fields_CREATED_AT,
-                    TableInterface::column_type_DATETIME,
-                    null,
-                    'default CURRENT_TIMESTAMP',
-                    '创建时间'
-                )
-                ->addColumn(
-                    self::fields_UPDATED_AT,
-                    TableInterface::column_type_DATETIME,
-                    null,
-                    'default CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
-                    '更新时间'
-                )
-                ->addIndex(TableInterface::index_type_KEY, 'idx_country_code', self::fields_COUNTRY_CODE, '国家代码索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_parent_region_id', self::fields_PARENT_REGION_ID, '父级地区ID索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_region_code', self::fields_REGION_CODE, '地区代码索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_region_type', self::fields_REGION_TYPE, '地区类型索引')
-                ->create();
-        }
-    }
-
-    public function upgrade(ModelSetup $setup, Context $context): void {}
-
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
+        return self::schema_table;
     }
 
     /**
      * 获取子地区列表
-     * 
+     *
      * @param int|null $parentRegionId 父级地区ID，null表示获取顶级地区
-     * @return \Weline\Framework\Database\Model\Collection
+     * @return \Weline\Framework\Database\Model 含 getItems() 的模型实例
      */
-    public function getChildren(?int $parentRegionId = null): \Weline\Framework\Database\Model\Collection
+    public function getChildren(?int $parentRegionId = null): \Weline\Framework\Database\Model
     {
         $model = $this->reset();
         if ($parentRegionId === null) {
-            $model->where(self::fields_PARENT_REGION_ID, null, 'IS');
+            $model->where(self::schema_fields_PARENT_REGION_ID, null, 'IS');
         } else {
-            $model->where(self::fields_PARENT_REGION_ID, $parentRegionId);
+            $model->where(self::schema_fields_PARENT_REGION_ID, $parentRegionId);
         }
-        $model->where(self::fields_IS_ACTIVE, 1)
-              ->order(self::fields_SORT_ORDER, 'ASC')
-              ->order(self::fields_REGION_NAME, 'ASC');
+        $model->where(self::schema_fields_IS_ACTIVE, 1)
+              ->order(self::schema_fields_SORT_ORDER, 'ASC')
+              ->order(self::schema_fields_REGION_NAME, 'ASC');
         return $model->select()->fetch();
     }
-
     /**
      * 根据国家代码获取地区列表
-     * 
+     *
      * @param string $countryCode ISO国家代码
      * @param string|null $regionType 地区类型筛选
-     * @return \Weline\Framework\Database\Model\Collection
+     * @return \Weline\Framework\Database\Model 含 getItems() 的模型实例
      */
-    public function getByCountryCode(string $countryCode, ?string $regionType = null): \Weline\Framework\Database\Model\Collection
+    public function getByCountryCode(string $countryCode, ?string $regionType = null): \Weline\Framework\Database\Model
     {
         $model = $this->reset()
-            ->where(self::fields_COUNTRY_CODE, $countryCode);
+            ->where(self::schema_fields_COUNTRY_CODE, $countryCode);
         
         if ($regionType !== null) {
-            $model->where(self::fields_REGION_TYPE, $regionType);
+            $model->where(self::schema_fields_REGION_TYPE, $regionType);
         }
         
-        $model->where(self::fields_IS_ACTIVE, 1)
-              ->order(self::fields_SORT_ORDER, 'ASC')
-              ->order(self::fields_REGION_NAME, 'ASC');
+        $model->where(self::schema_fields_IS_ACTIVE, 1)
+              ->order(self::schema_fields_SORT_ORDER, 'ASC')
+              ->order(self::schema_fields_REGION_NAME, 'ASC');
         
         return $model->select()->fetch();
     }
-
     /**
      * 获取父级地区
      * 
@@ -214,13 +114,12 @@ class Region extends AbstractModel
      */
     public function getParent(): ?Region
     {
-        $parentId = $this->getData(self::fields_PARENT_REGION_ID);
+        $parentId = $this->getData(self::schema_fields_PARENT_REGION_ID);
         if (!$parentId) {
             return null;
         }
         return $this->reset()->load($parentId);
     }
-
     /**
      * 获取完整地区路径（如：中国 > 北京 > 朝阳区）
      * 
@@ -232,11 +131,10 @@ class Region extends AbstractModel
         $region = $this;
         
         while ($region && $region->getId()) {
-            array_unshift($path, $region->getData(self::fields_REGION_NAME));
+            array_unshift($path, $region->getData(self::schema_fields_REGION_NAME));
             $region = $region->getParent();
         }
         
         return implode(' > ', $path);
     }
 }
-
