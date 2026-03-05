@@ -152,6 +152,11 @@ class PassthroughCore
     private int $spinWaitIntervalMs = 50;
     
     /**
+     * 上次输出「workerPorts 为空」到 stderr 的时间（节流，避免启动时刷屏）
+     */
+    private float $lastEmptyWorkerPortsStderrAt = 0.0;
+
+    /**
      * 统计信息
      */
     private array $stats = [
@@ -418,9 +423,13 @@ class PassthroughCore
      */
     private function connectToAvailableWorker(?int $excludePort, string $sni): array|false
     {
-        // 如果没有可用 Worker，直接返回
+        // 如果没有可用 Worker，直接返回（节流 stderr，避免启动期刷屏）
         if (empty($this->workerPorts)) {
-            \fwrite(\STDERR, "[PassthroughCore] 没有可用 Worker 端口！workerPorts 为空\n");
+            $now = \microtime(true);
+            if ($now - $this->lastEmptyWorkerPortsStderrAt >= 10.0) {
+                \fwrite(\STDERR, "[PassthroughCore] 没有可用 Worker 端口！workerPorts 为空\n");
+                $this->lastEmptyWorkerPortsStderrAt = $now;
+            }
             return false;
         }
 
