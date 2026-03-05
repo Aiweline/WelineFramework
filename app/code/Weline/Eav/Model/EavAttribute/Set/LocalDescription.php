@@ -18,5 +18,5 @@ use Weline\I18n\LocalModel;
 
 class LocalDescription extends LocalModel
 {
-    public const fields_ID         = Set::fields_ID;
+    public const schema_fields_ID = Set::schema_fields_ID;
 }

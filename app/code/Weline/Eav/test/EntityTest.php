@@ -33,15 +33,15 @@ class EntityTest extends \Weline\Framework\UnitTest\TestCore
         $this->eavEntity->clear()
             ->setData(
                 [
-                    EavEntity::fields_code => 'test',
-                    EavEntity::fields_class => 'Weline\Test\Model\Test',
-                    EavEntity::fields_name => '测试实体',
-                    EavEntity::fields_is_system => '1',
-                    EavEntity::fields_eav_entity_id_field_type => 'integer',
-                    EavEntity::fields_eav_entity_id_field_length => 11,
+                    EavEntity::schema_fields_code => 'test',
+                    EavEntity::schema_fields_class => 'Weline\Test\Model\Test',
+                    EavEntity::schema_fields_name => '测试实体',
+                    EavEntity::schema_fields_is_system => '1',
+                    EavEntity::schema_fields_eav_entity_id_field_type => 'integer',
+                    EavEntity::schema_fields_eav_entity_id_field_length => 11,
                 ]
             )
-            ->forceCheck(true, EavEntity::fields_code)
+            ->forceCheck(true, EavEntity::schema_fields_code)
             ->save();
         $entity = $this->eavEntity->loadByCode('test');
         self::assertTrue($entity->getClass() == 'Weline\Test\Model\Test', '添加实体');

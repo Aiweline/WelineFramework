@@ -83,7 +83,7 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
     public function getAttributeIdByCode(): string
     {
         $code = (string)$this->request->getPost('code');
-        $this->preCreateAttribute->load($this->preCreateAttribute::fields_code, $code);
+        $this->preCreateAttribute->load($this->preCreateAttribute::schema_fields_code, $code);
         return $this->fetchJson($this->preCreateAttribute->getId());
     }
 

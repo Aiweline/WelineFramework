@@ -25,67 +25,66 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class Group extends \Weline\Framework\Database\Model
 {
-    public const fields_ID = 'group_id';
-    public const fields_group_id = 'group_id';
-    public const fields_name = 'name';
-    public const fields_code = 'code';
-    public const fields_set_id = 'set_id';
-    public const fields_eav_entity_id = 'eav_entity_id';
+    public const schema_table = 'eav_attribute_group';
+    public const schema_primary_keys = ['group_id', 'eav_entity_id', 'set_id', 'code'];
+
+    public const schema_fields_ID = 'group_id';
+    public const schema_fields_group_id = 'group_id';
+    public const schema_fields_name = 'name';
+    public const schema_fields_code = 'code';
+    public const schema_fields_set_id = 'set_id';
+    public const schema_fields_eav_entity_id = 'eav_entity_id';
 
     public array $_unit_primary_keys = ['group_id', 'eav_entity_id', 'set_id', 'code'];
     public array $_index_sort_keys = ['group_id', 'eav_entity_id', 'set_id', 'code'];
 
-    // 表结构已迁移到 Schema/EavAttributeGroupSchema.php
-    // 由 Setup/Install.php 统一管理表创建
-    public function setup(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void {}
-    public function upgrade(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void {}
-    public function install(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void {}
+    // 表结构已迁移到 Schema/EavAttributeGroupSchema.php，由 Setup/Install.php 统一管理表创建；此处不再定义 setup/upgrade/install，使用父类空实现。
 
     function getCode()
     {
-        return $this->getData(self::fields_code);
+        return $this->getData(self::schema_fields_code);
     }
 
     function setCode(string $code): Group
     {
-        return $this->setData(self::fields_code, $code);
+        return $this->setData(self::schema_fields_code, $code);
     }
 
     function getSetId()
     {
-        return $this->getData(self::fields_set_id);
+        return $this->getData(self::schema_fields_set_id);
     }
 
     function setSetId(int $set_id): Group
     {
-        return $this->setData(self::fields_set_id, $set_id);
+        return $this->setData(self::schema_fields_set_id, $set_id);
     }
 
     function getEavEntityId()
     {
-        return $this->getData(self::fields_eav_entity_id);
+        return $this->getData(self::schema_fields_eav_entity_id);
     }
 
     function setEntityId(int $eav_entity_id): Group
     {
-        return $this->setData(self::fields_eav_entity_id, $eav_entity_id);
+        return $this->setData(self::schema_fields_eav_entity_id, $eav_entity_id);
     }
 
     function getName()
     {
-        return $this->getData(self::fields_name);
+        return $this->getData(self::schema_fields_name);
     }
 
     function setName(string $name): Group
     {
-        return $this->setData(self::fields_name, $name);
+        return $this->setData(self::schema_fields_name, $name);
     }
 
     function hasAttributes(): bool
     {
         /**@var EavAttribute $attributeModel */
         $attributeModel = ObjectManager::getInstance(EavAttribute::class);
-        $set = $attributeModel->reset()->where(EavAttribute::fields_group_id, $this->getId())
+        $set = $attributeModel->reset()->where(EavAttribute::schema_fields_group_id, $this->getId())
             ->find()->fetch();
         if ($set->getId()) {
             return true;
@@ -99,8 +98,8 @@ class Group extends \Weline\Framework\Database\Model
         // 将使用此属性集的属性集ID设置为0
         /**@var EavAttribute $attribute */
         $attribute = ObjectManager::getInstance(EavAttribute::class);
-        $attribute->where(EavAttribute::fields_group_id, $this->getId())
-            ->update(EavAttribute::fields_group_id, 0)
+        $attribute->where(EavAttribute::schema_fields_group_id, $this->getId())
+            ->update(EavAttribute::schema_fields_group_id, 0)
             ->fetch();
     }
 
@@ -117,7 +116,7 @@ class Group extends \Weline\Framework\Database\Model
     {
         /**@var EavAttribute $attrbiute */
         $attrbiute = ObjectManager::getInstance(EavAttribute::class);
-        $attrbiute->where(EavAttribute::fields_group_id, $this->getId());
+        $attrbiute->where(EavAttribute::schema_fields_group_id, $this->getId());
         return $attrbiute;
     }
 

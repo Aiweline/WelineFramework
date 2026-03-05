@@ -232,24 +232,20 @@
         var button = event.relatedTarget;
         var attribute_code = button.getAttribute('data-code');
         var eav_entity_id = button.getAttribute('data-eav_entity_id');
-        $.ajax({
-            url: '@backend-url("*/backend/attribute/option/search")?eav_entity_id={eav_entity_id}&attribute_code={attribute_code}'
-                .replace('{eav_entity_id}', eav_entity_id).replace('{attribute_code}', attribute_code),
-            success: function(res) {
-                var attributeOption = $('#attributeOption');
-                attributeOption.empty();
-                var options = res['option'];
-                if (options) {
-                    for (var option in options) {
-                        console.log();
-                        attributeOption.append();
-                    }
+        var url = '@backend-url("*/backend/attribute/option/search")?eav_entity_id={eav_entity_id}&attribute_code={attribute_code}'
+            .replace('{eav_entity_id}', eav_entity_id).replace('{attribute_code}', attribute_code);
+        var req = window.Weline.Api.get(url, { silent: true });
+        req.then(function(res) {
+            var resData = (res && res.data) || res;
+            var attributeOption = $('#attributeOption');
+            attributeOption.empty();
+            var options = (resData && resData['option']) || resData;
+            if (options && typeof options === 'object') {
+                for (var opt in options) {
+                    attributeOption.append('');
                 }
-                attributeOption.append('');
-                console.log(res);
             }
-        });
-        hideLoading();
+        }).catch(function() {}).finally(function() { hideLoading(); });
     });
     
     $('.ajax-delete').on('click', function () {
@@ -266,23 +262,16 @@
         }).then(function(result) {
             if (result.isConfirmed) {
                 showLoading();
-                $.ajax({
-                    url: $(self).data('href'),
-                    success: function(res) {
-                        if (res['code'] == 1) {
-                            Swal.fire({
-                                title: '<lang>删除成功</lang>',
-                                icon: 'success',
-                                timer: 2000,
-                                confirmButtonColor: '#3085d6',
-                                confirmButtonText: '<lang>确认</lang>',
-                            }).then(function(res) {
-                                location.reload();
-                            });
-                        }
-                        hideLoading();
+                var delUrl = $(self).data('href');
+                var req = window.Weline.Api.get(delUrl, { silent: true });
+                req.then(function(res) {
+                    var data = (res && res.data) || res;
+                    if (data && data['code'] == 1) {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({ title: '<lang>删除成功</lang>', icon: 'success', timer: 2000, confirmButtonColor: '#3085d6', confirmButtonText: '<lang>确认</lang>' }).then(function() { location.reload(); });
+                        } else { location.reload(); }
                     }
-                });
+                }).catch(function() {}).finally(function() { hideLoading(); });
             }
         });
     });

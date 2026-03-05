@@ -16,5 +16,5 @@ use Weline\Eav\Model\EavEntity;
 
 class LocalDescription extends \Weline\I18n\LocalModel
 {
-    const fields_ID = EavEntity::fields_ID;
+    const fields_ID = EavEntity::schema_fields_ID;
 }
