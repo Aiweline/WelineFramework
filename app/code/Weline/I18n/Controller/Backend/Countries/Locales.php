@@ -45,40 +45,40 @@ class Locales extends BaseController
         $country_code = $this->request->getParam('country_code');
         
         // 先设置基础条件
-        $this->locale->where('main_table.' . $this->locale::fields_COUNTRY_CODE, $country_code);
+        $this->locale->where('main_table.' . $this->locale::schema_fields_COUNTRY_CODE, $country_code);
         
         // 先执行joinModel，然后再使用where条件引用join的表
         $this->locale->joinModel(
                 \Weline\I18n\Model\Countries::class,
                 'c',
-                'main_table.' . $this->locale::fields_COUNTRY_CODE . '=c.' . \Weline\I18n\Model\Countries::fields_CODE,
+                'main_table.' . $this->locale::schema_fields_COUNTRY_CODE . '=c.' . \Weline\I18n\Model\Countries::schema_fields_CODE,
                 'left',
                 'c.flag'
             )
             ->joinModel(
                 \Weline\I18n\Model\Countries\Locale\Name::class,
                 'cln',
-                'c.' . \Weline\I18n\Model\Countries::fields_CODE . '=cln.' . \Weline\I18n\Model\Countries\Locale\Name::fields_COUNTRY_CODE,
+                'c.' . \Weline\I18n\Model\Countries::schema_fields_CODE . '=cln.' . \Weline\I18n\Model\Countries\Locale\Name::schema_fields_COUNTRY_CODE,
                 'left',
-                'cln.' . \Weline\I18n\Model\Countries\Locale\Name::fields_DISPLAY_NAME . ' as country_name'
+                'cln.' . \Weline\I18n\Model\Countries\Locale\Name::schema_fields_DISPLAY_NAME . ' as country_name'
             )->joinModel(
                 Name::class,
                 'lln',
-                'main_table.' . $this->locale::fields_CODE . '=lln.' . Name::fields_LOCALE_CODE,
+                'main_table.' . $this->locale::schema_fields_CODE . '=lln.' . Name::schema_fields_LOCALE_CODE,
                 'left',
-                'lln.' . Name::fields_DISPLAY_NAME . ' as locale_name'
+                'lln.' . Name::schema_fields_DISPLAY_NAME . ' as locale_name'
             );
         
         // joinModel之后才能使用where条件引用join的表
-        $this->locale->where('lln.' . Name::fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal())
-            ->where('cln.' . \Weline\I18n\Model\Countries\Locale\Name::fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal())
-            ->where('c.' . \Weline\I18n\Model\Countries::fields_CODE, $country_code);
+        $this->locale->where('lln.' . Name::schema_fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal())
+            ->where('cln.' . \Weline\I18n\Model\Countries\Locale\Name::schema_fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal())
+            ->where('c.' . \Weline\I18n\Model\Countries::schema_fields_CODE, $country_code);
 
         // 搜索条件（在join之后才能使用country_name）
         if ($search = $this->request->getParam('search')) {
-            $code = $this->locale::fields_CODE;
-            $country_code_field = $this->locale::fields_COUNTRY_CODE;
-            $this->locale->where("CONCAT(main_table.{$code},cln." . \Weline\I18n\Model\Countries\Locale\Name::fields_DISPLAY_NAME . ",main_table.{$country_code_field})", "%{$search}%", 'LIKE');
+            $code = $this->locale::schema_fields_CODE;
+            $country_code_field = $this->locale::schema_fields_COUNTRY_CODE;
+            $this->locale->where("CONCAT(main_table.{$code},cln." . \Weline\I18n\Model\Countries\Locale\Name::schema_fields_DISPLAY_NAME . ",main_table.{$country_code_field})", "%{$search}%", 'LIKE');
         }
     }
 
@@ -132,26 +132,26 @@ class Locales extends BaseController
             $localeCodes = Locale::extractLocaleCodes($locale);
             
             $locales[] = [
-                $this->locale::fields_CODE => $locale,
-                $this->locale::fields_COUNTRY_CODE => $country_code,
-                $this->locale::fields_SHORT_CODE => $localeCodes['short_code'],
-                $this->locale::fields_ISO2 => $localeCodes['iso2'],
-                $this->locale::fields_ISO3 => $localeCodes['iso3'],
+                $this->locale::schema_fields_CODE => $locale,
+                $this->locale::schema_fields_COUNTRY_CODE => $country_code,
+                $this->locale::schema_fields_SHORT_CODE => $localeCodes['short_code'],
+                $this->locale::schema_fields_ISO2 => $localeCodes['iso2'],
+                $this->locale::schema_fields_ISO3 => $localeCodes['iso3'],
             ];
             $locales_display[] = [
-                Name::fields_DISPLAY_LOCALE_CODE => Cookie::getLangLocal(),
-                Name::fields_LOCALE_CODE => $locale,
-                Name::fields_DISPLAY_NAME => $this->i18n->getLocaleName($locale, Cookie::getLangLocal()),
+                Name::schema_fields_DISPLAY_LOCALE_CODE => Cookie::getLangLocal(),
+                Name::schema_fields_LOCALE_CODE => $locale,
+                Name::schema_fields_DISPLAY_NAME => $this->i18n->getLocaleName($locale, Cookie::getLangLocal()),
             ];
         }
         $this->locale->beginTransaction();
         try {
             // 安装地区
-            $result = $this->locale->reset()->insert($locales, $this->locale::fields_CODE)->fetch();
+            $result = $this->locale->reset()->insert($locales, $this->locale::schema_fields_CODE)->fetch();
             // 安装地区展示码
             $this->localeName->reset()->insert($locales_display, [
-                $this->localeName::fields_LOCALE_CODE,
-                $this->localeName::fields_DISPLAY_LOCALE_CODE
+                $this->localeName::schema_fields_LOCALE_CODE,
+                $this->localeName::schema_fields_DISPLAY_LOCALE_CODE
             ])->fetch();
             $this->locale->commit();
             $this->getMessageManager()->addSuccess(__('安装国家地区数据成功！'));
@@ -168,8 +168,8 @@ class Locales extends BaseController
         if ($this->i18n->localeExists($code)) {
             try {
                 $this->locale->clearQuery();# 清理之前加载的target_locale_code数据
-                $this->locale->where($this->locale::fields_CODE, $code)
-                    ->setData($this->locale::fields_IS_ACTIVE, 1)
+                $this->locale->where($this->locale::schema_fields_CODE, $code)
+                    ->setData($this->locale::schema_fields_IS_ACTIVE, 1)
                     ->update()
                     ->fetch();
                 $this->getMessageManager()->addSuccess(__('激活成功！'));
@@ -189,8 +189,8 @@ class Locales extends BaseController
             try {
                 $this->locale->clearQuery();# 清理之前加载的target_locale_code数据
                 $this->locale->clearData();# 清理之前加载的target_locale_code数据
-                $this->locale->where($this->locale::fields_CODE, $code)
-                    ->setData($this->locale::fields_IS_ACTIVE, 0)
+                $this->locale->where($this->locale::schema_fields_CODE, $code)
+                    ->setData($this->locale::schema_fields_IS_ACTIVE, 0)
                     ->update()
                     ->fetch();
                 $this->getMessageManager()->addSuccess(__('禁用成功！'));
@@ -215,14 +215,14 @@ class Locales extends BaseController
         $flag = $this->i18n->getCountryFlagWithLocal($code, 42);
         
         // 如果简码字段为空，自动计算并保存
-        if (!$locale->getData($locale::fields_SHORT_CODE)) {
+        if (!$locale->getData($locale::schema_fields_SHORT_CODE)) {
             $localeCodes = Locale::extractLocaleCodes($code);
-            $locale->setData($locale::fields_SHORT_CODE, $localeCodes['short_code'])
-                ->setData($locale::fields_ISO2, $localeCodes['iso2'])
-                ->setData($locale::fields_ISO3, $localeCodes['iso3']);
+            $locale->setData($locale::schema_fields_SHORT_CODE, $localeCodes['short_code'])
+                ->setData($locale::schema_fields_ISO2, $localeCodes['iso2'])
+                ->setData($locale::schema_fields_ISO3, $localeCodes['iso3']);
         }
         
-        $locale->setData($locale::fields_IS_INSTALL, 1)->setData($locale::fields_FLAG, $flag['flag'] ?? '')->save(true);
+        $locale->setData($locale::schema_fields_IS_INSTALL, 1)->setData($locale::schema_fields_FLAG, $flag['flag'] ?? '')->save(true);
         $this->getMessageManager()->addSuccess(__('区域已安装！区域代码：%{1}', $code));
         $this->redirect($this->request->getReferer());
     }
@@ -236,7 +236,7 @@ class Locales extends BaseController
             $this->getMessageManager()->addWarning(__('该区域不存在！区域代码：%{1}', $code));
             $this->redirect($this->request->getReferer());
         }
-        $locale->setData($locale::fields_IS_INSTALL, 0)->save();
+        $locale->setData($locale::schema_fields_IS_INSTALL, 0)->save();
         $this->getMessageManager()->addSuccess(__('区域已卸载！区域代码：%{1}', $code));
         $this->redirect($this->request->getReferer());
     }
@@ -273,20 +273,20 @@ class Locales extends BaseController
                 $localeCodes = Locale::extractLocaleCodes($locale);
                 
                 $locales_data[] = [
-                    $this->locale::fields_CODE => $locale,
-                    $this->locale::fields_COUNTRY_CODE => $country_code,
-                    $this->locale::fields_SHORT_CODE => $localeCodes['short_code'],
-                    $this->locale::fields_ISO2 => $localeCodes['iso2'],
-                    $this->locale::fields_ISO3 => $localeCodes['iso3'],
-                    $this->locale::fields_IS_INSTALL => 0,
-                    $this->locale::fields_IS_ACTIVE => 0,
-                    $this->locale::fields_FLAG => ''
+                    $this->locale::schema_fields_CODE => $locale,
+                    $this->locale::schema_fields_COUNTRY_CODE => $country_code,
+                    $this->locale::schema_fields_SHORT_CODE => $localeCodes['short_code'],
+                    $this->locale::schema_fields_ISO2 => $localeCodes['iso2'],
+                    $this->locale::schema_fields_ISO3 => $localeCodes['iso3'],
+                    $this->locale::schema_fields_IS_INSTALL => 0,
+                    $this->locale::schema_fields_IS_ACTIVE => 0,
+                    $this->locale::schema_fields_FLAG => ''
                 ];
                 
                 $locales_display[] = [
-                    Name::fields_DISPLAY_LOCALE_CODE => Cookie::getLangLocal(),
-                    Name::fields_LOCALE_CODE => $locale,
-                    Name::fields_DISPLAY_NAME => $this->i18n->getLocaleName($locale, Cookie::getLangLocal()),
+                    Name::schema_fields_DISPLAY_LOCALE_CODE => Cookie::getLangLocal(),
+                    Name::schema_fields_LOCALE_CODE => $locale,
+                    Name::schema_fields_DISPLAY_NAME => $this->i18n->getLocaleName($locale, Cookie::getLangLocal()),
                 ];
             }
             
@@ -297,12 +297,12 @@ class Locales extends BaseController
             $localeModel->beginTransaction();
             
             // 插入区域数据
-            $localeModel->reset()->insert($locales_data, $this->locale::fields_CODE)->fetch();
+            $localeModel->reset()->insert($locales_data, $this->locale::schema_fields_CODE)->fetch();
             
             // 插入区域显示名称数据
             $localeNameModel->reset()->insert($locales_display, [
-                $this->localeName::fields_LOCALE_CODE,
-                $this->localeName::fields_DISPLAY_LOCALE_CODE
+                $this->localeName::schema_fields_LOCALE_CODE,
+                $this->localeName::schema_fields_DISPLAY_LOCALE_CODE
             ])->fetch();
             
             $localeModel->commit();
@@ -338,11 +338,11 @@ class Locales extends BaseController
                 ->joinModel(
                     Locale::class,
                     'l',
-                    'main_table.' . Name::fields_LOCALE_CODE . '=l.' . Locale::fields_CODE,
+                    'main_table.' . Name::schema_fields_LOCALE_CODE . '=l.' . Locale::schema_fields_CODE,
                     'inner'
                 )
-                ->where('l.' . Locale::fields_COUNTRY_CODE, $country_code)
-                ->where('main_table.' . Name::fields_DISPLAY_LOCALE_CODE, $currentLang)
+                ->where('l.' . Locale::schema_fields_COUNTRY_CODE, $country_code)
+                ->where('main_table.' . Name::schema_fields_DISPLAY_LOCALE_CODE, $currentLang)
                 ->count();
             
             if ($existingNamesCount > 0) {
@@ -352,8 +352,8 @@ class Locales extends BaseController
             
             // 获取该国家下所有已存在的区域
             $existingLocales = $this->locale->clearQuery()
-                ->where($this->locale::fields_COUNTRY_CODE, $country_code)
-                ->select($this->locale::fields_CODE)
+                ->where($this->locale::schema_fields_COUNTRY_CODE, $country_code)
+                ->select($this->locale::schema_fields_CODE)
                 ->fetch()
                 ->getItems();
             
@@ -365,15 +365,15 @@ class Locales extends BaseController
             $missingNames = [];
             
             foreach ($existingLocales as $locale) {
-                $localeCode = $locale->getData($this->locale::fields_CODE);
+                $localeCode = $locale->getData($this->locale::schema_fields_CODE);
                 
                 // 获取区域显示名称
                 $displayName = $this->i18n->getLocaleName($localeCode, $currentLang);
                 if ($displayName) {
                     $missingNames[] = [
-                        Name::fields_DISPLAY_LOCALE_CODE => $currentLang,
-                        Name::fields_LOCALE_CODE => $localeCode,
-                        Name::fields_DISPLAY_NAME => $displayName,
+                        Name::schema_fields_DISPLAY_LOCALE_CODE => $currentLang,
+                        Name::schema_fields_LOCALE_CODE => $localeCode,
+                        Name::schema_fields_DISPLAY_NAME => $displayName,
                     ];
                 }
             }
@@ -382,8 +382,8 @@ class Locales extends BaseController
             if (!empty($missingNames)) {
                 $this->localeName->clearQuery()
                     ->insert($missingNames, [
-                        Name::fields_LOCALE_CODE,
-                        Name::fields_DISPLAY_LOCALE_CODE
+                        Name::schema_fields_LOCALE_CODE,
+                        Name::schema_fields_DISPLAY_LOCALE_CODE
                     ])
                     ->fetch();
             }

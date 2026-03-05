@@ -36,11 +36,11 @@ class BaseController extends \Weline\Framework\App\Controller\BackendController
     {
         // 尝试使用JOIN查询，如果失败则使用基本查询
         $locale = $locale->joinModel(Locale\Name::class, 'ln', 'main_table.code=ln.locale_code')
-            ->where('ln.' . Locale\Name::fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal());
+            ->where('ln.' . Locale\Name::schema_fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal());
         $this->locale = $locale;
         $targetLocale = clone $locale;
         $targetLocale = $targetLocale->clearQuery()
-            ->where($locale::fields_CODE, Cookie::getLangLocal())
+            ->where($locale::schema_fields_CODE, Cookie::getLangLocal())
             ->find()
             ->fetch();
         if (!$targetLocale->getId()) {
@@ -92,9 +92,9 @@ class BaseController extends \Weline\Framework\App\Controller\BackendController
             ];
         } else {
             $target_locale = $targetLocale->getData();
-            $target_locale['name'] = $targetLocale->getData(Locale\Name::fields_DISPLAY_NAME) ?: $i18n->getLocaleName(Cookie::getLangLocal(), Cookie::getLangLocal());
+            $target_locale['name'] = $targetLocale->getData(Locale\Name::schema_fields_DISPLAY_NAME) ?: $i18n->getLocaleName(Cookie::getLangLocal(), Cookie::getLangLocal());
             // 获取国家代码并获取国旗
-            $countryCode = $targetLocale->getData($locale::fields_COUNTRY_CODE);
+            $countryCode = $targetLocale->getData($locale::schema_fields_COUNTRY_CODE);
             if ($countryCode) {
                 try {
                     $target_locale['flag'] = $i18n->getCountryFlag($countryCode, 24, 18) ?: '';

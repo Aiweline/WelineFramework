@@ -95,7 +95,7 @@ class AiTranslation implements CronTaskInterface
 
             // 为每个语言执行翻译
             foreach ($locales as $locale) {
-                $localeCode = $locale[Locale::fields_CODE] ?? '';
+                $localeCode = $locale[Locale::schema_fields_CODE] ?? '';
                 
                 // 跳过中文（源语言）
                 if (empty($localeCode) || strpos($localeCode, 'zh_Hans') !== false) {
@@ -162,7 +162,7 @@ class AiTranslation implements CronTaskInterface
     {
         try {
             $locales = $this->localeModel->clear()
-                ->where(Locale::fields_IS_ACTIVE, 1)
+                ->where(Locale::schema_fields_IS_ACTIVE, 1)
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -170,8 +170,8 @@ class AiTranslation implements CronTaskInterface
             return $locales ?: [];
         } catch (\Exception $e) {
             return [
-                [Locale::fields_CODE => 'en_US'],
-                [Locale::fields_CODE => 'ja_JP'],
+                [Locale::schema_fields_CODE => 'en_US'],
+                [Locale::schema_fields_CODE => 'ja_JP'],
             ];
         }
     }
