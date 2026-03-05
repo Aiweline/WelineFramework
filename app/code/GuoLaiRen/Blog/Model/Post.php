@@ -9,33 +9,59 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\Blog\Model;
 
-use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 
+#[Table(comment: '博客文章表')]
+#[Index(name: 'idx_site_id', columns: ['site_id'], comment: '站点索引')]
+#[Index(name: 'idx_category_id', columns: ['category_id'], comment: '分类索引')]
+#[Index(name: 'idx_status', columns: ['status'], comment: '状态索引')]
+#[Index(name: 'idx_published_at', columns: ['published_at'], comment: '发布时间索引')]
+#[Index(name: 'idx_is_featured', columns: ['is_featured'], comment: '精选索引')]
+#[Index(name: 'idx_trend_profile_id', columns: ['trend_profile_id'], comment: '趋势画像索引')]
 class Post extends Model
 {
-    public const table = 'guolairen_blog_post';
+    public const schema_table = 'guolairen_blog_post';
+    public const schema_primary_key = 'post_id';
 
-    // 字段定义
-    public const fields_ID           = 'post_id';
-    public const fields_SITE_ID      = 'site_id';
-    public const fields_CATEGORY_ID  = 'category_id';
-    public const fields_TITLE        = 'title';
-    public const fields_SLUG         = 'slug';
-    public const fields_SUMMARY      = 'summary';
-    public const fields_CONTENT      = 'content';
-    public const fields_COVER_IMAGE  = 'cover_image';
-    public const fields_AUTHOR       = 'author';
-    public const fields_TAGS         = 'tags';
-    public const fields_VIEW_COUNT   = 'view_count';
-    public const fields_STATUS       = 'status';
-    public const fields_IS_FEATURED  = 'is_featured';
-    public const fields_PUBLISHED_AT   = 'published_at';
-    public const fields_CREATED_AT     = 'created_at';
-    public const fields_UPDATED_AT     = 'updated_at';
-    public const fields_TREND_PROFILE_ID = 'trend_profile_id';
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '文章ID')]
+    public const schema_fields_ID           = 'post_id';
+    #[Col(type: 'int', nullable: false, default: 0, comment: '所属站点ID')]
+    public const schema_fields_SITE_ID      = 'site_id';
+    #[Col(type: 'int', nullable: false, default: 0, comment: '分类ID')]
+    public const schema_fields_CATEGORY_ID  = 'category_id';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '文章标题')]
+    public const schema_fields_TITLE        = 'title';
+    #[Col(type: 'varchar', length: 255, nullable: false, unique: true, comment: 'URL别名（唯一）')]
+    public const schema_fields_SLUG         = 'slug';
+    #[Col(type: 'text', nullable: true, comment: '文章摘要')]
+    public const schema_fields_SUMMARY      = 'summary';
+    #[Col(type: 'text', nullable: true, comment: '文章内容HTML')]
+    public const schema_fields_CONTENT      = 'content';
+    #[Col(type: 'varchar', length: 500, nullable: true, comment: '封面图片URL')]
+    public const schema_fields_COVER_IMAGE  = 'cover_image';
+    #[Col(type: 'varchar', length: 100, nullable: true, comment: '作者')]
+    public const schema_fields_AUTHOR       = 'author';
+    #[Col(type: 'varchar', length: 500, nullable: true, comment: '标签（逗号分隔）')]
+    public const schema_fields_TAGS         = 'tags';
+    #[Col(type: 'int', nullable: false, default: 0, comment: '浏览量')]
+    public const schema_fields_VIEW_COUNT   = 'view_count';
+    #[Col(type: 'smallint', length: 1, nullable: false, default: 0, comment: '状态:0草稿,1已发布')]
+    public const schema_fields_STATUS       = 'status';
+    #[Col(type: 'smallint', length: 1, nullable: false, default: 0, comment: '是否精选:0否,1是')]
+    public const schema_fields_IS_FEATURED  = 'is_featured';
+    #[Col(type: 'datetime', nullable: true, comment: '发布时间')]
+    public const schema_fields_PUBLISHED_AT   = 'published_at';
+    #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
+    public const schema_fields_CREATED_AT     = 'created_at';
+    #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '更新时间')]
+    public const schema_fields_UPDATED_AT     = 'updated_at';
+    #[Col(type: 'int', nullable: false, default: 0, comment: '趋势画像ID（自动发文时填充）')]
+    public const schema_fields_TREND_PROFILE_ID = 'trend_profile_id';
 
     // 状态常量
     public const STATUS_DRAFT     = 0;
@@ -46,7 +72,7 @@ class Post extends Model
      */
     public function getStatusName(): string
     {
-        return $this->getData(self::fields_STATUS) == self::STATUS_PUBLISHED
+        return $this->getData(self::schema_fields_STATUS) == self::STATUS_PUBLISHED
             ? __('已发布')
             : __('草稿');
     }
@@ -67,7 +93,7 @@ class Post extends Model
      */
     public function getCategory(): ?Category
     {
-        $categoryId = $this->getData(self::fields_CATEGORY_ID);
+        $categoryId = $this->getData(self::schema_fields_CATEGORY_ID);
         if (!$categoryId) {
             return null;
         }
@@ -83,7 +109,7 @@ class Post extends Model
     public function getCategoryName(): string
     {
         $category = $this->getCategory();
-        return $category ? $category->getData(Category::fields_NAME) : '';
+        return $category ? $category->getData(Category::schema_fields_NAME) : '';
     }
 
     /**
@@ -91,7 +117,7 @@ class Post extends Model
      */
     public function getTagsArray(): array
     {
-        $tags = $this->getData(self::fields_TAGS);
+        $tags = $this->getData(self::schema_fields_TAGS);
         if (empty($tags)) {
             return [];
         }
@@ -103,8 +129,8 @@ class Post extends Model
      */
     public function incrementViewCount(): self
     {
-        $count = (int)$this->getData(self::fields_VIEW_COUNT);
-        $this->setData(self::fields_VIEW_COUNT, $count + 1);
+        $count = (int)$this->getData(self::schema_fields_VIEW_COUNT);
+        $this->setData(self::schema_fields_VIEW_COUNT, $count + 1);
         return $this;
     }
 
@@ -113,297 +139,8 @@ class Post extends Model
      */
     public function isFeatured(): bool
     {
-        return (bool)$this->getData(self::fields_IS_FEATURED);
+        return (bool)$this->getData(self::schema_fields_IS_FEATURED);
     }
 
-    /**
-     * 安装表结构
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist()) {
-            return;
-        }
-
-        $setup->createTable('博客文章表')
-            ->addColumn(
-                self::fields_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                'primary key auto_increment',
-                '文章ID'
-            )
-            ->addColumn(
-                self::fields_SITE_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                'not null default 0',
-                '所属站点ID'
-            )
-            ->addColumn(
-                self::fields_CATEGORY_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                'not null default 0',
-                '分类ID'
-            )
-            ->addColumn(
-                self::fields_TITLE,
-                TableInterface::column_type_VARCHAR,
-                255,
-                'not null',
-                '文章标题'
-            )
-            ->addColumn(
-                self::fields_SLUG,
-                TableInterface::column_type_VARCHAR,
-                255,
-                'not null unique',
-                'URL别名（唯一）'
-            )
-            ->addColumn(
-                self::fields_SUMMARY,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '文章摘要'
-            )
-            ->addColumn(
-                self::fields_CONTENT,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '文章内容HTML'
-            )
-            ->addColumn(
-                self::fields_COVER_IMAGE,
-                TableInterface::column_type_VARCHAR,
-                500,
-                '',
-                '封面图片URL'
-            )
-            ->addColumn(
-                self::fields_AUTHOR,
-                TableInterface::column_type_VARCHAR,
-                100,
-                '',
-                '作者'
-            )
-            ->addColumn(
-                self::fields_TAGS,
-                TableInterface::column_type_VARCHAR,
-                500,
-                '',
-                '标签（逗号分隔）'
-            )
-            ->addColumn(
-                self::fields_VIEW_COUNT,
-                TableInterface::column_type_INTEGER,
-                0,
-                'not null default 0',
-                '浏览量'
-            )
-            ->addColumn(
-                self::fields_STATUS,
-                TableInterface::column_type_SMALLINT,
-                1,
-                'not null default 0',
-                '状态:0草稿,1已发布'
-            )
-            ->addColumn(
-                self::fields_IS_FEATURED,
-                TableInterface::column_type_SMALLINT,
-                1,
-                'not null default 0',
-                '是否精选:0否,1是'
-            )
-            ->addColumn(
-                self::fields_PUBLISHED_AT,
-                TableInterface::column_type_DATETIME,
-                0,
-                '',
-                '发布时间'
-            )
-            ->addColumn(
-                self::fields_CREATED_AT,
-                TableInterface::column_type_DATETIME,
-                0,
-                'not null default CURRENT_TIMESTAMP',
-                '创建时间'
-            )
-            ->addColumn(
-                self::fields_UPDATED_AT,
-                TableInterface::column_type_DATETIME,
-                0,
-                'not null default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP',
-                '更新时间'
-            )
-            ->addColumn(
-                self::fields_TREND_PROFILE_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                'not null default 0',
-                '趋势画像ID（自动发文时填充）'
-            )
-            ->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_site_id',
-                [self::fields_SITE_ID],
-                '站点索引'
-            )
-            ->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_category_id',
-                [self::fields_CATEGORY_ID],
-                '分类索引'
-            )
-            ->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_status',
-                [self::fields_STATUS],
-                '状态索引'
-            )
-            ->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_published_at',
-                [self::fields_PUBLISHED_AT],
-                '发布时间索引'
-            )
-            ->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_is_featured',
-                [self::fields_IS_FEATURED],
-                '精选索引'
-            )
-            ->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_trend_profile_id',
-                [self::fields_TREND_PROFILE_ID],
-                '趋势画像索引'
-            )
-            ->create();
-    }
-
-    /**
-     * 升级表结构
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            return;
-        }
-        
-        // 添加 site_id 字段
-        if (!$setup->hasField(self::fields_SITE_ID)) {
-            $setup->alterTable()->addColumn(
-                self::fields_SITE_ID,
-                self::fields_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                'not null default 0',
-                '所属站点ID'
-            )->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_site_id',
-                [self::fields_SITE_ID],
-                '站点索引'
-            )->alter();
-        }
-        
-        // 添加 category_id 字段
-        if (!$setup->hasField(self::fields_CATEGORY_ID)) {
-            $setup->alterTable()->addColumn(
-                self::fields_CATEGORY_ID,
-                self::fields_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                'not null default 0',
-                '分类ID'
-            )->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_category_id',
-                [self::fields_CATEGORY_ID],
-                '分类索引'
-            )->alter();
-        }
-        
-        // 添加 author 字段
-        if (!$setup->hasField(self::fields_AUTHOR)) {
-            $setup->alterTable()->addColumn(
-                self::fields_AUTHOR,
-                self::fields_COVER_IMAGE,
-                TableInterface::column_type_VARCHAR,
-                100,
-                '',
-                '作者'
-            )->alter();
-        }
-        
-        // 添加 tags 字段
-        if (!$setup->hasField(self::fields_TAGS)) {
-            $setup->alterTable()->addColumn(
-                self::fields_TAGS,
-                self::fields_AUTHOR,
-                TableInterface::column_type_VARCHAR,
-                500,
-                '',
-                '标签（逗号分隔）'
-            )->alter();
-        }
-        
-        // 添加 view_count 字段
-        if (!$setup->hasField(self::fields_VIEW_COUNT)) {
-            $setup->alterTable()->addColumn(
-                self::fields_VIEW_COUNT,
-                self::fields_TAGS,
-                TableInterface::column_type_INTEGER,
-                0,
-                'not null default 0',
-                '浏览量'
-            )->alter();
-        }
-        
-        // 添加 is_featured 字段
-        if (!$setup->hasField(self::fields_IS_FEATURED)) {
-            $setup->alterTable()->addColumn(
-                self::fields_IS_FEATURED,
-                self::fields_STATUS,
-                TableInterface::column_type_SMALLINT,
-                1,
-                'not null default 0',
-                '是否精选:0否,1是'
-            )->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_is_featured',
-                [self::fields_IS_FEATURED],
-                '精选索引'
-            )->alter();
-        }
-
-        // 趋势自动发文来源画像 ID（用于按站点+画像统计当日已发篇数）
-        if (!$setup->hasField(self::fields_TREND_PROFILE_ID)) {
-            $setup->alterTable()->addColumn(
-                self::fields_TREND_PROFILE_ID,
-                self::fields_CATEGORY_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                'not null default 0',
-                '趋势画像ID（自动发文时填充）'
-            )->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_trend_profile_id',
-                [self::fields_TREND_PROFILE_ID],
-                '趋势画像索引'
-            )->alter();
-        }
-    }
-
-    /**
-     * 设置表结构
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
 }
 

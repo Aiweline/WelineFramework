@@ -31,12 +31,12 @@ class TrendProfile extends BackendController
         $listModel->clear();
 
         if ($search = trim((string)$this->request->getGet('search', ''))) {
-            $listModel->where(TrendProfileModel::fields_NAME, '%' . $search . '%', 'like');
+            $listModel->where(TrendProfileModel::schema_fields_NAME, '%' . $search . '%', 'like');
         }
 
         $items = $listModel
-            ->order(TrendProfileModel::fields_SORT, 'ASC')
-            ->order(TrendProfileModel::fields_ID, 'DESC')
+            ->order(TrendProfileModel::schema_fields_SORT, 'ASC')
+            ->order(TrendProfileModel::schema_fields_ID, 'DESC')
             ->pagination()
             ->select()
             ->fetch();
@@ -75,10 +75,10 @@ class TrendProfile extends BackendController
             $keywordsArr = array_values(array_filter(array_map('trim', explode(',', $keywords))));
 
             $profile = ObjectManager::getInstance(TrendProfileModel::class);
-            $profile->setData(TrendProfileModel::fields_NAME, $name)
+            $profile->setData(TrendProfileModel::schema_fields_NAME, $name)
                 ->setKeywordsFromArray($keywordsArr)
-                ->setData(TrendProfileModel::fields_SORT, (int)($data['sort'] ?? 0))
-                ->setData(TrendProfileModel::fields_IS_ACTIVE, isset($data['is_active']) ? 1 : 0)
+                ->setData(TrendProfileModel::schema_fields_SORT, (int)($data['sort'] ?? 0))
+                ->setData(TrendProfileModel::schema_fields_IS_ACTIVE, isset($data['is_active']) ? 1 : 0)
                 ->save();
 
             MessageManager::success(__('画像已创建'));
@@ -132,10 +132,10 @@ class TrendProfile extends BackendController
             $keywords = (string)($data['keywords'] ?? '');
             $keywordsArr = array_values(array_filter(array_map('trim', explode(',', $keywords))));
 
-            $profile->setData(TrendProfileModel::fields_NAME, $name)
+            $profile->setData(TrendProfileModel::schema_fields_NAME, $name)
                 ->setKeywordsFromArray($keywordsArr)
-                ->setData(TrendProfileModel::fields_SORT, (int)($data['sort'] ?? 0))
-                ->setData(TrendProfileModel::fields_IS_ACTIVE, isset($data['is_active']) ? 1 : 0)
+                ->setData(TrendProfileModel::schema_fields_SORT, (int)($data['sort'] ?? 0))
+                ->setData(TrendProfileModel::schema_fields_IS_ACTIVE, isset($data['is_active']) ? 1 : 0)
                 ->save();
 
             MessageManager::success(__('画像已保存'));
@@ -223,10 +223,10 @@ class TrendProfile extends BackendController
             $profile = ObjectManager::getInstance(TrendProfileModel::class);
         }
 
-        $profile->setData(TrendProfileModel::fields_NAME, $name)
+        $profile->setData(TrendProfileModel::schema_fields_NAME, $name)
             ->setKeywordsFromArray($keywordsArr)
-            ->setData(TrendProfileModel::fields_SORT, (int)($data['sort'] ?? 0))
-            ->setData(TrendProfileModel::fields_IS_ACTIVE, isset($data['is_active']) ? 1 : 0)
+            ->setData(TrendProfileModel::schema_fields_SORT, (int)($data['sort'] ?? 0))
+            ->setData(TrendProfileModel::schema_fields_IS_ACTIVE, isset($data['is_active']) ? 1 : 0)
             ->save();
     }
 
