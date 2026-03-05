@@ -1,45 +1,47 @@
 <?php
-
 /*
  * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
  * 邮箱：aiweline@qq.com
  * 网址：aiweline.com
  * 论坛：https://bbs.aiweline.com
  */
-
 namespace Weline\Theme\Model;
-
 use Weline\Framework\App;
 use Weline\Framework\App\Env;
-use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Framework\Setup\Db\Setup;
-
+#[Table(comment: '主题表')]
+#[Index(name: 'parent_id', columns: ['parent_id'])]
 class WelineTheme extends Model
 {
+    public string $module_name = '';
     public const cache_TIME = 604800;
-
-    public const fields_ID = 'id';
-
-    public const fields_NAME = 'name';
-
-    public const fields_MODULE_NAME = 'module_name';
-
-    public const fields_PATH = 'path';
-
-    public const fields_PARENT_ID = 'parent_id';
-
-    public const fields_IS_ACTIVE = 'is_active';
-
-    public const fields_CONFIG = 'config';
-
+    public const schema_table = 'weline_theme';
+    public const schema_primary_key = 'id';
+    #[Col('int', 11, primaryKey: true, autoIncrement: true, nullable: false, comment: 'ID')]
+    public const schema_fields_ID = 'id';
+    #[Col('varchar', 60, nullable: false, unique: true, comment: '主题名')]
+    public const schema_fields_NAME = 'name';
+    #[Col('varchar', 255, nullable: false, comment: '模块名')]
+    public const schema_fields_MODULE_NAME = 'module_name';
+    #[Col('varchar', 128, nullable: false, unique: true, comment: '主题路径')]
+    public const schema_fields_PATH = 'path';
+    #[Col('int', 11, comment: '父级主题')]
+    public const schema_fields_PARENT_ID = 'parent_id';
+    #[Col('int', 11, comment: '是否激活')]
+    public const schema_fields_IS_ACTIVE = 'is_active';
+    #[Col('text', comment: '主题配置JSON')]
+    public const schema_fields_CONFIG = 'config';
+    #[Col('datetime', default: 'CURRENT_TIMESTAMP', comment: '安装时间')]
+    public const schema_fields_CREATE_TIME = 'create_time';
+    #[Col('datetime', default: 'CURRENT_TIMESTAMP', comment: '更新时间')]
+    public const schema_fields_UPDATE_TIME = 'update_time';
 //    protected $table = Install::table_THEME; # 如果需要设置特殊表名 需要加前缀
-
     private ?WelineTheme $theme = null;
-
     /**
      * @DESC          # 获取激活的主题 有缓存
      *
@@ -59,76 +61,60 @@ class WelineTheme extends Model
         if ($theme = $this->_cache->get('theme')) {
             return $this->setData($theme);
         }
-        $this->load(self::fields_IS_ACTIVE, 1);
-
+        $this->load(self::schema_fields_IS_ACTIVE, 1);
         if ($this->getId()) {
             $this->_cache->set('theme', $this->getData(), static::cache_TIME);
             Env::getInstance()->setConfig('theme', $this->getData());
         }
         return $this;
     }
-
     public function getName()
     {
-        return $this->getData(self::fields_NAME);
+        return $this->getData(self::schema_fields_NAME);
     }
-
     public function setName($value): static
     {
-        $this->setData(self::fields_NAME, $value);
-
+        $this->setData(self::schema_fields_NAME, $value);
         return $this;
     }
-
     public function getModuleName()
     {
-        return $this->getData(self::fields_MODULE_NAME);
+        return $this->getData(self::schema_fields_MODULE_NAME);
     }
-
     public function setModuleName(string $module_name): static
     {
-        $this->setData(self::fields_MODULE_NAME, $module_name);
-
+        $this->setData(self::schema_fields_MODULE_NAME, $module_name);
         return $this;
     }
-
     public function getPath(): string
     {
-        if ($this->getData(self::fields_PATH)) {
-            return Env::path_THEME_DESIGN_DIR . str_replace('\\', DS, $this->getData(self::fields_PATH)) . DS;
+        if ($this->getData(self::schema_fields_PATH)) {
+            return Env::path_THEME_DESIGN_DIR . str_replace('\\', DS, $this->getData(self::schema_fields_PATH)) . DS;
         }
         return App::Env('theme')['path'] ?? '';
     }
-
     public function getOriginPath(): string
     {
-        return $this->getData(self::fields_PATH);
+        return $this->getData(self::schema_fields_PATH);
     }
-
     public function getRelatePath(): string
     {
-        return str_replace(BP, '', Env::path_THEME_DESIGN_DIR) . str_replace('\\', DS, $this->getData(self::fields_PATH)) . DS;
+        return str_replace(BP, '', Env::path_THEME_DESIGN_DIR) . str_replace('\\', DS, $this->getData(self::schema_fields_PATH)) . DS;
     }
-
     public function setPath($value): static
     {
-        $this->setData(self::fields_PATH, $value);
-
+        $this->setData(self::schema_fields_PATH, $value);
         return $this;
     }
-
     public function getParentId()
     {
-        return $this->getData(self::fields_PARENT_ID);
+        return $this->getData(self::schema_fields_PARENT_ID);
     }
-
     public function setParentId($value): static
     {
-        $this->setData(self::fields_PARENT_ID, $value);
-
+        $this->setData(self::schema_fields_PARENT_ID, $value);
         return $this;
     }
-
     /**
      * 获取父主题对象
      * 
@@ -140,7 +126,6 @@ class WelineTheme extends Model
         if (!$parentId) {
             return null;
         }
-
         // 尝试从缓存获取
         $cacheKey = 'theme_parent_' . $parentId;
         if ($cached = $this->_cache->get($cacheKey)) {
@@ -148,7 +133,6 @@ class WelineTheme extends Model
             $parentTheme = ObjectManager::getInstance(WelineTheme::class);
             return $parentTheme->setData($cached);
         }
-
         // 从数据库加载
         try {
             /** @var WelineTheme $parentTheme */
@@ -163,10 +147,8 @@ class WelineTheme extends Model
         } catch (\Exception $e) {
             // 加载失败，返回null
         }
-
         return null;
     }
-
     /**
      * 获取完整的主题继承链（从基础到当前）
      * 
@@ -186,11 +168,9 @@ class WelineTheme extends Model
             }
             return $chain;
         }
-
         $chain = [];
         $visited = [];
         $currentTheme = $this;
-
         // 递归收集父主题
         while ($currentTheme && $currentTheme->getId()) {
             $themeId = $currentTheme->getId();
@@ -200,10 +180,8 @@ class WelineTheme extends Model
                 break;
             }
             $visited[] = $themeId;
-
             // 将父主题添加到链的前面（保证顺序：基础 → 父 → 子）
             array_unshift($chain, $currentTheme);
-
             // 获取父主题
             $parentTheme = $currentTheme->getParentTheme();
             if ($parentTheme) {
@@ -212,40 +190,32 @@ class WelineTheme extends Model
                 break;
             }
         }
-
         // 缓存继承链数据
         $chainData = [];
         foreach ($chain as $theme) {
             $chainData[] = $theme->getData();
         }
         $this->_cache->set($cacheKey, $chainData, static::cache_TIME);
-
         return $chain;
     }
-
     public function isActive()
     {
-        return $this->getData(self::fields_IS_ACTIVE);
+        return $this->getData(self::schema_fields_IS_ACTIVE);
     }
-
     public function setIsActive(bool $value): static
     {
-        $this->setData(self::fields_IS_ACTIVE, (int)$value);
+        $this->setData(self::schema_fields_IS_ACTIVE, (int)$value);
         return $this;
     }
-
     public function getCreateTime()
     {
-        return $this->getData(self::fields_CREATE_TIME);
+        return $this->getData(self::schema_fields_CREATE_TIME);
     }
-
     public function setCreateTime($time): static
     {
-        $this->setData(self::fields_CREATE_TIME, $time);
-
+        $this->setData(self::schema_fields_CREATE_TIME, $time);
         return $this;
     }
-
     /**
      * @DESC         |保存之后如果当前主题处于激活状态则启用当前主题
      * 启用前清除所有缓存
@@ -258,110 +228,20 @@ class WelineTheme extends Model
         if ($this->isActive() && $this->getId()) {
             #$this->query('UPDATE ' . $this->getTable() . ' SET `is_active`=0 WHERE id != ' . $this->getId())->fetch();
             $this->getQuery()
-                 ->where(self::fields_IS_ACTIVE, 1)
-                 ->where(self::fields_ID, $this->getId(), '!=')
-                 ->update(self::fields_IS_ACTIVE, 0)
+                 ->where(self::schema_fields_IS_ACTIVE, 1)
+                 ->where(self::schema_fields_ID, $this->getId(), '!=')
+                 ->update(self::schema_fields_IS_ACTIVE, 0)
                  ->fetch();
             Env::getInstance()->setConfig('theme', $this->getData());
         }
     }
-
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-//        if ($setup->tableExist()) {
-//            $setup->dropTable();
-//        }
-        $this->install($setup, $context);
-    }
-
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-    }
-
-    public function install(ModelSetup $setup, Context $context): void
-    {
-//        $setup->dropTable();
-        if (!$setup->tableExist()) {
-            $setup->getPrinting()->warning('安装数据库表：' . $this->getTable());
-            $setup->createTable(
-                '主题表'
-            )->addColumn(
-                'id',
-                TableInterface::column_type_INTEGER,
-                11,
-                'primary key AUTO_INCREMENT',
-                'ID'
-            )->addColumn(
-                'module_name',
-                TableInterface::column_type_VARCHAR,
-                '60',
-                'UNIQUE NOT NULL ',
-                '主题模块名'
-            )->addColumn(
-                'name',
-                TableInterface::column_type_VARCHAR,
-                '60',
-                'UNIQUE NOT NULL ',
-                '主题名'
-            )->addColumn(
-                'path',
-                TableInterface::column_type_VARCHAR,
-                '128',
-                'UNIQUE NOT NULL ',
-                '主题路径'
-            )->addColumn(
-                'parent_id',
-                TableInterface::column_type_INTEGER,
-                11,
-                '',
-                '父级主题'
-            )->addColumn(
-                'is_active',
-                TableInterface::column_type_INTEGER,
-                11,
-                '',
-                '是否激活'
-            )->addColumn(
-                'create_time',
-                TableInterface::column_type_DATETIME,
-                null,
-                'NOT NULL DEFAULT CURRENT_TIMESTAMP',
-                '安装时间'
-            )->addColumn(
-                'update_time',
-                TableInterface::column_type_DATETIME,
-                null,
-                'NOT NULL DEFAULT CURRENT_TIMESTAMP',
-                '更新时间'
-            )->addColumn(
-                'config',
-                TableInterface::column_type_TEXT,
-                null,
-                '',
-                '主题配置（JSON格式，存储partials选择等）'
-            )->addIndex(
-                TableInterface::index_type_DEFAULT,
-                'parent_id',
-                'parent_id'
-            )->create();
-        } else {
-            // 如果表已存在，检查是否需要添加 config 字段
-            if (!$setup->hasField('config')) {
-                $setup->getPrinting()->warning('添加字段：config');
-                $setup->alterTable()
-                    ->addColumn('config', 'update_time', TableInterface::column_type_TEXT, '', '', '主题配置（JSON格式，存储partials选择等）')
-                    ->alter();
-            }
-        }
-    }
-    
-    /**
+/**
      * 获取主题配置
      * @return array
      */
     public function getConfig(): array
     {
-        $config = $this->getData(self::fields_CONFIG);
+        $config = $this->getData(self::schema_fields_CONFIG);
         if (empty($config)) {
             return [];
         }
@@ -379,7 +259,7 @@ class WelineTheme extends Model
      */
     public function setConfig(array $config): static
     {
-        $this->setData(self::fields_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
+        $this->setData(self::schema_fields_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
         return $this;
     }
     

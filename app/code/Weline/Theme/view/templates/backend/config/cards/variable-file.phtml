@@ -128,44 +128,32 @@ $modalUrl = $this->getUrl('theme/backend/config/layout/getVariableFileModal');
         formData.append('scope', scope);
         formData.append('file_name', fileName);
         
-        fetch(getUrl, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.code === 200 && data.data && data.data.variable) {
-                // 使用AJAX加载弹窗内容
-                const variableJson = encodeURIComponent(JSON.stringify(data.data.variable));
-                fetch(modalUrl + '?variable=' + variableJson + '&file_name=' + encodeURIComponent(fileName) + '&area=' + area + '&scope=' + scope + '&theme_id=' + themeId, {
-                    method: 'GET'
-                })
-                .then(response => response.text())
-                .then(html => {
-                    const modalContent = modal.querySelector('.modal-content');
-                    if (modalContent) {
+        window.Weline.Api.request(getUrl, { method: 'POST', body: formData })
+        .then(function(response) {
+            var data = response.data;
+            if (response.ok && data && data.code === 200 && data.data && data.data.variable) {
+                var variableJson = encodeURIComponent(JSON.stringify(data.data.variable));
+                var loadUrl = modalUrl + '?variable=' + variableJson + '&file_name=' + encodeURIComponent(fileName) + '&area=' + area + '&scope=' + scope + '&theme_id=' + themeId;
+                return window.Weline.Api.request(loadUrl, { method: 'GET' }).then(function(r2) {
+                    var html = (r2.data && typeof r2.data === 'string') ? r2.data : (r2.data ? String(r2.data) : '');
+                    var modalContent = modal.querySelector('.modal-content');
+                    if (modalContent && html) {
                         modalContent.outerHTML = html;
-                        const newModal = document.getElementById('variableFileConfigModal');
+                        var newModal = document.getElementById('variableFileConfigModal');
                         if (newModal) {
-                            const newBsModal = new bootstrap.Modal(newModal);
+                            var newBsModal = new bootstrap.Modal(newModal);
                             newBsModal.show();
                         }
                     }
-                })
-                .catch(error => {
-                    console.error('Error loading modal:', error);
-                    modal.querySelector('.modal-body').innerHTML = 
-                        '<div class="alert alert-danger"><?= __('加载弹窗失败') ?>: ' + error.message + '</div>';
                 });
             } else {
-                modal.querySelector('.modal-body').innerHTML = 
-                    '<div class="alert alert-danger">' + (data.msg || '<?= __('加载失败') ?>') + '</div>';
+                modal.querySelector('.modal-body').innerHTML = '<div class="alert alert-danger">' + ((data && (data.msg || data.message)) || '<?= __('加载失败') ?>') + '</div>';
             }
         })
-        .catch(error => {
+        .catch(function(error) {
             console.error('Error:', error);
-            modal.querySelector('.modal-body').innerHTML = 
-                '<div class="alert alert-danger"><?= __('网络错误') ?>: ' + error.message + '</div>';
+            var msg = error && error.message ? error.message : '<?= __('网络错误') ?>';
+            modal.querySelector('.modal-body').innerHTML = '<div class="alert alert-danger">' + msg + '</div>';
         });
     };
 })();

@@ -638,7 +638,7 @@
                     }
 
                     // 检查是否已加载
-                    if (globalVarName && window[globalVarName]) {
+                    if (globalVarName && window[globalVarName] && window[globalVarName].__full !== false) {
                         const module = window[globalVarName];
                         this.loadedModules.set(moduleName, module);
                         this.loadingModules.delete(moduleName);

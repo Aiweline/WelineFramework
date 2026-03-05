@@ -618,29 +618,22 @@ $renderField = function($field) use ($formData, $layout) {
                 submitBtn.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> <?= __("提交中...") ?>';
             }
             
-            fetch(form.action, {
-                method: form.method,
+            var Toast = typeof BackendToast !== 'undefined' ? BackendToast : (typeof AdminToast !== 'undefined' ? AdminToast : null);
+            window.Weline.Api.request(form.action, {
+                method: form.method || 'POST',
                 body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
             })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
-                if (data.success) {
-                    if (typeof AdminToast !== 'undefined') {
-                        AdminToast.success(data.message || '<?= __("保存成功") ?>');
-                    }
+            .then(function(response) {
+                var data = response.data;
+                if (response.ok && data && data.success) {
+                    if (Toast) Toast.success(data.message || '<?= __("保存成功") ?>');
                     if (data.redirect) {
-                        setTimeout(function() {
-                            window.location.href = data.redirect;
-                        }, 1000);
+                        setTimeout(function() { window.location.href = data.redirect; }, 1000);
                     }
                 } else {
-                    if (typeof AdminToast !== 'undefined') {
-                        AdminToast.error(data.message || '<?= __("保存失败") ?>');
-                    }
-                    if (data.errors) {
+                    if (Toast) Toast.error((data && data.message) || '<?= __("保存失败") ?>');
+                    if (data && data.errors) {
                         for (var fieldName in data.errors) {
                             showError(fieldName, data.errors[fieldName]);
                         }
@@ -648,9 +641,7 @@ $renderField = function($field) use ($formData, $layout) {
                 }
             })
             .catch(function(error) {
-                if (typeof AdminToast !== 'undefined') {
-                    AdminToast.error('<?= __("网络错误，请重试") ?>');
-                }
+                if (Toast) Toast.error(error && error.message ? error.message : '<?= __("网络错误，请重试") ?>');
                 console.error('Form submit error:', error);
             })
             .finally(function() {
