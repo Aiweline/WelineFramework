@@ -17,7 +17,6 @@ use Weline\AutoLeadAgent\Model\SearchTask;
 use Weline\AutoLeadAgent\Model\LeadCandidate;
 use Weline\AutoLeadAgent\Service\LeadSearchService;
 use Weline\AutoLeadAgent\Service\SearchEngineMappingService;
-use WeShop\Store\Model\Store;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\TranslationService\Api\TranslationServiceInterface;
 
@@ -52,7 +51,7 @@ class Index extends BackendController
         /** @var SearchTask $taskModel */
         $taskModel = ObjectManager::getInstance(SearchTask::class);
         $taskModel->clear()
-            ->order(SearchTask::fields_CREATED_AT, 'DESC')
+            ->order(SearchTask::schema_fields_CREATED_AT, 'DESC')
             ->pagination($page, $pageSize)
             ->select()
             ->fetch();
@@ -76,14 +75,8 @@ class Index extends BackendController
             // 静默失败，避免影响后台页面
         }
 
-        // 获取可用店铺列表
-        /** @var Store $storeModel */
-        $storeModel = ObjectManager::getInstance(Store::class);
-        $stores = $storeModel->reset()
-            ->where(Store::fields_STATUS, Store::STATUS_ENABLED)
-            ->order(Store::fields_NAME, 'ASC')
-            ->fetch()
-            ->getItems();
+        // 获取可用店铺列表（通过查询器，避免跨模块直接调用）
+        $stores = w_query('store', 'getStoreList', ['status' => 1]);
 
         $this->assign('tasks', $tasks);
         $this->assign('candidate_count', $candidateCount);
@@ -125,13 +118,13 @@ class Index extends BackendController
         $candidateModel = ObjectManager::getInstance(LeadCandidate::class);
         
         // 优先使用 source_id，如果没有则使用 store_id（向后兼容）
-        $storeId = $task->getData(SearchTask::fields_STORE_ID);
-        $sourceId = $task->getData(SearchTask::fields_SOURCE_ID);
+        $storeId = $task->getData(SearchTask::schema_fields_STORE_ID);
+        $sourceId = $task->getData(SearchTask::schema_fields_SOURCE_ID);
         $queryStoreId = $sourceId ?: $storeId;
         
         $candidates = $candidateModel->clear()
-            ->where(LeadCandidate::fields_STORE_ID, $queryStoreId)
-            ->order(LeadCandidate::fields_CREATED_AT, 'DESC')
+            ->where(LeadCandidate::schema_fields_STORE_ID, $queryStoreId)
+            ->order(LeadCandidate::schema_fields_CREATED_AT, 'DESC')
             ->pagination(1, 50)
             ->select()
             ->fetch()
@@ -158,11 +151,11 @@ class Index extends BackendController
                 // 如果是数字ID，查询名称
                 $website = $targetWebsiteModel->clear()->load((int)$websiteId);
                 if ($website->getId()) {
-                    $name = $website->getData(\Weline\AutoLeadAgent\Model\TargetWebsite::fields_NAME);
+                    $name = $website->getData(\Weline\AutoLeadAgent\Model\TargetWebsite::schema_fields_NAME);
                     if ($name) {
                         $targetWebsiteNames[] = $name;
                     } else {
-                        $targetWebsiteNames[] = $website->getData(\Weline\AutoLeadAgent\Model\TargetWebsite::fields_DOMAIN) ?: __('网站ID') . ': ' . $websiteId;
+                        $targetWebsiteNames[] = $website->getData(\Weline\AutoLeadAgent\Model\TargetWebsite::schema_fields_DOMAIN) ?: __('网站ID') . ': ' . $websiteId;
                     }
                 } else {
                     $targetWebsiteNames[] = __('网站ID') . ': ' . $websiteId;
@@ -319,9 +312,9 @@ class Index extends BackendController
                 if ($website->getId()) {
                     $targetWebsites[] = [
                         'target_website_id' => $website->getId(),
-                        'name' => $website->getData(\Weline\AutoLeadAgent\Model\TargetWebsite::fields_NAME),
-                        'domain' => $website->getData(\Weline\AutoLeadAgent\Model\TargetWebsite::fields_DOMAIN),
-                        'search_syntax_template' => $website->getData(\Weline\AutoLeadAgent\Model\TargetWebsite::fields_SEARCH_SYNTAX_TEMPLATE),
+                        'name' => $website->getData(\Weline\AutoLeadAgent\Model\TargetWebsite::schema_fields_NAME),
+                        'domain' => $website->getData(\Weline\AutoLeadAgent\Model\TargetWebsite::schema_fields_DOMAIN),
+                        'search_syntax_template' => $website->getData(\Weline\AutoLeadAgent\Model\TargetWebsite::schema_fields_SEARCH_SYNTAX_TEMPLATE),
                     ];
                 }
             }
@@ -331,15 +324,15 @@ class Index extends BackendController
             'success' => true,
             'data' => [
                 'task_id' => $task->getId(),
-                'store_id' => $task->getData(SearchTask::fields_STORE_ID),
-                'source_type' => $task->getData(SearchTask::fields_SOURCE_TYPE),
-                'source_id' => $task->getData(SearchTask::fields_SOURCE_ID),
-                'status' => $task->getData(SearchTask::fields_STATUS),
-                'found_count' => (int)$task->getData(SearchTask::fields_FOUND_COUNT),
+                'store_id' => $task->getData(SearchTask::schema_fields_STORE_ID),
+                'source_type' => $task->getData(SearchTask::schema_fields_SOURCE_TYPE),
+                'source_id' => $task->getData(SearchTask::schema_fields_SOURCE_ID),
+                'status' => $task->getData(SearchTask::schema_fields_STATUS),
+                'found_count' => (int)$task->getData(SearchTask::schema_fields_FOUND_COUNT),
                 'selected_search_engines' => $task->getSelectedSearchEnginesArray(),
                 'selected_target_websites' => $targetWebsites, // 返回完整的目标网站信息
-                'created_at' => $task->getData(SearchTask::fields_CREATED_AT),
-                'updated_at' => $task->getData(SearchTask::fields_UPDATED_AT),
+                'created_at' => $task->getData(SearchTask::schema_fields_CREATED_AT),
+                'updated_at' => $task->getData(SearchTask::schema_fields_UPDATED_AT),
             ],
         ]);
     }
@@ -381,7 +374,7 @@ class Index extends BackendController
             ]);
         }
 
-        $currentStatus = $task->getData(SearchTask::fields_STATUS);
+        $currentStatus = $task->getData(SearchTask::schema_fields_STATUS);
         
         // 如果任务状态是 running，说明之前运行异常中断，自动标记为失败
         if ($currentStatus === SearchTask::STATUS_RUNNING) {
@@ -390,7 +383,7 @@ class Index extends BackendController
             $leadSearchService->updateTaskStatus(
                 $taskId,
                 SearchTask::STATUS_FAILED,
-                (float)$task->getData(SearchTask::fields_PROGRESS)
+                (float)$task->getData(SearchTask::schema_fields_PROGRESS)
             );
             $currentStatus = SearchTask::STATUS_FAILED;
         }
@@ -402,7 +395,7 @@ class Index extends BackendController
             $leadSearchService->updateTaskStatus(
                 $taskId,
                 SearchTask::STATUS_FAILED,
-                (float)$task->getData(SearchTask::fields_PROGRESS)
+                (float)$task->getData(SearchTask::schema_fields_PROGRESS)
             );
             $currentStatus = SearchTask::STATUS_FAILED;
         }
@@ -442,7 +435,7 @@ class Index extends BackendController
         $updated = $leadSearchService->updateTaskStatus(
             $taskId,
             SearchTask::STATUS_RUNNING,
-            (float)$task->getData(SearchTask::fields_PROGRESS)
+            (float)$task->getData(SearchTask::schema_fields_PROGRESS)
         );
 
         if (!$updated) {
@@ -453,9 +446,9 @@ class Index extends BackendController
         }
 
         // 获取来源类型画像信息，供前端AI模型使用
-        $storeId = (int)$task->getData(SearchTask::fields_STORE_ID);
-        $sourceType = $task->getData(SearchTask::fields_SOURCE_TYPE);
-        $sourceId = (int)$task->getData(SearchTask::fields_SOURCE_ID);
+        $storeId = (int)$task->getData(SearchTask::schema_fields_STORE_ID);
+        $sourceType = $task->getData(SearchTask::schema_fields_SOURCE_TYPE);
+        $sourceId = (int)$task->getData(SearchTask::schema_fields_SOURCE_ID);
         
         // 兼容处理：如果没有sourceType和sourceId，使用storeId
         if (empty($sourceType) && $sourceId <= 0) {
@@ -496,7 +489,7 @@ class Index extends BackendController
         /** @var SearchTask $taskModel */
         $taskModel = ObjectManager::getInstance(SearchTask::class);
         $taskModel->clear()
-            ->order(SearchTask::fields_CREATED_AT, 'DESC')
+            ->order(SearchTask::schema_fields_CREATED_AT, 'DESC')
             ->pagination($page, $pageSize)
             ->select()
             ->fetch();
@@ -505,13 +498,13 @@ class Index extends BackendController
         foreach ($taskModel->getItems() as $task) {
             $tasks[] = [
                 'task_id'     => $task->getId(),
-                'store_id'    => $task->getData(SearchTask::fields_STORE_ID), // 兼容字段
-                'source_type' => $task->getData(SearchTask::fields_SOURCE_TYPE) ?: 'store', // 来源类型
-                'source_id'   => (int)$task->getData(SearchTask::fields_SOURCE_ID) ?: (int)$task->getData(SearchTask::fields_STORE_ID), // 来源ID
-                'status'      => $task->getData(SearchTask::fields_STATUS),
-                'progress'    => (float)$task->getData(SearchTask::fields_PROGRESS),
-                'found_count' => (int)$task->getData(SearchTask::fields_FOUND_COUNT),
-                'created_at'  => $task->getData(SearchTask::fields_CREATED_AT),
+                'store_id'    => $task->getData(SearchTask::schema_fields_STORE_ID), // 兼容字段
+                'source_type' => $task->getData(SearchTask::schema_fields_SOURCE_TYPE) ?: 'store', // 来源类型
+                'source_id'   => (int)$task->getData(SearchTask::schema_fields_SOURCE_ID) ?: (int)$task->getData(SearchTask::schema_fields_STORE_ID), // 来源ID
+                'status'      => $task->getData(SearchTask::schema_fields_STATUS),
+                'progress'    => (float)$task->getData(SearchTask::schema_fields_PROGRESS),
+                'found_count' => (int)$task->getData(SearchTask::schema_fields_FOUND_COUNT),
+                'created_at'  => $task->getData(SearchTask::schema_fields_CREATED_AT),
             ];
         }
 
@@ -552,7 +545,7 @@ class Index extends BackendController
         // 如果没有指定 taskId，查找所有 running 状态的任务
         if ($taskId <= 0) {
             $taskModel->clear()
-                ->where(SearchTask::fields_STATUS, SearchTask::STATUS_RUNNING)
+                ->where(SearchTask::schema_fields_STATUS, SearchTask::STATUS_RUNNING)
                 ->select()
                 ->fetch();
             $runningTasks = $taskModel->getItems();
@@ -565,7 +558,7 @@ class Index extends BackendController
                 $leadSearchService->updateTaskStatus(
                     (int)$task->getId(),
                     SearchTask::STATUS_FAILED,
-                    (float)$task->getData(SearchTask::fields_PROGRESS)
+                    (float)$task->getData(SearchTask::schema_fields_PROGRESS)
                 );
                 $markedCount++;
             }
@@ -586,7 +579,7 @@ class Index extends BackendController
             ]);
         }
 
-        if ($task->getData(SearchTask::fields_STATUS) !== SearchTask::STATUS_RUNNING) {
+        if ($task->getData(SearchTask::schema_fields_STATUS) !== SearchTask::STATUS_RUNNING) {
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('任务状态不是运行中'),
@@ -598,7 +591,7 @@ class Index extends BackendController
         $leadSearchService->updateTaskStatus(
             $taskId,
             SearchTask::STATUS_FAILED,
-            (float)$task->getData(SearchTask::fields_PROGRESS)
+            (float)$task->getData(SearchTask::schema_fields_PROGRESS)
         );
 
         return $this->fetchJson([
@@ -618,27 +611,7 @@ class Index extends BackendController
     )]
     public function getStores(): string
     {
-        /** @var Store $storeModel */
-        $storeModel = ObjectManager::getInstance(Store::class);
-
-        $storeModel->clear()
-            ->where(Store::fields_STATUS, Store::STATUS_ENABLED)
-            ->order(Store::fields_NAME, 'ASC')
-            ->fetch();
-
-        $items = $storeModel->getItems();
-        $stores = [];
-        foreach ($items as $store) {
-            if (!$store instanceof Store) {
-                continue;
-            }
-            $stores[] = [
-                'store_id'   => $store->getId(),
-                'name'       => $store->getData(Store::fields_NAME),
-                'code'       => $store->getData(Store::fields_CODE),
-                'website_id' => $store->getData(Store::fields_WEBSITE_ID),
-            ];
-        }
+        $stores = w_query('store', 'getStoreList', ['status' => 1]);
 
         return $this->fetchJson([
             'success' => true,
@@ -688,12 +661,12 @@ class Index extends BackendController
 
             // 更新状态
             if (!empty($status)) {
-                $task->setData(SearchTask::fields_STATUS, $status);
+                $task->setData(SearchTask::schema_fields_STATUS, $status);
             }
             
             // 更新找到的客户数量
             if ($foundCount !== null) {
-                $task->setData(SearchTask::fields_FOUND_COUNT, (int)$foundCount);
+                $task->setData(SearchTask::schema_fields_FOUND_COUNT, (int)$foundCount);
             }
             
             $task->save();
@@ -703,8 +676,8 @@ class Index extends BackendController
                 'message' => __('进度更新成功'),
                 'data'    => [
                     'task_id'     => $taskId,
-                    'status'      => $task->getData(SearchTask::fields_STATUS),
-                    'found_count' => (int)$task->getData(SearchTask::fields_FOUND_COUNT),
+                    'status'      => $task->getData(SearchTask::schema_fields_STATUS),
+                    'found_count' => (int)$task->getData(SearchTask::schema_fields_FOUND_COUNT),
                 ],
             ]);
         } catch (\Throwable $e) {
@@ -768,7 +741,7 @@ class Index extends BackendController
                 ]);
             }
 
-            $storeId = (int)$task->getData(SearchTask::fields_STORE_ID);
+            $storeId = (int)$task->getData(SearchTask::schema_fields_STORE_ID);
             $savedCount = 0;
 
             // 保存每个候选客户
@@ -780,35 +753,35 @@ class Index extends BackendController
                 $profileData = $candidate;
                 
                 $candidateModel->clear()
-                    ->setData(LeadCandidate::fields_STORE_ID, $storeId)
-                    ->setData(LeadCandidate::fields_PROFILE_DATA, json_encode($profileData, JSON_UNESCAPED_UNICODE))
-                    ->setData(LeadCandidate::fields_SCORE, (float)($candidate['score'] ?? 0))
-                    ->setData(LeadCandidate::fields_SOURCE_URL, $candidate['profileUrl'] ?? $candidate['url'] ?? '')
-                    ->setData(LeadCandidate::fields_STATUS, 'pending');
+                    ->setData(LeadCandidate::schema_fields_STORE_ID, $storeId)
+                    ->setData(LeadCandidate::schema_fields_PROFILE_DATA, json_encode($profileData, JSON_UNESCAPED_UNICODE))
+                    ->setData(LeadCandidate::schema_fields_SCORE, (float)($candidate['score'] ?? 0))
+                    ->setData(LeadCandidate::schema_fields_SOURCE_URL, $candidate['profileUrl'] ?? $candidate['url'] ?? '')
+                    ->setData(LeadCandidate::schema_fields_STATUS, 'pending');
                 
                 // 保存新字段
                 if (!empty($candidate['email'])) {
-                    $candidateModel->setData(LeadCandidate::fields_EMAIL, $candidate['email']);
+                    $candidateModel->setData(LeadCandidate::schema_fields_EMAIL, $candidate['email']);
                 }
                 if (!empty($candidate['phone'])) {
-                    $candidateModel->setData(LeadCandidate::fields_PHONE, $candidate['phone']);
+                    $candidateModel->setData(LeadCandidate::schema_fields_PHONE, $candidate['phone']);
                 }
                 if (!empty($candidate['socialMediaAccounts'])) {
                     $candidateModel->setData(
-                        LeadCandidate::fields_SOCIAL_MEDIA_ACCOUNTS,
+                        LeadCandidate::schema_fields_SOCIAL_MEDIA_ACCOUNTS,
                         json_encode($candidate['socialMediaAccounts'], JSON_UNESCAPED_UNICODE)
                     );
                 }
                 if (!empty($candidate['matchedTextSegments'])) {
                     $candidateModel->setData(
-                        LeadCandidate::fields_MATCHED_TEXT_SEGMENTS,
+                        LeadCandidate::schema_fields_MATCHED_TEXT_SEGMENTS,
                         json_encode($candidate['matchedTextSegments'], JSON_UNESCAPED_UNICODE)
                     );
                 }
                 // 保存所有搜索过的网址
                 if (!empty($candidate['sourceUrls'])) {
                     $candidateModel->setData(
-                        LeadCandidate::fields_SOURCE_URLS,
+                        LeadCandidate::schema_fields_SOURCE_URLS,
                         json_encode($candidate['sourceUrls'], JSON_UNESCAPED_UNICODE)
                     );
                 }
@@ -869,7 +842,7 @@ class Index extends BackendController
             $taskModel = ObjectManager::getInstance(SearchTask::class);
             $task = $taskModel->load($taskId);
             if ($task->getId()) {
-                $task->setData(SearchTask::fields_RESULT_DATA, json_encode([
+                $task->setData(SearchTask::schema_fields_RESULT_DATA, json_encode([
                     'error' => $error,
                     'error_time' => date('Y-m-d H:i:s'),
                 ], JSON_UNESCAPED_UNICODE))
@@ -1002,7 +975,7 @@ class Index extends BackendController
             }
             
             // 检查任务状态，如果正在运行则不允许删除
-            $status = $task->getData(SearchTask::fields_STATUS);
+            $status = $task->getData(SearchTask::schema_fields_STATUS);
             if (in_array($status, [SearchTask::STATUS_RUNNING, SearchTask::STATUS_INFERRING, SearchTask::STATUS_CRAWLING])) {
                 return $this->fetchJson([
                     'success' => false,
@@ -1012,7 +985,7 @@ class Index extends BackendController
             
             // 删除任务（使用ORM的正确删除方式）
             $taskModel->clear()
-                ->where(SearchTask::fields_ID, $taskId)
+                ->where(SearchTask::schema_fields_ID, $taskId)
                 ->delete()
                 ->fetch();
             
@@ -1061,8 +1034,8 @@ class Index extends BackendController
             // 构建店铺画像
             $profile = [
                 'id' => $storeId,
-                'name' => $store->getData(Store::fields_NAME) ?? '',
-                'code' => $store->getData(Store::fields_CODE) ?? '',
+                'name' => $store->getData(Store::schema_fields_NAME) ?? '',
+                'code' => $store->getData(Store::schema_fields_CODE) ?? '',
                 'description' => $store->getData('description') ?? '',
                 'industry' => $store->getData('industry') ?? '通用',
                 'region' => $store->getData('region') ?? '',

@@ -47,7 +47,7 @@ class Wasm extends BackendController
 
         // 使用 ORM 内置分页
         $wasmModel->clear()
-            ->order(WasmHash::fields_CREATED_AT, 'DESC')
+            ->order(WasmHash::schema_fields_CREATED_AT, 'DESC')
             ->pagination($page, $pageSize)
             ->select()
             ->fetch();
@@ -89,7 +89,7 @@ class Wasm extends BackendController
         }
 
         // 检查文件是否存在
-        $filePath = $wasmModel->getData(WasmHash::fields_WASM_PATH);
+        $filePath = $wasmModel->getData(WasmHash::schema_fields_WASM_PATH);
         $fileExists = file_exists($filePath);
         $fileSize = $fileExists ? filesize($filePath) : 0;
 
