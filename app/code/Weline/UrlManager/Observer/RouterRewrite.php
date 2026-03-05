@@ -78,8 +78,8 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
         return $this->getUrlRewrite()
             ->reset()
             ->clearQuery()
-            ->where(UrlRewrite::fields_WEBSITE_ID, $websiteId)
-            ->where(UrlRewrite::fields_REWRITE, $rewrite)
+            ->where(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(UrlRewrite::schema_fields_REWRITE, $rewrite)
             ->find()
             ->fetch();
     }
