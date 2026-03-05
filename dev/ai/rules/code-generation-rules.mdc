@@ -11,11 +11,11 @@ alwaysApply: true
 代码生成**必须**参考并遵循以下技能（按场景选用）：
 
 - **code-generation-standards** — 模块结构、框架边界、禁止自造方法
-- **module-development** — register.php、数据库升级(hasField)、接口签名、路由(setup:upgrade --route)、event.xml(单数)
+- **module-development** — register.php、数据库 schema 声明式(#[Col])、Setup/Install.php、接口签名、路由(setup:upgrade --route)、event.xml(单数)
 - **theme-development** ⭐⭐⭐ — **前端/CSS/JS/组件必读！** 主题变量、禁止硬编码颜色、CSS 命名空间、JS 闭包、模板标签
 - **i18n-internationalization** — 用户可见文案 `<lang>`/`@lang()`/`__()`，禁止硬编码
 - **friendly-notifications** ⭐⭐ — **禁止 alert/confirm/prompt！** 必须使用 BackendToast/BackendConfirm（后台）或 FrontendToast（前台）
-- **database-model-standards** — 链式 fetch()、禁止业务层手写 SQL
+- **database-model-standards** — 链式 fetch()、禁止业务层手写 SQL；表结构用 #[Col]/#[Table]、Schema diff（setup:upgrade）
 - **create-event** — dispatch 用变量、data 键、触发顺序、event.xml 与 dispatch 对应
 - **unified-query-provider** ⭐ — **模块间查询/通信必读！** `w_query()`、`FrameworkQueryService`、禁止为查询创建独立事件
 - **debug-logging** — 禁止 error_log()，使用 Env::log_error/log_warning 等
@@ -71,7 +71,7 @@ BackendConfirm.show('确定删除吗？').then(confirmed => { if (confirmed) { .
 
 - **必须**先调用对应技能或规则（Read 对应 SKILL.md / 规则文件）查阅清楚，再基于查阅结果重新规划并生成代码。
 - **禁止**在不确定的情况下凭记忆或猜测继续写码；可先记住大纲，细节通过工具查阅后再落笔。
-- 适用场景示例：记不清事件命名格式 → 读 create-event；记不清 hasField/升级写法 → 读 database-model-standards 或 module-development；记不清模板标签语法 → 读 theme-development；等等。
+- 适用场景示例：记不清事件命名格式 → 读 create-event；记不清 #[Col]/Schema diff/表结构写法 → 读 database-model-standards 或 module-development；记不清模板标签语法 → 读 theme-development；等等。
 
 原则：**宁可先查再写，不可写了再错。**
 

@@ -42,9 +42,11 @@ class MyController extends BackendController
             $userId = $this->session->getUserId();
         }
         
-        // 存取数据
-        $this->session->getSession()->set('key', 'value');
-        $value = $this->session->getSession()->get('key');
+        // 存取数据（推荐直接调用，无需 getSession()）
+        $this->session->set('key', 'value');
+        $value = $this->session->get('key');
+        $this->session->delete('key');
+        $sessionId = $this->session->getId();
     }
 }
 ```
@@ -199,8 +201,8 @@ class Customer extends Model implements AuthenticableInterface
 | `getLoginUserID()` | `getUserId()` |
 | `getLoginUsername()` | `getUsername()` |
 | `getLoginUserData($key)` | `getUser()->getData($key)` |
-| `getData($key)` | `getSession()->get($key)` |
-| `setData($key, $val)` | `getSession()->set($key, $val)` |
+| `getData($key)` | `get($key)` 或 `getSession()->get($key)` |
+| `setData($key, $val)` | `set($key, $val)` 或 `getSession()->set($key, $val)` |
 
 ## 禁止事项
 

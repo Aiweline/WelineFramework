@@ -6,16 +6,17 @@ description: |
   Use when:
   - Creating/modifying models and database tables
   - Writing database queries (select/insert/update/delete)
-  - Adding columns/fields to existing tables (upgrade)
+  - Adding columns/fields to existing tables（使用 #[Col] 声明式，执行 setup:upgrade 同步）
   - Using ORM operations (CRITICAL: fetch() required!)
   - Pagination queries (MUST use framework pagination!)
   - Cross-database compatible code
   
   Keywords: Model, 模型, database, 数据库, ORM, select, insert, update, delete, fetch, 查询,
-  加字段, 添加字段, add column, addColumn, alterTable, upgrade, install, ModelSetup, hasField,
+  加字段, 添加字段, add column, addColumn, #[Col], #[Table], #[Index], 声明式 schema, SchemaDiff, SchemaParser, setup:upgrade,
   表结构, schema, 字段, field, column, 数据库升级, PostgreSQL, MySQL,
   分页, pagination, paging, page, pageSize, 翻页, 每页, 页码, limit, offset, getItems, getPagination,
-  totalSize, lastPage, 总数, 总页数, 列表, list, 数据列表, 分页查询, paged query, paginated
+  totalSize, lastPage, 总数, 总页数, 列表, list, 数据列表, 分页查询, paged query, paginated,
+  LocalModel, LocalDescription, schema_primary_keys, 联合主键, column does not exist, 列不存在, 报错
 globs:
   - "**/Model/**/*.php"
 alwaysApply: false
@@ -132,65 +133,101 @@ $setup->query("CREATE UNIQUE INDEX IF NOT EXISTS \"idx_name\" ON \"table\" (\"fi
 $setup->query("ALTER TABLE `table` ADD INDEX `idx_name` (`field`)");
 ```
 
-### 2. 模型 Setup/Upgrade 中使用框架适配器
+### 2. 表结构：声明式 Schema（#[Col]/#[Table]/#[Index]）
+
+**已废弃**：Model 的 `install()`/`upgrade()`/`setup()` 及 `ModelSetup`/`hasField()` 建表改表方式已废弃。**属性上的 #[Col] 已废弃**，SchemaParser 仅解析 **常量** 上的 #[Col]。
+
+**当前做法**：在 Model 类上使用 **声明式注解** 定义表结构，由 **SchemaDiffStage** 在 `php bin/w setup:upgrade` 时解析并同步到数据库。
+
+**约定**：`#[Col]` 必须标注在 **`schema_fields_*` 常量**上，列名 = 常量值。只有带 #[Col] 的常量才会被 SchemaParser 解析并参与表结构同步；若某字段只有常量没有 #[Col]，该字段不会出现在 SchemaDiff 中。
+
+**完整 Model 写法示例**（表名、主键、每个字段均需声明）：
 
 ```php
-// ✅ 正确：使用 ModelSetup 适配器方法
-public function install(ModelSetup $setup, Context $context): void
-{
-    if (!$setup->tableExist()) {
-        $setup->createTable()
-            ->addColumn('id', TableInterface::column_type_INTEGER, 0, 'primary key auto_increment')
-            ->addColumn('name', TableInterface::column_type_VARCHAR, 255, 'not null')
-            ->addIndex(TableInterface::index_type_UNIQUE, 'uk_name', 'name')
-            ->create();
-    }
-}
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 
-public function upgrade(ModelSetup $setup, Context $context): void
+#[Table(comment: '示例表')]
+#[Index(name: 'uk_name', columns: ['name'], type: 'UNIQUE', comment: '名称唯一')]
+class YourModel extends Model
 {
-    if ($setup->tableExist() && !$setup->hasIndex('uk_name')) {
-        $setup->alterTable()
-            ->addIndex(TableInterface::index_type_UNIQUE, 'uk_name', 'name', '名称唯一索引')
-            ->alter();
-    }
+    public const schema_table       = 'weline_your_table';  // 表名（含前缀）
+    public const schema_primary_key = 'id';
+
+    public string $_primary_key      = 'id';
+    public array $_unit_primary_keys = ['id'];
+
+    #[Col(type: 'int', nullable: false, primaryKey: true, autoIncrement: true, comment: 'ID')]
+    public const schema_fields_ID = 'id';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '名称')]
+    public const schema_fields_NAME = 'name';
+    #[Col(type: 'int', nullable: false, default: 1, comment: '状态')]
+    public const schema_fields_Status = 'status';
 }
 ```
 
-### ⚠️ 重要：触发 upgrade() 必须更新版本号
+- **表与主键**：显式定义 `schema_table`、`schema_primary_key`、`$_primary_key`、`$_unit_primary_keys`，与框架 AbstractModel 初始化约定一致。
+- **字段**：每个数据库列对应一个 `public const schema_fields_XXX = '列名';`，且该常量上必须有 `#[Col(type: ..., length: ..., nullable: ..., default: ..., comment: '...')]`，否则该列不会参与 `setup:upgrade` 的表结构同步。
+- **加字段 / 改表**：在 Model 上增改带 #[Col] 的 `schema_fields_*` 常量或 #[Index]，然后执行 `php bin/w setup:upgrade`。禁止在业务代码中手写 DDL 或方言 SQL。
+- **业务初始化 / 种子数据**：放在模块 **Setup/Install.php**、**Setup/Upgrade.php**，不在 Model 内。
+- **columns()**：无需重写。基类 `Model::columns()` 通过 `SHOW FULL COLUMNS` 获取运行时列信息；SchemaDiff 仅通过反射读取常量上的 #[Col]。
 
-**upgrade() 方法只有在模块版本号变化时才会执行！**
+### 2.1 SchemaParser / SchemaDiff 解析行为（必读）
 
-修改 upgrade() 后，必须同时更新模块的 `register.php` 中的版本号：
+SchemaParser 在 `setup:upgrade` 时解析 Model 类，仅当满足以下条件才会建表/改表：
+
+| 规则 | 说明 |
+|------|------|
+| **只解析类** | 解析继承链（子类 → 父类 → AbstractModel），**不解析接口**。接口中的 `schema_fields_*` 常量无 #[Col]，不会参与建表。 |
+| **必须有 #[Col]** | 只有带 `#[Col]` 的 `schema_fields_*` 常量才会被解析。**仅有常量无 #[Col] 的列不会出现在 SchemaDiff 中，也不会建表/加列。** |
+| **子类覆盖父类** | 子类中同名常量（列名相同）会覆盖父类的列定义。 |
+| **parse 返回 null 则不建表** | 若 `parseColumns()` 返回空数组，则 `parse()` 返回 null，该 Model 不会被 SchemaDiff 处理，表不会建/不会改。 |
+| **schema_primary_keys** | 联合主键时定义 `schema_primary_keys = ['col1', 'col2']`，会跳过 AbstractModel 默认的 `id` 列。 |
+| **schema_primary_key** | 单主键且非 `id` 时定义 `schema_primary_key = 'pk_name'`，会跳过默认 `id`。 |
+
+**典型错误**：Model 只有 `public const schema_fields_ID = 'page_id'` 无 #[Col]，SchemaParser 跳过该常量 → 表无 `page_id` 列 → 查询报 `column "page_id" does not exist`。
+
+### 2.2 LocalModel 子类表结构声明（多语言翻译表）
+
+继承 `Weline\I18n\LocalModel` 的模型（如 `*LocalDescription`）必须**显式为关联主表 ID 等字段添加 #[Col]**，否则 SchemaDiff 不会同步这些列。
 
 ```php
-// register.php
-Register::register(
-    Register::MODULE,
-    'Vendor_ModuleName',
-    __DIR__,
-    '1.0.1',  // ⚠️ 必须增加版本号！从 1.0.0 改为 1.0.1
-    '模块描述'
-);
-```
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+use Weline\I18n\LocalModel;
 
-然后运行升级命令：
-```bash
-php bin/m s:up --module=Vendor_ModuleName
-```
-
-**常见错误**：只修改 upgrade() 但不更新版本号 → upgrade() 不会执行！
-
-```php
-// ❌ 错误：在 upgrade 中直接写方言 SQL
-public function upgrade(ModelSetup $setup, Context $context): void
+#[Table(comment: 'XXX多语言翻译表')]
+#[Index(name: 'idx_xxx_id', columns: ['xxx_id'], comment: '主表ID索引')]
+class LocalDescription extends LocalModel
 {
-    // PostgreSQL 语法
-    $setup->query("CREATE UNIQUE INDEX IF NOT EXISTS \"uk_name\" ON \"{$table}\" (\"name\")");
-    // MySQL 语法
-    $setup->query("ALTER TABLE `{$table}` ADD UNIQUE INDEX `uk_name` (`name`)");
+    public const schema_table = 'vendor_module_xxx_local_description';
+    /** 联合主键：(xxx_id, local_code) */
+    public const schema_primary_keys = ['xxx_id', 'local_code'];
+
+    /** 关联主表ID — 必须带 #[Col] 才会被 SchemaDiff 同步 */
+    #[Col(type: 'int', nullable: false, primaryKey: true, comment: '关联主表ID')]
+    public const schema_fields_ID = MainModel::schema_fields_ID;
+
+    /** 语言代码 — 接口定义无 #[Col]，子类需显式声明 */
+    #[Col(type: 'varchar', length: 20, nullable: false, primaryKey: true, comment: '语言代码')]
+    public const schema_fields_local_code = 'local_code';
+
+    /** 配置 JSON（可选） */
+    #[Col(type: 'text', nullable: true, comment: '配置JSON')]
+    public const schema_fields_config = 'config';
+
+    // 其他多语言字段...
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: '名称')]
+    public const schema_fields_NAME = 'name';
 }
 ```
+
+**要点**：
+- `schema_fields_ID` 引用主表主键名（如 `page_id`、`store_id`），**必须有 #[Col]**。
+- `schema_fields_local_code`、`schema_fields_config` 等在 `LocalModelInterface` 中定义但无 #[Col]，子类需显式加 #[Col] 才能参与建表。
+- 使用 `schema_primary_keys` 表示联合主键，不要混用 `schema_primary_key` 单主键。
 
 ### 3. JOIN 查询使用框架方法
 
@@ -274,22 +311,9 @@ $sql = "DELETE FROM table a USING table b WHERE a.ctid < b.ctid AND a.field = b.
 $sql = "DELETE t1 FROM table t1 INNER JOIN table t2 WHERE t1.id < t2.id AND t1.field = t2.field";
 ```
 
-## 检查索引是否存在
+## 索引与表结构
 
-```php
-// ✅ 正确：使用 ModelSetup 方法
-if (!$setup->hasIndex('idx_name')) {
-    $setup->alterTable()
-        ->addIndex(TableInterface::index_type_KEY, 'idx_name', 'field')
-        ->alter();
-}
-
-// ❌ 错误：直接查询系统表
-// PostgreSQL
-$sql = "SELECT 1 FROM pg_indexes WHERE indexname = 'idx_name'";
-// MySQL
-$sql = "SHOW INDEX FROM table WHERE Key_name = 'idx_name'";
-```
+索引与表结构均在 Model 上通过 **#[Index]**、**[Col]** 声明，由 `setup:upgrade` 触发 SchemaDiff 同步，禁止在业务代码中查系统表或手写 DDL。
 
 ## 常用框架查询方法参考
 
@@ -443,54 +467,17 @@ $items = $model->getItems();
 $pagination = $model->getPagination();
 ```
 
-## ModelSetup 常用方法
+## 表结构维护（已废弃 ModelSetup/hasField）
 
-| 操作 | 方法 | 说明 |
-|------|------|------|
-| 检查表存在 | `tableExist()` | 检查表是否存在 |
-| 检查字段存在 | `hasField($field)` | 检查字段是否存在 |
-| 检查索引存在 | `hasIndex($indexName)` | 检查索引是否存在 |
-| 创建表 | `createTable()` | 获取建表构造器 |
-| 修改表 | `alterTable()` | 获取改表构造器 |
-| 删除表 | `dropTable()` | 删除表 |
-
-## 索引类型常量
-
-```php
-use Weline\Framework\Database\Api\Db\TableInterface;
-
-TableInterface::index_type_KEY      // 普通索引
-TableInterface::index_type_UNIQUE   // 唯一索引
-TableInterface::index_type_FULLTEXT // 全文索引
-TableInterface::index_type_SPATIAL  // 空间索引
-TableInterface::index_type_MULTI    // 组合索引
-```
+**已废弃**：`ModelSetup`、`hasField()`、`hasIndex()`、`createTable()`、`alterTable()` 等建表/改表方式已废弃。表结构统一使用 **#[Table]/#[Col]/#[Index]** 声明，执行 `php bin/w setup:upgrade` 由 SchemaDiffStage 同步。见上文「表结构：声明式 Schema」。
 
 ## 违规示例与修复
 
-### 示例 1：模型 upgrade 中写方言 SQL
+### 示例 1：加字段/加索引
 
-```php
-// ❌ 违规代码
-public function upgrade(ModelSetup $setup, Context $context): void
-{
-    try {
-        $setup->query("CREATE UNIQUE INDEX IF NOT EXISTS \"uk_name\" ON \"{$table}\" (\"field\")");
-    } catch (\Exception $e) {
-        $setup->query("ALTER TABLE `{$table}` ADD UNIQUE INDEX `uk_name` (`field`)");
-    }
-}
+**已废弃**：在 Model 的 `upgrade()` 里用 `hasField`/`hasIndex`+`alterTable()` 已废弃。
 
-// ✅ 修复后
-public function upgrade(ModelSetup $setup, Context $context): void
-{
-    if ($setup->tableExist() && !$setup->hasIndex('uk_name')) {
-        $setup->alterTable()
-            ->addIndex(TableInterface::index_type_UNIQUE, 'uk_name', 'field', '唯一索引')
-            ->alter();
-    }
-}
-```
+**正确做法**：在 Model 上增加 `#[Col]` 或 `#[Index]` 注解，然后执行 `php bin/w setup:upgrade`。
 
 ### 示例 2：控制器中拼接 SQL
 
@@ -654,15 +641,17 @@ DETAIL: Key (user_id)=(2) is not present in table "..._user".
 ```
 
 **原因：**
-在 `install()` 中硬编码了跨表外键 ID（如 `user_id=2`），但被依赖表并未保证存在该记录。
+在安装/种子逻辑中硬编码了跨表外键 ID（如 `user_id=2`），但被依赖表并未保证存在该记录。
 
 **正确做法：**
+- 种子/初始化逻辑应放在模块 **Setup/Install.php**（或 Setup/Upgrade.php），不在 Model 内。
+- 跨表初始化时先判定存在性再写关联数据：
 ```php
-// ✅ 安装阶段先建表，再按“存在性”初始化关联数据
+// ✅ Setup/Install.php 中：先建表（SchemaDiff），再按“存在性”初始化
 $backendUser = ObjectManager::getInstance(BackendUser::class);
 $backendUser->reset()->load(1);
 if ($backendUser->getId()) {
-    $this->clear()
+    $userRole->clear()
         ->setData('user_id', (int)$backendUser->getId())
         ->setData('role_id', 1)
         ->save(true);
@@ -740,6 +729,27 @@ where(
 
 **实际案例（2026-02-26）：**
 使用了不存在的 `whereIn()` 方法导致返回 `false`，后续链式调用报错 `Call to a member function fields() on false`。修复后改为 `where($field, $array, 'IN')`。
+
+---
+
+### Q8: `column "xxx_id" does not exist` 怎么办？
+
+**错误信息示例：**
+```
+SQLSTATE[42703]: Undefined column: 7 ERROR: column "page_id" does not exist
+LINE 1: ... WHERE ("page_id" ...
+```
+
+**原因**：Model 定义了 `schema_fields_ID = 'page_id'` 等常量，但**未加 #[Col]**。SchemaParser 只解析带 #[Col] 的常量，该列未参与 SchemaDiff，表中不存在该列。
+
+**解决**：在 Model 上为相关常量添加 #[Col]，然后执行 `php bin/w setup:upgrade`：
+
+```php
+#[Col(type: 'int', nullable: false, primaryKey: true, comment: '关联页面ID')]
+public const schema_fields_ID = Page::schema_fields_ID;  // 'page_id'
+```
+
+**典型场景**：`LocalModel` 子类（如 `Page\LocalDescription`）必须为 `schema_fields_ID`、`schema_fields_local_code` 等显式加 #[Col]，否则表结构与业务查询不一致。见上文「2.2 LocalModel 子类表结构声明」。
 
 ---
 

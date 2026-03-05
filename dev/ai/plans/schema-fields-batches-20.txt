@@ -1,0 +1,24 @@
+# 20 批次：每批处理以下目录下含 ::fields_ 的 PHP 文件，将 X::fields_ 改为 X::schema_fields_
+# 工作区: e:\WelineFramework\DEV-workspace\app\code
+# 替换规则: 所有 (ClassName)::fields_ 改为 (ClassName)::schema_fields_，跳过 AbstractModel.php
+
+1: Weline/Acl,Weline/Admin,Weline/Api
+2: Weline/Async,Weline/AutoLeadAgent
+3: Weline/Backend,Weline/BackendActivity,Weline/Bt_Center,Weline/CacheManager
+4: Weline/Captcha,Weline/Checkout,Weline/Cms,Weline/Cdn
+5: Weline/Component,Weline/Customer,Weline/CustomerService,Weline/Database
+6: Weline/DataTable,Weline/DeveloperWorkspace,Weline/Eav
+7: Weline/Frontend,Weline/Framework,Weline/GenerativeEngineOptimization
+8: Weline/I18n,Weline/Indexer,Weline/Layout
+9: Weline/Maintenance,Weline/Marketing,Weline/Meta,Weline/ModuleManager
+10: Weline/Multipass,Weline/Order,Weline/Payment,Weline/Queue
+11: Weline/RdpWrapper,Weline/Seo,Weline/Server,Weline/SessionManager
+12: Weline/Saas,Weline/Shipping,Weline/Smtp,Weline/Storage
+13: Weline/Sticker,Weline/SystemConfig,Weline/Taglib,Weline/Terraform
+14: Weline/Theme,Weline/TranslationService,Weline/TwoFactorAuth
+15: Weline/UrlManager,Weline/Visitor,Weline/Websites,Weline/Widget
+16: Weline/Ai,Weline/AiKnowledge,Weline/AliDdnsServer,Weline/Currency
+17: WeShop/Address,WeShop/Affiliate,WeShop/B2B,WeShop/Cart,WeShop/Catalog,WeShop/Checkout,WeShop/Cms,WeShop/Compare,WeShop/Compliance,WeShop/Customer
+18: WeShop/Filters,WeShop/GiftCard,WeShop/Invoice,WeShop/Inventory,WeShop/Logistics,WeShop/Membership,WeShop/Notification,WeShop/Order,WeShop/Price,WeShop/Product,WeShop/Promotion,WeShop/QA,WeShop/RecentlyViewed,WeShop/Report,WeShop/Review,WeShop/RMA,WeShop/Search,WeShop/Social,WeShop/Store,WeShop/Subscription,WeShop/Tax,WeShop/Wishlist
+19: GuoLaiRen/Blog,GuoLaiRen/Desensitization,GuoLaiRen/PageBuilder
+20: Aws,Agent,WelineTools
