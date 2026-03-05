@@ -48,14 +48,14 @@ class YoudaoProvider extends AbstractProvider
         string $sourceLanguage = 'auto',
         array $options = []
     ): array {
-        $apiKey = $provider->getData(TranslationProvider::fields_API_KEY);
-        $apiSecret = $provider->getData(TranslationProvider::fields_API_SECRET);
+        $apiKey = $provider->getData(TranslationProvider::schema_fields_API_KEY);
+        $apiSecret = $provider->getData(TranslationProvider::schema_fields_API_SECRET);
         
         if (empty($apiKey) || empty($apiSecret)) {
             throw new Exception(__('有道翻译API密钥未配置'));
         }
 
-        $endpoint = $provider->getData(TranslationProvider::fields_API_ENDPOINT) 
+        $endpoint = $provider->getData(TranslationProvider::schema_fields_API_ENDPOINT) 
             ?: 'https://openapi.youdao.com/api';
 
         // 标准化语言代码

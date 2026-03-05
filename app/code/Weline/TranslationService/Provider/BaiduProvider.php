@@ -48,14 +48,14 @@ class BaiduProvider extends AbstractProvider
         string $sourceLanguage = 'auto',
         array $options = []
     ): array {
-        $apiKey = $provider->getData(TranslationProvider::fields_API_KEY);
-        $apiSecret = $provider->getData(TranslationProvider::fields_API_SECRET);
+        $apiKey = $provider->getData(TranslationProvider::schema_fields_API_KEY);
+        $apiSecret = $provider->getData(TranslationProvider::schema_fields_API_SECRET);
         
         if (empty($apiKey) || empty($apiSecret)) {
             throw new Exception(__('百度翻译API密钥未配置'));
         }
 
-        $endpoint = $provider->getData(TranslationProvider::fields_API_ENDPOINT) 
+        $endpoint = $provider->getData(TranslationProvider::schema_fields_API_ENDPOINT) 
             ?: 'https://fanyi-api.baidu.com/api/trans/vip/translate';
 
         // 标准化语言代码（百度使用特殊代码）

@@ -102,9 +102,10 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.disabled = true;
             btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('测试中...') ?>';
             
-            fetch('<?= $this->getBackendUrl('*/backend/config/test') ?>?id=' + providerId)
-                .then(response => response.json())
-                .then(data => {
+            var testUrl = '<?= $this->getBackendUrl('*/backend/config/test') ?>?id=' + providerId;
+            window.Weline.Api.get(testUrl, { silent: true })
+                .then(function(res) {
+                    var data = (res && res.data) !== undefined ? res.data : res;
                     if (data.success) {
                         if (typeof Swal !== 'undefined') {
                             Swal.fire({
