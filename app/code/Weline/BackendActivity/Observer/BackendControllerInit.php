@@ -38,9 +38,9 @@ class BackendControllerInit implements ObserverInterface
     public function execute(Event &$event): void
     {
         # ACL访问列表信息
-        $acl = $this->acl->where(Acl::fields_CLASS, $this->request->getRouterData('class/name'))
-            ->where(Acl::fields_METHOD, $this->request->getMethod())
-            ->where(Acl::fields_ROUTE, $this->request->getRouteUrlPath())
+        $acl = $this->acl->where(Acl::schema_fields_CLASS, $this->request->getRouterData('class/name'))
+            ->where(Acl::schema_fields_METHOD, $this->request->getMethod())
+            ->where(Acl::schema_fields_ROUTE, $this->request->getRouteUrlPath())
             ->find()
             ->fetch();
         if (!$acl->getId()) {
