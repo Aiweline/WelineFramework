@@ -127,7 +127,7 @@ class Feed extends BackendController
                 // 表单未提交该字段，新建时默认为1，编辑时保持原值
                 if ($id > 0) {
                     $existingFeed = $feedModel->load($id);
-                    $isAutoPush = (int)($existingFeed->getData(FeedModel::fields_IS_AUTO_PUSH) ?? 1);
+                    $isAutoPush = (int)($existingFeed->getData(FeedModel::schema_fields_IS_AUTO_PUSH) ?? 1);
                 } else {
                     $isAutoPush = 1; // 新建时默认启用
                 }
@@ -154,15 +154,15 @@ class Feed extends BackendController
             }
 
             $feed->setData([
-                FeedModel::fields_FEED_NAME => $feedName,
-                FeedModel::fields_FEED_TYPE => $feedType,
-                FeedModel::fields_SOURCE_TYPE => $sourceType,
-                FeedModel::fields_SOURCE_CONFIG => $sourceConfig,
-                FeedModel::fields_FEED_URL => $feedUrl,
-                FeedModel::fields_UPDATE_FREQUENCY => $updateFrequency,
-                FeedModel::fields_IS_AUTO_PUSH => $isAutoPush,
-                FeedModel::fields_IS_ENABLED => $isEnabled,
-                FeedModel::fields_CONFIG => $config,
+                FeedModel::schema_fields_FEED_NAME => $feedName,
+                FeedModel::schema_fields_FEED_TYPE => $feedType,
+                FeedModel::schema_fields_SOURCE_TYPE => $sourceType,
+                FeedModel::schema_fields_SOURCE_CONFIG => $sourceConfig,
+                FeedModel::schema_fields_FEED_URL => $feedUrl,
+                FeedModel::schema_fields_UPDATE_FREQUENCY => $updateFrequency,
+                FeedModel::schema_fields_IS_AUTO_PUSH => $isAutoPush,
+                FeedModel::schema_fields_IS_ENABLED => $isEnabled,
+                FeedModel::schema_fields_CONFIG => $config,
             ]);
 
             $feed->save();
@@ -206,7 +206,7 @@ class Feed extends BackendController
             $feedContent = $feedGenerator->generateFeed($feed, $format);
 
             // 更新最后生成时间
-            $feed->setData(FeedModel::fields_LAST_GENERATED_AT, time());
+            $feed->setData(FeedModel::schema_fields_LAST_GENERATED_AT, time());
             $feed->save();
 
             return $this->jsonResponse(true, __('生成成功'), ['feed_content' => $feedContent]);

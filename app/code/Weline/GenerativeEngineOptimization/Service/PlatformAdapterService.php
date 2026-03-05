@@ -57,7 +57,7 @@ class PlatformAdapterService
      */
     public function getAdapter(Platform $platform): ?BaseAdapter
     {
-        $platformCode = $platform->getData(Platform::fields_PLATFORM_CODE);
+        $platformCode = $platform->getData(Platform::schema_fields_PLATFORM_CODE);
         
         if (!isset($this->adapterMap[$platformCode])) {
             return null;

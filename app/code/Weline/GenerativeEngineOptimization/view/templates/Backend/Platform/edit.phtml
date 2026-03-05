@@ -91,12 +91,11 @@ document.getElementById('platform-form').addEventListener('submit', function(e) 
     
     const formData = new FormData(this);
     
-    fetch('<?= $this->getUrl('generativeengineoptimization/backend/platform/save') ?>', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
+    var url = '<?= $this->getUrl('generativeengineoptimization/backend/platform/save') ?>';
+    var opts = { method: 'POST', body: formData };
+    window.Weline.Api.request(url, opts)
+    .then(function(res) {
+        var data = (res && res.data) !== undefined ? res.data : res;
         if (data.success) {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({

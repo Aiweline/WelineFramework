@@ -42,7 +42,7 @@ class FeedQueueService
     {
         /** @var Type $queueType */
         $queueType = ObjectManager::getInstance(Type::class);
-        $type = $queueType->where(Type::fields_class, 'Weline\GenerativeEngineOptimization\Queue\FeedGenerateQueue')
+        $type = $queueType->where(Type::schema_fields_class, 'Weline\GenerativeEngineOptimization\Queue\FeedGenerateQueue')
             ->find()
             ->fetch();
 
@@ -82,7 +82,7 @@ class FeedQueueService
     {
         /** @var Type $queueType */
         $queueType = ObjectManager::getInstance(Type::class);
-        $type = $queueType->where(Type::fields_class, 'Weline\GenerativeEngineOptimization\Queue\FeedPushQueue')
+        $type = $queueType->where(Type::schema_fields_class, 'Weline\GenerativeEngineOptimization\Queue\FeedPushQueue')
             ->find()
             ->fetch();
 

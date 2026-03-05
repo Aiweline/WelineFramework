@@ -12,40 +12,38 @@ declare(strict_types=1);
 namespace Weline\GenerativeEngineOptimization\Model;
 
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\Framework\Setup\Data\Context;
-
-/**
- * 平台配置模型
- * 
- * @package Weline_GenerativeEngineOptimization
- */
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+/** 平台配置模型 @package Weline_GenerativeEngineOptimization */
+#[Table(comment: 'GEO平台配置表')]
+#[Index(name: 'idx_platform_code', columns: ['platform_code'], type: 'UNIQUE', comment: '平台代码唯一索引')]
+#[Index(name: 'idx_is_enabled', columns: ['is_enabled'], comment: '启用状态索引')]
 class Platform extends Model
 {
-    public const table = 'geo_platform';
-    
-    /**
-     * Primary keys
-     */
+
+    public const schema_table = 'geo_platform';
+    public const schema_primary_key = 'id';
     public array $_unit_primary_keys = ['id'];
-    
-    /**
-     * Index sort keys
-     */
     public array $_index_sort_keys = ['id', 'platform_code', 'is_enabled'];
-    
-    /**
-     * Field name constants
-     */
-    public const fields_ID = 'id';
-    public const fields_PLATFORM_CODE = 'platform_code';
-    public const fields_PLATFORM_NAME = 'platform_name';
-    public const fields_API_ENDPOINT = 'api_endpoint';
-    public const fields_FEED_FORMAT = 'feed_format';
-    public const fields_IS_ENABLED = 'is_enabled';
-    public const fields_CONFIG = 'config';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
+    #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'ID')]
+    public const schema_fields_ID = 'id';
+    #[Col('varchar', 50, nullable: false, comment: '平台代码')]
+    public const schema_fields_PLATFORM_CODE = 'platform_code';
+    #[Col('varchar', 100, nullable: false, comment: '平台名称')]
+    public const schema_fields_PLATFORM_NAME = 'platform_name';
+    #[Col('varchar', 255, comment: 'API端点URL')]
+    public const schema_fields_API_ENDPOINT = 'api_endpoint';
+    #[Col('varchar', 50, default: 'json_feed', comment: 'Feed格式')]
+    public const schema_fields_FEED_FORMAT = 'feed_format';
+    #[Col('int', 1, default: 1, comment: '是否启用')]
+    public const schema_fields_IS_ENABLED = 'is_enabled';
+    #[Col('text', comment: '平台特定配置JSON')]
+    public const schema_fields_CONFIG = 'config';
+    #[Col('int', default: 0, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col('int', default: 0, comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
 
     /**
      * Platform codes
@@ -84,55 +82,16 @@ class Platform extends Model
      */
     public function getIdFieldName(): string
     {
-        return self::fields_ID;
+        return self::schema_fields_ID;
     }
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist() === false) {
-            $setup->createTable('GEO平台配置表')
-                ->addColumn(self::fields_ID, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
-                ->addColumn(self::fields_PLATFORM_CODE, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 50, 'not null', '平台代码')
-                ->addColumn(self::fields_PLATFORM_NAME, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 100, 'not null', '平台名称')
-                ->addColumn(self::fields_API_ENDPOINT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'null', 'API端点URL')
-                ->addColumn(self::fields_FEED_FORMAT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 50, 'default \'json_feed\'', 'Feed格式')
-                ->addColumn(self::fields_IS_ENABLED, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, 1, 'default 1', '是否启用')
-                ->addColumn(self::fields_CONFIG, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, 'null', '平台特定配置JSON')
-                ->addColumn(self::fields_CREATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
-                ->addColumn(self::fields_UPDATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
-                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_UNIQUE, 'idx_platform_code', self::fields_PLATFORM_CODE, '平台代码唯一索引')
-                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_is_enabled', self::fields_IS_ENABLED, '启用状态索引')
-                ->create();
-        }
-    }
-
-    /**
+/**
      * 获取配置数组
      * 
      * @return array
      */
     public function getConfigArray(): array
     {
-        $config = $this->getData(self::fields_CONFIG);
+        $config = $this->getData(self::schema_fields_CONFIG);
         if (is_string($config)) {
             $decoded = json_decode($config, true);
             return is_array($decoded) ? $decoded : [];
@@ -148,7 +107,7 @@ class Platform extends Model
      */
     public function setConfigArray(array $config): self
     {
-        $this->setData(self::fields_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
+        $this->setData(self::schema_fields_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
         return $this;
     }
 
@@ -159,6 +118,7 @@ class Platform extends Model
      */
     public function isEnabled(): bool
     {
-        return (int)$this->getData(self::fields_IS_ENABLED) === 1;
+        return (int)$this->getData(self::schema_fields_IS_ENABLED) === 1;
     }
 }
+

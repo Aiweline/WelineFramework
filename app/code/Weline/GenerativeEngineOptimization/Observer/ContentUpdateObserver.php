@@ -63,8 +63,8 @@ class ContentUpdateObserver
             /** @var Feed $feedModel */
             $feedModel = ObjectManager::getInstance(Feed::class);
             $feeds = $feedModel
-                ->where(Feed::fields_IS_ENABLED, 1)
-                ->where(Feed::fields_IS_AUTO_PUSH, 1)
+                ->where(Feed::schema_fields_IS_ENABLED, 1)
+                ->where(Feed::schema_fields_IS_AUTO_PUSH, 1)
                 ->select()
                 ->fetchArray();
 
@@ -80,7 +80,7 @@ class ContentUpdateObserver
                 $this->createOrUpdateFeedItem($feed, $data);
 
                 // 如果Feed配置了实时推送，立即推送
-                if ($feed->getData(Feed::fields_UPDATE_FREQUENCY) === Feed::FREQUENCY_REALTIME) {
+                if ($feed->getData(Feed::schema_fields_UPDATE_FREQUENCY) === Feed::FREQUENCY_REALTIME) {
                     $this->triggerAutoPush($feed);
                 }
             }
@@ -98,7 +98,7 @@ class ContentUpdateObserver
      */
     protected function isFeedMatchContent(Feed $feed, array $data): bool
     {
-        $feedType = $feed->getData(Feed::fields_FEED_TYPE);
+        $feedType = $feed->getData(Feed::schema_fields_FEED_TYPE);
         $sourceConfig = $feed->getSourceConfigArray();
         
         // 根据Feed类型和配置判断是否匹配
@@ -120,9 +120,9 @@ class ContentUpdateObserver
         
         // 查找是否已存在
         $feedItem = $feedItemModel
-            ->where(FeedItem::fields_FEED_ID, $feed->getId())
-            ->where(FeedItem::fields_ITEM_TYPE, $data['type'] ?? 'content')
-            ->where(FeedItem::fields_ITEM_ID, $data['id'] ?? 0)
+            ->where(FeedItem::schema_fields_FEED_ID, $feed->getId())
+            ->where(FeedItem::schema_fields_ITEM_TYPE, $data['type'] ?? 'content')
+            ->where(FeedItem::schema_fields_ITEM_ID, $data['id'] ?? 0)
             ->find()
             ->fetch();
 
@@ -131,15 +131,15 @@ class ContentUpdateObserver
         }
 
         $feedItem->setData([
-            FeedItem::fields_FEED_ID => $feed->getId(),
-            FeedItem::fields_ITEM_TYPE => $data['type'] ?? 'content',
-            FeedItem::fields_ITEM_ID => $data['id'] ?? 0,
-            FeedItem::fields_TITLE => $data['title'] ?? '',
-            FeedItem::fields_CONTENT => $data['content'] ?? '',
-            FeedItem::fields_URL => $data['url'] ?? '',
-            FeedItem::fields_METADATA => json_encode($data['metadata'] ?? []),
-            FeedItem::fields_IS_PUBLISHED => $data['is_published'] ?? 1,
-            FeedItem::fields_PUBLISHED_AT => $data['published_at'] ?? time(),
+            FeedItem::schema_fields_FEED_ID => $feed->getId(),
+            FeedItem::schema_fields_ITEM_TYPE => $data['type'] ?? 'content',
+            FeedItem::schema_fields_ITEM_ID => $data['id'] ?? 0,
+            FeedItem::schema_fields_TITLE => $data['title'] ?? '',
+            FeedItem::schema_fields_CONTENT => $data['content'] ?? '',
+            FeedItem::schema_fields_URL => $data['url'] ?? '',
+            FeedItem::schema_fields_METADATA => json_encode($data['metadata'] ?? []),
+            FeedItem::schema_fields_IS_PUBLISHED => $data['is_published'] ?? 1,
+            FeedItem::schema_fields_PUBLISHED_AT => $data['published_at'] ?? time(),
         ]);
 
         $feedItem->save();
@@ -161,7 +161,7 @@ class ContentUpdateObserver
             /** @var \Weline\GenerativeEngineOptimization\Model\Platform $platformModel */
             $platformModel = ObjectManager::getInstance(\Weline\GenerativeEngineOptimization\Model\Platform::class);
             $platforms = $platformModel
-                ->where(\Weline\GenerativeEngineOptimization\Model\Platform::fields_IS_ENABLED, 1)
+                ->where(\Weline\GenerativeEngineOptimization\Model\Platform::schema_fields_IS_ENABLED, 1)
                 ->select()
                 ->fetchArray();
 
