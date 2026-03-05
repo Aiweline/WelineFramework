@@ -4,59 +4,34 @@ declare(strict_types=1);
 
 namespace WeShop\Social\Model;
 
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 
 /**
  * 社交分享模型
  */
-class SocialShare extends \Weline\Framework\Database\Model
+#[Table(comment: 'WeShop社交分享表')]
+#[Index(name: 'idx_customer_id', columns: ['customer_id'], type: 'KEY', comment: '客户ID索引')]
+#[Index(name: 'idx_product_id', columns: ['product_id'], type: 'KEY', comment: '产品ID索引')]
+class SocialShare extends Model
 {
-    public const table = 'weshop_social_share';
-    public const primary_key = 'share_id';
+    public const schema_table = 'weshop_social_share';
+    public const schema_primary_key = 'share_id';
     public string $indexer = 'social_share_indexer';
-    
-    public const fields_ID = 'share_id';
-    public const fields_CUSTOMER_ID = 'customer_id';
-    public const fields_PRODUCT_ID = 'product_id';
-    public const fields_PLATFORM = 'platform';
-    public const fields_CREATED_AT = 'created_at';
-    
+
     public array $_unit_primary_keys = ['share_id'];
     public array $_index_sort_keys = ['customer_id', 'product_id', 'platform'];
-    
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('WeShop社交分享表')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'auto_increment primary key', '分享ID')
-                ->addColumn(self::fields_CUSTOMER_ID, TableInterface::column_type_INTEGER, 0, 'not null', '客户ID')
-                ->addColumn(self::fields_PRODUCT_ID, TableInterface::column_type_INTEGER, 0, 'not null', '产品ID')
-                ->addColumn(self::fields_PLATFORM, TableInterface::column_type_VARCHAR, 50, 'not null', '平台')
-                ->addColumn(self::fields_CREATED_AT, TableInterface::column_type_DATETIME, 0, 'not null default CURRENT_TIMESTAMP', '创建时间')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_customer_id', self::fields_CUSTOMER_ID, '客户ID索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_product_id', self::fields_PRODUCT_ID, '产品ID索引')
-                ->create();
-        }
-    }
+
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '分享ID')]
+    public const schema_fields_ID = 'share_id';
+    #[Col(type: 'int', nullable: false, comment: '客户ID')]
+    public const schema_fields_CUSTOMER_ID = 'customer_id';
+    #[Col(type: 'int', nullable: false, comment: '产品ID')]
+    public const schema_fields_PRODUCT_ID = 'product_id';
+    #[Col(type: 'varchar', length: 50, nullable: false, comment: '平台')]
+    public const schema_fields_PLATFORM = 'platform';
+    #[Col(type: 'datetime', nullable: false, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
 }
