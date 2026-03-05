@@ -34,7 +34,7 @@ class Category extends BackendController
     private function getSiteOptions(): array
     {
         $websites = $this->websiteModel->clear()
-            ->order(Website::fields_NAME, 'ASC')
+            ->order(Website::schema_fields_NAME, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
@@ -63,17 +63,17 @@ class Category extends BackendController
         // 根据当前网站过滤
         $websiteId = WebsiteData::getWebsiteId();
         if ($websiteId) {
-            $listModel->where(CategoryModel::fields_SITE_ID, $websiteId);
+            $listModel->where(CategoryModel::schema_fields_SITE_ID, $websiteId);
         }
 
         if ($keyword = $this->request->getGet('search')) {
             $keyword = "%{$keyword}%";
-            $listModel->where(CategoryModel::fields_NAME, $keyword, 'like')
-                ->where(CategoryModel::fields_SLUG, $keyword, 'like', 'OR');
+            $listModel->where(CategoryModel::schema_fields_NAME, $keyword, 'like')
+                ->where(CategoryModel::schema_fields_SLUG, $keyword, 'like', 'OR');
         }
 
         $categories = $listModel
-            ->order(CategoryModel::fields_ID, 'DESC')
+            ->order(CategoryModel::schema_fields_ID, 'DESC')
             ->pagination()
             ->select()
             ->fetch();
@@ -121,9 +121,9 @@ class Category extends BackendController
             // 别名唯一性校验（同一网站内唯一）
             $exists = clone $this->categoryModel;
             $exists->clear()
-                ->where(CategoryModel::fields_SLUG, $slug);
+                ->where(CategoryModel::schema_fields_SLUG, $slug);
             if ($websiteId) {
-                $exists->where(CategoryModel::fields_SITE_ID, $websiteId);
+                $exists->where(CategoryModel::schema_fields_SITE_ID, $websiteId);
             }
             $exists->find()->fetch();
             if ($exists->getId()) {
@@ -131,17 +131,17 @@ class Category extends BackendController
             }
 
             $category = clone $this->categoryModel;
-            $category->setData(CategoryModel::fields_NAME, $name)
-                ->setData(CategoryModel::fields_SLUG, $slug)
-                ->setData(CategoryModel::fields_SITE_ID, $websiteId)
-                ->setData(CategoryModel::fields_DESCRIPTION, (string)($data['description'] ?? ''))
-                ->setData(CategoryModel::fields_COVER_IMAGE, (string)($data['cover_image'] ?? ''))
-                ->setData(CategoryModel::fields_PARENT_ID, (int)($data['parent_id'] ?? 0))
-                ->setData(CategoryModel::fields_SORT_ORDER, (int)($data['sort_order'] ?? 0))
-                ->setData(CategoryModel::fields_STATUS, (int)($data['status'] ?? CategoryModel::STATUS_ENABLED))
-                ->setData(CategoryModel::fields_META_TITLE, (string)($data['meta_title'] ?? ''))
-                ->setData(CategoryModel::fields_META_DESCRIPTION, (string)($data['meta_description'] ?? ''))
-                ->setData(CategoryModel::fields_META_KEYWORDS, (string)($data['meta_keywords'] ?? ''))
+            $category->setData(CategoryModel::schema_fields_NAME, $name)
+                ->setData(CategoryModel::schema_fields_SLUG, $slug)
+                ->setData(CategoryModel::schema_fields_SITE_ID, $websiteId)
+                ->setData(CategoryModel::schema_fields_DESCRIPTION, (string)($data['description'] ?? ''))
+                ->setData(CategoryModel::schema_fields_COVER_IMAGE, (string)($data['cover_image'] ?? ''))
+                ->setData(CategoryModel::schema_fields_PARENT_ID, (int)($data['parent_id'] ?? 0))
+                ->setData(CategoryModel::schema_fields_SORT_ORDER, (int)($data['sort_order'] ?? 0))
+                ->setData(CategoryModel::schema_fields_STATUS, (int)($data['status'] ?? CategoryModel::STATUS_ENABLED))
+                ->setData(CategoryModel::schema_fields_META_TITLE, (string)($data['meta_title'] ?? ''))
+                ->setData(CategoryModel::schema_fields_META_DESCRIPTION, (string)($data['meta_description'] ?? ''))
+                ->setData(CategoryModel::schema_fields_META_KEYWORDS, (string)($data['meta_keywords'] ?? ''))
                 ->save();
 
             MessageManager::success(__('分类已创建'));
@@ -203,7 +203,7 @@ class Category extends BackendController
             // 获取当前网站ID（优先使用表单提交的，否则使用分类现有数据，最后从WebsiteData获取）
             $websiteId = (int)($data['site_id'] ?? 0);
             if (!$websiteId) {
-                $websiteId = (int)($category->getData(CategoryModel::fields_SITE_ID) ?? 0);
+                $websiteId = (int)($category->getData(CategoryModel::schema_fields_SITE_ID) ?? 0);
             }
             if (!$websiteId) {
                 $websiteId = (int)(WebsiteData::getWebsiteId() ?? 0);
@@ -212,10 +212,10 @@ class Category extends BackendController
             // 别名唯一性校验（排除当前记录，同一网站内唯一）
             $exists = clone $this->categoryModel;
             $exists->clear()
-                ->where(CategoryModel::fields_SLUG, $slug)
-                ->where(CategoryModel::fields_ID, $id, '!=', 'AND');
+                ->where(CategoryModel::schema_fields_SLUG, $slug)
+                ->where(CategoryModel::schema_fields_ID, $id, '!=', 'AND');
             if ($websiteId) {
-                $exists->where(CategoryModel::fields_SITE_ID, $websiteId);
+                $exists->where(CategoryModel::schema_fields_SITE_ID, $websiteId);
             }
             $exists->find()->fetch();
             if ($exists->getId()) {
@@ -228,17 +228,17 @@ class Category extends BackendController
                 throw new \Exception(__('不能将自己设为父级分类'));
             }
 
-            $category->setData(CategoryModel::fields_NAME, $name)
-                ->setData(CategoryModel::fields_SLUG, $slug)
-                ->setData(CategoryModel::fields_SITE_ID, $websiteId)
-                ->setData(CategoryModel::fields_DESCRIPTION, (string)($data['description'] ?? ''))
-                ->setData(CategoryModel::fields_COVER_IMAGE, (string)($data['cover_image'] ?? ''))
-                ->setData(CategoryModel::fields_PARENT_ID, $parentId)
-                ->setData(CategoryModel::fields_SORT_ORDER, (int)($data['sort_order'] ?? 0))
-                ->setData(CategoryModel::fields_STATUS, (int)($data['status'] ?? CategoryModel::STATUS_ENABLED))
-                ->setData(CategoryModel::fields_META_TITLE, (string)($data['meta_title'] ?? ''))
-                ->setData(CategoryModel::fields_META_DESCRIPTION, (string)($data['meta_description'] ?? ''))
-                ->setData(CategoryModel::fields_META_KEYWORDS, (string)($data['meta_keywords'] ?? ''))
+            $category->setData(CategoryModel::schema_fields_NAME, $name)
+                ->setData(CategoryModel::schema_fields_SLUG, $slug)
+                ->setData(CategoryModel::schema_fields_SITE_ID, $websiteId)
+                ->setData(CategoryModel::schema_fields_DESCRIPTION, (string)($data['description'] ?? ''))
+                ->setData(CategoryModel::schema_fields_COVER_IMAGE, (string)($data['cover_image'] ?? ''))
+                ->setData(CategoryModel::schema_fields_PARENT_ID, $parentId)
+                ->setData(CategoryModel::schema_fields_SORT_ORDER, (int)($data['sort_order'] ?? 0))
+                ->setData(CategoryModel::schema_fields_STATUS, (int)($data['status'] ?? CategoryModel::STATUS_ENABLED))
+                ->setData(CategoryModel::schema_fields_META_TITLE, (string)($data['meta_title'] ?? ''))
+                ->setData(CategoryModel::schema_fields_META_DESCRIPTION, (string)($data['meta_description'] ?? ''))
+                ->setData(CategoryModel::schema_fields_META_KEYWORDS, (string)($data['meta_keywords'] ?? ''))
                 ->save();
 
             MessageManager::success(__('分类已保存'));
@@ -328,7 +328,7 @@ class Category extends BackendController
 
         $websiteId = (int)($data['site_id'] ?? 0);
         if (!$websiteId && $category) {
-            $websiteId = (int)($category->getData(CategoryModel::fields_SITE_ID) ?? 0);
+            $websiteId = (int)($category->getData(CategoryModel::schema_fields_SITE_ID) ?? 0);
         }
         if (!$websiteId) {
             $websiteId = (int)(WebsiteData::getWebsiteId() ?? 0);
@@ -336,12 +336,12 @@ class Category extends BackendController
 
         // 别名唯一性校验（同一网站内唯一）
         $exists = clone $this->categoryModel;
-        $exists->clear()->where(CategoryModel::fields_SLUG, $slug);
+        $exists->clear()->where(CategoryModel::schema_fields_SLUG, $slug);
         if ($category && $category->getId()) {
-            $exists->where(CategoryModel::fields_ID, $category->getId(), '!=', 'AND');
+            $exists->where(CategoryModel::schema_fields_ID, $category->getId(), '!=', 'AND');
         }
         if ($websiteId) {
-            $exists->where(CategoryModel::fields_SITE_ID, $websiteId);
+            $exists->where(CategoryModel::schema_fields_SITE_ID, $websiteId);
         }
         $exists->find()->fetch();
         if ($exists->getId()) {
@@ -357,17 +357,17 @@ class Category extends BackendController
             $category = clone $this->categoryModel;
         }
 
-        $category->setData(CategoryModel::fields_NAME, $name)
-            ->setData(CategoryModel::fields_SLUG, $slug)
-            ->setData(CategoryModel::fields_SITE_ID, $websiteId)
-            ->setData(CategoryModel::fields_DESCRIPTION, (string)($data['description'] ?? ''))
-            ->setData(CategoryModel::fields_COVER_IMAGE, (string)($data['cover_image'] ?? ''))
-            ->setData(CategoryModel::fields_PARENT_ID, $parentId)
-            ->setData(CategoryModel::fields_SORT_ORDER, (int)($data['sort_order'] ?? 0))
-            ->setData(CategoryModel::fields_STATUS, (int)($data['status'] ?? CategoryModel::STATUS_ENABLED))
-            ->setData(CategoryModel::fields_META_TITLE, (string)($data['meta_title'] ?? ''))
-            ->setData(CategoryModel::fields_META_DESCRIPTION, (string)($data['meta_description'] ?? ''))
-            ->setData(CategoryModel::fields_META_KEYWORDS, (string)($data['meta_keywords'] ?? ''))
+        $category->setData(CategoryModel::schema_fields_NAME, $name)
+            ->setData(CategoryModel::schema_fields_SLUG, $slug)
+            ->setData(CategoryModel::schema_fields_SITE_ID, $websiteId)
+            ->setData(CategoryModel::schema_fields_DESCRIPTION, (string)($data['description'] ?? ''))
+            ->setData(CategoryModel::schema_fields_COVER_IMAGE, (string)($data['cover_image'] ?? ''))
+            ->setData(CategoryModel::schema_fields_PARENT_ID, $parentId)
+            ->setData(CategoryModel::schema_fields_SORT_ORDER, (int)($data['sort_order'] ?? 0))
+            ->setData(CategoryModel::schema_fields_STATUS, (int)($data['status'] ?? CategoryModel::STATUS_ENABLED))
+            ->setData(CategoryModel::schema_fields_META_TITLE, (string)($data['meta_title'] ?? ''))
+            ->setData(CategoryModel::schema_fields_META_DESCRIPTION, (string)($data['meta_description'] ?? ''))
+            ->setData(CategoryModel::schema_fields_META_KEYWORDS, (string)($data['meta_keywords'] ?? ''))
             ->save();
     }
 
@@ -387,10 +387,10 @@ class Category extends BackendController
             // 检查是否有子分类（同网站内）
             $childCount = clone $this->categoryModel;
             $query = $childCount->clear()
-                ->where(CategoryModel::fields_PARENT_ID, $id);
-            $siteId = $category->getData(CategoryModel::fields_SITE_ID);
+                ->where(CategoryModel::schema_fields_PARENT_ID, $id);
+            $siteId = $category->getData(CategoryModel::schema_fields_SITE_ID);
             if ($siteId) {
-                $query->where(CategoryModel::fields_SITE_ID, $siteId);
+                $query->where(CategoryModel::schema_fields_SITE_ID, $siteId);
             }
             $count = $query->count();
             if ($count > 0) {

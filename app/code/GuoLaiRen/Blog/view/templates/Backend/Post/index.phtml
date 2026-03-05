@@ -398,7 +398,7 @@ $aiModeLabel = (string)($this->getData('ai_mode_label') ?? __('画像关键词�
             <?php $aiPublishSseUrl = $this->getBackendUrl('blog/backend/post/trigger-ai-publish-sse'); ?>
             <w:theme:sse-terminal 
                 id="blog-ai-terminal"
-                url="{{aiPublishSseUrl}}"
+                url="<?= htmlspecialchars((string)$aiPublishSseUrl, ENT_QUOTES, 'UTF-8') ?>"
                 title="AI 生成进度"
                 height="400px"
             />
@@ -595,7 +595,14 @@ $aiModeLabel = (string)($this->getData('ai_mode_label') ?? __('画像关键词�
             isRunning = false;
             btn.disabled = false;
             btn.innerHTML = origText;
-            updateHint('<?= __('执行出错，请查看终端输出。') ?>', 'error');
+            var hintMsg = '<?= addslashes(__('连接失败或执行出错，请查看下方终端输出。')) ?>';
+            try {
+                if (e && e.data) {
+                    var d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+                    if (d && d.message) hintMsg = d.message;
+                }
+            } catch (err) {}
+            updateHint(hintMsg, 'error');
         });
         
         terminal.on('stop', function() {

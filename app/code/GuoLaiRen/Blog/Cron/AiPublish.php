@@ -70,10 +70,10 @@ class AiPublish implements CronTaskInterface
         }
 
         foreach ($quotas as $quota) {
-            $siteId = (int)$quota->getData(TrendSiteQuota::fields_SITE_ID);
-            $profileId = (int)$quota->getData(TrendSiteQuota::fields_PROFILE_ID);
-            $perDay = (int)$quota->getData(TrendSiteQuota::fields_ARTICLES_PER_DAY);
-            $categoryId = (int)$quota->getData(TrendSiteQuota::fields_DEFAULT_CATEGORY_ID);
+            $siteId = (int)$quota->getData(TrendSiteQuota::schema_fields_SITE_ID);
+            $profileId = (int)$quota->getData(TrendSiteQuota::schema_fields_PROFILE_ID);
+            $perDay = (int)$quota->getData(TrendSiteQuota::schema_fields_ARTICLES_PER_DAY);
+            $categoryId = (int)$quota->getData(TrendSiteQuota::schema_fields_DEFAULT_CATEGORY_ID);
 
             if ($categoryId <= 0) {
                 if ($onProgress) {
@@ -90,18 +90,18 @@ class AiPublish implements CronTaskInterface
                 }
                 continue;
             }
-            if ((int)$cat->getData(Category::fields_SITE_ID) !== $siteId) {
+            if ((int)$cat->getData(Category::schema_fields_SITE_ID) !== $siteId) {
                 if ($onProgress) {
-                    $onProgress('skip', ['reason' => '默认分类不属于该站点', 'category_id' => $categoryId, 'category_site_id' => $cat->getData(Category::fields_SITE_ID), 'quota_site_id' => $siteId]);
+                    $onProgress('skip', ['reason' => '默认分类不属于该站点', 'category_id' => $categoryId, 'category_site_id' => $cat->getData(Category::schema_fields_SITE_ID), 'quota_site_id' => $siteId]);
                 }
                 continue;
             }
 
             $postModel = ObjectManager::getInstance(PostModel::class);
             $already = $postModel->clear()
-                ->where(PostModel::fields_SITE_ID, $siteId)
-                ->where(PostModel::fields_TREND_PROFILE_ID, $profileId)
-                ->where(PostModel::fields_CREATED_AT, $todayStart, '>=')
+                ->where(PostModel::schema_fields_SITE_ID, $siteId)
+                ->where(PostModel::schema_fields_TREND_PROFILE_ID, $profileId)
+                ->where(PostModel::schema_fields_CREATED_AT, $todayStart, '>=')
                 ->count();
             $need = max(0, $perDay - $already);
             if ($need <= 0) {
@@ -119,9 +119,9 @@ class AiPublish implements CronTaskInterface
                 /** @var TrendingKeywordLog $logModel */
                 $logModel = ObjectManager::getInstance(TrendingKeywordLog::class);
                 $logs = $logModel->clear()
-                    ->where(TrendingKeywordLog::fields_PROFILE_ID, $profileId)
-                    ->where(TrendingKeywordLog::fields_USED_AT, null, 'IS')
-                    ->order(TrendingKeywordLog::fields_ID, 'ASC')
+                    ->where(TrendingKeywordLog::schema_fields_PROFILE_ID, $profileId)
+                    ->where(TrendingKeywordLog::schema_fields_USED_AT, null, 'IS')
+                    ->order(TrendingKeywordLog::schema_fields_ID, 'ASC')
                     ->limit($need)
                     ->select()
                     ->fetch()
@@ -130,14 +130,14 @@ class AiPublish implements CronTaskInterface
                 $idx = 0;
                 $total = count($logs);
                 foreach ($logs as $log) {
-                    $keyword = (string)$log->getData(TrendingKeywordLog::fields_KEYWORD);
-                    $logId = (int)$log->getData(TrendingKeywordLog::fields_ID);
+                    $keyword = (string)$log->getData(TrendingKeywordLog::schema_fields_KEYWORD);
+                    $logId = (int)$log->getData(TrendingKeywordLog::schema_fields_ID);
                     if ($onProgress) {
                         $onProgress('article_start', ['keyword' => $keyword, 'index' => $idx + 1, 'total' => $total]);
                     }
                     try {
                         if ($this->publishByKeyword($keyword, $siteId, $categoryId, $profileId, $locale, $asDraft)) {
-                            $log->setData(TrendingKeywordLog::fields_USED_AT, date('Y-m-d H:i:s'))->save();
+                            $log->setData(TrendingKeywordLog::schema_fields_USED_AT, date('Y-m-d H:i:s'))->save();
                             $published++;
                             if ($onProgress) {
                                 $onProgress('article_done', ['keyword' => $keyword, 'published' => $published]);
@@ -171,9 +171,9 @@ class AiPublish implements CronTaskInterface
                     }
                     continue;
                 }
-                if ((int)$profile->getData(TrendProfile::fields_IS_ACTIVE) !== 1) {
+                if ((int)$profile->getData(TrendProfile::schema_fields_IS_ACTIVE) !== 1) {
                     if ($onProgress) {
-                        $onProgress('skip', ['reason' => '画像未启用', 'profile_id' => $profileId, 'is_active' => $profile->getData(TrendProfile::fields_IS_ACTIVE)]);
+                        $onProgress('skip', ['reason' => '画像未启用', 'profile_id' => $profileId, 'is_active' => $profile->getData(TrendProfile::schema_fields_IS_ACTIVE)]);
                     }
                     continue;
                 }
@@ -181,7 +181,7 @@ class AiPublish implements CronTaskInterface
                 $keywords = array_values(array_unique($profile->getKeywordsArray()));
                 if (empty($keywords)) {
                     if ($onProgress) {
-                        $onProgress('skip', ['reason' => '画像无关键词', 'profile_id' => $profileId, 'raw_keywords' => $profile->getData(TrendProfile::fields_KEYWORDS)]);
+                        $onProgress('skip', ['reason' => '画像无关键词', 'profile_id' => $profileId, 'raw_keywords' => $profile->getData(TrendProfile::schema_fields_KEYWORDS)]);
                     }
                     continue;
                 }
@@ -273,25 +273,25 @@ class AiPublish implements CronTaskInterface
         $todayStart = date('Y-m-d 00:00:00');
         $hints = [];
         foreach ($quotas as $quota) {
-            $siteId = (int)$quota->getData(TrendSiteQuota::fields_SITE_ID);
-            $profileId = (int)$quota->getData(TrendSiteQuota::fields_PROFILE_ID);
-            $perDay = (int)$quota->getData(TrendSiteQuota::fields_ARTICLES_PER_DAY);
-            $categoryId = (int)$quota->getData(TrendSiteQuota::fields_DEFAULT_CATEGORY_ID);
+            $siteId = (int)$quota->getData(TrendSiteQuota::schema_fields_SITE_ID);
+            $profileId = (int)$quota->getData(TrendSiteQuota::schema_fields_PROFILE_ID);
+            $perDay = (int)$quota->getData(TrendSiteQuota::schema_fields_ARTICLES_PER_DAY);
+            $categoryId = (int)$quota->getData(TrendSiteQuota::schema_fields_DEFAULT_CATEGORY_ID);
             if ($categoryId <= 0) {
                 $hints[] = __('配额未设置默认分类');
                 continue;
             }
             $cat = ObjectManager::getInstance(Category::class);
             $cat->clear()->load($categoryId);
-            if (!$cat->getId() || (int)$cat->getData(Category::fields_SITE_ID) !== $siteId) {
+            if (!$cat->getId() || (int)$cat->getData(Category::schema_fields_SITE_ID) !== $siteId) {
                 $hints[] = __('默认分类不存在或不属于该站点');
                 continue;
             }
             $postModel = ObjectManager::getInstance(PostModel::class);
             $already = $postModel->clear()
-                ->where(PostModel::fields_SITE_ID, $siteId)
-                ->where(PostModel::fields_TREND_PROFILE_ID, $profileId)
-                ->where(PostModel::fields_CREATED_AT, $todayStart, '>=')
+                ->where(PostModel::schema_fields_SITE_ID, $siteId)
+                ->where(PostModel::schema_fields_TREND_PROFILE_ID, $profileId)
+                ->where(PostModel::schema_fields_CREATED_AT, $todayStart, '>=')
                 ->count();
             $need = max(0, $perDay - $already);
             if ($need <= 0) {
@@ -301,8 +301,8 @@ class AiPublish implements CronTaskInterface
             if ($hasTrendSource) {
                 $logModel = ObjectManager::getInstance(TrendingKeywordLog::class);
                 $logsCount = $logModel->clear()
-                    ->where(TrendingKeywordLog::fields_PROFILE_ID, $profileId)
-                    ->where(TrendingKeywordLog::fields_USED_AT, null, 'IS')
+                    ->where(TrendingKeywordLog::schema_fields_PROFILE_ID, $profileId)
+                    ->where(TrendingKeywordLog::schema_fields_USED_AT, null, 'IS')
                     ->count();
                 if ($logsCount <= 0) {
                     $hints[] = __('当前无未使用的增长词，请先运行「趋势同步」或明日再试');
@@ -312,7 +312,7 @@ class AiPublish implements CronTaskInterface
                 $profile->clear()->load($profileId);
                 if (!$profile->getId()) {
                     $hints[] = __('画像不存在');
-                } elseif ((int)$profile->getData(TrendProfile::fields_IS_ACTIVE) !== 1) {
+                } elseif ((int)$profile->getData(TrendProfile::schema_fields_IS_ACTIVE) !== 1) {
                     $hints[] = __('请启用画像');
                 } else {
                     $keywords = $profile->getKeywordsArray();
@@ -366,15 +366,15 @@ class AiPublish implements CronTaskInterface
             // 检查模型是否有效
             /** @var \Weline\Ai\Model\AiModel $aiModel */
             $aiModel = ObjectManager::getInstance(\Weline\Ai\Model\AiModel::class);
-            $modelCode = $globalDefault->getData(\Weline\Ai\Model\AiDefaultModel::fields_MODEL_CODE);
-            $model = $aiModel->clear()->where(\Weline\Ai\Model\AiModel::fields_MODEL_CODE, $modelCode)->find()->fetch();
+            $modelCode = $globalDefault->getData(\Weline\Ai\Model\AiDefaultModel::schema_fields_MODEL_CODE);
+            $model = $aiModel->clear()->where(\Weline\Ai\Model\AiModel::schema_fields_MODEL_CODE, $modelCode)->find()->fetch();
             
             if (!$model->getId()) {
                 return __('AI 默认模型配置无效（模型代码 %{1} 不存在）', [$modelCode]) . $linkHtml;
             }
             
-            if ((int)$model->getData(\Weline\Ai\Model\AiModel::fields_IS_ACTIVE) !== 1) {
-                return __('AI 默认模型 "%{1}" 未激活', [$model->getData(\Weline\Ai\Model\AiModel::fields_NAME)]) . $linkHtml;
+            if ((int)$model->getData(\Weline\Ai\Model\AiModel::schema_fields_IS_ACTIVE) !== 1) {
+                return __('AI 默认模型 "%{1}" 未激活', [$model->getData(\Weline\Ai\Model\AiModel::schema_fields_NAME)]) . $linkHtml;
             }
             
             return null;
@@ -404,18 +404,18 @@ class AiPublish implements CronTaskInterface
 
         $slug = $this->uniqueSlug($article['title'], $siteId);
         $post = ObjectManager::getInstance(PostModel::class);
-        $post->setData(PostModel::fields_SITE_ID, $siteId)
-            ->setData(PostModel::fields_CATEGORY_ID, $categoryId)
-            ->setData(PostModel::fields_TITLE, $article['title'])
-            ->setData(PostModel::fields_SLUG, $slug)
-            ->setData(PostModel::fields_SUMMARY, $article['summary'] ?? '')
-            ->setData(PostModel::fields_CONTENT, $article['content'])
-            ->setData(PostModel::fields_AUTHOR, RandomAuthorName::generate())
-            ->setData(PostModel::fields_STATUS, $asDraft ? PostModel::STATUS_DRAFT : PostModel::STATUS_PUBLISHED)
-            ->setData(PostModel::fields_TREND_PROFILE_ID, $profileId)
-            ->setData(PostModel::fields_PUBLISHED_AT, $asDraft ? null : date('Y-m-d H:i:s'))
-            ->setData(PostModel::fields_VIEW_COUNT, 0)
-            ->setData(PostModel::fields_IS_FEATURED, 0)
+        $post->setData(PostModel::schema_fields_SITE_ID, $siteId)
+            ->setData(PostModel::schema_fields_CATEGORY_ID, $categoryId)
+            ->setData(PostModel::schema_fields_TITLE, $article['title'])
+            ->setData(PostModel::schema_fields_SLUG, $slug)
+            ->setData(PostModel::schema_fields_SUMMARY, $article['summary'] ?? '')
+            ->setData(PostModel::schema_fields_CONTENT, $article['content'])
+            ->setData(PostModel::schema_fields_AUTHOR, RandomAuthorName::generate())
+            ->setData(PostModel::schema_fields_STATUS, $asDraft ? PostModel::STATUS_DRAFT : PostModel::STATUS_PUBLISHED)
+            ->setData(PostModel::schema_fields_TREND_PROFILE_ID, $profileId)
+            ->setData(PostModel::schema_fields_PUBLISHED_AT, $asDraft ? null : date('Y-m-d H:i:s'))
+            ->setData(PostModel::schema_fields_VIEW_COUNT, 0)
+            ->setData(PostModel::schema_fields_IS_FEATURED, 0)
             ->save();
 
         return true;
@@ -442,8 +442,8 @@ class AiPublish implements CronTaskInterface
         $slug = $base . '-' . date('YmdHis');
         $post = ObjectManager::getInstance(PostModel::class);
         $exists = $post->clear()
-            ->where(PostModel::fields_SLUG, $slug)
-            ->where(PostModel::fields_SITE_ID, $siteId)
+            ->where(PostModel::schema_fields_SLUG, $slug)
+            ->where(PostModel::schema_fields_SITE_ID, $siteId)
             ->find()
             ->fetch();
         if ($exists->getId()) {

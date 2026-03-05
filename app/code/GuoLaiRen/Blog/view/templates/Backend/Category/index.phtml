@@ -95,9 +95,9 @@ use GuoLaiRen\Blog\Model\Category;
                                 <?php foreach ($categories as $category): ?>
                                     <?php
                                     $parentName = '';
-                                    if ($category->getData(Category::fields_PARENT_ID) > 0) {
+                                    if ($category->getData(Category::schema_fields_PARENT_ID) > 0) {
                                         $parent = $category->getParentCategory();
-                                        $parentName = $parent ? $parent->getData(Category::fields_NAME) : '';
+                                        $parentName = $parent ? $parent->getData(Category::schema_fields_NAME) : '';
                                     }
                                     ?>
                                     <tr>
@@ -106,17 +106,17 @@ use GuoLaiRen\Blog\Model\Category;
                                             <?php if ($parentName): ?>
                                                 <small class="text-muted"><?= htmlspecialchars($parentName) ?> / </small>
                                             <?php endif; ?>
-                                            <strong><?= htmlspecialchars($category->getData(Category::fields_NAME)) ?></strong>
+                                            <strong><?= htmlspecialchars($category->getData(Category::schema_fields_NAME)) ?></strong>
                                         </td>
                                         <td>
-                                            <code><?= htmlspecialchars($category->getData(Category::fields_SLUG)) ?></code>
+                                            <code><?= htmlspecialchars($category->getData(Category::schema_fields_SLUG)) ?></code>
                                         </td>
                                         <td>
                                             <span class="badge bg-info"><?= $category->getPostCount() ?></span>
                                         </td>
-                                        <td><?= (int)$category->getData(Category::fields_SORT_ORDER) ?></td>
+                                        <td><?= (int)$category->getData(Category::schema_fields_SORT_ORDER) ?></td>
                                         <td>
-                                            <?php if ($category->getData(Category::fields_STATUS) == Category::STATUS_ENABLED): ?>
+                                            <?php if ($category->getData(Category::schema_fields_STATUS) == Category::STATUS_ENABLED): ?>
                                                 <span class="badge bg-success"><?= __('启用') ?></span>
                                             <?php else: ?>
                                                 <span class="badge bg-secondary"><lang>禁用</lang></span>
