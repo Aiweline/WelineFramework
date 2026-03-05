@@ -1253,13 +1253,16 @@ $statusOptions = $this->getData('statusOptions') ?? [];
                     var inputType = field.type === 'password' ? 'password' : 'text';
                     var defaultVal = field.default || '';
                     
-                    // 编辑模式下，密码字段显示占位符
+                    // 编辑模式下，密码字段显示占位符；api_key 类（如 APP ID）留空表示保持原值
                     var placeholder = field.placeholder || '';
                     if (isEditMode && isPassword) {
                         placeholder = '••••••••••••••••<?= __('（留空不修改）') ?>';
+                    } else if (isEditMode && mapping === 'api_key') {
+                        if (placeholder) placeholder += ' ';
+                        placeholder += '<?= __('（编辑时留空则保持原值）') ?>';
                     }
-                    
-                    html += '<input type="' + inputType + '" id="' + fieldId + '" class="pb-dm-config-input" data-field="' + field.name + '" data-mapping="' + mapping + '" data-required="' + isRequired + '"';
+                    var requiredInEdit = isRequired && !(isEditMode && (isPassword || mapping === 'api_key'));
+                    html += '<input type="' + inputType + '" id="' + fieldId + '" class="pb-dm-config-input" data-field="' + field.name + '" data-mapping="' + mapping + '" data-required="' + (requiredInEdit ? 'true' : 'false') + '"';
                     if (placeholder) html += ' placeholder="' + placeholder + '"';
                     if (defaultVal && !isPassword) html += ' value="' + defaultVal + '"';
                     html += '>';
@@ -1650,6 +1653,12 @@ $statusOptions = $this->getData('statusOptions') ?? [];
                 });
 
                 html += '</tbody></table>';
+            } else if (group.fetch_error) {
+                html += '<div class="pb-dm-empty" style="padding:20px;">' +
+                    '<i class="mdi mdi-alert-circle-outline" style="font-size:1.5rem;color:var(--backend-color-danger,#f46a6a);"></i>' +
+                    '<p style="color:var(--backend-color-danger,#f46a6a);"><?= __('拉取失败') ?>: ' + escapeHtml(group.fetch_error) + '</p>' +
+                    '<p style="font-size:0.85rem;color:var(--backend-color-text-secondary,#6c757d);"><?= __('请检查账户 API 凭据，或点击「测试」按钮验证连接。') ?></p>' +
+                '</div>';
             } else if (group.is_dns_only) {
                 html += '<div class="pb-dm-empty" style="padding:20px;">' +
                     '<i class="mdi mdi-dns" style="font-size:1.5rem;color:var(--backend-color-warning,#f1b44c);"></i>' +
