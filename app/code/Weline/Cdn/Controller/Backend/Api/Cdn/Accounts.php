@@ -56,11 +56,11 @@ class Accounts extends BackendController
             $data = [];
             foreach ($accounts as $account) {
                 $data[] = [
-                    'account_id' => (int)($account[Account::fields_ACCOUNT_ID] ?? 0),
-                    'name' => $account[Account::fields_NAME] ?? '',
-                    'adapter' => $account[Account::fields_ADAPTER] ?? '',
-                    'is_default' => (int)($account[Account::fields_IS_DEFAULT] ?? 0),
-                    'is_active' => ($account[Account::fields_STATUS] ?? '') === Account::STATUS_ACTIVE,
+                    'account_id' => (int)($account[Account::schema_fields_ACCOUNT_ID] ?? 0),
+                    'name' => $account[Account::schema_fields_NAME] ?? '',
+                    'adapter' => $account[Account::schema_fields_ADAPTER] ?? '',
+                    'is_default' => (int)($account[Account::schema_fields_IS_DEFAULT] ?? 0),
+                    'is_active' => ($account[Account::schema_fields_STATUS] ?? '') === Account::STATUS_ACTIVE,
                 ];
             }
 

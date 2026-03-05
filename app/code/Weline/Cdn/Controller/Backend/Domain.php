@@ -88,24 +88,24 @@ class Domain extends BackendController
 
             // 搜索过滤
             if (!empty($search)) {
-                $query->where(DomainModel::fields_DOMAIN_NAME, 'like', "%{$search}%");
+                $query->where(DomainModel::schema_fields_DOMAIN_NAME, 'like', "%{$search}%");
             }
 
             // 适配器过滤
             if (!empty($adapter)) {
-                $query->where(DomainModel::fields_ADAPTER, $adapter);
+                $query->where(DomainModel::schema_fields_ADAPTER, $adapter);
             }
 
             // 启用状态过滤
             if ($enabled !== '') {
-                $query->where(DomainModel::fields_ENABLED, (int)$enabled);
+                $query->where(DomainModel::schema_fields_ENABLED, (int)$enabled);
             }
 
             // 获取所有适配器
             $adapters = $this->getAdapterResolver()->getAllAdapters();
 
             // 排序
-            $query->order(DomainModel::fields_CREATED_AT, 'DESC');
+            $query->order(DomainModel::schema_fields_CREATED_AT, 'DESC');
 
             // 使用 Model 的 pagination 方法进行分页查询
             $domainsResult = $query->pagination($page, $pageSize)->fetch();
@@ -190,7 +190,7 @@ class Domain extends BackendController
         try {
             $accountModel = ObjectManager::getInstance(\Weline\Cdn\Model\Account::class);
             $accountList = $accountModel->reset()
-                ->where(\Weline\Cdn\Model\Account::fields_STATUS, \Weline\Cdn\Model\Account::STATUS_ACTIVE)
+                ->where(\Weline\Cdn\Model\Account::schema_fields_STATUS, \Weline\Cdn\Model\Account::STATUS_ACTIVE)
                 ->select()
                 ->fetchArray();
             
@@ -298,11 +298,11 @@ class Domain extends BackendController
 
             // 检查域名名称全局唯一性
             $existingByName = $this->getDomainModel()->reset()
-                ->where(DomainModel::fields_DOMAIN_NAME, $data['domain_name']);
+                ->where(DomainModel::schema_fields_DOMAIN_NAME, $data['domain_name']);
             
             if ($id) {
                 // 编辑时，排除当前记录
-                $existingByName->where(DomainModel::fields_DOMAIN_ID, $id, '!=');
+                $existingByName->where(DomainModel::schema_fields_DOMAIN_ID, $id, '!=');
             }
             
             $existingByName = $existingByName->find()->fetch();
@@ -316,11 +316,11 @@ class Domain extends BackendController
             
             // 检查 Zone ID 全局唯一性
             $existingByZoneId = $this->getDomainModel()->reset()
-                ->where(DomainModel::fields_ZONE_ID, $data['zone_id']);
+                ->where(DomainModel::schema_fields_ZONE_ID, $data['zone_id']);
             
             if ($id) {
                 // 编辑时，排除当前记录
-                $existingByZoneId->where(DomainModel::fields_DOMAIN_ID, $id, '!=');
+                $existingByZoneId->where(DomainModel::schema_fields_DOMAIN_ID, $id, '!=');
             }
             
             $existingByZoneId = $existingByZoneId->find()->fetch();
@@ -333,10 +333,10 @@ class Domain extends BackendController
             }
 
             // 设置数据
-            $domain->setData(DomainModel::fields_SITE_ID, $data['site_id']);
-            $domain->setData(DomainModel::fields_ADAPTER, $data['adapter']);
-            $domain->setData(DomainModel::fields_DOMAIN_NAME, $data['domain_name']);
-            $domain->setData(DomainModel::fields_ZONE_ID, $data['zone_id']);
+            $domain->setData(DomainModel::schema_fields_SITE_ID, $data['site_id']);
+            $domain->setData(DomainModel::schema_fields_ADAPTER, $data['adapter']);
+            $domain->setData(DomainModel::schema_fields_DOMAIN_NAME, $data['domain_name']);
+            $domain->setData(DomainModel::schema_fields_ZONE_ID, $data['zone_id']);
             
             // account_id 处理：空字符串转换为 null
             $accountId = $data['account_id'] ?? null;
@@ -345,11 +345,11 @@ class Domain extends BackendController
             } else {
                 $accountId = $accountId ? (int)$accountId : null;
             }
-            $domain->setData(DomainModel::fields_ACCOUNT_ID, $accountId);
+            $domain->setData(DomainModel::schema_fields_ACCOUNT_ID, $accountId);
             
-            $domain->setData(DomainModel::fields_INHERIT_DEFAULT, isset($data['inherit_default']) ? (int)$data['inherit_default'] : 1);
-            $domain->setData(DomainModel::fields_WARMUP_INTERVAL_SECONDS, (int)($data['warmup_interval_seconds'] ?? 300));
-            $domain->setData(DomainModel::fields_ENABLED, isset($data['enabled']) ? (int)$data['enabled'] : 1);
+            $domain->setData(DomainModel::schema_fields_INHERIT_DEFAULT, isset($data['inherit_default']) ? (int)$data['inherit_default'] : 1);
+            $domain->setData(DomainModel::schema_fields_WARMUP_INTERVAL_SECONDS, (int)($data['warmup_interval_seconds'] ?? 300));
+            $domain->setData(DomainModel::schema_fields_ENABLED, isset($data['enabled']) ? (int)$data['enabled'] : 1);
 
             // 处理自定义凭据
             if (isset($data['credentials']) && !empty($data['credentials'])) {
@@ -471,7 +471,7 @@ class Domain extends BackendController
                 ]);
             }
 
-            $domain->setData(DomainModel::fields_ENABLED, $enabled ? 1 : 0);
+            $domain->setData(DomainModel::schema_fields_ENABLED, $enabled ? 1 : 0);
             $domain->save();
 
             Message::success($enabled ? __('域名已启用') : __('域名已禁用'));

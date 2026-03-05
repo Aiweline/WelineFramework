@@ -93,11 +93,11 @@ class DomainAdd extends CommandAbstract implements CommandInterface
             /** @var Website $websiteModel */
             $websiteModel = ObjectManager::getInstance(Website::class);
             $website = $websiteModel->reset()
-                ->where(Website::fields_CODE, $siteCode)
+                ->where(Website::schema_fields_CODE, $siteCode)
                 ->find()
                 ->fetch();
 
-            if (!$website->getData(Website::fields_ID)) {
+            if (!$website->getData(Website::schema_fields_ID)) {
                 $this->printer->error(__('网站不存在：%{1}', [$siteCode]));
                 return;
             }
@@ -106,11 +106,11 @@ class DomainAdd extends CommandAbstract implements CommandInterface
             /** @var Domain $domainModel */
             $domainModel = ObjectManager::getInstance(Domain::class);
             $existingDomain = $domainModel->reset()
-                ->where(Domain::fields_SITE_ID, $website->getData(Website::fields_ID))
+                ->where(Domain::schema_fields_SITE_ID, $website->getData(Website::schema_fields_ID))
                 ->find()
                 ->fetch();
 
-            if ($existingDomain->getData(Domain::fields_DOMAIN_ID)) {
+            if ($existingDomain->getData(Domain::schema_fields_DOMAIN_ID)) {
                 $this->printer->error(__('该网站已配置CDN域名'));
                 return;
             }
@@ -123,7 +123,7 @@ class DomainAdd extends CommandAbstract implements CommandInterface
             }
 
             // 获取域名（从网站URL解析）
-            $websiteUrl = $website->getData(Website::fields_URL);
+            $websiteUrl = $website->getData(Website::schema_fields_URL);
             $parsedUrl = parse_url($websiteUrl);
             $domainName = $parsedUrl['host'] ?? '';
 
@@ -155,13 +155,13 @@ class DomainAdd extends CommandAbstract implements CommandInterface
 
             // 创建域名
             $domain = $domainModel->reset();
-            $domain->setData(Domain::fields_SITE_ID, $website->getData(Website::fields_ID));
-            $domain->setData(Domain::fields_ADAPTER, $adapterCode);
-            $domain->setData(Domain::fields_DOMAIN_NAME, $domainName);
-            $domain->setData(Domain::fields_ZONE_ID, $zoneId);
-            $domain->setData(Domain::fields_INHERIT_DEFAULT, 1);
-            $domain->setData(Domain::fields_ENABLED, 1);
-            $domain->setData(Domain::fields_WARMUP_INTERVAL_SECONDS, 300);
+            $domain->setData(Domain::schema_fields_SITE_ID, $website->getData(Website::schema_fields_ID));
+            $domain->setData(Domain::schema_fields_ADAPTER, $adapterCode);
+            $domain->setData(Domain::schema_fields_DOMAIN_NAME, $domainName);
+            $domain->setData(Domain::schema_fields_ZONE_ID, $zoneId);
+            $domain->setData(Domain::schema_fields_INHERIT_DEFAULT, 1);
+            $domain->setData(Domain::schema_fields_ENABLED, 1);
+            $domain->setData(Domain::schema_fields_WARMUP_INTERVAL_SECONDS, 300);
             $domain->save();
 
             $this->printer->success(__('CDN域名创建成功：%{1}', [$domainName]));

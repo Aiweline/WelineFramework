@@ -162,22 +162,22 @@ class CdnQueryProvider implements QueryProviderInterface
         $status = $params['status'] ?? null;
 
         if ($adapter !== null && $adapter !== '') {
-            $model->where(Account::fields_ADAPTER, (string)$adapter);
+            $model->where(Account::schema_fields_ADAPTER, (string)$adapter);
         }
         if ($status !== null && $status !== '') {
-            $model->where(Account::fields_STATUS, (string)$status);
+            $model->where(Account::schema_fields_STATUS, (string)$status);
         }
 
         $records = $model->select()->fetchArray();
         $accounts = [];
         foreach ($records as $record) {
             $accounts[] = [
-                'account_id'  => (int)($record[Account::fields_ACCOUNT_ID] ?? 0),
-                'adapter'     => (string)($record[Account::fields_ADAPTER] ?? ''),
-                'name'        => (string)($record[Account::fields_NAME] ?? ''),
-                'description' => (string)($record[Account::fields_DESCRIPTION] ?? ''),
-                'is_default'  => (bool)($record[Account::fields_IS_DEFAULT] ?? false),
-                'status'      => (string)($record[Account::fields_STATUS] ?? ''),
+                'account_id'  => (int)($record[Account::schema_fields_ACCOUNT_ID] ?? 0),
+                'adapter'     => (string)($record[Account::schema_fields_ADAPTER] ?? ''),
+                'name'        => (string)($record[Account::schema_fields_NAME] ?? ''),
+                'description' => (string)($record[Account::schema_fields_DESCRIPTION] ?? ''),
+                'is_default'  => (bool)($record[Account::schema_fields_IS_DEFAULT] ?? false),
+                'status'      => (string)($record[Account::schema_fields_STATUS] ?? ''),
             ];
         }
         return $accounts;
@@ -199,12 +199,12 @@ class CdnQueryProvider implements QueryProviderInterface
         }
 
         return [
-            'account_id'  => (int)$account->getData(Account::fields_ACCOUNT_ID),
-            'adapter'     => (string)$account->getData(Account::fields_ADAPTER),
-            'name'        => (string)$account->getData(Account::fields_NAME),
-            'description' => (string)$account->getData(Account::fields_DESCRIPTION),
-            'is_default'  => (bool)$account->getData(Account::fields_IS_DEFAULT),
-            'status'      => (string)$account->getData(Account::fields_STATUS),
+            'account_id'  => (int)$account->getData(Account::schema_fields_ACCOUNT_ID),
+            'adapter'     => (string)$account->getData(Account::schema_fields_ADAPTER),
+            'name'        => (string)$account->getData(Account::schema_fields_NAME),
+            'description' => (string)$account->getData(Account::schema_fields_DESCRIPTION),
+            'is_default'  => (bool)$account->getData(Account::schema_fields_IS_DEFAULT),
+            'status'      => (string)$account->getData(Account::schema_fields_STATUS),
             'credentials' => $account->getCredentialsArray(),
         ];
     }
@@ -235,17 +235,17 @@ class CdnQueryProvider implements QueryProviderInterface
                 }
             }
 
-            $account->setData(Account::fields_ADAPTER, $adapter);
-            $account->setData(Account::fields_NAME, $name);
+            $account->setData(Account::schema_fields_ADAPTER, $adapter);
+            $account->setData(Account::schema_fields_NAME, $name);
 
             if (isset($params['description'])) {
-                $account->setData(Account::fields_DESCRIPTION, (string)$params['description']);
+                $account->setData(Account::schema_fields_DESCRIPTION, (string)$params['description']);
             }
             if (isset($params['credentials']) && is_array($params['credentials'])) {
-                $account->setData(Account::fields_CREDENTIALS, json_encode($params['credentials'], JSON_UNESCAPED_UNICODE));
+                $account->setData(Account::schema_fields_CREDENTIALS, json_encode($params['credentials'], JSON_UNESCAPED_UNICODE));
             }
             if (isset($params['status'])) {
-                $account->setData(Account::fields_STATUS, (string)$params['status']);
+                $account->setData(Account::schema_fields_STATUS, (string)$params['status']);
             }
 
             $account->save();
@@ -317,11 +317,11 @@ class CdnQueryProvider implements QueryProviderInterface
         }
 
         return [
-            'account_id'  => (int)$account->getData(Account::fields_ACCOUNT_ID),
-            'adapter'     => (string)$account->getData(Account::fields_ADAPTER),
-            'name'        => (string)$account->getData(Account::fields_NAME),
+            'account_id'  => (int)$account->getData(Account::schema_fields_ACCOUNT_ID),
+            'adapter'     => (string)$account->getData(Account::schema_fields_ADAPTER),
+            'name'        => (string)$account->getData(Account::schema_fields_NAME),
             'is_default'  => true,
-            'status'      => (string)$account->getData(Account::fields_STATUS),
+            'status'      => (string)$account->getData(Account::schema_fields_STATUS),
         ];
     }
 
@@ -353,7 +353,7 @@ class CdnQueryProvider implements QueryProviderInterface
                 return ['success' => false, 'message' => (string)__('账户不存在')];
             }
 
-            $adapterCode = (string)$account->getData(Account::fields_ADAPTER);
+            $adapterCode = (string)$account->getData(Account::schema_fields_ADAPTER);
             $adapter = $this->adapterResolver->getAdapter($adapterCode);
 
             if ($adapter === null) {
@@ -390,7 +390,7 @@ class CdnQueryProvider implements QueryProviderInterface
                 return ['success' => false, 'message' => (string)__('账户不存在')];
             }
 
-            $adapterCode = (string)$account->getData(Account::fields_ADAPTER);
+            $adapterCode = (string)$account->getData(Account::schema_fields_ADAPTER);
             $adapter = $this->adapterResolver->getAdapter($adapterCode);
 
             if ($adapter === null) {

@@ -1,61 +1,75 @@
 <?php
-
 declare(strict_types=1);
-
 /*
  * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
  * 邮箱：aiweline@qq.com
  * 网址：aiweline.com
  * 论坛：https://bbs.aiweline.com
  */
-
 namespace Weline\Cdn\Model;
-
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\Framework\Setup\Data\Context;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 /**
  * 预热URL模型
- * 
  * @package Weline_Cdn
  */
+#[Table(comment: '预热URL表')]
+#[Index(name: 'idx_module', columns: ['module'])]
+#[Index(name: 'idx_status', columns: ['status'])]
+#[Index(name: 'idx_enabled', columns: ['enabled'])]
+#[Index(name: 'idx_domain_id', columns: ['domain_id'])]
+#[Index(name: 'idx_url', columns: ['url'])]
 class WarmupUrl extends Model
 {
-    public const table = 'cdn_warmup_url';
-    
+    public const schema_table = 'cdn_warmup_url';
+    public const schema_primary_key = 'warmup_url_id';
     /**
      * Primary keys
      */
     public array $_unit_primary_keys = ['warmup_url_id'];
-    
     /**
      * Field name constants
      */
-    public const fields_WARMUP_URL_ID = 'warmup_url_id';
-    public const fields_MODULE = 'module';
-    public const fields_PROVIDER = 'provider';
-    public const fields_URL = 'url';
-    public const fields_SITE_ID = 'site_id';
-    public const fields_DOMAIN_ID = 'domain_id';
-    public const fields_STATUS = 'status';
-    public const fields_TARGET_COUNT = 'target_count';
-    public const fields_PROCESSED_COUNT = 'processed_count';
-    public const fields_SUCCESS_COUNT = 'success_count';
-    public const fields_FAIL_COUNT = 'fail_count';
-    public const fields_RETRIES = 'retries';
-    public const fields_ENABLED = 'enabled';
-    public const fields_LAST_WARMED_AT = 'last_warmed_at';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
-
+    #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: '预热URL ID')]
+    public const schema_fields_WARMUP_URL_ID = 'warmup_url_id';
+    #[Col('varchar', 128, nullable: false, comment: '来源模块')]
+    public const schema_fields_MODULE = 'module';
+    #[Col('varchar', 128, nullable: false, comment: '提供者')]
+    public const schema_fields_PROVIDER = 'provider';
+    #[Col('varchar', 512, nullable: false, comment: 'URL地址')]
+    public const schema_fields_URL = 'url';
+    #[Col('int', comment: '站点ID')]
+    public const schema_fields_SITE_ID = 'site_id';
+    #[Col('int', comment: '域名ID')]
+    public const schema_fields_DOMAIN_ID = 'domain_id';
+    #[Col('varchar', 20, default: 'pending', comment: '状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col('int', default: 1, comment: '目标次数')]
+    public const schema_fields_TARGET_COUNT = 'target_count';
+    #[Col('int', default: 0, comment: '已处理次数')]
+    public const schema_fields_PROCESSED_COUNT = 'processed_count';
+    #[Col('int', default: 0, comment: '成功次数')]
+    public const schema_fields_SUCCESS_COUNT = 'success_count';
+    #[Col('int', default: 0, comment: '失败次数')]
+    public const schema_fields_FAIL_COUNT = 'fail_count';
+    #[Col('int', default: 0, comment: '重试次数')]
+    public const schema_fields_RETRIES = 'retries';
+    #[Col('int', 1, default: 1, comment: '是否启用')]
+    public const schema_fields_ENABLED = 'enabled';
+    #[Col('int', comment: '最后预热时间')]
+    public const schema_fields_LAST_WARMED_AT = 'last_warmed_at';
+    #[Col('int', default: 0, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col('int', default: 0, comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
     /**
      * Status constants
      */
     public const STATUS_PENDING = 'pending';
     public const STATUS_SUCCESS = 'success';
     public const STATUS_FAIL = 'fail';
-
     /**
      * Initialize model
      */
@@ -63,7 +77,6 @@ class WarmupUrl extends Model
     {
         $this->useMainDbMaster();
     }
-
     /**
      * 获取主键字段名
      * 
@@ -71,67 +84,17 @@ class WarmupUrl extends Model
      */
     public function getIdFieldName(): string
     {
-        return self::fields_WARMUP_URL_ID;
+        return self::schema_fields_WARMUP_URL_ID;
     }
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist() === false) {
-            $setup->createTable('预热URL表')
-                ->addColumn(self::fields_WARMUP_URL_ID, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', '预热URL ID')
-                ->addColumn(self::fields_MODULE, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 128, 'not null', '来源模块')
-                ->addColumn(self::fields_PROVIDER, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 128, 'not null', '提供者')
-                ->addColumn(self::fields_URL, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 512, 'not null', 'URL地址')
-                ->addColumn(self::fields_SITE_ID, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'null', '站点ID')
-                ->addColumn(self::fields_DOMAIN_ID, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'null', '域名ID')
-                ->addColumn(self::fields_STATUS, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'default \'pending\'', '状态')
-                ->addColumn(self::fields_TARGET_COUNT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 1', '目标次数')
-                ->addColumn(self::fields_PROCESSED_COUNT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '已处理次数')
-                ->addColumn(self::fields_SUCCESS_COUNT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '成功次数')
-                ->addColumn(self::fields_FAIL_COUNT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '失败次数')
-                ->addColumn(self::fields_RETRIES, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '重试次数')
-                ->addColumn(self::fields_ENABLED, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, 1, 'default 1', '是否启用')
-                ->addColumn(self::fields_LAST_WARMED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'null', '最后预热时间')
-                ->addColumn(self::fields_CREATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
-                ->addColumn(self::fields_UPDATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
-                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_module', self::fields_MODULE, '模块索引')
-                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_status', self::fields_STATUS, '状态索引')
-                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_enabled', self::fields_ENABLED, '启用状态索引')
-                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_domain_id', self::fields_DOMAIN_ID, '域名ID索引')
-                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_url', self::fields_URL, 'URL索引')
-                ->create();
-        }
-    }
-
-    /**
+/**
      * 检查是否启用
      * 
      * @return bool
      */
     public function isEnabled(): bool
     {
-        return (int)$this->getData(self::fields_ENABLED) === 1;
+        return (int)$this->getData(self::schema_fields_ENABLED) === 1;
     }
-
     /**
      * 保存前处理
      * 
@@ -140,11 +103,10 @@ class WarmupUrl extends Model
     public function beforeSave(): self
     {
         $now = time();
-        if (!$this->getData(self::fields_CREATED_AT)) {
-            $this->setData(self::fields_CREATED_AT, $now);
+        if (!$this->getData(self::schema_fields_CREATED_AT)) {
+            $this->setData(self::schema_fields_CREATED_AT, $now);
         }
-        $this->setData(self::fields_UPDATED_AT, $now);
+        $this->setData(self::schema_fields_UPDATED_AT, $now);
         return parent::beforeSave();
     }
 }
-

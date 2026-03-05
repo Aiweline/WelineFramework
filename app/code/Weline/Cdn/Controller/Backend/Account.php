@@ -75,11 +75,11 @@ class Account extends BackendController
 
             // 适配器过滤
             if (!empty($adapter)) {
-                $query->where(AccountModel::fields_ADAPTER, $adapter);
+                $query->where(AccountModel::schema_fields_ADAPTER, $adapter);
             }
 
             // 排序
-            $query->order(AccountModel::fields_CREATED_AT, 'DESC');
+            $query->order(AccountModel::schema_fields_CREATED_AT, 'DESC');
 
             // 分页查询（Model会自动计算总数）
             $result = $query->pagination($page, $pageSize)->fetch();
@@ -130,7 +130,7 @@ class Account extends BackendController
         if ($id) {
             $account = $this->getAccountModel()->reset()->load($id);
             
-            if (!$account->getData(AccountModel::fields_ACCOUNT_ID)) {
+            if (!$account->getData(AccountModel::schema_fields_ACCOUNT_ID)) {
                 Message::error(__('账户不存在'));
                 return (string)$this->redirect('*/backend/account/index');
             }
@@ -172,7 +172,7 @@ class Account extends BackendController
             if ($id) {
                 $account->load($id);
                 
-                if (!$account->getData(AccountModel::fields_ACCOUNT_ID)) {
+                if (!$account->getData(AccountModel::schema_fields_ACCOUNT_ID)) {
                     $errorMsg = __('账户不存在');
                     if ($this->request->isIframe()) {
                         return (string)$this->redirect('/component/offcanvas/error', [
@@ -233,10 +233,10 @@ class Account extends BackendController
             }
 
             // 设置数据
-            $account->setData(AccountModel::fields_NAME, $data['name']);
-            $account->setData(AccountModel::fields_ADAPTER, $data['adapter']);
-            $account->setData(AccountModel::fields_DESCRIPTION, $data['description'] ?? '');
-            $account->setData(AccountModel::fields_STATUS, $data['status'] ?? AccountModel::STATUS_ACTIVE);
+            $account->setData(AccountModel::schema_fields_NAME, $data['name']);
+            $account->setData(AccountModel::schema_fields_ADAPTER, $data['adapter']);
+            $account->setData(AccountModel::schema_fields_DESCRIPTION, $data['description'] ?? '');
+            $account->setData(AccountModel::schema_fields_STATUS, $data['status'] ?? AccountModel::STATUS_ACTIVE);
 
             // 处理凭据
             $credentials = [];
@@ -253,15 +253,15 @@ class Account extends BackendController
             $shouldSetDefault = isset($data['is_default']) && $data['is_default'] == 1;
             
             if (!$shouldSetDefault) {
-                $account->setData(AccountModel::fields_IS_DEFAULT, 0);
+                $account->setData(AccountModel::schema_fields_IS_DEFAULT, 0);
             }
 
             // 先保存获取ID（如果是新账户）
             $account->save();
-            $accountId = $account->getData(AccountModel::fields_ACCOUNT_ID);
+            $accountId = $account->getData(AccountModel::schema_fields_ACCOUNT_ID);
 
             // 如果是新账户或者是标记为默认且当前不是默认，则设置为默认
-            if ($shouldSetDefault && (!$id || $account->getData(AccountModel::fields_IS_DEFAULT) != 1)) {
+            if ($shouldSetDefault && (!$id || $account->getData(AccountModel::schema_fields_IS_DEFAULT) != 1)) {
                 if ($accountId) {
                     $this->getAccountManager()->setDefaultAccount($accountId);
                 }
@@ -320,7 +320,7 @@ class Account extends BackendController
         try {
             $account = $this->getAccountModel()->reset()->load($id);
             
-            if (!$account->getData(AccountModel::fields_ACCOUNT_ID)) {
+            if (!$account->getData(AccountModel::schema_fields_ACCOUNT_ID)) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('账户不存在')
@@ -372,7 +372,7 @@ class Account extends BackendController
         try {
             $account = $this->getAccountModel()->reset()->load($id);
             
-            if (!$account->getData(AccountModel::fields_ACCOUNT_ID)) {
+            if (!$account->getData(AccountModel::schema_fields_ACCOUNT_ID)) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('账户不存在')
@@ -413,7 +413,7 @@ class Account extends BackendController
         try {
             $account = $this->getAccountModel()->reset()->load($id);
             
-            if (!$account->getData(AccountModel::fields_ACCOUNT_ID)) {
+            if (!$account->getData(AccountModel::schema_fields_ACCOUNT_ID)) {
                 Message::error(__('账户不存在'));
                 return (string)$this->redirect('*/backend/account/index');
             }

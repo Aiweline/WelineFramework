@@ -168,7 +168,7 @@ class WarmupSendTest extends TestCase
         // Mock已存在的记录
         $existingUrl = $this->createMock(WarmupUrl::class);
         $existingUrl->method('getData')->willReturnCallback(function($field) {
-            return $field === WarmupUrl::fields_WARMUP_URL_ID ? 1 : null;
+            return $field === WarmupUrl::schema_fields_WARMUP_URL_ID ? 1 : null;
         });
         $existingUrl->method('setData')->willReturnSelf();
         $existingUrl->method('save')->willReturn(true);
