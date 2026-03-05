@@ -167,7 +167,7 @@ class Category extends \Weline\Framework\App\Controller\BackendController
             
             // 字段映射：将 Catalog 模型字段映射到表单期望的字段
             $category->setData('pid', $category->getParentId()); // pid 用于表单
-            $category->setData('position', $category->getData(CatalogCategory::fields_SORT_ORDER) ?: 0); // position 用于表单
+            $category->setData('position', $category->getData(CatalogCategory::schema_fields_SORT_ORDER) ?: 0); // position 用于表单
             $category->setData('default_set_id', 0); // Catalog 模型没有 default_set_id，设为 0
             
             // 从 LocalDescription 中获取 Meta 字段（如果已加载）
@@ -182,10 +182,10 @@ class Category extends \Weline\Framework\App\Controller\BackendController
                 }
             }
             if (!$localName) {
-                $localName = $category->getData(CatalogCategory::fields_NAME);
+                $localName = $category->getData(CatalogCategory::schema_fields_NAME);
             }
             $category->setData('local_name', $localName);
-            $category->setData('name', $category->getData(CatalogCategory::fields_NAME));
+            $category->setData('name', $category->getData(CatalogCategory::schema_fields_NAME));
             
             // 确保 category_id 字段存在
             $category->setData('category_id', $category->getId());
@@ -205,7 +205,7 @@ class Category extends \Weline\Framework\App\Controller\BackendController
                     }
                 }
                 $category->setData('parent_id', $parentId);
-                $category->setData('parent_name', $parent->getId() ? ($parentLocalName ?: $parent->getData(CatalogCategory::fields_NAME)) : __('无'));
+                $category->setData('parent_name', $parent->getId() ? ($parentLocalName ?: $parent->getData(CatalogCategory::schema_fields_NAME)) : __('无'));
             } else {
                 $category->setData('parent_id', 0);
                 $category->setData('parent_name', __('无'));
@@ -217,7 +217,7 @@ class Category extends \Weline\Framework\App\Controller\BackendController
             /** @var \WeShop\Catalog\Model\Category\LocalDescription $localDesc */
             $localDesc = ObjectManager::getInstance(\WeShop\Catalog\Model\Category\LocalDescription::class);
             $localDesc->clear()
-                ->where(\WeShop\Catalog\Model\Category\LocalDescription::fields_ID, $category->getId())
+                ->where(\WeShop\Catalog\Model\Category\LocalDescription::schema_fields_ID, $category->getId())
                 ->where('local_code', Cookie::getLang())
                 ->find()
                 ->fetch();
@@ -381,7 +381,7 @@ class Category extends \Weline\Framework\App\Controller\BackendController
                     /** @var \WeShop\Catalog\Model\Category\LocalDescription $localDesc */
                     $localDesc = ObjectManager::getInstance(\WeShop\Catalog\Model\Category\LocalDescription::class);
                     $localDesc->clear()
-                        ->where(\WeShop\Catalog\Model\Category\LocalDescription::fields_ID, $savedId)
+                        ->where(\WeShop\Catalog\Model\Category\LocalDescription::schema_fields_ID, $savedId)
                         ->where('local_code', Cookie::getLang())
                         ->find()
                         ->fetch();
@@ -394,9 +394,9 @@ class Category extends \Weline\Framework\App\Controller\BackendController
                         $logContent = "[" . date('Y-m-d H:i:s') . "] 更新 LocalDescription ID: {$localDesc->getId()}\n";
                     } else {
                         $localDesc->reset()
-                            ->setData(\WeShop\Catalog\Model\Category\LocalDescription::fields_ID, $savedId)
+                            ->setData(\WeShop\Catalog\Model\Category\LocalDescription::schema_fields_ID, $savedId)
                             ->setData('local_code', \Weline\Framework\Http\Cookie::getLang())
-                            ->setData('name', $this->category->getData(CatalogCategory::fields_NAME))
+                            ->setData('name', $this->category->getData(CatalogCategory::schema_fields_NAME))
                             ->setData('meta_title', $metaTitle)
                             ->setData('meta_keywords', $metaKeywords)
                             ->setData('meta_description', $metaDescription)
@@ -475,14 +475,14 @@ class Category extends \Weline\Framework\App\Controller\BackendController
                     
                     // 字段映射
                     $this->category->setData('pid', $this->category->getParentId());
-                    $this->category->setData('position', $this->category->getData(CatalogCategory::fields_SORT_ORDER) ?: 0);
+                    $this->category->setData('position', $this->category->getData(CatalogCategory::schema_fields_SORT_ORDER) ?: 0);
                     $this->category->setData('category_id', $this->category->getId());
-                    $this->category->setData('name', $this->category->getData(CatalogCategory::fields_NAME));
+                    $this->category->setData('name', $this->category->getData(CatalogCategory::schema_fields_NAME));
                     
                     // 加载 Meta 字段
                     $localDesc = ObjectManager::getInstance(\WeShop\Catalog\Model\Category\LocalDescription::class);
                     $localDesc->clear()
-                        ->where(\WeShop\Catalog\Model\Category\LocalDescription::fields_ID, $savedId)
+                        ->where(\WeShop\Catalog\Model\Category\LocalDescription::schema_fields_ID, $savedId)
                         ->where('local_code', Cookie::getLang())
                         ->find()
                         ->fetch();
@@ -555,7 +555,7 @@ class Category extends \Weline\Framework\App\Controller\BackendController
                 if (empty($parentName)) {
                     $parent = $this->category->reset()->loadLocalDescription()->load($parentId);
                     if ($parent->getId()) {
-                        $parentName = $parent->getData('local_name') ?: $parent->getData(CatalogCategory::fields_NAME);
+                        $parentName = $parent->getData('local_name') ?: $parent->getData(CatalogCategory::schema_fields_NAME);
                     }
                 }
                 $this->assign('preset_parent_id', $parentId);
@@ -619,7 +619,7 @@ class Category extends \Weline\Framework\App\Controller\BackendController
                 /** @var \WeShop\Catalog\Model\Category\LocalDescription $localDesc */
                 $localDesc = ObjectManager::getInstance(\WeShop\Catalog\Model\Category\LocalDescription::class);
                 $localDesc->clear()
-                    ->where(\WeShop\Catalog\Model\Category\LocalDescription::fields_ID, $this->category->getId())
+                    ->where(\WeShop\Catalog\Model\Category\LocalDescription::schema_fields_ID, $this->category->getId())
                     ->where('local_code', \Weline\Framework\Http\Cookie::getLang())
                     ->find()
                     ->fetch();
@@ -631,9 +631,9 @@ class Category extends \Weline\Framework\App\Controller\BackendController
                         ->save();
                 } else {
                     $localDesc->reset()
-                        ->setData(\WeShop\Catalog\Model\Category\LocalDescription::fields_ID, $this->category->getId())
+                        ->setData(\WeShop\Catalog\Model\Category\LocalDescription::schema_fields_ID, $this->category->getId())
                         ->setData('local_code', \Weline\Framework\Http\Cookie::getLang())
-                        ->setData('name', $this->category->getData(CatalogCategory::fields_NAME))
+                        ->setData('name', $this->category->getData(CatalogCategory::schema_fields_NAME))
                         ->setData('meta_title', $metaTitle)
                         ->setData('meta_keywords', $metaKeywords)
                         ->setData('meta_description', $metaDescription)

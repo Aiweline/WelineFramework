@@ -1,7 +1,5 @@
 <?php
-
 declare(strict_types=1);
-
 /*
  * 本文件由 秋枫雁飞 编写，所有解释权归WeShop所有。
  * 作者：Admin
@@ -10,540 +8,216 @@ declare(strict_types=1);
  * 论坛：https://bbs.aiweline.com
  * 日期：2023/2/21 23:13:32
  */
-
 namespace WeShop\Product\Model;
-
 use Weline\Eav\EavModel;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Set;
 use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+#[Table(comment: '产品表')]
+#[Index(name: 'idx_short_description', columns: ['short_description'], type: 'FULLTEXT', comment: '简短描述索引')]
+#[Index(name: 'idx_description', columns: ['description'], type: 'FULLTEXT', comment: '描述索引')]
+#[Index(name: 'idx_sku', columns: ['sku'], type: 'FULLTEXT', comment: 'SKU索引')]
+#[Index(name: 'idx_spu', columns: ['spu'], type: 'FULLTEXT', comment: 'SPU索引')]
+#[Index(name: 'idx_price', columns: ['price'], type: 'DEFAULT', comment: '价格索引')]
+#[Index(name: 'idx_name', columns: ['name'], type: 'FULLTEXT', comment: '产品名索引')]
+#[Index(name: 'idx_parent_id', columns: ['parent_id'], type: 'KEY', comment: '父级ID索引')]
+#[Index(name: 'idx_handle', columns: ['handle'], type: 'KEY', comment: '产品 Handle 索引')]
 class Product extends EavModel
 {
-    public const table = "weshop_product";
-    public const primary_key = "product_id";
+    public const schema_table = "weshop_product";
+    public const schema_primary_key = "product_id";
     public string $indexer = "product_indexer";
     public array $_unit_primary_keys = ["product_id"];
     public array $_index_sort_keys = ["product_id", "name", "sku", "stock", "cost", "price", "set_id"];
-
     // 字段定义
-    public const fields_ID = 'product_id';
-    public const fields_name = 'name';
-    public const fields_short_description = 'short_description';
-    public const fields_description = 'description';
-    public const fields_meta_name = 'meta_name';
-    public const fields_meta_description = 'meta_description';
-    public const fields_meta_keywords = 'meta_keywords';
-    public const fields_spu = 'spu';
-    public const fields_sku = 'sku';
-    public const fields_HANDLE = 'handle';
-    public const fields_stock = 'stock';
-    public const fields_cost = 'cost';
-    public const fields_price = 'price';
-    public const fields_image = 'image';
-    public const fields_images = 'images';
-    public const fields_parent_id = 'parent_id';
-    public const fields_status = 'status';
-    public const fields_weight = 'weight';
-    public const fields_set_id = 'set_id';
-
-    public array $_validate_fields = [self::fields_set_id, self::fields_name, self::fields_sku, self::fields_stock, self::fields_cost, self::fields_price, self::fields_set_id];
-
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '产品ID')]
+    public const schema_fields_ID = 'product_id';
+    #[Col(type: 'varchar', length: 150, nullable: false, comment: '名称')]
+    public const schema_fields_name = 'name';
+    #[Col(type: 'text', nullable: false, comment: '简短描述')]
+    public const schema_fields_short_description = 'short_description';
+    #[Col(type: 'text', nullable: false, comment: '描述')]
+    public const schema_fields_description = 'description';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: 'meta名称')]
+    public const schema_fields_meta_name = 'meta_name';
+    #[Col(type: 'text', nullable: false, comment: 'meta描述')]
+    public const schema_fields_meta_description = 'meta_description';
+    #[Col(type: 'text', nullable: false, comment: 'meta关键词')]
+    public const schema_fields_meta_keywords = 'meta_keywords';
+    #[Col(type: 'varchar', length: 60, nullable: false, comment: 'SPU')]
+    public const schema_fields_spu = 'spu';
+    #[Col(type: 'varchar', length: 60, nullable: false, comment: '最小存货单位（SKU）')]
+    public const schema_fields_sku = 'sku';
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: '产品 Handle（简短标识，用于友好URL）')]
+    public const schema_fields_HANDLE = 'handle';
+    #[Col(type: 'int', nullable: true, default: 99, comment: '库存')]
+    public const schema_fields_stock = 'stock';
+    #[Col(type: 'float', nullable: false, comment: '成本')]
+    public const schema_fields_cost = 'cost';
+    #[Col(type: 'float', nullable: false, comment: '价格')]
+    public const schema_fields_price = 'price';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '图片')]
+    public const schema_fields_image = 'image';
+    #[Col(type: 'text', nullable: false, comment: '子图')]
+    public const schema_fields_images = 'images';
+    #[Col(type: 'int', nullable: true, default: 0, comment: '父级ID')]
+    public const schema_fields_parent_id = 'parent_id';
+    #[Col(type: 'int', nullable: false, comment: '状态')]
+    public const schema_fields_status = 'status';
+    #[Col(type: 'decimal', length: '4,0', nullable: false, comment: '重量')]
+    public const schema_fields_weight = 'weight';
+    #[Col(type: 'int', nullable: false, comment: '属性集ID')]
+    public const schema_fields_set_id = 'set_id';
+    public array $_validate_fields = [self::schema_fields_set_id, self::schema_fields_name, self::schema_fields_sku, self::schema_fields_stock, self::schema_fields_cost, self::schema_fields_price, self::schema_fields_set_id];
     public const entity_code = 'product';
     public const entity_name = '产品实体';
     public const eav_entity_id_field_type = TableInterface::column_type_INTEGER;
     public const eav_entity_id_field_length = 11;
 
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-        // 设置产品默认属性集
-        /**@var \Weline\Eav\Model\EavAttribute\Set $setModel */
-        $setModel = ObjectManager::getInstance(Set::class);
-        # 属性集ID
-        $set_id = $setModel->reset()->where(Set::fields_code, 'default')
-            ->where(Set::fields_eav_entity_id, $this->getEavEntityId())
-            ->find()->fetch()['set_id'] ?? 0;
-        if ($set_id == 0) {
-            # 属性集
-            $setModel->reset()->setData(Set::fields_code, 'default')
-                ->setData(Set::fields_eav_entity_id, $this->getEavEntityId())
-                ->setData(Set::fields_name, '默认属性集')
-                ->forceCheck(true, [Set::fields_code, Set::fields_eav_entity_id])
-                ->save();
-            $set_id = $setModel->getId();
-        }
-        if ($set_id) {
-            # 属性组
-            /**@var \Weline\Eav\Model\EavAttribute\Group $groupModel */
-            $groupModel = ObjectManager::getInstance(\Weline\Eav\Model\EavAttribute\Group::class);
-            $groupModel->reset()->clearData()->setData(\Weline\Eav\Model\EavAttribute\Group::fields_code, 'default')
-                ->setData(\Weline\Eav\Model\EavAttribute\Group::fields_eav_entity_id, $this->getEavEntityId())
-                ->setData(\Weline\Eav\Model\EavAttribute\Group::fields_set_id, $set_id)
-                ->setData(\Weline\Eav\Model\EavAttribute\Group::fields_name, '默认属性组')
-                ->forceCheck(true, [
-                    \Weline\Eav\Model\EavAttribute\Group::fields_code,
-                    \Weline\Eav\Model\EavAttribute\Group::fields_eav_entity_id,
-                    \Weline\Eav\Model\EavAttribute\Group::fields_set_id,
-                ])
-                ->save();
-            $group_id = $groupModel->where(\Weline\Eav\Model\EavAttribute\Group::fields_code, 'default')
-                ->where(\Weline\Eav\Model\EavAttribute\Group::fields_eav_entity_id, $this->getEavEntityId())
-                ->where(\Weline\Eav\Model\EavAttribute\Set::fields_SET_ID, $set_id)
-                ->find()->fetch()['group_id'] ?? 0;
-            if ($group_id) {
-                # 创建默认属性 主图：image 子图：images
-                # 查找字符串类型
-                /**@var \Weline\Eav\Model\EavAttribute\Type $type */
-                $type = ObjectManager::getInstance(EavAttribute\Type::class);
-                $type_id = $type->where(EavAttribute\Type::fields_code, 'input_string')
-                    ->find()->fetch()[EavAttribute\Type::fields_ID] ?? 0;
-                if ($type_id) {
-                    /**@var \Weline\Eav\Model\EavAttribute $attributeModel */
-                    $attributeModel = ObjectManager::getInstance(EavAttribute::class);
-                    $attributeModel->reset()->clearData()->setData(EavAttribute::fields_code, 'image')
-                        ->setData(EavAttribute::fields_eav_entity_id, $this->getEavEntityId())
-                        ->setData(EavAttribute::fields_group_id, $group_id)
-                        ->setData(EavAttribute::fields_set_id, $set_id)
-                        ->setData(EavAttribute::fields_type_id, $type_id)
-                        ->setData(EavAttribute::fields_is_system, true)
-                        ->setData(EavAttribute::fields_name, '图片')
-                        ->forceCheck(true, [EavAttribute::fields_code, EavAttribute::fields_eav_entity_id, EavAttribute::fields_set_id])
-                        ->save();
-                    $attributeModel->reset()->clearData()->setData(EavAttribute::fields_code, 'images')
-                        ->setData(EavAttribute::fields_eav_entity_id, $this->getEavEntityId())
-                        ->setData(EavAttribute::fields_group_id, $group_id)
-                        ->setData(EavAttribute::fields_set_id, $set_id)
-                        ->setData(EavAttribute::fields_is_system, true)
-                        ->setData(EavAttribute::fields_name, '子图')
-                        ->setData(EavAttribute::fields_type_id, $type_id)
-                        ->forceCheck(true, [EavAttribute::fields_code, EavAttribute::fields_eav_entity_id, EavAttribute::fields_set_id])
-                        ->save();
-                }
-            }
-        }
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 如果表不存在，执行安装
-        if (!$setup->tableExist()) {
-            $this->install($setup, $context);
-            return;
-        }
-        
-        // 添加 handle 字段（如果不存在）
-        if (!$setup->hasField(self::fields_HANDLE)) {
-            $setup->alterTable()
-                ->addColumn(
-                    self::fields_HANDLE,
-                    self::fields_sku, // 在sku字段之后添加
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    '',
-                    '产品 Handle（简短标识，用于友好URL）'
-                )
-                ->alter();
-            
-            // 添加 handle 索引
-            $setup->alterTable()
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'idx_handle',
-                    self::fields_HANDLE,
-                    '产品 Handle 索引'
-                )
-                ->alter();
-        }
-        
-        // 移除 url_key 字段（如果存在）
-        if ($setup->hasField('url_key')) {
-            $setup->alterTable()
-                ->dropColumn('url_key')
-                ->alter();
-            
-            // 移除 url_key 索引（如果存在）
-            if ($setup->hasIndex('idx_url_key')) {
-                $setup->alterTable()
-                    ->dropIndex('idx_url_key')
-                    ->alter();
-            }
-        }
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        //        $setup->dropTable();
-        if (!$setup->tableExist()) {
-            $setup->createTable('产品表')
-                ->addColumn(
-                    $this::fields_ID,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'primary key auto_increment',
-                    '产品ID'
-                )
-                ->addColumn(
-                    $this::fields_name,
-                    TableInterface::column_type_VARCHAR,
-                    150,
-                    'not null',
-                    '名称'
-                )
-                ->addColumn(
-                    $this::fields_parent_id,
-                    TableInterface::column_type_INTEGER,
-                    11,
-                    'default 0',
-                    '父级ID'
-                )
-                ->addColumn(
-                    $this::fields_spu,
-                    TableInterface::column_type_VARCHAR,
-                    60,
-                    'not null',
-                    'SPU'
-                )
-                ->addColumn(
-                    $this::fields_sku,
-                    TableInterface::column_type_VARCHAR,
-                    60,
-                    'not null unique',
-                    '最小存货单位（SKU）'
-                )
-                ->addColumn(
-                    $this::fields_HANDLE,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    '',
-                    '产品 Handle（简短标识，用于友好URL）'
-                )
-                ->addColumn(
-                    $this::fields_stock,
-                    TableInterface::column_type_INTEGER,
-                    60,
-                    'default 99',
-                    '库存'
-                )
-                ->addColumn(
-                    $this::fields_cost,
-                    TableInterface::column_type_FLOAT,
-                    0,
-                    'not null',
-                    '成本'
-                )
-                ->addColumn(
-                    $this::fields_price,
-                    TableInterface::column_type_FLOAT,
-                    0,
-                    'not null',
-                    '价格'
-                )
-                ->addColumn(
-                    $this::fields_short_description,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    'not null',
-                    '简短描述'
-                )
-                ->addColumn(
-                    $this::fields_description,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    'not null',
-                    '描述'
-                )
-                ->addColumn(
-                    $this::fields_image,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    '图片'
-                )
-                ->addColumn(
-                    $this::fields_images,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    'not null',
-                    '子图'
-                )
-                ->addColumn(
-                    $this::fields_status,
-                    TableInterface::column_type_INTEGER,
-                    1,
-                    'not null',
-                    '状态'
-                )
-                ->addColumn(
-                    $this::fields_weight,
-                    TableInterface::column_type_NUMERIC,
-                    4,
-                    'not null',
-                    '重量'
-                )
-                ->addColumn(
-                    self::fields_meta_name,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    'meta名称'
-                )
-                ->addColumn(
-                    self::fields_meta_description,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    'not null',
-                    'meta描述'
-                )
-                ->addColumn(
-                    self::fields_meta_keywords,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    'not null',
-                    'meta关键词'
-                )
-                ->addColumn(
-                    self::fields_set_id,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'not null',
-                    '属性集ID'
-                )
-                ->addIndex(
-                    TableInterface::index_type_FULLTEXT,
-                    'idx_short_description',
-                    $this::fields_short_description,
-                    '简短描述索引'
-                )
-                ->addIndex(
-                    TableInterface::index_type_FULLTEXT,
-                    'idx_description',
-                    $this::fields_description,
-                    '描述索引'
-                )
-                ->addIndex(
-                    TableInterface::index_type_FULLTEXT,
-                    'idx_sku',
-                    $this::fields_sku,
-                    'SKU索引'
-                )
-                ->addIndex(
-                    TableInterface::index_type_FULLTEXT,
-                    'idx_spu',
-                    $this::fields_spu,
-                    'SPU索引'
-                )
-                ->addIndex(
-                    TableInterface::index_type_DEFAULT,
-                    'idx_price',
-                    $this::fields_price,
-                    '价格索引'
-                )
-                ->addIndex(
-                    TableInterface::index_type_FULLTEXT,
-                    'idx_name',
-                    $this::fields_name,
-                    '产品名索引'
-                )
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'idx_parent_id',
-                    $this::fields_parent_id,
-                    '父级ID索引'
-                )
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'idx_handle',
-                    $this::fields_HANDLE,
-                    '产品 Handle 索引'
-                )
-                ->create();
-        }
-    }
-
     public function getName(): string
     {
-        return $this->getData(self::fields_name);
+        return $this->getData(self::schema_fields_name);
     }
-
     public function setName(string $name): static
     {
-        $this->setData(self::fields_name, $name);
+        $this->setData(self::schema_fields_name, $name);
         return $this;
     }
-
     public function getMetaKeywords(): string
     {
-        return $this->getData(self::fields_meta_keywords);
+        return $this->getData(self::schema_fields_meta_keywords);
     }
-
     public function setMetaKeywords(string $meta_keywords): static
     {
-        $this->setData(self::fields_meta_keywords, $meta_keywords);
+        $this->setData(self::schema_fields_meta_keywords, $meta_keywords);
         return $this;
     }
-
     public function getParentId(): int
     {
-        return $this->getData(self::fields_parent_id);
+        return $this->getData(self::schema_fields_parent_id);
     }
-
     public function setParentId(int $parent_id): static
     {
-        $this->setData(self::fields_parent_id, $parent_id);
+        $this->setData(self::schema_fields_parent_id, $parent_id);
         return $this;
     }
-
     public function getSku(): string
     {
-        return $this->getData(self::fields_sku);
+        return $this->getData(self::schema_fields_sku);
     }
-
     public function setSku(string $sku): static
     {
-        $this->setData(self::fields_sku, $sku);
+        $this->setData(self::schema_fields_sku, $sku);
         return $this;
     }
-
     public function getStock(): int
     {
-        return $this->getData(self::fields_stock);
+        return $this->getData(self::schema_fields_stock);
     }
-
     public function setStock(int $stock): static
     {
-        $this->setData(self::fields_stock, $stock);
+        $this->setData(self::schema_fields_stock, $stock);
         return $this;
     }
-
     public function getCost(): float
     {
-        return (float)$this->getData(self::fields_cost);
+        return (float)$this->getData(self::schema_fields_cost);
     }
-
     public function setCost(float $cost): static
     {
-        $this->setData(self::fields_cost, $cost);
+        $this->setData(self::schema_fields_cost, $cost);
         return $this;
     }
-
     public function getPrice(): float
     {
-        return (float)$this->getData(self::fields_price);
+        return (float)$this->getData(self::schema_fields_price);
     }
-
     public function setPrice(float $price): static
     {
-        $this->setData(self::fields_price, $price);
+        $this->setData(self::schema_fields_price, $price);
         return $this;
     }
-
     public function getShortDescription(): string
     {
-        return $this->getData(self::fields_short_description);
+        return $this->getData(self::schema_fields_short_description);
     }
-
     public function setShortDescription(string $short_description): static
     {
-        $this->setData(self::fields_short_description, $short_description);
+        $this->setData(self::schema_fields_short_description, $short_description);
         return $this;
     }
-
     public function getDescription(): string
     {
-        return $this->getData(self::fields_description);
+        return $this->getData(self::schema_fields_description);
     }
-
     public function setDescription(string $description): static
     {
-        $this->setData(self::fields_description, $description);
+        $this->setData(self::schema_fields_description, $description);
         return $this;
     }
-
     public function getImage(): string
     {
-        return $this->getData(self::fields_image);
+        return $this->getData(self::schema_fields_image);
     }
-
     public function setImage(string $image): static
     {
-        $this->setData(self::fields_image, $image);
+        $this->setData(self::schema_fields_image, $image);
         return $this;
     }
-
     public function getImages(): string
     {
-        return $this->getData(self::fields_images);
+        return $this->getData(self::schema_fields_images);
     }
-
     public function setImages(string $images): static
     {
-        $this->setData(self::fields_images, $images);
+        $this->setData(self::schema_fields_images, $images);
         return $this;
     }
-
     public function getMetaName(): string
     {
-        return $this->getData(self::fields_meta_name);
+        return $this->getData(self::schema_fields_meta_name);
     }
-
     public function setMetaName(string $meta_title): static
     {
-        $this->setData(self::fields_meta_name, $meta_title);
+        $this->setData(self::schema_fields_meta_name, $meta_title);
         return $this;
     }
-
     public function getMetaDescription(): string
     {
-        return $this->getData(self::fields_meta_description);
+        return $this->getData(self::schema_fields_meta_description);
     }
-
     public function setMetaDescription(string $meta_description): static
     {
-        $this->setData(self::fields_meta_description, $meta_description);
+        $this->setData(self::schema_fields_meta_description, $meta_description);
         return $this;
     }
-
     public function getStatus(): int
     {
-        return (int)$this->getData(self::fields_status);
+        return (int)$this->getData(self::schema_fields_status);
     }
-
     public function setStatus(int $status): static
     {
-        $this->setData(self::fields_status, $status);
+        $this->setData(self::schema_fields_status, $status);
         return $this;
     }
-
     public function getWeight(): float
     {
-        return (float)$this->getData(self::fields_weight);
+        return (float)$this->getData(self::schema_fields_weight);
     }
-
     public function setWeight(float $weight): static
     {
-        $this->setData(self::fields_weight, $weight);
+        $this->setData(self::schema_fields_weight, $weight);
         return $this;
     }
-
     public function productCategories(): array
     {
         return ObjectManager::getInstance(ProductCategory::class)
-            ->where('product_id', $this->getId())->fetchArray();
+            ->where('product_id', $this->getId())->select()->fetchArray();
     }
-
     public function getCategoriesWithLocale(): array
     {
         /** @var ProductCategory $productCategory */
@@ -553,7 +227,6 @@ class Product extends EavModel
             ->joinModel(Category\LocalDescription::class, 'category_local', 'category.category_id=category_local.category_id')
             ->select()->fetchArray();
     }
-
     /**
      * 产品保存前钩子 - 触发事件
      */
@@ -567,7 +240,6 @@ class Product extends EavModel
         ];
         $this->getEventManager()->dispatch('WeShop_Product::product_save_before', $eventData);
     }
-
     /**
      * 产品保存后钩子 - 触发事件
      */
@@ -581,7 +253,6 @@ class Product extends EavModel
         ];
         $this->getEventManager()->dispatch('WeShop_Product::product_save_after', $eventData);
     }
-
     /**
      * 产品删除前钩子 - 触发事件
      */
@@ -594,7 +265,6 @@ class Product extends EavModel
             'product_id' => $this->getId()
         ]);
     }
-
     /**
      * 产品删除后钩子 - 触发事件
      */
@@ -603,10 +273,9 @@ class Product extends EavModel
         parent::delete_after();
         // 触发产品删除后事件
         $this->getEventManager()->dispatch('WeShop_Product::product_delete_after', [
-            'product_id' => $this->getOriginData(self::fields_ID)
+            'product_id' => $this->getOriginData(self::schema_fields_ID)
         ]);
     }
-
     /**
      * 获取事件管理器
      * @return \Weline\Framework\Event\EventsManager
@@ -615,16 +284,14 @@ class Product extends EavModel
     {
         return ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
     }
-
     /**
      * 获取属性集ID
      * @return int
      */
     public function getSetId(): int
     {
-        return (int)$this->getData(self::fields_set_id);
+        return (int)$this->getData(self::schema_fields_set_id);
     }
-
     /**
      * 设置属性集ID
      * @param int $setId
@@ -632,9 +299,8 @@ class Product extends EavModel
      */
     public function setSetId(int $setId): static
     {
-        return $this->setData(self::fields_set_id, $setId);
+        return $this->setData(self::schema_fields_set_id, $setId);
     }
-
     /**
      * 获取产品当前使用的属性集（通过 set_id）
      * @return Set|null
@@ -650,16 +316,14 @@ class Product extends EavModel
         $set->load($setId);
         return $set->getId() ? $set : null;
     }
-
     /**
      * 获取SPU
      * @return string
      */
     public function getSpu(): string
     {
-        return (string)$this->getData(self::fields_spu);
+        return (string)$this->getData(self::schema_fields_spu);
     }
-
     /**
      * 设置SPU
      * @param string $spu
@@ -667,7 +331,6 @@ class Product extends EavModel
      */
     public function setSpu(string $spu): static
     {
-        return $this->setData(self::fields_spu, $spu);
+        return $this->setData(self::schema_fields_spu, $spu);
     }
-
 }

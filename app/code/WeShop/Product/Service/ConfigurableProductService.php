@@ -55,8 +55,8 @@ class ConfigurableProductService
         $product->reset()->clearData();
         
         // 检查是否有子产品（parent_id = $productId）
-        $children = $product->where(Product::fields_parent_id, $productId)
-            ->where(Product::fields_status, 1)
+        $children = $product->where(Product::schema_fields_parent_id, $productId)
+            ->where(Product::schema_fields_status, 1)
             ->select()
             ->fetchArray();
         
@@ -112,8 +112,8 @@ class ConfigurableProductService
         // 获取所有子产品
         $product = clone $this->product;
         $children = $product->reset()->clearData()
-            ->where(Product::fields_parent_id, $productId)
-            ->where(Product::fields_status, 1)
+            ->where(Product::schema_fields_parent_id, $productId)
+            ->where(Product::schema_fields_status, 1)
             ->select()
             ->fetchArray();
         
@@ -122,17 +122,17 @@ class ConfigurableProductService
         }
 
         // 获取子产品的所有选项映射
-        $childProductIds = array_column($children, Product::fields_ID);
+        $childProductIds = array_column($children, Product::schema_fields_ID);
         
         $optionId = clone $this->productOptionId;
         $productOptions = $optionId->reset()->clearData()
-            ->where(OptionId::fields_PRODUCT_ID, $childProductIds, 'in')
+            ->where(OptionId::schema_fields_PRODUCT_ID, $childProductIds, 'in')
             ->select()
             ->fetchArray();
         
         // 收集所有属性ID和选项ID
-        $attributeIds = array_unique(array_column($productOptions, OptionId::fields_ATTRIBUTE_ID));
-        $optionIds = array_unique(array_column($productOptions, OptionId::fields_OPTION_ID));
+        $attributeIds = array_unique(array_column($productOptions, OptionId::schema_fields_ATTRIBUTE_ID));
+        $optionIds = array_unique(array_column($productOptions, OptionId::schema_fields_OPTION_ID));
         
         if (empty($attributeIds) || empty($optionIds)) {
             return ['attributes' => [], 'variants' => $this->formatVariants($children, [])];
@@ -147,24 +147,24 @@ class ConfigurableProductService
         // 构建产品-选项映射
         $productOptionMap = [];
         foreach ($productOptions as $po) {
-            $prodId = (int)$po[OptionId::fields_PRODUCT_ID];
+            $prodId = (int)$po[OptionId::schema_fields_PRODUCT_ID];
             if (!isset($productOptionMap[$prodId])) {
                 $productOptionMap[$prodId] = [];
             }
             $productOptionMap[$prodId][] = [
-                'attribute_id' => (int)$po[OptionId::fields_ATTRIBUTE_ID],
-                'option_id' => (int)$po[OptionId::fields_OPTION_ID],
+                'attribute_id' => (int)$po[OptionId::schema_fields_ATTRIBUTE_ID],
+                'option_id' => (int)$po[OptionId::schema_fields_OPTION_ID],
             ];
         }
 
         // 构建选项-产品映射（哪些产品可用于某个选项）
         $optionProductMap = [];
         foreach ($productOptions as $po) {
-            $optId = (int)$po[OptionId::fields_OPTION_ID];
+            $optId = (int)$po[OptionId::schema_fields_OPTION_ID];
             if (!isset($optionProductMap[$optId])) {
                 $optionProductMap[$optId] = [];
             }
-            $optionProductMap[$optId][] = (int)$po[OptionId::fields_PRODUCT_ID];
+            $optionProductMap[$optId][] = (int)$po[OptionId::schema_fields_PRODUCT_ID];
         }
 
         // 组装结果
@@ -218,33 +218,33 @@ class ConfigurableProductService
 
         $attribute = clone $this->eavAttribute;
         $attributes = $attribute->reset()->clearData()
-            ->where(EavAttribute::fields_ID, $attributeIds, 'in')
+            ->where(EavAttribute::schema_fields_ID, $attributeIds, 'in')
             ->select()
             ->fetchArray();
 
         // 获取本地化描述
         $localDesc = clone $this->attributeLocalDescription;
         $localDescs = $localDesc->reset()->clearData()
-            ->where(AttributeLocalDescription::fields_ID, $attributeIds, 'in')
-            ->where(AttributeLocalDescription::fields_local_code, $localeCode)
+            ->where(AttributeLocalDescription::schema_fields_ID, $attributeIds, 'in')
+            ->where(AttributeLocalDescription::schema_fields_local_code, $localeCode)
             ->select()
             ->fetchArray();
 
         // 构建本地化映射
         $localMap = [];
         foreach ($localDescs as $ld) {
-            $localMap[(int)$ld[AttributeLocalDescription::fields_ID]] = $ld;
+            $localMap[(int)$ld[AttributeLocalDescription::schema_fields_ID]] = $ld;
         }
 
         // 组装结果
         $result = [];
         foreach ($attributes as $attr) {
-            $attrId = (int)$attr[EavAttribute::fields_ID];
-            $originName = $attr[EavAttribute::fields_name] ?? '';
+            $attrId = (int)$attr[EavAttribute::schema_fields_ID];
+            $originName = $attr[EavAttribute::schema_fields_name] ?? '';
             $localizedName = $localMap[$attrId]['name'] ?? null;
 
             $result[$attrId] = [
-                'code' => $attr[EavAttribute::fields_code] ?? '',
+                'code' => $attr[EavAttribute::schema_fields_code] ?? '',
                 'name' => $localizedName ?: $originName, // 优先使用本地化名称
                 'origin_name' => $originName,
             ];
@@ -268,48 +268,48 @@ class ConfigurableProductService
 
         $option = clone $this->eavAttributeOption;
         $options = $option->reset()->clearData()
-            ->where(Option::fields_ID, $optionIds, 'in')
+            ->where(Option::schema_fields_ID, $optionIds, 'in')
             ->select()
             ->fetchArray();
 
         // 获取本地化描述
         $localDesc = clone $this->optionLocalDescription;
         $localDescs = $localDesc->reset()->clearData()
-            ->where(OptionLocalDescription::fields_ID, $optionIds, 'in')
-            ->where(OptionLocalDescription::fields_local_code, $localeCode)
+            ->where(OptionLocalDescription::schema_fields_ID, $optionIds, 'in')
+            ->where(OptionLocalDescription::schema_fields_local_code, $localeCode)
             ->select()
             ->fetchArray();
 
         // 构建本地化映射
         $localMap = [];
         foreach ($localDescs as $ld) {
-            $localMap[(int)$ld[OptionLocalDescription::fields_ID]] = $ld;
+            $localMap[(int)$ld[OptionLocalDescription::schema_fields_ID]] = $ld;
         }
 
         // 组装结果
         $result = [];
         foreach ($options as $opt) {
-            $optId = (int)$opt[Option::fields_ID];
-            $originValue = $opt[Option::fields_value] ?? '';
+            $optId = (int)$opt[Option::schema_fields_ID];
+            $originValue = $opt[Option::schema_fields_value] ?? '';
             $localizedValue = $localMap[$optId]['value'] ?? null;
 
             // 确定swatch类型
             $swatchType = null;
             $swatchValue = null;
-            if (!empty($opt[Option::fields_swatch_image])) {
+            if (!empty($opt[Option::schema_fields_swatch_image])) {
                 $swatchType = 'image';
-                $swatchValue = $opt[Option::fields_swatch_image];
-            } elseif (!empty($opt[Option::fields_swatch_color])) {
+                $swatchValue = $opt[Option::schema_fields_swatch_image];
+            } elseif (!empty($opt[Option::schema_fields_swatch_color])) {
                 $swatchType = 'color';
-                $swatchValue = $opt[Option::fields_swatch_color];
-            } elseif (!empty($opt[Option::fields_swatch_text])) {
+                $swatchValue = $opt[Option::schema_fields_swatch_color];
+            } elseif (!empty($opt[Option::schema_fields_swatch_text])) {
                 $swatchType = 'text';
-                $swatchValue = $opt[Option::fields_swatch_text];
+                $swatchValue = $opt[Option::schema_fields_swatch_text];
             }
 
             $result[$optId] = [
-                'attribute_id' => (int)$opt[Option::fields_attribute_id],
-                'code' => $opt[Option::fields_code] ?? '',
+                'attribute_id' => (int)$opt[Option::schema_fields_attribute_id],
+                'code' => $opt[Option::schema_fields_code] ?? '',
                 'value' => $localizedValue ?: $originValue, // 优先使用本地化值
                 'origin_value' => $originValue,
                 'swatch_type' => $swatchType,
@@ -331,7 +331,7 @@ class ConfigurableProductService
     {
         $variants = [];
         foreach ($children as $child) {
-            $productId = (int)$child[Product::fields_ID];
+            $productId = (int)$child[Product::schema_fields_ID];
             $optionIds = [];
             if (isset($productOptionMap[$productId])) {
                 foreach ($productOptionMap[$productId] as $po) {
@@ -341,11 +341,11 @@ class ConfigurableProductService
 
             $variants[] = [
                 'product_id' => $productId,
-                'sku' => $child[Product::fields_sku] ?? '',
-                'name' => $child[Product::fields_name] ?? '',
-                'price' => (float)($child[Product::fields_price] ?? 0),
-                'stock' => (int)($child[Product::fields_stock] ?? 0),
-                'image' => $child[Product::fields_image] ?? '',
+                'sku' => $child[Product::schema_fields_sku] ?? '',
+                'name' => $child[Product::schema_fields_name] ?? '',
+                'price' => (float)($child[Product::schema_fields_price] ?? 0),
+                'stock' => (int)($child[Product::schema_fields_stock] ?? 0),
+                'image' => $child[Product::schema_fields_image] ?? '',
                 'option_ids' => $optionIds,
             ];
         }
@@ -368,18 +368,18 @@ class ConfigurableProductService
         // 获取所有子产品的选项映射
         $optionId = clone $this->productOptionId;
         $productOptions = $optionId->reset()->clearData()
-            ->where(OptionId::fields_PRENT_PRODUCT_ID, $parentProductId)
+            ->where(OptionId::schema_fields_PARENT_PRODUCT_ID, $parentProductId)
             ->select()
             ->fetchArray();
 
         // 构建产品-选项映射
         $productOptionMap = [];
         foreach ($productOptions as $po) {
-            $prodId = (int)$po[OptionId::fields_PRODUCT_ID];
+            $prodId = (int)$po[OptionId::schema_fields_PRODUCT_ID];
             if (!isset($productOptionMap[$prodId])) {
                 $productOptionMap[$prodId] = [];
             }
-            $productOptionMap[$prodId][] = (int)$po[OptionId::fields_OPTION_ID];
+            $productOptionMap[$prodId][] = (int)$po[OptionId::schema_fields_OPTION_ID];
         }
 
         // 找到选项完全匹配的产品

@@ -144,8 +144,8 @@ class Edit extends BackendController
         # 查询属性是否存在
         /**@var EavAttribute[] $attributeDataItems */
         $attributeDataItems = $attribute->reset()
-            ->where($attribute::fields_attribute_id, $attributeIds, 'in')
-            ->where($attribute::fields_eav_entity_id, $product->getEavEntityId())
+            ->where($attribute::schema_fields_attribute_id, $attributeIds, 'in')
+            ->where($attribute::schema_fields_eav_entity_id, $product->getEavEntityId())
             ->select()
             ->fetch()
             ->getItems();
@@ -162,13 +162,13 @@ class Edit extends BackendController
     {
         $groups = $this->product->eav_AttributeGroupModel()
             ->loadLocalDescription()
-            ->where(Set::fields_ID, $set_id)
+            ->where(Set::schema_fields_ID, $set_id)
             ->select()
             ->fetchArray();
         foreach ($groups as &$group) {
             $attributes = $this->product->reset()->eav_AttributeModel()
-                ->where(EavAttribute::fields_set_id, $group[Set::fields_ID])
-                ->where('main_table.' . EavAttribute::fields_group_id, $group[EavAttribute\Group::fields_ID])
+                ->where(EavAttribute::schema_fields_set_id, $group[Set::schema_fields_ID])
+                ->where('main_table.' . EavAttribute::schema_fields_group_id, $group[EavAttribute\Group::schema_fields_ID])
                 ->joinModel(Type::class, 'type', 'main_table.type_id=type.type_id')
                 ->select()
                 ->fetch()

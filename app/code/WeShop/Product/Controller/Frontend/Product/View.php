@@ -59,7 +59,7 @@ class View extends BaseController
         }
         
         // 检查产品状态（status=1 表示启用）
-        $status = $product->getData(\WeShop\Product\Model\Product::fields_status);
+        $status = $product->getData(\WeShop\Product\Model\Product::schema_fields_status);
         if ($status != 1 && $status !== 'enabled') {
             $this->getMessageManager()->addError(__('产品已下架'));
             return $this->redirect('weshop/product/list');
@@ -68,18 +68,18 @@ class View extends BaseController
         // 格式化产品数据
         $productData = [
             'product_id' => $product->getId(),
-            'name' => $product->getData(\WeShop\Product\Model\Product::fields_name) ?? '',
-            'short_description' => $product->getData(\WeShop\Product\Model\Product::fields_short_description) ?? '',
-            'description' => $product->getData(\WeShop\Product\Model\Product::fields_description) ?? '',
-            'price' => (float)($product->getData(\WeShop\Product\Model\Product::fields_price) ?? 0),
-            'cost' => (float)($product->getData(\WeShop\Product\Model\Product::fields_cost) ?? 0),
-            'sku' => $product->getData(\WeShop\Product\Model\Product::fields_sku) ?? '',
-            'stock' => (int)($product->getData(\WeShop\Product\Model\Product::fields_stock) ?? 0),
-            'weight' => (float)($product->getData(\WeShop\Product\Model\Product::fields_weight) ?? 0),
-            'image' => $product->getData(\WeShop\Product\Model\Product::fields_image) ?? '',
-            'images' => $product->getData(\WeShop\Product\Model\Product::fields_images) ?? '',
-            'in_stock' => (int)($product->getData(\WeShop\Product\Model\Product::fields_stock) ?? 0) > 0,
-            'stock_status' => (int)($product->getData(\WeShop\Product\Model\Product::fields_stock) ?? 0) > 0 ? 'in_stock' : 'out_of_stock',
+            'name' => $product->getData(\WeShop\Product\Model\Product::schema_fields_name) ?? '',
+            'short_description' => $product->getData(\WeShop\Product\Model\Product::schema_fields_short_description) ?? '',
+            'description' => $product->getData(\WeShop\Product\Model\Product::schema_fields_description) ?? '',
+            'price' => (float)($product->getData(\WeShop\Product\Model\Product::schema_fields_price) ?? 0),
+            'cost' => (float)($product->getData(\WeShop\Product\Model\Product::schema_fields_cost) ?? 0),
+            'sku' => $product->getData(\WeShop\Product\Model\Product::schema_fields_sku) ?? '',
+            'stock' => (int)($product->getData(\WeShop\Product\Model\Product::schema_fields_stock) ?? 0),
+            'weight' => (float)($product->getData(\WeShop\Product\Model\Product::schema_fields_weight) ?? 0),
+            'image' => $product->getData(\WeShop\Product\Model\Product::schema_fields_image) ?? '',
+            'images' => $product->getData(\WeShop\Product\Model\Product::schema_fields_images) ?? '',
+            'in_stock' => (int)($product->getData(\WeShop\Product\Model\Product::schema_fields_stock) ?? 0) > 0,
+            'stock_status' => (int)($product->getData(\WeShop\Product\Model\Product::schema_fields_stock) ?? 0) > 0 ? 'in_stock' : 'out_of_stock',
         ];
         
         // 处理产品图片
@@ -119,11 +119,11 @@ class View extends BaseController
                     continue; // 排除当前产品
                 }
                 $relatedProducts[] = [
-                    'product_id' => $relatedProduct['product_id'] ?? $relatedProduct[\WeShop\Product\Model\Product::fields_ID] ?? 0,
-                    'name' => $relatedProduct['name'] ?? $relatedProduct[\WeShop\Product\Model\Product::fields_name] ?? '',
-                    'price' => $relatedProduct['price'] ?? $relatedProduct[\WeShop\Product\Model\Product::fields_price] ?? 0,
-                    'image' => $relatedProduct['image'] ?? $relatedProduct[\WeShop\Product\Model\Product::fields_image] ?? '',
-                    'sku' => $relatedProduct['sku'] ?? $relatedProduct[\WeShop\Product\Model\Product::fields_sku] ?? '',
+                    'product_id' => $relatedProduct['product_id'] ?? $relatedProduct[\WeShop\Product\Model\Product::schema_fields_ID] ?? 0,
+                    'name' => $relatedProduct['name'] ?? $relatedProduct[\WeShop\Product\Model\Product::schema_fields_name] ?? '',
+                    'price' => $relatedProduct['price'] ?? $relatedProduct[\WeShop\Product\Model\Product::schema_fields_price] ?? 0,
+                    'image' => $relatedProduct['image'] ?? $relatedProduct[\WeShop\Product\Model\Product::schema_fields_image] ?? '',
+                    'sku' => $relatedProduct['sku'] ?? $relatedProduct[\WeShop\Product\Model\Product::schema_fields_sku] ?? '',
                 ];
             }
         }
@@ -157,9 +157,9 @@ class View extends BaseController
         
         // SEO数据
         $this->assign('title', $productData['name']);
-        $this->assign('meta_title', $product->getData(\WeShop\Product\Model\Product::fields_meta_name) ?? $productData['name']);
-        $this->assign('meta_description', $product->getData(\WeShop\Product\Model\Product::fields_meta_description) ?? $productData['short_description']);
-        $this->assign('meta_keywords', $product->getData(\WeShop\Product\Model\Product::fields_meta_keywords) ?? '');
+        $this->assign('meta_title', $product->getData(\WeShop\Product\Model\Product::schema_fields_meta_name) ?? $productData['name']);
+        $this->assign('meta_description', $product->getData(\WeShop\Product\Model\Product::schema_fields_meta_description) ?? $productData['short_description']);
+        $this->assign('meta_keywords', $product->getData(\WeShop\Product\Model\Product::schema_fields_meta_keywords) ?? '');
         
         // Theme模块会自动根据 layoutType 和主题配置加载对应的布局
         // 布局文件路径：app/design/WeShop/default/frontend/layouts/product/product_detail_page_{variant}.phtml

@@ -64,9 +64,9 @@ class ProductUrlRewriteService
 
         // 2. 为每个站点配置生成 URL 重写
         foreach ($websiteConfigs as $config) {
-            $websiteId = (int)($config[ProductWebsite::fields_WEBSITE_ID] ?? 0);
-            $handle = $config[ProductWebsite::fields_HANDLE] ?? '';
-            $isActive = (bool)($config[ProductWebsite::fields_IS_ACTIVE] ?? true);
+            $websiteId = (int)($config[ProductWebsite::schema_fields_WEBSITE_ID] ?? 0);
+            $handle = $config[ProductWebsite::schema_fields_HANDLE] ?? '';
+            $isActive = (bool)($config[ProductWebsite::schema_fields_IS_ACTIVE] ?? true);
 
             if (empty($handle) || !$isActive) {
                 continue;
@@ -79,12 +79,12 @@ class ProductUrlRewriteService
         }
 
         // 3. 如果产品有全局 handle（向后兼容）
-        $globalHandle = $product->getData(Product::fields_HANDLE);
+        $globalHandle = $product->getData(Product::schema_fields_HANDLE);
         if (!empty($globalHandle)) {
             // 检查是否已经有站点配置覆盖了这个 handle
             $hasGlobalConfig = false;
             foreach ($websiteConfigs as $config) {
-                if (($config[ProductWebsite::fields_WEBSITE_ID] ?? -1) == 0) {
+                if (($config[ProductWebsite::schema_fields_WEBSITE_ID] ?? -1) == 0) {
                     $hasGlobalConfig = true;
                     break;
                 }
@@ -124,10 +124,10 @@ class ProductUrlRewriteService
 
             if ($existing) {
                 // 更新现有规则
-                $this->urlRewrite->reset()->load($existing[UrlRewrite::fields_ID] ?? 0);
+                $this->urlRewrite->reset()->load($existing[UrlRewrite::schema_fields_ID] ?? 0);
                 
                 // 检查 URL 是否发生变化
-                if (($existing[UrlRewrite::fields_URL_IDENTIFY] ?? '') !== $urlPath) {
+                if (($existing[UrlRewrite::schema_fields_URL_IDENTIFY] ?? '') !== $urlPath) {
                     // Handle 变化了，需要检查新 handle 是否可用
                     if (!$this->isHandleAvailable($websiteId, $handle, $productId)) {
                         // Handle 冲突，使用自动后缀
@@ -137,8 +137,8 @@ class ProductUrlRewriteService
                 }
 
                 $this->urlRewrite
-                    ->setData(UrlRewrite::fields_URL_IDENTIFY, $urlPath)
-                    ->setData(UrlRewrite::fields_REWRITE, $targetPath)
+                    ->setData(UrlRewrite::schema_fields_URL_IDENTIFY, $urlPath)
+                    ->setData(UrlRewrite::schema_fields_REWRITE, $targetPath)
                     ->save();
             } else {
                 // 新建规则
@@ -150,9 +150,9 @@ class ProductUrlRewriteService
                 }
 
                 $this->urlRewrite->reset()
-                    ->setData(UrlRewrite::fields_WEBSITE_ID, $websiteId)
-                    ->setData(UrlRewrite::fields_URL_IDENTIFY, $urlPath)
-                    ->setData(UrlRewrite::fields_REWRITE, $targetPath)
+                    ->setData(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
+                    ->setData(UrlRewrite::schema_fields_URL_IDENTIFY, $urlPath)
+                    ->setData(UrlRewrite::schema_fields_REWRITE, $targetPath)
                     ->save();
             }
 
@@ -182,13 +182,13 @@ class ProductUrlRewriteService
 
             // 查找所有相关的重写规则（通过目标路径匹配）
             $rewrites = $this->urlRewrite->reset()
-                ->where(UrlRewrite::fields_REWRITE, $targetPath)
+                ->where(UrlRewrite::schema_fields_REWRITE, $targetPath)
                 ->select()
                 ->fetch();
 
             if (is_array($rewrites)) {
                 foreach ($rewrites as $rewrite) {
-                    $this->urlRewrite->reset()->load($rewrite[UrlRewrite::fields_ID] ?? 0);
+                    $this->urlRewrite->reset()->load($rewrite[UrlRewrite::schema_fields_ID] ?? 0);
                     if ($this->urlRewrite->getId()) {
                         $this->urlRewrite->delete();
                         $deletedCount++;
@@ -218,7 +218,7 @@ class ProductUrlRewriteService
             $existing = $this->findExistingRewrite($productId, $websiteId);
 
             if ($existing) {
-                $this->urlRewrite->reset()->load($existing[UrlRewrite::fields_ID] ?? 0);
+                $this->urlRewrite->reset()->load($existing[UrlRewrite::schema_fields_ID] ?? 0);
                 $this->urlRewrite->delete();
                 return true;
             }
@@ -244,8 +244,8 @@ class ProductUrlRewriteService
             $targetPath = str_replace('{product_id}', (string)$productId, self::TARGET_PATH_TEMPLATE);
             
             $this->urlRewrite->reset()
-                ->where(UrlRewrite::fields_REWRITE, $targetPath)
-                ->where(UrlRewrite::fields_WEBSITE_ID, $websiteId)
+                ->where(UrlRewrite::schema_fields_REWRITE, $targetPath)
+                ->where(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
                 ->find()
                 ->fetch();
 
@@ -273,13 +273,13 @@ class ProductUrlRewriteService
 
         try {
             $this->urlRewrite->reset()
-                ->where(UrlRewrite::fields_WEBSITE_ID, $websiteId)
-                ->where(UrlRewrite::fields_URL_IDENTIFY, $urlPath);
+                ->where(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(UrlRewrite::schema_fields_URL_IDENTIFY, $urlPath);
 
             if ($excludeProductId) {
                 // 排除自身（通过排除目标路径）
                 $excludeTargetPath = str_replace('{product_id}', (string)$excludeProductId, self::TARGET_PATH_TEMPLATE);
-                $this->urlRewrite->where(UrlRewrite::fields_REWRITE, ['<>', $excludeTargetPath]);
+                $this->urlRewrite->where(UrlRewrite::schema_fields_REWRITE, ['<>', $excludeTargetPath]);
             }
 
             $this->urlRewrite->find()->fetch();
@@ -329,8 +329,8 @@ class ProductUrlRewriteService
     {
         // 清理每个站点的缓存
         foreach ($websiteConfigs as $config) {
-            $websiteId = (int)($config[ProductWebsite::fields_WEBSITE_ID] ?? 0);
-            $handle = $config[ProductWebsite::fields_HANDLE] ?? '';
+            $websiteId = (int)($config[ProductWebsite::schema_fields_WEBSITE_ID] ?? 0);
+            $handle = $config[ProductWebsite::schema_fields_HANDLE] ?? '';
             
             if (!empty($handle)) {
                 Router::clearHandleCache($handle, $websiteId);

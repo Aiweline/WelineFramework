@@ -39,7 +39,7 @@ class Product extends \Weline\Framework\App\Controller\BackendController
     public function index()
     {
         // 明确指定排序字段，使用表别名避免JOIN时的字段歧义
-        $products = $this->product->order('main_table.' . \WeShop\Product\Model\Product::fields_ID, 'DESC')
+        $products = $this->product->order('main_table.' . \WeShop\Product\Model\Product::schema_fields_ID, 'DESC')
             ->pagination()
             ->select()
             ->fetch();
@@ -56,7 +56,7 @@ class Product extends \Weline\Framework\App\Controller\BackendController
             // 查询每个产品的子产品数量
             $childrenData = $this->product->reset()
                 ->fields('parent_id, COUNT(*) as children_count')
-                ->where(\WeShop\Product\Model\Product::fields_parent_id, $productIds, 'in')
+                ->where(\WeShop\Product\Model\Product::schema_fields_parent_id, $productIds, 'in')
                 ->group('parent_id')
                 ->select()
                 ->fetchArray();
@@ -127,7 +127,7 @@ class Product extends \Weline\Framework\App\Controller\BackendController
         $attributes = $this->product->eav_AttributeModel()
             ->joinModel(Group::class, 'group', 'main_table.group_id=group.group_id')
             ->joinModel(Type::class, 'type', 'main_table.type_id=type.type_id')
-            ->where('main_table.' . Set::fields_ID, $id)
+            ->where('main_table.' . Set::schema_fields_ID, $id)
             ->select()
             ->fetchArray();
         return $this->fetchJson($attributes);
@@ -136,7 +136,7 @@ class Product extends \Weline\Framework\App\Controller\BackendController
     public function getSetGroup()
     {
         $id = $this->request->getGet('id');
-        $groups = $this->product->eav_AttributeGroupModel()->where(Set::fields_ID, $id)
+        $groups = $this->product->eav_AttributeGroupModel()->where(Set::schema_fields_ID, $id)
             ->joinModel(Group::class, 'group', 'main_table.group_id=group.group_id')
             ->joinModel(Type::class, 'type', 'main_table.type_id=type.type_id')
             ->select()
@@ -149,13 +149,13 @@ class Product extends \Weline\Framework\App\Controller\BackendController
         $id = $this->request->getGet('set_id');
         $groups = $this->product->eav_AttributeGroupModel()
             ->loadLocalDescription()
-            ->where(Set::fields_ID, $id)
+            ->where(Set::schema_fields_ID, $id)
             ->select()
             ->fetchArray();
         foreach ($groups as &$group) {
             $attributes = $this->product->reset()->eav_AttributeModel()
-                ->where(EavAttribute::fields_set_id, $group[Set::fields_ID])
-                ->where('main_table.' . EavAttribute::fields_group_id, $group[EavAttribute\Group::fields_ID])
+                ->where(EavAttribute::schema_fields_set_id, $group[Set::schema_fields_ID])
+                ->where('main_table.' . EavAttribute::schema_fields_group_id, $group[EavAttribute\Group::schema_fields_ID])
                 ->joinModel(Type::class, 'type', 'main_table.type_id=type.type_id')
                 ->select()
                 ->fetch()
@@ -210,7 +210,7 @@ class Product extends \Weline\Framework\App\Controller\BackendController
 
         // 获取子产品数量
         $childrenCount = $this->product->reset()
-            ->where(\WeShop\Product\Model\Product::fields_parent_id, $productId)
+            ->where(\WeShop\Product\Model\Product::schema_fields_parent_id, $productId)
             ->count();
 
         return $this->fetchJson([
@@ -234,8 +234,8 @@ class Product extends \Weline\Framework\App\Controller\BackendController
 
         $children = $this->product->reset()
             ->loadLocalDescription()
-            ->where(\WeShop\Product\Model\Product::fields_parent_id, $productId)
-            ->order('main_table.' . \WeShop\Product\Model\Product::fields_ID, 'ASC')
+            ->where(\WeShop\Product\Model\Product::schema_fields_parent_id, $productId)
+            ->order('main_table.' . \WeShop\Product\Model\Product::schema_fields_ID, 'ASC')
             ->select()
             ->fetchArray();
 

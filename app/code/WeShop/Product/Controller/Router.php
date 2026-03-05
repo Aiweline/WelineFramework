@@ -198,9 +198,9 @@ class Router implements RouterInterface
             $result = clone $productWebsite;
             
             $result->clear()
-                ->where(ProductWebsite::fields_WEBSITE_ID, $websiteId)
-                ->where(ProductWebsite::fields_HANDLE, $handle)
-                ->where(ProductWebsite::fields_IS_ACTIVE, 1)
+                ->where(ProductWebsite::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(ProductWebsite::schema_fields_HANDLE, $handle)
+                ->where(ProductWebsite::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
             
@@ -235,8 +235,8 @@ class Router implements RouterInterface
             
             // 通过 handle 查询产品（status=1 表示启用）
             $product->clear()
-                ->where(Product::fields_HANDLE, $handle)
-                ->where(Product::fields_status, 1)
+                ->where(Product::schema_fields_HANDLE, $handle)
+                ->where(Product::schema_fields_status, 1)
                 ->find()
                 ->fetch();
             
@@ -261,7 +261,7 @@ class Router implements RouterInterface
             
             $product->load($productId);
             
-            $status = $product->getData(Product::fields_status);
+            $status = $product->getData(Product::schema_fields_status);
             return $status === 'enabled' || $status === 1 || $status === '1';
         } catch (\Exception $e) {
             return false;
