@@ -45,20 +45,20 @@ class UpgradeDefaultAttribute implements ObserverInterface
                 /**@var \Weline\Eav\EavInterface $eavEntity */
                 $eavEntity = ObjectManager::getInstance($eav);
                 if ($eavEntity instanceof EavInterface) {
-                    // 注意：不设置 EavEntity::fields_ID，让数据库自动生成
+                    // 注意：不设置 EavEntity::schema_fields_ID，让数据库自动生成
                     // 使用 code 作为唯一键进行更新或插入
                     $eavEntityModel->reset()
                         ->setData(
                             [
-                                EavEntity::fields_code => $eavEntity->getEntityCode(),
-                                EavEntity::fields_class => $eav,
-                                EavEntity::fields_name => $eavEntity->getEntityName(),
-                                EavEntity::fields_is_system => 1,
-                                EavEntity::fields_eav_entity_id_field_type => $eavEntity->getEntityFieldIdType(),
-                                EavEntity::fields_eav_entity_id_field_length => $eavEntity->getEntityFieldIdLength(),
+                                EavEntity::schema_fields_code => $eavEntity->getEntityCode(),
+                                EavEntity::schema_fields_class => $eav,
+                                EavEntity::schema_fields_name => $eavEntity->getEntityName(),
+                                EavEntity::schema_fields_is_system => 1,
+                                EavEntity::schema_fields_eav_entity_id_field_type => $eavEntity->getEntityFieldIdType(),
+                                EavEntity::schema_fields_eav_entity_id_field_length => $eavEntity->getEntityFieldIdLength(),
                             ]
                         )
-                        ->forceCheck(true, EavEntity::fields_code)
+                        ->forceCheck(true, EavEntity::schema_fields_code)
                         ->save();
                     
                     // 获取刚保存的实体 ID（从 eavEntityModel 获取，而不是从 eavEntity 获取）

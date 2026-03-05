@@ -314,16 +314,16 @@ class AttributeFilterService
         /** @var EavAttribute $attributeModel */
         $attributeModel = ObjectManager::getInstance(EavAttribute::class);
         $attributeModel->reset()
-            ->where(EavAttribute::fields_eav_entity_id, $entity->getId())
-            ->where(EavAttribute::fields_is_enable, 1)
-            ->where(EavAttribute::fields_is_filterable, 1); // 只获取可筛选的属性
+            ->where(EavAttribute::schema_fields_eav_entity_id, $entity->getId())
+            ->where(EavAttribute::schema_fields_is_enable, 1)
+            ->where(EavAttribute::schema_fields_is_filterable, 1); // 只获取可筛选的属性
         
         if (!empty($attributeCodes)) {
-            $attributeModel->where(EavAttribute::fields_code, $attributeCodes, 'in');
+            $attributeModel->where(EavAttribute::schema_fields_code, $attributeCodes, 'in');
         }
         
-        $attributeModel->order(EavAttribute::fields_group_id)
-            ->order(EavAttribute::fields_attribute_id);
+        $attributeModel->order(EavAttribute::schema_fields_group_id)
+            ->order(EavAttribute::schema_fields_attribute_id);
         
         $results = $attributeModel->select()->fetch();
         
@@ -353,9 +353,9 @@ class AttributeFilterService
         /** @var EavAttribute $attributeModel */
         $attributeModel = ObjectManager::getInstance(EavAttribute::class);
         $attributeModel->reset()
-            ->where(EavAttribute::fields_eav_entity_id, $entity->getId())
-            ->where(EavAttribute::fields_code, $attributeCode)
-            ->where(EavAttribute::fields_is_enable, 1);
+            ->where(EavAttribute::schema_fields_eav_entity_id, $entity->getId())
+            ->where(EavAttribute::schema_fields_code, $attributeCode)
+            ->where(EavAttribute::schema_fields_is_enable, 1);
         
         $attribute = $attributeModel->find()->fetch();
         
@@ -415,20 +415,20 @@ class AttributeFilterService
         /** @var Option $optionModel */
         $optionModel = ObjectManager::getInstance(Option::class);
         $optionModel->reset()
-            ->where(Option::fields_attribute_id, $attribute->getId())
-            ->order(Option::fields_option_id);
+            ->where(Option::schema_fields_attribute_id, $attribute->getId())
+            ->order(Option::schema_fields_option_id);
         
         $results = $optionModel->select()->fetchArray();
         
         $options = [];
         foreach ($results as $row) {
-            $options[$row[Option::fields_option_id]] = [
-                'option_id' => $row[Option::fields_option_id],
-                'code' => $row[Option::fields_code] ?? '',
-                'value' => $row[Option::fields_value] ?? '',
-                'swatch_image' => $row[Option::fields_swatch_image] ?? null,
-                'swatch_color' => $row[Option::fields_swatch_color] ?? null,
-                'swatch_text' => $row[Option::fields_swatch_text] ?? null,
+            $options[$row[Option::schema_fields_option_id]] = [
+                'option_id' => $row[Option::schema_fields_option_id],
+                'code' => $row[Option::schema_fields_code] ?? '',
+                'value' => $row[Option::schema_fields_value] ?? '',
+                'swatch_image' => $row[Option::schema_fields_swatch_image] ?? null,
+                'swatch_color' => $row[Option::schema_fields_swatch_color] ?? null,
+                'swatch_text' => $row[Option::schema_fields_swatch_text] ?? null,
             ];
         }
         

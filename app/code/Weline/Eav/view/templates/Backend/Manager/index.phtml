@@ -354,21 +354,16 @@
             var self = this;
             var container = $(this.config.treeContainer);
             container.html('<div class="tree-loading"><i class="mdi mdi-loading mdi-spin me-2"></i>加载中...</div>');
-            
-            $.ajax({
-                url: this.config.apiBase + '/tree',
-                type: 'GET',
-                dataType: 'json',
-                success: function(res) {
-                    if (res.code === 0 || res.items) {
-                        self.renderTree(res.items || res.data || []);
-                    } else {
-                        container.html('<div class="text-danger p-3">加载失败</div>');
-                    }
-                },
-                error: function() {
+            var req = window.Weline.Api.get(this.config.apiBase + '/tree', { silent: true });
+            req.then(function(res) {
+                var data = res && res.data;
+                if (res && res.ok && data && (data.code === 0 || data.items)) {
+                    self.renderTree(data.items || data.data || []);
+                } else {
                     container.html('<div class="text-danger p-3">加载失败</div>');
                 }
+            }).catch(function() {
+                container.html('<div class="text-danger p-3">加载失败</div>');
             });
         },
         
@@ -494,22 +489,17 @@
             $('#detail-placeholder').hide();
             $('#detail-form').show().html('<div class="text-center p-5"><i class="mdi mdi-loading mdi-spin fs-3"></i></div>');
             $('#detail-header').show();
-            
-            $.ajax({
-                url: this.config.apiBase + '/detail',
-                type: 'GET',
-                data: { type: type, id: id },
-                dataType: 'json',
-                success: function(res) {
-                    if (res.code === 0 || res.data) {
-                        self.renderDetail(res.data || res);
-                    } else {
-                        $('#detail-form').html('<div class="text-danger p-3">加载失败</div>');
-                    }
-                },
-                error: function() {
+            var url = this.config.apiBase + '/detail?type=' + encodeURIComponent(type) + '&id=' + encodeURIComponent(id);
+            var req = window.Weline.Api.get(url, { silent: true });
+            req.then(function(res) {
+                var data = res && res.data;
+                if (res && res.ok && data && (data.code === 0 || data.data)) {
+                    self.renderDetail(data.data || data || {});
+                } else {
                     $('#detail-form').html('<div class="text-danger p-3">加载失败</div>');
                 }
+            }).catch(function() {
+                $('#detail-form').html('<div class="text-danger p-3">加载失败</div>');
             });
         },
         
