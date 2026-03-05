@@ -34,6 +34,12 @@ final class WlsSharedStorage implements SessionStorageInterface
     /** 降级模式标志 */
     private bool $degradedMode = false;
 
+    /** 上次尝试恢复连接的时间（降级后重试用） */
+    private int $lastReconnectAttempt = 0;
+
+    /** 降级后重试间隔（秒） */
+    private const RECONNECT_INTERVAL = 30;
+
     /** 降级模式下的文件存储 */
     private ?FileStorage $fallbackStorage = null;
 
@@ -104,7 +110,7 @@ final class WlsSharedStorage implements SessionStorageInterface
     }
 
     /**
-     * 确保已连接
+     * 确保已连接（降级模式下会按间隔重试连接 Session Server，便于 Worker 先启动后 Session Server 再就绪的场景）
      */
     private function ensureConnected(): bool
     {
@@ -112,6 +118,17 @@ final class WlsSharedStorage implements SessionStorageInterface
             if (\method_exists($this->client, 'isConnected') && $this->client->isConnected()) {
                 return true;
             }
+        }
+        if ($this->degradedMode) {
+            $now = \time();
+            if ($now - $this->lastReconnectAttempt < self::RECONNECT_INTERVAL) {
+                return false;
+            }
+            $this->lastReconnectAttempt = $now;
+            if ($this->connect()) {
+                return true;
+            }
+            return false;
         }
         return $this->connect();
     }
@@ -128,13 +145,13 @@ final class WlsSharedStorage implements SessionStorageInterface
     }
 
     /**
-     * 退出降级模式
+     * 退出降级模式（Session Server 恢复后自动用回共享存储，无需重启 Worker）
      */
     private function exitDegradedMode(): void
     {
         if ($this->degradedMode) {
             $this->degradedMode = false;
-            w_log_warning('[WlsSharedStorage] Exiting degraded mode, backend recovered', [], 'session');
+            w_log_warning('[WlsSharedStorage] Exiting degraded mode, Session Server connected', [], 'session');
         }
     }
 
