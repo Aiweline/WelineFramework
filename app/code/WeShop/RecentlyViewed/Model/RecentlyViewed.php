@@ -1,61 +1,30 @@
 <?php
-
 declare(strict_types=1);
-
 namespace WeShop\RecentlyViewed\Model;
-
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 /**
  * 最近浏览模型
  */
-class RecentlyViewed extends \Weline\Framework\Database\Model
+#[Table(comment: 'WeShop最近浏览表')]
+#[Index(name: 'idx_customer_id', columns: ['customer_id'], type: 'KEY', comment: '客户ID索引')]
+#[Index(name: 'idx_product_id', columns: ['product_id'], type: 'KEY', comment: '产品ID索引')]
+#[Index(name: 'idx_viewed_at', columns: ['viewed_at'], type: 'KEY', comment: '浏览时间索引')]
+class RecentlyViewed extends Model
 {
-    public const table = 'weshop_recently_viewed';
-    public const primary_key = 'view_id';
+    public const schema_table = 'weshop_recently_viewed';
+    public const schema_primary_key = 'view_id';
     public string $indexer = 'recently_viewed_indexer';
-    
-    public const fields_ID = 'view_id';
-    public const fields_CUSTOMER_ID = 'customer_id';
-    public const fields_PRODUCT_ID = 'product_id';
-    public const fields_VIEWED_AT = 'viewed_at';
-    
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '浏览ID')]
+    public const schema_fields_ID = 'view_id';
+    #[Col(type: 'int', nullable: false, comment: '客户ID')]
+    public const schema_fields_CUSTOMER_ID = 'customer_id';
+    #[Col(type: 'int', nullable: false, comment: '产品ID')]
+    public const schema_fields_PRODUCT_ID = 'product_id';
+    #[Col(type: 'datetime', nullable: false, comment: '浏览时间')]
+    public const schema_fields_VIEWED_AT = 'viewed_at';
     public array $_unit_primary_keys = ['view_id'];
     public array $_index_sort_keys = ['customer_id', 'viewed_at'];
-    
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('WeShop最近浏览表')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'auto_increment primary key', '浏览ID')
-                ->addColumn(self::fields_CUSTOMER_ID, TableInterface::column_type_INTEGER, 0, 'not null', '客户ID')
-                ->addColumn(self::fields_PRODUCT_ID, TableInterface::column_type_INTEGER, 0, 'not null', '产品ID')
-                ->addColumn(self::fields_VIEWED_AT, TableInterface::column_type_DATETIME, 0, 'not null default CURRENT_TIMESTAMP', '浏览时间')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_customer_id', self::fields_CUSTOMER_ID, '客户ID索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_product_id', self::fields_PRODUCT_ID, '产品ID索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_viewed_at', self::fields_VIEWED_AT, '浏览时间索引')
-                ->create();
-        }
-    }
 }
