@@ -79,10 +79,10 @@ class AccountList extends Block
         
         // 按 scope 过滤
         if ($scope !== '') {
-            $query->where(SeoAccount::fields_SCOPE, $scope);
+            $query->where(SeoAccount::schema_fields_SCOPE, $scope);
         }
         
-        $query->order(SeoAccount::fields_CREATED_AT, 'DESC');
+        $query->order(SeoAccount::schema_fields_CREATED_AT, 'DESC');
         
         return $query->fetchArray();
     }

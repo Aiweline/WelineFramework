@@ -58,7 +58,7 @@ class Embed extends BaseController
         
         // 按 scope 过滤
         if (!empty($scope)) {
-            $query->where(SeoSubject::fields_SCOPE, $scope);
+            $query->where(SeoSubject::schema_fields_SCOPE, $scope);
         }
         
         // 按关键词搜索
@@ -68,11 +68,11 @@ class Embed extends BaseController
         
         // 按状态过滤
         if ($status !== '') {
-            $query->where(SeoSubject::fields_STATUS, (int)$status);
+            $query->where(SeoSubject::schema_fields_STATUS, (int)$status);
         }
         
         // 获取所有主体
-        $subjects = $query->order(SeoSubject::fields_UPDATED_AT, 'DESC')
+        $subjects = $query->order(SeoSubject::schema_fields_UPDATED_AT, 'DESC')
             ->select()
             ->fetchArray();
 
@@ -82,7 +82,7 @@ class Embed extends BaseController
         
         foreach ($subjects as &$subject) {
             $keywordCount = $keywordModel->reset()
-                ->where(SeoKeyword::fields_SUBJECT_ID, $subject['subject_id'])
+                ->where(SeoKeyword::schema_fields_SUBJECT_ID, $subject['subject_id'])
                 ->count();
             $subject['keyword_count'] = $keywordCount;
         }
@@ -133,9 +133,9 @@ class Embed extends BaseController
         /** @var SeoKeyword $keywordModel */
         $keywordModel = $this->objectManager->getInstance(SeoKeyword::class);
         $keywords = $keywordModel->reset()
-            ->where(SeoKeyword::fields_SUBJECT_ID, $subjectId)
-            ->where(SeoKeyword::fields_STATUS, SeoKeyword::STATUS_ENABLED)
-            ->order(SeoKeyword::fields_PRIORITY, 'DESC')
+            ->where(SeoKeyword::schema_fields_SUBJECT_ID, $subjectId)
+            ->where(SeoKeyword::schema_fields_STATUS, SeoKeyword::STATUS_ENABLED)
+            ->order(SeoKeyword::schema_fields_PRIORITY, 'DESC')
             ->select()
             ->fetchArray();
 
@@ -143,9 +143,9 @@ class Embed extends BaseController
         /** @var SeoSuggestion $suggestionModel */
         $suggestionModel = $this->objectManager->getInstance(SeoSuggestion::class);
         $suggestion = $suggestionModel->reset()
-            ->where(SeoSuggestion::fields_SUBJECT_ID, $subjectId)
-            ->where(SeoSuggestion::fields_STATUS, SeoSuggestion::STATUS_ACTIVE)
-            ->order(SeoSuggestion::fields_CREATED_AT, 'DESC')
+            ->where(SeoSuggestion::schema_fields_SUBJECT_ID, $subjectId)
+            ->where(SeoSuggestion::schema_fields_STATUS, SeoSuggestion::STATUS_ACTIVE)
+            ->order(SeoSuggestion::schema_fields_CREATED_AT, 'DESC')
             ->find()
             ->fetch();
         
@@ -242,14 +242,14 @@ class Embed extends BaseController
                 }
             }
 
-            $subjectModel->setData(SeoSubject::fields_TITLE, $title)
-                ->setData(SeoSubject::fields_URL, $url)
-                ->setData(SeoSubject::fields_DESCRIPTION, $description)
-                ->setData(SeoSubject::fields_SCOPE, $scope)
-                ->setData(SeoSubject::fields_SUBJECT_TYPE, $subjectType)
-                ->setData(SeoSubject::fields_SUBJECT_ID, $subjectEntityId)
-                ->setData(SeoSubject::fields_STATUS, $status)
-                ->setData(SeoSubject::fields_LOCALE, $locale)
+            $subjectModel->setData(SeoSubject::schema_fields_TITLE, $title)
+                ->setData(SeoSubject::schema_fields_URL, $url)
+                ->setData(SeoSubject::schema_fields_DESCRIPTION, $description)
+                ->setData(SeoSubject::schema_fields_SCOPE, $scope)
+                ->setData(SeoSubject::schema_fields_SUBJECT_TYPE, $subjectType)
+                ->setData(SeoSubject::schema_fields_SUBJECT_ID, $subjectEntityId)
+                ->setData(SeoSubject::schema_fields_STATUS, $status)
+                ->setData(SeoSubject::schema_fields_LOCALE, $locale)
                 ->save();
 
             return $this->fetchJson([

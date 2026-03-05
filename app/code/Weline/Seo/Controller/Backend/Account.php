@@ -44,10 +44,10 @@ class Account extends BackendController
         $query = $this->getAccountModel()->reset()->select();
 
         if ($scope !== '') {
-            $query->where(SeoAccount::fields_SCOPE, $scope);
+            $query->where(SeoAccount::schema_fields_SCOPE, $scope);
         }
 
-        $query->order(SeoAccount::fields_CREATED_AT, 'DESC');
+        $query->order(SeoAccount::schema_fields_CREATED_AT, 'DESC');
 
         $accounts = $query->fetchArray();
         
@@ -59,7 +59,7 @@ class Account extends BackendController
             $accountId = (int)($account['account_id'] ?? 0);
             if ($accountId > 0) {
                 $bindings = $websiteAccountModel->reset()
-                    ->where(\Weline\Seo\Model\SeoWebsiteAccount::fields_ACCOUNT_ID, $accountId)
+                    ->where(\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_ACCOUNT_ID, $accountId)
                     ->select()
                     ->fetchArray();
                 $bindingCounts[$accountId] = count($bindings);
@@ -75,8 +75,8 @@ class Account extends BackendController
             if ($accountId > 0) {
                 // 获取该账户关联的所有统计数据（取每个站点最新一条汇总）
                 $stats = $statsModel->reset()
-                    ->where(\Weline\Seo\Model\SeoWebsiteStats::fields_ACCOUNT_ID, $accountId)
-                    ->order(\Weline\Seo\Model\SeoWebsiteStats::fields_STATS_DATE, 'DESC')
+                    ->where(\Weline\Seo\Model\SeoWebsiteStats::schema_fields_ACCOUNT_ID, $accountId)
+                    ->order(\Weline\Seo\Model\SeoWebsiteStats::schema_fields_STATS_DATE, 'DESC')
                     ->select()
                     ->fetchArray();
                 
@@ -92,17 +92,17 @@ class Account extends BackendController
                 ];
                 
                 foreach ($stats as $stat) {
-                    $websiteId = (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::fields_WEBSITE_ID] ?? 0);
+                    $websiteId = (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::schema_fields_WEBSITE_ID] ?? 0);
                     if ($websiteId > 0 && !in_array($websiteId, $processedWebsites)) {
                         $processedWebsites[] = $websiteId;
-                        $totalStats['indexed_pages'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::fields_INDEXED_PAGES] ?? 0);
-                        $totalStats['submitted_urls'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::fields_SUBMITTED_URLS] ?? 0);
-                        $totalStats['clicks'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::fields_CLICKS] ?? 0);
-                        $totalStats['impressions'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::fields_IMPRESSIONS] ?? 0);
-                        $totalStats['error_count'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::fields_ERROR_COUNT] ?? 0);
+                        $totalStats['indexed_pages'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::schema_fields_INDEXED_PAGES] ?? 0);
+                        $totalStats['submitted_urls'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::schema_fields_SUBMITTED_URLS] ?? 0);
+                        $totalStats['clicks'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::schema_fields_CLICKS] ?? 0);
+                        $totalStats['impressions'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::schema_fields_IMPRESSIONS] ?? 0);
+                        $totalStats['error_count'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::schema_fields_ERROR_COUNT] ?? 0);
                         
                         // 取最新的同步时间
-                        $syncAt = $stat[\Weline\Seo\Model\SeoWebsiteStats::fields_LAST_SYNC_AT] ?? null;
+                        $syncAt = $stat[\Weline\Seo\Model\SeoWebsiteStats::schema_fields_LAST_SYNC_AT] ?? null;
                         if ($syncAt && (!$totalStats['last_sync_at'] || $syncAt > $totalStats['last_sync_at'])) {
                             $totalStats['last_sync_at'] = $syncAt;
                         }
@@ -148,7 +148,7 @@ class Account extends BackendController
             }
         } else {
             if ($scope !== '') {
-                $account->setData(SeoAccount::fields_SCOPE, $scope);
+                $account->setData(SeoAccount::schema_fields_SCOPE, $scope);
             }
         }
 
@@ -216,14 +216,14 @@ class Account extends BackendController
 
             $scope = trim((string)($data['scope'] ?? ''));
 
-            $account->setData(SeoAccount::fields_NAME, $name)
-                ->setData(SeoAccount::fields_PLATFORM, $platform)
-                ->setData(SeoAccount::fields_PROVIDER, $platform) // 向后兼容
-                ->setData(SeoAccount::fields_SCOPE, $scope)
-                ->setData(SeoAccount::fields_DESCRIPTION, (string)($data['description'] ?? ''))
-                ->setData(SeoAccount::fields_IS_ACTIVE, (int)($data['is_active'] ?? SeoAccount::STATUS_ACTIVE))
-                ->setData(SeoAccount::fields_ENABLE_CRON_PUSH_URLS, (int)($data['enable_cron_push_urls'] ?? 1))
-                ->setData(SeoAccount::fields_ENABLE_CRON_SITEMAP, (int)($data['enable_cron_sitemap'] ?? 0));
+            $account->setData(SeoAccount::schema_fields_NAME, $name)
+                ->setData(SeoAccount::schema_fields_PLATFORM, $platform)
+                ->setData(SeoAccount::schema_fields_PROVIDER, $platform) // 向后兼容
+                ->setData(SeoAccount::schema_fields_SCOPE, $scope)
+                ->setData(SeoAccount::schema_fields_DESCRIPTION, (string)($data['description'] ?? ''))
+                ->setData(SeoAccount::schema_fields_IS_ACTIVE, (int)($data['is_active'] ?? SeoAccount::STATUS_ACTIVE))
+                ->setData(SeoAccount::schema_fields_ENABLE_CRON_PUSH_URLS, (int)($data['enable_cron_push_urls'] ?? 1))
+                ->setData(SeoAccount::schema_fields_ENABLE_CRON_SITEMAP, (int)($data['enable_cron_sitemap'] ?? 0));
 
             $configJson = (string)($data['config_json'] ?? '');
             if ($configJson !== '') {
@@ -279,25 +279,25 @@ class Account extends BackendController
             /** @var \Weline\Seo\Model\SeoWebsiteAccount $websiteAccountModel */
             $websiteAccountModel = ObjectManager::getInstance(\Weline\Seo\Model\SeoWebsiteAccount::class);
             $bindings = $websiteAccountModel->reset()
-                ->where(\Weline\Seo\Model\SeoWebsiteAccount::fields_ACCOUNT_ID, $accountId)
+                ->where(\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_ACCOUNT_ID, $accountId)
                 ->select()
                 ->fetchArray();
             
             $boundWebsiteIds = [];
             foreach ($bindings as $binding) {
-                $boundWebsiteIds[] = (int)($binding[\Weline\Seo\Model\SeoWebsiteAccount::fields_WEBSITE_ID] ?? 0);
+                $boundWebsiteIds[] = (int)($binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_WEBSITE_ID] ?? 0);
             }
             
             // 获取每个绑定网站的配置信息
             $configs = [];
             foreach ($bindings as $binding) {
-                $websiteId = (int)($binding[\Weline\Seo\Model\SeoWebsiteAccount::fields_WEBSITE_ID] ?? 0);
+                $websiteId = (int)($binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_WEBSITE_ID] ?? 0);
                 if ($websiteId > 0) {
                     $configs[$websiteId] = [
-                        'sitemap_frequency' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::fields_SITEMAP_FREQUENCY] ?? 'daily',
-                        'crawl_frequency' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::fields_CRAWL_FREQUENCY] ?? 'weekly',
-                        'priority' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::fields_PRIORITY] ?? '0.50',
-                        'is_auto_submit' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::fields_IS_AUTO_SUBMIT] ?? 1,
+                        'sitemap_frequency' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_SITEMAP_FREQUENCY] ?? 'daily',
+                        'crawl_frequency' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_CRAWL_FREQUENCY] ?? 'weekly',
+                        'priority' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_PRIORITY] ?? '0.50',
+                        'is_auto_submit' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_IS_AUTO_SUBMIT] ?? 1,
                     ];
                 }
             }
@@ -368,13 +368,13 @@ class Account extends BackendController
             
             // 获取当前已绑定的站点
             $existingBindings = $websiteAccountModel->reset()
-                ->where(\Weline\Seo\Model\SeoWebsiteAccount::fields_ACCOUNT_ID, $accountId)
+                ->where(\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_ACCOUNT_ID, $accountId)
                 ->select()
                 ->fetchArray();
             
             $existingWebsiteIds = [];
             foreach ($existingBindings as $binding) {
-                $existingWebsiteIds[] = (int)($binding[\Weline\Seo\Model\SeoWebsiteAccount::fields_WEBSITE_ID] ?? 0);
+                $existingWebsiteIds[] = (int)($binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_WEBSITE_ID] ?? 0);
             }
             
             // 找出需要删除的绑定（在旧列表中但不在新列表中）
@@ -469,8 +469,8 @@ class Account extends BackendController
             
             // 查找现有绑定
             $binding = $websiteAccountModel->reset()
-                ->where(\Weline\Seo\Model\SeoWebsiteAccount::fields_ACCOUNT_ID, $accountId)
-                ->where(\Weline\Seo\Model\SeoWebsiteAccount::fields_WEBSITE_ID, $websiteId)
+                ->where(\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_ACCOUNT_ID, $accountId)
+                ->where(\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_WEBSITE_ID, $websiteId)
                 ->find()
                 ->fetch();
             
@@ -483,10 +483,10 @@ class Account extends BackendController
             
             // 更新配置
             $binding->setData([
-                \Weline\Seo\Model\SeoWebsiteAccount::fields_SITEMAP_FREQUENCY => $config['sitemap_frequency'] ?? 'daily',
-                \Weline\Seo\Model\SeoWebsiteAccount::fields_CRAWL_FREQUENCY => $config['crawl_frequency'] ?? 'weekly',
-                \Weline\Seo\Model\SeoWebsiteAccount::fields_PRIORITY => $config['priority'] ?? '0.50',
-                \Weline\Seo\Model\SeoWebsiteAccount::fields_IS_AUTO_SUBMIT => (int)($config['is_auto_submit'] ?? 1),
+                \Weline\Seo\Model\SeoWebsiteAccount::schema_fields_SITEMAP_FREQUENCY => $config['sitemap_frequency'] ?? 'daily',
+                \Weline\Seo\Model\SeoWebsiteAccount::schema_fields_CRAWL_FREQUENCY => $config['crawl_frequency'] ?? 'weekly',
+                \Weline\Seo\Model\SeoWebsiteAccount::schema_fields_PRIORITY => $config['priority'] ?? '0.50',
+                \Weline\Seo\Model\SeoWebsiteAccount::schema_fields_IS_AUTO_SUBMIT => (int)($config['is_auto_submit'] ?? 1),
             ])->save();
             
             return $this->jsonResponse([
@@ -549,8 +549,8 @@ class Account extends BackendController
             
             // 先查询绑定是否存在
             $websiteAccountModel->reset()
-                ->where(\Weline\Seo\Model\SeoWebsiteAccount::fields_WEBSITE_ID, $websiteId)
-                ->where(\Weline\Seo\Model\SeoWebsiteAccount::fields_ACCOUNT_ID, $accountId)
+                ->where(\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_ACCOUNT_ID, $accountId)
                 ->find()
                 ->fetch();
             
@@ -640,7 +640,7 @@ class Account extends BackendController
             /** @var \Weline\Seo\Model\SeoWebsiteAccount $websiteAccountModel */
             $websiteAccountModel = ObjectManager::getInstance(\Weline\Seo\Model\SeoWebsiteAccount::class);
             $bindings = $websiteAccountModel->reset()
-                ->where(\Weline\Seo\Model\SeoWebsiteAccount::fields_ACCOUNT_ID, $accountId)
+                ->where(\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_ACCOUNT_ID, $accountId)
                 ->select()
                 ->fetchArray();
             
@@ -662,7 +662,7 @@ class Account extends BackendController
             $errors = [];
             
             foreach ($bindings as $binding) {
-                $websiteId = (int)($binding[\Weline\Seo\Model\SeoWebsiteAccount::fields_WEBSITE_ID] ?? 0);
+                $websiteId = (int)($binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_WEBSITE_ID] ?? 0);
                 if ($websiteId <= 0) {
                     continue;
                 }

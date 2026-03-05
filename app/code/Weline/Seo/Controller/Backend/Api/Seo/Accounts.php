@@ -39,11 +39,11 @@ class Accounts extends BackendController
             $accountModel = ObjectManager::getInstance(SeoAccount::class);
             
             $query = $accountModel->reset()
-                ->where(SeoAccount::fields_IS_ACTIVE, 1)
-                ->order(SeoAccount::fields_NAME, 'ASC');
+                ->where(SeoAccount::schema_fields_IS_ACTIVE, 1)
+                ->order(SeoAccount::schema_fields_NAME, 'ASC');
             
             if ($search !== '') {
-                $query->where(SeoAccount::fields_NAME, "%{$search}%", 'LIKE');
+                $query->where(SeoAccount::schema_fields_NAME, "%{$search}%", 'LIKE');
             }
             
             if ($limit > 0) {
@@ -56,12 +56,12 @@ class Accounts extends BackendController
             $data = [];
             foreach ($accounts as $account) {
                 $data[] = [
-                    'account_id' => (int)$account[SeoAccount::fields_ACCOUNT_ID],
-                    'name' => $account[SeoAccount::fields_NAME] ?? '',
-                    'provider' => $account[SeoAccount::fields_PROVIDER] ?? '',
-                    'scope' => $account[SeoAccount::fields_SCOPE] ?? '',
-                    'module' => $account[SeoAccount::fields_MODULE] ?? '',
-                    'is_active' => (int)($account[SeoAccount::fields_IS_ACTIVE] ?? 0),
+                    'account_id' => (int)$account[SeoAccount::schema_fields_ACCOUNT_ID],
+                    'name' => $account[SeoAccount::schema_fields_NAME] ?? '',
+                    'provider' => $account[SeoAccount::schema_fields_PROVIDER] ?? '',
+                    'scope' => $account[SeoAccount::schema_fields_SCOPE] ?? '',
+                    'module' => $account[SeoAccount::schema_fields_MODULE] ?? '',
+                    'is_active' => (int)($account[SeoAccount::schema_fields_IS_ACTIVE] ?? 0),
                 ];
             }
             
