@@ -109,7 +109,7 @@ class FeedPushQueue implements QueueInterface
                 /** @var Platform $platformModel */
                 $platformModel = ObjectManager::getInstance(Platform::class);
                 $platforms = $platformModel
-                    ->where(Platform::fields_IS_ENABLED, 1)
+                    ->where(Platform::schema_fields_IS_ENABLED, 1)
                     ->select()
                     ->fetchArray();
 
@@ -119,10 +119,10 @@ class FeedPushQueue implements QueueInterface
                     
                     if ($result->success) {
                         $successCount++;
-                        $results[] = "平台 {$platform->getData(Platform::fields_PLATFORM_NAME)}: 成功";
+                        $results[] = "平台 {$platform->getData(Platform::schema_fields_PLATFORM_NAME)}: 成功";
                     } else {
                         $failCount++;
-                        $results[] = "平台 {$platform->getData(Platform::fields_PLATFORM_NAME)}: 失败 - {$result->message}";
+                        $results[] = "平台 {$platform->getData(Platform::schema_fields_PLATFORM_NAME)}: 失败 - {$result->message}";
                     }
                 }
             } else {
@@ -142,10 +142,10 @@ class FeedPushQueue implements QueueInterface
                     
                     if ($result->success) {
                         $successCount++;
-                        $results[] = "平台 {$platform->getData(Platform::fields_PLATFORM_NAME)}: 成功";
+                        $results[] = "平台 {$platform->getData(Platform::schema_fields_PLATFORM_NAME)}: 成功";
                     } else {
                         $failCount++;
-                        $results[] = "平台 {$platform->getData(Platform::fields_PLATFORM_NAME)}: 失败 - {$result->message}";
+                        $results[] = "平台 {$platform->getData(Platform::schema_fields_PLATFORM_NAME)}: 失败 - {$result->message}";
                     }
                 }
             }

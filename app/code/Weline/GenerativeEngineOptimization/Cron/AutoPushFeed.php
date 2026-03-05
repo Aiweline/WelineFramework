@@ -91,8 +91,8 @@ class AutoPushFeed implements CronTaskInterface
             
             // 获取所有启用且启用了自动推送的Feed
             $feeds = $feedModel
-                ->where(Feed::fields_IS_ENABLED, 1)
-                ->where(Feed::fields_IS_AUTO_PUSH, 1)
+                ->where(Feed::schema_fields_IS_ENABLED, 1)
+                ->where(Feed::schema_fields_IS_AUTO_PUSH, 1)
                 ->select()
                 ->fetchArray();
 
