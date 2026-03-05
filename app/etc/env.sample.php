@@ -235,6 +235,14 @@ return [
         'pid' => null,
         'start_time' => null,
         'status' => 'stopped',
+        // WLS 编排器策略（server.orchestrator.*）
+        'orchestrator' => [
+            'single_restart_first' => true,      // IPC 断开时优先单实例重启（可恢复角色）
+            'escalation_window_sec' => 60.0,     // 升级窗口（秒），窗口内超阈值则整组重启
+            'escalation_threshold' => 3,         // 窗口内断开次数阈值
+            'stabilization_sec' => 15.0,         // 滚动重启后稳定期（秒），稳定期内新实例断开仅单实例重启
+            'critical_roles' => ['dispatcher', 'session_server', 'redirect'],  // 核心角色，断开直接整组重启
+        ],
     ],
     
     // ==================== 路由配置 ====================
