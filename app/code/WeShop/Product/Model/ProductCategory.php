@@ -1,70 +1,28 @@
 <?php
 
+declare(strict_types=1);
+
 namespace WeShop\Product\Model;
 
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 
+#[Table(comment: '产品分类表')]
+#[Index(name: 'product_category_product_id_index', columns: ['product_id'], type: 'KEY', comment: '产品ID索引')]
+#[Index(name: 'product_category_category_id_index', columns: ['category_id'], type: 'KEY', comment: '分类ID索引')]
 class ProductCategory extends Model
 {
-    public const table = "weshop_product_category";
-    public const primary_key = "product_category_id";
+    public const schema_table = "weshop_product_category";
+    public const schema_primary_key = "product_category_id";
     public string $indexer = "product_category_indexer";
-    public const fields_ID = "product_category_id";
-    public const fields_product_id = "product_id";
-    public const fields_category_id = "category_id";
+    public const schema_fields_ID = "product_category_id";
+    public const schema_fields_product_id = "product_id";
+    public const schema_fields_category_id = "category_id";
 
     public array $_unit_primary_keys = ["product_category_id"];
     public array $_index_sort_keys = ["product_id", "category_id"];
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // TODO: Implement upgrade() method.
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist()) {
-            return;
-        }
-        $setup->createTable('产品分类表')
-            ->addColumn(
-                self::fields_ID, 'int', 11,
-                'primary key auto_increment', '产品分类ID')
-            ->addColumn(
-                self::fields_product_id, 'int', 11,
-                'not null', '产品ID')
-            ->addColumn(
-                self::fields_category_id, 'int', 11,
-                'not null', '分类ID')
-            ->addIndex(
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY,
-                'product_category_product_id_index',
-                self::fields_product_id,
-                '产品ID索引')
-            ->addIndex(
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY,
-                'product_category_category_id_index',
-                self::fields_category_id,
-                '分类ID索引')
-            ->create();
-
-    }
 
     public function joinProduct(): self
     {
@@ -80,7 +38,6 @@ class ProductCategory extends Model
             'category',
             'main_table.category_id=category.category_id');
     }
-
 
     /**
      * 获取产品所属分类ID数组
@@ -127,3 +84,4 @@ class ProductCategory extends Model
         return $this;
     }
 }
+

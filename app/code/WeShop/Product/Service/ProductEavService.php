@@ -56,7 +56,7 @@ class ProductEavService
     {
         if ($this->productEntity === null) {
             $this->productEntity = $this->eavEntity->reset()
-                ->where(EavEntity::fields_code, Product::entity_code)
+                ->where(EavEntity::schema_fields_code, Product::entity_code)
                 ->find()
                 ->fetch();
         }
@@ -82,7 +82,7 @@ class ProductEavService
         if ($setId === null) {
             $product = ObjectManager::getInstance(Product::class);
             $product->load($productId);
-            $setId = (int)($product->getData(Product::fields_set_id) ?? 0);
+            $setId = (int)($product->getData(Product::schema_fields_set_id) ?? 0);
         }
 
         if (!$setId) {
@@ -94,8 +94,8 @@ class ProductEavService
 
         $result = [];
         foreach ($groups as $group) {
-            $groupId = (int)($group[Group::fields_ID] ?? $group['group_id'] ?? 0);
-            $groupName = $group[Group::fields_name] ?? $group['name'] ?? '';
+            $groupId = (int)($group[Group::schema_fields_ID] ?? $group['group_id'] ?? 0);
+            $groupName = $group[Group::schema_fields_name] ?? $group['name'] ?? '';
 
             // 获取组内的属性
             $attributes = $this->getGroupAttributes($productEntity->getId(), $setId, $groupId);
@@ -139,12 +139,12 @@ class ProductEavService
         }
 
         $query = $this->eavAttribute->reset()
-            ->where(EavAttribute::fields_eav_entity_id, $productEntity->getId())
-            ->where(EavAttribute::fields_is_enable, 1)
-            ->where(EavAttribute::fields_has_option, 1); // 只有有选项的属性才能筛选
+            ->where(EavAttribute::schema_fields_eav_entity_id, $productEntity->getId())
+            ->where(EavAttribute::schema_fields_is_enable, 1)
+            ->where(EavAttribute::schema_fields_has_option, 1); // 只有有选项的属性才能筛选
 
         if ($setId) {
-            $query->where(EavAttribute::fields_set_id, $setId);
+            $query->where(EavAttribute::schema_fields_set_id, $setId);
         }
 
         $attributes = $query->select()->fetch();
@@ -155,14 +155,14 @@ class ProductEavService
 
         $result = [];
         foreach ($attributes as $attribute) {
-            $attributeId = (int)($attribute[EavAttribute::fields_attribute_id] ?? 0);
+            $attributeId = (int)($attribute[EavAttribute::schema_fields_attribute_id] ?? 0);
             $options = $this->getAttributeOptions($attributeId);
 
             $result[] = [
                 'attribute_id' => $attributeId,
-                'code' => $attribute[EavAttribute::fields_code] ?? '',
-                'name' => $attribute[EavAttribute::fields_name] ?? '',
-                'type_id' => (int)($attribute[EavAttribute::fields_type_id] ?? 0),
+                'code' => $attribute[EavAttribute::schema_fields_code] ?? '',
+                'name' => $attribute[EavAttribute::schema_fields_name] ?? '',
+                'type_id' => (int)($attribute[EavAttribute::schema_fields_type_id] ?? 0),
                 'options' => $options,
             ];
         }
@@ -179,7 +179,7 @@ class ProductEavService
     public function getAttributeOptions(int $attributeId): array
     {
         $options = $this->attributeOption->reset()
-            ->where(Option::fields_attribute_id, $attributeId)
+            ->where(Option::schema_fields_attribute_id, $attributeId)
             ->select()
             ->fetch();
 
@@ -189,15 +189,15 @@ class ProductEavService
 
         return array_map(function ($option) {
             return [
-                'option_id' => (int)($option[Option::fields_option_id] ?? 0),
-                'code' => $option[Option::fields_code] ?? '',
-                'value' => $option[Option::fields_value] ?? '',
-                'swatch_image' => $option[Option::fields_swatch_image] ?? null,
-                'swatch_color' => $option[Option::fields_swatch_color] ?? null,
-                'swatch_text' => $option[Option::fields_swatch_text] ?? null,
-                'is_swatch' => !empty($option[Option::fields_swatch_image]) 
-                    || !empty($option[Option::fields_swatch_color]) 
-                    || !empty($option[Option::fields_swatch_text]),
+                'option_id' => (int)($option[Option::schema_fields_option_id] ?? 0),
+                'code' => $option[Option::schema_fields_code] ?? '',
+                'value' => $option[Option::schema_fields_value] ?? '',
+                'swatch_image' => $option[Option::schema_fields_swatch_image] ?? null,
+                'swatch_color' => $option[Option::schema_fields_swatch_color] ?? null,
+                'swatch_text' => $option[Option::schema_fields_swatch_text] ?? null,
+                'is_swatch' => !empty($option[Option::schema_fields_swatch_image]) 
+                    || !empty($option[Option::schema_fields_swatch_color]) 
+                    || !empty($option[Option::schema_fields_swatch_text]),
             ];
         }, $options);
     }
@@ -215,7 +215,7 @@ class ProductEavService
         }
 
         $sets = $this->attributeSet->reset()
-            ->where(Set::fields_eav_entity_id, $productEntity->getId())
+            ->where(Set::schema_fields_eav_entity_id, $productEntity->getId())
             ->select()
             ->fetch();
 
@@ -231,7 +231,7 @@ class ProductEavService
     public function getAttributeGroups(int $setId): array
     {
         $groups = $this->attributeGroup->reset()
-            ->where(Group::fields_set_id, $setId)
+            ->where(Group::schema_fields_set_id, $setId)
             ->order('sort_order')
             ->select()
             ->fetch();
@@ -250,10 +250,10 @@ class ProductEavService
     private function getGroupAttributes(int $entityId, int $setId, int $groupId): array
     {
         $attributes = $this->eavAttribute->reset()
-            ->where(EavAttribute::fields_eav_entity_id, $entityId)
-            ->where(EavAttribute::fields_set_id, $setId)
-            ->where(EavAttribute::fields_group_id, $groupId)
-            ->where(EavAttribute::fields_is_enable, 1)
+            ->where(EavAttribute::schema_fields_eav_entity_id, $entityId)
+            ->where(EavAttribute::schema_fields_set_id, $setId)
+            ->where(EavAttribute::schema_fields_group_id, $groupId)
+            ->where(EavAttribute::schema_fields_is_enable, 1)
             ->select()
             ->fetch();
 
@@ -269,10 +269,10 @@ class ProductEavService
      */
     private function loadAttributeValue(array $attributeData, int $productId): ?array
     {
-        $attributeId = (int)($attributeData[EavAttribute::fields_attribute_id] ?? 0);
-        $hasOption = (bool)($attributeData[EavAttribute::fields_has_option] ?? false);
-        $multipleValued = (bool)($attributeData[EavAttribute::fields_multiple_valued] ?? false);
-        $typeId = (int)($attributeData[EavAttribute::fields_type_id] ?? 0);
+        $attributeId = (int)($attributeData[EavAttribute::schema_fields_attribute_id] ?? 0);
+        $hasOption = (bool)($attributeData[EavAttribute::schema_fields_has_option] ?? false);
+        $multipleValued = (bool)($attributeData[EavAttribute::schema_fields_multiple_valued] ?? false);
+        $typeId = (int)($attributeData[EavAttribute::schema_fields_type_id] ?? 0);
 
         // 创建属性实例获取值
         /** @var EavAttribute $attribute */
@@ -303,7 +303,7 @@ class ProductEavService
                     $displayValues = [];
                     foreach ($options as $option) {
                         if (isset($option['selected']) && $option['selected']) {
-                            $displayValues[] = $option[Option::fields_value] ?? $option['value'] ?? '';
+                            $displayValues[] = $option[Option::schema_fields_value] ?? $option['value'] ?? '';
                         }
                     }
                     $displayValue = implode(', ', $displayValues);
@@ -312,8 +312,8 @@ class ProductEavService
 
             return [
                 'attribute_id' => $attributeId,
-                'code' => $attributeData[EavAttribute::fields_code] ?? '',
-                'name' => $attributeData[EavAttribute::fields_name] ?? '',
+                'code' => $attributeData[EavAttribute::schema_fields_code] ?? '',
+                'name' => $attributeData[EavAttribute::schema_fields_name] ?? '',
                 'type_id' => $typeId,
                 'has_option' => $hasOption,
                 'multiple_valued' => $multipleValued,
@@ -326,8 +326,8 @@ class ProductEavService
             // 获取值失败，返回基本信息
             return [
                 'attribute_id' => $attributeId,
-                'code' => $attributeData[EavAttribute::fields_code] ?? '',
-                'name' => $attributeData[EavAttribute::fields_name] ?? '',
+                'code' => $attributeData[EavAttribute::schema_fields_code] ?? '',
+                'name' => $attributeData[EavAttribute::schema_fields_name] ?? '',
                 'type_id' => $typeId,
                 'has_option' => $hasOption,
                 'multiple_valued' => $multipleValued,
@@ -409,7 +409,7 @@ class ProductEavService
                 $swatchData[] = [
                     'type' => !empty($option['swatch_image']) ? 'image' : (!empty($option['swatch_color']) ? 'color' : 'text'),
                     'value' => $option['swatch_image'] ?? $option['swatch_color'] ?? $option['swatch_text'] ?? '',
-                    'label' => $option[Option::fields_value] ?? $option['value'] ?? '',
+                    'label' => $option[Option::schema_fields_value] ?? $option['value'] ?? '',
                 ];
             }
         }
@@ -432,9 +432,9 @@ class ProductEavService
 
         try {
             $attribute = $this->eavAttribute->reset()
-                ->where(EavAttribute::fields_eav_entity_id, $productEntity->getId())
-                ->where(EavAttribute::fields_code, $attributeCode)
-                ->where(EavAttribute::fields_is_enable, 1)
+                ->where(EavAttribute::schema_fields_eav_entity_id, $productEntity->getId())
+                ->where(EavAttribute::schema_fields_code, $attributeCode)
+                ->where(EavAttribute::schema_fields_is_enable, 1)
                 ->find()
                 ->fetch();
 
