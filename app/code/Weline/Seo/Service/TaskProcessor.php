@@ -252,10 +252,10 @@ class TaskProcessor
             'module' => $module,
             'account' => [
                 'id' => $account->getId(),
-                'scope' => $account->getData(SeoAccount::fields_SCOPE),
-                'module' => $account->getData(SeoAccount::fields_MODULE),
-                'provider' => $account->getData(SeoAccount::fields_PROVIDER),
-                'name' => $account->getData(SeoAccount::fields_NAME),
+                'scope' => $account->getData(SeoAccount::schema_fields_SCOPE),
+                'module' => $account->getData(SeoAccount::schema_fields_MODULE),
+                'provider' => $account->getData(SeoAccount::schema_fields_PROVIDER),
+                'name' => $account->getData(SeoAccount::schema_fields_NAME),
             ],
             'config' => $account->getConfigArray(),
         ];
@@ -317,8 +317,8 @@ class TaskProcessor
         $keywordModel = $this->objectManager->getInstance(SeoKeyword::class);
         
         $keywordModel->reset()
-            ->where(SeoKeyword::fields_SUBJECT_ID, $subjectId)
-            ->where(SeoKeyword::fields_KEYWORD, $keyword)
+            ->where(SeoKeyword::schema_fields_SUBJECT_ID, $subjectId)
+            ->where(SeoKeyword::schema_fields_KEYWORD, $keyword)
             ->find()
             ->fetch();
         

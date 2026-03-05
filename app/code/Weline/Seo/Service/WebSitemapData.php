@@ -98,7 +98,7 @@ class WebSitemapData
         
         // 获取站点绑定的 SEO 账户
         $bindings = $this->seoWebsiteAccountModel->reset()
-            ->where(SeoWebsiteAccount::fields_WEBSITE_ID, $websiteId)
+            ->where(SeoWebsiteAccount::schema_fields_WEBSITE_ID, $websiteId)
             ->select()
             ->fetchArray();
         
@@ -109,7 +109,7 @@ class WebSitemapData
         }
         
         foreach ($bindings as $binding) {
-            $accountId = (int)($binding[SeoWebsiteAccount::fields_ACCOUNT_ID] ?? 0);
+            $accountId = (int)($binding[SeoWebsiteAccount::schema_fields_ACCOUNT_ID] ?? 0);
             if ($accountId <= 0) {
                 continue;
             }
@@ -124,7 +124,7 @@ class WebSitemapData
             
             // 如果 platform 字段为空，尝试从 provider 推断（向后兼容）
             if (empty($platformCode)) {
-                $provider = $account->getData(SeoAccount::fields_PROVIDER);
+                $provider = $account->getData(SeoAccount::schema_fields_PROVIDER);
                 $platformCode = $this->adapterRegistry->extractPlatformFromProvider($provider);
             }
             
@@ -150,12 +150,12 @@ class WebSitemapData
         $result = [];
         
         $bindings = $this->seoWebsiteAccountModel->reset()
-            ->where(SeoWebsiteAccount::fields_WEBSITE_ID, $websiteId)
+            ->where(SeoWebsiteAccount::schema_fields_WEBSITE_ID, $websiteId)
             ->select()
             ->fetchArray();
         
         foreach ($bindings as $binding) {
-            $accountId = (int)($binding[SeoWebsiteAccount::fields_ACCOUNT_ID] ?? 0);
+            $accountId = (int)($binding[SeoWebsiteAccount::schema_fields_ACCOUNT_ID] ?? 0);
             if ($accountId <= 0) {
                 continue;
             }
@@ -170,7 +170,7 @@ class WebSitemapData
             
             // 如果 platform 字段为空，尝试从 provider 推断（向后兼容）
             if (empty($platformCode)) {
-                $provider = $account->getData(SeoAccount::fields_PROVIDER);
+                $provider = $account->getData(SeoAccount::schema_fields_PROVIDER);
                 $platformCode = $this->adapterRegistry->extractPlatformFromProvider($provider);
             }
             
