@@ -107,22 +107,20 @@ $(document).ready(function() {
         }
         
         // 检查用户名是否可用
-        $.ajax({
-            url: '/customer/account/check-username',
+        window.Weline.Api.request('/customer/account/check-username', {
             method: 'POST',
-            data: { username: username },
-            dataType: 'json',
-            success: function(response) {
-                if (response.available) {
-                    $username.addClass('is-valid').removeClass('is-invalid');
-                } else {
-                    $username.addClass('is-invalid').removeClass('is-valid');
-                }
-            },
-            error: function() {
-                // 静默失败，不显示错误
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'username=' + encodeURIComponent(username)
+        }, { silent: true })
+        .then(function(response) {
+            var resp = response.data;
+            if (response.ok && resp && resp.available) {
+                $username.addClass('is-valid').removeClass('is-invalid');
+            } else {
+                $username.addClass('is-invalid').removeClass('is-valid');
             }
-        });
+        })
+        .catch(function() { /* 静默失败 */ });
     });
 
     // 密码验证
@@ -206,14 +204,14 @@ $(document).ready(function() {
         $registerSpinner.removeClass('d-none').show();
 
         // 发送注册请求
-        $.ajax({
-            url: '/customer/account/register',
+        window.Weline.Api.request('/customer/account/register', {
             method: 'POST',
-            data: $form.serialize(),
-            dataType: 'json',
-            success: function(response) {
-                if (response.success) {
-                    // 注册成功
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: $form.serialize()
+        })
+        .then(function(response) {
+            var resp = response.data;
+            if (response.ok && resp && resp.success) {
                     $registerBtn.removeClass('btn-loading').addClass('btn-success');
                     $registerSpinner.addClass('d-none').hide();
                     $registerText.html('<i class="fas fa-check-circle me-2"></i><lang>注册成功！</lang>').show();
@@ -225,20 +223,15 @@ $(document).ready(function() {
                     });
                     
                     setTimeout(function() {
-                        window.location.href = response.redirect || '/customer/account';
+                        window.location.href = (resp.redirect || '/customer/account');
                     }, 800);
                 } else {
-                    // 注册失败
-                    handleRegisterError(response.message || '<lang>注册失败，请稍后重试</lang>');
+                    handleRegisterError((resp && resp.message) || '<lang>注册失败，请稍后重试</lang>');
                 }
-            },
-            error: function(xhr) {
-                let errorMsg = '<lang>注册请求失败，请稍后重试</lang>';
-                if (xhr.responseJSON && xhr.responseJSON.message) {
-                    errorMsg = xhr.responseJSON.message;
-                }
-                handleRegisterError(errorMsg);
-            }
+        })
+        .catch(function(error) {
+            var errorMsg = (error && error.response && error.response.data && (error.response.data.message || error.response.data.msg)) || (error && error.message) || '<lang>注册请求失败，请稍后重试</lang>';
+            handleRegisterError(errorMsg);
         });
     });
 

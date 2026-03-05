@@ -4,74 +4,47 @@ declare(strict_types=1);
 
 namespace Weline\Customer\Model;
 
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 /**
- * 前端用户Token模型
- * 用于"记住我"功能
+ * 前端用户Token模型 - 用于"记住我"功能
  */
-class CustomerToken extends \Weline\Framework\Database\Model
+#[Table(comment: '前端用户Token表')]
+#[Index(name: 'idx_user_id', columns: ['user_id'])]
+#[Index(name: 'idx_token', columns: ['token'])]
+#[Index(name: 'idx_expire', columns: ['token_expire_time'])]
+class CustomerToken extends Model
 {
-    public const fields_ID = 'token_id';
-    public const fields_user_id = 'user_id';
-    public const fields_token = 'token';
-    public const fields_type = 'type';
-    public const fields_token_expire_time = 'token_expire_time';
-    public const fields_created_at = 'created_at';
-    public const fields_last_used_at = 'last_used_at';
 
-    /**
-     * 初始化
-     */
+    public const schema_primary_key = 'token_id';
+    public const schema_primary_keys = ['token_id'];
+    #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'Token ID')]
+    public const schema_fields_ID = 'token_id';
+    #[Col('int', nullable: false, comment: '用户ID')]
+    public const schema_fields_user_id = 'user_id';
+    #[Col('varchar', 64, nullable: false, comment: 'Token字符串')]
+    public const schema_fields_token = 'token';
+    #[Col('varchar', 32, nullable: false, comment: 'Token类型')]
+    public const schema_fields_type = 'type';
+    #[Col('int', nullable: false, comment: '过期时间戳')]
+    public const schema_fields_token_expire_time = 'token_expire_time';
+    #[Col('datetime', default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
+    public const schema_fields_created_at = 'created_at';
+    #[Col('datetime', comment: '最后使用时间')]
+    public const schema_fields_last_used_at = 'last_used_at';
+
     public function _init(): void
     {
-        $this->_primary_key = self::fields_ID;
     }
 
-    /**
-     * 安装数据表
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('前端用户Token表')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'auto_increment primary key', 'Token ID')
-                ->addColumn(self::fields_user_id, TableInterface::column_type_INTEGER, 0, 'not null', '用户ID')
-                ->addColumn(self::fields_token, TableInterface::column_type_VARCHAR, 64, 'not null unique', 'Token字符串')
-                ->addColumn(self::fields_type, TableInterface::column_type_VARCHAR, 32, 'not null', 'Token类型')
-                ->addColumn(self::fields_token_expire_time, TableInterface::column_type_INTEGER, 0, 'not null', '过期时间戳')
-                ->addColumn(self::fields_created_at, TableInterface::column_type_TIMESTAMP, 0, 'default CURRENT_TIMESTAMP', '创建时间')
-                ->addColumn(self::fields_last_used_at, TableInterface::column_type_TIMESTAMP, 0, 'null', '最后使用时间')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_user_id', self::fields_user_id, '用户ID索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_token', self::fields_token, 'Token索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_expire', self::fields_token_expire_time, '过期时间索引')
-                ->create();
-        }
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-    }
-
-    /**
+/**
      * 获取用户ID
      */
     public function getUserId(): int
     {
-        return (int)$this->getData(self::fields_user_id);
+        return (int)$this->getData(self::schema_fields_user_id);
     }
 
     /**
@@ -79,7 +52,7 @@ class CustomerToken extends \Weline\Framework\Database\Model
      */
     public function setUserId(int $userId): static
     {
-        return $this->setData(self::fields_user_id, $userId);
+        return $this->setData(self::schema_fields_user_id, $userId);
     }
 
     /**
@@ -87,7 +60,7 @@ class CustomerToken extends \Weline\Framework\Database\Model
      */
     public function getToken(): string
     {
-        return (string)$this->getData(self::fields_token);
+        return (string)$this->getData(self::schema_fields_token);
     }
 
     /**
@@ -95,7 +68,7 @@ class CustomerToken extends \Weline\Framework\Database\Model
      */
     public function setToken(string $token): static
     {
-        return $this->setData(self::fields_token, $token);
+        return $this->setData(self::schema_fields_token, $token);
     }
 
     /**
@@ -103,7 +76,7 @@ class CustomerToken extends \Weline\Framework\Database\Model
      */
     public function getType(): string
     {
-        return (string)$this->getData(self::fields_type);
+        return (string)$this->getData(self::schema_fields_type);
     }
 
     /**
@@ -111,7 +84,7 @@ class CustomerToken extends \Weline\Framework\Database\Model
      */
     public function setType(string $type): static
     {
-        return $this->setData(self::fields_type, $type);
+        return $this->setData(self::schema_fields_type, $type);
     }
 
     /**
@@ -119,7 +92,7 @@ class CustomerToken extends \Weline\Framework\Database\Model
      */
     public function getTokenExpireTime(): int
     {
-        return (int)$this->getData(self::fields_token_expire_time);
+        return (int)$this->getData(self::schema_fields_token_expire_time);
     }
 
     /**
@@ -127,7 +100,7 @@ class CustomerToken extends \Weline\Framework\Database\Model
      */
     public function setTokenExpireTime(int $time): static
     {
-        return $this->setData(self::fields_token_expire_time, $time);
+        return $this->setData(self::schema_fields_token_expire_time, $time);
     }
 
     /**
@@ -135,7 +108,7 @@ class CustomerToken extends \Weline\Framework\Database\Model
      */
     public function updateLastUsedAt(): static
     {
-        return $this->setData(self::fields_last_used_at, date('Y-m-d H:i:s'));
+        return $this->setData(self::schema_fields_last_used_at, date('Y-m-d H:i:s'));
     }
 
     /**
@@ -160,7 +133,8 @@ class CustomerToken extends \Weline\Framework\Database\Model
     public function cleanExpiredTokens(): int
     {
         return $this->builder()
-            ->where(self::fields_token_expire_time, time(), '<')
+            ->where(self::schema_fields_token_expire_time, time(), '<')
             ->delete();
     }
 }
+
