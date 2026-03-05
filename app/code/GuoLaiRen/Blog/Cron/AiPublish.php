@@ -60,7 +60,11 @@ class AiPublish implements CronTaskInterface
         $modeText = $hasTrendSource ? __('趋势增长词模式') : __('画像关键词兜底模式');
 
         if ($onProgress) {
-            $onProgress('start', ['mode' => $modeText, 'quotas_count' => count($quotas)]);
+            $onProgress('start', [
+                'message' => __('当前模式：%{mode}，待处理配额：%{count}', ['mode' => $modeText, 'count' => count($quotas)]),
+                'mode' => $modeText,
+                'quotas_count' => count($quotas),
+            ]);
         }
 
         if (empty($quotas)) {
@@ -329,55 +333,58 @@ class AiPublish implements CronTaskInterface
     }
     
     /**
-     * 检查 AI 模型配置是否正常
+     * 检查 AI 模型配置是否正常（与 ArticleGenerationService 使用相同的解析顺序）
      * @return string|null 返回错误提示（含 HTML 链接），如果正常则返回 null
      */
     private static function checkAiModelConfig(): ?string
     {
         try {
-            /** @var \Weline\Ai\Service\DefaultModelManager $defaultModelManager */
+            $scenarioCode = 'pagebuilder_article_generation'; // 与 ArticleGenerationService 使用的场景一致
             $defaultModelManager = ObjectManager::getInstance(\Weline\Ai\Service\DefaultModelManager::class);
-            
-            // 检查全局默认模型
-            $globalDefault = $defaultModelManager->getDefaultModelForService(
-                \Weline\Ai\Service\DefaultModelManager::SERVICE_TYPE_DEFAULT
-            );
-            
-            // 生成配置链接
-            /** @var \Weline\Framework\Http\Url $urlBuilder */
+            /** @var \Weline\Ai\Model\AiModel $aiModel */
+            $aiModel = ObjectManager::getInstance(\Weline\Ai\Model\AiModel::class);
+
+            // 与 AiService::selectModel 相同顺序：1.场景适配器 2.场景默认 3.全局默认 4.IS_DEFAULT 标记
+            $model = null;
+
+            $adapterScanner = ObjectManager::getInstance(\Weline\Ai\Service\AdapterScanner::class);
+            $adapterModelCode = $adapterScanner->getDefaultModelCodeForAdapter($scenarioCode);
+            if ($adapterModelCode) {
+                $model = $aiModel->clear()->where(\Weline\Ai\Model\AiModel::schema_fields_MODEL_CODE, $adapterModelCode)
+                    ->where(\Weline\Ai\Model\AiModel::schema_fields_IS_ACTIVE, 1)->find()->fetch();
+            }
+            if (!$model || !$model->getId()) {
+                $model = $defaultModelManager->getDefaultModel($scenarioCode);
+            }
+            if (!$model || !$model->getId()) {
+                $model = $defaultModelManager->getDefaultModel(\Weline\Ai\Service\DefaultModelManager::SERVICE_TYPE_DEFAULT);
+            }
+            if (!$model || !$model->getId()) {
+                $model = $aiModel->clear()->where(\Weline\Ai\Model\AiModel::schema_fields_IS_ACTIVE, 1)
+                    ->where(\Weline\Ai\Model\AiModel::schema_fields_IS_DEFAULT, 1)->find()->fetch();
+            }
+
+            if ($model && $model->getId()) {
+                return null;
+            }
+
             $urlBuilder = ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
+            $adapterUrl = $urlBuilder->getBackendUrl('ai/backend/adapter');
             $configUrl = $urlBuilder->getBackendUrl('ai/backend/defaultmodel');
             $modelListUrl = $urlBuilder->getBackendUrl('ai/backend/model');
             $providerUrl = $urlBuilder->getBackendUrl('ai/backend/provider');
-            
             $linkHtml = '<div class="ai-config-links" style="margin-top: 10px;">'
-                . '<a href="' . $configUrl . '" class="btn btn-sm btn-primary me-2" target="_blank">'
+                . '<a href="' . $adapterUrl . '" class="btn btn-sm btn-primary me-2" target="_blank">'
+                . '<i class="mdi mdi-puzzle me-1"></i>' . __('场景适配器') . '</a>'
+                . '<a href="' . $configUrl . '" class="btn btn-sm btn-outline-secondary me-2" target="_blank">'
                 . '<i class="mdi mdi-star-settings me-1"></i>' . __('配置默认模型') . '</a>'
                 . '<a href="' . $modelListUrl . '" class="btn btn-sm btn-outline-secondary me-2" target="_blank">'
                 . '<i class="mdi mdi-robot me-1"></i>' . __('模型列表') . '</a>'
                 . '<a href="' . $providerUrl . '" class="btn btn-sm btn-outline-secondary" target="_blank">'
                 . '<i class="mdi mdi-account-key me-1"></i>' . __('供应商账户') . '</a>'
                 . '</div>';
-            
-            if (!$globalDefault || !$globalDefault->getId()) {
-                return __('未配置 AI 默认模型') . $linkHtml;
-            }
-            
-            // 检查模型是否有效
-            /** @var \Weline\Ai\Model\AiModel $aiModel */
-            $aiModel = ObjectManager::getInstance(\Weline\Ai\Model\AiModel::class);
-            $modelCode = $globalDefault->getData(\Weline\Ai\Model\AiDefaultModel::schema_fields_MODEL_CODE);
-            $model = $aiModel->clear()->where(\Weline\Ai\Model\AiModel::schema_fields_MODEL_CODE, $modelCode)->find()->fetch();
-            
-            if (!$model->getId()) {
-                return __('AI 默认模型配置无效（模型代码 %{1} 不存在）', [$modelCode]) . $linkHtml;
-            }
-            
-            if ((int)$model->getData(\Weline\Ai\Model\AiModel::schema_fields_IS_ACTIVE) !== 1) {
-                return __('AI 默认模型 "%{1}" 未激活', [$model->getData(\Weline\Ai\Model\AiModel::schema_fields_NAME)]) . $linkHtml;
-            }
-            
-            return null;
+
+            return __('未配置 AI 默认模型（可在「场景适配器」中为文章生成适配器设置默认模型，或在「默认模型配置」中配置）') . $linkHtml;
         } catch (\Throwable $e) {
             return __('AI 模型配置检查失败：%{1}', [$e->getMessage()]);
         }
