@@ -84,8 +84,8 @@ class ApiDocImporter
         // 如果强制重新导入，先删除旧的API文档
         if ($force) {
             $this->progress(__('正在清理旧的API文档...'), 'warning');
-            $this->documentModel->where(Document::fields_IS_AUTO_IMPORTED, 1)
-                ->where(Document::fields_MODULE_NAME, 'API', 'like')
+            $this->documentModel->where(Document::schema_fields_IS_AUTO_IMPORTED, 1)
+                ->where(Document::schema_fields_MODULE_NAME, 'API', 'like')
                 ->delete()
                 ->fetch();
             $this->progress(__('清理完成'), 'success');
@@ -194,9 +194,9 @@ class ApiDocImporter
         
         // 检查是否已存在
         $existingDoc = $this->documentModel->clear()
-            ->where(Document::fields_MODULE_NAME, 'API_' . ($api['module'] ?? ''))
-            ->where(Document::fields_FILE_PATH, $documentKey)
-            ->where(Document::fields_IS_AUTO_IMPORTED, 1)
+            ->where(Document::schema_fields_MODULE_NAME, 'API_' . ($api['module'] ?? ''))
+            ->where(Document::schema_fields_FILE_PATH, $documentKey)
+            ->where(Document::schema_fields_IS_AUTO_IMPORTED, 1)
             ->find()
             ->fetch();
         
@@ -312,8 +312,8 @@ class ApiDocImporter
     private function ensureApiCatalog(): Catalog
     {
         $catalog = $this->catalogModel->clear()
-            ->where(Catalog::fields_NAME, 'API文档')
-            ->where(Catalog::fields_is_system, 1)
+            ->where(Catalog::schema_fields_NAME, 'API文档')
+            ->where(Catalog::schema_fields_is_system, 1)
             ->find()
             ->fetch();
         
@@ -363,9 +363,9 @@ class ApiDocImporter
         $sortOrder = $sortKey['sortOrder'];
         
         $catalog = $this->catalogModel->clear()
-            ->where(Catalog::fields_NAME, $displayName)
-            ->where(Catalog::fields_PID, $parentCatalog->getId())
-            ->where(Catalog::fields_is_system, 1)
+            ->where(Catalog::schema_fields_NAME, $displayName)
+            ->where(Catalog::schema_fields_PID, $parentCatalog->getId())
+            ->where(Catalog::schema_fields_is_system, 1)
             ->find()
             ->fetch();
         
@@ -388,9 +388,9 @@ class ApiDocImporter
     private function ensureVersionCatalog(string $version, Catalog $parentCatalog): Catalog
     {
         $catalog = $this->catalogModel->clear()
-            ->where(Catalog::fields_NAME, $version)
-            ->where(Catalog::fields_PID, $parentCatalog->getId())
-            ->where(Catalog::fields_is_system, 1)
+            ->where(Catalog::schema_fields_NAME, $version)
+            ->where(Catalog::schema_fields_PID, $parentCatalog->getId())
+            ->where(Catalog::schema_fields_is_system, 1)
             ->find()
             ->fetch();
         
@@ -415,9 +415,9 @@ class ApiDocImporter
         $category = $apiInfo['document']['category'] ?? $shortClassName;
         
         $catalog = $this->catalogModel->clear()
-            ->where(Catalog::fields_NAME, $category)
-            ->where(Catalog::fields_PID, $parentCatalog->getId())
-            ->where(Catalog::fields_is_system, 1)
+            ->where(Catalog::schema_fields_NAME, $category)
+            ->where(Catalog::schema_fields_PID, $parentCatalog->getId())
+            ->where(Catalog::schema_fields_is_system, 1)
             ->find()
             ->fetch();
         

@@ -68,8 +68,8 @@ class DocumentScanner
         // 强制重扫时先清空
         if ($forceRescan) {
             $this->progress(__('正在清理旧的自动导入文档和分类...'), 'warning');
-            $this->documentModel->clear()->where(Document::fields_IS_AUTO_IMPORTED, 1)->delete()->fetch();
-            $this->catalogModel->clear()->where(Catalog::fields_is_system, 1)->delete()->fetch();
+            $this->documentModel->clear()->where(Document::schema_fields_IS_AUTO_IMPORTED, 1)->delete()->fetch();
+            $this->catalogModel->clear()->where(Catalog::schema_fields_is_system, 1)->delete()->fetch();
             $this->progress(__('清理完成'), 'success');
         }
 
@@ -277,14 +277,14 @@ class DocumentScanner
 
         // 查询已有记录
         $existing = ObjectManager::make(Document::class)->clear()
-            ->where(Document::fields_MODULE_NAME, $moduleName)
-            ->where(Document::fields_FILE_PATH, $filePath)
+            ->where(Document::schema_fields_MODULE_NAME, $moduleName)
+            ->where(Document::schema_fields_FILE_PATH, $filePath)
             ->find()
             ->fetch();
 
         if ($existing && $existing->getId()) {
             // 检查文件是否有变化（通过修改时间判断）
-            $storedMtime = (int)($existing->getData(Document::fields_FILE_MTIME) ?? 0);
+            $storedMtime = (int)($existing->getData(Document::schema_fields_FILE_MTIME) ?? 0);
             if ($storedMtime === $fileMtime) {
                 // 文件未变化，跳过更新（但仍需确保分类正确）
                 $storedCategoryId = (int)($existing->getCategoryId() ?? 0);
@@ -305,12 +305,12 @@ class DocumentScanner
             $summary = $this->extractSummary($content);
 
             $existing->setTitle($title)
-                ->setData(Document::fields_summary, $summary)
+                ->setData(Document::schema_fields_summary, $summary)
                 ->setFileName($fileName)
                 ->setCategoryId((string)$catalogId)
                 ->setIsAutoImported(true)
-                ->setData(Document::fields_FILE_MTIME, $fileMtime)
-                ->setData(Document::fields_UPDATED_AT, date('Y-m-d H:i:s'))
+                ->setData(Document::schema_fields_FILE_MTIME, $fileMtime)
+                ->setData(Document::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
                 ->save();
             $result['updated']++;
             $this->progress("      ↻ " . __('更新: %{path}', ['path' => $filePath]), 'info');
@@ -326,7 +326,7 @@ class DocumentScanner
 
             $newDoc = ObjectManager::make(Document::class);
             $newDoc->setTitle($title)
-                ->setData(Document::fields_summary, $summary)
+                ->setData(Document::schema_fields_summary, $summary)
                 ->setContent('')
                 ->setModuleName($moduleName)
                 ->setFilePath($filePath)
@@ -334,8 +334,8 @@ class DocumentScanner
                 ->setCategoryId((string)$catalogId)
                 ->setIsAutoImported(true)
                 ->setSortOrder(0)
-                ->setData(Document::fields_FILE_MTIME, $fileMtime)
-                ->setData(Document::fields_UPDATED_AT, date('Y-m-d H:i:s'))
+                ->setData(Document::schema_fields_FILE_MTIME, $fileMtime)
+                ->setData(Document::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
                 ->save();
             $result['new']++;
             $this->progress("      ✨ " . __('新增: %{path}', ['path' => $filePath]), 'success');
@@ -352,8 +352,8 @@ class DocumentScanner
         // 使用新实例查询，避免单例状态污染
         $queryModel = ObjectManager::make(Catalog::class);
         $catalog = $queryModel->clear()
-            ->where(Catalog::fields_NAME, $name)
-            ->where(Catalog::fields_PID, $pid)
+            ->where(Catalog::schema_fields_NAME, $name)
+            ->where(Catalog::schema_fields_PID, $pid)
             ->find()
             ->fetch();
 
@@ -362,22 +362,22 @@ class DocumentScanner
             $updateData = [];
 
             // 更新 level（缓存值，可能需要修正）
-            $currentLevel = (int)($catalog->getData(Catalog::fields_level) ?? 0);
+            $currentLevel = (int)($catalog->getData(Catalog::schema_fields_level) ?? 0);
             if ($currentLevel !== $level) {
-                $updateData[Catalog::fields_level] = $level;
+                $updateData[Catalog::schema_fields_level] = $level;
                 $needsUpdate = true;
             }
 
             // 更新 position（排序值）
-            $currentPosition = (int)($catalog->getData(Catalog::fields_position) ?? 0);
+            $currentPosition = (int)($catalog->getData(Catalog::schema_fields_position) ?? 0);
             if ($position > 0 && $currentPosition !== $position) {
-                $updateData[Catalog::fields_position] = $position;
+                $updateData[Catalog::schema_fields_position] = $position;
                 $needsUpdate = true;
             }
 
             if ($needsUpdate && !empty($updateData)) {
                 ObjectManager::make(Catalog::class)->clear()
-                    ->where(Catalog::fields_ID, $catalog->getId())
+                    ->where(Catalog::schema_fields_ID, $catalog->getId())
                     ->update($updateData)
                     ->fetch();
             }
@@ -397,16 +397,16 @@ class DocumentScanner
             $catalog->setName($name)
                 ->setDescription($description)
                 ->setPid($pid)
-                ->setData(Catalog::fields_level, $level)
-                ->setData(Catalog::fields_is_system, 1)
-                ->setData(Catalog::fields_position, $position)
+                ->setData(Catalog::schema_fields_level, $level)
+                ->setData(Catalog::schema_fields_is_system, 1)
+                ->setData(Catalog::schema_fields_position, $position)
                 ->setIsActive(true)
                 ->save();
         } catch (\Exception $e) {
             // 并发创建冲突时重新查询
             $existingCatalog = ObjectManager::make(Catalog::class)->clear()
-                ->where(Catalog::fields_NAME, $name)
-                ->where(Catalog::fields_PID, $pid)
+                ->where(Catalog::schema_fields_NAME, $name)
+                ->where(Catalog::schema_fields_PID, $pid)
                 ->find()
                 ->fetch();
             if (!$existingCatalog || !$existingCatalog->getId()) {
@@ -427,7 +427,7 @@ class DocumentScanner
             return 0;
         }
         $cat = ObjectManager::make(Catalog::class)->clear()->load($catalogId);
-        return ($cat && $cat->getId()) ? (int)($cat->getData(Catalog::fields_level) ?? 0) : 0;
+        return ($cat && $cat->getId()) ? (int)($cat->getData(Catalog::schema_fields_level) ?? 0) : 0;
     }
 
     // ─── 清理 ────────────────────────────────────────────────
@@ -443,8 +443,8 @@ class DocumentScanner
 
         while (true) {
             $docs = $this->documentModel->clear()
-                ->fields([Document::fields_ID, Document::fields_MODULE_NAME, Document::fields_FILE_PATH])
-                ->where(Document::fields_IS_AUTO_IMPORTED, 1)
+                ->fields([Document::schema_fields_ID, Document::schema_fields_MODULE_NAME, Document::schema_fields_FILE_PATH])
+                ->where(Document::schema_fields_IS_AUTO_IMPORTED, 1)
                 ->limit(($page - 1) * $pageSize, $pageSize)
                 ->select()
                 ->fetchArray();
@@ -455,15 +455,15 @@ class DocumentScanner
 
             $idsToDelete = [];
             foreach ($docs as $doc) {
-                $key = ($doc[Document::fields_MODULE_NAME] ?? '') . '|' . ($doc[Document::fields_FILE_PATH] ?? '');
+                $key = ($doc[Document::schema_fields_MODULE_NAME] ?? '') . '|' . ($doc[Document::schema_fields_FILE_PATH] ?? '');
                 if (!isset($this->seenDocumentKeys[$key])) {
-                    $idsToDelete[] = (int)$doc[Document::fields_ID];
+                    $idsToDelete[] = (int)$doc[Document::schema_fields_ID];
                 }
             }
 
             if (!empty($idsToDelete)) {
                 $this->documentModel->clear()
-                    ->where(Document::fields_ID, $idsToDelete, 'in')
+                    ->where(Document::schema_fields_ID, $idsToDelete, 'in')
                     ->delete()
                     ->fetch();
                 $totalDeleted += count($idsToDelete);
@@ -485,15 +485,15 @@ class DocumentScanner
     private function cleanupUnseenCatalogs(): int
     {
         $allSystem = $this->catalogModel->clear()
-            ->where(Catalog::fields_is_system, 1)
+            ->where(Catalog::schema_fields_is_system, 1)
             ->select()
             ->fetchArray();
 
         $toDelete = [];
         foreach ($allSystem as $cat) {
-            $id = (int)($cat[Catalog::fields_ID] ?? 0);
+            $id = (int)($cat[Catalog::schema_fields_ID] ?? 0);
             if ($id > 0 && !isset($this->seenCatalogIds[$id])) {
-                $level = (int)($cat[Catalog::fields_level] ?? 0);
+                $level = (int)($cat[Catalog::schema_fields_level] ?? 0);
                 $toDelete[] = ['id' => $id, 'level' => $level];
             }
         }
@@ -509,10 +509,10 @@ class DocumentScanner
             }
             // 检查是否有文档或子分类关联
             $hasDoc = $this->documentModel->clear()
-                ->where(Document::fields_CATEGORY_ID, $item['id'])
+                ->where(Document::schema_fields_CATEGORY_ID, $item['id'])
                 ->find()->fetch();
             $hasChild = $this->catalogModel->clear()
-                ->where(Catalog::fields_PID, $item['id'])
+                ->where(Catalog::schema_fields_PID, $item['id'])
                 ->find()->fetch();
             if (!$hasDoc && !$hasChild) {
                 $cat->delete()->fetch();
@@ -542,13 +542,13 @@ class DocumentScanner
         while (true) {
             $groups = $this->documentModel->clear()
                 ->fields([
-                    Document::fields_MODULE_NAME,
-                    Document::fields_FILE_PATH,
-                    'MIN(' . Document::fields_ID . ') as min_id',
+                    Document::schema_fields_MODULE_NAME,
+                    Document::schema_fields_FILE_PATH,
+                    'MIN(' . Document::schema_fields_ID . ') as min_id',
                     'COUNT(*) as cnt',
                 ])
-                ->where(Document::fields_IS_AUTO_IMPORTED, 1)
-                ->group(Document::fields_MODULE_NAME . ', ' . Document::fields_FILE_PATH)
+                ->where(Document::schema_fields_IS_AUTO_IMPORTED, 1)
+                ->group(Document::schema_fields_MODULE_NAME . ', ' . Document::schema_fields_FILE_PATH)
                 ->having('COUNT(*) > 1')
                 ->limit(($page - 1) * $pageSize, $pageSize)
                 ->select()
@@ -559,24 +559,24 @@ class DocumentScanner
             }
 
             foreach ($groups as $g) {
-                $moduleName = $g[Document::fields_MODULE_NAME] ?? '';
-                $filePath = $g[Document::fields_FILE_PATH] ?? '';
+                $moduleName = $g[Document::schema_fields_MODULE_NAME] ?? '';
+                $filePath = $g[Document::schema_fields_FILE_PATH] ?? '';
                 $minId = (int)($g['min_id'] ?? 0);
                 if (!$moduleName || !$filePath || $minId <= 0) {
                     continue;
                 }
                 $ids = $this->documentModel->clear()
-                    ->fields(Document::fields_ID)
-                    ->where(Document::fields_IS_AUTO_IMPORTED, 1)
-                    ->where(Document::fields_MODULE_NAME, $moduleName)
-                    ->where(Document::fields_FILE_PATH, $filePath)
-                    ->where(Document::fields_ID, $minId, '!=')
+                    ->fields(Document::schema_fields_ID)
+                    ->where(Document::schema_fields_IS_AUTO_IMPORTED, 1)
+                    ->where(Document::schema_fields_MODULE_NAME, $moduleName)
+                    ->where(Document::schema_fields_FILE_PATH, $filePath)
+                    ->where(Document::schema_fields_ID, $minId, '!=')
                     ->select()
                     ->fetchArray();
-                $idsToDelete = array_map('intval', array_column($ids, Document::fields_ID));
+                $idsToDelete = array_map('intval', array_column($ids, Document::schema_fields_ID));
                 if (!empty($idsToDelete)) {
                     $this->documentModel->clear()
-                        ->where(Document::fields_ID, $idsToDelete, 'in')
+                        ->where(Document::schema_fields_ID, $idsToDelete, 'in')
                         ->delete()->fetch();
                     $totalDeleted += count($idsToDelete);
                 }

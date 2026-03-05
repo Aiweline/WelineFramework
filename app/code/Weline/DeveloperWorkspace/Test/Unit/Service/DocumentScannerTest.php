@@ -50,15 +50,15 @@ class DocumentScannerTest extends TestCase
         foreach ($this->testModules as $moduleName) {
             // 删除测试文档
             $this->documentModel->clear()
-                ->where(Document::fields_MODULE_NAME, $moduleName)
-                ->where(Document::fields_IS_AUTO_IMPORTED, 1)
+                ->where(Document::schema_fields_MODULE_NAME, $moduleName)
+                ->where(Document::schema_fields_IS_AUTO_IMPORTED, 1)
                 ->delete()
                 ->fetch();
 
             // 删除模块分类及其子分类
             $moduleCatalog = $this->catalogModel->clear()
-                ->where(Catalog::fields_NAME, $moduleName)
-                ->where(Catalog::fields_is_system, 1)
+                ->where(Catalog::schema_fields_NAME, $moduleName)
+                ->where(Catalog::schema_fields_is_system, 1)
                 ->find()
                 ->fetch();
             if ($moduleCatalog && $moduleCatalog->getId()) {
@@ -72,17 +72,17 @@ class DocumentScannerTest extends TestCase
     private function deleteCatalogTree(int $catalogId): void
     {
         $children = $this->catalogModel->clear()
-            ->where(Catalog::fields_PID, $catalogId)
+            ->where(Catalog::schema_fields_PID, $catalogId)
             ->select()
             ->fetchArray();
         foreach ($children as $child) {
-            $childId = (int)($child[Catalog::fields_ID] ?? 0);
+            $childId = (int)($child[Catalog::schema_fields_ID] ?? 0);
             if ($childId > 0) {
                 $this->deleteCatalogTree($childId);
             }
         }
         $this->catalogModel->clear()
-            ->where(Catalog::fields_ID, $catalogId)
+            ->where(Catalog::schema_fields_ID, $catalogId)
             ->delete()
             ->fetch();
     }
