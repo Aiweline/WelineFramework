@@ -16,9 +16,9 @@ namespace Weline\Framework\Database\Exception;
 
 class LinkException extends DatabaseException
 {
-    public function __construct($message = null, ?\Exception $cause = null, $code = 0)
+    public function __construct($message = null, ?\Exception $cause = null, int $code = 0)
     {
         $message = 'DB Error:' . $message;
-        parent::__construct($message, $cause, $code);
+        parent::__construct($message, $code, $cause);
     }
 }
