@@ -18,7 +18,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 #[Table(comment: '页面构建器-页面布局表')]
-#[Index(name: 'uk_page_id', columns: ['page_id'], type: 'UNIQUE', comment: '页面ID唯一索引')]
+#[Index(name: 'idx_page_id', columns: ['page_id'], comment: '页面ID索引')]
 #[Index(name: 'idx_is_active', columns: ['is_active'], comment: '状态索引')]
 class PageLayout extends Model
 {
@@ -27,14 +27,22 @@ class PageLayout extends Model
     // 字段定义
     #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '布局ID')]
     public const schema_fields_ID = 'layout_id';
-    public const schema_fields_PAGE_ID = 'page_id';               // 关联的页面ID
-    public const schema_fields_LAYOUT_CONFIG = 'layout_config';   // 布局配置（JSON）
-    public const schema_fields_HEADER_COMPONENT = 'header_component';    // Header组件代码
-    public const schema_fields_HEADER_CONFIG = 'header_config';          // Header组件配置（JSON）
-    public const schema_fields_FOOTER_COMPONENT = 'footer_component';    // Footer组件代码
-    public const schema_fields_FOOTER_CONFIG = 'footer_config';          // Footer组件配置（JSON）
-    public const schema_fields_CONTENT_COMPONENTS = 'content_components'; // 内容组件列表（JSON）
-    public const schema_fields_USE_ORIGINAL_TEMPLATE = 'use_original_template'; // 是否使用原始模板
+    #[Col(type: 'int', nullable: false, comment: '关联的页面ID')]
+    public const schema_fields_PAGE_ID = 'page_id';
+    #[Col(type: 'text', nullable: true, comment: '布局配置JSON')]
+    public const schema_fields_LAYOUT_CONFIG = 'layout_config';
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: 'Header组件代码')]
+    public const schema_fields_HEADER_COMPONENT = 'header_component';
+    #[Col(type: 'text', nullable: true, comment: 'Header组件配置JSON')]
+    public const schema_fields_HEADER_CONFIG = 'header_config';
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: 'Footer组件代码')]
+    public const schema_fields_FOOTER_COMPONENT = 'footer_component';
+    #[Col(type: 'text', nullable: true, comment: 'Footer组件配置JSON')]
+    public const schema_fields_FOOTER_CONFIG = 'footer_config';
+    #[Col(type: 'text', nullable: true, comment: '内容组件列表JSON')]
+    public const schema_fields_CONTENT_COMPONENTS = 'content_components';
+    #[Col(type: 'smallint', length: 1, nullable: false, default: 1, comment: '是否使用原始模板')]
+    public const schema_fields_USE_ORIGINAL_TEMPLATE = 'use_original_template';
     #[Col(type: 'smallint', length: 1, nullable: false, default: 1, comment: '是否启用')]
     public const schema_fields_IS_ACTIVE = 'is_active';
     #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
