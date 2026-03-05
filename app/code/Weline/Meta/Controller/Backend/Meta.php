@@ -31,10 +31,10 @@ class Meta extends BackendController
         $search = $this->request->getGet('search');
         
         if ($namespace) {
-            $meta->where(MetaModel::fields_NAMESPACE, $namespace);
+            $meta->where(MetaModel::schema_fields_NAMESPACE, $namespace);
         }
         if ($type) {
-            $meta->where(MetaModel::fields_META_TYPE, $type);
+            $meta->where(MetaModel::schema_fields_META_TYPE, $type);
         }
         if ($search) {
             $meta->where('file_path', '%' . $search . '%', 'LIKE');
@@ -78,7 +78,7 @@ class Meta extends BackendController
         }
         
         $meta->setData($data);
-        $metaData = json_decode($meta->getData(MetaModel::fields_META_DATA), true) ?? [];
+        $metaData = json_decode($meta->getData(MetaModel::schema_fields_META_DATA), true) ?? [];
         $meta->saveMeta($metaData);
         
         $this->getMessageManager()->addSuccess(__('保存成功'));

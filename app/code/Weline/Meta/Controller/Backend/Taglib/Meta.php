@@ -68,19 +68,19 @@ class Meta extends BackendController
             
             // 先尝试带 scope 的 key
             $md5 = LocaleDictionary::generateMd5($metaKeyWithScope, $locale);
-            $localeDict->load(LocaleDictionary::fields_MD5, $md5);
+            $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5);
             
             $translation = '';
             if ($localeDict->getId()) {
-                $translation = $localeDict->getData(LocaleDictionary::fields_TRANSLATE);
+                $translation = $localeDict->getData(LocaleDictionary::schema_fields_TRANSLATE);
             }
             
             // 如果没有找到，尝试不带 scope 的 key（使用默认值）
             if (empty($translation) && $scope !== 'default') {
                 $md5Default = LocaleDictionary::generateMd5($metaKey, $locale);
-                $localeDict->load(LocaleDictionary::fields_MD5, $md5Default);
+                $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5Default);
                 if ($localeDict->getId()) {
-                    $translation = $localeDict->getData(LocaleDictionary::fields_TRANSLATE);
+                    $translation = $localeDict->getData(LocaleDictionary::schema_fields_TRANSLATE);
                 }
             }
             
@@ -138,18 +138,18 @@ class Meta extends BackendController
             /** @var LocaleDictionary $localeDict */
             $localeDict = ObjectManager::getInstance(LocaleDictionary::class);
             $md5 = LocaleDictionary::generateMd5($metaKeyWithScope, $locale);
-            $localeDict->load(LocaleDictionary::fields_MD5, $md5);
+            $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5);
             
             if ($localeDict->getId()) {
                 // 更新
-                $localeDict->setData(LocaleDictionary::fields_TRANSLATE, $translateValue);
+                $localeDict->setData(LocaleDictionary::schema_fields_TRANSLATE, $translateValue);
                 $localeDict->save();
             } else {
                 // 新增
-                $localeDict->setData(LocaleDictionary::fields_MD5, $md5);
-                $localeDict->setData(LocaleDictionary::fields_STRING, $metaKeyWithScope);
-                $localeDict->setData(LocaleDictionary::fields_LOCALE, $locale);
-                $localeDict->setData(LocaleDictionary::fields_TRANSLATE, $translateValue);
+                $localeDict->setData(LocaleDictionary::schema_fields_MD5, $md5);
+                $localeDict->setData(LocaleDictionary::schema_fields_STRING, $metaKeyWithScope);
+                $localeDict->setData(LocaleDictionary::schema_fields_LOCALE, $locale);
+                $localeDict->setData(LocaleDictionary::schema_fields_TRANSLATE, $translateValue);
                 $localeDict->save();
             }
         }
