@@ -45,7 +45,7 @@ class MigratePoolData extends CommandAbstract
         $printing->printing(__('步骤 1: 为根域名生成子域名到域名池...'), 'info');
         $domainModel = ObjectManager::getInstance(Domain::class);
         $domains = $domainModel->clearQuery()
-            ->where(Domain::fields_STATUS, Domain::STATUS_ACTIVE)
+            ->where(Domain::schema_fields_STATUS, Domain::STATUS_ACTIVE)
             ->select()
             ->fetchArray();
         
@@ -112,7 +112,7 @@ class MigratePoolData extends CommandAbstract
         $printing->printing(__('步骤 3: 为 WebsiteDomain 关联 pool_id...'), 'info');
         $websiteDomainModel = ObjectManager::getInstance(WebsiteDomain::class);
         $websiteDomains = $websiteDomainModel->clearQuery()
-            ->where(WebsiteDomain::fields_POOL_ID, 0)
+            ->where(WebsiteDomain::schema_fields_POOL_ID, 0)
             ->select()
             ->fetchArray();
         
@@ -128,7 +128,7 @@ class MigratePoolData extends CommandAbstract
             // 查找 DomainPool 中匹配的记录
             $matchingPool = ObjectManager::getInstance(DomainPool::class, [], false);
             $matchingPool->clearQuery()
-                ->where(DomainPool::fields_DOMAIN, strtolower($domain))
+                ->where(DomainPool::schema_fields_DOMAIN, strtolower($domain))
                 ->find()
                 ->fetch();
             

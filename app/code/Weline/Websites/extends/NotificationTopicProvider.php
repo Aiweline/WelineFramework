@@ -51,6 +51,16 @@ class NotificationTopicProvider implements NotificationTopicProviderInterface
                 'color' => '#34c38f',
                 'default_channels' => ['backend'],
             ],
+            [
+                'code' => 'domain_pool_resolve_off_local',
+                'name' => __('域名池解析偏离本站'),
+                'group' => 'domain_management',
+                'group_name' => __('域名管理'),
+                'description' => __('域名池内域名解析不再指向本服务器时的通知'),
+                'icon' => 'ri-error-warning-line',
+                'color' => '#f06548',
+                'default_channels' => ['backend', 'email'],
+            ],
         ];
     }
 }
