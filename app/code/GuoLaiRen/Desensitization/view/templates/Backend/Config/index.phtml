@@ -297,18 +297,17 @@ function loadModels() {
     loadingDiv.style.display = 'block';
     modelList.innerHTML = '';
     
-    fetch('<?= $this->getBackendUrl('*/backend/detect/models') ?>', {
-        method: 'GET',
-        headers: {'Content-Type': 'application/json'}
-    })
-    .then(response => {
+    var opts = { method: 'GET', headers: {'Content-Type': 'application/json'} };
+    window.Weline.Api.get('<?= $this->getBackendUrl('*/backend/detect/models') ?>', { silent: true })
+    .then(function(res) {
         loadingDiv.style.display = 'none';
-        if (!response.ok) {
-            throw new Error('网络请求失败: ' + response.status);
+        var result = (res && res.data) !== undefined ? res.data : res;
+        if (!res || res.ok === false) {
+            throw new Error('网络请求失败: ' + (res.status || 500));
         }
-        return response.json();
+        return result;
     })
-    .then(result => {
+    .then(function(result) {
         if (result.success && result.data && result.data.length > 0) {
             allModels = result.data;
             console.log('AI模型加载成功，共加载', result.data.length, '个模型');
@@ -455,13 +454,11 @@ function saveConfig() {
         google_rules: document.getElementById('google_rules').value
     };
 
-    fetch('<?= $this->getBackendUrl('*/backend/config/save') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(data)
-    })
-    .then(response => response.json())
-    .then(result => {
+    var url = '<?= $this->getBackendUrl('*/backend/config/save') ?>';
+    var opts = { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) };
+    window.Weline.Api.request(url, opts)
+    .then(function(res) {
+        var result = (res && res.data) !== undefined ? res.data : res;
         if (result.success) {
             alert('配置保存成功');
             location.reload();
@@ -479,13 +476,11 @@ function resetAdapter(adapterType) {
         return;
     }
     
-    fetch('<?= $this->getBackendUrl('*/backend/config/reset') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({adapter_type: adapterType})
-    })
-    .then(response => response.json())
-    .then(result => {
+    var url = '<?= $this->getBackendUrl('*/backend/config/reset') ?>';
+    var opts = { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({adapter_type: adapterType}) };
+    window.Weline.Api.request(url, opts)
+    .then(function(res) {
+        var result = (res && res.data) !== undefined ? res.data : res;
         if (result.success) {
             alert('配置已重置');
             location.reload();
@@ -544,27 +539,10 @@ function updateRules(platform) {
     showUpdateRulesModal('正在从' + platformName + '获取网页并提取敏感词，请稍候...');
 
     const url = '<?= $this->getBackendUrl('*/backend/config/saveRules') ?>';
-    console.log('Making request to:', url);
-    
-    fetch(url, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({platform: platform})
-    })
-    .then(response => {
-        console.log('Response received:', response.status, response.statusText);
-        // 检查响应是否为HTML，如果是，尝试解析为JSON，否则抛出错误
-        const contentType = response.headers.get("content-type");
-        if (contentType && contentType.indexOf("application/json") !== -1) {
-            return response.json();
-        } else {
-            // 如果不是JSON，尝试读取文本并抛出错误
-            return response.text().then(text => {
-                throw new Error('服务器返回非JSON内容: ' + text);
-            });
-        }
-    })
-    .then(result => {
+    const opts = { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({platform: platform}) };
+    window.Weline.Api.request(url, opts)
+    .then(function(res) {
+        var result = (res && res.data) !== undefined ? res.data : res;
         console.log('Result:', result);
         const msgEl = document.getElementById('updateRulesModalMessage');
         if (result.success) {

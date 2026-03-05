@@ -234,18 +234,17 @@ function loadModels() {
     loadingDiv.style.display = 'block';
     modelList.innerHTML = '';
     
-    fetch('<?= $this->getBackendUrl('*/backend/detect/models') ?>', {
-        method: 'GET',
-        headers: {'Content-Type': 'application/json'}
-    })
-    .then(response => {
+    var detectModelsUrl = '<?= $this->getBackendUrl('*/backend/detect/models') ?>';
+    var detectOpts = { method: 'GET', headers: {'Content-Type': 'application/json'} };
+    window.Weline.Api.get(detectModelsUrl, { silent: true })
+    .then(function(res) {
         loadingDiv.style.display = 'none';
-        if (!response.ok) {
-            throw new Error('网络请求失败: ' + response.status);
+        if (!res || res.ok === false) {
+            throw new Error('网络请求失败: ' + (res && res.status || 500));
         }
-        return response.json();
+        return (res && res.data) !== undefined ? res.data : res;
     })
-    .then(result => {
+    .then(function(result) {
         if (result.success && result.data && result.data.length > 0) {
             allModels = result.data;
             console.log('AI模型加载成功，共加载', result.data.length, '个模型');
@@ -344,12 +343,10 @@ document.addEventListener('DOMContentLoaded', function() {
 function loadDefaultModelInfo() {
     if (!defaultModelCode) return;
     
-    fetch('<?= $this->getBackendUrl('*/backend/detect/models') ?>', {
-        method: 'GET',
-        headers: {'Content-Type': 'application/json'}
-    })
-    .then(response => response.json())
-    .then(result => {
+    var opts = { method: 'GET', headers: {'Content-Type': 'application/json'} };
+    window.Weline.Api.get('<?= $this->getBackendUrl('*/backend/detect/models') ?>', { silent: true })
+    .then(function(res) {
+        var result = (res && res.data) !== undefined ? res.data : res;
         if (result.success && result.data && result.data.length > 0) {
             const defaultModel = result.data.find(model => model.code === defaultModelCode);
             if (defaultModel) {
@@ -439,13 +436,11 @@ function executeDetect() {
     detectionContent.innerHTML = '<div class="text-center py-4"><i class="mdi mdi-loading mdi-spin me-2"></i>正在检测...</div>';
     if (resultFooter) resultFooter.style.display = 'none';
 
-    fetch('<?= $this->getBackendUrl('*/backend/detect/execute') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(data)
-    })
-    .then(response => response.json())
-    .then(data => {
+    var execUrl = '<?= $this->getBackendUrl('*/backend/detect/execute') ?>';
+    var execOpts = { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) };
+    window.Weline.Api.request(execUrl, execOpts)
+    .then(function(res) {
+        var data = (res && res.data) !== undefined ? res.data : res;
         if (data.success) {
             // 成功才关闭加载弹窗
             hideLoadingModal();
@@ -812,13 +807,11 @@ function startRewrite() {
         lang: dominantLang
     };
 
-    fetch('<?= $this->getBackendUrl('*/backend/detect/rewrite') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(data)
-    })
-    .then(response => response.json())
-    .then(data => {
+    var rewriteUrl = '<?= $this->getBackendUrl('*/backend/detect/rewrite') ?>';
+    var rewriteOpts = { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) };
+    window.Weline.Api.request(rewriteUrl, rewriteOpts)
+    .then(function(res) {
+        var data = (res && res.data) !== undefined ? res.data : res;
         startRewriteBtn.disabled = false;
         startRewriteBtn.innerHTML = originalHtml;
         
