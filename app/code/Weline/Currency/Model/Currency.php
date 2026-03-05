@@ -2,362 +2,92 @@
 
 namespace Weline\Currency\Model;
 
-use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: '货币表')]
+#[Index(name: 'idx_currency_code', columns: ['code'], type: 'UNIQUE')]
 class Currency extends Model
 {
-    public const fields_ID = 'currency_id';
-    public const fields_CODE = 'code';
-    public const fields_NAME = 'name';
-    public const fields_RATE = 'rate';
-    public const fields_SYMBOL = 'symbol';
-    public const fields_POSITION = 'position';
-    public const fields_FORMAT = 'format';
-    public const fields_STATUS = 'status';
-    public const fields_ICON = 'icon';
-    public const fields_THOUSAND_SEPARATOR = 'thousand_separator';
-    public const fields_DECIMAL_SEPARATOR = 'decimal_separator';
-    public const fields_BASE_CURRENCY = 'base_currency';
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $this->install($setup, $context);
-            return;
-        }
-
-        // 添加icon字段
-        if (!$setup->getConnection()->getConnector()->hasField($this->getTable(), self::fields_ICON)) {
-            $setup->alterTable('添加货币图标字段')
-                ->addColumn(
-                    self::fields_ICON,
-                    '',
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'null',
-                    '货币图标'
-                );
-            
-            // 为已有数据设置默认值：使用symbol字段值
-            $this->getConnection()->query("UPDATE {$this->getTable()} SET `" . self::fields_ICON . "` = `" . self::fields_SYMBOL . "`");
-        }
-
-        // 添加thousand_separator字段
-        if (!$setup->getConnection()->getConnector()->hasField($this->getTable(), self::fields_THOUSAND_SEPARATOR)) {
-            $setup->alterTable('添加千分位分隔符字段')
-                ->addColumn(
-                    self::fields_THOUSAND_SEPARATOR,
-                    '',
-                    TableInterface::column_type_VARCHAR,
-                    10,
-                    "not null default ','",
-                    '千分位分隔符'
-                );
-        }
-
-        // 添加decimal_separator字段
-        if (!$setup->getConnection()->getConnector()->hasField($this->getTable(), self::fields_DECIMAL_SEPARATOR)) {
-            $setup->alterTable('添加小数分隔符字段')
-                ->addColumn(
-                    self::fields_DECIMAL_SEPARATOR,
-                    '',
-                    TableInterface::column_type_VARCHAR,
-                    10,
-                    "not null default '.'",
-                    '小数分隔符'
-                );
-        }
-
-        // 添加base_currency字段
-        if (!$setup->getConnection()->getConnector()->hasField($this->getTable(), self::fields_BASE_CURRENCY)) {
-            $setup->alterTable('添加基准货币字段')
-                ->addColumn(
-                    self::fields_BASE_CURRENCY,
-                    '',
-                    TableInterface::column_type_VARCHAR,
-                    3,
-                    "not null default 'CNY'",
-                    '基准货币代码'
-                );
-        }
-        
-        // 确保CNY货币存在且为默认货币
-        $cnyCurrency = clone $this;
-        $cnyCurrency->clear()
-            ->where(self::fields_CODE, 'CNY')
-            ->find()
-            ->fetch();
-        
-        if (!$cnyCurrency->getId()) {
-            // 如果CNY不存在，创建它
-            $this->clear()
-                ->setCode('CNY')
-                ->setName('人民币')
-                ->setRate(1)
-                ->setSymbol('￥')
-                ->setPosition('left')
-                ->setFormat('1,0')
-                ->setStatus(true)
-                ->setIcon('￥')
-                ->setThousandSeparator(',')
-                ->setDecimalSeparator('.')
-                ->setBaseCurrency('CNY')
-                ->save();
-        } else {
-            // 如果CNY已存在，确保它是基准货币且汇率为1
-            $cnyCurrency->setBaseCurrency('CNY')
-                ->setRate(1)
-                ->setStatus(true)
-                ->save();
-        }
-        
-        // 确保配置中的基准货币为CNY
-        try {
-            /** @var \Weline\Currency\Model\Config $config */
-            $config = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Currency\Model\Config::class);
-            $currentBaseCurrency = $config->getBaseCurrency();
-            if ($currentBaseCurrency !== 'CNY') {
-                $config->setBaseCurrency('CNY');
-            }
-        } catch (\Throwable $e) {
-            // 如果Config不可用，忽略错误
-        }
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist()) {
-            return;
-        }
-        $setup->createTable('货币')
-            ->addColumn(
-                self::fields_ID,
-                TableInterface::column_type_INTEGER,
-                11,
-                'auto_increment primary key',
-                'ID'
-            )
-            ->addColumn(
-                self::fields_CODE,
-                TableInterface::column_type_VARCHAR,
-                3,
-                'not null',
-                '货币代码'
-            )
-            ->addColumn(
-                self::fields_NAME,
-                TableInterface::column_type_VARCHAR,
-                20,
-                'not null',
-                '货币名称'
-            )
-            ->addColumn(
-                self::fields_RATE,
-                TableInterface::column_type_DECIMAL,
-                10,
-                'not null',
-                '汇率'
-            )
-            ->addColumn(
-                self::fields_SYMBOL,
-                TableInterface::column_type_VARCHAR,
-                10,
-                'not null',
-                '货币符号'
-            )
-            ->addColumn(
-                self::fields_POSITION,
-                TableInterface::column_type_VARCHAR,
-                10,
-                'not null',
-                '货币符号位置'
-            )
-            ->addColumn(
-                self::fields_FORMAT,
-                TableInterface::column_type_VARCHAR,
-                10,
-                'not null',
-                '货币格式'
-            )
-            ->addColumn(
-                self::fields_STATUS,
-                TableInterface::column_type_VARCHAR,
-                10,
-                'not null',
-                '货币状态'
-            )
-            ->addColumn(
-                self::fields_ICON,
-                TableInterface::column_type_VARCHAR,
-                255,
-                'null',
-                '货币图标'
-            )
-            ->addColumn(
-                self::fields_THOUSAND_SEPARATOR,
-                TableInterface::column_type_VARCHAR,
-                10,
-                "not null default ','",
-                '千分位分隔符'
-            )
-            ->addColumn(
-                self::fields_DECIMAL_SEPARATOR,
-                TableInterface::column_type_VARCHAR,
-                10,
-                "not null default '.'",
-                '小数分隔符'
-            )
-            ->addColumn(
-                self::fields_BASE_CURRENCY,
-                TableInterface::column_type_VARCHAR,
-                3,
-                "not null default 'CNY'",
-                '基准货币代码'
-            )
-            ->addIndex(
-                TableInterface::index_type_UNIQUE,
-                'idx_currency_code',
-                self::fields_CODE,
-                '货币代码索引'
-            )
-            ->create();
-
-        # 设置默认货币（CNY - 人民币）
-        // 先检查CNY是否已存在，如果不存在则创建
-        $cnyCurrency = clone $this;
-        $cnyCurrency->clear()
-            ->where(self::fields_CODE, 'CNY')
-            ->find()
-            ->fetch();
-        
-        if (!$cnyCurrency->getId()) {
-            $this->clear()
-                ->setCode('CNY')
-                ->setName('人民币')
-                ->setRate(1)
-                ->setSymbol('￥')
-                ->setPosition('left')
-                ->setFormat('1,0')
-                ->setStatus(true)
-                ->setIcon('￥')
-                ->setThousandSeparator(',')
-                ->setDecimalSeparator('.')
-                ->setBaseCurrency('CNY')
-                ->save();
-        } else {
-            // 如果CNY已存在，确保它是基准货币
-            $cnyCurrency->setBaseCurrency('CNY')
-                ->setRate(1)
-                ->setStatus(true)
-                ->save();
-        }
-        
-        # 设置USD货币（可选）
-        $usdCurrency = clone $this;
-        $usdCurrency->clear()
-            ->where(self::fields_CODE, 'USD')
-            ->find()
-            ->fetch();
-        
-        if (!$usdCurrency->getId()) {
-            $this->clear()
-                ->setCode('USD')
-                ->setName('美刀')
-                ->setRate(8)
-                ->setSymbol('$')
-                ->setPosition('left')
-                ->setFormat('1,0')
-                ->setStatus(true)
-                ->setIcon('$')
-                ->setThousandSeparator(',')
-                ->setDecimalSeparator('.')
-                ->setBaseCurrency('CNY')
-                ->save();
-        }
-        
-        # 确保配置中的基准货币为CNY
-        try {
-            /** @var \Weline\Currency\Model\Config $config */
-            $config = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Currency\Model\Config::class);
-            $currentBaseCurrency = $config->getBaseCurrency();
-            if ($currentBaseCurrency !== 'CNY') {
-                $config->setBaseCurrency('CNY');
-            }
-        } catch (\Throwable $e) {
-            // 如果Config不可用，忽略错误（可能在安装阶段）
-        }
-    }
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'ID')]
+    public const schema_fields_ID = 'currency_id';
+    #[Col(type: 'varchar', length: 3, nullable: false, comment: '货币代码')]
+    public const schema_fields_CODE = 'code';
+    #[Col(type: 'varchar', length: 20, nullable: false, comment: '货币名称')]
+    public const schema_fields_NAME = 'name';
+    #[Col(type: 'decimal', length: '10,4', nullable: false, comment: '汇率')]
+    public const schema_fields_RATE = 'rate';
+    #[Col(type: 'varchar', length: 10, nullable: false, comment: '货币符号')]
+    public const schema_fields_SYMBOL = 'symbol';
+    #[Col(type: 'varchar', length: 10, nullable: false, comment: '货币符号位置')]
+    public const schema_fields_POSITION = 'position';
+    #[Col(type: 'varchar', length: 10, nullable: false, comment: '货币格式')]
+    public const schema_fields_FORMAT = 'format';
+    #[Col(type: 'varchar', length: 10, nullable: false, comment: '货币状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: '货币图标')]
+    public const schema_fields_ICON = 'icon';
+    #[Col(type: 'varchar', length: 10, nullable: false, default: ',', comment: '千分位分隔符')]
+    public const schema_fields_THOUSAND_SEPARATOR = 'thousand_separator';
+    #[Col(type: 'varchar', length: 10, nullable: false, default: '.', comment: '小数分隔符')]
+    public const schema_fields_DECIMAL_SEPARATOR = 'decimal_separator';
+    #[Col(type: 'varchar', length: 3, nullable: false, default: 'CNY', comment: '基准货币代码')]
+    public const schema_fields_BASE_CURRENCY = 'base_currency';
 
     public function getCode(): string
     {
-        return (string)($this->getData(self::fields_CODE) ?? '');
+        return (string)($this->getData(self::schema_fields_CODE) ?? '');
     }
 
     public function setCode(string $code): self
     {
-        return $this->setData(self::fields_CODE, $code);
+        return $this->setData(self::schema_fields_CODE, $code);
     }
 
     public function getName(): string
     {
-        return (string)($this->getData(self::fields_NAME) ?? '');
+        return (string)($this->getData(self::schema_fields_NAME) ?? '');
     }
 
     public function setName(string $name): self
     {
-        return $this->setData(self::fields_NAME, $name);
+        return $this->setData(self::schema_fields_NAME, $name);
     }
 
     public function getRate(): float
     {
-        return (float)($this->getData(self::fields_RATE) ?? 0.0);
+        return (float)($this->getData(self::schema_fields_RATE) ?? 0.0);
     }
 
     public function setRate(float $rate): self
     {
-        return $this->setData(self::fields_RATE, $rate);
+        return $this->setData(self::schema_fields_RATE, $rate);
     }
 
     public function getSymbol(): string
     {
-        return (string)($this->getData(self::fields_SYMBOL) ?? '');
+        return (string)($this->getData(self::schema_fields_SYMBOL) ?? '');
     }
 
     public function setSymbol(string $symbol): self
     {
-        return $this->setData(self::fields_SYMBOL, $symbol);
+        return $this->setData(self::schema_fields_SYMBOL, $symbol);
     }
 
     public function getPosition(): string
     {
-        return $this->getData(self::fields_POSITION) ?? 'left';
+        return $this->getData(self::schema_fields_POSITION) ?? 'left';
     }
 
     public function setPosition(string $position): self
     {
-        return $this->setData(self::fields_POSITION, $position);
+        return $this->setData(self::schema_fields_POSITION, $position);
     }
 
     public function getFormat(): string
     {
-        return $this->getData(self::fields_FORMAT) ?? '1,0';
+        return $this->getData(self::schema_fields_FORMAT) ?? '1,0';
     }
 
     public function setFormat(string $format): self
@@ -373,17 +103,17 @@ class Currency extends Model
                 throw new \InvalidArgumentException('货币格式错误,示例:2,4');
             }
         }
-        return $this->setData(self::fields_FORMAT, $format);
+        return $this->setData(self::schema_fields_FORMAT, $format);
     }
 
     public function getStatus(): bool
     {
-        return (bool)$this->getData(self::fields_STATUS);
+        return (bool)$this->getData(self::schema_fields_STATUS);
     }
 
     public function setStatus(bool $status): self
     {
-        return $this->setData(self::fields_STATUS, $status);
+        return $this->setData(self::schema_fields_STATUS, $status);
     }
 
     public function getCurrency(): string
@@ -393,17 +123,17 @@ class Currency extends Model
 
     public function getIcon(): ?string
     {
-        return $this->getData(self::fields_ICON);
+        return $this->getData(self::schema_fields_ICON);
     }
 
     public function setIcon(?string $icon): self
     {
-        return $this->setData(self::fields_ICON, $icon);
+        return $this->setData(self::schema_fields_ICON, $icon);
     }
 
     public function getThousandSeparator(): string
     {
-        return $this->getData(self::fields_THOUSAND_SEPARATOR) ?? ',';
+        return $this->getData(self::schema_fields_THOUSAND_SEPARATOR) ?? ',';
     }
 
     public function setThousandSeparator(string $separator): self
@@ -411,12 +141,12 @@ class Currency extends Model
         if (empty($separator)) {
             throw new \InvalidArgumentException(__('千分位分隔符不能为空'));
         }
-        return $this->setData(self::fields_THOUSAND_SEPARATOR, $separator);
+        return $this->setData(self::schema_fields_THOUSAND_SEPARATOR, $separator);
     }
 
     public function getDecimalSeparator(): string
     {
-        return $this->getData(self::fields_DECIMAL_SEPARATOR) ?? '.';
+        return $this->getData(self::schema_fields_DECIMAL_SEPARATOR) ?? '.';
     }
 
     public function setDecimalSeparator(string $separator): self
@@ -424,12 +154,12 @@ class Currency extends Model
         if (empty($separator)) {
             throw new \InvalidArgumentException(__('小数分隔符不能为空'));
         }
-        return $this->setData(self::fields_DECIMAL_SEPARATOR, $separator);
+        return $this->setData(self::schema_fields_DECIMAL_SEPARATOR, $separator);
     }
 
     public function getBaseCurrency(): string
     {
-        return $this->getData(self::fields_BASE_CURRENCY) ?? 'CNY';
+        return $this->getData(self::schema_fields_BASE_CURRENCY) ?? 'CNY';
     }
 
     public function setBaseCurrency(string $baseCurrency): self
@@ -437,7 +167,7 @@ class Currency extends Model
         if (strlen($baseCurrency) !== 3 || !ctype_upper($baseCurrency)) {
             throw new \InvalidArgumentException(__('基准货币代码必须是3位大写字母'));
         }
-        return $this->setData(self::fields_BASE_CURRENCY, $baseCurrency);
+        return $this->setData(self::schema_fields_BASE_CURRENCY, $baseCurrency);
     }
 
     /**
