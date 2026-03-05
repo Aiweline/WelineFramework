@@ -280,20 +280,8 @@
             try {
                 const apiUrl = this.config.api?.items || '/cart/api/mini-items';
                 
-                let response;
-                if (window.Weline && window.Weline.Api) {
-                    response = await Weline.Api.request(apiUrl, { method: 'GET' });
-                } else {
-                    const res = await fetch(apiUrl, {
-                        method: 'GET',
-                        headers: {
-                            'Accept': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest',
-                        },
-                    });
-                    response = await res.json();
-                }
-                
+                const raw = await window.Weline.Api.get(apiUrl);
+                const response = (raw && raw.data) || raw;
                 if (response.success) {
                     // 更新商品列表 HTML
                     if (response.html) {
@@ -356,25 +344,8 @@
             try {
                 const apiUrl = this.config.api?.update || '/cart/api/update';
                 
-                let response;
-                if (window.Weline && window.Weline.Api) {
-                    response = await Weline.Api.request(apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ item_id: itemId, quantity: newQty }),
-                    });
-                } else {
-                    const res = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest',
-                        },
-                        body: JSON.stringify({ item_id: itemId, quantity: newQty }),
-                    });
-                    response = await res.json();
-                }
-                
+                const raw = await window.Weline.Api.post(apiUrl, { item_id: itemId, quantity: newQty });
+                const response = (raw && raw.data) || raw;
                 if (response.success) {
                     // 更新显示
                     if (qtyElement) {
@@ -425,25 +396,8 @@
             try {
                 const apiUrl = this.config.api?.remove || '/cart/api/remove';
                 
-                let response;
-                if (window.Weline && window.Weline.Api) {
-                    response = await Weline.Api.request(apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ item_id: itemId }),
-                    });
-                } else {
-                    const res = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest',
-                        },
-                        body: JSON.stringify({ item_id: itemId }),
-                    });
-                    response = await res.json();
-                }
-                
+                const raw = await window.Weline.Api.post(apiUrl, { item_id: itemId });
+                const response = (raw && raw.data) || raw;
                 if (response.success) {
                     // 移除 DOM 元素（带动画）
                     item.style.transition = 'all 0.3s ease';
