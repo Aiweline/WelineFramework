@@ -1,59 +1,41 @@
 <?php
-
 declare(strict_types=1);
-
 namespace WeShop\Logistics\Model;
-
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 /**
  * 物流追踪模型
  */
-class Tracking extends \Weline\Framework\Database\Model
+#[Table(comment: 'WeShop物流追踪表')]
+#[Index(name: 'idx_order_id', columns: ['order_id'], comment: '订单ID索引')]
+#[Index(name: 'idx_tracking_number', columns: ['tracking_number'], comment: '物流单号索引')]
+class Tracking extends Model
 {
-    public const table = 'weshop_tracking';
-    public const primary_key = 'tracking_id';
+    public const schema_table = 'weshop_tracking';
+    public const schema_primary_key = 'tracking_id';
     public string $indexer = 'tracking_indexer';
     public array $_unit_primary_keys = ['tracking_id'];
     public array $_index_sort_keys = ['order_id', 'tracking_number', 'carrier', 'status', 'tracked_at'];
-    
-    public const fields_ID = 'tracking_id';
-    public const fields_order_id = 'order_id';
-    public const fields_tracking_number = 'tracking_number';
-    public const fields_carrier = 'carrier';
-    public const fields_status = 'status';
-    public const fields_location = 'location';
-    public const fields_description = 'description';
-    public const fields_tracked_at = 'tracked_at';
-    public const fields_created_at = 'created_at';
-    public const fields_updated_at = 'updated_at';
-
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('WeShop物流追踪表')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'auto_increment primary key', '追踪ID')
-                ->addColumn(self::fields_order_id, TableInterface::column_type_INTEGER, 0, 'not null', '订单ID')
-                ->addColumn(self::fields_tracking_number, TableInterface::column_type_VARCHAR, 100, 'not null', '物流单号')
-                ->addColumn(self::fields_carrier, TableInterface::column_type_VARCHAR, 50, 'not null', '承运商')
-                ->addColumn(self::fields_status, TableInterface::column_type_VARCHAR, 50, '', '状态')
-                ->addColumn(self::fields_location, TableInterface::column_type_VARCHAR, 255, '', '位置')
-                ->addColumn(self::fields_description, TableInterface::column_type_TEXT, 0, '', '描述')
-                ->addColumn(self::fields_tracked_at, TableInterface::column_type_DATETIME, 0, '', '追踪时间')
-                ->addColumn(self::fields_created_at, TableInterface::column_type_DATETIME, 0, '', '创建时间')
-                ->addColumn(self::fields_updated_at, TableInterface::column_type_DATETIME, 0, '', '更新时间')
-                ->create();
-        }
-    }
-
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-    }
-
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        $this->setup($setup, $context);
-    }
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '追踪ID')]
+    public const schema_fields_ID = 'tracking_id';
+    #[Col(type: 'int', nullable: false, comment: '订单ID')]
+    public const schema_fields_order_id = 'order_id';
+    #[Col(type: 'varchar', length: 100, nullable: false, comment: '物流单号')]
+    public const schema_fields_tracking_number = 'tracking_number';
+    #[Col(type: 'varchar', length: 50, nullable: false, comment: '承运商')]
+    public const schema_fields_carrier = 'carrier';
+    #[Col(type: 'varchar', length: 50, nullable: true, comment: '状态')]
+    public const schema_fields_status = 'status';
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: '位置')]
+    public const schema_fields_location = 'location';
+    #[Col(type: 'text', nullable: true, comment: '描述')]
+    public const schema_fields_description = 'description';
+    #[Col(type: 'datetime', nullable: true, comment: '追踪时间')]
+    public const schema_fields_tracked_at = 'tracked_at';
+    #[Col(type: 'datetime', nullable: true, comment: '创建时间')]
+    public const schema_fields_created_at = 'created_at';
+    #[Col(type: 'datetime', nullable: true, comment: '更新时间')]
+    public const schema_fields_updated_at = 'updated_at';
 }
