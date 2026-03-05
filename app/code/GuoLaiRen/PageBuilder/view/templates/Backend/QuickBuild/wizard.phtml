@@ -270,12 +270,95 @@ $cdnAccounts = $this->getData('cdnAccounts') ?? [];
     outline: none;
     box-shadow: 0 0 0 3px var(--backend-color-primary-light, rgba(85, 110, 230, 0.25));
 }
+/* 建站描述折叠块（默认收起） */
+.pb-qb-desc {
+    margin-bottom: var(--backend-spacing-lg, 24px);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-md, 8px);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    overflow: hidden;
+}
+.pb-qb-desc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--backend-spacing-sm, 8px) var(--backend-spacing-md, 16px);
+    cursor: pointer;
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.9rem;
+    user-select: none;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.pb-qb-desc-head:hover {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-primary, #212529);
+}
+.pb-qb-desc-head i.mdi-chevron-down {
+    transition: transform 0.2s ease;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+.pb-qb-desc.expanded .pb-qb-desc-head i.mdi-chevron-down {
+    transform: rotate(-180deg);
+}
+.pb-qb-desc-body {
+    display: none;
+    padding: var(--backend-spacing-md, 16px) var(--backend-spacing-lg, 24px);
+    border-top: 1px solid var(--backend-color-border-light, #e9ecef);
+    background: var(--backend-color-card-bg, #fff);
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 0.875rem;
+    line-height: 1.6;
+}
+.pb-qb-desc.expanded .pb-qb-desc-body {
+    display: block;
+}
+.pb-qb-desc-body ol {
+    margin: 0 0 0 1.2em;
+    padding: 0;
+}
+.pb-qb-desc-body li {
+    margin-bottom: var(--backend-spacing-xs, 4px);
+}
+.pb-qb-desc-body .pb-qb-desc-sub {
+    margin-top: var(--backend-spacing-md, 16px);
+    padding-top: var(--backend-spacing-sm, 8px);
+    border-top: 1px dashed var(--backend-color-border-light, #e9ecef);
+}
+.pb-qb-desc-body .pb-qb-desc-sub strong {
+    color: var(--backend-color-primary, #556ee6);
+}
 </style>
 
 <div class="pb-qb-container">
     <h4 style="color: var(--backend-color-text-primary, #212529); margin-bottom: var(--backend-spacing-lg, 24px);">
         <i class="mdi mdi-rocket-launch"></i> <lang>快速建站向导</lang>
     </h4>
+
+    <!-- 建站描述（默认收起） -->
+    <div class="pb-qb-desc" id="pb-qb-desc">
+        <div class="pb-qb-desc-head" id="pb-qb-desc-toggle" role="button" tabindex="0" aria-expanded="false">
+            <span><i class="mdi mdi-information-outline"></i> <lang>建站描述</lang></span>
+            <i class="mdi mdi-chevron-down"></i>
+        </div>
+        <div class="pb-qb-desc-body" aria-hidden="true">
+            <p style="margin: 0 0 10px 0; color: var(--backend-color-text-secondary, #6c757d);">
+                <lang>域名准备流程（完成后域名标记为可用，可在本向导中选择）：</lang>
+            </p>
+            <ol>
+                <li><lang>购买域名</lang></li>
+                <li><lang>拉取域名到线下：切换 DNS（可指定切换到哪里）、可选切换 CDN（可指定切换到哪里）</lang></li>
+                <li><lang>自动探查 DNS 解析情况</lang></li>
+                <li><lang>正常后自动将本地服务器公网 IP 解析到对应 DNS</lang></li>
+                <li><lang>自动定时检测并等待解析生效</lang></li>
+                <li><lang>解析好后向本地 WLS 申请 HTTPS 证书</lang></li>
+                <li><lang>一切就绪后域名标记为可用，进入「等待建站时选择」</lang></li>
+            </ol>
+            <div class="pb-qb-desc-sub">
+                <strong><lang>建站流程</lang>：</strong>
+                <lang>选择域名 → 取名字 → 选择页面构建器内模板 → 选择要支持的页面 → 一键建站</lang>
+            </div>
+        </div>
+    </div>
 
     <!-- 步骤条 -->
     <div class="pb-qb-steps">
@@ -556,6 +639,26 @@ $cdnAccounts = $this->getData('cdnAccounts') ?? [];
         var btn = document.getElementById('pb-qb-next1');
         btn.disabled = !selectedDomain || !selectedAccountId;
     }
+
+    // 建站描述折叠（默认收起）
+    (function() {
+        var desc = document.getElementById('pb-qb-desc');
+        var toggle = document.getElementById('pb-qb-desc-toggle');
+        var body = desc ? desc.querySelector('.pb-qb-desc-body') : null;
+        if (!desc || !toggle || !body) return;
+        function toggleDesc() {
+            var expanded = desc.classList.toggle('expanded');
+            toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            body.setAttribute('aria-hidden', expanded ? 'false' : 'true');
+        }
+        toggle.addEventListener('click', toggleDesc);
+        toggle.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleDesc();
+            }
+        });
+    })();
 
     // 模式切换
     document.querySelectorAll('.pb-qb-mode-tab').forEach(function(tab) {
