@@ -47,7 +47,7 @@ class CurrencyData
         $currencyModel = ObjectManager::getInstance(Currency::class);
         
         $currencies = $currencyModel->clear()
-            ->where(Currency::fields_STATUS, true)
+            ->where(Currency::schema_fields_STATUS, true)
             ->select()
             ->fetchArray();
         
@@ -76,7 +76,7 @@ class CurrencyData
         $currencyModel = ObjectManager::getInstance(Currency::class);
         
         $currency = $currencyModel->clear()
-            ->where(Currency::fields_CODE, strtoupper($currencyCode))
+            ->where(Currency::schema_fields_CODE, strtoupper($currencyCode))
             ->find()
             ->fetch();
         
