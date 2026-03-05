@@ -760,13 +760,11 @@
             btn.disabled = true;
             btn.innerHTML = '<?= __('测试中...') ?>';
             
-            fetch('<?= $this->getBackendUrl("currency/backend/config/testApi") ?>', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'api_key=' + encodeURIComponent(apiKey)
-            })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
+            var testApiUrl = '<?= $this->getBackendUrl("currency/backend/config/testApi") ?>';
+            var testApiOpts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'api_key=' + encodeURIComponent(apiKey) };
+            window.Weline.Api.request(testApiUrl, testApiOpts)
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
                     AdminToast.success(data.message || '<?= __('API连接测试成功') ?>');
                 } else {
@@ -788,12 +786,11 @@
             btn.disabled = true;
             btn.innerHTML = '<?= __('导入中...') ?>';
             
-            fetch('<?= $this->getBackendUrl("currency/backend/config/import") ?>', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-            })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
+            var importUrl = '<?= $this->getBackendUrl("currency/backend/config/import") ?>';
+            var importOpts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } };
+            window.Weline.Api.request(importUrl, importOpts)
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
                     AdminToast.success(data.message || '<?= __('导入成功') ?>');
                     setTimeout(function() { location.reload(); }, 2000);
