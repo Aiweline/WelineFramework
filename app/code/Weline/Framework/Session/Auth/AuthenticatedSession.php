@@ -63,7 +63,12 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
         $this->session->set($this->areaConfig->getLoginIdKey(), $user->getAuthIdentifier());
         $this->session->set($this->areaConfig->getUserModelKey(), $user::getAuthModelClass());
 
-        $this->session->regenerate(false);
+        // 后台登录不更换 session id，避免 302 重定向时部分环境不保存新 Cookie 导致下一请求无登录态、admin↔login 循环
+        if ($this->areaConfig->getArea() === 'backend') {
+            $this->session->save();
+        } else {
+            $this->session->regenerate(false);
+        }
 
         $this->cachedUser = $user;
     }
