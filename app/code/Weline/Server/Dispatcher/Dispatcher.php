@@ -1176,6 +1176,9 @@ class Dispatcher
         
         if ($result > 0 || $result === -2) {
             $this->connectionLastActivity[$connId] = \microtime(true);
+            if ($result > 0 && $this->isDevMode) {
+                $this->log("Dispatcher 转发到客户端 connId: {$connId} bytes: {$result}", 'ROUTE');
+            }
             if ($result > 0) {
                 $this->bytesCount['out'] += $result;
                 if (isset($this->connectionBytes[$connId])) {
