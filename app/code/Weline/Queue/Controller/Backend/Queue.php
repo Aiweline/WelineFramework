@@ -57,7 +57,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
             $this->queue->where("concat(main_table.name,main_table.content,main_table.result) like '%$search%'");
         }
         if ($id) {
-            $this->queue->where('main_table.' . $this->queue::fields_ID, $id);
+            $this->queue->where('main_table.' . $this->queue::schema_fields_ID, $id);
         }
         if ($status) {
             $this->queue->where('main_table.status', $status);
@@ -357,7 +357,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
             $this->redirect('/component/offcanvas/error', ['msg' => __('请选择要查看的队列'), 'reload' => 1]);
         }
         $res = $this->queue->joinModel(\Weline\Queue\Model\Queue\Type::class, 't', 'main_table.type_id=t.type_id', 'left')
-            ->where('main_table.' . $this->queue::fields_ID, $id)->find()->fetch();
+            ->where('main_table.' . $this->queue::schema_fields_ID, $id)->find()->fetch();
         if (!$this->queue->getId()) {
             $this->getMessageManager()->addWarning(__('队列不存在'));
             $this->redirect('/component/offcanvas/error', ['msg' => __('队列不存在'), 'reload' => 0]);
@@ -468,7 +468,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
             return $this->fetch('content');
         }
         $this->queue->load($queue_id);
-        $data = $this->queue->getData($this->queue::fields_result);
+        $data = $this->queue->getData($this->queue::schema_fields_result);
         $this->assign('data', $data);
         return $this->fetch('content');
     }
@@ -482,7 +482,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
             return $this->fetch('content');
         }
         $this->queue->load($queue_id);
-        $data = $this->queue->getData($this->queue::fields_content);
+        $data = $this->queue->getData($this->queue::schema_fields_content);
         $this->assign('data', $data);
         return $this->fetch('content');
     }
@@ -516,9 +516,9 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
             }
         }
         
-        $this->queue->setData($this->queue::fields_status, \Weline\Queue\Model\Queue::status_pending);
-        $this->queue->setData($this->queue::fields_finished, 0);
-        $this->queue->setData($this->queue::fields_pid, 0);
+        $this->queue->setData($this->queue::schema_fields_status, \Weline\Queue\Model\Queue::status_pending);
+        $this->queue->setData($this->queue::schema_fields_finished, 0);
+        $this->queue->setData($this->queue::schema_fields_pid, 0);
         $this->queue->save();
         
         $data = ['queue' => $this->queue];
@@ -570,7 +570,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
             $queue->setPid(0);
         }
         
-        $queue->setData($queue::fields_status, \Weline\Queue\Model\Queue::status_stop);
+        $queue->setData($queue::schema_fields_status, \Weline\Queue\Model\Queue::status_stop);
         $queue->save();
         
         $data = ['queue' => $this->queue];
@@ -611,12 +611,12 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
                 $this->getMessageManager()->addError($msg);
                 $this->redirect($this->request->getReferer());
             }
-            $queue->setData($queue::fields_pid, 0);
+            $queue->setData($queue::schema_fields_pid, 0);
         }
         
-        $queue->setData($queue::fields_status, \Weline\Queue\Model\Queue::status_pending);
-        $queue->setData($queue::fields_finished, 0);
-        $queue->setData($queue::fields_pid, 0);
+        $queue->setData($queue::schema_fields_status, \Weline\Queue\Model\Queue::status_pending);
+        $queue->setData($queue::schema_fields_finished, 0);
+        $queue->setData($queue::schema_fields_pid, 0);
         $queue->save();
         
         $data = ['queue' => $this->queue];
@@ -679,7 +679,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
                         }
                         $this->queue->setPid(0);
                     }
-                    $this->queue->setData(\Weline\Queue\Model\Queue::fields_status, \Weline\Queue\Model\Queue::status_stop);
+                    $this->queue->setData(\Weline\Queue\Model\Queue::schema_fields_status, \Weline\Queue\Model\Queue::status_stop);
                     $this->queue->save();
                     $eventData = ['queue' => $this->queue];
                     $this->getEventManager()->dispatch('Weline_Queue::stop', $eventData);
@@ -696,11 +696,11 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
                             $json['msg'] = __('队列有进程正在运行，无法继续！进程ID：%{1}', $pid);
                             return $this->fetchJson($json);
                         }
-                        $this->queue->setData(\Weline\Queue\Model\Queue::fields_pid, 0);
+                        $this->queue->setData(\Weline\Queue\Model\Queue::schema_fields_pid, 0);
                     }
-                    $this->queue->setData(\Weline\Queue\Model\Queue::fields_status, \Weline\Queue\Model\Queue::status_pending);
-                    $this->queue->setData(\Weline\Queue\Model\Queue::fields_finished, 0);
-                    $this->queue->setData(\Weline\Queue\Model\Queue::fields_pid, 0);
+                    $this->queue->setData(\Weline\Queue\Model\Queue::schema_fields_status, \Weline\Queue\Model\Queue::status_pending);
+                    $this->queue->setData(\Weline\Queue\Model\Queue::schema_fields_finished, 0);
+                    $this->queue->setData(\Weline\Queue\Model\Queue::schema_fields_pid, 0);
                     $this->queue->save();
                     $eventData = ['queue' => $this->queue];
                     $this->getEventManager()->dispatch('Weline_Queue::continue', $eventData);
@@ -714,9 +714,9 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
                         $json['msg'] = __('队列有进程正在运行，请先暂停队列！进程ID：%{1}', $pid);
                         return $this->fetchJson($json);
                     }
-                    $this->queue->setData(\Weline\Queue\Model\Queue::fields_status, \Weline\Queue\Model\Queue::status_pending);
-                    $this->queue->setData(\Weline\Queue\Model\Queue::fields_finished, 0);
-                    $this->queue->setData(\Weline\Queue\Model\Queue::fields_pid, 0);
+                    $this->queue->setData(\Weline\Queue\Model\Queue::schema_fields_status, \Weline\Queue\Model\Queue::status_pending);
+                    $this->queue->setData(\Weline\Queue\Model\Queue::schema_fields_finished, 0);
+                    $this->queue->setData(\Weline\Queue\Model\Queue::schema_fields_pid, 0);
                     $this->queue->save();
                     $eventData = ['queue' => $this->queue];
                     $this->getEventManager()->dispatch('Weline_Queue::reset', $eventData);
@@ -786,7 +786,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
                             Process::unsetLogProcessFilePath($pname);
                             $queue->setPid(0);
                         }
-                        $queue->setData(\Weline\Queue\Model\Queue::fields_status, \Weline\Queue\Model\Queue::status_stop);
+                        $queue->setData(\Weline\Queue\Model\Queue::schema_fields_status, \Weline\Queue\Model\Queue::status_stop);
                         $queue->save();
                         $eventData = ['queue' => $queue];
                         $this->getEventManager()->dispatch('Weline_Queue::stop', $eventData);
@@ -801,9 +801,9 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
                             $failCount++;
                             continue 2;
                         }
-                        $queue->setData(\Weline\Queue\Model\Queue::fields_status, \Weline\Queue\Model\Queue::status_pending);
-                        $queue->setData(\Weline\Queue\Model\Queue::fields_finished, 0);
-                        $queue->setData(\Weline\Queue\Model\Queue::fields_pid, 0);
+                        $queue->setData(\Weline\Queue\Model\Queue::schema_fields_status, \Weline\Queue\Model\Queue::status_pending);
+                        $queue->setData(\Weline\Queue\Model\Queue::schema_fields_finished, 0);
+                        $queue->setData(\Weline\Queue\Model\Queue::schema_fields_pid, 0);
                         $queue->save();
                         $eventData = ['queue' => $queue];
                         $this->getEventManager()->dispatch('Weline_Queue::continue', $eventData);
