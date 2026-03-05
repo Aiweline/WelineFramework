@@ -201,21 +201,21 @@ class SaasQueryProvider implements QueryProviderInterface
         $model->clearQuery();
 
         if ($status !== null && $status !== '') {
-            $model->where(ProvisioningOrder::fields_STATUS, (string)$status);
+            $model->where(ProvisioningOrder::schema_fields_STATUS, (string)$status);
         }
 
-        $model->order(ProvisioningOrder::fields_ORDER_ID, 'DESC');
+        $model->order(ProvisioningOrder::schema_fields_ORDER_ID, 'DESC');
         $model->pagination($page, $pageSize);
 
         $records = $model->select()->fetchArray();
         $orders = [];
         foreach ($records as $record) {
             $orders[] = [
-                'order_id'      => (int)($record[ProvisioningOrder::fields_ORDER_ID] ?? 0),
-                'domain'        => (string)($record[ProvisioningOrder::fields_DOMAIN] ?? ''),
-                'status'        => (string)($record[ProvisioningOrder::fields_STATUS] ?? ''),
-                'current_step'  => (string)($record[ProvisioningOrder::fields_CURRENT_STEP] ?? ''),
-                'error_message' => (string)($record[ProvisioningOrder::fields_ERROR_MESSAGE] ?? ''),
+                'order_id'      => (int)($record[ProvisioningOrder::schema_fields_ORDER_ID] ?? 0),
+                'domain'        => (string)($record[ProvisioningOrder::schema_fields_DOMAIN] ?? ''),
+                'status'        => (string)($record[ProvisioningOrder::schema_fields_STATUS] ?? ''),
+                'current_step'  => (string)($record[ProvisioningOrder::schema_fields_CURRENT_STEP] ?? ''),
+                'error_message' => (string)($record[ProvisioningOrder::schema_fields_ERROR_MESSAGE] ?? ''),
             ];
         }
 
@@ -281,20 +281,20 @@ class SaasQueryProvider implements QueryProviderInterface
 
         $model = clone $this->stepModel;
         $model->clearQuery();
-        $model->where(ProvisioningStep::fields_PROVISIONING_ORDER_ID, $orderId);
-        $model->order(ProvisioningStep::fields_STEP_ID, 'ASC');
+        $model->where(ProvisioningStep::schema_fields_PROVISIONING_ORDER_ID, $orderId);
+        $model->order(ProvisioningStep::schema_fields_STEP_ID, 'ASC');
 
         $records = $model->select()->fetchArray();
         $steps = [];
         foreach ($records as $record) {
             $steps[] = [
-                'step_id'       => (int)($record[ProvisioningStep::fields_STEP_ID] ?? 0),
-                'step_name'     => (string)($record[ProvisioningStep::fields_STEP_NAME] ?? ''),
-                'status'        => (string)($record[ProvisioningStep::fields_STATUS] ?? ''),
-                'vendor'        => (string)($record[ProvisioningStep::fields_VENDOR] ?? ''),
-                'account_id'    => (int)($record[ProvisioningStep::fields_ACCOUNT_ID] ?? 0),
-                'error_message' => (string)($record[ProvisioningStep::fields_ERROR_MESSAGE] ?? ''),
-                'result_json'   => (string)($record[ProvisioningStep::fields_RESULT_JSON] ?? ''),
+                'step_id'       => (int)($record[ProvisioningStep::schema_fields_STEP_ID] ?? 0),
+                'step_name'     => (string)($record[ProvisioningStep::schema_fields_STEP_NAME] ?? ''),
+                'status'        => (string)($record[ProvisioningStep::schema_fields_STATUS] ?? ''),
+                'vendor'        => (string)($record[ProvisioningStep::schema_fields_VENDOR] ?? ''),
+                'account_id'    => (int)($record[ProvisioningStep::schema_fields_ACCOUNT_ID] ?? 0),
+                'error_message' => (string)($record[ProvisioningStep::schema_fields_ERROR_MESSAGE] ?? ''),
+                'result_json'   => (string)($record[ProvisioningStep::schema_fields_RESULT_JSON] ?? ''),
             ];
         }
         return $steps;
@@ -305,16 +305,16 @@ class SaasQueryProvider implements QueryProviderInterface
         return [
             'order_id'             => $order->getOrderId(),
             'domain'               => $order->getDomain(),
-            'status'               => (string)$order->getData(ProvisioningOrder::fields_STATUS),
-            'current_step'         => (string)$order->getData(ProvisioningOrder::fields_CURRENT_STEP),
-            'registrar_account_id' => (int)$order->getData(ProvisioningOrder::fields_REGISTRAR_ACCOUNT_ID),
-            'dns_vendor'           => (string)$order->getData(ProvisioningOrder::fields_DNS_VENDOR),
-            'dns_account_id'       => (int)$order->getData(ProvisioningOrder::fields_DNS_ACCOUNT_ID),
-            'cdn_vendor'           => (string)$order->getData(ProvisioningOrder::fields_CDN_VENDOR),
-            'cdn_account_id'       => (int)$order->getData(ProvisioningOrder::fields_CDN_ACCOUNT_ID),
-            'website_id'           => (int)$order->getData(ProvisioningOrder::fields_WEBSITE_ID),
-            'apply_ssl'            => (bool)$order->getData(ProvisioningOrder::fields_APPLY_SSL),
-            'error_message'        => (string)$order->getData(ProvisioningOrder::fields_ERROR_MESSAGE),
+            'status'               => (string)$order->getData(ProvisioningOrder::schema_fields_STATUS),
+            'current_step'         => (string)$order->getData(ProvisioningOrder::schema_fields_CURRENT_STEP),
+            'registrar_account_id' => (int)$order->getData(ProvisioningOrder::schema_fields_REGISTRAR_ACCOUNT_ID),
+            'dns_vendor'           => (string)$order->getData(ProvisioningOrder::schema_fields_DNS_VENDOR),
+            'dns_account_id'       => (int)$order->getData(ProvisioningOrder::schema_fields_DNS_ACCOUNT_ID),
+            'cdn_vendor'           => (string)$order->getData(ProvisioningOrder::schema_fields_CDN_VENDOR),
+            'cdn_account_id'       => (int)$order->getData(ProvisioningOrder::schema_fields_CDN_ACCOUNT_ID),
+            'website_id'           => (int)$order->getData(ProvisioningOrder::schema_fields_WEBSITE_ID),
+            'apply_ssl'            => (bool)$order->getData(ProvisioningOrder::schema_fields_APPLY_SSL),
+            'error_message'        => (string)$order->getData(ProvisioningOrder::schema_fields_ERROR_MESSAGE),
         ];
     }
 }

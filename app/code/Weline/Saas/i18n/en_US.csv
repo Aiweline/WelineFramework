@@ -70,26 +70,6 @@ SSL,SSL
 "域名和域名商账号 ID 不能为空","域名和域名商账号 ID 不能为空"
 "订单 ID 无效","订单 ID 无效"
 "订单 ID 和 NS 列表不能为空","订单 ID 和 NS 列表不能为空"
-"SaaS 配置订单表","SaaS provisioning order table"
-配置订单ID,配置订单ID
-状态,状态
-域名商账号ID,域名商账号ID
-"DNS 供应商代码","DNS 供应商代码"
-"DNS 账户ID","DNS 账户ID"
-"CDN 供应商代码","CDN 供应商代码"
-"CDN 账户ID","CDN 账户ID"
-网站ID,网站ID
-是否申请SSL证书,是否申请SSL证书
-当前步骤,当前步骤
-错误信息,错误信息
-创建时间,创建时间
-更新时间,更新时间
-"SaaS 配置步骤表","SaaS provisioning step table"
-步骤ID,步骤ID
-步骤名,步骤名
-供应商代码,供应商代码
-账户ID,账户ID
-结果JSON,结果JSON
 证书签发后更新配置订单状态失败：%{1},"Failed to update provisioning order after certificate issued: %{1}"
 "域名购买成功后续 DNS 步骤失败：%{1}","DNS step after domain purchase failed: %{1}"
 事件数据格式错误,事件数据格式错误
@@ -123,8 +103,28 @@ SSL,SSL
 搜索,搜索
 重置,重置
 订单ID,订单ID
+状态,状态
+当前步骤,当前步骤
+错误信息,错误信息
+创建时间,创建时间
 暂无数据,"No data"
 "共 %{total} 条","Total %{total} records"
+"SaaS 配置订单表","SaaS provisioning order table"
+配置订单ID,配置订单ID
+域名商账号ID,域名商账号ID
+"DNS 供应商代码","DNS 供应商代码"
+"DNS 账户ID","DNS 账户ID"
+"CDN 供应商代码","CDN 供应商代码"
+"CDN 账户ID","CDN 账户ID"
+网站ID,网站ID
+是否申请SSL证书,是否申请SSL证书
+更新时间,更新时间
+"SaaS 配置步骤表","SaaS provisioning step table"
+步骤ID,步骤ID
+步骤名,步骤名
+供应商代码,供应商代码
+账户ID,账户ID
+结果JSON,结果JSON
 域名商账号不存在,域名商账号不存在
 域名商适配器不存在：%{1},域名商适配器不存在：%{1}
 "域名商 %{1} 不支持 NS 切换","域名商 %{1} 不支持 NS 切换"

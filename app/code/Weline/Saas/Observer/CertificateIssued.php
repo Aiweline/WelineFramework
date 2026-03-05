@@ -31,9 +31,9 @@ class CertificateIssued implements ObserverInterface
             if ($order->getStatus() !== ProvisioningOrder::STATUS_STEP_SSL) {
                 return;
             }
-            $order->setData(ProvisioningOrder::fields_STATUS, ProvisioningOrder::STATUS_COMPLETED);
-            $order->setData(ProvisioningOrder::fields_CURRENT_STEP, '');
-            $order->setData(ProvisioningOrder::fields_ERROR_MESSAGE, '');
+            $order->setData(ProvisioningOrder::schema_fields_STATUS, ProvisioningOrder::STATUS_COMPLETED);
+            $order->setData(ProvisioningOrder::schema_fields_CURRENT_STEP, '');
+            $order->setData(ProvisioningOrder::schema_fields_ERROR_MESSAGE, '');
             $order->save();
         } catch (\Throwable $e) {
             w_log_error('[Weline_Saas] ' . __('证书签发后更新配置订单状态失败：%{1}', [$e->getMessage()]));
