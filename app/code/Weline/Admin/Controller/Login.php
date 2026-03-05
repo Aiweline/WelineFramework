@@ -264,18 +264,30 @@ class Login extends \Weline\Framework\App\Controller\BackendController
     }
 
     /**
-     * 使用当前请求的 scheme+host 生成后台 URL，保证登录后重定向同源，Cookie 能带上，避免循环重定向。
+     * 使用当前请求的 scheme+host 及后台路由前缀生成后台 URL，保证含 admin_xxx 前缀且同源。
      */
     private function getBackendUrlSameOrigin(string $path): string
     {
-        $pathPart = $this->_url->getBackendUrlPath($path);
+        $pathPart = $this->getBackendPathWithPrefix($path);
         $scheme = $this->request->isSecure() ? 'https' : 'http';
         $host = $this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost';
         return $scheme . '://' . $host . $pathPart;
     }
 
     /**
-     * 将 URL 规范为当前请求同源（保留 path+query，替换 scheme+host），避免跨 host 重定向导致 Cookie 不发送。
+     * 获取带后台路由前缀的路径（如 /admin_696f02955db39/CNY/zh_Hans_CN/admin），避免重定向到缺少前缀的 /CNY/zh_Hans_CN/admin。
+     */
+    private function getBackendPathWithPrefix(string $path): string
+    {
+        $areaRoute = $this->request->getServer('WELINE_AREA_ROUTE') ?? '';
+        if ($areaRoute !== '') {
+            return '/' . \trim($areaRoute, '/') . '/' . \ltrim($path, '/');
+        }
+        return $this->_url->getBackendUrlPath($path);
+    }
+
+    /**
+     * 将 URL 规范为当前请求同源（保留 path+query，替换 scheme+host），path 已含后台前缀则不再改写。
      */
     private function ensureSameOrigin(string $url): string
     {
