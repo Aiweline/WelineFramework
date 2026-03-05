@@ -77,7 +77,7 @@ class Form extends BackendRestController
                     $reflection = new \ReflectionClass($modelInstance);
                     $constants = $reflection->getConstants();
                     foreach ($constants as $key => $value) {
-                        if (str_starts_with($key, 'fields_') && !empty($value) && is_string($value)) {
+                        if (str_starts_with($key, 'schema_fields_') && !empty($value) && is_string($value)) {
                             $modelFields[] = $value;
                         }
                     }
