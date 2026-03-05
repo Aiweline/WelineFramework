@@ -409,8 +409,8 @@
                         globalVarName = moduleConfig?.globalVar || this.getGlobalVarName(moduleName);
                     }
 
-                    // 检查是否已加载
-                    if (globalVarName && window[globalVarName]) {
+                    // 检查是否已加载（fallback 带 __full:false，需继续加载完整模块）
+                    if (globalVarName && window[globalVarName] && window[globalVarName].__full !== false) {
                         const module = window[globalVarName];
                         this.loadedModules.set(moduleName, module);
                         this.loadingModules.delete(moduleName);
@@ -910,11 +910,50 @@
 
         /**
          * Api 模块代理（按需加载）
+         * 用法：Weline.Api.request(url, opts) | Weline.Api.get(url, opts) | Weline.Api.post(url, data, opts)
+         * 请求级错误在此拦截并提示；DEV 环境下暴露完整错误信息（URL、状态码、响应体）。
          */
         Api: {
             request: async (url, options) => {
                 const ApiModule = await moduleLoader.loadModule('api');
-                return ApiModule.request(url, options);
+                try {
+                    return await ApiModule.request(url, options);
+                } catch (err) {
+                    if (window.DEV === true || window.WELINE_ENV === 'DEV') {
+                        err.requestUrl = err.requestUrl || url;
+                        console.error('[Weline.Api] 请求失败', {
+                            requestUrl: err.requestUrl,
+                            status: err.status,
+                            response: err.response,
+                            message: err.message
+                        });
+                    }
+                    throw err;
+                }
+            },
+            get: async (url, options) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                try {
+                    return await (ApiModule.get || ((u, o) => ApiModule.request(u, Object.assign({}, o, { method: 'GET' }))))(url, options);
+                } catch (err) {
+                    if (window.DEV === true || window.WELINE_ENV === 'DEV') {
+                        err.requestUrl = err.requestUrl || url;
+                        console.error('[Weline.Api] 请求失败', { requestUrl: err.requestUrl, status: err.status, response: err.response, message: err.message });
+                    }
+                    throw err;
+                }
+            },
+            post: async (url, data, options) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                try {
+                    return await (ApiModule.post || ((u, d, o) => ApiModule.request(u, Object.assign({}, o, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, (o || {}).headers), body: typeof d === 'string' ? d : JSON.stringify(d || {}) }))))(url, data, options);
+                } catch (err) {
+                    if (window.DEV === true || window.WELINE_ENV === 'DEV') {
+                        err.requestUrl = err.requestUrl || url;
+                        console.error('[Weline.Api] 请求失败', { requestUrl: err.requestUrl, status: err.status, response: err.response, message: err.message });
+                    }
+                    throw err;
+                }
             },
             markCartActive: async () => {
                 const ApiModule = await moduleLoader.loadModule('api');

@@ -139,21 +139,18 @@ document.getElementById('layout-config-form').addEventListener('submit', functio
         backendData.append(`layouts[${key}]`, backendLayouts[key]);
     });
     
-    // 先保存前端配置
-    fetch('<?= $this->getUrl('theme/backend/config/layout/save') ?>', {
-        method: 'POST',
-        body: frontendData
-    }).then(response => response.json()).then(data => {
+    var layoutSaveUrl = '<?= $this->getUrl('theme/backend/config/layout/save') ?>';
+    var req = window.Weline.Api.request(layoutSaveUrl, { method: 'POST', body: frontendData });
+    req.then(function(res) {
+        var data = (res && res.data) !== undefined ? res.data : res;
         if (data.status === 'success') {
-            // 再保存后端配置
-            return fetch('<?= $this->getUrl('theme/backend/config/layout/save') ?>', {
-                method: 'POST',
-                body: backendData
-            });
+            return window.Weline.Api.request(layoutSaveUrl, { method: 'POST', body: backendData });
         } else {
             throw new Error(data.message || '<?= __('保存失败') ?>');
         }
-    }).then(response => response.json()).then(data => {
+    }).then(function(res) {
+        if (!res) return;
+        var data = (res && res.data) !== undefined ? res.data : res;
         if (data.status === 'success') {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({

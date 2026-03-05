@@ -13,6 +13,20 @@
 (function(window, document) {
     'use strict';
 
+    /**
+     * i18n 翻译（优先使用 __WelineThemeConfig.i18n 或 Weline.i18n.translate）
+     */
+    function t(key, fallback) {
+        const cfg = window.__WelineThemeConfig?.i18n;
+        if (cfg && typeof cfg[key] === 'string') {
+            return cfg[key];
+        }
+        if (window.Weline?.i18n?.translate) {
+            return window.Weline.i18n.translate(key, {}) || fallback || key;
+        }
+        return fallback || key;
+    }
+
     // ========================================
     // BackendToast - 后台通知提示
     // ========================================
@@ -151,9 +165,9 @@
         show(message, options = {}) {
             return new Promise((resolve) => {
                 const {
-                    title = '确认操作',
-                    confirmText = '确定',
-                    cancelText = '取消',
+                    title = t('confirm_action', '确认操作'),
+                    confirmText = t('confirm', '确定'),
+                    cancelText = t('cancel', '取消'),
                     type = 'warning'
                 } = options;
                 
@@ -264,12 +278,12 @@
         showInput(options = {}) {
             return new Promise((resolve) => {
                 const {
-                    title = '输入',
+                    title = t('input', '输入'),
                     message = '',
                     placeholder = '',
                     defaultValue = '',
-                    confirmText = '确定',
-                    cancelText = '取消',
+                    confirmText = t('confirm', '确定'),
+                    cancelText = t('cancel', '取消'),
                     type = 'info'
                 } = options;
 
@@ -392,6 +406,107 @@
     };
 
     // ========================================
+    // BackendModal - 主题兼容弹窗（替代 Swal 等，统一使用主题变量）
+    // ========================================
+    const BackendModal = {
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        },
+
+        /**
+         * 单按钮提示弹窗（如加载失败、操作结果）
+         * @param {string} title 标题
+         * @param {string} message 正文
+         * @param {Object} options 可选 { confirmText, type, icon }
+         * @returns {Promise<void>}
+         */
+        alert(title, message = '', options = {}) {
+            return new Promise((resolve) => {
+                const {
+                    confirmText = t('confirm', '确定'),
+                    type = 'danger',
+                    icon = 'mdi-close-circle'
+                } = options;
+
+                const typeColors = {
+                    danger: 'var(--backend-color-danger, #f46a6a)',
+                    warning: 'var(--backend-color-warning, #f1b44c)',
+                    success: 'var(--backend-color-success, #34c38f)',
+                    info: 'var(--backend-color-info, #50a5f1)'
+                };
+                const borderColor = typeColors[type] || typeColors.danger;
+
+                const overlay = document.createElement('div');
+                overlay.className = 'backend-modal-overlay';
+                overlay.style.cssText = `
+                    position: fixed;
+                    inset: 0;
+                    background: rgba(0, 0, 0, 0.5);
+                    z-index: 10001;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    animation: backendFadeIn 0.2s ease;
+                `;
+
+                overlay.innerHTML = `
+                    <div class="backend-modal-dialog" style="
+                        background: var(--backend-color-card-bg);
+                        border-radius: var(--backend-border-radius-lg, 0.75rem);
+                        padding: 24px;
+                        max-width: 400px;
+                        width: 90%;
+                        box-shadow: var(--backend-shadow-lg);
+                        border-top: 4px solid ${borderColor};
+                        text-align: center;
+                    ">
+                        <div style="margin-bottom: 16px;">
+                            <i class="mdi ${icon}" style="font-size: 48px; color: ${borderColor};"></i>
+                        </div>
+                        <h4 style="margin: 0 0 8px; font-size: 1.125rem; color: var(--backend-color-text-primary);">${this.escapeHtml(title)}</h4>
+                        ${message ? `<p style="margin: 0 0 20px; color: var(--backend-color-text-secondary); font-size: 0.9375rem;">${this.escapeHtml(message)}</p>` : ''}
+                        <button class="backend-modal-btn" data-action="confirm" style="
+                            padding: 8px 24px;
+                            border: none;
+                            border-radius: var(--backend-border-radius, 0.375rem);
+                            background: var(--backend-color-primary);
+                            color: var(--backend-color-text-inverse);
+                            cursor: pointer;
+                            font-size: 0.9375rem;
+                            transition: all 0.2s ease;
+                        ">${this.escapeHtml(confirmText)}</button>
+                    </div>
+                `;
+
+                document.body.appendChild(overlay);
+                document.body.style.overflow = 'hidden';
+
+                const close = () => {
+                    overlay.style.animation = 'backendFadeOut 0.2s ease';
+                    setTimeout(() => {
+                        overlay.remove();
+                        document.body.style.overflow = '';
+                        resolve();
+                    }, 200);
+                };
+
+                overlay.querySelector('[data-action="confirm"]').addEventListener('click', close);
+                overlay.addEventListener('click', (e) => {
+                    if (e.target === overlay) close();
+                });
+                document.addEventListener('keydown', function escHandler(e) {
+                    if (e.key === 'Escape') {
+                        document.removeEventListener('keydown', escHandler);
+                        close();
+                    }
+                });
+            });
+        }
+    };
+
+    // ========================================
     // CSS 动画样式
     // ========================================
     (function injectStyles() {
@@ -437,7 +552,8 @@
     // ========================================
     window.BackendToast = BackendToast;
     window.BackendConfirm = BackendConfirm;
-    
+    window.BackendModal = BackendModal;
+
     // 向后兼容：保留 AdminToast 和 AdminConfirm 别名
     window.AdminToast = BackendToast;
     window.AdminConfirm = BackendConfirm;

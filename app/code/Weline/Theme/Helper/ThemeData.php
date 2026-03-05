@@ -438,12 +438,12 @@ class ThemeData
         /** @var Dictionary $dict */
         $dict = ObjectManager::getInstance(Dictionary::class);
         $md5 = Dictionary::generateMd5($translationKey, $locale);
-        $dict->load(Dictionary::fields_MD5, $md5);
+        $dict->load(Dictionary::schema_fields_MD5, $md5);
 
-        $dict->setData(Dictionary::fields_MD5, $md5);
-        $dict->setData(Dictionary::fields_WORD, $translationKey);
-        $dict->setData(Dictionary::fields_LOCALE_CODE, $locale);
-        $dict->setData(Dictionary::fields_TRANSLATE, $value);
+        $dict->setData(Dictionary::schema_fields_MD5, $md5);
+        $dict->setData(Dictionary::schema_fields_WORD, $translationKey);
+        $dict->setData(Dictionary::schema_fields_LOCALE_CODE, $locale);
+        $dict->setData(Dictionary::schema_fields_TRANSLATE, $value);
 
         $dict->save();
 
@@ -472,7 +472,7 @@ class ThemeData
         /** @var Dictionary $dict */
         $dict = ObjectManager::getInstance(Dictionary::class);
         $md5 = Dictionary::generateMd5($translationKey, $locale);
-        $dict->load(Dictionary::fields_MD5, $md5);
+        $dict->load(Dictionary::schema_fields_MD5, $md5);
 
         if ($dict->getId()) {
             $dict->delete();
@@ -586,9 +586,9 @@ class ThemeData
                     $metaConfig->clearQuery();
                     
                     // 查询该主题在指定命名空间下的所有配置
-                    $metaConfig->where(\Weline\Meta\Model\MetaConfig::fields_IDENTIFY_ID, (string)$themeId)
-                        ->where(\Weline\Meta\Model\MetaConfig::fields_NAMESPACE, $namespace)
-                        ->where(\Weline\Meta\Model\MetaConfig::fields_SCOPE, $scope);
+                    $metaConfig->where(\Weline\Meta\Model\MetaConfig::schema_fields_IDENTIFY_ID, (string)$themeId)
+                        ->where(\Weline\Meta\Model\MetaConfig::schema_fields_NAMESPACE, $namespace)
+                        ->where(\Weline\Meta\Model\MetaConfig::schema_fields_SCOPE, $scope);
                     
                     $collection = $metaConfig->select()->fetch();
                     $items = $collection->getItems();
@@ -598,8 +598,8 @@ class ThemeData
                         if (!$item instanceof \Weline\Meta\Model\MetaConfig) {
                             continue;
                         }
-                        $configKey = $item->getData(\Weline\Meta\Model\MetaConfig::fields_CONFIG_KEY);
-                        $configValue = $item->getData(\Weline\Meta\Model\MetaConfig::fields_CONFIG_VALUE);
+                        $configKey = $item->getData(\Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_KEY);
+                        $configValue = $item->getData(\Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_VALUE);
                         $themeConfigs[$configKey] = $configValue;
                     }
                     
@@ -746,8 +746,8 @@ class ThemeData
             // 构建查询条件：meta_identify LIKE 'theme.{area}.{type}.%'
             $identifyPrefix = "theme.{$area}.{$type}.%";
             
-            $metaModel->where(\Weline\Meta\Model\Meta::fields_NAMESPACE, 'theme')
-                ->where(\Weline\Meta\Model\Meta::fields_META_IDENTIFY, $identifyPrefix, 'LIKE');
+            $metaModel->where(\Weline\Meta\Model\Meta::schema_fields_NAMESPACE, 'theme')
+                ->where(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY, $identifyPrefix, 'LIKE');
             
             $collection = $metaModel->select()->fetch();
             $items = $collection->getItems();
@@ -759,12 +759,12 @@ class ThemeData
                 }
                 
                 $metaId = $item->getId();
-                $identify = $item->getData(\Weline\Meta\Model\Meta::fields_META_IDENTIFY);
-                $metaDataJson = $item->getData(\Weline\Meta\Model\Meta::fields_META_DATA);
-                $settingJson = $item->getData(\Weline\Meta\Model\Meta::fields_SETTING);
-                $filePath = $item->getData(\Weline\Meta\Model\Meta::fields_FILE_PATH);
-                $fileFullPath = $item->getData(\Weline\Meta\Model\Meta::fields_FILE_FULL_PATH);
-                $category = $item->getData(\Weline\Meta\Model\Meta::fields_CATEGORY);
+                $identify = $item->getData(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY);
+                $metaDataJson = $item->getData(\Weline\Meta\Model\Meta::schema_fields_META_DATA);
+                $settingJson = $item->getData(\Weline\Meta\Model\Meta::schema_fields_SETTING);
+                $filePath = $item->getData(\Weline\Meta\Model\Meta::schema_fields_FILE_PATH);
+                $fileFullPath = $item->getData(\Weline\Meta\Model\Meta::schema_fields_FILE_FULL_PATH);
+                $category = $item->getData(\Weline\Meta\Model\Meta::schema_fields_CATEGORY);
                 
                 $metaData = [];
                 if ($metaDataJson) {
@@ -1085,13 +1085,13 @@ class ThemeData
             $namespace = "theme.{$area}";
             $configKeyPrefix = "{$type}.%";
             
-            $query = $metaConfig->where(\Weline\Meta\Model\MetaConfig::fields_NAMESPACE, $namespace)
-                ->where(\Weline\Meta\Model\MetaConfig::fields_CONFIG_KEY, $configKeyPrefix, 'LIKE')
-                ->where(\Weline\Meta\Model\MetaConfig::fields_SCOPE, $scope);
+            $query = $metaConfig->where(\Weline\Meta\Model\MetaConfig::schema_fields_NAMESPACE, $namespace)
+                ->where(\Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_KEY, $configKeyPrefix, 'LIKE')
+                ->where(\Weline\Meta\Model\MetaConfig::schema_fields_SCOPE, $scope);
             
             // 如果提供了主题ID，添加 identify_id 条件
             if ($themeId !== null) {
-                $query->where(\Weline\Meta\Model\MetaConfig::fields_IDENTIFY_ID, (string)$themeId);
+                $query->where(\Weline\Meta\Model\MetaConfig::schema_fields_IDENTIFY_ID, (string)$themeId);
             }
             
             $collection = $query->select()->fetch();
@@ -1103,8 +1103,8 @@ class ThemeData
                     continue;
                 }
                 
-                $configKey = $item->getData(\Weline\Meta\Model\MetaConfig::fields_CONFIG_KEY);
-                $configValue = $item->getData(\Weline\Meta\Model\MetaConfig::fields_CONFIG_VALUE);
+                $configKey = $item->getData(\Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_KEY);
+                $configValue = $item->getData(\Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_VALUE);
                 
                 // 尝试解析 JSON 字符串（如果值是 JSON 格式）
                 if (is_string($configValue) && !empty($configValue)) {
@@ -1577,12 +1577,12 @@ class ThemeData
         /** @var Dictionary $dict */
         $dict = ObjectManager::getInstance(Dictionary::class);
         $md5 = Dictionary::generateMd5($translationKey, $locale);
-        $dict->load(Dictionary::fields_MD5, $md5);
+        $dict->load(Dictionary::schema_fields_MD5, $md5);
 
-        $dict->setData(Dictionary::fields_MD5, $md5);
-        $dict->setData(Dictionary::fields_WORD, $translationKey);
-        $dict->setData(Dictionary::fields_LOCALE_CODE, $locale);
-        $dict->setData(Dictionary::fields_TRANSLATE, $value);
+        $dict->setData(Dictionary::schema_fields_MD5, $md5);
+        $dict->setData(Dictionary::schema_fields_WORD, $translationKey);
+        $dict->setData(Dictionary::schema_fields_LOCALE_CODE, $locale);
+        $dict->setData(Dictionary::schema_fields_TRANSLATE, $value);
 
         $dict->save();
         return true;

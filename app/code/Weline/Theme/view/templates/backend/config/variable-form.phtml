@@ -323,13 +323,10 @@ $fileName = $data['name'] ?? ucfirst($file);
             
             formData.append('variables', JSON.stringify(variables));
             
-            fetch('<?= $saveUrl ?>', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.code === 200) {
+            window.Weline.Api.request('<?= $saveUrl ?>', { method: 'POST', body: formData })
+            .then(function(response) {
+                var data = response.data;
+                if (response.ok && data && data.code === 200) {
                     if (typeof Swal !== 'undefined') {
                         Swal.fire({
                             icon: 'success',
@@ -345,29 +342,31 @@ $fileName = $data['name'] ?? ucfirst($file);
                         refreshPreview(data.preview_url);
                     }
                 } else {
+                    var errMsg = (data && (data.msg || data.message)) || '<?= __('未知错误') ?>';
                     if (typeof Swal !== 'undefined') {
                         Swal.fire({
                             icon: 'error',
                             title: '<?= __('保存失败') ?>',
-                            text: data.msg || '<?= __('未知错误') ?>',
+                            text: errMsg,
                             confirmButtonText: '<?= __('确定') ?>'
                         });
                     } else {
-                        console.error('保存失败：' + (data.msg || '未知错误'));
+                        console.error('保存失败：' + errMsg);
                     }
                 }
             })
-            .catch(error => {
+            .catch(function(error) {
                 console.error('Error:', error);
+                var msg = error && error.message ? error.message : '<?= __('网络错误') ?>';
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'error',
                         title: '<?= __('保存失败') ?>',
-                        text: '<?= __('网络错误') ?>',
+                        text: msg,
                         confirmButtonText: '<?= __('确定') ?>'
                     });
                 } else {
-                    console.error('保存失败：网络错误');
+                    console.error('保存失败：' + msg);
                 }
             });
         }
@@ -381,20 +380,16 @@ $fileName = $data['name'] ?? ucfirst($file);
             formData.append('meta_identify', metaIdentify);
             formData.append('value', value);
             
-            fetch('<?= $saveVariableUrl ?>', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.code === 200 && data.preview_url) {
-                    // 实时更新预览
-                    refreshPreview(data.preview_url);
-                }
-            })
-            .catch(error => {
-                console.error('Error saving variable:', error);
-            });
+            window.Weline.Api.request('<?= $saveVariableUrl ?>', { method: 'POST', body: formData, silent: true })
+                .then(function(response) {
+                    var data = response.data;
+                    if (response.ok && data && data.code === 200 && data.preview_url) {
+                        refreshPreview(data.preview_url);
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Error saving variable:', error);
+                });
         }
         
         // 更新颜色值
@@ -478,12 +473,10 @@ $fileName = $data['name'] ?? ucfirst($file);
             
             formData.append('variables', JSON.stringify(variables));
             
-            fetch('<?= $saveUrl ?>', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
+            var opts = { method: 'POST', body: formData };
+            var req = window.Weline.Api.request('<?= $saveUrl ?>', opts);
+            req.then(function(res) {
+                var data = (res && res.data) || res;
                 if (data.code === 200) {
                     if (data.preview_url) {
                         refreshPreview(data.preview_url);
