@@ -18,6 +18,7 @@ namespace Weline\Websites\Service;
 
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainAutoResolveTask;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainPurchaseItem;
@@ -57,8 +58,10 @@ class DomainPurchaseService
      * 创建并处理购买订单
      *
      * @param int $accountId 域名商账号 ID
-     * @param array $items 购买条目列表 [{domain, years, website_id, auto_create_site}, ...]
-     * @param bool $autoResolve 是否自动解析到本服务器
+     * @param array $items 购买条目列表 [{domain, years, website_id, auto_create_site, resolve_to_local?, subdomains?}, ...]
+     *   resolve_to_local: yes|no 是否解析到本服务器（默认 yes）
+     *   subdomains: array 解析子域，默认 ['@','www']
+     * @param bool $autoResolve 是否自动解析到本服务器（兼容旧调用，若 items 含 resolve_to_local 则以 items 为准）
      * @return array{success: bool, message: string, order_id?: int, order_no?: string, results?: array}
      */
     public function createAndProcessOrder(int $accountId, array $items, bool $autoResolve = false): array
@@ -102,9 +105,9 @@ class DomainPurchaseService
 
         // 创建订单
         $order = clone $this->orderModel;
-        $order->setData(DomainPurchaseOrder::fields_ACCOUNT_ID, $accountId);
-        $order->setData(DomainPurchaseOrder::fields_TOTAL_COUNT, \count($items));
-        $order->setData(DomainPurchaseOrder::fields_STATUS, DomainPurchaseOrder::STATUS_PROCESSING);
+        $order->setData(DomainPurchaseOrder::schema_fields_ACCOUNT_ID, $accountId);
+        $order->setData(DomainPurchaseOrder::schema_fields_TOTAL_COUNT, \count($items));
+        $order->setData(DomainPurchaseOrder::schema_fields_STATUS, DomainPurchaseOrder::STATUS_PROCESSING);
         $order->save();
 
         $orderId = $order->getOrderId();
@@ -118,6 +121,16 @@ class DomainPurchaseService
             $years = (int) ($itemData['years'] ?? 1);
             $websiteId = (int) ($itemData['website_id'] ?? 0);
             $autoCreateSite = ($itemData['auto_create_site'] ?? 'no') === 'yes' ? 'yes' : 'no';
+            $resolveToLocal = isset($itemData['resolve_to_local'])
+                ? (($itemData['resolve_to_local'] ?? 'yes') === 'yes')
+                : $autoResolve;
+            $subdomains = $itemData['subdomains'] ?? ['@', 'www'];
+            if (!\is_array($subdomains)) {
+                $subdomains = \array_map('trim', \explode(',', (string) $subdomains));
+            }
+            if ($subdomains === []) {
+                $subdomains = ['@', 'www'];
+            }
 
             if (empty($domain)) {
                 continue;
@@ -125,33 +138,33 @@ class DomainPurchaseService
 
             // 创建购买条目
             $item = clone $this->itemModel;
-            $item->setData(DomainPurchaseItem::fields_ORDER_ID, $orderId);
-            $item->setData(DomainPurchaseItem::fields_DOMAIN, $domain);
-            $item->setData(DomainPurchaseItem::fields_YEARS, $years);
-            $item->setData(DomainPurchaseItem::fields_WEBSITE_ID, $websiteId);
-            $item->setData(DomainPurchaseItem::fields_AUTO_CREATE_SITE, $autoCreateSite);
-            $item->setData(DomainPurchaseItem::fields_STATUS, DomainPurchaseItem::STATUS_PENDING);
+            $item->setData(DomainPurchaseItem::schema_fields_ORDER_ID, $orderId);
+            $item->setData(DomainPurchaseItem::schema_fields_DOMAIN, $domain);
+            $item->setData(DomainPurchaseItem::schema_fields_YEARS, $years);
+            $item->setData(DomainPurchaseItem::schema_fields_WEBSITE_ID, $websiteId);
+            $item->setData(DomainPurchaseItem::schema_fields_AUTO_CREATE_SITE, $autoCreateSite);
+            $item->setData(DomainPurchaseItem::schema_fields_STATUS, DomainPurchaseItem::STATUS_PENDING);
 
             try {
                 // 调用适配器购买域名
                 $purchaseResult = $adapter->purchaseDomain($domain, $years, $credentials);
 
                 if ($purchaseResult['success'] ?? false) {
-                    $item->setData(DomainPurchaseItem::fields_STATUS, DomainPurchaseItem::STATUS_SUCCESS);
-                    $item->setData(DomainPurchaseItem::fields_PRICE, $purchaseResult['price'] ?? 0);
-                    $item->setData(DomainPurchaseItem::fields_CURRENCY, $purchaseResult['currency'] ?? 'USD');
+                    $item->setData(DomainPurchaseItem::schema_fields_STATUS, DomainPurchaseItem::STATUS_SUCCESS);
+                    $item->setData(DomainPurchaseItem::schema_fields_PRICE, $purchaseResult['price'] ?? 0);
+                    $item->setData(DomainPurchaseItem::schema_fields_CURRENCY, $purchaseResult['currency'] ?? 'USD');
                     $successCount++;
 
-                    // 购买成功后入域名池
-                    $this->addToDomainPool($domain);
+                    // 购买成功后入域名池（含 @、www 等子域）
+                    $this->addToDomainPoolWithSubdomains($domain, $accountId, $subdomains);
 
                     // 绑定站点
                     if ($websiteId > 0 || $autoCreateSite === 'yes') {
                         $this->bindToWebsite($domain, $websiteId, $autoCreateSite);
                     }
 
-                    // 如果开启自动解析，创建解析任务
-                    if ($autoResolve) {
+                    // 如果开启解析到本站，创建解析任务
+                    if ($resolveToLocal) {
                         $this->createAutoResolveTask($domain, $accountId);
                     }
 
@@ -162,13 +175,14 @@ class DomainPurchaseService
                             'order_id' => $orderId,
                             'website_id' => $websiteId,
                             'auto_create_site' => $autoCreateSite,
-                            'auto_resolve' => $autoResolve,
+                            'resolve_to_local' => $resolveToLocal,
+                            'subdomains' => $subdomains,
                         ],
                     ];
                     $this->eventsManager->dispatch('Weline_Websites::domain::purchase_success', $eventData);
                 } else {
-                    $item->setData(DomainPurchaseItem::fields_STATUS, DomainPurchaseItem::STATUS_FAILED);
-                    $item->setData(DomainPurchaseItem::fields_ERROR_MESSAGE, $purchaseResult['message'] ?? __('购买失败'));
+                    $item->setData(DomainPurchaseItem::schema_fields_STATUS, DomainPurchaseItem::STATUS_FAILED);
+                    $item->setData(DomainPurchaseItem::schema_fields_ERROR_MESSAGE, $purchaseResult['message'] ?? __('购买失败'));
                     $failCount++;
                 }
 
@@ -178,8 +192,8 @@ class DomainPurchaseService
                     'message' => $purchaseResult['message'] ?? '',
                 ];
             } catch (\Exception $e) {
-                $item->setData(DomainPurchaseItem::fields_STATUS, DomainPurchaseItem::STATUS_FAILED);
-                $item->setData(DomainPurchaseItem::fields_ERROR_MESSAGE, $e->getMessage());
+                $item->setData(DomainPurchaseItem::schema_fields_STATUS, DomainPurchaseItem::STATUS_FAILED);
+                $item->setData(DomainPurchaseItem::schema_fields_ERROR_MESSAGE, $e->getMessage());
                 $failCount++;
 
                 $results[] = [
@@ -193,9 +207,9 @@ class DomainPurchaseService
         }
 
         // 更新订单状态
-        $order->setData(DomainPurchaseOrder::fields_SUCCESS_COUNT, $successCount);
-        $order->setData(DomainPurchaseOrder::fields_FAIL_COUNT, $failCount);
-        $order->setData(DomainPurchaseOrder::fields_STATUS,
+        $order->setData(DomainPurchaseOrder::schema_fields_SUCCESS_COUNT, $successCount);
+        $order->setData(DomainPurchaseOrder::schema_fields_FAIL_COUNT, $failCount);
+        $order->setData(DomainPurchaseOrder::schema_fields_STATUS,
             $failCount === 0 ? DomainPurchaseOrder::STATUS_COMPLETED : (
                 $successCount === 0 ? DomainPurchaseOrder::STATUS_FAILED : DomainPurchaseOrder::STATUS_COMPLETED
             )
@@ -217,7 +231,43 @@ class DomainPurchaseService
     }
 
     /**
-     * 将域名添加到域名池
+     * 将域名及其子域（@、www 等）添加到域名池
+     *
+     * @param string $domain 根域名
+     * @param int $accountId 域名商账号 ID
+     * @param array $prefixes 子域前缀，如 ['@','www']
+     */
+    private function addToDomainPoolWithSubdomains(string $domain, int $accountId, array $prefixes = ['@', 'www']): void
+    {
+        try {
+            // 确保 Domain 记录存在（供 SubdomainGenerator 使用）
+            $domainModel = ObjectManager::getInstance(Domain::class);
+            $domainModel->syncDomains($accountId, [
+                [
+                    'domain' => $domain,
+                    'status' => Domain::STATUS_ACTIVE,
+                ],
+            ]);
+
+            $rootDomain = clone $domainModel;
+            $rootDomain->loadByDomainAndAccount($domain, $accountId);
+            if ($rootDomain->getDomainId()) {
+                $subdomainGenerator = ObjectManager::getInstance(SubdomainGeneratorService::class);
+                $subdomainGenerator->generateDefaultSubdomains($rootDomain, $prefixes);
+            } else {
+                // 若无法加载 Domain，则仅添加根域到池
+                $this->addToDomainPool($domain);
+            }
+        } catch (\Exception $e) {
+            w_log_error(__('域名入池失败: %{domain}, 错误: %{error}', [
+                'domain' => $domain,
+                'error' => $e->getMessage(),
+            ]));
+        }
+    }
+
+    /**
+     * 将单个域名添加到域名池
      */
     private function addToDomainPool(string $domain): void
     {

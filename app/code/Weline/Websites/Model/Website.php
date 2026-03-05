@@ -3,116 +3,39 @@
 namespace Weline\Websites\Model;
 
 use Weline\Framework\App\Exception;
-use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+#[Table(comment: '网站表')]
+#[Index(name: 'uk_name', columns: ['name'], type: 'UNIQUE')]
+#[Index(name: 'uk_code', columns: ['code'], type: 'UNIQUE')]
+#[Index(name: 'uk_url', columns: ['url'], type: 'UNIQUE')]
+#[Index(name: 'idx_scope', columns: ['scope'])]
 class Website extends Model
 {
-
-    public const fields_ID = 'website_id';
-    # 名称
-    public const fields_NAME = 'name';
-    # 代码
-    public const fields_CODE = 'code';
-    # 链接
-    public const fields_URL = 'url';
-    # 货币
-    public const fields_DEFAULT_CURRENCY = 'default_currency';
-    # 语言
-    public const fields_DEFAULT_LANGUAGE = 'default_language';
-    # 时区
-    public const fields_DEFAULT_TIMEZONE = 'default_timezone';
-    # 业务范围标识
-    public const fields_SCOPE = 'scope';
+    public const schema_table = 'weline_websites_website';
+    public const schema_primary_key = 'website_id';
 
 
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
+    #[Col('int', 11, nullable: false, primaryKey: true, autoIncrement: true, comment: '网站ID')]
+    public const schema_fields_ID = 'website_id';
+    #[Col('varchar', 128, nullable: false, unique: true, comment: '网站名称')]
+    public const schema_fields_NAME = 'name';
+    #[Col('varchar', 20, nullable: false, unique: true, comment: '网站代码')]
+    public const schema_fields_CODE = 'code';
+    #[Col('varchar', 128, nullable: false, unique: true, comment: '网站链接')]
+    public const schema_fields_URL = 'url';
+    #[Col('varchar', 20, nullable: true, comment: '默认货币')]
+    public const schema_fields_DEFAULT_CURRENCY = 'default_currency';
+    #[Col('varchar', 20, nullable: true, comment: '默认语言')]
+    public const schema_fields_DEFAULT_LANGUAGE = 'default_language';
+    #[Col('varchar', 60, nullable: false, comment: '默认时区')]
+    public const schema_fields_DEFAULT_TIMEZONE = 'default_timezone';
+    #[Col('varchar', 100, nullable: true, default: '', comment: '业务scope标识，如page_builder、catalog等')]
+    public const schema_fields_SCOPE = 'scope';
 
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 修改默认货币和默认语言字段为可空
-        if ($setup->tableExist()) {
-            try {
-                $tableName = $setup->getTable();
-                $connection = $setup->getConnection();
-                
-                // 检查并修改default_currency字段
-                try {
-                    $connection->query("ALTER TABLE `{$tableName}` MODIFY COLUMN `default_currency` VARCHAR(20) NULL COMMENT '默认货币'");
-                } catch (\Exception $e) {
-                    // 字段可能已经修改过或不存在，忽略错误
-                }
-                
-                // 检查并修改default_language字段
-                try {
-                    $connection->query("ALTER TABLE `{$tableName}` MODIFY COLUMN `default_language` VARCHAR(20) NULL COMMENT '默认语言'");
-                } catch (\Exception $e) {
-                    // 字段可能已经修改过或不存在，忽略错误
-                }
-                
-                // 检查并添加scope字段
-                try {
-                    $connection->query("ALTER TABLE `{$tableName}` ADD COLUMN `scope` VARCHAR(100) DEFAULT '' COMMENT '业务scope标识，如page_builder、catalog等'");
-                } catch (\Exception $e) {
-                    // 字段可能已存在，忽略错误
-                }
-                
-                // 添加scope索引（提升查询性能）
-                try {
-                    $connection->query("ALTER TABLE `{$tableName}` ADD INDEX `idx_scope` (`scope`)");
-                } catch (\Exception $e) {
-                    // 索引可能已存在，忽略错误
-                }
-            } catch (\Exception $e) {
-                // 忽略错误，可能表不存在或其他问题
-            }
-        }
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist()) {
-            return;
-        }
-        $setup->createTable('网站表')
-            ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 11, 'primary key auto_increment', '网站ID')
-            ->addColumn(self::fields_NAME, TableInterface::column_type_VARCHAR, 128, "not null unique", '网站名称')
-            ->addColumn(self::fields_CODE, TableInterface::column_type_VARCHAR, 20, "not null unique", '网站代码')
-            ->addColumn(self::fields_URL, TableInterface::column_type_VARCHAR, 128, "not null unique", '网站链接')
-            ->addColumn(self::fields_DEFAULT_CURRENCY, TableInterface::column_type_VARCHAR, 20, "", '默认货币')
-            ->addColumn(self::fields_DEFAULT_LANGUAGE, TableInterface::column_type_VARCHAR, 20, "", '默认语言')
-            ->addColumn(self::fields_DEFAULT_TIMEZONE, TableInterface::column_type_VARCHAR, 60, "not null", '默认时区')
-            ->addColumn(self::fields_SCOPE, TableInterface::column_type_VARCHAR, 100, "", '业务scope标识，如page_builder、catalog等')
-            ->create();
-        # 新建一个默认网站
-        try {
-            $this->setWebsiteId(1)
-                ->setName('默认网站')
-                ->setCode('default')
-                ->setUrl('http://localhost')
-                ->setDefaultCurrency('CNY')
-                ->setDefaultLanguage('zh_Hans_CN')
-                ->setDefaultTimezone('Asia/Shanghai')
-                ->save(true);
-        } catch (Exception $e) {
-
-        }
-    }
 
     /**
      * 保存前处理URL
@@ -122,11 +45,11 @@ class Website extends Model
     {
         parent::save_before();
         
-        $url = $this->getData(self::fields_URL);
+        $url = $this->getData(self::schema_fields_URL);
         if (!empty($url) && is_string($url)) {
             $url = trim($url);
             if (!preg_match('/^https?:\/\//i', $url)) {
-                $this->setData(self::fields_URL, 'http://' . $url);
+                $this->setData(self::schema_fields_URL, 'http://' . $url);
             }
         }
     }
@@ -148,35 +71,35 @@ class Website extends Model
 
     public function setWebsiteId(int $websiteId): self
     {
-        $this->setData(self::fields_ID, $websiteId);
+        $this->setData(self::schema_fields_ID, $websiteId);
         return $this;
     }
 
     public function getWebsiteId(): int
     {
-        return (int)$this->getData(self::fields_ID);
+        return (int)$this->getData(self::schema_fields_ID);
     }
 
     public function setName(string $name): self
     {
-        $this->setData(self::fields_NAME, $name);
+        $this->setData(self::schema_fields_NAME, $name);
         return $this;
     }
 
     public function getName(): string
     {
-        return (string)$this->getData(self::fields_NAME);
+        return (string)$this->getData(self::schema_fields_NAME);
     }
 
     public function setCode(string $code): self
     {
-        $this->setData(self::fields_CODE, $code);
+        $this->setData(self::schema_fields_CODE, $code);
         return $this;
     }
 
     public function getCode(): string
     {
-        return (string)$this->getData(self::fields_CODE);
+        return (string)$this->getData(self::schema_fields_CODE);
     }
 
     public function setUrl(string $url): self
@@ -186,36 +109,36 @@ class Website extends Model
         if (!empty($url) && !preg_match('/^https?:\/\//i', $url)) {
             $url = 'http://' . $url;
         }
-        $this->setData(self::fields_URL, $url);
+        $this->setData(self::schema_fields_URL, $url);
         return $this;
     }
 
     public function getUrl(): string
     {
-        return (string)$this->getData(self::fields_URL);
+        return (string)$this->getData(self::schema_fields_URL);
     }
 
     public function setDefaultCurrency(?string $currency): self
     {
-        $this->setData(self::fields_DEFAULT_CURRENCY, $currency);
+        $this->setData(self::schema_fields_DEFAULT_CURRENCY, $currency);
         return $this;
     }
 
     public function getDefaultCurrency(): ?string
     {
-        $currency = $this->getData(self::fields_DEFAULT_CURRENCY);
+        $currency = $this->getData(self::schema_fields_DEFAULT_CURRENCY);
         return $currency ? (string)$currency : null;
     }
 
     public function setDefaultLanguage(?string $language): self
     {
-        $this->setData(self::fields_DEFAULT_LANGUAGE, $language);
+        $this->setData(self::schema_fields_DEFAULT_LANGUAGE, $language);
         return $this;
     }
 
     public function getDefaultLanguage(): ?string
     {
-        $language = $this->getData(self::fields_DEFAULT_LANGUAGE);
+        $language = $this->getData(self::schema_fields_DEFAULT_LANGUAGE);
         return $language ? (string)$language : null;
     }
 
@@ -249,13 +172,13 @@ class Website extends Model
 
     public function setDefaultTimezone(string $timezone): self
     {
-        $this->setData(self::fields_DEFAULT_TIMEZONE, $timezone);
+        $this->setData(self::schema_fields_DEFAULT_TIMEZONE, $timezone);
         return $this;
     }
 
     public function getDefaultTimezone(): string
     {
-        return (string)$this->getData(self::fields_DEFAULT_TIMEZONE);
+        return (string)$this->getData(self::schema_fields_DEFAULT_TIMEZONE);
     }
 
     /**
@@ -266,7 +189,7 @@ class Website extends Model
      */
     public function setScope(string $scope): self
     {
-        $this->setData(self::fields_SCOPE, $scope);
+        $this->setData(self::schema_fields_SCOPE, $scope);
         return $this;
     }
 
@@ -277,6 +200,6 @@ class Website extends Model
      */
     public function getScope(): string
     {
-        return (string)$this->getData(self::fields_SCOPE);
+        return (string)$this->getData(self::schema_fields_SCOPE);
     }
 }

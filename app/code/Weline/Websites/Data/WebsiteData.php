@@ -281,7 +281,7 @@ class WebsiteData
         if (empty($currencyCodes)) {
             $currencyModel = ObjectManager::getInstance(Currency::class);
             $currencies = $currencyModel->clearQuery()
-                ->where(Currency::fields_STATUS, 1)
+                ->where(Currency::schema_fields_STATUS, 1)
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -291,8 +291,8 @@ class WebsiteData
             $currencies = [];
             foreach ($currencyCodes as $code) {
                 $currency = $currencyModel->clearQuery()
-                    ->where(Currency::fields_CODE, $code)
-                    ->where(Currency::fields_STATUS, 1)
+                    ->where(Currency::schema_fields_CODE, $code)
+                    ->where(Currency::schema_fields_STATUS, 1)
                     ->find()
                     ->fetch();
                 if ($currency->getId()) {
@@ -331,8 +331,8 @@ class WebsiteData
         if (empty($currencyCodes)) {
             $currencyModel = ObjectManager::getInstance(Currency::class);
             $currency = $currencyModel->clearQuery()
-                ->where(Currency::fields_CODE, strtoupper($currencyCode))
-                ->where(Currency::fields_STATUS, 1)
+                ->where(Currency::schema_fields_CODE, strtoupper($currencyCode))
+                ->where(Currency::schema_fields_STATUS, 1)
                 ->find()
                 ->fetch();
             return $currency->getId() > 0;
@@ -356,8 +356,8 @@ class WebsiteData
         if (empty($languageCodes)) {
             $localsModel = ObjectManager::getInstance(\Weline\I18n\Model\Locals::class);
             $locale = $localsModel->clearQuery()
-                ->where(\Weline\I18n\Model\Locals::fields_CODE, $languageCode)
-                ->where(\Weline\I18n\Model\Locals::fields_IS_ACTIVE, 1)
+                ->where(\Weline\I18n\Model\Locals::schema_fields_CODE, $languageCode)
+                ->where(\Weline\I18n\Model\Locals::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
             return $locale->getId() !== null;

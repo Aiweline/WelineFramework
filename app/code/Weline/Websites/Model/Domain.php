@@ -12,10 +12,10 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Model;
 
-use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 
 /**
  * 域名模型（根域名）
@@ -27,39 +27,97 @@ use Weline\Framework\Setup\Db\ModelSetup;
  * 
  * @see DomainPool 可建站的具体域名池
  */
+#[Table(comment: '域名表 - 同步自域名商')]
+#[Index(name: 'uk_account_domain', columns: ['account_id', 'domain'], type: 'UNIQUE')]
+#[Index(name: 'idx_account_id', columns: ['account_id'])]
+#[Index(name: 'idx_domain', columns: ['domain'])]
+#[Index(name: 'idx_status', columns: ['status'])]
+#[Index(name: 'idx_expires_at', columns: ['expires_at'])]
+#[Index(name: 'idx_resolve_status', columns: ['resolve_status'])]
+#[Index(name: 'idx_https_status', columns: ['https_status'])]
+#[Index(name: 'idx_site_ready', columns: ['site_ready'])]
 class Domain extends Model
 {
-    public const fields_ID = 'domain_id';
-    public const fields_ACCOUNT_ID = 'account_id';
-    public const fields_DOMAIN = 'domain';
-    public const fields_STATUS = 'status';
-    public const fields_REGISTRAR_STATUS = 'registrar_status';
-    public const fields_EXPIRES_AT = 'expires_at';
-    public const fields_NAMESERVERS = 'nameservers';
-    public const fields_EXTRA_DATA = 'extra_data';
-    public const fields_SYNCED_AT = 'synced_at';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
+    public const schema_table = 'weline_websites_domain';
+    public const schema_primary_key = 'domain_id';
 
-    // v1.5.0 新增字段 - CDN/DNS 归属信息（保留在 Domain 模型）
-    public const fields_CDN_PROVIDER = 'cdn_provider';
-    public const fields_CDN_ACCOUNT_ID = 'cdn_account_id';
-    public const fields_DNS_PROVIDER = 'dns_provider';
-    public const fields_DNS_ACCOUNT_ID = 'dns_account_id';
-    
-    // v1.5.0 新增字段 - 以下字段已废弃，应使用 DomainPool 模型中的对应字段
-    // @deprecated v1.6.0 使用 DomainPool 模型代替
-    public const fields_RESOLVE_STATUS = 'resolve_status';
-    public const fields_RESOLVED_IP = 'resolved_ip';
-    public const fields_RESOLVED_IPV6 = 'resolved_ipv6';
-    public const fields_IS_LOCAL_SERVER = 'is_local_server';
-    public const fields_RESOLVE_CHECKED_AT = 'resolve_checked_at';
-    public const fields_RESOLVE_ERROR = 'resolve_error';
-    public const fields_HTTPS_STATUS = 'https_status';
-    public const fields_HTTPS_EXPIRES_AT = 'https_expires_at';
-    public const fields_HTTPS_ERROR = 'https_error';
-    public const fields_HTTPS_REQUESTED_AT = 'https_requested_at';
-    public const fields_SITE_READY = 'site_ready';
+    #[Col('int', 11, nullable: false, primaryKey: true, autoIncrement: true, comment: '域名ID')]
+    public const schema_fields_ID = 'domain_id';
+
+    #[Col('int', 11, nullable: false, comment: '域名商账户ID')]
+    public const schema_fields_ACCOUNT_ID = 'account_id';
+
+    #[Col('varchar', 255, nullable: false, comment: '域名')]
+    public const schema_fields_DOMAIN = 'domain';
+
+    #[Col('varchar', 20, nullable: true, default: 'active', comment: '标准化状态')]
+    public const schema_fields_STATUS = 'status';
+
+    #[Col('varchar', 50, nullable: true, default: '', comment: '域名商原始状态')]
+    public const schema_fields_REGISTRAR_STATUS = 'registrar_status';
+
+    #[Col('date', nullable: true, comment: '过期时间')]
+    public const schema_fields_EXPIRES_AT = 'expires_at';
+
+    #[Col('text', nullable: true, comment: 'DNS服务器JSON')]
+    public const schema_fields_NAMESERVERS = 'nameservers';
+
+    #[Col('text', nullable: true, comment: '域名商原始数据JSON')]
+    public const schema_fields_EXTRA_DATA = 'extra_data';
+
+    #[Col('datetime', nullable: true, comment: '最后同步时间')]
+    public const schema_fields_SYNCED_AT = 'synced_at';
+
+    #[Col('datetime', nullable: true, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+
+    #[Col('datetime', nullable: true, comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
+
+    #[Col('varchar', 50, nullable: true, default: '', comment: 'CDN供应商代码')]
+    public const schema_fields_CDN_PROVIDER = 'cdn_provider';
+
+    #[Col('int', 11, nullable: true, default: 0, comment: 'CDN账户ID')]
+    public const schema_fields_CDN_ACCOUNT_ID = 'cdn_account_id';
+
+    #[Col('varchar', 50, nullable: true, default: '', comment: 'DNS服务商代码')]
+    public const schema_fields_DNS_PROVIDER = 'dns_provider';
+
+    #[Col('int', 11, nullable: true, default: 0, comment: 'DNS管理账户ID（第三方DNS服务商）')]
+    public const schema_fields_DNS_ACCOUNT_ID = 'dns_account_id';
+
+    #[Col('varchar', 20, nullable: true, default: 'pending', comment: '解析状态')]
+    public const schema_fields_RESOLVE_STATUS = 'resolve_status';
+
+    #[Col('varchar', 45, nullable: true, default: '', comment: '解析到的IPv4')]
+    public const schema_fields_RESOLVED_IP = 'resolved_ip';
+
+    #[Col('varchar', 45, nullable: true, default: '', comment: '解析到的IPv6')]
+    public const schema_fields_RESOLVED_IPV6 = 'resolved_ipv6';
+
+    #[Col('smallint', 1, nullable: true, default: 0, comment: '是否指向本服务器')]
+    public const schema_fields_IS_LOCAL_SERVER = 'is_local_server';
+
+    #[Col('datetime', nullable: true, comment: '解析检测时间')]
+    public const schema_fields_RESOLVE_CHECKED_AT = 'resolve_checked_at';
+
+    #[Col('text', nullable: true, comment: '解析错误信息')]
+    public const schema_fields_RESOLVE_ERROR = 'resolve_error';
+
+    #[Col('varchar', 20, nullable: true, default: 'none', comment: 'HTTPS证书状态')]
+    public const schema_fields_HTTPS_STATUS = 'https_status';
+
+    #[Col('date', nullable: true, comment: '证书过期时间')]
+    public const schema_fields_HTTPS_EXPIRES_AT = 'https_expires_at';
+
+    #[Col('text', nullable: true, comment: '证书申请错误')]
+    public const schema_fields_HTTPS_ERROR = 'https_error';
+
+    #[Col('datetime', nullable: true, comment: '证书申请时间')]
+    public const schema_fields_HTTPS_REQUESTED_AT = 'https_requested_at';
+
+    #[Col('smallint', 1, nullable: true, default: 0, comment: '是否可建站')]
+    public const schema_fields_SITE_READY = 'site_ready';
 
     // 状态常量
     public const STATUS_ACTIVE = 'active';
@@ -80,157 +138,6 @@ class Domain extends Model
     public const HTTPS_STATUS_ERROR = 'error';
 
     /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $this->install($setup, $context);
-            return;
-        }
-
-        // v1.5.0: 新增 CDN/DNS/解析/HTTPS 相关字段
-        // alterTable()->addColumn 签名: (field_name, after_column, type, length, options, comment)
-        $alter = $setup->alterTable();
-        $hasChanges = false;
-
-        if (!$setup->hasField(self::fields_CDN_PROVIDER)) {
-            $alter->addColumn(self::fields_CDN_PROVIDER, self::fields_UPDATED_AT, TableInterface::column_type_VARCHAR, 50, "default ''", 'CDN供应商代码');
-            $hasChanges = true;
-        }
-
-        if (!$setup->hasField(self::fields_CDN_ACCOUNT_ID)) {
-            $alter->addColumn(self::fields_CDN_ACCOUNT_ID, self::fields_CDN_PROVIDER, TableInterface::column_type_INTEGER, 11, 'default 0', 'CDN账户ID');
-            $hasChanges = true;
-        }
-
-        if (!$setup->hasField(self::fields_DNS_PROVIDER)) {
-            $alter->addColumn(self::fields_DNS_PROVIDER, self::fields_CDN_ACCOUNT_ID, TableInterface::column_type_VARCHAR, 50, "default ''", 'DNS服务商代码');
-            $hasChanges = true;
-        }
-
-        if (!$setup->hasField(self::fields_DNS_ACCOUNT_ID)) {
-            $alter->addColumn(self::fields_DNS_ACCOUNT_ID, self::fields_DNS_PROVIDER, TableInterface::column_type_INTEGER, 11, 'default 0', 'DNS管理账户ID（第三方DNS服务商）');
-            $hasChanges = true;
-        }
-
-        if (!$setup->hasField(self::fields_RESOLVE_STATUS)) {
-            $alter->addColumn(self::fields_RESOLVE_STATUS, self::fields_DNS_PROVIDER, TableInterface::column_type_VARCHAR, 20, "default 'pending'", '解析状态');
-            $hasChanges = true;
-        }
-
-        if (!$setup->hasField(self::fields_RESOLVED_IP)) {
-            $alter->addColumn(self::fields_RESOLVED_IP, self::fields_RESOLVE_STATUS, TableInterface::column_type_VARCHAR, 45, "default ''", '解析到的IPv4');
-            $hasChanges = true;
-        }
-
-        if (!$setup->hasField(self::fields_RESOLVED_IPV6)) {
-            $alter->addColumn(self::fields_RESOLVED_IPV6, self::fields_RESOLVED_IP, TableInterface::column_type_VARCHAR, 45, "default ''", '解析到的IPv6');
-            $hasChanges = true;
-        }
-
-        if (!$setup->hasField(self::fields_IS_LOCAL_SERVER)) {
-            $alter->addColumn(self::fields_IS_LOCAL_SERVER, self::fields_RESOLVED_IPV6, TableInterface::column_type_SMALLINT, 1, 'default 0', '是否指向本服务器');
-            $hasChanges = true;
-        }
-
-        if (!$setup->hasField(self::fields_RESOLVE_CHECKED_AT)) {
-            $alter->addColumn(self::fields_RESOLVE_CHECKED_AT, self::fields_IS_LOCAL_SERVER, TableInterface::column_type_DATETIME, 0, '', '解析检测时间');
-            $hasChanges = true;
-        }
-
-        if (!$setup->hasField(self::fields_RESOLVE_ERROR)) {
-            $alter->addColumn(self::fields_RESOLVE_ERROR, self::fields_RESOLVE_CHECKED_AT, TableInterface::column_type_TEXT, 0, '', '解析错误信息');
-            $hasChanges = true;
-        }
-
-        if (!$setup->hasField(self::fields_HTTPS_STATUS)) {
-            $alter->addColumn(self::fields_HTTPS_STATUS, self::fields_RESOLVE_ERROR, TableInterface::column_type_VARCHAR, 20, "default 'none'", 'HTTPS证书状态');
-            $hasChanges = true;
-        }
-
-        if (!$setup->hasField(self::fields_HTTPS_EXPIRES_AT)) {
-            $alter->addColumn(self::fields_HTTPS_EXPIRES_AT, self::fields_HTTPS_STATUS, TableInterface::column_type_DATE, 0, '', '证书过期时间');
-            $hasChanges = true;
-        }
-
-        if (!$setup->hasField(self::fields_HTTPS_ERROR)) {
-            $alter->addColumn(self::fields_HTTPS_ERROR, self::fields_HTTPS_EXPIRES_AT, TableInterface::column_type_TEXT, 0, '', '证书申请错误');
-            $hasChanges = true;
-        }
-
-        if (!$setup->hasField(self::fields_HTTPS_REQUESTED_AT)) {
-            $alter->addColumn(self::fields_HTTPS_REQUESTED_AT, self::fields_HTTPS_ERROR, TableInterface::column_type_DATETIME, 0, '', '证书申请时间');
-            $hasChanges = true;
-        }
-
-        if (!$setup->hasField(self::fields_SITE_READY)) {
-            $alter->addColumn(self::fields_SITE_READY, self::fields_HTTPS_REQUESTED_AT, TableInterface::column_type_SMALLINT, 1, 'default 0', '是否可建站');
-            $hasChanges = true;
-        }
-
-        if ($hasChanges) {
-            $alter->alter();
-        }
-
-        // 添加索引
-        if (!$setup->hasIndex('idx_resolve_status')) {
-            $setup->alterTable()
-                ->addIndex(TableInterface::index_type_KEY, 'idx_resolve_status', self::fields_RESOLVE_STATUS)
-                ->alter();
-        }
-
-        if (!$setup->hasIndex('idx_https_status')) {
-            $setup->alterTable()
-                ->addIndex(TableInterface::index_type_KEY, 'idx_https_status', self::fields_HTTPS_STATUS)
-                ->alter();
-        }
-
-        if (!$setup->hasIndex('idx_site_ready')) {
-            $setup->alterTable()
-                ->addIndex(TableInterface::index_type_KEY, 'idx_site_ready', self::fields_SITE_READY)
-                ->alter();
-        }
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist()) {
-            return;
-        }
-
-        $setup->createTable('域名表 - 同步自域名商')
-            ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 11, 'primary key auto_increment', '域名ID')
-            ->addColumn(self::fields_ACCOUNT_ID, TableInterface::column_type_INTEGER, 11, 'not null', '域名商账户ID')
-            ->addColumn(self::fields_DOMAIN, TableInterface::column_type_VARCHAR, 255, 'not null', '域名')
-            ->addColumn(self::fields_STATUS, TableInterface::column_type_VARCHAR, 20, "default 'active'", '标准化状态')
-            ->addColumn(self::fields_REGISTRAR_STATUS, TableInterface::column_type_VARCHAR, 50, "default ''", '域名商原始状态')
-            ->addColumn(self::fields_EXPIRES_AT, TableInterface::column_type_DATE, 0, '', '过期时间')
-            ->addColumn(self::fields_NAMESERVERS, TableInterface::column_type_TEXT, 0, '', 'DNS服务器JSON')
-            ->addColumn(self::fields_EXTRA_DATA, TableInterface::column_type_TEXT, 0, '', '域名商原始数据JSON')
-            ->addColumn(self::fields_SYNCED_AT, TableInterface::column_type_DATETIME, 0, '', '最后同步时间')
-            ->addColumn(self::fields_CREATED_AT, TableInterface::column_type_DATETIME, 0, '', '创建时间')
-            ->addColumn(self::fields_UPDATED_AT, TableInterface::column_type_DATETIME, 0, '', '更新时间')
-            ->addIndex(TableInterface::index_type_UNIQUE, 'uk_account_domain', [self::fields_ACCOUNT_ID, self::fields_DOMAIN])
-            ->addIndex(TableInterface::index_type_KEY, 'idx_account_id', self::fields_ACCOUNT_ID)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_domain', self::fields_DOMAIN)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_status', self::fields_STATUS)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_expires_at', self::fields_EXPIRES_AT)
-            ->create();
-    }
-
-    /**
      * 保存前自动更新时间戳和建站状态
      */
     public function save_before(): void
@@ -238,15 +145,15 @@ class Domain extends Model
         parent::save_before();
 
         $now = \date('Y-m-d H:i:s');
-        $this->setData(self::fields_UPDATED_AT, $now);
+        $this->setData(self::schema_fields_UPDATED_AT, $now);
 
-        if (!$this->getData(self::fields_ID)) {
-            $this->setData(self::fields_CREATED_AT, $now);
+        if (!$this->getData(self::schema_fields_ID)) {
+            $this->setData(self::schema_fields_CREATED_AT, $now);
         }
 
-        $domain = $this->getData(self::fields_DOMAIN);
+        $domain = $this->getData(self::schema_fields_DOMAIN);
         if ($domain) {
-            $this->setData(self::fields_DOMAIN, \strtolower(\trim($domain)));
+            $this->setData(self::schema_fields_DOMAIN, \strtolower(\trim($domain)));
         }
 
         // 自动计算建站就绪状态
@@ -257,67 +164,67 @@ class Domain extends Model
 
     public function getDomainId(): int
     {
-        return (int) $this->getData(self::fields_ID);
+        return (int) $this->getData(self::schema_fields_ID);
     }
 
     public function getAccountId(): int
     {
-        return (int) $this->getData(self::fields_ACCOUNT_ID);
+        return (int) $this->getData(self::schema_fields_ACCOUNT_ID);
     }
 
     public function setAccountId(int $accountId): self
     {
-        $this->setData(self::fields_ACCOUNT_ID, $accountId);
+        $this->setData(self::schema_fields_ACCOUNT_ID, $accountId);
         return $this;
     }
 
     public function getDomain(): string
     {
-        return (string) $this->getData(self::fields_DOMAIN);
+        return (string) $this->getData(self::schema_fields_DOMAIN);
     }
 
     public function setDomain(string $domain): self
     {
-        $this->setData(self::fields_DOMAIN, \strtolower(\trim($domain)));
+        $this->setData(self::schema_fields_DOMAIN, \strtolower(\trim($domain)));
         return $this;
     }
 
     public function getStatus(): string
     {
-        return (string) $this->getData(self::fields_STATUS);
+        return (string) $this->getData(self::schema_fields_STATUS);
     }
 
     public function setStatus(string $status): self
     {
-        $this->setData(self::fields_STATUS, $status);
+        $this->setData(self::schema_fields_STATUS, $status);
         return $this;
     }
 
     public function getRegistrarStatus(): string
     {
-        return (string) $this->getData(self::fields_REGISTRAR_STATUS);
+        return (string) $this->getData(self::schema_fields_REGISTRAR_STATUS);
     }
 
     public function setRegistrarStatus(string $status): self
     {
-        $this->setData(self::fields_REGISTRAR_STATUS, $status);
+        $this->setData(self::schema_fields_REGISTRAR_STATUS, $status);
         return $this;
     }
 
     public function getExpiresAt(): string
     {
-        return (string) $this->getData(self::fields_EXPIRES_AT);
+        return (string) $this->getData(self::schema_fields_EXPIRES_AT);
     }
 
     public function setExpiresAt(string $date): self
     {
-        $this->setData(self::fields_EXPIRES_AT, $date);
+        $this->setData(self::schema_fields_EXPIRES_AT, $date);
         return $this;
     }
 
     public function getNameservers(): array
     {
-        $ns = $this->getData(self::fields_NAMESERVERS);
+        $ns = $this->getData(self::schema_fields_NAMESERVERS);
         if (\is_string($ns) && $ns !== '') {
             $decoded = \json_decode($ns, true);
             return \is_array($decoded) ? $decoded : [];
@@ -327,13 +234,13 @@ class Domain extends Model
 
     public function setNameservers(array $nameservers): self
     {
-        $this->setData(self::fields_NAMESERVERS, \json_encode($nameservers, JSON_UNESCAPED_UNICODE));
+        $this->setData(self::schema_fields_NAMESERVERS, \json_encode($nameservers, JSON_UNESCAPED_UNICODE));
         return $this;
     }
 
     public function getExtraData(): array
     {
-        $data = $this->getData(self::fields_EXTRA_DATA);
+        $data = $this->getData(self::schema_fields_EXTRA_DATA);
         if (\is_string($data) && $data !== '') {
             $decoded = \json_decode($data, true);
             return \is_array($decoded) ? $decoded : [];
@@ -343,18 +250,18 @@ class Domain extends Model
 
     public function setExtraData(array $data): self
     {
-        $this->setData(self::fields_EXTRA_DATA, \json_encode($data, JSON_UNESCAPED_UNICODE));
+        $this->setData(self::schema_fields_EXTRA_DATA, \json_encode($data, JSON_UNESCAPED_UNICODE));
         return $this;
     }
 
     public function getSyncedAt(): string
     {
-        return (string) $this->getData(self::fields_SYNCED_AT);
+        return (string) $this->getData(self::schema_fields_SYNCED_AT);
     }
 
     public function setSyncedAt(string $datetime): self
     {
-        $this->setData(self::fields_SYNCED_AT, $datetime);
+        $this->setData(self::schema_fields_SYNCED_AT, $datetime);
         return $this;
     }
 
@@ -362,166 +269,166 @@ class Domain extends Model
 
     public function getCdnProvider(): string
     {
-        return (string) $this->getData(self::fields_CDN_PROVIDER);
+        return (string) $this->getData(self::schema_fields_CDN_PROVIDER);
     }
 
     public function setCdnProvider(string $provider): self
     {
-        $this->setData(self::fields_CDN_PROVIDER, $provider);
+        $this->setData(self::schema_fields_CDN_PROVIDER, $provider);
         return $this;
     }
 
     public function getCdnAccountId(): int
     {
-        return (int) $this->getData(self::fields_CDN_ACCOUNT_ID);
+        return (int) $this->getData(self::schema_fields_CDN_ACCOUNT_ID);
     }
 
     public function setCdnAccountId(int $accountId): self
     {
-        $this->setData(self::fields_CDN_ACCOUNT_ID, $accountId);
+        $this->setData(self::schema_fields_CDN_ACCOUNT_ID, $accountId);
         return $this;
     }
 
     public function getDnsProvider(): string
     {
-        return (string) $this->getData(self::fields_DNS_PROVIDER);
+        return (string) $this->getData(self::schema_fields_DNS_PROVIDER);
     }
 
     public function setDnsProvider(string $provider): self
     {
-        $this->setData(self::fields_DNS_PROVIDER, $provider);
+        $this->setData(self::schema_fields_DNS_PROVIDER, $provider);
         return $this;
     }
 
     public function getDnsAccountId(): int
     {
-        return (int) $this->getData(self::fields_DNS_ACCOUNT_ID);
+        return (int) $this->getData(self::schema_fields_DNS_ACCOUNT_ID);
     }
 
     public function setDnsAccountId(int $accountId): self
     {
-        $this->setData(self::fields_DNS_ACCOUNT_ID, $accountId);
+        $this->setData(self::schema_fields_DNS_ACCOUNT_ID, $accountId);
         return $this;
     }
 
     public function getResolveStatus(): string
     {
-        return (string) ($this->getData(self::fields_RESOLVE_STATUS) ?: self::RESOLVE_STATUS_PENDING);
+        return (string) ($this->getData(self::schema_fields_RESOLVE_STATUS) ?: self::RESOLVE_STATUS_PENDING);
     }
 
     public function setResolveStatus(string $status): self
     {
-        $this->setData(self::fields_RESOLVE_STATUS, $status);
+        $this->setData(self::schema_fields_RESOLVE_STATUS, $status);
         return $this;
     }
 
     public function getResolvedIp(): string
     {
-        return (string) $this->getData(self::fields_RESOLVED_IP);
+        return (string) $this->getData(self::schema_fields_RESOLVED_IP);
     }
 
     public function setResolvedIp(string $ip): self
     {
-        $this->setData(self::fields_RESOLVED_IP, $ip);
+        $this->setData(self::schema_fields_RESOLVED_IP, $ip);
         return $this;
     }
 
     public function getResolvedIpv6(): string
     {
-        return (string) $this->getData(self::fields_RESOLVED_IPV6);
+        return (string) $this->getData(self::schema_fields_RESOLVED_IPV6);
     }
 
     public function setResolvedIpv6(string $ip): self
     {
-        $this->setData(self::fields_RESOLVED_IPV6, $ip);
+        $this->setData(self::schema_fields_RESOLVED_IPV6, $ip);
         return $this;
     }
 
     public function isLocalServer(): bool
     {
-        return (bool) $this->getData(self::fields_IS_LOCAL_SERVER);
+        return (bool) $this->getData(self::schema_fields_IS_LOCAL_SERVER);
     }
 
     public function setIsLocalServer(bool $isLocal): self
     {
-        $this->setData(self::fields_IS_LOCAL_SERVER, $isLocal ? 1 : 0);
+        $this->setData(self::schema_fields_IS_LOCAL_SERVER, $isLocal ? 1 : 0);
         return $this;
     }
 
     public function getResolveCheckedAt(): string
     {
-        return (string) $this->getData(self::fields_RESOLVE_CHECKED_AT);
+        return (string) $this->getData(self::schema_fields_RESOLVE_CHECKED_AT);
     }
 
     public function setResolveCheckedAt(string $datetime): self
     {
-        $this->setData(self::fields_RESOLVE_CHECKED_AT, $datetime);
+        $this->setData(self::schema_fields_RESOLVE_CHECKED_AT, $datetime);
         return $this;
     }
 
     public function getResolveError(): string
     {
-        return (string) $this->getData(self::fields_RESOLVE_ERROR);
+        return (string) $this->getData(self::schema_fields_RESOLVE_ERROR);
     }
 
     public function setResolveError(string $error): self
     {
-        $this->setData(self::fields_RESOLVE_ERROR, $error);
+        $this->setData(self::schema_fields_RESOLVE_ERROR, $error);
         return $this;
     }
 
     public function getHttpsStatus(): string
     {
-        return (string) ($this->getData(self::fields_HTTPS_STATUS) ?: self::HTTPS_STATUS_NONE);
+        return (string) ($this->getData(self::schema_fields_HTTPS_STATUS) ?: self::HTTPS_STATUS_NONE);
     }
 
     public function setHttpsStatus(string $status): self
     {
-        $this->setData(self::fields_HTTPS_STATUS, $status);
+        $this->setData(self::schema_fields_HTTPS_STATUS, $status);
         return $this;
     }
 
     public function getHttpsExpiresAt(): string
     {
-        return (string) $this->getData(self::fields_HTTPS_EXPIRES_AT);
+        return (string) $this->getData(self::schema_fields_HTTPS_EXPIRES_AT);
     }
 
     public function setHttpsExpiresAt(string $date): self
     {
-        $this->setData(self::fields_HTTPS_EXPIRES_AT, $date);
+        $this->setData(self::schema_fields_HTTPS_EXPIRES_AT, $date);
         return $this;
     }
 
     public function getHttpsError(): string
     {
-        return (string) $this->getData(self::fields_HTTPS_ERROR);
+        return (string) $this->getData(self::schema_fields_HTTPS_ERROR);
     }
 
     public function setHttpsError(string $error): self
     {
-        $this->setData(self::fields_HTTPS_ERROR, $error);
+        $this->setData(self::schema_fields_HTTPS_ERROR, $error);
         return $this;
     }
 
     public function getHttpsRequestedAt(): string
     {
-        return (string) $this->getData(self::fields_HTTPS_REQUESTED_AT);
+        return (string) $this->getData(self::schema_fields_HTTPS_REQUESTED_AT);
     }
 
     public function setHttpsRequestedAt(string $datetime): self
     {
-        $this->setData(self::fields_HTTPS_REQUESTED_AT, $datetime);
+        $this->setData(self::schema_fields_HTTPS_REQUESTED_AT, $datetime);
         return $this;
     }
 
     public function isSiteReady(): bool
     {
-        return (bool) $this->getData(self::fields_SITE_READY);
+        return (bool) $this->getData(self::schema_fields_SITE_READY);
     }
 
     public function setSiteReady(bool $ready): self
     {
-        $this->setData(self::fields_SITE_READY, $ready ? 1 : 0);
+        $this->setData(self::schema_fields_SITE_READY, $ready ? 1 : 0);
         return $this;
     }
 
@@ -561,8 +468,8 @@ class Domain extends Model
     public function loadByDomainAndAccount(string $domain, int $accountId): self
     {
         $this->clearQuery()
-            ->where(self::fields_DOMAIN, \strtolower(\trim($domain)))
-            ->where(self::fields_ACCOUNT_ID, $accountId)
+            ->where(self::schema_fields_DOMAIN, \strtolower(\trim($domain)))
+            ->where(self::schema_fields_ACCOUNT_ID, $accountId)
             ->find()
             ->fetch();
         return $this;
@@ -581,20 +488,20 @@ class Domain extends Model
         $query = $this->newQuery();
 
         if (!empty($filters['account_id'])) {
-            $query->where(self::fields_ACCOUNT_ID, (int) $filters['account_id']);
+            $query->where(self::schema_fields_ACCOUNT_ID, (int) $filters['account_id']);
         }
 
         if (!empty($filters['status'])) {
-            $query->where(self::fields_STATUS, $filters['status']);
+            $query->where(self::schema_fields_STATUS, $filters['status']);
         }
 
         if (!empty($filters['search'])) {
             $search = '%' . \trim($filters['search']) . '%';
-            $query->where(self::fields_DOMAIN, $search, 'like');
+            $query->where(self::schema_fields_DOMAIN, $search, 'like');
         }
 
-        $items = $query->order(self::fields_EXPIRES_AT, 'ASC')
-            ->order(self::fields_DOMAIN, 'ASC')
+        $items = $query->order(self::schema_fields_EXPIRES_AT, 'ASC')
+            ->order(self::schema_fields_DOMAIN, 'ASC')
             ->pagination($page, $limit)
             ->select()
             ->fetchArray();
@@ -633,7 +540,7 @@ class Domain extends Model
             // 跨账户去重：如果域名已被其他账户拉取，跳过
             $existing = clone $this;
             $existing->clearQuery()
-                ->where(self::fields_DOMAIN, $domainName)
+                ->where(self::schema_fields_DOMAIN, $domainName)
                 ->find()
                 ->fetch();
             if ($existing->getDomainId() && $existing->getAccountId() !== $accountId) {
@@ -694,16 +601,16 @@ class Domain extends Model
         $domainNames = \array_map(fn($d) => \strtolower(\trim($d)), $domainNames);
 
         $existing = $this->clearQuery()
-            ->where(self::fields_ACCOUNT_ID, $accountId)
-            ->fields(self::fields_ID . ',' . self::fields_DOMAIN)
+            ->where(self::schema_fields_ACCOUNT_ID, $accountId)
+            ->fields(self::schema_fields_ID . ',' . self::schema_fields_DOMAIN)
             ->select()
             ->fetchArray();
 
         $deleted = 0;
         foreach ($existing as $row) {
-            if (!\in_array(\strtolower($row[self::fields_DOMAIN]), $domainNames, true)) {
+            if (!\in_array(\strtolower($row[self::schema_fields_DOMAIN]), $domainNames, true)) {
                 $this->clearData(true);
-                $this->where(self::fields_ID, $row[self::fields_ID])->delete()->fetch();
+                $this->where(self::schema_fields_ID, $row[self::schema_fields_ID])->delete()->fetch();
                 $deleted++;
             }
         }
@@ -724,7 +631,7 @@ class Domain extends Model
         }
 
         return $this->clearQuery()
-            ->where(self::fields_ID, $domainIds, 'IN')
+            ->where(self::schema_fields_ID, $domainIds, 'IN')
             ->select()
             ->fetchArray();
     }

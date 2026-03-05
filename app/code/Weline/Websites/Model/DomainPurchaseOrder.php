@@ -12,22 +12,39 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Model;
 
-use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 
+#[Table(comment: '域名购买订单表')]
+#[Index(name: 'uk_order_no', columns: ['order_no'], type: 'UNIQUE')]
+#[Index(name: 'idx_account_id', columns: ['account_id'])]
+#[Index(name: 'idx_status', columns: ['status'])]
 class DomainPurchaseOrder extends Model
 {
-    public const fields_ID = 'order_id';
-    public const fields_ACCOUNT_ID = 'account_id';        // 关联域名商账号 ID
-    public const fields_ORDER_NO = 'order_no';            // 订单号（系统生成）
-    public const fields_TOTAL_COUNT = 'total_count';      // 域名总数
-    public const fields_SUCCESS_COUNT = 'success_count';  // 成功数
-    public const fields_FAIL_COUNT = 'fail_count';        // 失败数
-    public const fields_STATUS = 'status';                // pending / processing / completed / failed
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
+    public const schema_table = 'weline_websites_domain_purchase_order';
+    public const schema_primary_key = 'order_id';
+
+
+    #[Col('int', 11, nullable: false, primaryKey: true, autoIncrement: true, comment: '订单ID')]
+    public const schema_fields_ID = 'order_id';
+    #[Col('int', 11, nullable: false, comment: '域名商账号ID')]
+    public const schema_fields_ACCOUNT_ID = 'account_id';
+    #[Col('varchar', 64, nullable: false, comment: '订单号')]
+    public const schema_fields_ORDER_NO = 'order_no';
+    #[Col('int', 11, nullable: true, default: 0, comment: '域名总数')]
+    public const schema_fields_TOTAL_COUNT = 'total_count';
+    #[Col('int', 11, nullable: true, default: 0, comment: '成功数')]
+    public const schema_fields_SUCCESS_COUNT = 'success_count';
+    #[Col('int', 11, nullable: true, default: 0, comment: '失败数')]
+    public const schema_fields_FAIL_COUNT = 'fail_count';
+    #[Col('varchar', 20, nullable: true, default: 'pending', comment: '状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col('datetime', nullable: true, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col('datetime', nullable: true, comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
 
     // 状态常量
     public const STATUS_PENDING = 'pending';
@@ -39,103 +56,6 @@ class DomainPurchaseOrder extends Model
     public array $_index_sort_keys = ['order_id', 'order_no', 'status'];
 
     /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $this->install($setup, $context);
-        }
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist()) {
-            return;
-        }
-
-        $setup->createTable(__('域名购买订单表'))
-            ->addColumn(
-                self::fields_ID,
-                TableInterface::column_type_INTEGER,
-                11,
-                'primary key auto_increment',
-                __('订单ID')
-            )
-            ->addColumn(
-                self::fields_ACCOUNT_ID,
-                TableInterface::column_type_INTEGER,
-                11,
-                'not null',
-                __('域名商账号ID')
-            )
-            ->addColumn(
-                self::fields_ORDER_NO,
-                TableInterface::column_type_VARCHAR,
-                64,
-                'not null',
-                __('订单号')
-            )
-            ->addColumn(
-                self::fields_TOTAL_COUNT,
-                TableInterface::column_type_INTEGER,
-                11,
-                'default 0',
-                __('域名总数')
-            )
-            ->addColumn(
-                self::fields_SUCCESS_COUNT,
-                TableInterface::column_type_INTEGER,
-                11,
-                'default 0',
-                __('成功数')
-            )
-            ->addColumn(
-                self::fields_FAIL_COUNT,
-                TableInterface::column_type_INTEGER,
-                11,
-                'default 0',
-                __('失败数')
-            )
-            ->addColumn(
-                self::fields_STATUS,
-                TableInterface::column_type_VARCHAR,
-                20,
-                "default 'pending'",
-                __('状态')
-            )
-            ->addColumn(
-                self::fields_CREATED_AT,
-                TableInterface::column_type_DATETIME,
-                0,
-                '',
-                __('创建时间')
-            )
-            ->addColumn(
-                self::fields_UPDATED_AT,
-                TableInterface::column_type_DATETIME,
-                0,
-                '',
-                __('更新时间')
-            )
-            ->addIndex(TableInterface::index_type_UNIQUE, 'uk_order_no', self::fields_ORDER_NO)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_account_id', self::fields_ACCOUNT_ID)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_status', self::fields_STATUS)
-            ->create();
-    }
-
-    /**
      * 保存前自动更新时间戳
      */
     public function save_before(): void
@@ -143,13 +63,13 @@ class DomainPurchaseOrder extends Model
         parent::save_before();
 
         $now = \date('Y-m-d H:i:s');
-        $this->setData(self::fields_UPDATED_AT, $now);
+        $this->setData(self::schema_fields_UPDATED_AT, $now);
 
-        if (!$this->getData(self::fields_ID)) {
-            $this->setData(self::fields_CREATED_AT, $now);
+        if (!$this->getData(self::schema_fields_ID)) {
+            $this->setData(self::schema_fields_CREATED_AT, $now);
             // 自动生成订单号
-            if (!$this->getData(self::fields_ORDER_NO)) {
-                $this->setData(self::fields_ORDER_NO, 'DP' . \date('YmdHis') . \str_pad((string)\random_int(0, 9999), 4, '0', STR_PAD_LEFT));
+            if (!$this->getData(self::schema_fields_ORDER_NO)) {
+                $this->setData(self::schema_fields_ORDER_NO, 'DP' . \date('YmdHis') . \str_pad((string)\random_int(0, 9999), 4, '0', STR_PAD_LEFT));
             }
         }
     }
@@ -158,37 +78,38 @@ class DomainPurchaseOrder extends Model
 
     public function getOrderId(): int
     {
-        return (int) $this->getData(self::fields_ID);
+        return (int) $this->getData(self::schema_fields_ID);
     }
 
     public function getOrderNo(): string
     {
-        return (string) $this->getData(self::fields_ORDER_NO);
+        return (string) $this->getData(self::schema_fields_ORDER_NO);
     }
 
     public function getStatus(): string
     {
-        return (string) $this->getData(self::fields_STATUS);
+        return (string) $this->getData(self::schema_fields_STATUS);
     }
 
     public function setStatus(string $status): self
     {
-        $this->setData(self::fields_STATUS, $status);
+        $this->setData(self::schema_fields_STATUS, $status);
         return $this;
     }
 
     public function getTotalCount(): int
     {
-        return (int) $this->getData(self::fields_TOTAL_COUNT);
+        return (int) $this->getData(self::schema_fields_TOTAL_COUNT);
     }
 
     public function getSuccessCount(): int
     {
-        return (int) $this->getData(self::fields_SUCCESS_COUNT);
+        return (int) $this->getData(self::schema_fields_SUCCESS_COUNT);
     }
 
     public function getFailCount(): int
     {
-        return (int) $this->getData(self::fields_FAIL_COUNT);
+        return (int) $this->getData(self::schema_fields_FAIL_COUNT);
     }
 }
+

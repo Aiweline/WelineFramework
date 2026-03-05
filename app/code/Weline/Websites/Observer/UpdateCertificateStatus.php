@@ -67,7 +67,7 @@ class UpdateCertificateStatus implements ObserverInterface
         /** @var DomainPool $poolModel */
         $poolModel = ObjectManager::getInstance(DomainPool::class, [], false);
         $poolModel->clearQuery()
-            ->where(DomainPool::fields_DOMAIN, strtolower($domain))
+            ->where(DomainPool::schema_fields_DOMAIN, strtolower($domain))
             ->find()
             ->fetch();
         
