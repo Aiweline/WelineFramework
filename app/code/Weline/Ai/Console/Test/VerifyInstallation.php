@@ -21,9 +21,7 @@ class VerifyInstallation implements CommandInterface
         $models = [
             'ai_model' => \Weline\Ai\Model\AiModel::class,
             'ai_api_key' => \Weline\Ai\Model\AiApiKey::class,
-            'ai_assistant' => \Weline\Ai\Model\AiAssistant::class,
             'ai_tenant' => \Weline\Ai\Model\AiTenant::class,
-            'ai_model_monitoring' => \Weline\Ai\Model\AiModelMonitoring::class,
         ];
 
         echo "📊 数据库表检查:\n";

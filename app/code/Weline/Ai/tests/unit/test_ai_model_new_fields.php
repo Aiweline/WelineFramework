@@ -31,8 +31,8 @@ class test_ai_model_new_fields extends TestCase
      */
     public function test_fields_IS_ACTIVE_constant_defined()
     {
-        $this->assertTrue(defined('Weline\Ai\Model\AiModel::fields_IS_ACTIVE'));
-        $this->assertEquals('is_active', AiModel::fields_IS_ACTIVE);
+        $this->assertTrue(defined('Weline\Ai\Model\AiModel::schema_fields_IS_ACTIVE'));
+        $this->assertEquals('is_active', AiModel::schema_fields_IS_ACTIVE);
     }
 
     /**
@@ -40,8 +40,8 @@ class test_ai_model_new_fields extends TestCase
      */
     public function test_fields_IS_DEFAULT_constant_defined()
     {
-        $this->assertTrue(defined('Weline\Ai\Model\AiModel::fields_IS_DEFAULT'));
-        $this->assertEquals('is_default', AiModel::fields_IS_DEFAULT);
+        $this->assertTrue(defined('Weline\Ai\Model\AiModel::schema_fields_IS_DEFAULT'));
+        $this->assertEquals('is_default', AiModel::schema_fields_IS_DEFAULT);
     }
 
     /**
@@ -50,7 +50,7 @@ class test_ai_model_new_fields extends TestCase
     public function test_getIsActive_returns_boolean()
     {
         // Arrange: 设置 is_active 为 1
-        $this->model->setData(AiModel::fields_IS_ACTIVE, 1);
+        $this->model->setData(AiModel::schema_fields_IS_ACTIVE, 1);
         
         // Act
         $result = $this->model->getIsActive();
@@ -66,7 +66,7 @@ class test_ai_model_new_fields extends TestCase
     public function test_getIsActive_returns_false_for_zero()
     {
         // Arrange
-        $this->model->setData(AiModel::fields_IS_ACTIVE, 0);
+        $this->model->setData(AiModel::schema_fields_IS_ACTIVE, 0);
         
         // Act
         $result = $this->model->getIsActive();
@@ -85,7 +85,7 @@ class test_ai_model_new_fields extends TestCase
         $this->model->setIsActive(true);
         
         // Assert
-        $this->assertEquals(1, $this->model->getData(AiModel::fields_IS_ACTIVE));
+        $this->assertEquals(1, $this->model->getData(AiModel::schema_fields_IS_ACTIVE));
         $this->assertTrue($this->model->getIsActive());
     }
 
@@ -98,7 +98,7 @@ class test_ai_model_new_fields extends TestCase
         $this->model->setIsActive(false);
         
         // Assert
-        $this->assertEquals(0, $this->model->getData(AiModel::fields_IS_ACTIVE));
+        $this->assertEquals(0, $this->model->getData(AiModel::schema_fields_IS_ACTIVE));
         $this->assertFalse($this->model->getIsActive());
     }
 
@@ -121,7 +121,7 @@ class test_ai_model_new_fields extends TestCase
     public function test_getIsDefault_returns_boolean()
     {
         // Arrange
-        $this->model->setData(AiModel::fields_IS_DEFAULT, 1);
+        $this->model->setData(AiModel::schema_fields_IS_DEFAULT, 1);
         
         // Act
         $result = $this->model->getIsDefault();
@@ -137,7 +137,7 @@ class test_ai_model_new_fields extends TestCase
     public function test_getIsDefault_returns_false_for_zero()
     {
         // Arrange
-        $this->model->setData(AiModel::fields_IS_DEFAULT, 0);
+        $this->model->setData(AiModel::schema_fields_IS_DEFAULT, 0);
         
         // Act
         $result = $this->model->getIsDefault();
@@ -156,7 +156,7 @@ class test_ai_model_new_fields extends TestCase
         $this->model->setIsDefault(true);
         
         // Assert
-        $this->assertEquals(1, $this->model->getData(AiModel::fields_IS_DEFAULT));
+        $this->assertEquals(1, $this->model->getData(AiModel::schema_fields_IS_DEFAULT));
         $this->assertTrue($this->model->getIsDefault());
     }
 
@@ -169,7 +169,7 @@ class test_ai_model_new_fields extends TestCase
         $this->model->setIsDefault(false);
         
         // Assert
-        $this->assertEquals(0, $this->model->getData(AiModel::fields_IS_DEFAULT));
+        $this->assertEquals(0, $this->model->getData(AiModel::schema_fields_IS_DEFAULT));
         $this->assertFalse($this->model->getIsDefault());
     }
 
@@ -237,7 +237,7 @@ class test_ai_model_new_fields extends TestCase
         // 但新创建的模型对象可能未设置该字段
         
         // Arrange: 显式设置默认值
-        $this->model->setData(AiModel::fields_IS_ACTIVE, 1);
+        $this->model->setData(AiModel::schema_fields_IS_ACTIVE, 1);
         
         // Act & Assert
         $this->assertTrue($this->model->getIsActive());
@@ -251,7 +251,7 @@ class test_ai_model_new_fields extends TestCase
         // 注意：根据数据库定义，is_default 默认为 0
         
         // Arrange: 显式设置默认值
-        $this->model->setData(AiModel::fields_IS_DEFAULT, 0);
+        $this->model->setData(AiModel::schema_fields_IS_DEFAULT, 0);
         
         // Act & Assert
         $this->assertFalse($this->model->getIsDefault());
@@ -316,9 +316,9 @@ class test_ai_model_new_fields extends TestCase
         $this->assertTrue($model->isCopied());
         
         // 验证实际字段常量
-        $this->assertEquals('token_price_input', AiModel::fields_TOKEN_PRICE_INPUT);
-        $this->assertEquals('token_price_output', AiModel::fields_TOKEN_PRICE_OUTPUT);
-        $this->assertEquals('proxy_info', AiModel::fields_PROXY_INFO);
+        $this->assertEquals('token_price_input', AiModel::schema_fields_TOKEN_PRICE_INPUT);
+        $this->assertEquals('token_price_output', AiModel::schema_fields_TOKEN_PRICE_OUTPUT);
+        $this->assertEquals('proxy_info', AiModel::schema_fields_PROXY_INFO);
     }
 
     /**
@@ -327,11 +327,11 @@ class test_ai_model_new_fields extends TestCase
     public function test_unit_primary_keys_uses_field_constants()
     {
         // Arrange & Act
-        $primaryKeys = $this->model->_unit_primary_keys ?? [];
+        $primaryKeys = $this->model->getUnitPrimaryKeys();
         
         // Assert
         $this->assertIsArray($primaryKeys);
-        $this->assertContains(AiModel::fields_ID, $primaryKeys);
+        $this->assertContains(AiModel::schema_fields_ID, $primaryKeys);
     }
 
     /**
@@ -344,9 +344,9 @@ class test_ai_model_new_fields extends TestCase
         
         // Assert
         $this->assertIsArray($sortKeys);
-        $this->assertContains(AiModel::fields_ID, $sortKeys);
-        $this->assertContains(AiModel::fields_SUPPLIER, $sortKeys);
-        $this->assertContains(AiModel::fields_MODEL_CODE, $sortKeys);
+        $this->assertContains(AiModel::schema_fields_ID, $sortKeys);
+        $this->assertContains(AiModel::schema_fields_SUPPLIER, $sortKeys);
+        $this->assertContains(AiModel::schema_fields_MODEL_CODE, $sortKeys);
     }
 
     /**
@@ -390,16 +390,16 @@ class test_ai_model_new_fields extends TestCase
     {
         // Arrange & Act
         $this->model
-            ->setData(AiModel::fields_SUPPLIER, 'OpenAI')
-            ->setData(AiModel::fields_MODEL_CODE, 'gpt-4')
-            ->setData(AiModel::fields_NAME, 'GPT-4')
+            ->setData(AiModel::schema_fields_SUPPLIER, 'OpenAI')
+            ->setData(AiModel::schema_fields_MODEL_CODE, 'gpt-4')
+            ->setData(AiModel::schema_fields_NAME, 'GPT-4')
             ->setIsActive(true)
             ->setIsDefault(true);
         
         // Assert
-        $this->assertEquals('OpenAI', $this->model->getData(AiModel::fields_SUPPLIER));
-        $this->assertEquals('gpt-4', $this->model->getData(AiModel::fields_MODEL_CODE));
-        $this->assertEquals('GPT-4', $this->model->getData(AiModel::fields_NAME));
+        $this->assertEquals('OpenAI', $this->model->getData(AiModel::schema_fields_SUPPLIER));
+        $this->assertEquals('gpt-4', $this->model->getData(AiModel::schema_fields_MODEL_CODE));
+        $this->assertEquals('GPT-4', $this->model->getData(AiModel::schema_fields_NAME));
         $this->assertTrue($this->model->isActive());
         $this->assertTrue($this->model->isDefault());
     }

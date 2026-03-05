@@ -144,7 +144,7 @@ class test_api_key_service extends TestCase
         $query = $this->createMock(QueryInterface::class);
         $this->apiKeyModel->expects($this->once())
             ->method('where')
-            ->with(AiApiKey::fields_TOKEN_HASH, $tokenHash)
+            ->with(AiApiKey::schema_fields_TOKEN_HASH, $tokenHash)
             ->willReturn($query);
 
         $query->expects($this->once())
@@ -157,7 +157,7 @@ class test_api_key_service extends TestCase
 
         $this->apiKeyModel->expects($this->once())
             ->method('getData')
-            ->with(AiApiKey::fields_STATUS)
+            ->with(AiApiKey::schema_fields_STATUS)
             ->willReturn(AiApiKey::STATUS_APPROVED);
 
         $result = $this->service->validateToken($rawToken);
@@ -200,7 +200,7 @@ class test_api_key_service extends TestCase
         
         $this->apiKeyModel->method('getId')->willReturn(1);
         $this->apiKeyModel->method('getData')
-            ->with(AiApiKey::fields_STATUS)
+            ->with(AiApiKey::schema_fields_STATUS)
             ->willReturn('rejected');
 
         $result = $this->service->validateToken($rawToken);
@@ -225,7 +225,7 @@ class test_api_key_service extends TestCase
 
         $this->apiKeyModel->expects($this->once())
             ->method('setData')
-            ->with(AiApiKey::fields_STATUS, AiApiKey::STATUS_REJECTED);
+            ->with(AiApiKey::schema_fields_STATUS, AiApiKey::STATUS_REJECTED);
 
         $this->apiKeyModel->expects($this->once())
             ->method('save');
@@ -269,18 +269,18 @@ class test_api_key_service extends TestCase
         $this->apiKeyModel->expects($this->exactly(3))
             ->method('getData')
             ->willReturnMap([
-                [AiApiKey::fields_USAGE_DAILY, null, 0.10],
-                [AiApiKey::fields_USAGE_MONTHLY, null, 1.50],
-                [AiApiKey::fields_CALL_COUNT, null, 42]
+                [AiApiKey::schema_fields_USAGE_DAILY, null, 0.10],
+                [AiApiKey::schema_fields_USAGE_MONTHLY, null, 1.50],
+                [AiApiKey::schema_fields_CALL_COUNT, null, 42]
             ]);
 
         // 验证更新
         $this->apiKeyModel->expects($this->once())
             ->method('setData')
             ->with($this->callback(function($data) use ($cost) {
-                return $data[AiApiKey::fields_USAGE_DAILY] === 0.15
-                    && $data[AiApiKey::fields_USAGE_MONTHLY] === 1.55
-                    && $data[AiApiKey::fields_CALL_COUNT] === 43;
+                return $data[AiApiKey::schema_fields_USAGE_DAILY] === 0.15
+                    && $data[AiApiKey::schema_fields_USAGE_MONTHLY] === 1.55
+                    && $data[AiApiKey::schema_fields_CALL_COUNT] === 43;
             }));
 
         $this->apiKeyModel->expects($this->once())
@@ -303,10 +303,10 @@ class test_api_key_service extends TestCase
 
         $this->apiKeyModel->method('getData')
             ->willReturnMap([
-                [AiApiKey::fields_QUOTA_DAILY, null, 10.0],
-                [AiApiKey::fields_QUOTA_MONTHLY, null, 300.0],
-                [AiApiKey::fields_USAGE_DAILY, null, 5.0],
-                [AiApiKey::fields_USAGE_MONTHLY, null, 150.0]
+                [AiApiKey::schema_fields_QUOTA_DAILY, null, 10.0],
+                [AiApiKey::schema_fields_QUOTA_MONTHLY, null, 300.0],
+                [AiApiKey::schema_fields_USAGE_DAILY, null, 5.0],
+                [AiApiKey::schema_fields_USAGE_MONTHLY, null, 150.0]
             ]);
 
         $result = $this->service->checkQuota($keyId);
@@ -323,8 +323,8 @@ class test_api_key_service extends TestCase
         $this->apiKeyModel->method('load')->willReturn($this->apiKeyModel);
         $this->apiKeyModel->method('getData')
             ->willReturnMap([
-                [AiApiKey::fields_QUOTA_DAILY, null, 10.0],
-                [AiApiKey::fields_USAGE_DAILY, null, 10.5]
+                [AiApiKey::schema_fields_QUOTA_DAILY, null, 10.0],
+                [AiApiKey::schema_fields_USAGE_DAILY, null, 10.5]
             ]);
 
         $result = $this->service->checkQuota($keyId);

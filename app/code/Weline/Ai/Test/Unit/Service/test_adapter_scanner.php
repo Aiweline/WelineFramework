@@ -118,7 +118,7 @@ class test_adapter_scanner extends TestCase
         
         $this->scenarioAdapter->expects($this->once())
             ->method('where')
-            ->with(AiScenarioAdapter::fields_CODE, $code)
+            ->with(AiScenarioAdapter::schema_fields_CODE, $code)
             ->willReturn($this->scenarioAdapter);
 
         $this->scenarioAdapter->expects($this->once())
@@ -162,7 +162,7 @@ class test_adapter_scanner extends TestCase
 
         $this->scenarioAdapter->expects($this->once())
             ->method('where')
-            ->with(AiScenarioAdapter::fields_IS_ACTIVE, 1)
+            ->with(AiScenarioAdapter::schema_fields_IS_ACTIVE, 1)
             ->willReturn($this->scenarioAdapter);
 
         $this->scenarioAdapter->expects($this->once())
@@ -208,7 +208,7 @@ class test_adapter_scanner extends TestCase
 
         $this->scenarioAdapter->expects($this->once())
             ->method('setData')
-            ->with(AiScenarioAdapter::fields_IS_ACTIVE, 1);
+            ->with(AiScenarioAdapter::schema_fields_IS_ACTIVE, 1);
 
         $this->scenarioAdapter->expects($this->once())
             ->method('save');
@@ -235,7 +235,7 @@ class test_adapter_scanner extends TestCase
 
         $this->scenarioAdapter->expects($this->once())
             ->method('setData')
-            ->with(AiScenarioAdapter::fields_IS_ACTIVE, 0);
+            ->with(AiScenarioAdapter::schema_fields_IS_ACTIVE, 0);
 
         $this->scenarioAdapter->expects($this->once())
             ->method('save');

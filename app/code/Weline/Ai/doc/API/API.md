@@ -11,10 +11,9 @@
 2. [Chat API](#chat-api)
 3. [Model API](#model-api)
 4. [API Key API](#api-key-api)
-5. [Assistant API](#assistant-api)
-6. [错误处理](#错误处理)
-7. [速率限制](#速率限制)
-8. [最佳实践](#最佳实践)
+5. [错误处理](#错误处理)
+6. [速率限制](#速率限制)
+7. [最佳实践](#最佳实践)
 
 ---
 
@@ -311,62 +310,6 @@ Authorization: Bearer YOUR_API_KEY
   "message": "API Key 已成功撤销"
 }
 ```
-
----
-
-## Assistant API
-
-### POST /api/v1/assistant
-
-创建新的 AI 助手。
-
-**请求体**:
-```json
-{
-  "name": "客服助手",
-  "description": "专业的客服支持助手",
-  "prompt_template": "你是一个专业的客服人员。用户问题：{input}",
-  "model_id": 1,
-  "config": {
-    "temperature": 0.7,
-    "max_tokens": 2000
-  },
-  "is_public": false
-}
-```
-
-**成功响应** (200 OK):
-```json
-{
-  "success": true,
-  "data": {
-    "id": 301,
-    "name": "客服助手",
-    "description": "专业的客服支持助手",
-    "prompt_template": "你是一个专业的客服人员。用户问题：{input}",
-    "model_id": 1,
-    "status": "active",
-    "usage_count": 0,
-    "created_at": "2025-10-10 10:00:00"
-  }
-}
-```
-
-### GET /api/v1/assistant
-
-获取助手列表。
-
-### GET /api/v1/assistant/{id}
-
-获取助手详情。
-
-### PUT /api/v1/assistant/{id}
-
-更新助手配置。
-
-### DELETE /api/v1/assistant/{id}
-
-删除助手。
 
 ---
 

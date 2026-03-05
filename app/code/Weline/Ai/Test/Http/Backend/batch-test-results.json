@@ -18,12 +18,6 @@
         "message": "正常"
     },
     {
-        "route": "ai\/backend\/assistant\/index",
-        "description": "助手管理",
-        "status": "SQL_ERROR",
-        "message": "Undefined"
-    },
-    {
         "route": "ai\/backend\/model\/index",
         "description": "AI模型管理",
         "status": "OK",
@@ -52,12 +46,6 @@
         "description": "场景适配器",
         "status": "OK",
         "message": "正常"
-    },
-    {
-        "route": "ai\/backend\/rating\/index",
-        "description": "评分管理",
-        "status": "UNKNOWN",
-        "message": "未知响应"
     },
     {
         "route": "ai\/backend\/insights\/index",

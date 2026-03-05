@@ -60,8 +60,8 @@ class Index extends FrontendController
     {
         // 获取激活的AI模型列表
         $models = $this->aiModel->reset()
-            ->where(AiModel::fields_IS_ACTIVE, 1)
-            ->order(AiModel::fields_CREATED_AT, 'DESC')
+            ->where(AiModel::schema_fields_IS_ACTIVE, 1)
+            ->order(AiModel::schema_fields_CREATED_AT, 'DESC')
             ->limit(10)
             ->select()
             ->fetch();
@@ -188,17 +188,17 @@ $result = \Weline\Ai\Service\AiService::generateText(
     {
         // 获取模型及其价格信息
         $models = $this->aiModel->reset()
-            ->where(AiModel::fields_IS_ACTIVE, 1)
+            ->where(AiModel::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetch();
 
         $pricingData = [];
         foreach ($models->getItems() as $model) {
             $pricingData[] = [
-                'name' => $model->getData(AiModel::fields_NAME),
-                'vendor' => $model->getData(AiModel::fields_SUPPLIER),
-                'input_price' => $model->getData(AiModel::fields_TOKEN_PRICE_INPUT),
-                'output_price' => $model->getData(AiModel::fields_TOKEN_PRICE_OUTPUT),
+                'name' => $model->getData(AiModel::schema_fields_NAME),
+                'vendor' => $model->getData(AiModel::schema_fields_SUPPLIER),
+                'input_price' => $model->getData(AiModel::schema_fields_TOKEN_PRICE_INPUT),
+                'output_price' => $model->getData(AiModel::schema_fields_TOKEN_PRICE_OUTPUT),
             ];
         }
 
