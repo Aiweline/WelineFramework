@@ -74,7 +74,7 @@ class TwoFactorAuthService
             return false;
         }
 
-        $secret = $record->getData(UserTwoFactor::fields_SECRET);
+        $secret = $record->getData(UserTwoFactor::schema_fields_SECRET);
         
         // 验证码必须正确才能禁用
         if (!TwoFactorAuthHelper::verifyCode($secret, $code)) {
@@ -94,11 +94,11 @@ class TwoFactorAuthService
     public function verify(int $userId, string $code): bool
     {
         $record = $this->userTwoFactor->getByUserId($userId);
-        if (!$record || !$record->getData(UserTwoFactor::fields_IS_ENABLED)) {
+        if (!$record || !$record->getData(UserTwoFactor::schema_fields_IS_ENABLED)) {
             return false;
         }
 
-        $secret = $record->getData(UserTwoFactor::fields_SECRET);
+        $secret = $record->getData(UserTwoFactor::schema_fields_SECRET);
         
         if (TwoFactorAuthHelper::verifyCode($secret, $code)) {
             $this->userTwoFactor->updateLastUsed($userId);
@@ -230,9 +230,9 @@ class TwoFactorAuthService
         }
 
         return [
-            'is_enabled' => (bool)$record->getData(UserTwoFactor::fields_IS_ENABLED),
-            'last_used_at' => $record->getData(UserTwoFactor::fields_LAST_USED_AT),
-            'created_at' => $record->getData(UserTwoFactor::fields_CREATED_AT),
+            'is_enabled' => (bool)$record->getData(UserTwoFactor::schema_fields_IS_ENABLED),
+            'last_used_at' => $record->getData(UserTwoFactor::schema_fields_LAST_USED_AT),
+            'created_at' => $record->getData(UserTwoFactor::schema_fields_CREATED_AT),
             'backup_codes_count' => count($this->getBackupCodes($userId)),
         ];
     }
