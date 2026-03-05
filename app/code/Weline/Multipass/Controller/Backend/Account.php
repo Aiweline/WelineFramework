@@ -133,7 +133,7 @@ class Account extends BackendController
                 }
                 
                 $users = $userModel
-                    ->order(FrontendUser::fields_ID, 'DESC')
+                    ->order(FrontendUser::schema_fields_ID, 'DESC')
                     ->pagination(1, 20)
                     ->select()
                     ->fetch();
@@ -143,7 +143,7 @@ class Account extends BackendController
                 $userModel->clear();
                 
                 // 先设置未删除条件
-                $userModel->where(BackendUser::fields_is_deleted, 0);
+                $userModel->where(BackendUser::schema_fields_is_deleted, 0);
                 
                 if (!empty($search)) {
                     // 使用 concat_like 进行多字段模糊查询
@@ -151,7 +151,7 @@ class Account extends BackendController
                 }
                 
                 $users = $userModel
-                    ->order(BackendUser::fields_ID, 'DESC')
+                    ->order(BackendUser::schema_fields_ID, 'DESC')
                     ->pagination(1, 20)
                     ->select()
                     ->fetch();

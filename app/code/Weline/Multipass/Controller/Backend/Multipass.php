@@ -108,11 +108,11 @@ class Multipass extends BackendController
             
             // 优先使用用户名查找，其次使用邮箱
             if (!empty($username)) {
-                $user->where(BackendUser::fields_username, $username)->find()->fetch();
+                $user->where(BackendUser::schema_fields_username, $username)->find()->fetch();
             }
             
             if (!$user->getId() && !empty($email)) {
-                $user->clear()->where(BackendUser::fields_email, $email)->find()->fetch();
+                $user->clear()->where(BackendUser::schema_fields_email, $email)->find()->fetch();
             }
 
             // 如果用户不存在，返回错误
