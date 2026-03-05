@@ -13,7 +13,6 @@ namespace Weline\I18n\Helper;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
-use Weline\Framework\App\Env;
 use Weline\I18n\Service\TranslationCollector;
 
 /**
