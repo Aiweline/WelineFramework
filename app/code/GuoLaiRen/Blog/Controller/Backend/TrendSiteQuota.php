@@ -126,7 +126,7 @@ class TrendSiteQuota extends BackendController
         $listModel->clear();
 
         $items = $listModel
-            ->order(TrendSiteQuotaModel::schema_fields_ID, 'DESC')
+            ->order(TrendSiteQuotaModel::schema_fields_QUOTA_ID, 'DESC')
             ->pagination()
             ->select()
             ->fetch();
@@ -258,7 +258,7 @@ class TrendSiteQuota extends BackendController
             $exists->clear()
                 ->where(TrendSiteQuotaModel::schema_fields_SITE_ID, $siteId)
                 ->where(TrendSiteQuotaModel::schema_fields_PROFILE_ID, $profileId)
-                ->where(TrendSiteQuotaModel::schema_fields_ID, $id, '!=')
+                ->where(TrendSiteQuotaModel::schema_fields_QUOTA_ID, $id, '!=')
                 ->find()
                 ->fetch();
             if ($exists->getId()) {
@@ -380,7 +380,7 @@ class TrendSiteQuota extends BackendController
             ->where(TrendSiteQuotaModel::schema_fields_SITE_ID, $siteId)
             ->where(TrendSiteQuotaModel::schema_fields_PROFILE_ID, $profileId);
         if ($quota !== null && $quota->getId()) {
-            $exists->where(TrendSiteQuotaModel::schema_fields_ID, $quota->getId(), '!=');
+            $exists->where(TrendSiteQuotaModel::schema_fields_QUOTA_ID, $quota->getId(), '!=');
         }
         $exists->find()->fetch();
         if ($exists->getId()) {

@@ -63,6 +63,7 @@ URL别名已存在，请更换一个,"URL slug already exists"
 配额已删除,"Quota deleted"
 "Blog AI 自动发文","Blog AI Auto Publish"
 "按站点+画像配额，从增长词记录中取词，调用 AI 生成标题+摘要+正文并写入博客（草稿或直接发布）","按站点+画像配额，从增长词记录中取词，调用 AI 生成标题+摘要+正文并写入博客（草稿或直接发布）"
+当前模式：%{mode}，待处理配额：%{count},"Current mode: %{mode}, quotas to process: %{count}"
 "Blog AI 发文失败（关键词 %{keyword}，log_id %{log_id}）：%{error}","Blog AI publish failed (keyword %{keyword}, log_id %{log_id}): %{error}"
 "自动发文完成：本次发布 %{count} 篇","Auto publish done: %{count} posts published"
 可能原因：,可能原因：
@@ -74,12 +75,11 @@ URL别名已存在，请更换一个,"URL slug already exists"
 请启用画像,请启用画像
 请在该画像中配置关键词,请在该画像中配置关键词
 "请检查 AI 服务配置或稍后重试。","请检查 AI 服务配置或稍后重试。"
+场景适配器,场景适配器
 配置默认模型,配置默认模型
 模型列表,模型列表
 供应商账户,供应商账户
-"未配置 AI 默认模型","未配置 AI 默认模型"
-"AI 默认模型配置无效（模型代码 %{1} 不存在）","AI 默认模型配置无效（模型代码 %{1} 不存在）"
-"AI 默认模型 ""%{1}"" 未激活","AI 默认模型 ""%{1}"" 未激活"
+"未配置 AI 默认模型（可在「场景适配器」中为文章生成适配器设置默认模型，或在「默认模型配置」中配置）","AI default model not configured (set in Scenario Adapters for article generation, or in Default Model config)"
 "AI 模型配置检查失败：%{1}","AI 模型配置检查失败：%{1}"
 文章生成失败,文章生成失败
 "Blog 趋势同步","Blog Trend Sync"
@@ -311,6 +311,9 @@ URL别名将用于生成分类页面的访问地址。,"URL slug will be used to
 发布时间：,"Published At:"
 摘要：,Summary:
 返回博客列表,"Back to Blog List"
+"未配置 AI 默认模型","未配置 AI 默认模型"
+"AI 默认模型配置无效（模型代码 %{1} 不存在）","AI 默认模型配置无效（模型代码 %{1} 不存在）"
+"AI 默认模型 ""%{1}"" 未激活","AI 默认模型 ""%{1}"" 未激活"
 加密密钥,加密密钥
 留空自动生成,留空自动生成
 生成,生成
