@@ -1,6 +1,5 @@
 <?php
 declare(strict_types=1);
-
 /**
  * Weline Server - 服务器状态日志模型
  * 
@@ -9,114 +8,74 @@ declare(strict_types=1);
  * @author Aiweline
  * @email aiweline@qq.com
  */
-
 namespace Weline\Server\Model;
-
-use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
-/**
- * 服务器状态日志模型
- * 
- * 定期记录服务器各进程的运行状态
- */
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+/** 服务器状态日志模型 - 定期记录服务器各进程的运行状态 */
+#[Table(comment: '服务器状态日志表')]
+#[Index(name: 'idx_instance', columns: ['instance'])]
+#[Index(name: 'idx_process_type', columns: ['process_type'])]
+#[Index(name: 'idx_status', columns: ['status'])]
+#[Index(name: 'idx_created_at', columns: ['created_at'])]
+#[Index(name: 'idx_instance_type', columns: ['instance', 'process_type'])]
 class ServerStatusLog extends Model
 {
-    public const fields_ID = 'log_id';
-    public const fields_INSTANCE = 'instance';              // 实例名称
-    public const fields_PROCESS_TYPE = 'process_type';      // 进程类型：master/dispatcher/worker
-    public const fields_PROCESS_ID = 'process_id';          // 进程 ID（Worker ID 或 PID）
-    public const fields_WORKER_ID = 'worker_id';            // Worker 编号（仅 worker 类型）
-    public const fields_PORT = 'port';                      // 监听端口
-    public const fields_PID = 'pid';                        // 系统进程 PID
-    public const fields_STATUS = 'status';                  // 状态：running/stopped/error/starting
-    public const fields_CONNECTIONS = 'connections';        // 当前连接数
-    public const fields_ACTIVE_REQUESTS = 'active_requests';// 活跃请求数
-    public const fields_TOTAL_REQUESTS = 'total_requests';  // 总处理请求数
-    public const fields_MEMORY_USAGE = 'memory_usage';      // 内存使用（字节）
-    public const fields_MEMORY_PEAK = 'memory_peak';        // 内存峰值（字节）
-    public const fields_CPU_USAGE = 'cpu_usage';            // CPU 使用率（%）
-    public const fields_UPTIME = 'uptime';                  // 运行时间（秒）
-    public const fields_LAST_ERROR = 'last_error';          // 最后错误信息
-    public const fields_EXTRA_DATA = 'extra_data';          // 额外数据（JSON）
-    public const fields_CREATED_AT = 'created_at';
-    
-    // 进程类型
+    public const schema_table = 'weline_server_status_log';
+    public const schema_primary_key = 'log_id';
+    #[Col('bigint', 20, primaryKey: true, autoIncrement: true, nullable: false, comment: '日志ID')]
+    public const schema_fields_ID = 'log_id';
+    #[Col('varchar', 50, default: 'default', comment: '实例名称')]
+    public const schema_fields_INSTANCE = 'instance';
+    #[Col('varchar', 20, nullable: false, comment: '进程类型')]
+    public const schema_fields_PROCESS_TYPE = 'process_type';
+    #[Col('varchar', 50, comment: '进程标识')]
+    public const schema_fields_PROCESS_ID = 'process_id';
+    #[Col('int', 11, default: 0, comment: 'Worker编号')]
+    public const schema_fields_WORKER_ID = 'worker_id';
+    #[Col('int', 11, default: 0, comment: '监听端口')]
+    public const schema_fields_PORT = 'port';
+    #[Col('int', 11, default: 0, comment: '系统进程PID')]
+    public const schema_fields_PID = 'pid';
+    #[Col('varchar', 20, default: 'running', comment: '状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col('int', 11, default: 0, comment: '当前连接数')]
+    public const schema_fields_CONNECTIONS = 'connections';
+    #[Col('int', 11, default: 0, comment: '活跃请求数')]
+    public const schema_fields_ACTIVE_REQUESTS = 'active_requests';
+    #[Col('bigint', 20, default: 0, comment: '总处理请求数')]
+    public const schema_fields_TOTAL_REQUESTS = 'total_requests';
+    #[Col('bigint', 20, default: 0, comment: '内存使用')]
+    public const schema_fields_MEMORY_USAGE = 'memory_usage';
+    #[Col('bigint', 20, default: 0, comment: '内存峰值')]
+    public const schema_fields_MEMORY_PEAK = 'memory_peak';
+    #[Col('decimal', '5,2', default: '0.00', comment: 'CPU使用率')]
+    public const schema_fields_CPU_USAGE = 'cpu_usage';
+    #[Col('int', 11, default: 0, comment: '运行时间秒')]
+    public const schema_fields_UPTIME = 'uptime';
+    #[Col('text', comment: '最后错误信息')]
+    public const schema_fields_LAST_ERROR = 'last_error';
+    #[Col('text', comment: '额外数据JSON')]
+    public const schema_fields_EXTRA_DATA = 'extra_data';
+    #[Col('datetime', comment: '记录时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
     public const PROCESS_TYPE_MASTER = 'master';
     public const PROCESS_TYPE_DISPATCHER = 'dispatcher';
     public const PROCESS_TYPE_WORKER = 'worker';
-    
-    // 状态
     public const STATUS_RUNNING = 'running';
     public const STATUS_STOPPED = 'stopped';
     public const STATUS_ERROR = 'error';
     public const STATUS_STARTING = 'starting';
-    
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $this->install($setup, $context);
-        }
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist()) {
-            return;
-        }
-        
-        $setup->createTable('服务器状态日志表')
-            ->addColumn(self::fields_ID, TableInterface::column_type_BIGINT, 20, 'primary key auto_increment', '日志ID')
-            ->addColumn(self::fields_INSTANCE, TableInterface::column_type_VARCHAR, 50, "default 'default'", '实例名称')
-            ->addColumn(self::fields_PROCESS_TYPE, TableInterface::column_type_VARCHAR, 20, 'not null', '进程类型')
-            ->addColumn(self::fields_PROCESS_ID, TableInterface::column_type_VARCHAR, 50, '', '进程标识')
-            ->addColumn(self::fields_WORKER_ID, TableInterface::column_type_INTEGER, 11, 'default 0', 'Worker编号')
-            ->addColumn(self::fields_PORT, TableInterface::column_type_INTEGER, 11, 'default 0', '监听端口')
-            ->addColumn(self::fields_PID, TableInterface::column_type_INTEGER, 11, 'default 0', '系统进程PID')
-            ->addColumn(self::fields_STATUS, TableInterface::column_type_VARCHAR, 20, "default 'running'", '状态')
-            ->addColumn(self::fields_CONNECTIONS, TableInterface::column_type_INTEGER, 11, 'default 0', '当前连接数')
-            ->addColumn(self::fields_ACTIVE_REQUESTS, TableInterface::column_type_INTEGER, 11, 'default 0', '活跃请求数')
-            ->addColumn(self::fields_TOTAL_REQUESTS, TableInterface::column_type_BIGINT, 20, 'default 0', '总处理请求数')
-            ->addColumn(self::fields_MEMORY_USAGE, TableInterface::column_type_BIGINT, 20, 'default 0', '内存使用')
-            ->addColumn(self::fields_MEMORY_PEAK, TableInterface::column_type_BIGINT, 20, 'default 0', '内存峰值')
-            ->addColumn(self::fields_CPU_USAGE, TableInterface::column_type_DECIMAL, '5,2', 'default 0.00', 'CPU使用率')
-            ->addColumn(self::fields_UPTIME, TableInterface::column_type_INTEGER, 11, 'default 0', '运行时间秒')
-            ->addColumn(self::fields_LAST_ERROR, TableInterface::column_type_TEXT, 0, '', '最后错误信息')
-            ->addColumn(self::fields_EXTRA_DATA, TableInterface::column_type_TEXT, 0, '', '额外数据JSON')
-            ->addColumn(self::fields_CREATED_AT, TableInterface::column_type_DATETIME, 0, '', '记录时间')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_instance', self::fields_INSTANCE)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_process_type', self::fields_PROCESS_TYPE)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_status', self::fields_STATUS)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_created_at', self::fields_CREATED_AT)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_instance_type', [self::fields_INSTANCE, self::fields_PROCESS_TYPE])
-            ->create();
-    }
-    
-    /**
+/**
      * 保存前自动设置时间戳
      */
     public function save_before(): void
     {
         parent::save_before();
         
-        if (!$this->getData(self::fields_CREATED_AT)) {
-            $this->setData(self::fields_CREATED_AT, \date('Y-m-d H:i:s'));
+        if (!$this->getData(self::schema_fields_CREATED_AT)) {
+            $this->setData(self::schema_fields_CREATED_AT, \date('Y-m-d H:i:s'));
         }
     }
     
@@ -124,183 +83,183 @@ class ServerStatusLog extends Model
     
     public function getLogId(): int
     {
-        return (int) $this->getData(self::fields_ID);
+        return (int) $this->getData(self::schema_fields_ID);
     }
     
     public function setInstance(string $instance): self
     {
-        $this->setData(self::fields_INSTANCE, $instance);
+        $this->setData(self::schema_fields_INSTANCE, $instance);
         return $this;
     }
     
     public function getInstance(): string
     {
-        return (string) ($this->getData(self::fields_INSTANCE) ?: 'default');
+        return (string) ($this->getData(self::schema_fields_INSTANCE) ?: 'default');
     }
     
     public function setProcessType(string $type): self
     {
-        $this->setData(self::fields_PROCESS_TYPE, $type);
+        $this->setData(self::schema_fields_PROCESS_TYPE, $type);
         return $this;
     }
     
     public function getProcessType(): string
     {
-        return (string) $this->getData(self::fields_PROCESS_TYPE);
+        return (string) $this->getData(self::schema_fields_PROCESS_TYPE);
     }
     
     public function setProcessId(string $id): self
     {
-        $this->setData(self::fields_PROCESS_ID, $id);
+        $this->setData(self::schema_fields_PROCESS_ID, $id);
         return $this;
     }
     
     public function getProcessId(): string
     {
-        return (string) $this->getData(self::fields_PROCESS_ID);
+        return (string) $this->getData(self::schema_fields_PROCESS_ID);
     }
     
     public function setWorkerId(int $id): self
     {
-        $this->setData(self::fields_WORKER_ID, $id);
+        $this->setData(self::schema_fields_WORKER_ID, $id);
         return $this;
     }
     
     public function getWorkerId(): int
     {
-        return (int) $this->getData(self::fields_WORKER_ID);
+        return (int) $this->getData(self::schema_fields_WORKER_ID);
     }
     
     public function setPort(int $port): self
     {
-        $this->setData(self::fields_PORT, $port);
+        $this->setData(self::schema_fields_PORT, $port);
         return $this;
     }
     
     public function getPort(): int
     {
-        return (int) $this->getData(self::fields_PORT);
+        return (int) $this->getData(self::schema_fields_PORT);
     }
     
     public function setPid(int $pid): self
     {
-        $this->setData(self::fields_PID, $pid);
+        $this->setData(self::schema_fields_PID, $pid);
         return $this;
     }
     
     public function getPid(): int
     {
-        return (int) $this->getData(self::fields_PID);
+        return (int) $this->getData(self::schema_fields_PID);
     }
     
     public function setStatus(string $status): self
     {
-        $this->setData(self::fields_STATUS, $status);
+        $this->setData(self::schema_fields_STATUS, $status);
         return $this;
     }
     
     public function getStatus(): string
     {
-        return (string) ($this->getData(self::fields_STATUS) ?: self::STATUS_RUNNING);
+        return (string) ($this->getData(self::schema_fields_STATUS) ?: self::STATUS_RUNNING);
     }
     
     public function setConnections(int $count): self
     {
-        $this->setData(self::fields_CONNECTIONS, $count);
+        $this->setData(self::schema_fields_CONNECTIONS, $count);
         return $this;
     }
     
     public function getConnections(): int
     {
-        return (int) $this->getData(self::fields_CONNECTIONS);
+        return (int) $this->getData(self::schema_fields_CONNECTIONS);
     }
     
     public function setActiveRequests(int $count): self
     {
-        $this->setData(self::fields_ACTIVE_REQUESTS, $count);
+        $this->setData(self::schema_fields_ACTIVE_REQUESTS, $count);
         return $this;
     }
     
     public function getActiveRequests(): int
     {
-        return (int) $this->getData(self::fields_ACTIVE_REQUESTS);
+        return (int) $this->getData(self::schema_fields_ACTIVE_REQUESTS);
     }
     
     public function setTotalRequests(int $count): self
     {
-        $this->setData(self::fields_TOTAL_REQUESTS, $count);
+        $this->setData(self::schema_fields_TOTAL_REQUESTS, $count);
         return $this;
     }
     
     public function getTotalRequests(): int
     {
-        return (int) $this->getData(self::fields_TOTAL_REQUESTS);
+        return (int) $this->getData(self::schema_fields_TOTAL_REQUESTS);
     }
     
     public function setMemoryUsage(int $bytes): self
     {
-        $this->setData(self::fields_MEMORY_USAGE, $bytes);
+        $this->setData(self::schema_fields_MEMORY_USAGE, $bytes);
         return $this;
     }
     
     public function getMemoryUsage(): int
     {
-        return (int) $this->getData(self::fields_MEMORY_USAGE);
+        return (int) $this->getData(self::schema_fields_MEMORY_USAGE);
     }
     
     public function setMemoryPeak(int $bytes): self
     {
-        $this->setData(self::fields_MEMORY_PEAK, $bytes);
+        $this->setData(self::schema_fields_MEMORY_PEAK, $bytes);
         return $this;
     }
     
     public function getMemoryPeak(): int
     {
-        return (int) $this->getData(self::fields_MEMORY_PEAK);
+        return (int) $this->getData(self::schema_fields_MEMORY_PEAK);
     }
     
     public function setCpuUsage(float $percent): self
     {
-        $this->setData(self::fields_CPU_USAGE, $percent);
+        $this->setData(self::schema_fields_CPU_USAGE, $percent);
         return $this;
     }
     
     public function getCpuUsage(): float
     {
-        return (float) $this->getData(self::fields_CPU_USAGE);
+        return (float) $this->getData(self::schema_fields_CPU_USAGE);
     }
     
     public function setUptime(int $seconds): self
     {
-        $this->setData(self::fields_UPTIME, $seconds);
+        $this->setData(self::schema_fields_UPTIME, $seconds);
         return $this;
     }
     
     public function getUptime(): int
     {
-        return (int) $this->getData(self::fields_UPTIME);
+        return (int) $this->getData(self::schema_fields_UPTIME);
     }
     
     public function setLastError(string $error): self
     {
-        $this->setData(self::fields_LAST_ERROR, $error);
+        $this->setData(self::schema_fields_LAST_ERROR, $error);
         return $this;
     }
     
     public function getLastError(): string
     {
-        return (string) $this->getData(self::fields_LAST_ERROR);
+        return (string) $this->getData(self::schema_fields_LAST_ERROR);
     }
     
     public function setExtraData(array $data): self
     {
-        $this->setData(self::fields_EXTRA_DATA, \json_encode($data, JSON_UNESCAPED_UNICODE));
+        $this->setData(self::schema_fields_EXTRA_DATA, \json_encode($data, JSON_UNESCAPED_UNICODE));
         return $this;
     }
     
     public function getExtraData(): array
     {
-        $json = $this->getData(self::fields_EXTRA_DATA);
+        $json = $this->getData(self::schema_fields_EXTRA_DATA);
         if (empty($json)) {
             return [];
         }
@@ -343,8 +302,8 @@ class ServerStatusLog extends Model
     {
         // 获取最新的各进程状态
         $results = $this->clearQuery()
-            ->where(self::fields_INSTANCE, $instance)
-            ->order(self::fields_CREATED_AT, 'DESC')
+            ->where(self::schema_fields_INSTANCE, $instance)
+            ->order(self::schema_fields_CREATED_AT, 'DESC')
             ->pagination(1, 100)
             ->select()
             ->fetchArray();
@@ -352,7 +311,7 @@ class ServerStatusLog extends Model
         // 按进程类型和 ID 分组，只保留最新的
         $latestByProcess = [];
         foreach ($results as $row) {
-            $key = $row[self::fields_PROCESS_TYPE] . '_' . $row[self::fields_PROCESS_ID];
+            $key = $row[self::schema_fields_PROCESS_TYPE] . '_' . $row[self::schema_fields_PROCESS_ID];
             if (!isset($latestByProcess[$key])) {
                 $latestByProcess[$key] = $row;
             }
@@ -370,14 +329,14 @@ class ServerStatusLog extends Model
         int $limit = 100
     ): array {
         $query = $this->clearQuery()
-            ->where(self::fields_INSTANCE, $instance);
+            ->where(self::schema_fields_INSTANCE, $instance);
         
         if ($processType) {
-            $query->where(self::fields_PROCESS_TYPE, $processType);
+            $query->where(self::schema_fields_PROCESS_TYPE, $processType);
         }
         
         return $query
-            ->order(self::fields_CREATED_AT, 'DESC')
+            ->order(self::schema_fields_CREATED_AT, 'DESC')
             ->pagination(1, $limit)
             ->select()
             ->fetchArray();
@@ -391,12 +350,12 @@ class ServerStatusLog extends Model
         $cutoffDate = \date('Y-m-d H:i:s', \time() - ($keepDays * 86400));
         
         $count = $this->clearQuery()
-            ->where(self::fields_CREATED_AT, $cutoffDate, '<')
+            ->where(self::schema_fields_CREATED_AT, $cutoffDate, '<')
             ->count();
         
         if ($count > 0) {
             $this->clearQuery()
-                ->where(self::fields_CREATED_AT, $cutoffDate, '<')
+                ->where(self::schema_fields_CREATED_AT, $cutoffDate, '<')
                 ->delete()
                 ->fetch();
         }
@@ -426,24 +385,24 @@ class ServerStatusLog extends Model
         $cpuCount = 0;
         
         foreach ($results as $row) {
-            $type = $row[self::fields_PROCESS_TYPE];
-            $status = $row[self::fields_STATUS];
+            $type = $row[self::schema_fields_PROCESS_TYPE];
+            $status = $row[self::schema_fields_STATUS];
             
             if ($type === self::PROCESS_TYPE_WORKER) {
                 $stats['total_workers']++;
                 if ($status === self::STATUS_RUNNING) {
                     $stats['running_workers']++;
                 }
-                $stats['total_connections'] += (int) $row[self::fields_CONNECTIONS];
-                $stats['total_requests'] += (int) $row[self::fields_TOTAL_REQUESTS];
-                $stats['total_memory'] += (int) $row[self::fields_MEMORY_USAGE];
+                $stats['total_connections'] += (int) $row[self::schema_fields_CONNECTIONS];
+                $stats['total_requests'] += (int) $row[self::schema_fields_TOTAL_REQUESTS];
+                $stats['total_memory'] += (int) $row[self::schema_fields_MEMORY_USAGE];
             } elseif ($type === self::PROCESS_TYPE_DISPATCHER) {
                 $stats['dispatcher_running'] = ($status === self::STATUS_RUNNING);
             } elseif ($type === self::PROCESS_TYPE_MASTER) {
                 $stats['master_running'] = ($status === self::STATUS_RUNNING);
             }
             
-            $cpu = (float) $row[self::fields_CPU_USAGE];
+            $cpu = (float) $row[self::schema_fields_CPU_USAGE];
             if ($cpu > 0) {
                 $cpuSum += $cpu;
                 $cpuCount++;

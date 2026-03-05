@@ -809,6 +809,15 @@ HTTPS,HTTPS
 "更新规则失败: %{1}","更新规则失败: %{1}"
 "WLS 内存缓存使用单一虚拟 Zone，所有域名共享","WLS 内存缓存使用单一虚拟 Zone，所有域名共享"
 "WLS 内存缓存适配器不支持攻击防护模式","WLS 内存缓存适配器不支持攻击防护模式"
+"Server 查询器不支持的操作：%{1}","Server 查询器不支持的操作：%{1}"
+"Server 查询","Server 查询"
+"提供 SSL 证书申请等能力","提供 SSL 证书申请等能力"
+"申请 SSL 证书","申请 SSL 证书"
+"Webroot 路径","Webroot 路径"
+联系邮箱,联系邮箱
+"关联网站 ID","关联网站 ID"
+"证书提供商 letsencrypt/litessl","证书提供商 letsencrypt/litessl"
+域名不能为空,域名不能为空
 "WLS 实例 [%s] Master 复活失败，已尝试 %d 次，请人工检查并执行 server:start 或 server:restart。","WLS 实例 [%s] Master 复活失败，已尝试 %d 次，请人工检查并执行 server:start 或 server:restart。"
 频率限制,频率限制
 路径扫描,路径扫描
@@ -1192,9 +1201,7 @@ URI,URI
 证书链,证书链
 私钥,私钥
 中间证书,中间证书
-"申请 SSL 证书","申请 SSL 证书"
 请确保域名已正确解析到本服务器,请确保域名已正确解析到本服务器
-联系邮箱,联系邮箱
 证书提供商,证书提供商
 LiteSSL,LiteSSL
 取消,取消
