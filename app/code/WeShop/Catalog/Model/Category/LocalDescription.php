@@ -15,14 +15,14 @@ class LocalDescription extends LocalModel
     public const indexer = 'catalog_category_local_description';
     
     // 关联主表ID字段（必须）
-    public const fields_ID = Category::fields_ID;
+    public const schema_fields_ID = Category::schema_fields_ID;
     
     // 多语言字段定义
-    public const fields_name = 'name';
-    public const fields_DESCRIPTION = 'description';
-    public const fields_META_TITLE = 'meta_title';
-    public const fields_META_DESCRIPTION = 'meta_description';
-    public const fields_META_KEYWORDS = 'meta_keywords';
+    public const schema_fields_name = 'name';
+    public const schema_fields_DESCRIPTION = 'description';
+    public const schema_fields_META_TITLE = 'meta_title';
+    public const schema_fields_META_DESCRIPTION = 'meta_description';
+    public const schema_fields_META_KEYWORDS = 'meta_keywords';
     
     /**
      * 获取本地化分类名称
@@ -30,7 +30,7 @@ class LocalDescription extends LocalModel
      */
     public function getLocalName(): string
     {
-        return (string)$this->getData(self::fields_name);
+        return (string)$this->getData(self::schema_fields_name);
     }
     
     /**
@@ -39,7 +39,7 @@ class LocalDescription extends LocalModel
      */
     public function getLocalDescription(): string
     {
-        return (string)$this->getData(self::fields_DESCRIPTION);
+        return (string)$this->getData(self::schema_fields_DESCRIPTION);
     }
     
     /**
@@ -48,7 +48,7 @@ class LocalDescription extends LocalModel
      */
     public function getLocalMetaTitle(): string
     {
-        return (string)$this->getData(self::fields_META_TITLE);
+        return (string)$this->getData(self::schema_fields_META_TITLE);
     }
     
     /**
@@ -57,7 +57,7 @@ class LocalDescription extends LocalModel
      */
     public function getLocalMetaDescription(): string
     {
-        return (string)$this->getData(self::fields_META_DESCRIPTION);
+        return (string)$this->getData(self::schema_fields_META_DESCRIPTION);
     }
     
     /**
@@ -66,6 +66,6 @@ class LocalDescription extends LocalModel
      */
     public function getLocalMetaKeywords(): string
     {
-        return (string)$this->getData(self::fields_META_KEYWORDS);
+        return (string)$this->getData(self::schema_fields_META_KEYWORDS);
     }
 }

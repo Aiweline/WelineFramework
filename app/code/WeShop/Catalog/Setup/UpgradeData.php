@@ -59,8 +59,8 @@ class UpgradeData
             ->setClass(Category::class)
             ->setEntityIdFieldType($category::eav_entity_id_field_type)
             ->setEntityIdFieldLength($category::eav_entity_id_field_length)
-            ->setData(EavEntity::fields_is_system, 0)
-            ->forceCheck(true, [EavEntity::fields_code])
+            ->setData(EavEntity::schema_fields_is_system, 0)
+            ->forceCheck(true, [EavEntity::schema_fields_code])
             ->save();
     }
     
@@ -83,7 +83,7 @@ class UpgradeData
             ->setCode('default')
             ->setEavEntityId($eavEntity->getId())
             ->setName(__('默认属性集'))
-            ->forceCheck(true, [Set::fields_code, Set::fields_eav_entity_id])
+            ->forceCheck(true, [Set::schema_fields_code, Set::schema_fields_eav_entity_id])
             ->save();
         
         return (int) $setModel->getId();
@@ -106,9 +106,9 @@ class UpgradeData
             ->setSetId($setId)
             ->setName(__('默认属性组'))
             ->forceCheck(true, [
-                Group::fields_code,
-                Group::fields_eav_entity_id,
-                Group::fields_set_id,
+                Group::schema_fields_code,
+                Group::schema_fields_eav_entity_id,
+                Group::schema_fields_set_id,
             ])
             ->save();
         
@@ -129,14 +129,14 @@ class UpgradeData
         // 查找可用的布尔类型（优先使用 input_bool，因为它更简单且不需要选项表）
         /** @var Type $typeModel */
         $typeModel = ObjectManager::getInstance(Type::class);
-        $type = $typeModel->where(Type::fields_code, 'input_bool')
+        $type = $typeModel->where(Type::schema_fields_code, 'input_bool')
             ->find()
             ->fetch();
         
         if (!$type->getId()) {
             // 如果 input_bool 不存在，查找 select_yes_no
             $type = $typeModel->reset()
-                ->where(Type::fields_code, 'select_yes_no')
+                ->where(Type::schema_fields_code, 'select_yes_no')
                 ->find()
                 ->fetch();
         }
@@ -144,7 +144,7 @@ class UpgradeData
         if (!$type->getId()) {
             // 如果都不存在，使用 select_option
             $type = $typeModel->reset()
-                ->where(Type::fields_code, 'select_option')
+                ->where(Type::schema_fields_code, 'select_option')
                 ->find()
                 ->fetch();
         }
@@ -155,8 +155,8 @@ class UpgradeData
         
         // 检查属性是否已存在
         $existingAttribute = $attributeModel->reset()
-            ->where(EavAttribute::fields_code, 'is_right_menu')
-            ->where(EavAttribute::fields_eav_entity_id, $eavEntity->getId())
+            ->where(EavAttribute::schema_fields_code, 'is_right_menu')
+            ->where(EavAttribute::schema_fields_eav_entity_id, $eavEntity->getId())
             ->find()
             ->fetch();
         
@@ -169,17 +169,17 @@ class UpgradeData
         $attributeModel->reset()
             ->current_setEntity($category)
             ->setData([
-                EavAttribute::fields_code => 'is_right_menu',
-                EavAttribute::fields_name => __('右侧菜单分类'),
-                EavAttribute::fields_type_id => $type->getId(),
-                EavAttribute::fields_set_id => $setId,
-                EavAttribute::fields_group_id => $groupId,
-                EavAttribute::fields_eav_entity_id => $eavEntity->getId(),
-                EavAttribute::fields_multiple_valued => 0,
-                EavAttribute::fields_has_option => 0,
-                EavAttribute::fields_is_system => 0,
-                EavAttribute::fields_is_enable => 1,
-                EavAttribute::fields_default_value => '0',
+                EavAttribute::schema_fields_code => 'is_right_menu',
+                EavAttribute::schema_fields_name => __('右侧菜单分类'),
+                EavAttribute::schema_fields_type_id => $type->getId(),
+                EavAttribute::schema_fields_set_id => $setId,
+                EavAttribute::schema_fields_group_id => $groupId,
+                EavAttribute::schema_fields_eav_entity_id => $eavEntity->getId(),
+                EavAttribute::schema_fields_multiple_valued => 0,
+                EavAttribute::schema_fields_has_option => 0,
+                EavAttribute::schema_fields_is_system => 0,
+                EavAttribute::schema_fields_is_enable => 1,
+                EavAttribute::schema_fields_default_value => '0',
             ])
             ->forceCheck(true, $attributeModel->_unit_primary_keys)
             ->save();
@@ -199,7 +199,7 @@ class UpgradeData
         // 查找文本类型（用于存储图标类名）
         /** @var Type $typeModel */
         $typeModel = ObjectManager::getInstance(Type::class);
-        $type = $typeModel->where(Type::fields_code, 'input_string')
+        $type = $typeModel->where(Type::schema_fields_code, 'input_string')
             ->find()
             ->fetch();
         
@@ -209,8 +209,8 @@ class UpgradeData
         
         // 检查属性是否已存在
         $existingAttribute = $attributeModel->reset()
-            ->where(EavAttribute::fields_code, 'icon')
-            ->where(EavAttribute::fields_eav_entity_id, $eavEntity->getId())
+            ->where(EavAttribute::schema_fields_code, 'icon')
+            ->where(EavAttribute::schema_fields_eav_entity_id, $eavEntity->getId())
             ->find()
             ->fetch();
         
@@ -223,17 +223,17 @@ class UpgradeData
         $attributeModel->reset()
             ->current_setEntity($category)
             ->setData([
-                EavAttribute::fields_code => 'icon',
-                EavAttribute::fields_name => __('图标'),
-                EavAttribute::fields_type_id => $type->getId(),
-                EavAttribute::fields_set_id => $setId,
-                EavAttribute::fields_group_id => $groupId,
-                EavAttribute::fields_eav_entity_id => $eavEntity->getId(),
-                EavAttribute::fields_multiple_valued => 0,
-                EavAttribute::fields_has_option => 0,
-                EavAttribute::fields_is_system => 0,
-                EavAttribute::fields_is_enable => 1,
-                EavAttribute::fields_default_value => '',
+                EavAttribute::schema_fields_code => 'icon',
+                EavAttribute::schema_fields_name => __('图标'),
+                EavAttribute::schema_fields_type_id => $type->getId(),
+                EavAttribute::schema_fields_set_id => $setId,
+                EavAttribute::schema_fields_group_id => $groupId,
+                EavAttribute::schema_fields_eav_entity_id => $eavEntity->getId(),
+                EavAttribute::schema_fields_multiple_valued => 0,
+                EavAttribute::schema_fields_has_option => 0,
+                EavAttribute::schema_fields_is_system => 0,
+                EavAttribute::schema_fields_is_enable => 1,
+                EavAttribute::schema_fields_default_value => '',
             ])
             ->forceCheck(true, $attributeModel->_unit_primary_keys)
             ->save();
@@ -253,14 +253,14 @@ class UpgradeData
         // 查找可用的布尔类型（优先使用 input_bool，因为它更简单且不需要选项表）
         /** @var Type $typeModel */
         $typeModel = ObjectManager::getInstance(Type::class);
-        $type = $typeModel->where(Type::fields_code, 'input_bool')
+        $type = $typeModel->where(Type::schema_fields_code, 'input_bool')
             ->find()
             ->fetch();
         
         if (!$type->getId()) {
             // 如果 input_bool 不存在，查找 select_yes_no
             $type = $typeModel->reset()
-                ->where(Type::fields_code, 'select_yes_no')
+                ->where(Type::schema_fields_code, 'select_yes_no')
                 ->find()
                 ->fetch();
         }
@@ -268,7 +268,7 @@ class UpgradeData
         if (!$type->getId()) {
             // 如果都不存在，使用 select_option
             $type = $typeModel->reset()
-                ->where(Type::fields_code, 'select_option')
+                ->where(Type::schema_fields_code, 'select_option')
                 ->find()
                 ->fetch();
         }
@@ -279,8 +279,8 @@ class UpgradeData
         
         // 检查属性是否已存在
         $existingAttribute = $attributeModel->reset()
-            ->where(EavAttribute::fields_code, 'show_icon')
-            ->where(EavAttribute::fields_eav_entity_id, $eavEntity->getId())
+            ->where(EavAttribute::schema_fields_code, 'show_icon')
+            ->where(EavAttribute::schema_fields_eav_entity_id, $eavEntity->getId())
             ->find()
             ->fetch();
         
@@ -293,17 +293,17 @@ class UpgradeData
         $attributeModel->reset()
             ->current_setEntity($category)
             ->setData([
-                EavAttribute::fields_code => 'show_icon',
-                EavAttribute::fields_name => __('显示图标'),
-                EavAttribute::fields_type_id => $type->getId(),
-                EavAttribute::fields_set_id => $setId,
-                EavAttribute::fields_group_id => $groupId,
-                EavAttribute::fields_eav_entity_id => $eavEntity->getId(),
-                EavAttribute::fields_multiple_valued => 0,
-                EavAttribute::fields_has_option => 0,
-                EavAttribute::fields_is_system => 0,
-                EavAttribute::fields_is_enable => 1,
-                EavAttribute::fields_default_value => '1', // 默认显示图标
+                EavAttribute::schema_fields_code => 'show_icon',
+                EavAttribute::schema_fields_name => __('显示图标'),
+                EavAttribute::schema_fields_type_id => $type->getId(),
+                EavAttribute::schema_fields_set_id => $setId,
+                EavAttribute::schema_fields_group_id => $groupId,
+                EavAttribute::schema_fields_eav_entity_id => $eavEntity->getId(),
+                EavAttribute::schema_fields_multiple_valued => 0,
+                EavAttribute::schema_fields_has_option => 0,
+                EavAttribute::schema_fields_is_system => 0,
+                EavAttribute::schema_fields_is_enable => 1,
+                EavAttribute::schema_fields_default_value => '1', // 默认显示图标
             ])
             ->forceCheck(true, $attributeModel->_unit_primary_keys)
             ->save();
