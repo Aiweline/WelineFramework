@@ -55,11 +55,13 @@ class MenuXmlReader extends XmlReader
                 );
             }
             
-            foreach ($config['menus'] as $key => $menuGroup) {
+            // Parser 将子节点放在 _value 下，需从 _value 中取 menu
+            $menusContent = $config['menus']['_value'] ?? $config['menus'];
+            $menusContent = is_array($menusContent) ? $menusContent : [];
+            foreach ($menusContent as $key => $menuGroup) {
                 if ($key === '_attribute' || $key === '_value') {
                     continue;
                 }
-                
                 if ($key === 'menu') {
                     $menuItems = $this->parseMenuElement($menuGroup, '', $module_and_file);
                     $module_menus[$module]['data'] = array_merge($module_menus[$module]['data'], $menuItems);

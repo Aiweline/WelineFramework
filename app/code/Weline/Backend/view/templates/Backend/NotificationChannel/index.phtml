@@ -131,13 +131,11 @@ $adapter_map = $adapter_map ?? [];
             BackendConfirm.show('<?= __('确定要删除此渠道吗？删除后将停止向该渠道发送通知。') ?>').then(function(confirmed) {
                 if (!confirmed) return;
 
-                fetch('<?= $this->getBackendUrl('*/backend/notificationchannel/delete') ?>', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'channel_id=' + channelId
-                })
-                .then(function(response) { return response.json(); })
-                .then(function(data) {
+                var url = '<?= $this->getBackendUrl('*/backend/notificationchannel/delete') ?>';
+                var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'channel_id=' + channelId };
+                var req = window.Weline.Api.request(url, opts);
+                req.then(function(res) {
+                    var data = (res && res.data) || res;
                     if (data.success) {
                         BackendToast.success(data.message);
                         setTimeout(function() { window.location.reload(); }, 1000);

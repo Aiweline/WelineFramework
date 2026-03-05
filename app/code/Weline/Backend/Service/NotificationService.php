@@ -37,10 +37,17 @@ class NotificationService
     }
 
     /**
-     * 获取用户的通知列表
+     * 获取用户的通知列表（支持关键词、类型、已读状态过滤）
+     *
+     * @param array{keyword?: string, type?: string, read?: string} $filters 可选：keyword 标题/内容模糊搜索，type 类型(info/success/...)，read 已读状态(all/read/unread)
      */
-    public function getUserNotifications(int $userId, int $page = 1, int $limit = 20, bool $unreadOnly = false): array
-    {
+    public function getUserNotifications(
+        int $userId,
+        int $page = 1,
+        int $limit = 20,
+        bool $unreadOnly = false,
+        array $filters = []
+    ): array {
         $query = $this->statusModel->clearQuery()
             ->joinModel(
                 SystemNotification::class,
@@ -49,10 +56,29 @@ class NotificationService
                 'inner',
                 'n.topic_code, n.type, n.title, n.content, n.priority, n.avatar, n.is_icon, n.is_img, n.external_channels, n.create_time as notification_time'
             )
-            ->where(UserNotificationStatus::fields_user_id, $userId);
+            ->where(UserNotificationStatus::schema_fields_user_id, $userId);
 
         if ($unreadOnly) {
-            $query->where(UserNotificationStatus::fields_is_read, 0);
+            $query->where(UserNotificationStatus::schema_fields_is_read, 0);
+        }
+
+        $keyword = isset($filters['keyword']) ? trim((string) $filters['keyword']) : '';
+        if ($keyword !== '') {
+            $pattern = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $keyword) . '%';
+            $query->where('n.title', $pattern, 'like', 'OR')
+                ->where('n.content', $pattern, 'like');
+        }
+
+        $type = isset($filters['type']) ? trim((string) $filters['type']) : '';
+        if ($type !== '' && in_array($type, NotificationType::getAllTypes(), true)) {
+            $query->where('n.type', $type);
+        }
+
+        $readFilter = isset($filters['read']) ? trim((string) $filters['read']) : 'all';
+        if ($readFilter === 'read') {
+            $query->where(UserNotificationStatus::schema_fields_is_read, 1);
+        } elseif ($readFilter === 'unread') {
+            $query->where(UserNotificationStatus::schema_fields_is_read, 0);
         }
 
         $query->order('n.create_time', 'DESC')
@@ -107,8 +133,8 @@ class NotificationService
     public function getUnreadCount(int $userId): int
     {
         return $this->statusModel->clearQuery()
-            ->where(UserNotificationStatus::fields_user_id, $userId)
-            ->where(UserNotificationStatus::fields_is_read, 0)
+            ->where(UserNotificationStatus::schema_fields_user_id, $userId)
+            ->where(UserNotificationStatus::schema_fields_is_read, 0)
             ->total();
     }
 
@@ -119,8 +145,8 @@ class NotificationService
     {
         $status = clone $this->statusModel;
         $status->clearQuery()
-            ->where(UserNotificationStatus::fields_notification_id, $notificationId)
-            ->where(UserNotificationStatus::fields_user_id, $userId)
+            ->where(UserNotificationStatus::schema_fields_notification_id, $notificationId)
+            ->where(UserNotificationStatus::schema_fields_user_id, $userId)
             ->find()
             ->fetch();
 
@@ -138,8 +164,8 @@ class NotificationService
     public function markAllAsRead(int $userId): int
     {
         $unreadStatuses = $this->statusModel->clearQuery()
-            ->where(UserNotificationStatus::fields_user_id, $userId)
-            ->where(UserNotificationStatus::fields_is_read, 0)
+            ->where(UserNotificationStatus::schema_fields_user_id, $userId)
+            ->where(UserNotificationStatus::schema_fields_is_read, 0)
             ->select()
             ->fetchArray();
 
@@ -162,7 +188,7 @@ class NotificationService
     public function getUserSubscriptions(int $userId): array
     {
         $subscriptions = $this->subscriptionModel->clearQuery()
-            ->where(UserNotificationSubscription::fields_user_id, $userId)
+            ->where(UserNotificationSubscription::schema_fields_user_id, $userId)
             ->select()
             ->fetchArray();
 
@@ -196,9 +222,9 @@ class NotificationService
     ): bool {
         $subscription = clone $this->subscriptionModel;
         $subscription->clearQuery()
-            ->where(UserNotificationSubscription::fields_user_id, $userId)
-            ->where(UserNotificationSubscription::fields_topic_code, $topicCode)
-            ->where(UserNotificationSubscription::fields_channel, $channel)
+            ->where(UserNotificationSubscription::schema_fields_user_id, $userId)
+            ->where(UserNotificationSubscription::schema_fields_topic_code, $topicCode)
+            ->where(UserNotificationSubscription::schema_fields_channel, $channel)
             ->find()
             ->fetch();
 
@@ -227,7 +253,7 @@ class NotificationService
     public function getChannels(): array
     {
         return $this->channelModel->clearQuery()
-            ->order(NotificationChannel::fields_channel_code)
+            ->order(NotificationChannel::schema_fields_channel_code)
             ->select()
             ->fetchArray();
     }
@@ -285,8 +311,8 @@ class NotificationService
                 'inner',
                 'n.topic_code, n.type, n.title, n.content, n.priority, n.avatar, n.is_icon, n.is_img, n.external_channels, n.create_time as notification_time, n.metadata'
             )
-            ->where(UserNotificationStatus::fields_notification_id, $notificationId)
-            ->where(UserNotificationStatus::fields_user_id, $userId)
+            ->where('main_table.' . UserNotificationStatus::schema_fields_notification_id, $notificationId)
+            ->where('main_table.' . UserNotificationStatus::schema_fields_user_id, $userId)
             ->find()
             ->fetch();
 
@@ -319,6 +345,85 @@ class NotificationService
             'notification_time' => $data['notification_time'] ?? '',
             'external_channels' => json_decode($data['external_channels'] ?? '[]', true) ?: [],
             'metadata'          => json_decode($data['metadata'] ?? '[]', true) ?: [],
+        ];
+    }
+
+    /**
+     * 获取当前通知的上下条（用于详情页翻页）
+     * 列表顺序为 create_time DESC，故：上一条 = 时间更新的一条，下一条 = 时间更早的一条
+     *
+     * @return array{prev_id: int|null, prev_title: string|null, next_id: int|null, next_title: string|null}
+     */
+    public function getAdjacentNotifications(int $userId, int $notificationId): array
+    {
+        $status = clone $this->statusModel;
+        $status->clearQuery()
+            ->joinModel(
+                SystemNotification::class,
+                'n',
+                'main_table.notification_id = n.notification_id',
+                'inner',
+                'n.notification_id, n.title, n.create_time'
+            )
+            ->where('main_table.' . UserNotificationStatus::schema_fields_notification_id, $notificationId)
+            ->where('main_table.' . UserNotificationStatus::schema_fields_user_id, $userId)
+            ->find()
+            ->fetch();
+
+        if (!$status->getId()) {
+            return ['prev_id' => null, 'prev_title' => null, 'next_id' => null, 'next_title' => null];
+        }
+
+        $currentTime = $status->getData('create_time') ?? '';
+
+        $prevId = null;
+        $prevTitle = null;
+        $nextId = null;
+        $nextTitle = null;
+
+        if ((string) $currentTime !== '') {
+            $baseJoin = 'main_table.notification_id = n.notification_id';
+            $baseFields = 'n.notification_id, n.title';
+            $userField = 'main_table.' . UserNotificationStatus::schema_fields_user_id;
+
+            $prev = clone $this->statusModel;
+            $prev->clearQuery()
+                ->joinModel(SystemNotification::class, 'n', $baseJoin, 'inner', $baseFields)
+                ->where($userField, $userId)
+                ->where('n.create_time', $currentTime, '>')
+                ->order('n.create_time', 'ASC')
+                ->limit(1)
+                ->select()
+                ->fetch();
+            $prevItems = $prev->getItems();
+            if (!empty($prevItems)) {
+                $d = $prevItems[0]->getData();
+                $prevId = (int) ($d['notification_id'] ?? 0);
+                $prevTitle = $d['title'] ?? '';
+            }
+
+            $next = clone $this->statusModel;
+            $next->clearQuery()
+                ->joinModel(SystemNotification::class, 'n', $baseJoin, 'inner', $baseFields)
+                ->where($userField, $userId)
+                ->where('n.create_time', $currentTime, '<')
+                ->order('n.create_time', 'DESC')
+                ->limit(1)
+                ->select()
+                ->fetch();
+            $nextItems = $next->getItems();
+            if (!empty($nextItems)) {
+                $d = $nextItems[0]->getData();
+                $nextId = (int) ($d['notification_id'] ?? 0);
+                $nextTitle = $d['title'] ?? '';
+            }
+        }
+
+        return [
+            'prev_id'    => $prevId,
+            'prev_title' => $prevTitle,
+            'next_id'    => $nextId,
+            'next_title' => $nextTitle,
         ];
     }
 }
