@@ -198,18 +198,18 @@ class SmtpSender extends \Weline\Framework\App\Helper
         /**@var \Weline\Smtp\Model\SmtpSendLog $sendLog */
         $sendLog = ObjectManager::getInstance(SmtpSendLog::class);
         try {
-            $sendLog->setData($sendLog::fields_FROM, $this->mail->From)
-                ->setData($sendLog::fields_SENDER_NAME, $this->mail->FromName)
-                ->setData($sendLog::fields_TO, json_encode($this->mail->getToAddresses()))
-                ->setData($sendLog::fields_REPLY_TO, json_encode($this->mail->getReplyToAddresses()))
-                ->setData($sendLog::fields_SUBJECT, $this->mail->Subject)
-                ->setData($sendLog::fields_CONTEXT, $this->mail->Body)
-                ->setData($sendLog::fields_ALT, $this->mail->AltBody)
-                ->setData($sendLog::fields_ATTACHMENT, json_encode($this->mail->getAttachments()))
-                ->setData($sendLog::fields_CC, json_encode($this->mail->getCcAddresses()))
-                ->setData($sendLog::fields_BCC, json_encode($this->mail->getBccAddresses()))
-                ->setData($sendLog::fields_RPOXY, $this->data->get($this->data::smtp_username, $module))
-                ->setData($sendLog::fields_MODULE, $module)
+            $sendLog->setData($sendLog::schema_fields_FROM, $this->mail->From)
+                ->setData($sendLog::schema_fields_SENDER_NAME, $this->mail->FromName)
+                ->setData($sendLog::schema_fields_TO, json_encode($this->mail->getToAddresses()))
+                ->setData($sendLog::schema_fields_REPLY_TO, json_encode($this->mail->getReplyToAddresses()))
+                ->setData($sendLog::schema_fields_SUBJECT, $this->mail->Subject)
+                ->setData($sendLog::schema_fields_CONTEXT, $this->mail->Body)
+                ->setData($sendLog::schema_fields_ALT, $this->mail->AltBody)
+                ->setData($sendLog::schema_fields_ATTACHMENT, json_encode($this->mail->getAttachments()))
+                ->setData($sendLog::schema_fields_CC, json_encode($this->mail->getCcAddresses()))
+                ->setData($sendLog::schema_fields_BCC, json_encode($this->mail->getBccAddresses()))
+                ->setData($sendLog::schema_fields_RPOXY, $this->data->get($this->data::smtp_username, $module))
+                ->setData($sendLog::schema_fields_MODULE, $module)
                 ->save();
         } catch (\ReflectionException|Exception|ModelException $e) {
             if (DEV) {
