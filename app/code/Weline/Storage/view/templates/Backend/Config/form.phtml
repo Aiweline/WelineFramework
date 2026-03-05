@@ -188,12 +188,10 @@ form.addEventListener('submit', async function(e) {
     }
     
     try {
-        const res = await fetch('<?= $this->getUrl('storage/backend/config/save') ?>', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: params.toString()
-        });
-        const data = await res.json();
+        var saveUrl = '<?= $this->getUrl('storage/backend/config/save') ?>';
+        var saveOpts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString() };
+        var res = await window.Weline.Api.request(saveUrl, saveOpts);
+        var data = (res && res.data) !== undefined ? res.data : res;
         
         if (data.code === 200) {
             AdminToast.success(data.msg);
@@ -219,12 +217,10 @@ document.getElementById('btn-test').addEventListener('click', async function() {
     this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> <?= __('测试中...') ?>';
     
     try {
-        const res = await fetch('<?= $this->getUrl('storage/backend/config/test') ?>', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: params.toString()
-        });
-        const data = await res.json();
+        var url = '<?= $this->getUrl('storage/backend/config/test') ?>';
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString() };
+        var res = await window.Weline.Api.request(url, opts);
+        var data = (res && res.data) !== undefined ? res.data : res;
         
         if (data.code === 200) {
             AdminToast.success(data.msg);
