@@ -38,9 +38,9 @@ class Listing extends BaseCommand
         $this->printing->note('定时任务总数：' . $taskTotal);
         $this->printing->setup(mb_str_pad(__('代码'), 35, ' ', STR_PAD_RIGHT, 'UTF-8') . mb_str_pad('名称', 55, ' ', STR_PAD_RIGHT, 'UTF-8') .'说明');
         foreach ($tasks as $key => $task) {
-            $task_name = $task->getData(CronTask::fields_NAME);
-            $task_code = $task->getData(CronTask::fields_EXECUTE_NAME);
-            $task_tip  = $task->getData(CronTask::fields_TIP);
+            $task_name = $task->getData(CronTask::schema_fields_NAME);
+            $task_code = $task->getData(CronTask::schema_fields_EXECUTE_NAME);
+            $task_tip  = $task->getData(CronTask::schema_fields_TIP);
             $task_tips = explode(PHP_EOL, $task_tip);
             foreach ($task_tips as $k=> &$taskTip) {
                 if($k > 0) {
