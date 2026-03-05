@@ -223,12 +223,11 @@ $isEdit = $domain && $domain->getId() ? true : false;
             
             var formData = new FormData(this);
             
-            fetch(this.action, {
-                method: 'POST',
-                body: formData
-            })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
+            var url = this.action;
+            var opts = { method: 'POST', body: formData };
+            window.Weline.Api.request(url, opts)
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
                     if (typeof Swal !== 'undefined') {
                         Swal.fire({

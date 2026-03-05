@@ -53,7 +53,7 @@ class UrlSiteResolver
 
         // 获取所有启用的域名
         $domains = $domainModel->reset()
-            ->where(Domain::fields_ENABLED, 1)
+            ->where(Domain::schema_fields_ENABLED, 1)
             ->select()
             ->fetch()
             ->getItems();
@@ -63,7 +63,7 @@ class UrlSiteResolver
 
         // 使用最长匹配原则
         foreach ($domains as $domain) {
-            $domainName = $domain->getData(Domain::fields_DOMAIN_NAME);
+            $domainName = $domain->getData(Domain::schema_fields_DOMAIN_NAME);
             
             // 完全匹配
             if ($domainName === $host) {
@@ -95,12 +95,12 @@ class UrlSiteResolver
         $domainModel = $this->objectManager->getInstance(Domain::class);
         
         $domain = $domainModel->reset()
-            ->where(Domain::fields_SITE_ID, $siteId)
-            ->where(Domain::fields_ENABLED, 1)
+            ->where(Domain::schema_fields_SITE_ID, $siteId)
+            ->where(Domain::schema_fields_ENABLED, 1)
             ->find()
             ->fetch();
 
-        return $domain->getData(Domain::fields_DOMAIN_ID) ? $domain : null;
+        return $domain->getData(Domain::schema_fields_DOMAIN_ID) ? $domain : null;
     }
 }
 

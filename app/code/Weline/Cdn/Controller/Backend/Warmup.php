@@ -70,17 +70,17 @@ class Warmup extends BackendController
 
             // 搜索过滤
             if (!empty($search)) {
-                $query->where(WarmupUrl::fields_URL, 'like', "%{$search}%");
+                $query->where(WarmupUrl::schema_fields_URL, 'like', "%{$search}%");
             }
 
             // 模块过滤
             if (!empty($module)) {
-                $query->where(WarmupUrl::fields_MODULE, $module);
+                $query->where(WarmupUrl::schema_fields_MODULE, $module);
             }
 
             // 状态过滤
             if (!empty($status)) {
-                $query->where(WarmupUrl::fields_STATUS, $status);
+                $query->where(WarmupUrl::schema_fields_STATUS, $status);
             }
 
             // 统计
@@ -89,7 +89,7 @@ class Warmup extends BackendController
             // 分页查询
             $urls = $query
                 ->limit($pageSize, ($page - 1) * $pageSize)
-                ->order(WarmupUrl::fields_CREATED_AT, 'DESC')
+                ->order(WarmupUrl::schema_fields_CREATED_AT, 'DESC')
                 ->fetch()
                 ->getItems();
 
@@ -98,14 +98,14 @@ class Warmup extends BackendController
 
             // 获取所有模块（用于筛选）
             $modules = $this->getWarmupUrlModel()->reset()
-                ->select(WarmupUrl::fields_MODULE)
-                ->group(WarmupUrl::fields_MODULE)
+                ->select(WarmupUrl::schema_fields_MODULE)
+                ->group(WarmupUrl::schema_fields_MODULE)
                 ->fetch()
                 ->getItems();
 
             $moduleList = [];
             foreach ($modules as $item) {
-                $moduleList[] = $item->getData(WarmupUrl::fields_MODULE);
+                $moduleList[] = $item->getData(WarmupUrl::schema_fields_MODULE);
             }
 
             $this->assign('urls', $urls);
@@ -145,14 +145,14 @@ class Warmup extends BackendController
         try {
             // 按模块统计
             $stats = $this->getWarmupUrlModel()->reset()
-                ->select(WarmupUrl::fields_MODULE . ', COUNT(*) as total_count, SUM(' . WarmupUrl::fields_PROCESSED_COUNT . ') as total_processed, SUM(' . WarmupUrl::fields_SUCCESS_COUNT . ') as total_success, SUM(' . WarmupUrl::fields_FAIL_COUNT . ') as total_fail')
-                ->group(WarmupUrl::fields_MODULE)
+                ->select(WarmupUrl::schema_fields_MODULE . ', COUNT(*) as total_count, SUM(' . WarmupUrl::schema_fields_PROCESSED_COUNT . ') as total_processed, SUM(' . WarmupUrl::schema_fields_SUCCESS_COUNT . ') as total_success, SUM(' . WarmupUrl::schema_fields_FAIL_COUNT . ') as total_fail')
+                ->group(WarmupUrl::schema_fields_MODULE)
                 ->fetch()
                 ->getItems();
 
             $statistics = [];
             foreach ($stats as $stat) {
-                $module = $stat->getData(WarmupUrl::fields_MODULE);
+                $module = $stat->getData(WarmupUrl::schema_fields_MODULE);
                 $total = (int)$stat->getData('total_count');
                 $processed = (int)$stat->getData('total_processed');
                 $success = (int)$stat->getData('total_success');
@@ -224,14 +224,14 @@ class Warmup extends BackendController
         try {
             $warmupUrl = $this->getWarmupUrlModel()->reset()->load($id);
             
-            if (!$warmupUrl->getData(WarmupUrl::fields_WARMUP_URL_ID)) {
+            if (!$warmupUrl->getData(WarmupUrl::schema_fields_WARMUP_URL_ID)) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('URL不存在')
                 ]);
             }
 
-            $warmupUrl->setData(WarmupUrl::fields_ENABLED, $enabled ? 1 : 0);
+            $warmupUrl->setData(WarmupUrl::schema_fields_ENABLED, $enabled ? 1 : 0);
             $warmupUrl->save();
 
             Message::success($enabled ? __('URL已启用') : __('URL已禁用'));
@@ -268,7 +268,7 @@ class Warmup extends BackendController
         try {
             $warmupUrl = $this->getWarmupUrlModel()->reset()->load($id);
             
-            if (!$warmupUrl->getData(WarmupUrl::fields_WARMUP_URL_ID)) {
+            if (!$warmupUrl->getData(WarmupUrl::schema_fields_WARMUP_URL_ID)) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('URL不存在')

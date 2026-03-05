@@ -166,9 +166,9 @@ $selectedDomainId = $this->getData('domain_id') ?: '';
                 ? getDomainRulesUrl + '?domain_id=' + domainId
                 : getGlobalRulesUrl;
             
-            fetch(url)
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
+            window.Weline.Api.get(url, { silent: true })
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
                     var rules = data.data || {};
                     document.getElementById('rulesTextarea').value = JSON.stringify(rules, null, 2);
@@ -215,12 +215,10 @@ $selectedDomainId = $this->getData('domain_id') ?: '';
                 formData.append('domain_id', currentDomainId);
             }
             
-            fetch(url, {
-                method: 'POST',
-                body: formData
-            })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
+            var opts = { method: 'POST', body: formData };
+            window.Weline.Api.request(url, opts)
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
                     Swal.fire({
                         icon: 'success',
@@ -269,11 +267,11 @@ $selectedDomainId = $this->getData('domain_id') ?: '';
                 confirmButtonColor: '#ff9800'
             }).then(function(result) {
                 if (result.isConfirmed) {
-                    fetch(importUrl + '?domain_id=' + currentDomainId, {
-                        method: 'POST'
-                    })
-                    .then(function(response) { return response.json(); })
-                    .then(function(data) {
+                    var impUrl = importUrl + '?domain_id=' + currentDomainId;
+                    var impOpts = { method: 'POST' };
+                    window.Weline.Api.request(impUrl, impOpts)
+                    .then(function(res) {
+                        var data = (res && res.data) !== undefined ? res.data : res;
                         if (data.success) {
                             document.getElementById('rulesTextarea').value = JSON.stringify(data.data || {}, null, 2);
                             Swal.fire({
