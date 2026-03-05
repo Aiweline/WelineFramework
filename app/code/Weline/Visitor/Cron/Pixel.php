@@ -92,7 +92,7 @@ class Pixel implements CronTaskInterface
         }
         foreach ($do as $item) {
             $pixel = w_obj(\Weline\Visitor\Model\Pixel::class)->load($item);
-            $pixel->setData(\Weline\Visitor\Model\Pixel::fields_CRON_DEAL, 1);
+            $pixel->setData(\Weline\Visitor\Model\Pixel::schema_fields_CRON_DEAL, 1);
             $pixel->save();
         }
         return 'ok';
