@@ -11,84 +11,60 @@ declare(strict_types=1);
 
 namespace Weline\DataTable\Model;
 
-use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: '测试订单表')]
+#[Index(name: 'idx_order_no', columns: ['order_no'], type: 'UNIQUE')]
+#[Index(name: 'idx_user_id', columns: ['user_id'])]
 class TestOrder extends Model
 {
-    public const table = 'datatable_test_orders';
+    public const schema_table = 'datatable_test_orders';
+    public const schema_primary_key = 'id';
 
-    public const fields_ID = 'id';
-    public const fields_order_no = 'order_no';
-    public const fields_user_id = 'user_id';
-    public const fields_total_amount = 'total_amount';
-    public const fields_discount_amount = 'discount_amount';
-    public const fields_shipping_fee = 'shipping_fee';
-    public const fields_final_amount = 'final_amount';
-    public const fields_payment_method = 'payment_method';
-    public const fields_payment_status = 'payment_status';
-    public const fields_order_status = 'order_status';
-    public const fields_shipping_address = 'shipping_address';
-    public const fields_shipping_phone = 'shipping_phone';
-    public const fields_shipping_name = 'shipping_name';
-    public const fields_shipping_company = 'shipping_company';
-    public const fields_tracking_number = 'tracking_number';
-    public const fields_notes = 'notes';
-    public const fields_created_at = 'created_at';
-    public const fields_updated_at = 'updated_at';
-    public const fields_paid_at = 'paid_at';
-    public const fields_shipped_at = 'shipped_at';
-    public const fields_completed_at = 'completed_at';
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('测试订单表')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'auto_increment primary key', '订单ID')
-                ->addColumn(self::fields_order_no, TableInterface::column_type_VARCHAR, 50, 'not null unique', '订单号')
-                ->addColumn(self::fields_user_id, TableInterface::column_type_INTEGER, 0, 'not null', '用户ID')
-                ->addColumn(self::fields_total_amount, TableInterface::column_type_DECIMAL, '10,2', 'default 0.00', '订单总金额')
-                ->addColumn(self::fields_discount_amount, TableInterface::column_type_DECIMAL, '10,2', 'default 0.00', '优惠金额')
-                ->addColumn(self::fields_shipping_fee, TableInterface::column_type_DECIMAL, '10,2', 'default 0.00', '运费')
-                ->addColumn(self::fields_final_amount, TableInterface::column_type_DECIMAL, '10,2', 'default 0.00', '最终金额')
-                ->addColumn(self::fields_payment_method, TableInterface::column_type_VARCHAR, 50, '', '支付方式')
-                ->addColumn(self::fields_payment_status, TableInterface::column_type_INTEGER, 1, 'default 0', '支付状态：0-未支付，1-已支付，2-已退款')
-                ->addColumn(self::fields_order_status, TableInterface::column_type_INTEGER, 1, 'default 0', '订单状态：0-待确认，1-已确认，2-已发货，3-已完成，4-已取消')
-                ->addColumn(self::fields_shipping_address, TableInterface::column_type_TEXT, 0, '', '收货地址')
-                ->addColumn(self::fields_shipping_phone, TableInterface::column_type_VARCHAR, 20, '', '收货电话')
-                ->addColumn(self::fields_shipping_name, TableInterface::column_type_VARCHAR, 100, '', '收货人姓名')
-                ->addColumn(self::fields_shipping_company, TableInterface::column_type_VARCHAR, 100, '', '快递公司')
-                ->addColumn(self::fields_tracking_number, TableInterface::column_type_VARCHAR, 100, '', '快递单号')
-                ->addColumn(self::fields_notes, TableInterface::column_type_TEXT, 0, '', '订单备注')
-                ->addColumn(self::fields_created_at, TableInterface::column_type_DATETIME, 0, 'default CURRENT_TIMESTAMP', '创建时间')
-                ->addColumn(self::fields_updated_at, TableInterface::column_type_DATETIME, 0, 'default CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP', '更新时间')
-                ->addColumn(self::fields_paid_at, TableInterface::column_type_DATETIME, 0, '', '支付时间')
-                ->addColumn(self::fields_shipped_at, TableInterface::column_type_DATETIME, 0, '', '发货时间')
-                ->addColumn(self::fields_completed_at, TableInterface::column_type_DATETIME, 0, '', '完成时间')
-                ->create();
-        }
-    }
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '订单ID')]
+    public const schema_fields_ID = 'id';
+    #[Col(type: 'varchar', length: 50, nullable: false, comment: '订单号')]
+    public const schema_fields_ORDER_NO = 'order_no';
+    #[Col(type: 'int', nullable: false, comment: '用户ID')]
+    public const schema_fields_USER_ID = 'user_id';
+    #[Col(type: 'decimal', length: '10,2', default: '0.00', comment: '订单总金额')]
+    public const schema_fields_TOTAL_AMOUNT = 'total_amount';
+    #[Col(type: 'decimal', length: '10,2', default: '0.00', comment: '优惠金额')]
+    public const schema_fields_DISCOUNT_AMOUNT = 'discount_amount';
+    #[Col(type: 'decimal', length: '10,2', default: '0.00', comment: '运费')]
+    public const schema_fields_SHIPPING_FEE = 'shipping_fee';
+    #[Col(type: 'decimal', length: '10,2', default: '0.00', comment: '最终金额')]
+    public const schema_fields_FINAL_AMOUNT = 'final_amount';
+    #[Col(type: 'varchar', length: 50, nullable: true, comment: '支付方式')]
+    public const schema_fields_PAYMENT_METHOD = 'payment_method';
+    #[Col(type: 'int', length: 1, default: 0, comment: '支付状态')]
+    public const schema_fields_PAYMENT_STATUS = 'payment_status';
+    #[Col(type: 'int', length: 1, default: 0, comment: '订单状态')]
+    public const schema_fields_ORDER_STATUS = 'order_status';
+    #[Col(type: 'text', nullable: true, comment: '收货地址')]
+    public const schema_fields_SHIPPING_ADDRESS = 'shipping_address';
+    #[Col(type: 'varchar', length: 20, nullable: true, comment: '收货电话')]
+    public const schema_fields_SHIPPING_PHONE = 'shipping_phone';
+    #[Col(type: 'varchar', length: 100, nullable: true, comment: '收货人姓名')]
+    public const schema_fields_SHIPPING_NAME = 'shipping_name';
+    #[Col(type: 'varchar', length: 100, nullable: true, comment: '快递公司')]
+    public const schema_fields_SHIPPING_COMPANY = 'shipping_company';
+    #[Col(type: 'varchar', length: 100, nullable: true, comment: '快递单号')]
+    public const schema_fields_TRACKING_NUMBER = 'tracking_number';
+    #[Col(type: 'text', nullable: true, comment: '订单备注')]
+    public const schema_fields_NOTES = 'notes';
+    #[Col(type: 'datetime', default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col(type: 'datetime', default: 'CURRENT_TIMESTAMP', comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
+    #[Col(type: 'datetime', nullable: true, comment: '支付时间')]
+    public const schema_fields_PAID_AT = 'paid_at';
+    #[Col(type: 'datetime', nullable: true, comment: '发货时间')]
+    public const schema_fields_SHIPPED_AT = 'shipped_at';
+    #[Col(type: 'datetime', nullable: true, comment: '完成时间')]
+    public const schema_fields_COMPLETED_AT = 'completed_at';
 
     /**
      * 获取测试数据
@@ -427,4 +403,4 @@ class TestOrder extends Model
     {
         return '¥' . number_format($value, 2);
     }
-} 
+}
