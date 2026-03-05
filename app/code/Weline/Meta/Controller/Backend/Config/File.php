@@ -27,17 +27,17 @@ class File extends BackendController
         /** @var MetaModel $metaModel */
         $metaModel = ObjectManager::getInstance(MetaModel::class);
         $namespaces = $metaModel->reset()
-            ->fields(MetaModel::fields_NAMESPACE)
-            ->where(MetaModel::fields_NAMESPACE, null, 'IS NOT NULL')
-            ->where(MetaModel::fields_NAMESPACE, '', '!=')
-            ->group(MetaModel::fields_NAMESPACE)
-            ->order(MetaModel::fields_NAMESPACE, 'ASC')
+            ->fields(MetaModel::schema_fields_NAMESPACE)
+            ->where(MetaModel::schema_fields_NAMESPACE, null, 'IS NOT NULL')
+            ->where(MetaModel::schema_fields_NAMESPACE, '', '!=')
+            ->group(MetaModel::schema_fields_NAMESPACE)
+            ->order(MetaModel::schema_fields_NAMESPACE, 'ASC')
             ->select()
             ->fetch();
         
         $namespaceList = [];
         foreach ($namespaces->getItems() as $item) {
-            $ns = (string)$item->getData(MetaModel::fields_NAMESPACE);
+            $ns = (string)$item->getData(MetaModel::schema_fields_NAMESPACE);
             if ($ns) {
                 $namespaceList[] = $ns;
             }
@@ -53,17 +53,17 @@ class File extends BackendController
         $typeOptions = [];
         if (!empty($namespace)) {
             $typeResult = $metaModel->reset()
-                ->fields(MetaModel::fields_META_TYPE)
-                ->where(MetaModel::fields_NAMESPACE, $namespace)
-                ->where(MetaModel::fields_META_TYPE, null, 'IS NOT NULL')
-                ->where(MetaModel::fields_META_TYPE, '', '!=')
-                ->group(MetaModel::fields_META_TYPE)
-                ->order(MetaModel::fields_META_TYPE, 'ASC')
+                ->fields(MetaModel::schema_fields_META_TYPE)
+                ->where(MetaModel::schema_fields_NAMESPACE, $namespace)
+                ->where(MetaModel::schema_fields_META_TYPE, null, 'IS NOT NULL')
+                ->where(MetaModel::schema_fields_META_TYPE, '', '!=')
+                ->group(MetaModel::schema_fields_META_TYPE)
+                ->order(MetaModel::schema_fields_META_TYPE, 'ASC')
                 ->select()
                 ->fetch();
 
             foreach ($typeResult->getItems() as $item) {
-                $t = (string)$item->getData(MetaModel::fields_META_TYPE);
+                $t = (string)$item->getData(MetaModel::schema_fields_META_TYPE);
                 if ($t && !in_array($t, $typeOptions, true)) {
                     $typeOptions[] = $t;
                 }
@@ -74,17 +74,17 @@ class File extends BackendController
         $categoryOptions = [];
         if (!empty($namespace)) {
             $categoryResult = $metaModel->reset()
-                ->fields(MetaModel::fields_CATEGORY)
-                ->where(MetaModel::fields_NAMESPACE, $namespace)
-                ->where(MetaModel::fields_CATEGORY, null, 'IS NOT NULL')
-                ->where(MetaModel::fields_CATEGORY, '', '!=')
-                ->group(MetaModel::fields_CATEGORY)
-                ->order(MetaModel::fields_CATEGORY, 'ASC')
+                ->fields(MetaModel::schema_fields_CATEGORY)
+                ->where(MetaModel::schema_fields_NAMESPACE, $namespace)
+                ->where(MetaModel::schema_fields_CATEGORY, null, 'IS NOT NULL')
+                ->where(MetaModel::schema_fields_CATEGORY, '', '!=')
+                ->group(MetaModel::schema_fields_CATEGORY)
+                ->order(MetaModel::schema_fields_CATEGORY, 'ASC')
                 ->select()
                 ->fetch();
 
             foreach ($categoryResult->getItems() as $item) {
-                $c = (string)$item->getData(MetaModel::fields_CATEGORY);
+                $c = (string)$item->getData(MetaModel::schema_fields_CATEGORY);
                 if ($c && !in_array($c, $categoryOptions, true)) {
                     $categoryOptions[] = $c;
                 }
@@ -100,17 +100,17 @@ class File extends BackendController
         if (!empty($namespace)) {
             // Scope 列表
             $scopeResult = $metaConfigModel->reset()
-                ->fields(MetaConfig::fields_SCOPE)
-                ->where(MetaConfig::fields_NAMESPACE, $namespace)
-                ->where(MetaConfig::fields_SCOPE, null, 'IS NOT NULL')
-                ->where(MetaConfig::fields_SCOPE, '', '!=')
-                ->group(MetaConfig::fields_SCOPE)
-                ->order(MetaConfig::fields_SCOPE, 'ASC')
+                ->fields(MetaConfig::schema_fields_SCOPE)
+                ->where(MetaConfig::schema_fields_NAMESPACE, $namespace)
+                ->where(MetaConfig::schema_fields_SCOPE, null, 'IS NOT NULL')
+                ->where(MetaConfig::schema_fields_SCOPE, '', '!=')
+                ->group(MetaConfig::schema_fields_SCOPE)
+                ->order(MetaConfig::schema_fields_SCOPE, 'ASC')
                 ->select()
                 ->fetch();
 
             foreach ($scopeResult->getItems() as $item) {
-                $s = (string)$item->getData(MetaConfig::fields_SCOPE);
+                $s = (string)$item->getData(MetaConfig::schema_fields_SCOPE);
                 if ($s && !in_array($s, $scopeOptions, true)) {
                     $scopeOptions[] = $s;
                 }
@@ -118,17 +118,17 @@ class File extends BackendController
 
             // 语言列表
             $localeResult = $metaConfigModel->reset()
-                ->fields(MetaConfig::fields_LOCALE)
-                ->where(MetaConfig::fields_NAMESPACE, $namespace)
-                ->where(MetaConfig::fields_LOCALE, null, 'IS NOT NULL')
-                ->where(MetaConfig::fields_LOCALE, '', '!=')
-                ->group(MetaConfig::fields_LOCALE)
-                ->order(MetaConfig::fields_LOCALE, 'ASC')
+                ->fields(MetaConfig::schema_fields_LOCALE)
+                ->where(MetaConfig::schema_fields_NAMESPACE, $namespace)
+                ->where(MetaConfig::schema_fields_LOCALE, null, 'IS NOT NULL')
+                ->where(MetaConfig::schema_fields_LOCALE, '', '!=')
+                ->group(MetaConfig::schema_fields_LOCALE)
+                ->order(MetaConfig::schema_fields_LOCALE, 'ASC')
                 ->select()
                 ->fetch();
 
             foreach ($localeResult->getItems() as $item) {
-                $l = (string)$item->getData(MetaConfig::fields_LOCALE);
+                $l = (string)$item->getData(MetaConfig::schema_fields_LOCALE);
                 if ($l && !in_array($l, $localeOptions, true)) {
                     $localeOptions[] = $l;
                 }
@@ -192,39 +192,39 @@ class File extends BackendController
 
         /** @var MetaModel $metaModel */
         $metaModel = ObjectManager::getInstance(MetaModel::class);
-        $metaModel->reset()->where(MetaModel::fields_NAMESPACE, $namespace);
+        $metaModel->reset()->where(MetaModel::schema_fields_NAMESPACE, $namespace);
         
         // 只查询非 field 类型的记录（文件类型）
-        $metaModel->where(MetaModel::fields_META_TYPE, 'field', '!=');
+        $metaModel->where(MetaModel::schema_fields_META_TYPE, 'field', '!=');
         
         // 只查询文件路径不为空的记录（文件类型）
-        $metaModel->where(MetaModel::fields_FILE_PATH, null, 'IS NOT NULL');
-        $metaModel->where(MetaModel::fields_FILE_PATH, '', '!=');
+        $metaModel->where(MetaModel::schema_fields_FILE_PATH, null, 'IS NOT NULL');
+        $metaModel->where(MetaModel::schema_fields_FILE_PATH, '', '!=');
 
         if ($area) {
-            $metaModel->where(MetaModel::fields_AREA, $area);
+            $metaModel->where(MetaModel::schema_fields_AREA, $area);
         }
         if ($type = $this->request->getParam('type')) {
-            $metaModel->where(MetaModel::fields_META_TYPE, $type);
+            $metaModel->where(MetaModel::schema_fields_META_TYPE, $type);
         }
         if ($category = $this->request->getParam('category')) {
-            $metaModel->where(MetaModel::fields_CATEGORY, $category);
+            $metaModel->where(MetaModel::schema_fields_CATEGORY, $category);
         }
 
         $result = $metaModel->select()->fetch();
         $items = [];
         foreach ($result->getItems() as $meta) {
-            $filePath = (string)$meta->getData(MetaModel::fields_FILE_PATH);
-            $metaIdentify = (string)$meta->getData(MetaModel::fields_META_IDENTIFY);
+            $filePath = (string)$meta->getData(MetaModel::schema_fields_FILE_PATH);
+            $metaIdentify = (string)$meta->getData(MetaModel::schema_fields_META_IDENTIFY);
             $items[] = [
-                'meta_id' => (int)$meta->getData(MetaModel::fields_ID),
+                'meta_id' => (int)$meta->getData(MetaModel::schema_fields_ID),
                 'meta_identify' => $metaIdentify,
                 'file_path' => $filePath,
-                'file_full_path' => (string)$meta->getData(MetaModel::fields_FILE_FULL_PATH),
-                'meta_type' => (string)$meta->getData(MetaModel::fields_META_TYPE),
-                'area' => (string)$meta->getData(MetaModel::fields_AREA),
-                'category' => (string)$meta->getData(MetaModel::fields_CATEGORY),
-                'namespace' => (string)$meta->getData(MetaModel::fields_NAMESPACE),
+                'file_full_path' => (string)$meta->getData(MetaModel::schema_fields_FILE_FULL_PATH),
+                'meta_type' => (string)$meta->getData(MetaModel::schema_fields_META_TYPE),
+                'area' => (string)$meta->getData(MetaModel::schema_fields_AREA),
+                'category' => (string)$meta->getData(MetaModel::schema_fields_CATEGORY),
+                'namespace' => (string)$meta->getData(MetaModel::schema_fields_NAMESPACE),
                 'title' => $this->guessNodeTitle($filePath, $metaIdentify),
             ];
         }
@@ -265,29 +265,29 @@ class File extends BackendController
         }
         
         // 查询文件类型的 meta（排除 field 类型，因为 field 是字段定义，不是文件配置）
-        $metaModel->reset()->where(MetaModel::fields_META_IDENTIFY, $metaIdentify);
+        $metaModel->reset()->where(MetaModel::schema_fields_META_IDENTIFY, $metaIdentify);
         
         // 如果能够提取到 namespace，添加 namespace 条件以提高查询准确性
         if ($namespace) {
-            $metaModel->where(MetaModel::fields_NAMESPACE, $namespace);
+            $metaModel->where(MetaModel::schema_fields_NAMESPACE, $namespace);
         }
         
         // 排除 field 类型
-        $metaModel->where(MetaModel::fields_META_TYPE, 'field', '!=');
+        $metaModel->where(MetaModel::schema_fields_META_TYPE, 'field', '!=');
         $metaRecord = $metaModel->find()->fetch();
         
         if (!$metaRecord->getId()) {
             // 如果没找到，尝试不排除 field 类型再查询一次（用于调试）
             $checkModel = ObjectManager::getInstance(MetaModel::class);
-            $checkModel->reset()->where(MetaModel::fields_META_IDENTIFY, $metaIdentify);
+            $checkModel->reset()->where(MetaModel::schema_fields_META_IDENTIFY, $metaIdentify);
             if ($namespace) {
-                $checkModel->where(MetaModel::fields_NAMESPACE, $namespace);
+                $checkModel->where(MetaModel::schema_fields_NAMESPACE, $namespace);
             }
             $checkRecord = $checkModel->fetch();
             
             if ($checkRecord->getId()) {
                 // 如果找到了 field 类型的记录，说明查询条件有问题
-                $foundType = $checkRecord->getData(MetaModel::fields_META_TYPE);
+                $foundType = $checkRecord->getData(MetaModel::schema_fields_META_TYPE);
                 return $this->fetchJson($this->error(__('找到的 Meta 配置类型不正确：%{meta_identify}，期望文件类型，实际为：%{type}', [
                     'meta_identify' => $metaIdentify,
                     'type' => $foundType
@@ -301,24 +301,24 @@ class File extends BackendController
         }
         
         // 从 meta 记录中获取 namespace（这是最准确的方式）
-        $namespace = $metaRecord->getData(MetaModel::fields_NAMESPACE);
+        $namespace = $metaRecord->getData(MetaModel::schema_fields_NAMESPACE);
         if (empty($namespace)) {
             return $this->fetchJson($this->error(__('Meta 配置缺少命名空间：') . $metaIdentify));
         }
         
         // 构建 meta 数组
-        $metaDataValue = $metaRecord->getData(MetaModel::fields_META_DATA);
-        $settingValue = $metaRecord->getData(MetaModel::fields_SETTING);
+        $metaDataValue = $metaRecord->getData(MetaModel::schema_fields_META_DATA);
+        $settingValue = $metaRecord->getData(MetaModel::schema_fields_SETTING);
         
         $meta = [
-            'meta_id' => $metaRecord->getData(MetaModel::fields_ID),
-            'meta_identify' => $metaRecord->getData(MetaModel::fields_META_IDENTIFY),
+            'meta_id' => $metaRecord->getData(MetaModel::schema_fields_ID),
+            'meta_identify' => $metaRecord->getData(MetaModel::schema_fields_META_IDENTIFY),
             'namespace' => $namespace,
-            'file_path' => $metaRecord->getData(MetaModel::fields_FILE_PATH),
-            'file_full_path' => $metaRecord->getData(MetaModel::fields_FILE_FULL_PATH),
-            'area' => $metaRecord->getData(MetaModel::fields_AREA),
-            'meta_type' => $metaRecord->getData(MetaModel::fields_META_TYPE),
-            'category' => $metaRecord->getData(MetaModel::fields_CATEGORY),
+            'file_path' => $metaRecord->getData(MetaModel::schema_fields_FILE_PATH),
+            'file_full_path' => $metaRecord->getData(MetaModel::schema_fields_FILE_FULL_PATH),
+            'area' => $metaRecord->getData(MetaModel::schema_fields_AREA),
+            'meta_type' => $metaRecord->getData(MetaModel::schema_fields_META_TYPE),
+            'category' => $metaRecord->getData(MetaModel::schema_fields_CATEGORY),
             'meta_data' => (!empty($metaDataValue) && is_string($metaDataValue)) ? (json_decode($metaDataValue, true) ?? []) : [],
             'setting' => (!empty($settingValue) && is_string($settingValue)) ? (json_decode($settingValue, true) ?? []) : [],
         ];
@@ -334,11 +334,11 @@ class File extends BackendController
         
         // 查询 name field
         $nameField = $metaModel->reset()
-            ->where(MetaModel::fields_META_IDENTIFY, $metaIdentify . '.name')
-            ->where(MetaModel::fields_META_TYPE, 'field')
+            ->where(MetaModel::schema_fields_META_IDENTIFY, $metaIdentify . '.name')
+            ->where(MetaModel::schema_fields_META_TYPE, 'field')
             ->fetch();
         if ($nameField->getId()) {
-            $nameMetaDataValue = $nameField->getData(MetaModel::fields_META_DATA);
+            $nameMetaDataValue = $nameField->getData(MetaModel::schema_fields_META_DATA);
             $nameMetaData = (!empty($nameMetaDataValue) && is_string($nameMetaDataValue)) ? (json_decode($nameMetaDataValue, true) ?? []) : [];
             $name = $nameMetaData['attributes']['default'] ?? $nameMetaData['attributes']['name'] ?? '';
             $nameTranslatable = !empty($nameMetaData['attributes']['translate']) || !empty($nameMetaData['attributes']['translatable']);
@@ -356,11 +356,11 @@ class File extends BackendController
 
         // 查询 description field
         $descField = $metaModel->reset()
-            ->where(MetaModel::fields_META_IDENTIFY, $metaIdentify . '.description')
-            ->where(MetaModel::fields_META_TYPE, 'field')
+            ->where(MetaModel::schema_fields_META_IDENTIFY, $metaIdentify . '.description')
+            ->where(MetaModel::schema_fields_META_TYPE, 'field')
             ->fetch();
         if ($descField->getId()) {
-            $descMetaDataValue = $descField->getData(MetaModel::fields_META_DATA);
+            $descMetaDataValue = $descField->getData(MetaModel::schema_fields_META_DATA);
             $descMetaData = (!empty($descMetaDataValue) && is_string($descMetaDataValue)) ? (json_decode($descMetaDataValue, true) ?? []) : [];
             $description = $descMetaData['attributes']['default'] ?? $descMetaData['attributes']['name'] ?? '';
             $descriptionTranslatable = !empty($descMetaData['attributes']['translate']) || !empty($descMetaData['attributes']['translatable']);
@@ -401,16 +401,16 @@ class File extends BackendController
                 
                 // 检查参数是否已保存：查询 m_w_meta_config 表中是否存在对应 meta_id 的记录
                 $checkQuery = $metaConfigModel->reset()
-                    ->where(\Weline\Meta\Model\MetaConfig::fields_NAMESPACE, $namespace)
-                    ->where(\Weline\Meta\Model\MetaConfig::fields_CONFIG_KEY, $configKey)
-                    ->where(\Weline\Meta\Model\MetaConfig::fields_SCOPE, $scope);
+                    ->where(\Weline\Meta\Model\MetaConfig::schema_fields_NAMESPACE, $namespace)
+                    ->where(\Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_KEY, $configKey)
+                    ->where(\Weline\Meta\Model\MetaConfig::schema_fields_SCOPE, $scope);
                 
                 if ($metaId) {
-                    $checkQuery->where(\Weline\Meta\Model\MetaConfig::fields_META_ID, $metaId);
+                    $checkQuery->where(\Weline\Meta\Model\MetaConfig::schema_fields_META_ID, $metaId);
                 } elseif ($metaIdentify) {
-                    $checkQuery->where(\Weline\Meta\Model\MetaConfig::fields_META_IDENTIFY, $metaIdentify);
+                    $checkQuery->where(\Weline\Meta\Model\MetaConfig::schema_fields_META_IDENTIFY, $metaIdentify);
                 } elseif ($identityId !== null && $identityId !== '') {
-                    $checkQuery->where(\Weline\Meta\Model\MetaConfig::fields_IDENTIFY_ID, (string)$identityId);
+                    $checkQuery->where(\Weline\Meta\Model\MetaConfig::schema_fields_IDENTIFY_ID, (string)$identityId);
                 }
                 
                 $checkRecord = $checkQuery->find()->fetch();
@@ -430,23 +430,23 @@ class File extends BackendController
                 } else {
                     // 不可翻译的参数：从 MetaConfig 读取（locale 为 null 的记录）
                     $configQuery = $metaConfigModel->reset()
-                        ->where(\Weline\Meta\Model\MetaConfig::fields_NAMESPACE, $namespace)
-                        ->where(\Weline\Meta\Model\MetaConfig::fields_CONFIG_KEY, $configKey)
-                        ->where(\Weline\Meta\Model\MetaConfig::fields_SCOPE, $scope)
-                        ->where(\Weline\Meta\Model\MetaConfig::fields_LOCALE, null, 'IS NULL');
+                        ->where(\Weline\Meta\Model\MetaConfig::schema_fields_NAMESPACE, $namespace)
+                        ->where(\Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_KEY, $configKey)
+                        ->where(\Weline\Meta\Model\MetaConfig::schema_fields_SCOPE, $scope)
+                        ->where(\Weline\Meta\Model\MetaConfig::schema_fields_LOCALE, null, 'IS NULL');
                     
                     if ($metaId) {
-                        $configQuery->where(\Weline\Meta\Model\MetaConfig::fields_META_ID, $metaId);
+                        $configQuery->where(\Weline\Meta\Model\MetaConfig::schema_fields_META_ID, $metaId);
                     } elseif ($metaIdentify) {
-                        $configQuery->where(\Weline\Meta\Model\MetaConfig::fields_META_IDENTIFY, $metaIdentify);
+                        $configQuery->where(\Weline\Meta\Model\MetaConfig::schema_fields_META_IDENTIFY, $metaIdentify);
                     } elseif ($identityId !== null && $identityId !== '') {
-                        $configQuery->where(\Weline\Meta\Model\MetaConfig::fields_IDENTIFY_ID, (string)$identityId);
+                        $configQuery->where(\Weline\Meta\Model\MetaConfig::schema_fields_IDENTIFY_ID, (string)$identityId);
                     }
                     
                     $configRecord = $configQuery->find()->fetch();
                     
                     if ($configRecord->getId()) {
-                        $values[$paramName] = $configRecord->getData(\Weline\Meta\Model\MetaConfig::fields_CONFIG_VALUE);
+                        $values[$paramName] = $configRecord->getData(\Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_VALUE);
                     }
                 }
             }
@@ -507,8 +507,8 @@ class File extends BackendController
             /** @var MetaModel $metaModel */
             $metaModel = ObjectManager::getInstance(MetaModel::class);
             $metaRecord = $metaModel->reset()
-                ->where(MetaModel::fields_META_IDENTIFY, $metaIdentify)
-                ->where(MetaModel::fields_META_TYPE, 'field', '!=')
+                ->where(MetaModel::schema_fields_META_IDENTIFY, $metaIdentify)
+                ->where(MetaModel::schema_fields_META_TYPE, 'field', '!=')
                 ->find()
                 ->fetch();
             
@@ -517,15 +517,15 @@ class File extends BackendController
             }
             
             // 从 meta 记录中获取 namespace（这是最准确的方式）
-            $namespace = $metaRecord->getData(MetaModel::fields_NAMESPACE);
+            $namespace = $metaRecord->getData(MetaModel::schema_fields_NAMESPACE);
             if (empty($namespace)) {
                 return $this->fetchJson($this->error(__('Meta 配置缺少命名空间：') . $metaIdentify));
             }
             
-            $metaId = $metaRecord->getData(MetaModel::fields_ID);
+            $metaId = $metaRecord->getData(MetaModel::schema_fields_ID);
             
             // 获取参数定义，判断哪些参数支持翻译
-            $settingValue = $metaRecord->getData(MetaModel::fields_SETTING);
+            $settingValue = $metaRecord->getData(MetaModel::schema_fields_SETTING);
             $setting = (!empty($settingValue) && is_string($settingValue)) ? (json_decode($settingValue, true) ?? []) : [];
             $definitions = $setting['param'] ?? [];
             
@@ -643,8 +643,8 @@ class File extends BackendController
                 /** @var MetaModel $metaModel */
                 $metaModel = ObjectManager::getInstance(MetaModel::class);
                 $fieldMeta = $metaModel->reset()
-                    ->where(MetaModel::fields_META_IDENTIFY, $metaIdentify . '.' . $paramName)
-                    ->where(MetaModel::fields_META_TYPE, 'field')
+                    ->where(MetaModel::schema_fields_META_IDENTIFY, $metaIdentify . '.' . $paramName)
+                    ->where(MetaModel::schema_fields_META_TYPE, 'field')
                     ->find()
                     ->fetch();
                 
@@ -652,7 +652,7 @@ class File extends BackendController
                     return $this->fetchJson($this->error(__('未找到对应的字段配置：%{param}', ['param' => $paramName])));
                 }
 
-                $fieldMetaDataValue = $fieldMeta->getData(MetaModel::fields_META_DATA);
+                $fieldMetaDataValue = $fieldMeta->getData(MetaModel::schema_fields_META_DATA);
                 $metaData = (!empty($fieldMetaDataValue) && is_string($fieldMetaDataValue)) ? (json_decode($fieldMetaDataValue, true) ?? []) : [];
                 $attributes = $metaData['attributes'] ?? [];
                 $defaultValue = $attributes['default'] ?? $attributes['name'] ?? '';
@@ -668,8 +668,8 @@ class File extends BackendController
                 /** @var MetaModel $metaModel */
                 $metaModel = ObjectManager::getInstance(MetaModel::class);
                 $metaRecord = $metaModel->reset()
-                    ->where(MetaModel::fields_META_IDENTIFY, $metaIdentify)
-                    ->where(MetaModel::fields_META_TYPE, 'field', '!=')
+                    ->where(MetaModel::schema_fields_META_IDENTIFY, $metaIdentify)
+                    ->where(MetaModel::schema_fields_META_TYPE, 'field', '!=')
                     ->find()
                     ->fetch();
                 
@@ -677,7 +677,7 @@ class File extends BackendController
                     return $this->fetchJson($this->error(__('未找到对应的 Meta 配置：%{meta_identify}', ['meta_identify' => $metaIdentify])));
                 }
                 
-                $settingValue = $metaRecord->getData(MetaModel::fields_SETTING);
+                $settingValue = $metaRecord->getData(MetaModel::schema_fields_SETTING);
                 $setting = (!empty($settingValue) && is_string($settingValue)) ? (json_decode($settingValue, true) ?? []) : [];
                 $definitions = $setting['param'] ?? [];
                 $definition = $definitions[$paramName] ?? null;
@@ -695,27 +695,27 @@ class File extends BackendController
             /** @var \Weline\I18n\Model\Locale $localeModel */
             $localeModel = ObjectManager::getInstance(\Weline\I18n\Model\Locale::class);
             $locales = $localeModel->reset()
-                ->where(\Weline\I18n\Model\Locale::fields_IS_INSTALL, 1)
-                ->order(\Weline\I18n\Model\Locale::fields_CODE, 'ASC')
+                ->where(\Weline\I18n\Model\Locale::schema_fields_IS_INSTALL, 1)
+                ->order(\Weline\I18n\Model\Locale::schema_fields_CODE, 'ASC')
                 ->select()
                 ->fetch();
             
             $translations = [];
             $currentLocaleValue = null;
             foreach ($locales->getItems() as $locale) {
-                $localeCode = (string)$locale->getData(\Weline\I18n\Model\Locale::fields_CODE);
+                $localeCode = (string)$locale->getData(\Weline\I18n\Model\Locale::schema_fields_CODE);
                 if ($localeCode) {
                     // 获取语言名称
                     /** @var \Weline\I18n\Model\Locale\Name $nameModel */
                     $nameModel = ObjectManager::getInstance(\Weline\I18n\Model\Locale\Name::class);
                     $nameRecord = $nameModel->reset()
-                        ->where(\Weline\I18n\Model\Locale\Name::fields_LOCALE_CODE, $localeCode)
-                        ->where(\Weline\I18n\Model\Locale\Name::fields_DISPLAY_LOCALE_CODE, $currentLocale)
+                        ->where(\Weline\I18n\Model\Locale\Name::schema_fields_LOCALE_CODE, $localeCode)
+                        ->where(\Weline\I18n\Model\Locale\Name::schema_fields_DISPLAY_LOCALE_CODE, $currentLocale)
                         ->find()
                         ->fetch();
                     
                     $localeName = $nameRecord->getId() 
-                        ? (string)$nameRecord->getData(\Weline\I18n\Model\Locale\Name::fields_DISPLAY_NAME)
+                        ? (string)$nameRecord->getData(\Weline\I18n\Model\Locale\Name::schema_fields_DISPLAY_NAME)
                         : $localeCode;
                     
                     // 从 w_meta_local 表获取翻译值
@@ -726,7 +726,7 @@ class File extends BackendController
                     /** @var MetaModel $metaModelForId */
                     $metaModelForId = ObjectManager::getInstance(MetaModel::class);
                     $metaForId = $metaModelForId->reset()
-                        ->where(MetaModel::fields_META_IDENTIFY, $metaIdentify)
+                        ->where(MetaModel::schema_fields_META_IDENTIFY, $metaIdentify)
                         ->find()
                         ->fetch();
                     $metaId = $metaForId->getId() ? (int)$metaForId->getId() : null;
@@ -740,9 +740,9 @@ class File extends BackendController
                     $translatedValue = '';
                     if ($metaId) {
                         $localModel->reset()
-                            ->where(MetaLocal::fields_META_ID, $metaId)
-                            ->where(MetaLocal::fields_LOCALE_CODE, $localeCode)
-                            ->where(MetaLocal::fields_CONFIG_KEY, $configKey)
+                            ->where(MetaLocal::schema_fields_META_ID, $metaId)
+                            ->where(MetaLocal::schema_fields_LOCALE_CODE, $localeCode)
+                            ->where(MetaLocal::schema_fields_CONFIG_KEY, $configKey)
                             ->find()
                             ->fetch();
                         
@@ -796,7 +796,7 @@ class File extends BackendController
             /** @var MetaModel $metaModel */
             $metaModel = ObjectManager::getInstance(MetaModel::class);
             $meta = $metaModel->reset()
-                ->where(MetaModel::fields_META_IDENTIFY, $metaIdentify)
+                ->where(MetaModel::schema_fields_META_IDENTIFY, $metaIdentify)
                 ->find()
                 ->fetch();
             
@@ -833,9 +833,9 @@ class File extends BackendController
                 
                 // 加载现有记录（按 meta_id + locale_code + config_key 查找）
                 $localModel->reset()
-                    ->where(MetaLocal::fields_META_ID, $metaId)
-                    ->where(MetaLocal::fields_LOCALE_CODE, $localeCode)
-                    ->where(MetaLocal::fields_CONFIG_KEY, $configKey)
+                    ->where(MetaLocal::schema_fields_META_ID, $metaId)
+                    ->where(MetaLocal::schema_fields_LOCALE_CODE, $localeCode)
+                    ->where(MetaLocal::schema_fields_CONFIG_KEY, $configKey)
                     ->find()
                     ->fetch();
                 
@@ -870,26 +870,26 @@ class File extends BackendController
             /** @var \Weline\I18n\Model\Locale $localeModel */
             $localeModel = ObjectManager::getInstance(\Weline\I18n\Model\Locale::class);
             $locales = $localeModel->reset()
-                ->where(\Weline\I18n\Model\Locale::fields_IS_INSTALL, 1)
-                ->order(\Weline\I18n\Model\Locale::fields_CODE, 'ASC')
+                ->where(\Weline\I18n\Model\Locale::schema_fields_IS_INSTALL, 1)
+                ->order(\Weline\I18n\Model\Locale::schema_fields_CODE, 'ASC')
                 ->select()
                 ->fetch();
             
             $localeList = [];
             foreach ($locales->getItems() as $locale) {
-                $code = (string)$locale->getData(\Weline\I18n\Model\Locale::fields_CODE);
+                $code = (string)$locale->getData(\Weline\I18n\Model\Locale::schema_fields_CODE);
                 if ($code) {
                     // 获取语言名称
                     /** @var \Weline\I18n\Model\Locale\Name $nameModel */
                     $nameModel = ObjectManager::getInstance(\Weline\I18n\Model\Locale\Name::class);
                     $nameRecord = $nameModel->reset()
-                        ->where(\Weline\I18n\Model\Locale\Name::fields_LOCALE_CODE, $code)
-                        ->where(\Weline\I18n\Model\Locale\Name::fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal() ?? 'zh_Hans_CN')
+                        ->where(\Weline\I18n\Model\Locale\Name::schema_fields_LOCALE_CODE, $code)
+                        ->where(\Weline\I18n\Model\Locale\Name::schema_fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal() ?? 'zh_Hans_CN')
                         ->find()
                         ->fetch();
                     
                     $name = $nameRecord->getId() 
-                        ? (string)$nameRecord->getData(\Weline\I18n\Model\Locale\Name::fields_DISPLAY_NAME)
+                        ? (string)$nameRecord->getData(\Weline\I18n\Model\Locale\Name::schema_fields_DISPLAY_NAME)
                         : $code;
                     
                     $localeList[] = [
@@ -923,7 +923,7 @@ class File extends BackendController
             /** @var MetaModel $metaModel */
             $metaModel = ObjectManager::getInstance(MetaModel::class);
             $metaRecord = $metaModel->reset()
-                ->where(MetaModel::fields_META_IDENTIFY, $metaIdentify)
+                ->where(MetaModel::schema_fields_META_IDENTIFY, $metaIdentify)
                 ->find()
                 ->fetch();
             
@@ -935,8 +935,8 @@ class File extends BackendController
             
             // 获取字段的默认值
             $fieldMeta = $metaModel->reset()
-                ->where(MetaModel::fields_META_IDENTIFY, $metaIdentify . '.' . $field)
-                ->where(MetaModel::fields_META_TYPE, 'field')
+                ->where(MetaModel::schema_fields_META_IDENTIFY, $metaIdentify . '.' . $field)
+                ->where(MetaModel::schema_fields_META_TYPE, 'field')
                 ->find()
                 ->fetch();
             
@@ -944,7 +944,7 @@ class File extends BackendController
                 return $this->fetchJson($this->error(__('未找到对应的字段配置：%{field}', ['field' => $field])));
             }
             
-            $fieldMetaDataValue = $fieldMeta->getData(MetaModel::fields_META_DATA);
+            $fieldMetaDataValue = $fieldMeta->getData(MetaModel::schema_fields_META_DATA);
             $metaData = (!empty($fieldMetaDataValue) && is_string($fieldMetaDataValue)) ? (json_decode($fieldMetaDataValue, true) ?? []) : [];
             $attributes = $metaData['attributes'] ?? [];
             $defaultValue = $attributes['default'] ?? $attributes['name'] ?? '';
@@ -958,35 +958,35 @@ class File extends BackendController
             /** @var \Weline\I18n\Model\Locale $localeModel */
             $localeModel = ObjectManager::getInstance(\Weline\I18n\Model\Locale::class);
             $locales = $localeModel->reset()
-                ->where(\Weline\I18n\Model\Locale::fields_IS_INSTALL, 1)
-                ->order(\Weline\I18n\Model\Locale::fields_CODE, 'ASC')
+                ->where(\Weline\I18n\Model\Locale::schema_fields_IS_INSTALL, 1)
+                ->order(\Weline\I18n\Model\Locale::schema_fields_CODE, 'ASC')
                 ->select()
                 ->fetch();
             
             $translations = [];
             foreach ($locales->getItems() as $locale) {
-                $localeCode = (string)$locale->getData(\Weline\I18n\Model\Locale::fields_CODE);
+                $localeCode = (string)$locale->getData(\Weline\I18n\Model\Locale::schema_fields_CODE);
                 if ($localeCode) {
                     // 获取语言名称
                     /** @var \Weline\I18n\Model\Locale\Name $nameModel */
                     $nameModel = ObjectManager::getInstance(\Weline\I18n\Model\Locale\Name::class);
                     $nameRecord = $nameModel->reset()
-                        ->where(\Weline\I18n\Model\Locale\Name::fields_LOCALE_CODE, $localeCode)
-                        ->where(\Weline\I18n\Model\Locale\Name::fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal() ?? 'zh_Hans_CN')
+                        ->where(\Weline\I18n\Model\Locale\Name::schema_fields_LOCALE_CODE, $localeCode)
+                        ->where(\Weline\I18n\Model\Locale\Name::schema_fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal() ?? 'zh_Hans_CN')
                         ->find()
                         ->fetch();
                     
                     $localeName = $nameRecord->getId() 
-                        ? (string)$nameRecord->getData(\Weline\I18n\Model\Locale\Name::fields_DISPLAY_NAME)
+                        ? (string)$nameRecord->getData(\Weline\I18n\Model\Locale\Name::schema_fields_DISPLAY_NAME)
                         : $localeCode;
                     
                     // 从 w_meta_local 表获取翻译值
                     /** @var MetaLocal $metaLocalModel */
                     $metaLocalModel = ObjectManager::getInstance(MetaLocal::class);
                     $metaLocalModel->reset()
-                        ->where(MetaLocal::fields_META_ID, $metaId)
-                        ->where(MetaLocal::fields_LOCALE_CODE, $localeCode)
-                        ->where(MetaLocal::fields_CONFIG_KEY, $field)
+                        ->where(MetaLocal::schema_fields_META_ID, $metaId)
+                        ->where(MetaLocal::schema_fields_LOCALE_CODE, $localeCode)
+                        ->where(MetaLocal::schema_fields_CONFIG_KEY, $field)
                         ->find()
                         ->fetch();
                     
@@ -1036,7 +1036,7 @@ class File extends BackendController
             /** @var MetaModel $metaModel */
             $metaModel = ObjectManager::getInstance(MetaModel::class);
             $metaRecord = $metaModel->reset()
-                ->where(MetaModel::fields_META_IDENTIFY, $metaIdentify)
+                ->where(MetaModel::schema_fields_META_IDENTIFY, $metaIdentify)
                 ->find()
                 ->fetch();
             
@@ -1048,8 +1048,8 @@ class File extends BackendController
             
             // 验证字段是否支持翻译
             $fieldMeta = $metaModel->reset()
-                ->where(MetaModel::fields_META_IDENTIFY, $metaIdentify . '.' . $field)
-                ->where(MetaModel::fields_META_TYPE, 'field')
+                ->where(MetaModel::schema_fields_META_IDENTIFY, $metaIdentify . '.' . $field)
+                ->where(MetaModel::schema_fields_META_TYPE, 'field')
                 ->find()
                 ->fetch();
             
@@ -1057,7 +1057,7 @@ class File extends BackendController
                 return $this->fetchJson($this->error(__('未找到对应的字段配置：%{field}', ['field' => $field])));
             }
             
-            $fieldMetaDataValue = $fieldMeta->getData(MetaModel::fields_META_DATA);
+            $fieldMetaDataValue = $fieldMeta->getData(MetaModel::schema_fields_META_DATA);
             $metaData = (!empty($fieldMetaDataValue) && is_string($fieldMetaDataValue)) ? (json_decode($fieldMetaDataValue, true) ?? []) : [];
             $attributes = $metaData['attributes'] ?? [];
             $defaultValue = $attributes['default'] ?? $attributes['name'] ?? '';
@@ -1087,9 +1087,9 @@ class File extends BackendController
                 
                 // 加载现有记录（按 meta_id + locale_code + config_key 查找）
                 $metaLocalModel->reset()
-                    ->where(MetaLocal::fields_META_ID, $metaId)
-                    ->where(MetaLocal::fields_LOCALE_CODE, $localeCode)
-                    ->where(MetaLocal::fields_CONFIG_KEY, $field)
+                    ->where(MetaLocal::schema_fields_META_ID, $metaId)
+                    ->where(MetaLocal::schema_fields_LOCALE_CODE, $localeCode)
+                    ->where(MetaLocal::schema_fields_CONFIG_KEY, $field)
                     ->find()
                     ->fetch();
                 

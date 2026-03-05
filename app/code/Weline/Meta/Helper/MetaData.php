@@ -157,19 +157,19 @@ class MetaData
                     // 从 Meta 表查询
                     /** @var Meta $meta */
                     $meta = ObjectManager::getInstance(Meta::class);
-                    $meta->where(Meta::fields_META_IDENTIFY, $metaIdentify);
+                    $meta->where(Meta::schema_fields_META_IDENTIFY, $metaIdentify);
                     
                     if ($namespace) {
-                        $meta->where(Meta::fields_NAMESPACE, $namespace);
+                        $meta->where(Meta::schema_fields_NAMESPACE, $namespace);
                     }
                     if ($type) {
-                        $meta->where(Meta::fields_META_TYPE, $type);
+                        $meta->where(Meta::schema_fields_META_TYPE, $type);
                     }
                     
                     $meta->find()->fetch();
                     
                     if ($meta->getId()) {
-                        $settingJson = $meta->getData(Meta::fields_SETTING);
+                        $settingJson = $meta->getData(Meta::schema_fields_SETTING);
                         if ($settingJson) {
                             $setting = json_decode($settingJson, true) ?? [];
                         }
@@ -201,7 +201,7 @@ class MetaData
             }
             
             // 从 meta_data JSON 中读取字段值
-            $metaDataJson = $instance->meta->getData(Meta::fields_META_DATA);
+            $metaDataJson = $instance->meta->getData(Meta::schema_fields_META_DATA);
             $metaData = $metaDataJson ? json_decode($metaDataJson, true) : [];
             
             // 从 meta_data 中查找字段值（支持多种数据结构）
@@ -262,9 +262,9 @@ class MetaData
                 }
                 
                 // 构建翻译键：@meta::{namespace}.{type}.{identify}.{field}
-                $namespaceValue = $instance->meta->getData(Meta::fields_NAMESPACE);
-                $typeValue = $instance->meta->getData(Meta::fields_META_TYPE);
-                $identifyValue = $instance->meta->getData(Meta::fields_META_IDENTIFY);
+                $namespaceValue = $instance->meta->getData(Meta::schema_fields_NAMESPACE);
+                $typeValue = $instance->meta->getData(Meta::schema_fields_META_TYPE);
+                $identifyValue = $instance->meta->getData(Meta::schema_fields_META_IDENTIFY);
                 $translationKey = "@meta::{$namespaceValue}.{$typeValue}.{$identifyValue}.{$field}";
                 
                 // 获取当前语言
@@ -278,10 +278,10 @@ class MetaData
                     
                     // 先尝试当前语言
                     $md5 = LocaleDictionary::generateMd5($translationKey, $currentLocale);
-                    $localeDict->load(LocaleDictionary::fields_MD5, $md5);
+                    $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5);
                     
                     if ($localeDict->getId()) {
-                        $translation = $localeDict->getData(LocaleDictionary::fields_TRANSLATE);
+                        $translation = $localeDict->getData(LocaleDictionary::schema_fields_TRANSLATE);
                         if (!empty($translation)) {
                             return $translation;
                         }
@@ -290,10 +290,10 @@ class MetaData
                     // 如果当前语言没有翻译，尝试默认语言
                     if ($currentLocale !== $defaultLocale) {
                         $md5Default = LocaleDictionary::generateMd5($translationKey, $defaultLocale);
-                        $localeDict->load(LocaleDictionary::fields_MD5, $md5Default);
+                        $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5Default);
                         
                         if ($localeDict->getId()) {
-                            $translation = $localeDict->getData(LocaleDictionary::fields_TRANSLATE);
+                            $translation = $localeDict->getData(LocaleDictionary::schema_fields_TRANSLATE);
                             if (!empty($translation)) {
                                 return $translation;
                             }
@@ -404,19 +404,19 @@ class MetaData
                     // 从 Meta 表查询
                     /** @var Meta $meta */
                     $meta = ObjectManager::getInstance(Meta::class);
-                    $meta->where(Meta::fields_META_IDENTIFY, $metaIdentify);
+                    $meta->where(Meta::schema_fields_META_IDENTIFY, $metaIdentify);
                     
                     if ($namespace) {
-                        $meta->where(Meta::fields_NAMESPACE, $namespace);
+                        $meta->where(Meta::schema_fields_NAMESPACE, $namespace);
                     }
                     if ($type) {
-                        $meta->where(Meta::fields_META_TYPE, $type);
+                        $meta->where(Meta::schema_fields_META_TYPE, $type);
                     }
                     
                     $meta->find()->fetch();
                     
                     if ($meta->getId()) {
-                        $settingJson = $meta->getData(Meta::fields_SETTING);
+                        $settingJson = $meta->getData(Meta::schema_fields_SETTING);
                         if ($settingJson) {
                             $setting = json_decode($settingJson, true) ?? [];
                         }
@@ -477,10 +477,10 @@ class MetaData
                         
                         // 先尝试当前语言
                         $md5 = LocaleDictionary::generateMd5($translationKey, $locale);
-                        $localeDict->load(LocaleDictionary::fields_MD5, $md5);
+                        $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5);
                         
                         if ($localeDict->getId()) {
-                            $translation = $localeDict->getData(LocaleDictionary::fields_TRANSLATE);
+                            $translation = $localeDict->getData(LocaleDictionary::schema_fields_TRANSLATE);
                             if (!empty($translation)) {
                                 return $translation;
                             }
@@ -489,10 +489,10 @@ class MetaData
                         // 如果当前语言没有翻译，尝试默认语言
                         if ($locale !== $defaultLocale) {
                             $md5Default = LocaleDictionary::generateMd5($translationKey, $defaultLocale);
-                            $localeDict->load(LocaleDictionary::fields_MD5, $md5Default);
+                            $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5Default);
                             
                             if ($localeDict->getId()) {
-                                $translation = $localeDict->getData(LocaleDictionary::fields_TRANSLATE);
+                                $translation = $localeDict->getData(LocaleDictionary::schema_fields_TRANSLATE);
                                 if (!empty($translation)) {
                                     return $translation;
                                 }
@@ -539,19 +539,19 @@ class MetaData
             // 原有的 Meta 表查询逻辑
             /** @var Meta $meta */
             $meta = ObjectManager::getInstance(Meta::class);
-            $meta->where(Meta::fields_META_IDENTIFY, $identify);
+            $meta->where(Meta::schema_fields_META_IDENTIFY, $identify);
             
             if ($namespace) {
-                $meta->where(Meta::fields_NAMESPACE, $namespace);
+                $meta->where(Meta::schema_fields_NAMESPACE, $namespace);
             }
             if ($type) {
-                $meta->where(Meta::fields_META_TYPE, $type);
+                $meta->where(Meta::schema_fields_META_TYPE, $type);
             }
             
             $meta->find()->fetch();
             
             if ($meta->getId()) {
-                $settingJson = $meta->getData(Meta::fields_SETTING);
+                $settingJson = $meta->getData(Meta::schema_fields_SETTING);
                 if ($settingJson) {
                     $setting = json_decode($settingJson, true) ?? [];
                 }
@@ -605,14 +605,14 @@ class MetaData
         $meta->loadByFilePath($filePath);
         
         if ($meta->getId()) {
-            $identify = $meta->getData(Meta::fields_META_IDENTIFY);
+            $identify = $meta->getData(Meta::schema_fields_META_IDENTIFY);
             // 缓存文件路径映射
             if ($identify) {
                 self::$filePathCache[$filePath] = $identify;
             }
             
             $instance->meta = $meta;
-            $settingJson = $meta->getData(Meta::fields_SETTING);
+            $settingJson = $meta->getData(Meta::schema_fields_SETTING);
             if ($settingJson) {
                 $instance->setting = json_decode($settingJson, true) ?? [];
             } else {
@@ -784,7 +784,7 @@ class MetaData
             return;
         }
         
-        $metaDataJson = $this->meta->getData(Meta::fields_META_DATA);
+        $metaDataJson = $this->meta->getData(Meta::schema_fields_META_DATA);
         if ($metaDataJson) {
             $metaData = json_decode($metaDataJson, true) ?? [];
             $translatedMetaData = $this->translateMetaDataLabels($this->meta, $metaData);
@@ -797,7 +797,7 @@ class MetaData
             $this->labelsTranslated = true;
             
             // 更新缓存
-            $identify = $this->meta->getData(Meta::fields_META_IDENTIFY);
+            $identify = $this->meta->getData(Meta::schema_fields_META_IDENTIFY);
             if ($identify) {
                 $cacheKey = self::buildCacheKey($identify, null, null);
                 if (isset(self::$metaCache[$cacheKey])) {
@@ -829,9 +829,9 @@ class MetaData
         $defaultLocale = 'zh_Hans_CN';
         
         // 获取 meta 的基本信息
-        $namespace = $meta->getData(Meta::fields_NAMESPACE);
-        $type = $meta->getData(Meta::fields_META_TYPE);
-        $identify = $meta->getData(Meta::fields_META_IDENTIFY);
+        $namespace = $meta->getData(Meta::schema_fields_NAMESPACE);
+        $type = $meta->getData(Meta::schema_fields_META_TYPE);
+        $identify = $meta->getData(Meta::schema_fields_META_IDENTIFY);
         
         // 翻译标签字段（如 info.name, info.description）
         $translatedData = $metaData;
@@ -961,15 +961,15 @@ class MetaData
                     $results = [];
                     try {
                         $queryResults = $localeDict->reset()
-                            ->where(LocaleDictionary::fields_MD5, $md5List, 'IN')
+                            ->where(LocaleDictionary::schema_fields_MD5, $md5List, 'IN')
                             ->select()
                             ->fetchArray();
                         
                         // 处理查询结果
                         foreach ($queryResults as $row) {
-                            $md5 = $row[LocaleDictionary::fields_MD5] ?? '';
-                            $localeCode = $row[LocaleDictionary::fields_LOCALE_CODE] ?? '';
-                            $translate = $row[LocaleDictionary::fields_TRANSLATE] ?? '';
+                            $md5 = $row[LocaleDictionary::schema_fields_MD5] ?? '';
+                            $localeCode = $row[LocaleDictionary::schema_fields_LOCALE_CODE] ?? '';
+                            $translate = $row[LocaleDictionary::schema_fields_TRANSLATE] ?? '';
                             
                             if (!empty($md5) && !empty($translate)) {
                                 $results[$md5] = [
@@ -1180,7 +1180,7 @@ class MetaData
                     
                     // 先尝试精确匹配
                     $metaRecord = $metaModel->reset()
-                        ->where(\Weline\Meta\Model\Meta::fields_META_IDENTIFY, $baseIdentify)
+                        ->where(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY, $baseIdentify)
                         ->find()
                         ->fetch();
                     
@@ -1192,7 +1192,7 @@ class MetaData
                         if (count($parts) > 3) {
                             $parentIdentify = implode('.', array_slice($parts, 0, -1));
                             $metaRecord = $metaModel->reset()
-                                ->where(\Weline\Meta\Model\Meta::fields_META_IDENTIFY, $parentIdentify)
+                                ->where(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY, $parentIdentify)
                                 ->find()
                                 ->fetch();
                         }
@@ -1200,7 +1200,7 @@ class MetaData
                     
                     if ($metaRecord && $metaRecord->getId()) {
                         $metaId = (int)$metaRecord->getId();
-                        $metaIdentify = $metaRecord->getData(\Weline\Meta\Model\Meta::fields_META_IDENTIFY) ?: $baseIdentify;
+                        $metaIdentify = $metaRecord->getData(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY) ?: $baseIdentify;
                     }
                 } catch (\Exception $e) {
                     // 如果查找失败，继续使用 identifyId 方式
@@ -1243,18 +1243,18 @@ class MetaData
                         $localeDict = ObjectManager::getInstance(LocaleDictionary::class);
                         
                         $md5 = LocaleDictionary::generateMd5($translationKey, $locale);
-                        $localeDict->load(LocaleDictionary::fields_MD5, $md5);
+                        $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5);
                         
                         if ($localeDict->getId()) {
                             // 更新
-                            $localeDict->setData(LocaleDictionary::fields_TRANSLATE, $value)
+                            $localeDict->setData(LocaleDictionary::schema_fields_TRANSLATE, $value)
                                       ->save();
                         } else {
                             // 插入
-                            $localeDict->setData(LocaleDictionary::fields_MD5, $md5)
-                                      ->setData(LocaleDictionary::fields_WORD, $translationKey)
-                                      ->setData(LocaleDictionary::fields_LOCALE_CODE, $locale)
-                                      ->setData(LocaleDictionary::fields_TRANSLATE, $value)
+                            $localeDict->setData(LocaleDictionary::schema_fields_MD5, $md5)
+                                      ->setData(LocaleDictionary::schema_fields_WORD, $translationKey)
+                                      ->setData(LocaleDictionary::schema_fields_LOCALE_CODE, $locale)
+                                      ->setData(LocaleDictionary::schema_fields_TRANSLATE, $value)
                                       ->save();
                         }
                         
@@ -1346,25 +1346,25 @@ class MetaData
             $query = $metaModel->reset();
             
             if ($namespace) {
-                $query->where(Meta::fields_NAMESPACE, $namespace);
+                $query->where(Meta::schema_fields_NAMESPACE, $namespace);
             }
             
             if ($metaIdentify) {
                 // 支持通配符：如果 metaIdentify 以 * 结尾，使用 LIKE 查询
                 if (str_ends_with($metaIdentify, '*')) {
                     $pattern = rtrim($metaIdentify, '*');
-                    $query->where(Meta::fields_META_IDENTIFY, $pattern . '%', 'LIKE');
+                    $query->where(Meta::schema_fields_META_IDENTIFY, $pattern . '%', 'LIKE');
                 } else {
-                    $query->where(Meta::fields_META_IDENTIFY, $metaIdentify);
+                    $query->where(Meta::schema_fields_META_IDENTIFY, $metaIdentify);
                 }
             }
             
             $metaList = $query->select()->fetchArray();
             foreach ($metaList as $meta) {
-                $metaIdentifyValue = $meta->getData(Meta::fields_META_IDENTIFY);
+                $metaIdentifyValue = $meta->getData(Meta::schema_fields_META_IDENTIFY);
                 $metaRecords[$metaIdentifyValue] = [
                     'meta' => $meta,
-                    'setting' => json_decode($meta->getData(Meta::fields_SETTING) ?? '{}', true) ?? []
+                    'setting' => json_decode($meta->getData(Meta::schema_fields_SETTING) ?? '{}', true) ?? []
                 ];
             }
         }
@@ -1377,33 +1377,33 @@ class MetaData
             $query = $metaConfigModel->reset();
             
             if ($namespace) {
-                $query->where(\Weline\Meta\Model\MetaConfig::fields_NAMESPACE, $namespace);
+                $query->where(\Weline\Meta\Model\MetaConfig::schema_fields_NAMESPACE, $namespace);
             }
             
             if ($metaIdentify) {
                 // 支持通配符
                 if (str_ends_with($metaIdentify, '*')) {
                     $pattern = rtrim($metaIdentify, '*');
-                    $query->where(\Weline\Meta\Model\MetaConfig::fields_META_IDENTIFY, $pattern . '%', 'LIKE');
+                    $query->where(\Weline\Meta\Model\MetaConfig::schema_fields_META_IDENTIFY, $pattern . '%', 'LIKE');
                 } else {
-                    $query->where(\Weline\Meta\Model\MetaConfig::fields_META_IDENTIFY, $metaIdentify);
+                    $query->where(\Weline\Meta\Model\MetaConfig::schema_fields_META_IDENTIFY, $metaIdentify);
                 }
             }
             
             if ($scope) {
-                $query->where(\Weline\Meta\Model\MetaConfig::fields_SCOPE, $scope);
+                $query->where(\Weline\Meta\Model\MetaConfig::schema_fields_SCOPE, $scope);
             }
             
             if ($locale) {
-                $query->where(\Weline\Meta\Model\MetaConfig::fields_LOCALE, $locale);
+                $query->where(\Weline\Meta\Model\MetaConfig::schema_fields_LOCALE, $locale);
             }
             
             $configList = $query->select()->fetchArray();
             foreach ($configList as $config) {
-                $configKey = $config->getData(\Weline\Meta\Model\MetaConfig::fields_CONFIG_KEY);
-                $metaIdentifyValue = $config->getData(\Weline\Meta\Model\MetaConfig::fields_META_IDENTIFY);
-                $configScope = $config->getData(\Weline\Meta\Model\MetaConfig::fields_SCOPE) ?? 'default';
-                $configLocale = $config->getData(\Weline\Meta\Model\MetaConfig::fields_LOCALE);
+                $configKey = $config->getData(\Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_KEY);
+                $metaIdentifyValue = $config->getData(\Weline\Meta\Model\MetaConfig::schema_fields_META_IDENTIFY);
+                $configScope = $config->getData(\Weline\Meta\Model\MetaConfig::schema_fields_SCOPE) ?? 'default';
+                $configLocale = $config->getData(\Weline\Meta\Model\MetaConfig::schema_fields_LOCALE);
                 
                 if (!isset($metaConfigs[$metaIdentifyValue])) {
                     $metaConfigs[$metaIdentifyValue] = [];
@@ -1415,7 +1415,7 @@ class MetaData
                     $metaConfigs[$metaIdentifyValue][$configKey][$configScope] = [];
                 }
                 
-                $metaConfigs[$metaIdentifyValue][$configKey][$configScope][$configLocale ?? ''] = $config->getData(\Weline\Meta\Model\MetaConfig::fields_CONFIG_VALUE);
+                $metaConfigs[$metaIdentifyValue][$configKey][$configScope][$configLocale ?? ''] = $config->getData(\Weline\Meta\Model\MetaConfig::schema_fields_CONFIG_VALUE);
             }
         }
         

@@ -131,16 +131,16 @@ class MetaManager implements TaglibInterface
                 /** @var MetaModel $metaModel */
                 $metaModel = ObjectManager::getInstance(MetaModel::class);
                 $namespaces = $metaModel->reset()
-                    ->fields(MetaModel::fields_NAMESPACE)
-                    ->where(MetaModel::fields_NAMESPACE, null, 'IS NOT NULL')
-                    ->where(MetaModel::fields_NAMESPACE, '', '!=')
-                    ->group(MetaModel::fields_NAMESPACE)
-                    ->order(MetaModel::fields_NAMESPACE, 'ASC')
+                    ->fields(MetaModel::schema_fields_NAMESPACE)
+                    ->where(MetaModel::schema_fields_NAMESPACE, null, 'IS NOT NULL')
+                    ->where(MetaModel::schema_fields_NAMESPACE, '', '!=')
+                    ->group(MetaModel::schema_fields_NAMESPACE)
+                    ->order(MetaModel::schema_fields_NAMESPACE, 'ASC')
                     ->select()
                     ->fetch();
                 
                 foreach ($namespaces->getItems() as $item) {
-                    $ns = (string)$item->getData(MetaModel::fields_NAMESPACE);
+                    $ns = (string)$item->getData(MetaModel::schema_fields_NAMESPACE);
                     if ($ns) {
                         $namespaceList[] = $ns;
                     }
