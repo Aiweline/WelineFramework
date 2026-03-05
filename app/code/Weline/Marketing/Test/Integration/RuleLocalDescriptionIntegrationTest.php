@@ -38,7 +38,7 @@ class RuleLocalDescriptionIntegrationTest extends TestCase
         // 清理测试数据
         if ($this->ruleModel->getId()) {
             $this->localModel->reset()
-                ->where(LocalDescription::fields_ID, $this->ruleModel->getId())
+                ->where(LocalDescription::schema_fields_ID, $this->ruleModel->getId())
                 ->select()
                 ->fetch()
                 ->walk(function ($item) {
@@ -58,11 +58,11 @@ class RuleLocalDescriptionIntegrationTest extends TestCase
     {
         // 步骤1：创建规则
         $this->ruleModel->setData([
-            Rule::fields_NAME => 'Complete Flow Test Rule',
-            Rule::fields_DESCRIPTION => 'Complete Flow Test Description',
-            Rule::fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
-            Rule::fields_STATUS => Rule::STATUS_ACTIVE,
-            Rule::fields_PRIORITY => 10
+            Rule::schema_fields_NAME => 'Complete Flow Test Rule',
+            Rule::schema_fields_DESCRIPTION => 'Complete Flow Test Description',
+            Rule::schema_fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
+            Rule::schema_fields_STATUS => Rule::STATUS_ACTIVE,
+            Rule::schema_fields_PRIORITY => 10
         ]);
         $this->ruleModel->save();
         $ruleId = $this->ruleModel->getId();
@@ -73,10 +73,10 @@ class RuleLocalDescriptionIntegrationTest extends TestCase
             // 步骤2：添加中文翻译
             $zhTranslation = ObjectManager::getInstance(LocalDescription::class);
             $zhTranslation->setData([
-                LocalDescription::fields_ID => $ruleId,
-                \Weline\I18n\LocalModelInterface::fields_local_code => 'zh_Hans_CN',
-                LocalDescription::fields_NAME => '完整流程测试规则',
-                LocalDescription::fields_DESCRIPTION => '完整流程测试描述'
+                LocalDescription::schema_fields_ID => $ruleId,
+                \Weline\I18n\LocalModelInterface::schema_fields_local_code => 'zh_Hans_CN',
+                LocalDescription::schema_fields_NAME => '完整流程测试规则',
+                LocalDescription::schema_fields_DESCRIPTION => '完整流程测试描述'
             ]);
             $zhTranslation->save();
             $zhTranslationId = $zhTranslation->getId();
@@ -86,10 +86,10 @@ class RuleLocalDescriptionIntegrationTest extends TestCase
             // 步骤3：添加英文翻译
             $enTranslation = ObjectManager::getInstance(LocalDescription::class);
             $enTranslation->setData([
-                LocalDescription::fields_ID => $ruleId,
-                \Weline\I18n\LocalModelInterface::fields_local_code => 'en_US',
-                LocalDescription::fields_NAME => 'Complete Flow Test Rule',
-                LocalDescription::fields_DESCRIPTION => 'Complete Flow Test Description'
+                LocalDescription::schema_fields_ID => $ruleId,
+                \Weline\I18n\LocalModelInterface::schema_fields_local_code => 'en_US',
+                LocalDescription::schema_fields_NAME => 'Complete Flow Test Rule',
+                LocalDescription::schema_fields_DESCRIPTION => 'Complete Flow Test Description'
             ]);
             $enTranslation->save();
             $enTranslationId = $enTranslation->getId();
@@ -101,7 +101,7 @@ class RuleLocalDescriptionIntegrationTest extends TestCase
             $ruleZh = ObjectManager::getInstance(Rule::class);
             $ruleZh->reset()
                 ->loadLocalDescription('zh_Hans_CN', LocalDescription::class)
-                ->where('main_table.' . Rule::fields_ID, $ruleId)
+                ->where('main_table.' . Rule::schema_fields_ID, $ruleId)
                 ->find()
                 ->fetch();
 
@@ -112,7 +112,7 @@ class RuleLocalDescriptionIntegrationTest extends TestCase
             $ruleEn = ObjectManager::getInstance(Rule::class);
             $ruleEn->reset()
                 ->loadLocalDescription('en_US', LocalDescription::class)
-                ->where('main_table.' . Rule::fields_ID, $ruleId)
+                ->where('main_table.' . Rule::schema_fields_ID, $ruleId)
                 ->find()
                 ->fetch();
 
@@ -147,9 +147,9 @@ class RuleLocalDescriptionIntegrationTest extends TestCase
             for ($i = 1; $i <= 3; $i++) {
                 $rule = ObjectManager::getInstance(Rule::class);
                 $rule->setData([
-                    Rule::fields_NAME => "Multi Language Rule {$i}",
-                    Rule::fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
-                    Rule::fields_STATUS => Rule::STATUS_ACTIVE
+                    Rule::schema_fields_NAME => "Multi Language Rule {$i}",
+                    Rule::schema_fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
+                    Rule::schema_fields_STATUS => Rule::STATUS_ACTIVE
                 ]);
                 $rule->save();
                 $ruleId = $rule->getId();
@@ -158,18 +158,18 @@ class RuleLocalDescriptionIntegrationTest extends TestCase
                 // 创建中文翻译
                 $zhTranslation = ObjectManager::getInstance(LocalDescription::class);
                 $zhTranslation->setData([
-                    LocalDescription::fields_ID => $ruleId,
-                    \Weline\I18n\LocalModelInterface::fields_local_code => 'zh_Hans_CN',
-                    LocalDescription::fields_NAME => "多语言规则 {$i}"
+                    LocalDescription::schema_fields_ID => $ruleId,
+                    \Weline\I18n\LocalModelInterface::schema_fields_local_code => 'zh_Hans_CN',
+                    LocalDescription::schema_fields_NAME => "多语言规则 {$i}"
                 ]);
                 $zhTranslation->save();
 
                 // 创建英文翻译
                 $enTranslation = ObjectManager::getInstance(LocalDescription::class);
                 $enTranslation->setData([
-                    LocalDescription::fields_ID => $ruleId,
-                    \Weline\I18n\LocalModelInterface::fields_local_code => 'en_US',
-                    LocalDescription::fields_NAME => "Multi Language Rule {$i}"
+                    LocalDescription::schema_fields_ID => $ruleId,
+                    \Weline\I18n\LocalModelInterface::schema_fields_local_code => 'en_US',
+                    LocalDescription::schema_fields_NAME => "Multi Language Rule {$i}"
                 ]);
                 $enTranslation->save();
             }
@@ -179,7 +179,7 @@ class RuleLocalDescriptionIntegrationTest extends TestCase
             $rulesZh = ObjectManager::getInstance(Rule::class);
             $rulesZh->reset()
                 ->loadLocalDescription('zh_Hans_CN', LocalDescription::class)
-                ->where('main_table.' . Rule::fields_ID, $ruleIds, 'IN')
+                ->where('main_table.' . Rule::schema_fields_ID, $ruleIds, 'IN')
                 ->select()
                 ->fetch();
 
@@ -195,7 +195,7 @@ class RuleLocalDescriptionIntegrationTest extends TestCase
             $rulesEn = ObjectManager::getInstance(Rule::class);
             $rulesEn->reset()
                 ->loadLocalDescription('en_US', LocalDescription::class)
-                ->where('main_table.' . Rule::fields_ID, $ruleIds, 'IN')
+                ->where('main_table.' . Rule::schema_fields_ID, $ruleIds, 'IN')
                 ->select()
                 ->fetch();
 
@@ -210,7 +210,7 @@ class RuleLocalDescriptionIntegrationTest extends TestCase
             // 清理测试数据
             foreach ($ruleIds as $ruleId) {
                 $this->localModel->reset()
-                    ->where(LocalDescription::fields_ID, $ruleId)
+                    ->where(LocalDescription::schema_fields_ID, $ruleId)
                     ->select()
                     ->fetch()
                     ->walk(function ($item) {
@@ -230,9 +230,9 @@ class RuleLocalDescriptionIntegrationTest extends TestCase
     {
         // 创建测试规则
         $this->ruleModel->setData([
-            Rule::fields_NAME => 'CRUD Test Rule',
-            Rule::fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
-            Rule::fields_STATUS => Rule::STATUS_ACTIVE
+            Rule::schema_fields_NAME => 'CRUD Test Rule',
+            Rule::schema_fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
+            Rule::schema_fields_STATUS => Rule::STATUS_ACTIVE
         ]);
         $this->ruleModel->save();
         $ruleId = $this->ruleModel->getId();
@@ -241,10 +241,10 @@ class RuleLocalDescriptionIntegrationTest extends TestCase
             // CREATE: 创建翻译
             $translation = ObjectManager::getInstance(LocalDescription::class);
             $translation->setData([
-                LocalDescription::fields_ID => $ruleId,
-                \Weline\I18n\LocalModelInterface::fields_local_code => 'zh_Hans_CN',
-                LocalDescription::fields_NAME => 'CRUD测试规则',
-                LocalDescription::fields_DESCRIPTION => 'CRUD测试描述'
+                LocalDescription::schema_fields_ID => $ruleId,
+                \Weline\I18n\LocalModelInterface::schema_fields_local_code => 'zh_Hans_CN',
+                LocalDescription::schema_fields_NAME => 'CRUD测试规则',
+                LocalDescription::schema_fields_DESCRIPTION => 'CRUD测试描述'
             ]);
             $translation->save();
             $translationId = $translation->getId();
@@ -254,36 +254,36 @@ class RuleLocalDescriptionIntegrationTest extends TestCase
             // READ: 读取翻译
             $loaded = ObjectManager::getInstance(LocalDescription::class);
             $loaded->reset()
-                ->where(LocalDescription::fields_ID, $ruleId)
-                ->where(\Weline\I18n\LocalModelInterface::fields_local_code, 'zh_Hans_CN')
+                ->where(LocalDescription::schema_fields_ID, $ruleId)
+                ->where(\Weline\I18n\LocalModelInterface::schema_fields_local_code, 'zh_Hans_CN')
                 ->find()
                 ->fetch();
 
-            $this->assertEquals('CRUD测试规则', $loaded->getData(LocalDescription::fields_NAME));
-            $this->assertEquals('CRUD测试描述', $loaded->getData(LocalDescription::fields_DESCRIPTION));
+            $this->assertEquals('CRUD测试规则', $loaded->getData(LocalDescription::schema_fields_NAME));
+            $this->assertEquals('CRUD测试描述', $loaded->getData(LocalDescription::schema_fields_DESCRIPTION));
 
             // UPDATE: 更新翻译
-            $loaded->setData(LocalDescription::fields_NAME, 'CRUD更新测试规则');
-            $loaded->setData(LocalDescription::fields_DESCRIPTION, 'CRUD更新测试描述');
+            $loaded->setData(LocalDescription::schema_fields_NAME, 'CRUD更新测试规则');
+            $loaded->setData(LocalDescription::schema_fields_DESCRIPTION, 'CRUD更新测试描述');
             $loaded->save();
 
             $updated = ObjectManager::getInstance(LocalDescription::class);
             $updated->reset()
-                ->where(LocalDescription::fields_ID, $ruleId)
-                ->where(\Weline\I18n\LocalModelInterface::fields_local_code, 'zh_Hans_CN')
+                ->where(LocalDescription::schema_fields_ID, $ruleId)
+                ->where(\Weline\I18n\LocalModelInterface::schema_fields_local_code, 'zh_Hans_CN')
                 ->find()
                 ->fetch();
 
-            $this->assertEquals('CRUD更新测试规则', $updated->getData(LocalDescription::fields_NAME));
-            $this->assertEquals('CRUD更新测试描述', $updated->getData(LocalDescription::fields_DESCRIPTION));
+            $this->assertEquals('CRUD更新测试规则', $updated->getData(LocalDescription::schema_fields_NAME));
+            $this->assertEquals('CRUD更新测试描述', $updated->getData(LocalDescription::schema_fields_DESCRIPTION));
 
             // DELETE: 删除翻译
             $updated->delete();
 
             $deleted = ObjectManager::getInstance(LocalDescription::class);
             $deleted->reset()
-                ->where(LocalDescription::fields_ID, $ruleId)
-                ->where(\Weline\I18n\LocalModelInterface::fields_local_code, 'zh_Hans_CN')
+                ->where(LocalDescription::schema_fields_ID, $ruleId)
+                ->where(\Weline\I18n\LocalModelInterface::schema_fields_local_code, 'zh_Hans_CN')
                 ->find()
                 ->fetch();
 
@@ -308,10 +308,10 @@ class RuleLocalDescriptionIntegrationTest extends TestCase
     {
         // 创建测试规则
         $this->ruleModel->setData([
-            Rule::fields_NAME => 'Consistency Test Rule',
-            Rule::fields_DESCRIPTION => 'Consistency Test Description',
-            Rule::fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
-            Rule::fields_STATUS => Rule::STATUS_ACTIVE
+            Rule::schema_fields_NAME => 'Consistency Test Rule',
+            Rule::schema_fields_DESCRIPTION => 'Consistency Test Description',
+            Rule::schema_fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
+            Rule::schema_fields_STATUS => Rule::STATUS_ACTIVE
         ]);
         $this->ruleModel->save();
         $ruleId = $this->ruleModel->getId();
@@ -320,35 +320,35 @@ class RuleLocalDescriptionIntegrationTest extends TestCase
             // 创建翻译
             $translation = ObjectManager::getInstance(LocalDescription::class);
             $translation->setData([
-                LocalDescription::fields_ID => $ruleId,
-                \Weline\I18n\LocalModelInterface::fields_local_code => 'zh_Hans_CN',
-                LocalDescription::fields_NAME => '一致性测试规则',
-                LocalDescription::fields_DESCRIPTION => '一致性测试描述'
+                LocalDescription::schema_fields_ID => $ruleId,
+                \Weline\I18n\LocalModelInterface::schema_fields_local_code => 'zh_Hans_CN',
+                LocalDescription::schema_fields_NAME => '一致性测试规则',
+                LocalDescription::schema_fields_DESCRIPTION => '一致性测试描述'
             ]);
             $translation->save();
 
             // 验证规则ID一致性
-            $this->assertEquals($ruleId, $translation->getData(LocalDescription::fields_ID), '规则ID应一致');
+            $this->assertEquals($ruleId, $translation->getData(LocalDescription::schema_fields_ID), '规则ID应一致');
 
             // 验证通过 loadLocalDescription 加载的数据一致性
             // 注意：在 loadLocalDescription 后，不能使用 load()，需要使用 where() 和表别名
             $rule = ObjectManager::getInstance(Rule::class);
             $rule->reset()
                 ->loadLocalDescription('zh_Hans_CN', LocalDescription::class)
-                ->where('main_table.' . Rule::fields_ID, $ruleId)
+                ->where('main_table.' . Rule::schema_fields_ID, $ruleId)
                 ->find()
                 ->fetch();
 
             $this->assertEquals($ruleId, $rule->getId(), '规则ID应一致');
-            $this->assertEquals('Consistency Test Rule', $rule->getData(Rule::fields_NAME), '原始名称应一致');
+            $this->assertEquals('Consistency Test Rule', $rule->getData(Rule::schema_fields_NAME), '原始名称应一致');
             $this->assertEquals('一致性测试规则', $rule->getData('local_name'), '翻译名称应一致');
 
             // 验证删除规则时，翻译数据也应被处理（外键约束或级联删除）
             // 注意：这取决于数据库配置，这里只验证翻译数据存在
             $translationExists = ObjectManager::getInstance(LocalDescription::class);
             $translationExists->reset()
-                ->where(LocalDescription::fields_ID, $ruleId)
-                ->where(\Weline\I18n\LocalModelInterface::fields_local_code, 'zh_Hans_CN')
+                ->where(LocalDescription::schema_fields_ID, $ruleId)
+                ->where(\Weline\I18n\LocalModelInterface::schema_fields_local_code, 'zh_Hans_CN')
                 ->find()
                 ->fetch();
 
