@@ -223,7 +223,7 @@ class Auto extends CommandAbstract
     protected function listCertificates(): void
     {
         $certificates = $this->certModel->clearQuery()
-            ->order(SslCertificate::fields_DOMAIN)
+            ->order(SslCertificate::schema_fields_DOMAIN)
             ->select()
             ->fetchArray();
         
@@ -247,11 +247,11 @@ class Auto extends CommandAbstract
         $this->printer->note(\str_repeat('-', 90));
         
         foreach ($certificates as $cert) {
-            $domain = $cert[SslCertificate::fields_DOMAIN];
-            $status = $cert[SslCertificate::fields_STATUS];
-            $httpsEnabled = $cert[SslCertificate::fields_HTTPS_ENABLED] ? '✓' : '✗';
-            $expiresAt = $cert[SslCertificate::fields_EXPIRES_AT] ?: '-';
-            $autoRenew = $cert[SslCertificate::fields_AUTO_RENEW] ? '✓' : '✗';
+            $domain = $cert[SslCertificate::schema_fields_DOMAIN];
+            $status = $cert[SslCertificate::schema_fields_STATUS];
+            $httpsEnabled = $cert[SslCertificate::schema_fields_HTTPS_ENABLED] ? '✓' : '✗';
+            $expiresAt = $cert[SslCertificate::schema_fields_EXPIRES_AT] ?: '-';
+            $autoRenew = $cert[SslCertificate::schema_fields_AUTO_RENEW] ? '✓' : '✗';
             
             // 状态颜色
             $statusText = match ($status) {
@@ -284,10 +284,10 @@ class Auto extends CommandAbstract
         // 统计信息
         $total = $this->certModel->clearQuery()->total();
         $active = $this->certModel->clearQuery()
-            ->where(SslCertificate::fields_STATUS, SslCertificate::STATUS_ACTIVE)
+            ->where(SslCertificate::schema_fields_STATUS, SslCertificate::STATUS_ACTIVE)
             ->total();
         $httpsEnabled = $this->certModel->clearQuery()
-            ->where(SslCertificate::fields_HTTPS_ENABLED, 1)
+            ->where(SslCertificate::schema_fields_HTTPS_ENABLED, 1)
             ->total();
         $expiringSoon = \count($this->certModel->getCertificatesNeedRenew(30));
         
@@ -319,7 +319,7 @@ class Auto extends CommandAbstract
         // 获取所有网站域名
         $domainModel = ObjectManager::getInstance(WebsiteDomain::class);
         $domains = $domainModel->clearQuery()
-            ->where(WebsiteDomain::fields_STATUS, WebsiteDomain::STATUS_ACTIVE)
+            ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE)
             ->select()
             ->fetchArray();
         
@@ -329,13 +329,13 @@ class Auto extends CommandAbstract
             $websites = $websiteModel->clearQuery()->select()->fetchArray();
             
             foreach ($websites as $website) {
-                $url = $website[Website::fields_URL] ?? '';
+                $url = $website[Website::schema_fields_URL] ?? '';
                 $domain = $this->extractDomainFromUrl($url);
                 
                 if ($domain) {
                     $domains[] = [
-                        WebsiteDomain::fields_DOMAIN => $domain,
-                        WebsiteDomain::fields_WEBSITE_ID => $website[Website::fields_ID],
+                        WebsiteDomain::schema_fields_DOMAIN => $domain,
+                        WebsiteDomain::schema_fields_WEBSITE_ID => $website[Website::schema_fields_ID],
                     ];
                 }
             }
@@ -350,8 +350,8 @@ class Auto extends CommandAbstract
         echo "\n";
         
         foreach ($domains as $domainData) {
-            $domain = $domainData[WebsiteDomain::fields_DOMAIN] ?? '';
-            $websiteId = (int) ($domainData[WebsiteDomain::fields_WEBSITE_ID] ?? 0);
+            $domain = $domainData[WebsiteDomain::schema_fields_DOMAIN] ?? '';
+            $websiteId = (int) ($domainData[WebsiteDomain::schema_fields_WEBSITE_ID] ?? 0);
             
             if (empty($domain) || $domain === 'localhost' || \filter_var($domain, FILTER_VALIDATE_IP)) {
                 continue;

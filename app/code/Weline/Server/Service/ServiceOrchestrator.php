@@ -96,6 +96,29 @@ class ServiceOrchestrator
     /** 是否已输出"服务器准备就绪"通知 */
     private bool $serverReadyNotified = false;
 
+    /** 单实例重启优先（可恢复角色 IPC 断开时先单实例重启） */
+    private bool $singleRestartFirst = true;
+
+    /** 升级窗口（秒）：在此时间内断开次数超过阈值则整组重启 */
+    private float $escalationWindowSec = 60.0;
+
+    /** 升级阈值：窗口内断开次数超过此值则整组重启 */
+    private int $escalationThreshold = 3;
+
+    /** 滚动重启稳定期（秒）：稳定期内新实例断开仅单实例重启 */
+    private float $stabilizationSec = 15.0;
+
+    /** 滚动重启稳定期结束时间戳 */
+    private float $rollingRestartStabilizingUntil = 0.0;
+
+    /** 核心角色：这些角色 IPC 断开直接整组重启 */
+    /** @var array<string, true> */
+    private array $criticalRoles = [];
+
+    /** 按角色的最近断开记录（用于 escalation 计数） */
+    /** @var array<string, array{count: int, windowStart: float}> */
+    private array $escalationDisconnects = [];
+
     public function __construct()
     {
         $this->registry = new ServiceRegistry();
@@ -264,6 +287,13 @@ class ServiceOrchestrator
         $this->reconcileInterval = (float)$context->getConfig('server.orchestrator.reconcile_interval_sec', 5.0);
         $this->sweeperInterval = (float)$context->getConfig('server.orchestrator.sweeper_interval_sec', 15.0);
         $this->periodicOrphanSweepEnabled = (bool)$context->getConfig('server.orchestrator.periodic_orphan_sweep', false);
+        $this->singleRestartFirst = (bool)$context->getConfig('server.orchestrator.single_restart_first', true);
+        $this->escalationWindowSec = (float)$context->getConfig('server.orchestrator.escalation_window_sec', 60.0);
+        $this->escalationThreshold = (int)$context->getConfig('server.orchestrator.escalation_threshold', 3);
+        $this->stabilizationSec = (float)$context->getConfig('server.orchestrator.stabilization_sec', 15.0);
+        $rawCritical = $context->getConfig('server.orchestrator.critical_roles', ['dispatcher', 'session_server', 'redirect']);
+        $this->criticalRoles = \array_fill_keys(\is_array($rawCritical) ? $rawCritical : [], true);
+        $this->escalationDisconnects = [];
         if ($this->registerTimeout < $this->startupGracePeriod) {
             // 防止 register_timeout 过短导致误判，至少与启动宽限一致
             $this->registerTimeout = $this->startupGracePeriod;
@@ -823,6 +853,10 @@ class ServiceOrchestrator
                     $msg = "  ✓ {$displayName}(PID:{$instance->pid}) 已退出";
                     WlsLogger::info_("[Orchestrator] {$msg}");
                     $this->sendStopProgress($msg);
+                    // 进程已退出，主动关闭 IPC 连接，避免超时等待
+                    if ($instance->ipcClientId !== null && $this->controlServer !== null) {
+                        $this->controlServer->closeClient($instance->ipcClientId);
+                    }
                 }
             }
 
@@ -1187,6 +1221,9 @@ class ServiceOrchestrator
                 $elapsedMs = (\microtime(true) - $startTime) * 1000;
                 $this->controlServer?->sendTo($this->rollingRestartClientId, ControlMessage::reloadCompleted($elapsedMs, \count($instances)));
             }
+
+            // 进入稳定期：此期间新实例断开仅单实例重启
+            $this->rollingRestartStabilizingUntil = \microtime(true) + $this->stabilizationSec;
         } finally {
             $this->fullRestartOnFailure = $savedFullRestartOnFailure;
             // 清除滚动重启期间累积的误触发标志
@@ -1274,6 +1311,11 @@ class ServiceOrchestrator
             // 处理复活队列
             $this->processResurrectQueue();
 
+            // 稳定期过期
+            if ($this->rollingRestartStabilizingUntil > 0 && $now >= $this->rollingRestartStabilizingUntil) {
+                $this->rollingRestartStabilizingUntil = 0;
+            }
+
             // 短暂休眠避免 CPU 空转
             \usleep(50000);
         }
@@ -1323,7 +1365,7 @@ class ServiceOrchestrator
                     if ($instance->ipcClientId === null && $uptime >= $this->registerTimeout) {
                         $this->registerTimeoutCount++;
                         WlsLogger::warning_("[Orchestrator] register 超时: {$instance->role}#{$instance->instanceId} (uptime={$uptime}s, timeout={$this->registerTimeout}s)");
-                        $this->requestFullRestart("register_timeout:{$instance->role}#{$instance->instanceId}");
+                        $this->healthCheckRestartOrEscalate($instance, "register_timeout:{$instance->role}#{$instance->instanceId}");
                         continue;
                     }
 
@@ -1339,7 +1381,7 @@ class ServiceOrchestrator
                     // 宽限期已过但还没有 IPC 连接
                     if ($instance->ipcClientId === null) {
                         WlsLogger::warning_("[Orchestrator] 启动超时: {$instance->role}#{$instance->instanceId} (uptime={$uptime}s, no IPC)");
-                        $this->requestFullRestart("startup_timeout:{$instance->role}#{$instance->instanceId}");
+                        $this->healthCheckRestartOrEscalate($instance, "startup_timeout:{$instance->role}#{$instance->instanceId}");
                         continue;
                     }
                 }
@@ -1364,16 +1406,53 @@ class ServiceOrchestrator
                         continue;
                     }
                     // 超过宽限期仍没有 IPC 连接，视为僵尸进程，需要杀死并复活
-                    WlsLogger::warning_("[Orchestrator] 进程存活但无 IPC 超时: {$instance->role}#{$instance->instanceId} (pid={$instance->pid}, uptime={$uptime}s)，触发整组重启");
-                    $this->requestFullRestart("no_ipc_timeout:{$instance->role}#{$instance->instanceId}");
+                    WlsLogger::warning_("[Orchestrator] 进程存活但无 IPC 超时: {$instance->role}#{$instance->instanceId} (pid={$instance->pid}, uptime={$uptime}s)");
+                    $this->healthCheckRestartOrEscalate($instance, "no_ipc_timeout:{$instance->role}#{$instance->instanceId}");
                     continue;
                 }
 
-                // 既没有 IPC 连接，PID 也不存活，安排复活
+                // 既没有 IPC 连接，PID 也不存活
                 WlsLogger::warning_("[Orchestrator] 健康检查失败: {$instance->role}#{$instance->instanceId} - No IPC and PID not running");
-                $this->requestFullRestart("dead_without_ipc:{$instance->role}#{$instance->instanceId}");
+                $this->healthCheckRestartOrEscalate($instance, "dead_without_ipc:{$instance->role}#{$instance->instanceId}");
             }
         }
+    }
+
+    /**
+     * 健康检查触发的重启：可恢复角色优先单实例重启，核心角色或超阈值则整组重启
+     */
+    private function healthCheckRestartOrEscalate(ServiceInstance $instance, string $reason): void
+    {
+        $maxRestarts = 10;
+        if (isset($this->criticalRoles[$instance->role]) || !$this->singleRestartFirst) {
+            $this->requestFullRestart($reason);
+            return;
+        }
+
+        $provider = $this->registry->getProvider($instance->role);
+        $resurrectionPriority = $provider?->getResurrectionPriority() ?? 0;
+        if ($resurrectionPriority <= 0 || $instance->restarts >= $maxRestarts) {
+            $this->requestFullRestart($reason);
+            return;
+        }
+
+        $role = $instance->role;
+        $now = \microtime(true);
+        if (!isset($this->escalationDisconnects[$role]) || $now - $this->escalationDisconnects[$role]['windowStart'] > $this->escalationWindowSec) {
+            $this->escalationDisconnects[$role] = ['count' => 0, 'windowStart' => $now];
+        }
+        $this->escalationDisconnects[$role]['count']++;
+
+        if ($this->escalationDisconnects[$role]['count'] > $this->escalationThreshold) {
+            $this->requestFullRestart("{$reason} (escalation_count={$this->escalationDisconnects[$role]['count']})");
+            return;
+        }
+
+        if ($instance->pid > 0 && $this->isProcessRunning($instance->pid)) {
+            $this->killInstanceProcess($instance);
+            \usleep(200000);
+        }
+        $this->scheduleResurrection($instance);
     }
 
     /**
@@ -1672,9 +1751,10 @@ class ServiceOrchestrator
                 continue;
             }
 
-            // 获取旧实例（在移除前）用于清理
+            // 获取旧实例（在移除前）用于清理和传递 restarts
             $oldInstance = $this->registry->getInstance($entry['role'], $entry['instanceId']);
-            
+            $oldRestarts = $oldInstance?->restarts ?? 0;
+
             // 延迟复活：检查进程是否仍在运行
             if (!empty($entry['delayed']) && !empty($entry['pid'])) {
                 if ($this->isProcessRunning($entry['pid'])) {
@@ -1703,8 +1783,7 @@ class ServiceOrchestrator
             // 启动新实例
             $newInstance = $this->startInstance($provider, $entry['instanceId'], $this->context);
             if ($newInstance !== null) {
-                // 保留重启计数
-                $newInstance->restarts = $this->registry->getInstance($entry['role'], $entry['instanceId'])?->restarts ?? 0;
+                $newInstance->restarts = $oldRestarts;
             }
 
             unset($this->resurrectQueue[$key]);
@@ -1769,6 +1848,10 @@ class ServiceOrchestrator
 
             case ControlMessage::TYPE_DRAINING_COMPLETE:
                 $this->handleDrainingComplete($msg, $clientId);
+                return;
+
+            case ControlMessage::TYPE_EXIT_REASON:
+                $this->handleExitReason($msg, $clientId);
                 return;
 
             case ControlMessage::TYPE_COMMAND:
@@ -1939,6 +2022,7 @@ class ServiceOrchestrator
         }
 
         $instance->state = ServiceInstance::STATE_READY;
+        $instance->setMeta('ready_at', \microtime(true));
         $this->registry->updateInstance($instance);
 
         // 发送 ACK_READY 确认
@@ -2177,6 +2261,26 @@ class ServiceOrchestrator
         $this->registry->updateInstance($instance);
 
         WlsLogger::info_("[Orchestrator] 排水完成: {$instance->role}#{$instance->instanceId}");
+    }
+
+    /**
+     * 处理 exit_reason 消息（Worker 退出前上报原因，best-effort，Master 兼容缺失）
+     */
+    private function handleExitReason(array $msg, int $clientId): void
+    {
+        $instance = $this->registry->getInstanceByIpcClient($clientId);
+        if ($instance === null) {
+            return;
+        }
+
+        $reason = (string)($msg['reason'] ?? 'unknown');
+        $code = (int)($msg['code'] ?? 0);
+        $instance->setMeta('exit_reason', $reason);
+        if ($code !== 0) {
+            $instance->setMeta('exit_code', $code);
+        }
+        $this->registry->updateInstance($instance);
+        WlsLogger::info_("[Orchestrator] 退出原因: {$instance->role}#{$instance->instanceId} reason={$reason}" . ($code !== 0 ? " code={$code}" : ''));
     }
 
     /**
@@ -2630,14 +2734,60 @@ class ServiceOrchestrator
             return;
         }
 
-        // 正在排水或已停止的实例（graceful reload 主动停止）→ 预期断开，不触发整组重启
-        if ($instance->state === ServiceInstance::STATE_DRAINING || $instance->state === ServiceInstance::STATE_STOPPED) {
+        // 正在排水、停止中或已停止的实例（graceful reload 主动停止）→ 预期断开，不触发整组重启和复活
+        // STATE_STOPPING：draining_complete 后、Worker 退出前，IPC 断开时应跳过（否则会重复安排延迟复活导致 Worker 数量翻倍）
+        if (\in_array($instance->state, [
+            ServiceInstance::STATE_DRAINING,
+            ServiceInstance::STATE_STOPPING,
+            ServiceInstance::STATE_STOPPED,
+        ], true)) {
             WlsLogger::info_("[Orchestrator] 实例 {$instance->role}#{$instance->instanceId} 处于 {$instance->state} 状态，预期断开，跳过整组重启");
             return;
         }
 
-        // 意外断开：触发整组重启
-        $this->requestFullRestart("ipc_disconnect:{$instance->role}#{$instance->instanceId}");
+        $now = \microtime(true);
+        $isNewInstance = $instance->getUptime() < $this->stabilizationSec;
+        if ($this->rollingRestartStabilizingUntil > 0 && $now < $this->rollingRestartStabilizingUntil && $isNewInstance) {
+            $provider = $this->registry->getProvider($instance->role);
+            if ($provider !== null && $provider->getResurrectionPriority() > 0) {
+                WlsLogger::info_("[Orchestrator] 稳定期内新实例 {$instance->role}#{$instance->instanceId} 断开，仅单实例重启");
+                $this->scheduleResurrectionWithDelay($instance, 2.0);
+                return;
+            }
+        }
+
+        // 分级故障策略：可恢复角色优先单实例重启，核心角色或超阈值则整组重启
+        $isCritical = isset($this->criticalRoles[$instance->role]);
+        if ($isCritical || !$this->singleRestartFirst) {
+            $this->requestFullRestart("ipc_disconnect:{$instance->role}#{$instance->instanceId}");
+            return;
+        }
+
+        $resurrectionPriority = $provider?->getResurrectionPriority() ?? 0;
+        if ($resurrectionPriority <= 0) {
+            $this->requestFullRestart("ipc_disconnect:{$instance->role}#{$instance->instanceId}");
+            return;
+        }
+
+        // 记录 escalation 计数
+        $role = $instance->role;
+        if (!isset($this->escalationDisconnects[$role]) || $now - $this->escalationDisconnects[$role]['windowStart'] > $this->escalationWindowSec) {
+            $this->escalationDisconnects[$role] = ['count' => 0, 'windowStart' => $now];
+        }
+        $this->escalationDisconnects[$role]['count']++;
+
+        $maxRestarts = 10;
+        if ($instance->restarts >= $maxRestarts) {
+            $this->requestFullRestart("ipc_disconnect:max_restarts:{$instance->role}#{$instance->instanceId} (restarts={$instance->restarts})");
+            return;
+        }
+
+        if ($this->escalationDisconnects[$role]['count'] <= $this->escalationThreshold) {
+            $this->scheduleResurrectionWithDelay($instance, 2.0);
+            return;
+        }
+
+        $this->requestFullRestart("ipc_disconnect:escalation:{$instance->role}#{$instance->instanceId} (count={$this->escalationDisconnects[$role]['count']})");
     }
 
     /**
@@ -2646,18 +2796,22 @@ class ServiceOrchestrator
     private function scheduleResurrectionWithDelay(ServiceInstance $instance, float $delay): void
     {
         $key = $instance->getKey();
-        
+
         // 如果已在队列中，保持现有安排
         if (isset($this->resurrectQueue[$key])) {
             return;
         }
-        
+
         $provider = $this->registry->getProvider($instance->role);
         if ($provider === null || $provider->getResurrectionPriority() <= 0) {
             WlsLogger::info_("[Orchestrator] 服务 {$instance->role} 不参与复活");
             return;
         }
-        
+
+        $instance->state = ServiceInstance::STATE_FAILED;
+        $instance->restarts++;
+        $this->registry->updateInstance($instance);
+
         $this->resurrectQueue[$key] = [
             'role' => $instance->role,
             'instanceId' => $instance->instanceId,
