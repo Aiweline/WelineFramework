@@ -48,12 +48,12 @@ class DeepLProvider extends AbstractProvider
         string $sourceLanguage = 'auto',
         array $options = []
     ): array {
-        $apiKey = $provider->getData(TranslationProvider::fields_API_KEY);
+        $apiKey = $provider->getData(TranslationProvider::schema_fields_API_KEY);
         if (empty($apiKey)) {
             throw new Exception(__('DeepL翻译API密钥未配置'));
         }
 
-        $endpoint = $provider->getData(TranslationProvider::fields_API_ENDPOINT) 
+        $endpoint = $provider->getData(TranslationProvider::schema_fields_API_ENDPOINT) 
             ?: 'https://api-free.deepl.com/v2/translate';
 
         // DeepL使用大写语言代码（如EN、ZH）

@@ -48,12 +48,12 @@ class MicrosoftProvider extends AbstractProvider
         string $sourceLanguage = 'auto',
         array $options = []
     ): array {
-        $apiKey = $provider->getData(TranslationProvider::fields_API_KEY);
+        $apiKey = $provider->getData(TranslationProvider::schema_fields_API_KEY);
         if (empty($apiKey)) {
             throw new Exception(__('Microsoft翻译API密钥未配置'));
         }
 
-        $endpoint = $provider->getData(TranslationProvider::fields_API_ENDPOINT) 
+        $endpoint = $provider->getData(TranslationProvider::schema_fields_API_ENDPOINT) 
             ?: 'https://api.cognitive.microsofttranslator.com/translate';
 
         // 标准化语言代码
@@ -99,7 +99,7 @@ class MicrosoftProvider extends AbstractProvider
      */
     public function detectLanguage(TranslationProvider $provider, string $text): string
     {
-        $apiKey = $provider->getData(TranslationProvider::fields_API_KEY);
+        $apiKey = $provider->getData(TranslationProvider::schema_fields_API_KEY);
         if (empty($apiKey)) {
             throw new Exception(__('Microsoft翻译API密钥未配置'));
         }
