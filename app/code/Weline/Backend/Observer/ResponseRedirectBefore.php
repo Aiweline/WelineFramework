@@ -117,8 +117,8 @@ class ResponseRedirectBefore implements ObserverInterface
             $backendSession = SessionFactory::getInstance()->createBackendSession();
             
             if (!$backendSession->isLoggedIn()) {
-                // 未登录用户重定向到登录页
-                $loginUrl = $this->request->getUrlBuilder()->getBackendUrl('admin/login');
+                // 未登录用户重定向到登录页（同源 URL，避免 admin ↔ login 循环重定向）
+                $loginUrl = $this->getBackendLoginUrlSameOrigin();
                 $data->setData('url', $loginUrl);
                 $data->setData('code', 302);
                 return;
@@ -280,5 +280,16 @@ class ResponseRedirectBefore implements ObserverInterface
             w_log_error("CSRF验证失败: " . $e->getMessage());
             return false;
         }
+    }
+
+    /**
+     * 使用当前请求的 scheme+host 生成后台登录 URL，保证与 Cookie 同源，避免 admin ↔ login 循环重定向。
+     */
+    protected function getBackendLoginUrlSameOrigin(): string
+    {
+        $pathPart = $this->request->getUrlBuilder()->getBackendUrlPath('admin/login');
+        $scheme = $this->request->isSecure() ? 'https' : 'http';
+        $host = $this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost';
+        return $scheme . '://' . $host . $pathPart;
     }
 }
