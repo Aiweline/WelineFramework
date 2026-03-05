@@ -660,9 +660,9 @@ class Route53DomainsService
             throw new \RuntimeException('AWS 配置未设置或未启用');
         }
 
-        $region = $this->config->getData(AwsConfig::fields_REGION) ?: 'us-east-1';
-        $accessKeyId = $this->config->getData(AwsConfig::fields_ACCESS_KEY_ID);
-        $secretAccessKey = $this->config->getData(AwsConfig::fields_SECRET_ACCESS_KEY);
+        $region = $this->config->getData(AwsConfig::schema_fields_REGION) ?: 'us-east-1';
+        $accessKeyId = $this->config->getData(AwsConfig::schema_fields_ACCESS_KEY_ID);
+        $secretAccessKey = $this->config->getData(AwsConfig::schema_fields_SECRET_ACCESS_KEY);
 
         $host = "route53domains.{$region}.amazonaws.com";
         $endpoint = "https://{$host}/";

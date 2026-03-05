@@ -41,15 +41,15 @@ class Operation extends BackendController
         $query = $this->getOperationModel()->reset();
 
         if ($domainName !== '') {
-            $query->where(DomainOperation::fields_DOMAIN_NAME, '%' . $domainName . '%', 'like');
+            $query->where(DomainOperation::schema_fields_DOMAIN_NAME, '%' . $domainName . '%', 'like');
         }
 
         if ($operationType !== '') {
-            $query->where(DomainOperation::fields_OPERATION_TYPE, $operationType);
+            $query->where(DomainOperation::schema_fields_OPERATION_TYPE, $operationType);
         }
 
         if ($status !== '') {
-            $query->where(DomainOperation::fields_STATUS, $status);
+            $query->where(DomainOperation::schema_fields_STATUS, $status);
         }
 
         // 获取总数
@@ -57,7 +57,7 @@ class Operation extends BackendController
         $total = $totalQuery->count();
 
         // 获取分页数据
-        $operations = $query->order(DomainOperation::fields_CREATED_AT, 'DESC')
+        $operations = $query->order(DomainOperation::schema_fields_CREATED_AT, 'DESC')
             ->limit($pageSize)
             ->offset(($page - 1) * $pageSize)
             ->select()
@@ -108,16 +108,16 @@ class Operation extends BackendController
             'success' => true,
             'operation' => [
                 'id' => $operation->getId(),
-                'domain_name' => $operation->getData(DomainOperation::fields_DOMAIN_NAME),
-                'operation_type' => $operation->getData(DomainOperation::fields_OPERATION_TYPE),
+                'domain_name' => $operation->getData(DomainOperation::schema_fields_DOMAIN_NAME),
+                'operation_type' => $operation->getData(DomainOperation::schema_fields_OPERATION_TYPE),
                 'operation_type_name' => $operation->getOperationTypeDisplayName(),
-                'status' => $operation->getData(DomainOperation::fields_STATUS),
+                'status' => $operation->getData(DomainOperation::schema_fields_STATUS),
                 'status_name' => $operation->getStatusDisplayName(),
-                'aws_operation_id' => $operation->getData(DomainOperation::fields_AWS_OPERATION_ID),
-                'error_message' => $operation->getData(DomainOperation::fields_ERROR_MESSAGE),
-                'operator_name' => $operation->getData(DomainOperation::fields_OPERATOR_NAME),
-                'created_at' => $operation->getData(DomainOperation::fields_CREATED_AT),
-                'updated_at' => $operation->getData(DomainOperation::fields_UPDATED_AT),
+                'aws_operation_id' => $operation->getData(DomainOperation::schema_fields_AWS_OPERATION_ID),
+                'error_message' => $operation->getData(DomainOperation::schema_fields_ERROR_MESSAGE),
+                'operator_name' => $operation->getData(DomainOperation::schema_fields_OPERATOR_NAME),
+                'created_at' => $operation->getData(DomainOperation::schema_fields_CREATED_AT),
+                'updated_at' => $operation->getData(DomainOperation::schema_fields_UPDATED_AT),
                 'request_data' => $requestData,
                 'response_data' => $responseData,
             ],
