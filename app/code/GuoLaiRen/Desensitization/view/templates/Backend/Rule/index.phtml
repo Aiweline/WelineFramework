@@ -245,9 +245,10 @@ $rules = $this->rules ?? [];
     }
     
     function editRule(ruleId) {
-        fetch('<?= $this->getBackendUrl('*/backend/rule/edit') ?>?rule_id=' + ruleId)
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
+        var url = '<?= $this->getBackendUrl('*/backend/rule/edit') ?>?rule_id=' + ruleId;
+        window.Weline.Api.get(url, { silent: true })
+            .then(function(response) {
+                var data = (response && response.data) || response;
                 if (data.success) {
                     var rule = data.data;
                     document.getElementById('desens-rule-id').value = rule.rule_id;
@@ -276,12 +277,9 @@ $rules = $this->rules ?? [];
             '<?= $this->getBackendUrl('*/backend/rule/edit') ?>' : 
             '<?= $this->getBackendUrl('*/backend/rule/add') ?>';
         
-        fetch(url, {
-            method: 'POST',
-            body: formData
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
+        window.Weline.Api.request(url, { method: 'POST', body: formData })
+        .then(function(response) {
+            var data = (response && response.data) || response;
             if (data.success) {
                 if (typeof AdminToast !== 'undefined') {
                     AdminToast.success('<?= __('保存成功') ?>');
@@ -306,13 +304,11 @@ $rules = $this->rules ?? [];
     }
     
     function doDeleteRule(ruleId) {
-        fetch('<?= $this->getBackendUrl('*/backend/rule/delete') ?>', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({rule_id: ruleId})
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
+        var url = '<?= $this->getBackendUrl('*/backend/rule/delete') ?>';
+        var body = { rule_id: ruleId };
+        window.Weline.Api.post(url, body)
+        .then(function(response) {
+            var data = (response && response.data) || response;
             if (data.success) {
                 if (typeof AdminToast !== 'undefined') {
                     AdminToast.success('<?= __('删除成功') ?>');
@@ -327,9 +323,10 @@ $rules = $this->rules ?? [];
     }
     
     function toggleRule(ruleId) {
-        fetch('<?= $this->getBackendUrl('*/backend/rule/toggle') ?>?rule_id=' + ruleId)
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
+        var url = '<?= $this->getBackendUrl('*/backend/rule/toggle') ?>?rule_id=' + ruleId;
+        window.Weline.Api.get(url)
+            .then(function(response) {
+                var data = (response && response.data) || response;
                 if (data.success) {
                     location.reload();
                 } else {
@@ -357,17 +354,11 @@ $rules = $this->rules ?? [];
             return;
         }
         
-        fetch('<?= $this->getBackendUrl('*/backend/rule/test') ?>', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                pattern: currentPattern,
-                replacement: currentReplacement,
-                test_content: testContent
-            })
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
+        var url = '<?= $this->getBackendUrl('*/backend/rule/test') ?>';
+        var body = { pattern: currentPattern, replacement: currentReplacement, test_content: testContent };
+        window.Weline.Api.post(url, body)
+        .then(function(response) {
+            var data = (response && response.data) || response;
             var resultDiv = document.getElementById('desensTestResult');
             if (data.success) {
                 resultDiv.innerHTML = 
