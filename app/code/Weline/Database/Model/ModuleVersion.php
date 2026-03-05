@@ -1,51 +1,46 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * 模块版本模型
- * 
+ * 表结构由 SchemaDiffStage 根据 #[Col] 同步。
+ *
  * @author WelineFramework
  * @package Weline\Database\Model
  */
 
 namespace Weline\Database\Model;
 
-use Weline\Framework\Database\ModelInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\Framework\Setup\Data\Context;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Table as TableAttribute;
 
-class ModuleVersion extends Model implements ModelInterface
+#[TableAttribute(comment: 'Module Versions Table')]
+class ModuleVersion extends Model
 {
+    /** 列名 module_name 与 AbstractModel::$module_name 冲突，用 name 指定列名 */
+
     public const fields_ID = 'id';
     public const fields_MODULE_NAME = 'module_name';
     public const fields_CURRENT_VERSION = 'current_version';
     public const fields_LAST_MIGRATION = 'last_migration';
     public const fields_UPDATED_AT = 'updated_at';
-    
+
+    /** 供 getModelFields() 使用，与 fields_* 同值 */
+    #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'ID')]
+    public const schema_fields_ID = 'id';
+    public const schema_fields_MODULE_NAME = 'module_name';
+    #[Col('varchar', 50, nullable: false, comment: 'Current Version')]
+    public const schema_fields_CURRENT_VERSION = 'current_version';
+    #[Col('varchar', 255, comment: 'Last Migration')]
+    public const schema_fields_LAST_MIGRATION = 'last_migration';
+    #[Col('timestamp', nullable: true, default: 'CURRENT_TIMESTAMP', comment: 'Updated At')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
+
     public function _construct()
     {
-        $this->init('weline_database_module_versions', self::fields_ID);
-    }
-
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-    }
-
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist() === false) {
-            $setup->createTable('Module Versions Table')
-                ->addColumn(self::fields_ID, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
-                ->addColumn(self::fields_MODULE_NAME, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'not null', 'Module Name')
-                ->addColumn(self::fields_CURRENT_VERSION, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 50, 'not null', 'Current Version')
-                ->addColumn(self::fields_LAST_MIGRATION, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'default null', 'Last Migration')
-                ->addColumn(self::fields_UPDATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TIMESTAMP, null, 'default CURRENT_TIMESTAMP', 'Updated At')
-                ->create();
-        }
+        $this->init('weline_database_module_versions', self::schema_fields_ID);
     }
 
     /**
@@ -57,13 +52,13 @@ class ModuleVersion extends Model implements ModelInterface
     public function getCurrentVersion(string $moduleName): ?string
     {
         $items = $this->reset()
-            ->where(self::fields_MODULE_NAME, $moduleName)
+            ->where(self::schema_fields_MODULE_NAME, $moduleName)
             ->limit(1)
             ->select()
             ->fetch()
             ->getItems();
         $version = $items[0] ?? null;
-        return $version && $version->getId() ? $version->getData(self::fields_CURRENT_VERSION) : null;
+        return $version && $version->getId() ? $version->getData(self::schema_fields_CURRENT_VERSION) : null;
     }
     
     /**
@@ -75,13 +70,13 @@ class ModuleVersion extends Model implements ModelInterface
     public function getLastMigration(string $moduleName): ?string
     {
         $items = $this->reset()
-            ->where(self::fields_MODULE_NAME, $moduleName)
+            ->where(self::schema_fields_MODULE_NAME, $moduleName)
             ->limit(1)
             ->select()
             ->fetch()
             ->getItems();
         $version = $items[0] ?? null;
-        return $version && $version->getId() ? $version->getData(self::fields_LAST_MIGRATION) : null;
+        return $version && $version->getId() ? $version->getData(self::schema_fields_LAST_MIGRATION) : null;
     }
     
     /**
@@ -93,7 +88,7 @@ class ModuleVersion extends Model implements ModelInterface
     public function isModuleExists(string $moduleName): bool
     {
         return $this->reset()
-            ->where(self::fields_MODULE_NAME, $moduleName)
+            ->where(self::schema_fields_MODULE_NAME, $moduleName)
             ->total() > 0;
     }
     
@@ -105,7 +100,7 @@ class ModuleVersion extends Model implements ModelInterface
     public function getAllModuleVersions(): array
     {
         return $this->reset()
-            ->order(self::fields_UPDATED_AT, 'DESC')
+            ->order(self::schema_fields_UPDATED_AT, 'DESC')
             ->select()
             ->fetch()
             ->getItems();
@@ -130,8 +125,8 @@ class ModuleVersion extends Model implements ModelInterface
         ];
         
         foreach ($modules as $module) {
-            $version = $module->getData(self::fields_CURRENT_VERSION);
-            $updatedAt = $module->getData(self::fields_UPDATED_AT);
+            $version = $module->getData(self::schema_fields_CURRENT_VERSION);
+            $updatedAt = $module->getData(self::schema_fields_UPDATED_AT);
             
             // 版本分布统计
             if (!isset($stats['version_distribution'][$version])) {
@@ -141,7 +136,7 @@ class ModuleVersion extends Model implements ModelInterface
             
             // 最近更新
             $stats['recent_updates'][] = [
-                'module' => $module->getData(self::fields_MODULE_NAME),
+                'module' => $module->getData(self::schema_fields_MODULE_NAME),
                 'version' => $version,
                 'updated_at' => $updatedAt
             ];
@@ -158,3 +153,4 @@ class ModuleVersion extends Model implements ModelInterface
         return $stats;
     }
 }
+

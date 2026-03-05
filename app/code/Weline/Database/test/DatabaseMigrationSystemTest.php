@@ -40,7 +40,7 @@ class DatabaseMigrationSystemTest extends TestCore
         parent::tearDown();
         // 清理测试数据
         $this->migrationModel->reset()
-            ->where(Migration::fields_MODULE, 'Weline_SystemTest')
+            ->where(Migration::schema_fields_MODULE, 'Weline_SystemTest')
             ->delete()
             ->fetch();
     }
@@ -122,8 +122,8 @@ class DatabaseMigrationSystemTest extends TestCore
         
         // 清理旧数据
         $this->migrationModel->reset()
-            ->where(Migration::fields_MODULE, $moduleName)
-            ->where(Migration::fields_FILE, $migrationFile)
+            ->where(Migration::schema_fields_MODULE, $moduleName)
+            ->where(Migration::schema_fields_FILE, $migrationFile)
             ->delete()
             ->fetch();
         

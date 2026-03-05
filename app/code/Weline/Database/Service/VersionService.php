@@ -47,18 +47,18 @@ class VersionService
             if ($existingVersion) {
                 // 更新现有记录
                 $existingVersion->setData([
-                    ModuleVersion::fields_CURRENT_VERSION => $newVersion,
-                    ModuleVersion::fields_LAST_MIGRATION => $lastMigration,
-                    ModuleVersion::fields_UPDATED_AT => date('Y-m-d H:i:s')
+                    ModuleVersion::schema_fields_CURRENT_VERSION => $newVersion,
+                    ModuleVersion::schema_fields_LAST_MIGRATION => $lastMigration,
+                    ModuleVersion::schema_fields_UPDATED_AT => date('Y-m-d H:i:s')
                 ]);
                 $result = $existingVersion->save();
             } else {
                 // 创建新记录
                 $this->versionModel->setData([
-                    ModuleVersion::fields_MODULE_NAME => $moduleName,
-                    ModuleVersion::fields_CURRENT_VERSION => $newVersion,
-                    ModuleVersion::fields_LAST_MIGRATION => $lastMigration,
-                    ModuleVersion::fields_UPDATED_AT => date('Y-m-d H:i:s')
+                    ModuleVersion::schema_fields_MODULE_NAME => $moduleName,
+                    ModuleVersion::schema_fields_CURRENT_VERSION => $newVersion,
+                    ModuleVersion::schema_fields_LAST_MIGRATION => $lastMigration,
+                    ModuleVersion::schema_fields_UPDATED_AT => date('Y-m-d H:i:s')
                 ]);
                 $result = $this->versionModel->save();
             }
@@ -85,7 +85,7 @@ class VersionService
     public function getModuleVersion(string $moduleName): ?ModuleVersion
     {
         $items = $this->versionModel->reset()
-            ->where(ModuleVersion::fields_MODULE_NAME, $moduleName)
+            ->where(ModuleVersion::schema_fields_MODULE_NAME, $moduleName)
             ->limit(1)
             ->select()
             ->fetch()
@@ -109,7 +109,7 @@ class VersionService
             return true; // 新模块
         }
         
-        $oldVersion = $currentVersion->getData(ModuleVersion::fields_CURRENT_VERSION);
+        $oldVersion = $currentVersion->getData(ModuleVersion::schema_fields_CURRENT_VERSION);
         
         return $oldVersion !== $newVersion;
     }
@@ -138,12 +138,12 @@ class VersionService
         $result = [];
         foreach ($history as $record) {
             $result[] = [
-                'from_version' => $record->getData(ModuleVersionHistory::fields_FROM_VERSION),
-                'to_version' => $record->getData(ModuleVersionHistory::fields_TO_VERSION),
-                'action' => $record->getData(ModuleVersionHistory::fields_ACTION),
-                'migration_file' => $record->getData(ModuleVersionHistory::fields_MIGRATION_FILE),
-                'operator' => $record->getData(ModuleVersionHistory::fields_OPERATOR),
-                'created_at' => $record->getData(ModuleVersionHistory::fields_CREATED_AT),
+                'from_version' => $record->getData(ModuleVersionHistory::schema_fields_FROM_VERSION),
+                'to_version' => $record->getData(ModuleVersionHistory::schema_fields_TO_VERSION),
+                'action' => $record->getData(ModuleVersionHistory::schema_fields_ACTION),
+                'migration_file' => $record->getData(ModuleVersionHistory::schema_fields_MIGRATION_FILE),
+                'operator' => $record->getData(ModuleVersionHistory::schema_fields_OPERATOR),
+                'created_at' => $record->getData(ModuleVersionHistory::schema_fields_CREATED_AT),
             ];
         }
         
@@ -204,8 +204,8 @@ class VersionService
         ];
         
         foreach ($modules as $module) {
-            $version = $module->getData(ModuleVersion::fields_CURRENT_VERSION);
-            $updatedAt = $module->getData(ModuleVersion::fields_UPDATED_AT);
+            $version = $module->getData(ModuleVersion::schema_fields_CURRENT_VERSION);
+            $updatedAt = $module->getData(ModuleVersion::schema_fields_UPDATED_AT);
             
             // 版本分布统计
             if (!isset($stats['version_distribution'][$version])) {
@@ -215,7 +215,7 @@ class VersionService
             
             // 最近更新
             $stats['recent_updates'][] = [
-                'module' => $module->getData(ModuleVersion::fields_MODULE_NAME),
+                'module' => $module->getData(ModuleVersion::schema_fields_MODULE_NAME),
                 'version' => $version,
                 'updated_at' => $updatedAt
             ];
@@ -322,13 +322,13 @@ class VersionService
             $operator = php_sapi_name() === 'cli' ? ModuleVersionHistory::OPERATOR_CLI : ModuleVersionHistory::OPERATOR_ADMIN;
             
             $this->historyModel->reset()->setData([
-                ModuleVersionHistory::fields_MODULE_NAME => $moduleName,
-                ModuleVersionHistory::fields_FROM_VERSION => $fromVersion,
-                ModuleVersionHistory::fields_TO_VERSION => $toVersion,
-                ModuleVersionHistory::fields_ACTION => $action,
-                ModuleVersionHistory::fields_MIGRATION_FILE => $migrationFile,
-                ModuleVersionHistory::fields_OPERATOR => $operator,
-                ModuleVersionHistory::fields_CREATED_AT => date('Y-m-d H:i:s'),
+                ModuleVersionHistory::schema_fields_MODULE_NAME => $moduleName,
+                ModuleVersionHistory::schema_fields_FROM_VERSION => $fromVersion,
+                ModuleVersionHistory::schema_fields_TO_VERSION => $toVersion,
+                ModuleVersionHistory::schema_fields_ACTION => $action,
+                ModuleVersionHistory::schema_fields_MIGRATION_FILE => $migrationFile,
+                ModuleVersionHistory::schema_fields_OPERATOR => $operator,
+                ModuleVersionHistory::schema_fields_CREATED_AT => date('Y-m-d H:i:s'),
             ])->save();
         } catch (\Exception $e) {
             $this->printing->warning(__('记录版本历史失败: %{1}', $e->getMessage()));
@@ -368,6 +368,6 @@ class VersionService
     public function getModuleVersionString(string $moduleName): ?string
     {
         $version = $this->getModuleVersion($moduleName);
-        return $version?->getData(ModuleVersion::fields_CURRENT_VERSION);
+        return $version?->getData(ModuleVersion::schema_fields_CURRENT_VERSION);
     }
 }
