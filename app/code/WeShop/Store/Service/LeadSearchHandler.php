@@ -34,8 +34,8 @@ class LeadSearchHandler implements SourceTypeHandlerInterface
         /** @var Store $storeModel */
         $storeModel = ObjectManager::getInstance(Store::class);
         $storeModel->clear()
-            ->where(Store::fields_STATUS, Store::STATUS_ENABLED)
-            ->order(Store::fields_NAME, 'ASC')
+            ->where(Store::schema_fields_STATUS, Store::STATUS_ENABLED)
+            ->order(Store::schema_fields_NAME, 'ASC')
             ->fetch();
 
         $options = [];
@@ -45,8 +45,8 @@ class LeadSearchHandler implements SourceTypeHandlerInterface
             }
             $options[] = [
                 'id'          => (int)$store->getId(),
-                'name'        => $store->getData(Store::fields_NAME),
-                'description' => (string)($store->getData(Store::fields_DESCRIPTION) ?? ''),
+                'name'        => $store->getData(Store::schema_fields_NAME),
+                'description' => (string)($store->getData(Store::schema_fields_DESCRIPTION) ?? ''),
             ];
         }
 
@@ -116,12 +116,12 @@ class LeadSearchHandler implements SourceTypeHandlerInterface
 
         return [
             'id'          => (int)$store->getId(),
-            'name'        => $store->getData(Store::fields_NAME),
-            'description' => (string)($store->getData(Store::fields_DESCRIPTION) ?? ''),
-            'meta_title'  => $store->getData(Store::fields_META_TITLE),
-            'meta_description' => $store->getData(Store::fields_META_DESCRIPTION),
-            'meta_keywords'    => $store->getData(Store::fields_META_KEYWORDS),
-            'address'     => $store->getData(Store::fields_ADDRESS),
+            'name'        => $store->getData(Store::schema_fields_NAME),
+            'description' => (string)($store->getData(Store::schema_fields_DESCRIPTION) ?? ''),
+            'meta_title'  => $store->getData(Store::schema_fields_META_TITLE),
+            'meta_description' => $store->getData(Store::schema_fields_META_DESCRIPTION),
+            'meta_keywords'    => $store->getData(Store::schema_fields_META_KEYWORDS),
+            'address'     => $store->getData(Store::schema_fields_ADDRESS),
             'language'    => $language,  // 添加语言字段
             'currency'   => $currency,   // 添加货币字段
             'languages'  => $languages,  // 添加支持的语言列表
@@ -137,13 +137,13 @@ class LeadSearchHandler implements SourceTypeHandlerInterface
         $candidateModel = ObjectManager::getInstance(LeadCandidate::class);
 
         $candidateModel->clear()
-            ->setData(LeadCandidate::fields_STORE_ID, $sourceId)
-            ->setData(LeadCandidate::fields_PROFILE_DATA, json_encode([
+            ->setData(LeadCandidate::schema_fields_STORE_ID, $sourceId)
+            ->setData(LeadCandidate::schema_fields_PROFILE_DATA, json_encode([
                 'note' => '示例候选客户，等待后续实现真实寻客逻辑。',
             ], JSON_UNESCAPED_UNICODE))
-            ->setData(LeadCandidate::fields_SCORE, 80.00)
-            ->setData(LeadCandidate::fields_SOURCE_URL, 'https://example.com')
-            ->setData(LeadCandidate::fields_STATUS, LeadCandidate::STATUS_PENDING)
+            ->setData(LeadCandidate::schema_fields_SCORE, 80.00)
+            ->setData(LeadCandidate::schema_fields_SOURCE_URL, 'https://example.com')
+            ->setData(LeadCandidate::schema_fields_STATUS, LeadCandidate::STATUS_PENDING)
             ->save();
     }
 }
