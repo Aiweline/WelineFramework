@@ -74,12 +74,12 @@ class PaymentService
         $transaction = $this->objectManager->getInstance(PaymentTransaction::class);
         $transactionNo = $this->generateTransactionNo();
         
-        $transaction->setData(PaymentTransaction::fields_ORDER_ID, $orderData['order_id'] ?? '')
-            ->setData(PaymentTransaction::fields_METHOD_CODE, $methodCode)
-            ->setData(PaymentTransaction::fields_TRANSACTION_NO, $transactionNo)
-            ->setData(PaymentTransaction::fields_AMOUNT, $amount)
-            ->setData(PaymentTransaction::fields_CURRENCY, $currency)
-            ->setData(PaymentTransaction::fields_STATUS, PaymentTransaction::STATUS_PENDING)
+        $transaction->setData(PaymentTransaction::schema_fields_ORDER_ID, $orderData['order_id'] ?? '')
+            ->setData(PaymentTransaction::schema_fields_METHOD_CODE, $methodCode)
+            ->setData(PaymentTransaction::schema_fields_TRANSACTION_NO, $transactionNo)
+            ->setData(PaymentTransaction::schema_fields_AMOUNT, $amount)
+            ->setData(PaymentTransaction::schema_fields_CURRENCY, $currency)
+            ->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_PENDING)
             ->setRequestData($orderData)
             ->save();
 
@@ -93,12 +93,12 @@ class PaymentService
         if ($result->isSuccess()) {
             // 如果支付提供商返回了交易号，更新
             if ($result->getData('transaction_no')) {
-                $transaction->setData(PaymentTransaction::fields_TRANSACTION_NO, $result->getData('transaction_no'))
+                $transaction->setData(PaymentTransaction::schema_fields_TRANSACTION_NO, $result->getData('transaction_no'))
                     ->save();
             }
         } else {
             // 支付创建失败
-            $transaction->setData(PaymentTransaction::fields_STATUS, PaymentTransaction::STATUS_FAILED)
+            $transaction->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_FAILED)
                 ->save();
             throw new \Exception($result->getData('message') ?? __('创建支付订单失败'));
         }
@@ -146,7 +146,7 @@ class PaymentService
 
         /** @var PaymentTransaction $transaction */
         $transaction = $this->objectManager->getInstance(PaymentTransaction::class);
-        $transaction->load(PaymentTransaction::fields_TRANSACTION_NO, $transactionNo);
+        $transaction->load(PaymentTransaction::schema_fields_TRANSACTION_NO, $transactionNo);
         
         if (!$transaction->getId()) {
             throw new \Exception(__('交易记录不存在: %{no}', ['no' => $transactionNo]));
@@ -161,14 +161,14 @@ class PaymentService
         
         // 更新交易状态
         if ($result->isSuccess()) {
-            $transaction->setData(PaymentTransaction::fields_STATUS, PaymentTransaction::STATUS_SUCCESS)
-                ->setData(PaymentTransaction::fields_PAID_AT, date('Y-m-d H:i:s'))
+            $transaction->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_SUCCESS)
+                ->setData(PaymentTransaction::schema_fields_PAID_AT, date('Y-m-d H:i:s'))
                 ->save();
         } elseif ($result->isFailed()) {
-            $transaction->setData(PaymentTransaction::fields_STATUS, PaymentTransaction::STATUS_FAILED)
+            $transaction->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_FAILED)
                 ->save();
         } elseif ($result->isProcessing()) {
-            $transaction->setData(PaymentTransaction::fields_STATUS, PaymentTransaction::STATUS_PROCESSING)
+            $transaction->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_PROCESSING)
                 ->save();
         }
 
@@ -186,7 +186,7 @@ class PaymentService
     {
         /** @var PaymentTransaction $transaction */
         $transaction = $this->objectManager->getInstance(PaymentTransaction::class);
-        $transaction->load(PaymentTransaction::fields_TRANSACTION_NO, $transactionNo);
+        $transaction->load(PaymentTransaction::schema_fields_TRANSACTION_NO, $transactionNo);
         
         if (!$transaction->getId()) {
             return null;
@@ -198,7 +198,7 @@ class PaymentService
         }
 
         // 获取支付提供商查询状态
-        $paymentMethod = $this->methodManager->getMethodByCode($transaction->getData(PaymentTransaction::fields_METHOD_CODE));
+        $paymentMethod = $this->methodManager->getMethodByCode($transaction->getData(PaymentTransaction::schema_fields_METHOD_CODE));
         if (!$paymentMethod) {
             return $transaction;
         }
@@ -213,14 +213,14 @@ class PaymentService
         
         // 更新交易状态
         if ($result->isSuccess()) {
-            $transaction->setData(PaymentTransaction::fields_STATUS, PaymentTransaction::STATUS_SUCCESS)
-                ->setData(PaymentTransaction::fields_PAID_AT, date('Y-m-d H:i:s'))
+            $transaction->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_SUCCESS)
+                ->setData(PaymentTransaction::schema_fields_PAID_AT, date('Y-m-d H:i:s'))
                 ->save();
         } elseif ($result->isFailed()) {
-            $transaction->setData(PaymentTransaction::fields_STATUS, PaymentTransaction::STATUS_FAILED)
+            $transaction->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_FAILED)
                 ->save();
         } elseif ($result->isProcessing()) {
-            $transaction->setData(PaymentTransaction::fields_STATUS, PaymentTransaction::STATUS_PROCESSING)
+            $transaction->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_PROCESSING)
                 ->save();
         }
 
@@ -240,7 +240,7 @@ class PaymentService
     {
         /** @var PaymentTransaction $transaction */
         $transaction = $this->objectManager->getInstance(PaymentTransaction::class);
-        $transaction->load(PaymentTransaction::fields_TRANSACTION_NO, $transactionNo);
+        $transaction->load(PaymentTransaction::schema_fields_TRANSACTION_NO, $transactionNo);
         
         if (!$transaction->getId()) {
             throw new \Exception(__('交易记录不存在'));
@@ -255,7 +255,7 @@ class PaymentService
         }
 
         // 获取支付提供商
-        $paymentMethod = $this->methodManager->getMethodByCode($transaction->getData(PaymentTransaction::fields_METHOD_CODE));
+        $paymentMethod = $this->methodManager->getMethodByCode($transaction->getData(PaymentTransaction::schema_fields_METHOD_CODE));
         if (!$paymentMethod) {
             throw new \Exception(__('支付方式不存在'));
         }
@@ -270,7 +270,7 @@ class PaymentService
         
         // 更新交易状态
         if ($result->isSuccess()) {
-            $transaction->setData(PaymentTransaction::fields_STATUS, PaymentTransaction::STATUS_REFUNDED)
+            $transaction->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_REFUNDED)
                 ->save();
         }
 
