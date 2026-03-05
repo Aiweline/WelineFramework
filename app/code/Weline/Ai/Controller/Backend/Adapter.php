@@ -280,6 +280,95 @@ class Adapter extends BackendController
     }
 
     /**
+     * 获取模型选项（用于默认模型下拉，仅返回已激活模型的 model_code、name）
+     *
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_adapter_list', '查看场景适配器列表', 'mdi-view-list', '查看场景适配器列表')]
+    public function getModelOptions(): string
+    {
+        try {
+            /** @var AiModel $aiModel */
+            $aiModel = ObjectManager::getInstance(AiModel::class);
+            $rows = $aiModel->reset()
+                ->where(AiModel::schema_fields_IS_ACTIVE, 1)
+                ->fields(AiModel::schema_fields_MODEL_CODE . ',' . AiModel::schema_fields_NAME)
+                ->order(AiModel::schema_fields_MODEL_CODE, 'ASC')
+                ->select()
+                ->fetchArray();
+            $items = [];
+            foreach ($rows as $row) {
+                $items[] = [
+                    'model_code' => (string)($row['model_code'] ?? ''),
+                    'name' => (string)($row['name'] ?? $row['model_code'] ?? ''),
+                ];
+            }
+            return $this->jsonResponse([
+                'success' => true,
+                'items' => $items,
+            ]);
+        } catch (\Throwable $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'items' => [],
+            ]);
+        }
+    }
+
+    /**
+     * 批量为选中的适配器设置默认模型
+     *
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_adapter_toggle', '切换场景适配器状态', 'mdi-toggle-switch', '启用或禁用场景适配器')]
+    public function postBatchSaveDefaultModel(): string
+    {
+        $ids = $this->request->getBodyParam('ids', $this->request->getPost('ids', []));
+        $defaultModel = trim((string)$this->request->getBodyParam('default_model', $this->request->getPost('default_model', '')));
+
+        if (empty($ids)) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('请选择要设置的适配器'),
+            ]);
+        }
+        if (!is_array($ids)) {
+            $ids = array_filter(array_map('intval', explode(',', (string)$ids)));
+        } else {
+            $ids = array_filter(array_map('intval', $ids));
+        }
+        if (empty($defaultModel)) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('请选择默认模型'),
+            ]);
+        }
+
+        try {
+            $updated = 0;
+            foreach ($ids as $id) {
+                $adapter = $this->getScenarioAdapter()->reset()->load((int)$id);
+                if ($adapter->getId()) {
+                    $adapter->setData(AiScenarioAdapter::schema_fields_DEFAULT_MODEL, $defaultModel);
+                    $adapter->save();
+                    $updated++;
+                }
+            }
+            return $this->jsonResponse([
+                'success' => true,
+                'message' => __('已为 %{count} 个适配器设置默认模型', ['count' => $updated]),
+                'updated' => $updated,
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('批量设置失败：%{error}', ['error' => $e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
      * 获取适配器信息
      * 
      * @return string

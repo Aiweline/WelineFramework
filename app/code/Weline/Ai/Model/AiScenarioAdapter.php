@@ -50,6 +50,8 @@ class AiScenarioAdapter extends \Weline\Framework\Database\Model
     public const schema_fields_EXAMPLES = 'examples';
     #[Col(type: 'smallint', length: 1, nullable: true, default: 1, comment: '是否激活')]
     public const schema_fields_IS_ACTIVE = 'is_active';
+    #[Col(type: 'varchar', length: 128, nullable: true, comment: '默认模型代码')]
+    public const schema_fields_DEFAULT_MODEL = 'default_model';
     #[Col(type: 'int', nullable: false, comment: '创建时间')]
     public const schema_fields_CREATED_TIME = 'created_time';
     #[Col(type: 'int', nullable: false, comment: '更新时间')]

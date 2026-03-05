@@ -385,6 +385,26 @@ class AdapterScanner
     }
 
     /**
+     * 获取场景适配器配置的默认模型代码（来自 ai_scenario_adapter.default_model）
+     *
+     * @param string $code 适配器代码
+     * @return string|null 默认模型代码，未配置或适配器不存在时返回 null
+     */
+    public function getDefaultModelCodeForAdapter(string $code): ?string
+    {
+        $record = $this->scenarioAdapter->reset()
+            ->where(AiScenarioAdapter::schema_fields_CODE, $code)
+            ->where(AiScenarioAdapter::schema_fields_IS_ACTIVE, 1)
+            ->find()
+            ->fetch();
+        if (!$record || !$record->getId()) {
+            return null;
+        }
+        $defaultModel = $record->getData(AiScenarioAdapter::schema_fields_DEFAULT_MODEL);
+        return $defaultModel !== null && $defaultModel !== '' ? (string)$defaultModel : null;
+    }
+
+    /**
      * 获取适配器实例
      * 
      * @param string $code
