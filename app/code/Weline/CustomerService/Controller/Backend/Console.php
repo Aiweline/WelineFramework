@@ -51,8 +51,8 @@ class Console extends BackendController
             // 查找当前用户是否是客服
             /** @var ServiceAgent $agent */
             $agent = ObjectManager::getInstance(ServiceAgent::class);
-            $agent->where(ServiceAgent::fields_user_id, $userId)
-                ->where(ServiceAgent::fields_is_active, 1)
+            $agent->where(ServiceAgent::schema_fields_user_id, $userId)
+                ->where(ServiceAgent::schema_fields_is_active, 1)
                 ->find()
                 ->fetch();
             
@@ -66,17 +66,17 @@ class Console extends BackendController
             /** @var ChatSession $session */
             $session = ObjectManager::getInstance(ChatSession::class);
             $sessions = $session->reset()
-                ->where(ChatSession::fields_agent_id, $agent->getId())
-                ->where(ChatSession::fields_status, ChatSession::STATUS_ACTIVE)
-                ->order(ChatSession::fields_updated_at, 'DESC')
+                ->where(ChatSession::schema_fields_agent_id, $agent->getId())
+                ->where(ChatSession::schema_fields_status, ChatSession::STATUS_ACTIVE)
+                ->order(ChatSession::schema_fields_updated_at, 'DESC')
                 ->select()
                 ->fetch()
                 ->getItems();
 
             // 获取等待分配的会话
             $waitingSessions = $session->reset()
-                ->where(ChatSession::fields_status, ChatSession::STATUS_WAITING)
-                ->order(ChatSession::fields_created_at, 'ASC')
+                ->where(ChatSession::schema_fields_status, ChatSession::STATUS_WAITING)
+                ->order(ChatSession::schema_fields_created_at, 'ASC')
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -86,8 +86,8 @@ class Console extends BackendController
                 /** @var ChatMessage $message */
                 $message = ObjectManager::getInstance(ChatMessage::class);
                 $lastMessage = $message->reset()
-                    ->where(ChatMessage::fields_session_id, $sessionData['session_id'])
-                    ->order(ChatMessage::fields_created_at, 'DESC')
+                    ->where(ChatMessage::schema_fields_session_id, $sessionData['session_id'])
+                    ->order(ChatMessage::schema_fields_created_at, 'DESC')
                     ->find()
                     ->fetch();
                 
@@ -98,9 +98,9 @@ class Console extends BackendController
 
                 // 获取未读消息数
                 $unreadCount = $message->reset()
-                    ->where(ChatMessage::fields_session_id, $sessionData['session_id'])
-                    ->where(ChatMessage::fields_sender_type, ChatMessage::SENDER_TYPE_CUSTOMER)
-                    ->where(ChatMessage::fields_created_at, $sessionData['last_read_time'] ?? '1970-01-01 00:00:00', '>')
+                    ->where(ChatMessage::schema_fields_session_id, $sessionData['session_id'])
+                    ->where(ChatMessage::schema_fields_sender_type, ChatMessage::SENDER_TYPE_CUSTOMER)
+                    ->where(ChatMessage::schema_fields_created_at, $sessionData['last_read_time'] ?? '1970-01-01 00:00:00', '>')
                     ->count();
                 $sessionData['unread_count'] = (int)$unreadCount;
             }
@@ -109,8 +109,8 @@ class Console extends BackendController
                 /** @var ChatMessage $message */
                 $message = ObjectManager::getInstance(ChatMessage::class);
                 $lastMessage = $message->reset()
-                    ->where(ChatMessage::fields_session_id, $waitingSession['session_id'])
-                    ->order(ChatMessage::fields_created_at, 'DESC')
+                    ->where(ChatMessage::schema_fields_session_id, $waitingSession['session_id'])
+                    ->order(ChatMessage::schema_fields_created_at, 'DESC')
                     ->find()
                     ->fetch();
                 
@@ -149,8 +149,8 @@ class Console extends BackendController
             
             /** @var ServiceAgent $agent */
             $agent = ObjectManager::getInstance(ServiceAgent::class);
-            $agent->where(ServiceAgent::fields_user_id, $userId)
-                ->where(ServiceAgent::fields_is_active, 1)
+            $agent->where(ServiceAgent::schema_fields_user_id, $userId)
+                ->where(ServiceAgent::schema_fields_is_active, 1)
                 ->find()
                 ->fetch();
             
@@ -161,17 +161,17 @@ class Console extends BackendController
             /** @var ChatSession $session */
             $session = ObjectManager::getInstance(ChatSession::class);
             $sessions = $session->reset()
-                ->where(ChatSession::fields_agent_id, $agent->getId())
-                ->where(ChatSession::fields_status, ChatSession::STATUS_ACTIVE)
-                ->order(ChatSession::fields_updated_at, 'DESC')
+                ->where(ChatSession::schema_fields_agent_id, $agent->getId())
+                ->where(ChatSession::schema_fields_status, ChatSession::STATUS_ACTIVE)
+                ->order(ChatSession::schema_fields_updated_at, 'DESC')
                 ->select()
                 ->fetch()
                 ->getItems();
 
             // 获取等待分配的会话
             $waitingSessions = $session->reset()
-                ->where(ChatSession::fields_status, ChatSession::STATUS_WAITING)
-                ->order(ChatSession::fields_created_at, 'ASC')
+                ->where(ChatSession::schema_fields_status, ChatSession::STATUS_WAITING)
+                ->order(ChatSession::schema_fields_created_at, 'ASC')
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -181,8 +181,8 @@ class Console extends BackendController
                 /** @var ChatMessage $message */
                 $message = ObjectManager::getInstance(ChatMessage::class);
                 $lastMessage = $message->reset()
-                    ->where(ChatMessage::fields_session_id, $sessionData['session_id'])
-                    ->order(ChatMessage::fields_created_at, 'DESC')
+                    ->where(ChatMessage::schema_fields_session_id, $sessionData['session_id'])
+                    ->order(ChatMessage::schema_fields_created_at, 'DESC')
                     ->find()
                     ->fetch();
                 
@@ -193,9 +193,9 @@ class Console extends BackendController
 
                 // 获取未读消息数
                 $unreadCount = $message->reset()
-                    ->where(ChatMessage::fields_session_id, $sessionData['session_id'])
-                    ->where(ChatMessage::fields_sender_type, ChatMessage::SENDER_TYPE_CUSTOMER)
-                    ->where(ChatMessage::fields_created_at, $sessionData['last_read_time'] ?? '1970-01-01 00:00:00', '>')
+                    ->where(ChatMessage::schema_fields_session_id, $sessionData['session_id'])
+                    ->where(ChatMessage::schema_fields_sender_type, ChatMessage::SENDER_TYPE_CUSTOMER)
+                    ->where(ChatMessage::schema_fields_created_at, $sessionData['last_read_time'] ?? '1970-01-01 00:00:00', '>')
                     ->count();
                 $sessionData['unread_count'] = (int)$unreadCount;
             }
@@ -228,8 +228,8 @@ class Console extends BackendController
             $userId = $this->session->getLoginUserID();
             /** @var ServiceAgent $agent */
             $agent = ObjectManager::getInstance(ServiceAgent::class);
-            $agent->where(ServiceAgent::fields_user_id, $userId)
-                ->where(ServiceAgent::fields_is_active, 1)
+            $agent->where(ServiceAgent::schema_fields_user_id, $userId)
+                ->where(ServiceAgent::schema_fields_is_active, 1)
                 ->find()
                 ->fetch();
             
@@ -280,8 +280,8 @@ class Console extends BackendController
             $userId = $this->session->getLoginUserID();
             /** @var ServiceAgent $agent */
             $agent = ObjectManager::getInstance(ServiceAgent::class);
-            $agent->where(ServiceAgent::fields_user_id, $userId)
-                ->where(ServiceAgent::fields_is_active, 1)
+            $agent->where(ServiceAgent::schema_fields_user_id, $userId)
+                ->where(ServiceAgent::schema_fields_is_active, 1)
                 ->find()
                 ->fetch();
             
@@ -302,7 +302,7 @@ class Console extends BackendController
                 $session->setAgentId($agent->getId())
                     ->setAgentLocale($agent->getLocale())
                     ->setStatus(ChatSession::STATUS_ACTIVE)
-                    ->setData(ChatSession::fields_updated_at, date('Y-m-d H:i:s'))
+                    ->setData(ChatSession::schema_fields_updated_at, date('Y-m-d H:i:s'))
                     ->save();
             } elseif ($session->getAgentId() != $agent->getId()) {
                 return $this->jsonResponse(false, __('无权访问此会话'));
@@ -342,8 +342,8 @@ class Console extends BackendController
             $userId = $this->session->getLoginUserID();
             /** @var ServiceAgent $agent */
             $agent = ObjectManager::getInstance(ServiceAgent::class);
-            $agent->where(ServiceAgent::fields_user_id, $userId)
-                ->where(ServiceAgent::fields_is_active, 1)
+            $agent->where(ServiceAgent::schema_fields_user_id, $userId)
+                ->where(ServiceAgent::schema_fields_is_active, 1)
                 ->find()
                 ->fetch();
             
@@ -365,8 +365,8 @@ class Console extends BackendController
 
             // 检查是否超过最大会话数
             $currentSessions = $session->reset()
-                ->where(ChatSession::fields_agent_id, $agent->getId())
-                ->where(ChatSession::fields_status, ChatSession::STATUS_ACTIVE)
+                ->where(ChatSession::schema_fields_agent_id, $agent->getId())
+                ->where(ChatSession::schema_fields_status, ChatSession::STATUS_ACTIVE)
                 ->count();
 
             if ($currentSessions >= $agent->getMaxSessions()) {
@@ -376,7 +376,7 @@ class Console extends BackendController
             $session->setAgentId($agent->getId())
                 ->setAgentLocale($agent->getLocale())
                 ->setStatus(ChatSession::STATUS_ACTIVE)
-                ->setData(ChatSession::fields_updated_at, date('Y-m-d H:i:s'))
+                ->setData(ChatSession::schema_fields_updated_at, date('Y-m-d H:i:s'))
                 ->save();
 
             return $this->jsonResponse(true, __('分配成功'));
@@ -401,8 +401,8 @@ class Console extends BackendController
             $userId = $this->session->getLoginUserID();
             /** @var ServiceAgent $agent */
             $agent = ObjectManager::getInstance(ServiceAgent::class);
-            $agent->where(ServiceAgent::fields_user_id, $userId)
-                ->where(ServiceAgent::fields_is_active, 1)
+            $agent->where(ServiceAgent::schema_fields_user_id, $userId)
+                ->where(ServiceAgent::schema_fields_is_active, 1)
                 ->find()
                 ->fetch();
             
@@ -423,7 +423,7 @@ class Console extends BackendController
             }
 
             $session->setStatus(ChatSession::STATUS_CLOSED)
-                ->setData(ChatSession::fields_updated_at, date('Y-m-d H:i:s'))
+                ->setData(ChatSession::schema_fields_updated_at, date('Y-m-d H:i:s'))
                 ->save();
 
             return $this->jsonResponse(true, __('会话已关闭'));
@@ -443,8 +443,8 @@ class Console extends BackendController
             
             /** @var ServiceAgent $agent */
             $agent = ObjectManager::getInstance(ServiceAgent::class);
-            $agent->where(ServiceAgent::fields_user_id, $userId)
-                ->where(ServiceAgent::fields_is_active, 1)
+            $agent->where(ServiceAgent::schema_fields_user_id, $userId)
+                ->where(ServiceAgent::schema_fields_is_active, 1)
                 ->find()
                 ->fetch();
             
@@ -472,8 +472,8 @@ class Console extends BackendController
 
             /** @var ServiceAgent $agent */
             $agent = ObjectManager::getInstance(ServiceAgent::class);
-            $agent->where(ServiceAgent::fields_user_id, $userId)
-                ->where(ServiceAgent::fields_is_active, 1)
+            $agent->where(ServiceAgent::schema_fields_user_id, $userId)
+                ->where(ServiceAgent::schema_fields_is_active, 1)
                 ->find()
                 ->fetch();
 
@@ -499,18 +499,18 @@ class Console extends BackendController
             /** @var ServiceAgent $agentModel */
             $agentModel = ObjectManager::getInstance(ServiceAgent::class);
             $agents = $agentModel->reset()
-                ->where(ServiceAgent::fields_is_active, 1)
+                ->where(ServiceAgent::schema_fields_is_active, 1)
                 ->select()
                 ->fetch()
                 ->getItems();
 
             $result = [];
             foreach ($agents as $a) {
-                $lastHb = $a[ServiceAgent::fields_last_heartbeat] ?? null;
+                $lastHb = $a[ServiceAgent::schema_fields_last_heartbeat] ?? null;
                 $online = $lastHb && (time() - strtotime($lastHb)) < ServiceAgent::HEARTBEAT_TIMEOUT;
                 $result[] = [
-                    'agent_id'   => $a[ServiceAgent::fields_ID],
-                    'name'       => $a[ServiceAgent::fields_name],
+                    'agent_id'   => $a[ServiceAgent::schema_fields_ID],
+                    'name'       => $a[ServiceAgent::schema_fields_name],
                     'online'     => $online,
                 ];
             }

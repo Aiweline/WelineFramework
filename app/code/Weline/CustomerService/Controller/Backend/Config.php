@@ -69,20 +69,20 @@ class Config extends BackendController
             foreach ($configs as $key => $value) {
                 $config = clone $configModel;
                 $config->reset()
-                    ->where(CustomerServiceConfig::fields_key, $key)
+                    ->where(CustomerServiceConfig::schema_fields_key, $key)
                     ->find()
                     ->fetch();
 
                 if ($config->getId()) {
                     $config->setValue($value)
-                        ->setData(CustomerServiceConfig::fields_updated_at, date('Y-m-d H:i:s'))
+                        ->setData(CustomerServiceConfig::schema_fields_updated_at, date('Y-m-d H:i:s'))
                         ->save();
                 } else {
                     $config->reset()
                         ->setKey($key)
                         ->setValue($value)
-                        ->setData(CustomerServiceConfig::fields_created_at, date('Y-m-d H:i:s'))
-                        ->setData(CustomerServiceConfig::fields_updated_at, date('Y-m-d H:i:s'))
+                        ->setData(CustomerServiceConfig::schema_fields_created_at, date('Y-m-d H:i:s'))
+                        ->setData(CustomerServiceConfig::schema_fields_updated_at, date('Y-m-d H:i:s'))
                         ->save();
                 }
             }

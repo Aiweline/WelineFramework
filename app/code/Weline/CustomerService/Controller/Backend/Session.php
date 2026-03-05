@@ -40,14 +40,14 @@ class Session extends BackendController
             $query = $session->reset();
             
             if (!empty($status)) {
-                $query->where(ChatSession::fields_status, $status);
+                $query->where(ChatSession::schema_fields_status, $status);
             }
             
             if ($agentId > 0) {
-                $query->where(ChatSession::fields_agent_id, $agentId);
+                $query->where(ChatSession::schema_fields_agent_id, $agentId);
             }
 
-            $sessions = $query->order(ChatSession::fields_created_at, 'DESC')
+            $sessions = $query->order(ChatSession::schema_fields_created_at, 'DESC')
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -67,7 +67,7 @@ class Session extends BackendController
                 /** @var ChatMessage $message */
                 $message = ObjectManager::getInstance(ChatMessage::class);
                 $sessionData['message_count'] = $message->reset()
-                    ->where(ChatMessage::fields_session_id, $sessionData['session_id'])
+                    ->where(ChatMessage::schema_fields_session_id, $sessionData['session_id'])
                     ->count();
             }
 
@@ -111,8 +111,8 @@ class Session extends BackendController
             /** @var ChatMessage $message */
             $message = ObjectManager::getInstance(ChatMessage::class);
             $messages = $message->reset()
-                ->where(ChatMessage::fields_session_id, $sessionId)
-                ->order(ChatMessage::fields_created_at, 'ASC')
+                ->where(ChatMessage::schema_fields_session_id, $sessionId)
+                ->order(ChatMessage::schema_fields_created_at, 'ASC')
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -152,7 +152,7 @@ class Session extends BackendController
             }
 
             $session->setStatus(ChatSession::STATUS_CLOSED)
-                ->setData(ChatSession::fields_updated_at, date('Y-m-d H:i:s'))
+                ->setData(ChatSession::schema_fields_updated_at, date('Y-m-d H:i:s'))
                 ->save();
 
             return $this->jsonResponse(true, __('会话已关闭'));
