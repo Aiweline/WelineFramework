@@ -8,7 +8,6 @@ use WeShop\Catalog\Model\Category;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
-use Weline\Framework\Setup\Db\ModelSetup;
 
 /**
  * 模块安装脚本
@@ -24,14 +23,7 @@ class Install implements \Weline\Framework\Setup\InstallInterface
      */
     public function setup(Setup $setup, Context $context): void
     {
-        // 1. 先安装分类表
-        /** @var Category $category */
-        $category = ObjectManager::getInstance(Category::class);
-        $modelSetup = ObjectManager::make(ModelSetup::class);
-        $modelSetup->putModel($category);
-        $category->install($modelSetup, $context);
-        
-        // 2. 注册 EAV 实体和属性
+        // 1. 注册 EAV 实体和属性
         /** @var UpgradeData $upgradeData */
         $upgradeData = ObjectManager::getInstance(\WeShop\Catalog\Setup\UpgradeData::class);
         try {
@@ -39,8 +31,8 @@ class Install implements \Weline\Framework\Setup\InstallInterface
         } catch (\Exception $e) {
             throw new \Exception(__('安装分类 EAV 实体和属性失败: %{1}', [$e->getMessage()]), 0, $e);
         }
-        
-        // 3. 再安装默认分类数据
+
+        // 2. 安装默认分类数据
         /** @var InstallData $installData */
         $installData = ObjectManager::getInstance(InstallData::class);
         try {

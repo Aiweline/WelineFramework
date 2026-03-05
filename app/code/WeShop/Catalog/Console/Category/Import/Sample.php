@@ -154,7 +154,7 @@ class Sample extends CommandAbstract
                 /** @var EavAttribute $attributeModel */
                 $attributeModel = ObjectManager::getInstance(EavAttribute::class);
                 $attributes = $attributeModel->reset()
-                    ->where(EavAttribute::fields_eav_entity_id, $eavEntityId)
+                    ->where(EavAttribute::schema_fields_eav_entity_id, $eavEntityId)
                     ->select()
                     ->fetchArray();
                 
@@ -237,13 +237,13 @@ class Sample extends CommandAbstract
             $category = clone $this->category;
             $category->reset()->clearData();
             $category->forceCheck(false)
-                ->setData(Category::fields_NAME, $categoryData['name'])
-                ->setData(Category::fields_HANDLE, $handle)
-                ->setData(Category::fields_PARENT_ID, $parentId)
-                ->setData(Category::fields_SORT_ORDER, $sortOrder)
-                ->setData(Category::fields_IS_ACTIVE, $categoryData['is_active'] ?? 1)
-                ->setData(Category::fields_DESCRIPTION, $categoryData['description'] ?? '')
-                ->setData(Category::fields_IMAGE, $categoryData['image'] ?? '');
+                ->setData(Category::schema_fields_NAME, $categoryData['name'])
+                ->setData(Category::schema_fields_HANDLE, $handle)
+                ->setData(Category::schema_fields_PARENT_ID, $parentId)
+                ->setData(Category::schema_fields_SORT_ORDER, $sortOrder)
+                ->setData(Category::schema_fields_IS_ACTIVE, $categoryData['is_active'] ?? 1)
+                ->setData(Category::schema_fields_DESCRIPTION, $categoryData['description'] ?? '')
+                ->setData(Category::schema_fields_IMAGE, $categoryData['image'] ?? '');
             
             $categoryId = $category->save();
             
@@ -323,7 +323,7 @@ class Sample extends CommandAbstract
             if (!$parent->getId()) {
                 break;
             }
-            $currentParentId = (int)$parent->getData(Category::fields_PARENT_ID);
+            $currentParentId = (int)$parent->getData(Category::schema_fields_PARENT_ID);
             $depth++;
         }
         
@@ -356,7 +356,7 @@ class Sample extends CommandAbstract
                 // 根据handle查找新的分类ID
                 $newCategory = clone $this->category;
                 $newCategory->reset()
-                    ->where(Category::fields_HANDLE, $relation['handle'])
+                    ->where(Category::schema_fields_HANDLE, $relation['handle'])
                     ->find()
                     ->fetch();
                 
