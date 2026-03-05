@@ -292,7 +292,7 @@ class Chat extends CommandAbstract
         $weekInfo = "今天是 {$todayDate}，当前是第 {$this->currentWeekNumber} 周（{$this->currentYear}年，{$dateRange['start']} ~ {$dateRange['end']}）";
 
         if ($this->currentReport && $this->currentReport->isHolidayWeek()) {
-            $holidayName = $this->currentReport->getData(WeeklyReport::fields_HOLIDAY_NAME);
+            $holidayName = $this->currentReport->getData(WeeklyReport::schema_fields_HOLIDAY_NAME);
             $weekInfo .= "，本周是【{$holidayName}】假期周";
         }
 
@@ -337,10 +337,10 @@ PROMPT;
         $lines = [];
         foreach ($tasks as $task) {
             $id = $task->getId();
-            $name = $task->getData(WeeklyTask::fields_TASK_NAME);
-            $status = $task->getData(WeeklyTask::fields_STATUS);
-            $category = $task->getData(WeeklyTask::fields_CATEGORY) ?: '未分类';
-            $progress = $task->getData(WeeklyTask::fields_PROGRESS) ?: '';
+            $name = $task->getData(WeeklyTask::schema_fields_TASK_NAME);
+            $status = $task->getData(WeeklyTask::schema_fields_STATUS);
+            $category = $task->getData(WeeklyTask::schema_fields_CATEGORY) ?: '未分类';
+            $progress = $task->getData(WeeklyTask::schema_fields_PROGRESS) ?: '';
             $lines[] = "- [{$id}] {$name} ({$status}) [{$category}]" . ($progress ? " - {$progress}" : '');
         }
         return implode("\n", $lines);
@@ -418,8 +418,8 @@ PROMPT;
     {
         $names = [];
         foreach ($tasks as $task) {
-            $name = $task->getData(WeeklyTask::fields_TASK_NAME);
-            $subTask = $task->getData(WeeklyTask::fields_SUB_TASK);
+            $name = $task->getData(WeeklyTask::schema_fields_TASK_NAME);
+            $subTask = $task->getData(WeeklyTask::schema_fields_SUB_TASK);
             if ($name) {
                 $names[] = mb_strtolower(trim($name));
             }
@@ -495,10 +495,10 @@ PROMPT;
         $category = trim($matches[3]);
 
         $taskData = [
-            WeeklyTask::fields_TASK_NAME => $taskName,
-            WeeklyTask::fields_STATUS => $status,
-            WeeklyTask::fields_CATEGORY => $category,
-            WeeklyTask::fields_START_DATE => date('Y-m-d'),
+            WeeklyTask::schema_fields_TASK_NAME => $taskName,
+            WeeklyTask::schema_fields_STATUS => $status,
+            WeeklyTask::schema_fields_CATEGORY => $category,
+            WeeklyTask::schema_fields_START_DATE => date('Y-m-d'),
         ];
 
         return $this->getReportService()->addTask(
@@ -565,7 +565,7 @@ PROMPT;
         
         $dateRange = $this->getReportService()->getWeekDateRange($weekNumber);
 
-        $holidayName = $report->getData(WeeklyReport::fields_HOLIDAY_NAME);
+        $holidayName = $report->getData(WeeklyReport::schema_fields_HOLIDAY_NAME);
         $weekTitle = $holidayName ? "第 {$weekNumber} 周【{$holidayName}】" : "第 {$weekNumber} 周";
         
         $isCurrent = ($weekNumber == $this->currentWeekNumber) ? ' ◄ 当前' : '';
@@ -587,14 +587,14 @@ PROMPT;
             $this->output("\n📋 任务列表:");
             foreach ($tasks as $task) {
                 $id = $task->getId();
-                $name = $task->getData(WeeklyTask::fields_TASK_NAME);
-                $subTask = $task->getData(WeeklyTask::fields_SUB_TASK);
-                $status = $task->getData(WeeklyTask::fields_STATUS);
-                $priority = (int) ($task->getData(WeeklyTask::fields_PRIORITY) ?: WeeklyTask::PRIORITY_NORMAL);
-                $isImportant = (bool) $task->getData(WeeklyTask::fields_IS_IMPORTANT);
-                $endDate = $task->getData(WeeklyTask::fields_END_DATE);
+                $name = $task->getData(WeeklyTask::schema_fields_TASK_NAME);
+                $subTask = $task->getData(WeeklyTask::schema_fields_SUB_TASK);
+                $status = $task->getData(WeeklyTask::schema_fields_STATUS);
+                $priority = (int) ($task->getData(WeeklyTask::schema_fields_PRIORITY) ?: WeeklyTask::PRIORITY_NORMAL);
+                $isImportant = (bool) $task->getData(WeeklyTask::schema_fields_IS_IMPORTANT);
+                $endDate = $task->getData(WeeklyTask::schema_fields_END_DATE);
 
-                $startDate = $task->getData(WeeklyTask::fields_START_DATE);
+                $startDate = $task->getData(WeeklyTask::schema_fields_START_DATE);
 
                 $statusIcon = match ($status) {
                     WeeklyTask::STATUS_COMPLETED, '完成', '已完成' => '✅',
@@ -671,10 +671,10 @@ PROMPT;
         $this->output("\n📋 {$this->currentYear} 年周报列表:");
 
         foreach ($reports as $report) {
-            $weekNumber = $report->getData(WeeklyReport::fields_WEEK_NUMBER);
-            $startDate = $report->getData(WeeklyReport::fields_WEEK_START_DATE);
-            $endDate = $report->getData(WeeklyReport::fields_WEEK_END_DATE);
-            $holidayName = $report->getData(WeeklyReport::fields_HOLIDAY_NAME);
+            $weekNumber = $report->getData(WeeklyReport::schema_fields_WEEK_NUMBER);
+            $startDate = $report->getData(WeeklyReport::schema_fields_WEEK_START_DATE);
+            $endDate = $report->getData(WeeklyReport::schema_fields_WEEK_END_DATE);
+            $holidayName = $report->getData(WeeklyReport::schema_fields_HOLIDAY_NAME);
 
             $current = ($weekNumber == $this->currentWeekNumber) ? ' ◄ 当前' : '';
             $holiday = $holidayName ? " 【{$holidayName}】" : '';
@@ -745,14 +745,14 @@ PROMPT;
         $nextWeekPlan = $this->safeReadLine();
 
         $taskData = [
-            WeeklyTask::fields_TASK_NAME => $taskName,
-            WeeklyTask::fields_SUB_TASK => $subTask,
-            WeeklyTask::fields_CATEGORY => $category,
-            WeeklyTask::fields_STATUS => $status,
-            WeeklyTask::fields_PROGRESS => $progress,
-            WeeklyTask::fields_RISKS => $risks,
-            WeeklyTask::fields_NEXT_WEEK_PLAN => $nextWeekPlan,
-            WeeklyTask::fields_START_DATE => date('Y-m-d'),
+            WeeklyTask::schema_fields_TASK_NAME => $taskName,
+            WeeklyTask::schema_fields_SUB_TASK => $subTask,
+            WeeklyTask::schema_fields_CATEGORY => $category,
+            WeeklyTask::schema_fields_STATUS => $status,
+            WeeklyTask::schema_fields_PROGRESS => $progress,
+            WeeklyTask::schema_fields_RISKS => $risks,
+            WeeklyTask::schema_fields_NEXT_WEEK_PLAN => $nextWeekPlan,
+            WeeklyTask::schema_fields_START_DATE => date('Y-m-d'),
         ];
 
         $task = $this->getReportService()->addTask(
@@ -781,7 +781,7 @@ PROMPT;
         }
 
         $this->output("\n📝 编辑任务 #{$taskId}");
-        $this->output("当前: {$taskModel->getData(WeeklyTask::fields_TASK_NAME)}");
+        $this->output("当前: {$taskModel->getData(WeeklyTask::schema_fields_TASK_NAME)}");
 
         $this->output("\n选择要修改的字段:");
         $this->output("  1. 状态");
@@ -798,28 +798,28 @@ PROMPT;
             case '1':
                 $this->output("新状态 (待开始/进行中/测试中/已完成): ");
                 $status = $this->safeReadLine();
-                $this->getReportService()->updateTask($taskId, [WeeklyTask::fields_STATUS => $status]);
+                $this->getReportService()->updateTask($taskId, [WeeklyTask::schema_fields_STATUS => $status]);
                 $this->output("✅ 状态已更新");
                 break;
 
             case '2':
                 $this->output("新进展: ");
                 $progress = $this->safeReadLine();
-                $this->getReportService()->updateTask($taskId, [WeeklyTask::fields_PROGRESS => $progress]);
+                $this->getReportService()->updateTask($taskId, [WeeklyTask::schema_fields_PROGRESS => $progress]);
                 $this->output("✅ 进展已更新");
                 break;
 
             case '3':
                 $this->output("风险与解决方案: ");
                 $risks = $this->safeReadLine();
-                $this->getReportService()->updateTask($taskId, [WeeklyTask::fields_RISKS => $risks]);
+                $this->getReportService()->updateTask($taskId, [WeeklyTask::schema_fields_RISKS => $risks]);
                 $this->output("✅ 风险已更新");
                 break;
 
             case '4':
                 $this->output("下周计划: ");
                 $plan = $this->safeReadLine();
-                $this->getReportService()->updateTask($taskId, [WeeklyTask::fields_NEXT_WEEK_PLAN => $plan]);
+                $this->getReportService()->updateTask($taskId, [WeeklyTask::schema_fields_NEXT_WEEK_PLAN => $plan]);
                 $this->output("✅ 下周计划已更新");
                 break;
 
@@ -834,10 +834,10 @@ PROMPT;
                 $plan = $this->safeReadLine();
 
                 $this->getReportService()->updateTask($taskId, [
-                    WeeklyTask::fields_STATUS => $status,
-                    WeeklyTask::fields_PROGRESS => $progress,
-                    WeeklyTask::fields_RISKS => $risks,
-                    WeeklyTask::fields_NEXT_WEEK_PLAN => $plan,
+                    WeeklyTask::schema_fields_STATUS => $status,
+                    WeeklyTask::schema_fields_PROGRESS => $progress,
+                    WeeklyTask::schema_fields_RISKS => $risks,
+                    WeeklyTask::schema_fields_NEXT_WEEK_PLAN => $plan,
                 ]);
                 $this->output("✅ 任务已更新");
                 break;
@@ -885,10 +885,10 @@ PROMPT;
             return;
         }
 
-        $isImportant = (bool) $task->getData(WeeklyTask::fields_IS_IMPORTANT);
+        $isImportant = (bool) $task->getData(WeeklyTask::schema_fields_IS_IMPORTANT);
         $newValue = $isImportant ? 0 : 1;
         
-        $this->getReportService()->updateTask($taskId, [WeeklyTask::fields_IS_IMPORTANT => $newValue]);
+        $this->getReportService()->updateTask($taskId, [WeeklyTask::schema_fields_IS_IMPORTANT => $newValue]);
         
         if ($newValue) {
             $this->output("⭐ 任务 #{$taskId} 已标记为重点");
@@ -924,7 +924,7 @@ PROMPT;
             return;
         }
 
-        $this->getReportService()->updateTask($taskId, [WeeklyTask::fields_PRIORITY => $priority]);
+        $this->getReportService()->updateTask($taskId, [WeeklyTask::schema_fields_PRIORITY => $priority]);
         
         $priorityNames = ['', '低', '普通', '高', '紧急'];
         $this->output("✅ 任务 #{$taskId} 优先级已设为「{$priorityNames[$priority]}」");
@@ -1055,15 +1055,15 @@ PROMPT;
         $lines = [];
         foreach ($tasks as $task) {
             $id = $task->getId();
-            $name = $task->getData(WeeklyTask::fields_TASK_NAME);
-            $subTask = $task->getData(WeeklyTask::fields_SUB_TASK);
-            $status = $task->getData(WeeklyTask::fields_STATUS);
-            $category = $task->getData(WeeklyTask::fields_CATEGORY);
-            $progress = $task->getData(WeeklyTask::fields_PROGRESS);
-            $risks = $task->getData(WeeklyTask::fields_RISKS);
-            $startDate = $task->getData(WeeklyTask::fields_START_DATE);
-            $endDate = $task->getData(WeeklyTask::fields_END_DATE);
-            $nextPlan = $task->getData(WeeklyTask::fields_NEXT_WEEK_PLAN);
+            $name = $task->getData(WeeklyTask::schema_fields_TASK_NAME);
+            $subTask = $task->getData(WeeklyTask::schema_fields_SUB_TASK);
+            $status = $task->getData(WeeklyTask::schema_fields_STATUS);
+            $category = $task->getData(WeeklyTask::schema_fields_CATEGORY);
+            $progress = $task->getData(WeeklyTask::schema_fields_PROGRESS);
+            $risks = $task->getData(WeeklyTask::schema_fields_RISKS);
+            $startDate = $task->getData(WeeklyTask::schema_fields_START_DATE);
+            $endDate = $task->getData(WeeklyTask::schema_fields_END_DATE);
+            $nextPlan = $task->getData(WeeklyTask::schema_fields_NEXT_WEEK_PLAN);
 
             $line = "- ID:{$id} | 任务:{$name}";
             if ($subTask) {
@@ -1192,16 +1192,16 @@ PROMPT;
                 $value = trim($value);
                 
                 $fieldMap = [
-                    'status' => WeeklyTask::fields_STATUS,
-                    '状态' => WeeklyTask::fields_STATUS,
-                    'progress' => WeeklyTask::fields_PROGRESS,
-                    '进展' => WeeklyTask::fields_PROGRESS,
-                    'risks' => WeeklyTask::fields_RISKS,
-                    '风险' => WeeklyTask::fields_RISKS,
-                    'next_week_plan' => WeeklyTask::fields_NEXT_WEEK_PLAN,
-                    '下周计划' => WeeklyTask::fields_NEXT_WEEK_PLAN,
-                    'end_date' => WeeklyTask::fields_END_DATE,
-                    '截止' => WeeklyTask::fields_END_DATE,
+                    'status' => WeeklyTask::schema_fields_STATUS,
+                    '状态' => WeeklyTask::schema_fields_STATUS,
+                    'progress' => WeeklyTask::schema_fields_PROGRESS,
+                    '进展' => WeeklyTask::schema_fields_PROGRESS,
+                    'risks' => WeeklyTask::schema_fields_RISKS,
+                    '风险' => WeeklyTask::schema_fields_RISKS,
+                    'next_week_plan' => WeeklyTask::schema_fields_NEXT_WEEK_PLAN,
+                    '下周计划' => WeeklyTask::schema_fields_NEXT_WEEK_PLAN,
+                    'end_date' => WeeklyTask::schema_fields_END_DATE,
+                    '截止' => WeeklyTask::schema_fields_END_DATE,
                 ];
                 
                 if (isset($fieldMap[$field])) {
@@ -1244,8 +1244,8 @@ PROMPT;
 
         $todayDate = date('Y-m-d');
         $holidayInfo = '';
-        if ($this->currentReport && $this->currentReport->getData(WeeklyReport::fields_IS_HOLIDAY_WEEK)) {
-            $holidayName = $this->currentReport->getData(WeeklyReport::fields_HOLIDAY_NAME);
+        if ($this->currentReport && $this->currentReport->getData(WeeklyReport::schema_fields_IS_HOLIDAY_WEEK)) {
+            $holidayName = $this->currentReport->getData(WeeklyReport::schema_fields_HOLIDAY_NAME);
             $holidayInfo = "（本周是 {$holidayName} 假期周）";
         }
 
