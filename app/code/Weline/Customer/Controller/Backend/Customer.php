@@ -28,10 +28,10 @@ class Customer extends BackendController
             $query = $userModel->reset();
 
             if ($keyword !== '') {
-                $query->where(FrontendUser::fields_username, "%{$keyword}%", 'LIKE');
+                $query->where(FrontendUser::schema_fields_username, "%{$keyword}%", 'LIKE');
             }
 
-            $query->order(FrontendUser::fields_ID, 'DESC');
+            $query->order(FrontendUser::schema_fields_ID, 'DESC');
             $collection = $query->pagination($page, $limit);
             $items = $collection->select()->fetch()->getItems();
             $total = (int)$collection->getTotal();
@@ -42,7 +42,7 @@ class Customer extends BackendController
 
             foreach ($items as $item) {
                 $data = is_object($item) ? $item->getData() : (array)$item;
-                $userId = (int)($data[FrontendUser::fields_ID] ?? $data['user_id'] ?? 0);
+                $userId = (int)($data[FrontendUser::schema_fields_ID] ?? $data['user_id'] ?? 0);
                 if ($userId <= 0) {
                     continue;
                 }
@@ -55,7 +55,7 @@ class Customer extends BackendController
                     'attempt_times' => (int)($data['attempt_times'] ?? 0),
                     'sess_id'       => $data['sess_id'] ?? '',
                     'token_count'   => 0,
-                    'is_sandbox'    => (int)($data[FrontendUser::fields_is_sandbox] ?? 0),
+                    'is_sandbox'    => (int)($data[FrontendUser::schema_fields_is_sandbox] ?? 0),
                 ];
             }
 
@@ -67,7 +67,7 @@ class Customer extends BackendController
                     $tokenCounts = [];
                     foreach ($userIds as $userId) {
                         $tokenCounts[$userId] = (int)$tokenModel->reset()
-                            ->where(FrontendUserToken::fields_user_id, $userId)
+                            ->where(FrontendUserToken::schema_fields_user_id, $userId)
                             ->count();
                     }
 
@@ -124,13 +124,13 @@ class Customer extends BackendController
 
         return $this->jsonResponse(true, __('获取成功'), [
             'user' => [
-                'user_id'       => (int)$data[FrontendUser::fields_ID],
+                'user_id'       => (int)$data[FrontendUser::schema_fields_ID],
                 'username'      => $data['username'] ?? '',
                 'avatar'        => $data['avatar'] ?? '',
                 'login_ip'      => $data['login_ip'] ?? '',
                 'attempt_times' => (int)($data['attempt_times'] ?? 0),
                 'sess_id'       => $data['sess_id'] ?? '',
-                'is_sandbox'    => (int)($data[FrontendUser::fields_is_sandbox] ?? 0),
+                'is_sandbox'    => (int)($data[FrontendUser::schema_fields_is_sandbox] ?? 0),
             ],
         ]);
     }
@@ -168,9 +168,9 @@ class Customer extends BackendController
         /** @var FrontendUser $duplicateChecker */
         $duplicateChecker = ObjectManager::getInstance(FrontendUser::class, [], false);
         $duplicateChecker->reset()
-            ->where(FrontendUser::fields_username, $username);
+            ->where(FrontendUser::schema_fields_username, $username);
         if ($userId > 0) {
-            $duplicateChecker->where(FrontendUser::fields_ID, $userId, '!=');
+            $duplicateChecker->where(FrontendUser::schema_fields_ID, $userId, '!=');
         }
         $duplicateChecker->find()->fetch();
         if ($duplicateChecker->getId()) {
@@ -191,7 +191,7 @@ class Customer extends BackendController
         }
 
         if ($resetAttempts) {
-            $userModel->setData(FrontendUser::fields_attempt_times, 0);
+            $userModel->setData(FrontendUser::schema_fields_attempt_times, 0);
             $userModel->setAttemptIp('');
         }
 
@@ -222,7 +222,7 @@ class Customer extends BackendController
         /** @var FrontendUserToken $tokenModel */
         $tokenModel = ObjectManager::getInstance(FrontendUserToken::class, [], false);
         $tokenModel->reset()
-            ->where(FrontendUserToken::fields_user_id, $userId)
+            ->where(FrontendUserToken::schema_fields_user_id, $userId)
             ->delete()->fetch();
 
         $userModel->delete()->fetch();
@@ -256,7 +256,7 @@ class Customer extends BackendController
         /** @var FrontendUserToken $tokenModel */
         $tokenModel = ObjectManager::getInstance(FrontendUserToken::class, [], false);
         $tokenModel->builder()
-            ->where(FrontendUserToken::fields_user_id, $userId)
+            ->where(FrontendUserToken::schema_fields_user_id, $userId)
             ->delete();
 
         $userModel->setSessionId('')->save();
@@ -295,7 +295,7 @@ class Customer extends BackendController
         /** @var FrontendUserToken $tokenModel */
         $tokenModel = ObjectManager::getInstance(FrontendUserToken::class, [], false);
         $tokenModel->builder()
-            ->where(FrontendUserToken::fields_user_id, $userId)
+            ->where(FrontendUserToken::schema_fields_user_id, $userId)
             ->delete();
 
         return $this->jsonResponse(true, __('密码已重置'), [
