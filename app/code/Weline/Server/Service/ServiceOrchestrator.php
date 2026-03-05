@@ -2358,6 +2358,28 @@ class ServiceOrchestrator
                     $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(false, $result, $result['message']));
                 }
                 break;
+
+            case ControlMessage::ACTION_SECURITY_UNBLOCK:
+                $ip = $msg['ip'] ?? null;
+                $clearAll = !empty($msg['clear_all']);
+                $dispatchers = $this->registry->getInstancesByRole('dispatcher');
+                $sent = 0;
+                foreach ($dispatchers as $dispatcher) {
+                    if ($dispatcher->ipcClientId !== null && $this->controlServer !== null) {
+                        $this->controlServer->sendTo(
+                            $dispatcher->ipcClientId,
+                            ControlMessage::securityUnblock($ip !== null && $ip !== '' ? $ip : null, $clearAll)
+                        );
+                        $sent++;
+                    }
+                }
+                $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
+                    true,
+                    ['dispatchers_notified' => $sent],
+                    $clearAll ? __('已通知 %{1} 个 Dispatcher 清空封禁列表', [$sent])
+                        : ($ip !== null && $ip !== '' ? __('已通知 %{1} 个 Dispatcher 解封 IP %{2}', [$sent, $ip]) : __('未指定 ip 或 clear_all'))
+                ));
+                break;
         }
     }
 

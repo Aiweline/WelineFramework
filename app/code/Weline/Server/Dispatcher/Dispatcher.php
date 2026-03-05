@@ -513,6 +513,16 @@ class Dispatcher
                 $this->passthroughCore->setHttpRedirectPort($this->httpRedirectPort);
                 $this->log("HTTP Redirect 端口设置为: {$this->httpRedirectPort}", 'INFO');
                 break;
+
+            case ControlMessage::TYPE_SECURITY_UNBLOCK:
+                if (!empty($msg['clear_all'])) {
+                    $this->attackDetector->clearAllBlocks();
+                    $this->log('已清空全部封禁列表', 'INFO');
+                } elseif (!empty($msg['ip'])) {
+                    $this->attackDetector->unblock((string) $msg['ip']);
+                    $this->log("已解封 IP: {$msg['ip']}", 'INFO');
+                }
+                break;
         }
     }
     
