@@ -1,45 +1,21 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Weline\SessionManager\Model;
 
-use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
-use Weline\Framework\Database\Db\Ddl\Table;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: 'Session 表')]
 class Session extends Model
 {
-    public const fields_ID = 'sess_id';
-    public const fields_SESSION_DATA = 'sess_data';
 
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // TODO: Implement upgrade() method.
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        //        $setup->dropTable();
-        if (!$setup->tableExist()) {
-            $setup->createTable()
-                ->addColumn(self::fields_ID, TableInterface::column_type_VARCHAR, 128, 'primary key', 'Session ID')
-                ->addColumn(self::fields_SESSION_DATA, TableInterface::column_type_TEXT, 65535, "", 'Session数据')
-                ->create();
-        }
-    }
+    public const schema_table = 'weline_session_manager_session';
+    public const schema_primary_key = 'sess_id';
+    #[Col('varchar', 128, primaryKey: true, nullable: false, comment: 'Session ID')]
+    public const schema_fields_ID = 'sess_id';
+    #[Col('text', comment: 'Session鏁版嵁')]
+    public const schema_fields_SESSION_DATA = 'sess_data';
 }
+
