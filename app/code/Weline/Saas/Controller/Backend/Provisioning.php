@@ -34,13 +34,13 @@ class Provisioning extends BackendController
         $search = trim((string) $this->request->getGet('search', ''));
         $status = trim((string) $this->request->getGet('status', ''));
 
-        $query = $this->orderModel->reset()->order(ProvisioningOrder::fields_ORDER_ID, 'DESC');
+        $query = $this->orderModel->reset()->order(ProvisioningOrder::schema_fields_ORDER_ID, 'DESC');
 
         if ($search !== '') {
-            $query->where(ProvisioningOrder::fields_DOMAIN, 'like', "%{$search}%");
+            $query->where(ProvisioningOrder::schema_fields_DOMAIN, 'like', "%{$search}%");
         }
         if ($status !== '') {
-            $query->where(ProvisioningOrder::fields_STATUS, $status);
+            $query->where(ProvisioningOrder::schema_fields_STATUS, $status);
         }
 
         $total = $query->total();

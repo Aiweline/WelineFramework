@@ -29,28 +29,28 @@ class ProvideProvisioningOrders implements ObserverInterface
             $query = $orderModel->clearQuery();
 
             if (!empty($filter['status'])) {
-                $query->where(ProvisioningOrder::fields_STATUS, $filter['status']);
+                $query->where(ProvisioningOrder::schema_fields_STATUS, $filter['status']);
             }
             if (!empty($filter['domain'])) {
-                $query->where(ProvisioningOrder::fields_DOMAIN, '%' . $filter['domain'] . '%', 'LIKE');
+                $query->where(ProvisioningOrder::schema_fields_DOMAIN, '%' . $filter['domain'] . '%', 'LIKE');
             }
 
-            $rows = $query->order(ProvisioningOrder::fields_ORDER_ID, 'DESC')
+            $rows = $query->order(ProvisioningOrder::schema_fields_ORDER_ID, 'DESC')
                 ->select()
                 ->fetchArray();
 
             foreach ($rows as $row) {
                 $orders[] = [
-                    'order_id' => (int) ($row[ProvisioningOrder::fields_ORDER_ID] ?? 0),
-                    'domain' => $row[ProvisioningOrder::fields_DOMAIN] ?? '',
-                    'status' => $row[ProvisioningOrder::fields_STATUS] ?? 'pending',
-                    'current_step' => $row[ProvisioningOrder::fields_CURRENT_STEP] ?? '',
-                    'registrar_account_id' => (int) ($row[ProvisioningOrder::fields_REGISTRAR_ACCOUNT_ID] ?? 0),
-                    'cdn_vendor' => $row[ProvisioningOrder::fields_CDN_VENDOR] ?? '',
-                    'apply_ssl' => (bool) ($row[ProvisioningOrder::fields_APPLY_SSL] ?? false),
-                    'error_message' => $row[ProvisioningOrder::fields_ERROR_MESSAGE] ?? '',
-                    'created_at' => $row[ProvisioningOrder::fields_CREATED_AT] ?? '',
-                    'updated_at' => $row[ProvisioningOrder::fields_UPDATED_AT] ?? '',
+                    'order_id' => (int) ($row[ProvisioningOrder::schema_fields_ORDER_ID] ?? 0),
+                    'domain' => $row[ProvisioningOrder::schema_fields_DOMAIN] ?? '',
+                    'status' => $row[ProvisioningOrder::schema_fields_STATUS] ?? 'pending',
+                    'current_step' => $row[ProvisioningOrder::schema_fields_CURRENT_STEP] ?? '',
+                    'registrar_account_id' => (int) ($row[ProvisioningOrder::schema_fields_REGISTRAR_ACCOUNT_ID] ?? 0),
+                    'cdn_vendor' => $row[ProvisioningOrder::schema_fields_CDN_VENDOR] ?? '',
+                    'apply_ssl' => (bool) ($row[ProvisioningOrder::schema_fields_APPLY_SSL] ?? false),
+                    'error_message' => $row[ProvisioningOrder::schema_fields_ERROR_MESSAGE] ?? '',
+                    'created_at' => $row[ProvisioningOrder::schema_fields_CREATED_AT] ?? '',
+                    'updated_at' => $row[ProvisioningOrder::schema_fields_UPDATED_AT] ?? '',
                 ];
             }
 

@@ -33,6 +33,6 @@ class ProvisioningOrderTest extends TestCase
 
     public function testTableName(): void
     {
-        $this->assertSame('saas_provisioning_order', ProvisioningOrder::table);
+        $this->assertSame('saas_provisioning_order', ProvisioningOrder::schema_table);
     }
 }
