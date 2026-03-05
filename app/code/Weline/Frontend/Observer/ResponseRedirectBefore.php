@@ -86,8 +86,8 @@ class ResponseRedirectBefore implements ObserverInterface
                     // 按 website_id 查找重写规则（不回退到 website_id=0）
                     $rewrite = $urlRewrite->reset()
                         ->clearQuery()
-                        ->where(UrlRewrite::fields_WEBSITE_ID, $websiteId)
-                        ->where(UrlRewrite::fields_PATH, $path)
+                        ->where(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
+                        ->where(UrlRewrite::schema_fields_PATH, $path)
                         ->find()
                         ->fetch();
                     
