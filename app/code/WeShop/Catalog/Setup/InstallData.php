@@ -80,8 +80,8 @@ class InstallData
             
             // 检查分类是否已存在（通过handle和parent_id）
             $existing = $category->clear()
-                ->where(Category::fields_HANDLE, $handle)
-                ->where(Category::fields_PARENT_ID, $parentId)
+                ->where(Category::schema_fields_HANDLE, $handle)
+                ->where(Category::schema_fields_PARENT_ID, $parentId)
                 ->find()
                 ->fetch();
             
@@ -91,12 +91,12 @@ class InstallData
                 // 使用 forceCheck(false) 强制插入新记录，不检查是否存在
                 $category->clear()
                     ->forceCheck(false)
-                    ->setData(Category::fields_NAME, $catData['name'])
-                    ->setData(Category::fields_HANDLE, $handle)
-                    ->setData(Category::fields_PARENT_ID, $parentId)
-                    ->setData(Category::fields_SORT_ORDER, $sortOrder)
-                    ->setData(Category::fields_IS_ACTIVE, $catData['is_active'] ?? 1)
-                    ->setData(Category::fields_DESCRIPTION, $catData['description'] ?? '');
+                    ->setData(Category::schema_fields_NAME, $catData['name'])
+                    ->setData(Category::schema_fields_HANDLE, $handle)
+                    ->setData(Category::schema_fields_PARENT_ID, $parentId)
+                    ->setData(Category::schema_fields_SORT_ORDER, $sortOrder)
+                    ->setData(Category::schema_fields_IS_ACTIVE, $catData['is_active'] ?? 1)
+                    ->setData(Category::schema_fields_DESCRIPTION, $catData['description'] ?? '');
                 
                 $saveResult = $category->save();
                 

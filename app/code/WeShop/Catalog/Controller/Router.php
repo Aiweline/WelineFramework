@@ -18,7 +18,7 @@ use Weline\Framework\Router\RouterInterface;
  * 功能：将友好的URL路径重写为分类查看路由
  * 例如：/catalog/category/foldable -> /catalog/frontend/category/view?handle=foldable
  * 
- * 注意：分类 handle 使用 Category::fields_HANDLE 字段进行匹配
+ * 注意：分类 handle 使用 Category::schema_fields_HANDLE 字段进行匹配
  */
 class Router implements RouterInterface
 {
@@ -132,8 +132,8 @@ class Router implements RouterInterface
             // 先尝试使用解码后的 handle（精确匹配，支持直接存储层级路径的场景）
             // SELECT "main_table".* FROM "public"."m_weshop_category" AS "main_table" WHERE (is_active = '1') AND (handle = 'smartphones') LIMIT 1 OFFSET 0
             $category->clear()
-                ->where(Category::fields_HANDLE, $decodedHandle)
-                ->where(Category::fields_IS_ACTIVE, 1)
+                ->where(Category::schema_fields_HANDLE, $decodedHandle)
+                ->where(Category::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
             $exists = (bool)$category->getId();
@@ -144,23 +144,23 @@ class Router implements RouterInterface
                 // 使用 LIKE 查询匹配以 handle 结尾的完整路径
                 // 正确格式：where('field', '%value%', 'like')
                 $category->clear()
-                    ->where(Category::fields_HANDLE, '%/' . $decodedHandle, 'like')
-                    ->where(Category::fields_IS_ACTIVE, 1)
+                    ->where(Category::schema_fields_HANDLE, '%/' . $decodedHandle, 'like')
+                    ->where(Category::schema_fields_IS_ACTIVE, 1)
                     ->find()
                     ->fetch();
                 
                 // 如果还是没找到，尝试匹配以 handle 结尾的路径（不包含前导斜杠）
                 if (!$category->getId()) {
                     $category->clear()
-                        ->where(Category::fields_HANDLE, '%' . $decodedHandle, 'like')
-                        ->where(Category::fields_IS_ACTIVE, 1)
+                        ->where(Category::schema_fields_HANDLE, '%' . $decodedHandle, 'like')
+                        ->where(Category::schema_fields_IS_ACTIVE, 1)
                         ->find()
                         ->fetch();
                 }
                 
                 $exists = (bool)$category->getId();
                 $categoryId = $category->getId();
-                $foundHandle = $category->getId() ? $category->getData(Category::fields_HANDLE) : '';
+                $foundHandle = $category->getId() ? $category->getData(Category::schema_fields_HANDLE) : '';
                 
                 // 如果找到了，更新categoryHandle为完整的handle，以便后续使用
                 if ($exists && $foundHandle) {
@@ -171,8 +171,8 @@ class Router implements RouterInterface
             // 如果使用解码后的 handle 没找到，尝试使用原始 handle（可能数据库存储的就是编码后的）
             if (!$exists && $decodedHandle !== $categoryHandle) {   
                 $category->clear()
-                    ->where(Category::fields_HANDLE, $categoryHandle)
-                    ->where(Category::fields_IS_ACTIVE, 1)
+                    ->where(Category::schema_fields_HANDLE, $categoryHandle)
+                    ->where(Category::schema_fields_IS_ACTIVE, 1)
                     ->find()
                     ->fetch();
                 $exists = (bool)$category->getId();
@@ -186,8 +186,8 @@ class Router implements RouterInterface
                 $leafHandle = basename($decodedHandle);
                 if ($leafHandle !== '') {
                     $category->clear()
-                        ->where(Category::fields_HANDLE, $leafHandle)
-                        ->where(Category::fields_IS_ACTIVE, 1)
+                        ->where(Category::schema_fields_HANDLE, $leafHandle)
+                        ->where(Category::schema_fields_IS_ACTIVE, 1)
                         ->find()
                         ->fetch();
 
@@ -206,7 +206,7 @@ class Router implements RouterInterface
                 $currentNode = clone $category;
                 while ($currentNode && $currentNode->getId()) {
                     array_unshift($nodes, clone $currentNode);
-                    $parentId = (int)($currentNode->getData(Category::fields_PARENT_ID) ?? 0);
+                    $parentId = (int)($currentNode->getData(Category::schema_fields_PARENT_ID) ?? 0);
                     if ($parentId <= 0) {
                         break;
                     }
@@ -222,7 +222,7 @@ class Router implements RouterInterface
                 $nodesCount = count($nodes);
 
                 foreach ($nodes as $index => $node) {
-                    $handle = trim((string)($node->getData(Category::fields_HANDLE) ?? ''), '/');
+                    $handle = trim((string)($node->getData(Category::schema_fields_HANDLE) ?? ''), '/');
                     if ($handle === '') {
                         continue;
                     }
@@ -231,7 +231,7 @@ class Router implements RouterInterface
 
                     $item = [
                         'category_id' => (int)$node->getId(),
-                        'name'        => (string)($node->getData(Category::fields_NAME) ?? ''),
+                        'name'        => (string)($node->getData(Category::schema_fields_NAME) ?? ''),
                         'handle'      => $handle,
                         'path'        => $path,
                     ];
@@ -242,10 +242,10 @@ class Router implements RouterInterface
                     } else {
                         // 最后一个视为当前分类
                         $currentCategory = $item;
-                        $currentCategory['description'] = (string)($node->getData(Category::fields_DESCRIPTION) ?? '');
-                        $currentCategory['image'] = (string)($node->getData(Category::fields_IMAGE) ?? '');
-                        $currentCategory['parent_id'] = (int)($node->getData(Category::fields_PARENT_ID) ?? 0);
-                        $currentCategory['sort_order'] = (int)($node->getData(Category::fields_SORT_ORDER) ?? 0);
+                        $currentCategory['description'] = (string)($node->getData(Category::schema_fields_DESCRIPTION) ?? '');
+                        $currentCategory['image'] = (string)($node->getData(Category::schema_fields_IMAGE) ?? '');
+                        $currentCategory['parent_id'] = (int)($node->getData(Category::schema_fields_PARENT_ID) ?? 0);
+                        $currentCategory['sort_order'] = (int)($node->getData(Category::schema_fields_SORT_ORDER) ?? 0);
                     }
                 }
 
