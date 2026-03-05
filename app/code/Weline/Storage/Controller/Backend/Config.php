@@ -39,8 +39,8 @@ class Config extends BackendController
     public function index()
     {
         $configs = $this->getStorageConfig()->reset()
-            ->order(StorageConfig::fields_IS_DEFAULT, 'DESC')
-            ->order(StorageConfig::fields_CONFIG_ID, 'ASC')
+            ->order(StorageConfig::schema_fields_IS_DEFAULT, 'DESC')
+            ->order(StorageConfig::schema_fields_CONFIG_ID, 'ASC')
             ->select()
             ->fetchArray();
         
@@ -73,7 +73,7 @@ class Config extends BackendController
         $id = (int) $this->request->getGet('id');
         
         $config = $this->getStorageConfig()->reset()
-            ->where(StorageConfig::fields_CONFIG_ID, $id)
+            ->where(StorageConfig::schema_fields_CONFIG_ID, $id)
             ->find()
             ->fetch();
         
@@ -103,7 +103,7 @@ class Config extends BackendController
             
             if ($id > 0) {
                 $this->getStorageConfig()->reset()
-                    ->where(StorageConfig::fields_CONFIG_ID, $id)
+                    ->where(StorageConfig::schema_fields_CONFIG_ID, $id)
                     ->find()
                     ->fetch();
                 
@@ -125,10 +125,10 @@ class Config extends BackendController
             
             $existConfig = ObjectManager::getInstance(StorageConfig::class)
                 ->reset()
-                ->where(StorageConfig::fields_NAME, $name);
+                ->where(StorageConfig::schema_fields_NAME, $name);
             
             if ($id > 0) {
-                $existConfig->where(StorageConfig::fields_CONFIG_ID, $id, '!=');
+                $existConfig->where(StorageConfig::schema_fields_CONFIG_ID, $id, '!=');
             }
             
             $existConfig->find()->fetch();
@@ -137,10 +137,10 @@ class Config extends BackendController
                 return $this->fetchJson(['code' => 400, 'msg' => __('存储标识已存在')]);
             }
             
-            $this->getStorageConfig()->setData(StorageConfig::fields_NAME, $name);
-            $this->getStorageConfig()->setData(StorageConfig::fields_DISPLAY_NAME, $data['display_name'] ?? $name);
-            $this->getStorageConfig()->setData(StorageConfig::fields_DRIVER, $data['driver'] ?? 'local');
-            $this->getStorageConfig()->setData(StorageConfig::fields_STATUS, (int) ($data['status'] ?? 1));
+            $this->getStorageConfig()->setData(StorageConfig::schema_fields_NAME, $name);
+            $this->getStorageConfig()->setData(StorageConfig::schema_fields_DISPLAY_NAME, $data['display_name'] ?? $name);
+            $this->getStorageConfig()->setData(StorageConfig::schema_fields_DRIVER, $data['driver'] ?? 'local');
+            $this->getStorageConfig()->setData(StorageConfig::schema_fields_STATUS, (int) ($data['status'] ?? 1));
             
             $driverConfig = [];
             $driver = $data['driver'] ?? 'local';
@@ -178,7 +178,7 @@ class Config extends BackendController
             }
             
             $this->getStorageConfig()->setConfigArray($driverConfig);
-            $this->getStorageConfig()->setData(StorageConfig::fields_UPDATED_AT, \date('Y-m-d H:i:s'));
+            $this->getStorageConfig()->setData(StorageConfig::schema_fields_UPDATED_AT, \date('Y-m-d H:i:s'));
             
             $this->getStorageConfig()->save(true);
             
@@ -210,7 +210,7 @@ class Config extends BackendController
             $id = (int) $this->request->getPost('id');
             
             $this->getStorageConfig()->reset()
-                ->where(StorageConfig::fields_CONFIG_ID, $id)
+                ->where(StorageConfig::schema_fields_CONFIG_ID, $id)
                 ->find()
                 ->fetch();
             
@@ -292,7 +292,7 @@ class Config extends BackendController
             $id = (int) $this->request->getPost('id');
             
             $this->getStorageConfig()->reset()
-                ->where(StorageConfig::fields_CONFIG_ID, $id)
+                ->where(StorageConfig::schema_fields_CONFIG_ID, $id)
                 ->find()
                 ->fetch();
             
