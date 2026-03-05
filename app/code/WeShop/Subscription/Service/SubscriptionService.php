@@ -56,14 +56,14 @@ class SubscriptionService
             throw new \Exception(__('订阅计划不存在'));
         }
 
-        if ((int)$plan->getData(SubscriptionPlan::fields_STATUS) !== SubscriptionPlan::STATUS_ENABLED) {
+        if ((int)$plan->getData(SubscriptionPlan::schema_fields_STATUS) !== SubscriptionPlan::STATUS_ENABLED) {
             throw new \Exception(__('订阅计划已停用'));
         }
 
         $now = date('Y-m-d H:i:s');
-        $trialDays = (int)$plan->getData(SubscriptionPlan::fields_TRIAL_DAYS);
-        $billingCycle = $plan->getData(SubscriptionPlan::fields_BILLING_CYCLE);
-        $billingInterval = (int)$plan->getData(SubscriptionPlan::fields_BILLING_INTERVAL);
+        $trialDays = (int)$plan->getData(SubscriptionPlan::schema_fields_TRIAL_DAYS);
+        $billingCycle = $plan->getData(SubscriptionPlan::schema_fields_BILLING_CYCLE);
+        $billingInterval = (int)$plan->getData(SubscriptionPlan::schema_fields_BILLING_INTERVAL);
 
         // 计算周期
         $periodStart = $now;
@@ -83,22 +83,22 @@ class SubscriptionService
         /** @var Subscription $subscription */
         $subscription = ObjectManager::getInstance(Subscription::class);
         $subscription->clearData()
-            ->setData(Subscription::fields_CUSTOMER_ID, $customerId)
-            ->setData(Subscription::fields_PLAN_ID, $planId)
-            ->setData(Subscription::fields_PRODUCT_ID, $plan->getData(SubscriptionPlan::fields_PRODUCT_ID))
-            ->setData(Subscription::fields_ORDER_ID, $orderId)
-            ->setData(Subscription::fields_STATUS, $status)
-            ->setData(Subscription::fields_PRICE, $plan->getData(SubscriptionPlan::fields_PRICE))
-            ->setData(Subscription::fields_BILLING_CYCLE, $billingCycle)
-            ->setData(Subscription::fields_BILLING_INTERVAL, $billingInterval)
-            ->setData(Subscription::fields_TRIAL_ENDS_AT, $trialEndsAt)
-            ->setData(Subscription::fields_CURRENT_PERIOD_START, $periodStart)
-            ->setData(Subscription::fields_CURRENT_PERIOD_END, $periodEnd)
-            ->setData(Subscription::fields_NEXT_BILLING_AT, $periodEnd)
-            ->setData(Subscription::fields_PAYMENT_METHOD, $paymentMethod)
-            ->setData(Subscription::fields_RENEWAL_COUNT, 0)
-            ->setData(Subscription::fields_CREATED_AT, $now)
-            ->setData(Subscription::fields_UPDATED_AT, $now)
+            ->setData(Subscription::schema_fields_CUSTOMER_ID, $customerId)
+            ->setData(Subscription::schema_fields_PLAN_ID, $planId)
+            ->setData(Subscription::schema_fields_PRODUCT_ID, $plan->getData(SubscriptionPlan::schema_fields_PRODUCT_ID))
+            ->setData(Subscription::schema_fields_ORDER_ID, $orderId)
+            ->setData(Subscription::schema_fields_STATUS, $status)
+            ->setData(Subscription::schema_fields_PRICE, $plan->getData(SubscriptionPlan::schema_fields_PRICE))
+            ->setData(Subscription::schema_fields_BILLING_CYCLE, $billingCycle)
+            ->setData(Subscription::schema_fields_BILLING_INTERVAL, $billingInterval)
+            ->setData(Subscription::schema_fields_TRIAL_ENDS_AT, $trialEndsAt)
+            ->setData(Subscription::schema_fields_CURRENT_PERIOD_START, $periodStart)
+            ->setData(Subscription::schema_fields_CURRENT_PERIOD_END, $periodEnd)
+            ->setData(Subscription::schema_fields_NEXT_BILLING_AT, $periodEnd)
+            ->setData(Subscription::schema_fields_PAYMENT_METHOD, $paymentMethod)
+            ->setData(Subscription::schema_fields_RENEWAL_COUNT, 0)
+            ->setData(Subscription::schema_fields_CREATED_AT, $now)
+            ->setData(Subscription::schema_fields_UPDATED_AT, $now)
             ->save();
 
         // 记录历史
@@ -106,9 +106,9 @@ class SubscriptionService
         $this->addHistory(
             (int)$subscription->getId(),
             $action,
-            (float)$plan->getData(SubscriptionPlan::fields_PRICE),
+            (float)$plan->getData(SubscriptionPlan::schema_fields_PRICE),
             $orderId,
-            __('创建订阅：%{plan}', ['plan' => $plan->getData(SubscriptionPlan::fields_NAME)])
+            __('创建订阅：%{plan}', ['plan' => $plan->getData(SubscriptionPlan::schema_fields_NAME)])
         );
 
         // 触发事件
@@ -136,33 +136,33 @@ class SubscriptionService
             throw new \Exception(__('订阅不存在'));
         }
 
-        if (!$subscription->isActive() && $subscription->getData(Subscription::fields_STATUS) !== Subscription::STATUS_PAST_DUE) {
+        if (!$subscription->isActive() && $subscription->getData(Subscription::schema_fields_STATUS) !== Subscription::STATUS_PAST_DUE) {
             throw new \Exception(__('订阅状态不允许续费'));
         }
 
         $now = date('Y-m-d H:i:s');
-        $billingCycle = $subscription->getData(Subscription::fields_BILLING_CYCLE);
-        $billingInterval = (int)$subscription->getData(Subscription::fields_BILLING_INTERVAL);
+        $billingCycle = $subscription->getData(Subscription::schema_fields_BILLING_CYCLE);
+        $billingInterval = (int)$subscription->getData(Subscription::schema_fields_BILLING_INTERVAL);
 
         $periodStart = $now;
         $periodEnd = $this->calculatePeriodEnd($periodStart, $billingCycle, $billingInterval);
 
-        $renewalCount = (int)$subscription->getData(Subscription::fields_RENEWAL_COUNT);
+        $renewalCount = (int)$subscription->getData(Subscription::schema_fields_RENEWAL_COUNT);
 
         $subscription
-            ->setData(Subscription::fields_STATUS, Subscription::STATUS_ACTIVE)
-            ->setData(Subscription::fields_CURRENT_PERIOD_START, $periodStart)
-            ->setData(Subscription::fields_CURRENT_PERIOD_END, $periodEnd)
-            ->setData(Subscription::fields_NEXT_BILLING_AT, $periodEnd)
-            ->setData(Subscription::fields_RENEWAL_COUNT, $renewalCount + 1)
-            ->setData(Subscription::fields_UPDATED_AT, $now)
+            ->setData(Subscription::schema_fields_STATUS, Subscription::STATUS_ACTIVE)
+            ->setData(Subscription::schema_fields_CURRENT_PERIOD_START, $periodStart)
+            ->setData(Subscription::schema_fields_CURRENT_PERIOD_END, $periodEnd)
+            ->setData(Subscription::schema_fields_NEXT_BILLING_AT, $periodEnd)
+            ->setData(Subscription::schema_fields_RENEWAL_COUNT, $renewalCount + 1)
+            ->setData(Subscription::schema_fields_UPDATED_AT, $now)
             ->save();
 
         // 记录历史
         $this->addHistory(
             $subscriptionId,
             SubscriptionHistory::ACTION_RENEWED,
-            (float)$subscription->getData(Subscription::fields_PRICE),
+            (float)$subscription->getData(Subscription::schema_fields_PRICE),
             $orderId,
             __('续费成功，第%{count}次续费', ['count' => $renewalCount + 1])
         );
@@ -194,7 +194,7 @@ class SubscriptionService
         }
 
         // 验证客户权限
-        if ($customerId > 0 && (int)$subscription->getData(Subscription::fields_CUSTOMER_ID) !== $customerId) {
+        if ($customerId > 0 && (int)$subscription->getData(Subscription::schema_fields_CUSTOMER_ID) !== $customerId) {
             throw new \Exception(__('无权操作此订阅'));
         }
 
@@ -205,10 +205,10 @@ class SubscriptionService
         $now = date('Y-m-d H:i:s');
 
         $subscription
-            ->setData(Subscription::fields_STATUS, Subscription::STATUS_CANCELLED)
-            ->setData(Subscription::fields_CANCELLED_AT, $now)
-            ->setData(Subscription::fields_CANCEL_REASON, $reason)
-            ->setData(Subscription::fields_UPDATED_AT, $now)
+            ->setData(Subscription::schema_fields_STATUS, Subscription::STATUS_CANCELLED)
+            ->setData(Subscription::schema_fields_CANCELLED_AT, $now)
+            ->setData(Subscription::schema_fields_CANCEL_REASON, $reason)
+            ->setData(Subscription::schema_fields_UPDATED_AT, $now)
             ->save();
 
         // 记录历史
@@ -240,7 +240,7 @@ class SubscriptionService
             throw new \Exception(__('订阅不存在'));
         }
 
-        if ($customerId > 0 && (int)$subscription->getData(Subscription::fields_CUSTOMER_ID) !== $customerId) {
+        if ($customerId > 0 && (int)$subscription->getData(Subscription::schema_fields_CUSTOMER_ID) !== $customerId) {
             throw new \Exception(__('无权操作此订阅'));
         }
 
@@ -251,9 +251,9 @@ class SubscriptionService
         $now = date('Y-m-d H:i:s');
 
         $subscription
-            ->setData(Subscription::fields_STATUS, Subscription::STATUS_PAUSED)
-            ->setData(Subscription::fields_PAUSED_AT, $now)
-            ->setData(Subscription::fields_UPDATED_AT, $now)
+            ->setData(Subscription::schema_fields_STATUS, Subscription::STATUS_PAUSED)
+            ->setData(Subscription::schema_fields_PAUSED_AT, $now)
+            ->setData(Subscription::schema_fields_UPDATED_AT, $now)
             ->save();
 
         // 记录历史
@@ -284,7 +284,7 @@ class SubscriptionService
             throw new \Exception(__('订阅不存在'));
         }
 
-        if ($customerId > 0 && (int)$subscription->getData(Subscription::fields_CUSTOMER_ID) !== $customerId) {
+        if ($customerId > 0 && (int)$subscription->getData(Subscription::schema_fields_CUSTOMER_ID) !== $customerId) {
             throw new \Exception(__('无权操作此订阅'));
         }
 
@@ -293,19 +293,19 @@ class SubscriptionService
         }
 
         $now = date('Y-m-d H:i:s');
-        $billingCycle = $subscription->getData(Subscription::fields_BILLING_CYCLE);
-        $billingInterval = (int)$subscription->getData(Subscription::fields_BILLING_INTERVAL);
+        $billingCycle = $subscription->getData(Subscription::schema_fields_BILLING_CYCLE);
+        $billingInterval = (int)$subscription->getData(Subscription::schema_fields_BILLING_INTERVAL);
 
         $periodStart = $now;
         $periodEnd = $this->calculatePeriodEnd($periodStart, $billingCycle, $billingInterval);
 
         $subscription
-            ->setData(Subscription::fields_STATUS, Subscription::STATUS_ACTIVE)
-            ->setData(Subscription::fields_PAUSED_AT, null)
-            ->setData(Subscription::fields_CURRENT_PERIOD_START, $periodStart)
-            ->setData(Subscription::fields_CURRENT_PERIOD_END, $periodEnd)
-            ->setData(Subscription::fields_NEXT_BILLING_AT, $periodEnd)
-            ->setData(Subscription::fields_UPDATED_AT, $now)
+            ->setData(Subscription::schema_fields_STATUS, Subscription::STATUS_ACTIVE)
+            ->setData(Subscription::schema_fields_PAUSED_AT, null)
+            ->setData(Subscription::schema_fields_CURRENT_PERIOD_START, $periodStart)
+            ->setData(Subscription::schema_fields_CURRENT_PERIOD_END, $periodEnd)
+            ->setData(Subscription::schema_fields_NEXT_BILLING_AT, $periodEnd)
+            ->setData(Subscription::schema_fields_UPDATED_AT, $now)
             ->save();
 
         // 记录历史
@@ -333,13 +333,13 @@ class SubscriptionService
         $subscription = ObjectManager::getInstance(Subscription::class);
 
         $subscription->clear()
-            ->where(Subscription::fields_CUSTOMER_ID, $customerId);
+            ->where(Subscription::schema_fields_CUSTOMER_ID, $customerId);
 
         if (!empty($filters['status'])) {
-            $subscription->where(Subscription::fields_STATUS, $filters['status']);
+            $subscription->where(Subscription::schema_fields_STATUS, $filters['status']);
         }
 
-        $subscription->order(Subscription::fields_CREATED_AT, 'DESC')
+        $subscription->order(Subscription::schema_fields_CREATED_AT, 'DESC')
             ->pagination($page, $pageSize);
 
         $items = $subscription->select()->fetchArray();
@@ -364,9 +364,9 @@ class SubscriptionService
         $now = date('Y-m-d H:i:s');
 
         return $subscription->clear()
-            ->where(Subscription::fields_STATUS, [Subscription::STATUS_ACTIVE, Subscription::STATUS_TRIALING], 'IN')
-            ->where(Subscription::fields_NEXT_BILLING_AT, $now, '<=')
-            ->order(Subscription::fields_NEXT_BILLING_AT, 'ASC')
+            ->where(Subscription::schema_fields_STATUS, [Subscription::STATUS_ACTIVE, Subscription::STATUS_TRIALING], 'IN')
+            ->where(Subscription::schema_fields_NEXT_BILLING_AT, $now, '<=')
+            ->order(Subscription::schema_fields_NEXT_BILLING_AT, 'ASC')
             ->select()
             ->fetchArray();
     }
@@ -386,8 +386,8 @@ class SubscriptionService
         if ($subscription->getId() && $subscription->isActive()) {
             $now = date('Y-m-d H:i:s');
             $subscription
-                ->setData(Subscription::fields_STATUS, Subscription::STATUS_PAST_DUE)
-                ->setData(Subscription::fields_UPDATED_AT, $now)
+                ->setData(Subscription::schema_fields_STATUS, Subscription::STATUS_PAST_DUE)
+                ->setData(Subscription::schema_fields_UPDATED_AT, $now)
                 ->save();
 
             $this->addHistory($subscriptionId, SubscriptionHistory::ACTION_PAYMENT_FAILED, 0, 0, __('支付失败，订阅已逾期'));
@@ -409,8 +409,8 @@ class SubscriptionService
         if ($subscription->getId()) {
             $now = date('Y-m-d H:i:s');
             $subscription
-                ->setData(Subscription::fields_STATUS, Subscription::STATUS_EXPIRED)
-                ->setData(Subscription::fields_UPDATED_AT, $now)
+                ->setData(Subscription::schema_fields_STATUS, Subscription::STATUS_EXPIRED)
+                ->setData(Subscription::schema_fields_UPDATED_AT, $now)
                 ->save();
 
             $this->addHistory($subscriptionId, SubscriptionHistory::ACTION_EXPIRED, 0, 0, __('订阅已过期'));
@@ -435,8 +435,8 @@ class SubscriptionService
         $history = ObjectManager::getInstance(SubscriptionHistory::class);
 
         $history->clear()
-            ->where(SubscriptionHistory::fields_SUBSCRIPTION_ID, $subscriptionId)
-            ->order(SubscriptionHistory::fields_CREATED_AT, 'DESC')
+            ->where(SubscriptionHistory::schema_fields_SUBSCRIPTION_ID, $subscriptionId)
+            ->order(SubscriptionHistory::schema_fields_CREATED_AT, 'DESC')
             ->pagination($page, $pageSize);
 
         $items = $history->select()->fetchArray();
@@ -459,22 +459,22 @@ class SubscriptionService
         $subscription = ObjectManager::getInstance(Subscription::class);
 
         $activeCount = $subscription->clear()
-            ->where(Subscription::fields_STATUS, Subscription::STATUS_ACTIVE)
+            ->where(Subscription::schema_fields_STATUS, Subscription::STATUS_ACTIVE)
             ->select()
             ->getTotalCount();
 
         $trialingCount = $subscription->clear()
-            ->where(Subscription::fields_STATUS, Subscription::STATUS_TRIALING)
+            ->where(Subscription::schema_fields_STATUS, Subscription::STATUS_TRIALING)
             ->select()
             ->getTotalCount();
 
         $pastDueCount = $subscription->clear()
-            ->where(Subscription::fields_STATUS, Subscription::STATUS_PAST_DUE)
+            ->where(Subscription::schema_fields_STATUS, Subscription::STATUS_PAST_DUE)
             ->select()
             ->getTotalCount();
 
         $cancelledCount = $subscription->clear()
-            ->where(Subscription::fields_STATUS, Subscription::STATUS_CANCELLED)
+            ->where(Subscription::schema_fields_STATUS, Subscription::STATUS_CANCELLED)
             ->select()
             ->getTotalCount();
 
@@ -513,13 +513,13 @@ class SubscriptionService
         /** @var SubscriptionHistory $history */
         $history = ObjectManager::getInstance(SubscriptionHistory::class);
         $history->clearData()
-            ->setData(SubscriptionHistory::fields_SUBSCRIPTION_ID, $subscriptionId)
-            ->setData(SubscriptionHistory::fields_ORDER_ID, $orderId)
-            ->setData(SubscriptionHistory::fields_ACTION, $action)
-            ->setData(SubscriptionHistory::fields_AMOUNT, $amount)
-            ->setData(SubscriptionHistory::fields_NOTE, $note)
-            ->setData(SubscriptionHistory::fields_OPERATOR, $operator)
-            ->setData(SubscriptionHistory::fields_CREATED_AT, date('Y-m-d H:i:s'))
+            ->setData(SubscriptionHistory::schema_fields_SUBSCRIPTION_ID, $subscriptionId)
+            ->setData(SubscriptionHistory::schema_fields_ORDER_ID, $orderId)
+            ->setData(SubscriptionHistory::schema_fields_ACTION, $action)
+            ->setData(SubscriptionHistory::schema_fields_AMOUNT, $amount)
+            ->setData(SubscriptionHistory::schema_fields_NOTE, $note)
+            ->setData(SubscriptionHistory::schema_fields_OPERATOR, $operator)
+            ->setData(SubscriptionHistory::schema_fields_CREATED_AT, date('Y-m-d H:i:s'))
             ->save();
     }
 

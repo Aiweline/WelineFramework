@@ -47,7 +47,7 @@ class View extends BackendController
         }
 
         // 加载订阅计划
-        $planId = (int)$this->subscription->getData(Subscription::fields_PLAN_ID);
+        $planId = (int)$this->subscription->getData(Subscription::schema_fields_PLAN_ID);
         $this->subscriptionPlan->load($planId);
 
         // 获取历史记录
