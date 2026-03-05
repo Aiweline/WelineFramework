@@ -38,13 +38,13 @@ class InstallData
         foreach ($roots as $r) {
             $catalog->clear()
                 ->forceCheck(false)
-                ->setData(Catalog::fields_NAME, $r['name'])
-                ->setData(Catalog::fields_DESCRIPTION, $r['description'])
-                ->setData(Catalog::fields_level, $r['level'])
-                ->setData(Catalog::fields_PID, 0)
-                ->setData(Catalog::fields_position, $r['position'])
-                ->setData(Catalog::fields_is_active, $r['is_active'])
-                ->setData(Catalog::fields_is_system, 0)
+                ->setData(Catalog::schema_fields_NAME, $r['name'])
+                ->setData(Catalog::schema_fields_DESCRIPTION, $r['description'])
+                ->setData(Catalog::schema_fields_level, $r['level'])
+                ->setData(Catalog::schema_fields_PID, 0)
+                ->setData(Catalog::schema_fields_position, $r['position'])
+                ->setData(Catalog::schema_fields_is_active, $r['is_active'])
+                ->setData(Catalog::schema_fields_is_system, 0)
                 ->save();
             if ($r['name'] === __('快速开始')) {
                 $quickStartId = (int) $catalog->getId();
@@ -61,13 +61,13 @@ class InstallData
             foreach ($children as $c) {
                 $catalog->clear()
                     ->forceCheck(false)
-                    ->setData(Catalog::fields_NAME, $c['name'])
-                    ->setData(Catalog::fields_DESCRIPTION, $c['description'])
-                    ->setData(Catalog::fields_level, 2)
-                    ->setData(Catalog::fields_PID, $quickStartId)
-                    ->setData(Catalog::fields_position, $c['position'])
-                    ->setData(Catalog::fields_is_active, $c['is_active'])
-                    ->setData(Catalog::fields_is_system, 0)
+                    ->setData(Catalog::schema_fields_NAME, $c['name'])
+                    ->setData(Catalog::schema_fields_DESCRIPTION, $c['description'])
+                    ->setData(Catalog::schema_fields_level, 2)
+                    ->setData(Catalog::schema_fields_PID, $quickStartId)
+                    ->setData(Catalog::schema_fields_position, $c['position'])
+                    ->setData(Catalog::schema_fields_is_active, $c['is_active'])
+                    ->setData(Catalog::schema_fields_is_system, 0)
                     ->save();
             }
         }
