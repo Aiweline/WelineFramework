@@ -53,14 +53,14 @@ class MenuUrlValidator
         /** @var Menu $menuModel */
         $menuModel = ObjectManager::getInstance(Menu::class);
         $menus = $menuModel
-            ->where(Menu::fields_IS_BACKEND, 1)
-            ->where(Menu::fields_IS_ENABLE, 1)
+            ->where(Menu::schema_fields_IS_BACKEND, 1)
+            ->where(Menu::schema_fields_IS_ENABLE, 1)
             ->select()
             ->fetchArray();
 
         $menuPaths = [];
         foreach ($menus as $menu) {
-            $action = $menu[Menu::fields_ACTION] ?? '';
+            $action = $menu[Menu::schema_fields_ACTION] ?? '';
             if ($action) {
                 // 去除前后斜杠，统一格式
                 $action = trim($action, '/');

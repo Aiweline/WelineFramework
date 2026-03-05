@@ -88,8 +88,8 @@ class SystemNotificationObserver implements ObserverInterface
             
             // 检查是否有重复的消息（根据标题和内容）
             $existingNotification = clone $notification;
-            $existingNotification->where(SystemNotification::fields_title, $title)
-                                ->where(SystemNotification::fields_content, $content)
+            $existingNotification->where(SystemNotification::schema_fields_title, $title)
+                                ->where(SystemNotification::schema_fields_content, $content)
                                 ->find()
                                 ->fetch();
             
@@ -172,8 +172,8 @@ class SystemNotificationObserver implements ObserverInterface
             
             // 检查是否有重复的错误消息
             $existingNotification = clone $notification;
-            $existingNotification->where(SystemNotification::fields_title, $title)
-                                ->where(SystemNotification::fields_content, $content)
+            $existingNotification->where(SystemNotification::schema_fields_title, $title)
+                                ->where(SystemNotification::schema_fields_content, $content)
                                 ->find()
                                 ->fetch();
             

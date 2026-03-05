@@ -437,16 +437,11 @@
             data[key] = value;
         });
         
-        fetch(config.apiSave, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify(data)
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(result) {
+        var url = config.apiSave;
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(data) };
+        window.Weline.Api.request(url, opts)
+        .then(function(res) {
+            var result = (res && res.data) !== undefined ? res.data : res;
             setLoading(false);
             if (result.success) {
                 BackendToast.success(result.msg || config.text.saveSuccess);
@@ -473,16 +468,11 @@
         }).then(function(confirmed) {
             if (!confirmed) return;
             
-            fetch(config.apiDelete, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify({ id: userId })
-            })
-            .then(function(response) { return response.json(); })
-            .then(function(result) {
+            var url = config.apiDelete;
+            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ id: userId }) };
+            window.Weline.Api.request(url, opts)
+            .then(function(res) {
+                var result = (res && res.data) !== undefined ? res.data : res;
                 if (result.success) {
                     BackendToast.success(result.msg || config.text.deleteSuccess);
                     var row = document.querySelector('tr[data-user-id="' + userId + '"]');
@@ -513,16 +503,11 @@
         }).then(function(confirmed) {
             if (!confirmed) return;
             
-            fetch(config.apiToggle, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify({ id: userId, action: action })
-            })
-            .then(function(response) { return response.json(); })
-            .then(function(result) {
+            var url = config.apiToggle;
+            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ id: userId, action: action }) };
+            window.Weline.Api.request(url, opts)
+            .then(function(res) {
+                var result = (res && res.data) !== undefined ? res.data : res;
                 if (result.success) {
                     BackendToast.success(result.msg || config.text.toggleSuccess);
                     setTimeout(function() { location.reload(); }, 800);

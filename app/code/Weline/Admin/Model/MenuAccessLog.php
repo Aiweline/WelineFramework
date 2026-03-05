@@ -12,67 +12,41 @@ declare(strict_types=1);
 namespace Weline\Admin\Model;
 
 use Weline\Acl\Model\Acl;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+#[Table(comment: '菜单访问记录表')]
+#[Index(name: 'idx_user_id', columns: ['user_id'], comment: '用户ID索引')]
+#[Index(name: 'idx_source_id', columns: ['source_id'], comment: '资源ID索引')]
+#[Index(name: 'idx_access_time', columns: ['access_time'], comment: '访问时间索引')]
+#[Index(name: 'idx_user_source', columns: ['user_id', 'source_id'], comment: '用户资源复合索引')]
 class MenuAccessLog extends Model
 {
-    public const fields_ID = 'menu_access_log_id';
-    public const fields_menu_access_log_id = 'menu_access_log_id';
-    public const fields_user_id = 'user_id';
-    public const fields_source_id = 'source_id';
-    public const fields_route = 'route';
-    public const fields_method = 'method';
-    public const fields_access_time = 'access_time';
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '访问记录ID')]
+    public const schema_fields_ID = 'menu_access_log_id';
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '访问记录ID')]
+    public const schema_fields_menu_access_log_id = 'menu_access_log_id';
+    #[Col(type: 'int', nullable: false, comment: '用户ID')]
+    public const schema_fields_user_id = 'user_id';
+    #[Col(type: 'varchar', length: 127, nullable: false, comment: '菜单资源ID')]
+    public const schema_fields_source_id = 'source_id';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '路由路径')]
+    public const schema_fields_route = 'route';
+    #[Col(type: 'varchar', length: 6, nullable: true, default: '', comment: '请求方法')]
+    public const schema_fields_method = 'method';
+    #[Col(type: 'int', nullable: false, comment: '访问时间')]
+    public const schema_fields_access_time = 'access_time';
 
-    public array $_unit_primary_keys = [self::fields_ID];
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // TODO: Implement upgrade() method.
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('菜单访问记录表')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 11, 'primary key auto_increment', '访问记录ID')
-                ->addColumn(self::fields_user_id, TableInterface::column_type_INTEGER, 11, 'not null', '用户ID')
-                ->addColumn(self::fields_source_id, TableInterface::column_type_VARCHAR, 127, 'not null', '菜单资源ID')
-                ->addColumn(self::fields_route, TableInterface::column_type_VARCHAR, 255, 'not null', '路由路径')
-                ->addColumn(self::fields_method, TableInterface::column_type_VARCHAR, 6, 'default ""', '请求方法')
-                ->addColumn(self::fields_access_time, TableInterface::column_type_INTEGER, 11, 'not null', '访问时间')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_user_id', self::fields_user_id, '用户ID索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_source_id', self::fields_source_id, '资源ID索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_access_time', self::fields_access_time, '访问时间索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_user_source', [self::fields_user_id, self::fields_source_id], '用户资源复合索引')
-                ->create();
-        }
-    }
+    public array $_unit_primary_keys = [self::schema_fields_ID];
 
     /**
      * 设置用户ID
      */
     public function setUserId(int $userId): static
     {
-        return $this->setData(self::fields_user_id, $userId);
+        return $this->setData(self::schema_fields_user_id, $userId);
     }
 
     /**
@@ -80,7 +54,7 @@ class MenuAccessLog extends Model
      */
     public function getUserId(): int
     {
-        return intval($this->getData(self::fields_user_id));
+        return intval($this->getData(self::schema_fields_user_id));
     }
 
     /**
@@ -88,7 +62,7 @@ class MenuAccessLog extends Model
      */
     public function setSourceId(string $sourceId): static
     {
-        return $this->setData(self::fields_source_id, $sourceId);
+        return $this->setData(self::schema_fields_source_id, $sourceId);
     }
 
     /**
@@ -96,7 +70,7 @@ class MenuAccessLog extends Model
      */
     public function getSourceId(): string
     {
-        return $this->getData(self::fields_source_id) ?? '';
+        return $this->getData(self::schema_fields_source_id) ?? '';
     }
 
     /**
@@ -104,7 +78,7 @@ class MenuAccessLog extends Model
      */
     public function setRoute(string $route): static
     {
-        return $this->setData(self::fields_route, $route);
+        return $this->setData(self::schema_fields_route, $route);
     }
 
     /**
@@ -112,7 +86,7 @@ class MenuAccessLog extends Model
      */
     public function getRoute(): string
     {
-        return $this->getData(self::fields_route) ?? '';
+        return $this->getData(self::schema_fields_route) ?? '';
     }
 
     /**
@@ -120,7 +94,7 @@ class MenuAccessLog extends Model
      */
     public function setMethod(string $method): static
     {
-        return $this->setData(self::fields_method, $method);
+        return $this->setData(self::schema_fields_method, $method);
     }
 
     /**
@@ -128,7 +102,7 @@ class MenuAccessLog extends Model
      */
     public function getMethod(): string
     {
-        return $this->getData(self::fields_method) ?? '';
+        return $this->getData(self::schema_fields_method) ?? '';
     }
 
     /**
@@ -136,7 +110,7 @@ class MenuAccessLog extends Model
      */
     public function setAccessTime(int $accessTime): static
     {
-        return $this->setData(self::fields_access_time, $accessTime);
+        return $this->setData(self::schema_fields_access_time, $accessTime);
     }
 
     /**
@@ -144,7 +118,7 @@ class MenuAccessLog extends Model
      */
     public function getAccessTime(): int
     {
-        return intval($this->getData(self::fields_access_time));
+        return intval($this->getData(self::schema_fields_access_time));
     }
 
     /**
@@ -179,10 +153,10 @@ class MenuAccessLog extends Model
         // 查询最近N天的访问记录，按source_id分组统计访问次数
         try {
             $results = $this->clearData()
-                ->fields(self::fields_source_id . ', COUNT(*) as access_count')
-                ->where(self::fields_user_id, $userId)
-                ->where(self::fields_access_time, $startTime, '>=')
-                ->group(self::fields_source_id)
+                ->fields(self::schema_fields_source_id . ', COUNT(*) as access_count')
+                ->where(self::schema_fields_user_id, $userId)
+                ->where(self::schema_fields_access_time, $startTime, '>=')
+                ->group(self::schema_fields_source_id)
                 ->order('access_count', 'DESC')
                 ->limit($limit * 2) // 多查询一些，因为后续可能会过滤掉一些无权限的
                 ->select()
@@ -218,12 +192,12 @@ class MenuAccessLog extends Model
             // 非超级管理员需要检查权限
             /** @var \Weline\Acl\Model\RoleAccess $roleAccessModel */
             $roleAccessModel = ObjectManager::getInstance(\Weline\Acl\Model\RoleAccess::class);
-            $roleAccess = $roleAccessModel->where(\Weline\Acl\Model\RoleAccess::fields_ROLE_ID, $role->getId())
+            $roleAccess = $roleAccessModel->where(\Weline\Acl\Model\RoleAccess::schema_fields_ROLE_ID, $role->getId())
                 ->select()
                 ->fetchArray();
             if (is_array($roleAccess)) {
                 foreach ($roleAccess as $access) {
-                    $userAccessSources[] = $access[\Weline\Acl\Model\RoleAccess::fields_SOURCE_ID];
+                    $userAccessSources[] = $access[\Weline\Acl\Model\RoleAccess::schema_fields_SOURCE_ID];
                 }
             }
         }
@@ -233,7 +207,7 @@ class MenuAccessLog extends Model
                 break;
             }
             
-            $sourceId = $result[self::fields_source_id];
+            $sourceId = $result[self::schema_fields_source_id];
             
             // 检查权限（超级管理员跳过权限检查）
             if ($role->getId() !== 1 && !in_array($sourceId, $userAccessSources)) {
@@ -242,9 +216,9 @@ class MenuAccessLog extends Model
             
             // 验证ACL资源是否存在且类型为menus
             $acl = $aclModel->clearData()
-                ->where(Acl::fields_SOURCE_ID, $sourceId)
-                ->where(Acl::fields_TYPE, Acl::type_MENUS)
-                ->where(Acl::fields_IS_ENABLE, 1)
+                ->where(Acl::schema_fields_SOURCE_ID, $sourceId)
+                ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
+                ->where(Acl::schema_fields_IS_ENABLE, 1)
                 ->find()
                 ->fetch();
             
@@ -295,10 +269,10 @@ class MenuAccessLog extends Model
         // 查询最近N天的访问记录，按source_id分组，取最新的访问时间
         try {
             $results = $this->clearData()
-                ->fields(self::fields_source_id . ', MAX(' . self::fields_access_time . ') as last_access_time')
-                ->where(self::fields_user_id, $userId)
-                ->where(self::fields_access_time, $startTime, '>=')
-                ->group(self::fields_source_id)
+                ->fields(self::schema_fields_source_id . ', MAX(' . self::schema_fields_access_time . ') as last_access_time')
+                ->where(self::schema_fields_user_id, $userId)
+                ->where(self::schema_fields_access_time, $startTime, '>=')
+                ->group(self::schema_fields_source_id)
                 ->order('last_access_time', 'DESC')
                 ->limit($limit * 2) // 多查询一些，因为后续可能会过滤掉一些无权限的
                 ->select()
@@ -334,12 +308,12 @@ class MenuAccessLog extends Model
             // 非超级管理员需要检查权限
             /** @var \Weline\Acl\Model\RoleAccess $roleAccessModel */
             $roleAccessModel = ObjectManager::getInstance(\Weline\Acl\Model\RoleAccess::class);
-            $roleAccess = $roleAccessModel->where(\Weline\Acl\Model\RoleAccess::fields_ROLE_ID, $role->getId())
+            $roleAccess = $roleAccessModel->where(\Weline\Acl\Model\RoleAccess::schema_fields_ROLE_ID, $role->getId())
                 ->select()
                 ->fetchArray();
             if (is_array($roleAccess)) {
                 foreach ($roleAccess as $access) {
-                    $userAccessSources[] = $access[\Weline\Acl\Model\RoleAccess::fields_SOURCE_ID];
+                    $userAccessSources[] = $access[\Weline\Acl\Model\RoleAccess::schema_fields_SOURCE_ID];
                 }
             }
         }
@@ -349,7 +323,7 @@ class MenuAccessLog extends Model
                 break;
             }
             
-            $sourceId = $result[self::fields_source_id];
+            $sourceId = $result[self::schema_fields_source_id];
             
             // 检查权限（超级管理员跳过权限检查）
             if ($role->getId() !== 1 && !in_array($sourceId, $userAccessSources)) {
@@ -358,9 +332,9 @@ class MenuAccessLog extends Model
             
             // 验证ACL资源是否存在且类型为menus
             $acl = $aclModel->clearData()
-                ->where(Acl::fields_SOURCE_ID, $sourceId)
-                ->where(Acl::fields_TYPE, Acl::type_MENUS)
-                ->where(Acl::fields_IS_ENABLE, 1)
+                ->where(Acl::schema_fields_SOURCE_ID, $sourceId)
+                ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
+                ->where(Acl::schema_fields_IS_ENABLE, 1)
                 ->find()
                 ->fetch();
             
