@@ -42,10 +42,10 @@ class MetaTranslation
         /** @var Dictionary $localeDict */
         $localeDict = ObjectManager::getInstance(Dictionary::class);
         $md5 = Dictionary::generateMd5($translationKey, $locale);
-        $localeDict->load(Dictionary::fields_MD5, $md5);
+        $localeDict->load(Dictionary::schema_fields_MD5, $md5);
         
         if ($localeDict->getId()) {
-            $translation = $localeDict->getData(Dictionary::fields_TRANSLATE);
+            $translation = $localeDict->getData(Dictionary::schema_fields_TRANSLATE);
             if (!empty($translation)) {
                 return $translation;
             }
@@ -81,19 +81,19 @@ class MetaTranslation
         /** @var Dictionary $localeDict */
         $localeDict = ObjectManager::getInstance(Dictionary::class);
         $md5 = Dictionary::generateMd5($translationKey, $locale);
-        $localeDict->load(Dictionary::fields_MD5, $md5);
+        $localeDict->load(Dictionary::schema_fields_MD5, $md5);
         
         $translation = '';
         if ($localeDict->getId()) {
-            $translation = $localeDict->getData(Dictionary::fields_TRANSLATE);
+            $translation = $localeDict->getData(Dictionary::schema_fields_TRANSLATE);
         }
         
         // 如果没有找到带scope的翻译，尝试不带scope的
         if (empty($translation) && $scope !== 'default') {
             $md5Default = Dictionary::generateMd5('@meta::' . $metaKey, $locale);
-            $localeDict->load(Dictionary::fields_MD5, $md5Default);
+            $localeDict->load(Dictionary::schema_fields_MD5, $md5Default);
             if ($localeDict->getId()) {
-                $translation = $localeDict->getData(Dictionary::fields_TRANSLATE);
+                $translation = $localeDict->getData(Dictionary::schema_fields_TRANSLATE);
             }
         }
         
@@ -127,12 +127,12 @@ class MetaTranslation
         /** @var Dictionary $localeDict */
         $localeDict = ObjectManager::getInstance(Dictionary::class);
         $md5 = Dictionary::generateMd5($translationKey, $locale);
-        $localeDict->load(Dictionary::fields_MD5, $md5);
+        $localeDict->load(Dictionary::schema_fields_MD5, $md5);
 
-        $localeDict->setData(Dictionary::fields_MD5, $md5);
-        $localeDict->setData(Dictionary::fields_WORD, $translationKey);
-        $localeDict->setData(Dictionary::fields_LOCALE_CODE, $locale);
-        $localeDict->setData(Dictionary::fields_TRANSLATE, $value);
+        $localeDict->setData(Dictionary::schema_fields_MD5, $md5);
+        $localeDict->setData(Dictionary::schema_fields_WORD, $translationKey);
+        $localeDict->setData(Dictionary::schema_fields_LOCALE_CODE, $locale);
+        $localeDict->setData(Dictionary::schema_fields_TRANSLATE, $value);
 
         return $localeDict->save();
     }

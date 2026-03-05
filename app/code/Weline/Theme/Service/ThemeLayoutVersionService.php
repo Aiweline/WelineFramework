@@ -298,9 +298,9 @@ readonly class ThemeLayoutVersionService
     public function getVersions(int $themeId, string $pageType, int $limit = 0): array
     {
         $query = $this->versionModel->reset()
-            ->where(ThemeLayoutVersion::fields_THEME_ID, $themeId)
-            ->where(ThemeLayoutVersion::fields_PAGE_TYPE, $pageType)
-            ->order(ThemeLayoutVersion::fields_VERSION_NUMBER, 'DESC');
+            ->where(ThemeLayoutVersion::schema_fields_THEME_ID, $themeId)
+            ->where(ThemeLayoutVersion::schema_fields_PAGE_TYPE, $pageType)
+            ->order(ThemeLayoutVersion::schema_fields_VERSION_NUMBER, 'DESC');
 
         if ($limit > 0) {
             $query->limit($limit);
@@ -328,9 +328,9 @@ readonly class ThemeLayoutVersionService
     public function getCurrentVersion(int $themeId, string $pageType): ?ThemeLayoutVersion
     {
         $result = $this->versionModel->reset()
-            ->where(ThemeLayoutVersion::fields_THEME_ID, $themeId)
-            ->where(ThemeLayoutVersion::fields_PAGE_TYPE, $pageType)
-            ->where(ThemeLayoutVersion::fields_IS_CURRENT, 1)
+            ->where(ThemeLayoutVersion::schema_fields_THEME_ID, $themeId)
+            ->where(ThemeLayoutVersion::schema_fields_PAGE_TYPE, $pageType)
+            ->where(ThemeLayoutVersion::schema_fields_IS_CURRENT, 1)
             ->select()
             ->fetchArray();
 
@@ -351,9 +351,9 @@ readonly class ThemeLayoutVersionService
     public function getPublishedVersion(int $themeId, string $pageType): ?ThemeLayoutVersion
     {
         $result = $this->versionModel->reset()
-            ->where(ThemeLayoutVersion::fields_THEME_ID, $themeId)
-            ->where(ThemeLayoutVersion::fields_PAGE_TYPE, $pageType)
-            ->where(ThemeLayoutVersion::fields_IS_PUBLISHED, 1)
+            ->where(ThemeLayoutVersion::schema_fields_THEME_ID, $themeId)
+            ->where(ThemeLayoutVersion::schema_fields_PAGE_TYPE, $pageType)
+            ->where(ThemeLayoutVersion::schema_fields_IS_PUBLISHED, 1)
             ->select()
             ->fetchArray();
 
@@ -495,9 +495,9 @@ readonly class ThemeLayoutVersionService
     private function getNextVersionNumber(int $themeId, string $pageType): int
     {
         $result = $this->versionModel->reset()
-            ->where(ThemeLayoutVersion::fields_THEME_ID, $themeId)
-            ->where(ThemeLayoutVersion::fields_PAGE_TYPE, $pageType)
-            ->order(ThemeLayoutVersion::fields_VERSION_NUMBER, 'DESC')
+            ->where(ThemeLayoutVersion::schema_fields_THEME_ID, $themeId)
+            ->where(ThemeLayoutVersion::schema_fields_PAGE_TYPE, $pageType)
+            ->order(ThemeLayoutVersion::schema_fields_VERSION_NUMBER, 'DESC')
             ->limit(1)
             ->select()
             ->fetchArray();
@@ -507,7 +507,7 @@ readonly class ThemeLayoutVersionService
         }
 
         $row = is_array($result[0] ?? null) ? $result[0] : $result;
-        $maxNumber = (int)($row[ThemeLayoutVersion::fields_VERSION_NUMBER] ?? 0);
+        $maxNumber = (int)($row[ThemeLayoutVersion::schema_fields_VERSION_NUMBER] ?? 0);
 
         return $maxNumber + 1;
     }
@@ -519,10 +519,10 @@ readonly class ThemeLayoutVersionService
     {
         try {
             $this->versionModel->reset()
-                ->where(ThemeLayoutVersion::fields_THEME_ID, $themeId)
-                ->where(ThemeLayoutVersion::fields_PAGE_TYPE, $pageType)
-                ->where(ThemeLayoutVersion::fields_IS_CURRENT, 1)
-                ->update([ThemeLayoutVersion::fields_IS_CURRENT => 0])
+                ->where(ThemeLayoutVersion::schema_fields_THEME_ID, $themeId)
+                ->where(ThemeLayoutVersion::schema_fields_PAGE_TYPE, $pageType)
+                ->where(ThemeLayoutVersion::schema_fields_IS_CURRENT, 1)
+                ->update([ThemeLayoutVersion::schema_fields_IS_CURRENT => 0])
                 ->fetch();
         } catch (\Exception $e) {
             // 静默失败
@@ -536,10 +536,10 @@ readonly class ThemeLayoutVersionService
     {
         try {
             $this->versionModel->reset()
-                ->where(ThemeLayoutVersion::fields_THEME_ID, $themeId)
-                ->where(ThemeLayoutVersion::fields_PAGE_TYPE, $pageType)
-                ->where(ThemeLayoutVersion::fields_IS_PUBLISHED, 1)
-                ->update([ThemeLayoutVersion::fields_IS_PUBLISHED => 0])
+                ->where(ThemeLayoutVersion::schema_fields_THEME_ID, $themeId)
+                ->where(ThemeLayoutVersion::schema_fields_PAGE_TYPE, $pageType)
+                ->where(ThemeLayoutVersion::schema_fields_IS_PUBLISHED, 1)
+                ->update([ThemeLayoutVersion::schema_fields_IS_PUBLISHED => 0])
                 ->fetch();
         } catch (\Exception $e) {
             // 静默失败
@@ -553,9 +553,9 @@ readonly class ThemeLayoutVersionService
     {
         try {
             $this->themeLayout->reset()
-                ->where(ThemeLayout::fields_THEME_ID, $themeId)
-                ->where(ThemeLayout::fields_PAGE_TYPE, $pageType)
-                ->where(ThemeLayout::fields_STATUS, ThemeLayout::STATUS_DRAFT)
+                ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
+                ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
+                ->where(ThemeLayout::schema_fields_STATUS, ThemeLayout::STATUS_DRAFT)
                 ->delete()
                 ->fetch();
         } catch (\Exception $e) {

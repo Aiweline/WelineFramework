@@ -1502,10 +1502,10 @@ USAGE;
                 
                 foreach ($allThemeWords as $word) {
                     $md5 = LocaleDictionary::generateMd5($word, $targetLocale);
-                    $translation = $localeDictionary->clearData()->load(LocaleDictionary::fields_MD5, $md5);
+                    $translation = $localeDictionary->clearData()->load(LocaleDictionary::schema_fields_MD5, $md5);
                     
-                    if ($translation->getId() && !empty($translation->getData(LocaleDictionary::fields_TRANSLATE))) {
-                        $translatedWords[$word] = $translation->getData(LocaleDictionary::fields_TRANSLATE);
+                    if ($translation->getId() && !empty($translation->getData(LocaleDictionary::schema_fields_TRANSLATE))) {
+                        $translatedWords[$word] = $translation->getData(LocaleDictionary::schema_fields_TRANSLATE);
                     } else {
                         $untranslatedWords[] = $word;
                     }

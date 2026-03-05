@@ -178,34 +178,34 @@ class MetaScanVariableFiles implements ObserverInterface
             /** @var Meta $metaModel */
             $metaModel = ObjectManager::getInstance(Meta::class);
             $existing = $metaModel->clearQuery()
-                ->where(Meta::fields_NAMESPACE, $namespace)
-                ->where(Meta::fields_META_TYPE, 'variables')
-                ->where(Meta::fields_META_IDENTIFY, $metaIdentify)
+                ->where(Meta::schema_fields_NAMESPACE, $namespace)
+                ->where(Meta::schema_fields_META_TYPE, 'variables')
+                ->where(Meta::schema_fields_META_IDENTIFY, $metaIdentify)
                 ->find()
                 ->fetch();
             
             try {
                 if ($existing && $existing->getId()) {
                     // 更新现有记录（不改变唯一约束字段）
-                    $existing->setData(Meta::fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
-                    $existing->setData(Meta::fields_SETTING, json_encode($setting, JSON_UNESCAPED_UNICODE));
-                    $existing->setData(Meta::fields_AREA, $area);
-                    $existing->setData(Meta::fields_CATEGORY, $variableFile);
-                    $existing->setData(Meta::fields_FILE_PATH, $this->getRelativePath($filePath));
-                    $existing->setData(Meta::fields_FILE_FULL_PATH, $filePath);
+                    $existing->setData(Meta::schema_fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
+                    $existing->setData(Meta::schema_fields_SETTING, json_encode($setting, JSON_UNESCAPED_UNICODE));
+                    $existing->setData(Meta::schema_fields_AREA, $area);
+                    $existing->setData(Meta::schema_fields_CATEGORY, $variableFile);
+                    $existing->setData(Meta::schema_fields_FILE_PATH, $this->getRelativePath($filePath));
+                    $existing->setData(Meta::schema_fields_FILE_FULL_PATH, $filePath);
                     $existing->save();
                 } else {
                     // 创建新记录
                     $metaModel->clearQuery();
-                    $metaModel->setData(Meta::fields_NAMESPACE, $namespace);
-                    $metaModel->setData(Meta::fields_META_TYPE, 'variables');
-                    $metaModel->setData(Meta::fields_META_IDENTIFY, $metaIdentify);
-                    $metaModel->setData(Meta::fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
-                    $metaModel->setData(Meta::fields_SETTING, json_encode($setting, JSON_UNESCAPED_UNICODE));
-                    $metaModel->setData(Meta::fields_AREA, $area);
-                    $metaModel->setData(Meta::fields_CATEGORY, $variableFile);
-                    $metaModel->setData(Meta::fields_FILE_PATH, $this->getRelativePath($filePath));
-                    $metaModel->setData(Meta::fields_FILE_FULL_PATH, $filePath);
+                    $metaModel->setData(Meta::schema_fields_NAMESPACE, $namespace);
+                    $metaModel->setData(Meta::schema_fields_META_TYPE, 'variables');
+                    $metaModel->setData(Meta::schema_fields_META_IDENTIFY, $metaIdentify);
+                    $metaModel->setData(Meta::schema_fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
+                    $metaModel->setData(Meta::schema_fields_SETTING, json_encode($setting, JSON_UNESCAPED_UNICODE));
+                    $metaModel->setData(Meta::schema_fields_AREA, $area);
+                    $metaModel->setData(Meta::schema_fields_CATEGORY, $variableFile);
+                    $metaModel->setData(Meta::schema_fields_FILE_PATH, $this->getRelativePath($filePath));
+                    $metaModel->setData(Meta::schema_fields_FILE_FULL_PATH, $filePath);
                     $metaModel->save();
                 }
             } catch (\Exception $e) {
@@ -213,16 +213,16 @@ class MetaScanVariableFiles implements ObserverInterface
                 if (strpos($e->getMessage(), 'UNIQUE constraint') !== false || strpos($e->getMessage(), 'Integrity constraint violation') !== false) {
                     // 尝试直接更新（使用完整唯一约束条件）
                     $metaModel->clearQuery()
-                        ->where(Meta::fields_NAMESPACE, $namespace)
-                        ->where(Meta::fields_META_TYPE, 'variables')
-                        ->where(Meta::fields_META_IDENTIFY, $metaIdentify)
+                        ->where(Meta::schema_fields_NAMESPACE, $namespace)
+                        ->where(Meta::schema_fields_META_TYPE, 'variables')
+                        ->where(Meta::schema_fields_META_IDENTIFY, $metaIdentify)
                         ->update([
-                            Meta::fields_META_DATA => json_encode($metaDataArray, JSON_UNESCAPED_UNICODE),
-                            Meta::fields_SETTING => json_encode($setting, JSON_UNESCAPED_UNICODE),
-                            Meta::fields_AREA => $area,
-                            Meta::fields_CATEGORY => $variableFile,
-                            Meta::fields_FILE_PATH => $this->getRelativePath($filePath),
-                            Meta::fields_FILE_FULL_PATH => $filePath
+                            Meta::schema_fields_META_DATA => json_encode($metaDataArray, JSON_UNESCAPED_UNICODE),
+                            Meta::schema_fields_SETTING => json_encode($setting, JSON_UNESCAPED_UNICODE),
+                            Meta::schema_fields_AREA => $area,
+                            Meta::schema_fields_CATEGORY => $variableFile,
+                            Meta::schema_fields_FILE_PATH => $this->getRelativePath($filePath),
+                            Meta::schema_fields_FILE_FULL_PATH => $filePath
                         ])->fetch();
                 } else {
                     throw $e;
