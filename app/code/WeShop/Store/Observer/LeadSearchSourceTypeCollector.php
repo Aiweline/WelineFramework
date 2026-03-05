@@ -6,10 +6,8 @@ namespace WeShop\Store\Observer;
 
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use WeShop\Store\Model\Store;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Websites\Model\WebsiteLanguage;
-use Weline\I18n\Model\Locals;
+use WeShop\Store\Model\Store;
 
 /**
  * 自动寻客来源类型收集 - 店铺类型观察者
@@ -32,8 +30,8 @@ class LeadSearchSourceTypeCollector implements ObserverInterface
         /** @var Store $storeModel */
         $storeModel = ObjectManager::getInstance(Store::class);
         $storeModel->clear()
-            ->where(Store::fields_STATUS, Store::STATUS_ENABLED)
-            ->order(Store::fields_NAME, 'ASC')
+            ->where(Store::schema_fields_STATUS, Store::STATUS_ENABLED)
+            ->order(Store::schema_fields_NAME, 'ASC')
             ->select()
             ->fetch();
 
@@ -44,39 +42,25 @@ class LeadSearchSourceTypeCollector implements ObserverInterface
             }
             
             // 获取店铺基础描述
-            $description = (string)($store->getData(Store::fields_DESCRIPTION) ?? '');
+            $description = (string)($store->getData(Store::schema_fields_DESCRIPTION) ?? '');
             
             // 获取店铺关联的语言信息
             $languages = [];
-            $websiteId = (int)$store->getData(Store::fields_WEBSITE_ID);
+            $websiteId = (int)$store->getData(Store::schema_fields_WEBSITE_ID);
             if ($websiteId > 0) {
                 try {
-                    /** @var WebsiteLanguage $websiteLanguageModel */
-                    $websiteLanguageModel = ObjectManager::getInstance(WebsiteLanguage::class);
-                    $languageCodes = $websiteLanguageModel->getWebsiteLanguageCodes($websiteId);
-                    
+                    $languageCodes = w_query('websites', 'getWebsiteLanguageCodes', ['website_id' => $websiteId]);
+
                     if (!empty($languageCodes)) {
-                        // 获取语言名称
-                        /** @var Locals $localsModel */
-                        $localsModel = ObjectManager::getInstance(Locals::class);
                         foreach ($languageCodes as $code) {
-                            $locale = $localsModel->clear()
-                                ->where(Locals::fields_CODE, $code)
-                                ->where(Locals::fields_IS_ACTIVE, 1)
-                                ->find()
-                                ->fetch();
-                            
-                            if ($locale->getId()) {
-                                $languages[] = [
-                                    'code' => $code,
-                                    'name' => $locale->getData(Locals::fields_NAME) ?: $code,
-                                ];
-                            } else {
-                                $languages[] = [
-                                    'code' => $code,
-                                    'name' => $code,
-                                ];
-                            }
+                            $locale = w_query('i18n', 'getLocaleByCode', [
+                                'code' => $code,
+                                'target_code' => $code,
+                            ]);
+                            $languages[] = [
+                                'code' => $code,
+                                'name' => $locale['name'] ?? $code,
+                            ];
                         }
                     }
                 } catch (\Exception $e) {
@@ -86,21 +70,17 @@ class LeadSearchSourceTypeCollector implements ObserverInterface
             
             // 获取店铺默认区域信息
             $regions = [];
-            $local = (string)($store->getData(Store::fields_LOCAL) ?? '');
+            $local = (string)($store->getData(Store::schema_fields_LOCAL) ?? '');
             if (!empty($local)) {
                 try {
-                    /** @var Locals $localsModel */
-                    $localsModel = ObjectManager::getInstance(Locals::class);
-                    $locale = $localsModel->clear()
-                        ->where(Locals::fields_CODE, $local)
-                        ->where(Locals::fields_IS_ACTIVE, 1)
-                        ->find()
-                        ->fetch();
-                    
-                    if ($locale->getId()) {
+                    $locale = w_query('i18n', 'getLocaleByCode', [
+                        'code' => $local,
+                        'target_code' => $local,
+                    ]);
+                    if ($locale !== null) {
                         $regions[] = [
                             'code' => $local,
-                            'name' => $locale->getData(Locals::fields_NAME) ?: $local,
+                            'name' => $locale['name'] ?? $local,
                         ];
                     }
                 } catch (\Exception $e) {
@@ -130,10 +110,10 @@ class LeadSearchSourceTypeCollector implements ObserverInterface
             
             $options[] = [
                 'id'          => (int)$store->getId(),
-                'name'        => $store->getData(Store::fields_NAME),
+                'name'        => $store->getData(Store::schema_fields_NAME),
                 'description' => $enhancedDescription,
                 'meta'        => [
-                    'code'       => $store->getData(Store::fields_CODE),
+                    'code'       => $store->getData(Store::schema_fields_CODE),
                     'website_id' => $websiteId,
                     'languages'  => $languages,
                     'regions'    => $regions,
