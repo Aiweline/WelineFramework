@@ -48,7 +48,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         if ($this->session->isLoggedIn()) {
             // 有来源网址就跳回来源网址
             $this->redirectReferer();
-            $this->redirect($this->_url->getBackendUrl('admin'));
+            $this->redirect($this->getBackendUrlSameOrigin('admin'));
         }
         //        $this->session->delete('backend_disable_login');
         $this->assign('post_url', $this->_url->getBackendUrl('admin/login/post'));
@@ -103,7 +103,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         if ($this->session->isLoggedIn()) {
             // 有来源网址就跳回来源网址
             $this->redirectReferer();
-            $this->redirect($this->_url->getBackendUrl('admin'));
+            $this->redirect($this->getBackendUrlSameOrigin('admin'));
         }
         # 验证 form 表单
         // if (empty($this->request->getParam('form_key')) || ($this->session->get('form_key') !== $this->request->getParam('form_key'))) {
@@ -220,10 +220,12 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             $this->redirect($this->_url->getBackendUrl('/admin/login'));
             return;
         }
+        // 登录成功后立即持久化 Session（避免 WLS 下重定向请求读不到登录态导致循环重定向）
+        $this->session->getSession()->save();
         // 有来源网址就跳回来源网址
         $this->redirectReferer();
-        # 跳转首页
-        $this->redirect($this->_url->getBackendUrl('admin'));
+        # 跳转首页（使用当前请求同源 URL，确保 Cookie 能带上，避免跨 host 丢失 Session）
+        $this->redirect($this->getBackendUrlSameOrigin('admin'));
     }
 
     private function redirectReferer(): void
@@ -236,7 +238,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 $refererRoutePath = trim($parsed['uri'] ?? '', '/');
                 if ($refererRoutePath && MenuUrlValidator::isValidLoginRedirectTarget($refererRoutePath)) {
                     $this->session->delete('backend_login_referer');
-                    $this->redirect($backend_login_referer);
+                    $this->redirect($this->ensureSameOrigin($backend_login_referer));
                     return;
                 } else {
                     // 不是有效跳转目标，清除
@@ -252,13 +254,37 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 $parsed = \Weline\Framework\Http\Url::parser($referer);
                 $refererRoutePath = trim($parsed['uri'] ?? '', '/');
                 if ($refererRoutePath && MenuUrlValidator::isValidLoginRedirectTarget($refererRoutePath)) {
-                    $this->redirect($referer);
+                    $this->redirect($this->ensureSameOrigin($referer));
                 } else {
                     // 不是有效跳转目标，清除
                     $this->session->delete('referer');
                 }
             }
         }
+    }
+
+    /**
+     * 使用当前请求的 scheme+host 生成后台 URL，保证登录后重定向同源，Cookie 能带上，避免循环重定向。
+     */
+    private function getBackendUrlSameOrigin(string $path): string
+    {
+        $pathPart = $this->_url->getBackendUrlPath($path);
+        $scheme = $this->request->isSecure() ? 'https' : 'http';
+        $host = $this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost';
+        return $scheme . '://' . $host . $pathPart;
+    }
+
+    /**
+     * 将 URL 规范为当前请求同源（保留 path+query，替换 scheme+host），避免跨 host 重定向导致 Cookie 不发送。
+     */
+    private function ensureSameOrigin(string $url): string
+    {
+        $parsed = \parse_url($url);
+        $path = $parsed['path'] ?? '/';
+        $query = isset($parsed['query']) && $parsed['query'] !== '' ? '?' . $parsed['query'] : '';
+        $scheme = $this->request->isSecure() ? 'https' : 'http';
+        $host = $this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost';
+        return $scheme . '://' . $host . $path . $query;
     }
 
     public function logout(): void
