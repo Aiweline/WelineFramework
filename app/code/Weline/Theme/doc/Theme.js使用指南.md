@@ -448,19 +448,27 @@ if (window.Weline) {
 }
 ```
 
-### 示例 2: 模块加载
+### 示例 2: 模块加载与 API 请求
+
+所有 Ajax 请求**必须**使用 `Weline.Api.request`，以支持维护模式感知、404/5xx 友好提示；支持请求级 `onError`/`onHttpError` 回调和 DEV 下完整错误暴露。详见 `Weline_Frontend::doc/Weline.Api使用指南.md`。
 
 ```javascript
 // 声明并加载 API 模块
 Weline.declare('api', true, null, function() {
     console.log('API 模块已加载');
     
-    // 使用 API 模块
-    Weline.Api.request('/api/data', {
-        method: 'GET'
-    }).then(function(response) {
-        console.log('数据:', response);
-    });
+    // 使用 Weline.Api 发起请求
+    Weline.Api.request('/api/data', { method: 'GET' })
+        .then(function(response) {
+            if (response.ok) {
+                console.log('数据:', response.data);
+            } else {
+                BackendToast.error(response.data?.msg || '获取失败');
+            }
+        })
+        .catch(function(err) {
+            if (!err.maintenance) BackendToast.error(err.message || '请求失败');
+        });
 });
 ```
 
@@ -492,8 +500,8 @@ document.addEventListener('themechange', function(event) {
 <script>
 document.querySelector('[data-weline-load]').addEventListener('weline-modules-loaded', function(event) {
     console.log('模块已加载:', event.detail.modules);
-    // 使用加载的模块
-    Weline.Api.request('/api/data');
+    Weline.Api.request('/api/data', { method: 'GET' })
+        .then(function(r) { if (r.ok) console.log('数据:', r.data); });
 });
 </script>
 ```

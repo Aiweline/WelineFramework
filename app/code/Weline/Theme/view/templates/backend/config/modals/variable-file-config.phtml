@@ -277,13 +277,10 @@ foreach ($variables as $varName => $var) {
         saveBtn.disabled = true;
         saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span><?= __('保存中...') ?>';
         
-        fetch(saveUrl, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.code === 200) {
+        window.Weline.Api.request(saveUrl, { method: 'POST', body: formData })
+        .then(function(response) {
+            var data = response.data;
+            if (response.ok && data && data.code === 200) {
                 if (typeof showSaveToast === 'function') {
                     showSaveToast(data.msg || '<?= __('配置保存成功') ?>', 'success');
                 } else {
@@ -311,29 +308,31 @@ foreach ($variables as $varName => $var) {
                     bsModal.hide();
                 }
             } else {
+                var errMsg = (data && (data.msg || data.message)) || '<?= __('保存失败') ?>';
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'error',
                         title: '<?= __('保存失败') ?>',
-                        text: data.msg || '<?= __('保存失败') ?>',
+                        text: errMsg,
                         confirmButtonText: '<?= __('确定') ?>'
                     });
                 } else {
-                    console.error(data.msg || '<?= __('保存失败') ?>');
+                    console.error(errMsg);
                 }
             }
         })
-        .catch(error => {
+        .catch(function(error) {
             console.error('Error:', error);
+            var msg = error && error.message ? error.message : '<?= __('网络错误') ?>';
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
                     icon: 'error',
                     title: '<?= __('保存失败') ?>',
-                    text: error.message,
+                    text: msg,
                     confirmButtonText: '<?= __('确定') ?>'
                 });
             } else {
-                console.error('<?= __('保存失败') ?>: ' + error.message);
+                console.error('<?= __('保存失败') ?>: ' + msg);
             }
         })
         .finally(() => {
