@@ -463,15 +463,15 @@ $(document).ready(function() {
         $loginText.hide();
         $loginSpinner.removeClass('d-none').show();
 
-        // 发送登录请求
-        $.ajax({
-            url: '/customer/account/login',
+        // 发送登录请求（使用 Weline.Api）
+        window.Weline.Api.request('/customer/account/login', {
             method: 'POST',
-            data: $form.serialize(),
-            dataType: 'json',
-            success: function(response) {
-                if (response.success) {
-                    // 登录成功
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: $form.serialize()
+        })
+        .then(function(response) {
+            var resp = response.data;
+            if (response.ok && resp && resp.success) {
                     $loginBtn.removeClass('btn-loading').addClass('btn-success');
                     $loginSpinner.addClass('d-none').hide();
                     $loginText.html('<i class="fas fa-check-circle me-2"></i><lang>登录成功！</lang>').show();
@@ -483,20 +483,15 @@ $(document).ready(function() {
                     });
                     
                     setTimeout(function() {
-                        window.location.href = response.redirect || '/customer/account';
+                        window.location.href = (resp.redirect || '/customer/account');
                     }, 800);
                 } else {
-                    // 登录失败
-                    handleLoginError(response.message || '<lang>登录失败，请检查用户名和密码</lang>');
+                    handleLoginError((resp && resp.message) || '<lang>登录失败，请检查用户名和密码</lang>');
                 }
-            },
-            error: function(xhr) {
-                let errorMsg = '<lang>登录请求失败，请稍后重试</lang>';
-                if (xhr.responseJSON && xhr.responseJSON.message) {
-                    errorMsg = xhr.responseJSON.message;
-                }
-                handleLoginError(errorMsg);
-            }
+        })
+        .catch(function(error) {
+            var errorMsg = (error && error.response && error.response.data && (error.response.data.message || error.response.data.msg)) || (error && error.message) || '<lang>登录请求失败，请稍后重试</lang>';
+            handleLoginError(errorMsg);
         });
     });
 
