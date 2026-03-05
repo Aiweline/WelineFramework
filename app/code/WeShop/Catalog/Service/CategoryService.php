@@ -49,8 +49,8 @@ class CategoryService
         // 克隆模型以避免状态污染
         $category = clone $categoryModel;
         $category->clear()
-            ->where(Category::fields_HANDLE, $decodedHandle)
-            ->where(Category::fields_IS_ACTIVE, 1)
+            ->where(Category::schema_fields_HANDLE, $decodedHandle)
+            ->where(Category::schema_fields_IS_ACTIVE, 1)
             ->find()
             ->fetch();
 
@@ -64,8 +64,8 @@ class CategoryService
             if ($leafHandle !== '') {
                 $category = clone $categoryModel;
                 $category->clear()
-                    ->where(Category::fields_HANDLE, $leafHandle)
-                    ->where(Category::fields_IS_ACTIVE, 1)
+                    ->where(Category::schema_fields_HANDLE, $leafHandle)
+                    ->where(Category::schema_fields_IS_ACTIVE, 1)
                     ->find()
                     ->fetch();
 
@@ -79,8 +79,8 @@ class CategoryService
         if ($decodedHandle !== $handle) {
             $category = clone $categoryModel;
             $category->clear()
-                ->where(Category::fields_HANDLE, $handle)
-                ->where(Category::fields_IS_ACTIVE, 1)
+                ->where(Category::schema_fields_HANDLE, $handle)
+                ->where(Category::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
 
@@ -104,9 +104,9 @@ class CategoryService
         $category = ObjectManager::getInstance(Category::class);
         
         return $category->clear()
-            ->where(Category::fields_PARENT_ID, $parentId)
-            ->where(Category::fields_IS_ACTIVE, 1)
-            ->order(Category::fields_SORT_ORDER, 'ASC')
+            ->where(Category::schema_fields_PARENT_ID, $parentId)
+            ->where(Category::schema_fields_IS_ACTIVE, 1)
+            ->order(Category::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetchArray();
     }
@@ -191,8 +191,8 @@ class CategoryService
         
         return $category->clear()
             ->loadLocalDescription()
-            ->where(Category::fields_PARENT_ID, $parentId)
-            ->order(Category::fields_SORT_ORDER, 'ASC')
+            ->where(Category::schema_fields_PARENT_ID, $parentId)
+            ->order(Category::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetchArray();
     }
@@ -272,12 +272,12 @@ class CategoryService
         /** @var Category $category */
         $category = ObjectManager::getInstance(Category::class);
         
-        if (!empty($categoryData[Category::fields_ID])) {
-            $category->load($categoryData[Category::fields_ID]);
+        if (!empty($categoryData[Category::schema_fields_ID])) {
+            $category->load($categoryData[Category::schema_fields_ID]);
         }
         
         foreach ($categoryData as $key => $value) {
-            if ($key !== Category::fields_ID) {
+            if ($key !== Category::schema_fields_ID) {
                 $category->setData($key, $value);
             }
         }
