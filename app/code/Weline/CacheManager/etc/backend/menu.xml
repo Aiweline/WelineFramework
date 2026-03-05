@@ -10,11 +10,5 @@
         
         <menu source="Weline_CacheManager::system_cache" name="system_cache" title="缓存管理" action="*/system/cache"
               icon="mdi mdi-database-cog-outline" order="10"/>
-        
-        <menu source="Weline_CacheManager::cache_cleanup" name="cache_cleanup" title="缓存清理" action="*/backend/cachecleanup"
-              icon="mdi mdi-broom" order="20"/>
-        
-        <menu source="Weline_CacheManager::cron_status" name="cron_status" title="定时任务状态" action="*/backend/cachecleanup/cron-status"
-              icon="mdi mdi-clock-check-outline" order="30"/>
     </menu>
 </menus>

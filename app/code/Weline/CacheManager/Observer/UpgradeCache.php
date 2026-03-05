@@ -73,19 +73,19 @@ class UpgradeCache implements \Weline\Framework\Event\ObserverInterface
         $cacheModel = ObjectManager::make(\Weline\CacheManager\Model\Cache::class);
         
         $existing = $cacheModel
-            ->where($cacheModel::fields_IDENTITY, $poolInfo['identity'])
+            ->where($cacheModel::schema_fields_IDENTITY, $poolInfo['identity'])
             ->find()
             ->fetch();
         
         $data = [
-            $cacheModel::fields_NAME => $poolInfo['name'],
-            $cacheModel::fields_IDENTITY => $poolInfo['identity'],
-            $cacheModel::fields_Module => 'Weline_Framework',
-            $cacheModel::fields_FILE => 'CacheManager Pool',
-            $cacheModel::fields_TYPE => 0,
-            $cacheModel::fields_Status => 1,
-            $cacheModel::fields_Permanently => $poolInfo['permanent'] ? 1 : 0,
-            $cacheModel::fields_DESCRIPTION => $poolInfo['tip'],
+            $cacheModel::schema_fields_NAME => $poolInfo['name'],
+            $cacheModel::schema_fields_IDENTITY => $poolInfo['identity'],
+            $cacheModel::schema_fields_Module => 'Weline_Framework',
+            $cacheModel::schema_fields_FILE => 'CacheManager Pool',
+            $cacheModel::schema_fields_TYPE => 0,
+            $cacheModel::schema_fields_Status => 1,
+            $cacheModel::schema_fields_Permanently => $poolInfo['permanent'] ? 1 : 0,
+            $cacheModel::schema_fields_DESCRIPTION => $poolInfo['tip'],
         ];
         
         if ($existing && $existing->getId()) {
