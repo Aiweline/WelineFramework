@@ -218,9 +218,10 @@ $userType = $this->getData('user_type') ?? 'backend';
         
         if (window.showLoading) showLoading();
         
-        fetch(getUserListUrl + encodeURIComponent(search))
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
+        var url = getUserListUrl + encodeURIComponent(search);
+        window.Weline.Api.get(url, { silent: true })
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (window.hideLoading) hideLoading();
                 if (data.code === 200) {
                     displayUsers(data.data.users);
@@ -312,12 +313,10 @@ $userType = $this->getData('user_type') ?? 'backend';
         formData.append('site_id', siteId);
         formData.append('user_type', selectedUserType);
         
-        fetch(generateTokenUrl, {
-            method: 'POST',
-            body: formData
-        })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
+        var opts = { method: 'POST', body: formData };
+        window.Weline.Api.request(generateTokenUrl, opts)
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (window.hideLoading) hideLoading();
                 if (data.code === 200) {
                     displayTokenResult(data.data);
