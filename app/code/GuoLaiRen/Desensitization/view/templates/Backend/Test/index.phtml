@@ -170,14 +170,14 @@ $models = $this->models ?? [];
         resultContent.innerHTML = '<div class="text-center py-4"><i class="mdi mdi-loading mdi-spin me-2"></i><?= __('正在测试...') ?></div>';
         resultCard.style.display = 'block';
 
-        fetch('<?= $this->getBackendUrl('*/backend/test/execute') ?>', {
+        window.Weline.Api.request('<?= $this->getBackendUrl('*/backend/test/execute') ?>', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(data)
         })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
-            if (data.success) {
+        .then(function(response) {
+            var data = response.data;
+            if (response.ok && data && data.success) {
                 var result = data.data;
                 resultContent.innerHTML = 
                     '<div class="alert alert-success">' +
@@ -198,11 +198,11 @@ $models = $this->models ?? [];
                         '</div>' +
                     '</div>';
             } else {
-                resultContent.innerHTML = '<div class="alert alert-danger"><?= __('测试失败') ?>: ' + data.message + '</div>';
+                resultContent.innerHTML = '<div class="alert alert-danger"><?= __('测试失败') ?>: ' + (data && (data.message || data.msg)) + '</div>';
             }
         })
         .catch(function(error) {
-            resultContent.innerHTML = '<div class="alert alert-danger"><?= __('测试失败') ?>: ' + error.message + '</div>';
+            resultContent.innerHTML = '<div class="alert alert-danger"><?= __('测试失败') ?>: ' + (error && error.message ? error.message : '') + '</div>';
         });
     });
 })();
