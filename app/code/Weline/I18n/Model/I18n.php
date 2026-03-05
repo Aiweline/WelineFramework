@@ -414,6 +414,13 @@ class I18n
 
     public function getLocalsWords(bool $cache = true, ?string $moduleName = null): array
     {
+        // 翻译数据量大，提前提升内存限制，避免在收集过程中内存溢出
+        $_prevMemLimit = ini_get('memory_limit');
+        $currentLimit = $this->parseMemoryLimit($_prevMemLimit);
+        if ($currentLimit > 0 && $currentLimit < 512 * 1024 * 1024) {
+            ini_set('memory_limit', '512M');
+        }
+
         if (self::$local_words and $cache) {
             return self::$local_words;
         }
@@ -596,15 +603,7 @@ class I18n
             echo "共发现 " . $error_count . " 个问题\n";
             echo str_repeat("=", 80) . "\n\n";
         }
-        
-        // 翻译数据量大，提前提升内存限制，避免在收集过程中内存溢出
-        $_prevMemLimit = ini_get('memory_limit');
-        $currentLimit = $this->parseMemoryLimit($_prevMemLimit);
-        $requiredLimit = 512 * 1024 * 1024; // 512MB
-        if ($currentLimit < $requiredLimit) {
-            ini_set('memory_limit', '512M');
-        }
-        
+
         $directories = [];
         foreach (Env::getInstance()->getActiveModules() as $module) {
             if ($moduleName !== null && $module['name'] !== $moduleName) {
@@ -692,12 +691,12 @@ class I18n
                         $locals_words[$local_code] = [];
                     }
                     $db_translations = $localeDictionary->reset()
-                        ->where(LocaleDictionary::fields_LOCALE_CODE, $local_code)
+                        ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $local_code)
                         ->select()
                         ->fetchArray();
                     foreach ($db_translations as $db_trans) {
-                        $word = $db_trans[LocaleDictionary::fields_WORD] ?? '';
-                        $translate = $db_trans[LocaleDictionary::fields_TRANSLATE] ?? '';
+                        $word = $db_trans[LocaleDictionary::schema_fields_WORD] ?? '';
+                        $translate = $db_trans[LocaleDictionary::schema_fields_TRANSLATE] ?? '';
                         if ($word && $translate) {
                             $locals_words[$local_code][$word] = $translate;
                         }
@@ -910,7 +909,7 @@ class I18n
             if ($countryCode && Countries::exists($countryCode)) {
                 $countriesModel = ObjectManager::getInstance(\Weline\I18n\Model\Countries::class);
                 $country = $countriesModel->reset()
-                    ->where(\Weline\I18n\Model\Countries::fields_CODE, $countryCode)
+                    ->where(\Weline\I18n\Model\Countries::schema_fields_CODE, $countryCode)
                     ->find()
                     ->fetch();
                 
@@ -918,10 +917,10 @@ class I18n
                     $flag = (string)$this->getCountryFlag($countryCode);
                     $countriesModel->reset()
                         ->setData([
-                            \Weline\I18n\Model\Countries::fields_CODE => $countryCode,
-                            \Weline\I18n\Model\Countries::fields_FLAG => $flag,
-                            \Weline\I18n\Model\Countries::fields_IS_INSTALL => 1,
-                            \Weline\I18n\Model\Countries::fields_IS_ACTIVE => 1,
+                            \Weline\I18n\Model\Countries::schema_fields_CODE => $countryCode,
+                            \Weline\I18n\Model\Countries::schema_fields_FLAG => $flag,
+                            \Weline\I18n\Model\Countries::schema_fields_IS_INSTALL => 1,
+                            \Weline\I18n\Model\Countries::schema_fields_IS_ACTIVE => 1,
                         ])
                         ->save();
                     if (php_sapi_name() === 'cli') {
@@ -929,12 +928,12 @@ class I18n
                     }
                 } else {
                     $needUpdate = false;
-                    if (!$country->getData(\Weline\I18n\Model\Countries::fields_IS_INSTALL)) {
-                        $country->setData(\Weline\I18n\Model\Countries::fields_IS_INSTALL, 1);
+                    if (!$country->getData(\Weline\I18n\Model\Countries::schema_fields_IS_INSTALL)) {
+                        $country->setData(\Weline\I18n\Model\Countries::schema_fields_IS_INSTALL, 1);
                         $needUpdate = true;
                     }
-                    if (!$country->getData(\Weline\I18n\Model\Countries::fields_IS_ACTIVE)) {
-                        $country->setData(\Weline\I18n\Model\Countries::fields_IS_ACTIVE, 1);
+                    if (!$country->getData(\Weline\I18n\Model\Countries::schema_fields_IS_ACTIVE)) {
+                        $country->setData(\Weline\I18n\Model\Countries::schema_fields_IS_ACTIVE, 1);
                         $needUpdate = true;
                     }
                     if ($needUpdate) {
@@ -948,7 +947,7 @@ class I18n
 
             $localeModel = ObjectManager::getInstance(Locale::class);
             $locale = $localeModel->reset()
-                ->where(Locale::fields_CODE, $localeCode)
+                ->where(Locale::schema_fields_CODE, $localeCode)
                 ->find()
                 ->fetch();
             
@@ -959,11 +958,11 @@ class I18n
                 }
                 $localeModel->reset()
                     ->setData([
-                        Locale::fields_CODE => $localeCode,
-                        Locale::fields_COUNTRY_CODE => $countryCode,
-                        Locale::fields_FLAG => $flag,
-                        Locale::fields_IS_ACTIVE => 1,
-                        Locale::fields_IS_INSTALL => 1,
+                        Locale::schema_fields_CODE => $localeCode,
+                        Locale::schema_fields_COUNTRY_CODE => $countryCode,
+                        Locale::schema_fields_FLAG => $flag,
+                        Locale::schema_fields_IS_ACTIVE => 1,
+                        Locale::schema_fields_IS_INSTALL => 1,
                     ])
                     ->save();
                 if (php_sapi_name() === 'cli') {
@@ -971,12 +970,12 @@ class I18n
                 }
             } else {
                 $needUpdate = false;
-                if (!$locale->getData(Locale::fields_IS_INSTALL)) {
-                    $locale->setData(Locale::fields_IS_INSTALL, 1);
+                if (!$locale->getData(Locale::schema_fields_IS_INSTALL)) {
+                    $locale->setData(Locale::schema_fields_IS_INSTALL, 1);
                     $needUpdate = true;
                 }
-                if (!$locale->getData(Locale::fields_IS_ACTIVE)) {
-                    $locale->setData(Locale::fields_IS_ACTIVE, 1);
+                if (!$locale->getData(Locale::schema_fields_IS_ACTIVE)) {
+                    $locale->setData(Locale::schema_fields_IS_ACTIVE, 1);
                     $needUpdate = true;
                 }
                 if ($needUpdate) {

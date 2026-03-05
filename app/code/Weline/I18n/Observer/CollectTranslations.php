@@ -56,11 +56,11 @@ class CollectTranslations implements ObserverInterface
             $moduleName = $translation['module'] ?? $event->getData('module') ?? 'Weline_I18n';
 
             // 检查词汇是否已存在于i18n_dictionary表
-            $dictionary->load(Dictionary::fields_WORD, $translationKey);
+            $dictionary->load(Dictionary::schema_fields_WORD, $translationKey);
             if (!$dictionary->getId()) {
-                $dictionary->setData(Dictionary::fields_WORD, $translationKey);
-                $dictionary->setData(Dictionary::fields_MODULE, $moduleName);
-                $dictionary->setData(Dictionary::fields_IS_BACKEND, $translation['is_backend'] ?? 1);
+                $dictionary->setData(Dictionary::schema_fields_WORD, $translationKey);
+                $dictionary->setData(Dictionary::schema_fields_MODULE, $moduleName);
+                $dictionary->setData(Dictionary::schema_fields_IS_BACKEND, $translation['is_backend'] ?? 1);
                 $dictionary->save();
             }
             
@@ -69,13 +69,13 @@ class CollectTranslations implements ObserverInterface
             /** @var LocaleDictionary $localeDict */
             $localeDict = ObjectManager::getInstance(LocaleDictionary::class);
             $md5 = LocaleDictionary::generateMd5($translationKey, $defaultLocale);
-            $localeDict->load(LocaleDictionary::fields_MD5, $md5);
+            $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5);
             
             if (!$localeDict->getId()) {
-                $localeDict->setData(LocaleDictionary::fields_MD5, $md5);
-                $localeDict->setData(LocaleDictionary::fields_WORD, $translationKey);
-                $localeDict->setData(LocaleDictionary::fields_LOCALE_CODE, $defaultLocale);
-                $localeDict->setData(LocaleDictionary::fields_TRANSLATE, $value);
+                $localeDict->setData(LocaleDictionary::schema_fields_MD5, $md5);
+                $localeDict->setData(LocaleDictionary::schema_fields_WORD, $translationKey);
+                $localeDict->setData(LocaleDictionary::schema_fields_LOCALE_CODE, $defaultLocale);
+                $localeDict->setData(LocaleDictionary::schema_fields_TRANSLATE, $value);
                 $localeDict->save();
             }
         }

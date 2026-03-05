@@ -43,13 +43,13 @@ class Countries extends BaseController
         // 使用LEFT JOIN获取国家显示名称，明确选择 display_name 字段
         // 在 ON 条件中添加当前语言限制，优先显示当前语言的显示名称
         $currentLang = Cookie::getLangLocal();
-        $joinCondition = "main_table.code=cln.country_code AND cln." . Name::fields_DISPLAY_LOCALE_CODE . "='" . addslashes($currentLang) . "'";
+        $joinCondition = "main_table.code=cln.country_code AND cln." . Name::schema_fields_DISPLAY_LOCALE_CODE . "='" . addslashes($currentLang) . "'";
         $this->countries->joinModel(
             Name::class, 
             'cln', 
             $joinCondition, 
             'left',
-            'cln.' . Name::fields_DISPLAY_NAME . ' as display_name, cln.' . Name::fields_DISPLAY_LOCALE_CODE
+            'cln.' . Name::schema_fields_DISPLAY_NAME . ' as display_name, cln.' . Name::schema_fields_DISPLAY_LOCALE_CODE
         );
         $this->localeNames = $localeName;
     }
@@ -59,38 +59,38 @@ class Countries extends BaseController
         parent::__init();
         if ($search = $this->request->getGet('search')) {
             $search = addslashes($search);
-            $code = $this->countries::fields_CODE;
-            $name = Name::fields_DISPLAY_NAME;
+            $code = $this->countries::schema_fields_CODE;
+            $name = Name::schema_fields_DISPLAY_NAME;
             $this->countries->concat_like("main_table.{$code},cln.{$name}", "%{$search}%");
         }
         
         // 高级搜索条件
         if ($searchCode = $this->request->getGet('search_code')) {
             $searchCode = addslashes($searchCode);
-            $this->countries->like('main_table.' . $this->countries::fields_CODE, "%{$searchCode}%");
+            $this->countries->like('main_table.' . $this->countries::schema_fields_CODE, "%{$searchCode}%");
         }
         
         if ($searchName = $this->request->getGet('search_name')) {
             $searchName = addslashes($searchName);
-            $this->countries->like('cln.' . Name::fields_DISPLAY_NAME, "%{$searchName}%");
+            $this->countries->like('cln.' . Name::schema_fields_DISPLAY_NAME, "%{$searchName}%");
         }
         
         if ($searchStatus = $this->request->getGet('search_status')) {
             // 注意：由于有 joinModel，需要使用 main_table 前缀
             switch ($searchStatus) {
                 case 'active':
-                    $this->countries->where('main_table.' . $this->countries::fields_IS_INSTALL, 1)
-                                   ->where('main_table.' . $this->countries::fields_IS_ACTIVE, 1);
+                    $this->countries->where('main_table.' . $this->countries::schema_fields_IS_INSTALL, 1)
+                                   ->where('main_table.' . $this->countries::schema_fields_IS_ACTIVE, 1);
                     break;
                 case 'inactive':
-                    $this->countries->where('main_table.' . $this->countries::fields_IS_INSTALL, 1)
-                                   ->where('main_table.' . $this->countries::fields_IS_ACTIVE, 0);
+                    $this->countries->where('main_table.' . $this->countries::schema_fields_IS_INSTALL, 1)
+                                   ->where('main_table.' . $this->countries::schema_fields_IS_ACTIVE, 0);
                     break;
                 case 'installed':
-                    $this->countries->where('main_table.' . $this->countries::fields_IS_INSTALL, 1);
+                    $this->countries->where('main_table.' . $this->countries::schema_fields_IS_INSTALL, 1);
                     break;
                 case 'uninstalled':
-                    $this->countries->where('main_table.' . $this->countries::fields_IS_INSTALL, 0);
+                    $this->countries->where('main_table.' . $this->countries::schema_fields_IS_INSTALL, 0);
                     break;
             }
         }
@@ -113,20 +113,20 @@ class Countries extends BaseController
         // 注意：由于有 joinModel，需要使用 main_table 前缀来明确指定字段所属表
         switch ($filter) {
             case 'active':
-                $query->where('main_table.' . \Weline\I18n\Model\Countries::fields_IS_INSTALL, 1)
-                      ->where('main_table.' . \Weline\I18n\Model\Countries::fields_IS_ACTIVE, 1);
+                $query->where('main_table.' . \Weline\I18n\Model\Countries::schema_fields_IS_INSTALL, 1)
+                      ->where('main_table.' . \Weline\I18n\Model\Countries::schema_fields_IS_ACTIVE, 1);
                 break;
             case 'inactive':
-                $query->where('main_table.' . \Weline\I18n\Model\Countries::fields_IS_INSTALL, 1)
-                      ->where('main_table.' . \Weline\I18n\Model\Countries::fields_IS_ACTIVE, 0);
+                $query->where('main_table.' . \Weline\I18n\Model\Countries::schema_fields_IS_INSTALL, 1)
+                      ->where('main_table.' . \Weline\I18n\Model\Countries::schema_fields_IS_ACTIVE, 0);
                 break;
             case 'installed':
                 // 显示已安装的（包括激活和未激活）
-                $query->where('main_table.' . \Weline\I18n\Model\Countries::fields_IS_INSTALL, 1);
+                $query->where('main_table.' . \Weline\I18n\Model\Countries::schema_fields_IS_INSTALL, 1);
                 break;
             case 'uninstalled':
                 // 显示未安装的
-                $query->where('main_table.' . \Weline\I18n\Model\Countries::fields_IS_INSTALL, 0);
+                $query->where('main_table.' . \Weline\I18n\Model\Countries::schema_fields_IS_INSTALL, 0);
                 break;
             case 'all':
                 // 显示所有国家（包括已安装和未安装的）
@@ -184,7 +184,7 @@ class Countries extends BaseController
         foreach ($countries as $country) {
             // 如果 display_name 为空，使用国家代码或从 I18n 服务获取
             if (empty($country->getData('display_name'))) {
-                $countryCode = $country->getData($this->countries::fields_CODE);
+                $countryCode = $country->getData($this->countries::schema_fields_CODE);
                 // 尝试从 I18n 服务获取国家名称
                 try {
                     $countryNames = $this->i18n->getCountries($currentLang);
@@ -202,7 +202,7 @@ class Countries extends BaseController
             
             // 确保 flag 字段存在
             if (empty($country->getData('flag'))) {
-                $countryCode = $country->getData($this->countries::fields_CODE);
+                $countryCode = $country->getData($this->countries::schema_fields_CODE);
                 try {
                     $flag = $this->i18n->getCountryFlag($countryCode, 32, 24);
                     $country->setData('flag', $flag ?: '');
@@ -260,11 +260,11 @@ class Countries extends BaseController
         foreach ($countries as $country) {
             $countriesData[] = [
                 'id' => $country->getId(),
-                'code' => $country->getData($this->countries::fields_CODE),
-                'display_name' => $country->getData('display_name') ?: $country->getData($this->countries::fields_CODE),
+                'code' => $country->getData($this->countries::schema_fields_CODE),
+                'display_name' => $country->getData('display_name') ?: $country->getData($this->countries::schema_fields_CODE),
                 'flag' => $country->getData('flag') ?: '',
-                'is_install' => (bool)$country->getData($this->countries::fields_IS_INSTALL),
-                'is_active' => (bool)$country->getData($this->countries::fields_IS_ACTIVE),
+                'is_install' => (bool)$country->getData($this->countries::schema_fields_IS_INSTALL),
+                'is_active' => (bool)$country->getData($this->countries::schema_fields_IS_ACTIVE),
                 'display_locale_code' => $country->getData('display_locale_code') ?: Cookie::getLangLocal(),
             ];
         }
@@ -311,26 +311,26 @@ class Countries extends BaseController
         $insert_countries_display = [];
         foreach ($countries as $code => $country) {
             $insert_countries[] = [
-                \Weline\I18n\Model\Countries::fields_CODE => $code,
-                \Weline\I18n\Model\Countries::fields_FLAG => (string)$this->i18n->getCountryFlag($code),
-                \Weline\I18n\Model\Countries::fields_IS_ACTIVE => 0,
-                \Weline\I18n\Model\Countries::fields_IS_INSTALL => 0,
+                \Weline\I18n\Model\Countries::schema_fields_CODE => $code,
+                \Weline\I18n\Model\Countries::schema_fields_FLAG => (string)$this->i18n->getCountryFlag($code),
+                \Weline\I18n\Model\Countries::schema_fields_IS_ACTIVE => 0,
+                \Weline\I18n\Model\Countries::schema_fields_IS_INSTALL => 0,
             ];
             $insert_countries_display[] = [
-                Name::fields_COUNTRY_CODE => $code,
-                Name::fields_DISPLAY_LOCALE_CODE => Cookie::getLangLocal(),
-                Name::fields_DISPLAY_NAME => $country,
+                Name::schema_fields_COUNTRY_CODE => $code,
+                Name::schema_fields_DISPLAY_LOCALE_CODE => Cookie::getLangLocal(),
+                Name::schema_fields_DISPLAY_NAME => $country,
             ];
         }
         $this->countries->beginTransaction();
         try {
             // 安装国家数据
-            $this->countries->clearQuery()->insert($insert_countries, \Weline\I18n\Model\Countries::fields_CODE)->fetch();
+            $this->countries->clearQuery()->insert($insert_countries, \Weline\I18n\Model\Countries::schema_fields_CODE)->fetch();
             // 安装显示数据
             $this->localeNames->insert($insert_countries_display, [
-                $this->localeNames::fields_COUNTRY_CODE,
-                $this->localeNames::fields_DISPLAY_LOCALE_CODE,
-                $this->localeNames::fields_DISPLAY_NAME
+                $this->localeNames::schema_fields_COUNTRY_CODE,
+                $this->localeNames::schema_fields_DISPLAY_LOCALE_CODE,
+                $this->localeNames::schema_fields_DISPLAY_NAME
             ])->fetch();
             $this->countries->commit();
             Message::success(__('操作成功！更新%{1}记录。', [count($insert_countries)]));
@@ -356,11 +356,11 @@ class Countries extends BaseController
             $code = $this->request->getPost('code');
             try {
                 $this->countries->clearQuery();
-                $this->countries->load($this->countries::fields_CODE, $code);
+                $this->countries->load($this->countries::schema_fields_CODE, $code);
                 if ($this->countries->getId()) {
-                    $this->countries->setData($this->countries::fields_IS_INSTALL, 1)->save(true);
-                    $this->getMessageManager()->addSuccess(__('成功安装!国家：%{1}(%{2})', [$this->countries->getData($this->localeNames::fields_DISPLAY_NAME),
-                        $this->countries->getData($this->countries::fields_CODE)]));
+                    $this->countries->setData($this->countries::schema_fields_IS_INSTALL, 1)->save(true);
+                    $this->getMessageManager()->addSuccess(__('成功安装!国家：%{1}(%{2})', [$this->countries->getData($this->localeNames::schema_fields_DISPLAY_NAME),
+                        $this->countries->getData($this->countries::schema_fields_CODE)]));
                 } else {
                     $this->getMessageManager()->addWarning(__('国家不存在！国家代码：%{1}', $code));
                 }
@@ -385,17 +385,17 @@ class Countries extends BaseController
         }
         
         try {
-            $this->countries->clearQuery()->where($this->countries::fields_CODE, $code)
+            $this->countries->clearQuery()->where($this->countries::schema_fields_CODE, $code)
                 ->find()
                 ->fetch();
             if ($this->countries->getId()) {
-                $this->countries->setData($this->countries::fields_IS_INSTALL, 0)->save(true);
+                $this->countries->setData($this->countries::schema_fields_IS_INSTALL, 0)->save(true);
                 // 使用 clearQuery() 清除之前可能存在的 join 条件，避免 PostgreSQL UPDATE 语句报错
-                $this->countries->getLocaleModel()->clearQuery()->where(Locale::fields_COUNTRY_CODE, $code)
-                    ->update([Locale::fields_IS_INSTALL => 0, Locale::fields_IS_ACTIVE => 0])
+                $this->countries->getLocaleModel()->clearQuery()->where(Locale::schema_fields_COUNTRY_CODE, $code)
+                    ->update([Locale::schema_fields_IS_INSTALL => 0, Locale::schema_fields_IS_ACTIVE => 0])
                     ->fetch();
-                $this->getMessageManager()->addSuccess(__('成功卸载!国家：%{1}(%{2})', [$this->countries->getData(Name::fields_DISPLAY_NAME),
-                    $this->countries->getData($this->countries::fields_CODE)]));
+                $this->getMessageManager()->addSuccess(__('成功卸载!国家：%{1}(%{2})', [$this->countries->getData(Name::schema_fields_DISPLAY_NAME),
+                    $this->countries->getData($this->countries::schema_fields_CODE)]));
             } else {
                 $this->getMessageManager()->addWarning(__('国家不存在！国家代码：%{1}', $code));
             }
@@ -414,14 +414,14 @@ class Countries extends BaseController
             $this->redirect('*/backend/countries?filter=' . $filter);
         }
         try {
-            $this->countries->clearQuery()->load($this->countries::fields_CODE, $code);
+            $this->countries->clearQuery()->load($this->countries::schema_fields_CODE, $code);
             if (!$this->countries->getId()) {
                 $this->getMessageManager()->addWarning(__('国家不存在！国家代码：%{1}', $code));
                 $this->redirect('*/backend/countries?filter=' . $filter);
             }
-            $this->countries->setData($this->countries::fields_IS_ACTIVE, 1)->save(true);
-            $this->getMessageManager()->addSuccess(__('成功激活国家！国家：%{1}（%{2}）', [$this->countries->getData(Name::fields_DISPLAY_NAME),
-                $this->countries->getData($this->countries::fields_CODE)]));
+            $this->countries->setData($this->countries::schema_fields_IS_ACTIVE, 1)->save(true);
+            $this->getMessageManager()->addSuccess(__('成功激活国家！国家：%{1}（%{2}）', [$this->countries->getData(Name::schema_fields_DISPLAY_NAME),
+                $this->countries->getData($this->countries::schema_fields_CODE)]));
         } catch (\Exception $exception) {
             $this->getMessageManager()->addException($exception);
         }
@@ -445,22 +445,22 @@ class Countries extends BaseController
         
         try {
             $this->countries->clearQuery();
-            $this->countries->load($this->countries::fields_CODE, $code);
+            $this->countries->load($this->countries::schema_fields_CODE, $code);
             if (!$this->countries->getId()) {
                 $this->getMessageManager()->addWarning(__('国家不存在！国家代码：%{1}', $code));
                 $this->redirect('*/backend/countries?filter=' . $filter);
             }
-            $this->countries->setData($this->countries::fields_IS_ACTIVE, 0)->save(true);
-            $this->getMessageManager()->addSuccess(__('成功禁用国家！国家：%{1}（%{2}）', [$this->countries->getData(Name::fields_DISPLAY_NAME),
-                $this->countries->getData($this->countries::fields_CODE)]));
+            $this->countries->setData($this->countries::schema_fields_IS_ACTIVE, 0)->save(true);
+            $this->getMessageManager()->addSuccess(__('成功禁用国家！国家：%{1}（%{2}）', [$this->countries->getData(Name::schema_fields_DISPLAY_NAME),
+                $this->countries->getData($this->countries::schema_fields_CODE)]));
             // FIXME 禁用应当删除对应语言的翻译包
-            $country_locales = $this->locale->where($this->locale::fields_COUNTRY_CODE, $code)->select()->fetch()->getItems();
+            $country_locales = $this->locale->where($this->locale::schema_fields_COUNTRY_CODE, $code)->select()->fetch()->getItems();
             $pack_dir = Env::path_LANGUAGE_PACK;
             /**@var System $system */
             $system = ObjectManager::getInstance(System::class);
             /**@var */
             foreach ($country_locales as $country_locale) {
-                $locale_dirs = glob($pack_dir . '*' . DS . $country_locale->getData($this->locale::fields_ID), GLOB_ONLYDIR);
+                $locale_dirs = glob($pack_dir . '*' . DS . $country_locale->getData($this->locale::schema_fields_ID), GLOB_ONLYDIR);
                 foreach ($locale_dirs as $locale_dir) {
                     $result = $system->exec('rm -rf ' . $locale_dir);
                 }
@@ -499,9 +499,9 @@ class Countries extends BaseController
             
             foreach ($codes as $code) {
                 try {
-                    $this->countries->clearQuery()->load($this->countries::fields_CODE, $code);
+                    $this->countries->clearQuery()->load($this->countries::schema_fields_CODE, $code);
                     if ($this->countries->getId()) {
-                        $this->countries->setData($this->countries::fields_IS_ACTIVE, 1)->save(true);
+                        $this->countries->setData($this->countries::schema_fields_IS_ACTIVE, 1)->save(true);
                         $successCount++;
             } else {
                         $errorCount++;
@@ -549,9 +549,9 @@ class Countries extends BaseController
             
             foreach ($codes as $code) {
                 try {
-                    $this->countries->clearQuery()->load($this->countries::fields_CODE, $code);
+                    $this->countries->clearQuery()->load($this->countries::schema_fields_CODE, $code);
                     if ($this->countries->getId()) {
-                        $this->countries->setData($this->countries::fields_IS_ACTIVE, 0)->save(true);
+                        $this->countries->setData($this->countries::schema_fields_IS_ACTIVE, 0)->save(true);
                         $successCount++;
                     } else {
                         $errorCount++;
@@ -599,9 +599,9 @@ class Countries extends BaseController
             
             foreach ($codes as $code) {
                 try {
-                    $this->countries->clearQuery()->load($this->countries::fields_CODE, $code);
+                    $this->countries->clearQuery()->load($this->countries::schema_fields_CODE, $code);
                     if ($this->countries->getId()) {
-                        $this->countries->setData($this->countries::fields_IS_INSTALL, 1)->save(true);
+                        $this->countries->setData($this->countries::schema_fields_IS_INSTALL, 1)->save(true);
                         $successCount++;
                     } else {
                         $errorCount++;
@@ -639,8 +639,8 @@ class Countries extends BaseController
         
         // 检查zh_Hans_CN是否已存在
         $existingLocale = $locale->clearQuery()
-            ->where(\Weline\I18n\Model\Locale::fields_CODE, 'zh_Hans_CN')
-            ->where(\Weline\I18n\Model\Locale::fields_COUNTRY_CODE, 'CN')
+            ->where(\Weline\I18n\Model\Locale::schema_fields_CODE, 'zh_Hans_CN')
+            ->where(\Weline\I18n\Model\Locale::schema_fields_COUNTRY_CODE, 'CN')
             ->select()
             ->fetch()
             ->getFirst();
@@ -648,15 +648,15 @@ class Countries extends BaseController
         if ($existingLocale && $existingLocale->getId()) {
             // 已存在，更新为已安装且已激活
             // 如果简码字段为空，自动计算并保存
-            if (!$existingLocale->getData(\Weline\I18n\Model\Locale::fields_SHORT_CODE)) {
+            if (!$existingLocale->getData(\Weline\I18n\Model\Locale::schema_fields_SHORT_CODE)) {
                 $localeCodes = \Weline\I18n\Model\Locale::extractLocaleCodes('zh_Hans_CN');
-                $existingLocale->setData(\Weline\I18n\Model\Locale::fields_SHORT_CODE, $localeCodes['short_code'])
-                    ->setData(\Weline\I18n\Model\Locale::fields_ISO2, $localeCodes['iso2'])
-                    ->setData(\Weline\I18n\Model\Locale::fields_ISO3, $localeCodes['iso3']);
+                $existingLocale->setData(\Weline\I18n\Model\Locale::schema_fields_SHORT_CODE, $localeCodes['short_code'])
+                    ->setData(\Weline\I18n\Model\Locale::schema_fields_ISO2, $localeCodes['iso2'])
+                    ->setData(\Weline\I18n\Model\Locale::schema_fields_ISO3, $localeCodes['iso3']);
             }
             
-            $existingLocale->setData(\Weline\I18n\Model\Locale::fields_IS_INSTALL, 1)
-                          ->setData(\Weline\I18n\Model\Locale::fields_IS_ACTIVE, 1)
+            $existingLocale->setData(\Weline\I18n\Model\Locale::schema_fields_IS_INSTALL, 1)
+                          ->setData(\Weline\I18n\Model\Locale::schema_fields_IS_ACTIVE, 1)
                           ->save(true);
         } else {
             // 不存在，创建新的区域记录
@@ -664,28 +664,28 @@ class Countries extends BaseController
             $localeCodes = \Weline\I18n\Model\Locale::extractLocaleCodes('zh_Hans_CN');
             
             $localeData = [
-                \Weline\I18n\Model\Locale::fields_CODE => 'zh_Hans_CN',
-                \Weline\I18n\Model\Locale::fields_COUNTRY_CODE => 'CN',
-                \Weline\I18n\Model\Locale::fields_SHORT_CODE => $localeCodes['short_code'],
-                \Weline\I18n\Model\Locale::fields_ISO2 => $localeCodes['iso2'],
-                \Weline\I18n\Model\Locale::fields_ISO3 => $localeCodes['iso3'],
-                \Weline\I18n\Model\Locale::fields_IS_INSTALL => 1,
-                \Weline\I18n\Model\Locale::fields_IS_ACTIVE => 1,
-                \Weline\I18n\Model\Locale::fields_FLAG => ''
+                \Weline\I18n\Model\Locale::schema_fields_CODE => 'zh_Hans_CN',
+                \Weline\I18n\Model\Locale::schema_fields_COUNTRY_CODE => 'CN',
+                \Weline\I18n\Model\Locale::schema_fields_SHORT_CODE => $localeCodes['short_code'],
+                \Weline\I18n\Model\Locale::schema_fields_ISO2 => $localeCodes['iso2'],
+                \Weline\I18n\Model\Locale::schema_fields_ISO3 => $localeCodes['iso3'],
+                \Weline\I18n\Model\Locale::schema_fields_IS_INSTALL => 1,
+                \Weline\I18n\Model\Locale::schema_fields_IS_ACTIVE => 1,
+                \Weline\I18n\Model\Locale::schema_fields_FLAG => ''
             ];
             
-            $locale->clearQuery()->insert($localeData, [\Weline\I18n\Model\Locale::fields_CODE, \Weline\I18n\Model\Locale::fields_COUNTRY_CODE])->fetch();
+            $locale->clearQuery()->insert($localeData, [\Weline\I18n\Model\Locale::schema_fields_CODE, \Weline\I18n\Model\Locale::schema_fields_COUNTRY_CODE])->fetch();
             
             // 创建区域名称记录
             $localeNameData = [
-                \Weline\I18n\Model\Locale\Name::fields_LOCALE_CODE => 'zh_Hans_CN',
-                \Weline\I18n\Model\Locale\Name::fields_DISPLAY_LOCALE_CODE => 'zh_Hans_CN',
-                \Weline\I18n\Model\Locale\Name::fields_DISPLAY_NAME => '简体中文（中国）'
+                \Weline\I18n\Model\Locale\Name::schema_fields_LOCALE_CODE => 'zh_Hans_CN',
+                \Weline\I18n\Model\Locale\Name::schema_fields_DISPLAY_LOCALE_CODE => 'zh_Hans_CN',
+                \Weline\I18n\Model\Locale\Name::schema_fields_DISPLAY_NAME => '简体中文（中国）'
             ];
             
             $localeName->clearQuery()->insert($localeNameData, [
-                \Weline\I18n\Model\Locale\Name::fields_LOCALE_CODE,
-                \Weline\I18n\Model\Locale\Name::fields_DISPLAY_LOCALE_CODE
+                \Weline\I18n\Model\Locale\Name::schema_fields_LOCALE_CODE,
+                \Weline\I18n\Model\Locale\Name::schema_fields_DISPLAY_LOCALE_CODE
             ])->fetch();
         }
     }
@@ -701,7 +701,7 @@ class Countries extends BaseController
             
             // 首先检查当前语言是否已经有数据，如果有就直接返回
             $existingCount = $this->localeNames->clearQuery()
-                ->where(Name::fields_DISPLAY_LOCALE_CODE, $currentLang)
+                ->where(Name::schema_fields_DISPLAY_LOCALE_CODE, $currentLang)
                 ->count();
             
             if ($existingCount > 0) {
@@ -732,13 +732,13 @@ class Countries extends BaseController
             // 批量准备当前语言的国家数据
             $missingData = [];
             foreach ($allCountries as $country) {
-                $countryCode = $country->getData(\Weline\I18n\Model\Countries::fields_CODE);
+                $countryCode = $country->getData(\Weline\I18n\Model\Countries::schema_fields_CODE);
                 
                 if (isset($countryNames[$countryCode])) {
                     $missingData[] = [
-                        Name::fields_COUNTRY_CODE => $countryCode,
-                        Name::fields_DISPLAY_LOCALE_CODE => $currentLang,
-                        Name::fields_DISPLAY_NAME => $countryNames[$countryCode]
+                        Name::schema_fields_COUNTRY_CODE => $countryCode,
+                        Name::schema_fields_DISPLAY_LOCALE_CODE => $currentLang,
+                        Name::schema_fields_DISPLAY_NAME => $countryNames[$countryCode]
                     ];
                 }
             }
@@ -747,8 +747,8 @@ class Countries extends BaseController
             if (!empty($missingData)) {
                 $this->localeNames->clearQuery()
                     ->insert($missingData, [
-                        Name::fields_COUNTRY_CODE,
-                        Name::fields_DISPLAY_LOCALE_CODE
+                        Name::schema_fields_COUNTRY_CODE,
+                        Name::schema_fields_DISPLAY_LOCALE_CODE
                     ])
                     ->fetch();
             }

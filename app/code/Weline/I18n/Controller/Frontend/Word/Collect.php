@@ -59,9 +59,9 @@ class Collect extends \Weline\Framework\App\Controller\FrontendController
             }
             // word 可以是字符串或任意值，只要 key 存在就注册
             $insertData[] = [
-                $this->dictionary::fields_WORD => $key,
-                $this->dictionary::fields_IS_BACKEND => $this->request->isBackend() ? 1 : 0,
-                $this->dictionary::fields_MODULE => $this->request->getModuleName(),
+                $this->dictionary::schema_fields_WORD => $key,
+                $this->dictionary::schema_fields_IS_BACKEND => $this->request->isBackend() ? 1 : 0,
+                $this->dictionary::schema_fields_MODULE => $this->request->getModuleName(),
             ];
         }
         
@@ -77,10 +77,10 @@ class Collect extends \Weline\Framework\App\Controller\FrontendController
             // 修复：需要先 reset() 清除之前的查询状态
             $this->dictionary->reset()
                 ->insert($insertData, [
-                    $this->dictionary::fields_ID,  // word 是主键，用于判断记录是否存在
+                    $this->dictionary::schema_fields_ID,  // word 是主键，用于判断记录是否存在
                 ], implode(',', [
-                    $this->dictionary::fields_IS_BACKEND,
-                    $this->dictionary::fields_MODULE,
+                    $this->dictionary::schema_fields_IS_BACKEND,
+                    $this->dictionary::schema_fields_MODULE,
                 ]))
                 ->fetch();  // 必须调用 fetch() 才会真正执行插入操作
             $this->dictionary->commit();

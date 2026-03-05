@@ -97,7 +97,7 @@ class Local implements \Weline\Taglib\TaglibInterface
             /**@var Request $request */
             $request = ObjectManager::getInstance(Request::class);
             if ($request->isBackend()) {
-                $action = $request->getUrlBuilder()->getBackendUrl('i18n/backend/taglib/local', ['model' => $model, 'field' => $field]);
+                $action = $request->getUrlBuilder()->getBackendUrl('i18n/backend/taglib/local', ['model' => $model, 'field' => $field, 'isIframe' => '1']);
             } else {
                 $action = $request->getUrlBuilder()->getUrl('i18n/frontend/taglib/local', ['model' => $model, 'field' => $field]);
             }
@@ -228,8 +228,8 @@ class StoreDescription extends \Weline\I18n\LocalModel
 {
     public const indexer = \'store_local_description\';
     public const fields_ID = \'store_id\';
-    public const fields_NAME = Store::fields_NAME;
-    public const fields_DESCRIPTION = Store::fields_DESCRIPTION;
+    public const fields_NAME = Store::schema_fields_NAME;
+    public const fields_DESCRIPTION = Store::schema_fields_DESCRIPTION;
 }
 </pre>示例中，我们设置店铺的name字段可以翻译。<span style="color:red;">除了那么，还可以添加多个字段，比如店铺详情等，使用时指定字段即可。</span>';
     }
