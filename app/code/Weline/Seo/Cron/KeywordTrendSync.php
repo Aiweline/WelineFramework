@@ -77,8 +77,8 @@ class KeywordTrendSync implements CronTaskInterface
             
             // 获取需要同步的关键词（启用状态，最近7天内有更新）
             $keywords = $keywordModel->reset()
-                ->where(SeoKeyword::fields_STATUS, SeoKeyword::STATUS_ENABLED)
-                ->where(SeoKeyword::fields_UPDATED_AT, date('Y-m-d H:i:s', strtotime('-7 days')), '>=')
+                ->where(SeoKeyword::schema_fields_STATUS, SeoKeyword::STATUS_ENABLED)
+                ->where(SeoKeyword::schema_fields_UPDATED_AT, date('Y-m-d H:i:s', strtotime('-7 days')), '>=')
                 ->select()
                 ->fetchArray();
 
@@ -126,8 +126,8 @@ class KeywordTrendSync implements CronTaskInterface
 
                             // 查找关键词ID
                             $keywordRecord = $keywordModel->reset()
-                                ->where(SeoKeyword::fields_SUBJECT_ID, $subjectId)
-                                ->where(SeoKeyword::fields_KEYWORD, $keyword)
+                                ->where(SeoKeyword::schema_fields_SUBJECT_ID, $subjectId)
+                                ->where(SeoKeyword::schema_fields_KEYWORD, $keyword)
                                 ->find()
                                 ->fetch();
 

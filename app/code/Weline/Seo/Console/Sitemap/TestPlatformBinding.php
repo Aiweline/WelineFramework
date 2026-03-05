@@ -97,28 +97,28 @@ class TestPlatformBinding implements CommandInterface
         foreach ($platforms as $data) {
             // 检查是否已存在
             $existing = $this->seoAccountModel->reset()
-                ->where(SeoAccount::fields_PLATFORM, $data['platform'])
-                ->where(SeoAccount::fields_PROVIDER, $data['provider'])
+                ->where(SeoAccount::schema_fields_PLATFORM, $data['platform'])
+                ->where(SeoAccount::schema_fields_PROVIDER, $data['provider'])
                 ->find()
                 ->fetch();
             
             if ($existing->getId()) {
                 // 更新现有账户
                 $existing->setPlatform($data['platform'])
-                    ->setData(SeoAccount::fields_NAME, $data['name'])
-                    ->setData(SeoAccount::fields_IS_ACTIVE, 1)
+                    ->setData(SeoAccount::schema_fields_NAME, $data['name'])
+                    ->setData(SeoAccount::schema_fields_IS_ACTIVE, 1)
                     ->save();
                 $account = $existing;
                 echo "  ✓ 更新账户: {$data['name']} (ID: {$account->getId()}, Platform: {$data['platform']})\n";
             } else {
                 // 创建新账户
                 $account = $this->seoAccountModel->reset()->setData([
-                    SeoAccount::fields_PLATFORM => $data['platform'],
-                    SeoAccount::fields_PROVIDER => $data['provider'],
-                    SeoAccount::fields_NAME => $data['name'],
-                    SeoAccount::fields_DESCRIPTION => $data['description'],
-                    SeoAccount::fields_IS_ACTIVE => 1,
-                    SeoAccount::fields_ENABLE_CRON_SITEMAP => 1,
+                    SeoAccount::schema_fields_PLATFORM => $data['platform'],
+                    SeoAccount::schema_fields_PROVIDER => $data['provider'],
+                    SeoAccount::schema_fields_NAME => $data['name'],
+                    SeoAccount::schema_fields_DESCRIPTION => $data['description'],
+                    SeoAccount::schema_fields_IS_ACTIVE => 1,
+                    SeoAccount::schema_fields_ENABLE_CRON_SITEMAP => 1,
                 ])->save();
                 echo "  ✓ 创建账户: {$data['name']} (ID: {$account->getId()}, Platform: {$data['platform']})\n";
             }
@@ -210,7 +210,7 @@ class TestPlatformBinding implements CommandInterface
     {
         $bindings = $this->seoWebsiteAccountModel->getByWebsiteId($websiteId);
         foreach ($bindings as $binding) {
-            $accountId = (int)($binding[SeoWebsiteAccount::fields_ACCOUNT_ID] ?? 0);
+            $accountId = (int)($binding[SeoWebsiteAccount::schema_fields_ACCOUNT_ID] ?? 0);
             if ($accountId > 0) {
                 $this->seoWebsiteAccountModel->reset()->unbindWebsiteAccount($websiteId, $accountId);
             }

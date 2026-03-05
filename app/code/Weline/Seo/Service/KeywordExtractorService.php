@@ -111,8 +111,8 @@ class KeywordExtractorService
         
         foreach ($keywords as $keyword) {
             $keywordModel->reset()
-                ->where(SeoKeyword::fields_SUBJECT_ID, $subjectId)
-                ->where(SeoKeyword::fields_KEYWORD, $keyword)
+                ->where(SeoKeyword::schema_fields_SUBJECT_ID, $subjectId)
+                ->where(SeoKeyword::schema_fields_KEYWORD, $keyword)
                 ->find()
                 ->fetch();
             

@@ -412,12 +412,10 @@ if ($scope) $baseParams['scope'] = $scope;
             e.preventDefault();
             const formData = new FormData(this);
             
-            fetch(saveUrl, {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
+            var opts = { method: 'POST', body: formData };
+            window.Weline.Api.request(saveUrl, opts)
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
                     alert(data.message || '<?= __('保存成功') ?>');
                     location.reload();
@@ -443,12 +441,10 @@ if ($scope) $baseParams['scope'] = $scope;
             const formData = new FormData();
             formData.append('subject_id', subjectId);
             
-            fetch(refreshUrl, {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
+            var opts = { method: 'POST', body: formData };
+            window.Weline.Api.request(refreshUrl, opts)
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 loading.style.display = 'none';
                 
                 if (data.success && data.data && data.data.suggestion) {

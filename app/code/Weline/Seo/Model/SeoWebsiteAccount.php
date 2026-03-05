@@ -11,47 +11,43 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Model;
 
-use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
-/**
- * 站点-SEO账户关联模型
- *
- * 用于管理站点与SEO账户的绑定关系，
- * 控制站点是否自动提交sitemap到搜索引擎。
- *
- * @package Weline_Seo
- */
+/** 站点-SEO账户关联模型 - 管理站点与SEO账户绑定、sitemap自动提交 */
+#[Table(comment: '站点SEO账户关联表')]
+#[Index(name: 'unique_website_account', columns: ['website_id', 'account_id'], type: 'UNIQUE')]
+#[Index(name: 'idx_website', columns: ['website_id'])]
+#[Index(name: 'idx_account', columns: ['account_id'])]
+#[Index(name: 'idx_auto_submit', columns: ['is_auto_submit'])]
 class SeoWebsiteAccount extends Model
 {
-    public const table = 'weline_seo_website_account';
 
-    /**
-     * Primary key
-     */
-    public string $_primary_key = 'id';
-
-    /**
-     * Primary keys
-     */
+    public const schema_table = 'weline_seo_website_account';
+    public const schema_primary_key = 'id';
     public array $_unit_primary_keys = ['id'];
-
-    /**
-     * 字段常量
-     */
-    public const fields_ID = 'id';
-    public const fields_WEBSITE_ID = 'website_id';
-    public const fields_ACCOUNT_ID = 'account_id';
-    public const fields_IS_AUTO_SUBMIT = 'is_auto_submit';
-    public const fields_SITEMAP_FREQUENCY = 'sitemap_frequency';
-    public const fields_CRAWL_FREQUENCY = 'crawl_frequency';
-    public const fields_PRIORITY = 'priority';
-    public const fields_CONFIG_JSON = 'config_json';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
+    #[Col('int', 0, nullable: false, primaryKey: true, autoIncrement: true, comment: '关联ID')]
+    public const schema_fields_ID = 'id';
+    #[Col('int', 0, nullable: false, comment: '站点ID')]
+    public const schema_fields_WEBSITE_ID = 'website_id';
+    #[Col('int', 0, nullable: false, comment: 'SEO账户ID')]
+    public const schema_fields_ACCOUNT_ID = 'account_id';
+    #[Col('int', 1, nullable: false, default: 1, comment: '是否自动提交sitemap')]
+    public const schema_fields_IS_AUTO_SUBMIT = 'is_auto_submit';
+    #[Col('varchar', 20, nullable: false, default: 'daily', comment: 'Sitemap生成频率')]
+    public const schema_fields_SITEMAP_FREQUENCY = 'sitemap_frequency';
+    #[Col('varchar', 20, nullable: false, default: 'weekly', comment: '抓取频率')]
+    public const schema_fields_CRAWL_FREQUENCY = 'crawl_frequency';
+    #[Col('decimal', '3,2', nullable: false, default: 0.50, comment: 'URL优先级')]
+    public const schema_fields_PRIORITY = 'priority';
+    #[Col('text', comment: '其他配置JSON')]
+    public const schema_fields_CONFIG_JSON = 'config_json';
+    #[Col('datetime', comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col('datetime', comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
     
     /**
      * Sitemap 生成频率常量
@@ -88,207 +84,14 @@ class SeoWebsiteAccount extends Model
 
     public function getIdFieldName(): string
     {
-        return self::fields_ID;
+        return self::schema_fields_ID;
     }
-
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist() === false) {
-            $setup->createTable('站点SEO账户关联表')
-                ->addColumn(
-                    self::fields_ID,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'primary key auto_increment',
-                    '关联ID'
-                )
-                ->addColumn(
-                    self::fields_WEBSITE_ID,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'not null',
-                    '站点ID'
-                )
-                ->addColumn(
-                    self::fields_ACCOUNT_ID,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'not null',
-                    'SEO账户ID'
-                )
-                ->addColumn(
-                    self::fields_IS_AUTO_SUBMIT,
-                    TableInterface::column_type_INTEGER,
-                    1,
-                    'default 1',
-                    '是否自动提交sitemap：1是，0否'
-                )
-                ->addColumn(
-                    self::fields_SITEMAP_FREQUENCY,
-                    TableInterface::column_type_VARCHAR,
-                    20,
-                    'default "daily"',
-                    'Sitemap生成频率：realtime/hourly/daily/weekly/monthly/manual'
-                )
-                ->addColumn(
-                    self::fields_CRAWL_FREQUENCY,
-                    TableInterface::column_type_VARCHAR,
-                    20,
-                    'default "weekly"',
-                    '抓取频率（changefreq）：always/hourly/daily/weekly/monthly/yearly/never'
-                )
-                ->addColumn(
-                    self::fields_PRIORITY,
-                    TableInterface::column_type_DECIMAL,
-                    '3,2',
-                    'default 0.50',
-                    'URL优先级（0.0-1.0）'
-                )
-                ->addColumn(
-                    self::fields_CONFIG_JSON,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    '',
-                    '其他配置（JSON格式）'
-                )
-                ->addColumn(
-                    self::fields_CREATED_AT,
-                    TableInterface::column_type_DATETIME,
-                    0,
-                    '',
-                    '创建时间'
-                )
-                ->addColumn(
-                    self::fields_UPDATED_AT,
-                    TableInterface::column_type_DATETIME,
-                    0,
-                    '',
-                    '更新时间'
-                )
-                ->addIndex(
-                    TableInterface::index_type_UNIQUE,
-                    'unique_website_account',
-                    [self::fields_WEBSITE_ID, self::fields_ACCOUNT_ID],
-                    '站点-账户组合唯一索引'
-                )
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'idx_website',
-                    [self::fields_WEBSITE_ID],
-                    '站点索引'
-                )
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'idx_account',
-                    [self::fields_ACCOUNT_ID],
-                    '账户索引'
-                )
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'idx_auto_submit',
-                    [self::fields_IS_AUTO_SUBMIT],
-                    '自动提交索引'
-                )
-                ->create();
-        }
-    }
-
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist() === false) {
-            return;
-        }
-
-        // 修改唯一索引：从 website_id 改为 (website_id, account_id)，支持多平台绑定（v1.0.1）
-        if ($setup->hasIndex('unique_website')) {
-            $setup->alterTable()
-                ->dropIndex('unique_website')
-                ->alter();
-        }
-        
-        if (!$setup->hasIndex('unique_website_account')) {
-            $setup->alterTable()
-                ->addIndex(
-                    TableInterface::index_type_UNIQUE,
-                    'unique_website_account',
-                    [self::fields_WEBSITE_ID, self::fields_ACCOUNT_ID],
-                    '站点-账户组合唯一索引'
-                )
-                ->alter();
-        }
-        
-        if (!$setup->hasIndex('idx_website')) {
-            $setup->alterTable()
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'idx_website',
-                    [self::fields_WEBSITE_ID],
-                    '站点索引'
-                )
-                ->alter();
-        }
-        
-        // 添加频率和配置字段（v1.0.2）
-        if (!$setup->hasField(self::fields_SITEMAP_FREQUENCY)) {
-            $setup->alterTable()
-                ->addColumn(
-                    self::fields_SITEMAP_FREQUENCY,
-                    TableInterface::column_type_VARCHAR,
-                    20,
-                    'default "daily"',
-                    'Sitemap生成频率：realtime/hourly/daily/weekly/monthly/manual'
-                )
-                ->alter();
-        }
-        
-        if (!$setup->hasField(self::fields_CRAWL_FREQUENCY)) {
-            $setup->alterTable()
-                ->addColumn(
-                    self::fields_CRAWL_FREQUENCY,
-                    TableInterface::column_type_VARCHAR,
-                    20,
-                    'default "weekly"',
-                    '抓取频率（changefreq）：always/hourly/daily/weekly/monthly/yearly/never'
-                )
-                ->alter();
-        }
-        
-        if (!$setup->hasField(self::fields_PRIORITY)) {
-            $setup->alterTable()
-                ->addColumn(
-                    self::fields_PRIORITY,
-                    TableInterface::column_type_DECIMAL,
-                    '3,2',
-                    'default 0.50',
-                    'URL优先级（0.0-1.0）'
-                )
-                ->alter();
-        }
-        
-        if (!$setup->hasField(self::fields_CONFIG_JSON)) {
-            $setup->alterTable()
-                ->addColumn(
-                    self::fields_CONFIG_JSON,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    '',
-                    '其他配置（JSON格式）'
-                )
-                ->alter();
-        }
-    }
-
-    /**
+/**
      * 获取站点ID
      */
     public function getWebsiteId(): int
     {
-        return (int)$this->getData(self::fields_WEBSITE_ID);
+        return (int)$this->getData(self::schema_fields_WEBSITE_ID);
     }
 
     /**
@@ -296,7 +99,7 @@ class SeoWebsiteAccount extends Model
      */
     public function getAccountId(): int
     {
-        return (int)$this->getData(self::fields_ACCOUNT_ID);
+        return (int)$this->getData(self::schema_fields_ACCOUNT_ID);
     }
 
     /**
@@ -304,7 +107,7 @@ class SeoWebsiteAccount extends Model
      */
     public function isAutoSubmitEnabled(): bool
     {
-        return (int)$this->getData(self::fields_IS_AUTO_SUBMIT) === 1;
+        return (int)$this->getData(self::schema_fields_IS_AUTO_SUBMIT) === 1;
     }
 
     /**
@@ -315,7 +118,7 @@ class SeoWebsiteAccount extends Model
     public function getByWebsiteId(int $websiteId): array
     {
         return $this->reset()
-            ->where(self::fields_WEBSITE_ID, $websiteId)
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
             ->select()
             ->fetchArray();
     }
@@ -326,8 +129,8 @@ class SeoWebsiteAccount extends Model
     public function getByWebsiteAndAccount(int $websiteId, int $accountId): ?self
     {
         $this->reset()
-            ->where(self::fields_WEBSITE_ID, $websiteId)
-            ->where(self::fields_ACCOUNT_ID, $accountId)
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(self::schema_fields_ACCOUNT_ID, $accountId)
             ->find()
             ->fetch();
         
@@ -353,15 +156,15 @@ class SeoWebsiteAccount extends Model
         
         // 准备数据（使用默认值）
         $data = [
-            self::fields_IS_AUTO_SUBMIT => isset($config['is_auto_submit']) ? ($config['is_auto_submit'] ? 1 : 0) : 1,
-            self::fields_SITEMAP_FREQUENCY => $config['sitemap_frequency'] ?? self::DEFAULT_SITEMAP_FREQUENCY,
-            self::fields_CRAWL_FREQUENCY => $config['crawl_frequency'] ?? self::DEFAULT_CRAWL_FREQUENCY,
-            self::fields_PRIORITY => $config['priority'] ?? self::DEFAULT_PRIORITY,
+            self::schema_fields_IS_AUTO_SUBMIT => isset($config['is_auto_submit']) ? ($config['is_auto_submit'] ? 1 : 0) : 1,
+            self::schema_fields_SITEMAP_FREQUENCY => $config['sitemap_frequency'] ?? self::DEFAULT_SITEMAP_FREQUENCY,
+            self::schema_fields_CRAWL_FREQUENCY => $config['crawl_frequency'] ?? self::DEFAULT_CRAWL_FREQUENCY,
+            self::schema_fields_PRIORITY => $config['priority'] ?? self::DEFAULT_PRIORITY,
         ];
         
         // 处理额外配置
         if (isset($config['config']) && is_array($config['config'])) {
-            $data[self::fields_CONFIG_JSON] = json_encode($config['config'], JSON_UNESCAPED_UNICODE);
+            $data[self::schema_fields_CONFIG_JSON] = json_encode($config['config'], JSON_UNESCAPED_UNICODE);
         }
         
         if ($existing) {
@@ -369,8 +172,8 @@ class SeoWebsiteAccount extends Model
             return $existing;
         }
         
-        $data[self::fields_WEBSITE_ID] = $websiteId;
-        $data[self::fields_ACCOUNT_ID] = $accountId;
+        $data[self::schema_fields_WEBSITE_ID] = $websiteId;
+        $data[self::schema_fields_ACCOUNT_ID] = $accountId;
         
         $this->reset()->setData($data)->save();
         
@@ -384,8 +187,8 @@ class SeoWebsiteAccount extends Model
     {
         // 先查询并fetch数据
         $this->reset()
-            ->where(self::fields_WEBSITE_ID, $websiteId)
-            ->where(self::fields_ACCOUNT_ID, $accountId)
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(self::schema_fields_ACCOUNT_ID, $accountId)
             ->find()
             ->fetch();
         
@@ -417,7 +220,7 @@ class SeoWebsiteAccount extends Model
         $seoAccountModel = ObjectManager::getInstance(SeoAccount::class);
         
         foreach ($bindings as $binding) {
-            $accountId = (int)($binding[self::fields_ACCOUNT_ID] ?? 0);
+            $accountId = (int)($binding[self::schema_fields_ACCOUNT_ID] ?? 0);
             if ($accountId <= 0) {
                 continue;
             }
@@ -442,7 +245,7 @@ class SeoWebsiteAccount extends Model
     public function getAutoSubmitBindings(): array
     {
         return $this->reset()
-            ->where(self::fields_IS_AUTO_SUBMIT, 1)
+            ->where(self::schema_fields_IS_AUTO_SUBMIT, 1)
             ->select()
             ->fetchArray();
     }
@@ -452,7 +255,7 @@ class SeoWebsiteAccount extends Model
      */
     public function getSitemapFrequency(): string
     {
-        return $this->getData(self::fields_SITEMAP_FREQUENCY) ?: self::DEFAULT_SITEMAP_FREQUENCY;
+        return $this->getData(self::schema_fields_SITEMAP_FREQUENCY) ?: self::DEFAULT_SITEMAP_FREQUENCY;
     }
 
     /**
@@ -460,7 +263,7 @@ class SeoWebsiteAccount extends Model
      */
     public function setSitemapFrequency(string $frequency): self
     {
-        $this->setData(self::fields_SITEMAP_FREQUENCY, $frequency);
+        $this->setData(self::schema_fields_SITEMAP_FREQUENCY, $frequency);
         return $this;
     }
 
@@ -469,7 +272,7 @@ class SeoWebsiteAccount extends Model
      */
     public function getCrawlFrequency(): string
     {
-        return $this->getData(self::fields_CRAWL_FREQUENCY) ?: self::DEFAULT_CRAWL_FREQUENCY;
+        return $this->getData(self::schema_fields_CRAWL_FREQUENCY) ?: self::DEFAULT_CRAWL_FREQUENCY;
     }
 
     /**
@@ -477,7 +280,7 @@ class SeoWebsiteAccount extends Model
      */
     public function setCrawlFrequency(string $frequency): self
     {
-        $this->setData(self::fields_CRAWL_FREQUENCY, $frequency);
+        $this->setData(self::schema_fields_CRAWL_FREQUENCY, $frequency);
         return $this;
     }
 
@@ -486,7 +289,7 @@ class SeoWebsiteAccount extends Model
      */
     public function getPriority(): float
     {
-        $priority = $this->getData(self::fields_PRIORITY);
+        $priority = $this->getData(self::schema_fields_PRIORITY);
         return $priority !== null ? (float)$priority : self::DEFAULT_PRIORITY;
     }
 
@@ -497,7 +300,7 @@ class SeoWebsiteAccount extends Model
     {
         // 限制在 0.0 - 1.0 之间
         $priority = max(0.0, min(1.0, $priority));
-        $this->setData(self::fields_PRIORITY, $priority);
+        $this->setData(self::schema_fields_PRIORITY, $priority);
         return $this;
     }
 
@@ -506,7 +309,7 @@ class SeoWebsiteAccount extends Model
      */
     public function getConfig(): array
     {
-        $config = $this->getData(self::fields_CONFIG_JSON);
+        $config = $this->getData(self::schema_fields_CONFIG_JSON);
         if (is_string($config) && !empty($config)) {
             $decoded = json_decode($config, true);
             return is_array($decoded) ? $decoded : [];
@@ -519,7 +322,7 @@ class SeoWebsiteAccount extends Model
      */
     public function setConfig(array $config): self
     {
-        $this->setData(self::fields_CONFIG_JSON, json_encode($config, JSON_UNESCAPED_UNICODE));
+        $this->setData(self::schema_fields_CONFIG_JSON, json_encode($config, JSON_UNESCAPED_UNICODE));
         return $this;
     }
 
@@ -558,8 +361,9 @@ class SeoWebsiteAccount extends Model
     {
         $now = date('Y-m-d H:i:s');
         if (!$this->getId()) {
-            $this->setData(self::fields_CREATED_AT, $now);
+            $this->setData(self::schema_fields_CREATED_AT, $now);
         }
-        $this->setData(self::fields_UPDATED_AT, $now);
+        $this->setData(self::schema_fields_UPDATED_AT, $now);
     }
 }
+

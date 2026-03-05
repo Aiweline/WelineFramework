@@ -356,53 +356,52 @@ if ($scope) $baseParams['scope'] = $scope;
         // 添加主体表单提交
         document.getElementById('addSubjectForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            const formData = new FormData(this);
-            
-            fetch(saveUrl, {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert(data.message || '<?= __('保存成功') ?>');
+            var formData = new FormData(this);
+            window.Weline.Api.request(saveUrl, { method: 'POST', body: formData })
+            .then(function(response) {
+                var data = response.data;
+                var Toast = window.BackendToast || window.AdminToast;
+                if (response.ok && data && data.success) {
+                    if (Toast) Toast.success(data.message || '<?= __('保存成功') ?>');
                     location.reload();
                 } else {
-                    alert(data.message || '<?= __('保存失败') ?>');
+                    if (Toast) Toast.error((data && (data.message || data.msg)) || '<?= __('保存失败') ?>');
                 }
             })
-            .catch(error => {
-                alert('<?= __('请求失败') ?>: ' + error.message);
+            .catch(function(error) {
+                (window.BackendToast || window.AdminToast).error(error && error.message ? error.message : '<?= __('请求失败') ?>');
             });
         });
         
         // 删除按钮
         document.querySelectorAll('.btn-delete').forEach(function(btn) {
             btn.addEventListener('click', function() {
-                const subjectId = this.dataset.subjectId;
-                if (!confirm('<?= __('确定要删除该SEO主体吗？') ?>')) {
-                    return;
+                var subjectId = this.dataset.subjectId;
+                var self = this;
+                var doDelete = function(confirmed) {
+                    if (!confirmed) return;
+                    var fd = new FormData();
+                    fd.append('subject_id', subjectId);
+                    window.Weline.Api.request(deleteUrl, { method: 'POST', body: fd })
+                    .then(function(response) {
+                        var data = response.data;
+                        var Toast = window.BackendToast || window.AdminToast;
+                        if (response.ok && data && data.success) {
+                            var card = self.closest('.subject-card');
+                            if (card) card.remove();
+                        } else {
+                            if (Toast) Toast.error((data && (data.message || data.msg)) || '<?= __('删除失败') ?>');
+                        }
+                    })
+                    .catch(function(error) {
+                        (window.BackendToast || window.AdminToast).error(error && error.message ? error.message : '<?= __('请求失败') ?>');
+                    });
+                };
+                if (typeof BackendConfirm !== 'undefined') {
+                    BackendConfirm.show('<?= __('确定要删除该SEO主体吗？') ?>').then(doDelete);
+                } else {
+                    doDelete(window.confirm('<?= __('确定要删除该SEO主体吗？') ?>'));
                 }
-                
-                const formData = new FormData();
-                formData.append('subject_id', subjectId);
-                
-                fetch(deleteUrl, {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // 移除卡片
-                        this.closest('.subject-card').remove();
-                    } else {
-                        alert(data.message || '<?= __('删除失败') ?>');
-                    }
-                })
-                .catch(error => {
-                    alert('<?= __('请求失败') ?>: ' + error.message);
-                });
             });
         });
     });
