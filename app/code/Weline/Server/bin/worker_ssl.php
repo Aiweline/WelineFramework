@@ -1977,9 +1977,15 @@ function handleRequest(
         $isHttp11 = \strpos($rawRequest, 'HTTP/1.1') !== false;
         $hasClose = \stripos($rawRequest, 'Connection: close') !== false;
         $keepAlive = $isHttp11 && !$hasClose;
-        
-        if (!$isLocal) {
-            // 非本地请求：返回 403（极简响应）
+        // 可选：允许外网访问健康检查（仅测试/内网环境建议开启，生产建议关闭）
+        $healthAllowRemote = false;
+        if (\defined('BP') && \is_file(BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php')) {
+            $env = @include BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php';
+            $healthAllowRemote = (bool)($env['server']['servers'][$instanceName]['health_allow_remote']
+                ?? $env['wls']['health_allow_remote'] ?? false);
+        }
+        if (!$isLocal && !$healthAllowRemote) {
+            // 非本地请求且未配置允许：返回 403（极简响应）
             return $keepAlive
                 ? "HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\nConnection: keep-alive\r\n\r\nForbidden"
                 : "HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\nConnection: close\r\n\r\nForbidden";
