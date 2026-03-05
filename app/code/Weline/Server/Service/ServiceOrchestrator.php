@@ -630,20 +630,20 @@ class ServiceOrchestrator
         $this->sendStopProgress('阶段1/6: 广播 DRAIN - 通知子进程停止接受新请求');
         $this->broadcastDrainToAll();
 
-        // ========== 阶段 2：等待排水完成 ==========
+        // ========== 阶段 2：等待排水完成（短超时，与 Windows 一致，不长时间等待）==========
         WlsLogger::info_('[Orchestrator] 阶段2: 等待排水完成');
         $this->sendStopProgress('阶段2/6: 等待排水完成 - 子进程处理完当前请求');
-        $this->waitForAllDrained($this->drainTimeout, true);
+        $this->waitForAllDrained(2.0, true);
 
         // ========== 阶段 3：广播 SHUTDOWN ==========
         WlsLogger::info_('[Orchestrator] 阶段3: 广播 SHUTDOWN');
         $this->sendStopProgress('阶段3/6: 广播 SHUTDOWN - 通知子进程退出');
         $this->broadcastShutdownToAll();
 
-        // ========== 阶段 4：等待所有 IPC 连接断开 ==========
+        // ========== 阶段 4：等待所有 IPC 连接断开（短超时）==========
         WlsLogger::info_('[Orchestrator] 阶段4: 等待子进程退出');
         $this->sendStopProgress('阶段4/6: 等待子进程退出');
-        $this->waitForAllDisconnectedWithProgress(5.0);
+        $this->waitForAllDisconnectedWithProgress(3.0);
 
         // ========== 阶段 5：校验并强制杀死残留进程 ==========
         WlsLogger::info_('[Orchestrator] 阶段5: 校验子进程退出状态');

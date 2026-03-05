@@ -30,11 +30,11 @@ use Weline\Server\Service\ServerInstanceManager;
  */
 class Stop extends CommandAbstract
 {
-    /** IPC 等待超时（秒）- 需要足够时间让 Orchestrator 完成 drain (5s) + disconnect (3s) + cleanup */
-    private const IPC_TIMEOUT = 60;
+    /** IPC 等待超时（秒）- 与 Windows 一致，不长时间等待，超时后强制杀进程 */
+    private const IPC_TIMEOUT = 15;
     
-    /** 子进程全部退出后等待 Master 退出的最大时间（秒）- Windows 可能需要更长 */
-    private const MASTER_EXIT_TIMEOUT = 10;
+    /** 子进程全部退出后等待 Master 退出的最大时间（秒）*/
+    private const MASTER_EXIT_TIMEOUT = 5;
     
     /** IPC 消息颜色常量 */
     private const IPC_COLOR_TAG = 'Blue';       // [IPC] 标签颜色
@@ -417,7 +417,7 @@ class Stop extends CommandAbstract
         \stream_set_timeout($conn, 1);
         \stream_set_blocking($conn, false);
         
-        $timeout = $force ? 30 : self::IPC_TIMEOUT;
+        $timeout = $force ? 8 : self::IPC_TIMEOUT;
         $deadline = \microtime(true) + $timeout;
         $lastProgress = '';
         $masterAboutToExit = false; // 只在收到 "Master 即将退出" 时置 true
