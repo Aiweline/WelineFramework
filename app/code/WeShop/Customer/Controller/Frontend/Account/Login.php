@@ -81,7 +81,7 @@ class Login extends BaseController
         try {
             /** @var \WeShop\Customer\Model\Customer $customer */
             $customer = ObjectManager::getInstance(\WeShop\Customer\Model\Customer::class);
-            $customer->load(\WeShop\Customer\Model\Customer::fields_EMAIL, $email);
+            $customer->load(\WeShop\Customer\Model\Customer::schema_fields_EMAIL, $email);
             
             if (!$customer->getId()) {
                 $this->getMessageManager()->addError(__('邮箱或密码错误'));
@@ -93,7 +93,7 @@ class Login extends BaseController
             $storedPassword = $customer->getData('password');
             if (empty($storedPassword)) {
                 // 如果Customer模型没有password字段，尝试从user_id关联的用户表获取
-                $userId = $customer->getData(\WeShop\Customer\Model\Customer::fields_USER_ID);
+                $userId = $customer->getData(\WeShop\Customer\Model\Customer::schema_fields_USER_ID);
                 if ($userId) {
                     // TODO: 从User表获取密码并验证
                     // 临时：如果Customer模型没有password字段，跳过密码验证（仅用于开发测试）
@@ -111,7 +111,7 @@ class Login extends BaseController
             }
             
             // 检查用户状态
-            $status = $customer->getData(\WeShop\Customer\Model\Customer::fields_STATUS);
+            $status = $customer->getData(\WeShop\Customer\Model\Customer::schema_fields_STATUS);
             if ($status !== 'active' && $status !== 'enabled') {
                 $this->getMessageManager()->addError(__('账户已被禁用'));
                 return $this->redirect('weshop/customer/account/login?error=' . urlencode(__('账户已被禁用')));
