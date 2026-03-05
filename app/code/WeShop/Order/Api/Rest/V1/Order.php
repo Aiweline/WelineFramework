@@ -80,10 +80,10 @@ class Order extends FrontendRestController
         $orderList = [];
         foreach ($orders as $order) {
             $orderList[] = [
-                'order_id' => $order['order_id'] ?? $order[\WeShop\Order\Model\Order::fields_ID] ?? 0,
-                'increment_id' => $order['increment_id'] ?? $order[\WeShop\Order\Model\Order::fields_increment_id] ?? '',
-                'total' => $order['total'] ?? $order[\WeShop\Order\Model\Order::fields_total] ?? 0,
-                'created_at' => $order['created_at'] ?? $order[\WeShop\Order\Model\Order::fields_created_at] ?? '',
+                'order_id' => $order['order_id'] ?? $order[\WeShop\Order\Model\Order::schema_fields_ID] ?? 0,
+                'increment_id' => $order['increment_id'] ?? $order[\WeShop\Order\Model\Order::schema_fields_increment_id] ?? '',
+                'total' => $order['total'] ?? $order[\WeShop\Order\Model\Order::schema_fields_total] ?? 0,
+                'created_at' => $order['created_at'] ?? $order[\WeShop\Order\Model\Order::schema_fields_created_at] ?? '',
             ];
         }
         

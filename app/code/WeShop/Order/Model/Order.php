@@ -1,51 +1,31 @@
 <?php
-
 declare(strict_types=1);
-
 namespace WeShop\Order\Model;
-
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
-class Order extends \Weline\Framework\Database\Model
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: 'WeShop订单表')]
+#[Index(name: 'uk_increment_id', columns: ['increment_id'], type: 'UNIQUE', comment: '订单号唯一')]
+class Order extends Model
 {
-    public const table = 'weshop_order';
-    public const primary_key = 'order_id';
-    
-    public const fields_ID = 'order_id';
-    public const fields_increment_id = 'increment_id';
-    public const fields_customer_id = 'customer_id';
-    public const fields_status = 'status';
-    public const fields_total = 'total';
-    public const fields_created_at = 'created_at';
-    public const fields_updated_at = 'updated_at';
-
+    public const schema_table = 'weshop_order';
+    public const schema_primary_key = 'order_id';
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '订单ID')]
+    public const schema_fields_ID = 'order_id';
+    #[Col(type: 'varchar', length: 32, nullable: false, comment: '订单号')]
+    public const schema_fields_increment_id = 'increment_id';
+    #[Col(type: 'int', nullable: false, comment: '客户ID')]
+    public const schema_fields_customer_id = 'customer_id';
+    #[Col(type: 'varchar', length: 50, nullable: true, default: 'pending', comment: '订单状态')]
+    public const schema_fields_status = 'status';
+    #[Col(type: 'decimal', length: '10,2', nullable: true, default: '0.00', comment: '订单总额')]
+    public const schema_fields_total = 'total';
+    #[Col(type: 'datetime', nullable: true, comment: '创建时间')]
+    public const schema_fields_created_at = 'created_at';
+    #[Col(type: 'datetime', nullable: true, comment: '更新时间')]
+    public const schema_fields_updated_at = 'updated_at';
     public string $indexer = 'order_indexer';
     public array $_unit_primary_keys = ['order_id'];
     public array $_index_sort_keys = ['order_id', 'increment_id', 'customer_id', 'status', 'total', 'created_at'];
-
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('WeShop订单表')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'auto_increment primary key', '订单ID')
-                ->addColumn(self::fields_increment_id, TableInterface::column_type_VARCHAR, 32, 'not null unique', '订单号')
-                ->addColumn(self::fields_customer_id, TableInterface::column_type_INTEGER, 0, 'not null', '客户ID')
-                ->addColumn(self::fields_status, TableInterface::column_type_VARCHAR, 50, "default 'pending'", '订单状态')
-                ->addColumn(self::fields_total, TableInterface::column_type_DECIMAL, '10,2', 'default 0.00', '订单总额')
-                ->addColumn(self::fields_created_at, TableInterface::column_type_DATETIME, 0, '', '创建时间')
-                ->addColumn(self::fields_updated_at, TableInterface::column_type_DATETIME, 0, '', '更新时间')
-                ->create();
-        }
-    }
-
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-    }
-
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        $this->setup($setup, $context);
-    }
 }

@@ -43,12 +43,12 @@ class OrderService
         $incrementId = $this->generateOrderNumber();
         
         $order->clearData()
-            ->setData(Order::fields_increment_id, $incrementId)
-            ->setData(Order::fields_customer_id, $orderData['customer_id'] ?? 0)
-            ->setData(Order::fields_status, $orderData['status'] ?? self::STATUS_PENDING)
-            ->setData(Order::fields_total, $orderData['total'] ?? 0)
-            ->setData(Order::fields_created_at, date('Y-m-d H:i:s'))
-            ->setData(Order::fields_updated_at, date('Y-m-d H:i:s'))
+            ->setData(Order::schema_fields_increment_id, $incrementId)
+            ->setData(Order::schema_fields_customer_id, $orderData['customer_id'] ?? 0)
+            ->setData(Order::schema_fields_status, $orderData['status'] ?? self::STATUS_PENDING)
+            ->setData(Order::schema_fields_total, $orderData['total'] ?? 0)
+            ->setData(Order::schema_fields_created_at, date('Y-m-d H:i:s'))
+            ->setData(Order::schema_fields_updated_at, date('Y-m-d H:i:s'))
             ->save();
         
         return $order;
@@ -83,7 +83,7 @@ class OrderService
     {
         /** @var Order $order */
         $order = ObjectManager::getInstance(Order::class);
-        $order->load(Order::fields_increment_id, $incrementId);
+        $order->load(Order::schema_fields_increment_id, $incrementId);
         
         if ($order->getId()) {
             return $order;
@@ -107,11 +107,11 @@ class OrderService
         $order = ObjectManager::getInstance(Order::class);
         
         $order->clear()
-            ->where(Order::fields_customer_id, $customerId);
+            ->where(Order::schema_fields_customer_id, $customerId);
         
         // 应用筛选条件
         if (!empty($filters['status'])) {
-            $order->where(Order::fields_status, $filters['status']);
+            $order->where(Order::schema_fields_status, $filters['status']);
         }
         
         if (!empty($filters['payment_status'])) {
@@ -121,7 +121,7 @@ class OrderService
             }
         }
         
-        $order->order(Order::fields_created_at, 'DESC')
+        $order->order(Order::schema_fields_created_at, 'DESC')
             ->pagination($page, $pageSize);
         
         $items = $order->select()->fetchArray();
@@ -145,8 +145,8 @@ class OrderService
         $order = ObjectManager::getInstance(Order::class);
         
         $order->clear()
-            ->where(Order::fields_customer_id, $customerId)
-            ->where(Order::fields_status, [self::STATUS_PENDING, self::STATUS_PROCESSING], 'IN');
+            ->where(Order::schema_fields_customer_id, $customerId)
+            ->where(Order::schema_fields_status, [self::STATUS_PENDING, self::STATUS_PROCESSING], 'IN');
         
         // 如果订单模型有payment_status字段，也筛选支付状态
         if ($order->hasField('payment_status')) {
@@ -168,9 +168,9 @@ class OrderService
         $order = ObjectManager::getInstance(Order::class);
         
         $order->clear()
-            ->where(Order::fields_customer_id, $customerId)
-            ->where(Order::fields_status, [self::STATUS_PENDING, self::STATUS_PROCESSING], 'IN')
-            ->order(Order::fields_created_at, 'DESC');
+            ->where(Order::schema_fields_customer_id, $customerId)
+            ->where(Order::schema_fields_status, [self::STATUS_PENDING, self::STATUS_PROCESSING], 'IN')
+            ->order(Order::schema_fields_created_at, 'DESC');
         
         // 如果订单模型有payment_status字段，也筛选支付状态
         if ($order->hasField('payment_status')) {
@@ -197,8 +197,8 @@ class OrderService
             throw new \Exception(__('订单不存在'));
         }
         
-        $order->setData(Order::fields_status, $status)
-            ->setData(Order::fields_updated_at, date('Y-m-d H:i:s'))
+        $order->setData(Order::schema_fields_status, $status)
+            ->setData(Order::schema_fields_updated_at, date('Y-m-d H:i:s'))
             ->save();
         
         return $order;
@@ -224,7 +224,7 @@ class OrderService
         // 如果订单模型有payment_status字段
         if ($order->hasField('payment_status')) {
             $order->setData('payment_status', $paymentStatus)
-                ->setData(Order::fields_updated_at, date('Y-m-d H:i:s'))
+                ->setData(Order::schema_fields_updated_at, date('Y-m-d H:i:s'))
                 ->save();
         }
         
@@ -253,7 +253,7 @@ class OrderService
         }
         
         // 验证客户ID
-        if ((int)$order->getData(Order::fields_customer_id) !== $customerId) {
+        if ((int)$order->getData(Order::schema_fields_customer_id) !== $customerId) {
             return [
                 'can_cancel' => false,
                 'reason' => __('无权取消此订单'),
@@ -261,7 +261,7 @@ class OrderService
             ];
         }
         
-        $status = $order->getData(Order::fields_status);
+        $status = $order->getData(Order::schema_fields_status);
         $paymentStatus = $order->hasField('payment_status') ? $order->getData('payment_status') : null;
         $fulfillmentStatus = $order->hasField('fulfillment_status') ? $order->getData('fulfillment_status') : null;
         
@@ -387,8 +387,8 @@ class OrderService
         }
         
         // 更新订单状态为已取消
-        $order->setData(Order::fields_status, self::STATUS_CANCELLED)
-            ->setData(Order::fields_updated_at, date('Y-m-d H:i:s'))
+        $order->setData(Order::schema_fields_status, self::STATUS_CANCELLED)
+            ->setData(Order::schema_fields_updated_at, date('Y-m-d H:i:s'))
             ->save();
         
         // 如果订单模型有payment_status字段，更新支付状态
@@ -473,12 +473,12 @@ class OrderService
         }
         
         // 验证客户ID
-        if ((int)$order->getData(Order::fields_customer_id) !== $customerId) {
+        if ((int)$order->getData(Order::schema_fields_customer_id) !== $customerId) {
             return false;
         }
         
         // 只有待处理或处理中的订单可以继续支付
-        $status = $order->getData(Order::fields_status);
+        $status = $order->getData(Order::schema_fields_status);
         if (!in_array($status, [self::STATUS_PENDING, self::STATUS_PROCESSING])) {
             return false;
         }
