@@ -69,6 +69,13 @@ final class Connector extends Query implements ConnectorInterface
     protected ?Query $query = null;
     protected bool $fromPool = false; // 标记连接是否来自连接池
 
+    private ?MysqlDialect $dialect = null;
+
+    private function getDialect(): MysqlDialect
+    {
+        return $this->dialect ??= new MysqlDialect();
+    }
+
     public function create(): static
     {
         if ($this->link !== null) {
@@ -102,7 +109,7 @@ final class Connector extends Query implements ConnectorInterface
         );
         $this->fromPool = true;
         try {
-            (new MysqlDialect())->validateVersion((string)$this->link->getAttribute(PDO::ATTR_SERVER_VERSION));
+            $this->getDialect()->validateVersion((string)$this->link->getAttribute(PDO::ATTR_SERVER_VERSION));
         } catch (\Throwable $e) {
             w_log_warning(__('MySQL 版本校验未通过（连接已建立，升级可继续）：%{1}', [$e->getMessage()]), [], 'database_version.log');
         }
@@ -279,6 +286,11 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         return $this->configProvider;
     }
 
+    public function getQuery(): QueryInterface
+    {
+        return $this;
+    }
+
     public function createTable(): Sql\Table\CreateInterface
     {
         return ObjectManager::getInstance(Create::class)->setConnection($this);
@@ -287,6 +299,12 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function alterTable(): Sql\Table\AlterInterface
     {
         return ObjectManager::getInstance(Alter::class)->setConnection($this);
+    }
+
+    public function dropTableIfExists(string $table): void
+    {
+        $quoted = $this->quoteTable(str_replace(['`', '"'], '', $table));
+        $this->query("DROP TABLE IF EXISTS {$quoted}")->fetch();
     }
 
     public function tableExist(string $table_name): bool
@@ -349,5 +367,281 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         $stmt = $this->link->prepare($query);
         $stmt->execute();
         return $stmt->rowCount() > 0;
+    }
+
+    /** @inheritDoc */
+    public function getTableComment(string $table): string
+    {
+        $db = $this->configProvider->getDatabase();
+        $table = str_replace(['`', '"'], '', $table);
+        $db = str_replace(['`', '"'], '', $db ?? '');
+        try {
+            $sql = 'SELECT TABLE_COMMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = :schema AND TABLE_NAME = :tbl LIMIT 1';
+            $stmt = $this->getWrappedConnection()->prepare($sql);
+            $stmt->execute([':schema' => $db, ':tbl' => $table]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            return (string) ($row['TABLE_COMMENT'] ?? $row['table_comment'] ?? '');
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    /** @inheritDoc */
+    public function getDefaultTableAdditional(): string
+    {
+        return 'ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4';
+    }
+
+    /** @inheritDoc */
+    public function getTableColumns(string $table): array
+    {
+        $quoted = '`' . str_replace('`', '``', $table) . '`';
+        $rows = $this->query("SHOW FULL COLUMNS FROM {$quoted}")->fetchArray();
+        if (!is_array($rows)) {
+            return [];
+        }
+        $list = [];
+        foreach ($rows as $row) {
+            $field = $row['Field'] ?? $row['field'] ?? '';
+            $type = $row['Type'] ?? $row['type'] ?? '';
+            $null = strtoupper($row['Null'] ?? $row['null'] ?? 'YES');
+            $key = $row['Key'] ?? $row['key'] ?? '';
+            $default = $row['Default'] ?? $row['default'] ?? null;
+            $extra = $row['Extra'] ?? $row['extra'] ?? '';
+            $comment = $row['Comment'] ?? $row['comment'] ?? '';
+            $nullable = $null !== 'NO';
+            $primaryKey = $key === 'PRI';
+            $autoIncrement = stripos($extra, 'auto_increment') !== false;
+            $unique = $key === 'UNI';
+            [$baseType, $length] = $this->parseColumnTypeMysql($type);
+            $list[] = [
+                'name' => $field,
+                'type' => $baseType,
+                'length' => $length,
+                'nullable' => $nullable,
+                'primary_key' => $primaryKey,
+                'auto_increment' => $autoIncrement,
+                'default' => $default,
+                'comment' => $comment,
+                'unique' => $unique,
+            ];
+        }
+        return $list;
+    }
+
+    /** @return array{0: string, 1: int|string|null} */
+    private function parseColumnTypeMysql(string $type): array
+    {
+        $type = trim($type);
+        if (preg_match('/^(\w+)\s*\(\s*(\d+)\s*\)/', $type, $m)) {
+            return [$m[1], (int) $m[2]];
+        }
+        if (preg_match('/^(\w+)\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)/', $type, $m)) {
+            return [$m[1], $m[2] . ',' . $m[3]];
+        }
+        return [strtolower($type), null];
+    }
+
+    /** @inheritDoc */
+    public function getTableIndexes(string $table): array
+    {
+        $quoted = '`' . str_replace('`', '``', $table) . '`';
+        $rows = $this->query("SHOW INDEX FROM {$quoted}")->fetchArray();
+        if (!is_array($rows)) {
+            return [];
+        }
+        $byName = [];
+        foreach ($rows as $row) {
+            $keyName = $row['Key_name'] ?? $row['key_name'] ?? '';
+            $column = $row['Column_name'] ?? $row['column_name'] ?? '';
+            $nonUnique = (int) ($row['Non_unique'] ?? $row['non_unique'] ?? 1);
+            $seq = (int) ($row['Seq_in_index'] ?? $row['seq_in_index'] ?? 0);
+            if ($keyName === 'PRIMARY') {
+                continue;
+            }
+            if (!isset($byName[$keyName])) {
+                $byName[$keyName] = ['columns' => [], 'unique' => $nonUnique === 0];
+            }
+            $byName[$keyName]['columns'][$seq] = $column;
+        }
+        $list = [];
+        foreach ($byName as $name => $data) {
+            ksort($data['columns']);
+            $list[] = ['name' => $name, 'columns' => array_values($data['columns']), 'unique' => $data['unique']];
+        }
+        return $list;
+    }
+
+    /** @inheritDoc */
+    public function quoteTable(string $table): string
+    {
+        return $this->getDialect()->quoteTable($table);
+    }
+
+    /** @inheritDoc */
+    public function quoteIdentifier(string $identifier): string
+    {
+        return $this->getDialect()->quoteIdentifier($identifier);
+    }
+
+    /** @inheritDoc */
+    public function buildAlterAddColumnSql(string $table, array $col): string
+    {
+        $t = $this->getDialect()->quoteTable($table);
+        $def = $this->mysqlColumnDef($col);
+        return "ALTER TABLE {$t} ADD COLUMN {$def}";
+    }
+
+    /** @inheritDoc */
+    public function buildAlterModifyColumnSql(string $table, array $col, ?array $existingCol = null): string
+    {
+        $t = $this->getDialect()->quoteTable($table);
+        $def = $this->mysqlColumnDef($col);
+        return "ALTER TABLE {$t} MODIFY COLUMN {$def}";
+    }
+
+    /** @inheritDoc */
+    public function buildAlterDropColumnSql(string $table, string $colName): string
+    {
+        $d = $this->getDialect();
+        $t = $d->quoteTable($table);
+        $c = $d->quoteIdentifier($colName);
+        return "ALTER TABLE {$t} DROP COLUMN {$c}";
+    }
+
+    /** @inheritDoc */
+    public function buildAlterTableCommentSql(string $table, string $comment): string
+    {
+        $t = $this->getDialect()->quoteTable($table);
+        return "ALTER TABLE {$t} COMMENT '" . str_replace("'", "''", $comment) . "'";
+    }
+
+    /** @inheritDoc */
+    public function buildAddIndexSql(string $table, array $idx): string
+    {
+        $d = $this->getDialect();
+        $t = $d->quoteTable($table);
+        $name = $d->quoteIdentifier($idx['name'] ?? '');
+        $cols = array_map(fn (string $c) => $d->quoteIdentifier($c), $idx['columns'] ?? []);
+        $colList = implode(',', $cols);
+        $type = strtoupper($idx['type'] ?? 'INDEX');
+        if ($type === 'UNIQUE') {
+            return "ALTER TABLE {$t} ADD UNIQUE {$name} ({$colList})";
+        }
+        return "ALTER TABLE {$t} ADD INDEX {$name} ({$colList})";
+    }
+
+    /** @inheritDoc */
+    public function buildDropIndexSql(string $table, string $indexName): string
+    {
+        $t = $this->getDialect()->quoteTable($table);
+        $n = $this->getDialect()->quoteIdentifier($indexName);
+        return "ALTER TABLE {$t} DROP INDEX {$n}";
+    }
+
+    /** @inheritDoc */
+    public function buildAddForeignKeySql(string $table, array $fk): string
+    {
+        $d = $this->getDialect();
+        $t = $d->quoteTable($table);
+        $name = $d->quoteIdentifier($fk['name'] ?? '');
+        $cols = array_map(fn (string $c) => $d->quoteIdentifier($c), $fk['columns'] ?? []);
+        $refCols = array_map(fn (string $c) => $d->quoteIdentifier($c), $fk['referencesColumns'] ?? []);
+        $refTable = $d->quoteTable($fk['referencesTable'] ?? '');
+        $onDelete = !empty($fk['onDeleteCascade']) ? ' ON DELETE CASCADE' : '';
+        $onUpdate = !empty($fk['onUpdateCascade']) ? ' ON UPDATE CASCADE' : '';
+        return "ALTER TABLE {$t} ADD CONSTRAINT {$name} FOREIGN KEY (" . implode(',', $cols) . ") REFERENCES {$refTable} (" . implode(',', $refCols) . "){$onDelete}{$onUpdate}";
+    }
+
+    /** @inheritDoc */
+    public function buildDropForeignKeySql(string $table, string $fkName): string
+    {
+        $t = $this->getDialect()->quoteTable($table);
+        $n = $this->getDialect()->quoteIdentifier($fkName);
+        return "ALTER TABLE {$t} DROP FOREIGN KEY {$n}";
+    }
+
+    private function mysqlColumnDef(array $col): string
+    {
+        $c = $this->getDialect()->quoteIdentifier($col['name'] ?? '');
+        $type = strtolower($col['type'] ?? 'varchar');
+        $len = $col['length'] ?? null;
+        $typeLen = $type . ($len !== null ? "({$len})" : '');
+        $opts = [];
+        if (!empty($col['primaryKey'])) {
+            $opts[] = 'PRIMARY KEY';
+        }
+        if (!empty($col['autoIncrement'])) {
+            $opts[] = 'AUTO_INCREMENT';
+        }
+        if (empty($col['nullable']) && empty($col['primaryKey'])) {
+            $opts[] = 'NOT NULL';
+        }
+        if (isset($col['default']) && $col['default'] !== null) {
+            $d = $col['default'];
+            $opts[] = is_string($d) && strtoupper($d) === 'CURRENT_TIMESTAMP'
+                ? 'DEFAULT CURRENT_TIMESTAMP'
+                : (is_string($d) ? "DEFAULT '" . str_replace("'", "''", $d) . "'" : "DEFAULT {$d}");
+        }
+        if (!empty($col['unique']) && empty($col['primaryKey'])) {
+            $opts[] = 'UNIQUE';
+        }
+        $optStr = implode(' ', $opts);
+        $comment = isset($col['comment']) && $col['comment'] !== ''
+            ? " COMMENT '" . str_replace("'", "''", $col['comment']) . "'"
+            : '';
+        return "{$c} {$typeLen} {$optStr}{$comment}";
+    }
+
+    /** @inheritDoc */
+    public function getTableForeignKeys(string $table): array
+    {
+        $db = $this->configProvider->getDatabase();
+        $table = str_replace(['`', '"'], '', $table);
+        $db = str_replace(['`', '"'], '', $db ?? '');
+        try {
+            $sql = "SELECT kcu.CONSTRAINT_NAME, kcu.COLUMN_NAME, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME, rc.DELETE_RULE, rc.UPDATE_RULE
+                FROM information_schema.KEY_COLUMN_USAGE kcu
+                JOIN information_schema.REFERENTIAL_CONSTRAINTS rc ON rc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME AND rc.CONSTRAINT_SCHEMA = kcu.TABLE_SCHEMA
+                WHERE kcu.TABLE_SCHEMA = :schema AND kcu.TABLE_NAME = :tbl AND kcu.REFERENCED_TABLE_NAME IS NOT NULL
+                ORDER BY kcu.ORDINAL_POSITION";
+            $stmt = $this->getWrappedConnection()->prepare($sql);
+            $stmt->execute([':schema' => $db, ':tbl' => $table]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (\Throwable) {
+            return [];
+        }
+        $byName = [];
+        foreach ($rows as $row) {
+            $name = $row['CONSTRAINT_NAME'] ?? '';
+            $col = $row['COLUMN_NAME'] ?? '';
+            $refTable = $row['REFERENCED_TABLE_NAME'] ?? '';
+            $refCol = $row['REFERENCED_COLUMN_NAME'] ?? '';
+            $onDelete = strtoupper($row['DELETE_RULE'] ?? '');
+            $onUpdate = strtoupper($row['UPDATE_RULE'] ?? '');
+            if (!isset($byName[$name])) {
+                $byName[$name] = [
+                    'columns' => [],
+                    'ref_table' => $refTable,
+                    'ref_columns' => [],
+                    'on_delete_cascade' => $onDelete === 'CASCADE',
+                    'on_update_cascade' => $onUpdate === 'CASCADE',
+                ];
+            }
+            $byName[$name]['columns'][] = $col;
+            $byName[$name]['ref_columns'][] = $refCol;
+        }
+        $list = [];
+        foreach ($byName as $name => $data) {
+            $list[] = [
+                'name' => $name,
+                'columns' => $data['columns'],
+                'ref_table' => $data['ref_table'],
+                'ref_columns' => $data['ref_columns'],
+                'on_delete_cascade' => $data['on_delete_cascade'],
+                'on_update_cascade' => $data['on_update_cascade'],
+            ];
+        }
+        return $list;
     }
 }

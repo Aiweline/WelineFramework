@@ -23,6 +23,7 @@ use Weline\Framework\Exception\Core;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Database\Schema\Attribute\Col;
 
 /**
  * Class AbstractModel
@@ -65,19 +66,23 @@ abstract class AbstractModel extends DataObject
 {
     # 主数据库连接使用标志
     public const use_main_db_master = false;
-    public const table = '';
-    public const primary_key = '';
+    /** 表名（DDL 唯一定义） */
+    public const schema_table = '';
+    /** 主键字段名（单主键） */
+    public const schema_primary_key = '';
+    /** 联合主键字段名列表 */
+    public const schema_primary_keys = [];
     # 索引名
     public const indexer = '';
-    /**
-     * 对象属性
-     *
-     * @var array
-     */
-    public const fields_ID = 'id';
-    public const fields_CREATE_TIME = 'create_time';
-
-    public const fields_UPDATE_TIME = 'update_time';
+    /** 主键字段名常量（默认 id） */
+    #[Col(type: 'integer', length: 11, nullable: false, primaryKey: true, autoIncrement: true, comment: 'ID')]
+    public const schema_fields_ID = 'id';
+    /** 创建时间字段名 */
+    #[Col(type: 'timestamp', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
+    public const schema_fields_CREATE_TIME = 'create_time';
+    /** 更新时间字段名 */
+    #[Col(type: 'timestamp', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '更新时间')]
+    public const schema_fields_UPDATE_TIME = 'update_time';
 
     # 模块名称
     public string $module_name = '';
@@ -173,18 +178,22 @@ abstract class AbstractModel extends DataObject
         if (empty($this->_suffix)) {
             $this->_suffix = $this->getConnection()->getConfigProvider()->getPrefix() ?: '';
         }
-        # 模型属性
-        if (!empty($this::table)) {
-            $this->table = $this::table;
+        # 模型属性（仅读 schema_*）
+        if (!empty($this::schema_table)) {
+            $this->table = $this::schema_table;
         }
         if (empty($this->table)) {
             $this->table = $this->processTable();
         }
         if (empty($this->_primary_key)) {
-            if (!empty($this::primary_key)) {
-                $this->_primary_key = $this::primary_key;
-            } elseif ($this::fields_ID !== $this->_primary_key_default) {
-                $this->_primary_key = $this::fields_ID;
+            $pkKeys = $this::schema_primary_keys;
+            if (is_array($pkKeys) && $pkKeys !== []) {
+                $this->_unit_primary_keys = $pkKeys;
+                $this->_primary_key = (string) reset($pkKeys);
+            } elseif (!empty($this::schema_primary_key)) {
+                $this->_primary_key = $this::schema_primary_key;
+            } elseif ($this::schema_fields_ID !== $this->_primary_key_default) {
+                $this->_primary_key = $this::schema_fields_ID;
             } else {
                 $this->_primary_key = $this->_primary_key_default;
             }
@@ -312,6 +321,23 @@ abstract class AbstractModel extends DataObject
     }
 
     /**
+     * 主键字段名（与 getIdField() 同义，供外部统一通过 getter 访问）
+     */
+    public function getPrimaryKey(): string
+    {
+        return $this->_primary_key;
+    }
+
+    /**
+     * 联合主键字段名数组（供外部统一通过 getter 访问，避免直接读 _unit_primary_keys）
+     * @return list<string>
+     */
+    public function getUnitPrimaryKeys(): array
+    {
+        return $this->_unit_primary_keys;
+    }
+
+    /**
      * @DESC          # 处理表名 存在表名则不处理
      *
      * @AUTH    秋枫雁飞
@@ -322,8 +348,8 @@ abstract class AbstractModel extends DataObject
      */
     protected function processTable(): string
     {
-        if ($this::table) {
-            $this->table = $this::table;
+        if ($this::schema_table) {
+            $this->table = $this::schema_table;
         }
         if (!$this->table) {
             $class_file_name_arr = explode('Model', $this::class);
@@ -1123,8 +1149,8 @@ abstract class AbstractModel extends DataObject
     public function getId(mixed $default = 0)
     {
         if (!$this->_primary_key) {
-            if($this::fields_ID){
-                return $this->getData($this::fields_ID) ?: $default;
+            if ($this::schema_fields_ID) {
+                return $this->getData($this::schema_fields_ID) ?: $default;
             }
             return $default;
         }
@@ -1146,22 +1172,22 @@ abstract class AbstractModel extends DataObject
 
     public function getCreateTime()
     {
-        return $this->getData(self::fields_CREATE_TIME);
+        return $this->getData(self::schema_fields_CREATE_TIME);
     }
 
     public function setCreateTime(string $create_time): static
     {
-        return $this->setData(self::fields_CREATE_TIME, $create_time);
+        return $this->setData(self::schema_fields_CREATE_TIME, $create_time);
     }
 
     public function getUpdateTime()
     {
-        return $this->getData(self::fields_UPDATE_TIME);
+        return $this->getData(self::schema_fields_UPDATE_TIME);
     }
 
     public function setUpdateTime(string $update_time): static
     {
-        return $this->setData(self::fields_UPDATE_TIME, $update_time);
+        return $this->setData(self::schema_fields_UPDATE_TIME, $update_time);
     }
 
     public function getModelFields(bool $remove_primary_key = false, bool $remove_force_check_fields = false): array
@@ -1183,7 +1209,7 @@ abstract class AbstractModel extends DataObject
         //        if ($this::class === \Weline\Theme\Model\WelineTheme::class) p($arrConst,1);
         $_fields = [];
         foreach ($arrConst as $key => $val) {
-            if ($val && $key !== 'fields_ID' && str_starts_with($key, 'fields_')) {
+            if ($val && str_starts_with($key, 'schema_fields_')) {
                 $_fields[] = $val;
             }
         }
@@ -1260,7 +1286,7 @@ abstract class AbstractModel extends DataObject
                     //                        $this->setData($this->_primary_key, $datas);
                     //                    }
                     //                }
-                    if (($val === $this::fields_CREATE_TIME || $val === $this::fields_UPDATE_TIME) && empty($field_data)) {
+                    if (($val === $this::schema_fields_CREATE_TIME || $val === $this::schema_fields_UPDATE_TIME) && empty($field_data)) {
                         $field_data = date('Y-m-d H:i:s');
                     }
                     $this->_model_fields_data[$val] = $field_data;

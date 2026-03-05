@@ -39,7 +39,7 @@ class ModuleFileReader extends Scan
         $files   = [];
         $base_path = $module->getBasePath();
         $this->globFile($base_path . $dir, $files, '.php', $base_path, $module->getNamespacePath().'\\', true, true, $base_path);
-//        # 框架内部
+        // Weline_Framework 子目录（Setup、Session 等）可拥有 Model 目录，其 ORM 在 setup:upgrade 时由 SchemaDiffStage 处理
         if('Weline_Framework' == $module->getName()) {
             $framework_module_paths = glob($base_path.'*', GLOB_ONLYDIR);
             foreach ($framework_module_paths as $framework_module_path) {

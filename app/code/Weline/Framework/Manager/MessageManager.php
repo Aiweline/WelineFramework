@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Manager;
 
 use Weline\Framework\Session\Session;
+use Weline\Framework\Session\SessionFactory;
 
 class MessageManager
 {
@@ -33,8 +34,19 @@ class MessageManager
         $this->session = $session;
     }
 
+    /**
+     * 获取当前请求用于存消息的 Session。
+     * 后台/rest_backend 请求使用 SessionFactory::createSession()，与后端控制器同源，避免 WLS 下消息丢失；
+     * 其他场景使用 ObjectManager 的 Session 实例。
+     */
     public static function session(): Session
     {
+        $area = $_SERVER['WELINE_AREA'] ?? '';
+        if ($area === 'backend' || $area === 'rest_backend') {
+            $s = SessionFactory::getInstance()->createSession();
+            assert($s instanceof Session);
+            return $s;
+        }
         return ObjectManager::getInstance(Session::class);
     }
 
@@ -48,24 +60,24 @@ class MessageManager
     public function addError(string $msg = '', string $title = '', string $class = 'danger'): static
     {
         $title = $title ?: __('错误！');
-        self::session()->addData('system-message', self::process_message($msg, $title, $class));
-        self::session()->setData('has-error', '1');
+        self::session()->append('system-message', self::process_message($msg, $title, $class));
+        self::session()->set('has-error', '1');
         return $this;
     }
 
     public static function add_error(string $msg = '', string $title = '', string $class = 'danger'): self
     {
         $title = $title ?: __('错误！');
-        self::session()->addData('system-message', self::process_message($msg, $title, $class));
-        self::session()->setData('has-error', '1');
+        self::session()->append('system-message', self::process_message($msg, $title, $class));
+        self::session()->set('has-error', '1');
         return new self(self::session());
     }
 
     public static function error(string $msg = '', string $title = '', string $class = 'danger'): void
     {
         $session = self::session();
-        $session->addData('system-message', self::process_message($msg, $title, $class));
-        $session->setData('has-error', '1');
+        $session->append('system-message', self::process_message($msg, $title, $class));
+        $session->set('has-error', '1');
     }
 
     /**
@@ -74,12 +86,12 @@ class MessageManager
      */
     public function hasErrorMessage(): bool
     {
-        return (bool)self::session()->getData('has-error');
+        return (bool)self::session()->get('has-error');
     }
 
     public static function has_error_message(): bool
     {
-        return (bool)self::session()->getData('has-error');
+        return (bool)self::session()->get('has-error');
     }
 
     /**
@@ -92,16 +104,16 @@ class MessageManager
     public function addException(\Exception $exception, string $title = '', string $class = 'warning')
     {
         $msg = $exception->getMessage();
-        self::session()->addData('system-message', self::process_message($msg, __('异常警告！'), $class));
-        self::session()->setData('has-exception', '1');
+        self::session()->append('system-message', self::process_message($msg, __('异常警告！'), $class));
+        self::session()->set('has-exception', '1');
         return $this;
     }
 
     public static function exception(\Exception $exception, string $title = '', string $class = 'warning'): void
     {
         $msg = $exception->getMessage();
-        self::session()->addData('system-message', self::process_message($msg, $title, $class));
-        self::session()->setData('has-exception', '1');
+        self::session()->append('system-message', self::process_message($msg, $title, $class));
+        self::session()->set('has-exception', '1');
     }
 
     /**@return bool
@@ -109,12 +121,12 @@ class MessageManager
      */
     public function hasException(): bool
     {
-        return (bool)self::session()->getData('has-exception');
+        return (bool)self::session()->get('has-exception');
     }
 
     public static function has_exception(): bool
     {
-        return (bool)self::session()->getData('has-exception');
+        return (bool)self::session()->get('has-exception');
     }
 
     /**
@@ -127,16 +139,16 @@ class MessageManager
     public function addSuccess(string $msg = '', string $title = '', string $class = 'success')
     {
         $title = $title ?: __('操作成功！');
-        self::session()->addData('system-message', self::process_message($msg, $title, $class));
-        self::session()->setData('has-success', '1');
+        self::session()->append('system-message', self::process_message($msg, $title, $class));
+        self::session()->set('has-success', '1');
         return $this;
     }
 
     public static function success(string $msg = '', string $title = '', string $class = 'success'): void
     {
         $title = $title ?: __('操作成功！');
-        self::session()->addData('system-message', self::process_message($msg, $title, $class));
-        self::session()->setData('has-success', '1');
+        self::session()->append('system-message', self::process_message($msg, $title, $class));
+        self::session()->set('has-success', '1');
     }
 
     /**
@@ -145,12 +157,12 @@ class MessageManager
      */
     public function hasSuccessMessage(): bool
     {
-        return (bool)self::session()->getData('has-success');
+        return (bool)self::session()->get('has-success');
     }
 
     public static function has_success_message(): bool
     {
-        return (bool)self::session()->getData('has-success');
+        return (bool)self::session()->get('has-success');
     }
 
 
@@ -163,16 +175,16 @@ class MessageManager
     public function addWarning(string $msg = '', string $title = '', string $class = 'warning'): self
     {
         $title = $title ?: __('警告！');
-        self::session()->addData('system-message', self::process_message($msg, $title, $class));
-        self::session()->setData('has-warning', '1');
+        self::session()->append('system-message', self::process_message($msg, $title, $class));
+        self::session()->set('has-warning', '1');
         return $this;
     }
 
     public static function warning(string $msg = '', string $title = '', string $class = 'warning'): void
     {
         $title = $title ?: __('警告！');
-        self::session()->addData('system-message', self::process_message($msg, $title, $class));
-        self::session()->setData('has-warning', '1');
+        self::session()->append('system-message', self::process_message($msg, $title, $class));
+        self::session()->set('has-warning', '1');
     }
 
     /**
@@ -181,12 +193,12 @@ class MessageManager
      */
     public function hasWarningMessage(): bool
     {
-        return (bool)self::session()->getData('has-warning');
+        return (bool)self::session()->get('has-warning');
     }
 
     public static function has_warning_message(): bool
     {
-        return (bool)self::session()->getData('has-warning');
+        return (bool)self::session()->get('has-warning');
     }
 
     /**
@@ -199,16 +211,16 @@ class MessageManager
     public function addNotes(string $msg = '', string $title = '', string $class = 'notes')
     {
         $title = $title ?: __('提示！');
-        self::session()->addData('system-message', self::process_message($msg, $title, $class));
-        self::session()->setData('has-notes', '1');
+        self::session()->append('system-message', self::process_message($msg, $title, $class));
+        self::session()->set('has-notes', '1');
         return $this;
     }
 
     public static function notes(string $msg = '', string $title = '', string $class = 'notes'): void
     {
         $title = $title ?: __('提示！');
-        self::session()->addData('system-message', self::process_message($msg, $title, $class));
-        self::session()->setData('has-notes', '1');
+        self::session()->append('system-message', self::process_message($msg, $title, $class));
+        self::session()->set('has-notes', '1');
     }
 
     /**
@@ -217,22 +229,26 @@ class MessageManager
      */
     public function hasNotesMessage(): bool
     {
-        return (bool)self::session()->getData('has-notes');
+        return (bool)self::session()->get('has-notes');
     }
 
     public static function has_notes_message(): bool
     {
-        return (bool)self::session()->getData('has-notes');
+        return (bool)self::session()->get('has-notes');
     }
 
     public function render(): string
     {
         // 始终使用 self::session() 获取当前请求的 session，避免 WLS 常驻内存下实例不一致
         $session = self::session();
-        $html = "<div class='system message'>{$session->getData('system-message')}</div>";
+        $html = "<div class='system message'>{$session->get('system-message')}</div>";
         // 使用当前 session 清理，确保消息被正确消费
         foreach (self::keys as $key) {
             $session->delete($key);
+        }
+        // 显式刷写到 session 存储，确保清空后的状态持久化（WLS/Redis 等跨请求生效）
+        if (\method_exists($session, 'save')) {
+            $session->save();
         }
         return $html;
     }

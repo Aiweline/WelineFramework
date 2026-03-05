@@ -333,8 +333,10 @@ class Core
 
     /**
      * 获取去除区域路由前缀后的 URL 路径
-     * 
-     * 性能优化：提取重复逻辑，避免在 processUrl() 中多处重复
+     *
+     * 后台 URL 结构为 /backendKey/currency/language/module/controller/action，
+     * 解析后 getUrlPath() 为 /currency/language/admin/...（已去 backendKey），
+     * 路由表键为 admin/controller/action，故需再去除前两段（货币+语言）再匹配。
      */
     private function getStrippedUrlPath(): string
     {
@@ -342,7 +344,21 @@ class Core
         if ($this->is_backend || (\Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND === $this->request_area)) {
             $url = str_replace($this->area_router, '', $url);
         }
-        return str_replace('//', '/', $url);
+        $url = str_replace('//', '/', trim($url, '/'));
+        // 后台：路径可能为 currency/language/admin/...，需去掉前两段再与路由表匹配
+        if ($this->is_backend && $url !== '') {
+            $segments = explode('/', $url);
+            $first = $segments[0] ?? '';
+            $second = $segments[1] ?? '';
+            $isCurrency = strlen($first) === 3 && ctype_upper($first);
+            $isLanguage = strlen($second) > 3 && strlen($second) <= 10
+                && ctype_lower(substr($second, 0, 2))
+                && isset($second[2]) && $second[2] === '_';
+            if ($isCurrency && $isLanguage && count($segments) > 2) {
+                $url = implode('/', array_slice($segments, 2));
+            }
+        }
+        return $url;
     }
     
     /**
@@ -948,19 +964,23 @@ class Core
         // 编辑器预览模式不写入全页缓存
         $isEditorMode = isset($_GET['editor_mode']) && ($_GET['editor_mode'] === '1' || $_GET['editor_mode'] === 'true');
         if (!$this->is_backend && !$isEditorMode && $routerCacheEnabled && $frontendCacheEnabled && !empty($fpcHtml)) {
-            // 构建统一缓存结构，包含所有请求相关数据
-            $unifiedCacheData = [
-                KeyBuilder::UNIFIED_CACHE_URL_KEY => $this->url,
-                KeyBuilder::UNIFIED_CACHE_RULE_KEY => $this->request->getRule(),
-                KeyBuilder::UNIFIED_CACHE_ROUTER_KEY => $this->router,
-                KeyBuilder::UNIFIED_CACHE_PARAMS_KEY => $this->routerGeneratedGetParams,
-                KeyBuilder::UNIFIED_CACHE_FPC_KEY => $fpcHtml,
-                KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => $responseHeaders,
-            ];
-            
-            // 保存统一缓存（使用较长的过期时间，因为包含全页缓存）
-            $saveCacheKey = KeyBuilder::buildUnifiedRequestCacheKey('', $this->request->getMethod() ?: 'GET');
-            $this->cache->set($saveCacheKey, $unifiedCacheData, 3600);
+            // 写前校验：fullUri 无效时跳过 FPC 写入，避免以错误 key 污染缓存
+            $fullUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? '';
+            if (KeyBuilder::isValidFullPageCacheKey($fullUri)) {
+                // 构建统一缓存结构，包含所有请求相关数据
+                $unifiedCacheData = [
+                    KeyBuilder::UNIFIED_CACHE_URL_KEY => $this->url,
+                    KeyBuilder::UNIFIED_CACHE_RULE_KEY => $this->request->getRule(),
+                    KeyBuilder::UNIFIED_CACHE_ROUTER_KEY => $this->router,
+                    KeyBuilder::UNIFIED_CACHE_PARAMS_KEY => $this->routerGeneratedGetParams,
+                    KeyBuilder::UNIFIED_CACHE_FPC_KEY => $fpcHtml,
+                    KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => $responseHeaders,
+                ];
+
+                // 保存统一缓存（使用较长的过期时间，因为包含全页缓存）
+                $saveCacheKey = KeyBuilder::buildUnifiedRequestCacheKey('', $this->request->getMethod() ?: 'GET');
+                $this->cache->set($saveCacheKey, $unifiedCacheData, 3600);
+            }
         }
         // 兼容性：如果 url_cache_data 为空，也保存到旧的缓存键
         if (!$this->url_cache_data) {

@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Weline\Framework\Database\Schema;
 
 /**
- * DDL 表/列编译接口：将列定义与表结构编译为方言 SQL
+ * DDL 表/列编译接口
+ *
+ * @deprecated 方言已下沉至 Connector，使用 ConnectorInterface::getDefaultTableAdditional() 等。
+ *             本接口保留仅为向后兼容，新代码请直接使用适配器。
  * @since 1.0.0
  */
 interface SchemaCompilerInterface

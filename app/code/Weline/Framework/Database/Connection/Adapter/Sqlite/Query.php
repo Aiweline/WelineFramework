@@ -941,7 +941,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                     }
                     if (!empty($conflictFields)) {
                         // 如果 exist_update_sql 是 'DO UPDATE SET ALL_FIELDS'，生成所有字段的更新语句
-                        if ($this->exist_update_sql === 'DO UPDATE SET ALL_FIELDS') {
+                        if ($this->exist_update_sql === QueryInterface::EXIST_UPDATE_ALL_FIELDS) {
                             $updateParts = [];
                             foreach ($insert_fields as $field) {
                                 // 跳过冲突检测字段

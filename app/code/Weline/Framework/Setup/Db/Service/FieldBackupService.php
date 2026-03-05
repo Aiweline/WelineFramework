@@ -137,7 +137,7 @@ class FieldBackupService
             
             // 保存备份数据到备份表
             foreach ($data as $row) {
-                $backupModel = ObjectManager::getInstance(\Weline\Framework\Setup\Db\Model\FieldBackup::class);
+                $backupModel = ObjectManager::getInstance(\Weline\Framework\Setup\Model\FieldBackup::class);
                 $backupModel->clearData()
                     ->setData('module', $moduleName)
                     ->setData('table_name', $tableName)
@@ -184,7 +184,7 @@ class FieldBackupService
             }
             
             // 查询备份数据
-            $backupModel = ObjectManager::getInstance(\Weline\Framework\Setup\Db\Model\FieldBackup::class);
+            $backupModel = ObjectManager::getInstance(\Weline\Framework\Setup\Model\FieldBackup::class);
             $backupModel->reset()
                 ->where('module', $moduleName)
                 ->where('table_name', $tableName)
@@ -234,7 +234,7 @@ class FieldBackupService
 
                 if ($hasCurrent) {
                     // 存在人为或新版本写入的数据，不做覆盖，只做冲突记录
-                    $conflictModel = ObjectManager::getInstance(\Weline\Framework\Setup\Db\Model\FieldBackupConflict::class);
+                    $conflictModel = ObjectManager::getInstance(\Weline\Framework\Setup\Model\FieldBackupConflict::class);
                     $conflictModel->clearData()
                         ->setData('module', $moduleName)
                         ->setData('table_name', $tableName)
@@ -267,7 +267,7 @@ class FieldBackupService
 
                 // 标记为已恢复
                 if ($backupId !== null) {
-                    $updateBackupModel = ObjectManager::getInstance(\Weline\Framework\Setup\Db\Model\FieldBackup::class);
+                    $updateBackupModel = ObjectManager::getInstance(\Weline\Framework\Setup\Model\FieldBackup::class);
                     $updateBackupModel->load($backupId)
                         ->setData('restored', 1)
                         ->setData('restore_time', date('Y-m-d H:i:s'))
@@ -308,9 +308,9 @@ class FieldBackupService
     private function ensureBackupTableExists(): void
     {
         try {
-            $backupModel = ObjectManager::getInstance(\Weline\Framework\Setup\Db\Model\FieldBackup::class);
-            $conflictModel = ObjectManager::getInstance(\Weline\Framework\Setup\Db\Model\FieldBackupConflict::class);
-            $definitionModel = ObjectManager::getInstance(\Weline\Framework\Setup\Db\Model\FieldDefinitionBackup::class);
+            $backupModel = ObjectManager::getInstance(\Weline\Framework\Setup\Model\FieldBackup::class);
+            $conflictModel = ObjectManager::getInstance(\Weline\Framework\Setup\Model\FieldBackupConflict::class);
+            $definitionModel = ObjectManager::getInstance(\Weline\Framework\Setup\Model\FieldDefinitionBackup::class);
             $setup = ObjectManager::make(\Weline\Framework\Setup\Db\ModelSetup::class);
             // 正确传递构造参数数组给 Context（模块名 + 模块版本）
             $context = ObjectManager::make(
@@ -364,8 +364,8 @@ class FieldBackupService
 
             $definitionJson = json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-            /** @var \Weline\Framework\Setup\Db\Model\FieldDefinitionBackup $defModel */
-            $defModel = ObjectManager::getInstance(\Weline\Framework\Setup\Db\Model\FieldDefinitionBackup::class);
+            /** @var \Weline\Framework\Setup\Model\FieldDefinitionBackup $defModel */
+            $defModel = ObjectManager::getInstance(\Weline\Framework\Setup\Model\FieldDefinitionBackup::class);
             $defModel->clearData()
                 ->setData('module', $moduleName)
                 ->setData('table_name', $tableName)

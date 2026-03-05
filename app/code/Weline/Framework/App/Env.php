@@ -38,6 +38,9 @@ class Env extends DataObject
 
     public const path_MODULES_FILE = APP_ETC_PATH . 'modules.php';
 
+    /** 框架模块名，用于保证其始终最先注册、最先执行（Model/建表等） */
+    public const MODULE_FRAMEWORK = 'Weline_Framework';
+
     public const path_MODULE_DEPENDENCIES_FILE = APP_ETC_PATH . 'module_dependencies.php';
 
     public const path_COMMANDS_FILE = self::path_framework_generated . 'commands.php';
@@ -977,6 +980,7 @@ class Env extends DataObject
         
         try {
             $this->module_list = (array)require Env::path_MODULES_FILE;
+            $this->module_list = $this->ensureFrameworkFirstInModuleList($this->module_list);
         } catch (\Throwable $e) {
             // 如果是权限错误，提供更友好的提示
             if (strpos($e->getMessage(), 'Permission denied') !== false || 
@@ -995,6 +999,22 @@ class Env extends DataObject
         self::$module_configs = [];
 
         return $this->module_list;
+    }
+
+    /**
+     * 保证 Weline_Framework 在模块列表中始终排第一，便于先注册、先执行 Model/建表等。
+     *
+     * @param array<string, array> $list 模块列表 [ module_name => module_data ]
+     * @return array<string, array>
+     */
+    private function ensureFrameworkFirstInModuleList(array $list): array
+    {
+        if ($list === [] || !isset($list[self::MODULE_FRAMEWORK])) {
+            return $list;
+        }
+        $framework = $list[self::MODULE_FRAMEWORK];
+        unset($list[self::MODULE_FRAMEWORK]);
+        return [self::MODULE_FRAMEWORK => $framework] + $list;
     }
 
     public function getDependencies(bool $reget = false): array

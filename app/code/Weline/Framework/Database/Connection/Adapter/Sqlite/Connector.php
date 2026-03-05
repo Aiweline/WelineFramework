@@ -66,6 +66,13 @@ final class Connector extends Query implements ConnectorInterface
     protected ?Query $query = null;
     protected bool $fromPool = false; // 标记连接是否来自连接池
 
+    private ?SqliteDialect $dialect = null;
+
+    private function getDialect(): SqliteDialect
+    {
+        return $this->dialect ??= new SqliteDialect();
+    }
+
     static function processName(string $name): string
     {
         return str_replace(['`', '"'], '', $name);
@@ -102,7 +109,7 @@ final class Connector extends Query implements ConnectorInterface
         $this->fromPool = true;
         try {
             $version = (string)$this->link->query('SELECT sqlite_version()')->fetchColumn();
-            (new SqliteDialect())->validateVersion($version);
+            $this->getDialect()->validateVersion($version);
         } catch (\Throwable $e) {
             w_log_warning(__('SQLite 版本校验未通过（连接已建立，升级可继续）：%{1}', [$e->getMessage()]), [], 'database_version.log');
         }
@@ -257,7 +264,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         $tableMeta = $this->query("SELECT sql FROM sqlite_master WHERE type='table' AND name='$table_name'")->fetch();
 
         if ($tableMeta === false) {
-            throw new Exception("Table '$table_name' does not exist.");
+            throw new \Exception("Table '$table_name' does not exist.");
         }
         // 返回 CREATE TABLE 语句
         return $tableMeta[0]['sql'] ?? '';
@@ -276,6 +283,12 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function alterTable(): Sql\Table\AlterInterface
     {
         return ObjectManager::getInstance(Table\Alter::class)->setConnection($this);
+    }
+
+    public function dropTableIfExists(string $table): void
+    {
+        $quoted = $this->quoteTable(self::processName($table));
+        $this->query("DROP TABLE IF EXISTS {$quoted}")->fetch();
     }
 
     public function tableExist(string $table_name): bool
@@ -319,5 +332,195 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function getQuery(): QueryInterface
     {
         return $this;
+    }
+
+    /** @inheritDoc */
+    public function getTableComment(string $table): string
+    {
+        return '';
+    }
+
+    /** @inheritDoc */
+    public function getTableColumns(string $table): array
+    {
+        $table = self::processName($table);
+        $rows = $this->query("PRAGMA table_info(" . $this->getLink()->quote($table) . ")")->fetchArray();
+        if (!is_array($rows)) {
+            return [];
+        }
+        $list = [];
+        foreach ($rows as $row) {
+            $name = $row['name'] ?? '';
+            $type = strtolower($row['type'] ?? '');
+            $notnull = (int) ($row['notnull'] ?? 0);
+            $pk = (int) ($row['pk'] ?? 0);
+            $default = $row['dflt_value'] ?? null;
+            $list[] = [
+                'name' => $name,
+                'type' => $type ?: 'text',
+                'length' => null,
+                'nullable' => $notnull === 0,
+                'primary_key' => $pk > 0,
+                'auto_increment' => $pk > 0 && ($type === 'integer' || $type === 'int'),
+                'default' => $default,
+                'comment' => '',
+                'unique' => false,
+            ];
+        }
+        return $list;
+    }
+
+    /** @inheritDoc */
+    public function getTableIndexes(string $table): array
+    {
+        $table = self::processName($table);
+        $indexList = $this->query("PRAGMA index_list(" . $this->getLink()->quote($table) . ")")->fetchArray();
+        if (!is_array($indexList)) {
+            return [];
+        }
+        $list = [];
+        foreach ($indexList as $idx) {
+            $name = $idx['name'] ?? '';
+            $unique = (bool) ($idx['unique'] ?? false);
+            $info = $this->query("PRAGMA index_info(" . $this->getLink()->quote($name) . ")")->fetchArray();
+            $columns = [];
+            if (is_array($info)) {
+                foreach ($info as $r) {
+                    $columns[] = $r['name'] ?? '';
+                }
+            }
+            $list[] = ['name' => $name, 'columns' => $columns, 'unique' => $unique];
+        }
+        return $list;
+    }
+
+    /** @inheritDoc */
+    public function quoteTable(string $table): string
+    {
+        return $this->getDialect()->quoteTable($table);
+    }
+
+    /** @inheritDoc */
+    public function quoteIdentifier(string $identifier): string
+    {
+        return $this->getDialect()->quoteIdentifier($identifier);
+    }
+
+    /** @inheritDoc */
+    public function buildAlterAddColumnSql(string $table, array $col): string
+    {
+        $d = $this->getDialect();
+        $t = $d->quoteTable($table);
+        $def = $this->sqliteColumnDef($col);
+        return "ALTER TABLE {$t} ADD COLUMN {$def}";
+    }
+
+    /** @inheritDoc */
+    public function buildAlterModifyColumnSql(string $table, array $col, ?array $existingCol = null): string
+    {
+        throw new \RuntimeException('SQLite does not support ALTER COLUMN MODIFY. Use table recreation workaround.');
+    }
+
+    /** @inheritDoc */
+    public function buildAlterDropColumnSql(string $table, string $colName): string
+    {
+        $d = $this->getDialect();
+        $t = $d->quoteTable($table);
+        $c = $d->quoteIdentifier($colName);
+        return "ALTER TABLE {$t} DROP COLUMN {$c}";
+    }
+
+    /** @inheritDoc */
+    public function buildAlterTableCommentSql(string $table, string $comment): string
+    {
+        return "SELECT 1"; // SQLite 不支持表注释，返回无操作
+    }
+
+    /** @inheritDoc */
+    public function buildAddIndexSql(string $table, array $idx): string
+    {
+        $d = $this->getDialect();
+        $t = $d->quoteTable($table);
+        $name = $d->quoteIdentifier($idx['name'] ?? '');
+        $cols = array_map(fn (string $c) => $d->quoteIdentifier($c), $idx['columns'] ?? []);
+        $colList = implode(',', $cols);
+        $type = strtoupper($idx['type'] ?? 'INDEX');
+        if ($type === 'UNIQUE') {
+            return "CREATE UNIQUE INDEX IF NOT EXISTS {$name} ON {$t} ({$colList})";
+        }
+        return "CREATE INDEX IF NOT EXISTS {$name} ON {$t} ({$colList})";
+    }
+
+    /** @inheritDoc */
+    public function buildDropIndexSql(string $table, string $indexName): string
+    {
+        $n = $this->getDialect()->quoteIdentifier($indexName);
+        return "DROP INDEX IF EXISTS {$n}";
+    }
+
+    /** @inheritDoc */
+    public function buildAddForeignKeySql(string $table, array $fk): string
+    {
+        return "SELECT 1"; // SQLite 不支持 ALTER TABLE ADD CONSTRAINT
+    }
+
+    /** @inheritDoc */
+    public function buildDropForeignKeySql(string $table, string $fkName): string
+    {
+        return "SELECT 1"; // SQLite 不支持 ALTER TABLE DROP CONSTRAINT
+    }
+
+    private function sqliteColumnDef(array $col): string
+    {
+        $c = $this->getDialect()->quoteIdentifier($col['name'] ?? '');
+        $type = strtoupper($col['type'] ?? 'TEXT');
+        $len = $col['length'] ?? null;
+        $typeLen = $type . ($len !== null ? "({$len})" : '');
+        $opts = [];
+        if (!empty($col['primaryKey'])) {
+            $opts[] = 'PRIMARY KEY';
+        }
+        if (!empty($col['autoIncrement']) && !empty($col['primaryKey'])) {
+            $opts[] = 'AUTOINCREMENT';
+        }
+        if (empty($col['nullable']) && empty($col['primaryKey'])) {
+            $opts[] = 'NOT NULL';
+        }
+        if (isset($col['default']) && $col['default'] !== null) {
+            $d = $col['default'];
+            $opts[] = is_string($d) && strtoupper($d) === 'CURRENT_TIMESTAMP'
+                ? "DEFAULT (datetime('now'))"
+                : (is_string($d) ? "DEFAULT '" . str_replace("'", "''", $d) . "'" : "DEFAULT {$d}");
+        }
+        $optStr = implode(' ', $opts);
+        return "{$c} {$typeLen} {$optStr}";
+    }
+
+    /** @inheritDoc */
+    public function getTableForeignKeys(string $table): array
+    {
+        $table = self::processName($table);
+        $rows = $this->query("PRAGMA foreign_key_list(" . $this->getLink()->quote($table) . ")")->fetchArray();
+        if (!is_array($rows)) {
+            return [];
+        }
+        $list = [];
+        foreach ($rows as $row) {
+            $list[] = [
+                'name' => 'fk_' . ($row['id'] ?? 0),
+                'columns' => [$row['from'] ?? ''],
+                'ref_table' => $row['table'] ?? '',
+                'ref_columns' => [$row['to'] ?? ''],
+                'on_delete_cascade' => strtoupper($row['on_delete'] ?? '') === 'CASCADE',
+                'on_update_cascade' => strtoupper($row['on_update'] ?? '') === 'CASCADE',
+            ];
+        }
+        return $list;
+    }
+
+    /** @inheritDoc */
+    public function getDefaultTableAdditional(): string
+    {
+        return '';
     }
 }

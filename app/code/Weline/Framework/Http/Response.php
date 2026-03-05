@@ -250,8 +250,18 @@ class Response implements ResponseInterface
     }
 
     /**
+     * 发送响应并终止（简短别名，兼容 send）
+     *
+     * @throws ResponseTerminateException
+     */
+    public function send(): never
+    {
+        $this->sendResponse();
+    }
+
+    /**
      * 发送响应并终止
-     * 
+     *
      * @throws ResponseTerminateException
      */
     public function sendResponse(): never

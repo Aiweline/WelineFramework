@@ -69,6 +69,13 @@ final class Connector extends Query implements ConnectorInterface
     protected bool $fromPool = false; // 标记连接是否来自连接池
     protected ?PDO $_original_pdo = null; // 原始 PDO 引用，用于克隆后的对象访问
 
+    private ?PgsqlDialect $dialect = null;
+
+    private function getDialect(): PgsqlDialect
+    {
+        return $this->dialect ??= new PgsqlDialect();
+    }
+
     public function create(): static
     {
         if ($this->link !== null) {
@@ -82,9 +89,9 @@ final class Connector extends Query implements ConnectorInterface
             $availableDrivers = implode(',', PDO::getAvailableDrivers());
             $installHint = '';
             if (PHP_OS_FAMILY === 'Windows') {
-                $installHint = ' Windows系统：请确保 php_pdo_pgsql.dll 和 php_pgsql.dll 已在 php.ini 中启用。';
+                $installHint = ' ' . __('Windows: Ensure php_pdo_pgsql.dll and php_pgsql.dll are enabled in php.ini.');
             } elseif (PHP_OS_FAMILY === 'Linux') {
-                $installHint = ' Linux系统：请运行 "apt-get install php-pgsql" 或 "yum install php-pgsql" 安装扩展，然后重启 PHP-FPM/Apache。';
+                $installHint = ' ' . __('Linux: Run "apt-get install php-pgsql" or "yum install php-pgsql" to install the extension, then restart PHP-FPM/Apache.');
             }
             throw new LinkException(__('PostgreSQL 驱动不存在：%{1}。可用驱动列表：%{2}。%{3}更多驱动配置请转到 php.ini 中开启。', [$db_type, $availableDrivers, $installHint]));
         }
@@ -119,7 +126,7 @@ final class Connector extends Query implements ConnectorInterface
         $this->_original_pdo = $this->link;
         $this->fromPool = true;
         try {
-            (new PgsqlDialect())->validateVersion((string)$this->link->getAttribute(PDO::ATTR_SERVER_VERSION));
+            $this->getDialect()->validateVersion((string)$this->link->getAttribute(PDO::ATTR_SERVER_VERSION));
         } catch (\Throwable $e) {
             w_log_warning(__('PostgreSQL 版本校验未通过（连接已建立，升级可继续）：%{1}', [$e->getMessage()]), [], 'database_version.log');
         }
@@ -296,6 +303,13 @@ SQL;
         return ObjectManager::getInstance(Alter::class)->setConnection($this);
     }
 
+    /** @inheritDoc 方言：PostgreSQL 使用 CASCADE 自动清理依赖 */
+    public function dropTableIfExists(string $table): void
+    {
+        $quoted = $this->quoteTable(str_replace(['`', '"'], '', $table));
+        $this->query("DROP TABLE IF EXISTS {$quoted} CASCADE")->fetch();
+    }
+
     public function tableExist(string $table_name): bool
     {
         try {
@@ -379,8 +393,10 @@ SQL;
                 $table = $parts[1] ?? $parts[0];
             }
         }
-        
-        $sql = "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_schema = '{$schema}' AND table_name = '{$table}' AND column_name = '{$field}')";
+        $schema = str_replace("'", "''", $schema);
+        $table = str_replace("'", "''", $table);
+        $field = str_replace("'", "''", $field);
+        $sql = "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE LOWER(table_schema) = LOWER('{$schema}') AND LOWER(table_name) = LOWER('{$table}') AND LOWER(column_name) = LOWER('{$field}'))";
         $stmt = $this->getLink()->query($sql);
         $result = $stmt->fetch(\PDO::FETCH_ASSOC);
         return (bool)($result['exists'] ?? false);
@@ -411,6 +427,502 @@ SQL;
     public function getQuery(): QueryInterface
     {
         return $this;
+    }
+
+    /** @inheritDoc */
+    public function quoteTable(string $table): string
+    {
+        return $this->getDialect()->quoteTable($table);
+    }
+
+    /** @inheritDoc */
+    public function quoteIdentifier(string $identifier): string
+    {
+        return $this->getDialect()->quoteIdentifier($identifier);
+    }
+
+    /**
+     * @inheritDoc
+     * PostgreSQL: 向非空表添加 NOT NULL 列时，需提供 DEFAULT，否则报 "contains null values"。
+     * 若模型未声明 default，按类型生成临时默认值（varchar→''，int→0），以通过 ADD COLUMN。
+     */
+    public function buildAlterAddColumnSql(string $table, array $col): string
+    {
+        $dialect = $this->getDialect();
+        $t = $dialect->quoteTable($table);
+        $c = $dialect->quoteIdentifier($col['name'] ?? '');
+        $type = $this->pgsqlTypeFromCol($col);
+        $clauses = [$c . ' ' . $type];
+        $nullable = !empty($col['nullable']);
+        $hasDefault = isset($col['default']) && $col['default'] !== null;
+        $isSerial = (!empty($col['autoIncrement']) || !empty($col['primaryKey']))
+            && in_array(strtolower($col['type'] ?? ''), ['int', 'integer', 'bigint', 'smallint', 'tinyint'], true);
+        if ($hasDefault) {
+            $defVal = $col['default'];
+            $clauses[] = is_string($defVal) && strtoupper($defVal) === 'CURRENT_TIMESTAMP'
+                ? 'DEFAULT CURRENT_TIMESTAMP'
+                : (is_string($defVal) ? "DEFAULT '" . str_replace("'", "''", $defVal) . "'" : "DEFAULT {$defVal}");
+        } elseif (!$nullable && !$isSerial) {
+            $baseType = strtolower($col['type'] ?? 'varchar');
+            $clauses[] = match (true) {
+                in_array($baseType, ['varchar', 'char', 'text', 'longtext', 'mediumtext', 'tinytext'], true) => "DEFAULT ''",
+                in_array($baseType, ['int', 'integer', 'bigint', 'smallint', 'tinyint', 'mediumint'], true) => 'DEFAULT 0',
+                in_array($baseType, ['decimal', 'numeric', 'float', 'double'], true) => 'DEFAULT 0',
+                $baseType === 'bool' || $baseType === 'boolean' => 'DEFAULT false',
+                default => "DEFAULT ''",
+            };
+        }
+        if (!$nullable) {
+            $clauses[] = 'NOT NULL';
+        }
+        return "ALTER TABLE {$t} ADD COLUMN " . implode(' ', $clauses);
+    }
+
+    /**
+     * @inheritDoc
+     * PostgreSQL: 设置 NOT NULL 前需先将现有 NULL 填充为默认值，否则报 "contains null values"。
+     * 类型变更时，UPDATE 填充值必须与当前列类型兼容，使用 $existingCol 生成兼容值。
+     */
+    public function buildAlterModifyColumnSql(string $table, array $col, ?array $existingCol = null): string
+    {
+        $d = $this->getDialect();
+        $t = $d->quoteTable($table);
+        $c = $d->quoteIdentifier($col['name'] ?? '');
+        $type = $this->pgsqlTypeFromCol($col, true); // ALTER COLUMN 不支持 SERIAL 伪类型，使用 INTEGER/BIGINT
+        $usingExpr = $this->pgsqlModifyColumnUsingExpr($c, $type, $col, $existingCol);
+        $parts = ["ALTER COLUMN {$c} TYPE {$type} USING {$usingExpr}"];
+        $setNotNull = empty($col['nullable']);
+        $prefix = '';
+        if ($setNotNull) {
+            $fillCol = $existingCol ?? $col;
+            $fillVal = $this->pgsqlDefaultForNullFill($fillCol);
+            $prefix = "UPDATE {$t} SET {$c} = {$fillVal} WHERE {$c} IS NULL;\n";
+        }
+        $parts[] = $setNotNull ? "ALTER COLUMN {$c} SET NOT NULL" : "ALTER COLUMN {$c} DROP NOT NULL";
+        if (!empty($col['autoIncrement'])) {
+            [$schema, $tableName] = $this->parseSchemaTable($table);
+            $colName = (string) ($col['name'] ?? '');
+            $seqName = $tableName . '_' . $colName . '_seq';
+            $seqRef = $schema . '.' . $seqName;
+            $parts[] = "ALTER COLUMN {$c} SET DEFAULT nextval('" . str_replace("'", "''", $seqRef) . "'::regclass)";
+            $createSeq = 'CREATE SEQUENCE IF NOT EXISTS ' . $d->quoteIdentifier($schema) . '.' . $d->quoteIdentifier($seqName);
+            return $prefix . $createSeq . ";\nALTER TABLE {$t} " . implode(', ', $parts);
+        }
+        if (isset($col['default']) && $col['default'] !== null) {
+            $defVal = $col['default'];
+            $def = is_string($defVal) && strtoupper($defVal) === 'CURRENT_TIMESTAMP'
+                ? 'CURRENT_TIMESTAMP'
+                : (is_string($defVal) ? "'" . str_replace("'", "''", $defVal) . "'" : (string) $defVal);
+            $parts[] = "ALTER COLUMN {$c} SET DEFAULT {$def}";
+        } else {
+            $parts[] = "ALTER COLUMN {$c} DROP DEFAULT";
+        }
+        return $prefix . "ALTER TABLE {$t} " . implode(', ', $parts);
+    }
+
+    /** 用于 MODIFY 时填充 NULL 的默认值（按类型）。UPDATE 只能用字面量，不能用 nextval 等表达式。 */
+    private function pgsqlDefaultForNullFill(array $col): string
+    {
+        $baseType = strtolower($col['type'] ?? 'varchar');
+        $isSerial = !empty($col['autoIncrement']) || (is_string($col['default'] ?? '') && stripos((string) $col['default'], 'nextval') !== false);
+        if ($isSerial || in_array($baseType, ['int', 'integer', 'bigint', 'smallint', 'tinyint', 'mediumint'], true)) {
+            return '0';
+        }
+        if (isset($col['default']) && $col['default'] !== null) {
+            $d = $col['default'];
+            if (is_string($d) && strtoupper($d) === 'CURRENT_TIMESTAMP') {
+                return 'CURRENT_TIMESTAMP';
+            }
+            if (!is_string($d) || stripos($d, 'nextval') === false) {
+                $val = is_string($d) ? $d : (string) $d;
+                $maxLen = isset($col['length']) ? (int) $col['length'] : null;
+                if ($maxLen !== null && $maxLen > 0 && strlen($val) > $maxLen) {
+                    $val = substr($val, 0, $maxLen);
+                }
+                return "'" . str_replace("'", "''", $val) . "'";
+            }
+        }
+        return match (true) {
+            in_array($baseType, ['varchar', 'char', 'text', 'longtext', 'mediumtext', 'tinytext'], true) => "''",
+            in_array($baseType, ['int', 'integer', 'bigint', 'smallint', 'tinyint', 'mediumint'], true) => '0',
+            in_array($baseType, ['decimal', 'numeric', 'float', 'double'], true) => '0',
+            $baseType === 'bool' || $baseType === 'boolean' => 'false',
+            $baseType === 'date' => "'1970-01-01'",
+            in_array($baseType, ['datetime', 'timestamp'], true) => "'1970-01-01'",
+            default => "''",
+        };
+    }
+
+    /**
+     * @inheritDoc
+     * PostgreSQL: 使用 CASCADE 自动删除列上的外键、索引等依赖，避免手动 DROP CONSTRAINT 时约束名不匹配
+     *（PG 自生成约束名如 tablename_columnname_fkey，与模型声明的列名可能不同）
+     */
+    public function buildAlterDropColumnSql(string $table, string $colName): string
+    {
+        $d = $this->getDialect();
+        $t = $d->quoteTable($table);
+        $c = $d->quoteIdentifier($colName);
+        return "ALTER TABLE {$t} DROP COLUMN IF EXISTS {$c} CASCADE";
+    }
+
+    /** @inheritDoc */
+    public function buildAlterTableCommentSql(string $table, string $comment): string
+    {
+        $t = $this->getDialect()->quoteTable($table);
+        $c = $comment !== '' ? "'" . str_replace("'", "''", $comment) . "'" : 'NULL';
+        return "COMMENT ON TABLE {$t} IS {$c}";
+    }
+
+    /** @inheritDoc */
+    public function buildAddIndexSql(string $table, array $idx): string
+    {
+        $d = $this->getDialect();
+        $t = $d->quoteTable($table);
+        $name = $d->quoteIdentifier($idx['name'] ?? '');
+        $cols = array_map(fn (string $c) => $d->quoteIdentifier($c), $idx['columns'] ?? []);
+        $colList = implode(',', $cols);
+        $type = strtoupper($idx['type'] ?? 'INDEX');
+        $usingPart = (!empty($idx['method']) && strtoupper($idx['method']) !== 'BTREE') ? ' USING ' . $idx['method'] : '';
+        if ($type === 'UNIQUE') {
+            return "CREATE UNIQUE INDEX IF NOT EXISTS {$name} ON {$t}{$usingPart} ({$colList})";
+        }
+        return "CREATE INDEX IF NOT EXISTS {$name} ON {$t}{$usingPart} ({$colList})";
+    }
+
+    /**
+     * @inheritDoc
+     * PostgreSQL: UNIQUE 约束的索引必须用 DROP CONSTRAINT，不能 DROP INDEX。
+     * 优先 DROP CONSTRAINT（约束删除后索引自动删除）；若非约束则需 DROP INDEX。
+     * 先尝试 DROP CONSTRAINT，再 DROP INDEX（对约束型索引后者为 no-op）。
+     */
+    public function buildDropIndexSql(string $table, string $indexName): string
+    {
+        $n = $this->getDialect()->quoteIdentifier($indexName);
+        return "ALTER TABLE {$table} DROP CONSTRAINT IF EXISTS {$n} CASCADE;\nDROP INDEX IF EXISTS {$n}";
+    }
+
+    /** @inheritDoc */
+    public function buildAddForeignKeySql(string $table, array $fk): string
+    {
+        $d = $this->getDialect();
+        $t = $d->quoteTable($table);
+        $name = $d->quoteIdentifier($fk['name'] ?? '');
+        $cols = array_map(fn (string $c) => $d->quoteIdentifier($c), $fk['columns'] ?? []);
+        $refCols = array_map(fn (string $c) => $d->quoteIdentifier($c), $fk['referencesColumns'] ?? []);
+        $refTable = $d->quoteTable($fk['referencesTable'] ?? '');
+        $onDelete = !empty($fk['onDeleteCascade']) ? ' ON DELETE CASCADE' : '';
+        $onUpdate = !empty($fk['onUpdateCascade']) ? ' ON UPDATE CASCADE' : '';
+        return "ALTER TABLE {$t} ADD CONSTRAINT {$name} FOREIGN KEY (" . implode(',', $cols) . ") REFERENCES {$refTable} (" . implode(',', $refCols) . "){$onDelete}{$onUpdate}";
+    }
+
+    /**
+     * @inheritDoc
+     * PostgreSQL: 使用 IF EXISTS 避免约束名不匹配时报错（PG 自生成名如 tablename_columnname_fkey，
+     * 与模型声明的 FK 名可能不同）；CASCADE 删除依赖该约束的对象。
+     */
+    public function buildDropForeignKeySql(string $table, string $fkName): string
+    {
+        $t = $this->getDialect()->quoteTable($table);
+        $n = $this->getDialect()->quoteIdentifier($fkName);
+        return "ALTER TABLE {$t} DROP CONSTRAINT IF EXISTS {$n} CASCADE";
+    }
+
+    /** MODIFY COLUMN 的 USING 表达式，varchar(n)/char(n) 时截断以避免 "value too long"。 */
+    private function pgsqlModifyColumnUsingExpr(string $quotedCol, string $pgType, array $col, ?array $existingCol): string
+    {
+        $len = $col['length'] ?? null;
+        if ($len !== null && $len > 0 && (str_starts_with($pgType, 'VARCHAR') || str_starts_with($pgType, 'CHAR'))) {
+            return "LEFT({$quotedCol}::text, {$len})::{$pgType}";
+        }
+        return "{$quotedCol}::{$pgType}";
+    }
+
+    /**
+     * @param array $col 列定义
+     * @param bool $forAlterModify 若为 true，不使用 SERIAL（PostgreSQL ALTER COLUMN 不支持 SERIAL 伪类型）
+     */
+    private function pgsqlTypeFromCol(array $col, bool $forAlterModify = false): string
+    {
+        $type = strtolower($col['type'] ?? 'varchar');
+        $len = $col['length'] ?? null;
+        if (!$forAlterModify && !empty($col['autoIncrement']) && in_array($type, ['int', 'integer', 'bigint', 'smallint', 'tinyint'], true)) {
+            return match ($type) {
+                'bigint' => 'BIGSERIAL',
+                'smallint', 'tinyint' => 'SMALLSERIAL',
+                default => 'SERIAL',
+            };
+        }
+        $lenPart = $len !== null ? "({$len})" : '';
+        $pgType = match ($type) {
+            'int', 'integer' => 'INTEGER',
+            'bigint' => 'BIGINT',
+            'smallint' => 'SMALLINT',
+            'tinyint' => 'SMALLINT',
+            'mediumint' => 'INTEGER',
+            'varchar' => 'VARCHAR' . $lenPart,
+            'char' => 'CHAR' . $lenPart,
+            'text', 'longtext', 'mediumtext', 'tinytext' => 'TEXT',
+            'blob', 'longblob', 'mediumblob', 'tinyblob' => 'BYTEA',
+            'datetime' => 'TIMESTAMP',
+            'timestamp' => 'TIMESTAMP',
+            'json' => 'JSONB',
+            'decimal', 'numeric' => 'DECIMAL' . $lenPart,
+            'float', 'double' => 'DOUBLE PRECISION',
+            'bool', 'boolean' => 'BOOLEAN',
+            default => strtoupper($type) . $lenPart,
+        };
+        return $pgType;
+    }
+
+    /** @return array{0: string, 1: string} [schema, table] */
+    private function parseSchemaTable(string $table): array
+    {
+        $table = str_replace(['`', '"'], '', $table);
+        if (str_contains($table, '.')) {
+            $parts = explode('.', $table, 2);
+            return [trim($parts[0]) ?: 'public', trim($parts[1])];
+        }
+        return ['public', $table];
+    }
+
+    /** @inheritDoc */
+    public function getTableComment(string $table): string
+    {
+        [$schema, $tableName] = $this->parseSchemaTable($table);
+        if ($tableName === '') {
+            return '';
+        }
+        try {
+            $sql = "SELECT obj_description(c.oid) AS comment FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = :schema AND c.relname = :tbl AND c.relkind = 'r' LIMIT 1";
+            $stmt = $this->getWrappedConnection()->prepare($sql);
+            $stmt->execute([':schema' => $schema, ':tbl' => $tableName]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            return (string) ($row['comment'] ?? '');
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    /** @inheritDoc */
+    public function getTableColumns(string $table): array
+    {
+        [$schema, $tableName] = $this->parseSchemaTable($table);
+        if ($tableName === '') {
+            return [];
+        }
+        $pdo = $this->getWrappedConnection()->getPdo();
+        try {
+            $sql = "SELECT column_name, data_type, character_maximum_length, numeric_precision, is_nullable, column_default
+                FROM information_schema.columns
+                WHERE table_schema = :schema AND table_name = :tbl
+                ORDER BY ordinal_position";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([':schema' => $schema, ':tbl' => $tableName]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (\Throwable) {
+            return [];
+        }
+        if ($rows === []) {
+            return [];
+        }
+
+        $oidSql = "SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = :schema AND c.relname = :tbl AND c.relkind = 'r' LIMIT 1";
+        $oidStmt = $pdo->prepare($oidSql);
+        $oidStmt->execute([':schema' => $schema, ':tbl' => $tableName]);
+        $tableOid = $oidStmt->fetchColumn();
+        $pkCols = [];
+        $uniqueCols = [];
+        if ($tableOid !== false) {
+            $conSql = "SELECT c.contype, a.attname
+                FROM pg_constraint c
+                CROSS JOIN unnest(c.conkey) AS conkey_attnum
+                JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = conkey_attnum AND a.attnum > 0 AND NOT a.attisdropped
+                WHERE c.conrelid = :oid AND c.contype IN ('p','u')";
+            $conStmt = $pdo->prepare($conSql);
+            $conStmt->execute([':oid' => $tableOid]);
+            while (($r = $conStmt->fetch(PDO::FETCH_ASSOC)) !== false) {
+                $col = $r['attname'] ?? '';
+                if (($r['contype'] ?? '') === 'p') {
+                    $pkCols[$col] = true;
+                } else {
+                    $uniqueCols[$col] = true;
+                }
+            }
+        }
+
+        $commentSql = "SELECT a.attname, col_description(c.oid, a.attnum) AS col_comment
+            FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace JOIN pg_attribute a ON a.attrelid = c.oid
+            WHERE n.nspname = :schema AND c.relname = :tbl AND c.relkind = 'r' AND a.attnum > 0 AND NOT a.attisdropped";
+        $commentStmt = $pdo->prepare($commentSql);
+        $commentStmt->execute([':schema' => $schema, ':tbl' => $tableName]);
+        $comments = [];
+        while (($r = $commentStmt->fetch(PDO::FETCH_ASSOC)) !== false) {
+            $comments[$r['attname'] ?? ''] = (string) ($r['col_comment'] ?? '');
+        }
+
+        $list = [];
+        foreach ($rows as $row) {
+            $field = $row['column_name'] ?? '';
+            $dataType = $row['data_type'] ?? '';
+            $charLen = $row['character_maximum_length'] ?? null;
+            $numPrec = $row['numeric_precision'] ?? null;
+            $length = $charLen !== null ? (int) $charLen : ($numPrec !== null ? (int) $numPrec : null);
+            $nullable = strtoupper($row['is_nullable'] ?? 'YES') !== 'NO';
+            $default = $row['column_default'] ?? null;
+            $autoIncrement = $default !== null && stripos((string) $default, 'nextval') !== false;
+            $comment = $comments[$field] ?? '';
+            $primaryKey = isset($pkCols[$field]);
+            $unique = isset($uniqueCols[$field]);
+
+            $pgType = strtolower($dataType);
+            $baseType = $pgType;
+            if ($pgType === 'character varying') {
+                $baseType = 'varchar';
+            } elseif ($pgType === 'integer') {
+                $baseType = 'int';
+            } elseif (in_array($pgType, ['bigint', 'smallint'], true)) {
+                $baseType = $pgType;
+            } elseif ($pgType === 'double precision') {
+                $baseType = 'double';
+            } elseif ($pgType === 'timestamp without time zone' || $pgType === 'timestamp with time zone') {
+                $baseType = 'datetime';
+            } elseif ($pgType === 'text') {
+                $baseType = 'text';
+            }
+            if ($length === null && $charLen === null && $numPrec !== null) {
+                $length = (int) $numPrec;
+            }
+
+            $list[] = [
+                'name' => $field,
+                'type' => $baseType,
+                'length' => $length,
+                'nullable' => $nullable,
+                'primary_key' => $primaryKey,
+                'auto_increment' => $autoIncrement,
+                'default' => $default,
+                'comment' => $comment,
+                'unique' => $unique,
+            ];
+        }
+        return $list;
+    }
+
+    /** @inheritDoc */
+    public function getTableIndexes(string $table): array
+    {
+        [$schema, $tableName] = $this->parseSchemaTable($table);
+        if ($tableName === '') {
+            return [];
+        }
+        $pdo = $this->getWrappedConnection()->getPdo();
+        try {
+            $sql = "SELECT i.relname AS index_name, a.attname AS column_name, k.ord AS seq, ix.indisunique
+                FROM pg_index ix
+                JOIN pg_class t ON t.oid = ix.indrelid
+                JOIN pg_namespace n ON n.oid = t.relnamespace
+                JOIN pg_class i ON i.oid = ix.indexrelid
+                JOIN LATERAL unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord) ON true
+                JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum AND a.attnum > 0 AND NOT a.attisdropped
+                WHERE n.nspname = :schema AND t.relname = :tbl AND t.relkind = 'r' AND NOT ix.indisprimary
+                ORDER BY i.relname, k.ord";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([':schema' => $schema, ':tbl' => $tableName]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (\Throwable) {
+            return [];
+        }
+        $byName = [];
+        foreach ($rows as $row) {
+            $keyName = $row['index_name'] ?? '';
+            $column = $row['column_name'] ?? '';
+            $seq = (int) ($row['seq'] ?? 0);
+            $unique = (bool) ($row['indisunique'] ?? false);
+            if (!isset($byName[$keyName])) {
+                $byName[$keyName] = ['columns' => [], 'unique' => $unique];
+            }
+            $byName[$keyName]['columns'][$seq] = $column;
+        }
+        $list = [];
+        foreach ($byName as $name => $data) {
+            ksort($data['columns']);
+            $list[] = [
+                'name' => $name,
+                'columns' => array_values($data['columns']),
+                'unique' => $data['unique'],
+            ];
+        }
+        return $list;
+    }
+
+    /** @inheritDoc */
+    public function getTableForeignKeys(string $table): array
+    {
+        [$schema, $tableName] = $this->parseSchemaTable($table);
+        if ($tableName === '') {
+            return [];
+        }
+        $pdo = $this->getWrappedConnection()->getPdo();
+        try {
+            $sql = "SELECT
+                    kcu.constraint_name,
+                    kcu.column_name,
+                    rcu.table_name AS ref_table,
+                    rcu.column_name AS ref_column,
+                    rc.delete_rule,
+                    rc.update_rule
+                FROM information_schema.key_column_usage kcu
+                JOIN information_schema.referential_constraints rc
+                    ON rc.constraint_name = kcu.constraint_name AND rc.constraint_schema = kcu.table_schema
+                JOIN information_schema.key_column_usage rcu
+                    ON rcu.constraint_name = rc.unique_constraint_name AND rcu.table_schema = rc.unique_constraint_schema AND rcu.ordinal_position = kcu.ordinal_position
+                WHERE kcu.table_schema = :schema AND kcu.table_name = :tbl
+                ORDER BY kcu.constraint_name, kcu.ordinal_position";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([':schema' => $schema, ':tbl' => $tableName]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (\Throwable) {
+            return [];
+        }
+        $byName = [];
+        foreach ($rows as $row) {
+            $name = $row['constraint_name'] ?? '';
+            $col = $row['column_name'] ?? '';
+            $refTable = $row['ref_table'] ?? '';
+            $refCol = $row['ref_column'] ?? '';
+            $onDelete = strtoupper($row['delete_rule'] ?? '');
+            $onUpdate = strtoupper($row['update_rule'] ?? '');
+            if (!isset($byName[$name])) {
+                $byName[$name] = [
+                    'columns' => [],
+                    'ref_table' => $refTable,
+                    'ref_columns' => [],
+                    'on_delete_cascade' => $onDelete === 'CASCADE',
+                    'on_update_cascade' => $onUpdate === 'CASCADE',
+                ];
+            }
+            $byName[$name]['columns'][] = $col;
+            $byName[$name]['ref_columns'][] = $refCol;
+        }
+        $list = [];
+        foreach ($byName as $name => $data) {
+            $list[] = [
+                'name' => $name,
+                'columns' => $data['columns'],
+                'ref_table' => $data['ref_table'],
+                'ref_columns' => $data['ref_columns'],
+                'on_delete_cascade' => $data['on_delete_cascade'],
+                'on_update_cascade' => $data['on_update_cascade'],
+            ];
+        }
+        return $list;
+    }
+
+    /** @inheritDoc */
+    public function getDefaultTableAdditional(): string
+    {
+        return '';
     }
 }
 

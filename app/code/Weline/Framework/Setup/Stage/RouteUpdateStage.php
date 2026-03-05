@@ -76,6 +76,12 @@ class RouteUpdateStage extends AbstractStage
         if ($this->prepared) {
             return;
         }
+        // 当 setup:upgrade --stage=xxx 指定了不含 route_update 的阶段时，不触碰路由，避免 enableBatchMode 清空缓冲后不 flush 导致路由丢失
+        if (!empty($context['skip_route_stage'])) {
+            $this->prepared = true;
+            $this->clearErrors();
+            return;
+        }
         // 如果指定了需要清除的模块，记录它们
         if (isset($context['modules_to_clear']) && is_array($context['modules_to_clear'])) {
             $this->modulesToClear = $context['modules_to_clear'];
@@ -287,7 +293,12 @@ class RouteUpdateStage extends AbstractStage
         if (!$this->prepared) {
             return;
         }
-        
+        // 若从未做过真实准备（如 skip_route_stage），无备份可恢复，直接重置状态避免误写空数据
+        if ($this->originalRouteData === []) {
+            $this->prepared = false;
+            $this->committed = false;
+            return;
+        }
         // 恢复原始路由数据
         foreach ($this->originalRouteData as $path => $routers) {
             try {
