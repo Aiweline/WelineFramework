@@ -51,7 +51,7 @@ class ProductSaveAfter implements ObserverInterface
 
         // 获取默认库存源
         $defaultSource = $this->source->reset()
-            ->where(Source::fields_CODE, 'default')
+            ->where(Source::schema_fields_CODE, 'default')
             ->find()
             ->fetch();
 
