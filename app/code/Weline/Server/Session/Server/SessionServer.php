@@ -53,7 +53,10 @@ final class SessionServer
 
     /** 配置 */
     private array $config = [];
-    
+
+    /** 上次 bind 失败原因（供入口脚本输出到日志） */
+    private ?string $lastBindError = null;
+
     /** 认证 Token（null 表示不启用认证） */
     private ?string $authToken = null;
     
@@ -147,9 +150,11 @@ final class SessionServer
         );
 
         if (!$this->serverSocket) {
-            $this->log("Failed to start: {$errstr} ({$errno})");
+            $this->lastBindError = "{$errstr} ({$errno})";
+            $this->log("Failed to start: {$this->lastBindError}");
             return false;
         }
+        $this->lastBindError = null;
 
         \stream_set_blocking($this->serverSocket, false);
 
@@ -195,6 +200,14 @@ final class SessionServer
         if ($written !== false) {
             $this->log("Discovery file written: {$discoveryFile}");
         }
+    }
+
+    /**
+     * 获取上次 start() 失败时的 socket 错误（便于入口脚本输出到日志）
+     */
+    public function getLastBindError(): ?string
+    {
+        return $this->lastBindError;
     }
 
     /**
