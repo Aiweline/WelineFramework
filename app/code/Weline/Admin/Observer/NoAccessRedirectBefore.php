@@ -65,13 +65,20 @@ class NoAccessRedirectBefore implements \Weline\Framework\Event\ObserverInterfac
     }
 
     /**
-     * 获取带后台路由前缀的路径，避免重定向到缺少 admin_xxx 的地址。
+     * 获取带后台路由前缀的路径；仅当 WELINE_AREA_ROUTE 已含后端 prefix 时使用，否则用 Env 拼接。
      */
     private function getBackendPathWithPrefix(string $path): string
     {
+        $backendPrefix = \Weline\Framework\App\Env::getAreaRoutePrefix('backend');
         $areaRoute = $this->request->getServer('WELINE_AREA_ROUTE') ?? '';
-        if ($areaRoute !== '') {
+        if ($areaRoute !== '' && $backendPrefix !== null && $backendPrefix !== ''
+            && (str_starts_with($areaRoute, $backendPrefix . '/') || $areaRoute === $backendPrefix)) {
             return '/' . \trim($areaRoute, '/') . '/' . \ltrim($path, '/');
+        }
+        if ($backendPrefix !== null && $backendPrefix !== '') {
+            $currency = $this->request->getServer('WELINE_USER_CURRENCY') ?? $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY';
+            $language = $this->request->getServer('WELINE_USER_LANG') ?? $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
+            return '/' . $backendPrefix . '/' . $currency . '/' . $language . '/' . \ltrim($path, '/');
         }
         return $this->request->getUrlBuilder()->getBackendUrlPath($path);
     }
