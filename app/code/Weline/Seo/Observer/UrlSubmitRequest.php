@@ -52,7 +52,7 @@ class UrlSubmitRequest implements ObserverInterface
             $subjectModel = $this->objectManager->getInstance(SeoSubject::class);
             $subject = $subjectModel->findOrCreate($subjectType, $subjectEntityId);
             $subject->setUrl($url)
-                ->setData(SeoSubject::fields_SCOPE, $scope)
+                ->setData(SeoSubject::schema_fields_SCOPE, $scope)
                 ->setStatus(SeoSubject::STATUS_ENABLED)
                 ->save();
 
@@ -66,8 +66,8 @@ class UrlSubmitRequest implements ObserverInterface
 
             // 查找匹配 scope 的启用账户
             $accounts = $accountModel->reset()
-                ->where(SeoAccount::fields_SCOPE, $scope)
-                ->where(SeoAccount::fields_IS_ACTIVE, SeoAccount::STATUS_ACTIVE)
+                ->where(SeoAccount::schema_fields_SCOPE, $scope)
+                ->where(SeoAccount::schema_fields_IS_ACTIVE, SeoAccount::STATUS_ACTIVE)
                 ->select()
                 ->fetchArray();
 
@@ -82,8 +82,8 @@ class UrlSubmitRequest implements ObserverInterface
             $eventDispatcher = $this->objectManager->getInstance(EventDispatcher::class);
 
             foreach ($accounts as $accountData) {
-                $provider = (string)($accountData[SeoAccount::fields_PROVIDER] ?? '');
-                $accountId = (int)($accountData[SeoAccount::fields_ACCOUNT_ID] ?? 0);
+                $provider = (string)($accountData[SeoAccount::schema_fields_PROVIDER] ?? '');
+                $accountId = (int)($accountData[SeoAccount::schema_fields_ACCOUNT_ID] ?? 0);
 
                 if ($provider === '' || $accountId <= 0) {
                     continue;
@@ -105,7 +105,7 @@ class UrlSubmitRequest implements ObserverInterface
                     ->setStatus(SeoTask::STATUS_PENDING)
                     ->setMaxAttempts(3);
 
-                $task->setData(SeoTask::fields_SCOPE, $scope)
+                $task->setData(SeoTask::schema_fields_SCOPE, $scope)
                     ->save();
 
                 $taskId = (int)$task->getId();

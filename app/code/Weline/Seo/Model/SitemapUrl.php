@@ -11,38 +11,48 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Model;
 
-use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
-/**
- * Sitemap URL 模型
- *
- * 存储所有模块提供的 sitemap URL 数据
- *
- * @package Weline_Seo
- */
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+/** Sitemap URL 模型 - 存储各模块提供的 sitemap URL */
+#[Table(comment: 'Sitemap URL 数据表')]
+#[Index(name: 'idx_website_id', columns: ['website_id'])]
+#[Index(name: 'idx_module', columns: ['module'])]
+#[Index(name: 'idx_status', columns: ['status'])]
+#[Index(name: 'idx_unique_url', columns: ['website_id', 'module', 'entity_type', 'entity_id'], type: 'UNIQUE')]
 class SitemapUrl extends Model
 {
-    public const table = 'weline_sitemap_url';
 
-    public string $_primary_key = 'url_id';
+    public const schema_table = 'weline_sitemap_url';
+    public const schema_primary_key = 'url_id';
     public array $_unit_primary_keys = ['url_id'];
-
-    public const fields_ID = 'url_id';
-    public const fields_WEBSITE_ID = 'website_id';
-    public const fields_MODULE = 'module';
-    public const fields_SCOPE = 'scope';
-    public const fields_ENTITY_TYPE = 'entity_type';
-    public const fields_ENTITY_ID = 'entity_id';
-    public const fields_URL = 'url';
-    public const fields_CHANGEFREQ = 'changefreq';
-    public const fields_PRIORITY = 'priority';
-    public const fields_LASTMOD = 'lastmod';
-    public const fields_STATUS = 'status';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
+    #[Col('int', 0, nullable: false, primaryKey: true, autoIncrement: true, comment: 'URL ID')]
+    public const schema_fields_ID = 'url_id';
+    #[Col('int', 0, nullable: false, default: 0, comment: '站点ID')]
+    public const schema_fields_WEBSITE_ID = 'website_id';
+    #[Col('varchar', 100, nullable: false, comment: '模块标识')]
+    public const schema_fields_MODULE = 'module';
+    #[Col('varchar', 50, nullable: false, default: '', comment: '业务范围')]
+    public const schema_fields_SCOPE = 'scope';
+    #[Col('varchar', 50, nullable: false, default: '', comment: '实体类型')]
+    public const schema_fields_ENTITY_TYPE = 'entity_type';
+    #[Col('int', 0, nullable: false, default: 0, comment: '实体ID')]
+    public const schema_fields_ENTITY_ID = 'entity_id';
+    #[Col('text', null, false, comment: 'URL地址')]
+    public const schema_fields_URL = 'url';
+    #[Col('varchar', 20, nullable: false, default: 'weekly', comment: '更新频率')]
+    public const schema_fields_CHANGEFREQ = 'changefreq';
+    #[Col('varchar', 10, nullable: false, default: '0.5', comment: '优先级')]
+    public const schema_fields_PRIORITY = 'priority';
+    #[Col('datetime', comment: '最后修改时间')]
+    public const schema_fields_LASTMOD = 'lastmod';
+    #[Col('smallint', 1, nullable: false, default: 1, comment: '状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col('datetime', comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col('datetime', comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
 
     public function _init(): void
     {
@@ -51,125 +61,7 @@ class SitemapUrl extends Model
 
     public function getIdFieldName(): string
     {
-        return self::fields_ID;
-    }
-
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist() === false) {
-            $setup->createTable('Sitemap URL 数据表')
-                ->addColumn(
-                    self::fields_ID,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'primary key auto_increment',
-                    'URL ID'
-                )
-                ->addColumn(
-                    self::fields_WEBSITE_ID,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'not null default 0',
-                    '站点 ID'
-                )
-                ->addColumn(
-                    self::fields_MODULE,
-                    TableInterface::column_type_VARCHAR,
-                    100,
-                    'not null',
-                    '模块标识，如 GuoLaiRen_PageBuilder'
-                )
-                ->addColumn(
-                    self::fields_SCOPE,
-                    TableInterface::column_type_VARCHAR,
-                    50,
-                    'default \'\'',
-                    '业务范围标识，如 page_builder'
-                )
-                ->addColumn(
-                    self::fields_ENTITY_TYPE,
-                    TableInterface::column_type_VARCHAR,
-                    50,
-                    'default \'\'',
-                    '实体类型，如 page、product'
-                )
-                ->addColumn(
-                    self::fields_ENTITY_ID,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'default 0',
-                    '实体 ID'
-                )
-                ->addColumn(
-                    self::fields_URL,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    'not null',
-                    'URL 地址'
-                )
-                ->addColumn(
-                    self::fields_CHANGEFREQ,
-                    TableInterface::column_type_VARCHAR,
-                    20,
-                    'default \'weekly\'',
-                    '更新频率：always, hourly, daily, weekly, monthly, yearly, never'
-                )
-                ->addColumn(
-                    self::fields_PRIORITY,
-                    TableInterface::column_type_VARCHAR,
-                    10,
-                    'default \'0.5\'',
-                    '优先级：0.0 - 1.0'
-                )
-                ->addColumn(
-                    self::fields_LASTMOD,
-                    TableInterface::column_type_DATETIME,
-                    0,
-                    'null',
-                    '最后修改时间'
-                )
-                ->addColumn(
-                    self::fields_STATUS,
-                    TableInterface::column_type_SMALLINT,
-                    1,
-                    'default 1',
-                    '状态：1=启用，0=禁用'
-                )
-                ->addColumn(
-                    self::fields_CREATED_AT,
-                    TableInterface::column_type_DATETIME,
-                    0,
-                    'default current_timestamp',
-                    '创建时间'
-                )
-                ->addColumn(
-                    self::fields_UPDATED_AT,
-                    TableInterface::column_type_DATETIME,
-                    0,
-                    'default current_timestamp on update current_timestamp',
-                    '更新时间'
-                )
-                ->addIndex(TableInterface::index_type_KEY, 'idx_website_id', self::fields_WEBSITE_ID, '站点索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_module', self::fields_MODULE, '模块索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_status', self::fields_STATUS, '状态索引')
-                ->addIndex(
-                    TableInterface::index_type_UNIQUE,
-                    'idx_unique_url',
-                    self::fields_WEBSITE_ID . ',' . self::fields_MODULE . ',' . self::fields_ENTITY_TYPE . ',' . self::fields_ENTITY_ID,
-                    '唯一索引'
-                )
-                ->create();
-        }
-    }
-
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 暂无升级逻辑
+        return self::schema_fields_ID;
     }
 
     /**
@@ -181,18 +73,18 @@ class SitemapUrl extends Model
     public function getActiveUrlsByWebsiteGrouped(int $websiteId): array
     {
         $urls = $this->reset()
-            ->where(self::fields_WEBSITE_ID, $websiteId)
-            ->where(self::fields_STATUS, 1)
-            ->order(self::fields_MODULE, 'ASC')
-            ->order(self::fields_ENTITY_TYPE, 'ASC')
-            ->order(self::fields_ENTITY_ID, 'ASC')
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(self::schema_fields_STATUS, 1)
+            ->order(self::schema_fields_MODULE, 'ASC')
+            ->order(self::schema_fields_ENTITY_TYPE, 'ASC')
+            ->order(self::schema_fields_ENTITY_ID, 'ASC')
             ->select()
             ->fetchArray();
 
         $grouped = [];
         foreach ($urls as $url) {
-            $module = $url[self::fields_MODULE] ?? 'default';
-            $scope = $url[self::fields_SCOPE] ?? '';
+            $module = $url[self::schema_fields_MODULE] ?? 'default';
+            $scope = $url[self::schema_fields_SCOPE] ?? '';
             $key = $scope ? $module . '_' . $scope : $module;
             
             if (!isset($grouped[$key])) {
@@ -214,8 +106,8 @@ class SitemapUrl extends Model
     public function getActiveUrls(int $websiteId): array
     {
         return $this->reset()
-            ->where(self::fields_WEBSITE_ID, $websiteId)
-            ->where(self::fields_STATUS, 1)
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(self::schema_fields_STATUS, 1)
             ->select()
             ->fetchArray();
     }
@@ -229,8 +121,8 @@ class SitemapUrl extends Model
     public function getActiveUrlCount(int $websiteId): int
     {
         return (int)$this->reset()
-            ->where(self::fields_WEBSITE_ID, $websiteId)
-            ->where(self::fields_STATUS, 1)
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(self::schema_fields_STATUS, 1)
             ->select()
             ->count();
     }
@@ -260,35 +152,35 @@ class SitemapUrl extends Model
 
                 // 查找现有记录
                 $existing = $this->reset()
-                    ->where(self::fields_WEBSITE_ID, $websiteId)
-                    ->where(self::fields_MODULE, $module)
-                    ->where(self::fields_ENTITY_TYPE, $entityType)
-                    ->where(self::fields_ENTITY_ID, $entityId)
+                    ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+                    ->where(self::schema_fields_MODULE, $module)
+                    ->where(self::schema_fields_ENTITY_TYPE, $entityType)
+                    ->where(self::schema_fields_ENTITY_ID, $entityId)
                     ->find()
                     ->fetch();
 
                 if ($existing) {
                     // 更新
-                    $this->reset()->load($existing[self::fields_ID]);
-                    $this->setData(self::fields_URL, $url['url'] ?? '');
-                    $this->setData(self::fields_CHANGEFREQ, $url['changefreq'] ?? 'weekly');
-                    $this->setData(self::fields_PRIORITY, $url['priority'] ?? '0.5');
-                    $this->setData(self::fields_LASTMOD, $url['lastmod'] ?? date('Y-m-d H:i:s'));
-                    $this->setData(self::fields_STATUS, $url['status'] ?? 1);
+                    $this->reset()->load($existing[self::schema_fields_ID]);
+                    $this->setData(self::schema_fields_URL, $url['url'] ?? '');
+                    $this->setData(self::schema_fields_CHANGEFREQ, $url['changefreq'] ?? 'weekly');
+                    $this->setData(self::schema_fields_PRIORITY, $url['priority'] ?? '0.5');
+                    $this->setData(self::schema_fields_LASTMOD, $url['lastmod'] ?? date('Y-m-d H:i:s'));
+                    $this->setData(self::schema_fields_STATUS, $url['status'] ?? 1);
                     $this->save();
                 } else {
                     // 插入
                     $this->reset()->setData([
-                        self::fields_WEBSITE_ID => $websiteId,
-                        self::fields_MODULE => $module,
-                        self::fields_SCOPE => $url['scope'] ?? '',
-                        self::fields_ENTITY_TYPE => $entityType,
-                        self::fields_ENTITY_ID => $entityId,
-                        self::fields_URL => $url['url'] ?? '',
-                        self::fields_CHANGEFREQ => $url['changefreq'] ?? 'weekly',
-                        self::fields_PRIORITY => $url['priority'] ?? '0.5',
-                        self::fields_LASTMOD => $url['lastmod'] ?? date('Y-m-d H:i:s'),
-                        self::fields_STATUS => $url['status'] ?? 1,
+                        self::schema_fields_WEBSITE_ID => $websiteId,
+                        self::schema_fields_MODULE => $module,
+                        self::schema_fields_SCOPE => $url['scope'] ?? '',
+                        self::schema_fields_ENTITY_TYPE => $entityType,
+                        self::schema_fields_ENTITY_ID => $entityId,
+                        self::schema_fields_URL => $url['url'] ?? '',
+                        self::schema_fields_CHANGEFREQ => $url['changefreq'] ?? 'weekly',
+                        self::schema_fields_PRIORITY => $url['priority'] ?? '0.5',
+                        self::schema_fields_LASTMOD => $url['lastmod'] ?? date('Y-m-d H:i:s'),
+                        self::schema_fields_STATUS => $url['status'] ?? 1,
                     ])->save();
                 }
             }
@@ -308,15 +200,15 @@ class SitemapUrl extends Model
     public function getScopeStats(int $websiteId): array
     {
         $urls = $this->reset()
-            ->where(self::fields_WEBSITE_ID, $websiteId)
-            ->where(self::fields_STATUS, 1)
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(self::schema_fields_STATUS, 1)
             ->select()
             ->fetchArray();
 
         $stats = [];
         foreach ($urls as $url) {
-            $scope = $url[self::fields_SCOPE] ?? '';
-            $module = $url[self::fields_MODULE] ?? '';
+            $scope = $url[self::schema_fields_SCOPE] ?? '';
+            $module = $url[self::schema_fields_MODULE] ?? '';
             $key = $scope . '|' . $module;
 
             if (!isset($stats[$key])) {
@@ -342,7 +234,7 @@ class SitemapUrl extends Model
     {
         try {
             $this->reset()
-                ->where(self::fields_WEBSITE_ID, $websiteId)
+                ->where(self::schema_fields_WEBSITE_ID, $websiteId)
                 ->delete();
             return true;
         } catch (\Exception $e) {
@@ -360,9 +252,9 @@ class SitemapUrl extends Model
     public function deleteByModule(string $module, int $websiteId = 0): bool
     {
         try {
-            $this->reset()->where(self::fields_MODULE, $module);
+            $this->reset()->where(self::schema_fields_MODULE, $module);
             if ($websiteId > 0) {
-                $this->where(self::fields_WEBSITE_ID, $websiteId);
+                $this->where(self::schema_fields_WEBSITE_ID, $websiteId);
             }
             $this->delete();
             return true;
@@ -371,3 +263,4 @@ class SitemapUrl extends Model
         }
     }
 }
+

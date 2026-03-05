@@ -120,7 +120,7 @@ class SitemapSubmit implements CronTaskInterface
                     $hasAutoSubmit = false;
                     if (!empty($bindings)) {
                         foreach ($bindings as $bindingRow) {
-                            if ((int)($bindingRow[SeoWebsiteAccount::fields_IS_AUTO_SUBMIT] ?? 0) === 1) {
+                            if ((int)($bindingRow[SeoWebsiteAccount::schema_fields_IS_AUTO_SUBMIT] ?? 0) === 1) {
                                 $hasAutoSubmit = true;
                                 break;
                             }
@@ -145,8 +145,8 @@ class SitemapSubmit implements CronTaskInterface
             // 按 website_id 分组，避免同一站点重复提交
             $websiteBindingsMap = [];
             foreach ($autoBindings as $binding) {
-                $wId = (int)($binding[SeoWebsiteAccount::fields_WEBSITE_ID] ?? 0);
-                $aId = (int)($binding[SeoWebsiteAccount::fields_ACCOUNT_ID] ?? 0);
+                $wId = (int)($binding[SeoWebsiteAccount::schema_fields_WEBSITE_ID] ?? 0);
+                $aId = (int)($binding[SeoWebsiteAccount::schema_fields_ACCOUNT_ID] ?? 0);
                 if ($wId > 0 && $aId > 0) {
                     $websiteBindingsMap[$wId][] = $binding;
                 }
@@ -154,7 +154,7 @@ class SitemapSubmit implements CronTaskInterface
 
             foreach ($websiteBindingsMap as $websiteId => $websiteBindings) {
                 foreach ($websiteBindings as $binding) {
-                    $accountId = (int)($binding[SeoWebsiteAccount::fields_ACCOUNT_ID] ?? 0);
+                    $accountId = (int)($binding[SeoWebsiteAccount::schema_fields_ACCOUNT_ID] ?? 0);
 
                     try {
                         // 获取账户信息
@@ -168,7 +168,7 @@ class SitemapSubmit implements CronTaskInterface
                         
                         // 如果 platform 字段为空，从 provider 推断（向后兼容）
                         if (empty($platformCode)) {
-                            $providerCode = $account->getData(SeoAccount::fields_PROVIDER);
+                            $providerCode = $account->getData(SeoAccount::schema_fields_PROVIDER);
                             $platformCode = $sitemapAdapterRegistry->extractPlatformFromProvider($providerCode);
                         }
                         
@@ -220,7 +220,7 @@ class SitemapSubmit implements CronTaskInterface
                         __('以下站点未绑定 SEO 账户，无法自动提交 sitemap：') . "\n\n" 
                             . implode("\n", $stats['unbound_websites']) . "\n\n" 
                             . __('请前往"SEO管理 > Sitemap管理"或"站点管理"绑定 SEO 账户。'),
-                        ['source_module' => 'Weline_Seo', 'icon' => 'ri-sitemap-line']
+                        ['source_module' => 'Weline_Seo', 'icon' => 'ri-file-list-line']
                     );
                 } catch (\Exception $e) {
                     w_log_error('[Weline_Seo] SitemapSubmit message error: ' . $e->getMessage());

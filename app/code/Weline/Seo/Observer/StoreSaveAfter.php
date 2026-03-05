@@ -16,7 +16,6 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Model\SeoTask;
 use Weline\Seo\Model\SeoSubject;
-use WeShop\Store\Model\Store;
 
 /**
  * Store 保存后观察者
@@ -46,8 +45,9 @@ class StoreSaveAfter implements ObserverInterface
     {
         $data = $event->getData();
         $store = $data['store'] ?? null;
-        
-        if (!$store instanceof Store || !$store->getId()) {
+
+        // 使用鸭式类型检查，避免跨模块直接依赖 Store 类
+        if (!is_object($store) || !method_exists($store, 'getId') || !$store->getId()) {
             return;
         }
 
@@ -57,10 +57,10 @@ class StoreSaveAfter implements ObserverInterface
             
             // 检查是否已存在相同任务（避免重复入队）
             $existingTask = $taskModel->reset()
-                ->where(SeoTask::fields_TASK_TYPE, SeoTask::TASK_TYPE_FEED_GENERATE)
-                ->where(SeoTask::fields_SUBJECT_TYPE, SeoSubject::SUBJECT_TYPE_STORE)
-                ->where(SeoTask::fields_SUBJECT_ID, $store->getId())
-                ->where(SeoTask::fields_STATUS, [SeoTask::STATUS_PENDING, SeoTask::STATUS_PROCESSING], 'IN')
+                ->where(SeoTask::schema_fields_TASK_TYPE, SeoTask::TASK_TYPE_FEED_GENERATE)
+                ->where(SeoTask::schema_fields_SUBJECT_TYPE, SeoSubject::SUBJECT_TYPE_STORE)
+                ->where(SeoTask::schema_fields_SUBJECT_ID, $store->getId())
+                ->where(SeoTask::schema_fields_STATUS, [SeoTask::STATUS_PENDING, SeoTask::STATUS_PROCESSING], 'IN')
                 ->find()
                 ->fetch();
             
@@ -101,7 +101,7 @@ class StoreSaveAfter implements ObserverInterface
                     $store->getId(),
                     [
                         'priority' => SeoTask::PRIORITY_NORMAL,
-                        'scheduled_at' => $taskModel->getData(SeoTask::fields_SCHEDULED_AT),
+                        'scheduled_at' => $taskModel->getData(SeoTask::schema_fields_SCHEDULED_AT),
                     ]
                 );
             }
