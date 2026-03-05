@@ -4,122 +4,35 @@ declare(strict_types=1);
 
 namespace Weline\TwoFactorAuth\Model;
 
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
-/**
- * 用户双因素身份验证模型
- * 
- * @package Weline\TwoFactorAuth\Model
- */
-class UserTwoFactor extends \Weline\Framework\Database\Model
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+/** 用户双因素身份验证模型 */
+#[Table(comment: '用户2FA表')]
+#[Index(name: 'idx_user_id', columns: ['user_id'], type: 'UNIQUE')]
+#[Index(name: 'idx_is_enabled', columns: ['is_enabled'])]
+class UserTwoFactor extends Model
 {
-    public const fields_ID = 'user_2fa_id';
-    public const fields_USER_ID = 'user_id';
-    public const fields_SECRET = 'secret';
-    public const fields_IS_ENABLED = 'is_enabled';
-    public const fields_BACKUP_CODES = 'backup_codes';
-    public const fields_LAST_USED_AT = 'last_used_at';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable()
-                ->addColumn(
-                    self::fields_ID,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'primary key auto_increment',
-                    '用户2FA ID'
-                )
-                ->addColumn(
-                    self::fields_USER_ID,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'not null',
-                    '用户ID'
-                )
-                ->addColumn(
-                    self::fields_SECRET,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    '密钥（Base32编码）'
-                )
-                ->addColumn(
-                    self::fields_IS_ENABLED,
-                    TableInterface::column_type_SMALLINT,
-                    1,
-                    'not null default 1',
-                    '是否启用（1=启用，0=禁用）'
-                )
-                ->addColumn(
-                    self::fields_BACKUP_CODES,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    'null',
-                    '备份码（JSON格式）'
-                )
-                ->addColumn(
-                    self::fields_LAST_USED_AT,
-                    TableInterface::column_type_DATETIME,
-                    0,
-                    'null',
-                    '最后使用时间'
-                )
-                ->addColumn(
-                    self::fields_CREATED_AT,
-                    TableInterface::column_type_DATETIME,
-                    0,
-                    'not null default CURRENT_TIMESTAMP',
-                    '创建时间'
-                )
-                ->addColumn(
-                    self::fields_UPDATED_AT,
-                    TableInterface::column_type_DATETIME,
-                    0,
-                    'not null default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP',
-                    '更新时间'
-                )
-                ->addIndex(
-                    TableInterface::index_type_UNIQUE,
-                    'idx_user_id',
-                    self::fields_USER_ID,
-                    '用户ID唯一索引'
-                )
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'idx_is_enabled',
-                    self::fields_IS_ENABLED,
-                    '启用状态索引'
-                )
-                ->create();
-        }
-    }
-
-    /**
+    public const schema_table = 'user_two_factor';
+    public const schema_primary_key = 'user_2fa_id';
+    #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: '用户2FA ID')]
+    public const schema_fields_ID = 'user_2fa_id';
+    #[Col('int', nullable: false, comment: '用户ID')]
+    public const schema_fields_USER_ID = 'user_id';
+    #[Col('varchar', 255, nullable: false, comment: '密钥Base32')]
+    public const schema_fields_SECRET = 'secret';
+    #[Col('smallint', 1, nullable: false, default: 1, comment: '是否启用')]
+    public const schema_fields_IS_ENABLED = 'is_enabled';
+    #[Col('text', comment: '备份码JSON')]
+    public const schema_fields_BACKUP_CODES = 'backup_codes';
+    #[Col('datetime', comment: '最后使用时间')]
+    public const schema_fields_LAST_USED_AT = 'last_used_at';
+    #[Col('datetime', default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col('datetime', default: 'CURRENT_TIMESTAMP', comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
+/**
      * 获取用户的2FA配置
      * 
      * @param int $userId 用户ID
@@ -127,7 +40,7 @@ class UserTwoFactor extends \Weline\Framework\Database\Model
      */
     public function getByUserId(int $userId): ?self
     {
-        return $this->where(self::fields_USER_ID, $userId)->find()->fetch();
+        return $this->where(self::schema_fields_USER_ID, $userId)->find()->fetch();
     }
 
     /**
@@ -139,7 +52,7 @@ class UserTwoFactor extends \Weline\Framework\Database\Model
     public function isUserEnabled(int $userId): bool
     {
         $record = $this->getByUserId($userId);
-        return $record && (bool)$record->getData(self::fields_IS_ENABLED);
+        return $record && (bool)$record->getData(self::schema_fields_IS_ENABLED);
     }
 
     /**
@@ -155,18 +68,18 @@ class UserTwoFactor extends \Weline\Framework\Database\Model
         $existing = $this->getByUserId($userId);
         
         if ($existing) {
-            $existing->setData(self::fields_SECRET, $secret);
-            $existing->setData(self::fields_IS_ENABLED, 1);
-            $existing->setData(self::fields_BACKUP_CODES, json_encode($backupCodes));
+            $existing->setData(self::schema_fields_SECRET, $secret);
+            $existing->setData(self::schema_fields_IS_ENABLED, 1);
+            $existing->setData(self::schema_fields_BACKUP_CODES, json_encode($backupCodes));
             $existing->save();
             return $existing;
         } else {
             // 清除之前的数据，确保创建新记录时不会包含旧数据
             $this->clearData();
-            $this->setData(self::fields_USER_ID, $userId);
-            $this->setData(self::fields_SECRET, $secret);
-            $this->setData(self::fields_IS_ENABLED, 1);
-            $this->setData(self::fields_BACKUP_CODES, json_encode($backupCodes));
+            $this->setData(self::schema_fields_USER_ID, $userId);
+            $this->setData(self::schema_fields_SECRET, $secret);
+            $this->setData(self::schema_fields_IS_ENABLED, 1);
+            $this->setData(self::schema_fields_BACKUP_CODES, json_encode($backupCodes));
             $this->save();
             return $this;
         }
@@ -182,7 +95,7 @@ class UserTwoFactor extends \Weline\Framework\Database\Model
     {
         $record = $this->getByUserId($userId);
         if ($record) {
-            $record->setData(self::fields_IS_ENABLED, 0);
+            $record->setData(self::schema_fields_IS_ENABLED, 0);
             $record->save();
             return true;
         }
@@ -199,7 +112,7 @@ class UserTwoFactor extends \Weline\Framework\Database\Model
     {
         $record = $this->getByUserId($userId);
         if ($record) {
-            $record->setData(self::fields_LAST_USED_AT, date('Y-m-d H:i:s'));
+            $record->setData(self::schema_fields_LAST_USED_AT, date('Y-m-d H:i:s'));
             $record->save();
         }
     }
@@ -214,7 +127,7 @@ class UserTwoFactor extends \Weline\Framework\Database\Model
     {
         $record = $this->getByUserId($userId);
         if ($record) {
-            $codes = $record->getData(self::fields_BACKUP_CODES);
+            $codes = $record->getData(self::schema_fields_BACKUP_CODES);
             return $codes ? json_decode($codes, true) : [];
         }
         return [];
@@ -240,7 +153,7 @@ class UserTwoFactor extends \Weline\Framework\Database\Model
         if ($key !== false) {
             // 移除已使用的备份码
             unset($codes[$key]);
-            $record->setData(self::fields_BACKUP_CODES, json_encode(array_values($codes)));
+            $record->setData(self::schema_fields_BACKUP_CODES, json_encode(array_values($codes)));
             $record->save();
             $this->updateLastUsed($userId);
             return true;
@@ -260,7 +173,7 @@ class UserTwoFactor extends \Weline\Framework\Database\Model
     {
         $record = $this->getByUserId($userId);
         if ($record) {
-            $record->setData(self::fields_BACKUP_CODES, json_encode($newCodes));
+            $record->setData(self::schema_fields_BACKUP_CODES, json_encode($newCodes));
             $record->save();
             return true;
         }
