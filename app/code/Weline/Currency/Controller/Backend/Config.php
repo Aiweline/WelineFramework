@@ -55,7 +55,7 @@ class Config extends BackendController
             // 获取所有已启用的货币列表，用于基准货币选择
             $currencyModel = ObjectManager::getInstance(\Weline\Currency\Model\Currency::class);
             $currencies = $currencyModel->clear()
-                ->where(\Weline\Currency\Model\Currency::fields_STATUS, 1)
+                ->where(\Weline\Currency\Model\Currency::schema_fields_STATUS, 1)
                 ->order('code', 'ASC')
                 ->select()
                 ->fetchArray();

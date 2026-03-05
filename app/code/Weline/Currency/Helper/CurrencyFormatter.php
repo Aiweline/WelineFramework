@@ -52,7 +52,7 @@ class CurrencyFormatter
         
         if ($currencyCode) {
             $currency = $currencyModel->clear()
-                ->where(Currency::fields_CODE, strtoupper($currencyCode))
+                ->where(Currency::schema_fields_CODE, strtoupper($currencyCode))
                 ->find()
                 ->fetch();
             
@@ -63,7 +63,7 @@ class CurrencyFormatter
         
         // 如果没有指定货币代码或找不到，返回默认货币（CNY）
         $currency = $currencyModel->clear()
-            ->where(Currency::fields_CODE, 'CNY')
+            ->where(Currency::schema_fields_CODE, 'CNY')
             ->find()
             ->fetch();
         
