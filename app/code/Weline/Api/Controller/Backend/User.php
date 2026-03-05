@@ -494,8 +494,8 @@ class User extends \Weline\Framework\App\Controller\BackendController
                     continue;
                 }
                 $acls[] = [
-                    \Weline\Acl\Model\RoleAccess::fields_ROLE_ID => $roleId,
-                    \Weline\Acl\Model\RoleAccess::fields_SOURCE_ID => $aclId,
+                    \Weline\Acl\Model\RoleAccess::schema_fields_ROLE_ID => $roleId,
+                    \Weline\Acl\Model\RoleAccess::schema_fields_SOURCE_ID => $aclId,
                 ];
             }
             
@@ -506,14 +506,14 @@ class User extends \Weline\Framework\App\Controller\BackendController
             try {
                 // 清除角色原有权限
                 $roleAccessModel->reset()
-                    ->where(\Weline\Acl\Model\Role::fields_ROLE_ID, $roleId)
+                    ->where(\Weline\Acl\Model\Role::schema_fields_ROLE_ID, $roleId)
                     ->delete()
                     ->fetch();
                 
                 // 保存新权限
                 if (!empty($acls)) {
                     $roleAccessModel->reset()
-                        ->insert($acls, [\Weline\Acl\Model\Role::fields_ROLE_ID, \Weline\Acl\Model\RoleAccess::fields_SOURCE_ID])
+                        ->insert($acls, [\Weline\Acl\Model\Role::schema_fields_ROLE_ID, \Weline\Acl\Model\RoleAccess::schema_fields_SOURCE_ID])
                         ->fetch();
                 }
                 

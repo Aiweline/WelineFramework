@@ -11,50 +11,37 @@ declare(strict_types=1);
 
 namespace Weline\Api\Model;
 
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
-class ApiUserToken extends \Weline\Framework\Database\Model
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: 'API用户令牌表')]
+#[Index(name: 'idx_w_api_user_token_token', columns: ['token'], type: 'UNIQUE', comment: '令牌唯一')]
+#[Index(name: 'idx_w_api_user_token_user_id', columns: ['user_id'], comment: '用户ID')]
+#[Index(name: 'idx_w_api_user_token_type', columns: ['type'], comment: '令牌类型')]
+#[Index(name: 'idx_w_api_user_token_expire_time', columns: ['token_expire_time'], comment: '过期时间')]
+class ApiUserToken extends Model
 {
-    public const fields_ID = 'id';
-    public const fields_user_id = 'user_id';
-    public const fields_token = 'token';
-    public const fields_type = 'type';
-    public const fields_token_expire_time = 'token_expire_time';
+
+    public const schema_table = 'm_api_user_token';
+    public const schema_primary_key = 'id';
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'ID')]
+    public const schema_fields_ID = 'id';
+    #[Col(type: 'int', nullable: false, comment: '用户ID')]
+    public const schema_fields_user_id = 'user_id';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '令牌值')]
+    public const schema_fields_token = 'token';
+    #[Col(type: 'varchar', length: 50, nullable: false, comment: '令牌类型（access_token/refresh_token/pass_token）')]
+    public const schema_fields_type = 'type';
+    #[Col(type: 'int', nullable: true, comment: '过期时间（Unix时间戳）')]
+    public const schema_fields_token_expire_time = 'token_expire_time';
 
     public const TYPE_ACCESS_TOKEN = 'access_token';
     public const TYPE_REFRESH_TOKEN = 'refresh_token';
     public const TYPE_PASS_TOKEN = 'pass_token';
 
-    public array $_unit_primary_keys = ['id'];
+    public array $_unit_primary_keys = [self::schema_fields_ID];
     public array $_index_sort_keys = ['user_id', 'token', 'type'];
-    
-    public string $table = 'm_api_user_token';
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 数据库升级逻辑
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        // 表结构已在 Setup/Install.php 中创建
-    }
 
     /**
      * 获取ID
@@ -69,7 +56,7 @@ class ApiUserToken extends \Weline\Framework\Database\Model
      */
     public function getUserId(): int
     {
-        return (int)($this->getData(self::fields_user_id) ?? 0);
+        return (int)($this->getData(self::schema_fields_user_id) ?? 0);
     }
 
     /**
@@ -77,7 +64,7 @@ class ApiUserToken extends \Weline\Framework\Database\Model
      */
     public function setUserId(int $userId): self
     {
-        return $this->setData(self::fields_user_id, $userId);
+        return $this->setData(self::schema_fields_user_id, $userId);
     }
 
     /**
@@ -85,7 +72,7 @@ class ApiUserToken extends \Weline\Framework\Database\Model
      */
     public function getToken(): string
     {
-        return (string)($this->getData(self::fields_token) ?? '');
+        return (string)($this->getData(self::schema_fields_token) ?? '');
     }
 
     /**
@@ -93,7 +80,7 @@ class ApiUserToken extends \Weline\Framework\Database\Model
      */
     public function setToken(string $token): self
     {
-        return $this->setData(self::fields_token, $token);
+        return $this->setData(self::schema_fields_token, $token);
     }
 
     /**
@@ -101,7 +88,7 @@ class ApiUserToken extends \Weline\Framework\Database\Model
      */
     public function getType(): string
     {
-        return (string)($this->getData(self::fields_type) ?? '');
+        return (string)($this->getData(self::schema_fields_type) ?? '');
     }
 
     /**
@@ -109,7 +96,7 @@ class ApiUserToken extends \Weline\Framework\Database\Model
      */
     public function setType(string $type): self
     {
-        return $this->setData(self::fields_type, $type);
+        return $this->setData(self::schema_fields_type, $type);
     }
 
     /**
@@ -117,7 +104,7 @@ class ApiUserToken extends \Weline\Framework\Database\Model
      */
     public function getTokenExpireTime(): int
     {
-        return (int)($this->getData(self::fields_token_expire_time) ?? 0);
+        return (int)($this->getData(self::schema_fields_token_expire_time) ?? 0);
     }
 
     /**
@@ -125,7 +112,7 @@ class ApiUserToken extends \Weline\Framework\Database\Model
      */
     public function setTokenExpireTime(int $timestamp): self
     {
-        return $this->setData(self::fields_token_expire_time, $timestamp);
+        return $this->setData(self::schema_fields_token_expire_time, $timestamp);
     }
 
     /**
@@ -151,4 +138,5 @@ class ApiUserToken extends \Weline\Framework\Database\Model
         parent::save_before();
     }
 }
+
 
