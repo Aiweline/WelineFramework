@@ -58,12 +58,12 @@ class OrderList extends BaseController
         $orderModel = ObjectManager::getInstance(\WeShop\Order\Model\Order::class);
         foreach ($result['items'] as $order) {
             $orderData = [
-                'order_id' => $order['order_id'] ?? $order[$orderModel::fields_ID] ?? 0,
-                'increment_id' => $order['increment_id'] ?? $order[$orderModel::fields_increment_id] ?? '',
-                'status' => $order['status'] ?? $order[$orderModel::fields_status] ?? 'pending',
+                'order_id' => $order['order_id'] ?? $order[$orderModel::schema_fields_ID] ?? 0,
+                'increment_id' => $order['increment_id'] ?? $order[$orderModel::schema_fields_increment_id] ?? '',
+                'status' => $order['status'] ?? $order[$orderModel::schema_fields_status] ?? 'pending',
                 'payment_status' => $order['payment_status'] ?? OrderService::PAYMENT_STATUS_PENDING,
-                'total' => $order['total'] ?? $order[$orderModel::fields_total] ?? 0,
-                'created_at' => $order['created_at'] ?? $order[$orderModel::fields_created_at] ?? '',
+                'total' => $order['total'] ?? $order[$orderModel::schema_fields_total] ?? 0,
+                'created_at' => $order['created_at'] ?? $order[$orderModel::schema_fields_created_at] ?? '',
             ];
             
             // 判断是否可以继续支付
