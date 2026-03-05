@@ -39,8 +39,8 @@ class Config extends BackendController
     public function index(): string
     {
         $configs = $this->getConfigModel()->reset()
-            ->order(AwsConfig::fields_IS_DEFAULT, 'DESC')
-            ->order(AwsConfig::fields_CREATED_AT, 'DESC')
+            ->order(AwsConfig::schema_fields_IS_DEFAULT, 'DESC')
+            ->order(AwsConfig::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetchArray();
 
@@ -121,9 +121,9 @@ class Config extends BackendController
 
             // 检查名称是否重复
             $existingConfig = $this->getConfigModel()->reset()
-                ->where(AwsConfig::fields_NAME, $name);
+                ->where(AwsConfig::schema_fields_NAME, $name);
             if ($id) {
-                $existingConfig->where(AwsConfig::fields_CONFIG_ID, $id, '!=');
+                $existingConfig->where(AwsConfig::schema_fields_CONFIG_ID, $id, '!=');
             }
             $existingConfig = $existingConfig->find();
             if ($existingConfig->getId()) {
@@ -133,15 +133,15 @@ class Config extends BackendController
                 ]);
             }
 
-            $config->setData(AwsConfig::fields_NAME, $name)
-                ->setData(AwsConfig::fields_ACCESS_KEY_ID, $accessKeyId)
-                ->setData(AwsConfig::fields_REGION, $data['region'] ?? 'us-east-1')
-                ->setData(AwsConfig::fields_DESCRIPTION, $data['description'] ?? '')
-                ->setData(AwsConfig::fields_IS_ACTIVE, (int)($data['is_active'] ?? 1));
+            $config->setData(AwsConfig::schema_fields_NAME, $name)
+                ->setData(AwsConfig::schema_fields_ACCESS_KEY_ID, $accessKeyId)
+                ->setData(AwsConfig::schema_fields_REGION, $data['region'] ?? 'us-east-1')
+                ->setData(AwsConfig::schema_fields_DESCRIPTION, $data['description'] ?? '')
+                ->setData(AwsConfig::schema_fields_IS_ACTIVE, (int)($data['is_active'] ?? 1));
 
             // 只有在提供了新密钥时才更新
             if ($secretAccessKey !== '' && $secretAccessKey !== '********') {
-                $config->setData(AwsConfig::fields_SECRET_ACCESS_KEY, $secretAccessKey);
+                $config->setData(AwsConfig::schema_fields_SECRET_ACCESS_KEY, $secretAccessKey);
             } elseif (!$id) {
                 // 新配置必须提供密钥
                 return $this->jsonResponse([
