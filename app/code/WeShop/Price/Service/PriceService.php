@@ -30,7 +30,7 @@ class PriceService
             throw new \Exception(__('产品不存在'));
         }
         
-        $basePrice = (float)$product->getData(Product::fields_price);
+        $basePrice = (float)$product->getData(Product::schema_fields_price);
         
         // 触发价格计算事件，允许其他模块修改价格
         \Weline\Framework\Event\EventsManager::getInstance()->dispatch('WeShop_Price::calculate_price', [
