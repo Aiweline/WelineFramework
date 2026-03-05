@@ -12,47 +12,45 @@ declare(strict_types=1);
 namespace Weline\Marketing\Model\Campaign;
 
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\Framework\Setup\Data\Context;
-
-/**
- * 促销活动模型
- * 
- * @package Weline_Marketing
- */
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+/** 促销活动模型 @package Weline_Marketing */
+#[Table(comment: '促销活动表')]
+#[Index(name: 'idx_status', columns: ['status', 'start_date', 'end_date'])]
+#[Index(name: 'idx_rule', columns: ['rule_id'])]
 class Campaign extends Model
 {
-    // 框架自动推导表名：Campaign → weline_marketing_campaign
-    
-    /**
-     * Unit primary keys
-     */
+    public const schema_table = 'weline_marketing_campaign';
+    public const schema_primary_key = 'id';
     public array $_unit_primary_keys = ['id'];
-    
-    /**
-     * Index sort keys
-     */
     public array $_index_sort_keys = ['id', 'rule_id', 'status'];
-    
-    /**
-     * Field name constants
-     */
-    public const fields_ID = 'id';
-    public const fields_NAME = 'name';
-    public const fields_DESCRIPTION = 'description';
-    public const fields_RULE_ID = 'rule_id';
-    public const fields_STATUS = 'status';
-    public const fields_START_DATE = 'start_date';
-    public const fields_END_DATE = 'end_date';
-    public const fields_BUDGET = 'budget';
-    public const fields_SPENT = 'spent';
-    public const fields_TARGET_AUDIENCE = 'target_audience';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
 
-    /**
-     * Status constants
-     */
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '活动ID')]
+    public const schema_fields_ID = 'id';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '活动名称')]
+    public const schema_fields_NAME = 'name';
+    #[Col(type: 'text', nullable: true, comment: '活动描述')]
+    public const schema_fields_DESCRIPTION = 'description';
+    #[Col(type: 'int', nullable: false, comment: '关联规则ID')]
+    public const schema_fields_RULE_ID = 'rule_id';
+    #[Col(type: 'varchar', length: 20, nullable: false, default: 'draft', comment: '状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col(type: 'datetime', nullable: false, comment: '开始时间')]
+    public const schema_fields_START_DATE = 'start_date';
+    #[Col(type: 'datetime', nullable: false, comment: '结束时间')]
+    public const schema_fields_END_DATE = 'end_date';
+    #[Col(type: 'decimal', length: '10,2', nullable: true, comment: '预算')]
+    public const schema_fields_BUDGET = 'budget';
+    #[Col(type: 'decimal', length: '10,2', default: 0, comment: '已花费')]
+    public const schema_fields_SPENT = 'spent';
+    #[Col(type: 'text', nullable: true, comment: '目标受众JSON')]
+    public const schema_fields_TARGET_AUDIENCE = 'target_audience';
+    #[Col(type: 'timestamp', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col(type: 'timestamp', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
+
     public const STATUS_DRAFT = 'draft';
     public const STATUS_ACTIVE = 'active';
     public const STATUS_PAUSED = 'paused';
@@ -60,149 +58,11 @@ class Campaign extends Model
     public const STATUS_CANCELLED = 'cancelled';
 
     /**
-     * Initialize model
-     */
-    public function _init(): void
-    {
-        $this->_table = 'weline_marketing_campaign';
-        $this->_id_field_name = 'id';
-    }
-
-    /**
-     * Install database table
-     *
-     * @param ModelSetup $setup
-     * @param Context $context
-     * @return void
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        $this->useMainDbMaster();
-        
-        if ($setup->tableExist() === false) {
-            $setup->createTable('促销活动表')
-            ->addColumn(
-                self::fields_ID,
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER,
-                0,
-                'primary key auto_increment',
-                '活动ID'
-            )
-            ->addColumn(
-                self::fields_NAME,
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR,
-                255,
-                'not null',
-                '活动名称'
-            )
-            ->addColumn(
-                self::fields_DESCRIPTION,
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT,
-                0,
-                'null',
-                '活动描述'
-            )
-            ->addColumn(
-                self::fields_RULE_ID,
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER,
-                0,
-                'not null',
-                '关联规则ID'
-            )
-            ->addColumn(
-                self::fields_STATUS,
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR,
-                20,
-                'not null default \'draft\'',
-                '状态：draft草稿, active激活, paused暂停, completed已完成, cancelled已取消'
-            )
-            ->addColumn(
-                self::fields_START_DATE,
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_DATETIME,
-                0,
-                'not null',
-                '开始时间'
-            )
-            ->addColumn(
-                self::fields_END_DATE,
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_DATETIME,
-                0,
-                'not null',
-                '结束时间'
-            )
-            ->addColumn(
-                self::fields_BUDGET,
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_DECIMAL,
-                '10,2',
-                'null',
-                '预算'
-            )
-            ->addColumn(
-                self::fields_SPENT,
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_DECIMAL,
-                '10,2',
-                'default 0',
-                '已花费'
-            )
-            ->addColumn(
-                self::fields_TARGET_AUDIENCE,
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT,
-                0,
-                'null',
-                '目标受众（JSON）'
-            )
-            ->addColumn(
-                self::fields_CREATED_AT,
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TIMESTAMP,
-                0,
-                'not null default current_timestamp',
-                '创建时间'
-            )
-            ->addColumn(
-                self::fields_UPDATED_AT,
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TIMESTAMP,
-                0,
-                'not null default current_timestamp on update current_timestamp',
-                '更新时间'
-            )
-            ->addIndex('INDEX', 'idx_status', [self::fields_STATUS, self::fields_START_DATE, self::fields_END_DATE])
-            ->addIndex('INDEX', 'idx_rule', [self::fields_RULE_ID])
-            ->create();
-        }
-    }
-
-    /**
-     * Setup database table
-     *
-     * @param ModelSetup $setup
-     * @param Context $context
-     * @return void
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * Upgrade database table
-     *
-     * @param ModelSetup $setup
-     * @param Context $context
-     * @return void
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // Future upgrades will be added here
-    }
-
-    /**
      * Get target audience as array
-     *
-     * @return array|null
      */
     public function getTargetAudience(): ?array
     {
-        $audience = $this->getData(self::fields_TARGET_AUDIENCE);
+        $audience = $this->getData(self::schema_fields_TARGET_AUDIENCE);
         if (empty($audience)) {
             return null;
         }
@@ -211,14 +71,11 @@ class Campaign extends Model
 
     /**
      * Set target audience from array
-     *
-     * @param array|null $audience
-     * @return $this
      */
     public function setTargetAudience(?array $audience): self
     {
         $this->setData(
-            self::fields_TARGET_AUDIENCE,
+            self::schema_fields_TARGET_AUDIENCE,
             $audience ? json_encode($audience, JSON_UNESCAPED_UNICODE) : null
         );
         return $this;

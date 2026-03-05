@@ -56,27 +56,27 @@ class CampaignService
             return [];
         }
 
-        $ruleId = $campaign->getData(Campaign::fields_RULE_ID);
+        $ruleId = $campaign->getData(Campaign::schema_fields_RULE_ID);
         if (!$ruleId) {
             return [];
         }
 
         /** @var RuleUsage $ruleUsage */
         $ruleUsage = ObjectManager::getInstance(RuleUsage::class);
-        $ruleUsage->where(RuleUsage::fields_RULE_ID, $ruleId);
+        $ruleUsage->where(RuleUsage::schema_fields_RULE_ID, $ruleId);
         $totalUsage = $ruleUsage->count();
 
         $ruleUsage->reset();
-        $ruleUsage->where(RuleUsage::fields_RULE_ID, $ruleId);
-        $totalDiscount = $ruleUsage->sum(RuleUsage::fields_DISCOUNT_AMOUNT);
+        $ruleUsage->where(RuleUsage::schema_fields_RULE_ID, $ruleId);
+        $totalDiscount = $ruleUsage->sum(RuleUsage::schema_fields_DISCOUNT_AMOUNT);
 
-        $budget = $campaign->getData(Campaign::fields_BUDGET);
-        $spent = $campaign->getData(Campaign::fields_SPENT);
+        $budget = $campaign->getData(Campaign::schema_fields_BUDGET);
+        $spent = $campaign->getData(Campaign::schema_fields_SPENT);
 
         return [
             'campaign_id' => $campaignId,
-            'name' => $campaign->getData(Campaign::fields_NAME),
-            'status' => $campaign->getData(Campaign::fields_STATUS),
+            'name' => $campaign->getData(Campaign::schema_fields_NAME),
+            'status' => $campaign->getData(Campaign::schema_fields_STATUS),
             'budget' => $budget,
             'spent' => $spent,
             'remaining_budget' => $budget ? ($budget - $spent) : null,
