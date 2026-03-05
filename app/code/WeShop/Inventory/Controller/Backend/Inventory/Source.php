@@ -33,7 +33,7 @@ class Source extends BackendController
     {
         $sources = $this->source->reset()
             ->pagination()
-            ->order(SourceModel::fields_PRIORITY, 'ASC')
+            ->order(SourceModel::schema_fields_PRIORITY, 'ASC')
             ->select()
             ->fetch()
             ->getItems();

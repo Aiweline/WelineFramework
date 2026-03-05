@@ -42,7 +42,7 @@ class ProductDeleteAfter implements ObserverInterface
 
         // 删除该产品在所有库存源的库存记录
         $this->sourceItem->reset()
-            ->where(SourceItem::fields_PRODUCT_ID, $productId)
+            ->where(SourceItem::schema_fields_PRODUCT_ID, $productId)
             ->delete()
             ->fetch();
     }
