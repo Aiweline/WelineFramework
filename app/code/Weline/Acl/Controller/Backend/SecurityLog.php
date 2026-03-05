@@ -41,15 +41,15 @@ class SecurityLog extends BackendController
             $query = $logModel->reset();
             
             if ($eventType) {
-                $query->where(SecurityLogModel::fields_EVENT_TYPE, $eventType);
+                $query->where(SecurityLogModel::schema_fields_EVENT_TYPE, $eventType);
             }
             
             if ($keyword) {
-                $query->where(SecurityLogModel::fields_MESSAGE, "%{$keyword}%", 'LIKE')
-                      ->orWhere(SecurityLogModel::fields_IP, "%{$keyword}%", 'LIKE');
+                $query->where(SecurityLogModel::schema_fields_MESSAGE, "%{$keyword}%", 'LIKE')
+                      ->orWhere(SecurityLogModel::schema_fields_IP, "%{$keyword}%", 'LIKE');
             }
             
-            $query->order(SecurityLogModel::fields_CREATED_AT, 'DESC');
+            $query->order(SecurityLogModel::schema_fields_CREATED_AT, 'DESC');
             $collection = $query->pagination($page, $limit);
             
             $logs = $collection->getItems();

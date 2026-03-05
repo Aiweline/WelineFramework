@@ -265,12 +265,11 @@ $keyword = $keyword ?? '';
             var formData = new FormData();
             formData.append('id', id);
             
-            fetch('<?= $this->getBackendUrl('*/backend/ip-whitelist/toggle') ?>', {
-                method: 'POST',
-                body: formData
-            })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
+            var url = '<?= $this->getBackendUrl('*/backend/ip-whitelist/toggle') ?>';
+            var opts = { method: 'POST', body: formData };
+            window.Weline.Api.request(url, opts)
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
                     AdminToast.success(data.message);
                     setTimeout(function() {
@@ -293,12 +292,11 @@ $keyword = $keyword ?? '';
             var formData = new FormData();
             formData.append('id', id);
             
-            fetch('<?= $this->getBackendUrl('*/backend/ip-whitelist/delete') ?>', {
-                method: 'POST',
-                body: formData
-            })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
+            var url = '<?= $this->getBackendUrl('*/backend/ip-whitelist/delete') ?>';
+            var opts = { method: 'POST', body: formData };
+            window.Weline.Api.request(url, opts)
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
                     AdminToast.success(data.message);
                     setTimeout(function() {

@@ -202,29 +202,14 @@
         
         BackendToast.info('<?= __('正在创建角色...') ?>');
         
-        fetch('<?= $this->getBackendUrl("*/backend/acl/role/add") ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify(data)
-        })
-        .then(function(response) {
-            // 检查 HTTP 状态码
-            if (!response.ok) {
-                throw new Error('HTTP <?= __('错误') ?>: ' + response.status + ' ' + response.statusText);
+        var roleUrl = '<?= $this->getBackendUrl("*/backend/acl/role/add") ?>';
+        var roleOpts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(data) };
+        window.Weline.Api.request(roleUrl, roleOpts)
+        .then(function(res) {
+            if (!res || res.ok === false) {
+                throw new Error('HTTP <?= __('错误') ?>: ' + (res && res.status || 500));
             }
-            return response.text();
-        })
-        .then(function(text) {
-            // 尝试解析 JSON
-            try {
-                return JSON.parse(text);
-            } catch (e) {
-                console.error('JSON parse error, response:', text);
-                throw new Error('<?= __('服务器返回格式错误，请检查后台日志') ?>');
-            }
+            return (res && res.data) !== undefined ? res.data : res;
         })
         .then(function(result) {
             if (result.success) {

@@ -12,37 +12,57 @@ declare(strict_types=1);
 
 namespace Weline\Acl\Model;
 
-use Weline\Framework\App\Debug;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
 
+#[Table(comment: 'ACL权限表')]
+#[Index(name: 'idx_source_id', columns: ['source_id'], type: 'UNIQUE', comment: 'ACL资源ID唯一')]
 class Acl extends \Weline\Framework\Database\Model
 {
-    public const fields_ID = 'source_id';
-    public const fields_ACL_ID = 'acl_id';
-    public const fields_ORDER = 'order';
-    public const fields_SOURCE_ID = 'source_id';
-    public const fields_SOURCE_NAME = 'source_name';
-    public const fields_DOCUMENT = 'document';
-    public const fields_PARENT_SOURCE = 'parent_source';
-    public const fields_ROUTER = 'router';
-    public const fields_ROUTE = 'route';
-    public const fields_METHOD = 'method';
-    public const fields_REWRITE = 'rewrite';
-    public const fields_MODULE = 'module';
-    public const fields_CLASS = 'class';
-    public const fields_TYPE = 'type';
-    public const fields_ICON = 'icon';
-    public const fields_IS_ENABLE = 'is_enable';
-    public const fields_IS_BACKEND = 'is_backend';
 
+    public const schema_primary_key = 'source_id';
+
+    #[Col(type: 'varchar', length: 127, nullable: false, unique: true, comment: 'ACL资源ID')]
+    public const schema_fields_ID = 'source_id';
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'ACL权限ID')]
+    public const schema_fields_ACL_ID = 'acl_id';
+    #[Col(type: 'int', nullable: true, default: 0, comment: '排序')]
+    public const schema_fields_ORDER = 'order';
+    #[Col(type: 'varchar', length: 127, nullable: false, unique: true, comment: 'ACL资源ID')]
+    public const schema_fields_SOURCE_ID = 'source_id';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: 'ACL资源名称')]
+    public const schema_fields_SOURCE_NAME = 'source_name';
+    #[Col(type: 'text', nullable: false, comment: 'ACL资源描述')]
+    public const schema_fields_DOCUMENT = 'document';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: 'ACL父级资源')]
+    public const schema_fields_PARENT_SOURCE = 'parent_source';
+    #[Col(type: 'varchar', length: 60, nullable: false, comment: 'ACL路由前缀')]
+    public const schema_fields_ROUTER = 'router';
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: 'ACL路由')]
+    public const schema_fields_ROUTE = 'route';
+    #[Col(type: 'varchar', length: 6, nullable: true, default: '', comment: 'ACL路由请求方法')]
+    public const schema_fields_METHOD = 'method';
+    #[Col(type: 'varchar', length: 255, nullable: true, default: '', comment: 'ACL路由重写')]
+    public const schema_fields_REWRITE = 'rewrite';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: 'ACL模组')]
+    public const schema_fields_MODULE = 'module';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '控制器类')]
+    public const schema_fields_CLASS = 'class';
+    #[Col(type: 'varchar', length: 120, nullable: false, comment: '类型')]
+    public const schema_fields_TYPE = 'type';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '图片，可以是链接')]
+    public const schema_fields_ICON = 'icon';
+    #[Col(type: 'smallint', nullable: true, default: 1, comment: '是否允许')]
+    public const schema_fields_IS_ENABLE = 'is_enable';
+    #[Col(type: 'int', nullable: true, default: 1, comment: '是否后台')]
+    public const schema_fields_IS_BACKEND = 'is_backend';
 
     public const type_MENUS = 'menus';
 
-    public array $_unit_primary_keys = [self::fields_SOURCE_ID];
+    public array $_unit_primary_keys = [self::schema_fields_SOURCE_ID];
 
 
     private ?Url $url = null;
@@ -68,142 +88,142 @@ class Acl extends \Weline\Framework\Database\Model
 
     public function setAclId(string $acl_id): static
     {
-        return $this->setData(self::fields_ACL_ID, $acl_id);
+        return $this->setData(self::schema_fields_ACL_ID, $acl_id);
     }
 
     public function setOrder(int $order): static
     {
-        return $this->setData(self::fields_ORDER, $order);
+        return $this->setData(self::schema_fields_ORDER, $order);
     }
 
     public function getOrder(): int
     {
-        return (int)$this->getData(self::fields_ORDER);
+        return (int)$this->getData(self::schema_fields_ORDER);
     }
 
     public function setSourceName(string $source_name): static
     {
-        return $this->setData(self::fields_SOURCE_NAME, $source_name);
+        return $this->setData(self::schema_fields_SOURCE_NAME, $source_name);
     }
 
     public function setDocument(string $document): static
     {
-        return $this->setData(self::fields_DOCUMENT, $document);
+        return $this->setData(self::schema_fields_DOCUMENT, $document);
     }
 
     public function setParentSource(string $parent_source): static
     {
-        return $this->setData(self::fields_PARENT_SOURCE, $parent_source);
+        return $this->setData(self::schema_fields_PARENT_SOURCE, $parent_source);
     }
 
     public function setRouter(string $router): static
     {
-        return $this->setData(self::fields_ROUTER, $router);
+        return $this->setData(self::schema_fields_ROUTER, $router);
     }
 
     public function setRoute(string $route): static
     {
-        return $this->setData(self::fields_ROUTE, $route);
+        return $this->setData(self::schema_fields_ROUTE, $route);
     }
 
     public function setMethod(string $method): static
     {
-        return $this->setData(self::fields_METHOD, $method);
+        return $this->setData(self::schema_fields_METHOD, $method);
     }
 
     public function setRewrite(string $rewrite): static
     {
-        return $this->setData(self::fields_REWRITE, $rewrite);
+        return $this->setData(self::schema_fields_REWRITE, $rewrite);
     }
 
     public function setModule(string $module): static
     {
-        return $this->setData(self::fields_MODULE, $module);
+        return $this->setData(self::schema_fields_MODULE, $module);
     }
 
     public function setClass(string $class): static
     {
-        return $this->setData(self::fields_CLASS, $class);
+        return $this->setData(self::schema_fields_CLASS, $class);
     }
 
     public function setType(string $type): static
     {
-        return $this->setData(self::fields_TYPE, $type);
+        return $this->setData(self::schema_fields_TYPE, $type);
     }
 
     public function setIcon(string $icon): static
     {
-        return $this->setData(self::fields_ICON, $icon);
+        return $this->setData(self::schema_fields_ICON, $icon);
     }
 
     public function setIsEnable(bool $is_enable = true): static
     {
-        return $this->setData(self::fields_IS_ENABLE, $is_enable);
+        return $this->setData(self::schema_fields_IS_ENABLE, $is_enable);
     }
 
     public function setIsBackend(bool $is_backend = true): static
     {
-        return $this->setData(self::fields_IS_BACKEND, $is_backend);
+        return $this->setData(self::schema_fields_IS_BACKEND, $is_backend);
     }
 
     public function getAclId(): int
     {
-        return intval($this->getData(self::fields_ACL_ID));
+        return intval($this->getData(self::schema_fields_ACL_ID));
     }
 
     public function getSourceName(): string
     {
-        return $this->getData(self::fields_SOURCE_NAME);
+        return $this->getData(self::schema_fields_SOURCE_NAME);
     }
 
     public function getDocument(): string
     {
-        return $this->getData(self::fields_DOCUMENT);
+        return $this->getData(self::schema_fields_DOCUMENT);
     }
 
     public function getParentSource(): string
     {
-        return $this->getData(self::fields_PARENT_SOURCE) ?: '';
+        return $this->getData(self::schema_fields_PARENT_SOURCE) ?: '';
     }
 
     public function getRouter(): string
     {
-        return $this->getData(self::fields_ROUTER);
+        return $this->getData(self::schema_fields_ROUTER);
     }
 
     public function getRoute(): string
     {
-        return $this->getData(self::fields_ROUTE);
+        return $this->getData(self::schema_fields_ROUTE);
     }
 
     public function getMethod(): string
     {
-        return $this->getData(self::fields_METHOD);
+        return $this->getData(self::schema_fields_METHOD);
     }
 
     public function getRewrite(): string
     {
-        return $this->getData(self::fields_REWRITE);
+        return $this->getData(self::schema_fields_REWRITE);
     }
 
     public function getModule(): string
     {
-        return $this->getData(self::fields_MODULE);
+        return $this->getData(self::schema_fields_MODULE);
     }
 
     public function getClass(): string
     {
-        return $this->getData(self::fields_CLASS);
+        return $this->getData(self::schema_fields_CLASS);
     }
 
     public function getType(): string
     {
-        return $this->getData(self::fields_TYPE);
+        return $this->getData(self::schema_fields_TYPE);
     }
 
     public function getIcon(): string
     {
-        return $this->getData(self::fields_ICON);
+        return $this->getData(self::schema_fields_ICON);
     }
 
     public function getUrl(): string
@@ -218,135 +238,15 @@ class Acl extends \Weline\Framework\Database\Model
 
     public function isEnable(): bool
     {
-        return (bool)$this->getData(self::fields_IS_ENABLE);
+        return (bool)$this->getData(self::schema_fields_IS_ENABLE);
     }
 
 
     public function isBackend(): bool
     {
-        return (bool)$this->getData(self::fields_IS_BACKEND);
+        return (bool)$this->getData(self::schema_fields_IS_BACKEND);
     }
 
 
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->hasField(self::fields_ORDER)) {
-            $setup->alterTable()->addColumn(
-                self::fields_ORDER,
-                self::fields_ACL_ID,
-                TableInterface::column_type_INTEGER,
-                11, 'default 0', '排序'
-            )->alter();
-        }
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        // 注意：不再清空 ACL 表，因为权限收集是在升级过程中通过 ControllerAttributes 观察者进行的
-        // 在 install 时清空表会导致已收集的权限丢失
-        // 如果确实需要清理不存在的权限，应该在权限收集完成后进行清理，而不是在 install 时清空所有权限
-        // if ($setup->tableExist()) {
-        //     $setup->query('TRUNCATE TABLE ' . $this->getTable());
-        // }
-//        $setup->dropTable();
-        if (!$setup->tableExist()) {
-            $setup->createTable()
-                ->addColumn(
-                    self::fields_ACL_ID,
-                    TableInterface::column_type_INTEGER,
-                    null, 'primary key auto_increment', 'ACL权限ID'
-                )
-                ->addColumn(
-                    self::fields_ORDER,
-                    TableInterface::column_type_INTEGER,
-                    null, 'default 0', '排序'
-                )
-                ->addColumn(
-                    self::fields_SOURCE_ID,
-                    TableInterface::column_type_VARCHAR,
-                    127, 'not null unique', 'ACL资源ID'
-                )
-                ->addColumn(
-                    self::fields_SOURCE_NAME,
-                    TableInterface::column_type_VARCHAR,
-                    255, 'not null', 'ACL资源名称'
-                )
-                ->addColumn(
-                    self::fields_DOCUMENT,
-                    TableInterface::column_type_TEXT,
-                    null, 'not null', 'ACL资源描述'
-                )
-                ->addColumn(
-                    self::fields_PARENT_SOURCE,
-                    TableInterface::column_type_VARCHAR,
-                    255, 'not null', 'ACL父级资源'
-                )
-                ->addColumn(
-                    self::fields_ROUTER,
-                    TableInterface::column_type_VARCHAR,
-                    60, 'not null', 'ACL路由前缀'
-                )
-                ->addColumn(
-                    self::fields_REWRITE,
-                    TableInterface::column_type_VARCHAR,
-                    255, 'default ""', 'ACL路由重写'
-                )
-                ->addColumn(
-                    self::fields_ROUTE,
-                    TableInterface::column_type_VARCHAR,
-                    255, '', 'ACL路由'
-                )
-                ->addColumn(
-                    self::fields_METHOD,
-                    TableInterface::column_type_VARCHAR,
-                    6, 'default ""', 'ACL路由请求方法'
-                )
-                ->addColumn(
-                    self::fields_MODULE,
-                    TableInterface::column_type_VARCHAR,
-                    255, 'not null', 'ACL模组'
-                )
-                ->addColumn(
-                    self::fields_CLASS,
-                    TableInterface::column_type_VARCHAR,
-                    255, 'not null', '控制器类'
-                )
-                ->addColumn(
-                    self::fields_TYPE,
-                    TableInterface::column_type_VARCHAR,
-                    120, 'not null', '类型'
-                )
-                ->addColumn(
-                    self::fields_IS_BACKEND,
-                    TableInterface::column_type_INTEGER,
-                    1, 'default 1', '是否后台'
-                )
-                ->addColumn(
-                    self::fields_ICON,
-                    TableInterface::column_type_VARCHAR,
-                    255, 'not null', '图片，可以是链接'
-                )
-                ->addColumn(
-                    self::fields_IS_ENABLE,
-                    TableInterface::column_type_SMALLINT,
-                    255, 'default 1', '是否允许'
-                )
-                ->addAdditional('ENGINE=MyIsam;')
-                ->create();
-        }
-    }
 }
+
