@@ -89,7 +89,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $this->identity_field = $field;
         return $this;
     }
-    
+
     /**
      * 🔧 重写 query 方法，在执行前转换 MySQL 特有语法
      * 对于直接执行的 SQL（没有 this->sql 的情况下），需要标准化处理
@@ -152,6 +152,15 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             $this->batch = true;
         }
 
+        // 主键（identity_field）为 null/空时从插入数据中移除，由数据库自增生成
+        if ($this->identity_field !== '') {
+            foreach ($this->insert['origin'] as &$row) {
+                if (array_key_exists($this->identity_field, $row) && ($row[$this->identity_field] === null || $row[$this->identity_field] === '')) {
+                    unset($row[$this->identity_field]);
+                }
+            }
+            unset($row);
+        }
         // 处理插入数据分类（按 PostgreSQL：冲突依据字段仅使用实际数据中存在的列）
         if (count($this->insert)) {
             $first_insert_item = $this->insert['origin'][0] ?? [];
@@ -188,7 +197,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                     }
                     $this->exist_update_sql = trim($this->exist_update_sql, ',');
                 } else {
-                    $this->exist_update_sql = 'DO UPDATE SET ALL_FIELDS';
+                    $this->exist_update_sql = QueryInterface::EXIST_UPDATE_ALL_FIELDS;
                 }
             }
 
@@ -1238,12 +1247,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $has_identify_field_insert = false;
         $has_no_identify_field_insert = false;
         
-        // 合并所有插入项
         $all_insert_items = array_merge($insert_items, $insert_or_update_items);
-        
         foreach ($all_insert_items as $insert_key => $insert) {
             $insert_key += 1;
-            
             if ($this->identity_field && empty($insert[$this->identity_field])) {
                 unset($insert[$this->identity_field]);
                 $insert_fields = array_keys($insert);
@@ -1316,8 +1322,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                         }
                     }
                     if (!empty($conflictFields)) {
-                        // 🔧 修复：如果 exist_update_sql 是 'DO UPDATE SET ALL_FIELDS'，生成所有字段的更新语句
-                        if ($this->exist_update_sql === 'DO UPDATE SET ALL_FIELDS') {
+                        // 语义常量 EXIST_UPDATE_ALL_FIELDS 由本适配器展开为方言
+                        if ($this->exist_update_sql === QueryInterface::EXIST_UPDATE_ALL_FIELDS) {
                             $updateParts = [];
                             foreach ($insert_fields as $field) {
                                 // 跳过冲突检测字段

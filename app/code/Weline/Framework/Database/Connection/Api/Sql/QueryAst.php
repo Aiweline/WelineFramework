@@ -45,6 +45,8 @@ abstract class QueryAst implements QueryInterface
     public string $table = '';
     public string $table_alias = 'main_table';
     public array $insert = [];
+    /** @var string 存在则更新时的 SET 子句（方言由适配器生成），EXIST_UPDATE_ALL_FIELDS 表示冲突时更新全部字段 */
+    public string $exist_update_sql = '';
     public array $insert_update_fields = [];
     public array $insert_need_fields = [];
     public array $insert_update_where_fields = [];
@@ -309,6 +311,10 @@ abstract class QueryAst implements QueryInterface
                     }
                 }
                 $this->insert_update_where_fields = array_reverse($this->insert_update_where_fields);
+            }
+            // 存在则更新：指定了冲突依据字段且未指定更新字段时，冲突时更新全部字段（等价于原 existUpdateAllFields()）
+            if (!empty($this->insert_update_where_fields) && empty($this->insert_update_fields)) {
+                $this->exist_update_sql = QueryInterface::EXIST_UPDATE_ALL_FIELDS;
             }
 
             # 除去主键的联合查询字段

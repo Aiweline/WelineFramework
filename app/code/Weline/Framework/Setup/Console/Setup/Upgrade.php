@@ -32,16 +32,45 @@ use Weline\Framework\Setup\Stage\StageUpdateManager;
 use Weline\Framework\Setup\Stage\RouteUpdateStage;
 use Weline\Framework\Setup\Stage\FileUpdateStage;
 use Weline\Framework\Setup\Stage\DatabaseUpdateStage;
+use Weline\Framework\Setup\Stage\FrameworkDbBootstrapStage;
 use Weline\Framework\Setup\Stage\ModuleSetupStage;
+use Weline\Framework\Setup\Stage\EavSchemaStage;
+use Weline\Framework\Setup\Stage\SchemaDiffStage;
+use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Setup\Data\Context as SetupContext;
 use Weline\Framework\System\Text;
 use Weline\Framework\Console\Console\Reflection\Compile as ReflectionCompile;
 use Weline\Hook\HookRegistry;
 use Weline\Framework\Router\Service\RouteUpdateService;
 use Weline\Framework\Registry\Service\RegistryUpdateService;
+use Weline\Framework\Console\ParseModuleArgsTrait;
 
 class Upgrade implements \Weline\Framework\Console\CommandInterface
 {
+    use ParseModuleArgsTrait;
+
+    /** 阶段 code 名（用于 --stage= 只运行指定阶段，便于单阶段测试） */
+    public const STAGE_MODULE_SETUP = 'module_setup';
+    public const STAGE_FRAMEWORK_DB_BOOTSTRAP = 'framework_db_bootstrap';
+    public const STAGE_MODULE_MANAGER_BOOTSTRAP = 'module_manager_bootstrap';
+    public const STAGE_EAV_SCHEMA = 'eav_schema';
+    public const STAGE_SCHEMA_DIFF = 'schema_diff';
+    public const STAGE_DATABASE_UPDATE = 'database_update';
+    public const STAGE_ROUTE_UPDATE = 'route_update';
+    public const STAGE_FILE_UPDATE = 'file_update';
+
+    /** 所有阶段 code 列表（按执行顺序） */
+    public const STAGE_CODES_ORDERED = [
+        self::STAGE_MODULE_SETUP,
+        self::STAGE_FRAMEWORK_DB_BOOTSTRAP,
+        self::STAGE_MODULE_MANAGER_BOOTSTRAP,
+        self::STAGE_EAV_SCHEMA,
+        self::STAGE_SCHEMA_DIFF,
+        self::STAGE_DATABASE_UPDATE,
+        self::STAGE_ROUTE_UPDATE,
+        self::STAGE_FILE_UPDATE,
+    ];
+
     /**
      * 记录是否有模块被安装或升级
      * @var bool
@@ -868,6 +897,10 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     private function collectFrameworkRegistries(bool $includeTag = true, array $moduleNames = []): void
     {
+        // 仅保留已注册的模块名，避免将 stage code（如 schema_diff）等误当作模块传入注册表/标签库收集
+        $validModuleNames = array_keys(Env::getInstance()->getActiveModules());
+        $moduleNames = array_values(array_intersect($moduleNames, $validModuleNames));
+
         // 使用统一服务更新所有注册表
         try {
             /** @var RegistryUpdateService $registryService */
@@ -1002,6 +1035,20 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         if ($argsModule) {
             $this->printing->setup(__('指定模块升级模式：仅升级 %{1}', [implode(', ', $argsModule)]));
         }
+
+        // 解析 --stage=code 或 --stage code（只运行指定阶段，便于单阶段测试）
+        $stageFilter = null;
+        if (isset($args['stage'])) {
+            $stageFilter = is_array($args['stage']) ? $args['stage'] : array_map('trim', explode(',', (string) $args['stage']));
+            $stageFilter = array_values(array_filter($stageFilter, fn($s) => $s !== ''));
+            $validCodes = self::STAGE_CODES_ORDERED;
+            $unknown = array_diff($stageFilter, $validCodes);
+            if ($unknown !== []) {
+                throw new Exception(__('未知阶段 code：%{1}。可选：%{2}', [implode(', ', $unknown), implode(', ', $validCodes)]));
+            }
+            $this->printing->setup(__('仅运行指定阶段：%{1}', [implode(', ', $stageFilter)]));
+        }
+        $shouldCommitStage = fn(string $code): bool => $stageFilter === null || in_array($code, $stageFilter, true);
         
         // 检查是否指定了部分更新模式
         $doModel = isset($args['model']);
@@ -1039,20 +1086,46 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         }
         
         if ($doRoute) {
+            // 🔧 路由注册会触发 ControllerAttributes 查询 m_acl 等表，必须先提交 SchemaDiff 确保表已存在
+            $connectionFactory = ObjectManager::getInstance(ConnectionFactory::class);
+            $frameworkDbBootstrapStage = ObjectManager::make(FrameworkDbBootstrapStage::class, ['connectionFactory' => $connectionFactory]);
+            $frameworkDbBootstrapStage->prepare([]);
+            $frameworkDbBootstrapStage->commit();
+
+            /** @var Handle $routeModuleHandle */
+            $routeModuleHandle = ObjectManager::getInstance(Handle::class);
+            $eavSchemaStage = ObjectManager::make(EavSchemaStage::class, [
+                'eventsManager' => ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class),
+                'migrationModel' => ObjectManager::getInstance(\Weline\Framework\Setup\Model\Migration::class),
+                'printing' => $this->printing,
+            ]);
+            $eavSchemaStage->prepare([]);
+            $eavSchemaStage->commit();
+
+            $schemaDiffStage = ObjectManager::make(SchemaDiffStage::class, [
+                'moduleHandle' => $routeModuleHandle,
+                'moduleReader' => ObjectManager::getInstance(\Weline\Framework\Module\Config\ModuleFileReader::class),
+                'connectionFactory' => $connectionFactory,
+                'schemaParser' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaParser::class),
+                'dbSchemaReader' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\DbSchemaReader::class),
+                'diffEngine' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaDiffEngine::class),
+                'executor' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaMigrationExecutor::class),
+                'printing' => $this->printing,
+            ]);
+            $schemaDiffStage->prepare([]);
+            $schemaDiffStage->commit();
+
             // 使用独立的路由更新服务
             // 注意：路由更新不依赖 register.php，register.php 只负责模块注册
             $stageNum = 1;
             $this->printing->note($stageNum . '、指定注册路由信息...', '系统');
-            
-            /**@var Handle $module_handle */
-            $module_handle = ObjectManager::getInstance(Handle::class);
-            
+
             /**@var RouteUpdateService $routeUpdateService */
             $routeUpdateService = ObjectManager::make(RouteUpdateService::class, [
                 'printing' => $this->printing,
-                'moduleHandle' => $module_handle
+                'moduleHandle' => $routeModuleHandle
             ]);
-            
+
             // 更新路由（支持指定模块）
             $routeUpdateService->updateRoutes($argsModule ?: []);
         }
@@ -1181,6 +1254,32 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             // 全量更新模式：更新所有注册表
             $registryService->updateAllRegistries(true, false, true);
         }
+        // 🔧 runPendingRegistrations 会触发 Theme Installer 等查询 m_weline_theme 等表，必须先提交 SchemaDiff 确保表结构完整（如 module_name 等缺失列已添加）
+        $connectionFactory = ObjectManager::getInstance(ConnectionFactory::class);
+        $preSchemaFrameworkBootstrap = ObjectManager::make(FrameworkDbBootstrapStage::class, ['connectionFactory' => $connectionFactory]);
+        $preSchemaFrameworkBootstrap->prepare([]);
+        $preSchemaFrameworkBootstrap->commit();
+        /** @var Handle $preSchemaModuleHandle */
+        $preSchemaModuleHandle = ObjectManager::getInstance(Handle::class);
+        $preSchemaEavStage = ObjectManager::make(EavSchemaStage::class, [
+            'eventsManager' => ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class),
+            'migrationModel' => ObjectManager::getInstance(\Weline\Framework\Setup\Model\Migration::class),
+            'printing' => $this->printing,
+        ]);
+        $preSchemaEavStage->prepare([]);
+        $preSchemaEavStage->commit();
+        $preSchemaDiffStage = ObjectManager::make(SchemaDiffStage::class, [
+            'moduleHandle' => $preSchemaModuleHandle,
+            'moduleReader' => ObjectManager::getInstance(\Weline\Framework\Module\Config\ModuleFileReader::class),
+            'connectionFactory' => $connectionFactory,
+            'schemaParser' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaParser::class),
+            'dbSchemaReader' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\DbSchemaReader::class),
+            'diffEngine' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaDiffEngine::class),
+            'executor' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaMigrationExecutor::class),
+            'printing' => $this->printing,
+        ]);
+        $preSchemaDiffStage->prepare([]);
+        $preSchemaDiffStage->commit();
         Register::runPendingRegistrations();
         Register::clearRegisterPhase();
         $modules = Env::getInstance()->getModuleList();
@@ -1284,6 +1383,35 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
         // 仅更新路由模式（可能带 --module）：使用专用 RouteUpdateService，避免与通用阶段管理逻辑冲突
         if ($isRouteOnly) {
+            // 🔧 路由注册会触发 ControllerAttributes 查询 m_acl 等表，必须先提交 SchemaDiff 确保表已存在
+            $connectionFactory = ObjectManager::getInstance(ConnectionFactory::class);
+            $frameworkDbBootstrapStage = ObjectManager::make(FrameworkDbBootstrapStage::class, ['connectionFactory' => $connectionFactory]);
+            $frameworkDbBootstrapStage->prepare([]);
+            $frameworkDbBootstrapStage->commit();
+
+            /** @var Handle $routeModuleHandle */
+            $routeModuleHandle = ObjectManager::getInstance(Handle::class);
+            $eavSchemaStage = ObjectManager::make(EavSchemaStage::class, [
+                'eventsManager' => ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class),
+                'migrationModel' => ObjectManager::getInstance(\Weline\Framework\Setup\Model\Migration::class),
+                'printing' => $this->printing,
+            ]);
+            $eavSchemaStage->prepare([]);
+            $eavSchemaStage->commit();
+
+            $schemaDiffStage = ObjectManager::make(SchemaDiffStage::class, [
+                'moduleHandle' => $routeModuleHandle,
+                'moduleReader' => ObjectManager::getInstance(\Weline\Framework\Module\Config\ModuleFileReader::class),
+                'connectionFactory' => $connectionFactory,
+                'schemaParser' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaParser::class),
+                'dbSchemaReader' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\DbSchemaReader::class),
+                'diffEngine' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaDiffEngine::class),
+                'executor' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaMigrationExecutor::class),
+                'printing' => $this->printing,
+            ]);
+            $schemaDiffStage->prepare([]);
+            $schemaDiffStage->commit();
+
             /** @var \Weline\Framework\Router\Service\RouteUpdateService $routeService */
             $routeService = ObjectManager::getInstance(\Weline\Framework\Router\Service\RouteUpdateService::class);
 
@@ -1310,33 +1438,61 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $this->printing->note($stageNumber . '、初始化阶段更新管理器...', '系统');
         /**@var StageUpdateManager $stageManager */
         $stageManager = ObjectManager::getInstance(StageUpdateManager::class);
-        
+
+        // Order 0: Framework 数据库引导（Migration/MigrationBackup 等 bootstrap 表）
+        if (!$isRouteOnly) {
+            $connectionFactory = ObjectManager::getInstance(ConnectionFactory::class);
+            $frameworkDbBootstrapStage = ObjectManager::make(FrameworkDbBootstrapStage::class, ['connectionFactory' => $connectionFactory]);
+            $stageManager->registerStage($frameworkDbBootstrapStage, 0);
+        }
+
         // 创建各个更新阶段
         $moduleSetupStage = ObjectManager::make(ModuleSetupStage::class, ['moduleHandle' => $module_handle]);
         $stageManager->registerStage($moduleSetupStage, 1);
-        
-        // 仅在非仅更新路由模式下创建数据库更新阶段
+
+        // 仅在非仅更新路由模式下创建数据库更新阶段与声明式 Schema Diff 阶段
         $databaseStage = null;
         if (!$isRouteOnly) {
+            $eavSchemaStage = ObjectManager::make(EavSchemaStage::class, [
+                'eventsManager' => ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class),
+                'migrationModel' => ObjectManager::getInstance(\Weline\Framework\Setup\Model\Migration::class),
+                'printing' => $this->printing,
+            ]);
+            $stageManager->registerStage($eavSchemaStage, 2);
+
             /**@var ModelManager $modelManager */
             $modelManager = ObjectManager::getInstance(ModelManager::class);
             $databaseStage = ObjectManager::make(DatabaseUpdateStage::class, ['modelManager' => $modelManager]);
-            $stageManager->registerStage($databaseStage, 2);
+            $stageManager->registerStage($databaseStage, 3);
+
+            $schemaDiffStage = ObjectManager::make(SchemaDiffStage::class, [
+                'moduleHandle' => $module_handle,
+                'moduleReader' => ObjectManager::getInstance(\Weline\Framework\Module\Config\ModuleFileReader::class),
+                'connectionFactory' => $connectionFactory,
+                'schemaParser' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaParser::class),
+                'dbSchemaReader' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\DbSchemaReader::class),
+                'diffEngine' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaDiffEngine::class),
+                'executor' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaMigrationExecutor::class),
+                'printing' => $this->printing,
+            ]);
+            $stageManager->registerStage($schemaDiffStage, 4);
         }
-        
+
         /**@var \Weline\Framework\Router\Helper\Data $routerHelper */
         $routerHelper = ObjectManager::getInstance(\Weline\Framework\Router\Helper\Data::class);
         $routeStage = ObjectManager::make(RouteUpdateStage::class, ['routerHelper' => $routerHelper]);
-        $stageManager->registerStage($routeStage, 3);
-        
+        $stageManager->registerStage($routeStage, 5);
+
         $fileStage = ObjectManager::make(FileUpdateStage::class);
-        $stageManager->registerStage($fileStage, 4);
+        $stageManager->registerStage($fileStage, 6);
         
         // ========== 批量收集所有更新任务 ==========
         $stageNumber++;
         $this->printing->note($stageNumber . '、批量收集模块更新任务...', '系统');
         
         // 收集模块安装/升级任务
+        /** @var \Weline\Framework\Module\Helper\Data $moduleHelper */
+        $moduleHelper = ObjectManager::getInstance(\Weline\Framework\Module\Helper\Data::class);
         foreach ($modules as $module_name => $module) {
             if ($argsModule and !in_array($module_name, $argsModule)) {
                 continue;
@@ -1352,6 +1508,14 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             if (isset($module['installing']) and $module['installing']) {
                 $moduleSetupStage->addInstallTask($moduleObj);
                 $this->printing->note(__('收集模块安装任务：%{1}', [$module_name]));
+            }
+            
+            // 开发环境：已安装且无升级的模块，强制执行 Install.php 的 setup()，使 Setup 内初始化/种子数据可被更新
+            if (defined('DEV') && DEV && !isset($module['installing']) && !isset($module['upgrading'])
+                && !$moduleHelper->isDisabled($modules, $module_name)) {
+                $moduleObj->setData('dev_force_run_install', true);
+                $moduleSetupStage->addInstallTask($moduleObj);
+                $this->printing->note(__('收集模块开发环境重跑安装脚本：%{1}', [$module_name]));
             }
         }
         
@@ -1404,26 +1568,56 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $this->printing->note(__('   - 仅更新路由模式，跳过数据库更新任务收集'));
         }
         
-        // 准备路由更新阶段
-        $routeStage->prepare([
-            'modules_to_clear' => $argsModule ?: []
-        ]);
+        // 仅在将提交 route_update 时准备并收集路由；单独指定其他阶段（如 schema_diff）时跳过，避免 enableBatchMode 清空缓冲后不 flush 导致路由丢失
+        $willCommitRoute = $shouldCommitStage(self::STAGE_ROUTE_UPDATE);
+        if ($willCommitRoute) {
+            $routeStage->prepare([
+                'modules_to_clear' => $argsModule ?: []
+            ]);
+        }
         
-        // 收集路由注册任务（在内存中收集，不立即写入）
-        $this->printing->note(__('   - 批量收集路由注册任务...'));
-        
-        
-        foreach ($modules as $module_name => $module) {
-            if ($argsModule and !in_array($module_name, $argsModule)) {
-                continue;
+        // 🔧 先提交 SchemaDiff，确保表已创建，再收集路由（registerRoute 会触发 ControllerAttributes 查询 m_acl 等表；--route 模式同样需要表已存在）
+        if ($databaseStage !== null) {
+            $frameworkDbBootstrapStage = $stageManager->getStage('framework_db_bootstrap');
+            $eavSchemaStage = $stageManager->getStage('eav_schema');
+            $schemaDiffStage = $stageManager->getStage('schema_diff');
+            if ($frameworkDbBootstrapStage && !$frameworkDbBootstrapStage->isCommitted()) {
+                $frameworkDbBootstrapStage->prepare([]);
+                if ($frameworkDbBootstrapStage->isPrepared()) {
+                    $this->printing->note(__('   - 提前提交 Framework 数据库引导（供 SchemaDiff 使用）...'));
+                    $frameworkDbBootstrapStage->commit();
+                }
             }
-            try {
-                $module_handle->registerRoute(new Module($module));
-            } catch (Exception $exception) {
-                $this->printing->error(__('模块 %{1} 路由注册失败：%{2}', [$module_name, $exception->getMessage()]));
-                // 回滚已准备的路由阶段
-                $routeStage->rollback();
-                throw new Exception(__('模块 %{1} 路由注册失败：%{2}', [$module_name, $exception->getMessage()]));
+            if ($eavSchemaStage && !$eavSchemaStage->isCommitted()) {
+                $eavSchemaStage->prepare([]);
+                if ($eavSchemaStage->isPrepared()) {
+                    $this->printing->note(__('   - 提前提交 EavSchema...'));
+                    $eavSchemaStage->commit();
+                }
+            }
+            if ($schemaDiffStage && !$schemaDiffStage->isCommitted()) {
+                $schemaDiffStage->prepare([]);
+                if ($schemaDiffStage->isPrepared()) {
+                    $this->printing->note(__('   - 提前提交 SchemaDiff（确保表在路由收集前已创建）...'));
+                    $schemaDiffStage->commit();
+                }
+            }
+        }
+        
+        // 收集路由注册任务（仅在将提交 route_update 时执行，避免污染路由缓冲）
+        if ($willCommitRoute) {
+            $this->printing->note(__('   - 批量收集路由注册任务...'));
+            foreach ($modules as $module_name => $module) {
+                if ($argsModule and !in_array($module_name, $argsModule)) {
+                    continue;
+                }
+                try {
+                    $module_handle->registerRoute(new Module($module));
+                } catch (Exception $exception) {
+                    $this->printing->error(__('模块 %{1} 路由注册失败：%{2}', [$module_name, $exception->getMessage()]));
+                    $routeStage->rollback();
+                    throw new Exception(__('模块 %{1} 路由注册失败：%{2}', [$module_name, $exception->getMessage()]));
+                }
             }
         }
         
@@ -1431,7 +1625,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $stageNumber++;
         $this->printing->note($stageNumber . '、准备所有更新阶段...', '系统');
         try {
-            $stageManager->prepareAll();
+            $stageManager->prepareAll(['skip_route_stage' => !$willCommitRoute]);
             $this->printing->success(__('✓ 所有阶段准备完成'));
         } catch (Exception $e) {
             $this->printing->error(__('阶段准备失败：%{1}', [$e->getMessage()]));
@@ -1461,11 +1655,15 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $this->printing->note($stageNumber . '、提交所有更新阶段（批量执行）...', '系统');
         try {
             // 第一步：先提交模块安装/升级阶段（可能产生新的模块，需要重新收集任务）
-            $this->printing->note(__('   - 提交模块安装/升级阶段...'));
-            $moduleSetupStage->commit();
-            
-            // 检查是否有模块被安装或升级
-            if ($moduleSetupStage->hasModuleInstalledOrUpgraded()) {
+            if ($shouldCommitStage(self::STAGE_MODULE_SETUP)) {
+                $this->printing->note(__('   - 提交模块安装/升级阶段（%{1}）...', [self::STAGE_MODULE_SETUP]));
+                $moduleSetupStage->commit();
+            } else {
+                $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_MODULE_SETUP]));
+            }
+
+            // 检查是否有模块被安装或升级（仅当执行了 module_setup 时）
+            if ($shouldCommitStage(self::STAGE_MODULE_SETUP) && $moduleSetupStage->hasModuleInstalledOrUpgraded()) {
                 $this->hasModuleInstalledOrUpgraded = true;
                 
                 // 模块安装/升级后，需要重新收集可能产生的新任务
@@ -1514,42 +1712,43 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     // 所以这里我们主要检查是否有遗漏的模块
                 }
                 
-                // 重新收集路由注册任务（新安装的模块或新注册的依赖模块可能需要路由注册）
-                $this->printing->note(__('   - 重新收集路由注册任务...'));
-                foreach ($updatedModules as $module_name => $module) {
-                    if ($argsModule and !in_array($module_name, $argsModule)) {
-                        continue;
-                    }
-                    try {
-                        // 检查路由是否已经注册（通过检查批量缓存）
-                        $needsRoute = true;
-                        foreach (Env::router_files_PATH as $path) {
-                            $routers = $routerHelper->getBatchRouters($path);
-                            foreach ($routers as $router) {
-                                $routerModule = '';
-                                if (is_array($router)) {
-                                    if (isset($router['module'])) {
-                                        $routerModule = $router['module'];
-                                    } elseif (isset($router['rule']) && is_array($router['rule']) && isset($router['rule']['module'])) {
-                                        $routerModule = $router['rule']['module'];
+                // 重新收集路由注册任务（仅当将提交 route_update 时执行）
+                if ($willCommitRoute) {
+                    $this->printing->note(__('   - 重新收集路由注册任务...'));
+                    foreach ($updatedModules as $module_name => $module) {
+                        if ($argsModule and !in_array($module_name, $argsModule)) {
+                            continue;
+                        }
+                        try {
+                            // 检查路由是否已经注册（通过检查批量缓存）
+                            $needsRoute = true;
+                            foreach (Env::router_files_PATH as $path) {
+                                $routers = $routerHelper->getBatchRouters($path);
+                                foreach ($routers as $router) {
+                                    $routerModule = '';
+                                    if (is_array($router)) {
+                                        if (isset($router['module'])) {
+                                            $routerModule = $router['module'];
+                                        } elseif (isset($router['rule']) && is_array($router['rule']) && isset($router['rule']['module'])) {
+                                            $routerModule = $router['rule']['module'];
+                                        }
+                                    }
+                                    if ($routerModule === $module_name) {
+                                        $needsRoute = false;
+                                        break 2;
                                     }
                                 }
-                                if ($routerModule === $module_name) {
-                                    $needsRoute = false;
-                                    break 2;
-                                }
                             }
+                            if ($needsRoute) {
+                                $this->printing->note(__('   - 为模块 %{1} 注册路由...', [$module_name]));
+                                $module_handle->registerRoute(new Module($module));
+                            }
+                        } catch (Exception $exception) {
+                            $this->printing->warning(__('模块 %{1} 路由重新注册失败：%{2}，继续执行...', [
+                                $module_name,
+                                $exception->getMessage()
+                            ]));
                         }
-                        
-                        if ($needsRoute) {
-                            $this->printing->note(__('   - 为模块 %{1} 注册路由...', [$module_name]));
-                            $module_handle->registerRoute(new Module($module));
-                        }
-                    } catch (Exception $exception) {
-                        $this->printing->warning(__('模块 %{1} 路由重新注册失败：%{2}，继续执行...', [
-                            $module_name, 
-                            $exception->getMessage()
-                        ]));
                     }
                 }
                 
@@ -1563,7 +1762,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                         throw new Exception(__('数据库更新阶段验证失败：%{1}', [$errorMsg]));
                     }
                 }
-                if (!$routeStage->validate()) {
+                if ($willCommitRoute && !$routeStage->validate()) {
                     $status = $routeStage->getStatus();
                     $errors = $status['errors'] ?? [];
                     $errorMsg = !empty($errors) ? implode('; ', $errors) : __('验证失败');
@@ -1571,21 +1770,71 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 }
             }
             
-            // 第二步：提交数据库更新阶段（仅在非仅更新路由模式下执行）
+            // 第二步：先提交 Framework 数据库引导阶段（创建 m_weline_database_migrations 等），再 EavSchema / SchemaDiff / 数据库更新（仅在非仅更新路由模式下执行）
             if (!$isRouteOnly && $databaseStage !== null) {
-                $this->printing->note(__('   - 提交数据库更新阶段...'));
-                $databaseStage->commit();
+                $frameworkDbBootstrapStage = $stageManager->getStage('framework_db_bootstrap');
+                $moduleManagerBootstrapStage = $stageManager->getStage('module_manager_bootstrap');
+                $needBootstrapTables = $shouldCommitStage(self::STAGE_EAV_SCHEMA) || $shouldCommitStage(self::STAGE_SCHEMA_DIFF) || $shouldCommitStage(self::STAGE_DATABASE_UPDATE);
+                // 若将执行 eav_schema / schema_diff / database_update 任一阶段，必须先提交 framework_db_bootstrap，确保 migrations 等表存在（即使用户仅指定 --stage=schema_diff）
+                if ($needBootstrapTables && $frameworkDbBootstrapStage && $frameworkDbBootstrapStage->isPrepared() && !$frameworkDbBootstrapStage->isCommitted()) {
+                    $this->printing->note(__('   - 提交 Framework 数据库引导阶段（%{1}）（依赖阶段，先执行）...', [self::STAGE_FRAMEWORK_DB_BOOTSTRAP]));
+                    $frameworkDbBootstrapStage->commit();
+                } elseif ($shouldCommitStage(self::STAGE_FRAMEWORK_DB_BOOTSTRAP) && $frameworkDbBootstrapStage && $frameworkDbBootstrapStage->isPrepared()) {
+                    $this->printing->note(__('   - 提交 Framework 数据库引导阶段（%{1}）...', [self::STAGE_FRAMEWORK_DB_BOOTSTRAP]));
+                    $frameworkDbBootstrapStage->commit();
+                } elseif ($stageFilter !== null && !$shouldCommitStage(self::STAGE_FRAMEWORK_DB_BOOTSTRAP) && !$needBootstrapTables) {
+                    $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_FRAMEWORK_DB_BOOTSTRAP]));
+                }
+                if ($needBootstrapTables && $moduleManagerBootstrapStage && $moduleManagerBootstrapStage->isPrepared() && !$moduleManagerBootstrapStage->isCommitted()) {
+                    $this->printing->note(__('   - 提交 ModuleManager 引导阶段（%{1}）（依赖阶段，先执行）...', [self::STAGE_MODULE_MANAGER_BOOTSTRAP]));
+                    $moduleManagerBootstrapStage->commit();
+                } elseif ($shouldCommitStage(self::STAGE_MODULE_MANAGER_BOOTSTRAP) && $moduleManagerBootstrapStage && $moduleManagerBootstrapStage->isPrepared()) {
+                    $this->printing->note(__('   - 提交 ModuleManager 引导阶段（%{1}）...', [self::STAGE_MODULE_MANAGER_BOOTSTRAP]));
+                    $moduleManagerBootstrapStage->commit();
+                } elseif ($stageFilter !== null && !$shouldCommitStage(self::STAGE_MODULE_MANAGER_BOOTSTRAP)) {
+                    $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_MODULE_MANAGER_BOOTSTRAP]));
+                }
+                $eavSchemaStage = $stageManager->getStage('eav_schema');
+                if ($shouldCommitStage(self::STAGE_EAV_SCHEMA) && $eavSchemaStage && $eavSchemaStage->isPrepared()) {
+                    $this->printing->note(__('   - 提交 EavSchema 阶段（%{1}）...', [self::STAGE_EAV_SCHEMA]));
+                    $eavSchemaStage->commit();
+                } elseif ($stageFilter !== null && !$shouldCommitStage(self::STAGE_EAV_SCHEMA)) {
+                    $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_EAV_SCHEMA]));
+                }
+                $schemaDiffStage = $stageManager->getStage('schema_diff');
+                if ($shouldCommitStage(self::STAGE_SCHEMA_DIFF) && $schemaDiffStage && $schemaDiffStage->isPrepared()) {
+                    $this->printing->note(__('   - 提交 SchemaDiff 阶段（%{1}）...', [self::STAGE_SCHEMA_DIFF]));
+                    $schemaDiffStage->commit();
+                } elseif ($stageFilter !== null && !$shouldCommitStage(self::STAGE_SCHEMA_DIFF)) {
+                    $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_SCHEMA_DIFF]));
+                }
+                if ($shouldCommitStage(self::STAGE_DATABASE_UPDATE)) {
+                    $this->printing->note(__('   - 提交数据库更新阶段（%{1}）...', [self::STAGE_DATABASE_UPDATE]));
+                    $databaseStage->commit();
+                } else {
+                    $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_DATABASE_UPDATE]));
+                }
             } else {
-                $this->printing->note(__('   - 仅更新路由模式，跳过数据库更新阶段提交'));
+                if (!$isRouteOnly) {
+                    $this->printing->note(__('   - 仅更新路由模式，跳过数据库更新阶段提交'));
+                }
             }
             
             // 第三步：提交路由更新阶段
-            $this->printing->note(__('   - 提交路由更新阶段...'));
-            $routeStage->commit();
+            if ($shouldCommitStage(self::STAGE_ROUTE_UPDATE)) {
+                $this->printing->note(__('   - 提交路由更新阶段（%{1}）...', [self::STAGE_ROUTE_UPDATE]));
+                $routeStage->commit();
+            } else {
+                $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_ROUTE_UPDATE]));
+            }
             
             // 第四步：提交文件更新阶段
-            $this->printing->note(__('   - 提交文件更新阶段...'));
-            $fileStage->commit();
+            if ($shouldCommitStage(self::STAGE_FILE_UPDATE)) {
+                $this->printing->note(__('   - 提交文件更新阶段（%{1}）...', [self::STAGE_FILE_UPDATE]));
+                $fileStage->commit();
+            } else {
+                $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_FILE_UPDATE]));
+            }
             // 一次性重载 Env（含 modules.php），避免本进程后续 getModuleList 仍用旧缓存导致 base_path 等错误
             Env::getInstance()->reload();
 
@@ -2047,40 +2296,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     }
     
     /**
-     * 解析模块参数
-     * 
-     * 支持 --module、-m 选项及位置参数
-     * 
-     * @param array $args 命令参数
-     * @return array 模块名数组
-     */
-    private function parseModuleArgs(array $args): array
-    {
-        // 支持 --module 和 -m 两种写法
-        $argsModule = $args['module'] ?? $args['m'] ?? [];
-        if (is_string($argsModule)) {
-            $argsModule = array_filter(array_map('trim', explode(' ', $argsModule)));
-        }
-        
-        // 如果没有通过 --module 或 -m 指定模块，检查位置参数
-        if (empty($argsModule)) {
-            $positionalArgs = [];
-            foreach ($args as $key => $value) {
-                // 如果是数字键且不是选项参数，则认为是位置参数
-                // 排除命令本身（通常是第一个位置参数）
-                if (is_numeric($key) && is_string($value) && !str_starts_with($value, '-') && $key > 0) {
-                    $positionalArgs[] = $value;
-                }
-            }
-            if (!empty($positionalArgs)) {
-                $argsModule = $positionalArgs;
-            }
-        }
-        
-        return array_values(array_filter($argsModule));
-    }
-    
-    /**
      * @inheritDoc
      */
     public function tip(): string
@@ -2169,6 +2384,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     public function help(): array|string
     {
         // 基于tip的默认help实现
+        $stageCodes = implode(', ', self::STAGE_CODES_ORDERED);
         return \Weline\Framework\Console\CommandHelper::formatHelp(
             'setup:upgrade',
             '升级模块系统，包括数据库模型、路由等',
@@ -2176,6 +2392,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '--model' => '仅升级数据库模型',
                 '--route' => '仅升级路由',
                 '-m, --module=<模块名>' => '升级指定模块（例如：Weline_Demo）',
+                '--stage=<code>[,code...]' => __('只运行指定阶段（跳过其他阶段，便于单阶段测试）。阶段 code：%{1}', [$stageCodes]),
                 '--hot' => '热更新模式，通知运行中的 WLS 服务器重载',
                 '-s, --skip-env-check' => '跳过环境依赖检测',
                 '-f, --force' => '强制升级（跳过环境依赖检测）',
@@ -2189,6 +2406,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '升级所有模块' => 'php bin/w setup:upgrade',
                 '仅升级数据库模型' => 'php bin/w setup:upgrade --model',
                 '仅升级路由' => 'php bin/w setup:upgrade --route',
+                __('仅运行 schema_diff 阶段（测试声明式表）') => 'php bin/w setup:upgrade --stage=schema_diff',
+                __('仅运行 framework_db_bootstrap 阶段') => 'php bin/w setup:upgrade --stage=framework_db_bootstrap',
                 '升级指定模块（位置参数）' => 'php bin/w setup:upgrade Weline_Demo',
                 '升级指定模块（长选项）' => 'php bin/w setup:upgrade --module Weline_Demo',
                 '升级指定模块（短选项）' => 'php bin/w setup:upgrade -m Weline_Demo',
@@ -2197,7 +2416,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 __('跳过反射编译（加快 s:up）') => 'php bin/w setup:upgrade --skip-reflection-compile',
                 __('同步执行优化（等待完成）') => 'php bin/w setup:upgrade --sync',
             ],
-            'php bin/w setup:upgrade [--model|--route|--hot|--sync] [-m|--module=<模块名>]'
+            'php bin/w setup:upgrade [--model|--route|--stage=<code>|--hot|--sync] [-m|--module=<模块名>]'
         );
     }
 

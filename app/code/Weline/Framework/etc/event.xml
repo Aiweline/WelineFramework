@@ -47,4 +47,9 @@
         <observer name="Weline_Framework_Query::module_query_dispatcher" instance="Weline\Framework\Service\Query\Observer\ModuleQueryDispatcher" disabled="false" shared="true" sort="0"/>
     </event>
 
+    <!-- Schema DDL 成功后清理数据库相关缓存 -->
+    <event name="Weline_Framework_Schema::table_ddl_after">
+        <observer name="Weline_Framework_Database::schema_change_clear_cache" instance="Weline\Framework\Database\Observer\SchemaChangeClearCacheObserver" disabled="false" shared="true" sort="100"/>
+    </event>
+
 </config>

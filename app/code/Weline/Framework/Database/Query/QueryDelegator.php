@@ -31,11 +31,11 @@ final class QueryDelegator
         if ($method === 'delete') {
             $model->setDeleteFlag(true);
             if ($model->getId()) {
-                $model->getQuery()->where($model->_primary_key, $model->getId())->delete();
+                $model->getQuery()->where($model->getPrimaryKey(), $model->getId())->delete();
             } elseif ($model->getQuery()->wheres) {
                 $model->getQuery()->delete();
-            } elseif ($model->_unit_primary_keys) {
-                foreach ($model->_unit_primary_keys as $unit_primary_key) {
+            } elseif ($model->getUnitPrimaryKeys() !== []) {
+                foreach ($model->getUnitPrimaryKeys() as $unit_primary_key) {
                     if (empty($model->getData($unit_primary_key))) {
                         throw new Core(__('删除条件不能为空：确保模型存在要删除的指定主键值，或者存在查询条件!'));
                     }

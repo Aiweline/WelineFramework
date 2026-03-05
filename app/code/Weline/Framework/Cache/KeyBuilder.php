@@ -186,7 +186,27 @@ class KeyBuilder
     }
 
     /**
+     * 校验 fullUri 是否可用于全页缓存键
+     * 避免空或无效 URI 导致缓存键碰撞（如 unified::GET）
+     *
+     * @param string $fullUri 完整请求 URI
+     * @return bool
+     */
+    public static function isValidFullPageCacheKey(string $fullUri): bool
+    {
+        if ($fullUri === '' || \strlen($fullUri) < 2) {
+            return false;
+        }
+        if (!\str_contains($fullUri, '://')) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
      * 构建统一请求缓存键
+     *
+     * 当 WELINE_FULL_REQUEST_URI 为空时使用 fallback，避免所有 GET 共享同一 key 导致串台。
      *
      * @param string $uri URI（可留空，将使用 WELINE_FULL_REQUEST_URI）
      * @param string $method HTTP 方法
@@ -195,6 +215,28 @@ class KeyBuilder
     public static function buildUnifiedRequestCacheKey(string $uri = '', string $method = 'GET'): string
     {
         $fullUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? $uri;
+        $usedFallback = false;
+
+        if ($fullUri === '' || !\str_contains($fullUri, '://')) {
+            $scheme = $_SERVER['REQUEST_SCHEME'] ?? 'http';
+            $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+            $path = $_SERVER['REQUEST_URI'] ?? '/';
+            $fullUri = $scheme . '://' . $host . (\str_starts_with($path, '/') ? '' : '/') . $path;
+            $usedFallback = true;
+        }
+        if ($fullUri === '' || !\str_contains($fullUri, '://')) {
+            $fullUri = 'unknown-' . ($_SERVER['REQUEST_URI'] ?? '/');
+            $usedFallback = true;
+        }
+
+        if ($usedFallback && \function_exists('w_log_warning')) {
+            w_log_warning(
+                '[KeyBuilder] WELINE_FULL_REQUEST_URI missing, used fallback for FPC key',
+                ['fullUri' => $fullUri, 'REQUEST_URI' => $_SERVER['REQUEST_URI'] ?? ''],
+                'fpc_consistency.log'
+            );
+        }
+
         return self::build('router', 'unified:' . $fullUri . ':' . $method);
     }
 }

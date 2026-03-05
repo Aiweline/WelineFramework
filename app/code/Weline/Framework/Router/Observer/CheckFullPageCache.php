@@ -89,6 +89,12 @@ class CheckFullPageCache implements ObserverInterface
             return;
         }
 
+        // 读前校验：fullUri 无效时跳过 FPC，避免命中错误缓存导致串台
+        $fullUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? '';
+        if (!KeyBuilder::isValidFullPageCacheKey($fullUri)) {
+            return;
+        }
+
         // 直接使用 WELINE_FULL_REQUEST_URI 构建全页缓存键（包含协议、域名、端口、路径、查询参数等完整信息）
         // 不需要规范化，不需要对比域名，WELINE_FULL_REQUEST_URI 已经包含了所有必要信息
         $unifiedCacheKey = KeyBuilder::buildUnifiedRequestCacheKey('', $method);

@@ -83,7 +83,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         return $this;
     }
 
-
     public function insertOld(array $data, array|string $update_fields = [], string $update_where_fields = '', bool $ignore_primary_key = false): QueryInterface
     {
         if (empty($data)) {
@@ -847,7 +846,21 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 
                 // 如果有 ON DUPLICATE KEY UPDATE 需求，添加 ON DUPLICATE KEY UPDATE 子句
                 if (!empty($this->exist_update_sql)) {
-                    $sql .= ' ' . $this->exist_update_sql;
+                    if ($this->exist_update_sql === QueryInterface::EXIST_UPDATE_ALL_FIELDS) {
+                        $updateParts = [];
+                        foreach ($insert_fields as $field) {
+                            if (!empty($this->insert_update_where_fields) && in_array($field, $this->insert_update_where_fields, true)) {
+                                continue;
+                            }
+                            if ($this->identity_field && $field === $this->identity_field) {
+                                continue;
+                            }
+                            $updateParts[] = "`{$field}`=VALUES(`{$field}`)";
+                        }
+                        $sql .= empty($updateParts) ? '' : ' ON DUPLICATE KEY UPDATE ' . implode(', ', $updateParts);
+                    } else {
+                        $sql .= ' ' . $this->exist_update_sql;
+                    }
                 } elseif (!empty($this->insert_update_fields) || !empty($this->insert_update_where_fields)) {
                     // 如果没有设置 exist_update_sql，但设置了更新字段，自动生成 ON DUPLICATE KEY UPDATE
                     if (!empty($this->insert_update_fields)) {
