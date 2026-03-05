@@ -194,7 +194,7 @@ class DomainSyncService
         $accountModelInstance = ObjectManager::getInstance(DomainRegistrarAccount::class);
         $accountModelInstance->clearData(true);
         $accounts = $accountModelInstance
-            ->where(DomainRegistrarAccount::fields_STATUS, DomainRegistrarAccount::STATUS_ACTIVE)
+            ->where(DomainRegistrarAccount::schema_fields_STATUS, DomainRegistrarAccount::STATUS_ACTIVE)
             ->select()
             ->fetchArray();
 
@@ -215,8 +215,8 @@ class DomainSyncService
         $successDetails = [];
 
         foreach ($accounts as $accountData) {
-            $accountId = (int) ($accountData[DomainRegistrarAccount::fields_ID] ?? 0);
-            $accountName = (string) ($accountData[DomainRegistrarAccount::fields_ACCOUNT_NAME] ?? "ID:{$accountId}");
+            $accountId = (int) ($accountData[DomainRegistrarAccount::schema_fields_ID] ?? 0);
+            $accountName = (string) ($accountData[DomainRegistrarAccount::schema_fields_ACCOUNT_NAME] ?? "ID:{$accountId}");
             if ($accountId <= 0) {
                 continue;
             }
@@ -274,24 +274,24 @@ class DomainSyncService
         $domainModelInstance = ObjectManager::getInstance(Domain::class);
         $result = $domainModelInstance->getPagedList($filters, $page, $limit);
 
-        $accountIds = \array_unique(\array_column($result['items'], Domain::fields_ACCOUNT_ID));
+        $accountIds = \array_unique(\array_column($result['items'], Domain::schema_fields_ACCOUNT_ID));
         $accounts = [];
 
         if ($accountIds !== []) {
             $accountModelInstance = ObjectManager::getInstance(DomainRegistrarAccount::class);
             $accountModelInstance->clearData(true);
             $accountRows = $accountModelInstance
-                ->where(DomainRegistrarAccount::fields_ID, $accountIds, 'IN')
+                ->where(DomainRegistrarAccount::schema_fields_ID, $accountIds, 'IN')
                 ->fields(
-                    DomainRegistrarAccount::fields_ID . ',' .
-                    DomainRegistrarAccount::fields_ACCOUNT_NAME . ',' .
-                    DomainRegistrarAccount::fields_REGISTRAR_ID
+                    DomainRegistrarAccount::schema_fields_ID . ',' .
+                    DomainRegistrarAccount::schema_fields_ACCOUNT_NAME . ',' .
+                    DomainRegistrarAccount::schema_fields_REGISTRAR_ID
                 )
                 ->select()
                 ->fetchArray();
 
             foreach ($accountRows as $row) {
-                $accounts[(int) $row[DomainRegistrarAccount::fields_ID]] = $row[DomainRegistrarAccount::fields_ACCOUNT_NAME] ?? '';
+                $accounts[(int) $row[DomainRegistrarAccount::schema_fields_ID]] = $row[DomainRegistrarAccount::schema_fields_ACCOUNT_NAME] ?? '';
             }
         }
 
@@ -310,12 +310,12 @@ class DomainSyncService
         $accountModelInstance = ObjectManager::getInstance(DomainRegistrarAccount::class);
         $accountModelInstance->clearData(true);
         return $accountModelInstance
-            ->where(DomainRegistrarAccount::fields_STATUS, DomainRegistrarAccount::STATUS_ACTIVE)
-            ->order(DomainRegistrarAccount::fields_ACCOUNT_NAME, 'ASC')
+            ->where(DomainRegistrarAccount::schema_fields_STATUS, DomainRegistrarAccount::STATUS_ACTIVE)
+            ->order(DomainRegistrarAccount::schema_fields_ACCOUNT_NAME, 'ASC')
             ->fields(
-                DomainRegistrarAccount::fields_ID . ',' .
-                DomainRegistrarAccount::fields_ACCOUNT_NAME . ',' .
-                DomainRegistrarAccount::fields_REGISTRAR_ID
+                DomainRegistrarAccount::schema_fields_ID . ',' .
+                DomainRegistrarAccount::schema_fields_ACCOUNT_NAME . ',' .
+                DomainRegistrarAccount::schema_fields_REGISTRAR_ID
             )
             ->select()
             ->fetchArray();
@@ -358,7 +358,7 @@ class DomainSyncService
                 break;
 
             case 'sync':
-                $accountIds = \array_unique(\array_column($domains, Domain::fields_ACCOUNT_ID));
+                $accountIds = \array_unique(\array_column($domains, Domain::schema_fields_ACCOUNT_ID));
                 foreach ($accountIds as $accountId) {
                     $results[(int) $accountId] = $this->syncAccount((int) $accountId);
                 }
@@ -407,8 +407,8 @@ class DomainSyncService
         $accountCache = [];
 
         foreach ($domains as $domainData) {
-            $domainName = (string) ($domainData[Domain::fields_DOMAIN] ?? '');
-            $accountId = (int) ($domainData[Domain::fields_ACCOUNT_ID] ?? 0);
+            $domainName = (string) ($domainData[Domain::schema_fields_DOMAIN] ?? '');
+            $accountId = (int) ($domainData[Domain::schema_fields_ACCOUNT_ID] ?? 0);
 
             if ($domainName === '' || $accountId <= 0) {
                 $results[$domainName] = ['success' => false, 'message' => __('数据无效')];
@@ -470,17 +470,17 @@ class DomainSyncService
         $domainModelInstance->clearData(true);
 
         if ($accountId > 0) {
-            $domainModelInstance->where(Domain::fields_ACCOUNT_ID, $accountId);
+            $domainModelInstance->where(Domain::schema_fields_ACCOUNT_ID, $accountId);
         }
 
-        $result = $domainModelInstance->order(Domain::fields_SYNCED_AT, 'DESC')
+        $result = $domainModelInstance->order(Domain::schema_fields_SYNCED_AT, 'DESC')
             ->limit(1)
-            ->fields(Domain::fields_SYNCED_AT)
+            ->fields(Domain::schema_fields_SYNCED_AT)
             ->select()
             ->fetchArray();
 
-        if ($result !== [] && !empty($result[0][Domain::fields_SYNCED_AT])) {
-            return $result[0][Domain::fields_SYNCED_AT];
+        if ($result !== [] && !empty($result[0][Domain::schema_fields_SYNCED_AT])) {
+            return $result[0][Domain::schema_fields_SYNCED_AT];
         }
 
         return null;
@@ -537,11 +537,11 @@ class DomainSyncService
             // 获取本地已存在的域名
             $domainModelInstance = ObjectManager::getInstance(Domain::class);
             $localDomains = $domainModelInstance->clearQuery()
-                ->where(Domain::fields_ACCOUNT_ID, $accountId)
-                ->fields(Domain::fields_DOMAIN)
+                ->where(Domain::schema_fields_ACCOUNT_ID, $accountId)
+                ->fields(Domain::schema_fields_DOMAIN)
                 ->select()
                 ->fetchArray();
-            $localDomainNames = \array_column($localDomains, Domain::fields_DOMAIN);
+            $localDomainNames = \array_column($localDomains, Domain::schema_fields_DOMAIN);
 
             // 标记是否已导入本地
             $domains = [];
@@ -584,14 +584,22 @@ class DomainSyncService
     }
 
     /**
+     * 解析模式：批量解析到本站（默认）| 保持各自 DNS
+     */
+    public const RESOLVE_MODE_BATCH_TO_LOCAL = 'batch_to_local';
+    public const RESOLVE_MODE_KEEP_EACH_DNS = 'keep_each_dns';
+
+    /**
      * 手动导入指定域名到本地
      *
      * @param int $accountId 账户ID
      * @param array $domainNames 要导入的域名列表
-     * @param bool $autoResolve 是否自动解析到本地服务器
-     * @return array{success: bool, message: string, added: int, skipped: int, auto_resolve_queued?: bool}
+     * @param bool|string $autoResolveOrMode 是否自动解析到本地（兼容）或 resolve_mode: batch_to_local|keep_each_dns
+     *   默认 batch_to_local：批量解析到本服务器公网 IP，否则不导入
+     *   keep_each_dns：保持各域名当前 DNS，不入池自动解析任务
+     * @return array{success: bool, message: string, added: int, skipped: int, pool_added?: int, auto_resolve_queued?: bool}
      */
-    public function importDomains(int $accountId, array $domainNames, bool $autoResolve = false): array
+    public function importDomains(int $accountId, array $domainNames, bool|string $autoResolveOrMode = self::RESOLVE_MODE_BATCH_TO_LOCAL): array
     {
         if ($domainNames === []) {
             return [
@@ -672,6 +680,11 @@ class DomainSyncService
             $domainModelInstance = ObjectManager::getInstance(Domain::class);
             $result = $domainModelInstance->syncDomains($accountId, $domainsToImport);
 
+            $resolveMode = \is_bool($autoResolveOrMode)
+                ? ($autoResolveOrMode ? self::RESOLVE_MODE_BATCH_TO_LOCAL : self::RESOLVE_MODE_KEEP_EACH_DNS)
+                : (string) $autoResolveOrMode;
+            $doAutoResolve = $resolveMode === self::RESOLVE_MODE_BATCH_TO_LOCAL;
+
             $importedDomains = [];
             $poolAdded = 0;
             $autoResolveQueued = 0;
@@ -680,12 +693,12 @@ class DomainSyncService
                 $dm->loadByDomainAndAccount($domainName, $accountId);
                 if ($dm->getDomainId()) {
                     $importedDomains[$domainName] = (int) $dm->getDomainId();
-                    
+
                     $subdomainGenerator = ObjectManager::getInstance(SubdomainGeneratorService::class);
                     $poolResult = $subdomainGenerator->generateDefaultSubdomains($dm);
                     $poolAdded += $poolResult['added'] ?? 0;
-                    
-                    if ($autoResolve) {
+
+                    if ($doAutoResolve) {
                         try {
                             DomainAutoResolveTask::createTask($domainName, $accountId);
                             $autoResolveQueued++;
@@ -707,7 +720,8 @@ class DomainSyncService
                 'skipped' => $result['updated'],
                 'pool_added' => $poolAdded,
                 'domains' => $importedDomains,
-                'auto_resolve_queued' => $autoResolve && $autoResolveQueued > 0,
+                'resolve_mode' => $resolveMode,
+                'auto_resolve_queued' => $doAutoResolve && $autoResolveQueued > 0,
             ];
         } catch (\Throwable $e) {
             w_log_error("导入域名失败: " . $e->getMessage(), [], 'domain_sync');

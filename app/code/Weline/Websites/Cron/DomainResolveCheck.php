@@ -43,7 +43,7 @@ class DomainResolveCheck implements CronTaskInterface
             $resolveService = ObjectManager::getInstance(DomainResolveService::class);
 
             $domains = $domainModel->clearQuery()
-                ->where(Domain::fields_STATUS, Domain::STATUS_ACTIVE)
+                ->where(Domain::schema_fields_STATUS, Domain::STATUS_ACTIVE)
                 ->select()
                 ->fetchArray();
 
@@ -70,7 +70,7 @@ class DomainResolveCheck implements CronTaskInterface
                     }
                 } catch (\Throwable $e) {
                     $errors++;
-                    w_log_warning("域名 {$row[Domain::fields_DOMAIN]} 检测失败: {$e->getMessage()}", [], 'domain_resolve_check');
+                    w_log_warning("域名 {$row[Domain::schema_fields_DOMAIN]} 检测失败: {$e->getMessage()}", [], 'domain_resolve_check');
                 }
             }
 

@@ -44,7 +44,7 @@ class DomainNsCheck implements CronTaskInterface
             $dnsDetector = ObjectManager::getInstance(DnsProviderDetector::class);
 
             $domains = $domainModel->clearQuery()
-                ->where(Domain::fields_STATUS, Domain::STATUS_ACTIVE)
+                ->where(Domain::schema_fields_STATUS, Domain::STATUS_ACTIVE)
                 ->select()
                 ->fetchArray();
 
@@ -106,7 +106,7 @@ class DomainNsCheck implements CronTaskInterface
                     }
                 } catch (\Throwable $e) {
                     $errors++;
-                    w_log_warning("域名 {$row[Domain::fields_DOMAIN]} NS 检测失败: {$e->getMessage()}", [], 'domain_ns_check');
+                    w_log_warning("域名 {$row[Domain::schema_fields_DOMAIN]} NS 检测失败: {$e->getMessage()}", [], 'domain_ns_check');
                 }
             }
 

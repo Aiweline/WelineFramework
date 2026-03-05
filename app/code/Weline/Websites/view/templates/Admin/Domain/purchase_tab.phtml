@@ -53,6 +53,12 @@ $websites = $websites ?? [];
                 <i class="mdi mdi-information-outline"></i>
                 <?= __('购买后自动将域名的 @ 和 www 记录解析到本服务器公网IP，通过Cron任务在域名可用后自动执行') ?>
             </div>
+            <div class="mt-3">
+                <label class="form-label small fw-bold"><?= __('子域名（逗号分隔，默认 @,www）') ?></label>
+                <input type="text" class="form-control form-control-sm" id="purchase-subdomains"
+                       placeholder="@, www" value="@, www">
+                <div class="form-text small"><?= __('购买后入池并自动解析的子域名列表') ?></div>
+            </div>
         </div>
     </div>
 
@@ -239,12 +245,19 @@ function submitPurchase() {
 function executePurchase(accountId, items) {
     showToast('<?= __('正在提交购买请求...') ?>', 'info');
 
-    var autoResolve = document.getElementById('purchase-auto-resolve').checked ? '1' : '0';
+    var autoResolveEl = document.getElementById('purchase-auto-resolve');
+    var autoResolve = (autoResolveEl && autoResolveEl.checked) ? '1' : '0';
+    var resolveToLocal = autoResolve === '1' ? 'yes' : 'no';
+    var subdomainsRaw = (document.getElementById('purchase-subdomains') || {}).value || '@, www';
+    var subdomains = subdomainsRaw.split(',').map(function(s) { return (s || '').trim(); }).filter(Boolean);
+    if (subdomains.length === 0) subdomains = ['@', 'www'];
 
     var formData = new FormData();
     formData.append('account_id', accountId);
     formData.append('items', JSON.stringify(items));
     formData.append('auto_resolve', autoResolve);
+    formData.append('resolve_to_local', resolveToLocal);
+    formData.append('subdomains', JSON.stringify(subdomains));
 
     fetch(purchaseUrl, {
         method: 'POST',

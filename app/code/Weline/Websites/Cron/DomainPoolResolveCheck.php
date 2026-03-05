@@ -11,9 +11,11 @@ declare(strict_types=1);
 namespace Weline\Websites\Cron;
 
 use Weline\Cron\CronTaskInterface;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Service\DomainPoolResolveService;
+use Weline\Websites\Service\ServerIpService;
 
 class DomainPoolResolveCheck implements CronTaskInterface
 {
@@ -42,6 +44,8 @@ class DomainPoolResolveCheck implements CronTaskInterface
         try {
             $domainPoolModel = ObjectManager::getInstance(DomainPool::class);
             $resolveService = ObjectManager::getInstance(DomainPoolResolveService::class);
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+            $serverIpService = ObjectManager::getInstance(ServerIpService::class);
 
             $domains = $domainPoolModel->getDomainsNeedResolveCheck(100);
 
@@ -71,9 +75,21 @@ class DomainPoolResolveCheck implements CronTaskInterface
                     if ($result['site_ready']) {
                         $ready++;
                     }
+
+                    if (!empty($result['resolve_off_local'])) {
+                        $eventData = [
+                            'data' => [
+                                'domain' => $poolDomain->getDomain(),
+                                'pool_id' => (int) $poolDomain->getPoolId(),
+                                'resolved_ip' => $result['ipv4'] ?: $result['ipv6'] ?? '',
+                                'expected_ip' => $serverIpService->getPublicIpv4() ?: $serverIpService->getPublicIpv6() ?? '',
+                            ],
+                        ];
+                        $eventsManager->dispatch('Weline_Websites::domain_pool::resolve_off_local', $eventData);
+                    }
                 } catch (\Throwable $e) {
                     $errors++;
-                    w_log_warning("域名 {$row[DomainPool::fields_DOMAIN]} 检测失败: {$e->getMessage()}", [], 'domain_pool_resolve_check');
+                    w_log_warning("域名 {$row[DomainPool::schema_fields_DOMAIN]} 检测失败: {$e->getMessage()}", [], 'domain_pool_resolve_check');
                 }
             }
 
