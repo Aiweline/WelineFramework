@@ -56,18 +56,23 @@ class Adapter extends BackendController
     #[Acl('Weline_Ai::ai_adapter_list', '查看场景适配器列表', 'mdi-view-list', '查看场景适配器列表')]
     public function index(): string
     {
+        if ($this->request->getGet('embed') === '1') {
+            $this->layoutType = 'default.blank';
+        }
         $page = (int)$this->request->getGet('page', 1);
         $pageSize = 20;
 
         // 获取适配器列表
         $adapters = $this->getScenarioAdapter()->reset()
             ->pagination($page, $pageSize)
-            ->order(AiScenarioAdapter::fields_CREATED_TIME, 'DESC')
+            ->order(AiScenarioAdapter::schema_fields_CREATED_TIME, 'DESC')
             ->select()
             ->fetch();
 
         $this->assign('adapters', $adapters->getItems());
         $this->assign('pagination', $adapters->getPagination());
+        $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
+        $this->assign('activeTab', 'adapter');
 
         return $this->fetch();
     }
@@ -99,7 +104,7 @@ class Adapter extends BackendController
         }
 
         // 获取适配器实例信息
-        $adapterInstance = $this->getAdapterScanner()->getAdapter($adapter->getData(AiScenarioAdapter::fields_CODE));
+        $adapterInstance = $this->getAdapterScanner()->getAdapter($adapter->getData(AiScenarioAdapter::schema_fields_CODE));
         
         $this->assign('adapter', $adapter);
         $this->assign('adapterInstance', $adapterInstance);
@@ -130,7 +135,7 @@ class Adapter extends BackendController
         }
 
         // 获取适配器实例信息
-        $adapterInstance = $this->getAdapterScanner()->getAdapter($adapter->getData(AiScenarioAdapter::fields_CODE));
+        $adapterInstance = $this->getAdapterScanner()->getAdapter($adapter->getData(AiScenarioAdapter::schema_fields_CODE));
         
         $this->assign('adapter', $adapter);
         $this->assign('adapterInstance', $adapterInstance);
@@ -208,7 +213,7 @@ class Adapter extends BackendController
 
         try {
             $newStatus = $adapter->isActive() ? 0 : 1;
-            $adapter->setData(AiScenarioAdapter::fields_IS_ACTIVE, $newStatus);
+            $adapter->setData(AiScenarioAdapter::schema_fields_IS_ACTIVE, $newStatus);
             $adapter->save();
 
             return $this->jsonResponse([
@@ -419,7 +424,7 @@ class Adapter extends BackendController
             foreach ($ids as $id) {
                 $adapter = $this->getScenarioAdapter()->reset()->load((int)$id);
                 if ($adapter->getId()) {
-                    $adapter->setData(AiScenarioAdapter::fields_IS_ACTIVE, $status);
+                    $adapter->setData(AiScenarioAdapter::schema_fields_IS_ACTIVE, $status);
                     $adapter->save();
                     $updated++;
                 }

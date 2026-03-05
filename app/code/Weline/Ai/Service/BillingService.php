@@ -133,26 +133,26 @@ class BillingService
         /** @var AiApiCallLog $log */
         $log = ObjectManager::getInstance(AiApiCallLog::class);
         $log->setData([
-            AiApiCallLog::fields_API_KEY_ID => $callData['api_key_id'] ?? 0,
-            AiApiCallLog::fields_USER_ID => $userId,
-            AiApiCallLog::fields_REQUEST_ID => $callData['request_id'] ?? uniqid('req_'),
-            AiApiCallLog::fields_MODEL_ID => $callData['model_id'] ?? 0,
-            AiApiCallLog::fields_MODEL_CODE => $callData['model_code'] ?? '',
-            AiApiCallLog::fields_ENDPOINT => $callData['endpoint'] ?? '',
-            AiApiCallLog::fields_REQUEST_METHOD => $callData['request_method'] ?? 'POST',
-            AiApiCallLog::fields_REQUEST_IP => $callData['request_ip'] ?? '',
-            AiApiCallLog::fields_PROMPT_TOKENS => $callData['prompt_tokens'] ?? 0,
-            AiApiCallLog::fields_COMPLETION_TOKENS => $callData['completion_tokens'] ?? 0,
-            AiApiCallLog::fields_TOTAL_TOKENS => $callData['total_tokens'] ?? 0,
-            AiApiCallLog::fields_PROMPT_COST => $callData['prompt_cost'] ?? 0.0,
-            AiApiCallLog::fields_COMPLETION_COST => $callData['completion_cost'] ?? 0.0,
-            AiApiCallLog::fields_TOTAL_COST => $callData['total_cost'] ?? 0.0,
-            AiApiCallLog::fields_BALANCE_BEFORE => $balanceBefore,
-            AiApiCallLog::fields_BALANCE_AFTER => $balanceAfter,
-            AiApiCallLog::fields_RESPONSE_STATUS => $callData['response_status'] ?? 200,
-            AiApiCallLog::fields_RESPONSE_TIME => $callData['response_time'] ?? 0,
-            AiApiCallLog::fields_STATUS => $callData['status'] ?? AiApiCallLog::STATUS_SUCCESS,
-            AiApiCallLog::fields_ERROR_MESSAGE => $callData['error_message'] ?? '',
+            AiApiCallLog::schema_fields_API_KEY_ID => $callData['api_key_id'] ?? 0,
+            AiApiCallLog::schema_fields_USER_ID => $userId,
+            AiApiCallLog::schema_fields_REQUEST_ID => $callData['request_id'] ?? uniqid('req_'),
+            AiApiCallLog::schema_fields_MODEL_ID => $callData['model_id'] ?? 0,
+            AiApiCallLog::schema_fields_MODEL_CODE => $callData['model_code'] ?? '',
+            AiApiCallLog::schema_fields_ENDPOINT => $callData['endpoint'] ?? '',
+            AiApiCallLog::schema_fields_REQUEST_METHOD => $callData['request_method'] ?? 'POST',
+            AiApiCallLog::schema_fields_REQUEST_IP => $callData['request_ip'] ?? '',
+            AiApiCallLog::schema_fields_PROMPT_TOKENS => $callData['prompt_tokens'] ?? 0,
+            AiApiCallLog::schema_fields_COMPLETION_TOKENS => $callData['completion_tokens'] ?? 0,
+            AiApiCallLog::schema_fields_TOTAL_TOKENS => $callData['total_tokens'] ?? 0,
+            AiApiCallLog::schema_fields_PROMPT_COST => $callData['prompt_cost'] ?? 0.0,
+            AiApiCallLog::schema_fields_COMPLETION_COST => $callData['completion_cost'] ?? 0.0,
+            AiApiCallLog::schema_fields_TOTAL_COST => $callData['total_cost'] ?? 0.0,
+            AiApiCallLog::schema_fields_BALANCE_BEFORE => $balanceBefore,
+            AiApiCallLog::schema_fields_BALANCE_AFTER => $balanceAfter,
+            AiApiCallLog::schema_fields_RESPONSE_STATUS => $callData['response_status'] ?? 200,
+            AiApiCallLog::schema_fields_RESPONSE_TIME => $callData['response_time'] ?? 0,
+            AiApiCallLog::schema_fields_STATUS => $callData['status'] ?? AiApiCallLog::STATUS_SUCCESS,
+            AiApiCallLog::schema_fields_ERROR_MESSAGE => $callData['error_message'] ?? '',
         ]);
         $log->save();
     }
@@ -173,16 +173,16 @@ class BillingService
         }
         
         // 更新使用量
-        $apiKey->setData(AiApiKey::fields_USAGE_DAILY, 
-            ((float)($apiKey->getData(AiApiKey::fields_USAGE_DAILY) ?? 0.0)) + $cost
+        $apiKey->setData(AiApiKey::schema_fields_USAGE_DAILY, 
+            ((float)($apiKey->getData(AiApiKey::schema_fields_USAGE_DAILY) ?? 0.0)) + $cost
         );
-        $apiKey->setData(AiApiKey::fields_USAGE_MONTHLY, 
-            ((float)($apiKey->getData(AiApiKey::fields_USAGE_MONTHLY) ?? 0.0)) + $cost
+        $apiKey->setData(AiApiKey::schema_fields_USAGE_MONTHLY, 
+            ((float)($apiKey->getData(AiApiKey::schema_fields_USAGE_MONTHLY) ?? 0.0)) + $cost
         );
-        $apiKey->setData(AiApiKey::fields_CALL_COUNT, 
-            ((int)($apiKey->getData(AiApiKey::fields_CALL_COUNT) ?? 0)) + 1
+        $apiKey->setData(AiApiKey::schema_fields_CALL_COUNT, 
+            ((int)($apiKey->getData(AiApiKey::schema_fields_CALL_COUNT) ?? 0)) + 1
         );
-        $apiKey->setData(AiApiKey::fields_LAST_USED_TIME, date('Y-m-d H:i:s'));
+        $apiKey->setData(AiApiKey::schema_fields_LAST_USED_TIME, date('Y-m-d H:i:s'));
         $apiKey->save();
     }
     
@@ -196,18 +196,18 @@ class BillingService
     public function checkQuota(AiApiKey $apiKey, float $estimatedCost = 0.0): bool
     {
         // 检查每日配额
-        $quotaDaily = (float)($apiKey->getData(AiApiKey::fields_QUOTA_DAILY) ?? 0.0);
+        $quotaDaily = (float)($apiKey->getData(AiApiKey::schema_fields_QUOTA_DAILY) ?? 0.0);
         if ($quotaDaily > 0) {
-            $usageDaily = (float)($apiKey->getData(AiApiKey::fields_USAGE_DAILY) ?? 0.0);
+            $usageDaily = (float)($apiKey->getData(AiApiKey::schema_fields_USAGE_DAILY) ?? 0.0);
             if ($usageDaily + $estimatedCost > $quotaDaily) {
                 return false;
             }
         }
         
         // 检查每月配额
-        $quotaMonthly = (float)($apiKey->getData(AiApiKey::fields_QUOTA_MONTHLY) ?? 0.0);
+        $quotaMonthly = (float)($apiKey->getData(AiApiKey::schema_fields_QUOTA_MONTHLY) ?? 0.0);
         if ($quotaMonthly > 0) {
-            $usageMonthly = (float)($apiKey->getData(AiApiKey::fields_USAGE_MONTHLY) ?? 0.0);
+            $usageMonthly = (float)($apiKey->getData(AiApiKey::schema_fields_USAGE_MONTHLY) ?? 0.0);
             if ($usageMonthly + $estimatedCost > $quotaMonthly) {
                 return false;
             }

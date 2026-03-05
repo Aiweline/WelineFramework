@@ -1,5 +1,7 @@
 # AI助手工具模块开发计划
 
+> **2026-03 精简说明**：后台菜单已精简，仅保留「AI 管理」「场景配置」。以下计划中的营销工具、客户支持、训练数据、A/B 测试等独立页面已移除，核心能力（模型、适配器、供应商、助手）保留。
+
 ## 模块概述
 **模块名称**: Weline_Ai  
 **表前缀**: ai_  
@@ -1439,12 +1441,14 @@ public static function generateText($prompt, $modelCode = null) {
 ```
 app/code/Weline/Ai/
 ├── Controller/
-│   ├── Backend/           # 后台管理控制器
+│   ├── Backend/           # 后台管理控制器（2026-03 精简后）
+│   │   ├── Index.php      # 重定向到 Manager
+│   │   ├── Manager.php    # AI 管理聚合页
+│   │   ├── Adapter.php    # 场景配置
 │   │   ├── Model.php      # 模型管理
-│   │   ├── Assistant.php  # 助手管理
-│   │   ├── ApiKey.php     # API密钥管理
+│   │   ├── Provider.php   # 供应商账户
 │   │   ├── DefaultModel.php # 默认模型管理
-│   │   └── Monitor.php    # 监控管理
+│   │   └── Assistant.php  # 助手管理
 │   ├── Frontend/          # 前端用户控制器
 │   │   ├── Index.php      # 工具介绍
 │   │   ├── Center.php     # 个人中心

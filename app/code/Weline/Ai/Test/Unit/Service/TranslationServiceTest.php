@@ -179,7 +179,7 @@ class TranslationServiceTest extends TestCore
         // 检查默认模型
         $defaultModel = $this->defaultModelManager->getDefaultModel('translation');
         if ($defaultModel) {
-            $modelCode = $defaultModel->getData(\Weline\Ai\Model\AiModel::fields_MODEL_CODE) ?? 'unknown';
+            $modelCode = $defaultModel->getData(\Weline\Ai\Model\AiModel::schema_fields_MODEL_CODE) ?? 'unknown';
             echo "✓ 找到翻译默认模型: {$modelCode}\n";
         } else {
             echo "✗ 未找到翻译默认模型\n";
@@ -261,7 +261,7 @@ class TranslationServiceTest extends TestCore
                 return;
             }
             
-            $modelCode = $defaultModel->getData(\Weline\Ai\Model\AiModel::fields_MODEL_CODE) ?? '';
+            $modelCode = $defaultModel->getData(\Weline\Ai\Model\AiModel::schema_fields_MODEL_CODE) ?? '';
             echo "使用模型: {$modelCode}\n";
             
             // 直接调用 AI 服务

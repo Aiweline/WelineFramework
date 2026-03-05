@@ -15,14 +15,14 @@ test.describe('AI模型列表页面', () => {
         }
     });
 
-    test('应该显示模型列表页面和收集按钮', async ({ page }) => {
+    test('应该显示模型列表页面和新增模型按钮', async ({ page }) => {
         await page.goto('http://127.0.0.1:9981/ai/backend/model');
         await page.waitForTimeout(1000);
 
-        const title = page.locator('text=/模型列表|AI模型列表/i');
+        const title = page.locator('text=/模型列表|AI模型列表|AI模型管理/i');
         await expect(title).toBeVisible({ timeout: 5000 });
 
-        const collectButton = page.locator('button:has-text("收集模型")');
-        await expect(collectButton).toBeVisible({ timeout: 5000 });
+        const addButton = page.locator('a:has-text("新增模型"), button:has-text("新增模型")');
+        await expect(addButton).toBeVisible({ timeout: 5000 });
     });
 });

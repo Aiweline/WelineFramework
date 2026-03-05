@@ -73,7 +73,7 @@ class BillingManager
         $query = $this->billingPlanModel->reset();
         
         if ($activeOnly) {
-            $query->where(AiBillingPlan::fields_IS_ACTIVE, 1);
+            $query->where(AiBillingPlan::schema_fields_IS_ACTIVE, 1);
         }
 
         return $query->select()->fetch();
@@ -88,7 +88,7 @@ class BillingManager
     public function getBillingPlan(int $planId): ?AiBillingPlan
     {
         $plan = $this->billingPlanModel->reset()
-            ->where(AiBillingPlan::fields_ID, $planId)
+            ->where(AiBillingPlan::schema_fields_ID, $planId)
             ->find()
             ->fetch();
 
@@ -117,11 +117,11 @@ class BillingManager
         array $limits = []
     ): AiBillingPlan {
         $plan = new AiBillingPlan();
-        $plan->setData(AiBillingPlan::fields_PLAN_NAME, $planName)
-             ->setData(AiBillingPlan::fields_PLAN_TYPE, $planType)
-             ->setData(AiBillingPlan::fields_PRICE, $price)
-             ->setData(AiBillingPlan::fields_CURRENCY, $currency)
-             ->setData(AiBillingPlan::fields_BILLING_CYCLE, $billingCycle)
+        $plan->setData(AiBillingPlan::schema_fields_PLAN_NAME, $planName)
+             ->setData(AiBillingPlan::schema_fields_PLAN_TYPE, $planType)
+             ->setData(AiBillingPlan::schema_fields_PRICE, $price)
+             ->setData(AiBillingPlan::schema_fields_CURRENCY, $currency)
+             ->setData(AiBillingPlan::schema_fields_BILLING_CYCLE, $billingCycle)
              ->setFeatures($features)
              ->setLimits($limits)
              ->save();
@@ -149,7 +149,7 @@ class BillingManager
     ): AiBillingInvoice {
         // 验证租户是否存在
         $tenant = $this->tenantModel->reset()
-            ->where(AiTenant::fields_ID, $tenantId)
+            ->where(AiTenant::schema_fields_ID, $tenantId)
             ->find()
             ->fetch();
 
@@ -159,11 +159,11 @@ class BillingManager
 
         // 创建发票
         $invoice = new AiBillingInvoice();
-        $invoice->setData(AiBillingInvoice::fields_TENANT_ID, $tenantId)
-                ->setData(AiBillingInvoice::fields_AMOUNT, $amount)
-                ->setData(AiBillingInvoice::fields_CURRENCY, $currency)
-                ->setData(AiBillingInvoice::fields_STATUS, AiBillingInvoice::STATUS_PENDING)
-                ->setData(AiBillingInvoice::fields_DUE_DATE, time() + ($dueDays * 24 * 3600))
+        $invoice->setData(AiBillingInvoice::schema_fields_TENANT_ID, $tenantId)
+                ->setData(AiBillingInvoice::schema_fields_AMOUNT, $amount)
+                ->setData(AiBillingInvoice::schema_fields_CURRENCY, $currency)
+                ->setData(AiBillingInvoice::schema_fields_STATUS, AiBillingInvoice::STATUS_PENDING)
+                ->setData(AiBillingInvoice::schema_fields_DUE_DATE, time() + ($dueDays * 24 * 3600))
                 ->setItems($items)
                 ->save();
 
@@ -182,13 +182,13 @@ class BillingManager
     public function getTenantInvoices(int $tenantId, string $status = '', int $limit = 20, int $offset = 0): array
     {
         $query = $this->billingInvoiceModel->reset()
-            ->where(AiBillingInvoice::fields_TENANT_ID, $tenantId);
+            ->where(AiBillingInvoice::schema_fields_TENANT_ID, $tenantId);
 
         if ($status) {
-            $query->where(AiBillingInvoice::fields_STATUS, $status);
+            $query->where(AiBillingInvoice::schema_fields_STATUS, $status);
         }
 
-        return $query->orderBy(AiBillingInvoice::fields_CREATED_TIME, 'DESC')
+        return $query->orderBy(AiBillingInvoice::schema_fields_CREATED_TIME, 'DESC')
                     ->limit($limit, $offset)
                     ->select()
                     ->fetch();
@@ -206,7 +206,7 @@ class BillingManager
     public function processPayment(int $invoiceId, string $paymentMethod, string $transactionId = ''): bool
     {
         $invoice = $this->billingInvoiceModel->reset()
-            ->where(AiBillingInvoice::fields_ID, $invoiceId)
+            ->where(AiBillingInvoice::schema_fields_ID, $invoiceId)
             ->find()
             ->fetch();
 
@@ -241,7 +241,7 @@ class BillingManager
     private function updateTenantSubscription(int $tenantId): bool
     {
         $tenant = $this->tenantModel->reset()
-            ->where(AiTenant::fields_ID, $tenantId)
+            ->where(AiTenant::schema_fields_ID, $tenantId)
             ->find()
             ->fetch();
 
@@ -251,8 +251,8 @@ class BillingManager
 
         // 检查是否有未支付的发票
         $pendingInvoices = $this->billingInvoiceModel->reset()
-            ->where(AiBillingInvoice::fields_TENANT_ID, $tenantId)
-            ->where(AiBillingInvoice::fields_STATUS, AiBillingInvoice::STATUS_PENDING)
+            ->where(AiBillingInvoice::schema_fields_TENANT_ID, $tenantId)
+            ->where(AiBillingInvoice::schema_fields_STATUS, AiBillingInvoice::STATUS_PENDING)
             ->select()
             ->fetch();
 
@@ -268,9 +268,9 @@ class BillingManager
 
         // 更新租户状态
         if ($hasOverdue) {
-            $tenant->setData(AiTenant::fields_STATUS, AiTenant::STATUS_SUSPENDED);
+            $tenant->setData(AiTenant::schema_fields_STATUS, AiTenant::STATUS_SUSPENDED);
         } else {
-            $tenant->setData(AiTenant::fields_STATUS, AiTenant::STATUS_ACTIVE);
+            $tenant->setData(AiTenant::schema_fields_STATUS, AiTenant::STATUS_ACTIVE);
         }
 
         return $tenant->save();
@@ -289,7 +289,7 @@ class BillingManager
     {
         // 获取租户的计费计划
         $tenant = $this->tenantModel->reset()
-            ->where(AiTenant::fields_ID, $tenantId)
+            ->where(AiTenant::schema_fields_ID, $tenantId)
             ->find()
             ->fetch();
 
@@ -357,8 +357,8 @@ class BillingManager
         
         // 获取发票统计
         $invoices = $this->billingInvoiceModel->reset()
-            ->where(AiBillingInvoice::fields_TENANT_ID, $tenantId)
-            ->where(AiBillingInvoice::fields_CREATED_TIME, '>=', $startTime)
+            ->where(AiBillingInvoice::schema_fields_TENANT_ID, $tenantId)
+            ->where(AiBillingInvoice::schema_fields_CREATED_TIME, '>=', $startTime)
             ->select()
             ->fetch();
 
@@ -410,8 +410,8 @@ class BillingManager
     public function getOverdueInvoices(int $tenantId): array
     {
         $invoices = $this->billingInvoiceModel->reset()
-            ->where(AiBillingInvoice::fields_TENANT_ID, $tenantId)
-            ->where(AiBillingInvoice::fields_STATUS, AiBillingInvoice::STATUS_PENDING)
+            ->where(AiBillingInvoice::schema_fields_TENANT_ID, $tenantId)
+            ->where(AiBillingInvoice::schema_fields_STATUS, AiBillingInvoice::STATUS_PENDING)
             ->select()
             ->fetch();
 
@@ -439,7 +439,7 @@ class BillingManager
     public function cancelInvoice(int $invoiceId): bool
     {
         $invoice = $this->billingInvoiceModel->reset()
-            ->where(AiBillingInvoice::fields_ID, $invoiceId)
+            ->where(AiBillingInvoice::schema_fields_ID, $invoiceId)
             ->find()
             ->fetch();
 
@@ -465,7 +465,7 @@ class BillingManager
     public function refundInvoice(int $invoiceId): bool
     {
         $invoice = $this->billingInvoiceModel->reset()
-            ->where(AiBillingInvoice::fields_ID, $invoiceId)
+            ->where(AiBillingInvoice::schema_fields_ID, $invoiceId)
             ->find()
             ->fetch();
 

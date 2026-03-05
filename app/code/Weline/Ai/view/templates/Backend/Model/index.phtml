@@ -7,7 +7,10 @@
  * @var int $total
  */
 /**@var \Weline\Framework\View\Template $this */
+$activeTab = $activeTab ?? 'model';
 ?>
+<template>Weline_Ai::Backend/Manager/tabs.phtml</template>
+<?php if (empty($embed)): ?>
 <!-- 页面标题 -->
 <div class='row'>
     <div class='col-12'>
@@ -26,6 +29,7 @@
     </div>
 </div>
 <!-- 页面标题结束 -->
+<?php endif; ?>
 
 <!-- 按钮操作栏 -->
 <div class="row mb-3">
@@ -54,18 +58,14 @@
             
             <!-- 右侧按钮 -->
             <div class="d-flex gap-2">
-                <button type="button" class="btn btn-success" onclick="collectModels()">
-                    <i class="mdi mdi-download me-1"></i>
-                    <lang>收集模型</lang>
-                </button>
+                <a href="<?= $this->getBackendUrl('*/backend/model/edit', ['id' => 0]) ?>" class="btn btn-success">
+                    <i class="mdi mdi-plus me-1"></i>
+                    <lang>新增模型</lang>
+                </a>
                 <a href="<?= $this->getBackendUrl('*/backend/defaultModel') ?>" class="btn btn-primary">
                     <i class="mdi mdi-star me-1"></i>
                     <lang>默认模型管理</lang>
                 </a>
-                <button type="button" class="btn btn-danger" onclick="clearAllModels()">
-                    <i class="mdi mdi-trash-can-outline me-1"></i>
-                    <lang>清空模型表</lang>
-                </button>
             </div>
         </div>
     </div>
@@ -140,7 +140,7 @@
                 <?php if (empty($models)): ?>
                     <div class="alert alert-info">
                         <i class="mdi mdi-information me-2"></i>
-                        <lang>暂无数据，请点击"收集模型"按钮来扫描和导入模型配置。</lang>
+                        <lang>暂无数据，请点击"新增模型"按钮添加模型，或运行 php bin/w ai:model:collect 扫描配置。</lang>
                     </div>
                 <?php else: ?>
                     <div class="table-responsive">
@@ -404,6 +404,10 @@
 (function() {
     'use strict';
 
+    function apiRequest(url, opts) {
+        return window.Weline.Api.request(url, opts);
+    }
+
     // 批量选择功能
     window.toggleSelectAll = function() {
         const selectAll = document.getElementById('selectAll');
@@ -450,18 +454,16 @@
             return;
         }
         
-        if (!confirm('<?= __('确定要激活选中的模型吗？') ?>')) {
-            return;
-        }
-        
-        fetch('<?= $this->getBackendUrl('*/backend/model/bulkActivate') ?>', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ids: ids})
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
+        BackendConfirm.show('<?= __('确定要激活选中的模型吗？') ?>').then(function(confirmed) {
+            if (!confirmed) return;
+            apiRequest('<?= $this->getBackendUrl('*/backend/model/bulkActivate') ?>', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ids: ids})
+            })
+            .then(function(response) {
+                var data = response.data;
+                if (response.ok && data && data.success) {
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'success',
@@ -486,6 +488,7 @@
                     console.error('<?= __('操作失败：') ?>' + data.message);
                 }
             }
+        });
         });
     };
 
@@ -506,18 +509,16 @@
             return;
         }
         
-        if (!confirm('<?= __('确定要禁用选中的模型吗？') ?>')) {
-            return;
-        }
-        
-        fetch('<?= $this->getBackendUrl('*/backend/model/bulkDeactivate') ?>', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ids: ids})
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
+        BackendConfirm.show('<?= __('确定要禁用选中的模型吗？') ?>').then(function(confirmed) {
+            if (!confirmed) return;
+            apiRequest('<?= $this->getBackendUrl('*/backend/model/bulkDeactivate') ?>', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ids: ids})
+            })
+            .then(function(response) {
+                var data = response.data;
+                if (response.ok && data && data.success) {
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'success',
@@ -543,6 +544,7 @@
                 }
             }
         });
+        });
     };
 
     // 批量删除
@@ -562,18 +564,16 @@
             return;
         }
         
-        if (!confirm('<?= __('确定要删除选中的模型吗？此操作不可恢复！\n注意：只能删除复制的模型，原始模型无法删除。') ?>')) {
-            return;
-        }
-        
-        fetch('<?= $this->getBackendUrl('*/backend/model/bulkDelete') ?>', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ids: ids})
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
+        BackendConfirm.show('<?= __('确定要删除选中的模型吗？此操作不可恢复！注意：只能删除复制的模型，原始模型无法删除。') ?>').then(function(confirmed) {
+            if (!confirmed) return;
+            apiRequest('<?= $this->getBackendUrl('*/backend/model/bulkDelete') ?>', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ids: ids})
+            })
+            .then(function(response) {
+                var data = response.data;
+                if (response.ok && data && data.success) {
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'success',
@@ -598,6 +598,7 @@
                     console.error('<?= __('操作失败：') ?>' + data.message);
                 }
             }
+        });
         });
     };
 
@@ -623,14 +624,14 @@
         
         updateProgress(progressModal, '开始测试 ' + ids.length + ' 个模型...');
         
-        fetch('<?= $this->getBackendUrl('*/backend/model/batchTestConnection') ?>', {
+        apiRequest('<?= $this->getBackendUrl('*/backend/model/batchTestConnection') ?>', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({model_ids: ids})
         })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
+        .then(function(response) {
+            var data = response.data;
+            if (response.ok && data && data.success) {
                 showTestResults(data.results, data.summary);
                 progressModal.hide();
                 setTimeout(() => location.reload(), 3000);
@@ -648,12 +649,12 @@
                 progressModal.hide();
             }
         })
-        .catch(error => {
+        .catch(function(error) {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
                     icon: 'error',
                     title: '<?= __('请求失败') ?>',
-                    text: error.message,
+                    text: (error && error.message) || '<?= __('请求失败') ?>',
                     confirmButtonText: '<?= __('确定') ?>'
                 });
             } else {
@@ -740,74 +741,6 @@
         resultModal.show();
     }
 
-    // 清空模型表
-    window.clearAllModels = function() {
-        var firstConfirm = confirm('<?= __('🚨 危险操作警告！') ?>\n\n' +
-            '<?= __('您即将执行以下操作：') ?>\n' +
-            '• <?= __('删除所有AI模型数据') ?>\n' +
-            '• <?= __('包括原始模型和复制模型') ?>\n' +
-            '• <?= __('包括所有配置和测试记录') ?>\n' +
-            '• <?= __('此操作不可恢复！') ?>\n\n' +
-            '<?= __('确定要继续吗？') ?>');
-        
-        if (!firstConfirm) {
-            return;
-        }
-        
-        var confirmText = prompt('<?= __('⚠️ 最终确认') ?>\n\n' +
-            '<?= __('为了确保您了解此操作的严重性，') ?>\n' +
-            '<?= __('请输入以下文本以确认：') ?>\n\n' +
-            'CLEAR ALL MODELS\n\n' +
-            '<?= __('（区分大小写）') ?>');
-        
-        if (confirmText !== 'CLEAR ALL MODELS') {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('确认文本不正确') ?>',
-                    html: '<?= __('操作已取消') ?><br><br><?= __('请确保输入：') ?>CLEAR ALL MODELS<br><?= __('（区分大小写）') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('❌ 确认文本不正确，操作已取消') ?>');
-            }
-            return;
-        }
-        
-        fetch('<?= $this->getBackendUrl('*/backend/model/clearAll') ?>', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'}
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '<?= __('成功') ?>',
-                        text: data.message,
-                        timer: 2000,
-                        showConfirmButton: false
-                    }).then(() => location.reload());
-                } else {
-                    console.log(data.message);
-                    location.reload();
-                }
-            } else {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('操作失败') ?>',
-                        text: data.message,
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('操作失败：') ?>' + data.message);
-                }
-            }
-        });
-    };
-
     // 删除单个模型
     window.deleteModel = function(modelId, modelCode, isCopied) {
         if (!isCopied) {
@@ -824,20 +757,18 @@
             return;
         }
         
-        if (!confirm('<?= __('确定要删除模型') ?> ' + modelCode + ' <?= __('吗？') ?>')) {
-            return;
-        }
-
-        fetch('<?= $this->getBackendUrl('*/backend/model/delete') ?>?id=' + modelId, {
-            method: 'DELETE',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Content-Type': 'application/json'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
+        BackendConfirm.show('<?= __('确定要删除模型') ?> ' + modelCode + ' <?= __('吗？') ?>').then(function(confirmed) {
+            if (!confirmed) return;
+            apiRequest('<?= $this->getBackendUrl('*/backend/model/delete') ?>?id=' + modelId, {
+                method: 'DELETE',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(function(response) {
+                var data = response.data;
+                if (response.ok && data && data.success) {
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'success',
@@ -876,73 +807,18 @@
                 console.error('<?= __('删除失败，请重试') ?>');
             }
         });
-    };
-
-    window.collectModels = function() {
-        var btn = event.target.closest('button');
-        btn.disabled = true;
-        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('收集中...') ?>';
-
-        fetch('<?= $this->getBackendUrl('*/backend/model/collect') ?>', {
-            method: 'POST'
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '<?= __('收集成功') ?>',
-                        text: data.message,
-                        timer: 2000,
-                        showConfirmButton: false
-                    }).then(() => location.reload());
-                } else {
-                    console.log('<?= __('收集成功！') ?>\n' + data.message);
-                    location.reload();
-                }
-            } else {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('收集失败') ?>',
-                        text: data.message,
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('收集失败：') ?>' + data.message);
-                }
-            }
-        })
-        .catch(error => {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('请求失败') ?>',
-                    text: error.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('请求失败：') ?>' + error.message);
-            }
-        })
-        .finally(() => {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="mdi mdi-download"></i> <?= __('收集模型') ?>';
         });
     };
 
     window.toggleStatusByCode = function(modelCode) {
-        fetch('<?= $this->getBackendUrl('*/backend/model/toggleStatus') ?>', {
+        apiRequest('<?= $this->getBackendUrl('*/backend/model/toggleStatus') ?>', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: 'model_code=' + encodeURIComponent(modelCode)
         })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
+        .then(function(response) {
+            var data = response.data;
+            if (response.ok && data && data.success) {
                 location.reload();
             } else {
                 if (typeof Swal !== 'undefined') {
@@ -1000,15 +876,13 @@
         var testModal = createTestModal();
         document.body.appendChild(testModal);
         
-        fetch('<?= $this->getBackendUrl('*/backend/model/testConnection') ?>', {
+        apiRequest('<?= $this->getBackendUrl('*/backend/model/testConnection') ?>', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ model_code: modelCode })
         })
-        .then(response => response.json())
-        .then(data => {
+        .then(function(response) {
+            var data = response.data;
             btn.innerHTML = originalHtml;
             btn.disabled = false;
             document.body.removeChild(testModal);
@@ -1074,15 +948,13 @@
         var testModal = createTestModal();
         document.body.appendChild(testModal);
         
-        fetch('<?= $this->getBackendUrl('*/backend/model/testSelfConfig') ?>', {
+        apiRequest('<?= $this->getBackendUrl('*/backend/model/testSelfConfig') ?>', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ model_code: modelCode })
         })
-        .then(response => response.json())
-        .then(data => {
+        .then(function(response) {
+            var data = response.data;
             btn.innerHTML = originalHtml;
             btn.disabled = false;
             document.body.removeChild(testModal);

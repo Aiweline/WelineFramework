@@ -608,7 +608,7 @@ class OpenAiProvider implements ProviderInterface
     private function capMaxTokens(AiModel $model, array $config, array $params): int
     {
         $requested = (int)($params['max_tokens'] ?? $config['max_tokens'] ?? 2000);
-        $modelMax = (int)($model->getData(AiModel::fields_MAX_TOKENS) ?? $config['max_tokens'] ?? 8192);
+        $modelMax = (int)($model->getData(AiModel::schema_fields_MAX_TOKENS) ?? $config['max_tokens'] ?? 8192);
         return min(max(1, $requested), max(1, $modelMax));
     }
 

@@ -1,0 +1,112 @@
+<?php
+/**
+ * AI 管理聚合页：顶部 Tab（模型 | 适配器 | 供应商账户），iframe 内容区
+ * @var string $activeTab 当前 Tab：model | adapter | account
+ * @var \Weline\Framework\View\Template $this
+ */
+$activeTab = $activeTab ?? 'model';
+$modelUrl = $this->getBackendUrl('ai/backend/model') . '?embed=1';
+$adapterUrl = $this->getBackendUrl('ai/backend/adapter') . '?embed=1';
+$accountUrl = $this->getBackendUrl('ai/backend/provider') . '?embed=1';
+$baseUrl = $this->getBackendUrl('ai/backend/manager');
+?>
+<style>
+.weline-ai-manager { min-height: calc(100vh - 120px); color: var(--backend-color-text-primary); }
+.weline-ai-manager .page-title-box { margin-bottom: 1rem; }
+.weline-ai-manager .page-title-box h4 { color: var(--backend-color-text-primary); }
+.weline-ai-manager .breadcrumb { background: transparent; }
+.weline-ai-manager .breadcrumb-item, .weline-ai-manager .breadcrumb-item a { color: var(--backend-color-text-secondary); }
+.weline-ai-manager .breadcrumb-item.active { color: var(--backend-color-text-primary); }
+.weline-ai-manager .nav-tabs { border-bottom: 1px solid var(--backend-color-border-default); background: var(--backend-color-card-bg); padding: 0 1rem; border-radius: 8px 8px 0 0; }
+.weline-ai-manager .nav-tabs .nav-link { border: none; color: var(--backend-color-text-secondary); padding: 1rem 1.25rem; font-weight: 500; border-bottom: 3px solid transparent; }
+.weline-ai-manager .nav-tabs .nav-link:hover { color: var(--backend-color-primary); }
+.weline-ai-manager .nav-tabs .nav-link.active { color: var(--backend-color-primary); border-bottom-color: var(--backend-color-primary); background: transparent; }
+.weline-ai-manager .tab-content { background: var(--backend-color-card-bg); border: 1px solid var(--backend-color-border-default); border-top: none; border-radius: 0 0 8px 8px; overflow: hidden; }
+.weline-ai-manager .tab-pane { display: none; height: calc(100vh - 220px); min-height: 500px; background: var(--backend-color-card-bg); }
+.weline-ai-manager .tab-pane.active { display: block; }
+.weline-ai-manager .tab-pane iframe { width: 100%; height: 100%; border: none; display: block; }
+</style>
+
+<div class="weline-ai-manager">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <h4 class="mb-sm-0">
+                    <i class="mdi mdi-robot-outline me-2"></i>
+                    <lang>AI 管理</lang>
+                </h4>
+                <div class="page-title-right">
+                    <ol class="breadcrumb m-0">
+                        <li class="breadcrumb-item"><a href="javascript:void(0);"><lang>AI 中心</lang></a></li>
+                        <li class="breadcrumb-item active"><lang>AI 管理</lang></li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs weline-ai-manager-tabs" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'model' ? 'active' : '' ?>" href="<?= $baseUrl ?>?tab=model" data-tab="model" data-url="<?= htmlspecialchars($modelUrl) ?>">
+                <i class="mdi mdi-robot-outline me-1"></i><lang>模型</lang>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'adapter' ? 'active' : '' ?>" href="<?= $baseUrl ?>?tab=adapter" data-tab="adapter" data-url="<?= htmlspecialchars($adapterUrl) ?>">
+                <i class="mdi mdi-puzzle-outline me-1"></i><lang>适配器</lang>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'account' ? 'active' : '' ?>" href="<?= $baseUrl ?>?tab=account" data-tab="account" data-url="<?= htmlspecialchars($accountUrl) ?>">
+                <i class="mdi mdi-account-key-outline me-1"></i><lang>供应商账户</lang>
+            </a>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <div class="tab-pane <?= $activeTab === 'model' ? 'active' : '' ?>" id="tab-model" data-tab="model">
+            <iframe src="<?= htmlspecialchars($modelUrl) ?>" title="<lang>模型</lang>"></iframe>
+        </div>
+        <div class="tab-pane <?= $activeTab === 'adapter' ? 'active' : '' ?>" id="tab-adapter" data-tab="adapter">
+            <iframe src="<?= $activeTab === 'adapter' ? htmlspecialchars($adapterUrl) : '' ?>" title="<lang>适配器</lang>"></iframe>
+        </div>
+        <div class="tab-pane <?= $activeTab === 'account' ? 'active' : '' ?>" id="tab-account" data-tab="account">
+            <iframe src="<?= $activeTab === 'account' ? htmlspecialchars($accountUrl) : '' ?>" title="<lang>供应商账户</lang>"></iframe>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    var tabs = document.querySelectorAll('.weline-ai-manager-tabs .nav-link');
+    var panes = document.querySelectorAll('.weline-ai-manager .tab-pane');
+    function switchTab(tab, url) {
+        tabs.forEach(function(t) { t.classList.remove('active'); });
+        panes.forEach(function(p) {
+            p.classList.remove('active');
+            if (p.getAttribute('data-tab') === tab) {
+                p.classList.add('active');
+                var iframe = p.querySelector('iframe');
+                if (iframe && url && !iframe.dataset.loaded) {
+                    iframe.src = url;
+                    iframe.dataset.loaded = '1';
+                }
+            }
+        });
+        var activeTabEl = document.querySelector('.weline-ai-manager-tabs .nav-link[data-tab="' + tab + '"]');
+        if (activeTabEl) activeTabEl.classList.add('active');
+        if (history.replaceState) {
+            var params = new URLSearchParams(window.location.search);
+            params.set('tab', tab);
+            history.replaceState(null, '', window.location.pathname + '?' + params.toString());
+        }
+    }
+    tabs.forEach(function(tabEl) {
+        tabEl.addEventListener('click', function(e) {
+            e.preventDefault();
+            switchTab(this.getAttribute('data-tab'), this.getAttribute('data-url'));
+        });
+    });
+})();
+</script>

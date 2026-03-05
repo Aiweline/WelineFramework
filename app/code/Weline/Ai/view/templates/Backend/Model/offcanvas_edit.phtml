@@ -35,6 +35,7 @@ if ($isEdit && $model->getData('provider_config')) {
 if (empty($providerConfig) && !empty($config)) {
     $providerConfig = $config;
 }
+$selectedAccountId = (string)($providerConfig['account_id'] ?? '');
 ?>
 
 <style>
@@ -197,23 +198,53 @@ if (empty($providerConfig) && !empty($config)) {
                                         </label>
                                         <?php $isReadonly = $isEdit && !$model->getData('is_copy'); ?>
                                         <?php if ($isReadonly): ?>
-                                            <input type="text" 
-                                                   class="form-control" 
-                                                   value="<?= $model->getData('supplier') ?>" 
+                                            <input type="text"
+                                                   class="form-control"
+                                                   value="<?= htmlspecialchars((string)$model->getData('supplier')) ?>"
                                                    readonly>
-                                            <input type="hidden" name="supplier" value="<?= $model->getData('supplier') ?>">
-                                        <?php else: ?>
-                                            <input type="text" 
-                                                   class="form-control" 
-                                                   id="supplier" 
-                                                   name="supplier" 
-                                                   value="<?= $model ? $model->getData('supplier') : '' ?>" 
-                                                   required
-                                                   placeholder="<?= __('例如：OpenAI') ?>">
+                                            <input type="hidden" name="supplier" value="<?= htmlspecialchars((string)$model->getData('supplier')) ?>">
+                                        <?php else:
+                                            $providerOptionsStr = $this->getData('providerOptionsStr') ?? '';
+                                            $supplierValue = $model ? (string)$model->getData('supplier') : '';
+                                        ?>
+                                            <div class="d-flex gap-2 align-items-start">
+                                                <div class="flex-grow-1">
+                                                    <w:theme:search-select
+                                                        id="supplier"
+                                                        name="supplier"
+                                                        options="<?= htmlspecialchars($providerOptionsStr) ?>"
+                                                        value="<?= htmlspecialchars($supplierValue) ?>"
+                                                        placeholder="<?= __('请选择或搜索供应商...') ?>"
+                                                        required="true"
+                                                        clearable="true"
+                                                        class="form-control"
+                                                    />
+                                                </div>
+                                                <a href="<?= $this->getBackendUrl('*/backend/provider/editOffcanvas', ['id' => 0]) ?>"
+                                                   target="_blank"
+                                                   class="btn btn-outline-primary btn-sm mt-0"
+                                                   title="<?= __('快速新建供应商账户') ?>">
+                                                    <i class="mdi mdi-plus"></i> <?= __('新建账户') ?>
+                                                </a>
+                                            </div>
                                         <?php endif; ?>
                                         <div class="form-text"><?= __('AI 模型的提供商') ?></div>
                                     </div>
                                 </div>
+
+                                <?php if (!$isReadonly): ?>
+                                <!-- 供应商账户（可选，指定后覆盖默认账户） -->
+                                <div class="col-12">
+                                    <div class="mb-2">
+                                        <label for="provider_account_id" class="form-label"><lang>供应商账户</lang></label>
+                                        <select class="form-select" id="provider_account_id" name="provider_config[account_id]">
+                                            <option value=""><?= __('使用默认账户') ?></option>
+                                            <!-- 账户选项由 JS 根据供应商动态加载 -->
+                                        </select>
+                                        <div class="form-text"><?= __('留空使用默认账户，或选择指定账户') ?></div>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
                                 
                                 <!-- 模型代码 -->
                                 <div class="col-md-6">
@@ -672,7 +703,38 @@ if (!empty($displayConfig)) {
             }
 
             this.initForm();
+            this.initAccountSelect();
             this.initTestPanel();
+        },
+
+        initAccountSelect: function() {
+            var supplierVal = document.getElementById('supplier_value');
+            var accountSelect = document.getElementById('provider_account_id');
+            if (!supplierVal || !accountSelect) return;
+            var backendUrl = '<?= addslashes($this->getBackendUrl('*/backend/provider/getAccountsForSelect')) ?>';
+            var selectedId = '<?= addslashes($selectedAccountId ?? '') ?>';
+            function loadAccounts(providerCode) {
+                accountSelect.innerHTML = '<option value=""><?= addslashes(__('使用默认账户')) ?></option>';
+                if (!providerCode) return;
+                var url = backendUrl + '?provider_code=' + encodeURIComponent(providerCode) + '&limit=100';
+                var req = window.Weline.Api.get(url, { silent: true });
+                req.then(function(res) {
+                    var resp = (res && res.data) || res;
+                        var items = (resp && resp.success && resp.data) ? resp.data : (Array.isArray(resp) ? resp : []);
+                        items.forEach(function(item) {
+                            var opt = document.createElement('option');
+                            opt.value = item.value;
+                            opt.textContent = item.label;
+                            if (item.value === selectedId) opt.selected = true;
+                            accountSelect.appendChild(opt);
+                        });
+                    })
+                    .catch(function() {});
+            }
+            supplierVal.addEventListener('change', function() {
+                loadAccounts(this.value || '');
+            });
+            if (supplierVal.value) loadAccounts(supplierVal.value);
         },
 
         initForm: function() {
@@ -722,24 +784,9 @@ if (!empty($displayConfig)) {
                 }
                 
                 var formData = new FormData(form);
-                
-                fetch(form.action, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(function(response) {
-                    return response.text().then(function(text) {
-                        try {
-                            return JSON.parse(text);
-                        } catch (e) {
-                            throw new Error('服务器返回的不是有效的JSON格式');
-                        }
-                    });
-                })
-                .then(function(data) {
+                var opts = { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } };
+                var req = window.Weline.Api.request(form.action, opts).then(function(res) { return (res && res.data) || res; });
+                req.then(function(data) {
                     if (data.success) {
                         if (typeof Swal !== 'undefined') {
                             Swal.fire({
@@ -836,12 +883,10 @@ if (!empty($displayConfig)) {
                     formData.append('model_code', modelCode);
                     formData.append('prompt', prompt);
                     
-                    fetch('<?= $this->getBackendUrl("*/backend/model/testConnection") ?>', {
-                        method: 'POST',
-                        body: formData
-                    })
-                    .then(function(response) { return response.json(); })
-                    .then(function(data) {
+                    var tcUrl = '<?= $this->getBackendUrl("*/backend/model/testConnection") ?>';
+                    var tcReq = window.Weline.Api.request(tcUrl, { method: 'POST', body: formData });
+                    tcReq.then(function(res) {
+                        var data = (res && res.data) || res;
                         testModelBtn.disabled = false;
                         testModelBtn.innerHTML = '<i class="bi bi-play-circle"></i> <?= __('测试模型') ?>';
                         

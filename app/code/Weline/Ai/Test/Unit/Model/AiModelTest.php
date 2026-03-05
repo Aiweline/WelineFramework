@@ -34,21 +34,21 @@ class AiModelTest extends TestCase
      */
     public function testFieldConstants()
     {
-        $this->assertEquals('id', AiModel::fields_ID);
-        $this->assertEquals('supplier', AiModel::fields_SUPPLIER);
-        $this->assertEquals('model_code', AiModel::fields_MODEL_CODE);
-        $this->assertEquals('name', AiModel::fields_NAME);
-        $this->assertEquals('version', AiModel::fields_VERSION);
-        $this->assertEquals('is_copy', AiModel::fields_IS_COPY);
-        $this->assertEquals('origin_model_id', AiModel::fields_ORIGIN_MODEL_ID);
-        $this->assertEquals('config', AiModel::fields_CONFIG);
-        $this->assertEquals('capabilities', AiModel::fields_CAPABILITIES);
-        $this->assertEquals('max_tokens', AiModel::fields_MAX_TOKENS);
-        $this->assertEquals('status', AiModel::fields_STATUS);
-        $this->assertEquals('is_active', AiModel::fields_IS_ACTIVE);
-        $this->assertEquals('is_default', AiModel::fields_IS_DEFAULT);
-        $this->assertEquals('created_at', AiModel::fields_CREATED_AT);
-        $this->assertEquals('updated_at', AiModel::fields_UPDATED_AT);
+        $this->assertEquals('id', AiModel::schema_fields_ID);
+        $this->assertEquals('supplier', AiModel::schema_fields_SUPPLIER);
+        $this->assertEquals('model_code', AiModel::schema_fields_MODEL_CODE);
+        $this->assertEquals('name', AiModel::schema_fields_NAME);
+        $this->assertEquals('version', AiModel::schema_fields_VERSION);
+        $this->assertEquals('is_copy', AiModel::schema_fields_IS_COPY);
+        $this->assertEquals('origin_model_id', AiModel::schema_fields_ORIGIN_MODEL_ID);
+        $this->assertEquals('config', AiModel::schema_fields_CONFIG);
+        $this->assertEquals('capabilities', AiModel::schema_fields_CAPABILITIES);
+        $this->assertEquals('max_tokens', AiModel::schema_fields_MAX_TOKENS);
+        $this->assertEquals('status', AiModel::schema_fields_STATUS);
+        $this->assertEquals('is_active', AiModel::schema_fields_IS_ACTIVE);
+        $this->assertEquals('is_default', AiModel::schema_fields_IS_DEFAULT);
+        $this->assertEquals('created_at', AiModel::schema_fields_CREATED_AT);
+        $this->assertEquals('updated_at', AiModel::schema_fields_UPDATED_AT);
     }
 
     /**
@@ -57,20 +57,20 @@ class AiModelTest extends TestCase
     public function testSetAndGetData()
     {
         $testData = [
-            AiModel::fields_MODEL_CODE => 'gpt-4',
-            AiModel::fields_NAME => 'GPT-4',
-            AiModel::fields_SUPPLIER => 'openai',
-            AiModel::fields_STATUS => 'active',
-            AiModel::fields_IS_ACTIVE => 1
+            AiModel::schema_fields_MODEL_CODE => 'gpt-4',
+            AiModel::schema_fields_NAME => 'GPT-4',
+            AiModel::schema_fields_SUPPLIER => 'openai',
+            AiModel::schema_fields_STATUS => 'active',
+            AiModel::schema_fields_IS_ACTIVE => 1
         ];
 
         $this->model->setData($testData);
 
-        $this->assertEquals('gpt-4', $this->model->getData(AiModel::fields_MODEL_CODE));
-        $this->assertEquals('GPT-4', $this->model->getData(AiModel::fields_NAME));
-        $this->assertEquals('openai', $this->model->getData(AiModel::fields_SUPPLIER));
-        $this->assertEquals('active', $this->model->getData(AiModel::fields_STATUS));
-        $this->assertEquals(1, $this->model->getData(AiModel::fields_IS_ACTIVE));
+        $this->assertEquals('gpt-4', $this->model->getData(AiModel::schema_fields_MODEL_CODE));
+        $this->assertEquals('GPT-4', $this->model->getData(AiModel::schema_fields_NAME));
+        $this->assertEquals('openai', $this->model->getData(AiModel::schema_fields_SUPPLIER));
+        $this->assertEquals('active', $this->model->getData(AiModel::schema_fields_STATUS));
+        $this->assertEquals(1, $this->model->getData(AiModel::schema_fields_IS_ACTIVE));
     }
 
     /**
@@ -78,10 +78,10 @@ class AiModelTest extends TestCase
      */
     public function testIsActive()
     {
-        $this->model->setData(AiModel::fields_IS_ACTIVE, 1);
+        $this->model->setData(AiModel::schema_fields_IS_ACTIVE, 1);
         $this->assertTrue($this->model->isActive());
 
-        $this->model->setData(AiModel::fields_IS_ACTIVE, 0);
+        $this->model->setData(AiModel::schema_fields_IS_ACTIVE, 0);
         $this->assertFalse($this->model->isActive());
     }
 
@@ -90,10 +90,10 @@ class AiModelTest extends TestCase
      */
     public function testIsDefault()
     {
-        $this->model->setData(AiModel::fields_IS_DEFAULT, 1);
+        $this->model->setData(AiModel::schema_fields_IS_DEFAULT, 1);
         $this->assertTrue($this->model->isDefault());
 
-        $this->model->setData(AiModel::fields_IS_DEFAULT, 0);
+        $this->model->setData(AiModel::schema_fields_IS_DEFAULT, 0);
         $this->assertFalse($this->model->isDefault());
     }
 
@@ -103,7 +103,7 @@ class AiModelTest extends TestCase
     public function testGetCapabilities()
     {
         $capabilities = ['chat', 'completion', 'embedding'];
-        $this->model->setData(AiModel::fields_CAPABILITIES, json_encode($capabilities));
+        $this->model->setData(AiModel::schema_fields_CAPABILITIES, json_encode($capabilities));
 
         $result = $this->model->getCapabilities();
         $this->assertIsArray($result);
@@ -118,11 +118,11 @@ class AiModelTest extends TestCase
         $tokenPriceInput = 0.03;
         $tokenPriceOutput = 0.06;
         
-        $this->model->setData(AiModel::fields_TOKEN_PRICE_INPUT, $tokenPriceInput);
-        $this->model->setData(AiModel::fields_TOKEN_PRICE_OUTPUT, $tokenPriceOutput);
+        $this->model->setData(AiModel::schema_fields_TOKEN_PRICE_INPUT, $tokenPriceInput);
+        $this->model->setData(AiModel::schema_fields_TOKEN_PRICE_OUTPUT, $tokenPriceOutput);
 
-        $this->assertEquals($tokenPriceInput, $this->model->getData(AiModel::fields_TOKEN_PRICE_INPUT));
-        $this->assertEquals($tokenPriceOutput, $this->model->getData(AiModel::fields_TOKEN_PRICE_OUTPUT));
+        $this->assertEquals($tokenPriceInput, $this->model->getData(AiModel::schema_fields_TOKEN_PRICE_INPUT));
+        $this->assertEquals($tokenPriceOutput, $this->model->getData(AiModel::schema_fields_TOKEN_PRICE_OUTPUT));
     }
 
     /**
@@ -132,16 +132,16 @@ class AiModelTest extends TestCase
     {
         // 测试必填字段
         $this->model->setData([
-            AiModel::fields_MODEL_CODE => '',
-            AiModel::fields_NAME => 'Test',
+            AiModel::schema_fields_MODEL_CODE => '',
+            AiModel::schema_fields_NAME => 'Test',
         ]);
 
         // 模型代码不能为空
-        $this->assertEmpty($this->model->getData(AiModel::fields_MODEL_CODE));
+        $this->assertEmpty($this->model->getData(AiModel::schema_fields_MODEL_CODE));
 
         // 设置有效数据
-        $this->model->setData(AiModel::fields_MODEL_CODE, 'valid-code');
-        $this->assertEquals('valid-code', $this->model->getData(AiModel::fields_MODEL_CODE));
+        $this->model->setData(AiModel::schema_fields_MODEL_CODE, 'valid-code');
+        $this->assertEquals('valid-code', $this->model->getData(AiModel::schema_fields_MODEL_CODE));
     }
 
     protected function tearDown(): void

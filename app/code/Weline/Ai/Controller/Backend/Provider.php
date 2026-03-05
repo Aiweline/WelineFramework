@@ -8,6 +8,7 @@ use Weline\Admin\Controller\BaseController;
 use Weline\Ai\Model\Provider\Account;
 use Weline\Ai\Model\Provider\UsageRecord;
 use Weline\Ai\Service\Provider\AccountService;
+use Weline\Ai\Service\Provider\VendorConfigManager;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -39,8 +40,13 @@ class Provider extends BaseController
     #[Acl('Weline_Ai::ai_provider_list', '查看供应商账户', 'mdi-view-list', '查看供应商账户列表')]
     public function index()
     {
+        if ($this->request->getParam('embed') === '1') {
+            $this->layoutType = 'default.blank';
+        }
         $this->assign('title', __('AI供应商账户管理'));
         $this->assign('providers', $this->accountService->getSupportedProviders());
+        $this->assign('embed', ($this->request->getParam('embed') === '1' || $this->request->getParam('embed') === true));
+        $this->assign('activeTab', 'account');
         return $this->fetch();
     }
 
@@ -59,11 +65,11 @@ class Provider extends BaseController
             $accountModel = ObjectManager::getInstance(Account::class);
             
             if ($search) {
-                $accountModel->where(Account::fields_ACCOUNT_NAME , "%{$search}%", 'like');
+                $accountModel->where(Account::schema_fields_ACCOUNT_NAME , "%{$search}%", 'like');
             }
             
             if ($providerCode) {
-                $accountModel->where(Account::fields_PROVIDER_CODE, $providerCode);
+                $accountModel->where(Account::schema_fields_PROVIDER_CODE, $providerCode);
             }
 
             $total = $accountModel->count();
@@ -71,13 +77,13 @@ class Provider extends BaseController
             // 重新创建模型实例以避免状态污染
             $accountModel = ObjectManager::getInstance(Account::class);
             if ($search) {
-                $accountModel->where(Account::fields_ACCOUNT_NAME, "%{$search}%", 'like');
+                $accountModel->where(Account::schema_fields_ACCOUNT_NAME, "%{$search}%", 'like');
             }
             if ($providerCode) {
-                $accountModel->where(Account::fields_PROVIDER_CODE, $providerCode);
+                $accountModel->where(Account::schema_fields_PROVIDER_CODE, $providerCode);
             }
             
-            $accounts = $accountModel->order(Account::fields_CREATED_AT, 'DESC')
+            $accounts = $accountModel->order(Account::schema_fields_CREATED_AT, 'DESC')
                 ->pagination($page, $limit)
                 ->select()
                 ->fetch()
@@ -131,6 +137,98 @@ class Provider extends BaseController
                 'message' => $e->getMessage()
             ]);
         }
+    }
+
+    /**
+     * 获取供应商账户列表（供模型表单账户选择，支持 search-select）
+     * 参数：provider_code 必填，q 可选搜索关键词
+     */
+    public function getAccountsForSelect()
+    {
+        $providerCode = (string)($this->request->getParam('provider_code') ?? $this->request->getGet('provider_code') ?? '');
+        $q = (string)($this->request->getParam('q') ?? $this->request->getGet('q') ?? '');
+        $limit = (int)($this->request->getParam('limit') ?? 50);
+
+        if ($providerCode === '') {
+            return $this->fetchJson(['success' => true, 'data' => []]);
+        }
+
+        /** @var Account $accountModel */
+        $accountModel = ObjectManager::getInstance(Account::class)
+            ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
+            ->where(Account::schema_fields_IS_ACTIVE, 1);
+        if ($q !== '') {
+            $accountModel->where(Account::schema_fields_ACCOUNT_NAME, "%{$q}%", 'like');
+        }
+        $accounts = $accountModel->order(Account::schema_fields_IS_DEFAULT, 'DESC')
+            ->order(Account::schema_fields_CREATED_AT, 'DESC')
+            ->limit($limit)
+            ->select()
+            ->fetch()
+            ->getItems();
+
+        $providers = $this->accountService->getSupportedProviders();
+        $providerName = $providers[$providerCode]['name'] ?? $providerCode;
+        $data = [];
+        foreach ($accounts as $acc) {
+            $arr = is_object($acc) ? $acc->getData() : $acc;
+            $data[] = [
+                'value' => (string)($arr['id'] ?? ''),
+                'label' => ($arr['account_name'] ?? '') . ' (' . $providerName . ')',
+            ];
+        }
+        return $this->fetchJson(['success' => true, 'data' => $data]);
+    }
+
+    /**
+     * 获取供应商信息（供模型表单选择供应商后自动填充）
+     *
+     * @return \Weline\Framework\Http\Response|string
+     */
+    public function getProviderInfo()
+    {
+        $providerCode = (string)($this->request->getParam('provider_code') ?? $this->request->getGet('provider_code') ?? '');
+        if ($providerCode === '') {
+            return $this->fetchJson(['success' => false, 'message' => __('供应商代码不能为空')]);
+        }
+        $config = VendorConfigManager::getProviderConfig($providerCode);
+        if (!$config) {
+            return $this->fetchJson(['success' => false, 'message' => __('供应商不存在: %{1}', [$providerCode])]);
+        }
+        $info = [
+            'name' => $config['name'] ?? $providerCode,
+            'code' => $config['code'] ?? $providerCode,
+            'base_url' => $config['base_url'] ?? '',
+            'test_model' => $config['test_model'] ?? '',
+            'model_config_defaults' => $config['model_config_defaults'] ?? [],
+            'models' => array_map(function ($m) {
+                return [
+                    'code' => $m['code'] ?? '',
+                    'name' => $m['name'] ?? $m['code'] ?? '',
+                ];
+            }, $config['models'] ?? []),
+        ];
+        return $this->fetchJson(['success' => true, 'data' => $info]);
+    }
+
+    /**
+     * Offcanvas 编辑/新建账户（供侧边栏加载）
+     */
+    #[Acl('Weline_Ai::ai_provider_edit_offcanvas', '编辑供应商账户（侧边栏）', 'mdi-pencil', '编辑供应商账户（侧边栏）')]
+    public function editOffcanvas(): string
+    {
+        $id = (int)($this->request->getParam('id') ?? 0);
+        $account = null;
+        if ($id > 0) {
+            /** @var Account $account */
+            $account = ObjectManager::getInstance(Account::class)->load($id);
+            if (!$account->getId()) {
+                $account = null;
+            }
+        }
+        $this->assign('account', $account);
+        $this->assign('providers', $this->accountService->getSupportedProviders());
+        return $this->fetch('offcanvas_edit');
     }
 
     /**
@@ -210,8 +308,8 @@ class Provider extends BaseController
             }
 
             // 设置基本信息
-            $account->setData(Account::fields_PROVIDER_CODE, $data['provider_code']);
-            $account->setData(Account::fields_ACCOUNT_NAME, $data['account_name']);
+            $account->setData(Account::schema_fields_PROVIDER_CODE, $data['provider_code']);
+            $account->setData(Account::schema_fields_ACCOUNT_NAME, $data['account_name']);
             
             // 只有当提供新的API密钥时才更新
             if (!empty($data['api_key'])) {
@@ -220,13 +318,13 @@ class Provider extends BaseController
             
             // 设置其他字段
             if (!empty($data['api_secret'])) {
-                $account->setData(Account::fields_API_SECRET, $data['api_secret']);
+                $account->setData(Account::schema_fields_API_SECRET, $data['api_secret']);
             }
             
-            $account->setData(Account::fields_BASE_URL, $data['base_url'] ?? '');
-            $account->setData(Account::fields_BALANCE, (float)($data['balance'] ?? 0));
-            $account->setData(Account::fields_CURRENCY, $data['currency'] ?? 'USD');
-            $account->setData(Account::fields_IS_ACTIVE, (int)($data['is_active'] ?? 0));
+            $account->setData(Account::schema_fields_BASE_URL, $data['base_url'] ?? '');
+            $account->setData(Account::schema_fields_BALANCE, (float)($data['balance'] ?? 0));
+            $account->setData(Account::schema_fields_CURRENCY, $data['currency'] ?? 'USD');
+            $account->setData(Account::schema_fields_IS_ACTIVE, (int)($data['is_active'] ?? 0));
             
             // 处理代理配置
             if (!empty($data['proxy_enabled'])) {
@@ -238,17 +336,17 @@ class Provider extends BaseController
                     'username' => $data['proxy_username'] ?? '',
                     'password' => $data['proxy_password'] ?? ''
                 ];
-                $account->setData(Account::fields_PROXY_CONFIG, json_encode($proxyConfig));
+                $account->setData(Account::schema_fields_PROXY_CONFIG, json_encode($proxyConfig));
             } else {
-                $account->setData(Account::fields_PROXY_CONFIG, null);
+                $account->setData(Account::schema_fields_PROXY_CONFIG, null);
             }
 
             // 保存时间戳
             if (!$account->getId()) {
-                $account->setData(Account::fields_CREATED_AT, time());
-                $account->setData(Account::fields_CONNECTION_STATUS, Account::STATUS_PENDING);
+                $account->setData(Account::schema_fields_CREATED_AT, time());
+                $account->setData(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_PENDING);
             }
-            $account->setData(Account::fields_UPDATED_AT, time());
+            $account->setData(Account::schema_fields_UPDATED_AT, time());
 
             $account->save();
 
@@ -290,7 +388,7 @@ class Provider extends BaseController
             // 检查是否有使用记录
             /** @var UsageRecord $usageRecord */
             $usageRecord = ObjectManager::getInstance(UsageRecord::class);
-            $hasUsage = $usageRecord->where(UsageRecord::fields_ACCOUNT_ID, $id)->count() > 0;
+            $hasUsage = $usageRecord->where(UsageRecord::schema_fields_ACCOUNT_ID, $id)->count() > 0;
             
             if ($hasUsage) {
                 throw new \Exception(__('该账户有使用记录，无法删除'));
@@ -346,18 +444,18 @@ class Provider extends BaseController
             $account->reset()->load($id);
             
             // 如果测试失败且账户是激活状态，取消激活
-            if (!$result['success'] && $account->getData(Account::fields_IS_ACTIVE)) {
-                $account->setData(Account::fields_IS_ACTIVE, 0);
-                $account->setData(Account::fields_CONNECTION_STATUS, Account::STATUS_FAILED);
-                $account->setData(Account::fields_CONNECTION_TEST_MESSAGE, $result['message']);
-                $account->setData(Account::fields_CONNECTION_TEST_TIME, time());
+            if (!$result['success'] && $account->getData(Account::schema_fields_IS_ACTIVE)) {
+                $account->setData(Account::schema_fields_IS_ACTIVE, 0);
+                $account->setData(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_FAILED);
+                $account->setData(Account::schema_fields_CONNECTION_TEST_MESSAGE, $result['message']);
+                $account->setData(Account::schema_fields_CONNECTION_TEST_TIME, time());
                 $account->save();
             }
             
             // 在返回结果中包含更新后的连接状态
-            $result['connection_status'] = $account->getData(Account::fields_CONNECTION_STATUS);
-            $result['connection_test_time'] = $account->getData(Account::fields_CONNECTION_TEST_TIME);
-            $result['connection_test_message'] = $account->getData(Account::fields_CONNECTION_TEST_MESSAGE);
+            $result['connection_status'] = $account->getData(Account::schema_fields_CONNECTION_STATUS);
+            $result['connection_test_time'] = $account->getData(Account::schema_fields_CONNECTION_TEST_TIME);
+            $result['connection_test_message'] = $account->getData(Account::schema_fields_CONNECTION_TEST_MESSAGE);
             
             return $this->fetchJson($result);
         } catch (\Exception $e) {
@@ -385,9 +483,9 @@ class Provider extends BaseController
             // 创建临时账户对象进行测试
             /** @var Account $tempAccount */
             $tempAccount = ObjectManager::getInstance(Account::class);
-            $tempAccount->setData(Account::fields_PROVIDER_CODE, $data['provider_code']);
+            $tempAccount->setData(Account::schema_fields_PROVIDER_CODE, $data['provider_code']);
             $tempAccount->setEncryptedApiKey($data['api_key']);
-            $tempAccount->setData(Account::fields_BASE_URL, $data['base_url'] ?? '');
+            $tempAccount->setData(Account::schema_fields_BASE_URL, $data['base_url'] ?? '');
             
             // 如果有代理配置
             if (!empty($data['proxy_enabled'])) {
@@ -399,7 +497,7 @@ class Provider extends BaseController
                     'username' => $data['proxy_username'] ?? '',
                     'password' => $data['proxy_password'] ?? ''
                 ];
-                $tempAccount->setData(Account::fields_PROXY_CONFIG, json_encode($proxyConfig));
+                $tempAccount->setData(Account::schema_fields_PROXY_CONFIG, json_encode($proxyConfig));
             }
             
             $result = $this->accountService->testConnection($tempAccount);
@@ -430,15 +528,15 @@ class Provider extends BaseController
                 throw new \Exception('账户不存在');
             }
 
-            $isActive = !$account->getData(Account::fields_IS_ACTIVE);
+            $isActive = !$account->getData(Account::schema_fields_IS_ACTIVE);
             
             // 如果要激活账户，先检查连接状态
-            if ($isActive && $account->getData(Account::fields_CONNECTION_STATUS) !== Account::STATUS_SUCCESS) {
+            if ($isActive && $account->getData(Account::schema_fields_CONNECTION_STATUS) !== Account::STATUS_SUCCESS) {
                 throw new \Exception(__('请先测试连接成功后再激活账户'));
             }
 
-            $account->setData(Account::fields_IS_ACTIVE, $isActive ? 1 : 0);
-            $account->setData(Account::fields_UPDATED_AT, time());
+            $account->setData(Account::schema_fields_IS_ACTIVE, $isActive ? 1 : 0);
+            $account->setData(Account::schema_fields_UPDATED_AT, time());
             $account->save();
 
             return $this->fetchJson([
@@ -624,19 +722,19 @@ class Provider extends BaseController
             $usageModel = ObjectManager::getInstance(UsageRecord::class);
             
             if ($accountId) {
-                $usageModel->where(UsageRecord::fields_ACCOUNT_ID, $accountId);
+                $usageModel->where(UsageRecord::schema_fields_ACCOUNT_ID, $accountId);
             }
             
             if ($dateFrom) {
-                $usageModel->where(UsageRecord::fields_CREATED_AT, strtotime($dateFrom), '>=');
+                $usageModel->where(UsageRecord::schema_fields_CREATED_AT, strtotime($dateFrom), '>=');
             }
             
             if ($dateTo) {
-                $usageModel->where(UsageRecord::fields_CREATED_AT, strtotime($dateTo . ' 23:59:59'), '<=');
+                $usageModel->where(UsageRecord::schema_fields_CREATED_AT, strtotime($dateTo . ' 23:59:59'), '<=');
             }
 
             $total = $usageModel->count();
-            $records = $usageModel->order(UsageRecord::fields_CREATED_AT, 'DESC')
+            $records = $usageModel->order(UsageRecord::schema_fields_CREATED_AT, 'DESC')
                 ->pagination($page, $limit)
                 ->select()
                 ->fetchArray();
@@ -680,24 +778,24 @@ class Provider extends BaseController
         $usageModel = ObjectManager::getInstance(UsageRecord::class);
         
         if ($accountId) {
-            $usageModel->where(UsageRecord::fields_ACCOUNT_ID, $accountId);
+            $usageModel->where(UsageRecord::schema_fields_ACCOUNT_ID, $accountId);
         }
         
         if ($dateFrom) {
-            $usageModel->where(UsageRecord::fields_CREATED_AT, strtotime($dateFrom), '>=');
+            $usageModel->where(UsageRecord::schema_fields_CREATED_AT, strtotime($dateFrom), '>=');
         }
         
         if ($dateTo) {
-            $usageModel->where(UsageRecord::fields_CREATED_AT, strtotime($dateTo . ' 23:59:59'), '<=');
+            $usageModel->where(UsageRecord::schema_fields_CREATED_AT, strtotime($dateTo . ' 23:59:59'), '<=');
         }
         
         $stats = $usageModel->fields(
             'COUNT(*) AS total_requests,' .
-            'SUM(' . UsageRecord::fields_TOTAL_TOKENS . ') AS total_tokens,' .
-            'SUM(' . UsageRecord::fields_TOTAL_COST . ') AS total_cost,' .
-            'AVG(' . UsageRecord::fields_TOTAL_COST . ') AS avg_cost,' .
-            'SUM(CASE WHEN ' . UsageRecord::fields_STATUS . ' = "success" THEN 1 ELSE 0 END) AS success_count,' .
-            'SUM(CASE WHEN ' . UsageRecord::fields_STATUS . ' = "failed" THEN 1 ELSE 0 END) AS failed_count'
+            'SUM(' . UsageRecord::schema_fields_TOTAL_TOKENS . ') AS total_tokens,' .
+            'SUM(' . UsageRecord::schema_fields_TOTAL_COST . ') AS total_cost,' .
+            'AVG(' . UsageRecord::schema_fields_TOTAL_COST . ') AS avg_cost,' .
+            'SUM(CASE WHEN ' . UsageRecord::schema_fields_STATUS . ' = "success" THEN 1 ELSE 0 END) AS success_count,' .
+            'SUM(CASE WHEN ' . UsageRecord::schema_fields_STATUS . ' = "failed" THEN 1 ELSE 0 END) AS failed_count'
         )->find()->fetch();
 
         if (!$stats || !is_array($stats)) {

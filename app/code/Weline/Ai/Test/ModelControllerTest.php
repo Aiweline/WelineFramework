@@ -78,7 +78,7 @@ class ModelControllerTest extends TestCore
             
             if ($testModels && method_exists($testModels, 'getItems')) {
                 foreach ($testModels->getItems() as $testModel) {
-                    $modelCode = $testModel->getData(AiModel::fields_MODEL_CODE);
+                    $modelCode = $testModel->getData(AiModel::schema_fields_MODEL_CODE);
                     if ($modelCode && strpos($modelCode, 'test') !== false) {
                         try {
                             $testModel->delete()->fetch();
@@ -109,22 +109,22 @@ class ModelControllerTest extends TestCore
     {
         // 设置完整的默认值，允许customData完全覆盖
         $defaults = [
-            AiModel::fields_SUPPLIER => 'test-supplier-' . uniqid(),
-            AiModel::fields_MODEL_CODE => 'test-model-' . uniqid(),
-            AiModel::fields_NAME => '测试模型',
-            AiModel::fields_VERSION => '1.0.0',
-            AiModel::fields_IS_COPY => 0, // 默认是原始模型
-            AiModel::fields_ORIGIN_MODEL_ID => null,
-            AiModel::fields_CONFIG => json_encode(['temperature' => 0.7]),
-            AiModel::fields_CAPABILITIES => json_encode(['chat' => true]),
-            AiModel::fields_MAX_TOKENS => 4096,
-            AiModel::fields_COST_PER_TOKEN => '0.0015',
-            AiModel::fields_TOKEN_PRICE_INPUT => 0.03,
-            AiModel::fields_TOKEN_PRICE_OUTPUT => 0.06,
-            AiModel::fields_PROXY_INFO => null,
-            AiModel::fields_STATUS => 'active',
-            AiModel::fields_IS_ACTIVE => 1,
-            AiModel::fields_IS_DEFAULT => 0,
+            AiModel::schema_fields_SUPPLIER => 'test-supplier-' . uniqid(),
+            AiModel::schema_fields_MODEL_CODE => 'test-model-' . uniqid(),
+            AiModel::schema_fields_NAME => '测试模型',
+            AiModel::schema_fields_VERSION => '1.0.0',
+            AiModel::schema_fields_IS_COPY => 0, // 默认是原始模型
+            AiModel::schema_fields_ORIGIN_MODEL_ID => null,
+            AiModel::schema_fields_CONFIG => json_encode(['temperature' => 0.7]),
+            AiModel::schema_fields_CAPABILITIES => json_encode(['chat' => true]),
+            AiModel::schema_fields_MAX_TOKENS => 4096,
+            AiModel::schema_fields_COST_PER_TOKEN => '0.0015',
+            AiModel::schema_fields_TOKEN_PRICE_INPUT => 0.03,
+            AiModel::schema_fields_TOKEN_PRICE_OUTPUT => 0.06,
+            AiModel::schema_fields_PROXY_INFO => null,
+            AiModel::schema_fields_STATUS => 'active',
+            AiModel::schema_fields_IS_ACTIVE => 1,
+            AiModel::schema_fields_IS_DEFAULT => 0,
         ];
 
         // customData优先级更高
@@ -169,9 +169,9 @@ class ModelControllerTest extends TestCore
     private function createCopiedModel(int $originModelId, array $customData = []): AiModel
     {
         $defaultData = [
-            AiModel::fields_IS_COPY => 1,
-            AiModel::fields_ORIGIN_MODEL_ID => $originModelId,
-            AiModel::fields_MODEL_CODE => 'test-copy-' . uniqid(),
+            AiModel::schema_fields_IS_COPY => 1,
+            AiModel::schema_fields_ORIGIN_MODEL_ID => $originModelId,
+            AiModel::schema_fields_MODEL_CODE => 'test-copy-' . uniqid(),
         ];
 
         return $this->createTestModel(array_merge($defaultData, $customData));
@@ -191,15 +191,15 @@ class ModelControllerTest extends TestCore
         $testModel->reset();
         
         $modelCode = 'test-integrity-' . uniqid();
-        $testModel->setData(AiModel::fields_SUPPLIER, 'integrity-supplier');
-        $testModel->setData(AiModel::fields_MODEL_CODE, $modelCode);
-        $testModel->setData(AiModel::fields_NAME, '完整性测试模型');
-        $testModel->setData(AiModel::fields_VERSION, '1.0.0');
-        $testModel->setData(AiModel::fields_IS_COPY, 0);
-        $testModel->setData(AiModel::fields_IS_ACTIVE, 1);
-        $testModel->setData(AiModel::fields_IS_DEFAULT, 0);
-        $testModel->setData(AiModel::fields_TOKEN_PRICE_INPUT, 0.03);
-        $testModel->setData(AiModel::fields_TOKEN_PRICE_OUTPUT, 0.06);
+        $testModel->setData(AiModel::schema_fields_SUPPLIER, 'integrity-supplier');
+        $testModel->setData(AiModel::schema_fields_MODEL_CODE, $modelCode);
+        $testModel->setData(AiModel::schema_fields_NAME, '完整性测试模型');
+        $testModel->setData(AiModel::schema_fields_VERSION, '1.0.0');
+        $testModel->setData(AiModel::schema_fields_IS_COPY, 0);
+        $testModel->setData(AiModel::schema_fields_IS_ACTIVE, 1);
+        $testModel->setData(AiModel::schema_fields_IS_DEFAULT, 0);
+        $testModel->setData(AiModel::schema_fields_TOKEN_PRICE_INPUT, 0.03);
+        $testModel->setData(AiModel::schema_fields_TOKEN_PRICE_OUTPUT, 0.06);
         
         $testModel->save();
         $modelId = $testModel->getId();
@@ -214,11 +214,11 @@ class ModelControllerTest extends TestCore
         
         // 验证字段值
         $this->assertEquals($modelId, $loadedModel->getId(), 'ID应匹配');
-        $this->assertEquals('integrity-supplier', $loadedModel->getData(AiModel::fields_SUPPLIER), '供应商应匹配');
-        $this->assertEquals($modelCode, $loadedModel->getData(AiModel::fields_MODEL_CODE), '模型代码应匹配');
-        $this->assertEquals('完整性测试模型', $loadedModel->getData(AiModel::fields_NAME), '名称应匹配');
-        $this->assertEquals(0, $loadedModel->getData(AiModel::fields_IS_COPY), 'IS_COPY应为0');
-        $this->assertEquals(1, $loadedModel->getData(AiModel::fields_IS_ACTIVE), 'IS_ACTIVE应为1');
+        $this->assertEquals('integrity-supplier', $loadedModel->getData(AiModel::schema_fields_SUPPLIER), '供应商应匹配');
+        $this->assertEquals($modelCode, $loadedModel->getData(AiModel::schema_fields_MODEL_CODE), '模型代码应匹配');
+        $this->assertEquals('完整性测试模型', $loadedModel->getData(AiModel::schema_fields_NAME), '名称应匹配');
+        $this->assertEquals(0, $loadedModel->getData(AiModel::schema_fields_IS_COPY), 'IS_COPY应为0');
+        $this->assertEquals(1, $loadedModel->getData(AiModel::schema_fields_IS_ACTIVE), 'IS_ACTIVE应为1');
     }
 
     /**
@@ -228,28 +228,28 @@ class ModelControllerTest extends TestCore
     {
         // 创建原始模型
         $originalModel = $this->createTestModel([
-            AiModel::fields_NAME => '原始模型',
-            AiModel::fields_MODEL_CODE => 'original-model-' . uniqid(),
-            AiModel::fields_SUPPLIER => 'copy-test-supplier',
-            AiModel::fields_MAX_TOKENS => 8192,
-            AiModel::fields_IS_COPY => 0, // 明确设置为原始模型
+            AiModel::schema_fields_NAME => '原始模型',
+            AiModel::schema_fields_MODEL_CODE => 'original-model-' . uniqid(),
+            AiModel::schema_fields_SUPPLIER => 'copy-test-supplier',
+            AiModel::schema_fields_MAX_TOKENS => 8192,
+            AiModel::schema_fields_IS_COPY => 0, // 明确设置为原始模型
         ]);
 
         $originalModelId = (int)$originalModel->getId();
         
         // 验证原始模型创建时的状态（在创建复制模型之前）
-        $this->assertEquals(0, $originalModel->getData(AiModel::fields_IS_COPY), '原始模型创建时IS_COPY应为0');
+        $this->assertEquals(0, $originalModel->getData(AiModel::schema_fields_IS_COPY), '原始模型创建时IS_COPY应为0');
 
         // 创建复制模型
         $copiedModel = $this->createCopiedModel($originalModelId, [
-            AiModel::fields_NAME => '复制的模型',
+            AiModel::schema_fields_NAME => '复制的模型',
         ]);
 
         // 验证复制模型的标记
-        $this->assertEquals(1, $copiedModel->getData(AiModel::fields_IS_COPY), '复制模型IS_COPY应为1');
+        $this->assertEquals(1, $copiedModel->getData(AiModel::schema_fields_IS_COPY), '复制模型IS_COPY应为1');
         $this->assertEquals(
             $originalModelId,
-            $copiedModel->getData(AiModel::fields_ORIGIN_MODEL_ID),
+            $copiedModel->getData(AiModel::schema_fields_ORIGIN_MODEL_ID),
             'origin_model_id应指向原始模型'
         );
     }
@@ -261,12 +261,12 @@ class ModelControllerTest extends TestCore
     {
         // 创建原始模型
         $originalModel = $this->createTestModel([
-            AiModel::fields_NAME => '不可删除的原始模型',
-            AiModel::fields_IS_COPY => 0,
+            AiModel::schema_fields_NAME => '不可删除的原始模型',
+            AiModel::schema_fields_IS_COPY => 0,
         ]);
 
         // 验证是原始模型
-        $this->assertEquals(0, $originalModel->getData(AiModel::fields_IS_COPY), '应为原始模型');
+        $this->assertEquals(0, $originalModel->getData(AiModel::schema_fields_IS_COPY), '应为原始模型');
         $this->assertFalse($originalModel->isCopied(), 'isCopied()应返回false');
         
         // Controller应该检查is_copy状态并拒绝删除
@@ -282,17 +282,17 @@ class ModelControllerTest extends TestCore
     {
         // 创建原始模型和复制模型
         $originalModel = $this->createTestModel([
-            AiModel::fields_NAME => '原始模型（用于复制）',
+            AiModel::schema_fields_NAME => '原始模型（用于复制）',
         ]);
         
         $copiedModel = $this->createCopiedModel((int)$originalModel->getId(), [
-            AiModel::fields_NAME => '可删除的复制模型',
+            AiModel::schema_fields_NAME => '可删除的复制模型',
         ]);
 
         $copiedModelId = $copiedModel->getId();
 
         // 验证是复制模型
-        $this->assertEquals(1, $copiedModel->getData(AiModel::fields_IS_COPY), '应为复制模型');
+        $this->assertEquals(1, $copiedModel->getData(AiModel::schema_fields_IS_COPY), '应为复制模型');
         
         // 删除复制模型
         $copiedModel->delete()->fetch();
@@ -311,29 +311,29 @@ class ModelControllerTest extends TestCore
     {
         // 创建激活状态的模型
         $model = $this->createTestModel([
-            AiModel::fields_IS_ACTIVE => 1,
+            AiModel::schema_fields_IS_ACTIVE => 1,
         ]);
 
-        $originalStatus = $model->getData(AiModel::fields_IS_ACTIVE);
+        $originalStatus = $model->getData(AiModel::schema_fields_IS_ACTIVE);
         $this->assertEquals(1, $originalStatus, '初始状态应为激活');
 
         // 切换状态（激活 → 停用）
-        $model->setData(AiModel::fields_IS_ACTIVE, 0);
+        $model->setData(AiModel::schema_fields_IS_ACTIVE, 0);
         $model->save();
 
         // 重新加载验证
         $updatedModel = ObjectManager::getInstance(AiModel::class);
         $updatedModel->load($model->getId());
-        $this->assertEquals(0, $updatedModel->getData(AiModel::fields_IS_ACTIVE), '状态应从1变为0');
+        $this->assertEquals(0, $updatedModel->getData(AiModel::schema_fields_IS_ACTIVE), '状态应从1变为0');
 
         // 再次切换（停用 → 激活）
-        $updatedModel->setData(AiModel::fields_IS_ACTIVE, 1);
+        $updatedModel->setData(AiModel::schema_fields_IS_ACTIVE, 1);
         $updatedModel->save();
 
         // 验证状态恢复
         $finalModel = ObjectManager::getInstance(AiModel::class);
         $finalModel->load($model->getId());
-        $this->assertEquals(1, $finalModel->getData(AiModel::fields_IS_ACTIVE), '状态应从0恢复为1');
+        $this->assertEquals(1, $finalModel->getData(AiModel::schema_fields_IS_ACTIVE), '状态应从0恢复为1');
     }
 
     /**
@@ -346,13 +346,13 @@ class ModelControllerTest extends TestCore
         
         // 创建第一个测试模型并立即验证（避免单例覆盖）
         $model1 = $this->createTestModel([
-            AiModel::fields_NAME => '查询测试模型1',
-            AiModel::fields_SUPPLIER => $testSupplier,
+            AiModel::schema_fields_NAME => '查询测试模型1',
+            AiModel::schema_fields_SUPPLIER => $testSupplier,
         ]);
         
         $model1Id = $model1->getId();
-        $model1Name = $model1->getData(AiModel::fields_NAME);
-        $model1Supplier = $model1->getData(AiModel::fields_SUPPLIER);
+        $model1Name = $model1->getData(AiModel::schema_fields_NAME);
+        $model1Supplier = $model1->getData(AiModel::schema_fields_SUPPLIER);
         
         $this->assertNotEmpty($model1Id, 'model1应有ID');
         $this->assertEquals('查询测试模型1', $model1Name, 'model1名称应匹配');
@@ -360,12 +360,12 @@ class ModelControllerTest extends TestCore
         
         // 创建第二个测试模型
         $model2 = $this->createTestModel([
-            AiModel::fields_NAME => '查询测试模型2',
-            AiModel::fields_SUPPLIER => $testSupplier,
+            AiModel::schema_fields_NAME => '查询测试模型2',
+            AiModel::schema_fields_SUPPLIER => $testSupplier,
         ]);
         
         $model2Id = $model2->getId();
-        $model2Name = $model2->getData(AiModel::fields_NAME);
+        $model2Name = $model2->getData(AiModel::schema_fields_NAME);
         
         $this->assertNotEmpty($model2Id, 'model2应有ID');
         $this->assertEquals('查询测试模型2', $model2Name, 'model2名称应匹配');
@@ -374,7 +374,7 @@ class ModelControllerTest extends TestCore
         // 测试按供应商查询
         $queryModel = new AiModel(); // 使用new创建新实例，避免单例问题
         $models = $queryModel
-            ->where(AiModel::fields_SUPPLIER, $testSupplier)
+            ->where(AiModel::schema_fields_SUPPLIER, $testSupplier)
             ->select()
             ->fetch();
 
