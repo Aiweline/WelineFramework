@@ -67,7 +67,7 @@ class ExcelExporter
         $firstSheet = true;
 
         foreach ($reports as $report) {
-            $weekNumber = $report->getData(WeeklyReport::fields_WEEK_NUMBER);
+            $weekNumber = $report->getData(WeeklyReport::schema_fields_WEEK_NUMBER);
             $tasks = $this->getReportService()->getWeekTasks((int) $report->getId());
 
             if ($firstSheet) {
@@ -77,7 +77,7 @@ class ExcelExporter
                 $sheet = $spreadsheet->createSheet();
             }
 
-            $holidayName = $report->getData(WeeklyReport::fields_HOLIDAY_NAME);
+            $holidayName = $report->getData(WeeklyReport::schema_fields_HOLIDAY_NAME);
             $sheetTitle = $holidayName ? "第{$weekNumber}周【{$holidayName}】" : "第{$weekNumber}周";
             $sheet->setTitle(mb_substr($sheetTitle, 0, 31));
 
@@ -104,7 +104,7 @@ class ExcelExporter
             '下周计划',
         ];
 
-        $holidayName = $report->getData(WeeklyReport::fields_HOLIDAY_NAME);
+        $holidayName = $report->getData(WeeklyReport::schema_fields_HOLIDAY_NAME);
         if ($holidayName) {
             $headers[0] = "第{$weekNumber}周【{$holidayName}】";
         }
@@ -118,16 +118,16 @@ class ExcelExporter
 
         $row = 2;
         foreach ($tasks as $task) {
-            $taskName = $task->getData(WeeklyTask::fields_CATEGORY) ?: $task->getData(WeeklyTask::fields_TASK_NAME);
+            $taskName = $task->getData(WeeklyTask::schema_fields_CATEGORY) ?: $task->getData(WeeklyTask::schema_fields_TASK_NAME);
             $sheet->setCellValue('A' . $row, $taskName);
-            $sheet->setCellValue('B' . $row, $task->getData(WeeklyTask::fields_SUB_TASK));
-            $sheet->setCellValue('C' . $row, $task->getData(WeeklyTask::fields_RELATED_DOC));
-            $sheet->setCellValue('D' . $row, $task->getData(WeeklyTask::fields_START_DATE));
-            $sheet->setCellValue('E' . $row, $task->getData(WeeklyTask::fields_END_DATE));
-            $sheet->setCellValue('F' . $row, $task->getData(WeeklyTask::fields_STATUS));
-            $sheet->setCellValue('G' . $row, $task->getData(WeeklyTask::fields_PROGRESS));
-            $sheet->setCellValue('H' . $row, $task->getData(WeeklyTask::fields_RISKS));
-            $sheet->setCellValue('I' . $row, $task->getData(WeeklyTask::fields_NEXT_WEEK_PLAN));
+            $sheet->setCellValue('B' . $row, $task->getData(WeeklyTask::schema_fields_SUB_TASK));
+            $sheet->setCellValue('C' . $row, $task->getData(WeeklyTask::schema_fields_RELATED_DOC));
+            $sheet->setCellValue('D' . $row, $task->getData(WeeklyTask::schema_fields_START_DATE));
+            $sheet->setCellValue('E' . $row, $task->getData(WeeklyTask::schema_fields_END_DATE));
+            $sheet->setCellValue('F' . $row, $task->getData(WeeklyTask::schema_fields_STATUS));
+            $sheet->setCellValue('G' . $row, $task->getData(WeeklyTask::schema_fields_PROGRESS));
+            $sheet->setCellValue('H' . $row, $task->getData(WeeklyTask::schema_fields_RISKS));
+            $sheet->setCellValue('I' . $row, $task->getData(WeeklyTask::schema_fields_NEXT_WEEK_PLAN));
 
             $row++;
         }

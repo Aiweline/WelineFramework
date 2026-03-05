@@ -159,7 +159,7 @@ class WeeklyReportService
      */
     public function addTask(int $reportId, array $taskData): WeeklyTask
     {
-        $taskData[WeeklyTask::fields_REPORT_ID] = $reportId;
+        $taskData[WeeklyTask::schema_fields_REPORT_ID] = $reportId;
 
         $task = $this->getTaskModel();
         return $task->addTask($taskData);
@@ -220,7 +220,7 @@ class WeeklyReportService
         ];
 
         foreach ($tasks as $task) {
-            $status = $task->getData(WeeklyTask::fields_STATUS) ?? '';
+            $status = $task->getData(WeeklyTask::schema_fields_STATUS) ?? '';
 
             switch ($status) {
                 case WeeklyTask::STATUS_COMPLETED:
@@ -258,31 +258,31 @@ class WeeklyReportService
     public function parseTaskFromDescription(string $description): array
     {
         $task = [
-            WeeklyTask::fields_TASK_NAME => '',
-            WeeklyTask::fields_SUB_TASK => '',
-            WeeklyTask::fields_STATUS => WeeklyTask::STATUS_IN_PROGRESS,
-            WeeklyTask::fields_PROGRESS => '',
-            WeeklyTask::fields_CATEGORY => '',
+            WeeklyTask::schema_fields_TASK_NAME => '',
+            WeeklyTask::schema_fields_SUB_TASK => '',
+            WeeklyTask::schema_fields_STATUS => WeeklyTask::STATUS_IN_PROGRESS,
+            WeeklyTask::schema_fields_PROGRESS => '',
+            WeeklyTask::schema_fields_CATEGORY => '',
         ];
 
         if (str_contains($description, '完成') || str_contains($description, '已完成')) {
-            $task[WeeklyTask::fields_STATUS] = WeeklyTask::STATUS_COMPLETED;
+            $task[WeeklyTask::schema_fields_STATUS] = WeeklyTask::STATUS_COMPLETED;
         } elseif (str_contains($description, '测试')) {
-            $task[WeeklyTask::fields_STATUS] = WeeklyTask::STATUS_TESTING;
+            $task[WeeklyTask::schema_fields_STATUS] = WeeklyTask::STATUS_TESTING;
         } elseif (str_contains($description, '待开始') || str_contains($description, '计划')) {
-            $task[WeeklyTask::fields_STATUS] = WeeklyTask::STATUS_TODO;
+            $task[WeeklyTask::schema_fields_STATUS] = WeeklyTask::STATUS_TODO;
         }
 
         if (str_contains($description, '建站')) {
-            $task[WeeklyTask::fields_CATEGORY] = '建站任务';
+            $task[WeeklyTask::schema_fields_CATEGORY] = '建站任务';
         } elseif (str_contains($description, 'Demo') || str_contains($description, 'AI')) {
-            $task[WeeklyTask::fields_CATEGORY] = 'Demo 自动AI建站系统';
+            $task[WeeklyTask::schema_fields_CATEGORY] = 'Demo 自动AI建站系统';
         } elseif (str_contains($description, 'Saas') || str_contains($description, 'saas')) {
-            $task[WeeklyTask::fields_CATEGORY] = 'Saas';
+            $task[WeeklyTask::schema_fields_CATEGORY] = 'Saas';
         }
 
-        $task[WeeklyTask::fields_TASK_NAME] = $description;
-        $task[WeeklyTask::fields_PROGRESS] = $description;
+        $task[WeeklyTask::schema_fields_TASK_NAME] = $description;
+        $task[WeeklyTask::schema_fields_PROGRESS] = $description;
 
         return $task;
     }
