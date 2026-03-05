@@ -71,13 +71,12 @@ document.getElementById('push-form').addEventListener('submit', function(e) {
     
     formData.set('platform_ids', JSON.stringify(platformIds));
     
-    fetch('<?= $this->getUrl('generativeengineoptimization/backend/push/execute') ?>', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        const resultDiv = document.getElementById('push-result');
+    var geoPushUrl = '<?= $this->getUrl('generativeengineoptimization/backend/push/execute') ?>';
+    var geoPushOpts = { method: 'POST', body: formData };
+    window.Weline.Api.request(geoPushUrl, geoPushOpts)
+    .then(function(res) {
+        var data = (res && res.data) !== undefined ? res.data : res;
+        var resultDiv = document.getElementById('push-result');
         resultDiv.style.display = 'block';
         
         if (data.success) {
