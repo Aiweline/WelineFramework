@@ -54,15 +54,15 @@ class SeoUrlGenerateRewrite implements ObserverInterface
         // 先尝试 match_uri，再尝试 real_uri
         $rewrite = $this->urlRewrite->reset()
             ->clearQuery()
-            ->where(UrlRewrite::fields_WEBSITE_ID, $websiteId)
-            ->where(UrlRewrite::fields_PATH, $match_uri)
+            ->where(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(UrlRewrite::schema_fields_PATH, $match_uri)
             ->find()->fetch();
         
         if (!$rewrite->getId() && $match_uri !== $real_uri) {
             $rewrite = $this->urlRewrite->reset()
                 ->clearQuery()
-                ->where(UrlRewrite::fields_WEBSITE_ID, $websiteId)
-                ->where(UrlRewrite::fields_PATH, $real_uri)
+                ->where(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(UrlRewrite::schema_fields_PATH, $real_uri)
                 ->find()->fetch();
         }
         if ($rewrite->getId()) {
