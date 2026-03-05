@@ -15,8 +15,6 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Database\Connection\Api\Sql\AbstractTable;
 use Weline\Framework\Database\Connection\Api\Sql\Table\CreateInterface;
-use Weline\Framework\Database\Schema\MysqlSchemaCompiler;
-
 class Create extends AbstractTable implements CreateInterface
 {
     public array $index_outs = [];
@@ -195,7 +193,7 @@ class Create extends AbstractTable implements CreateInterface
         }
         $comment = $this->comment ? "COMMENT '{$this->comment}'" : '';
         if (trim($this->additional) === '' || $this->additional === ';') {
-            $this->additional = (new MysqlSchemaCompiler())->getDefaultTableAdditional();
+            $this->additional = $this->getConnector()->getDefaultTableAdditional();
         }
         if (!empty($this->additional)) {
             $this->additional = str_replace(';', '', $this->additional);

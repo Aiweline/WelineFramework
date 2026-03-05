@@ -14,6 +14,8 @@ use Weline\Framework\Register\Register;
 
 abstract class CommandAbstract implements CommandInterface
 {
+    use ParseModuleArgsTrait;
+
     protected Printing $printer;
 
     public function __init()

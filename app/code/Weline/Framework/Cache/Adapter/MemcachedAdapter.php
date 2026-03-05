@@ -76,6 +76,35 @@ class MemcachedAdapter implements CacheAdapterInterface, StatsInterface
             return false;
         }
 
+        try {
+            if (\method_exists($this->memcached, 'getAllKeys')) {
+                $allKeys = $this->memcached->getAllKeys();
+                if ($allKeys === false) {
+                    w_log_warning(
+                        __('MemcachedAdapter: getAllKeys() 失败，fallback 到 flush() 将清空整个 Memcached 实例'),
+                        ['identity' => $this->identity],
+                        'cache'
+                    );
+                    return $this->memcached->flush();
+                }
+                $keysToDelete = \array_filter($allKeys, fn(string $k): bool => \str_starts_with($k, $this->prefix));
+                if (!empty($keysToDelete) && \method_exists($this->memcached, 'deleteMulti')) {
+                    $this->memcached->deleteMulti($keysToDelete);
+                } else {
+                    foreach ($keysToDelete as $key) {
+                        $this->memcached->delete($key);
+                    }
+                }
+                return true;
+            }
+        } catch (\Throwable $e) {
+            w_log_warning(
+                __('MemcachedAdapter: 按 prefix 清理失败，fallback 到 flush(): %{1}', [$e->getMessage()]),
+                ['identity' => $this->identity],
+                'cache'
+            );
+        }
+
         return $this->memcached->flush();
     }
 

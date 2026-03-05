@@ -105,7 +105,7 @@ class ModelSetup
         if (!$this->model->getConnection()->getConnector()->tableExist($this->model->getTable())) {
             throw new \Weline\Framework\App\Exception(__('表不存在: %{1}', $this->model->getTable()));
         }
-        $alter = $this->model->getConnection()->getConnector()->alterTable()->forTable($this->model->getTable(), $this->model->_primary_key, $comment, $new_table_name);
+        $alter = $this->model->getConnection()->getConnector()->alterTable()->forTable($this->model->getTable(), $this->model->getPrimaryKey(), $comment, $new_table_name);
         
         // 返回包装类，自动处理字段备份和恢复
         return new AlterWithBackup($alter, $this);
@@ -440,7 +440,7 @@ class ModelSetup
         }
         
         // 获取主键
-        $primaryKey = $this->model->_primary_key ?? 'id';
+        $primaryKey = $this->model->getPrimaryKey() ?: 'id';
         
         // 备份字段数据
         $this->getFieldBackupService()->backupFieldData(

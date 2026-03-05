@@ -288,15 +288,27 @@ return [
         'description' => __('在获取数据库索引器列表时触发，允许其他模块添加自定义索引器。'),
         'doc' => 'database/数据库索引器列表.md',
     ],
+    // 已废弃：ModelManager 不再 dispatch，请使用 Weline_Framework_Schema::table_ddl_before / table_ddl_after
     'Weline_Framework_Database::model_update_before' => [
-        'name' => __('模型更新前'),
-        'description' => __('在数据库模型更新前触发，允许其他模块在更新前执行操作。'),
+        'name' => __('模型更新前（已废弃）'),
+        'description' => __('已废弃，请使用 table_ddl_before。原在数据库模型更新前触发。'),
         'doc' => 'database/模型更新前.md',
     ],
     'Weline_Framework_Database::model_update_after' => [
-        'name' => __('模型更新后'),
-        'description' => __('在数据库模型更新后触发，允许其他模块在更新后执行操作。'),
+        'name' => __('模型更新后（已废弃）'),
+        'description' => __('已废弃，请使用 table_ddl_after。原在数据库模型更新后触发。'),
         'doc' => 'database/模型更新后.md',
+    ],
+    // Schema DDL 事件（替代 model_update_before/after）
+    'Weline_Framework_Schema::table_ddl_before' => [
+        'name' => __('表 DDL 执行前'),
+        'description' => __('在执行表结构 DDL 前触发，允许其他模块（如 ModuleManager）做表名冲突检查。'),
+        'doc' => 'database/table_ddl_before.md',
+    ],
+    'Weline_Framework_Schema::table_ddl_after' => [
+        'name' => __('表 DDL 执行后'),
+        'description' => __('在执行表结构 DDL 后触发，允许其他模块（如 ModuleManager）记录表映射、清理缓存等。'),
+        'doc' => 'database/table_ddl_after.md',
     ],
     
     // ========== 模型动态事件 ==========

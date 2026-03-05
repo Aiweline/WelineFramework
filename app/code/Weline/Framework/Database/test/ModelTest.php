@@ -14,6 +14,7 @@ namespace Weline\Framework\Database\test;
 use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\Database\Model\ModelManager;
+use Weline\Framework\Database\Setup\Db\CreateTestWelineModelTable;
 use Weline\Framework\Database\test\Model\WelineModel;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Model\Module;
@@ -27,6 +28,7 @@ class ModelTest extends TestCore
     public function setUp(): void
     {
         $this->model = ObjectManager::getInstance(WelineModel::class);
+        CreateTestWelineModelTable::run();
         /** @var ModelManager $modelManager */
         $modelManager = ObjectManager::getInstance(ModelManager::class);
         $devModule = Env::getInstance()->getModuleInfo('Weline_Framework');
@@ -106,7 +108,7 @@ class ModelTest extends TestCore
         $this->model->setData(['name' => 'test-update11'])->save();
         self::assertTrue('test-update11' == $this->model->load(3)->getData('name'));
         # update 查询保存
-        $this->model->where($this->model::fields_ID, 3)
+        $this->model->where($this->model::schema_fields_ID, 3)
             ->update(['name' => 'test-update2'])
             ->fetch();
         self::assertTrue('test-update2' == $this->model->getData('name'));

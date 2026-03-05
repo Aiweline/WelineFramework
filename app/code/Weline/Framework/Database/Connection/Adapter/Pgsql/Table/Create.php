@@ -242,7 +242,8 @@ class Create extends AbstractTable implements CreateInterface
         }
         
         $type = strtoupper($type);
-        $index_method = $index_method ? "USING {$index_method}" : '';
+        // PostgreSQL: USING 必须在列列表之前；BTREE 为默认，可省略
+        $usingPart = ($index_method && strtoupper($index_method) !== 'BTREE') ? " USING {$index_method}" : '';
         
         if (is_string($column)) {
             $column = explode(',', $column);
@@ -259,10 +260,10 @@ class Create extends AbstractTable implements CreateInterface
             case self::index_type_DEFAULT:
             case self::index_type_KEY:
             case 'INDEX': // 兼容旧的调用方式
-                $this->indexes[] = "CREATE INDEX IF NOT EXISTS \"{$name}\" ON {$this->table} ({$column_str}) {$index_method};";
+                $this->indexes[] = "CREATE INDEX IF NOT EXISTS \"{$name}\" ON {$this->table}{$usingPart} ({$column_str});";
                 break;
             case self::index_type_UNIQUE:
-                $this->indexes[] = "CREATE UNIQUE INDEX IF NOT EXISTS \"{$name}\" ON {$this->table} ({$column_str}) {$index_method};";
+                $this->indexes[] = "CREATE UNIQUE INDEX IF NOT EXISTS \"{$name}\" ON {$this->table}{$usingPart} ({$column_str});";
                 break;
             case self::index_type_FULLTEXT:
                 // PostgreSQL 使用 GIN 索引实现全文搜索
@@ -276,7 +277,7 @@ class Create extends AbstractTable implements CreateInterface
                 if (!is_array($column)) {
                     throw new Exception(self::index_type_MULTI . __('：此索引的column需要array类型'));
                 }
-                $this->indexes[] = "CREATE INDEX IF NOT EXISTS \"{$name}\" ON {$this->table} ({$column_str}) {$index_method};";
+                $this->indexes[] = "CREATE INDEX IF NOT EXISTS \"{$name}\" ON {$this->table}{$usingPart} ({$column_str});";
                 break;
             default:
                 throw new Exception(__('未知的索引类型：') . $type);

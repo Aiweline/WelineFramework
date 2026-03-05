@@ -6,7 +6,9 @@ namespace Weline\Framework\Database\Schema;
 
 /**
  * SQLite 3.45+ DDL 编译
- * @since 1.0.0 支持 SQLite 3.45+
+ *
+ * @deprecated 方言已下沉至 Sqlite Connector
+ * @since 1.0.0
  */
 final class SqliteSchemaCompiler implements SchemaCompilerInterface
 {
