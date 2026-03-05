@@ -71,6 +71,7 @@
         autoRequests: [],
         autoEnableOnCartClickSelector: '[data-weline-cart-trigger]',
         maintenanceHandler: null,
+        onHttpError: null, // (status, error, silent) => void，可选全局 HTTP 错误钩子
         // workerUrl 自动处理：优先使用配置中的，否则使用默认值
         workerUrl: apiConfig.workerUrl ? resolveWorkerUrl(apiConfig.workerUrl) : getDefaultWorkerUrl(),
     }, apiConfig);
@@ -100,6 +101,13 @@
             this.listenMaintenanceResolved();
         }
 
+        /**
+         * @param {string} url
+         * @param {object} [options]
+         * @param {function(number, Error): boolean|void} [options.onError] - 请求级错误回调；返回 true 表示已处理，不再执行默认 Toast
+         * @param {function(number, Error): boolean|void} [options.onHttpError] - 同上，与 onError 二选一
+         * @param {boolean} [options.silent] - 为 true 时不触发任何错误提示
+         */
         request(url, options = {}) {
             if (!url) {
                 return Promise.reject(new Error('请求地址不能为空'));
@@ -187,6 +195,8 @@
 
             delete prepared.json;
             delete prepared.signal;
+            delete prepared.onError;
+            delete prepared.onHttpError;
 
             return prepared;
         }
@@ -256,9 +266,76 @@
             if (data.ok !== false && !data.error) {
                 pending.resolve(this.buildResponse(data));
             } else {
-                const error = new Error(data.error || data.statusText || '请求失败');
-                error.response = this.buildResponse(data);
+                const response = this.buildResponse(data);
+                const status = response.status;
+                const serverMsg = (response.data && typeof response.data === 'object') ? (response.data.msg || response.data.message) : null;
+                let friendlyMessage = data.error || data.statusText || serverMsg || '请求失败';
+                if (!serverMsg) {
+                    if (status === 404) {
+                        friendlyMessage = '接口或页面不存在，请刷新重试';
+                    } else if (status >= 500) {
+                        friendlyMessage = '服务异常，请稍后重试';
+                    }
+                }
+                const error = new Error(friendlyMessage);
+                error.response = response;
+                error.status = status;
+                if (pending.url) {
+                    error.requestUrl = pending.url;
+                }
+                this.handleHttpError(status, error, pending.options?.silent, pending.options);
                 pending.reject(error);
+            }
+        }
+
+        /**
+         * 统一 HTTP 错误处理：先执行请求级回调，再全局回调，最后默认 Toast。
+         * @param {number} status - HTTP 状态码
+         * @param {Error} error - 错误对象（含 response、requestUrl）
+         * @param {boolean} silent - 是否静默（静默时不做任何提示）
+         * @param {object} [requestOptions] - 本次请求的 options，可含 onError/onHttpError 回调
+         *   - onError(status, error) 或 onHttpError(status, error): 返回 true 表示业务已处理，不再执行默认 Toast
+         */
+        handleHttpError(status, error, silent, requestOptions) {
+            if (silent) return;
+            const isDev = window.DEV === true || window.WELINE_ENV === 'DEV';
+            const detailParts = [];
+            if (isDev) {
+                if (error.requestUrl) detailParts.push('URL: ' + error.requestUrl);
+                detailParts.push('HTTP ' + (status || 0));
+                if (error.response?.data != null) {
+                    const d = error.response.data;
+                    detailParts.push(typeof d === 'object' ? JSON.stringify(d, null, 2) : String(d));
+                }
+                if (error.message) detailParts.push(error.message);
+                console.error('[Weline.Api] 请求失败', { status, requestUrl: error.requestUrl, response: error.response, error: error.message });
+            }
+            const requestCb = requestOptions && (requestOptions.onError || requestOptions.onHttpError);
+            if (typeof requestCb === 'function') {
+                try {
+                    if (requestCb.call(null, status, error) === true) {
+                        return;
+                    }
+                } catch (e) {
+                    console.error('[Weline.Api] 请求 onError/onHttpError 执行失败:', e);
+                }
+            }
+            if (typeof this.config.onHttpError === 'function') {
+                try {
+                    this.config.onHttpError(status, error, silent);
+                } catch (e) {
+                    console.error('[Weline.Api] onHttpError 执行失败:', e);
+                }
+                return;
+            }
+            const Toast = window.BackendToast || window.AdminToast || window.FrontendToast;
+            if (typeof Toast === 'object' && typeof Toast.error === 'function') {
+                let msg = error.response?.data?.msg || (typeof error.response?.data === 'object' && error.response?.data?.message) || error.message;
+                if (!msg) msg = status === 404 ? '接口或页面不存在，请刷新重试' : status >= 500 ? '服务异常，请稍后重试' : '请求失败';
+                if (isDev && detailParts.length) {
+                    msg = msg + '\n\n[DEV] ' + detailParts.join('\n');
+                }
+                Toast.error(msg);
             }
         }
 
@@ -726,7 +803,15 @@
 
     // 导出模块接口
     const ApiModule = {
+        __full: true,
         request: (url, options) => client.request(url, options),
+        get: (url, options) => client.request(url, Object.assign({ method: 'GET' }, options)),
+        post: (url, data, options) => {
+            const opts = Object.assign({}, options, { method: 'POST' });
+            opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+            opts.body = typeof data === 'string' ? data : JSON.stringify(data || {});
+            return client.request(url, opts);
+        },
         markCartActive: () => client.markCartActive(),
         markCartEmpty: () => client.markCartEmpty(),
         enableAutoRequests: () => client.enableAutoRequests(),
