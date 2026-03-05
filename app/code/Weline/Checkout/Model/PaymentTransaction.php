@@ -12,29 +12,45 @@ declare(strict_types=1);
 namespace Weline\Checkout\Model;
 
 use Weline\Framework\Database\Model;
-use Weline\Framework\Database\Api\Db\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 /**
  * 支付交易模型
  */
+#[Table(comment: '支付交易表')]
+#[Index(name: 'idx_order_id', columns: ['order_id'], comment: '订单ID')]
+#[Index(name: 'idx_transaction_number', columns: ['transaction_number'], comment: '交易号')]
+#[Index(name: 'idx_status', columns: ['status'], comment: '交易状态')]
+#[Index(name: 'idx_created_time', columns: ['created_time'], comment: '创建时间')]
 class PaymentTransaction extends Model
 {
-    public const table = 'weline_checkout_payment_transaction';
-    public const primary_key = 'transaction_id';
-    
+
+    public const schema_table = 'weline_checkout_payment_transaction';
+    public const schema_primary_key = 'transaction_id';
+    public const schema_primary_keys = ['transaction_id'];
+
     // 字段常量
-    public const fields_ID = 'transaction_id';
-    public const fields_ORDER_ID = 'order_id';
-    public const fields_PAYMENT_METHOD = 'payment_method';
-    public const fields_TRANSACTION_NUMBER = 'transaction_number';
-    public const fields_AMOUNT = 'amount';
-    public const fields_CURRENCY = 'currency';
-    public const fields_STATUS = 'status';
-    public const fields_GATEWAY_RESPONSE = 'gateway_response';
-    public const fields_CREATED_TIME = 'created_time';
-    public const fields_UPDATED_TIME = 'updated_time';
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '交易ID')]
+    public const schema_fields_ID = 'transaction_id';
+    #[Col(type: 'int', nullable: false, comment: '订单ID')]
+    public const schema_fields_ORDER_ID = 'order_id';
+    #[Col(type: 'varchar', length: 50, nullable: false, comment: '支付方式')]
+    public const schema_fields_PAYMENT_METHOD = 'payment_method';
+    #[Col(type: 'varchar', length: 128, nullable: true, comment: '交易号')]
+    public const schema_fields_TRANSACTION_NUMBER = 'transaction_number';
+    #[Col(type: 'decimal', length: '10,2', nullable: true, default: '0.00', comment: '交易金额')]
+    public const schema_fields_AMOUNT = 'amount';
+    #[Col(type: 'varchar', length: 10, nullable: true, default: 'CNY', comment: '货币代码')]
+    public const schema_fields_CURRENCY = 'currency';
+    #[Col(type: 'varchar', length: 20, nullable: true, default: 'pending', comment: '交易状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col(type: 'text', nullable: true, comment: '支付网关响应（JSON）')]
+    public const schema_fields_GATEWAY_RESPONSE = 'gateway_response';
+    #[Col(type: 'datetime', nullable: false, comment: '创建时间')]
+    public const schema_fields_CREATED_TIME = 'created_time';
+    #[Col(type: 'datetime', nullable: false, comment: '更新时间')]
+    public const schema_fields_UPDATED_TIME = 'updated_time';
     
     // 交易状态常量
     public const STATUS_PENDING = 'pending';
@@ -42,7 +58,6 @@ class PaymentTransaction extends Model
     public const STATUS_FAILED = 'failed';
     public const STATUS_REFUNDED = 'refunded';
     
-    public array $_unit_primary_keys = ['transaction_id'];
     public array $_index_sort_keys = ['transaction_id', 'order_id', 'transaction_number', 'created_time'];
 
     /**
@@ -50,48 +65,6 @@ class PaymentTransaction extends Model
      */
     public function _init(): void
     {
-        $this->_primary_key = 'transaction_id';
-    }
-
-    /**
-     * 设置模型
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * 安装模型
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist() === false) {
-            $setup->createTable('支付交易表')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, null, 'primary key auto_increment', '交易ID')
-                ->addColumn(self::fields_ORDER_ID, TableInterface::column_type_INTEGER, null, 'not null', '订单ID')
-                ->addColumn(self::fields_PAYMENT_METHOD, TableInterface::column_type_VARCHAR, 50, 'not null', '支付方式')
-                ->addColumn(self::fields_TRANSACTION_NUMBER, TableInterface::column_type_VARCHAR, 128, '', '交易号')
-                ->addColumn(self::fields_AMOUNT, TableInterface::column_type_DECIMAL, '10,2', 'default 0.00', '交易金额')
-                ->addColumn(self::fields_CURRENCY, TableInterface::column_type_VARCHAR, 10, 'default \'CNY\'', '货币代码')
-                ->addColumn(self::fields_STATUS, TableInterface::column_type_VARCHAR, 20, 'default \'pending\'', '交易状态')
-                ->addColumn(self::fields_GATEWAY_RESPONSE, TableInterface::column_type_TEXT, null, '', '支付网关响应（JSON）')
-                ->addColumn(self::fields_CREATED_TIME, TableInterface::column_type_DATETIME, null, 'not null', '创建时间')
-                ->addColumn(self::fields_UPDATED_TIME, TableInterface::column_type_DATETIME, null, 'not null', '更新时间')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_order_id', self::fields_ORDER_ID)
-                ->addIndex(TableInterface::index_type_KEY, 'idx_transaction_number', self::fields_TRANSACTION_NUMBER)
-                ->addIndex(TableInterface::index_type_KEY, 'idx_status', self::fields_STATUS)
-                ->addIndex(TableInterface::index_type_KEY, 'idx_created_time', self::fields_CREATED_TIME)
-                ->create();
-        }
-    }
-
-    /**
-     * 升级模型
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑
     }
 
     /**
@@ -102,8 +75,8 @@ class PaymentTransaction extends Model
      */
     public function getTransactionsByOrderId(int $orderId): array
     {
-        return $this->where(self::fields_ORDER_ID, $orderId)
-            ->order(self::fields_CREATED_TIME, 'DESC')
+        return $this->where(self::schema_fields_ORDER_ID, $orderId)
+            ->order(self::schema_fields_CREATED_TIME, 'DESC')
             ->select()
             ->fetchArray();
     }
@@ -151,4 +124,5 @@ class PaymentTransaction extends Model
         return is_array($decoded) ? $decoded : [];
     }
 }
+
 

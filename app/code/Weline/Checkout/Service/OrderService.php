@@ -73,7 +73,7 @@ class OrderService
     {
         /** @var Order $order */
         $order = ObjectManager::getInstance(Order::class);
-        $order->load(Order::fields_ORDER_NUMBER, $orderNumber);
+        $order->load(Order::schema_fields_ORDER_NUMBER, $orderNumber);
         
         if (!$order->getId()) {
             return null;
@@ -198,8 +198,8 @@ class OrderService
         
         $offset = ($page - 1) * $pageSize;
         
-        return $order->where(Order::fields_CUSTOMER_ID, $customerId)
-            ->order(Order::fields_CREATED_TIME, 'DESC')
+        return $order->where(Order::schema_fields_CUSTOMER_ID, $customerId)
+            ->order(Order::schema_fields_CREATED_TIME, 'DESC')
             ->limit($pageSize, $offset)
             ->select()
             ->fetchArray();

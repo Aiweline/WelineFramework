@@ -171,32 +171,32 @@ class CheckoutService
             /** @var Order $order */
             $order = ObjectManager::getInstance(Order::class);
             $order->setData([
-                Order::fields_ORDER_NUMBER => $order->generateOrderNumber(),
-                Order::fields_CUSTOMER_ID => $data['customer_id'],
-                Order::fields_STATUS => Order::STATUS_PENDING,
-                Order::fields_SUBTOTAL => $totals['subtotal'],
-                Order::fields_SHIPPING_AMOUNT => $totals['shipping_amount'],
-                Order::fields_TAX_AMOUNT => $totals['tax_amount'],
-                Order::fields_DISCOUNT_AMOUNT => $totals['discount_amount'],
-                Order::fields_TOTAL_AMOUNT => $totals['total_amount'],
-                Order::fields_CURRENCY => $data['currency'] ?? 'CNY',
-                Order::fields_SHIPPING_ADDRESS => is_array($data['shipping_address']) 
+                Order::schema_fields_ORDER_NUMBER => $order->generateOrderNumber(),
+                Order::schema_fields_CUSTOMER_ID => $data['customer_id'],
+                Order::schema_fields_STATUS => Order::STATUS_PENDING,
+                Order::schema_fields_SUBTOTAL => $totals['subtotal'],
+                Order::schema_fields_SHIPPING_AMOUNT => $totals['shipping_amount'],
+                Order::schema_fields_TAX_AMOUNT => $totals['tax_amount'],
+                Order::schema_fields_DISCOUNT_AMOUNT => $totals['discount_amount'],
+                Order::schema_fields_TOTAL_AMOUNT => $totals['total_amount'],
+                Order::schema_fields_CURRENCY => $data['currency'] ?? 'CNY',
+                Order::schema_fields_SHIPPING_ADDRESS => is_array($data['shipping_address']) 
                     ? json_encode($data['shipping_address'], JSON_UNESCAPED_UNICODE) 
                     : $data['shipping_address'],
-                Order::fields_BILLING_ADDRESS => !empty($data['billing_address'])
+                Order::schema_fields_BILLING_ADDRESS => !empty($data['billing_address'])
                     ? (is_array($data['billing_address']) 
                         ? json_encode($data['billing_address'], JSON_UNESCAPED_UNICODE) 
                         : $data['billing_address'])
                     : (is_array($data['shipping_address']) 
                         ? json_encode($data['shipping_address'], JSON_UNESCAPED_UNICODE) 
                         : $data['shipping_address']),
-                Order::fields_PAYMENT_METHOD => $data['payment_method'] ?? '',
-                Order::fields_PAYMENT_STATUS => Order::PAYMENT_STATUS_PENDING,
-                Order::fields_SHIPPING_METHOD => $data['shipping_method'] ?? '',
-                Order::fields_SHIPPING_STATUS => Order::SHIPPING_STATUS_PENDING,
-                Order::fields_REMARK => $data['remark'] ?? '',
-                Order::fields_CREATED_TIME => date('Y-m-d H:i:s'),
-                Order::fields_UPDATED_TIME => date('Y-m-d H:i:s'),
+                Order::schema_fields_PAYMENT_METHOD => $data['payment_method'] ?? '',
+                Order::schema_fields_PAYMENT_STATUS => Order::PAYMENT_STATUS_PENDING,
+                Order::schema_fields_SHIPPING_METHOD => $data['shipping_method'] ?? '',
+                Order::schema_fields_SHIPPING_STATUS => Order::SHIPPING_STATUS_PENDING,
+                Order::schema_fields_REMARK => $data['remark'] ?? '',
+                Order::schema_fields_CREATED_TIME => date('Y-m-d H:i:s'),
+                Order::schema_fields_UPDATED_TIME => date('Y-m-d H:i:s'),
             ]);
             $order->save();
             
@@ -206,19 +206,19 @@ class CheckoutService
             foreach ($data['items'] as $item) {
                 $orderItem->clear()
                     ->setData([
-                        OrderItem::fields_ORDER_ID => $order->getId(),
-                        OrderItem::fields_PRODUCT_ID => $item['product_id'],
-                        OrderItem::fields_PRODUCT_NAME => $item['product_name'] ?? '',
-                        OrderItem::fields_PRODUCT_SKU => $item['product_sku'] ?? '',
-                        OrderItem::fields_QUANTITY => $item['quantity'],
-                        OrderItem::fields_PRICE => $item['price'],
-                        OrderItem::fields_TOTAL_PRICE => (float)$item['quantity'] * (float)$item['price'],
-                        OrderItem::fields_ATTRIBUTES => !empty($item['attributes'])
+                        OrderItem::schema_fields_ORDER_ID => $order->getId(),
+                        OrderItem::schema_fields_PRODUCT_ID => $item['product_id'],
+                        OrderItem::schema_fields_PRODUCT_NAME => $item['product_name'] ?? '',
+                        OrderItem::schema_fields_PRODUCT_SKU => $item['product_sku'] ?? '',
+                        OrderItem::schema_fields_QUANTITY => $item['quantity'],
+                        OrderItem::schema_fields_PRICE => $item['price'],
+                        OrderItem::schema_fields_TOTAL_PRICE => (float)$item['quantity'] * (float)$item['price'],
+                        OrderItem::schema_fields_ATTRIBUTES => !empty($item['attributes'])
                             ? (is_array($item['attributes']) 
                                 ? json_encode($item['attributes'], JSON_UNESCAPED_UNICODE) 
                                 : $item['attributes'])
                             : '',
-                        OrderItem::fields_CREATED_TIME => date('Y-m-d H:i:s'),
+                        OrderItem::schema_fields_CREATED_TIME => date('Y-m-d H:i:s'),
                     ])
                     ->save();
             }

@@ -124,18 +124,18 @@ class PaymentService
         /** @var PaymentTransaction $transaction */
         $transaction = ObjectManager::getInstance(PaymentTransaction::class);
         $transaction->setData([
-            PaymentTransaction::fields_ORDER_ID => $orderId,
-            PaymentTransaction::fields_PAYMENT_METHOD => $paymentMethod,
-            PaymentTransaction::fields_AMOUNT => $order->getTotalAmount(),
-            PaymentTransaction::fields_CURRENCY => $order->getCurrency(),
-            PaymentTransaction::fields_STATUS => PaymentTransaction::STATUS_PENDING,
-            PaymentTransaction::fields_GATEWAY_RESPONSE => !empty($paymentData['gateway_response'])
+            PaymentTransaction::schema_fields_ORDER_ID => $orderId,
+            PaymentTransaction::schema_fields_PAYMENT_METHOD => $paymentMethod,
+            PaymentTransaction::schema_fields_AMOUNT => $order->getTotalAmount(),
+            PaymentTransaction::schema_fields_CURRENCY => $order->getCurrency(),
+            PaymentTransaction::schema_fields_STATUS => PaymentTransaction::STATUS_PENDING,
+            PaymentTransaction::schema_fields_GATEWAY_RESPONSE => !empty($paymentData['gateway_response'])
                 ? (is_array($paymentData['gateway_response'])
                     ? json_encode($paymentData['gateway_response'], JSON_UNESCAPED_UNICODE)
                     : $paymentData['gateway_response'])
                 : '',
-            PaymentTransaction::fields_CREATED_TIME => date('Y-m-d H:i:s'),
-            PaymentTransaction::fields_UPDATED_TIME => date('Y-m-d H:i:s'),
+            PaymentTransaction::schema_fields_CREATED_TIME => date('Y-m-d H:i:s'),
+            PaymentTransaction::schema_fields_UPDATED_TIME => date('Y-m-d H:i:s'),
         ]);
         $transaction->save();
         
