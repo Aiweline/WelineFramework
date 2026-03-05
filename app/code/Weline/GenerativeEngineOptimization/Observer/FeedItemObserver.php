@@ -82,9 +82,9 @@ class FeedItemObserver implements ObserverInterface
 
         // 检查是否已存在
         $existingItem = $feedItemModel
-            ->where(FeedItem::fields_FEED_ID, $feed->getId())
-            ->where(FeedItem::fields_ITEM_TYPE, $data['item_type'])
-            ->where(FeedItem::fields_ITEM_ID, $data['item_id'])
+            ->where(FeedItem::schema_fields_FEED_ID, $feed->getId())
+            ->where(FeedItem::schema_fields_ITEM_TYPE, $data['item_type'])
+            ->where(FeedItem::schema_fields_ITEM_ID, $data['item_id'])
             ->find()
             ->fetch();
 
@@ -115,9 +115,9 @@ class FeedItemObserver implements ObserverInterface
         $feedItemModel = ObjectManager::getInstance(FeedItem::class);
 
         $feedItem = $feedItemModel
-            ->where(FeedItem::fields_FEED_ID, $data['feed_id'])
-            ->where(FeedItem::fields_ITEM_TYPE, $data['item_type'])
-            ->where(FeedItem::fields_ITEM_ID, $data['item_id'])
+            ->where(FeedItem::schema_fields_FEED_ID, $data['feed_id'])
+            ->where(FeedItem::schema_fields_ITEM_TYPE, $data['item_type'])
+            ->where(FeedItem::schema_fields_ITEM_ID, $data['item_id'])
             ->find()
             ->fetch();
 
@@ -148,9 +148,9 @@ class FeedItemObserver implements ObserverInterface
         $feedItemModel = ObjectManager::getInstance(FeedItem::class);
 
         $feedItem = $feedItemModel
-            ->where(FeedItem::fields_FEED_ID, $data['feed_id'])
-            ->where(FeedItem::fields_ITEM_TYPE, $data['item_type'])
-            ->where(FeedItem::fields_ITEM_ID, $data['item_id'])
+            ->where(FeedItem::schema_fields_FEED_ID, $data['feed_id'])
+            ->where(FeedItem::schema_fields_ITEM_TYPE, $data['item_type'])
+            ->where(FeedItem::schema_fields_ITEM_ID, $data['item_id'])
             ->find()
             ->fetch();
 
@@ -172,21 +172,21 @@ class FeedItemObserver implements ObserverInterface
         $feedItem = clone $feedItemModel;
         
         $feedItem->setData([
-            FeedItem::fields_FEED_ID => $feed->getId(),
-            FeedItem::fields_ITEM_TYPE => $data['item_type'],
-            FeedItem::fields_ITEM_ID => $data['item_id'],
-            FeedItem::fields_TITLE => $data['title'] ?? '',
-            FeedItem::fields_CONTENT => $data['content'] ?? '',
-            FeedItem::fields_URL => $data['url'] ?? '',
-            FeedItem::fields_METADATA => json_encode($data['metadata'] ?? []),
-            FeedItem::fields_IS_PUBLISHED => $data['is_published'] ?? 1,
-            FeedItem::fields_PUBLISHED_AT => $data['published_at'] ?? time(),
+            FeedItem::schema_fields_FEED_ID => $feed->getId(),
+            FeedItem::schema_fields_ITEM_TYPE => $data['item_type'],
+            FeedItem::schema_fields_ITEM_ID => $data['item_id'],
+            FeedItem::schema_fields_TITLE => $data['title'] ?? '',
+            FeedItem::schema_fields_CONTENT => $data['content'] ?? '',
+            FeedItem::schema_fields_URL => $data['url'] ?? '',
+            FeedItem::schema_fields_METADATA => json_encode($data['metadata'] ?? []),
+            FeedItem::schema_fields_IS_PUBLISHED => $data['is_published'] ?? 1,
+            FeedItem::schema_fields_PUBLISHED_AT => $data['published_at'] ?? time(),
         ]);
 
         $feedItem->save();
 
         // 如果Feed配置了实时推送，入队推送任务
-        if ($feed->isAutoPush() && $feed->getData(Feed::fields_UPDATE_FREQUENCY) === Feed::FREQUENCY_REALTIME) {
+        if ($feed->isAutoPush() && $feed->getData(Feed::schema_fields_UPDATE_FREQUENCY) === Feed::FREQUENCY_REALTIME) {
             $this->enqueueAutoPush($feed);
         }
     }
@@ -202,22 +202,22 @@ class FeedItemObserver implements ObserverInterface
     {
         // 更新字段（只更新提供的字段）
         if (isset($data['title'])) {
-            $feedItem->setData(FeedItem::fields_TITLE, $data['title']);
+            $feedItem->setData(FeedItem::schema_fields_TITLE, $data['title']);
         }
         if (isset($data['content'])) {
-            $feedItem->setData(FeedItem::fields_CONTENT, $data['content']);
+            $feedItem->setData(FeedItem::schema_fields_CONTENT, $data['content']);
         }
         if (isset($data['url'])) {
-            $feedItem->setData(FeedItem::fields_URL, $data['url']);
+            $feedItem->setData(FeedItem::schema_fields_URL, $data['url']);
         }
         if (isset($data['metadata'])) {
-            $feedItem->setData(FeedItem::fields_METADATA, json_encode($data['metadata']));
+            $feedItem->setData(FeedItem::schema_fields_METADATA, json_encode($data['metadata']));
         }
         if (isset($data['is_published'])) {
-            $feedItem->setData(FeedItem::fields_IS_PUBLISHED, $data['is_published']);
+            $feedItem->setData(FeedItem::schema_fields_IS_PUBLISHED, $data['is_published']);
         }
         if (isset($data['published_at'])) {
-            $feedItem->setData(FeedItem::fields_PUBLISHED_AT, $data['published_at']);
+            $feedItem->setData(FeedItem::schema_fields_PUBLISHED_AT, $data['published_at']);
         }
 
         $feedItem->save();
@@ -225,9 +225,9 @@ class FeedItemObserver implements ObserverInterface
         // 如果Feed配置了实时推送，入队推送任务
         /** @var Feed $feedModel */
         $feedModel = ObjectManager::getInstance(Feed::class);
-        $feed = $feedModel->load($feedItem->getData(FeedItem::fields_FEED_ID));
+        $feed = $feedModel->load($feedItem->getData(FeedItem::schema_fields_FEED_ID));
         
-        if ($feed->isAutoPush() && $feed->getData(Feed::fields_UPDATE_FREQUENCY) === Feed::FREQUENCY_REALTIME) {
+        if ($feed->isAutoPush() && $feed->getData(Feed::schema_fields_UPDATE_FREQUENCY) === Feed::FREQUENCY_REALTIME) {
             $this->enqueueAutoPush($feed);
         }
     }

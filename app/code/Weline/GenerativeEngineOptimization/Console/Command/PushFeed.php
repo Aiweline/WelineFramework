@@ -80,7 +80,7 @@ class PushFeed implements CommandInterface
 
                 if ($result->success) {
                     echo "推送成功！\n";
-                    echo "平台: {$platform->getData(Platform::fields_PLATFORM_NAME)}\n";
+                    echo "平台: {$platform->getData(Platform::schema_fields_PLATFORM_NAME)}\n";
                     echo "推送条目数: {$result->itemsCount}\n";
                 } else {
                     echo "推送失败: {$result->message}\n";
@@ -91,7 +91,7 @@ class PushFeed implements CommandInterface
                 /** @var Platform $platformModel */
                 $platformModel = ObjectManager::getInstance(Platform::class);
                 $platforms = $platformModel
-                    ->where(Platform::fields_IS_ENABLED, 1)
+                    ->where(Platform::schema_fields_IS_ENABLED, 1)
                     ->select()
                     ->fetchArray();
 
@@ -104,10 +104,10 @@ class PushFeed implements CommandInterface
 
                     if ($result->success) {
                         $successCount++;
-                        echo "✓ {$platform->getData(Platform::fields_PLATFORM_NAME)}: 成功\n";
+                        echo "✓ {$platform->getData(Platform::schema_fields_PLATFORM_NAME)}: 成功\n";
                     } else {
                         $failCount++;
-                        echo "✗ {$platform->getData(Platform::fields_PLATFORM_NAME)}: {$result->message}\n";
+                        echo "✗ {$platform->getData(Platform::schema_fields_PLATFORM_NAME)}: {$result->message}\n";
                     }
                 }
 

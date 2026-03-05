@@ -40,7 +40,7 @@ abstract class AbstractAdapter extends BaseAdapter
      */
     protected function getDecryptedApiKey(PlatformAccount $account): string
     {
-        $encryptedKey = $account->getData(PlatformAccount::fields_API_KEY);
+        $encryptedKey = $account->getData(PlatformAccount::schema_fields_API_KEY);
         if (empty($encryptedKey)) {
             return '';
         }
@@ -109,7 +109,7 @@ abstract class AbstractAdapter extends BaseAdapter
     {
         $feed = [
             'version' => 'https://jsonfeed.org/version/1.1',
-            'title' => $this->platform->getData(Platform::fields_PLATFORM_NAME) . ' Feed',
+            'title' => $this->platform->getData(Platform::schema_fields_PLATFORM_NAME) . ' Feed',
             'items' => [],
         ];
         
