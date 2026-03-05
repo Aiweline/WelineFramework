@@ -10,7 +10,7 @@ use Weline\Framework\Register\Register;
 use Weline\Framework\Setup\Data\Context as SetupContext;
 use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\ModuleManager\Model\Module;
-use Weline\ModuleManager\Model\Module\Table;
+use Weline\Framework\Setup\Model\ModuleTable;
 
 class ModuleUpdateBefore implements ObserverInterface
 {
@@ -19,8 +19,8 @@ class ModuleUpdateBefore implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
-        /**@var Table $model */
-        $model = ObjectManager::getInstance(Table::class);
+        /**@var ModuleTable $model */
+        $model = ObjectManager::getInstance(ModuleTable::class);
         $modelSetup = ObjectManager::getInstance(ModelSetup::class);
         $modelSetup->putModel($model);
         $module = $this->getThisModuleInfo();

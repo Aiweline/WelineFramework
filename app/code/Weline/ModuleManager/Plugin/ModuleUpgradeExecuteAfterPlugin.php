@@ -33,7 +33,7 @@ class ModuleUpgradeExecuteAfterPlugin
             $module['status'] = $module['status'] ? 1 : 0;
             $moduleModel->clearData()
                 ->setModelFieldsData($module)
-                ->save(true, Module::fields_NAME);
+                ->save(true, Module::schema_fields_NAME);
         }
     }
 }
