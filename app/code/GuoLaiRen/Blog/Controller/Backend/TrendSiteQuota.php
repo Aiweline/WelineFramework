@@ -35,7 +35,7 @@ class TrendSiteQuota extends BackendController
         /** @var Website $website */
         $website = ObjectManager::getInstance(Website::class);
         $items = $website->clear()
-            ->order(Website::fields_NAME, 'ASC')
+            ->order(Website::schema_fields_NAME, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
@@ -57,16 +57,16 @@ class TrendSiteQuota extends BackendController
         /** @var TrendProfile $profile */
         $profile = ObjectManager::getInstance(TrendProfile::class);
         $items = $profile->clear()
-            ->where(TrendProfile::fields_IS_ACTIVE, 1)
-            ->order(TrendProfile::fields_SORT, 'ASC')
+            ->where(TrendProfile::schema_fields_IS_ACTIVE, 1)
+            ->order(TrendProfile::schema_fields_SORT, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
         $out = [];
         foreach ($items as $p) {
             $out[] = [
-                'profile_id' => $p->getData(TrendProfile::fields_ID),
-                'name' => $p->getData(TrendProfile::fields_NAME),
+                'profile_id' => $p->getData(TrendProfile::schema_fields_ID),
+                'name' => $p->getData(TrendProfile::schema_fields_NAME),
             ];
         }
         return $out;
@@ -96,7 +96,7 @@ class TrendSiteQuota extends BackendController
     {
         $cids = [];
         foreach ($quotaItems as $q) {
-            $cid = (int)$q->getData(TrendSiteQuotaModel::fields_DEFAULT_CATEGORY_ID);
+            $cid = (int)$q->getData(TrendSiteQuotaModel::schema_fields_DEFAULT_CATEGORY_ID);
             if ($cid > 0) {
                 $cids[$cid] = true;
             }
@@ -108,13 +108,13 @@ class TrendSiteQuota extends BackendController
         /** @var Category $categoryModel */
         $categoryModel = ObjectManager::getInstance(Category::class);
         $categories = $categoryModel->clear()
-            ->where(Category::fields_ID, $cids, 'in')
+            ->where(Category::schema_fields_ID, $cids, 'in')
             ->select()
             ->fetch()
             ->getItems();
         $out = [];
         foreach ($categories as $c) {
-            $out[(int)$c->getData(Category::fields_ID)] = (string)$c->getData(Category::fields_NAME);
+            $out[(int)$c->getData(Category::schema_fields_ID)] = (string)$c->getData(Category::schema_fields_NAME);
         }
         return $out;
     }
@@ -126,7 +126,7 @@ class TrendSiteQuota extends BackendController
         $listModel->clear();
 
         $items = $listModel
-            ->order(TrendSiteQuotaModel::fields_ID, 'DESC')
+            ->order(TrendSiteQuotaModel::schema_fields_ID, 'DESC')
             ->pagination()
             ->select()
             ->fetch();
@@ -140,7 +140,7 @@ class TrendSiteQuota extends BackendController
         $profileModel = ObjectManager::getInstance(TrendProfile::class);
         $profiles = [];
         foreach ($profileModel->clear()->select()->fetch()->getItems() as $p) {
-            $profiles[(int)$p->getData(TrendProfile::fields_ID)] = (string)$p->getData(TrendProfile::fields_NAME);
+            $profiles[(int)$p->getData(TrendProfile::schema_fields_ID)] = (string)$p->getData(TrendProfile::schema_fields_NAME);
         }
 
         $categoryNames = $this->getCategoryNamesForQuotas($items->getItems());
@@ -184,8 +184,8 @@ class TrendSiteQuota extends BackendController
 
             $exists = clone $this->quotaModel;
             $exists->clear()
-                ->where(TrendSiteQuotaModel::fields_SITE_ID, $siteId)
-                ->where(TrendSiteQuotaModel::fields_PROFILE_ID, $profileId)
+                ->where(TrendSiteQuotaModel::schema_fields_SITE_ID, $siteId)
+                ->where(TrendSiteQuotaModel::schema_fields_PROFILE_ID, $profileId)
                 ->find()
                 ->fetch();
             if ($exists->getId()) {
@@ -196,10 +196,10 @@ class TrendSiteQuota extends BackendController
             $this->validateCategoryForSite($defaultCategoryId, $siteId);
 
             $quota = ObjectManager::getInstance(TrendSiteQuotaModel::class);
-            $quota->setData(TrendSiteQuotaModel::fields_SITE_ID, $siteId)
-                ->setData(TrendSiteQuotaModel::fields_PROFILE_ID, $profileId)
-                ->setData(TrendSiteQuotaModel::fields_ARTICLES_PER_DAY, (int)($data['articles_per_day'] ?? 0))
-                ->setData(TrendSiteQuotaModel::fields_DEFAULT_CATEGORY_ID, $defaultCategoryId)
+            $quota->setData(TrendSiteQuotaModel::schema_fields_SITE_ID, $siteId)
+                ->setData(TrendSiteQuotaModel::schema_fields_PROFILE_ID, $profileId)
+                ->setData(TrendSiteQuotaModel::schema_fields_ARTICLES_PER_DAY, (int)($data['articles_per_day'] ?? 0))
+                ->setData(TrendSiteQuotaModel::schema_fields_DEFAULT_CATEGORY_ID, $defaultCategoryId)
                 ->save();
 
             MessageManager::success(__('配额已创建'));
@@ -256,9 +256,9 @@ class TrendSiteQuota extends BackendController
 
             $exists = clone $this->quotaModel;
             $exists->clear()
-                ->where(TrendSiteQuotaModel::fields_SITE_ID, $siteId)
-                ->where(TrendSiteQuotaModel::fields_PROFILE_ID, $profileId)
-                ->where(TrendSiteQuotaModel::fields_ID, $id, '!=')
+                ->where(TrendSiteQuotaModel::schema_fields_SITE_ID, $siteId)
+                ->where(TrendSiteQuotaModel::schema_fields_PROFILE_ID, $profileId)
+                ->where(TrendSiteQuotaModel::schema_fields_ID, $id, '!=')
                 ->find()
                 ->fetch();
             if ($exists->getId()) {
@@ -268,10 +268,10 @@ class TrendSiteQuota extends BackendController
             $defaultCategoryId = (int)($data['default_category_id'] ?? 0);
             $this->validateCategoryForSite($defaultCategoryId, $siteId);
 
-            $quota->setData(TrendSiteQuotaModel::fields_SITE_ID, $siteId)
-                ->setData(TrendSiteQuotaModel::fields_PROFILE_ID, $profileId)
-                ->setData(TrendSiteQuotaModel::fields_ARTICLES_PER_DAY, (int)($data['articles_per_day'] ?? 0))
-                ->setData(TrendSiteQuotaModel::fields_DEFAULT_CATEGORY_ID, $defaultCategoryId)
+            $quota->setData(TrendSiteQuotaModel::schema_fields_SITE_ID, $siteId)
+                ->setData(TrendSiteQuotaModel::schema_fields_PROFILE_ID, $profileId)
+                ->setData(TrendSiteQuotaModel::schema_fields_ARTICLES_PER_DAY, (int)($data['articles_per_day'] ?? 0))
+                ->setData(TrendSiteQuotaModel::schema_fields_DEFAULT_CATEGORY_ID, $defaultCategoryId)
                 ->save();
 
             MessageManager::success(__('配额已保存'));
@@ -292,7 +292,7 @@ class TrendSiteQuota extends BackendController
         if (!$cat->getId()) {
             throw new \Exception(__('所选分类不存在'));
         }
-        if ((int)$cat->getData(Category::fields_SITE_ID) !== $siteId) {
+        if ((int)$cat->getData(Category::schema_fields_SITE_ID) !== $siteId) {
             throw new \Exception(__('所选分类必须属于该站点'));
         }
     }
@@ -377,10 +377,10 @@ class TrendSiteQuota extends BackendController
         // 唯一性校验
         $exists = clone $this->quotaModel;
         $exists->clear()
-            ->where(TrendSiteQuotaModel::fields_SITE_ID, $siteId)
-            ->where(TrendSiteQuotaModel::fields_PROFILE_ID, $profileId);
+            ->where(TrendSiteQuotaModel::schema_fields_SITE_ID, $siteId)
+            ->where(TrendSiteQuotaModel::schema_fields_PROFILE_ID, $profileId);
         if ($quota !== null && $quota->getId()) {
-            $exists->where(TrendSiteQuotaModel::fields_ID, $quota->getId(), '!=');
+            $exists->where(TrendSiteQuotaModel::schema_fields_ID, $quota->getId(), '!=');
         }
         $exists->find()->fetch();
         if ($exists->getId()) {
@@ -394,10 +394,10 @@ class TrendSiteQuota extends BackendController
             $quota = ObjectManager::getInstance(TrendSiteQuotaModel::class);
         }
 
-        $quota->setData(TrendSiteQuotaModel::fields_SITE_ID, $siteId)
-            ->setData(TrendSiteQuotaModel::fields_PROFILE_ID, $profileId)
-            ->setData(TrendSiteQuotaModel::fields_ARTICLES_PER_DAY, (int)($data['articles_per_day'] ?? 0))
-            ->setData(TrendSiteQuotaModel::fields_DEFAULT_CATEGORY_ID, $defaultCategoryId)
+        $quota->setData(TrendSiteQuotaModel::schema_fields_SITE_ID, $siteId)
+            ->setData(TrendSiteQuotaModel::schema_fields_PROFILE_ID, $profileId)
+            ->setData(TrendSiteQuotaModel::schema_fields_ARTICLES_PER_DAY, (int)($data['articles_per_day'] ?? 0))
+            ->setData(TrendSiteQuotaModel::schema_fields_DEFAULT_CATEGORY_ID, $defaultCategoryId)
             ->save();
     }
 
