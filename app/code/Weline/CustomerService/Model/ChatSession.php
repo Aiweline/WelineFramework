@@ -11,23 +11,38 @@ declare(strict_types=1);
 
 namespace Weline\CustomerService\Model;
 
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: '聊天会话表')]
+#[Index(name: 'idx_customer_id', columns: ['customer_id'])]
+#[Index(name: 'idx_agent_id', columns: ['agent_id'])]
+#[Index(name: 'idx_session_token', columns: ['session_token'])]
+#[Index(name: 'idx_status', columns: ['status'])]
 class ChatSession extends Model
 {
-    public const table = 'chat_session';
-    public const fields_ID = 'session_id';
-    public const fields_customer_id = 'customer_id';
-    public const fields_agent_id = 'agent_id';
-    public const fields_session_token = 'session_token';
-    public const fields_customer_locale = 'customer_locale';
-    public const fields_agent_locale = 'agent_locale';
-    public const fields_status = 'status';
-    public const fields_created_at = 'created_at';
-    public const fields_updated_at = 'updated_at';
+    public const schema_table = 'chat_session';
+    public const schema_primary_key = 'session_id';
+
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '会话ID')]
+    public const schema_fields_ID = 'session_id';
+    #[Col(type: 'int', nullable: true, comment: '客户ID')]
+    public const schema_fields_CUSTOMER_ID = 'customer_id';
+    #[Col(type: 'int', nullable: true, comment: '客服ID')]
+    public const schema_fields_AGENT_ID = 'agent_id';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '会话令牌')]
+    public const schema_fields_SESSION_TOKEN = 'session_token';
+    #[Col(type: 'varchar', length: 20, nullable: false, default: 'zh_Hans_CN', comment: '客户语言')]
+    public const schema_fields_CUSTOMER_LOCALE = 'customer_locale';
+    #[Col(type: 'varchar', length: 20, nullable: false, default: 'zh_Hans_CN', comment: '客服语言')]
+    public const schema_fields_AGENT_LOCALE = 'agent_locale';
+    #[Col(type: 'varchar', length: 20, nullable: false, default: 'waiting', comment: '状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col(type: 'datetime', nullable: true, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col(type: 'datetime', nullable: true, comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
 
     public const STATUS_WAITING = 'waiting';
     public const STATUS_ACTIVE = 'active';
@@ -35,101 +50,67 @@ class ChatSession extends Model
 
     public function _init(): void
     {
-        $this->_primary_key = self::fields_ID;
-        $this->_table = self::table;
-    }
-
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑
-    }
-
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('聊天会话表')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'primary key auto_increment', '会话ID')
-                ->addColumn(self::fields_customer_id, TableInterface::column_type_INTEGER, 0, '', '客户ID')
-                ->addColumn(self::fields_agent_id, TableInterface::column_type_INTEGER, 0, '', '客服ID')
-                ->addColumn(self::fields_session_token, TableInterface::column_type_VARCHAR, 255, 'not null', '会话令牌')
-                ->addColumn(self::fields_customer_locale, TableInterface::column_type_VARCHAR, 20, 'not null default "zh_Hans_CN"', '客户语言')
-                ->addColumn(self::fields_agent_locale, TableInterface::column_type_VARCHAR, 20, 'not null default "zh_Hans_CN"', '客服语言')
-                ->addColumn(self::fields_status, TableInterface::column_type_VARCHAR, 20, 'not null default "waiting"', '状态')
-                ->addColumn(self::fields_created_at, TableInterface::column_type_DATETIME, 0, '', '创建时间')
-                ->addColumn(self::fields_updated_at, TableInterface::column_type_DATETIME, 0, '', '更新时间')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_customer_id', self::fields_customer_id, '客户ID索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_agent_id', self::fields_agent_id, '客服ID索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_session_token', self::fields_session_token, '会话令牌索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_status', self::fields_status, '状态索引')
-                ->create();
-        }
     }
 
     public function getCustomerId(): ?int
     {
-        $id = $this->getData(self::fields_customer_id);
+        $id = $this->getData(self::schema_fields_CUSTOMER_ID);
         return $id ? (int)$id : null;
     }
 
     public function setCustomerId(?int $customerId): static
     {
-        return $this->setData(self::fields_customer_id, $customerId);
+        return $this->setData(self::schema_fields_CUSTOMER_ID, $customerId);
     }
 
     public function getAgentId(): ?int
     {
-        $id = $this->getData(self::fields_agent_id);
+        $id = $this->getData(self::schema_fields_AGENT_ID);
         return $id ? (int)$id : null;
     }
 
     public function setAgentId(?int $agentId): static
     {
-        return $this->setData(self::fields_agent_id, $agentId);
+        return $this->setData(self::schema_fields_AGENT_ID, $agentId);
     }
 
     public function getSessionToken(): string
     {
-        return (string)$this->getData(self::fields_session_token);
+        return (string)$this->getData(self::schema_fields_SESSION_TOKEN);
     }
 
     public function setSessionToken(string $sessionToken): static
     {
-        return $this->setData(self::fields_session_token, $sessionToken);
+        return $this->setData(self::schema_fields_SESSION_TOKEN, $sessionToken);
     }
 
     public function getCustomerLocale(): string
     {
-        return (string)$this->getData(self::fields_customer_locale);
+        return (string)$this->getData(self::schema_fields_CUSTOMER_LOCALE);
     }
 
     public function setCustomerLocale(string $customerLocale): static
     {
-        return $this->setData(self::fields_customer_locale, $customerLocale);
+        return $this->setData(self::schema_fields_CUSTOMER_LOCALE, $customerLocale);
     }
 
     public function getAgentLocale(): string
     {
-        return (string)$this->getData(self::fields_agent_locale);
+        return (string)$this->getData(self::schema_fields_AGENT_LOCALE);
     }
 
     public function setAgentLocale(string $agentLocale): static
     {
-        return $this->setData(self::fields_agent_locale, $agentLocale);
+        return $this->setData(self::schema_fields_AGENT_LOCALE, $agentLocale);
     }
 
     public function getStatus(): string
     {
-        return (string)$this->getData(self::fields_status);
+        return (string)$this->getData(self::schema_fields_STATUS);
     }
 
     public function setStatus(string $status): static
     {
-        return $this->setData(self::fields_status, $status);
+        return $this->setData(self::schema_fields_STATUS, $status);
     }
 }
-
