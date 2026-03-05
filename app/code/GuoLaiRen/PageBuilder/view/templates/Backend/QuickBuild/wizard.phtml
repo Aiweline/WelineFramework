@@ -513,7 +513,7 @@ $cdnAccounts = $this->getData('cdnAccounts') ?? [];
         Object.keys(data).forEach(function(k) {
             fd.append(k, typeof data[k] === 'object' ? JSON.stringify(data[k]) : data[k]);
         });
-        return fetch(url, { method: 'POST', body: fd }).then(function(r) { return r.json(); });
+        return window.Weline.Api.request(url, { method: 'POST', body: fd }).then(function(r) { return r.ok ? r.data : (r.data || {}); });
     }
     
     // 配置进度步骤定义

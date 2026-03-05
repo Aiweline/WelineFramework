@@ -106,13 +106,13 @@ class Template extends BackendController
             // 使用OR条件组合多个字段的模糊搜索
             // 第一个条件作为起始，后续使用OR连接
             $searchValue = "%{$search}%";
-            $styles->where(Style::fields_CODE, $searchValue, 'LIKE')
-                ->where(Style::fields_NAME, $searchValue, 'LIKE', 'OR')
-                ->where(Style::fields_DESCRIPTION, $searchValue, 'LIKE', 'OR');
+            $styles->where(Style::schema_fields_CODE, $searchValue, 'LIKE')
+                ->where(Style::schema_fields_NAME, $searchValue, 'LIKE', 'OR')
+                ->where(Style::schema_fields_DESCRIPTION, $searchValue, 'LIKE', 'OR');
         }
         
-        $styleList = $styles->order(Style::fields_SORT_ORDER, 'ASC')
-            ->order(Style::fields_CREATE_TIME, 'DESC')
+        $styleList = $styles->order(Style::schema_fields_SORT_ORDER, 'ASC')
+            ->order(Style::schema_fields_CREATE_TIME, 'DESC')
             ->select()
             ->fetch()
             ->getItems();
@@ -129,7 +129,7 @@ class Template extends BackendController
         // 获取所有页面列表（用于选择预览页面）
         $allPages = clone $this->pageModel;
         $pageList = $allPages->clear()
-            ->order(PageModel::fields_CREATE_TIME, 'DESC')
+            ->order(PageModel::schema_fields_CREATE_TIME, 'DESC')
             ->select()
             ->fetch()
             ->getItems();
@@ -179,7 +179,7 @@ class Template extends BackendController
             
             // 发布时检查是否有预览图
             if ($isPublished && !$skipPreviewCheck) {
-                $previewImage = $style->getData(Style::fields_PREVIEW_IMAGE);
+                $previewImage = $style->getData(Style::schema_fields_PREVIEW_IMAGE);
                 $hasPreview = false;
                 
                 if ($previewImage) {
@@ -202,7 +202,7 @@ class Template extends BackendController
                 if (!$hasPreview) {
                     $previewPageUrl = $this->request->getUrlBuilder()->getBackendUrl(
                         'pagebuilder/backend/preview/stylePreview',
-                        ['style_code' => $style->getData(Style::fields_CODE)]
+                        ['style_code' => $style->getData(Style::schema_fields_CODE)]
                     );
                     
                     return $this->fetchJson([
@@ -210,14 +210,14 @@ class Template extends BackendController
                         'needs_preview' => true,
                         'message' => __('发布前需要先生成预览图'),
                         'style_id' => $styleId,
-                        'style_code' => $style->getData(Style::fields_CODE),
+                        'style_code' => $style->getData(Style::schema_fields_CODE),
                         'preview_page_url' => $previewPageUrl,
                         'upload_url' => $this->request->getUrlBuilder()->getBackendUrl('pagebuilder/backend/template/uploadPreview')
                     ]);
                 }
             }
             
-            $style->setData(Style::fields_IS_PUBLISHED, $isPublished ? 1 : 0);
+            $style->setData(Style::schema_fields_IS_PUBLISHED, $isPublished ? 1 : 0);
             $style->save();
             
             return $this->fetchJson([
@@ -249,7 +249,7 @@ class Template extends BackendController
         
         // 检查模板是否存在
         $style = clone $this->styleModel;
-        $style->clear()->where(Style::fields_CODE, $styleCode)->find()->fetch();
+        $style->clear()->where(Style::schema_fields_CODE, $styleCode)->find()->fetch();
         
         if (!$style->getId()) {
             $this->getMessageManager()->addError(__('模板不存在'));
@@ -353,7 +353,7 @@ class Template extends BackendController
             
             // 获取模板配置定义
             $styleModel = clone $this->styleModel;
-            $styleModel->clear()->where(Style::fields_CODE, $styleCode)->find()->fetch();
+            $styleModel->clear()->where(Style::schema_fields_CODE, $styleCode)->find()->fetch();
             
             if (!$styleModel->getId()) {
                 return $this->fetchJson([
@@ -481,7 +481,7 @@ class Template extends BackendController
                     if ($locale && $locale !== $defaultLocale) {
                         $localDesc = clone $this->localDescriptionModel;
                         $localDesc->clear()
-                            ->where(LocalDescription::fields_ID, $pageId)
+                            ->where(LocalDescription::schema_fields_ID, $pageId)
                             ->where('local_code', $locale)
                             ->find()
                             ->fetch();
@@ -547,8 +547,8 @@ class Template extends BackendController
                 'success' => true,
                 'data' => $configGroups,
                 'style_info' => [
-                    'code' => $styleModel->getData(Style::fields_CODE),
-                    'name' => $styleModel->getData(Style::fields_NAME)
+                    'code' => $styleModel->getData(Style::schema_fields_CODE),
+                    'name' => $styleModel->getData(Style::schema_fields_NAME)
                 ]
             ]);
         } catch (\Exception $e) {
@@ -654,7 +654,7 @@ class Template extends BackendController
                 // 保存到LocalDescription.config.style_config（语言特定配置）
                 $localDesc = clone $this->localDescriptionModel;
                 $localDesc->clear()
-                    ->where(LocalDescription::fields_ID, $pageId)
+                    ->where(LocalDescription::schema_fields_ID, $pageId)
                     ->where('local_code', $locale)
                     ->find()
                     ->fetch();
@@ -681,12 +681,12 @@ class Template extends BackendController
                 } else {
                     $newLocalDesc = clone $this->localDescriptionModel;
                     $newLocalDesc->clearData()
-                        ->setData(LocalDescription::fields_ID, $pageId)
+                        ->setData(LocalDescription::schema_fields_ID, $pageId)
                         ->setData('local_code', $locale)
                         ->setData('config', json_encode($config))
-                        ->setData(LocalDescription::fields_NAME, $page->getData('name'))
-                        ->setData(LocalDescription::fields_TITLE, $page->getData('title'))
-                        ->setData(LocalDescription::fields_CONTENT, $page->getData('content'))
+                        ->setData(LocalDescription::schema_fields_NAME, $page->getData('name'))
+                        ->setData(LocalDescription::schema_fields_TITLE, $page->getData('title'))
+                        ->setData(LocalDescription::schema_fields_CONTENT, $page->getData('content'))
                         ->save(true);
                 }
             } else {
@@ -758,7 +758,7 @@ class Template extends BackendController
             
             // 检查模板是否存在
             $style = clone $this->styleModel;
-            $style->clear()->where(Style::fields_CODE, $styleCode)->find()->fetch();
+            $style->clear()->where(Style::schema_fields_CODE, $styleCode)->find()->fetch();
             
             if (!$style->getId()) {
                 return $this->fetchJson([
@@ -783,7 +783,7 @@ class Template extends BackendController
                 $previewUrl = '/static/pagebuilder/previews/' . $previewFileName . '?t=' . filemtime($previewFilePath);
                 
                 // 更新数据库中的预览图路径
-                $style->setData(Style::fields_PREVIEW_IMAGE, 'pagebuilder/previews/' . $previewFileName);
+                $style->setData(Style::schema_fields_PREVIEW_IMAGE, 'pagebuilder/previews/' . $previewFileName);
                 $style->save();
                 
                 return $this->fetchJson([
@@ -860,7 +860,7 @@ class Template extends BackendController
             
             // 检查模板是否存在
             $style = clone $this->styleModel;
-            $style->clear()->where(Style::fields_CODE, $styleCode)->find()->fetch();
+            $style->clear()->where(Style::schema_fields_CODE, $styleCode)->find()->fetch();
             
             if (!$style->getId()) {
                 return $this->fetchJson([
@@ -905,7 +905,7 @@ class Template extends BackendController
             }
             
             // 更新数据库中的预览图路径
-            $style->setData(Style::fields_PREVIEW_IMAGE, 'pagebuilder/previews/' . $previewFileName);
+            $style->setData(Style::schema_fields_PREVIEW_IMAGE, 'pagebuilder/previews/' . $previewFileName);
             $style->save();
             
             $previewUrl = '/static/pagebuilder/previews/' . $previewFileName . '?t=' . time();
@@ -949,15 +949,15 @@ class Template extends BackendController
             // 获取所有模板
             $styles = clone $this->styleModel;
             $styleList = $styles->clear()
-                ->order(Style::fields_CODE, 'ASC')
+                ->order(Style::schema_fields_CODE, 'ASC')
                 ->select()
                 ->fetch()
                 ->getItems();
             
             $results = [];
             foreach ($styleList as $style) {
-                $styleCode = $style->getData(Style::fields_CODE);
-                $previewImage = $style->getData(Style::fields_PREVIEW_IMAGE);
+                $styleCode = $style->getData(Style::schema_fields_CODE);
+                $previewImage = $style->getData(Style::schema_fields_PREVIEW_IMAGE);
                 
                 // 检查是否已有预览图
                 $hasPreview = false;
@@ -968,7 +968,7 @@ class Template extends BackendController
                 
                 $results[] = [
                     'code' => $styleCode,
-                    'name' => $style->getData(Style::fields_NAME),
+                    'name' => $style->getData(Style::schema_fields_NAME),
                     'has_preview' => $hasPreview,
                     'needs_generate' => !$hasPreview || $force,
                     'preview_page_url' => $this->request->getUrlBuilder()->getBackendUrl(
@@ -1026,7 +1026,7 @@ class Template extends BackendController
             
             // 获取模板配置定义
             $styleModel = clone $this->styleModel;
-            $styleModel->clear()->where(Style::fields_CODE, $styleCode)->find()->fetch();
+            $styleModel->clear()->where(Style::schema_fields_CODE, $styleCode)->find()->fetch();
             
             if (!$styleModel->getId()) {
                 return $this->fetchJson([
@@ -1094,7 +1094,7 @@ class Template extends BackendController
                     if ($locale && $locale !== $defaultLocale) {
                         $localDesc = clone $this->localDescriptionModel;
                         $localDesc->clear()
-                            ->where(LocalDescription::fields_ID, $pageId)
+                            ->where(LocalDescription::schema_fields_ID, $pageId)
                             ->where('local_code', $locale)
                             ->find()
                             ->fetch();
@@ -1127,7 +1127,7 @@ class Template extends BackendController
                     'text_configs' => $textConfigs,
                     'total' => count($textConfigs),
                     'style_code' => $styleCode,
-                    'style_name' => $styleModel->getData(Style::fields_NAME),
+                    'style_name' => $styleModel->getData(Style::schema_fields_NAME),
                 ]
             ]);
         } catch (\Exception $e) {
