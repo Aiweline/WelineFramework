@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Controller\Backend;
 
+use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\AiScenarioAdapter;
 use Weline\Ai\Service\AdapterScanner;
 use Weline\Framework\App\Controller\BackendController;
@@ -49,6 +50,49 @@ class Adapter extends BackendController
     }
 
     /**
+     * 补充适配器列表中空版本和空状态，从实例读取并回写数据库
+     *
+     * @param array $items 适配器模型列表
+     */
+    private function enrichAdapterList(array $items): void
+    {
+        $scanner = $this->getAdapterScanner();
+        foreach ($items as $adapter) {
+            if (!is_object($adapter) || !method_exists($adapter, 'getData')) {
+                continue;
+            }
+            $code = $adapter->getData(AiScenarioAdapter::schema_fields_CODE);
+            $version = $adapter->getData(AiScenarioAdapter::schema_fields_VERSION);
+            $isActive = $adapter->getData(AiScenarioAdapter::schema_fields_IS_ACTIVE);
+            $needsSave = false;
+
+            // 版本为空时从实例获取
+            if ($code && ($version === '' || $version === null)) {
+                $instance = $scanner->getAdapter($code);
+                if ($instance && method_exists($instance, 'getVersion')) {
+                    $ver = $instance->getVersion();
+                    $adapter->setData(AiScenarioAdapter::schema_fields_VERSION, $ver);
+                    $needsSave = true;
+                }
+            }
+
+            // is_active 为空时默认激活
+            if ($isActive === '' || $isActive === null) {
+                $adapter->setData(AiScenarioAdapter::schema_fields_IS_ACTIVE, 1);
+                $needsSave = true;
+            }
+
+            if ($needsSave) {
+                try {
+                    $adapter->save();
+                } catch (\Throwable $e) {
+                    // 忽略保存失败，避免阻断列表展示
+                }
+            }
+        }
+    }
+
+    /**
      * 适配器列表页面
      * 
      * @return string
@@ -69,7 +113,11 @@ class Adapter extends BackendController
             ->select()
             ->fetch();
 
-        $this->assign('adapters', $adapters->getItems());
+        $items = $adapters->getItems();
+        // 补充空版本和空状态：从适配器实例读取并回写数据库
+        $this->enrichAdapterList($items);
+
+        $this->assign('adapters', $items);
         $this->assign('pagination', $adapters->getPagination());
         $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
         $this->assign('activeTab', 'adapter');
@@ -85,6 +133,7 @@ class Adapter extends BackendController
     #[Acl('Weline_Ai::ai_adapter_detail', '查看场景适配器详情', 'mdi-information', '查看场景适配器详情')]
     public function detailOffcanvas(): string
     {
+        $this->layoutType = 'default.blank';
         $id = (int)$this->request->getGet('id');
         
         if (!$id) {
@@ -120,6 +169,7 @@ class Adapter extends BackendController
     #[Acl('Weline_Ai::ai_adapter_detail_page', '查看场景适配器详情页面', 'mdi-file-document', '查看场景适配器完整详情页面')]
     public function detail(): string
     {
+        $this->layoutType = 'default.blank';
         $id = (int)$this->request->getGet('id');
         
         if (!$id) {
