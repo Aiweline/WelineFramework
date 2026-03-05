@@ -20,7 +20,6 @@ use WeShop\Filters\Service\FilterService;
 use WeShop\Filters\Service\FilterUrlService;
 use WeShop\Product\Model\ProductCategory;
 use WeShop\Product\Model\Product;
-use WeShop\Catalog\Service\CategoryService;
 use Weline\Framework\Manager\ObjectManager;
 
 // 获取当前分类数据
@@ -34,10 +33,7 @@ if ($categoryId <= 0) {
 
 // 获取分类下的产品ID
 try {
-    /** @var CategoryService $categoryService */
-    $categoryService = ObjectManager::getInstance(CategoryService::class);
-    $categoryIds = $categoryService->getAllDescendantCategoryIds($categoryId);
-    $categoryIds[] = $categoryId;
+    $categoryIds = w_query('catalog', 'getAllDescendantCategoryIds', ['category_id' => $categoryId]);
     
     /** @var ProductCategory $productCategory */
     $productCategory = ObjectManager::getInstance(ProductCategory::class);

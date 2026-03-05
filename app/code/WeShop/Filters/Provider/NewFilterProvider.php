@@ -94,12 +94,12 @@ class NewFilterProvider extends AbstractFilterProvider
             $productModel = ObjectManager::getInstance(Product::class);
             $productModel->reset()
                 ->fields('COUNT(*) as count')
-                ->where(Product::fields_ID, $productIds, 'in')
+                ->where(Product::schema_fields_ID, $productIds, 'in')
                 ->where('created_at', $newDate, '>=');
             
             // 检查是否有 is_new 字段
-            if (defined(Product::class . '::fields_is_new')) {
-                $productModel->where(Product::fields_is_new, 1, '=', 'OR');
+            if (defined(Product::class . '::schema_fields_is_new')) {
+                $productModel->where(Product::schema_fields_is_new, 1, '=', 'OR');
             }
             
             $result = $productModel->find()->fetchArray();
@@ -120,12 +120,12 @@ class NewFilterProvider extends AbstractFilterProvider
             /** @var Product $productModel */
             $productModel = ObjectManager::getInstance(Product::class);
             $productModel->reset()
-                ->fields(Product::fields_ID)
-                ->where(Product::fields_ID, $productIds, 'in')
+                ->fields(Product::schema_fields_ID)
+                ->where(Product::schema_fields_ID, $productIds, 'in')
                 ->where('created_at', $newDate, '>=');
             
             $results = $productModel->select()->fetchArray();
-            return array_column($results, Product::fields_ID);
+            return array_column($results, Product::schema_fields_ID);
         } catch (\Throwable $e) {
             return [];
         }

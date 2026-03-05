@@ -129,15 +129,15 @@ class SaleFilterProvider extends AbstractFilterProvider
             $productModel = ObjectManager::getInstance(Product::class);
             $productModel->reset()
                 ->fields('COUNT(*) as count')
-                ->where(Product::fields_ID, $productIds, 'in');
+                ->where(Product::schema_fields_ID, $productIds, 'in');
             
             // 检查是否有 special_price 或 sale_price 字段
-            if (defined(Product::class . '::fields_special_price')) {
-                $productModel->where(Product::fields_special_price, 0, '>')
-                    ->where(Product::fields_special_price, Product::fields_price, '<', 'AND', true);
-            } elseif (defined(Product::class . '::fields_sale_price')) {
-                $productModel->where(Product::fields_sale_price, 0, '>')
-                    ->where(Product::fields_sale_price, Product::fields_price, '<', 'AND', true);
+            if (defined(Product::class . '::schema_fields_special_price')) {
+                $productModel->where(Product::schema_fields_special_price, 0, '>')
+                    ->where(Product::schema_fields_special_price, Product::schema_fields_price, '<', 'AND', true);
+            } elseif (defined(Product::class . '::schema_fields_sale_price')) {
+                $productModel->where(Product::schema_fields_sale_price, 0, '>')
+                    ->where(Product::schema_fields_sale_price, Product::schema_fields_price, '<', 'AND', true);
             } else {
                 // 没有促销价格字段，返回0
                 return 0;
@@ -167,7 +167,7 @@ class SaleFilterProvider extends AbstractFilterProvider
             
             $productModel->reset()
                 ->fields('COUNT(*) as count')
-                ->where(Product::fields_ID, $productIds, 'in')
+                ->where(Product::schema_fields_ID, $productIds, 'in')
                 ->where($discountCondition);
             
             $result = $productModel->find()->fetchArray();
@@ -186,18 +186,18 @@ class SaleFilterProvider extends AbstractFilterProvider
             /** @var Product $productModel */
             $productModel = ObjectManager::getInstance(Product::class);
             $productModel->reset()
-                ->fields(Product::fields_ID)
-                ->where(Product::fields_ID, $productIds, 'in');
+                ->fields(Product::schema_fields_ID)
+                ->where(Product::schema_fields_ID, $productIds, 'in');
             
-            if (defined(Product::class . '::fields_special_price')) {
-                $productModel->where(Product::fields_special_price, 0, '>')
-                    ->where(Product::fields_special_price, Product::fields_price, '<', 'AND', true);
+            if (defined(Product::class . '::schema_fields_special_price')) {
+                $productModel->where(Product::schema_fields_special_price, 0, '>')
+                    ->where(Product::schema_fields_special_price, Product::schema_fields_price, '<', 'AND', true);
             } else {
                 return [];
             }
             
             $results = $productModel->select()->fetchArray();
-            return array_column($results, Product::fields_ID);
+            return array_column($results, Product::schema_fields_ID);
         } catch (\Throwable $e) {
             return [];
         }
@@ -218,12 +218,12 @@ class SaleFilterProvider extends AbstractFilterProvider
             }
             
             $productModel->reset()
-                ->fields(Product::fields_ID)
-                ->where(Product::fields_ID, $productIds, 'in')
+                ->fields(Product::schema_fields_ID)
+                ->where(Product::schema_fields_ID, $productIds, 'in')
                 ->where($discountCondition);
             
             $results = $productModel->select()->fetchArray();
-            return array_column($results, Product::fields_ID);
+            return array_column($results, Product::schema_fields_ID);
         } catch (\Throwable $e) {
             return [];
         }
@@ -236,10 +236,10 @@ class SaleFilterProvider extends AbstractFilterProvider
     {
         $specialPriceField = null;
         
-        if (defined(Product::class . '::fields_special_price')) {
-            $specialPriceField = Product::fields_special_price;
-        } elseif (defined(Product::class . '::fields_sale_price')) {
-            $specialPriceField = Product::fields_sale_price;
+        if (defined(Product::class . '::schema_fields_special_price')) {
+            $specialPriceField = Product::schema_fields_special_price;
+        } elseif (defined(Product::class . '::schema_fields_sale_price')) {
+            $specialPriceField = Product::schema_fields_sale_price;
         }
         
         if (!$specialPriceField) {
@@ -251,10 +251,10 @@ class SaleFilterProvider extends AbstractFilterProvider
         return sprintf(
             '(%s > 0 AND %s > 0 AND ((%s - %s) / %s * 100) >= %d)',
             $specialPriceField,
-            Product::fields_price,
-            Product::fields_price,
+            Product::schema_fields_price,
+            Product::schema_fields_price,
             $specialPriceField,
-            Product::fields_price,
+            Product::schema_fields_price,
             $minDiscount
         );
     }
