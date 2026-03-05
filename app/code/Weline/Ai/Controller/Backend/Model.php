@@ -213,6 +213,7 @@ class Model extends BackendController
     #[Acl('Weline_Ai::ai_model_detail', '查看AI模型详情', 'mdi-information', '查看AI模型详情')]
     public function detail(): string
     {
+        $this->layoutType = 'default.blank';
         $id = (int)$this->request->getGet('id');
         
         if (!$id) {
@@ -242,6 +243,7 @@ class Model extends BackendController
     #[Acl('Weline_Ai::ai_model_detail', '查看AI模型详情', 'mdi-information', '查看AI模型详情')]
     public function detailOffcanvas(): string
     {
+        $this->layoutType = 'default.blank';
         $id = (int)$this->request->getGet('id');
         
         if (!$id) {
