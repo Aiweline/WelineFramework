@@ -107,7 +107,7 @@ class Daemon extends CommandAbstract
 
         foreach ($allMappings as $mapping) {
             $mappingId = $mapping->getId();
-            $status = (int)$mapping->getData(SyncMapping::fields_STATUS);
+            $status = (int)$mapping->getData(SyncMapping::schema_fields_STATUS);
             
             // 如果映射状态为停止（0），停止对应的 watcher（如果正在运行），然后跳过检测
             if ($status === 0) {
