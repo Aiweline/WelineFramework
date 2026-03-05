@@ -50,12 +50,12 @@ class View extends BaseController
         // 格式化页面数据
         $pageData = [
             'page_id' => $page->getId(),
-            'title' => $page->getData(\WeShop\Cms\Model\Page::fields_TITLE) ?? '',
-            'identifier' => $page->getData(\WeShop\Cms\Model\Page::fields_IDENTIFIER) ?? '',
-            'content' => $page->getData(\WeShop\Cms\Model\Page::fields_CONTENT) ?? '',
-            'is_active' => (bool)($page->getData(\WeShop\Cms\Model\Page::fields_IS_ACTIVE) ?? true),
-            'created_at' => $page->getData(\WeShop\Cms\Model\Page::fields_CREATED_AT) ?? '',
-            'updated_at' => $page->getData(\WeShop\Cms\Model\Page::fields_UPDATED_AT) ?? '',
+            'title' => $page->getData(\WeShop\Cms\Model\Page::schema_fields_TITLE) ?? '',
+            'identifier' => $page->getData(\WeShop\Cms\Model\Page::schema_fields_IDENTIFIER) ?? '',
+            'content' => $page->getData(\WeShop\Cms\Model\Page::schema_fields_CONTENT) ?? '',
+            'is_active' => (bool)($page->getData(\WeShop\Cms\Model\Page::schema_fields_IS_ACTIVE) ?? true),
+            'created_at' => $page->getData(\WeShop\Cms\Model\Page::schema_fields_CREATED_AT) ?? '',
+            'updated_at' => $page->getData(\WeShop\Cms\Model\Page::schema_fields_UPDATED_AT) ?? '',
         ];
         
         // 准备模板数据
