@@ -1390,20 +1390,14 @@ function loadStyleConfig(styleCode) {
     console.log('📡 配置请求 URL:', configUrl);
     
     // 通过AJAX获取样式配置
-    fetch(configUrl, {
-        method: 'GET',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-        },
-        credentials: 'same-origin'
-    })
-        .then(response => {
-            console.log('📥 配置响应状态:', response.status, response.statusText);
-            return response.json();
-        })
-        .then(data => {
+    var configOpts = { method: 'GET', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' };
+    window.Weline.Api.get(configUrl, { silent: true })
+        .then(function(res) {
+            var data = (res && res.data) !== undefined ? res.data : res;
             console.log('📦 配置响应数据:', data);
+            return data;
+        })
+        .then(function(data) {
             if (data.success && data.data) {
                 renderStyleConfig(data.data);
             } else {
@@ -2765,16 +2759,10 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
                 });
                 
                 // 发送保存请求
-                const response = await fetch('<?= $this->getBackendUrl('cms/backend/preview/autoSave') ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify(requestData)
-                });
-                
-                const result = await response.json();
+                var saveUrl = '<?= $this->getBackendUrl('cms/backend/preview/autoSave') ?>';
+                var saveOpts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(requestData) };
+                var response = await window.Weline.Api.request(saveUrl, saveOpts);
+                var result = (response && response.data) !== undefined ? response.data : response;
                 
                 console.log('✅ 保存响应', {
                     success: result.success,

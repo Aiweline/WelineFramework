@@ -9,19 +9,18 @@ declare(strict_types=1);
 
 namespace WeShop\Cms\Model;
 
-use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 
 class Page extends Model
 {
-    public const table = 'weshop_cms_page';
-    public const primary_key = 'page_id';
+    public const schema_table = 'weshop_cms_page';
+    public const schema_primary_key = 'page_id';
     public string $indexer = 'cms_page_indexer';
     
     // 字段定义
-    public const fields_ID = 'page_id';
+    public const schema_fields_ID = 'page_id';
     
     /**
      * Unit primary keys
@@ -32,28 +31,28 @@ class Page extends Model
      * Index sort keys
      */
     public array $_index_sort_keys = ['page_id', 'handle', 'type', 'status'];
-    public const fields_HANDLE = 'handle';
-    public const fields_TYPE = 'type';
-    public const fields_NAME = 'name';
-    public const fields_TITLE = 'title';
-    public const fields_CONTENT = 'content';
-    public const fields_PARENT_ID = 'parent_id';
-    public const fields_GA4_ID = 'ga4_id';
-    public const fields_GTM_ID = 'gtm_id';
-    public const fields_FB_PIXEL_ID = 'fb_pixel_id';
-    public const fields_LOGO = 'logo';
-    public const fields_ICON = 'icon';
-    public const fields_LOCALES = 'locales';
-    public const fields_DEFAULT_LOCALE = 'default_locale';
-    public const fields_STYLE = 'style';
-    public const fields_STYLE_SETTING = 'style_setting';
-    public const fields_META_TITLE = 'meta_title';
-    public const fields_META_DESCRIPTION = 'meta_description';
-    public const fields_META_KEYWORDS = 'meta_keywords';
-    public const fields_REDIRECT_URL = 'redirect_url';
-    public const fields_STATUS = 'status';
-    public const fields_CREATE_TIME = 'create_time';
-    public const fields_UPDATE_TIME = 'update_time';
+    public const schema_fields_HANDLE = 'handle';
+    public const schema_fields_TYPE = 'type';
+    public const schema_fields_NAME = 'name';
+    public const schema_fields_TITLE = 'title';
+    public const schema_fields_CONTENT = 'content';
+    public const schema_fields_PARENT_ID = 'parent_id';
+    public const schema_fields_GA4_ID = 'ga4_id';
+    public const schema_fields_GTM_ID = 'gtm_id';
+    public const schema_fields_FB_PIXEL_ID = 'fb_pixel_id';
+    public const schema_fields_LOGO = 'logo';
+    public const schema_fields_ICON = 'icon';
+    public const schema_fields_LOCALES = 'locales';
+    public const schema_fields_DEFAULT_LOCALE = 'default_locale';
+    public const schema_fields_STYLE = 'style';
+    public const schema_fields_STYLE_SETTING = 'style_setting';
+    public const schema_fields_META_TITLE = 'meta_title';
+    public const schema_fields_META_DESCRIPTION = 'meta_description';
+    public const schema_fields_META_KEYWORDS = 'meta_keywords';
+    public const schema_fields_REDIRECT_URL = 'redirect_url';
+    public const schema_fields_STATUS = 'status';
+    public const schema_fields_CREATE_TIME = 'create_time';
+    public const schema_fields_UPDATE_TIME = 'update_time';
     
     // 页面类型常量
     public const TYPE_HOME = 'home_page';
@@ -92,7 +91,7 @@ class Page extends Model
     public function getTypeName(): string
     {
         $types = self::getPageTypes();
-        return $types[$this->getData(self::fields_TYPE)] ?? $this->getData(self::fields_TYPE);
+        return $types[$this->getData(self::schema_fields_TYPE)] ?? $this->getData(self::schema_fields_TYPE);
     }
     
     /**
@@ -100,7 +99,7 @@ class Page extends Model
      */
     public function getStatusName(): string
     {
-        return $this->getData(self::fields_STATUS) == self::STATUS_PUBLISHED ? __('已发布') : __('草稿');
+        return $this->getData(self::schema_fields_STATUS) == self::STATUS_PUBLISHED ? __('已发布') : __('草稿');
     }
     
     /**
@@ -108,7 +107,7 @@ class Page extends Model
      */
     public function getSelectedLocales(): array
     {
-        $locales = $this->getData(self::fields_LOCALES);
+        $locales = $this->getData(self::schema_fields_LOCALES);
         if (empty($locales) || !is_string($locales)) {
             return [];
         }
@@ -121,7 +120,7 @@ class Page extends Model
      */
     public function setSelectedLocales(array $locales): self
     {
-        return $this->setData(self::fields_LOCALES, json_encode($locales));
+        return $this->setData(self::schema_fields_LOCALES, json_encode($locales));
     }
     
     /**
@@ -129,7 +128,7 @@ class Page extends Model
      */
     public function getParentPage(): ?Page
     {
-        $parentId = $this->getData(self::fields_PARENT_ID);
+        $parentId = $this->getData(self::schema_fields_PARENT_ID);
         if (!$parentId) {
             return null;
         }
@@ -146,7 +145,7 @@ class Page extends Model
     {
         $children = clone $this;
         return $children->clear()
-            ->where(self::fields_PARENT_ID, $this->getId())
+            ->where(self::schema_fields_PARENT_ID, $this->getId())
             ->select()
             ->fetch()
             ->getItems();
@@ -157,7 +156,7 @@ class Page extends Model
      */
     public function getStyleSetting(): array
     {
-        $setting = $this->getData(self::fields_STYLE_SETTING);
+        $setting = $this->getData(self::schema_fields_STYLE_SETTING);
         if (empty($setting) || !is_string($setting)) {
             return [];
         }
@@ -170,7 +169,7 @@ class Page extends Model
      */
     public function setStyleSetting(array $setting): self
     {
-        return $this->setData(self::fields_STYLE_SETTING, json_encode($setting));
+        return $this->setData(self::schema_fields_STYLE_SETTING, json_encode($setting));
     }
     
     /**
@@ -192,252 +191,7 @@ class Page extends Model
         return parent::loadLocalDescription($local_code, $model);
     }
 
-    /**
-     * 安装表结构
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        // 检查表是否已存在
-        if ($setup->tableExist()) {
-            // 表已存在，只创建默认测试页面
-            $this->createDefaultTestPage();
-            return;
-        }
-        
-        // 创建新表
-        $setup->createTable('WeShop CMS页面表')
-            ->addColumn(
-                self::fields_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                'primary key auto_increment',
-                '页面ID'
-            )
-            ->addColumn(
-                self::fields_HANDLE,
-                TableInterface::column_type_VARCHAR,
-                100,
-                'not null unique',
-                '页面句柄'
-            )
-            ->addColumn(
-                self::fields_TYPE,
-                TableInterface::column_type_VARCHAR,
-                50,
-                'not null',
-                '页面类型'
-            )
-            ->addColumn(
-                self::fields_NAME,
-                TableInterface::column_type_VARCHAR,
-                255,
-                'not null',
-                '页面名称'
-            )
-            ->addColumn(
-                self::fields_TITLE,
-                TableInterface::column_type_VARCHAR,
-                255,
-                'not null',
-                '页面标题'
-            )
-            ->addColumn(
-                self::fields_CONTENT,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '页面内容'
-            )
-            ->addColumn(
-                self::fields_PARENT_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                'default 0',
-                '父页面ID'
-            )
-            ->addColumn(
-                self::fields_GA4_ID,
-                TableInterface::column_type_VARCHAR,
-                100,
-                '',
-                'Google Analytics 4 ID'
-            )
-            ->addColumn(
-                self::fields_GTM_ID,
-                TableInterface::column_type_VARCHAR,
-                100,
-                '',
-                'Google Tag Manager ID'
-            )
-            ->addColumn(
-                self::fields_FB_PIXEL_ID,
-                TableInterface::column_type_VARCHAR,
-                100,
-                '',
-                'Facebook Pixel ID'
-            )
-            ->addColumn(
-                self::fields_LOGO,
-                TableInterface::column_type_VARCHAR,
-                255,
-                '',
-                'Logo图片路径'
-            )
-            ->addColumn(
-                self::fields_ICON,
-                TableInterface::column_type_VARCHAR,
-                255,
-                '',
-                'Icon图标路径'
-            )
-            ->addColumn(
-                self::fields_LOCALES,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '选中的语言列表(JSON)'
-            )
-            ->addColumn(
-                self::fields_DEFAULT_LOCALE,
-                TableInterface::column_type_VARCHAR,
-                10,
-                '',
-                '默认语言代码'
-            )
-            ->addColumn(
-                self::fields_STYLE,
-                TableInterface::column_type_VARCHAR,
-                100,
-                '',
-                '页面样式模板名称'
-            )
-            ->addColumn(
-                self::fields_STYLE_SETTING,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '页面样式配置(JSON)'
-            )
-            ->addColumn(
-                self::fields_META_TITLE,
-                TableInterface::column_type_VARCHAR,
-                255,
-                '',
-                'SEO标题'
-            )
-            ->addColumn(
-                self::fields_META_DESCRIPTION,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                'SEO描述'
-            )
-            ->addColumn(
-                self::fields_META_KEYWORDS,
-                TableInterface::column_type_VARCHAR,
-                255,
-                '',
-                'SEO关键词'
-            )
-            ->addColumn(
-                self::fields_REDIRECT_URL,
-                TableInterface::column_type_VARCHAR,
-                500,
-                '',
-                '表单提交后跳转URL'
-            )
-            ->addColumn(
-                self::fields_STATUS,
-                TableInterface::column_type_SMALLINT,
-                1,
-                'not null default 0',
-                '状态:0草稿,1已发布'
-            )
-            ->addColumn(
-                self::fields_CREATE_TIME,
-                TableInterface::column_type_DATETIME,
-                0,
-                'not null default CURRENT_TIMESTAMP',
-                '创建时间'
-            )
-            ->addColumn(
-                self::fields_UPDATE_TIME,
-                TableInterface::column_type_DATETIME,
-                0,
-                'not null default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP',
-                '更新时间'
-            )
-            ->addIndex(TableInterface::index_type_KEY, 'idx_handle', [self::fields_HANDLE], '句柄索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_type', [self::fields_TYPE], '类型索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_parent_id', [self::fields_PARENT_ID], '父页面索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_status', [self::fields_STATUS], '状态索引')
-            ->create();
-        
-        // 创建默认测试页面
-        $this->createDefaultTestPage();
-    }
-
-    /**
-     * 升级表结构
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑可以在这里添加
-        // 暂时只确保测试页面存在
-        $this->createDefaultTestPage();
-    }
-
-    /**
-     * 设置表结构
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        // 开发模式下：删除旧表重建（从旧结构迁移到新结构）
-        // [临时] 2026-01-15 从旧结构（identifier, title）迁移到新结构（handle, name）
-        // 验证通过后需要注释掉 dropTable()
-        if (DEV && $setup->tableExist()) {
-            // 开发模式下，直接删除旧表重建
-            $setup->dropTable();
-        }
-        
-        $this->install($setup, $context);
-        // 在开发模式下，每次执行 module:upgrade 都会触发 setup，确保测试页面存在
-        $this->createDefaultTestPage();
-    }
-    
-    /**
-     * 创建默认测试页面
-     */
-    private function createDefaultTestPage(): void
-    {
-        try {
-            // 检查表是否存在
-            if (!$this->getConnection()->getConnector()->tableExist($this->getTable())) {
-                return; // 表不存在，跳过
-            }
-            
-            // 检查是否已存在测试页面
-            $existingPage = clone $this;
-            $existingPage->clear()
-                ->where(self::fields_HANDLE, 'test-page')
-                ->find()
-                ->fetch();
-            
-            if (!$existingPage->getId()) {
-                // 创建默认测试页面
-                $newPage = clone $this;
-                $newPage->clearData()
-                    ->setData(self::fields_HANDLE, 'test-page')
-                    ->setData(self::fields_TYPE, self::TYPE_CUSTOM)
-                    ->setData(self::fields_NAME, __('测试页面'))
-                    ->setData(self::fields_TITLE, __('测试页面'))
-                    ->setData(self::fields_CONTENT, '<h1>' . __('欢迎使用CMS页面管理系统') . '</h1><p>' . __('这是一个默认的测试页面，您可以编辑或删除它。') . '</p>')
-                    ->setData(self::fields_STATUS, self::STATUS_PUBLISHED)
-                    ->save(true);
-            }
-        } catch (\Exception $e) {
-            // 静默处理错误，避免影响模块安装
-            w_log_error('WeShop CMS: Failed to create default test page: ' . $e->getMessage());
-        }
-    }
+    public function install(ModelSetup $setup, Context $context): void {}
+    public function upgrade(ModelSetup $setup, Context $context): void {}
+    public function setup(ModelSetup $setup, Context $context): void {}
 }
