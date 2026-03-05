@@ -32,13 +32,13 @@ class Index extends BackendController
         $rma->clear();
         
         if (!empty($filters['status'])) {
-            $rma->where(Rma::fields_status, $filters['status']);
+            $rma->where(Rma::schema_fields_STATUS, $filters['status']);
         }
         if (!empty($filters['order_id'])) {
-            $rma->where(Rma::fields_order_id, $filters['order_id']);
+            $rma->where(Rma::schema_fields_ORDER_ID, $filters['order_id']);
         }
         
-        $rma->order(Rma::fields_created_at, 'DESC')
+        $rma->order(Rma::schema_fields_CREATED_AT, 'DESC')
             ->pagination($page, $pageSize)
             ->select();
         
