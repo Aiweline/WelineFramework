@@ -11,210 +11,144 @@ declare(strict_types=1);
 
 namespace Weline\CustomerService\Model;
 
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: '客服人员表')]
+#[Index(name: 'idx_user_id', columns: ['user_id'])]
+#[Index(name: 'idx_is_active', columns: ['is_active'])]
 class ServiceAgent extends Model
 {
-    public const table = 'service_agent';
-    public const fields_ID = 'agent_id';
-    public const fields_user_id = 'user_id';
-    public const fields_name = 'name';
-    public const fields_email = 'email';
-    public const fields_locale = 'locale';
-    public const fields_supported_locales = 'supported_locales';
-    public const fields_is_active = 'is_active';
-    public const fields_max_sessions = 'max_sessions';
-    public const fields_last_heartbeat = 'last_heartbeat';
-    public const fields_created_at = 'created_at';
-    public const fields_updated_at = 'updated_at';
+    public const schema_table = 'service_agent';
+    public const schema_primary_key = 'agent_id';
+
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '客服ID')]
+    public const schema_fields_ID = 'agent_id';
+    #[Col(type: 'int', nullable: false, comment: '关联后台用户ID')]
+    public const schema_fields_USER_ID = 'user_id';
+    #[Col(type: 'varchar', length: 100, nullable: false, comment: '客服名称')]
+    public const schema_fields_NAME = 'name';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '邮箱')]
+    public const schema_fields_EMAIL = 'email';
+    #[Col(type: 'varchar', length: 20, nullable: false, default: 'zh_Hans_CN', comment: '客服语言')]
+    public const schema_fields_LOCALE = 'locale';
+    #[Col(type: 'text', nullable: true, comment: '支持的语言列表(JSON)')]
+    public const schema_fields_SUPPORTED_LOCALES = 'supported_locales';
+    #[Col(type: 'int', length: 1, nullable: false, default: 1, comment: '是否激活')]
+    public const schema_fields_IS_ACTIVE = 'is_active';
+    #[Col(type: 'int', nullable: false, default: 10, comment: '最大并发会话数')]
+    public const schema_fields_MAX_SESSIONS = 'max_sessions';
+    #[Col(type: 'datetime', nullable: true, comment: '最后心跳时间')]
+    public const schema_fields_LAST_HEARTBEAT = 'last_heartbeat';
+    #[Col(type: 'datetime', nullable: true, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col(type: 'datetime', nullable: true, comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
 
     /** 心跳超时秒数：超过此时间未收到心跳视为离线 */
     public const HEARTBEAT_TIMEOUT = 60;
 
     public function _init(): void
     {
-        $this->_primary_key = self::fields_ID;
-        $this->_table = self::table;
-    }
-
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 添加支持的语言列表字段
-        if (!$setup->hasField(self::fields_supported_locales)) {
-            $setup->alterTable()
-                ->addColumn(
-                    self::fields_supported_locales,
-                    self::fields_locale,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    '',
-                    '支持的语言列表(JSON)'
-                )
-                ->alter();
-        }
-        // 添加最后心跳时间字段（在线状态检测）
-        if (!$setup->hasField(self::fields_last_heartbeat)) {
-            $setup->alterTable()
-                ->addColumn(
-                    self::fields_last_heartbeat,
-                    self::fields_max_sessions,
-                    TableInterface::column_type_DATETIME,
-                    0,
-                    '',
-                    '最后心跳时间'
-                )
-                ->alter();
-        }
-    }
-
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('客服人员表')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'primary key auto_increment', '客服ID')
-                ->addColumn(self::fields_user_id, TableInterface::column_type_INTEGER, 0, 'not null', '关联后台用户ID')
-                ->addColumn(self::fields_name, TableInterface::column_type_VARCHAR, 100, 'not null', '客服名称')
-                ->addColumn(self::fields_email, TableInterface::column_type_VARCHAR, 255, 'not null', '邮箱')
-                ->addColumn(self::fields_locale, TableInterface::column_type_VARCHAR, 20, 'not null default "zh_Hans_CN"', '客服语言')
-                ->addColumn(self::fields_is_active, TableInterface::column_type_INTEGER, 1, 'not null default 1', '是否激活')
-                ->addColumn(self::fields_max_sessions, TableInterface::column_type_INTEGER, 0, 'not null default 10', '最大并发会话数')
-                ->addColumn(self::fields_created_at, TableInterface::column_type_DATETIME, 0, '', '创建时间')
-                ->addColumn(self::fields_updated_at, TableInterface::column_type_DATETIME, 0, '', '更新时间')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_user_id', self::fields_user_id, '用户ID索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_is_active', self::fields_is_active, '激活状态索引')
-                ->create();
-        }
+        $this->_primary_key = self::schema_fields_ID;
+        $this->_table = self::schema_table;
     }
 
     public function getUserId(): int
     {
-        return (int)$this->getData(self::fields_user_id);
+        return (int)$this->getData(self::schema_fields_USER_ID);
     }
 
     public function setUserId(int $userId): static
     {
-        return $this->setData(self::fields_user_id, $userId);
+        return $this->setData(self::schema_fields_USER_ID, $userId);
     }
 
     public function getName(): string
     {
-        return (string)$this->getData(self::fields_name);
+        return (string)$this->getData(self::schema_fields_NAME);
     }
 
     public function setName(string $name): static
     {
-        return $this->setData(self::fields_name, $name);
+        return $this->setData(self::schema_fields_NAME, $name);
     }
 
     public function getEmail(): string
     {
-        return (string)$this->getData(self::fields_email);
+        return (string)$this->getData(self::schema_fields_EMAIL);
     }
 
     public function setEmail(string $email): static
     {
-        return $this->setData(self::fields_email, $email);
+        return $this->setData(self::schema_fields_EMAIL, $email);
     }
 
     public function getLocale(): string
     {
-        return (string)$this->getData(self::fields_locale);
+        return (string)$this->getData(self::schema_fields_LOCALE);
     }
 
     public function setLocale(string $locale): static
     {
-        return $this->setData(self::fields_locale, $locale);
+        return $this->setData(self::schema_fields_LOCALE, $locale);
     }
 
     public function getIsActive(): bool
     {
-        return (bool)$this->getData(self::fields_is_active);
+        return (bool)$this->getData(self::schema_fields_IS_ACTIVE);
     }
 
     public function setIsActive(bool $isActive): static
     {
-        return $this->setData(self::fields_is_active, $isActive ? 1 : 0);
+        return $this->setData(self::schema_fields_IS_ACTIVE, $isActive ? 1 : 0);
     }
 
     public function getMaxSessions(): int
     {
-        return (int)$this->getData(self::fields_max_sessions);
+        return (int)$this->getData(self::schema_fields_MAX_SESSIONS);
     }
 
     public function setMaxSessions(int $maxSessions): static
     {
-        return $this->setData(self::fields_max_sessions, $maxSessions);
+        return $this->setData(self::schema_fields_MAX_SESSIONS, $maxSessions);
     }
 
-    /**
-     * 更新心跳时间（标记为在线）
-     */
     public function updateHeartbeat(): static
     {
-        return $this->setData(self::fields_last_heartbeat, date('Y-m-d H:i:s'));
+        return $this->setData(self::schema_fields_LAST_HEARTBEAT, date('Y-m-d H:i:s'));
     }
 
-    /**
-     * 判断客服是否在线（心跳在超时时间内）
-     */
     public function isOnline(): bool
     {
-        $lastHeartbeat = $this->getData(self::fields_last_heartbeat);
+        $lastHeartbeat = $this->getData(self::schema_fields_LAST_HEARTBEAT);
         if (empty($lastHeartbeat)) {
             return false;
         }
         return (time() - strtotime($lastHeartbeat)) < self::HEARTBEAT_TIMEOUT;
     }
 
-    /**
-     * 获取支持的语言列表
-     * @return array
-     */
     public function getSupportedLocales(): array
     {
-        $data = $this->getData(self::fields_supported_locales);
+        $data = $this->getData(self::schema_fields_SUPPORTED_LOCALES);
         if (empty($data)) {
-            // 默认返回主语言
             return [$this->getLocale()];
         }
-        
         $locales = json_decode($data, true);
         return is_array($locales) ? $locales : [$this->getLocale()];
     }
 
-    /**
-     * 设置支持的语言列表
-     * @param array $locales
-     * @return static
-     */
     public function setSupportedLocales(array $locales): static
     {
-        return $this->setData(self::fields_supported_locales, json_encode($locales));
+        return $this->setData(self::schema_fields_SUPPORTED_LOCALES, json_encode($locales));
     }
 
-    /**
-     * 检查是否支持某个语言
-     * @param string $locale
-     * @return bool
-     */
     public function supportsLocale(string $locale): bool
     {
-        $supported = $this->getSupportedLocales();
-        return in_array($locale, $supported, true);
+        return in_array($locale, $this->getSupportedLocales(), true);
     }
 
-    /**
-     * 获取所有可用语言列表（静态方法）
-     * @return array
-     */
     public static function getAvailableLocales(): array
     {
         return [
@@ -234,4 +168,3 @@ class ServiceAgent extends Model
         ];
     }
 }
-
