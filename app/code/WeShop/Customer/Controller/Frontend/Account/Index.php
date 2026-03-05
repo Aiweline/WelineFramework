@@ -49,11 +49,11 @@ class Index extends BaseController
         $recentOrders = [];
         foreach ($recentOrdersResult['items'] as $order) {
             $recentOrders[] = [
-                'order_id' => $order['order_id'] ?? $order[\WeShop\Order\Model\Order::fields_ID] ?? 0,
-                'increment_id' => $order['increment_id'] ?? $order[\WeShop\Order\Model\Order::fields_increment_id] ?? '',
-                'status' => $order['status'] ?? $order[\WeShop\Order\Model\Order::fields_status] ?? 'pending',
-                'total' => $order['total'] ?? $order[\WeShop\Order\Model\Order::fields_total] ?? 0,
-                'created_at' => $order['created_at'] ?? $order[\WeShop\Order\Model\Order::fields_created_at] ?? '',
+                'order_id' => $order['order_id'] ?? $order[\WeShop\Order\Model\Order::schema_fields_ID] ?? 0,
+                'increment_id' => $order['increment_id'] ?? $order[\WeShop\Order\Model\Order::schema_fields_increment_id] ?? '',
+                'status' => $order['status'] ?? $order[\WeShop\Order\Model\Order::schema_fields_status] ?? 'pending',
+                'total' => $order['total'] ?? $order[\WeShop\Order\Model\Order::schema_fields_total] ?? 0,
+                'created_at' => $order['created_at'] ?? $order[\WeShop\Order\Model\Order::schema_fields_created_at] ?? '',
             ];
         }
         
@@ -67,12 +67,12 @@ class Index extends BaseController
         // 格式化客户数据
         $customerData = [
             'customer_id' => $customer->getId(),
-            'firstname' => $customer->getData(\WeShop\Customer\Model\Customer::fields_FIRST_NAME) ?? '',
-            'lastname' => $customer->getData(\WeShop\Customer\Model\Customer::fields_LAST_NAME) ?? '',
-            'email' => $customer->getData(\WeShop\Customer\Model\Customer::fields_EMAIL) ?? '',
-            'username' => $customer->getData('username') ?? $customer->getData(\WeShop\Customer\Model\Customer::fields_EMAIL) ?? '',
-            'phone' => $customer->getData(\WeShop\Customer\Model\Customer::fields_PHONE) ?? '',
-            'created_at' => $customer->getData(\WeShop\Customer\Model\Customer::fields_CREATED_AT) ?? '',
+            'firstname' => $customer->getData(\WeShop\Customer\Model\Customer::schema_fields_FIRST_NAME) ?? '',
+            'lastname' => $customer->getData(\WeShop\Customer\Model\Customer::schema_fields_LAST_NAME) ?? '',
+            'email' => $customer->getData(\WeShop\Customer\Model\Customer::schema_fields_EMAIL) ?? '',
+            'username' => $customer->getData('username') ?? $customer->getData(\WeShop\Customer\Model\Customer::schema_fields_EMAIL) ?? '',
+            'phone' => $customer->getData(\WeShop\Customer\Model\Customer::schema_fields_PHONE) ?? '',
+            'created_at' => $customer->getData(\WeShop\Customer\Model\Customer::schema_fields_CREATED_AT) ?? '',
         ];
         
         // 准备模板数据
