@@ -315,6 +315,13 @@ class Preview extends BackendController
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_preview', '页面预览', '', '页面预览')]
     public function full()
     {
+        // 预览禁止缓存，确保拖拽添加组件后刷新能立即看到最新内容
+        $response = $this->request->getResponse();
+        $response->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0');
+        $response->setHeader('Pragma', 'no-cache');
+        $response->setHeader('Expires', '0');
+        $response->setHeader('X-Accel-Expires', '0');
+
         $pageId = (int)$this->request->getGet('page_id');
         $locale = $this->request->getGet('locale');
         $tempStyleCode = $this->request->getGet('style_code'); // 临时样式代码（用于预览）
@@ -361,6 +368,12 @@ class Preview extends BackendController
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_preview', '样式模板预览', '', '样式模板预览')]
     public function stylePreview()
     {
+        // 预览禁止缓存
+        $response = $this->request->getResponse();
+        $response->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        $response->setHeader('Pragma', 'no-cache');
+        $response->setHeader('Expires', '0');
+
         $styleCode = $this->request->getGet('style_code');
         $locale = $this->request->getGet('locale', 'zh_Hans_CN'); // 默认语言
         $pageType = $this->request->getGet('page_type', Page::TYPE_HOME); // 默认首页类型
