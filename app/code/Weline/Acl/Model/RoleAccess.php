@@ -17,72 +17,26 @@ use Weline\Backend\Model\BackendUser;
 use Weline\Backend\Model\Menu;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
-class RoleAccess extends \Weline\Framework\Database\Model
+/** 复合主键 (role_id, source_id) 用 UNIQUE 约束实现，框架暂不支持复合主键声明 */
+#[Table(comment: '角色资源访问表')]
+#[Index(name: 'uk_role_source', columns: ['role_id', 'source_id'], type: 'UNIQUE', comment: '角色+资源唯一')]
+class RoleAccess extends Model
 {
-    public const fields_ID = 'role_id';
-    public const fields_ROLE_ID = Role::fields_ID;
-    public const fields_SOURCE_ID = Acl::fields_ID;
+
+    #[Col(type: 'int', nullable: false, comment: '角色ID')]
+    public const schema_fields_ID = 'role_id';
+    #[Col(type: 'int', nullable: false, comment: '角色ID')]
+    public const schema_fields_ROLE_ID = 'role_id';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '资源ID')]
+    public const schema_fields_SOURCE_ID = 'source_id';
 
     private array $exist = [];
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // TODO: Implement upgrade() method.
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-//        $setup->dropTable();
-        if (!$setup->tableExist()) {
-            $setup->createTable()
-                ->addColumn(
-                    self::fields_ROLE_ID,
-                    TableInterface::column_type_INTEGER,
-                    null,
-                    'not null',
-                    '角色ID'
-                )
-                ->addColumn(
-                    self::fields_SOURCE_ID,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    '资源ID'
-                )
-                /*->addForeignKey(
-                    'ROLE_ACCESS_ROLE_ID',
-                    self::fields_ROLE_ID,
-                    $this->getTable('role'),
-                    Role::fields_ID,
-                    true
-                )*/
-                ->addConstraints("primary key (role_id,source_id)")
-                ->create();
-        }
-    }
-
-
-    /**
+/**
      * @DESC          # 获取树形菜单【携带角色权限信息】
      *
      * @AUTH    秋枫雁飞
@@ -107,7 +61,7 @@ class RoleAccess extends \Weline\Framework\Database\Model
         string     $order_sort = 'ASC'
     ): array
     {
-        $main_field = $main_field ?: $this::fields_ID;
+        $main_field = $main_field ?: $this::schema_fields_ID;
         $top_menus = $this->clearData()
             ->joinModel(Acl::class, 'a', 'a.source_id=main_table.source_id and main_table.role_id=' . $role->getId(''), 'right')
             ->where($parent_id_field, $parent_id_value)
@@ -161,7 +115,7 @@ class RoleAccess extends \Weline\Framework\Database\Model
         string $order_sort = 'ASC'
     ): Model
     {
-        $main_field = $main_field ?: $this::fields_ID;
+        $main_field = $main_field ?: $this::schema_fields_ID;
         $model->setData('source_id', $model->getData('a_source_id'));
         if ($subs = $this->clear()
             ->joinModel(Acl::class, 'a', 'a.source_id=main_table.source_id and main_table.role_id=' . $role->getId(''), 'right')
@@ -333,3 +287,4 @@ class RoleAccess extends \Weline\Framework\Database\Model
         return $types;
     }
 }
+

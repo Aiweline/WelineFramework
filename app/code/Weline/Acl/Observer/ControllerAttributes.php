@@ -161,26 +161,21 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                     ->setIsBackend($data->getData('is_backend') ?: false)
                     ->setType($type);
                 
-                // 🔧 修复：如果控制器 #[Acl] 没有指定 parent_source，查询数据库保留原有值
-                // ACL 父子级关系：menu.xml → 控制器类 → 控制器方法
-                // menu.xml 定义的 parent_source 优先级最高，控制器不应覆盖
+                // 控制器 #[Acl] 仅负责 pc 接口权限，type 固定为 pc
+                // type='menus' 仅由 MenuCollector（menu.xml）写入；侧栏菜单必须以 menu.xml 为准
+                // 不再保留既有 type='menus'，避免已从 menu.xml 移除的 controller ACL 仍显示在侧栏
                 $sourceId = $acl->getSourceId();
                 $aclParentSource = $acl->getParentSource();
                 if (empty($aclParentSource)) {
-                    // 查询数据库中是否已存在该 source_id 的 parent_source
+                    // 仅当 parent_source 为空时，查询数据库保留 menu.xml 可能设置的 parent_source
                     $existingRecords = $this->acl->reset()
-                        ->where(\Weline\Acl\Model\Acl::fields_SOURCE_ID, $sourceId)
-                        ->fields(\Weline\Acl\Model\Acl::fields_PARENT_SOURCE . ',' . \Weline\Acl\Model\Acl::fields_TYPE)
+                        ->where(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID, $sourceId)
+                        ->fields(\Weline\Acl\Model\Acl::schema_fields_PARENT_SOURCE)
                         ->select()
                         ->fetchArray();
                     $existingRecord = $existingRecords[0] ?? null;
                     if ($existingRecord && !empty($existingRecord['parent_source'])) {
-                        // 保留 menu.xml 设置的 parent_source
                         $acl->setParentSource($existingRecord['parent_source']);
-                    }
-                    // 同时保留 type='menus'
-                    if ($existingRecord && $existingRecord['type'] === 'menus') {
-                        $acl->setType('menus');
                     }
                 }
                 
@@ -189,6 +184,10 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                     $this->pending_class_level_acls[$module] = [];
                 }
                 $aclData = $acl->getData();
+                // 补全表中有默认值的字段，避免插入时缺列
+                if (!isset($aclData[\Weline\Acl\Model\Acl::schema_fields_ORDER])) {
+                    $aclData[\Weline\Acl\Model\Acl::schema_fields_ORDER] = 0;
+                }
                 $this->pending_class_level_acls[$module][] = $aclData;
                 
                 // 记录类级别权限ID，供方法级别权限使用（按模块索引）
@@ -424,7 +423,11 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             if (!isset($this->pending_method_level_acls[$module])) {
                 $this->pending_method_level_acls[$module] = [];
             }
-            $this->pending_method_level_acls[$module][] = $acl->getData();
+            $methodAclData = $acl->getData();
+            if (!isset($methodAclData[\Weline\Acl\Model\Acl::schema_fields_ORDER])) {
+                $methodAclData[\Weline\Acl\Model\Acl::schema_fields_ORDER] = 0;
+            }
+            $this->pending_method_level_acls[$module][] = $methodAclData;
         }
         
         // 清空待处理队列
@@ -542,46 +545,34 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         $this->acl->reset()->clearData();
         $this->acl->beginTransaction();
         try {
-            // 🔧 修复：保护 type='menus' 的记录以及 parent_source 字段不被覆盖
-            // 如果 menu.xml 定义的菜单与控制器 #[Acl] 注解使用相同的 source_id，
-            // 控制器收集会尝试把 type 从 'menus' 改成 'pc'，并清空 parent_source，导致菜单消失或层级错乱
-            // 解决方案：检查现有记录，如果是 'menus' 类型则保留原 type 和 parent_source
+            // 控制器 ACL 统一为 type='pc'；type='menus' 仅由 MenuCollector（menu.xml）负责
+            // 批量保存时不再保留既有 type='menus'，确保侧栏菜单严格以 menu.xml 为准
+            // 仅保留 parent_source（当新数据为空时）
             $sourceIds = array_column($deduplicatedAcls, 'source_id');
-            $existingMenuRecords = [];
+            $existingParentMap = [];
             if (!empty($sourceIds)) {
                 $existingRecords = $this->acl->reset()
-                    ->where(\Weline\Acl\Model\Acl::fields_SOURCE_ID, $sourceIds, 'in')
-                    ->where(\Weline\Acl\Model\Acl::fields_TYPE, 'menus')
-                    ->select(\Weline\Acl\Model\Acl::fields_SOURCE_ID . ',' . \Weline\Acl\Model\Acl::fields_PARENT_SOURCE)
+                    ->where(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID, $sourceIds, 'in')
+                    ->select(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID . ',' . \Weline\Acl\Model\Acl::schema_fields_PARENT_SOURCE)
                     ->fetchArray();
                 foreach ($existingRecords as $record) {
-                    $existingMenuRecords[$record['source_id']] = [
-                        'type' => 'menus',
-                        'parent_source' => $record['parent_source'] ?? '',
-                    ];
+                    $existingParentMap[$record['source_id']] = $record['parent_source'] ?? '';
                 }
             }
-            
-            // 对于已存在且 type='menus' 的记录，保留其 type 和 parent_source 不被覆盖
             foreach ($deduplicatedAcls as &$acl) {
                 $sourceId = $acl['source_id'] ?? '';
-                if (!empty($sourceId) && isset($existingMenuRecords[$sourceId])) {
-                    // 保留原有的 type='menus'，不覆盖为控制器的 type
-                    $acl['type'] = 'menus';
-                    // 保留原有的 parent_source（如果新数据的 parent_source 为空）
-                    $existingParent = $existingMenuRecords[$sourceId]['parent_source'] ?? '';
+                if (!empty($sourceId) && isset($existingParentMap[$sourceId])) {
                     $newParent = $acl['parent_source'] ?? '';
-                    if (empty($newParent) && !empty($existingParent)) {
-                        $acl['parent_source'] = $existingParent;
+                    if (empty($newParent) && $existingParentMap[$sourceId] !== '') {
+                        $acl['parent_source'] = $existingParentMap[$sourceId];
                     }
                 }
             }
             unset($acl);
-            
-            // acl 表对 source_id 有 UNIQUE，显式设置 exist_update_sql 后 Sqlite 会生成 ON CONFLICT(source_id) DO UPDATE，避免 UNIQUE 违反
+
+            // acl 表对 source_id 有 UNIQUE，存在则按冲突键更新全部字段（方言由适配器生成）
             $this->acl->reset()->clearData();
-            $this->acl->getQuery()->exist_update_sql = 'DO UPDATE SET ALL_FIELDS';
-            $this->acl->insert($deduplicatedAcls, 'source_id', '')->fetch();
+            $this->acl->getQuery()->insert($deduplicatedAcls, 'source_id', '')->fetch();
             $this->acl->commit();
         } catch (\Exception $exception) {
             $this->acl->rollBack();
@@ -705,43 +696,32 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         $this->acl->reset()->clearData();
         $this->acl->beginTransaction();
         try {
-            // 🔧 修复：保护 type='menus' 的记录以及 parent_source 字段不被覆盖（方法级别权限同样需要保护）
+            // 方法级别 ACL 统一为 type='pc'；仅保留 parent_source（当新数据为空时）
             $sourceIds = array_column($deduplicatedAcls, 'source_id');
-            $existingMenuRecords = [];
+            $existingParentMap = [];
             if (!empty($sourceIds)) {
                 $existingRecords = $this->acl->reset()
-                    ->where(\Weline\Acl\Model\Acl::fields_SOURCE_ID, $sourceIds, 'in')
-                    ->where(\Weline\Acl\Model\Acl::fields_TYPE, 'menus')
-                    ->select(\Weline\Acl\Model\Acl::fields_SOURCE_ID . ',' . \Weline\Acl\Model\Acl::fields_PARENT_SOURCE)
+                    ->where(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID, $sourceIds, 'in')
+                    ->select(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID . ',' . \Weline\Acl\Model\Acl::schema_fields_PARENT_SOURCE)
                     ->fetchArray();
                 foreach ($existingRecords as $record) {
-                    $existingMenuRecords[$record['source_id']] = [
-                        'type' => 'menus',
-                        'parent_source' => $record['parent_source'] ?? '',
-                    ];
+                    $existingParentMap[$record['source_id']] = $record['parent_source'] ?? '';
                 }
             }
-            
-            // 对于已存在且 type='menus' 的记录，保留其 type 和 parent_source 不被覆盖
             foreach ($deduplicatedAcls as &$acl) {
                 $sourceId = $acl['source_id'] ?? '';
-                if (!empty($sourceId) && isset($existingMenuRecords[$sourceId])) {
-                    // 保留原有的 type='menus'，不覆盖为控制器的 type
-                    $acl['type'] = 'menus';
-                    // 保留原有的 parent_source（如果新数据的 parent_source 为空）
-                    $existingParent = $existingMenuRecords[$sourceId]['parent_source'] ?? '';
+                if (!empty($sourceId) && isset($existingParentMap[$sourceId])) {
                     $newParent = $acl['parent_source'] ?? '';
-                    if (empty($newParent) && !empty($existingParent)) {
-                        $acl['parent_source'] = $existingParent;
+                    if (empty($newParent) && $existingParentMap[$sourceId] !== '') {
+                        $acl['parent_source'] = $existingParentMap[$sourceId];
                     }
                 }
             }
             unset($acl);
-            
-            // acl 表对 source_id 有 UNIQUE，显式设置 exist_update_sql 后 Sqlite 会生成 ON CONFLICT(source_id) DO UPDATE，避免 UNIQUE 违反
+
+            // acl 表对 source_id 有 UNIQUE，存在则按冲突键更新全部字段（方言由适配器生成）
             $this->acl->reset()->clearData();
-            $this->acl->getQuery()->exist_update_sql = 'DO UPDATE SET ALL_FIELDS';
-            $this->acl->insert($deduplicatedAcls, ['source_id'], '')->fetch();
+            $this->acl->getQuery()->insert($deduplicatedAcls, ['source_id'], '')->fetch();
             $this->acl->commit();
         } catch (\Exception $exception) {
             $this->acl->rollBack();
@@ -819,7 +799,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         try {
             $parentAcl = clone $this->acl;
             $parentAcl->reset();
-            $result = $parentAcl->where(Acl::fields_SOURCE_ID, $parentSourceId)
+            $result = $parentAcl->where(Acl::schema_fields_SOURCE_ID, $parentSourceId)
                 ->find()
                 ->fetch();
             return $result && $result->getId();
@@ -858,12 +838,12 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             $parentAcl->reset();
             
             // 构建查询条件
-            $query = $parentAcl->where(Acl::fields_CLASS, $className)
-                ->where(Acl::fields_SOURCE_ID, $currentSourceId, '!=');
+            $query = $parentAcl->where(Acl::schema_fields_CLASS, $className)
+                ->where(Acl::schema_fields_SOURCE_ID, $currentSourceId, '!=');
             
             // 如果提供了模块名，同时按模块名查找（更精确）
             if (!empty($moduleName)) {
-                $query->where(Acl::fields_MODULE, $moduleName);
+                $query->where(Acl::schema_fields_MODULE, $moduleName);
             }
             
             $results = $query->select()->fetch();
@@ -871,9 +851,9 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             if ($results && $results->getItems()) {
                 // 优先查找 method 字段为空的权限（类级别权限通常 method 为空）
                 foreach ($results->getItems() as $item) {
-                    $method = $item->getData(Acl::fields_METHOD);
+                    $method = $item->getData(Acl::schema_fields_METHOD);
                     if (empty($method)) {
-                        $parentSourceId = $item->getData(Acl::fields_SOURCE_ID);
+                        $parentSourceId = $item->getData(Acl::schema_fields_SOURCE_ID);
                         if ($parentSourceId && $parentSourceId !== $currentSourceId) {
                             return $parentSourceId;
                         }
@@ -882,7 +862,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                 
                 // 如果没找到 method 为空的，尝试通过权限ID模式匹配
                 foreach ($results->getItems() as $item) {
-                    $parentSourceId = $item->getData(Acl::fields_SOURCE_ID);
+                    $parentSourceId = $item->getData(Acl::schema_fields_SOURCE_ID);
                     if ($parentSourceId && $parentSourceId !== $currentSourceId) {
                         // 检查权限ID是否可能是父级（通过模式匹配）
                         // 例如：如果当前是 page_builder_index，父级可能是 page_builder
