@@ -5,35 +5,49 @@ declare(strict_types=1);
 namespace Weline\Ai\Model;
 
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\Framework\Setup\Data\Context;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 
 /**
  * AI Tenant Entity
- * 
+ *
  * @package Weline_Ai
  */
+#[Table(comment: 'AI租户表')]
+#[Index(name: 'idx_domain', columns: ['domain'])]
+#[Index(name: 'idx_status', columns: ['status'])]
 class AiTenant extends Model
 {
-    // 字段常量
-    public const fields_ID = 'id';
-    public const fields_NAME = 'name';
-    public const fields_DOMAIN = 'domain';
-    public const fields_CONFIG = 'config';
-    public const fields_QUOTA_MONTHLY = 'quota_monthly';
-    public const fields_USAGE_MONTHLY = 'usage_monthly';
-    public const fields_BILLING_PLAN = 'billing_plan';
-    public const fields_STATUS = 'status';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
-    
-    // 计费计划常量
+    public const schema_table = 'ai_tenant';
+    public const schema_primary_key = 'id';
+
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'ID')]
+    public const schema_fields_ID = 'id';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '租户名称')]
+    public const schema_fields_NAME = 'name';
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: '域名')]
+    public const schema_fields_DOMAIN = 'domain';
+    #[Col(type: 'text', nullable: true, comment: '配置JSON')]
+    public const schema_fields_CONFIG = 'config';
+    #[Col(type: 'int', nullable: true, comment: '月度配额')]
+    public const schema_fields_QUOTA_MONTHLY = 'quota_monthly';
+    #[Col(type: 'int', nullable: true, default: 0, comment: '月度使用量')]
+    public const schema_fields_USAGE_MONTHLY = 'usage_monthly';
+    #[Col(type: 'varchar', length: 20, default: 'free', comment: '计费计划')]
+    public const schema_fields_BILLING_PLAN = 'billing_plan';
+    #[Col(type: 'varchar', length: 20, default: 'active', comment: '状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col(type: 'int', nullable: true, default: 0, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col(type: 'int', nullable: true, default: 0, comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
+
     public const PLAN_FREE = 'free';
     public const PLAN_BASIC = 'basic';
     public const PLAN_PREMIUM = 'premium';
     public const PLAN_ENTERPRISE = 'enterprise';
 
-    // 状态常量
     public const STATUS_ACTIVE = 'active';
     public const STATUS_SUSPENDED = 'suspended';
     public const STATUS_CANCELLED = 'cancelled';
@@ -41,50 +55,22 @@ class AiTenant extends Model
     public function _init(): void
     {
         $this->useMainDbMaster();
-        // 表名由框架自动推导：AiTenant -> ai_tenant
     }
 
-    public function setup(ModelSetup $setup, Context $context): void {}
-    public function upgrade(ModelSetup $setup, Context $context): void {}
-    
-    public function install(ModelSetup $setup, Context $context): void
+    public function getIdFieldName(): string
     {
-        if (!$setup->tableExist()) {
-            $setup->createTable('AI租户表')
-                ->addColumn('id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
-                ->addColumn('name', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'not null', '租户名称')
-                ->addColumn('domain', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, '', '域名')
-                ->addColumn('config', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, '', '配置JSON')
-                ->addColumn('quota_monthly', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, '', '月度配额')
-                ->addColumn('usage_monthly', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '月度使用量')
-                ->addColumn('billing_plan', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'default \'free\'', '计费计划')
-                ->addColumn('status', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'default \'active\'', '状态')
-                ->addColumn('created_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
-                ->addColumn('updated_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
-                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_DEFAULT, 'idx_domain', 'domain')
-                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_DEFAULT, 'idx_status', 'status')
-                ->create();
-        }
-        // 初始数据使用模型 save() 插入，避免 SQL 方言差异（PostgreSQL/MySQL/SQLite）
-        if ($this->reset()->total() === 0) {
-            $this->setData([
-                'name' => 'Default Tenant',
-                'domain' => 'default.localhost',
-                'config' => ['timezone' => 'Asia/Shanghai', 'locale' => 'zh_Hans_CN'],
-                'billing_plan' => self::PLAN_ENTERPRISE,
-                'status' => self::STATUS_ACTIVE,
-            ])->save();
-        }
+        return self::schema_fields_ID;
     }
 
+    /** Whether the tenant is active */
     public function isActive(): bool
     {
-        return $this->getData('status') === self::STATUS_ACTIVE;
+        return $this->getData(self::schema_fields_STATUS) === self::STATUS_ACTIVE;
     }
 
     public function getConfig(): array
     {
-        $config = $this->getData('config');
+        $config = $this->getData(self::schema_fields_CONFIG);
         if (is_string($config)) {
             $decoded = json_decode($config, true);
             return is_array($decoded) ? $decoded : [];
@@ -94,18 +80,18 @@ class AiTenant extends Model
 
     public function hasQuota(): bool
     {
-        $monthlyQuota = $this->getData('quota_monthly');
+        $monthlyQuota = $this->getData(self::schema_fields_QUOTA_MONTHLY);
         if (!$monthlyQuota) {
             return true;
         }
 
-        $monthlyUsage = $this->getData('usage_monthly');
-        return $monthlyUsage < $monthlyQuota;
+        $monthlyUsage = $this->getData(self::schema_fields_USAGE_MONTHLY);
+        return (int) $monthlyUsage < (int) $monthlyQuota;
     }
 
     public function validate(): bool
     {
-        if (empty($this->getData('name'))) {
+        if (empty($this->getData(self::schema_fields_NAME))) {
             throw new \InvalidArgumentException('Tenant name is required');
         }
 
@@ -115,9 +101,10 @@ class AiTenant extends Model
     public function beforeSave(): self
     {
         $this->validate();
-        
-        if (is_array($this->getData('config'))) {
-            $this->setData('config', json_encode($this->getData('config')));
+
+        $config = $this->getData(self::schema_fields_CONFIG);
+        if (is_array($config)) {
+            $this->setData(self::schema_fields_CONFIG, json_encode($config));
         }
 
         return parent::beforeSave();

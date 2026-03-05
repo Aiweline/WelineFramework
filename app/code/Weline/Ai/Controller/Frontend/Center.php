@@ -13,16 +13,14 @@ declare(strict_types=1);
 namespace Weline\Ai\Controller\Frontend;
 
 use Weline\Ai\Model\AiApiKey;
-use Weline\Ai\Model\AiAssistant;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\Message;
 
 /**
  * 用户个人中心控制器
- * 
+ *
  * 功能：
  * - 用户API密钥管理
- * - 个人助手管理
  * - 使用统计查看
  * - 个人设置
  */
@@ -34,22 +32,13 @@ class Center extends FrontendController
     private AiApiKey $aiApiKey;
 
     /**
-     * @var AiAssistant
-     */
-    private AiAssistant $aiAssistant;
-
-    /**
      * 构造函数
-     * 
+     *
      * @param AiApiKey $aiApiKey
-     * @param AiAssistant $aiAssistant
      */
-    public function __construct(
-        AiApiKey $aiApiKey,
-        AiAssistant $aiAssistant
-    ) {
+    public function __construct(AiApiKey $aiApiKey)
+    {
         $this->aiApiKey = $aiApiKey;
-        $this->aiAssistant = $aiAssistant;
     }
 
 
@@ -72,19 +61,10 @@ class Center extends FrontendController
                 ->fetch()
                 ->count();
 
-            // 获取用户的助手数量
-            $assistantCount = $this->aiAssistant->reset()
-                ->where('user_id', $userId)
-                ->select()
-                ->fetch()
-                ->count();
-
             $this->assign('api_key_count', $apiKeyCount);
-            $this->assign('assistant_count', $assistantCount);
             $this->assign('user', $this->getLoginUser());
         } else {
             $this->assign('api_key_count', 0);
-            $this->assign('assistant_count', 0);
             $this->assign('user', []);
         }
 
@@ -228,33 +208,6 @@ class Center extends FrontendController
                 'message' => __('删除失败：%{1}', $e->getMessage())
             ]);
         }
-    }
-
-    /**
-     * 助手管理
-     * 
-     * @return string
-     */
-    public function assistants(): string
-    {
-        if (!$this->isLoggedIn()) {
-            $this->redirect($this->_url->getFrontendUrl('*/frontend/index'));
-            return '';
-        }
-
-        $userId = $this->getLoginUserId();
-
-        // 获取用户的助手列表
-        $assistants = $this->aiAssistant->reset()
-            ->where('user_id', $userId)
-            ->order('created_time', 'DESC')
-            ->select()
-            ->fetch();
-
-        $this->assign('page_title', __('我的助手'));
-        $this->assign('assistants', $assistants->getItems());
-
-        return $this->fetch();
     }
 
     /**

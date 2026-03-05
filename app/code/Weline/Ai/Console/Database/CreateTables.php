@@ -56,7 +56,7 @@ class CreateTables implements CommandInterface
             echo "=== Verifying Tables ===\n";
             $prefix = $dbSetup->getTablePrefix();
             $tables = [];
-            foreach (['ai_model', 'ai_api_key', 'ai_assistant', 'ai_tenant', 'ai_model_monitoring'] as $base) {
+            foreach (['ai_model', 'ai_api_key', 'ai_tenant', 'ai_model_monitoring'] as $base) {
                 if ($conn->tableExist($dbSetup->getTable($base))) {
                     $tables[] = ['name' => $prefix . $base];
                 }

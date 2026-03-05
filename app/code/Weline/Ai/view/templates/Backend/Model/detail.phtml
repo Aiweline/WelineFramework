@@ -166,24 +166,18 @@
     'use strict';
 
     window.testConnection = function() {
-        if (!confirm('<?= __('确定要测试此模型的连接吗？') ?>')) {
-            return;
-        }
-
+        BackendConfirm.show('<?= __('确定要测试此模型的连接吗？') ?>').then(function(confirmed) {
+            if (!confirmed) return;
         var btn = event.target.closest('button');
         btn.disabled = true;
         btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('测试中...') ?>';
 
-        fetch('<?= $this->getBackendUrl('*/backend/model/testConnection') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: 'id=<?= $model->getId() ?>'
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
+        var url = '<?= $this->getBackendUrl('*/backend/model/testConnection') ?>';
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=<?= $model->getId() ?>' };
+        var req = window.Weline.Api.request(url, opts);
+        req.then(function(res) {
+            var data = (res && res.data) || res;
+            if (data && data.success) {
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'success',
@@ -208,12 +202,12 @@
                 }
             }
         })
-        .catch(error => {
+        .catch(function(err) {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
                     icon: 'error',
                     title: '<?= __('请求失败') ?>',
-                    text: error.message,
+                    text: (err && err.message) || '<?= __('请重试') ?>',
                     confirmButtonText: '<?= __('确定') ?>'
                 });
             } else {
@@ -223,6 +217,7 @@
         .finally(() => {
             btn.disabled = false;
             btn.innerHTML = '<i class="mdi mdi-connection"></i> <?= __('测试连接') ?>';
+        });
         });
     };
 })();

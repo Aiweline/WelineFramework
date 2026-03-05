@@ -161,7 +161,7 @@ class DefaultModel extends BackendController
                     $modelInfo = null;
                     if ($modelCode) {
                         $model = $this->getAiModel()->reset()
-                            ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                            ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                             ->find()
                             ->fetch();
                         
@@ -224,7 +224,7 @@ class DefaultModel extends BackendController
         try {
             // 检查模型是否存在
             $model = $this->getAiModel()->reset()
-                ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                 ->find()
                 ->fetch();
             if (!$model || !$model->getId()) {
@@ -397,7 +397,7 @@ class DefaultModel extends BackendController
                 return $this->jsonResponse([
                     'success' => true,
                     'data' => [
-                        'model_code' => $model->getData(AiModel::fields_MODEL_CODE),
+                        'model_code' => $model->getData(AiModel::schema_fields_MODEL_CODE),
                         'model_name' => $model->getName(),
                         'vendor' => $model->getVendor(),
                         'status' => $model->getStatus()
@@ -469,7 +469,7 @@ class DefaultModel extends BackendController
             // 获取每个模型的详细信息
             foreach ($modelServiceTypes as $modelCode => $serviceTypes) {
                 $model = $this->getAiModel()->reset()
-                    ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                    ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                     ->find()
                     ->fetch();
                 
@@ -550,7 +550,7 @@ class DefaultModel extends BackendController
                 // 如果有模型代码，验证模型是否存在
                 if ($modelCode) {
                     $model = $this->getAiModel()->reset()
-                        ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                        ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                         ->find()
                         ->fetch();
                     

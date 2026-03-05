@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Setup;
 
-use Weline\Framework\Setup\InstallInterface;
+use Weline\Ai\Model\AiTenant;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
+use Weline\Framework\Setup\InstallInterface;
 
 /**
  * AI Module Installation Script
@@ -87,24 +89,6 @@ class Install implements InstallInterface
             ->addIndex('UNIQUE', 'idx_ai_api_key_token_unique', ['token'])
             ->create();
         
-        // AI Assistant table
-        $connection->createTable('ai_assistant', 'AI助手表')
-            ->addColumn('id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
-            ->addColumn('name', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'not null', '助手名称')
-            ->addColumn('description', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, 'null', '描述')
-            ->addColumn('prompt_template', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, 'not null', '提示模板')
-            ->addColumn('model_id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'not null', '模型ID')
-            ->addColumn('user_id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'not null', '用户ID')
-            ->addColumn('tenant_id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'not null', '租户ID')
-            ->addColumn('config', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, 'null', '配置JSON')
-            ->addColumn('is_public', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, 1, 'default 0', '是否公开')
-            ->addColumn('usage_count', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '使用次数')
-            ->addColumn('status', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'default \'active\'', '状态')
-            ->addColumn('created_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
-            ->addColumn('updated_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
-            ->addIndex('INDEX', 'idx_ai_assistant_tenant', ['tenant_id'])
-            ->create();
-        
         // ai_tenant 表由 AiTenant::install() 模型安装创建，初始数据也在模型内通过 save() 插入，不使用 SQL 方言
         // AI Model Monitoring table
         $connection->createTable('ai_model_monitoring', 'AI模型监控表')
@@ -122,5 +106,23 @@ class Install implements InstallInterface
             ->addColumn('created_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
             ->addIndex('INDEX', 'idx_ai_model_monitoring_date', ['date'])
             ->create();
+
+        $this->seedDefaultTenant();
+    }
+
+    /** 业务初始化：无租户时插入默认租户（计划 3.10） */
+    private function seedDefaultTenant(): void
+    {
+        $tenant = ObjectManager::getInstance(AiTenant::class);
+        if ($tenant->reset()->total() > 0) {
+            return;
+        }
+        $tenant->setData([
+            'name' => 'Default Tenant',
+            'domain' => 'default.localhost',
+            'config' => ['timezone' => 'Asia/Shanghai', 'locale' => 'zh_Hans_CN'],
+            'billing_plan' => AiTenant::PLAN_ENTERPRISE,
+            'status' => AiTenant::STATUS_ACTIVE,
+        ])->save();
     }
 }

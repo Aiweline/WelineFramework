@@ -3,8 +3,11 @@
  * 场景适配器管理页面模板
  */
 /**@var \Weline\Framework\View\Template $this */
-
+$activeTab = $activeTab ?? 'adapter';
 $adapters = $adapters ?? [];
+?>
+<template>Weline_Ai::Backend/Manager/tabs.phtml</template>
+<?php
 $totalCount = count($adapters);
 $activeCount = 0;
 $inactiveCount = 0;
@@ -103,6 +106,7 @@ foreach ($adapters as $a) {
 </style>
 
 <div class="weline-adapter-page">
+    <?php if (empty($embed)): ?>
     <!-- 页面标题 -->
     <div class="row">
         <div class="col-12">
@@ -120,6 +124,7 @@ foreach ($adapters as $a) {
             </div>
         </div>
     </div>
+    <?php endif; ?>
 
     <!-- 消息提示 -->
     <div class="row">
@@ -394,16 +399,10 @@ foreach ($adapters as $a) {
 
         _doToggleStatus: function(id) {
             showLoading();
-            fetch(this.urls.toggleStatus, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify({id: id})
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
+            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({id: id}) };
+            var req = window.Weline.Api.request(this.urls.toggleStatus, opts);
+            req.then(function(res) {
+                var data = (res && res.data) || res;
                 hideLoading();
                 if (data.success) {
                     BackendToast.success(data.message || '<?= __('状态更新成功') ?>');
@@ -433,16 +432,10 @@ foreach ($adapters as $a) {
 
         _doDelete: function(id) {
             showLoading();
-            fetch(this.urls.delete, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify({id: id})
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
+            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({id: id}) };
+            var req = window.Weline.Api.request(this.urls.delete, opts);
+            req.then(function(res) {
+                var data = (res && res.data) || res;
                 hideLoading();
                 if (data.success) {
                     BackendToast.success(data.message || '<?= __('删除成功') ?>');
@@ -521,16 +514,10 @@ foreach ($adapters as $a) {
 
         _doBatchDelete: function(ids) {
             showLoading();
-            fetch(this.urls.batchDelete, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify({ids: ids})
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
+            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ids: ids}) };
+            var req = window.Weline.Api.request(this.urls.batchDelete, opts);
+            req.then(function(res) {
+                var data = (res && res.data) || res;
                 hideLoading();
                 if (data.success) {
                     BackendToast.success(data.message);
@@ -567,16 +554,10 @@ foreach ($adapters as $a) {
 
         _doBatchToggle: function(ids, status) {
             showLoading();
-            fetch(this.urls.batchToggle, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify({ids: ids, status: status})
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
+            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ids: ids, status: status}) };
+            var req = window.Weline.Api.request(this.urls.batchToggle, opts);
+            req.then(function(res) {
+                var data = (res && res.data) || res;
                 hideLoading();
                 if (data.success) {
                     BackendToast.success(data.message);

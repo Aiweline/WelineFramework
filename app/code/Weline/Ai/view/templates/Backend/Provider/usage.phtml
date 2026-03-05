@@ -214,9 +214,10 @@
                 params.append('account_id', this.accountId);
             }
             
-            fetch('<?= $this->getBackendUrl('*/backend/provider/getUsageList') ?>?' + params)
-                .then(function(response) { return response.json(); })
-                .then(function(data) {
+            var url = '<?= $this->getBackendUrl('*/backend/provider/getUsageList') ?>?' + params;
+            var req = window.Weline.Api.get(url, { silent: true });
+            req.then(function(res) {
+                var data = (res && res.data) || res;
                     if (data.success) {
                         self.displayRecords(data.data);
                         self.displayPagination(data.total, data.page, data.limit);

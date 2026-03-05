@@ -34,20 +34,20 @@ class AiApiKeyTest extends TestCase
      */
     public function testFieldConstants()
     {
-        $this->assertEquals('id', AiApiKey::fields_ID);
-        $this->assertEquals('user_id', AiApiKey::fields_USER_ID);
-        $this->assertEquals('tenant_id', AiApiKey::fields_TENANT_ID);
-        $this->assertEquals('name', AiApiKey::fields_NAME);
-        $this->assertEquals('token', AiApiKey::fields_TOKEN);
-        $this->assertEquals('status', AiApiKey::fields_STATUS);
-        $this->assertEquals('quota_daily', AiApiKey::fields_QUOTA_DAILY);
-        $this->assertEquals('quota_monthly', AiApiKey::fields_QUOTA_MONTHLY);
-        $this->assertEquals('usage_daily', AiApiKey::fields_USAGE_DAILY);
-        $this->assertEquals('usage_monthly', AiApiKey::fields_USAGE_MONTHLY);
-        $this->assertEquals('expires_at', AiApiKey::fields_EXPIRES_AT);
-        $this->assertEquals('last_used_at', AiApiKey::fields_LAST_USED_AT);
-        $this->assertEquals('created_at', AiApiKey::fields_CREATED_AT);
-        $this->assertEquals('updated_at', AiApiKey::fields_UPDATED_AT);
+        $this->assertEquals('id', AiApiKey::schema_fields_ID);
+        $this->assertEquals('user_id', AiApiKey::schema_fields_USER_ID);
+        $this->assertEquals('tenant_id', AiApiKey::schema_fields_TENANT_ID);
+        $this->assertEquals('name', AiApiKey::schema_fields_NAME);
+        $this->assertEquals('token', AiApiKey::schema_fields_TOKEN);
+        $this->assertEquals('status', AiApiKey::schema_fields_STATUS);
+        $this->assertEquals('quota_daily', AiApiKey::schema_fields_QUOTA_DAILY);
+        $this->assertEquals('quota_monthly', AiApiKey::schema_fields_QUOTA_MONTHLY);
+        $this->assertEquals('usage_daily', AiApiKey::schema_fields_USAGE_DAILY);
+        $this->assertEquals('usage_monthly', AiApiKey::schema_fields_USAGE_MONTHLY);
+        $this->assertEquals('expires_at', AiApiKey::schema_fields_EXPIRES_AT);
+        $this->assertEquals('last_used_at', AiApiKey::schema_fields_LAST_USED_AT);
+        $this->assertEquals('created_at', AiApiKey::schema_fields_CREATED_AT);
+        $this->assertEquals('updated_at', AiApiKey::schema_fields_UPDATED_AT);
     }
 
     /**
@@ -56,22 +56,22 @@ class AiApiKeyTest extends TestCase
     public function testSetAndGetData()
     {
         $testData = [
-            AiApiKey::fields_USER_ID => 1,
-            AiApiKey::fields_NAME => 'Test API Key',
-            AiApiKey::fields_TOKEN => 'test_api_key_123',
-            AiApiKey::fields_STATUS => 'approved',
-            AiApiKey::fields_QUOTA_DAILY => 1000,
-            AiApiKey::fields_USAGE_DAILY => 100
+            AiApiKey::schema_fields_USER_ID => 1,
+            AiApiKey::schema_fields_NAME => 'Test API Key',
+            AiApiKey::schema_fields_TOKEN => 'test_api_key_123',
+            AiApiKey::schema_fields_STATUS => 'approved',
+            AiApiKey::schema_fields_QUOTA_DAILY => 1000,
+            AiApiKey::schema_fields_USAGE_DAILY => 100
         ];
 
         $this->model->setData($testData);
 
-        $this->assertEquals(1, $this->model->getData(AiApiKey::fields_USER_ID));
-        $this->assertEquals('Test API Key', $this->model->getData(AiApiKey::fields_NAME));
-        $this->assertEquals('test_api_key_123', $this->model->getData(AiApiKey::fields_TOKEN));
-        $this->assertEquals('approved', $this->model->getData(AiApiKey::fields_STATUS));
-        $this->assertEquals(1000, $this->model->getData(AiApiKey::fields_QUOTA_DAILY));
-        $this->assertEquals(100, $this->model->getData(AiApiKey::fields_USAGE_DAILY));
+        $this->assertEquals(1, $this->model->getData(AiApiKey::schema_fields_USER_ID));
+        $this->assertEquals('Test API Key', $this->model->getData(AiApiKey::schema_fields_NAME));
+        $this->assertEquals('test_api_key_123', $this->model->getData(AiApiKey::schema_fields_TOKEN));
+        $this->assertEquals('approved', $this->model->getData(AiApiKey::schema_fields_STATUS));
+        $this->assertEquals(1000, $this->model->getData(AiApiKey::schema_fields_QUOTA_DAILY));
+        $this->assertEquals(100, $this->model->getData(AiApiKey::schema_fields_USAGE_DAILY));
     }
 
     /**
@@ -79,11 +79,11 @@ class AiApiKeyTest extends TestCase
      */
     public function testStatusCheck()
     {
-        $this->model->setData(AiApiKey::fields_STATUS, AiApiKey::STATUS_APPROVED);
-        $this->assertEquals(AiApiKey::STATUS_APPROVED, $this->model->getData(AiApiKey::fields_STATUS));
+        $this->model->setData(AiApiKey::schema_fields_STATUS, AiApiKey::STATUS_APPROVED);
+        $this->assertEquals(AiApiKey::STATUS_APPROVED, $this->model->getData(AiApiKey::schema_fields_STATUS));
 
-        $this->model->setData(AiApiKey::fields_STATUS, AiApiKey::STATUS_SUSPENDED);
-        $this->assertEquals(AiApiKey::STATUS_SUSPENDED, $this->model->getData(AiApiKey::fields_STATUS));
+        $this->model->setData(AiApiKey::schema_fields_STATUS, AiApiKey::STATUS_SUSPENDED);
+        $this->assertEquals(AiApiKey::STATUS_SUSPENDED, $this->model->getData(AiApiKey::schema_fields_STATUS));
     }
 
     /**
@@ -92,15 +92,15 @@ class AiApiKeyTest extends TestCase
     public function testQuotaMethods()
     {
         // 测试配额设置
-        $this->model->setData(AiApiKey::fields_QUOTA_DAILY, 5000);
-        $this->model->setData(AiApiKey::fields_USAGE_DAILY, 1500);
+        $this->model->setData(AiApiKey::schema_fields_QUOTA_DAILY, 5000);
+        $this->model->setData(AiApiKey::schema_fields_USAGE_DAILY, 1500);
 
-        $this->assertEquals(5000, $this->model->getData(AiApiKey::fields_QUOTA_DAILY));
-        $this->assertEquals(1500, $this->model->getData(AiApiKey::fields_USAGE_DAILY));
+        $this->assertEquals(5000, $this->model->getData(AiApiKey::schema_fields_QUOTA_DAILY));
+        $this->assertEquals(1500, $this->model->getData(AiApiKey::schema_fields_USAGE_DAILY));
 
         // 测试剩余配额计算
-        $remaining = $this->model->getData(AiApiKey::fields_QUOTA_DAILY) - 
-                     $this->model->getData(AiApiKey::fields_USAGE_DAILY);
+        $remaining = $this->model->getData(AiApiKey::schema_fields_QUOTA_DAILY) - 
+                     $this->model->getData(AiApiKey::schema_fields_USAGE_DAILY);
         $this->assertEquals(3500, $remaining);
     }
 
@@ -113,8 +113,8 @@ class AiApiKeyTest extends TestCase
         $statuses = ['pending', 'approved', 'rejected'];
 
         foreach ($statuses as $status) {
-            $this->model->setData(AiApiKey::fields_STATUS, $status);
-            $this->assertEquals($status, $this->model->getData(AiApiKey::fields_STATUS));
+            $this->model->setData(AiApiKey::schema_fields_STATUS, $status);
+            $this->assertEquals($status, $this->model->getData(AiApiKey::schema_fields_STATUS));
         }
     }
 
@@ -124,13 +124,13 @@ class AiApiKeyTest extends TestCase
     public function testExpirationCheck()
     {
         // 测试已过期
-        $this->model->setData(AiApiKey::fields_EXPIRES_AT, time() - 86400);
-        $expiresAt = $this->model->getData(AiApiKey::fields_EXPIRES_AT);
+        $this->model->setData(AiApiKey::schema_fields_EXPIRES_AT, time() - 86400);
+        $expiresAt = $this->model->getData(AiApiKey::schema_fields_EXPIRES_AT);
         $this->assertLessThan(time(), $expiresAt);
 
         // 测试未过期
-        $this->model->setData(AiApiKey::fields_EXPIRES_AT, time() + 86400);
-        $expiresAt = $this->model->getData(AiApiKey::fields_EXPIRES_AT);
+        $this->model->setData(AiApiKey::schema_fields_EXPIRES_AT, time() + 86400);
+        $expiresAt = $this->model->getData(AiApiKey::schema_fields_EXPIRES_AT);
         $this->assertGreaterThan(time(), $expiresAt);
     }
 
@@ -140,14 +140,14 @@ class AiApiKeyTest extends TestCase
     public function testKeyMasking()
     {
         $apiKey = 'sk_test_1234567890abcdefghijklmnopqrstuvwxyz';
-        $this->model->setData(AiApiKey::fields_TOKEN, $apiKey);
+        $this->model->setData(AiApiKey::schema_fields_TOKEN, $apiKey);
 
         // 模拟密钥隐藏（显示前8位和后4位）
         $maskedKey = substr($apiKey, 0, 8) . '...' . substr($apiKey, -4);
         $expected = 'sk_test_...wxyz';
 
         $this->assertEquals($expected, $maskedKey);
-        $this->assertEquals($apiKey, $this->model->getData(AiApiKey::fields_TOKEN));
+        $this->assertEquals($apiKey, $this->model->getData(AiApiKey::schema_fields_TOKEN));
     }
 
     /**
@@ -157,13 +157,13 @@ class AiApiKeyTest extends TestCase
     {
         $currentTime = time();
 
-        $this->model->setData(AiApiKey::fields_CREATED_AT, $currentTime);
-        $this->model->setData(AiApiKey::fields_UPDATED_AT, $currentTime);
-        $this->model->setData(AiApiKey::fields_LAST_USED_AT, $currentTime);
+        $this->model->setData(AiApiKey::schema_fields_CREATED_AT, $currentTime);
+        $this->model->setData(AiApiKey::schema_fields_UPDATED_AT, $currentTime);
+        $this->model->setData(AiApiKey::schema_fields_LAST_USED_AT, $currentTime);
 
-        $this->assertEquals($currentTime, $this->model->getData(AiApiKey::fields_CREATED_AT));
-        $this->assertEquals($currentTime, $this->model->getData(AiApiKey::fields_UPDATED_AT));
-        $this->assertEquals($currentTime, $this->model->getData(AiApiKey::fields_LAST_USED_AT));
+        $this->assertEquals($currentTime, $this->model->getData(AiApiKey::schema_fields_CREATED_AT));
+        $this->assertEquals($currentTime, $this->model->getData(AiApiKey::schema_fields_UPDATED_AT));
+        $this->assertEquals($currentTime, $this->model->getData(AiApiKey::schema_fields_LAST_USED_AT));
     }
 
     protected function tearDown(): void
