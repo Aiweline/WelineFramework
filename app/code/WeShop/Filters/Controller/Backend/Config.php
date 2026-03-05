@@ -97,17 +97,17 @@ class Config extends PcController
                 }
                 
                 $configData = [
-                    CategoryFilterConfig::fields_sort_order => (int)($config['sort_order'] ?? 100),
-                    CategoryFilterConfig::fields_is_enabled => 1,
-                    CategoryFilterConfig::fields_display_type => $config['display_type'] ?? 'list',
-                    CategoryFilterConfig::fields_is_collapsed => (int)($config['collapsed'] ?? 0),
-                    CategoryFilterConfig::fields_inherit_parent => (int)($config['inherit_parent'] ?? 1),
-                    CategoryFilterConfig::fields_config_data => json_encode($config['extra'] ?? []),
+                    CategoryFilterConfig::schema_fields_sort_order => (int)($config['sort_order'] ?? 100),
+                    CategoryFilterConfig::schema_fields_is_enabled => 1,
+                    CategoryFilterConfig::schema_fields_display_type => $config['display_type'] ?? 'list',
+                    CategoryFilterConfig::schema_fields_is_collapsed => (int)($config['collapsed'] ?? 0),
+                    CategoryFilterConfig::schema_fields_inherit_parent => (int)($config['inherit_parent'] ?? 1),
+                    CategoryFilterConfig::schema_fields_config_data => json_encode($config['extra'] ?? []),
                 ];
                 
                 // 如果是EAV属性筛选
                 if (isset($config['attribute_id'])) {
-                    $configData[CategoryFilterConfig::fields_attribute_id] = (int)$config['attribute_id'];
+                    $configData[CategoryFilterConfig::schema_fields_attribute_id] = (int)$config['attribute_id'];
                 }
                 
                 $this->categoryFilterConfig->saveFilterConfig($categoryId, $filterCode, $configData);

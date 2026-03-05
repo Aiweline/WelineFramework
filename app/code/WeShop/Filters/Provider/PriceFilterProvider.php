@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace WeShop\Filters\Provider;
 
 use WeShop\Filters\Model\PriceRange;
-use WeShop\Product\Model\Product;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -102,14 +101,14 @@ class PriceFilterProvider extends AbstractFilterProvider
         
         $options = [];
         foreach ($ranges as $range) {
-            $minPrice = (float)$range[PriceRange::fields_min_price];
-            $maxPrice = $range[PriceRange::fields_max_price] !== null 
-                ? (float)$range[PriceRange::fields_max_price] 
+            $minPrice = (float)$range[PriceRange::schema_fields_min_price];
+            $maxPrice = $range[PriceRange::schema_fields_max_price] !== null 
+                ? (float)$range[PriceRange::schema_fields_max_price] 
                 : null;
             
             $value = $this->formatRangeValue($minPrice, $maxPrice);
-            $label = !empty($range[PriceRange::fields_label]) 
-                ? $range[PriceRange::fields_label]
+            $label = !empty($range[PriceRange::schema_fields_label]) 
+                ? $range[PriceRange::schema_fields_label]
                 : PriceRange::generateLabel($minPrice, $maxPrice, $this->currencySymbol);
             
             $count = $this->countProductsInRange($productIds, $minPrice, $maxPrice);
@@ -225,58 +224,23 @@ class PriceFilterProvider extends AbstractFilterProvider
         if (empty($productIds) || empty($filterValues)) {
             return $productIds;
         }
-        
-        // 解析所有价格范围
+
         $ranges = [];
         foreach ($filterValues as $value) {
             $parsed = $this->parseRangeValue($value);
             if ($parsed) {
-                $ranges[] = $parsed;
+                $ranges[] = ['min' => $parsed['min'], 'max' => $parsed['max'] ?? null];
             }
         }
-        
+
         if (empty($ranges)) {
             return $productIds;
         }
-        
-        // 查询符合价格范围的产品
-        /** @var Product $productModel */
-        $productModel = ObjectManager::getInstance(Product::class);
-        $productModel->reset()
-            ->fields(Product::fields_ID)
-            ->where(Product::fields_ID, $productIds, 'in');
-        
-        // 使用框架的 where 方法构建价格条件，避免 SQL 注入和跨数据库兼容性问题
-        // 对于多个范围，使用 OR 条件组
-        if (count($ranges) === 1) {
-            // 单个范围：直接使用 where
-            $range = $ranges[0];
-            $productModel->where(Product::fields_price, $range['min'], '>=');
-            if ($range['max'] !== null) {
-                $productModel->where(Product::fields_price, $range['max'], '<=');
-            }
-        } else {
-            // 多个范围：构建 OR 条件（使用数值格式化确保兼容性）
-            $priceConditions = [];
-            $priceField = Product::fields_price;
-            foreach ($ranges as $range) {
-                $minPrice = number_format($range['min'], 2, '.', '');
-                if ($range['max'] !== null) {
-                    $maxPrice = number_format($range['max'], 2, '.', '');
-                    $priceConditions[] = "({$priceField} >= {$minPrice} AND {$priceField} <= {$maxPrice})";
-                } else {
-                    $priceConditions[] = "{$priceField} >= {$minPrice}";
-                }
-            }
-            
-            if (!empty($priceConditions)) {
-                $productModel->where('(' . implode(' OR ', $priceConditions) . ')');
-            }
-        }
-        
-        $results = $productModel->select()->fetchArray();
-        
-        return array_column($results, Product::fields_ID);
+
+        return w_query('product', 'filterByPriceRange', [
+            'product_ids' => $productIds,
+            'ranges' => $ranges,
+        ]);
     }
     
     /**
@@ -291,57 +255,29 @@ class PriceFilterProvider extends AbstractFilterProvider
     }
     
     /**
-     * 获取产品价格统计
+     * 获取产品价格统计（通过 product 查询器，避免跨模块直接依赖）
      */
     private function getPriceStats(array $productIds): array
     {
         if (empty($productIds)) {
             return ['min' => null, 'max' => null, 'avg' => null];
         }
-        
-        /** @var Product $productModel */
-        $productModel = ObjectManager::getInstance(Product::class);
-        $productModel->reset()
-            ->fields([
-                'MIN(' . Product::fields_price . ') as min_price',
-                'MAX(' . Product::fields_price . ') as max_price',
-                'AVG(' . Product::fields_price . ') as avg_price',
-            ])
-            ->where(Product::fields_ID, $productIds, 'in')
-            ->where(Product::fields_price, 0, '>');
-        
-        $result = $productModel->find()->fetchArray();
-        
-        return [
-            'min' => $result['min_price'] !== null ? (float)$result['min_price'] : null,
-            'max' => $result['max_price'] !== null ? (float)$result['max_price'] : null,
-            'avg' => $result['avg_price'] !== null ? (float)$result['avg_price'] : null,
-        ];
+        return w_query('product', 'getPriceStats', ['product_ids' => $productIds]);
     }
     
     /**
-     * 计算区间内的产品数量
+     * 计算区间内的产品数量（通过 product 查询器）
      */
     private function countProductsInRange(array $productIds, float $minPrice, ?float $maxPrice): int
     {
         if (empty($productIds)) {
             return 0;
         }
-        
-        /** @var Product $productModel */
-        $productModel = ObjectManager::getInstance(Product::class);
-        $productModel->reset()
-            ->fields('COUNT(*) as count')
-            ->where(Product::fields_ID, $productIds, 'in')
-            ->where(Product::fields_price, $minPrice, '>=');
-        
-        if ($maxPrice !== null) {
-            $productModel->where(Product::fields_price, $maxPrice, '<=');
-        }
-        
-        $result = $productModel->find()->fetchArray();
-        
-        return (int)($result['count'] ?? 0);
+        return w_query('product', 'countByPriceRange', [
+            'product_ids' => $productIds,
+            'min_price' => $minPrice,
+            'max_price' => $maxPrice,
+        ]);
     }
     
     /**
@@ -453,11 +389,11 @@ class PriceFilterProvider extends AbstractFilterProvider
     private function getDefaultRanges(): array
     {
         return [
-            [PriceRange::fields_min_price => 0, PriceRange::fields_max_price => 100, PriceRange::fields_label => ''],
-            [PriceRange::fields_min_price => 100, PriceRange::fields_max_price => 300, PriceRange::fields_label => ''],
-            [PriceRange::fields_min_price => 300, PriceRange::fields_max_price => 500, PriceRange::fields_label => ''],
-            [PriceRange::fields_min_price => 500, PriceRange::fields_max_price => 1000, PriceRange::fields_label => ''],
-            [PriceRange::fields_min_price => 1000, PriceRange::fields_max_price => null, PriceRange::fields_label => ''],
+            [PriceRange::schema_fields_min_price => 0, PriceRange::schema_fields_max_price => 100, PriceRange::schema_fields_label => ''],
+            [PriceRange::schema_fields_min_price => 100, PriceRange::schema_fields_max_price => 300, PriceRange::schema_fields_label => ''],
+            [PriceRange::schema_fields_min_price => 300, PriceRange::schema_fields_max_price => 500, PriceRange::schema_fields_label => ''],
+            [PriceRange::schema_fields_min_price => 500, PriceRange::schema_fields_max_price => 1000, PriceRange::schema_fields_label => ''],
+            [PriceRange::schema_fields_min_price => 1000, PriceRange::schema_fields_max_price => null, PriceRange::schema_fields_label => ''],
         ];
     }
     
