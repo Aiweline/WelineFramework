@@ -1,55 +1,76 @@
 <?php
-
 declare(strict_types=1);
-
 /*
  * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
  * 邮箱：aiweline@qq.com
  * 网址：aiweline.com
  * 论坛：https://bbs.aiweline.com
  */
-
 namespace Weline\Order\Model;
-
 use Weline\Framework\Database\Model;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\DataObject\DataObject;
-
-/**
- * 订单主表模型
- */
+/** 订单主表模型 */
+#[Table(comment: '订单主表')]
+#[Index(name: 'idx_order_number', columns: ['order_number'])]
+#[Index(name: 'idx_customer_id', columns: ['customer_id'])]
+#[Index(name: 'idx_status', columns: ['status'])]
+#[Index(name: 'idx_created_at', columns: ['created_at'])]
 class Order extends Model
 {
-    public const table = 'weline_order';
-    
+    public const schema_table = 'weline_order';
+    public const schema_primary_key = 'order_id';
     // 字段常量
-    public const fields_ID = 'order_id';
-    public const fields_ORDER_NUMBER = 'order_number';
-    public const fields_CUSTOMER_ID = 'customer_id';
-    public const fields_STATUS = 'status';
-    public const fields_STATE = 'state';
-    public const fields_GRAND_TOTAL = 'grand_total';
-    public const fields_SUBTOTAL = 'subtotal';
-    public const fields_SHIPPING_AMOUNT = 'shipping_amount';
-    public const fields_TAX_AMOUNT = 'tax_amount';
-    public const fields_DISCOUNT_AMOUNT = 'discount_amount';
-    public const fields_CURRENCY = 'currency';
-    public const fields_PAYMENT_STATUS = 'payment_status';
-    public const fields_FULFILLMENT_STATUS = 'fulfillment_status';
-    public const fields_SHIPPING_ADDRESS = 'shipping_address';
-    public const fields_BILLING_ADDRESS = 'billing_address';
-    public const fields_CUSTOMER_EMAIL = 'customer_email';
-    public const fields_CUSTOMER_NAME = 'customer_name';
-    public const fields_CUSTOMER_PHONE = 'customer_phone';
-    public const fields_SHIPPING_METHOD = 'shipping_method';
-    public const fields_PAYMENT_METHOD = 'payment_method';
-    public const fields_NOTES = 'notes';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
+    #[Col('int', 11, nullable: false, primaryKey: true, autoIncrement: true, comment: '订单ID')]
+    public const schema_fields_ID = 'order_id';
+    #[Col('varchar', 64, nullable: false, unique: true, comment: '订单号')]
+    public const schema_fields_ORDER_NUMBER = 'order_number';
+    #[Col('int', 11, comment: '客户ID')]
+    public const schema_fields_CUSTOMER_ID = 'customer_id';
+    #[Col('varchar', 50, nullable: false, default: 'pending', comment: '订单状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col('varchar', 50, nullable: false, default: 'pending', comment: '状态机状态')]
+    public const schema_fields_STATE = 'state';
+    #[Col('decimal', '10,2', nullable: false, default: 0.00, comment: '订单总金额')]
+    public const schema_fields_GRAND_TOTAL = 'grand_total';
+    #[Col('decimal', '10,2', nullable: false, default: 0.00, comment: '商品小计')]
+    public const schema_fields_SUBTOTAL = 'subtotal';
+    #[Col('decimal', '10,2', nullable: false, default: 0.00, comment: '运费')]
+    public const schema_fields_SHIPPING_AMOUNT = 'shipping_amount';
+    #[Col('decimal', '10,2', nullable: false, default: 0.00, comment: '税费')]
+    public const schema_fields_TAX_AMOUNT = 'tax_amount';
+    #[Col('decimal', '10,2', nullable: false, default: 0.00, comment: '折扣金额')]
+    public const schema_fields_DISCOUNT_AMOUNT = 'discount_amount';
+    #[Col('varchar', 10, nullable: false, default: 'CNY', comment: '货币代码')]
+    public const schema_fields_CURRENCY = 'currency';
+    #[Col('varchar', 50, nullable: false, default: 'pending', comment: '支付状态')]
+    public const schema_fields_PAYMENT_STATUS = 'payment_status';
+    #[Col('varchar', 50, nullable: false, default: 'pending', comment: '发货状态')]
+    public const schema_fields_FULFILLMENT_STATUS = 'fulfillment_status';
+    #[Col('text', comment: '收货地址JSON')]
+    public const schema_fields_SHIPPING_ADDRESS = 'shipping_address';
+    #[Col('text', comment: '账单地址JSON')]
+    public const schema_fields_BILLING_ADDRESS = 'billing_address';
+    #[Col('varchar', 255, comment: '客户邮箱')]
+    public const schema_fields_CUSTOMER_EMAIL = 'customer_email';
+    #[Col('varchar', 255, comment: '客户姓名')]
+    public const schema_fields_CUSTOMER_NAME = 'customer_name';
+    #[Col('varchar', 50, comment: '客户电话')]
+    public const schema_fields_CUSTOMER_PHONE = 'customer_phone';
+    #[Col('varchar', 100, comment: '配送方式')]
+    public const schema_fields_SHIPPING_METHOD = 'shipping_method';
+    #[Col('varchar', 100, comment: '支付方式')]
+    public const schema_fields_PAYMENT_METHOD = 'payment_method';
+    #[Col('text', comment: '订单备注')]
+    public const schema_fields_NOTES = 'notes';
+    #[Col('timestamp', comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col('timestamp', comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
     
     // 订单状态常量
     public const STATUS_PENDING = 'pending';
@@ -81,228 +102,7 @@ class Order extends Model
      * 索引排序键
      */
     public array $_index_sort_keys = ['order_id', 'order_number', 'customer_id', 'status', 'created_at'];
-    
-    /**
-     * 初始化模型
-     */
-    public function _init(): void
-    {
-        $this->_primary_key = self::fields_ID;
-    }
-    
-    /**
-     * 模型设置
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-    
-    /**
-     * 模型升级
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑可以在这里添加
-    }
-    
-    /**
-     * 安装数据表
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('订单主表')
-                ->addColumn(
-                    self::fields_ID,
-                    TableInterface::column_type_INTEGER,
-                    11,
-                    'primary key auto_increment',
-                    '订单ID'
-                )
-                ->addColumn(
-                    self::fields_ORDER_NUMBER,
-                    TableInterface::column_type_VARCHAR,
-                    64,
-                    'not null unique',
-                    '订单号（唯一）'
-                )
-                ->addColumn(
-                    self::fields_CUSTOMER_ID,
-                    TableInterface::column_type_INTEGER,
-                    11,
-                    'null',
-                    '客户ID（关联Customer模块）'
-                )
-                ->addColumn(
-                    self::fields_STATUS,
-                    TableInterface::column_type_VARCHAR,
-                    50,
-                    'default "pending"',
-                    '订单状态'
-                )
-                ->addColumn(
-                    self::fields_STATE,
-                    TableInterface::column_type_VARCHAR,
-                    50,
-                    'default "pending"',
-                    '订单状态机状态'
-                )
-                ->addColumn(
-                    self::fields_GRAND_TOTAL,
-                    TableInterface::column_type_DECIMAL,
-                    '10,2',
-                    'default 0.00',
-                    '订单总金额'
-                )
-                ->addColumn(
-                    self::fields_SUBTOTAL,
-                    TableInterface::column_type_DECIMAL,
-                    '10,2',
-                    'default 0.00',
-                    '商品小计'
-                )
-                ->addColumn(
-                    self::fields_SHIPPING_AMOUNT,
-                    TableInterface::column_type_DECIMAL,
-                    '10,2',
-                    'default 0.00',
-                    '运费'
-                )
-                ->addColumn(
-                    self::fields_TAX_AMOUNT,
-                    TableInterface::column_type_DECIMAL,
-                    '10,2',
-                    'default 0.00',
-                    '税费'
-                )
-                ->addColumn(
-                    self::fields_DISCOUNT_AMOUNT,
-                    TableInterface::column_type_DECIMAL,
-                    '10,2',
-                    'default 0.00',
-                    '折扣金额'
-                )
-                ->addColumn(
-                    self::fields_CURRENCY,
-                    TableInterface::column_type_VARCHAR,
-                    10,
-                    'default "CNY"',
-                    '货币代码'
-                )
-                ->addColumn(
-                    self::fields_PAYMENT_STATUS,
-                    TableInterface::column_type_VARCHAR,
-                    50,
-                    'default "pending"',
-                    '支付状态'
-                )
-                ->addColumn(
-                    self::fields_FULFILLMENT_STATUS,
-                    TableInterface::column_type_VARCHAR,
-                    50,
-                    'default "pending"',
-                    '发货状态'
-                )
-                ->addColumn(
-                    self::fields_SHIPPING_ADDRESS,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    'null',
-                    '收货地址（JSON）'
-                )
-                ->addColumn(
-                    self::fields_BILLING_ADDRESS,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    'null',
-                    '账单地址（JSON）'
-                )
-                ->addColumn(
-                    self::fields_CUSTOMER_EMAIL,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'null',
-                    '客户邮箱'
-                )
-                ->addColumn(
-                    self::fields_CUSTOMER_NAME,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'null',
-                    '客户姓名'
-                )
-                ->addColumn(
-                    self::fields_CUSTOMER_PHONE,
-                    TableInterface::column_type_VARCHAR,
-                    50,
-                    'null',
-                    '客户电话'
-                )
-                ->addColumn(
-                    self::fields_SHIPPING_METHOD,
-                    TableInterface::column_type_VARCHAR,
-                    100,
-                    'null',
-                    '配送方式'
-                )
-                ->addColumn(
-                    self::fields_PAYMENT_METHOD,
-                    TableInterface::column_type_VARCHAR,
-                    100,
-                    'null',
-                    '支付方式'
-                )
-                ->addColumn(
-                    self::fields_NOTES,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    'null',
-                    '订单备注'
-                )
-                ->addColumn(
-                    self::fields_CREATED_AT,
-                    TableInterface::column_type_TIMESTAMP,
-                    0,
-                    'default current_timestamp',
-                    '创建时间'
-                )
-                ->addColumn(
-                    self::fields_UPDATED_AT,
-                    TableInterface::column_type_TIMESTAMP,
-                    0,
-                    'default current_timestamp on update current_timestamp',
-                    '更新时间'
-                )
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'idx_order_number',
-                    self::fields_ORDER_NUMBER,
-                    '订单号索引'
-                )
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'idx_customer_id',
-                    self::fields_CUSTOMER_ID,
-                    '客户ID索引'
-                )
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'idx_status',
-                    self::fields_STATUS,
-                    '订单状态索引'
-                )
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'idx_created_at',
-                    self::fields_CREATED_AT,
-                    '创建时间索引'
-                )
-                ->create();
-        }
-    }
-    
-    /**
+/**
      * 生成订单号
      */
     public function generateOrderNumber(): string
@@ -315,7 +115,7 @@ class Order extends Model
      */
     public function canCancel(): bool
     {
-        $status = $this->getData(self::fields_STATUS);
+        $status = $this->getData(self::schema_fields_STATUS);
         return in_array($status, [self::STATUS_PENDING, self::STATUS_PROCESSING]);
     }
     
@@ -324,8 +124,8 @@ class Order extends Model
      */
     public function canRefund(): bool
     {
-        $status = $this->getData(self::fields_STATUS);
-        $paymentStatus = $this->getData(self::fields_PAYMENT_STATUS);
+        $status = $this->getData(self::schema_fields_STATUS);
+        $paymentStatus = $this->getData(self::schema_fields_PAYMENT_STATUS);
         return $status === self::STATUS_PAID && $paymentStatus === self::PAYMENT_STATUS_PAID;
     }
     
@@ -391,7 +191,7 @@ class Order extends Model
      */
     public function getStatusText(): string
     {
-        $status = $this->getData(self::fields_STATUS);
+        $status = $this->getData(self::schema_fields_STATUS);
         if (empty($status)) {
             return '';
         }
@@ -405,7 +205,7 @@ class Order extends Model
      */
     public function getStatusClass(): string
     {
-        $status = $this->getData(self::fields_STATUS);
+        $status = $this->getData(self::schema_fields_STATUS);
         if (empty($status)) {
             return 'secondary';
         }
@@ -551,4 +351,3 @@ class Order extends Model
         };
     }
 }
-
