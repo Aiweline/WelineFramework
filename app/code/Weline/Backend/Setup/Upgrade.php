@@ -20,9 +20,7 @@ class Upgrade implements UpgradeInterface
     {
         $version = $context->getVersion();
 
-        if (version_compare($version, '1.0.3', '<')) {
-            $this->ensureDefaultAdminUser();
-        }
+        $this->ensureDefaultAdminUser();
         if (version_compare($version, '1.2.1', '<')) {
             $this->ensureUser1HasRole1();
         }
