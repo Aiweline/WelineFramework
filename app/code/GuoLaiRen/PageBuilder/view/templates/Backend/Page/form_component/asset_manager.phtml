@@ -125,8 +125,8 @@
                 '?handle=' + encodeURIComponent(handle) + 
                 (sub ? ('&sub=' + encodeURIComponent(sub)) : '') +
                 (websiteId ? ('&website_id=' + encodeURIComponent(websiteId)) : '');
-            const res = await fetch(listUrl, { credentials: 'same-origin' });
-            const data = await res.json();
+            var res = await window.Weline.Api.get(listUrl, { credentials: 'same-origin', silent: true });
+            const data = (res && res.data) || res;
             if (!data.success){
                 document.getElementById('assetListBody').innerHTML = '<div class="alert alert-danger m-3">' + (data.message || '<?= __('加载失败') ?>') + '</div>';
                 return;
@@ -250,8 +250,10 @@
         fd.append('handle', handle);
         fd.append('sub', sub);
         try{
-            const res = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/page/uploadAssetTo') ?>', { method: 'POST', body: fd, credentials: 'same-origin' });
-            const data = await res.json();
+            var url = '<?= $this->getBackendUrl('pagebuilder/backend/page/uploadAssetTo') ?>';
+            var opts = { method: 'POST', body: fd, credentials: 'same-origin' };
+            var res = await window.Weline.Api.request(url, opts);
+            const data = (res && res.data) || res;
             if (data && data.success){
                 if (typeof showToast === 'function') showToast('success', '<?= __('上传成功') ?>', '');
                 loadAssetList(sub);

@@ -62,8 +62,8 @@ class Seo extends BaseController
         
         // 方式1: 查询当前module/scope的账户
         $accountQuery1 = $accountModel->reset()->select();
-        $accountQuery1->where(SeoAccount::fields_MODULE, $module)
-                      ->where(SeoAccount::fields_SCOPE, $scope);
+        $accountQuery1->where(SeoAccount::schema_fields_MODULE, $module)
+                      ->where(SeoAccount::schema_fields_SCOPE, $scope);
         if ($accountSearch !== '') {
             $accountQuery1->where('name', '%' . $accountSearch . '%', 'LIKE');
         }
@@ -71,8 +71,8 @@ class Seo extends BaseController
         
         // 方式2: 查询空module和空scope的通用账户
         $accountQuery2 = $accountModel->reset()->select();
-        $accountQuery2->where(SeoAccount::fields_MODULE, '')
-                      ->where(SeoAccount::fields_SCOPE, '');
+        $accountQuery2->where(SeoAccount::schema_fields_MODULE, '')
+                      ->where(SeoAccount::schema_fields_SCOPE, '');
         if ($accountSearch !== '') {
             $accountQuery2->where('name', '%' . $accountSearch . '%', 'LIKE');
         }
@@ -133,7 +133,7 @@ class Seo extends BaseController
             $websites = $websiteModel->reset()
                 ->select()
                 ->limit($websitePageSize, ($websitePage - 1) * $websitePageSize)
-                ->order(Website::fields_ID, 'ASC')
+                ->order(Website::schema_fields_ID, 'ASC')
                 ->fetchArray();
         }
 
@@ -417,8 +417,8 @@ class Seo extends BaseController
                             'account_id' => $account->getId(),
                             'account_name' => $account->getData('name') ?: $account->getData('provider'),
                             'is_active' => $account->isActive(),
-                            'is_auto_submit' => (int)($binding[\Weline\Seo\Model\SeoWebsiteAccount::fields_IS_AUTO_SUBMIT] ?? 0) === 1,
-                            'sitemap_frequency' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::fields_SITEMAP_FREQUENCY] ?? 'daily',
+                            'is_auto_submit' => (int)($binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_IS_AUTO_SUBMIT] ?? 0) === 1,
+                            'sitemap_frequency' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_SITEMAP_FREQUENCY] ?? 'daily',
                             'enable_cron_push' => (int)$account->getData('enable_cron_push_urls') === 1,
                             'enable_cron_sitemap' => (int)$account->getData('enable_cron_sitemap') === 1,
                         ];

@@ -48,7 +48,7 @@ class AIComponentRegistry
         $this->entityFileManager->updateComponentJson();
         
         // 更新缓存
-        $code = $component->getData(Component::fields_CODE);
+        $code = $component->getData(Component::schema_fields_CODE);
         self::$componentCache[$code] = $component;
     }
     
@@ -118,8 +118,8 @@ class AIComponentRegistry
         $componentModel = ObjectManager::getInstance(Component::class);
         $component = clone $componentModel;
         $component->clear()
-            ->where(Component::fields_CODE, $componentCode)
-            ->where(Component::fields_IS_AI_GENERATED, 1)
+            ->where(Component::schema_fields_CODE, $componentCode)
+            ->where(Component::schema_fields_IS_AI_GENERATED, 1)
             ->find()
             ->fetch();
         
@@ -142,13 +142,13 @@ class AIComponentRegistry
         $componentModel = ObjectManager::getInstance(Component::class);
         $components = clone $componentModel;
         $query = $components->clear()
-            ->where(Component::fields_IS_AI_GENERATED, 1);
+            ->where(Component::schema_fields_IS_AI_GENERATED, 1);
         
         if ($activeOnly) {
-            $query->where(Component::fields_IS_ACTIVE, 1);
+            $query->where(Component::schema_fields_IS_ACTIVE, 1);
         }
         
-        $query->order(Component::fields_SORT_ORDER, 'ASC')
+        $query->order(Component::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetch();
         
@@ -167,14 +167,14 @@ class AIComponentRegistry
         $componentModel = ObjectManager::getInstance(Component::class);
         $components = clone $componentModel;
         $query = $components->clear()
-            ->where(Component::fields_IS_AI_GENERATED, 1)
-            ->where(Component::fields_CATEGORY, $category);
+            ->where(Component::schema_fields_IS_AI_GENERATED, 1)
+            ->where(Component::schema_fields_CATEGORY, $category);
         
         if ($activeOnly) {
-            $query->where(Component::fields_IS_ACTIVE, 1);
+            $query->where(Component::schema_fields_IS_ACTIVE, 1);
         }
         
-        $query->order(Component::fields_SORT_ORDER, 'ASC')
+        $query->order(Component::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetch();
         
@@ -238,7 +238,7 @@ class AIComponentRegistry
         // 获取总数
         $total = clone $componentModel;
         $total->clear()
-            ->where(Component::fields_IS_AI_GENERATED, 1)
+            ->where(Component::schema_fields_IS_AI_GENERATED, 1)
             ->select('COUNT(*) as count')
             ->find()
             ->fetch();
@@ -247,8 +247,8 @@ class AIComponentRegistry
         // 获取启用数
         $active = clone $componentModel;
         $active->clear()
-            ->where(Component::fields_IS_AI_GENERATED, 1)
-            ->where(Component::fields_IS_ACTIVE, 1)
+            ->where(Component::schema_fields_IS_AI_GENERATED, 1)
+            ->where(Component::schema_fields_IS_ACTIVE, 1)
             ->select('COUNT(*) as count')
             ->find()
             ->fetch();
@@ -259,8 +259,8 @@ class AIComponentRegistry
         foreach (['header', 'content', 'footer', 'widget'] as $category) {
             $cat = clone $componentModel;
             $cat->clear()
-                ->where(Component::fields_IS_AI_GENERATED, 1)
-                ->where(Component::fields_CATEGORY, $category)
+                ->where(Component::schema_fields_IS_AI_GENERATED, 1)
+                ->where(Component::schema_fields_CATEGORY, $category)
                 ->select('COUNT(*) as count')
                 ->find()
                 ->fetch();
@@ -291,7 +291,7 @@ class AIComponentRegistry
         $components = $this->getAllComponents(false);
         
         foreach ($components as $component) {
-            $code = $component->getData(Component::fields_CODE);
+            $code = $component->getData(Component::schema_fields_CODE);
             $filePath = $this->entityFileManager->getEntityFullPath($component);
             
             if (!file_exists($filePath)) {

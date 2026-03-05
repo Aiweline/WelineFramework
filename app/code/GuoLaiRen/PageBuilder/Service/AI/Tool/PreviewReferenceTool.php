@@ -48,7 +48,7 @@ class PreviewReferenceTool implements ToolInterface
         /** @var Component $componentModel */
         $componentModel = ObjectManager::getInstance(Component::class);
         $component = $componentModel->reset()
-            ->where(Component::fields_CODE, $componentCode)
+            ->where(Component::schema_fields_CODE, $componentCode)
             ->find()
             ->fetch();
 
@@ -56,7 +56,7 @@ class PreviewReferenceTool implements ToolInterface
             return ['error' => __('组件不存在：%{1}', [$componentCode])];
         }
 
-        $templateContent = $component->getData(Component::fields_TEMPLATE_CONTENT);
+        $templateContent = $component->getData(Component::schema_fields_TEMPLATE_CONTENT);
         $decoded = null;
         if (!empty($templateContent)) {
             $decoded = json_decode($templateContent, true);
@@ -66,8 +66,8 @@ class PreviewReferenceTool implements ToolInterface
         if (is_array($decoded)) {
             return [
                 'code' => $componentCode,
-                'name' => $component->getData(Component::fields_NAME),
-                'category' => $component->getData(Component::fields_CATEGORY),
+                'name' => $component->getData(Component::schema_fields_NAME),
+                'category' => $component->getData(Component::schema_fields_CATEGORY),
                 'html_content' => $decoded['html_content'] ?? '',
                 'css_content' => $decoded['css_content'] ?? '',
                 'css_responsive' => $decoded['css_responsive'] ?? '',
@@ -78,15 +78,15 @@ class PreviewReferenceTool implements ToolInterface
         }
 
         // 回退：读取组件文件
-        $path = $component->getData(Component::fields_PATH);
+        $path = $component->getData(Component::schema_fields_PATH);
         if (!empty($path)) {
             $fullPath = BP . DIRECTORY_SEPARATOR . $path;
             if (file_exists($fullPath)) {
                 $content = file_get_contents($fullPath);
                 return [
                     'code' => $componentCode,
-                    'name' => $component->getData(Component::fields_NAME),
-                    'category' => $component->getData(Component::fields_CATEGORY),
+                    'name' => $component->getData(Component::schema_fields_NAME),
+                    'category' => $component->getData(Component::schema_fields_CATEGORY),
                     'file_content' => mb_substr($content, 0, 10000), // 限制大小
                 ];
             }
@@ -94,8 +94,8 @@ class PreviewReferenceTool implements ToolInterface
 
         return [
             'code' => $componentCode,
-            'name' => $component->getData(Component::fields_NAME),
-            'category' => $component->getData(Component::fields_CATEGORY),
+            'name' => $component->getData(Component::schema_fields_NAME),
+            'category' => $component->getData(Component::schema_fields_CATEGORY),
             'note' => 'No template content or file found',
         ];
     }

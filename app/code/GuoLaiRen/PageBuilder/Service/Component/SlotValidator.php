@@ -340,15 +340,15 @@ class SlotValidator
         // 回退到数据库查询
         $component = $this->getComponentResolver()->resolve($componentCode, $styleCode);
         if ($component) {
-            $category = $component->getData(Component::fields_CATEGORY) ?: 'content';
+            $category = $component->getData(Component::schema_fields_CATEGORY) ?: 'content';
             $configSchema = $component->getConfigSchema();
             
             return [
                 'code' => $componentCode,
-                'name' => $component->getData(Component::fields_NAME) ?: $componentCode,
+                'name' => $component->getData(Component::schema_fields_NAME) ?: $componentCode,
                 'region' => $configSchema['region'] ?? $category,
                 'category' => $category,
-                'type' => $component->getData(Component::fields_TYPE) ?: 'section',
+                'type' => $component->getData(Component::schema_fields_TYPE) ?: 'section',
                 'placeable_in' => $configSchema['placeable_in'] ?? [$category],
                 'slots' => $configSchema['slots'] ?? [],
                 'compatible_slot_types' => $configSchema['compatible_slot_types'] ?? ['*'],

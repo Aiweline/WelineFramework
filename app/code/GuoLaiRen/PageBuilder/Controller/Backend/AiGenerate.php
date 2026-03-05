@@ -65,8 +65,8 @@ class AiGenerate extends BackendController
             } catch (\Throwable $e) {
                 // 回退：查询默认激活模型
                 $model = $aiModel->reset()
-                    ->where(AiModel::fields_IS_ACTIVE, 1)
-                    ->where(AiModel::fields_IS_DEFAULT, 1)
+                    ->where(AiModel::schema_fields_IS_ACTIVE, 1)
+                    ->where(AiModel::schema_fields_IS_DEFAULT, 1)
                     ->find()
                     ->fetch();
             }
@@ -115,11 +115,11 @@ class AiGenerate extends BackendController
                     'vendor' => $vendor,
                     'vendor_label' => $vendorLabel,
                     'provider' => $providerName,
-                    'max_tokens' => (int)($model->getData(AiModel::fields_MAX_TOKENS) ?: 0),
-                    'is_default' => (bool)$model->getData(AiModel::fields_IS_DEFAULT),
+                    'max_tokens' => (int)($model->getData(AiModel::schema_fields_MAX_TOKENS) ?: 0),
+                    'is_default' => (bool)$model->getData(AiModel::schema_fields_IS_DEFAULT),
                     'scenario' => $scenarioCode,
-                    'connection_status' => $model->getData(AiModel::fields_CONNECTION_TEST_STATUS) ?: 'unknown',
-                    'model_source' => $model->getData(AiModel::fields_MODEL_SOURCE) ?: 'remote',
+                    'connection_status' => $model->getData(AiModel::schema_fields_CONNECTION_TEST_STATUS) ?: 'unknown',
+                    'model_source' => $model->getData(AiModel::schema_fields_MODEL_SOURCE) ?: 'remote',
                 ],
             ]);
         } catch (\Throwable $e) {
@@ -258,7 +258,7 @@ class AiGenerate extends BackendController
             // 获取目标语言（优先使用表单提交的值，如果没有则使用数据库中的值）
             $targetLocale = $this->request->getPost('default_locale', '');
             if (empty($targetLocale) && $page) {
-                $targetLocale = $page->getData(PageModel::fields_DEFAULT_LOCALE) ?: '';
+                $targetLocale = $page->getData(PageModel::schema_fields_DEFAULT_LOCALE) ?: '';
             }
 
             // 构建提示词
@@ -364,7 +364,7 @@ class AiGenerate extends BackendController
 
             // 加载模板信息
             $style = clone $this->styleModel;
-            $style->clear()->where(Style::fields_CODE, $styleCode)->find()->fetch();
+            $style->clear()->where(Style::schema_fields_CODE, $styleCode)->find()->fetch();
 
             if (!$style->getId()) {
                 $this->request->getResponse()->setHeader('Content-Type', 'application/json');
@@ -666,7 +666,7 @@ class AiGenerate extends BackendController
         array $currentConfig = []
     ): string {
         // 获取页面的目标语言
-        $targetLocale = $page->getData(PageModel::fields_DEFAULT_LOCALE) ?: '';
+        $targetLocale = $page->getData(PageModel::schema_fields_DEFAULT_LOCALE) ?: '';
         
         $componentName = $metadata['name'] ?? $metadata['code'] ?? '未知组件';
         $componentDesc = $metadata['description'] ?? '';
@@ -912,7 +912,7 @@ class AiGenerate extends BackendController
         array $textConfigs
     ): string {
         // 获取页面的目标语言
-        $targetLocale = $page->getData(PageModel::fields_DEFAULT_LOCALE) ?: '';
+        $targetLocale = $page->getData(PageModel::schema_fields_DEFAULT_LOCALE) ?: '';
         
         $prompt = "你是一个专业的网页模板配置生成助手。根据页面信息生成模板所需的所有文字配置项，请返回JSON格式的数据。\n\n";
         
@@ -920,8 +920,8 @@ class AiGenerate extends BackendController
         $prompt .= "- 页面标题：{$page->getData('title')}\n";
         $prompt .= "- 页面句柄：{$page->getData('handle')}\n";
         $prompt .= "- 页面类型：{$page->getData('type')}\n";
-        $prompt .= "- 模板代码：{$style->getData(Style::fields_CODE)}\n";
-        $prompt .= "- 模板名称：{$style->getData(Style::fields_NAME)}\n\n";
+        $prompt .= "- 模板代码：{$style->getData(Style::schema_fields_CODE)}\n";
+        $prompt .= "- 模板名称：{$style->getData(Style::schema_fields_NAME)}\n\n";
 
         if ($page->getData('meta_description')) {
             $prompt .= "SEO描述：{$page->getData('meta_description')}\n";
@@ -2485,9 +2485,9 @@ PROMPT;
     {
         try {
             $draft = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Model\AiComponentDraft::class);
-            $draft->setData(\GuoLaiRen\PageBuilder\Model\AiComponentDraft::fields_TEMPLATE_CONTENT, $phtmlCode);
-            $draft->setData(\GuoLaiRen\PageBuilder\Model\AiComponentDraft::fields_COMPONENT_META, json_encode($meta, JSON_UNESCAPED_UNICODE));
-            $draft->setData(\GuoLaiRen\PageBuilder\Model\AiComponentDraft::fields_CREATED_AT, time());
+            $draft->setData(\GuoLaiRen\PageBuilder\Model\AiComponentDraft::schema_fields_TEMPLATE_CONTENT, $phtmlCode);
+            $draft->setData(\GuoLaiRen\PageBuilder\Model\AiComponentDraft::schema_fields_COMPONENT_META, json_encode($meta, JSON_UNESCAPED_UNICODE));
+            $draft->setData(\GuoLaiRen\PageBuilder\Model\AiComponentDraft::schema_fields_CREATED_AT, time());
             $inserted = $draft->insert($draft->getModelData())->fetch();
             $draftId = is_numeric($inserted) ? (int) $inserted : 0;
             if ($draftId === 0 && method_exists($draft->getQuery(), 'getConnectionInterface')) {
@@ -2764,8 +2764,8 @@ PROMPT;
         /** @var AiModel $aiModel */
         $aiModel = ObjectManager::getInstance(AiModel::class);
         $model = $aiModel->clear()
-            ->where(AiModel::fields_MODEL_CODE, $modelCode)
-            ->where(AiModel::fields_IS_ACTIVE, 1)
+            ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
+            ->where(AiModel::schema_fields_IS_ACTIVE, 1)
             ->find()
             ->fetch();
         if (!$model || !$model->getId()) {
@@ -3023,7 +3023,7 @@ PROMPT;
                                 $phtmlCode,
                                 $prompt
                             );
-                            $dbStyleCode = $savedComponent->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_STYLE_CODE);
+                            $dbStyleCode = $savedComponent->getData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_STYLE_CODE);
 
                             $sse->sendEvent('agent_status', [
                                 'status' => 'saved',
@@ -3150,8 +3150,8 @@ PROMPT;
         // 查找是否已存在同 code 的 AI 组件
         $existing = clone $componentModel;
         $existing->clear()
-            ->where(\GuoLaiRen\PageBuilder\Model\Component::fields_CODE, $componentCode)
-            ->where(\GuoLaiRen\PageBuilder\Model\Component::fields_STYLE_CODE, \GuoLaiRen\PageBuilder\Model\Component::STYLE_CODE_AI_GENERATED)
+            ->where(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_CODE, $componentCode)
+            ->where(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_STYLE_CODE, \GuoLaiRen\PageBuilder\Model\Component::STYLE_CODE_AI_GENERATED)
             ->find()
             ->fetch();
 
@@ -3162,31 +3162,31 @@ PROMPT;
 
         // 设置组件数据
         $category = $region ?: 'content';
-        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::fields_CODE, $componentCode);
-        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::fields_NAME, $name);
-        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::fields_DESCRIPTION, $description);
-        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::fields_STYLE_CODE, \GuoLaiRen\PageBuilder\Model\Component::STYLE_CODE_AI_GENERATED);
-        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::fields_CATEGORY, $category);
-        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::fields_TYPE, \GuoLaiRen\PageBuilder\Model\Component::TYPE_SECTION);
-        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::fields_COMPATIBLE_STYLES, json_encode(['*']));
-        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::fields_IS_ACTIVE, 1);
-        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::fields_IS_SYSTEM, 0);
-        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::fields_SORT_ORDER, 100);
+        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_CODE, $componentCode);
+        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_NAME, $name);
+        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_DESCRIPTION, $description);
+        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_STYLE_CODE, \GuoLaiRen\PageBuilder\Model\Component::STYLE_CODE_AI_GENERATED);
+        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_CATEGORY, $category);
+        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_TYPE, \GuoLaiRen\PageBuilder\Model\Component::TYPE_SECTION);
+        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_COMPATIBLE_STYLES, json_encode(['*']));
+        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_IS_ACTIVE, 1);
+        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_IS_SYSTEM, 0);
+        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_SORT_ORDER, 100);
 
         // 设置路径（_ai_generated 目录下）
         $componentPath = 'style/_ai_generated/components/' . $category . '/' . $componentCode . '.phtml';
-        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::fields_PATH, $componentPath);
+        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_PATH, $componentPath);
 
         // AI 相关字段
         $component->setAIGenerated(true);
         $component->setAIPrompt($prompt);
-        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::fields_AI_VERSION, '2.0');
+        $component->setData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_AI_VERSION, '2.0');
 
         // 存模板内容（用于后续实体文件同步）
         if (method_exists($component, 'setTemplateContent')) {
             $component->setTemplateContent($phtmlCode);
         } else {
-            $component->setData(\GuoLaiRen\PageBuilder\Model\Component::fields_TEMPLATE_CONTENT, $phtmlCode);
+            $component->setData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_TEMPLATE_CONTENT, $phtmlCode);
         }
 
         // 保存到数据库
@@ -3381,26 +3381,26 @@ PROMPT;
         }
 
         if (!empty($articleData['title'])) {
-            $page->setData(PageModel::fields_TITLE, $articleData['title']);
-            if (empty($page->getData(PageModel::fields_NAME))) {
-                $page->setData(PageModel::fields_NAME, $articleData['title']);
+            $page->setData(PageModel::schema_fields_TITLE, $articleData['title']);
+            if (empty($page->getData(PageModel::schema_fields_NAME))) {
+                $page->setData(PageModel::schema_fields_NAME, $articleData['title']);
             }
         }
 
         if (!empty($articleData['content'])) {
-            $page->setData(PageModel::fields_CONTENT, $articleData['content']);
+            $page->setData(PageModel::schema_fields_CONTENT, $articleData['content']);
         }
 
         if (!empty($articleData['meta_title'])) {
-            $page->setData(PageModel::fields_META_TITLE, $articleData['meta_title']);
+            $page->setData(PageModel::schema_fields_META_TITLE, $articleData['meta_title']);
         }
 
         if (!empty($articleData['meta_description'])) {
-            $page->setData(PageModel::fields_META_DESCRIPTION, $articleData['meta_description']);
+            $page->setData(PageModel::schema_fields_META_DESCRIPTION, $articleData['meta_description']);
         }
 
         if (!empty($articleData['meta_keywords'])) {
-            $page->setData(PageModel::fields_META_KEYWORDS, $articleData['meta_keywords']);
+            $page->setData(PageModel::schema_fields_META_KEYWORDS, $articleData['meta_keywords']);
         }
 
         $page->save();

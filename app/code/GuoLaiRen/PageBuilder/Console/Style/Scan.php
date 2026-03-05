@@ -93,15 +93,15 @@ class Scan implements CommandInterface
             // 检查数据库中是否已存在
             $existingStyle = clone $this->styleModel;
             $existingStyle->clear()
-                ->where(Style::fields_CODE, $styleName)
+                ->where(Style::schema_fields_CODE, $styleName)
                 ->find()
                 ->fetch();
 
             if ($existingStyle->getId()) {
                 // 更新现有样式
-                $existingStyle->setData(Style::fields_NAME, $this->formatStyleName($styleName))
-                    ->setData(Style::fields_DESCRIPTION, $description)
-                    ->setData(Style::fields_PATH, $relativePath)
+                $existingStyle->setData(Style::schema_fields_NAME, $this->formatStyleName($styleName))
+                    ->setData(Style::schema_fields_DESCRIPTION, $description)
+                    ->setData(Style::schema_fields_PATH, $relativePath)
                     ->save();
 
                 $this->printer->success(__('  ✓ 已更新'));
@@ -110,12 +110,12 @@ class Scan implements CommandInterface
                 // 创建新样式
                 $newStyle = clone $this->styleModel;
                 $newStyle->clearData()
-                    ->setData(Style::fields_CODE, $styleName)
-                    ->setData(Style::fields_NAME, $this->formatStyleName($styleName))
-                    ->setData(Style::fields_DESCRIPTION, $description)
-                    ->setData(Style::fields_PATH, $relativePath)
-                    ->setData(Style::fields_IS_ACTIVE, 1)
-                    ->setData(Style::fields_SORT_ORDER, $scannedCount * 10)
+                    ->setData(Style::schema_fields_CODE, $styleName)
+                    ->setData(Style::schema_fields_NAME, $this->formatStyleName($styleName))
+                    ->setData(Style::schema_fields_DESCRIPTION, $description)
+                    ->setData(Style::schema_fields_PATH, $relativePath)
+                    ->setData(Style::schema_fields_IS_ACTIVE, 1)
+                    ->setData(Style::schema_fields_SORT_ORDER, $scannedCount * 10)
                     ->save(true);
 
                 $this->printer->success(__('  ✓ 已创建 (ID: %{1})', [$newStyle->getId()]));

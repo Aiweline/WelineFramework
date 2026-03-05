@@ -50,25 +50,25 @@ class Submission extends BackendController
         
         // 搜索条件
         if ($search) {
-            $query->where(FormSubmission::fields_EMAIL, "%$search%", 'like')
-                ->where(FormSubmission::fields_PHONE, "%$search%", 'like', 'or');
+            $query->where(FormSubmission::schema_fields_EMAIL, "%$search%", 'like')
+                ->where(FormSubmission::schema_fields_PHONE, "%$search%", 'like', 'or');
         }
         
         // 页面筛选
         if ($pageId) {
-            $query->where(FormSubmission::fields_PAGE_ID, $pageId);
+            $query->where(FormSubmission::schema_fields_PAGE_ID, $pageId);
         }
         
         // 日期范围筛选
         if ($startDate) {
-            $query->where(FormSubmission::fields_SUBMITTED_AT, $startDate, '>=');
+            $query->where(FormSubmission::schema_fields_SUBMITTED_AT, $startDate, '>=');
         }
         if ($endDate) {
-            $query->where(FormSubmission::fields_SUBMITTED_AT, $endDate . ' 23:59:59', '<=');
+            $query->where(FormSubmission::schema_fields_SUBMITTED_AT, $endDate . ' 23:59:59', '<=');
         }
         
         // 额外字段筛选（需要遍历）
-        $submissions = $query->order(FormSubmission::fields_SUBMITTED_AT, 'DESC')
+        $submissions = $query->order(FormSubmission::schema_fields_SUBMITTED_AT, 'DESC')
             ->select()
             ->fetch()
             ->getItems();
@@ -129,9 +129,9 @@ class Submission extends BackendController
         $this->assign('submission', $submission);
         
         // 获取关联页面信息
-        if ($submission->getData(FormSubmission::fields_PAGE_ID)) {
+        if ($submission->getData(FormSubmission::schema_fields_PAGE_ID)) {
             $page = clone $this->pageModel;
-            $page->clear()->load($submission->getData(FormSubmission::fields_PAGE_ID));
+            $page->clear()->load($submission->getData(FormSubmission::schema_fields_PAGE_ID));
             if ($page->getId()) {
                 $this->assign('page', $page);
             }
@@ -180,7 +180,7 @@ class Submission extends BackendController
             // 获取所有提交记录
             $submissions = clone $this->formSubmissionModel;
             $submissions = $submissions->clear()
-                ->order(FormSubmission::fields_SUBMITTED_AT, 'DESC')
+                ->order(FormSubmission::schema_fields_SUBMITTED_AT, 'DESC')
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -208,11 +208,11 @@ class Submission extends BackendController
             foreach ($submissions as $submission) {
                 $row = [
                     $submission->getId(),
-                    $submission->getData(FormSubmission::fields_PAGE_ID),
-                    $submission->getData(FormSubmission::fields_EMAIL),
-                    $submission->getData(FormSubmission::fields_PHONE),
-                    $submission->getData(FormSubmission::fields_IP_ADDRESS),
-                    $submission->getData(FormSubmission::fields_SUBMITTED_AT)
+                    $submission->getData(FormSubmission::schema_fields_PAGE_ID),
+                    $submission->getData(FormSubmission::schema_fields_EMAIL),
+                    $submission->getData(FormSubmission::schema_fields_PHONE),
+                    $submission->getData(FormSubmission::schema_fields_IP_ADDRESS),
+                    $submission->getData(FormSubmission::schema_fields_SUBMITTED_AT)
                 ];
                 
                 $extraFields = $submission->getExtraFields();

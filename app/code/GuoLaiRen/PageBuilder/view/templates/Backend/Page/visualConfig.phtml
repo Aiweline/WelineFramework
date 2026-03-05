@@ -661,19 +661,14 @@ function autoSaveConfig() {
             });
             
             // 发送保存请求
-            const response = await fetch('<?= $this->getBackendUrl('*/backend/preview/autoSave') ?>', {
+            var saveUrl = '<?= $this->getBackendUrl('*/backend/preview/autoSave') ?>';
+            var opts = {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify({
-                    page_id: pageId,
-                    style_config: config
-                })
-            });
-            
-            const result = await response.json();
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ page_id: pageId, style_config: config })
+            };
+            var res = await window.Weline.Api.request(saveUrl, opts);
+            var result = (res && res.data) || res;
             
             if (result.success) {
                 updateSaveStatus('saved', '<?= __('已保存') ?>');

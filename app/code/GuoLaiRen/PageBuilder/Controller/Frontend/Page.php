@@ -9,8 +9,6 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Controller\Frontend;
 
-use GuoLaiRen\Blog\Model\Category as BlogCategory;
-use GuoLaiRen\Blog\Model\Post as BlogPost;
 use GuoLaiRen\PageBuilder\Helper\PageHelper;
 use GuoLaiRen\PageBuilder\Model\Page as PageModel;
 use GuoLaiRen\PageBuilder\Model\Style;
@@ -23,8 +21,6 @@ class Page extends FrontendController
     private PageHelper $pageHelper;
     private Style $styleModel;
     private PageRenderService $pageRenderService;
-    private ?BlogPost $blogPostModel = null;
-    private ?BlogCategory $blogCategoryModel = null;
 
     public function __construct(
         PageModel $pageModel,
@@ -36,28 +32,6 @@ class Page extends FrontendController
         $this->pageHelper = $pageHelper;
         $this->styleModel = $styleModel;
         $this->pageRenderService = $pageRenderService;
-    }
-
-    /**
-     * 延迟加载博客文章模型
-     */
-    private function getBlogPostModel(): BlogPost
-    {
-        if ($this->blogPostModel === null) {
-            $this->blogPostModel = \Weline\Framework\Manager\ObjectManager::getInstance(BlogPost::class);
-        }
-        return $this->blogPostModel;
-    }
-
-    /**
-     * 延迟加载博客分类模型
-     */
-    private function getBlogCategoryModel(): BlogCategory
-    {
-        if ($this->blogCategoryModel === null) {
-            $this->blogCategoryModel = \Weline\Framework\Manager\ObjectManager::getInstance(BlogCategory::class);
-        }
-        return $this->blogCategoryModel;
     }
 
     /**
@@ -75,28 +49,15 @@ class Page extends FrontendController
      */
     private function loadBlogData(PageModel $page): void
     {
-        $pageType = $page->getData(PageModel::fields_TYPE);
+        $pageType = $page->getData(PageModel::schema_fields_TYPE);
         
         // 检查是否是博客类型页面
         if (!in_array($pageType, [PageModel::TYPE_BLOG, PageModel::TYPE_BLOG_CATEGORY, PageModel::TYPE_BLOG_LIST])) {
             return;
         }
         
-        // 获取所有启用的分类（当前网站）
-        $websiteId = \Weline\Websites\Data\WebsiteData::getWebsiteId();
-        $categoryModel = clone $this->getBlogCategoryModel();
-        $query = $categoryModel->clear()
-            ->where(BlogCategory::fields_STATUS, BlogCategory::STATUS_ENABLED);
-        
-        // 根据当前网站过滤
-        if ($websiteId) {
-            $query->where(BlogCategory::fields_SITE_ID, $websiteId);
-        }
-        
-        $blogCategories = $query->order(BlogCategory::fields_SORT_ORDER, 'ASC')
-            ->select()
-            ->fetch()
-            ->getItems();
+        $websiteId = (int)\Weline\Websites\Data\WebsiteData::getWebsiteId();
+        $blogCategories = w_query('blog', 'getCategoryList', ['site_id' => $websiteId]);
         $this->assign('blog_categories', $blogCategories);
         
         // 获取请求参数
@@ -106,160 +67,43 @@ class Page extends FrontendController
         $pageNum = $pageNum > 0 ? $pageNum : 1;
         $pageSize = 12;
         
-        // 当前分类
-        $currentCategory = null;
-        if ($categorySlug) {
-            $catModel = clone $this->getBlogCategoryModel();
-            $query = $catModel->clear()
-                ->where(BlogCategory::fields_SLUG, $categorySlug)
-                ->where(BlogCategory::fields_STATUS, BlogCategory::STATUS_ENABLED);
-            
-            // 根据当前网站过滤
-            if ($websiteId) {
-                $query->where(BlogCategory::fields_SITE_ID, $websiteId);
-            }
-            
-            $query->find()->fetch();
-            if ($catModel->getId()) {
-                $currentCategory = $catModel;
-            }
-        }
+        $currentCategory = $categorySlug
+            ? w_query('blog', 'getCategoryBySlug', ['slug' => $categorySlug, 'site_id' => $websiteId])
+            : null;
         $this->assign('current_category', $currentCategory);
         
-        // 根据页面类型加载不同数据
         if ($pageType === PageModel::TYPE_BLOG && $postSlug) {
-            // 博客文章详情页
-            $postModel = clone $this->getBlogPostModel();
-            $query = $postModel->clear()
-                ->where(BlogPost::fields_SLUG, $postSlug)
-                ->where(BlogPost::fields_STATUS, BlogPost::STATUS_PUBLISHED);
-            
-            // 根据当前网站过滤
-            if ($websiteId) {
-                $query->where(BlogPost::fields_SITE_ID, $websiteId);
-            }
-            
-            $query->find()->fetch();
-            
-            if ($postModel->getId()) {
-                // 增加浏览量
-                $postModel->incrementViewCount()->save();
-                $this->assign('current_post', $postModel);
-                
-                // 获取相关文章（同分类的其他文章）
-                $categoryId = $postModel->getData(BlogPost::fields_CATEGORY_ID);
-                if ($categoryId) {
-                    $relatedModel = clone $this->getBlogPostModel();
-                    $relatedQuery = $relatedModel->clear()
-                        ->where(BlogPost::fields_CATEGORY_ID, $categoryId)
-                        ->where(BlogPost::fields_ID, $postModel->getId(), '!=')
-                        ->where(BlogPost::fields_STATUS, BlogPost::STATUS_PUBLISHED);
-                    
-                    // 根据当前网站过滤
-                    if ($websiteId) {
-                        $relatedQuery->where(BlogPost::fields_SITE_ID, $websiteId);
-                    }
-                    
-                    $relatedPosts = $relatedQuery->order(BlogPost::fields_PUBLISHED_AT, 'DESC')
-                        ->limit(6)
-                        ->select()
-                        ->fetch()
-                        ->getItems();
-                    $this->assign('related_posts', $relatedPosts);
-                }
+            $currentPost = w_query('blog', 'getPostBySlug', ['slug' => $postSlug, 'site_id' => $websiteId]);
+            if ($currentPost) {
+                w_query('blog', 'incrementPostViewCount', ['post_id' => $currentPost['post_id']]);
+                $currentPost['view_count'] = ($currentPost['view_count'] ?? 0) + 1;
+                $this->assign('current_post', $currentPost);
+                $relatedPosts = w_query('blog', 'getRelatedPosts', [
+                    'category_id' => $currentPost['category_id'] ?? 0,
+                    'exclude_post_id' => $currentPost['post_id'],
+                    'site_id' => $websiteId,
+                    'limit' => 6,
+                ]);
+                $this->assign('related_posts', $relatedPosts);
             }
         } else {
-            // 博客列表页或分类页
-            $postModel = clone $this->getBlogPostModel();
-            $query = $postModel->clear()
-                ->where(BlogPost::fields_STATUS, BlogPost::STATUS_PUBLISHED);
-            
-            // 根据当前网站过滤
-            if ($websiteId) {
-                $query->where(BlogPost::fields_SITE_ID, $websiteId);
-            }
-            
-            // 如果指定了分类
-            if ($currentCategory) {
-                $query->where(BlogPost::fields_CATEGORY_ID, $currentCategory->getId());
-            }
-            
-            // 分页查询（is_featured字段可能不存在，使用try-catch处理）
-            try {
-                $blogPosts = $query
-                    ->order(BlogPost::fields_IS_FEATURED, 'DESC')
-                    ->order(BlogPost::fields_PUBLISHED_AT, 'DESC')
-                    ->page($pageNum, $pageSize)
-                    ->pagination()
-                    ->select()
-                    ->fetch();
-            } catch (\Exception $e) {
-                // 如果is_featured字段不存在，仅按发布时间排序
-                $postModel = clone $this->getBlogPostModel();
-                $fallbackQuery = $postModel->clear()
-                    ->where(BlogPost::fields_STATUS, BlogPost::STATUS_PUBLISHED);
-                
-                // 根据当前网站过滤
-                if ($websiteId) {
-                    $fallbackQuery->where(BlogPost::fields_SITE_ID, $websiteId);
-                }
-                
-                if ($currentCategory) {
-                    $fallbackQuery->where(BlogPost::fields_CATEGORY_ID, $currentCategory->getId());
-                }
-                
-                $blogPosts = $fallbackQuery
-                    ->order(BlogPost::fields_PUBLISHED_AT, 'DESC')
-                    ->page($pageNum, $pageSize)
-                    ->pagination()
-                    ->select()
-                    ->fetch();
-            }
-            
-            $this->assign('blog_posts', $blogPosts->getItems());
-            $this->assign('pagination', $blogPosts->getPagination());
+            $listResult = w_query('blog', 'getPostList', [
+                'site_id' => $websiteId,
+                'category_id' => $currentCategory ? ($currentCategory['category_id'] ?? null) : null,
+                'page' => $pageNum,
+                'page_size' => $pageSize,
+            ]);
+            $this->assign('blog_posts', $listResult['items'] ?? []);
+            $this->assign('pagination', $listResult['pagination'] ?? []);
         }
         
-        // 获取最近文章（用于侧边栏）
-        $recentModel = clone $this->getBlogPostModel();
-        $recentQuery = $recentModel->clear()
-            ->where(BlogPost::fields_STATUS, BlogPost::STATUS_PUBLISHED);
-        
-        // 根据当前网站过滤
-        if ($websiteId) {
-            $recentQuery->where(BlogPost::fields_SITE_ID, $websiteId);
-        }
-        
-        $recentPosts = $recentQuery->order(BlogPost::fields_PUBLISHED_AT, 'DESC')
-            ->limit(10)
-            ->select()
-            ->fetch()
-            ->getItems();
+        $recentPosts = w_query('blog', 'getRecentPosts', ['site_id' => $websiteId, 'limit' => 10]);
         $this->assign('recent_posts', $recentPosts);
-        
-        // 获取所有标签（用于标签云）
+        $postsWithTags = w_query('blog', 'getPostsWithTags', ['site_id' => $websiteId]);
         $allTags = [];
-        try {
-            $tagsModel = clone $this->getBlogPostModel();
-            $tagsQuery = $tagsModel->clear()
-                ->where(BlogPost::fields_STATUS, BlogPost::STATUS_PUBLISHED)
-                ->where(BlogPost::fields_TAGS, '', '!=');
-            
-            // 根据当前网站过滤
-            if ($websiteId) {
-                $tagsQuery->where(BlogPost::fields_SITE_ID, $websiteId);
-            }
-            
-            $postsWithTags = $tagsQuery->select()
-                ->fetch()
-                ->getItems();
-        } catch (\Exception $e) {
-            $postsWithTags = [];
-        }
         foreach ($postsWithTags as $post) {
-            $tags = $post->getTagsArray();
-            foreach ($tags as $tag) {
-                if (!in_array($tag, $allTags)) {
+            foreach ($post['tags_array'] ?? [] as $tag) {
+                if ($tag !== '' && !in_array($tag, $allTags)) {
                     $allTags[] = $tag;
                 }
             }
@@ -297,12 +141,12 @@ class Page extends FrontendController
         if (empty($handle) && $websiteId > 0) {
             $page = clone $this->pageModel;
             $page->clear()
-                ->where(PageModel::fields_WEBSITE_ID, $websiteId)
-                ->where(PageModel::fields_TYPE, PageModel::TYPE_HOME);
+                ->where(PageModel::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(PageModel::schema_fields_TYPE, PageModel::TYPE_HOME);
             
             // 如果不是预览模式，只显示已发布的页面
             if (!$isPreview) {
-                $page->where(PageModel::fields_STATUS, PageModel::STATUS_PUBLISHED);
+                $page->where(PageModel::schema_fields_STATUS, PageModel::STATUS_PUBLISHED);
             }
             
             $page->find()->fetch();
@@ -311,10 +155,10 @@ class Page extends FrontendController
             if (!$page->getId()) {
                 $page = clone $this->pageModel;
                 $page->clear()
-                    ->where(PageModel::fields_WEBSITE_ID, 0)
-                    ->where(PageModel::fields_TYPE, PageModel::TYPE_HOME);
+                    ->where(PageModel::schema_fields_WEBSITE_ID, 0)
+                    ->where(PageModel::schema_fields_TYPE, PageModel::TYPE_HOME);
                 if (!$isPreview) {
-                    $page->where(PageModel::fields_STATUS, PageModel::STATUS_PUBLISHED);
+                    $page->where(PageModel::schema_fields_STATUS, PageModel::STATUS_PUBLISHED);
                 }
                 $page->find()->fetch();
             }
@@ -330,12 +174,12 @@ class Page extends FrontendController
             // 加载页面（按 website_id + handle 查询）
             $page = clone $this->pageModel;
             $page->clear()
-                ->where(PageModel::fields_WEBSITE_ID, $websiteId)
-                ->where(PageModel::fields_HANDLE, $handle);
+                ->where(PageModel::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(PageModel::schema_fields_HANDLE, $handle);
             
             // 如果不是预览模式，只显示已发布的页面
             if (!$isPreview) {
-                $page->where(PageModel::fields_STATUS, PageModel::STATUS_PUBLISHED);
+                $page->where(PageModel::schema_fields_STATUS, PageModel::STATUS_PUBLISHED);
             }
             
             $page->find()->fetch();
@@ -346,10 +190,10 @@ class Page extends FrontendController
             if (!$page->getId() && $websiteId !== 0) {
                 $page = clone $this->pageModel;
                 $page->clear()
-                    ->where(PageModel::fields_WEBSITE_ID, 0)
-                    ->where(PageModel::fields_HANDLE, $handle);
+                    ->where(PageModel::schema_fields_WEBSITE_ID, 0)
+                    ->where(PageModel::schema_fields_HANDLE, $handle);
                 if (!$isPreview) {
-                    $page->where(PageModel::fields_STATUS, PageModel::STATUS_PUBLISHED);
+                    $page->where(PageModel::schema_fields_STATUS, PageModel::STATUS_PUBLISHED);
                 }
                 $page->find()->fetch();
             }
@@ -358,9 +202,9 @@ class Page extends FrontendController
                 // 最后尝试：只按 handle 查找，取第一个匹配的已发布页面
                 $page = clone $this->pageModel;
                 $page->clear()
-                    ->where(PageModel::fields_HANDLE, $handle);
+                    ->where(PageModel::schema_fields_HANDLE, $handle);
                 if (!$isPreview) {
-                    $page->where(PageModel::fields_STATUS, PageModel::STATUS_PUBLISHED);
+                    $page->where(PageModel::schema_fields_STATUS, PageModel::STATUS_PUBLISHED);
                 }
                 $page->find()->fetch();
             }
@@ -402,13 +246,13 @@ class Page extends FrontendController
         $this->loadBlogData($page);
 
         // 获取页面的样式代码
-        $styleCode = $page->getData(PageModel::fields_STYLE);
+        $styleCode = $page->getData(PageModel::schema_fields_STYLE);
         
         if ($styleCode) {
             // 验证样式是否存在
             $style = clone $this->styleModel;
             $style->clear()
-                ->where(Style::fields_CODE, $styleCode)
+                ->where(Style::schema_fields_CODE, $styleCode)
                 ->find()
                 ->fetch();
             
@@ -543,7 +387,7 @@ class Page extends FrontendController
      */
     private function renderLanguageSwitcher(PageModel $page, array $availableLocales, string $currentLocale): string
     {
-        $handle = $page->getData(PageModel::fields_HANDLE);
+        $handle = $page->getData(PageModel::schema_fields_HANDLE);
         // 使用友好的重写 URL 格式
         $baseUrl = '/' . $handle;
         

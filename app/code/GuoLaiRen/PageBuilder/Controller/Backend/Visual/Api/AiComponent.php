@@ -252,7 +252,7 @@ class AiComponent extends BackendController
             $draft = ObjectManager::getInstance(AiComponentDraft::class);
             $draft->load($draftId);
             if ($draft->getId()) {
-                return (string) $draft->getData(AiComponentDraft::fields_TEMPLATE_CONTENT);
+                return (string) $draft->getData(AiComponentDraft::schema_fields_TEMPLATE_CONTENT);
             }
         }
         if ($componentId > 0) {
@@ -356,8 +356,8 @@ class AiComponent extends BackendController
                 $componentModel = ObjectManager::getInstance(Component::class);
                 $existing = clone $componentModel;
                 $existing->clear()
-                    ->where(Component::fields_CODE, $componentCode)
-                    ->where(Component::fields_STYLE_CODE, Component::STYLE_CODE_AI_GENERATED)
+                    ->where(Component::schema_fields_CODE, $componentCode)
+                    ->where(Component::schema_fields_STYLE_CODE, Component::STYLE_CODE_AI_GENERATED)
                     ->find()
                     ->fetch();
                 
@@ -365,7 +365,7 @@ class AiComponent extends BackendController
                     if (method_exists($existing, 'setTemplateContent')) {
                         $existing->setTemplateContent($newTemplateContent);
                     } else {
-                        $existing->setData(Component::fields_TEMPLATE_CONTENT, $newTemplateContent);
+                        $existing->setData(Component::schema_fields_TEMPLATE_CONTENT, $newTemplateContent);
                     }
                     $existing->save();
                     $this->entityFileManager->syncEntityFile($existing);
@@ -378,7 +378,7 @@ class AiComponent extends BackendController
                 $draft = ObjectManager::getInstance(AiComponentDraft::class);
                 $draft->load($draftId);
                 if ($draft->getId()) {
-                    $draft->setData(AiComponentDraft::fields_TEMPLATE_CONTENT, $newTemplateContent);
+                    $draft->setData(AiComponentDraft::schema_fields_TEMPLATE_CONTENT, $newTemplateContent);
                     $draft->save();
                 }
             }
@@ -449,7 +449,7 @@ class AiComponent extends BackendController
                 $component->load($componentId);
                 if ($component->getId()) {
                     $templateContent = $component->getTemplateContent() ?: '';
-                    $componentCode = $component->getData(Component::fields_CODE) ?: $componentCode;
+                    $componentCode = $component->getData(Component::schema_fields_CODE) ?: $componentCode;
                     $body['code'] = $componentCode;
                 }
             } elseif (!empty($componentCode)) {
@@ -457,8 +457,8 @@ class AiComponent extends BackendController
                 $componentModel = ObjectManager::getInstance(Component::class);
                 $component = clone $componentModel;
                 $component->clear()
-                    ->where(Component::fields_CODE, $componentCode)
-                    ->where(Component::fields_STYLE_CODE, $styleCode)
+                    ->where(Component::schema_fields_CODE, $componentCode)
+                    ->where(Component::schema_fields_STYLE_CODE, $styleCode)
                     ->find()
                     ->fetch();
                 if ($component->getId()) {
@@ -539,8 +539,8 @@ class AiComponent extends BackendController
                 $componentModel = ObjectManager::getInstance(Component::class);
                 $existing = clone $componentModel;
                 $existing->clear()
-                    ->where(Component::fields_CODE, $componentCode)
-                    ->where(Component::fields_STYLE_CODE, Component::STYLE_CODE_AI_GENERATED)
+                    ->where(Component::schema_fields_CODE, $componentCode)
+                    ->where(Component::schema_fields_STYLE_CODE, Component::STYLE_CODE_AI_GENERATED)
                     ->find()
                     ->fetch();
 
@@ -548,7 +548,7 @@ class AiComponent extends BackendController
                     if (method_exists($existing, 'setTemplateContent')) {
                         $existing->setTemplateContent($newTemplateContent);
                     } else {
-                        $existing->setData(Component::fields_TEMPLATE_CONTENT, $newTemplateContent);
+                        $existing->setData(Component::schema_fields_TEMPLATE_CONTENT, $newTemplateContent);
                     }
                     $existing->save();
                     $this->entityFileManager->syncEntityFile($existing);
@@ -560,7 +560,7 @@ class AiComponent extends BackendController
                 $draft = ObjectManager::getInstance(AiComponentDraft::class);
                 $draft->load($draftId);
                 if ($draft->getId()) {
-                    $draft->setData(AiComponentDraft::fields_TEMPLATE_CONTENT, $newTemplateContent);
+                    $draft->setData(AiComponentDraft::schema_fields_TEMPLATE_CONTENT, $newTemplateContent);
                     $draft->save();
                 }
             }
@@ -1166,8 +1166,8 @@ class AiComponent extends BackendController
             // 查找或创建LocalDescription记录
             $localDesc = clone $this->localDescriptionModel;
             $existing = $localDesc->clear()
-                ->where(LocalDescription::fields_ID, $componentId)
-                ->where(LocalModelInterface::fields_local_code, $locale)
+                ->where(LocalDescription::schema_fields_ID, $componentId)
+                ->where(LocalModelInterface::schema_fields_local_code, $locale)
                 ->find()
                 ->fetch();
             
@@ -1178,7 +1178,7 @@ class AiComponent extends BackendController
             } else {
                 // 创建新记录
                 $newLocal = clone $this->localDescriptionModel;
-                $newLocal->setData(LocalDescription::fields_ID, $componentId);
+                $newLocal->setData(LocalDescription::schema_fields_ID, $componentId);
                 $newLocal->setLocalCode($locale);
                 $newLocal->setConfigValue('ai_generation_history', $historyData);
                 $newLocal->save(true);
@@ -1202,8 +1202,8 @@ class AiComponent extends BackendController
             
             $localDesc = clone $this->localDescriptionModel;
             $localDesc->clear()
-                ->where(LocalDescription::fields_ID, $componentId)
-                ->where(LocalModelInterface::fields_local_code, $locale)
+                ->where(LocalDescription::schema_fields_ID, $componentId)
+                ->where(LocalModelInterface::schema_fields_local_code, $locale)
                 ->find()
                 ->fetch();
             

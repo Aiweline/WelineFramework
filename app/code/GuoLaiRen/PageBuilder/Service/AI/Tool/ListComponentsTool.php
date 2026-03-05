@@ -57,16 +57,16 @@ class ListComponentsTool implements ToolInterface
         /** @var Component $componentModel */
         $componentModel = ObjectManager::getInstance(Component::class);
         $query = $componentModel->reset()
-            ->where(Component::fields_IS_ACTIVE, 1);
+            ->where(Component::schema_fields_IS_ACTIVE, 1);
 
         if (!empty($styleCode)) {
-            $query->where(Component::fields_STYLE_CODE, $styleCode);
+            $query->where(Component::schema_fields_STYLE_CODE, $styleCode);
         }
         if (!empty($category)) {
-            $query->where(Component::fields_CATEGORY, $category);
+            $query->where(Component::schema_fields_CATEGORY, $category);
         }
 
-        $query->order(Component::fields_SORT_ORDER, 'ASC')
+        $query->order(Component::schema_fields_SORT_ORDER, 'ASC')
             ->limit($limit);
 
         $components = $query->select()->fetch();
@@ -82,12 +82,12 @@ class ListComponentsTool implements ToolInterface
                     continue;
                 }
                 $result[] = [
-                    'code' => $comp->getData(Component::fields_CODE),
-                    'name' => $comp->getData(Component::fields_NAME),
-                    'description' => mb_substr($comp->getData(Component::fields_DESCRIPTION) ?: '', 0, 200),
-                    'category' => $comp->getData(Component::fields_CATEGORY),
-                    'style_code' => $comp->getData(Component::fields_STYLE_CODE),
-                    'is_ai_generated' => (bool)$comp->getData(Component::fields_IS_AI_GENERATED),
+                    'code' => $comp->getData(Component::schema_fields_CODE),
+                    'name' => $comp->getData(Component::schema_fields_NAME),
+                    'description' => mb_substr($comp->getData(Component::schema_fields_DESCRIPTION) ?: '', 0, 200),
+                    'category' => $comp->getData(Component::schema_fields_CATEGORY),
+                    'style_code' => $comp->getData(Component::schema_fields_STYLE_CODE),
+                    'is_ai_generated' => (bool)$comp->getData(Component::schema_fields_IS_AI_GENERATED),
                 ];
             }
         }
