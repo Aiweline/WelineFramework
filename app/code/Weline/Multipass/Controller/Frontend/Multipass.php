@@ -105,7 +105,7 @@ class Multipass extends FrontendController
             
             // 优先使用用户名查找，其次使用邮箱
             if (!empty($username)) {
-                $user->where(FrontendUser::fields_username, $username)->find()->fetch();
+                $user->where(FrontendUser::schema_fields_username, $username)->find()->fetch();
             }
             
             if (!$user->getId() && !empty($email)) {

@@ -81,7 +81,7 @@ class Site extends BackendController
             // 检查站点URL是否已存在
             $existingSite = clone $this->siteModel;
             $existingSite->clear()
-                ->where(MultipassSite::fields_SITE_URL, $siteUrl)
+                ->where(MultipassSite::schema_fields_SITE_URL, $siteUrl)
                 ->find()
                 ->fetch();
             
@@ -100,11 +100,11 @@ class Site extends BackendController
             // 创建站点
             $site = clone $this->siteModel;
             $site->setData([
-                MultipassSite::fields_SITE_NAME => $siteName,
-                MultipassSite::fields_SITE_URL => rtrim($siteUrl, '/'),
-                MultipassSite::fields_SECRET_KEY => $secretKey,
-                MultipassSite::fields_USER_TYPE => $userType,
-                MultipassSite::fields_IS_ENABLED => $isEnabled,
+                MultipassSite::schema_fields_SITE_NAME => $siteName,
+                MultipassSite::schema_fields_SITE_URL => rtrim($siteUrl, '/'),
+                MultipassSite::schema_fields_SECRET_KEY => $secretKey,
+                MultipassSite::schema_fields_USER_TYPE => $userType,
+                MultipassSite::schema_fields_IS_ENABLED => $isEnabled,
             ])->save(true);
             
             return $this->fetchJson([
@@ -160,11 +160,11 @@ class Site extends BackendController
             
             // 保存
             $site->setData([
-                MultipassSite::fields_SITE_NAME => $siteName,
-                MultipassSite::fields_SITE_URL => rtrim($siteUrl, '/'),
-                MultipassSite::fields_SECRET_KEY => $secretKey,
-                MultipassSite::fields_USER_TYPE => $userType,
-                MultipassSite::fields_IS_ENABLED => $isEnabled,
+                MultipassSite::schema_fields_SITE_NAME => $siteName,
+                MultipassSite::schema_fields_SITE_URL => rtrim($siteUrl, '/'),
+                MultipassSite::schema_fields_SECRET_KEY => $secretKey,
+                MultipassSite::schema_fields_USER_TYPE => $userType,
+                MultipassSite::schema_fields_IS_ENABLED => $isEnabled,
             ])->save(!$siteId);
             
             $this->getMessageManager()->addSuccess(__('站点保存成功'));
@@ -213,8 +213,8 @@ class Site extends BackendController
     {
         try {
             $sites = $this->siteModel->clear()
-                ->where(MultipassSite::fields_IS_ENABLED, 1)
-                ->order(MultipassSite::fields_SITE_NAME, 'ASC')
+                ->where(MultipassSite::schema_fields_IS_ENABLED, 1)
+                ->order(MultipassSite::schema_fields_SITE_NAME, 'ASC')
                 ->select()
                 ->fetch()
                 ->getItems();
