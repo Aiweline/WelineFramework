@@ -39,11 +39,11 @@ class IpWhitelist extends BackendController
             $query = $whitelistModel->reset();
             
             if ($keyword) {
-                $query->where(IpWhitelistModel::fields_IP, "%{$keyword}%", 'LIKE')
-                      ->orWhere(IpWhitelistModel::fields_DESCRIPTION, "%{$keyword}%", 'LIKE');
+                $query->where(IpWhitelistModel::schema_fields_IP, "%{$keyword}%", 'LIKE')
+                      ->orWhere(IpWhitelistModel::schema_fields_DESCRIPTION, "%{$keyword}%", 'LIKE');
             }
             
-            $query->order(IpWhitelistModel::fields_CREATED_AT, 'DESC');
+            $query->order(IpWhitelistModel::schema_fields_CREATED_AT, 'DESC');
             $collection = $query->pagination($page, $limit);
             
             $items = $collection->getItems();
@@ -98,14 +98,14 @@ class IpWhitelist extends BackendController
                 $whitelistModel = ObjectManager::getInstance(IpWhitelistModel::class);
                 
                 // 检查是否已存在
-                $existing = $whitelistModel->reset()->where(IpWhitelistModel::fields_IP, $ip)->load();
+                $existing = $whitelistModel->reset()->where(IpWhitelistModel::schema_fields_IP, $ip)->load();
                 if ($existing->getId()) {
                     return $this->jsonResponse(false, __('该IP地址已存在'));
                 }
                 
-                $whitelistModel->setData(IpWhitelistModel::fields_IP, $ip);
-                $whitelistModel->setData(IpWhitelistModel::fields_DESCRIPTION, $description);
-                $whitelistModel->setData(IpWhitelistModel::fields_IS_ACTIVE, $isActive);
+                $whitelistModel->setData(IpWhitelistModel::schema_fields_IP, $ip);
+                $whitelistModel->setData(IpWhitelistModel::schema_fields_DESCRIPTION, $description);
+                $whitelistModel->setData(IpWhitelistModel::schema_fields_IS_ACTIVE, $isActive);
                 
                 if ($whitelistModel->save()) {
                     return $this->jsonResponse(true, __('添加成功'));
@@ -156,16 +156,16 @@ class IpWhitelist extends BackendController
                 
                 // 检查IP是否被其他记录使用
                 $existing = $whitelistModel->reset()
-                    ->where(IpWhitelistModel::fields_IP, $ip)
-                    ->where(IpWhitelistModel::fields_ID, $id, '!=')
+                    ->where(IpWhitelistModel::schema_fields_IP, $ip)
+                    ->where(IpWhitelistModel::schema_fields_ID, $id, '!=')
                     ->load();
                 if ($existing->getId()) {
                     return $this->jsonResponse(false, __('该IP地址已被其他记录使用'));
                 }
                 
-                $whitelistModel->setData(IpWhitelistModel::fields_IP, $ip);
-                $whitelistModel->setData(IpWhitelistModel::fields_DESCRIPTION, $description);
-                $whitelistModel->setData(IpWhitelistModel::fields_IS_ACTIVE, $isActive);
+                $whitelistModel->setData(IpWhitelistModel::schema_fields_IP, $ip);
+                $whitelistModel->setData(IpWhitelistModel::schema_fields_DESCRIPTION, $description);
+                $whitelistModel->setData(IpWhitelistModel::schema_fields_IS_ACTIVE, $isActive);
                 
                 if ($whitelistModel->save()) {
                     return $this->jsonResponse(true, __('更新成功'));
@@ -257,9 +257,9 @@ class IpWhitelist extends BackendController
                 return $this->jsonResponse(false, __('记录不存在'));
             }
             
-            $currentStatus = (int)$whitelistModel->getData(IpWhitelistModel::fields_IS_ACTIVE);
+            $currentStatus = (int)$whitelistModel->getData(IpWhitelistModel::schema_fields_IS_ACTIVE);
             $newStatus = $currentStatus ? 0 : 1;
-            $whitelistModel->setData(IpWhitelistModel::fields_IS_ACTIVE, $newStatus);
+            $whitelistModel->setData(IpWhitelistModel::schema_fields_IS_ACTIVE, $newStatus);
             
             if ($whitelistModel->save()) {
                 return $this->jsonResponse(true, __('状态更新成功'), ['is_active' => $newStatus]);
