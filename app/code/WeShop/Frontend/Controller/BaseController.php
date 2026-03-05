@@ -6,9 +6,6 @@ namespace WeShop\Frontend\Controller;
 
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\App\State;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Theme\Helper\ThemeConfigHelper;
-use Weline\Theme\Model\WelineTheme;
 
 /**
  * WeShop 前端控制器基类
@@ -35,11 +32,11 @@ class BaseController extends FrontendController
     protected ?int $layoutVariant = null;
     
     /**
-     * 当前主题对象
-     * 
-     * @var WelineTheme|null
+     * 当前主题信息（通过 theme 查询器获取的数组）
+     *
+     * @var array|null
      */
-    protected ?WelineTheme $currentTheme = null;
+    protected ?array $currentTheme = null;
     
     public function __init()
     {
@@ -101,7 +98,7 @@ class BaseController extends FrontendController
     {
         try {
             $theme = $this->getCurrentTheme();
-            if (!$theme || !$theme->getId()) {
+            if (!$theme || empty($theme['id'])) {
                 return 1;
             }
             
@@ -119,24 +116,20 @@ class BaseController extends FrontendController
     }
     
     /**
-     * 获取当前主题
-     * 
-     * @return WelineTheme|null
+     * 获取当前主题（通过 theme 查询器，避免跨模块直接调用）
+     *
+     * @return array|null 主题信息数组 {id, name, module_name, path, ...}
      */
-    protected function getCurrentTheme(): ?WelineTheme
+    protected function getCurrentTheme(): ?array
     {
         if ($this->currentTheme === null) {
             try {
-                /** @var WelineTheme $theme */
-                $theme = ObjectManager::getInstance(WelineTheme::class);
-                $theme = $theme->getActiveTheme('frontend');
-                $this->currentTheme = $theme;
+                $this->currentTheme = w_query('theme', 'getActiveTheme', [], 'frontend');
             } catch (\Throwable $e) {
-                // 获取主题失败
                 $this->currentTheme = null;
             }
         }
-        
+
         return $this->currentTheme;
     }
     
