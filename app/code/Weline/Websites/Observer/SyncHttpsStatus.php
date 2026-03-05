@@ -74,7 +74,7 @@ class SyncHttpsStatus implements ObserverInterface
         /** @var DomainPool $poolModel */
         $poolModel = ObjectManager::getInstance(DomainPool::class, [], false);
         $poolModel->clearQuery()
-            ->where(DomainPool::fields_DOMAIN, strtolower($domain))
+            ->where(DomainPool::schema_fields_DOMAIN, strtolower($domain))
             ->find()
             ->fetch();
         
@@ -102,8 +102,8 @@ class SyncHttpsStatus implements ObserverInterface
         /** @var DomainPool $poolModel */
         $poolModel = ObjectManager::getInstance(DomainPool::class);
         $pools = $poolModel->clearQuery()
-            ->where(DomainPool::fields_ROOT_DOMAIN, $rootDomain)
-            ->where(DomainPool::fields_CERT_ID, 0)
+            ->where(DomainPool::schema_fields_ROOT_DOMAIN, $rootDomain)
+            ->where(DomainPool::schema_fields_CERT_ID, 0)
             ->select()
             ->fetchArray();
         
@@ -126,9 +126,9 @@ class SyncHttpsStatus implements ObserverInterface
         
         foreach ($subdomains as $subdomain) {
             // 如果子域名没有独立证书，使用泛域名证书
-            if (empty($subdomain[WebsiteDomain::fields_CERT_ID])) {
+            if (empty($subdomain[WebsiteDomain::schema_fields_CERT_ID])) {
                 $domainModel->syncDomainCertificate(
-                    $subdomain[WebsiteDomain::fields_DOMAIN],
+                    $subdomain[WebsiteDomain::schema_fields_DOMAIN],
                     $certId,
                     true
                 );

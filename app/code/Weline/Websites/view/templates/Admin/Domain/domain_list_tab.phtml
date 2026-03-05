@@ -369,13 +369,23 @@ $accounts = $accounts ?? [];
                 </div>
 
                 <div class="mt-3 p-2" style="background:var(--backend-color-bg-tertiary,#f1f3f5);border-radius:var(--backend-border-radius,6px);">
-                    <label class="form-check-label d-flex align-items-start gap-2" style="cursor:pointer;">
-                        <input type="checkbox" id="weline-import-auto-resolve" checked class="form-check-input" style="margin-top:3px;">
-                        <div>
-                            <strong><i class="mdi mdi-server"></i> <?= __('自动解析DNS到本地服务器') ?></strong>
-                            <div class="text-muted small"><?= __('导入后自动将域名的 @ 和 www 记录解析到本服务器公网IP') ?></div>
-                        </div>
-                    </label>
+                    <label class="form-label fw-bold small"><?= __('导入解析模式') ?></label>
+                    <div class="d-flex flex-column gap-2">
+                        <label class="form-check-label d-flex align-items-start gap-2" style="cursor:pointer;">
+                            <input type="radio" name="weline-import-resolve-mode" value="batch_to_local" checked class="form-check-input">
+                            <div>
+                                <strong><?= __('批量解析到本服务器') ?></strong>
+                                <div class="text-muted small"><?= __('导入后自动将域名的 @ 和 www 记录解析到本服务器公网IP，入池并创建自动解析任务') ?></div>
+                            </div>
+                        </label>
+                        <label class="form-check-label d-flex align-items-start gap-2" style="cursor:pointer;">
+                            <input type="radio" name="weline-import-resolve-mode" value="keep_each_dns" class="form-check-input">
+                            <div>
+                                <strong><?= __('保持各域名当前 DNS') ?></strong>
+                                <div class="text-muted small"><?= __('仅导入域名记录，不修改 DNS，不入池自动解析任务') ?></div>
+                            </div>
+                        </label>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -1295,12 +1305,14 @@ $accounts = $accounts ?? [];
             return;
         }
 
-        var autoResolveCheckbox = document.getElementById('weline-import-auto-resolve');
-        var autoResolve = autoResolveCheckbox ? autoResolveCheckbox.checked : true;
+        var modeRadio = document.querySelector('input[name="weline-import-resolve-mode"]:checked');
+        var resolveMode = (modeRadio && modeRadio.value) || 'batch_to_local';
+        var autoResolve = resolveMode === 'batch_to_local';
 
         toast('<?= __('正在导入域名...') ?>', 'info');
         var fd = new FormData();
         fd.append('account_id', accountId);
+        fd.append('resolve_mode', resolveMode);
         fd.append('auto_resolve', autoResolve ? '1' : '0');
         domains.forEach(function(d) { fd.append('domains[]', d); });
 
@@ -1309,7 +1321,7 @@ $accounts = $accounts ?? [];
             .then(function(data) {
                 if (data.code === 200) {
                     var msg = data.msg || '<?= __('导入成功') ?>';
-                    if (autoResolve && data.auto_resolve_queued) {
+                    if (autoResolve && (data.data && data.data.auto_resolve_queued)) {
                         msg += ' <?= __('（自动解析任务已创建）') ?>';
                     }
                     toast(msg, 'success');

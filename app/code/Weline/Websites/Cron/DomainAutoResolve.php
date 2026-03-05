@@ -78,7 +78,7 @@ class DomainAutoResolve implements CronTaskInterface
             }
 
             $tasks = $taskModel->clearQuery()
-                ->where(DomainAutoResolveTask::fields_STATUS, DomainAutoResolveTask::STATUS_PENDING)
+                ->where(DomainAutoResolveTask::schema_fields_STATUS, DomainAutoResolveTask::STATUS_PENDING)
                 ->select()
                 ->fetchArray();
 
@@ -217,8 +217,8 @@ class DomainAutoResolve implements CronTaskInterface
             $resolveService = ObjectManager::getInstance(DomainResolveService::class);
 
             $domains = $domainModel->clearQuery()
-                ->where(Domain::fields_STATUS, Domain::STATUS_ACTIVE)
-                ->where(Domain::fields_IS_LOCAL_SERVER, 0)
+                ->where(Domain::schema_fields_STATUS, Domain::STATUS_ACTIVE)
+                ->where(Domain::schema_fields_IS_LOCAL_SERVER, 0)
                 ->select()
                 ->fetchArray();
 

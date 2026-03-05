@@ -70,40 +70,40 @@ class ProvideDomainList implements ObserverInterface
         $model = ObjectManager::getInstance(WebsiteDomain::class);
         
         $query = $model->clearQuery()
-            ->where(WebsiteDomain::fields_STATUS, WebsiteDomain::STATUS_ACTIVE);
+            ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE);
         
         // 应用过滤条件
         if (!empty($filter['website_id'])) {
-            $query->where(WebsiteDomain::fields_WEBSITE_ID, $filter['website_id']);
+            $query->where(WebsiteDomain::schema_fields_WEBSITE_ID, $filter['website_id']);
         }
         
         if (!empty($filter['root_domain'])) {
-            $query->where(WebsiteDomain::fields_ROOT_DOMAIN, $filter['root_domain']);
+            $query->where(WebsiteDomain::schema_fields_ROOT_DOMAIN, $filter['root_domain']);
         }
         
         if (isset($filter['has_certificate'])) {
             if ($filter['has_certificate']) {
-                $query->where(WebsiteDomain::fields_CERT_ID, 'null', 'is not');
+                $query->where(WebsiteDomain::schema_fields_CERT_ID, 'null', 'is not');
             } else {
-                $query->where(WebsiteDomain::fields_CERT_ID, 'null', 'is');
+                $query->where(WebsiteDomain::schema_fields_CERT_ID, 'null', 'is');
             }
         }
         
-        $rows = $query->order(WebsiteDomain::fields_ROOT_DOMAIN, 'ASC')
-            ->order(WebsiteDomain::fields_DOMAIN, 'ASC')
+        $rows = $query->order(WebsiteDomain::schema_fields_ROOT_DOMAIN, 'ASC')
+            ->order(WebsiteDomain::schema_fields_DOMAIN, 'ASC')
             ->select()
             ->fetchArray();
         
         $domains = [];
         foreach ($rows as $row) {
             $domains[] = [
-                'domain' => $row[WebsiteDomain::fields_DOMAIN],
-                'root_domain' => $row[WebsiteDomain::fields_ROOT_DOMAIN],
-                'website_id' => (int) $row[WebsiteDomain::fields_WEBSITE_ID],
-                'cert_id' => $row[WebsiteDomain::fields_CERT_ID] ? (int) $row[WebsiteDomain::fields_CERT_ID] : null,
-                'https_enabled' => (bool) $row[WebsiteDomain::fields_HTTPS_ENABLED],
-                'is_primary' => (bool) $row[WebsiteDomain::fields_IS_PRIMARY],
-                'health_status' => $row[WebsiteDomain::fields_HEALTH_STATUS] ?? 'unknown',
+                'domain' => $row[WebsiteDomain::schema_fields_DOMAIN],
+                'root_domain' => $row[WebsiteDomain::schema_fields_ROOT_DOMAIN],
+                'website_id' => (int) $row[WebsiteDomain::schema_fields_WEBSITE_ID],
+                'cert_id' => $row[WebsiteDomain::schema_fields_CERT_ID] ? (int) $row[WebsiteDomain::schema_fields_CERT_ID] : null,
+                'https_enabled' => (bool) $row[WebsiteDomain::schema_fields_HTTPS_ENABLED],
+                'is_primary' => (bool) $row[WebsiteDomain::schema_fields_IS_PRIMARY],
+                'health_status' => $row[WebsiteDomain::schema_fields_HEALTH_STATUS] ?? 'unknown',
                 'source' => 'website_domain',
             ];
         }
@@ -128,9 +128,9 @@ class ProvideDomainList implements ObserverInterface
         $domains = [];
         foreach ($rows as $row) {
             $domains[] = [
-                'domain' => $row[DomainPool::fields_DOMAIN],
-                'root_domain' => $row[DomainPool::fields_ROOT_DOMAIN],
-                'description' => $row[DomainPool::fields_DESCRIPTION] ?? '',
+                'domain' => $row[DomainPool::schema_fields_DOMAIN],
+                'root_domain' => $row[DomainPool::schema_fields_ROOT_DOMAIN],
+                'description' => $row[DomainPool::schema_fields_DESCRIPTION] ?? '',
                 'cert_id' => null,
                 'https_enabled' => false,
                 'source' => 'domain_pool',

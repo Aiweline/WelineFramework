@@ -410,8 +410,8 @@ class DomainResolveService
 
         foreach ($records as &$record) {
             $isLocal = false;
-            $type = \strtoupper($record[DomainDnsRecord::fields_RECORD_TYPE] ?? '');
-            $value = $record[DomainDnsRecord::fields_VALUE] ?? '';
+            $type = \strtoupper($record[DomainDnsRecord::schema_fields_RECORD_TYPE] ?? '');
+            $value = $record[DomainDnsRecord::schema_fields_VALUE] ?? '';
 
             if ($type === 'A' && $value === $serverIpv4) {
                 $isLocal = true;
@@ -492,8 +492,8 @@ class DomainResolveService
         // 首先根据 code 查找 DomainRegistrar 获取 registrar_id
         $registrar = ObjectManager::getInstance(\Weline\Websites\Model\DomainRegistrar::class);
         $registrar->clearQuery()
-            ->where(\Weline\Websites\Model\DomainRegistrar::fields_CODE, \strtolower($providerCode))
-            ->where(\Weline\Websites\Model\DomainRegistrar::fields_STATUS, \Weline\Websites\Model\DomainRegistrar::STATUS_ACTIVE);
+            ->where(\Weline\Websites\Model\DomainRegistrar::schema_fields_CODE, \strtolower($providerCode))
+            ->where(\Weline\Websites\Model\DomainRegistrar::schema_fields_STATUS, \Weline\Websites\Model\DomainRegistrar::STATUS_ACTIVE);
         
         $registrar = $registrar->find()->fetch();
         if (!$registrar instanceof \Weline\Websites\Model\DomainRegistrar || !$registrar->getId()) {
@@ -503,8 +503,8 @@ class DomainResolveService
         // 然后根据 registrar_id 查找账户
         $account = ObjectManager::getInstance(DomainRegistrarAccount::class);
         $account->clearQuery()
-            ->where(DomainRegistrarAccount::fields_REGISTRAR_ID, $registrar->getId())
-            ->where(DomainRegistrarAccount::fields_STATUS, DomainRegistrarAccount::STATUS_ACTIVE);
+            ->where(DomainRegistrarAccount::schema_fields_REGISTRAR_ID, $registrar->getId())
+            ->where(DomainRegistrarAccount::schema_fields_STATUS, DomainRegistrarAccount::STATUS_ACTIVE);
         
         $account = $account->find()->fetch();
         

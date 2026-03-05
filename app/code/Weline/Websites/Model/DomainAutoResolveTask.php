@@ -9,20 +9,36 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Model;
 
-use Weline\Framework\Database\Connection\Api\Sql\TableInterface as Table;
-use Weline\Framework\Setup\Data\Context as SetupContext;
-use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 
-class DomainAutoResolveTask extends \Weline\Framework\Database\Model
+#[Table(comment: '域名自动解析任务表')]
+#[Index(name: 'idx_status', columns: ['status'])]
+#[Index(name: 'idx_domain', columns: ['domain'])]
+class DomainAutoResolveTask extends Model
 {
-    public const fields_ID = 'task_id';
-    public const fields_DOMAIN = 'domain';
-    public const fields_ACCOUNT_ID = 'account_id';
-    public const fields_STATUS = 'status';
-    public const fields_RETRY_COUNT = 'retry_count';
-    public const fields_LAST_ERROR = 'last_error';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
+    public const schema_table = 'weline_websites_domain_auto_resolve_task';
+    public const schema_primary_key = 'task_id';
+
+
+    #[Col('int', 11, nullable: false, primaryKey: true, autoIncrement: true, comment: '任务ID')]
+    public const schema_fields_ID = 'task_id';
+    #[Col('varchar', 255, nullable: false, comment: '域名')]
+    public const schema_fields_DOMAIN = 'domain';
+    #[Col('int', 11, nullable: false, default: 0, comment: '域名商账户ID')]
+    public const schema_fields_ACCOUNT_ID = 'account_id';
+    #[Col('varchar', 20, nullable: false, default: 'pending', comment: '状态: pending, processing, success, failed')]
+    public const schema_fields_STATUS = 'status';
+    #[Col('int', 11, nullable: false, default: 0, comment: '重试次数')]
+    public const schema_fields_RETRY_COUNT = 'retry_count';
+    #[Col('text', nullable: true, comment: '最后一次错误信息')]
+    public const schema_fields_LAST_ERROR = 'last_error';
+    #[Col('timestamp', nullable: true, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col('timestamp', nullable: true, default: 'CURRENT_TIMESTAMP', comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
 
     public const STATUS_PENDING = 'pending';
     public const STATUS_PROCESSING = 'processing';
@@ -31,146 +47,59 @@ class DomainAutoResolveTask extends \Weline\Framework\Database\Model
 
     public const MAX_RETRY = 10;
 
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, SetupContext $context): void
-    {
-        $setup->dropTable();
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, SetupContext $context): void
-    {
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, SetupContext $context): void
-    {
-        if ($setup->tableExist()) {
-            return;
-        }
-
-        $setup->createTable()
-            ->addColumn(
-                self::fields_ID,
-                Table::column_type_INTEGER,
-                11,
-                'primary key auto_increment',
-                __('任务ID')
-            )
-            ->addColumn(
-                self::fields_DOMAIN,
-                Table::column_type_VARCHAR,
-                255,
-                'not null',
-                __('域名')
-            )
-            ->addColumn(
-                self::fields_ACCOUNT_ID,
-                Table::column_type_INTEGER,
-                11,
-                'not null default 0',
-                __('域名商账户ID')
-            )
-            ->addColumn(
-                self::fields_STATUS,
-                Table::column_type_VARCHAR,
-                20,
-                "not null default 'pending'",
-                __('状态: pending, processing, success, failed')
-            )
-            ->addColumn(
-                self::fields_RETRY_COUNT,
-                Table::column_type_INTEGER,
-                11,
-                'not null default 0',
-                __('重试次数')
-            )
-            ->addColumn(
-                self::fields_LAST_ERROR,
-                Table::column_type_TEXT,
-                0,
-                '',
-                __('最后一次错误信息')
-            )
-            ->addColumn(
-                self::fields_CREATED_AT,
-                Table::column_type_TIMESTAMP,
-                0,
-                'default CURRENT_TIMESTAMP',
-                __('创建时间')
-            )
-            ->addColumn(
-                self::fields_UPDATED_AT,
-                Table::column_type_TIMESTAMP,
-                0,
-                'default CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
-                __('更新时间')
-            )
-            ->addIndex(Table::index_type_KEY, 'idx_status', self::fields_STATUS)
-            ->addIndex(Table::index_type_KEY, 'idx_domain', self::fields_DOMAIN)
-            ->create();
-    }
-
     public function getTaskId(): int
     {
-        return (int) $this->getData(self::fields_ID);
+        return (int) $this->getData(self::schema_fields_ID);
     }
 
     public function getDomain(): string
     {
-        return (string) $this->getData(self::fields_DOMAIN);
+        return (string) $this->getData(self::schema_fields_DOMAIN);
     }
 
     public function setDomain(string $domain): self
     {
-        return $this->setData(self::fields_DOMAIN, $domain);
+        return $this->setData(self::schema_fields_DOMAIN, $domain);
     }
 
     public function getAccountId(): int
     {
-        return (int) $this->getData(self::fields_ACCOUNT_ID);
+        return (int) $this->getData(self::schema_fields_ACCOUNT_ID);
     }
 
     public function setAccountId(int $accountId): self
     {
-        return $this->setData(self::fields_ACCOUNT_ID, $accountId);
+        return $this->setData(self::schema_fields_ACCOUNT_ID, $accountId);
     }
 
     public function getStatus(): string
     {
-        return (string) $this->getData(self::fields_STATUS);
+        return (string) $this->getData(self::schema_fields_STATUS);
     }
 
     public function setStatus(string $status): self
     {
-        return $this->setData(self::fields_STATUS, $status);
+        return $this->setData(self::schema_fields_STATUS, $status);
     }
 
     public function getRetryCount(): int
     {
-        return (int) $this->getData(self::fields_RETRY_COUNT);
+        return (int) $this->getData(self::schema_fields_RETRY_COUNT);
     }
 
     public function incrementRetryCount(): self
     {
-        return $this->setData(self::fields_RETRY_COUNT, $this->getRetryCount() + 1);
+        return $this->setData(self::schema_fields_RETRY_COUNT, $this->getRetryCount() + 1);
     }
 
     public function getLastError(): string
     {
-        return (string) $this->getData(self::fields_LAST_ERROR);
+        return (string) $this->getData(self::schema_fields_LAST_ERROR);
     }
 
     public function setLastError(string $error): self
     {
-        return $this->setData(self::fields_LAST_ERROR, $error);
+        return $this->setData(self::schema_fields_LAST_ERROR, $error);
     }
 
     public function canRetry(): bool
@@ -184,7 +113,7 @@ class DomainAutoResolveTask extends \Weline\Framework\Database\Model
     public function loadByDomain(string $domain): self
     {
         $this->clearQuery();
-        return $this->where(self::fields_DOMAIN, $domain)->find()->fetch();
+        return $this->where(self::schema_fields_DOMAIN, $domain)->find()->fetch();
     }
 
     /**
@@ -197,7 +126,7 @@ class DomainAutoResolveTask extends \Weline\Framework\Database\Model
 
         if ($task->getTaskId() && $task->getStatus() !== self::STATUS_SUCCESS) {
             $task->setStatus(self::STATUS_PENDING);
-            $task->setData(self::fields_RETRY_COUNT, 0);
+            $task->setData(self::schema_fields_RETRY_COUNT, 0);
             $task->setLastError('');
             $task->save();
             return $task;
@@ -216,3 +145,4 @@ class DomainAutoResolveTask extends \Weline\Framework\Database\Model
         return $task;
     }
 }
+

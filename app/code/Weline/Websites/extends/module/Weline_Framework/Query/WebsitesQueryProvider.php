@@ -8,6 +8,8 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Websites\Model\DomainRegistrar;
 use Weline\Websites\Model\DomainRegistrarAccount;
+use Weline\Websites\Model\Website;
+use Weline\Websites\Model\WebsiteLanguage;
 use Weline\Websites\Service\DomainPurchaseService;
 use Weline\Websites\Service\DomainRegistrarResolverService;
 
@@ -16,7 +18,9 @@ class WebsitesQueryProvider implements QueryProviderInterface
     public function __construct(
         private readonly DomainRegistrarResolverService $resolver,
         private readonly DomainRegistrarAccount $accountModel,
-        private readonly DomainRegistrar $registrarModel
+        private readonly DomainRegistrar $registrarModel,
+        private readonly Website $websiteModel,
+        private readonly WebsiteLanguage $websiteLanguageModel
     ) {
     }
 
@@ -39,6 +43,9 @@ class WebsitesQueryProvider implements QueryProviderInterface
             'getConfigFields'        => $this->getConfigFields($params),
             'getRegistrarInfo'       => $this->getRegistrarInfo($params),
             'modifyDns'              => $this->modifyDns($params),
+            'getWebsiteById'         => $this->getWebsiteById($params),
+            'getWebsiteList'         => $this->getWebsiteList($params),
+            'getWebsiteLanguageCodes' => $this->getWebsiteLanguageCodes($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Websites 查询器不支持的操作：%{1}', $operation)
             ),
@@ -107,6 +114,9 @@ class WebsitesQueryProvider implements QueryProviderInterface
                     'params'      => [
                         ['name' => 'account_id', 'type' => 'int',   'required' => true, 'description' => __('账号 ID')],
                         ['name' => 'items',      'type' => 'array', 'required' => true, 'description' => __('购买项数组')],
+                        ['name' => 'auto_resolve', 'type' => 'bool', 'required' => false, 'description' => __('是否自动解析到本地，默认 true')],
+                        ['name' => 'resolve_to_local', 'type' => 'string', 'required' => false, 'description' => __('默认 yes/no，对 items 中未指定者生效')],
+                        ['name' => 'subdomains', 'type' => 'array|string', 'required' => false, 'description' => __('默认子域名列表，如 ["@","www"] 或 "@,www"')],
                     ],
                 ],
                 [
@@ -139,6 +149,25 @@ class WebsitesQueryProvider implements QueryProviderInterface
                         ['name' => 'nameservers', 'type' => 'string', 'required' => true, 'description' => __('NS 列表，逗号分隔')],
                     ],
                 ],
+                [
+                    'name'        => 'getWebsiteById',
+                    'description' => __('根据 ID 获取站点信息'),
+                    'params'      => [
+                        ['name' => 'website_id', 'type' => 'int', 'required' => true],
+                    ],
+                ],
+                [
+                    'name'        => 'getWebsiteList',
+                    'description' => __('获取所有站点列表'),
+                    'params'      => [],
+                ],
+                [
+                    'name'        => 'getWebsiteLanguageCodes',
+                    'description' => __('获取站点关联的语言代码列表'),
+                    'params'      => [
+                        ['name' => 'website_id', 'type' => 'int', 'required' => true],
+                    ],
+                ],
             ],
         ];
     }
@@ -163,22 +192,22 @@ class WebsitesQueryProvider implements QueryProviderInterface
         $model->clearQuery();
         $status = $params['status'] ?? null;
         if ($status !== null && $status !== '') {
-            $model->where(DomainRegistrarAccount::fields_STATUS, (string)$status);
+            $model->where(DomainRegistrarAccount::schema_fields_STATUS, (string)$status);
         }
         $records = $model->select()->fetchArray();
         $accounts = [];
         foreach ($records as $record) {
-            $registrarId   = (int)($record[DomainRegistrarAccount::fields_REGISTRAR_ID] ?? 0);
+            $registrarId   = (int)($record[DomainRegistrarAccount::schema_fields_REGISTRAR_ID] ?? 0);
             $registrarCode = '';
             $registrarName = '';
             if ($registrarId > 0) {
                 $reg = clone $this->registrarModel;
                 $reg->clearQuery();
-                $reg->where(DomainRegistrar::fields_ID, $registrarId)->find()->fetch();
-                $registrarCode = (string)($reg->getData(DomainRegistrar::fields_CODE) ?? '');
-                $registrarName = (string)($reg->getData(DomainRegistrar::fields_NAME) ?? '');
+                $reg->where(DomainRegistrar::schema_fields_ID, $registrarId)->find()->fetch();
+                $registrarCode = (string)($reg->getData(DomainRegistrar::schema_fields_CODE) ?? '');
+                $registrarName = (string)($reg->getData(DomainRegistrar::schema_fields_NAME) ?? '');
             }
-            $extraConfigRaw = $record[DomainRegistrarAccount::fields_EXTRA_CONFIG] ?? '';
+            $extraConfigRaw = $record[DomainRegistrarAccount::schema_fields_EXTRA_CONFIG] ?? '';
             $extraConfig = [];
             if (\is_string($extraConfigRaw) && $extraConfigRaw !== '') {
                 $extraConfig = \json_decode($extraConfigRaw, true) ?: [];
@@ -187,15 +216,15 @@ class WebsitesQueryProvider implements QueryProviderInterface
             }
             
             $accounts[] = [
-                'account_id'     => (int)($record[DomainRegistrarAccount::fields_ID] ?? 0),
-                'account_name'   => (string)($record[DomainRegistrarAccount::fields_ACCOUNT_NAME] ?? ''),
+                'account_id'     => (int)($record[DomainRegistrarAccount::schema_fields_ID] ?? 0),
+                'account_name'   => (string)($record[DomainRegistrarAccount::schema_fields_ACCOUNT_NAME] ?? ''),
                 'registrar_id'   => $registrarId,
                 'registrar_code' => $registrarCode,
                 'registrar_name' => $registrarName,
-                'region'         => (string)($record[DomainRegistrarAccount::fields_REGION] ?? ''),
+                'region'         => (string)($record[DomainRegistrarAccount::schema_fields_REGION] ?? ''),
                 'extra_config'   => $extraConfig,
-                'status'         => (string)($record[DomainRegistrarAccount::fields_STATUS] ?? ''),
-                'created_at'     => (string)($record[DomainRegistrarAccount::fields_CREATED_AT] ?? ''),
+                'status'         => (string)($record[DomainRegistrarAccount::schema_fields_STATUS] ?? ''),
+                'created_at'     => (string)($record[DomainRegistrarAccount::schema_fields_CREATED_AT] ?? ''),
             ];
         }
         return $accounts;
@@ -263,20 +292,20 @@ class WebsitesQueryProvider implements QueryProviderInterface
         try {
             $reg = clone $this->registrarModel;
             $reg->clearQuery();
-            $reg->where(DomainRegistrar::fields_CODE, $registrarCode)->find()->fetch();
-            if (!$reg->getData(DomainRegistrar::fields_ID)) {
-                $reg->setData(DomainRegistrar::fields_CODE, $registrarCode);
-                $reg->setData(DomainRegistrar::fields_NAME, $adapter->getRegistrarName());
-                $reg->setData(DomainRegistrar::fields_DESCRIPTION, $adapter->getDescription());
-                $reg->setData(DomainRegistrar::fields_STATUS, DomainRegistrar::STATUS_ACTIVE);
+            $reg->where(DomainRegistrar::schema_fields_CODE, $registrarCode)->find()->fetch();
+            if (!$reg->getData(DomainRegistrar::schema_fields_ID)) {
+                $reg->setData(DomainRegistrar::schema_fields_CODE, $registrarCode);
+                $reg->setData(DomainRegistrar::schema_fields_NAME, $adapter->getRegistrarName());
+                $reg->setData(DomainRegistrar::schema_fields_DESCRIPTION, $adapter->getDescription());
+                $reg->setData(DomainRegistrar::schema_fields_STATUS, DomainRegistrar::STATUS_ACTIVE);
                 $reg->save();
             }
-            $registrarId = (int)$reg->getData(DomainRegistrar::fields_ID);
+            $registrarId = (int)$reg->getData(DomainRegistrar::schema_fields_ID);
 
             $account = clone $this->accountModel;
             $account->clearQuery();
             if ($accountId > 0) {
-                $account->where(DomainRegistrarAccount::fields_ID, $accountId)->find()->fetch();
+                $account->where(DomainRegistrarAccount::schema_fields_ID, $accountId)->find()->fetch();
                 if (!$account->getAccountId()) {
                     return ['success' => false, 'message' => (string)__('账号不存在：%{1}', (string)$accountId)];
                 }
@@ -318,7 +347,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
         try {
             $account = clone $this->accountModel;
             $account->clearQuery();
-            $account->where(DomainRegistrarAccount::fields_ID, $accountId)->find()->fetch();
+            $account->where(DomainRegistrarAccount::schema_fields_ID, $accountId)->find()->fetch();
             if (!$account->getAccountId()) {
                 return ['success' => false, 'message' => (string)__('账号不存在')];
             }
@@ -338,15 +367,15 @@ class WebsitesQueryProvider implements QueryProviderInterface
         try {
             $account = clone $this->accountModel;
             $account->clearQuery();
-            $account->where(DomainRegistrarAccount::fields_ID, $accountId)->find()->fetch();
+            $account->where(DomainRegistrarAccount::schema_fields_ID, $accountId)->find()->fetch();
             if (!$account->getAccountId()) {
                 return [];
             }
-            $registrarId = (int)$account->getData(DomainRegistrarAccount::fields_REGISTRAR_ID);
+            $registrarId = (int)$account->getData(DomainRegistrarAccount::schema_fields_REGISTRAR_ID);
             $reg = clone $this->registrarModel;
             $reg->clearQuery();
-            $reg->where(DomainRegistrar::fields_ID, $registrarId)->find()->fetch();
-            $registrarCode = (string)($reg->getData(DomainRegistrar::fields_CODE) ?? '');
+            $reg->where(DomainRegistrar::schema_fields_ID, $registrarId)->find()->fetch();
+            $registrarCode = (string)($reg->getData(DomainRegistrar::schema_fields_CODE) ?? '');
             $adapter = $this->resolver->getAdapter($registrarCode);
             if ($adapter === null) {
                 return [];
@@ -368,15 +397,15 @@ class WebsitesQueryProvider implements QueryProviderInterface
         try {
             $account = clone $this->accountModel;
             $account->clearQuery();
-            $account->where(DomainRegistrarAccount::fields_ID, $accountId)->find()->fetch();
+            $account->where(DomainRegistrarAccount::schema_fields_ID, $accountId)->find()->fetch();
             if (!$account->getAccountId()) {
                 return [];
             }
-            $registrarId = (int)$account->getData(DomainRegistrarAccount::fields_REGISTRAR_ID);
+            $registrarId = (int)$account->getData(DomainRegistrarAccount::schema_fields_REGISTRAR_ID);
             $reg = clone $this->registrarModel;
             $reg->clearQuery();
-            $reg->where(DomainRegistrar::fields_ID, $registrarId)->find()->fetch();
-            $registrarCode = (string)($reg->getData(DomainRegistrar::fields_CODE) ?? '');
+            $reg->where(DomainRegistrar::schema_fields_ID, $registrarId)->find()->fetch();
+            $registrarCode = (string)($reg->getData(DomainRegistrar::schema_fields_CODE) ?? '');
             $adapter = $this->resolver->getAdapter($registrarCode);
             if ($adapter === null) {
                 return [];
@@ -409,7 +438,25 @@ class WebsitesQueryProvider implements QueryProviderInterface
     {
         $accountId = (int)($params['account_id'] ?? 0);
         $items     = (array)($params['items'] ?? []);
-        $autoResolve = (bool)($params['auto_resolve'] ?? false);
+        $autoResolve = (bool)($params['auto_resolve'] ?? true);
+        $defaultResolveToLocal = isset($params['resolve_to_local'])
+            ? (($params['resolve_to_local'] ?? 'yes') === 'yes')
+            : $autoResolve;
+        $defaultSubdomains = $params['subdomains'] ?? ['@', 'www'];
+        if (!\is_array($defaultSubdomains)) {
+            $defaultSubdomains = \array_map('trim', \explode(',', (string)$defaultSubdomains));
+        }
+
+        foreach ($items as &$item) {
+            if (!isset($item['resolve_to_local'])) {
+                $item['resolve_to_local'] = $defaultResolveToLocal ? 'yes' : 'no';
+            }
+            if (!isset($item['subdomains'])) {
+                $item['subdomains'] = $defaultSubdomains;
+            }
+        }
+        unset($item);
+
         if ($accountId <= 0 || $items === []) {
             return ['success' => false, 'message' => (string)__('参数不完整')];
         }
@@ -432,15 +479,15 @@ class WebsitesQueryProvider implements QueryProviderInterface
         try {
             $account = clone $this->accountModel;
             $account->clearQuery();
-            $account->where(DomainRegistrarAccount::fields_ID, $accountId)->find()->fetch();
+            $account->where(DomainRegistrarAccount::schema_fields_ID, $accountId)->find()->fetch();
             if (!$account->getAccountId()) {
                 return ['success' => false, 'message' => (string)__('账号不存在')];
             }
-            $registrarId = (int)$account->getData(DomainRegistrarAccount::fields_REGISTRAR_ID);
+            $registrarId = (int)$account->getData(DomainRegistrarAccount::schema_fields_REGISTRAR_ID);
             $reg = clone $this->registrarModel;
             $reg->clearQuery();
-            $reg->where(DomainRegistrar::fields_ID, $registrarId)->find()->fetch();
-            $registrarCode = (string)($reg->getData(DomainRegistrar::fields_CODE) ?? '');
+            $reg->where(DomainRegistrar::schema_fields_ID, $registrarId)->find()->fetch();
+            $registrarCode = (string)($reg->getData(DomainRegistrar::schema_fields_CODE) ?? '');
             $adapter = $this->resolver->getAdapter($registrarCode);
             if ($adapter === null) {
                 return ['success' => false, 'message' => (string)__('未找到适配器')];
@@ -508,16 +555,16 @@ class WebsitesQueryProvider implements QueryProviderInterface
         try {
             $account = clone $this->accountModel;
             $account->clearQuery();
-            $account->where(DomainRegistrarAccount::fields_ID, $accountId)->find()->fetch();
+            $account->where(DomainRegistrarAccount::schema_fields_ID, $accountId)->find()->fetch();
             if (!$account->getAccountId()) {
                 return ['success' => false, 'message' => (string)__('账号不存在')];
             }
 
-            $registrarId = (int)$account->getData(DomainRegistrarAccount::fields_REGISTRAR_ID);
+            $registrarId = (int)$account->getData(DomainRegistrarAccount::schema_fields_REGISTRAR_ID);
             $reg = clone $this->registrarModel;
             $reg->clearQuery();
-            $reg->where(DomainRegistrar::fields_ID, $registrarId)->find()->fetch();
-            $registrarCode = (string)($reg->getData(DomainRegistrar::fields_CODE) ?? '');
+            $reg->where(DomainRegistrar::schema_fields_ID, $registrarId)->find()->fetch();
+            $registrarCode = (string)($reg->getData(DomainRegistrar::schema_fields_CODE) ?? '');
 
             $adapter = $this->resolver->getAdapter($registrarCode);
             if ($adapter === null) {
@@ -534,5 +581,57 @@ class WebsitesQueryProvider implements QueryProviderInterface
             w_log_error((string)__('修改 DNS 失败：%{1}', $e->getMessage()), [], 'domain_management');
             return ['success' => false, 'message' => $e->getMessage()];
         }
+    }
+
+    private function getWebsiteById(array $params): ?array
+    {
+        $websiteId = (int)($params['website_id'] ?? 0);
+        if ($websiteId <= 0) {
+            return null;
+        }
+        $website = clone $this->websiteModel;
+        $website->load($websiteId);
+        if (!$website->getId()) {
+            return null;
+        }
+        return [
+            'website_id' => (int)$website->getId(),
+            'name' => $website->getData(Website::schema_fields_NAME),
+            'code' => $website->getData(Website::schema_fields_CODE),
+            'url' => $website->getData(Website::schema_fields_URL),
+            'default_currency' => $website->getData(Website::schema_fields_DEFAULT_CURRENCY),
+            'default_language' => $website->getData(Website::schema_fields_DEFAULT_LANGUAGE),
+            'default_timezone' => $website->getData(Website::schema_fields_DEFAULT_TIMEZONE),
+            'scope' => $website->getData(Website::schema_fields_SCOPE),
+        ];
+    }
+
+    private function getWebsiteList(array $params): array
+    {
+        $website = clone $this->websiteModel;
+        $website->clearQuery();
+        $items = $website->select()->fetch()->getItems();
+        $list = [];
+        foreach ($items as $w) {
+            if (!$w->getId()) {
+                continue;
+            }
+            $list[] = [
+                'website_id' => (int)$w->getId(),
+                'name' => $w->getData(Website::schema_fields_NAME),
+                'code' => $w->getData(Website::schema_fields_CODE),
+                'url' => $w->getData(Website::schema_fields_URL),
+            ];
+        }
+        return $list;
+    }
+
+    private function getWebsiteLanguageCodes(array $params): array
+    {
+        $websiteId = (int)($params['website_id'] ?? 0);
+        if ($websiteId <= 0) {
+            return [];
+        }
+        return $this->websiteLanguageModel->getWebsiteLanguageCodes($websiteId);
     }
 }

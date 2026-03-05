@@ -9,17 +9,27 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Model;
 
-use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 
+#[Table(comment: '域名管理配置表')]
+#[Index(name: 'uk_config_key', columns: ['config_key'], type: 'UNIQUE')]
 class DomainConfig extends Model
 {
-    public const fields_ID = 'config_id';
-    public const fields_KEY = 'config_key';
-    public const fields_VALUE = 'config_value';
-    public const fields_UPDATED_AT = 'updated_at';
+    public const schema_table = 'weline_websites_domain_config';
+    public const schema_primary_key = 'config_id';
+
+
+    #[Col('int', 11, nullable: false, primaryKey: true, autoIncrement: true, comment: '配置ID')]
+    public const schema_fields_ID = 'config_id';
+    #[Col('varchar', 100, nullable: false, comment: '配置键')]
+    public const schema_fields_KEY = 'config_key';
+    #[Col('text', nullable: true, comment: '配置值')]
+    public const schema_fields_VALUE = 'config_value';
+    #[Col('datetime', nullable: true, comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
 
     // 配置键常量
     public const CONFIG_AUTO_RESOLVE_ENABLED = 'auto_resolve_enabled';
@@ -41,42 +51,6 @@ class DomainConfig extends Model
         self::CONFIG_CERT_AUTO_REQUEST => '0',
     ];
 
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $this->install($setup, $context);
-        }
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist()) {
-            return;
-        }
-
-        $setup->createTable('域名管理配置表')
-            ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 11, 'primary key auto_increment', '配置ID')
-            ->addColumn(self::fields_KEY, TableInterface::column_type_VARCHAR, 100, 'not null', '配置键')
-            ->addColumn(self::fields_VALUE, TableInterface::column_type_TEXT, 0, '', '配置值')
-            ->addColumn(self::fields_UPDATED_AT, TableInterface::column_type_DATETIME, 0, '', '更新时间')
-            ->addIndex(TableInterface::index_type_UNIQUE, 'uk_config_key', self::fields_KEY)
-            ->create();
-    }
-
     // =============== 业务方法 ===============
 
     /**
@@ -85,12 +59,12 @@ class DomainConfig extends Model
     public function getValue(string $key, ?string $default = null): string
     {
         $this->clearQuery()
-            ->where(self::fields_KEY, $key)
+            ->where(self::schema_fields_KEY, $key)
             ->find()
             ->fetch();
 
-        if ($this->getData(self::fields_ID)) {
-            return (string) $this->getData(self::fields_VALUE);
+        if ($this->getData(self::schema_fields_ID)) {
+            return (string) $this->getData(self::schema_fields_VALUE);
         }
 
         return $default ?? (self::DEFAULTS[$key] ?? '');
@@ -103,13 +77,13 @@ class DomainConfig extends Model
     {
         $model = clone $this;
         $model->clearQuery()
-            ->where(self::fields_KEY, $key)
+            ->where(self::schema_fields_KEY, $key)
             ->find()
             ->fetch();
 
-        $model->setData(self::fields_KEY, $key);
-        $model->setData(self::fields_VALUE, $value);
-        $model->setData(self::fields_UPDATED_AT, \date('Y-m-d H:i:s'));
+        $model->setData(self::schema_fields_KEY, $key);
+        $model->setData(self::schema_fields_VALUE, $value);
+        $model->setData(self::schema_fields_UPDATED_AT, \date('Y-m-d H:i:s'));
         $model->save();
 
         return $this;
@@ -149,7 +123,7 @@ class DomainConfig extends Model
 
         $config = self::DEFAULTS;
         foreach ($rows as $row) {
-            $config[$row[self::fields_KEY]] = $row[self::fields_VALUE];
+            $config[$row[self::schema_fields_KEY]] = $row[self::schema_fields_VALUE];
         }
 
         return $config;
@@ -161,11 +135,11 @@ class DomainConfig extends Model
     public function deleteKey(string $key): bool
     {
         $this->clearQuery()
-            ->where(self::fields_KEY, $key)
+            ->where(self::schema_fields_KEY, $key)
             ->find()
             ->fetch();
 
-        if ($this->getData(self::fields_ID)) {
+        if ($this->getData(self::schema_fields_ID)) {
             $this->delete()->fetch();
             return true;
         }
@@ -224,3 +198,4 @@ class DomainConfig extends Model
         return $this->getValue(self::CONFIG_CERT_AUTO_REQUEST) === '1';
     }
 }
+

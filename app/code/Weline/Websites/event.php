@@ -17,5 +17,10 @@ return [
         'description' => __('域名购买成功后触发，可用于通知、自动 DNS 解析、证书申请等后续操作。数据包含 domain、order_id、website_id、auto_create_site。'),
         'doc' => 'domain_purchase_success.md',
     ],
+    'Weline_Websites::domain_pool::resolve_off_local' => [
+        'name' => __('域名池解析偏离本站'),
+        'description' => __('域名解析结果偏离本站（如 DNS 指向变更）时触发，用于发送通知提醒管理员。'),
+        'doc' => 'domain_pool_resolve_off_local.md',
+    ],
 ];
 

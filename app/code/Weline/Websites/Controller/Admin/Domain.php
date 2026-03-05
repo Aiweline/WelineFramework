@@ -93,7 +93,7 @@ class Domain extends BackendController
 
         // 域名列表（初始数据，前端会通过 AJAX 加载分页）
         $domains = $this->domainModel->clearQuery()
-            ->order(DomainModel::fields_CREATED_AT, 'DESC')
+            ->order(DomainModel::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetchArray();
         $this->assign('domains', \array_slice($domains, 0, 20));
@@ -502,17 +502,33 @@ class Domain extends BackendController
     {
         try {
             $accountId = (int) $this->request->getPost('account_id', 0);
-            $items = $this->request->getPost('items', []);
+            $itemsRaw = $this->request->getPost('items', []);
+            $items = \is_string($itemsRaw) ? (json_decode($itemsRaw, true) ?: []) : (array) $itemsRaw;
             $autoResolve = $this->request->getPost('auto_resolve', '0') === '1';
+            $resolveToLocal = $this->request->getPost('resolve_to_local', $autoResolve ? 'yes' : 'no');
+            $subdomainsRaw = $this->request->getPost('subdomains', '');
+            $subdomains = \is_string($subdomainsRaw) ? (json_decode($subdomainsRaw, true) ?: \array_map('trim', \explode(',', $subdomainsRaw))) : (array) $subdomainsRaw;
+            if ($subdomains === []) {
+                $subdomains = ['@', 'www'];
+            }
 
-            if (empty($items) || $accountId <= 0) {
+            if ($items === [] || $accountId <= 0) {
                 return $this->fetchJson([
                     'code' => 400,
                     'msg' => __('请选择域名商账号并添加购买域名'),
                 ]);
             }
 
-            // 获取购买服务
+            foreach ($items as &$it) {
+                if (!isset($it['resolve_to_local'])) {
+                    $it['resolve_to_local'] = ($resolveToLocal ?? 'yes') === 'yes' ? 'yes' : 'no';
+                }
+                if (!isset($it['subdomains'])) {
+                    $it['subdomains'] = $subdomains;
+                }
+            }
+            unset($it);
+
             $purchaseService = ObjectManager::getInstance(
                 \Weline\Websites\Service\DomainPurchaseService::class
             );
@@ -742,6 +758,7 @@ class Domain extends BackendController
         try {
             $accountId = (int) $this->request->getPost('account_id', 0);
             $domains = $this->request->getPost('domains', []);
+            $resolveMode = $this->request->getPost('resolve_mode', '');
             $autoResolve = $this->request->getPost('auto_resolve', '0') === '1';
 
             if ($accountId <= 0) {
@@ -758,7 +775,11 @@ class Domain extends BackendController
                 ]);
             }
 
-            $result = $this->syncService->importDomains($accountId, $domains, $autoResolve);
+            $sync = $this->syncService;
+            $mode = ($resolveMode === $sync::RESOLVE_MODE_KEEP_EACH_DNS || $resolveMode === $sync::RESOLVE_MODE_BATCH_TO_LOCAL)
+                ? $resolveMode
+                : ($autoResolve ? $sync::RESOLVE_MODE_BATCH_TO_LOCAL : $sync::RESOLVE_MODE_KEEP_EACH_DNS);
+            $result = $sync->importDomains($accountId, $domains, $mode);
 
             return $this->fetchJson([
                 'code' => $result['success'] ? 200 : 400,
@@ -1998,10 +2019,10 @@ class Domain extends BackendController
                         $registrar = ObjectManager::getInstance(\Weline\Websites\Model\DomainRegistrar::class);
                         $registrar->clearData(true);
                         $registrar->clearQuery();
-                        $registrar->where(\Weline\Websites\Model\DomainRegistrar::fields_ID, $registrarId)
+                        $registrar->where(\Weline\Websites\Model\DomainRegistrar::schema_fields_ID, $registrarId)
                             ->find()->fetch();
-                        $registrarCode = (string) ($registrar->getData(\Weline\Websites\Model\DomainRegistrar::fields_CODE) ?? '');
-                        $registrarName = (string) ($registrar->getData(\Weline\Websites\Model\DomainRegistrar::fields_NAME) ?? '');
+                        $registrarCode = (string) ($registrar->getData(\Weline\Websites\Model\DomainRegistrar::schema_fields_CODE) ?? '');
+                        $registrarName = (string) ($registrar->getData(\Weline\Websites\Model\DomainRegistrar::schema_fields_NAME) ?? '');
                     }
                 }
 
@@ -2603,7 +2624,7 @@ class Domain extends BackendController
             $registrarResolver = ObjectManager::getInstance(DomainRegistrarResolverService::class);
             $accounts = ObjectManager::getInstance(DomainRegistrarAccount::class);
             $allAccounts = $accounts->clearQuery()
-                ->where(DomainRegistrarAccount::fields_STATUS, DomainRegistrarAccount::STATUS_ACTIVE)
+                ->where(DomainRegistrarAccount::schema_fields_STATUS, DomainRegistrarAccount::STATUS_ACTIVE)
                 ->select()
                 ->fetch();
 
@@ -2688,7 +2709,7 @@ class Domain extends BackendController
 
         // 查找域名池中所有 root_domain 匹配的记录
         $poolDomains = $poolModel->clearQuery()
-            ->where(\Weline\Websites\Model\DomainPool::fields_ROOT_DOMAIN, \strtolower($rootDomain))
+            ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($rootDomain))
             ->select()
             ->fetch();
 
@@ -2768,7 +2789,7 @@ class Domain extends BackendController
                     // 1. 删除关联的域名池记录
                     $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
                     $poolRecords = $poolModel->clearQuery()
-                        ->where(\Weline\Websites\Model\DomainPool::fields_ROOT_DOMAIN, \strtolower($domainName))
+                        ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($domainName))
                         ->select()
                         ->fetch();
 
@@ -2780,7 +2801,7 @@ class Domain extends BackendController
                     // 2. 删除关联的 DNS 解析记录（本地记录）
                     $dnsModel = ObjectManager::getInstance(DomainDnsRecord::class, [], false);
                     $dnsRecords = $dnsModel->clearQuery()
-                        ->where(DomainDnsRecord::fields_DOMAIN_ID, $domainId)
+                        ->where(DomainDnsRecord::schema_fields_DOMAIN_ID, $domainId)
                         ->select()
                         ->fetch();
 
@@ -2845,7 +2866,7 @@ class Domain extends BackendController
 
             // 获取该账户下的所有域名
             $domains = $this->domainModel->clearQuery()
-                ->where(DomainModel::fields_ACCOUNT_ID, $accountId)
+                ->where(DomainModel::schema_fields_ACCOUNT_ID, $accountId)
                 ->select()
                 ->fetch();
 
@@ -2872,7 +2893,7 @@ class Domain extends BackendController
                 // 1. 删除关联的域名池记录
                 $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
                 $poolRecords = $poolModel->clearQuery()
-                    ->where(\Weline\Websites\Model\DomainPool::fields_ROOT_DOMAIN, \strtolower($domainName))
+                    ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($domainName))
                     ->select()
                     ->fetch();
 
@@ -2884,7 +2905,7 @@ class Domain extends BackendController
                 // 2. 删除关联的 DNS 解析记录
                 $dnsModel = ObjectManager::getInstance(DomainDnsRecord::class, [], false);
                 $dnsRecords = $dnsModel->clearQuery()
-                    ->where(DomainDnsRecord::fields_DOMAIN_ID, $domainId)
+                    ->where(DomainDnsRecord::schema_fields_DOMAIN_ID, $domainId)
                     ->select()
                     ->fetch();
 
@@ -2962,7 +2983,7 @@ class Domain extends BackendController
 
                 // 获取该账户下的所有域名
                 $domains = $this->domainModel->clearQuery()
-                    ->where(DomainModel::fields_ACCOUNT_ID, $accountId)
+                    ->where(DomainModel::schema_fields_ACCOUNT_ID, $accountId)
                     ->select()
                     ->fetch();
 
@@ -2981,7 +3002,7 @@ class Domain extends BackendController
                     // 删除关联的域名池记录
                     $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
                     $poolRecords = $poolModel->clearQuery()
-                        ->where(\Weline\Websites\Model\DomainPool::fields_ROOT_DOMAIN, \strtolower($domainName))
+                        ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($domainName))
                         ->select()
                         ->fetch();
 
@@ -2993,7 +3014,7 @@ class Domain extends BackendController
                     // 删除关联的 DNS 解析记录
                     $dnsModel = ObjectManager::getInstance(DomainDnsRecord::class, [], false);
                     $dnsRecords = $dnsModel->clearQuery()
-                        ->where(DomainDnsRecord::fields_DOMAIN_ID, $domainId)
+                        ->where(DomainDnsRecord::schema_fields_DOMAIN_ID, $domainId)
                         ->select()
                         ->fetch();
 

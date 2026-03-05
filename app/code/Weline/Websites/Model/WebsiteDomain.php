@@ -12,11 +12,11 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Model;
 
-use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
 
 /**
  * 网站域名模型
@@ -26,24 +26,52 @@ use Weline\Framework\Setup\Db\ModelSetup;
  * 注意：v1.6.0 开始推荐使用 pool_id 关联 DomainPool 模型
  * domain 字段保留用于向后兼容
  */
+#[Table(comment: '网站域名表')]
+#[Index(name: 'uk_domain_subpath', columns: ['domain', 'sub_path'], type: 'UNIQUE')]
+#[Index(name: 'idx_website', columns: ['website_id'])]
+#[Index(name: 'idx_pool', columns: ['pool_id'])]
+#[Index(name: 'idx_root_domain', columns: ['root_domain'])]
+#[Index(name: 'idx_cert', columns: ['cert_id'])]
+#[Index(name: 'idx_status', columns: ['status'])]
+#[Index(name: 'idx_health', columns: ['health_status'])]
 class WebsiteDomain extends Model
 {
-    public const fields_ID = 'domain_id';
-    public const fields_WEBSITE_ID = 'website_id';      // 关联的网站 ID
-    public const fields_POOL_ID = 'pool_id';            // v1.6.0 新增：关联 DomainPool.pool_id
-    public const fields_DOMAIN = 'domain';              // 域名（子域名或完整域名）
-    public const fields_ROOT_DOMAIN = 'root_domain';    // 根域名（由 domain 自动解析归属）
-    public const fields_SUB_PATH = 'sub_path';          // 子路径（可选，如 /shop）
-    public const fields_CERT_ID = 'cert_id';            // 关联的 SSL 证书 ID（可选）
-    public const fields_IS_PRIMARY = 'is_primary';      // 是否主域名
-    public const fields_HTTPS_ENABLED = 'https_enabled';// 是否启用 HTTPS（自动根据证书状态同步）
-    public const fields_STATUS = 'status';              // 状态：active/disabled
-    public const fields_HEALTH_STATUS = 'health_status';// 健康状态：healthy/unhealthy/unknown
-    public const fields_HEALTH_CODE = 'health_code';    // 健康检查 HTTP 状态码
-    public const fields_HEALTH_MESSAGE = 'health_message'; // 健康检查消息
-    public const fields_HEALTH_CHECKED_AT = 'health_checked_at'; // 最后健康检查时间
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
+    public const schema_table = 'weline_websites_website_domain';
+    public const schema_primary_key = 'domain_id';
+
+
+    #[Col('int', 11, nullable: false, primaryKey: true, autoIncrement: true, comment: '域名ID')]
+    public const schema_fields_ID = 'domain_id';
+    #[Col('int', 11, nullable: false, comment: '网站ID')]
+    public const schema_fields_WEBSITE_ID = 'website_id';
+    #[Col('int', 11, nullable: true, comment: '关联域名池ID')]
+    public const schema_fields_POOL_ID = 'pool_id';
+    #[Col('varchar', 255, nullable: false, comment: '域名')]
+    public const schema_fields_DOMAIN = 'domain';
+    #[Col('varchar', 255, nullable: true, default: '', comment: '根域名（自动解析）')]
+    public const schema_fields_ROOT_DOMAIN = 'root_domain';
+    #[Col('varchar', 255, nullable: true, default: '', comment: '子路径')]
+    public const schema_fields_SUB_PATH = 'sub_path';
+    #[Col('int', 11, nullable: true, comment: '关联的SSL证书ID')]
+    public const schema_fields_CERT_ID = 'cert_id';
+    #[Col('int', 1, nullable: true, default: 0, comment: '是否主域名')]
+    public const schema_fields_IS_PRIMARY = 'is_primary';
+    #[Col('int', 1, nullable: true, default: 0, comment: '启用HTTPS')]
+    public const schema_fields_HTTPS_ENABLED = 'https_enabled';
+    #[Col('varchar', 20, nullable: true, default: 'active', comment: '状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col('varchar', 20, nullable: true, default: 'unknown', comment: '健康状态')]
+    public const schema_fields_HEALTH_STATUS = 'health_status';
+    #[Col('int', 4, nullable: true, comment: '健康检查HTTP状态码')]
+    public const schema_fields_HEALTH_CODE = 'health_code';
+    #[Col('varchar', 500, nullable: true, default: '', comment: '健康检查消息')]
+    public const schema_fields_HEALTH_MESSAGE = 'health_message';
+    #[Col('datetime', nullable: true, comment: '最后健康检查时间')]
+    public const schema_fields_HEALTH_CHECKED_AT = 'health_checked_at';
+    #[Col('datetime', nullable: true, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col('datetime', nullable: true, comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
     
     // 状态常量
     public const STATUS_ACTIVE = 'active';
@@ -55,159 +83,6 @@ class WebsiteDomain extends Model
     public const HEALTH_UNKNOWN = 'unknown';
     
     /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 如果表不存在，执行安装
-        if (!$setup->tableExist()) {
-            $this->install($setup, $context);
-            return;
-        }
-        
-        // v1.6.0: 新增 pool_id 字段关联 DomainPool
-        if (!$setup->hasField(self::fields_POOL_ID)) {
-            $setup->alterTable()->addColumn(
-                self::fields_POOL_ID,
-                self::fields_WEBSITE_ID,
-                TableInterface::column_type_INTEGER,
-                11,
-                'default null',
-                '关联 DomainPool.pool_id'
-            )->alter();
-        }
-        
-        // 为 pool_id 添加索引
-        if (!$setup->hasIndex('idx_pool')) {
-            $setup->alterTable()
-                ->addIndex(TableInterface::index_type_KEY, 'idx_pool', self::fields_POOL_ID)
-                ->alter();
-        }
-        
-        // 新增 root_domain 字段（填写子域名时自动归属根域名）
-        if (!$setup->hasField(self::fields_ROOT_DOMAIN)) {
-            $setup->alterTable()->addColumn(
-                self::fields_ROOT_DOMAIN,
-                self::fields_DOMAIN,
-                TableInterface::column_type_VARCHAR,
-                255,
-                "default ''",
-                '根域名（由域名自动解析）'
-            )->alter();
-        }
-        // 新增 sub_path 字段（子路径，可选）
-        if (!$setup->hasField(self::fields_SUB_PATH)) {
-            $setup->alterTable()->addColumn(
-                self::fields_SUB_PATH,
-                self::fields_ROOT_DOMAIN,
-                TableInterface::column_type_VARCHAR,
-                255,
-                "default ''",
-                '子路径（如 /shop）'
-            )->alter();
-        }
-        // 新增 cert_id 字段（关联 SSL 证书，可选）
-        if (!$setup->hasField(self::fields_CERT_ID)) {
-            $setup->alterTable()->addColumn(
-                self::fields_CERT_ID,
-                self::fields_SUB_PATH,
-                TableInterface::column_type_INTEGER,
-                11,
-                "default null",
-                '关联的SSL证书ID'
-            )->alter();
-        }
-        // 新增 health_status 字段（健康状态）
-        if (!$setup->hasField(self::fields_HEALTH_STATUS)) {
-            $setup->alterTable()->addColumn(
-                self::fields_HEALTH_STATUS,
-                self::fields_STATUS,
-                TableInterface::column_type_VARCHAR,
-                20,
-                "default 'unknown'",
-                '健康状态'
-            )->alter();
-        }
-        // 新增 health_code 字段（HTTP 状态码）
-        if (!$setup->hasField(self::fields_HEALTH_CODE)) {
-            $setup->alterTable()->addColumn(
-                self::fields_HEALTH_CODE,
-                self::fields_HEALTH_STATUS,
-                TableInterface::column_type_INTEGER,
-                4,
-                "default null",
-                '健康检查HTTP状态码'
-            )->alter();
-        }
-        // 新增 health_message 字段（检查消息）
-        if (!$setup->hasField(self::fields_HEALTH_MESSAGE)) {
-            $setup->alterTable()->addColumn(
-                self::fields_HEALTH_MESSAGE,
-                self::fields_HEALTH_CODE,
-                TableInterface::column_type_VARCHAR,
-                500,
-                "default ''",
-                '健康检查消息'
-            )->alter();
-        }
-        // 新增 health_checked_at 字段（最后检查时间）
-        if (!$setup->hasField(self::fields_HEALTH_CHECKED_AT)) {
-            $setup->alterTable()->addColumn(
-                self::fields_HEALTH_CHECKED_AT,
-                self::fields_HEALTH_MESSAGE,
-                TableInterface::column_type_DATETIME,
-                0,
-                'default null',
-                '最后健康检查时间'
-            )->alter();
-        }
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist()) {
-            return;
-        }
-        
-        $setup->createTable('网站域名表')
-            ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 11, 'primary key auto_increment', '域名ID')
-            ->addColumn(self::fields_WEBSITE_ID, TableInterface::column_type_INTEGER, 11, 'not null', '网站ID')
-            ->addColumn(self::fields_POOL_ID, TableInterface::column_type_INTEGER, 11, 'default null', '关联域名池ID')
-            ->addColumn(self::fields_DOMAIN, TableInterface::column_type_VARCHAR, 255, 'not null', '域名')
-            ->addColumn(self::fields_ROOT_DOMAIN, TableInterface::column_type_VARCHAR, 255, "default ''", '根域名（自动解析）')
-            ->addColumn(self::fields_SUB_PATH, TableInterface::column_type_VARCHAR, 255, "default ''", '子路径')
-            ->addColumn(self::fields_CERT_ID, TableInterface::column_type_INTEGER, 11, 'default null', '关联的SSL证书ID')
-            ->addColumn(self::fields_IS_PRIMARY, TableInterface::column_type_INTEGER, 1, 'default 0', '是否主域名')
-            ->addColumn(self::fields_HTTPS_ENABLED, TableInterface::column_type_INTEGER, 1, 'default 0', '启用HTTPS')
-            ->addColumn(self::fields_STATUS, TableInterface::column_type_VARCHAR, 20, "default 'active'", '状态')
-            ->addColumn(self::fields_HEALTH_STATUS, TableInterface::column_type_VARCHAR, 20, "default 'unknown'", '健康状态')
-            ->addColumn(self::fields_HEALTH_CODE, TableInterface::column_type_INTEGER, 4, 'default null', '健康检查HTTP状态码')
-            ->addColumn(self::fields_HEALTH_MESSAGE, TableInterface::column_type_VARCHAR, 500, "default ''", '健康检查消息')
-            ->addColumn(self::fields_HEALTH_CHECKED_AT, TableInterface::column_type_DATETIME, 0, 'default null', '最后健康检查时间')
-            ->addColumn(self::fields_CREATED_AT, TableInterface::column_type_DATETIME, 0, '', '创建时间')
-            ->addColumn(self::fields_UPDATED_AT, TableInterface::column_type_DATETIME, 0, '', '更新时间')
-            ->addIndex(TableInterface::index_type_UNIQUE, 'uk_domain_subpath', self::fields_DOMAIN . ',' . self::fields_SUB_PATH)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_website', self::fields_WEBSITE_ID)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_pool', self::fields_POOL_ID)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_root_domain', self::fields_ROOT_DOMAIN)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_cert', self::fields_CERT_ID)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_status', self::fields_STATUS)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_health', self::fields_HEALTH_STATUS)
-            ->create();
-    }
-    
-    /**
      * 保存前自动更新时间戳并解析根域名
      */
     public function save_before(): void
@@ -215,21 +90,21 @@ class WebsiteDomain extends Model
         parent::save_before();
         
         $now = \date('Y-m-d H:i:s');
-        $this->setData(self::fields_UPDATED_AT, $now);
+        $this->setData(self::schema_fields_UPDATED_AT, $now);
         
-        if (!$this->getData(self::fields_ID)) {
-            $this->setData(self::fields_CREATED_AT, $now);
+        if (!$this->getData(self::schema_fields_ID)) {
+            $this->setData(self::schema_fields_CREATED_AT, $now);
         }
         
         // 域名转小写
-        $domain = $this->getData(self::fields_DOMAIN);
+        $domain = $this->getData(self::schema_fields_DOMAIN);
         if ($domain) {
             $domain = \strtolower(\trim($domain));
-            $this->setData(self::fields_DOMAIN, $domain);
+            $this->setData(self::schema_fields_DOMAIN, $domain);
             
             // 使用 PSL 库解析根域名
             $rootDomain = $this->parseRootDomain($domain);
-            $this->setData(self::fields_ROOT_DOMAIN, $rootDomain);
+            $this->setData(self::schema_fields_ROOT_DOMAIN, $rootDomain);
         }
     }
     
@@ -271,29 +146,29 @@ class WebsiteDomain extends Model
     
     public function getDomainId(): int
     {
-        return (int) $this->getData(self::fields_ID);
+        return (int) $this->getData(self::schema_fields_ID);
     }
     
     public function setWebsiteId(int $websiteId): self
     {
-        $this->setData(self::fields_WEBSITE_ID, $websiteId);
+        $this->setData(self::schema_fields_WEBSITE_ID, $websiteId);
         return $this;
     }
     
     public function getWebsiteId(): int
     {
-        return (int) $this->getData(self::fields_WEBSITE_ID);
+        return (int) $this->getData(self::schema_fields_WEBSITE_ID);
     }
     
     public function setPoolId(?int $poolId): self
     {
-        $this->setData(self::fields_POOL_ID, $poolId);
+        $this->setData(self::schema_fields_POOL_ID, $poolId);
         return $this;
     }
     
     public function getPoolId(): ?int
     {
-        $poolId = $this->getData(self::fields_POOL_ID);
+        $poolId = $this->getData(self::schema_fields_POOL_ID);
         return $poolId !== null && $poolId !== '' ? (int) $poolId : null;
     }
     
@@ -330,119 +205,119 @@ class WebsiteDomain extends Model
     
     public function setDomain(string $domain): self
     {
-        $this->setData(self::fields_DOMAIN, \strtolower(\trim($domain)));
+        $this->setData(self::schema_fields_DOMAIN, \strtolower(\trim($domain)));
         return $this;
     }
     
     public function getDomain(): string
     {
-        return (string) $this->getData(self::fields_DOMAIN);
+        return (string) $this->getData(self::schema_fields_DOMAIN);
     }
     
     public function setIsPrimary(bool $isPrimary): self
     {
-        $this->setData(self::fields_IS_PRIMARY, $isPrimary ? 1 : 0);
+        $this->setData(self::schema_fields_IS_PRIMARY, $isPrimary ? 1 : 0);
         return $this;
     }
     
     public function isPrimary(): bool
     {
-        return (bool) $this->getData(self::fields_IS_PRIMARY);
+        return (bool) $this->getData(self::schema_fields_IS_PRIMARY);
     }
     
     public function setHttpsEnabled(bool $enabled): self
     {
-        $this->setData(self::fields_HTTPS_ENABLED, $enabled ? 1 : 0);
+        $this->setData(self::schema_fields_HTTPS_ENABLED, $enabled ? 1 : 0);
         return $this;
     }
     
     public function isHttpsEnabled(): bool
     {
-        return (bool) $this->getData(self::fields_HTTPS_ENABLED);
+        return (bool) $this->getData(self::schema_fields_HTTPS_ENABLED);
     }
     
     public function setStatus(string $status): self
     {
-        $this->setData(self::fields_STATUS, $status);
+        $this->setData(self::schema_fields_STATUS, $status);
         return $this;
     }
     
     public function getStatus(): string
     {
-        return (string) $this->getData(self::fields_STATUS);
+        return (string) $this->getData(self::schema_fields_STATUS);
     }
     
     public function getRootDomain(): string
     {
-        return (string) $this->getData(self::fields_ROOT_DOMAIN);
+        return (string) $this->getData(self::schema_fields_ROOT_DOMAIN);
     }
     
     public function setSubPath(string $subPath): self
     {
-        $this->setData(self::fields_SUB_PATH, $subPath);
+        $this->setData(self::schema_fields_SUB_PATH, $subPath);
         return $this;
     }
     
     public function getSubPath(): string
     {
-        return (string) $this->getData(self::fields_SUB_PATH);
+        return (string) $this->getData(self::schema_fields_SUB_PATH);
     }
     
     public function setCertId(?int $certId): self
     {
-        $this->setData(self::fields_CERT_ID, $certId);
+        $this->setData(self::schema_fields_CERT_ID, $certId);
         return $this;
     }
     
     public function getCertId(): ?int
     {
-        $certId = $this->getData(self::fields_CERT_ID);
+        $certId = $this->getData(self::schema_fields_CERT_ID);
         return $certId !== null ? (int) $certId : null;
     }
     
     public function setHealthStatus(string $status): self
     {
-        $this->setData(self::fields_HEALTH_STATUS, $status);
+        $this->setData(self::schema_fields_HEALTH_STATUS, $status);
         return $this;
     }
     
     public function getHealthStatus(): string
     {
-        return (string) ($this->getData(self::fields_HEALTH_STATUS) ?: self::HEALTH_UNKNOWN);
+        return (string) ($this->getData(self::schema_fields_HEALTH_STATUS) ?: self::HEALTH_UNKNOWN);
     }
     
     public function setHealthCode(?int $code): self
     {
-        $this->setData(self::fields_HEALTH_CODE, $code);
+        $this->setData(self::schema_fields_HEALTH_CODE, $code);
         return $this;
     }
     
     public function getHealthCode(): ?int
     {
-        $code = $this->getData(self::fields_HEALTH_CODE);
+        $code = $this->getData(self::schema_fields_HEALTH_CODE);
         return $code !== null ? (int) $code : null;
     }
     
     public function setHealthMessage(string $message): self
     {
-        $this->setData(self::fields_HEALTH_MESSAGE, $message);
+        $this->setData(self::schema_fields_HEALTH_MESSAGE, $message);
         return $this;
     }
     
     public function getHealthMessage(): string
     {
-        return (string) $this->getData(self::fields_HEALTH_MESSAGE);
+        return (string) $this->getData(self::schema_fields_HEALTH_MESSAGE);
     }
     
     public function setHealthCheckedAt(?string $datetime): self
     {
-        $this->setData(self::fields_HEALTH_CHECKED_AT, $datetime);
+        $this->setData(self::schema_fields_HEALTH_CHECKED_AT, $datetime);
         return $this;
     }
     
     public function getHealthCheckedAt(): ?string
     {
-        return $this->getData(self::fields_HEALTH_CHECKED_AT) ?: null;
+        return $this->getData(self::schema_fields_HEALTH_CHECKED_AT) ?: null;
     }
     
     public function isHealthy(): bool
@@ -531,9 +406,9 @@ class WebsiteDomain extends Model
     public function getWebsiteDomains(int $websiteId): array
     {
         return $this->clearQuery()
-            ->where(self::fields_WEBSITE_ID, $websiteId)
-            ->where(self::fields_STATUS, self::STATUS_ACTIVE)
-            ->order(self::fields_IS_PRIMARY, 'DESC')
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
+            ->order(self::schema_fields_IS_PRIMARY, 'DESC')
             ->select()
             ->fetchArray();
     }
@@ -544,8 +419,8 @@ class WebsiteDomain extends Model
     public function getPrimaryDomain(int $websiteId): ?self
     {
         $this->clearQuery()
-            ->where(self::fields_WEBSITE_ID, $websiteId)
-            ->where(self::fields_IS_PRIMARY, 1)
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(self::schema_fields_IS_PRIMARY, 1)
             ->find()
             ->fetch();
         
@@ -558,7 +433,7 @@ class WebsiteDomain extends Model
     public function loadByDomain(string $domain): self
     {
         $this->clearQuery()
-            ->where(self::fields_DOMAIN, \strtolower(\trim($domain)))
+            ->where(self::schema_fields_DOMAIN, \strtolower(\trim($domain)))
             ->find()
             ->fetch();
         return $this;
@@ -577,20 +452,20 @@ class WebsiteDomain extends Model
         $domain = \strtolower(\trim($domain));
         $subPath = $subPath === '' ? '' : (\str_starts_with($subPath, '/') ? $subPath : '/' . $subPath);
         $row = $this->clearQuery()
-            ->where(self::fields_DOMAIN, $domain)
-            ->where(self::fields_SUB_PATH, $subPath)
+            ->where(self::schema_fields_DOMAIN, $domain)
+            ->where(self::schema_fields_SUB_PATH, $subPath)
             ->find()
             ->fetch();
         if (!$row || !$this->getDomainId()) {
             return null;
         }
-        $websiteId = (int) $this->getData(self::fields_WEBSITE_ID);
+        $websiteId = (int) $this->getData(self::schema_fields_WEBSITE_ID);
         if ($excludeWebsiteId !== null && $websiteId === $excludeWebsiteId) {
             return null;
         }
         $website = ObjectManager::getInstance(Website::class);
         $website->load($websiteId);
-        $name = $website->getId() ? (string) $website->getData(Website::fields_NAME) : (string) $websiteId;
+        $name = $website->getId() ? (string) $website->getData(Website::schema_fields_NAME) : (string) $websiteId;
         return ['website_id' => $websiteId, 'website_name' => $name];
     }
     
@@ -600,8 +475,8 @@ class WebsiteDomain extends Model
     public function getHttpsEnabledDomains(): array
     {
         return $this->clearQuery()
-            ->where(self::fields_HTTPS_ENABLED, 1)
-            ->where(self::fields_STATUS, self::STATUS_ACTIVE)
+            ->where(self::schema_fields_HTTPS_ENABLED, 1)
+            ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
             ->select()
             ->fetchArray();
     }
@@ -613,15 +488,15 @@ class WebsiteDomain extends Model
     {
         // 先取消所有主域名
         $this->clearQuery()
-            ->where(self::fields_WEBSITE_ID, $websiteId)
-            ->setData(self::fields_IS_PRIMARY, 0)
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->setData(self::schema_fields_IS_PRIMARY, 0)
             ->update()
             ->fetch();
         
         // 设置新的主域名
         $this->clearQuery()
-            ->where(self::fields_ID, $domainId)
-            ->setData(self::fields_IS_PRIMARY, 1)
+            ->where(self::schema_fields_ID, $domainId)
+            ->setData(self::schema_fields_IS_PRIMARY, 1)
             ->update()
             ->fetch();
         
@@ -636,15 +511,15 @@ class WebsiteDomain extends Model
     public function getDomainsGroupedByRoot(): array
     {
         $domains = $this->clearQuery()
-            ->where(self::fields_STATUS, self::STATUS_ACTIVE)
-            ->order(self::fields_ROOT_DOMAIN, 'ASC')
-            ->order(self::fields_DOMAIN, 'ASC')
+            ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
+            ->order(self::schema_fields_ROOT_DOMAIN, 'ASC')
+            ->order(self::schema_fields_DOMAIN, 'ASC')
             ->select()
             ->fetchArray();
         
         $grouped = [];
         foreach ($domains as $domain) {
-            $rootDomain = $domain[self::fields_ROOT_DOMAIN] ?: $domain[self::fields_DOMAIN];
+            $rootDomain = $domain[self::schema_fields_ROOT_DOMAIN] ?: $domain[self::schema_fields_DOMAIN];
             if (!isset($grouped[$rootDomain])) {
                 $grouped[$rootDomain] = [];
             }
@@ -660,9 +535,9 @@ class WebsiteDomain extends Model
     public function getDomainsByRoot(string $rootDomain): array
     {
         return $this->clearQuery()
-            ->where(self::fields_ROOT_DOMAIN, $rootDomain)
-            ->where(self::fields_STATUS, self::STATUS_ACTIVE)
-            ->order(self::fields_DOMAIN, 'ASC')
+            ->where(self::schema_fields_ROOT_DOMAIN, $rootDomain)
+            ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
+            ->order(self::schema_fields_DOMAIN, 'ASC')
             ->select()
             ->fetchArray();
     }
@@ -675,8 +550,8 @@ class WebsiteDomain extends Model
     public function updateCertIdByDomain(string $domain, int $certId): void
     {
         $this->clearQuery()
-            ->where(self::fields_DOMAIN, \strtolower(\trim($domain)))
-            ->setData(self::fields_CERT_ID, $certId)
+            ->where(self::schema_fields_DOMAIN, \strtolower(\trim($domain)))
+            ->setData(self::schema_fields_CERT_ID, $certId)
             ->update()
             ->fetch();
     }
@@ -703,9 +578,9 @@ class WebsiteDomain extends Model
     public function syncDomainCertificate(string $domain, int $certId, bool $httpsEnabled): void
     {
         $this->clearQuery()
-            ->where(self::fields_DOMAIN, \strtolower(\trim($domain)))
-            ->setData(self::fields_CERT_ID, $certId)
-            ->setData(self::fields_HTTPS_ENABLED, $httpsEnabled ? 1 : 0)
+            ->where(self::schema_fields_DOMAIN, \strtolower(\trim($domain)))
+            ->setData(self::schema_fields_CERT_ID, $certId)
+            ->setData(self::schema_fields_HTTPS_ENABLED, $httpsEnabled ? 1 : 0)
             ->update()
             ->fetch();
     }
@@ -718,9 +593,9 @@ class WebsiteDomain extends Model
     public function rollbackHttps(string $domain): void
     {
         $this->clearQuery()
-            ->where(self::fields_DOMAIN, \strtolower(\trim($domain)))
-            ->setData(self::fields_HTTPS_ENABLED, 0)
-            ->setData(self::fields_CERT_ID, null)
+            ->where(self::schema_fields_DOMAIN, \strtolower(\trim($domain)))
+            ->setData(self::schema_fields_HTTPS_ENABLED, 0)
+            ->setData(self::schema_fields_CERT_ID, null)
             ->update()
             ->fetch();
     }
@@ -736,11 +611,11 @@ class WebsiteDomain extends Model
     public function updateHealthCheck(int $domainId, string $status, ?int $code, string $message = ''): void
     {
         $this->clearQuery()
-            ->where(self::fields_ID, $domainId)
-            ->setData(self::fields_HEALTH_STATUS, $status)
-            ->setData(self::fields_HEALTH_CODE, $code)
-            ->setData(self::fields_HEALTH_MESSAGE, $message)
-            ->setData(self::fields_HEALTH_CHECKED_AT, \date('Y-m-d H:i:s'))
+            ->where(self::schema_fields_ID, $domainId)
+            ->setData(self::schema_fields_HEALTH_STATUS, $status)
+            ->setData(self::schema_fields_HEALTH_CODE, $code)
+            ->setData(self::schema_fields_HEALTH_MESSAGE, $message)
+            ->setData(self::schema_fields_HEALTH_CHECKED_AT, \date('Y-m-d H:i:s'))
             ->update()
             ->fetch();
     }
@@ -751,7 +626,7 @@ class WebsiteDomain extends Model
     public function getAllActiveDomainsForHealthCheck(): array
     {
         return $this->clearQuery()
-            ->where(self::fields_STATUS, self::STATUS_ACTIVE)
+            ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
             ->select()
             ->fetchArray();
     }
@@ -762,8 +637,8 @@ class WebsiteDomain extends Model
     public function getUnhealthyDomains(): array
     {
         return $this->clearQuery()
-            ->where(self::fields_STATUS, self::STATUS_ACTIVE)
-            ->where(self::fields_HEALTH_STATUS, self::HEALTH_UNHEALTHY)
+            ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
+            ->where(self::schema_fields_HEALTH_STATUS, self::HEALTH_UNHEALTHY)
             ->select()
             ->fetchArray();
     }
@@ -777,10 +652,11 @@ class WebsiteDomain extends Model
     public function getDomainsWithStatus(int $websiteId): array
     {
         return $this->clearQuery()
-            ->where(self::fields_WEBSITE_ID, $websiteId)
-            ->where(self::fields_STATUS, self::STATUS_ACTIVE)
-            ->order(self::fields_IS_PRIMARY, 'DESC')
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
+            ->order(self::schema_fields_IS_PRIMARY, 'DESC')
             ->select()
             ->fetchArray();
     }
 }
+
