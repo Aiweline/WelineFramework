@@ -121,13 +121,11 @@ $isEdit = $plan && $plan->getId();
         e.preventDefault();
         var formData = new FormData(this);
 
-        fetch('<?= $this->getUrl('*/plan/index/save') ?>', {
-            method: 'POST',
-            headers: {'X-Requested-With': 'XMLHttpRequest'},
-            body: new URLSearchParams(formData)
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
+        var url = '<?= $this->getUrl('*/plan/index/save') ?>';
+        var opts = { method: 'POST', body: new URLSearchParams(formData) };
+        window.Weline.Api.request(url, opts)
+        .then(function(res) {
+            var data = (res && res.data) !== undefined ? res.data : res;
             if (data.code === 200) {
                 window.location.href = '<?= $this->getUrl('*/plan/index') ?>';
             } else {

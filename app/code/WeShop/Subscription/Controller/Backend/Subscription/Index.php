@@ -33,10 +33,10 @@ class Index extends BackendController
         $query = $this->subscription->clear();
 
         if ($status) {
-            $query->where(Subscription::fields_STATUS, $status);
+            $query->where(Subscription::schema_fields_STATUS, $status);
         }
 
-        $query->order(Subscription::fields_CREATED_AT, 'DESC')
+        $query->order(Subscription::schema_fields_CREATED_AT, 'DESC')
             ->pagination($page, $pageSize);
 
         $items = $query->select()->fetchArray();
