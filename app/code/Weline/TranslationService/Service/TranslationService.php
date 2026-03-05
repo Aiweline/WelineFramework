@@ -121,9 +121,9 @@ class TranslationService implements TranslationServiceInterface
         }
 
         // 获取渠道适配器
-        $adapter = $this->providerFactory->create($provider->getData(TranslationProvider::fields_PROVIDER_CODE));
+        $adapter = $this->providerFactory->create($provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE));
         if (!$adapter) {
-            throw new Exception(__('未找到渠道适配器：%{1}', [$provider->getData(TranslationProvider::fields_PROVIDER_CODE)]));
+            throw new Exception(__('未找到渠道适配器：%{1}', [$provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE)]));
         }
 
         // 记录开始时间
@@ -168,7 +168,7 @@ class TranslationService implements TranslationServiceInterface
                 'translated_text' => $translatedText,
                 'target_language' => $targetLanguage,
                 'source_language' => $result['source_language'] ?? $sourceLanguage,
-                'provider_code' => $provider->getData(TranslationProvider::fields_PROVIDER_CODE),
+                'provider_code' => $provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE),
                 'character_count' => $characterCount,
                 'cost' => $cost,
                 'response_time' => $responseTime,
@@ -202,7 +202,7 @@ class TranslationService implements TranslationServiceInterface
                 'text' => $text,
                 'target_language' => $targetLanguage,
                 'source_language' => $sourceLanguage,
-                'provider_code' => $provider ? $provider->getData(TranslationProvider::fields_PROVIDER_CODE) : null,
+                'provider_code' => $provider ? $provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE) : null,
                 'error_message' => $e->getMessage(),
                 'error_code' => $e->getCode(),
                 'options' => $options
@@ -265,9 +265,9 @@ class TranslationService implements TranslationServiceInterface
         }
 
         // 获取渠道适配器
-        $adapter = $this->providerFactory->create($provider->getData(TranslationProvider::fields_PROVIDER_CODE));
+        $adapter = $this->providerFactory->create($provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE));
         if (!$adapter) {
-            throw new Exception(__('未找到渠道适配器：%{1}', [$provider->getData(TranslationProvider::fields_PROVIDER_CODE)]));
+            throw new Exception(__('未找到渠道适配器：%{1}', [$provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE)]));
         }
 
         // 记录开始时间
@@ -314,7 +314,7 @@ class TranslationService implements TranslationServiceInterface
                 'translated_texts' => $results,
                 'target_language' => $targetLanguage,
                 'source_language' => $sourceLanguage,
-                'provider_code' => $provider->getData(TranslationProvider::fields_PROVIDER_CODE),
+                'provider_code' => $provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE),
                 'total_characters' => $totalCharacters,
                 'cost' => $cost,
                 'response_time' => $responseTime,
@@ -351,7 +351,7 @@ class TranslationService implements TranslationServiceInterface
                 'texts' => $texts,
                 'target_language' => $targetLanguage,
                 'source_language' => $sourceLanguage,
-                'provider_code' => $provider ? $provider->getData(TranslationProvider::fields_PROVIDER_CODE) : null,
+                'provider_code' => $provider ? $provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE) : null,
                 'error_message' => $e->getMessage(),
                 'error_code' => $e->getCode(),
                 'options' => $options
@@ -383,9 +383,9 @@ class TranslationService implements TranslationServiceInterface
         }
 
         // 获取渠道适配器
-        $adapter = $this->providerFactory->create($provider->getData(TranslationProvider::fields_PROVIDER_CODE));
+        $adapter = $this->providerFactory->create($provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE));
         if (!$adapter) {
-            throw new Exception(__('未找到渠道适配器：%{1}', [$provider->getData(TranslationProvider::fields_PROVIDER_CODE)]));
+            throw new Exception(__('未找到渠道适配器：%{1}', [$provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE)]));
         }
 
         return $adapter->detectLanguage($provider, $text);
@@ -403,7 +403,7 @@ class TranslationService implements TranslationServiceInterface
         if ($providerCode) {
             // 指定渠道
             $provider = $this->providerModel->clear()
-                ->load(TranslationProvider::fields_PROVIDER_CODE, $providerCode);
+                ->load(TranslationProvider::schema_fields_PROVIDER_CODE, $providerCode);
             
             if ($provider->getId() && $provider->isEnabled()) {
                 // 检查语言支持
@@ -416,8 +416,8 @@ class TranslationService implements TranslationServiceInterface
             // 自动选择渠道
             // 优先选择默认渠道
             $provider = $this->providerModel->clear()
-                ->where(TranslationProvider::fields_IS_DEFAULT, 1)
-                ->where(TranslationProvider::fields_IS_ENABLED, 1)
+                ->where(TranslationProvider::schema_fields_IS_DEFAULT, 1)
+                ->where(TranslationProvider::schema_fields_IS_ENABLED, 1)
                 ->order('priority', 'DESC')
                 ->find()
                 ->fetch();
@@ -427,7 +427,7 @@ class TranslationService implements TranslationServiceInterface
                 if ($targetLanguage && !$provider->supportsLanguage($targetLanguage)) {
                     // 如果默认渠道不支持，查找其他支持该语言的渠道
                     $provider = $this->providerModel->clear()
-                        ->where(TranslationProvider::fields_IS_ENABLED, 1)
+                        ->where(TranslationProvider::schema_fields_IS_ENABLED, 1)
                         ->order('priority', 'DESC')
                         ->select()
                         ->fetch();
@@ -444,7 +444,7 @@ class TranslationService implements TranslationServiceInterface
 
             // 如果没有默认渠道，选择优先级最高的启用渠道
             $provider = $this->providerModel->clear()
-                ->where(TranslationProvider::fields_IS_ENABLED, 1)
+                ->where(TranslationProvider::schema_fields_IS_ENABLED, 1)
                 ->order('priority', 'DESC')
                 ->find()
                 ->fetch();
@@ -470,7 +470,7 @@ class TranslationService implements TranslationServiceInterface
      */
     private function calculateCost(TranslationProvider $provider, int $characterCount): float
     {
-        $costPerChar = (float)$provider->getData(TranslationProvider::fields_COST_PER_CHARACTER);
+        $costPerChar = (float)$provider->getData(TranslationProvider::schema_fields_COST_PER_CHARACTER);
         return $costPerChar * $characterCount;
     }
 
@@ -505,19 +505,19 @@ class TranslationService implements TranslationServiceInterface
     ): void {
         try {
             $this->recordModel->clear()
-                ->setData(TranslationRecord::fields_PROVIDER_ID, $provider->getId())
-                ->setData(TranslationRecord::fields_PROVIDER_CODE, $provider->getData(TranslationProvider::fields_PROVIDER_CODE))
-                ->setData(TranslationRecord::fields_SOURCE_TEXT, $sourceText)
-                ->setData(TranslationRecord::fields_TRANSLATED_TEXT, $translatedText)
-                ->setData(TranslationRecord::fields_SOURCE_LANGUAGE, $sourceLanguage)
-                ->setData(TranslationRecord::fields_TARGET_LANGUAGE, $targetLanguage)
-                ->setData(TranslationRecord::fields_CHARACTER_COUNT, $characterCount)
-                ->setData(TranslationRecord::fields_COST, $cost)
-                ->setData(TranslationRecord::fields_RESPONSE_TIME, $responseTime)
-                ->setData(TranslationRecord::fields_STATUS, $status)
-                ->setData(TranslationRecord::fields_ERROR_MESSAGE, $errorMessage)
-                ->setData(TranslationRecord::fields_MODULE_NAME, $moduleName)
-                ->setData(TranslationRecord::fields_CREATED_AT, date('Y-m-d H:i:s'))
+                ->setData(TranslationRecord::schema_fields_PROVIDER_ID, $provider->getId())
+                ->setData(TranslationRecord::schema_fields_PROVIDER_CODE, $provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE))
+                ->setData(TranslationRecord::schema_fields_SOURCE_TEXT, $sourceText)
+                ->setData(TranslationRecord::schema_fields_TRANSLATED_TEXT, $translatedText)
+                ->setData(TranslationRecord::schema_fields_SOURCE_LANGUAGE, $sourceLanguage)
+                ->setData(TranslationRecord::schema_fields_TARGET_LANGUAGE, $targetLanguage)
+                ->setData(TranslationRecord::schema_fields_CHARACTER_COUNT, $characterCount)
+                ->setData(TranslationRecord::schema_fields_COST, $cost)
+                ->setData(TranslationRecord::schema_fields_RESPONSE_TIME, $responseTime)
+                ->setData(TranslationRecord::schema_fields_STATUS, $status)
+                ->setData(TranslationRecord::schema_fields_ERROR_MESSAGE, $errorMessage)
+                ->setData(TranslationRecord::schema_fields_MODULE_NAME, $moduleName)
+                ->setData(TranslationRecord::schema_fields_CREATED_AT, date('Y-m-d H:i:s'))
                 ->save();
         } catch (\Exception $e) {
             // 记录失败不影响翻译功能，只记录日志
@@ -538,7 +538,7 @@ class TranslationService implements TranslationServiceInterface
         
         if ($providerCode) {
             $provider = $this->providerModel->clear()
-                ->load(TranslationProvider::fields_PROVIDER_CODE, $providerCode);
+                ->load(TranslationProvider::schema_fields_PROVIDER_CODE, $providerCode);
             
             if ($provider->getId() && $provider->isEnabled()) {
                 return $provider->supportsLanguage($normalizedCode);
@@ -546,7 +546,7 @@ class TranslationService implements TranslationServiceInterface
         } else {
             // 检查是否有任何渠道支持该语言
             $providers = $this->providerModel->clear()
-                ->where(TranslationProvider::fields_IS_ENABLED, 1)
+                ->where(TranslationProvider::schema_fields_IS_ENABLED, 1)
                 ->select()
                 ->fetch();
             
@@ -568,13 +568,13 @@ class TranslationService implements TranslationServiceInterface
     public function getAvailableProviders(): array
     {
         $providers = $this->providerModel->clear()
-            ->where(TranslationProvider::fields_IS_ENABLED, 1)
+            ->where(TranslationProvider::schema_fields_IS_ENABLED, 1)
             ->select()
             ->fetch();
         
         $codes = [];
         foreach ($providers as $provider) {
-            $codes[] = $provider->getData(TranslationProvider::fields_PROVIDER_CODE);
+            $codes[] = $provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE);
         }
         
         return $codes;

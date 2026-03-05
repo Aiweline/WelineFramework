@@ -48,12 +48,12 @@ class GoogleProvider extends AbstractProvider
         string $sourceLanguage = 'auto',
         array $options = []
     ): array {
-        $apiKey = $provider->getData(TranslationProvider::fields_API_KEY);
+        $apiKey = $provider->getData(TranslationProvider::schema_fields_API_KEY);
         if (empty($apiKey)) {
             throw new Exception(__('Google翻译API密钥未配置'));
         }
 
-        $endpoint = $provider->getData(TranslationProvider::fields_API_ENDPOINT) 
+        $endpoint = $provider->getData(TranslationProvider::schema_fields_API_ENDPOINT) 
             ?: 'https://translation.googleapis.com/language/translate/v2';
 
         // 标准化语言代码
@@ -100,7 +100,7 @@ class GoogleProvider extends AbstractProvider
      */
     public function detectLanguage(TranslationProvider $provider, string $text): string
     {
-        $apiKey = $provider->getData(TranslationProvider::fields_API_KEY);
+        $apiKey = $provider->getData(TranslationProvider::schema_fields_API_KEY);
         if (empty($apiKey)) {
             throw new Exception(__('Google翻译API密钥未配置'));
         }

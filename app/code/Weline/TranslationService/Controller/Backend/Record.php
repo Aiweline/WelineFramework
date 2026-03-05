@@ -63,25 +63,25 @@ class Record extends \Weline\Admin\Controller\BaseController
         $query = $this->recordModel->clear();
         
         if ($providerId) {
-            $query->where(TranslationRecord::fields_PROVIDER_ID, $providerId);
+            $query->where(TranslationRecord::schema_fields_PROVIDER_ID, $providerId);
         }
         if ($status) {
-            $query->where(TranslationRecord::fields_STATUS, $status);
+            $query->where(TranslationRecord::schema_fields_STATUS, $status);
         }
         if ($sourceLanguage) {
-            $query->where(TranslationRecord::fields_SOURCE_LANGUAGE, $sourceLanguage);
+            $query->where(TranslationRecord::schema_fields_SOURCE_LANGUAGE, $sourceLanguage);
         }
         if ($targetLanguage) {
-            $query->where(TranslationRecord::fields_TARGET_LANGUAGE, $targetLanguage);
+            $query->where(TranslationRecord::schema_fields_TARGET_LANGUAGE, $targetLanguage);
         }
         if ($moduleName) {
-            $query->where(TranslationRecord::fields_MODULE_NAME, $moduleName);
+            $query->where(TranslationRecord::schema_fields_MODULE_NAME, $moduleName);
         }
         if ($startDate) {
-            $query->where(TranslationRecord::fields_CREATED_AT, $startDate, '>=');
+            $query->where(TranslationRecord::schema_fields_CREATED_AT, $startDate, '>=');
         }
         if ($endDate) {
-            $query->where(TranslationRecord::fields_CREATED_AT, $endDate . ' 23:59:59', '<=');
+            $query->where(TranslationRecord::schema_fields_CREATED_AT, $endDate . ' 23:59:59', '<=');
         }
         
         // 获取总数
@@ -89,7 +89,7 @@ class Record extends \Weline\Admin\Controller\BaseController
         
         // 获取分页数据
         $records = $query->clear()
-            ->order(TranslationRecord::fields_CREATED_AT, 'DESC')
+            ->order(TranslationRecord::schema_fields_CREATED_AT, 'DESC')
             ->limit($pageSize, ($page - 1) * $pageSize)
             ->select()
             ->fetch();
@@ -139,7 +139,7 @@ class Record extends \Weline\Admin\Controller\BaseController
         }
         
         // 获取渠道信息
-        $provider = $this->providerModel->clear()->load($record->getData(TranslationRecord::fields_PROVIDER_ID));
+        $provider = $this->providerModel->clear()->load($record->getData(TranslationRecord::schema_fields_PROVIDER_ID));
         
         $this->assign('record', $record);
         $this->assign('provider', $provider);
@@ -220,44 +220,44 @@ class Record extends \Weline\Admin\Controller\BaseController
         
         // 成功记录数
         $successRecords = $this->recordModel->clear()
-            ->where(TranslationRecord::fields_STATUS, TranslationRecord::STATUS_SUCCESS)
+            ->where(TranslationRecord::schema_fields_STATUS, TranslationRecord::STATUS_SUCCESS)
             ->count();
         
         // 失败记录数
         $failedRecords = $this->recordModel->clear()
-            ->where(TranslationRecord::fields_STATUS, TranslationRecord::STATUS_FAILED)
+            ->where(TranslationRecord::schema_fields_STATUS, TranslationRecord::STATUS_FAILED)
             ->count();
         
         // 总字符数
         $totalCharacters = $this->recordModel->clear()
-            ->where(TranslationRecord::fields_STATUS, TranslationRecord::STATUS_SUCCESS)
-            ->sum(TranslationRecord::fields_CHARACTER_COUNT) ?? 0;
+            ->where(TranslationRecord::schema_fields_STATUS, TranslationRecord::STATUS_SUCCESS)
+            ->sum(TranslationRecord::schema_fields_CHARACTER_COUNT) ?? 0;
         
         // 总成本
         $totalCost = $this->recordModel->clear()
-            ->where(TranslationRecord::fields_STATUS, TranslationRecord::STATUS_SUCCESS)
-            ->sum(TranslationRecord::fields_COST) ?? 0;
+            ->where(TranslationRecord::schema_fields_STATUS, TranslationRecord::STATUS_SUCCESS)
+            ->sum(TranslationRecord::schema_fields_COST) ?? 0;
         
         // 平均响应时间
         $avgResponseTime = $this->recordModel->clear()
-            ->where(TranslationRecord::fields_STATUS, TranslationRecord::STATUS_SUCCESS)
-            ->avg(TranslationRecord::fields_RESPONSE_TIME) ?? 0;
+            ->where(TranslationRecord::schema_fields_STATUS, TranslationRecord::STATUS_SUCCESS)
+            ->avg(TranslationRecord::schema_fields_RESPONSE_TIME) ?? 0;
         
         // 今日统计
         $todayStart = date('Y-m-d 00:00:00');
         $todayRecords = $this->recordModel->clear()
-            ->where(TranslationRecord::fields_CREATED_AT, $todayStart, '>=')
+            ->where(TranslationRecord::schema_fields_CREATED_AT, $todayStart, '>=')
             ->count();
         
         $todayCharacters = $this->recordModel->clear()
-            ->where(TranslationRecord::fields_CREATED_AT, $todayStart, '>=')
-            ->where(TranslationRecord::fields_STATUS, TranslationRecord::STATUS_SUCCESS)
-            ->sum(TranslationRecord::fields_CHARACTER_COUNT) ?? 0;
+            ->where(TranslationRecord::schema_fields_CREATED_AT, $todayStart, '>=')
+            ->where(TranslationRecord::schema_fields_STATUS, TranslationRecord::STATUS_SUCCESS)
+            ->sum(TranslationRecord::schema_fields_CHARACTER_COUNT) ?? 0;
         
         $todayCost = $this->recordModel->clear()
-            ->where(TranslationRecord::fields_CREATED_AT, $todayStart, '>=')
-            ->where(TranslationRecord::fields_STATUS, TranslationRecord::STATUS_SUCCESS)
-            ->sum(TranslationRecord::fields_COST) ?? 0;
+            ->where(TranslationRecord::schema_fields_CREATED_AT, $todayStart, '>=')
+            ->where(TranslationRecord::schema_fields_STATUS, TranslationRecord::STATUS_SUCCESS)
+            ->sum(TranslationRecord::schema_fields_COST) ?? 0;
         
         return [
             'total_records' => $totalRecords,
@@ -284,23 +284,23 @@ class Record extends \Weline\Admin\Controller\BaseController
         $providers = $this->providerModel->clear()->select()->fetch();
         foreach ($providers as $provider) {
             $providerId = $provider->getId();
-            $providerStats[$provider->getData(TranslationProvider::fields_PROVIDER_CODE)] = [
-                'name' => $provider->getData(TranslationProvider::fields_PROVIDER_NAME),
+            $providerStats[$provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE)] = [
+                'name' => $provider->getData(TranslationProvider::schema_fields_PROVIDER_NAME),
                 'total_records' => $this->recordModel->clear()
-                    ->where(TranslationRecord::fields_PROVIDER_ID, $providerId)
+                    ->where(TranslationRecord::schema_fields_PROVIDER_ID, $providerId)
                     ->count(),
                 'success_records' => $this->recordModel->clear()
-                    ->where(TranslationRecord::fields_PROVIDER_ID, $providerId)
-                    ->where(TranslationRecord::fields_STATUS, TranslationRecord::STATUS_SUCCESS)
+                    ->where(TranslationRecord::schema_fields_PROVIDER_ID, $providerId)
+                    ->where(TranslationRecord::schema_fields_STATUS, TranslationRecord::STATUS_SUCCESS)
                     ->count(),
                 'total_characters' => $this->recordModel->clear()
-                    ->where(TranslationRecord::fields_PROVIDER_ID, $providerId)
-                    ->where(TranslationRecord::fields_STATUS, TranslationRecord::STATUS_SUCCESS)
-                    ->sum(TranslationRecord::fields_CHARACTER_COUNT) ?? 0,
+                    ->where(TranslationRecord::schema_fields_PROVIDER_ID, $providerId)
+                    ->where(TranslationRecord::schema_fields_STATUS, TranslationRecord::STATUS_SUCCESS)
+                    ->sum(TranslationRecord::schema_fields_CHARACTER_COUNT) ?? 0,
                 'total_cost' => $this->recordModel->clear()
-                    ->where(TranslationRecord::fields_PROVIDER_ID, $providerId)
-                    ->where(TranslationRecord::fields_STATUS, TranslationRecord::STATUS_SUCCESS)
-                    ->sum(TranslationRecord::fields_COST) ?? 0,
+                    ->where(TranslationRecord::schema_fields_PROVIDER_ID, $providerId)
+                    ->where(TranslationRecord::schema_fields_STATUS, TranslationRecord::STATUS_SUCCESS)
+                    ->sum(TranslationRecord::schema_fields_COST) ?? 0,
             ];
         }
         
