@@ -33,13 +33,13 @@ class TrendingKeywordLog extends BackendController
         /** @var TrendProfile $profile */
         $profile = ObjectManager::getInstance(TrendProfile::class);
         $items = $profile->clear()
-            ->order(TrendProfile::fields_SORT, 'ASC')
+            ->order(TrendProfile::schema_fields_SORT, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
         $out = [];
         foreach ($items as $p) {
-            $out[(int)$p->getData(TrendProfile::fields_ID)] = (string)$p->getData(TrendProfile::fields_NAME);
+            $out[(int)$p->getData(TrendProfile::schema_fields_ID)] = (string)$p->getData(TrendProfile::schema_fields_NAME);
         }
         return $out;
     }
@@ -53,25 +53,25 @@ class TrendingKeywordLog extends BackendController
         // 按画像筛选
         $profileId = (int)$this->request->getGet('profile_id', 0);
         if ($profileId > 0) {
-            $listModel->where(TrendingKeywordLogModel::fields_PROFILE_ID, $profileId);
+            $listModel->where(TrendingKeywordLogModel::schema_fields_PROFILE_ID, $profileId);
         }
 
         // 按使用状态筛选
         $usedFilter = $this->request->getGet('used', '');
         if ($usedFilter === 'yes') {
-            $listModel->where(TrendingKeywordLogModel::fields_USED_AT, null, 'IS NOT');
+            $listModel->where(TrendingKeywordLogModel::schema_fields_USED_AT, null, 'IS NOT');
         } elseif ($usedFilter === 'no') {
-            $listModel->where(TrendingKeywordLogModel::fields_USED_AT, null, 'IS');
+            $listModel->where(TrendingKeywordLogModel::schema_fields_USED_AT, null, 'IS');
         }
 
         // 搜索关键词
         $search = trim((string)$this->request->getGet('search', ''));
         if ($search !== '') {
-            $listModel->where(TrendingKeywordLogModel::fields_KEYWORD, '%' . $search . '%', 'like');
+            $listModel->where(TrendingKeywordLogModel::schema_fields_KEYWORD, '%' . $search . '%', 'like');
         }
 
         $items = $listModel
-            ->order(TrendingKeywordLogModel::fields_ID, 'DESC')
+            ->order(TrendingKeywordLogModel::schema_fields_ID, 'DESC')
             ->pagination()
             ->select()
             ->fetch();
@@ -103,7 +103,7 @@ class TrendingKeywordLog extends BackendController
                 throw new \Exception(__('日志不存在'));
             }
 
-            $log->setData(TrendingKeywordLogModel::fields_USED_AT, date('Y-m-d H:i:s'))->save();
+            $log->setData(TrendingKeywordLogModel::schema_fields_USED_AT, date('Y-m-d H:i:s'))->save();
             MessageManager::success(__('已标记为已使用'));
         } catch (\Throwable $e) {
             MessageManager::error($e->getMessage());
@@ -123,7 +123,7 @@ class TrendingKeywordLog extends BackendController
                 throw new \Exception(__('日志不存在'));
             }
 
-            $log->setData(TrendingKeywordLogModel::fields_USED_AT, null)->save();
+            $log->setData(TrendingKeywordLogModel::schema_fields_USED_AT, null)->save();
             MessageManager::success(__('已标记为未使用'));
         } catch (\Throwable $e) {
             MessageManager::error($e->getMessage());
@@ -163,8 +163,8 @@ class TrendingKeywordLog extends BackendController
 
             $delModel = clone $this->logModel;
             $delModel->clear()
-                ->where(TrendingKeywordLogModel::fields_CREATED_AT, $cutoff, '<')
-                ->where(TrendingKeywordLogModel::fields_USED_AT, null, 'IS NOT') // 只删除已使用的
+                ->where(TrendingKeywordLogModel::schema_fields_CREATED_AT, $cutoff, '<')
+                ->where(TrendingKeywordLogModel::schema_fields_USED_AT, null, 'IS NOT') // 只删除已使用的
                 ->delete()
                 ->fetch();
 

@@ -58,7 +58,7 @@ $sites = $this->getData('sites') ?? [];
                                     <lang>分类名称</lang> <span class="text-danger">*</span>
                                 </label>
                                 <input type="text" class="form-control" id="name" name="name"
-                                       value="<?= htmlspecialchars($category ? $category->getData(Category::fields_NAME) : '') ?>"
+                                       value="<?= htmlspecialchars($category ? $category->getData(Category::schema_fields_NAME) : '') ?>"
                                        required>
                             </div>
                         </div>
@@ -68,7 +68,7 @@ $sites = $this->getData('sites') ?? [];
                                     <lang>URL别名</lang> <span class="text-danger">*</span>
                                 </label>
                                 <input type="text" class="form-control" id="slug" name="slug"
-                                       value="<?= htmlspecialchars($category ? $category->getData(Category::fields_SLUG) : '') ?>"
+                                       value="<?= htmlspecialchars($category ? $category->getData(Category::schema_fields_SLUG) : '') ?>"
                                        pattern="[a-z0-9\-]+"
                                        title="<?= __('只能包含小写字母、数字和连字符') ?>"
                                        required>
@@ -87,7 +87,7 @@ $sites = $this->getData('sites') ?? [];
                                     <option value=""><lang>请选择</lang></option>
                                     <?php foreach ($sites as $site): ?>
                                         <option value="<?= $site['site_id'] ?>"
-                                            <?= ($category && (int)$category->getData(Category::fields_SITE_ID) == $site['site_id']) ? 'selected' : '' ?>
+                                            <?= ($category && (int)$category->getData(Category::schema_fields_SITE_ID) == $site['site_id']) ? 'selected' : '' ?>
                                             <?= (!$category && empty($category)) ? '' : '' ?>>
                                             <?= htmlspecialchars($site['site_name']) ?>
                                         </option>
@@ -105,7 +105,7 @@ $sites = $this->getData('sites') ?? [];
                                     <option value="0"><lang>无（顶级分类）</lang></option>
                                     <?php foreach ($parent_options as $id => $name): ?>
                                         <option value="<?= $id ?>"
-                                            <?= ($category && $category->getData(Category::fields_PARENT_ID) == $id) ? 'selected' : '' ?>>
+                                            <?= ($category && $category->getData(Category::schema_fields_PARENT_ID) == $id) ? 'selected' : '' ?>>
                                             <?= htmlspecialchars($name) ?>
                                         </option>
                                     <?php endforeach; ?>
@@ -121,7 +121,7 @@ $sites = $this->getData('sites') ?? [];
                                     <lang>排序</lang>
                                 </label>
                                 <input type="number" class="form-control" id="sort_order" name="sort_order"
-                                       value="<?= (int)($category ? $category->getData(Category::fields_SORT_ORDER) : 0) ?>"
+                                       value="<?= (int)($category ? $category->getData(Category::schema_fields_SORT_ORDER) : 0) ?>"
                                        min="0">
                                 <small class="text-muted"><lang>数字越小越靠前</lang></small>
                             </div>
@@ -134,7 +134,7 @@ $sites = $this->getData('sites') ?? [];
                                 <select class="form-select" id="status" name="status">
                                     <?php foreach (Category::getStatusOptions() as $value => $label): ?>
                                         <option value="<?= $value ?>"
-                                            <?= ($category && $category->getData(Category::fields_STATUS) == $value) ? 'selected' : '' ?>
+                                            <?= ($category && $category->getData(Category::schema_fields_STATUS) == $value) ? 'selected' : '' ?>
                                             <?= (!$category && $value == Category::STATUS_ENABLED) ? 'selected' : '' ?>>
                                             <?= $label ?>
                                         </option>
@@ -148,14 +148,14 @@ $sites = $this->getData('sites') ?? [];
                         <label for="description" class="form-label">
                             <lang>分类描述</lang>
                         </label>
-                        <textarea class="form-control" id="description" name="description" rows="3"><?= htmlspecialchars($category ? $category->getData(Category::fields_DESCRIPTION) : '') ?></textarea>
+                        <textarea class="form-control" id="description" name="description" rows="3"><?= htmlspecialchars($category ? $category->getData(Category::schema_fields_DESCRIPTION) : '') ?></textarea>
                     </div>
 
                     <div class="mb-3">
                         <label for="cover_image" class="form-label">
                             <?= __('封面图片') ?>
                         </label>
-                        <?php $cat_cover_image = $category ? $category->getData(Category::fields_COVER_IMAGE) : ''; ?>
+                        <?php $cat_cover_image = $category ? $category->getData(Category::schema_fields_COVER_IMAGE) : ''; ?>
                         <input type="hidden" id="cover_image" name="cover_image"
                                value="<?= htmlspecialchars($cat_cover_image) ?>">
                         <file-manager target="#cover_image"
@@ -178,7 +178,7 @@ $sites = $this->getData('sites') ?? [];
                             <lang>SEO标题</lang>
                         </label>
                         <input type="text" class="form-control" id="meta_title" name="meta_title"
-                               value="<?= htmlspecialchars($category ? $category->getData(Category::fields_META_TITLE) : '') ?>">
+                               value="<?= htmlspecialchars($category ? $category->getData(Category::schema_fields_META_TITLE) : '') ?>">
                         <small class="text-muted"><lang>留空则使用分类名称</lang></small>
                     </div>
 
@@ -186,7 +186,7 @@ $sites = $this->getData('sites') ?? [];
                         <label for="meta_description" class="form-label">
                             <lang>SEO描述</lang>
                         </label>
-                        <textarea class="form-control" id="meta_description" name="meta_description" rows="2"><?= htmlspecialchars($category ? $category->getData(Category::fields_META_DESCRIPTION) : '') ?></textarea>
+                        <textarea class="form-control" id="meta_description" name="meta_description" rows="2"><?= htmlspecialchars($category ? $category->getData(Category::schema_fields_META_DESCRIPTION) : '') ?></textarea>
                     </div>
 
                     <div class="mb-3">
@@ -194,7 +194,7 @@ $sites = $this->getData('sites') ?? [];
                             <lang>SEO关键词</lang>
                         </label>
                         <input type="text" class="form-control" id="meta_keywords" name="meta_keywords"
-                               value="<?= htmlspecialchars($category ? $category->getData(Category::fields_META_KEYWORDS) : '') ?>"
+                               value="<?= htmlspecialchars($category ? $category->getData(Category::schema_fields_META_KEYWORDS) : '') ?>"
                                placeholder="<?= __('关键词1, 关键词2, 关键词3') ?>">
                     </div>
 
