@@ -469,6 +469,8 @@ SQL;
                 in_array($baseType, ['int', 'integer', 'bigint', 'smallint', 'tinyint', 'mediumint'], true) => 'DEFAULT 0',
                 in_array($baseType, ['decimal', 'numeric', 'float', 'double'], true) => 'DEFAULT 0',
                 $baseType === 'bool' || $baseType === 'boolean' => 'DEFAULT false',
+                $baseType === 'date' => "DEFAULT '1970-01-01'",
+                in_array($baseType, ['datetime', 'timestamp', 'timestamptz'], true) => "DEFAULT '1970-01-01 00:00:00'",
                 default => "DEFAULT ''",
             };
         }
@@ -542,13 +544,16 @@ SQL;
                 return "'" . str_replace("'", "''", $val) . "'";
             }
         }
+        $isDateLike = $baseType === 'date'
+            || in_array($baseType, ['datetime', 'timestamp', 'timestamptz'], true)
+            || str_contains($baseType, 'timestamp');
         return match (true) {
             in_array($baseType, ['varchar', 'char', 'text', 'longtext', 'mediumtext', 'tinytext'], true) => "''",
             in_array($baseType, ['int', 'integer', 'bigint', 'smallint', 'tinyint', 'mediumint'], true) => '0',
             in_array($baseType, ['decimal', 'numeric', 'float', 'double'], true) => '0',
             $baseType === 'bool' || $baseType === 'boolean' => 'false',
             $baseType === 'date' => "'1970-01-01'",
-            in_array($baseType, ['datetime', 'timestamp'], true) => "'1970-01-01'",
+            $isDateLike => "'1970-01-01 00:00:00'",
             default => "''",
         };
     }
@@ -628,12 +633,19 @@ SQL;
         return "ALTER TABLE {$t} DROP CONSTRAINT IF EXISTS {$n} CASCADE";
     }
 
-    /** MODIFY COLUMN 的 USING 表达式，varchar(n)/char(n) 时截断以避免 "value too long"。 */
+    /** MODIFY COLUMN 的 USING 表达式。varchar(n)/char(n) 时截断；date/timestamp 时需处理空字符串 ''（PostgreSQL ''::date 报错）。 */
     private function pgsqlModifyColumnUsingExpr(string $quotedCol, string $pgType, array $col, ?array $existingCol): string
     {
         $len = $col['length'] ?? null;
         if ($len !== null && $len > 0 && (str_starts_with($pgType, 'VARCHAR') || str_starts_with($pgType, 'CHAR'))) {
             return "LEFT({$quotedCol}::text, {$len})::{$pgType}";
+        }
+        $pgUpper = strtoupper($pgType);
+        if ($pgUpper === 'DATE' || str_starts_with($pgUpper, 'DATE(')) {
+            return "CASE WHEN {$quotedCol} IS NULL OR TRIM({$quotedCol}::text) = '' THEN '1970-01-01'::date ELSE ({$quotedCol}::text)::date END";
+        }
+        if ($pgUpper === 'TIMESTAMP' || $pgUpper === 'TIMESTAMPTZ') {
+            return "CASE WHEN {$quotedCol} IS NULL OR TRIM({$quotedCol}::text) = '' OR (TRIM({$quotedCol}::text) !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}') THEN '1970-01-01 00:00:00'::timestamp ELSE ({$quotedCol} AT TIME ZONE 'UTC') END";
         }
         return "{$quotedCol}::{$pgType}";
     }
