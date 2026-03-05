@@ -27,6 +27,7 @@
 </div>
 
 <style>
+/* weline-media 弹窗：使用主题变量，兼容暗色/亮色模式 */
 .wm-modal-overlay {
     display: none;
     position: fixed;
@@ -34,7 +35,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--backend-color-bg-overlay, rgba(0, 0, 0, 0.5));
     z-index: 9999;
     justify-content: center;
     align-items: center;
@@ -43,27 +44,28 @@
     display: flex;
 }
 .wm-modal-container {
-    background: var(--backend-color-bg-card, #fff);
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-card-border, #dee2e6);
     border-radius: 8px;
     width: 90%;
     max-width: 1200px;
     max-height: 90vh;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--backend-shadow-2xl, 0 25px 50px -12px rgba(0, 0, 0, 0.25));
 }
 .wm-modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 12px 16px;
-    border-bottom: 1px solid var(--backend-color-border, #dee2e6);
+    border-bottom: 1px solid var(--backend-color-border-default, #dee2e6);
 }
 .wm-modal-title {
     margin: 0;
     font-size: 16px;
     font-weight: 600;
-    color: var(--backend-color-text, #333);
+    color: var(--backend-color-text-primary, #212529);
 }
 .wm-modal-hint {
     font-size: 12px;
@@ -80,12 +82,13 @@
     line-height: 1;
 }
 .wm-modal-close:hover {
-    color: var(--backend-color-danger, #dc3545);
+    color: var(--backend-color-danger, #f46a6a);
 }
 .wm-modal-body {
     flex: 1;
     overflow: hidden;
     min-height: 70vh;
+    background: var(--backend-color-card-bg, #fff);
 }
 .wm-modal-iframe {
     width: 100%;
@@ -96,7 +99,7 @@
     display: inline-block;
     position: relative;
     margin: 4px;
-    border: 1px solid var(--backend-color-border, #dee2e6);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
     border-radius: 4px;
     overflow: hidden;
 }
@@ -112,8 +115,8 @@
     right: 2px;
     width: 18px;
     height: 18px;
-    background: rgba(220, 53, 69, 0.9);
-    color: #fff;
+    background: var(--backend-color-danger, #f46a6a);
+    color: var(--backend-color-text-inverse, #fff);
     border-radius: 50%;
     font-size: 14px;
     line-height: 16px;
@@ -122,7 +125,7 @@
     z-index: 1;
 }
 .wm-preview-close:hover {
-    background: #dc3545;
+    background: var(--backend-color-danger-hover, #f24a4a);
 }
 </style>
 
