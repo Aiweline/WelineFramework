@@ -62,15 +62,15 @@ class LocalDescriptionTest extends TestCase
     public function testFieldConstants(): void
     {
         // 关联主表ID字段
-        $this->assertEquals('id', LocalDescription::fields_ID);
-        $this->assertEquals(Rule::fields_ID, LocalDescription::fields_ID);
+        $this->assertEquals('id', LocalDescription::schema_fields_ID);
+        $this->assertEquals(Rule::schema_fields_ID, LocalDescription::schema_fields_ID);
         
         // 多语言字段
-        $this->assertEquals('name', LocalDescription::fields_NAME);
-        $this->assertEquals('description', LocalDescription::fields_DESCRIPTION);
+        $this->assertEquals('name', LocalDescription::schema_fields_NAME);
+        $this->assertEquals('description', LocalDescription::schema_fields_DESCRIPTION);
         
         // LocalModel 接口要求的字段
-        $this->assertEquals('local_code', LocalModelInterface::fields_local_code);
+        $this->assertEquals('local_code', LocalModelInterface::schema_fields_local_code);
     }
 
     /**
@@ -80,7 +80,7 @@ class LocalDescriptionTest extends TestCase
      */
     public function testTableAndIndexerConstants(): void
     {
-        $this->assertEquals('weline_marketing_rule_local_description', LocalDescription::table);
+        $this->assertEquals('weline_marketing_rule_local_description', LocalDescription::schema_table);
         $this->assertEquals('marketing_rule_local_description', LocalDescription::indexer);
     }
 
@@ -92,18 +92,18 @@ class LocalDescriptionTest extends TestCase
     public function testSetAndGetData(): void
     {
         $testData = [
-            LocalDescription::fields_ID => 1,
-            LocalModelInterface::fields_local_code => 'zh_Hans_CN',
-            LocalDescription::fields_NAME => '测试规则名称',
-            LocalDescription::fields_DESCRIPTION => '测试规则描述'
+            LocalDescription::schema_fields_ID => 1,
+            LocalModelInterface::schema_fields_local_code => 'zh_Hans_CN',
+            LocalDescription::schema_fields_NAME => '测试规则名称',
+            LocalDescription::schema_fields_DESCRIPTION => '测试规则描述'
         ];
 
         $this->model->setData($testData);
 
-        $this->assertEquals(1, $this->model->getData(LocalDescription::fields_ID));
-        $this->assertEquals('zh_Hans_CN', $this->model->getData(LocalModelInterface::fields_local_code));
-        $this->assertEquals('测试规则名称', $this->model->getData(LocalDescription::fields_NAME));
-        $this->assertEquals('测试规则描述', $this->model->getData(LocalDescription::fields_DESCRIPTION));
+        $this->assertEquals(1, $this->model->getData(LocalDescription::schema_fields_ID));
+        $this->assertEquals('zh_Hans_CN', $this->model->getData(LocalModelInterface::schema_fields_local_code));
+        $this->assertEquals('测试规则名称', $this->model->getData(LocalDescription::schema_fields_NAME));
+        $this->assertEquals('测试规则描述', $this->model->getData(LocalDescription::schema_fields_DESCRIPTION));
     }
 
     /**
@@ -117,10 +117,10 @@ class LocalDescriptionTest extends TestCase
         /** @var Rule $rule */
         $rule = ObjectManager::getInstance(Rule::class);
         $rule->setData([
-            Rule::fields_NAME => 'Test Rule',
-            Rule::fields_DESCRIPTION => 'Test Description',
-            Rule::fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
-            Rule::fields_STATUS => Rule::STATUS_ACTIVE
+            Rule::schema_fields_NAME => 'Test Rule',
+            Rule::schema_fields_DESCRIPTION => 'Test Description',
+            Rule::schema_fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
+            Rule::schema_fields_STATUS => Rule::STATUS_ACTIVE
         ]);
         $rule->save();
         $ruleId = $rule->getId();
@@ -132,10 +132,10 @@ class LocalDescriptionTest extends TestCase
             /** @var LocalDescription $zhTranslation */
             $zhTranslation = ObjectManager::getInstance(LocalDescription::class);
             $zhTranslation->setData([
-                LocalDescription::fields_ID => $ruleId,
-                LocalModelInterface::fields_local_code => 'zh_Hans_CN',
-                LocalDescription::fields_NAME => '测试规则',
-                LocalDescription::fields_DESCRIPTION => '测试规则描述'
+                LocalDescription::schema_fields_ID => $ruleId,
+                LocalModelInterface::schema_fields_local_code => 'zh_Hans_CN',
+                LocalDescription::schema_fields_NAME => '测试规则',
+                LocalDescription::schema_fields_DESCRIPTION => '测试规则描述'
             ]);
             $zhTranslation->save();
             
@@ -145,10 +145,10 @@ class LocalDescriptionTest extends TestCase
             /** @var LocalDescription $enTranslation */
             $enTranslation = ObjectManager::getInstance(LocalDescription::class);
             $enTranslation->setData([
-                LocalDescription::fields_ID => $ruleId,
-                LocalModelInterface::fields_local_code => 'en_US',
-                LocalDescription::fields_NAME => 'Test Rule',
-                LocalDescription::fields_DESCRIPTION => 'Test Rule Description'
+                LocalDescription::schema_fields_ID => $ruleId,
+                LocalModelInterface::schema_fields_local_code => 'en_US',
+                LocalDescription::schema_fields_NAME => 'Test Rule',
+                LocalDescription::schema_fields_DESCRIPTION => 'Test Rule Description'
             ]);
             $enTranslation->save();
             
@@ -157,24 +157,24 @@ class LocalDescriptionTest extends TestCase
             // 读取中文翻译
             $zhLoaded = ObjectManager::getInstance(LocalDescription::class);
             $zhLoaded->reset()
-                ->where(LocalDescription::fields_ID, $ruleId)
-                ->where(LocalModelInterface::fields_local_code, 'zh_Hans_CN')
+                ->where(LocalDescription::schema_fields_ID, $ruleId)
+                ->where(LocalModelInterface::schema_fields_local_code, 'zh_Hans_CN')
                 ->find()
                 ->fetch();
             
-            $this->assertEquals('测试规则', $zhLoaded->getData(LocalDescription::fields_NAME));
-            $this->assertEquals('测试规则描述', $zhLoaded->getData(LocalDescription::fields_DESCRIPTION));
+            $this->assertEquals('测试规则', $zhLoaded->getData(LocalDescription::schema_fields_NAME));
+            $this->assertEquals('测试规则描述', $zhLoaded->getData(LocalDescription::schema_fields_DESCRIPTION));
 
             // 读取英文翻译
             $enLoaded = ObjectManager::getInstance(LocalDescription::class);
             $enLoaded->reset()
-                ->where(LocalDescription::fields_ID, $ruleId)
-                ->where(LocalModelInterface::fields_local_code, 'en_US')
+                ->where(LocalDescription::schema_fields_ID, $ruleId)
+                ->where(LocalModelInterface::schema_fields_local_code, 'en_US')
                 ->find()
                 ->fetch();
             
-            $this->assertEquals('Test Rule', $enLoaded->getData(LocalDescription::fields_NAME));
-            $this->assertEquals('Test Rule Description', $enLoaded->getData(LocalDescription::fields_DESCRIPTION));
+            $this->assertEquals('Test Rule', $enLoaded->getData(LocalDescription::schema_fields_NAME));
+            $this->assertEquals('Test Rule Description', $enLoaded->getData(LocalDescription::schema_fields_DESCRIPTION));
 
         } finally {
             // 清理测试数据
@@ -197,8 +197,8 @@ class LocalDescriptionTest extends TestCase
      */
     public function testMainTableIdField(): void
     {
-        $this->assertEquals(Rule::fields_ID, LocalDescription::fields_ID);
-        $this->assertEquals('id', LocalDescription::fields_ID);
+        $this->assertEquals(Rule::schema_fields_ID, LocalDescription::schema_fields_ID);
+        $this->assertEquals('id', LocalDescription::schema_fields_ID);
     }
 
     /**
@@ -212,9 +212,9 @@ class LocalDescriptionTest extends TestCase
         /** @var Rule $rule */
         $rule = ObjectManager::getInstance(Rule::class);
         $rule->setData([
-            Rule::fields_NAME => 'Composite Key Test',
-            Rule::fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
-            Rule::fields_STATUS => Rule::STATUS_ACTIVE
+            Rule::schema_fields_NAME => 'Composite Key Test',
+            Rule::schema_fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
+            Rule::schema_fields_STATUS => Rule::STATUS_ACTIVE
         ]);
         $rule->save();
         $ruleId = $rule->getId();
@@ -224,9 +224,9 @@ class LocalDescriptionTest extends TestCase
             /** @var LocalDescription $translation1 */
             $translation1 = ObjectManager::getInstance(LocalDescription::class);
             $translation1->setData([
-                LocalDescription::fields_ID => $ruleId,
-                LocalModelInterface::fields_local_code => 'zh_Hans_CN',
-                LocalDescription::fields_NAME => '复合主键测试'
+                LocalDescription::schema_fields_ID => $ruleId,
+                LocalModelInterface::schema_fields_local_code => 'zh_Hans_CN',
+                LocalDescription::schema_fields_NAME => '复合主键测试'
             ]);
             $translation1->save();
             $translation1Id = $translation1->getId();
@@ -235,9 +235,9 @@ class LocalDescriptionTest extends TestCase
             /** @var LocalDescription $translation2 */
             $translation2 = ObjectManager::getInstance(LocalDescription::class);
             $translation2->setData([
-                LocalDescription::fields_ID => $ruleId,
-                LocalModelInterface::fields_local_code => 'en_US',
-                LocalDescription::fields_NAME => 'Composite Key Test'
+                LocalDescription::schema_fields_ID => $ruleId,
+                LocalModelInterface::schema_fields_local_code => 'en_US',
+                LocalDescription::schema_fields_NAME => 'Composite Key Test'
             ]);
             $translation2->save();
             $translation2Id = $translation2->getId();
@@ -251,12 +251,12 @@ class LocalDescriptionTest extends TestCase
             // 验证可以通过复合主键查询
             $loaded1 = ObjectManager::getInstance(LocalDescription::class);
             $loaded1->reset()
-                ->where(LocalDescription::fields_ID, $ruleId)
-                ->where(LocalModelInterface::fields_local_code, 'zh_Hans_CN')
+                ->where(LocalDescription::schema_fields_ID, $ruleId)
+                ->where(LocalModelInterface::schema_fields_local_code, 'zh_Hans_CN')
                 ->find()
                 ->fetch();
             
-            $this->assertEquals('复合主键测试', $loaded1->getData(LocalDescription::fields_NAME));
+            $this->assertEquals('复合主键测试', $loaded1->getData(LocalDescription::schema_fields_NAME));
 
         } finally {
             // 清理测试数据
@@ -283,9 +283,9 @@ class LocalDescriptionTest extends TestCase
         /** @var Rule $rule */
         $rule = ObjectManager::getInstance(Rule::class);
         $rule->setData([
-            Rule::fields_NAME => 'Update Test',
-            Rule::fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
-            Rule::fields_STATUS => Rule::STATUS_ACTIVE
+            Rule::schema_fields_NAME => 'Update Test',
+            Rule::schema_fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
+            Rule::schema_fields_STATUS => Rule::STATUS_ACTIVE
         ]);
         $rule->save();
         $ruleId = $rule->getId();
@@ -295,28 +295,28 @@ class LocalDescriptionTest extends TestCase
             /** @var LocalDescription $translation */
             $translation = ObjectManager::getInstance(LocalDescription::class);
             $translation->setData([
-                LocalDescription::fields_ID => $ruleId,
-                LocalModelInterface::fields_local_code => 'zh_Hans_CN',
-                LocalDescription::fields_NAME => '原始名称',
-                LocalDescription::fields_DESCRIPTION => '原始描述'
+                LocalDescription::schema_fields_ID => $ruleId,
+                LocalModelInterface::schema_fields_local_code => 'zh_Hans_CN',
+                LocalDescription::schema_fields_NAME => '原始名称',
+                LocalDescription::schema_fields_DESCRIPTION => '原始描述'
             ]);
             $translation->save();
 
             // 更新翻译
-            $translation->setData(LocalDescription::fields_NAME, '更新后的名称');
-            $translation->setData(LocalDescription::fields_DESCRIPTION, '更新后的描述');
+            $translation->setData(LocalDescription::schema_fields_NAME, '更新后的名称');
+            $translation->setData(LocalDescription::schema_fields_DESCRIPTION, '更新后的描述');
             $translation->save();
 
             // 验证更新
             $updated = ObjectManager::getInstance(LocalDescription::class);
             $updated->reset()
-                ->where(LocalDescription::fields_ID, $ruleId)
-                ->where(LocalModelInterface::fields_local_code, 'zh_Hans_CN')
+                ->where(LocalDescription::schema_fields_ID, $ruleId)
+                ->where(LocalModelInterface::schema_fields_local_code, 'zh_Hans_CN')
                 ->find()
                 ->fetch();
 
-            $this->assertEquals('更新后的名称', $updated->getData(LocalDescription::fields_NAME));
-            $this->assertEquals('更新后的描述', $updated->getData(LocalDescription::fields_DESCRIPTION));
+            $this->assertEquals('更新后的名称', $updated->getData(LocalDescription::schema_fields_NAME));
+            $this->assertEquals('更新后的描述', $updated->getData(LocalDescription::schema_fields_DESCRIPTION));
 
         } finally {
             // 清理测试数据
@@ -340,9 +340,9 @@ class LocalDescriptionTest extends TestCase
         /** @var Rule $rule */
         $rule = ObjectManager::getInstance(Rule::class);
         $rule->setData([
-            Rule::fields_NAME => 'Delete Test',
-            Rule::fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
-            Rule::fields_STATUS => Rule::STATUS_ACTIVE
+            Rule::schema_fields_NAME => 'Delete Test',
+            Rule::schema_fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
+            Rule::schema_fields_STATUS => Rule::STATUS_ACTIVE
         ]);
         $rule->save();
         $ruleId = $rule->getId();
@@ -352,9 +352,9 @@ class LocalDescriptionTest extends TestCase
             /** @var LocalDescription $translation */
             $translation = ObjectManager::getInstance(LocalDescription::class);
             $translation->setData([
-                LocalDescription::fields_ID => $ruleId,
-                LocalModelInterface::fields_local_code => 'zh_Hans_CN',
-                LocalDescription::fields_NAME => '待删除的翻译'
+                LocalDescription::schema_fields_ID => $ruleId,
+                LocalModelInterface::schema_fields_local_code => 'zh_Hans_CN',
+                LocalDescription::schema_fields_NAME => '待删除的翻译'
             ]);
             $translation->save();
             $translationId = $translation->getId();
@@ -365,8 +365,8 @@ class LocalDescriptionTest extends TestCase
             // 验证删除
             $deleted = ObjectManager::getInstance(LocalDescription::class);
             $deleted->reset()
-                ->where(LocalDescription::fields_ID, $ruleId)
-                ->where(LocalModelInterface::fields_local_code, 'zh_Hans_CN')
+                ->where(LocalDescription::schema_fields_ID, $ruleId)
+                ->where(LocalModelInterface::schema_fields_local_code, 'zh_Hans_CN')
                 ->find()
                 ->fetch();
 

@@ -324,7 +324,7 @@ class RuleEngine
 
         $result = $this->executeActions($actions, $context);
         $result['rule_id'] = $rule->getId();
-        $result['rule_name'] = $rule->getData(Rule::fields_NAME);
+        $result['rule_name'] = $rule->getData(Rule::schema_fields_NAME);
 
         return $result;
     }
