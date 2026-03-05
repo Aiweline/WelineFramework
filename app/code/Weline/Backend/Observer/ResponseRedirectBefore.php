@@ -19,6 +19,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Session;
+use Weline\Framework\Session\Strategy\WlsStrategy;
 
 class ResponseRedirectBefore implements ObserverInterface
 {
@@ -117,6 +118,10 @@ class ResponseRedirectBefore implements ObserverInterface
             $backendSession = SessionFactory::getInstance()->createBackendSession();
             
             if (!$backendSession->isLoggedIn()) {
+                // 诊断：是否带 Session Cookie（便于排查 WLS 下登录后仍跳回登录页）
+                $sessId = (string) ($_COOKIE[WlsStrategy::SESSION_NAME] ?? '');
+                $hint = $sessId !== '' ? \substr($sessId, 0, 8) . '...' : 'none';
+                w_log_warning('[Backend] Redirect to login: cookie_sid=' . $hint . ' (session empty or not logged in)', [], 'session');
                 // 未登录用户重定向到登录页（同源 URL，避免 admin ↔ login 循环重定向）
                 $loginUrl = $this->getBackendLoginUrlSameOrigin();
                 $data->setData('url', $loginUrl);
