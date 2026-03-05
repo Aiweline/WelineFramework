@@ -14,6 +14,7 @@ namespace Weline\Acl\Model;
 
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: '角色表')]
