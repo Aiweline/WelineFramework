@@ -21,13 +21,13 @@ class Scope extends BackendController
             $user_id = $this->session->getLoginUserID();
             // 查找或新建
             $userScope = w_obj(UserScope::class)
-                ->where(UserScope::fields_USER_ID, $user_id)
-                ->where(UserScope::fields_SCOPE, $scope)
+                ->where(UserScope::schema_fields_USER_ID, $user_id)
+                ->where(UserScope::schema_fields_SCOPE, $scope)
                 ->find()    
                 ->fetch();
             if (!$userScope->getId()) {
-                $userScope->setData(UserScope::fields_USER_ID, $user_id)
-                    ->setData(UserScope::fields_SCOPE, $scope);
+                $userScope->setData(UserScope::schema_fields_USER_ID, $user_id)
+                    ->setData(UserScope::schema_fields_SCOPE, $scope);
             }
             // 支持json字符串或数组 
             if (is_string($data)) {
@@ -35,13 +35,13 @@ class Scope extends BackendController
             } else {
                 $json = json_encode($data, JSON_UNESCAPED_UNICODE);
             }
-            $userScope->setData(UserScope::fields_DATA, $json);
+            $userScope->setData(UserScope::schema_fields_DATA, $json);
             $userScope->save(true);
             return $this->fetchJson([
                 'code' => 200,
                 'msg' => __('保存成功'),
                 'data'=>$userScope->getData(),
-                'json'=>$userScope->getData(UserScope::fields_DATA)?json_decode($userScope->getData(UserScope::fields_DATA)??'{}'):[]
+                'json'=>$userScope->getData(UserScope::schema_fields_DATA)?json_decode($userScope->getData(UserScope::schema_fields_DATA)??'{}'):[]
             ]);
         }
         // GET: 获取scope数据
@@ -49,11 +49,11 @@ class Scope extends BackendController
             $scope = $this->request->getGet('scope');
             $user_id = $this->session->getLoginUserID();
             $userScope = w_obj(UserScope::class)
-                ->where(UserScope::fields_USER_ID, $user_id)
-                ->where(UserScope::fields_SCOPE, $scope)
+                ->where(UserScope::schema_fields_USER_ID, $user_id)
+                ->where(UserScope::schema_fields_SCOPE, $scope)
                 ->find()
                 ->fetch();
-            $json = $userScope->getData(UserScope::fields_DATA);
+            $json = $userScope->getData(UserScope::schema_fields_DATA);
             $jsonArr = $json ? json_decode($json, true) : [];
             return $this->fetchJson([
                 'code' => 200,

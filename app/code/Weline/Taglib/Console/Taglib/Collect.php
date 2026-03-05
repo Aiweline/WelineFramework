@@ -38,14 +38,34 @@ class Collect implements CommandInterface
         $moduleName = $args['module'] ?? $args['m'] ?? $args[1] ?? null;
 
         if ($moduleName) {
-            $moduleName = trim($moduleName);
-            $this->printing->note(__('正在收集模块 %{1} 的标签库...', [$moduleName]));
-            try {
-                $this->collectModuleTaglibs($moduleName);
-                $this->printing->success(__('模块 %{1} 标签库收集成功！', [$moduleName]));
-            } catch (\Exception $e) {
-                $this->printing->error(__('模块 %{1} 标签库收集失败：%{2}', [$moduleName, $e->getMessage()]));
-                return;
+            $moduleName = is_string($moduleName) ? trim($moduleName) : '';
+            // 支持逗号分隔的多个模块；仅保留已注册的模块名，避免 stage code（如 schema_diff）等被当作模块
+            $requested = $moduleName === '' ? [] : array_map('trim', explode(',', $moduleName));
+            $validNames = array_keys(Env::getInstance()->getActiveModules());
+            $moduleList = array_values(array_intersect($requested, $validNames));
+            if ($moduleList !== $requested && $requested !== []) {
+                $this->printing->warning(__('“%{1}”不是已注册模块名，已忽略；仅收集已注册模块的标签。', [implode(', ', array_diff($requested, $moduleList))]));
+            }
+            if (!empty($moduleList)) {
+                $this->printing->note(__('正在收集模块 %{1} 的标签库...', [implode(', ', $moduleList)]));
+                try {
+                    foreach ($moduleList as $name) {
+                        $this->collectModuleTaglibs($name);
+                    }
+                    $this->printing->success(__('模块 %{1} 标签库收集成功！', [implode(', ', $moduleList)]));
+                } catch (\Exception $e) {
+                    $this->printing->error(__('模块 %{1} 标签库收集失败：%{2}', [implode(', ', $moduleList), $e->getMessage()]));
+                    return;
+                }
+            } else {
+                $this->printing->note(__('正在收集所有模块的标签库...'));
+                try {
+                    $this->collectAllTaglibs();
+                    $this->printing->success(__('所有标签库收集成功！'));
+                } catch (\Exception $e) {
+                    $this->printing->error(__('标签库收集失败：%{1}', [$e->getMessage()]));
+                    return;
+                }
             }
         } else {
             $this->printing->note(__('正在收集所有模块的标签库...'));
