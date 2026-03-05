@@ -13,93 +13,29 @@ declare(strict_types=1);
 
 namespace Weline\Index\Model;
 
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
-class Contact extends \Weline\Framework\Database\Model
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: '联系')]
+#[Index(name: 'phone', columns: ['phone'], comment: '电话索引')]
+class Contact extends Model
 {
-    public const fields_ID = 'contact_id';
-    public const fields_EMAIL = 'email';
-    public const fields_NAME = 'name';
-    public const fields_PHONE = 'phone';
-    public const fields_OBJECT = 'object';
-    public const fields_MESSAGE = 'message';
+    public const schema_table = 'weline_index_contact';
+    public const schema_primary_key = 'contact_id';
+
     public const indexer = 'weline_indexer';
 
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // TODO: Implement upgrade() method.
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-//        $setup->dropTable();
-        if (!$setup->tableExist()) {
-            $setup->createTable()
-                ->addColumn(
-                    self::fields_ID,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'auto_increment primary key',
-                    'ID'
-                )
-                ->addColumn(
-                    self::fields_EMAIL,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null unique',
-                    '邮箱'
-                )
-                ->addColumn(
-                    self::fields_NAME,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    '称呼'
-                )
-                ->addColumn(
-                    self::fields_PHONE,
-                    TableInterface::column_type_VARCHAR,
-                    32,
-                    'not null',
-                    '电话号码'
-                )
-                ->addColumn(
-                    self::fields_OBJECT,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    '主题'
-                )
-                ->addColumn(
-                    self::fields_MESSAGE,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    'not null',
-                    '内容'
-                )
-                ->addIndex(
-                    TableInterface::index_type_DEFAULT,
-                    self::fields_PHONE,
-                    'phone',
-                    '电话唯一索引'
-                )
-                ->create();
-        }
-    }
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'ID')]
+    public const schema_fields_ID = 'contact_id';
+    #[Col(type: 'varchar', length: 255, nullable: false, unique: true, comment: '邮箱')]
+    public const schema_fields_EMAIL = 'email';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '称呼')]
+    public const schema_fields_NAME = 'name';
+    #[Col(type: 'varchar', length: 32, nullable: false, comment: '电话号码')]
+    public const schema_fields_PHONE = 'phone';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '主题')]
+    public const schema_fields_OBJECT = 'object';
+    #[Col(type: 'text', nullable: false, comment: '内容')]
+    public const schema_fields_MESSAGE = 'message';
 }
