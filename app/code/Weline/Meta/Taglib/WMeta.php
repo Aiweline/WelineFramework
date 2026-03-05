@@ -131,10 +131,10 @@ class WMeta implements TaglibInterface
                 if ($translatedValue === null) {
                     /** @var \Weline\Meta\Model\Meta $metaModel */
                     $metaModel = ObjectManager::getInstance(\Weline\Meta\Model\Meta::class);
-                    $metaModel->where(\Weline\Meta\Model\Meta::fields_META_IDENTIFY, $metaIdentify)->find()->fetch();
+                    $metaModel->where(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY, $metaIdentify)->find()->fetch();
                     
                     if ($metaModel->getId()) {
-                        $metaData = json_decode($metaModel->getData(\Weline\Meta\Model\Meta::fields_META_DATA) ?? '{}', true);
+                        $metaData = json_decode($metaModel->getData(\Weline\Meta\Model\Meta::schema_fields_META_DATA) ?? '{}', true);
                         
                         // 尝试从 meta_data 中获取字段值
                         if ($fieldPath === 'name') {
@@ -184,8 +184,8 @@ class WMeta implements TaglibInterface
                     'field' => $fieldPath,
                     'id' => $metaIdentify
                 ];
-                
                 if ($request->isBackend()) {
+                    $actionParams['isIframe'] = '1';
                     $action = $request->getUrlBuilder()->getBackendUrl('i18n/backend/taglib/local', $actionParams);
                 } else {
                     $action = $request->getUrlBuilder()->getUrl('i18n/frontend/taglib/local', $actionParams);
@@ -312,16 +312,16 @@ TAG;
 \$metaKeyWithScope = \$metaKey . (\$scope !== 'default' ? '|scope:' . \$scope : '');
 \$localeDict = \\Weline\\Framework\\Manager\\ObjectManager::getInstance()->get(\\Weline\\I18n\\Model\\Locale\\Dictionary::class);
 \$md5 = \\Weline\\I18n\\Model\\Locale\\Dictionary::generateMd5(\$metaKeyWithScope, \$locale);
-\$localeDict->load(\$md5, \\Weline\\I18n\\Model\\Locale\\Dictionary::fields_MD5);
+\$localeDict->load(\$md5, \\Weline\\I18n\\Model\\Locale\\Dictionary::schema_fields_MD5);
 \$translation = '';
 if (\$localeDict->getId()) {
-    \$translation = \$localeDict->getData(\\Weline\\I18n\\Model\\Locale\\Dictionary::fields_TRANSLATE);
+    \$translation = \$localeDict->getData(\\Weline\\I18n\\Model\\Locale\\Dictionary::schema_fields_TRANSLATE);
 }
 if (empty(\$translation) && \$scope !== 'default') {
     \$md5Default = \\Weline\\I18n\\Model\\Locale\\Dictionary::generateMd5(\$metaKey, \$locale);
-    \$localeDict->load(\$md5Default, \\Weline\\I18n\\Model\\Locale\\Dictionary::fields_MD5);
+    \$localeDict->load(\$md5Default, \\Weline\\I18n\\Model\\Locale\\Dictionary::schema_fields_MD5);
     if (\$localeDict->getId()) {
-        \$translation = \$localeDict->getData(\\Weline\\I18n\\Model\\Locale\\Dictionary::fields_TRANSLATE);
+        \$translation = \$localeDict->getData(\\Weline\\I18n\\Model\\Locale\\Dictionary::schema_fields_TRANSLATE);
     }
 }
 \$defaultValue = \$translation ?: '{$content}';
@@ -334,19 +334,19 @@ PHP;
                 
                 // 先尝试带 scope 的 key
                 $md5 = LocaleDictionary::generateMd5($metaKeyWithScope, $locale);
-                $localeDict->load(LocaleDictionary::fields_MD5, $md5);
+                $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5);
                 
                 $translation = '';
                 if ($localeDict->getId()) {
-                    $translation = $localeDict->getData(LocaleDictionary::fields_TRANSLATE);
+                    $translation = $localeDict->getData(LocaleDictionary::schema_fields_TRANSLATE);
                 }
                 
                 // 如果没有找到，尝试不带 scope 的 key（使用默认值）
                 if (empty($translation) && $scope !== 'default') {
                     $md5Default = LocaleDictionary::generateMd5($metaKey, $locale);
-                    $localeDict->load(LocaleDictionary::fields_MD5, $md5Default);
+                    $localeDict->load(LocaleDictionary::schema_fields_MD5, $md5Default);
                     if ($localeDict->getId()) {
-                        $translation = $localeDict->getData(LocaleDictionary::fields_TRANSLATE);
+                        $translation = $localeDict->getData(LocaleDictionary::schema_fields_TRANSLATE);
                     }
                 }
 
