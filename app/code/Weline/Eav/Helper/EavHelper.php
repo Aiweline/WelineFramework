@@ -24,7 +24,7 @@ class EavHelper
         # 当前实体
         /** @var \Weline\Eav\Model\EavEntity $entity */
         $entity = ObjectManager::make(\Weline\Eav\Model\EavEntity::class);
-        $entity = $entity->load($entity::fields_code, $entity_code);
+        $entity = $entity->load($entity::schema_fields_code, $entity_code);
         if (!$entity->getId()) {
             throw new \Exception(__('当前实体不存在 %{1}', $entity_code));
         }
@@ -39,7 +39,7 @@ class EavHelper
     {
         /** @var \Weline\Eav\Model\EavAttribute\Type $type */
         $type = ObjectManager::make(\Weline\Eav\Model\EavAttribute\Type::class);
-        $type = $type->load($type::fields_code, $type_code);
+        $type = $type->load($type::schema_fields_code, $type_code);
         if (!$type->getId()) {
             throw new \Exception(__('类型不存在:%{1}', $type_code));
         }
@@ -68,8 +68,8 @@ class EavHelper
         /** @var \Weline\Eav\Model\EavAttribute\Set $attributeSet */
         $attributeSet = ObjectManager::make(\Weline\Eav\Model\EavAttribute\Set::class);
         $eav_entity_id = self::getEntity($entity_code)->getId();
-        $attributeSet = $attributeSet->where($attributeSet::fields_code, $code)
-            ->where($attributeSet::fields_eav_entity_id, $eav_entity_id)
+        $attributeSet = $attributeSet->where($attributeSet::schema_fields_code, $code)
+            ->where($attributeSet::schema_fields_eav_entity_id, $eav_entity_id)
             ->find()
             ->fetch();
         if (!$attributeSet->getId()) {
@@ -93,9 +93,9 @@ class EavHelper
         $attributeGroup = ObjectManager::make(\Weline\Eav\Model\EavAttribute\Group::class);
         $eav_entity_id = self::getEntity($entity_code)->getId();
         $set_id = self::getEntityAttributeSet($entity_code, $set_code, $set_name)->getId();
-        $attributeGroup = $attributeGroup->where($attributeGroup::fields_code, $code)
-            ->where($attributeGroup::fields_eav_entity_id, $eav_entity_id)
-            ->where($attributeGroup::fields_set_id, $set_id)
+        $attributeGroup = $attributeGroup->where($attributeGroup::schema_fields_code, $code)
+            ->where($attributeGroup::schema_fields_eav_entity_id, $eav_entity_id)
+            ->where($attributeGroup::schema_fields_set_id, $set_id)
             ->find()
             ->fetch();
         if (!$attributeGroup->getId()) {
@@ -123,8 +123,8 @@ class EavHelper
         $group_id = (int)self::getEntityAttributeGroup($group_code, $group_name, $set_code, $set_name)->getId();
         $type_id = (int)self::getType($type_code)->getId();
         /**@var \Weline\Eav\Model\EavAttribute $attribute */
-        $attribute = $attribute->where($attribute::fields_code, $code)
-            ->where($attribute::fields_eav_entity_id, $eav_entity_id)
+        $attribute = $attribute->where($attribute::schema_fields_code, $code)
+            ->where($attribute::schema_fields_eav_entity_id, $eav_entity_id)
             ->find()
             ->fetch();
         if (!$attribute->getId()) {
@@ -145,16 +145,16 @@ class EavHelper
                 throw new \Exception('创建属性失败');
             }
         } else {
-            $attribute->where($attribute::fields_type_id, $type_id)
-                ->where($attribute::fields_eav_entity_id, $eav_entity_id)
-                ->where($attribute::fields_attribute_id, $attribute->getId())
-                ->where($attribute::fields_is_system, 1)
-                ->where($attribute::fields_code, $code)
+            $attribute->where($attribute::schema_fields_type_id, $type_id)
+                ->where($attribute::schema_fields_eav_entity_id, $eav_entity_id)
+                ->where($attribute::schema_fields_attribute_id, $attribute->getId())
+                ->where($attribute::schema_fields_is_system, 1)
+                ->where($attribute::schema_fields_code, $code)
                 ->update([
-                    $attribute::fields_name => $name,
-                    $attribute::fields_group_id => $group_id,
-                    $attribute::fields_set_id => $set_id,
-                    $attribute::fields_multiple_valued => (int)$is_multi,
+                    $attribute::schema_fields_name => $name,
+                    $attribute::schema_fields_group_id => $group_id,
+                    $attribute::schema_fields_set_id => $set_id,
+                    $attribute::schema_fields_multiple_valued => (int)$is_multi,
                 ])
                 ->fetch();
         }

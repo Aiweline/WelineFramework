@@ -244,17 +244,17 @@
                 var dataTr = $(this);
                 console.log('使用ajax将配置项保存到数据库');
                 console.log(dataTr);
-                $.ajax({
-                    url:'@backend-url("*/backend/attribute/option/edit")',
-                    type:'POST',
-                    data: Object.assign(values,{
-                        attribute_code:'{{attribute.code}}',
-                        eav_entity_id:'{{attribute.eav_entity_id}}',
-                        origin_code:dataTr.attr('data-id')
-                    }),
-                    dataType: 'json',
-                    success: function (data) {
-                        if(data['code']===1){
+                var editData = Object.assign({}, values, {
+                    attribute_code:'{{attribute.code}}',
+                    eav_entity_id:'{{attribute.eav_entity_id}}',
+                    origin_code:dataTr.attr('data-id')
+                });
+                var editUrl = '@backend-url("*/backend/attribute/option/edit")';
+                var editBody = Object.keys(editData).map(function(k){ return encodeURIComponent(k)+'='+encodeURIComponent(editData[k]); }).join('&');
+                var req = window.Weline.Api.request(editUrl, { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: editBody });
+                req.then(function(res) {
+                    var data = (res && res.data) || res;
+                    if(data && data['code']===1){
                             Swal.fire({
                                 title: '@lang{修改提示}',
                                 text: data['msg'],
@@ -271,8 +271,7 @@
                                 confirmButtonText: '@lang{重试}'
                             });
                         }
-                    }
-                });
+                }).catch(function() {});
             },
             cancel: function (values) {
                 $('.edit i', this)
@@ -303,13 +302,13 @@
                 showCancelButton: true
             }).then(function (result) {
                 if (result.isConfirmed) {
-                    $.ajax({
-                        url: '@backend-url("*/backend/attribute/option/delete")?isAjax=1',
-                        type: 'POST',
-                        data: {code: parent.attr('data-id'), attribute_code: '{{attribute.code}}', eav_entity_id: '{{attribute.eav_entity_id}}'},
-                        async: true,
-                        success: function (result) {
-                            if (result.code === 1) {
+                    var delData = {code: parent.attr('data-id'), attribute_code: '{{attribute.code}}', eav_entity_id: '{{attribute.eav_entity_id}}'};
+                    var delBody = Object.keys(delData).map(function(k){ return encodeURIComponent(k)+'='+encodeURIComponent(delData[k]); }).join('&');
+                    var delUrl = '@backend-url("*/backend/attribute/option/delete")?isAjax=1';
+                    var req = window.Weline.Api.request(delUrl, { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: delBody });
+                    req.then(function (res) {
+                        var result = (res && res.data) || res;
+                        if (result && result.code === 1) {
                                 Swal.fire({
                                     title: '@lang{通知}',
                                     text: result.msg,
@@ -325,8 +324,7 @@
                                     confirmButtonText: '@lang{好的}'
                                 });
                             }
-                        }
-                    });
+                    }).catch(function() {});
                 }
             });
             renderEditTable();
@@ -375,11 +373,11 @@
     
     var debounceInputOptionCode = debounce(function(e) {
         var search = $(e.target).val();
-        $.ajax({
-            url: '@backend-url("*/backend/attribute/option/search")?field=code&limit=1&search=' + search +
-                '&eav_entity_id={{attribute.eav_entity_id}}&attribute_code={{attribute.code}}',
-            success: function (res) {
-                if (res['msg']) {
+        var url = '@backend-url("*/backend/attribute/option/search")?field=code&limit=1&search=' + encodeURIComponent(search) + '&eav_entity_id={{attribute.eav_entity_id}}&attribute_code={{attribute.code}}';
+        var req = window.Weline.Api.get(url, { silent: true });
+        req.then(function (res) {
+            var resData = (res && res.data) || res;
+            if (resData && resData['msg']) {
                     Swal.fire({
                         title: '警告！',
                         text: res['msg'],
@@ -387,9 +385,9 @@
                         dangerMode: true,
                         confirmButtonText: '@lang{好的}'
                     });
-                    return false;
+                    return;
                 }
-                var items = res['items'];
+                var items = (resData && resData['items']) || [];
                 if (items.length) {
                     codeInput.removeClass('border-success');
                     codeInput.addClass('border-danger');
@@ -397,18 +395,17 @@
                     codeInput.removeClass('border-danger');
                     codeInput.addClass('border-success');
                 }
-            }
-        });
+        }).catch(function() {});
     }, 500);
     codeInput.on('input', debounceInputOptionCode);
     
     var debounceInputOptionName = debounce(function(e) {
         var search = $(e.target).val();
-        $.ajax({
-            url:'@backend-url("*/backend/attribute/option/search")?field=name&limit=1&search=' + search +
-                '&eav_entity_id={{attribute.eav_entity_id}}&attribute_code={{attribute.code}}',
-            success: function (res) {
-                if (res['msg']) {
+        var url = '@backend-url("*/backend/attribute/option/search")?field=name&limit=1&search=' + encodeURIComponent(search) + '&eav_entity_id={{attribute.eav_entity_id}}&attribute_code={{attribute.code}}';
+        var req = window.Weline.Api.get(url, { silent: true });
+        req.then(function (res) {
+            var resData = (res && res.data) || res;
+            if (resData && resData['msg']) {
                     Swal.fire({
                         title: '警告！',
                         text: res['msg'],
@@ -416,9 +413,9 @@
                         dangerMode: true,
                         confirmButtonText: '@lang{好的}'
                     });
-                    return false;
+                    return;
                 }
-                var items = res['items'];
+                var items = (resData && resData['items']) || [];
                 if (items.length) {
                     nameInput.removeClass('border-success');
                     nameInput.addClass('border-danger');
@@ -426,8 +423,7 @@
                     nameInput.removeClass('border-danger');
                     nameInput.addClass('border-success');
                 }
-            }
-        });
+        }).catch(function() {});
     }, 500);
     nameInput.on('input', debounceInputOptionName);
 
@@ -467,16 +463,15 @@
                 'eav_entity_id':'{{attribute.eav_entity_id}}',
                 'attribute_code':'{{attribute.code}}'
             };
-            $.ajax({
-                type: 'post',
-                url: '@backend-url("*/backend/attribute/option/add")',
-                data: data,
-                dataType: 'json',
-                success: function (data) {
-                    if(data['code']===0){
+            var addBody = Object.keys(data).map(function(k){ return encodeURIComponent(k)+'='+encodeURIComponent(data[k]); }).join('&');
+            var addUrl = '@backend-url("*/backend/attribute/option/add")';
+            var req = window.Weline.Api.request(addUrl, { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: addBody });
+            req.then(function (res) {
+                var resData = (res && res.data) || res;
+                if(resData && resData['code']===0){
                         Swal.fire({
                             title: '@lang{操作失败}',
-                            text: data['msg'],
+                            text: resData['msg'],
                             icon: 'error',
                             confirmButtonText: '@lang{重新编辑}'
                         });
@@ -500,7 +495,7 @@
                         renderEditTable();
                     }
                 }
-            });
+            }).catch(function() {});
         };
         
         checkAndAdd();

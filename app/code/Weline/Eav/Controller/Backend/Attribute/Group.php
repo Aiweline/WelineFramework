@@ -117,7 +117,7 @@ class Group extends \Weline\Framework\App\Controller\BackendController
             try {
                 $this->validatePost();
                 $this->group->setData($this->request->getPost())
-                    ->forceCheck(true, [$this->group::fields_code, $this->group::fields_eav_entity_id, $this->group::fields_set_id])
+                    ->forceCheck(true, [$this->group::schema_fields_code, $this->group::schema_fields_eav_entity_id, $this->group::schema_fields_set_id])
                     ->save();
                 $this->getMessageManager()->addSuccess(__('修改成功！'));
                 $this->session->delete('eav_group');
@@ -134,9 +134,9 @@ class Group extends \Weline\Framework\App\Controller\BackendController
         if ($this->request->getGet('group_id')) {
             $group = $this->group->load($this->request->getGet('group_id'));
             $this->assign('group', $group);
-            $this->assign('group_set', ObjectManager::getInstance(\Weline\Eav\Model\EavAttribute\Set::class)->load($group->getData($group::fields_set_id)));
+            $this->assign('group_set', ObjectManager::getInstance(\Weline\Eav\Model\EavAttribute\Set::class)->load($group->getData($group::schema_fields_set_id)));
             $this->assign('group_entity', ObjectManager::getInstance(\Weline\Eav\Model\EavEntity::class)->load($group->getData
-            ($group::fields_eav_entity_id)));
+            ($group::schema_fields_eav_entity_id)));
         }
         $this->init_form();
         return $this->fetch('form');

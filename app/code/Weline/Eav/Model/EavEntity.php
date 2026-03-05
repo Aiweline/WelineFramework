@@ -23,14 +23,18 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class EavEntity extends Model
 {
-    public const fields_ID = 'eav_entity_id';
-    public const fields_eav_entity_id = 'eav_entity_id';
-    public const fields_code = 'code';
-    public const fields_name = 'name';
-    public const fields_class = 'class';
-    public const fields_is_system = 'is_system';
-    public const fields_eav_entity_id_field_type = 'eav_entity_id_field_type';
-    public const fields_eav_entity_id_field_length = 'eav_entity_id_field_length';
+    public const schema_table = 'eav_entity';
+    /** @var list<string> */
+    public const schema_primary_keys = ['eav_entity_id', 'code', 'name'];
+
+    public const schema_fields_ID = 'eav_entity_id';
+    public const schema_fields_eav_entity_id = 'eav_entity_id';
+    public const schema_fields_code = 'code';
+    public const schema_fields_name = 'name';
+    public const schema_fields_class = 'class';
+    public const schema_fields_is_system = 'is_system';
+    public const schema_fields_eav_entity_id_field_type = 'eav_entity_id_field_type';
+    public const schema_fields_eav_entity_id_field_length = 'eav_entity_id_field_length';
 
     public array $_unit_primary_keys = ['eav_entity_id', 'code', 'name'];
     public array $_index_sort_keys = ['eav_entity_id', 'code', 'name'];
@@ -62,8 +66,8 @@ class EavEntity extends Model
     {
         /**@var \Weline\Eav\Model\EavAttribute $attributeModel */
         $attributeModel = ObjectManager::make(EavAttribute::class);
-        $attributeModel->where(EavAttribute::fields_eav_entity_id, $this->getId())
-            ->where(EavAttribute::fields_code, $code)
+        $attributeModel->where(EavAttribute::schema_fields_eav_entity_id, $this->getId())
+            ->where(EavAttribute::schema_fields_code, $code)
             ->find()
             ->fetch();
         return $attributeModel;
@@ -71,59 +75,59 @@ class EavEntity extends Model
 
     public function getCode(): string
     {
-        return $this->getData(self::fields_code);
+        return $this->getData(self::schema_fields_code);
     }
 
     public function setCode(string $code): static
     {
-        return $this->setData(self::fields_code, $code);
+        return $this->setData(self::schema_fields_code, $code);
     }
 
     public function getName(): string
     {
-        return $this->getData(self::fields_name);
+        return $this->getData(self::schema_fields_name);
     }
 
     public function setName(string $name): static
     {
-        return $this->setData(self::fields_name, $name);
+        return $this->setData(self::schema_fields_name, $name);
     }
 
     public function getClass(): string
     {
-        return $this->getData(self::fields_class);
+        return $this->getData(self::schema_fields_class);
     }
 
     public function setClass(string $class): static
     {
-        return $this->setData(self::fields_class, $class);
+        return $this->setData(self::schema_fields_class, $class);
     }
 
     public function isSystem(bool $is_system = false): bool|static
     {
         if (is_bool($is_system)) {
-            return $this->setData(self::fields_is_system, $is_system);
+            return $this->setData(self::schema_fields_is_system, $is_system);
         }
-        return (bool)$this->getData(self::fields_is_system);
+        return (bool)$this->getData(self::schema_fields_is_system);
     }
 
     public function getEavEntityIdFieldType(): string
     {
-        return $this->getData(self::fields_eav_entity_id_field_type);
+        return $this->getData(self::schema_fields_eav_entity_id_field_type);
     }
 
     public function setEntityIdFieldType(string $eav_entity_id_field_type): static
     {
-        return $this->setData(self::fields_eav_entity_id_field_type, $eav_entity_id_field_type);
+        return $this->setData(self::schema_fields_eav_entity_id_field_type, $eav_entity_id_field_type);
     }
 
     public function getEavEntityIdFieldLength(): int
     {
-        return intval($this->getData(self::fields_eav_entity_id_field_length));
+        return intval($this->getData(self::schema_fields_eav_entity_id_field_length));
     }
 
     public function setEntityIdFieldLength(int $eav_entity_id_field_length): static
     {
-        return $this->setData(self::fields_eav_entity_id_field_length, $eav_entity_id_field_length);
+        return $this->setData(self::schema_fields_eav_entity_id_field_length, $eav_entity_id_field_length);
     }
 }

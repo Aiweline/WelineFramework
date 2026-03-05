@@ -20,7 +20,7 @@ use Weline\I18n\LocalModel;
 
 class LocalDescription extends LocalModel
 {
-    public const fields_ID          = EavAttribute::fields_ID;
+    public const fields_ID          = EavAttribute::schema_fields_ID;
 
 //    public function setup(ModelSetup $setup, Context $context): void
 //    {
