@@ -1189,10 +1189,10 @@ if (typeof window.openVisualConfig === 'undefined') {
         // 如果只有 handle 没有 pageId，需要通过 API 获取
         if (handle && !pageId) {
             console.log('📡 通过 handle 获取页面信息:', handle);
-            fetch('<?= $this->getBackendUrl('cms/backend/page/getPageByHandle') ?>?handle=' + encodeURIComponent(handle))
-                .then(response => response.json())
-                .then(result => {
-                    if (result.success && result.data) {
+            var url = '<?= $this->getBackendUrl('cms/backend/page/getPageByHandle') ?>?handle=' + encodeURIComponent(handle);
+            window.Weline.Api.get(url, { silent: true }).then(function(res) {
+                var result = (res && res.data) || res;
+                if (result.success && result.data) {
                         pageId = result.data.page_id || null;
                         window.visualPageId = pageId;
                         window.visualConfigHandle = handle;
@@ -1428,17 +1428,8 @@ window.updateSaveStatus = function(status, text) {
                 }
             }
             
-            // 发送保存请求
-            const response = await fetch(saveUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify(requestBody)
-            });
-            
-            const result = await response.json();
+            var res = await window.Weline.Api.post(saveUrl, requestBody, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            const result = (res && res.data) || res;
             
             if (result.success) {
                 if (typeof window.updateSaveStatus === 'function') {
@@ -1695,8 +1686,8 @@ async function loadTemplateStyleConfig(forceScan = false) {
             url += '&force_scan=1&t=' + Date.now();
         }
         
-        const response = await fetch(url);
-        const result = await response.json();
+        var res = await window.Weline.Api.get(url, { silent: true });
+        const result = (res && res.data) || res;
         try { console.log('[VisualConfig] 页面模式配置载入'); console.log('请求URL:', url); console.log('返回结构:', result); } catch (_) {}
         try { console.log('[VisualConfig] 模板模式配置载入'); console.log('请求URL:', url); console.log('返回结构:', result); } catch (_) {}
         
@@ -2031,10 +2022,9 @@ async function loadVisualStyleConfig() {
             url += '&locale=' + encodeURIComponent(locale);
         }
 
-        const response = await fetch(url);
-        const result = await response.json();
+        var res = await window.Weline.Api.get(url, { silent: true });
+        const result = (res && res.data) || res;
         if (result.success && result.data) {
-            // 显示模板信息（名称 + 代码）
             if (result.style_info) {
                 const badge = document.getElementById('templateInfoBadge');
                 if (badge) {
@@ -2457,13 +2447,9 @@ async function handleConfigImport(event) {
             importBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __("导入中...") ?>';
         }
         
-        const response = await fetch(url, {
-            method: 'POST',
-            body: formData,
-            credentials: 'same-origin'
-        });
-        
-        const result = await response.json();
+        var opts = { method: 'POST', body: formData, credentials: 'same-origin' };
+        var res = await window.Weline.Api.request(url, opts);
+        const result = (res && res.data) || res;
         
         if (result.success) {
             if (typeof showToast === 'function') {
@@ -2730,16 +2716,9 @@ window.resetVisualConfigGroup = function(section) {
                     };
                 }
                 
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify(requestData)
-                });
-                
-                const result = await response.json();
+                var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(requestData) };
+                var res = await window.Weline.Api.request(url, opts);
+                const result = (res && res.data) || res;
                 
                 if (result.success) {
                     console.log('✅ 重置成功，重新加载配置...');

@@ -81,13 +81,13 @@ class Form extends FrontendController
             // 保存表单提交记录
             $submission = clone $this->formSubmissionModel;
             $submission->clearData()
-                ->setData(FormSubmission::fields_PAGE_ID, $pageId)
-                ->setData(FormSubmission::fields_EMAIL, $email)
-                ->setData(FormSubmission::fields_PHONE, $phone)
-                ->setData(FormSubmission::fields_USER_AGENT, $userAgent)
-                ->setData(FormSubmission::fields_IP_ADDRESS, $ipAddress)
-                ->setData(FormSubmission::fields_REFERER, $referer)
-                ->setData(FormSubmission::fields_STATUS, FormSubmission::STATUS_NEW)
+                ->setData(FormSubmission::schema_fields_PAGE_ID, $pageId)
+                ->setData(FormSubmission::schema_fields_EMAIL, $email)
+                ->setData(FormSubmission::schema_fields_PHONE, $phone)
+                ->setData(FormSubmission::schema_fields_USER_AGENT, $userAgent)
+                ->setData(FormSubmission::schema_fields_IP_ADDRESS, $ipAddress)
+                ->setData(FormSubmission::schema_fields_REFERER, $referer)
+                ->setData(FormSubmission::schema_fields_STATUS, FormSubmission::STATUS_NEW)
                 ->save();
 
             // 返回成功响应

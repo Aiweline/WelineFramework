@@ -9,41 +9,75 @@ declare(strict_types=1);
 
 namespace Weline\Cms\Model;
 
-use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 
+#[Table(comment: 'CMS页面表')]
+#[Index(name: 'UNQ_WEBSITE_HANDLE', columns: ['website_id', 'handle'], type: 'UNIQUE')]
+#[Index(name: 'idx_handle', columns: ['handle'])]
+#[Index(name: 'idx_website_id', columns: ['website_id'])]
+#[Index(name: 'idx_type', columns: ['type'])]
+#[Index(name: 'idx_parent_id', columns: ['parent_id'])]
+#[Index(name: 'idx_status', columns: ['status'])]
 class Page extends Model
 {
-    public const table = 'weline_cms_page';
-    
+    public const schema_table = 'weline_cms_page';
+
     // 字段定义
-    public const fields_ID = 'page_id';
-    public const fields_HANDLE = 'handle';
-    public const fields_WEBSITE_ID = 'website_id';
-    public const fields_TYPE = 'type';
-    public const fields_NAME = 'name';
-    public const fields_TITLE = 'title';
-    public const fields_CONTENT = 'content';
-    public const fields_PARENT_ID = 'parent_id';
-    public const fields_GA4_ID = 'ga4_id';
-    public const fields_GTM_ID = 'gtm_id';
-    public const fields_FB_PIXEL_ID = 'fb_pixel_id';
-    public const fields_CTA_EVENT_NAME = 'cta_event_name';
-    public const fields_LOGO = 'logo';
-    public const fields_ICON = 'icon';
-    public const fields_LOCALES = 'locales';
-    public const fields_DEFAULT_LOCALE = 'default_locale';
-    public const fields_STYLE = 'style';
-    public const fields_STYLE_SETTING = 'style_setting';
-    public const fields_META_TITLE = 'meta_title';
-    public const fields_META_DESCRIPTION = 'meta_description';
-    public const fields_META_KEYWORDS = 'meta_keywords';
-    public const fields_REDIRECT_URL = 'redirect_url';
-    public const fields_STATUS = 'status';
-    public const fields_CREATE_TIME = 'create_time';
-    public const fields_UPDATE_TIME = 'update_time';
+    #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: '页面ID')]
+    public const schema_fields_ID = 'page_id';
+    #[Col('varchar', 100, nullable: false, comment: '页面句柄')]
+    public const schema_fields_HANDLE = 'handle';
+    #[Col('int', 11, nullable: false, default: 0, comment: '网站ID')]
+    public const schema_fields_WEBSITE_ID = 'website_id';
+    #[Col('varchar', 50, nullable: false, comment: '页面类型')]
+    public const schema_fields_TYPE = 'type';
+    #[Col('varchar', 255, nullable: false, comment: '页面名称')]
+    public const schema_fields_NAME = 'name';
+    #[Col('varchar', 255, nullable: false, comment: '页面标题')]
+    public const schema_fields_TITLE = 'title';
+    #[Col('text', comment: '页面内容')]
+    public const schema_fields_CONTENT = 'content';
+    #[Col('int', default: 0, comment: '父页面ID')]
+    public const schema_fields_PARENT_ID = 'parent_id';
+    #[Col('varchar', 100, comment: 'GA4 ID')]
+    public const schema_fields_GA4_ID = 'ga4_id';
+    #[Col('varchar', 100, comment: 'GTM ID')]
+    public const schema_fields_GTM_ID = 'gtm_id';
+    #[Col('varchar', 100, comment: 'Facebook Pixel ID')]
+    public const schema_fields_FB_PIXEL_ID = 'fb_pixel_id';
+    #[Col('varchar', 100, comment: 'CTA转化事件名称')]
+    public const schema_fields_CTA_EVENT_NAME = 'cta_event_name';
+    #[Col('varchar', 255, comment: 'Logo路径')]
+    public const schema_fields_LOGO = 'logo';
+    #[Col('varchar', 255, comment: 'Icon路径')]
+    public const schema_fields_ICON = 'icon';
+    #[Col('text', comment: '选中的语言列表(JSON)')]
+    public const schema_fields_LOCALES = 'locales';
+    #[Col('varchar', 10, comment: '默认语言代码')]
+    public const schema_fields_DEFAULT_LOCALE = 'default_locale';
+    #[Col('varchar', 100, comment: '页面样式模板名称')]
+    public const schema_fields_STYLE = 'style';
+    #[Col('text', comment: '页面样式配置(JSON)')]
+    public const schema_fields_STYLE_SETTING = 'style_setting';
+    #[Col('varchar', 255, comment: 'SEO标题')]
+    public const schema_fields_META_TITLE = 'meta_title';
+    #[Col('text', comment: 'SEO描述')]
+    public const schema_fields_META_DESCRIPTION = 'meta_description';
+    #[Col('varchar', 255, comment: 'SEO关键词')]
+    public const schema_fields_META_KEYWORDS = 'meta_keywords';
+    #[Col('varchar', 500, comment: '表单提交后跳转URL')]
+    public const schema_fields_REDIRECT_URL = 'redirect_url';
+    #[Col('smallint', 1, nullable: false, default: 0, comment: '状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col('datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
+    public const schema_fields_CREATE_TIME = 'create_time';
+    #[Col('datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '更新时间')]
+    public const schema_fields_UPDATE_TIME = 'update_time';
     
     // 页面类型常量
     public const TYPE_HOME = 'home_page';
@@ -82,7 +116,7 @@ class Page extends Model
     public function getTypeName(): string
     {
         $types = self::getPageTypes();
-        return $types[$this->getData(self::fields_TYPE)] ?? $this->getData(self::fields_TYPE);
+        return $types[$this->getData(self::schema_fields_TYPE)] ?? $this->getData(self::schema_fields_TYPE);
     }
     
     /**
@@ -90,7 +124,7 @@ class Page extends Model
      */
     public function getStatusName(): string
     {
-        return $this->getData(self::fields_STATUS) == self::STATUS_PUBLISHED ? __('已发布') : __('草稿');
+        return $this->getData(self::schema_fields_STATUS) == self::STATUS_PUBLISHED ? __('已发布') : __('草稿');
     }
     
     /**
@@ -98,7 +132,7 @@ class Page extends Model
      */
     public function getSelectedLocales(): array
     {
-        $locales = $this->getData(self::fields_LOCALES);
+        $locales = $this->getData(self::schema_fields_LOCALES);
         if (empty($locales)) {
             return [];
         }
@@ -110,7 +144,7 @@ class Page extends Model
      */
     public function setSelectedLocales(array $locales): self
     {
-        return $this->setData(self::fields_LOCALES, json_encode($locales));
+        return $this->setData(self::schema_fields_LOCALES, json_encode($locales));
     }
     
     /**
@@ -118,7 +152,7 @@ class Page extends Model
      */
     public function getParentPage(): ?Page
     {
-        $parentId = $this->getData(self::fields_PARENT_ID);
+        $parentId = $this->getData(self::schema_fields_PARENT_ID);
         if (!$parentId) {
             return null;
         }
@@ -135,7 +169,7 @@ class Page extends Model
     {
         $children = clone $this;
         return $children->clear()
-            ->where(self::fields_PARENT_ID, $this->getId())
+            ->where(self::schema_fields_PARENT_ID, $this->getId())
             ->select()
             ->fetch()
             ->getItems();
@@ -146,7 +180,7 @@ class Page extends Model
      */
     public function getStyleSetting(): array
     {
-        $setting = $this->getData(self::fields_STYLE_SETTING);
+        $setting = $this->getData(self::schema_fields_STYLE_SETTING);
         if (empty($setting)) {
             return [];
         }
@@ -158,7 +192,7 @@ class Page extends Model
      */
     public function setStyleSetting(array $setting): self
     {
-        return $this->setData(self::fields_STYLE_SETTING, json_encode($setting));
+        return $this->setData(self::schema_fields_STYLE_SETTING, json_encode($setting));
     }
     
     /**
@@ -170,287 +204,5 @@ class Page extends Model
         return $settings[$key] ?? $default;
     }
 
-    /**
-     * 安装表结构
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        // 删除旧表（如果存在）- 仅在重建表结构时临时启用
-        // $setup->dropTable();
-        
-        // 检查表是否已存在
-        if ($setup->tableExist()) {
-            return;
-        }
-        
-        // 创建新表
-        $setup->createTable('CMS内容管理系统-页面表')
-            ->addColumn(
-                self::fields_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                'primary key auto_increment',
-                '页面ID'
-            )
-            ->addColumn(
-                self::fields_HANDLE,
-                TableInterface::column_type_VARCHAR,
-                100,
-                'not null',
-                '页面句柄'
-            )
-            ->addColumn(
-                self::fields_WEBSITE_ID,
-                TableInterface::column_type_INTEGER,
-                11,
-                'not null default 0',
-                '网站ID（0表示默认/全局）'
-            )
-            ->addColumn(
-                self::fields_TYPE,
-                TableInterface::column_type_VARCHAR,
-                50,
-                'not null',
-                '页面类型'
-            )
-            ->addColumn(
-                self::fields_NAME,
-                TableInterface::column_type_VARCHAR,
-                255,
-                'not null',
-                '页面名称'
-            )
-            ->addColumn(
-                self::fields_TITLE,
-                TableInterface::column_type_VARCHAR,
-                255,
-                'not null',
-                '页面标题'
-            )
-            ->addColumn(
-                self::fields_CONTENT,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '页面内容'
-            )
-            ->addColumn(
-                self::fields_PARENT_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                'default 0',
-                '父页面ID'
-            )
-            ->addColumn(
-                self::fields_GA4_ID,
-                TableInterface::column_type_VARCHAR,
-                100,
-                '',
-                'Google Analytics 4 ID'
-            )
-            ->addColumn(
-                self::fields_GTM_ID,
-                TableInterface::column_type_VARCHAR,
-                100,
-                '',
-                'Google Tag Manager ID'
-            )
-            ->addColumn(
-                self::fields_FB_PIXEL_ID,
-                TableInterface::column_type_VARCHAR,
-                100,
-                '',
-                'Facebook Pixel ID'
-            )
-            ->addColumn(
-                self::fields_LOGO,
-                TableInterface::column_type_VARCHAR,
-                255,
-                '',
-                'Logo图片路径'
-            )
-            ->addColumn(
-                self::fields_ICON,
-                TableInterface::column_type_VARCHAR,
-                255,
-                '',
-                'Icon图标路径'
-            )
-            ->addColumn(
-                self::fields_LOCALES,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '选中的语言列表(JSON)'
-            )
-            ->addColumn(
-                self::fields_DEFAULT_LOCALE,
-                TableInterface::column_type_VARCHAR,
-                10,
-                '',
-                '默认语言代码'
-            )
-            ->addColumn(
-                self::fields_STYLE,
-                TableInterface::column_type_VARCHAR,
-                100,
-                '',
-                '页面样式模板名称'
-            )
-            ->addColumn(
-                self::fields_STYLE_SETTING,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '页面样式配置(JSON)'
-            )
-            ->addColumn(
-                self::fields_META_TITLE,
-                TableInterface::column_type_VARCHAR,
-                255,
-                '',
-                'SEO标题'
-            )
-            ->addColumn(
-                self::fields_META_DESCRIPTION,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                'SEO描述'
-            )
-            ->addColumn(
-                self::fields_META_KEYWORDS,
-                TableInterface::column_type_VARCHAR,
-                255,
-                '',
-                'SEO关键词'
-            )
-            ->addColumn(
-                self::fields_REDIRECT_URL,
-                TableInterface::column_type_VARCHAR,
-                500,
-                '',
-                '表单提交后跳转URL'
-            )
-            ->addColumn(
-                self::fields_STATUS,
-                TableInterface::column_type_SMALLINT,
-                1,
-                'not null default 0',
-                '状态:0草稿,1已发布'
-            )
-            ->addColumn(
-                self::fields_CREATE_TIME,
-                TableInterface::column_type_DATETIME,
-                0,
-                'not null default CURRENT_TIMESTAMP',
-                '创建时间'
-            )
-            ->addColumn(
-                self::fields_UPDATE_TIME,
-                TableInterface::column_type_DATETIME,
-                0,
-                'not null default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP',
-                '更新时间'
-            )
-            ->addIndex(TableInterface::index_type_UNIQUE, 'UNQ_WEBSITE_HANDLE', [self::fields_WEBSITE_ID, self::fields_HANDLE], '网站+句柄唯一')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_handle', [self::fields_HANDLE], '句柄索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_website_id', [self::fields_WEBSITE_ID], '网站ID索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_type', [self::fields_TYPE], '类型索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_parent_id', [self::fields_PARENT_ID], '父页面索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_status', [self::fields_STATUS], '状态索引')
-            ->create();
-    }
-
-    /**
-     * 升级表结构
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            return;
-        }
-        
-        // 添加 default_locale 字段（如果不存在）
-        if (!$setup->hasField('default_locale')) {
-            $setup->alterTable()->addColumn(
-                self::fields_DEFAULT_LOCALE,
-                '',
-                TableInterface::column_type_VARCHAR,
-                10,
-                '',
-                '默认语言代码'
-            )->alter();
-        }
-        
-        // 添加 cta_event_name 字段（如果不存在）
-        if (!$setup->hasField('cta_event_name')) {
-            $setup->alterTable()->addColumn(
-                self::fields_CTA_EVENT_NAME,
-                '',
-                TableInterface::column_type_VARCHAR,
-                100,
-                '',
-                'CTA转化事件名称'
-            )->alter();
-        }
-        
-        // 添加 website_id 字段（如果不存在）
-        if (!$setup->hasField(self::fields_WEBSITE_ID)) {
-            try {
-                $setup->alterTable()->addColumn(
-                    self::fields_WEBSITE_ID,
-                    self::fields_HANDLE,
-                    TableInterface::column_type_INTEGER,
-                    11,
-                    'not null default 0',
-                    '网站ID（0表示默认/全局）'
-                )->alter();
-            } catch (\Exception $e) {
-                // 如果 ALTER 失败，尝试直接执行 SQL
-                if (!$setup->hasField(self::fields_WEBSITE_ID)) {
-                    $tableName = $setup->getTable();
-                    try {
-                        $setup->query("ALTER TABLE {$tableName} ADD COLUMN `" . self::fields_WEBSITE_ID . "` INT(11) NOT NULL DEFAULT 0 COMMENT '网站ID（0表示默认/全局）' AFTER `" . self::fields_HANDLE . "`");
-                    } catch (\Exception $e2) {
-                        // 静默失败，可能字段已存在
-                    }
-                }
-            }
-            
-            // 添加 website_id 普通索引
-            try {
-                $tableName = $setup->getTable();
-                $setup->query("CREATE INDEX idx_website_id ON {$tableName} (" . self::fields_WEBSITE_ID . ")");
-            } catch (\Exception $e) {
-                // 索引可能已存在
-            }
-        }
-        
-        // 删除旧的 handle 唯一索引（如果存在）
-        try {
-            $tableName = $setup->getTable();
-            // 尝试删除可能的唯一约束（MySQL 中 unique 可能是索引或约束）
-            $setup->query("DROP INDEX handle ON {$tableName}");
-        } catch (\Exception $e) {
-            // 索引可能不存在
-        }
-        
-        // 添加新的组合唯一索引：(website_id, handle)
-        try {
-            $tableName = $setup->getTable();
-            $setup->query("CREATE UNIQUE INDEX UNQ_WEBSITE_HANDLE ON {$tableName} (" . self::fields_WEBSITE_ID . ", " . self::fields_HANDLE . ")");
-        } catch (\Exception $e) {
-            // 索引可能已存在
-        }
-    }
-
-    /**
-     * 设置表结构
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
 }
 

@@ -1,35 +1,46 @@
 <?php
-
 declare(strict_types=1);
-
 /*
  * Weline Cms Module
  * CMS内容管理系统表单提交记录模型
  */
-
 namespace Weline\Cms\Model;
-
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: 'CMS表单提交记录表')]
+#[Index(name: 'idx_page_id', columns: ['page_id'])]
+#[Index(name: 'idx_email', columns: ['email'])]
+#[Index(name: 'idx_phone', columns: ['phone'])]
+#[Index(name: 'idx_status', columns: ['status'])]
+#[Index(name: 'idx_submitted_at', columns: ['submitted_at'])]
 class FormSubmission extends Model
 {
-    public const table = 'weline_cms_form_submission';
-    
+    public const schema_table = 'weline_cms_form_submission';
     // 字段定义
-    public const fields_ID = 'submission_id';
-    public const fields_PAGE_ID = 'page_id';
-    public const fields_EMAIL = 'email';
-    public const fields_PHONE = 'phone';
-    public const fields_EXTRA_FIELDS = 'extra_fields';
-    public const fields_IP_ADDRESS = 'ip_address';
-    public const fields_USER_AGENT = 'user_agent';
-    public const fields_REFERER = 'referer';
-    public const fields_STATUS = 'status';
-    public const fields_SUBMITTED_AT = 'submitted_at';
-    public const fields_CREATE_TIME = 'create_time';
+    #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: '提交记录ID')]
+    public const schema_fields_ID = 'submission_id';
+    #[Col('int', comment: '关联页面ID')]
+    public const schema_fields_PAGE_ID = 'page_id';
+    #[Col('varchar', 255, comment: '邮箱')]
+    public const schema_fields_EMAIL = 'email';
+    #[Col('varchar', 50, comment: '电话')]
+    public const schema_fields_PHONE = 'phone';
+    #[Col('text', comment: '额外字段(JSON)')]
+    public const schema_fields_EXTRA_FIELDS = 'extra_fields';
+    #[Col('varchar', 45, comment: 'IP地址')]
+    public const schema_fields_IP_ADDRESS = 'ip_address';
+    #[Col('varchar', 255, comment: '用户代理')]
+    public const schema_fields_USER_AGENT = 'user_agent';
+    #[Col('varchar', 255, comment: '来源页面')]
+    public const schema_fields_REFERER = 'referer';
+    #[Col('varchar', 20, nullable: false, default: 'new', comment: '状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col('datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '提交时间')]
+    public const schema_fields_SUBMITTED_AT = 'submitted_at';
+    #[Col('datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
+    public const schema_fields_CREATE_TIME = 'create_time';
     
     // 状态常量
     public const STATUS_NEW = 'new';
@@ -41,7 +52,7 @@ class FormSubmission extends Model
      */
     public function getExtraFields(): array
     {
-        $extra = $this->getData(self::fields_EXTRA_FIELDS);
+        $extra = $this->getData(self::schema_fields_EXTRA_FIELDS);
         return $extra ? json_decode($extra ?? '', true) : [];
     }
     
@@ -50,7 +61,7 @@ class FormSubmission extends Model
      */
     public function setExtraFields(array $fields): self
     {
-        $this->setData(self::fields_EXTRA_FIELDS, json_encode($fields));
+        $this->setData(self::schema_fields_EXTRA_FIELDS, json_encode($fields));
         return $this;
     }
     
@@ -74,138 +85,4 @@ class FormSubmission extends Model
         
         return $keys;
     }
-
-    /**
-     * 安装表结构
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        // 删除旧表（如果存在）- 仅在重建表结构时临时启用
-        // $setup->dropTable();
-        
-        // 检查表是否已存在
-        if ($setup->tableExist()) {
-            return;
-        }
-        
-        $setup->createTable('CMS内容管理系统-表单提交记录表')
-            ->addColumn(
-                self::fields_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                'primary key auto_increment',
-                '提交记录ID'
-            )
-            ->addColumn(
-                self::fields_PAGE_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                '',
-                '关联页面ID'
-            )
-            ->addColumn(
-                self::fields_EMAIL,
-                TableInterface::column_type_VARCHAR,
-                255,
-                '',
-                '邮箱'
-            )
-            ->addColumn(
-                self::fields_PHONE,
-                TableInterface::column_type_VARCHAR,
-                50,
-                '',
-                '电话'
-            )
-            ->addColumn(
-                self::fields_EXTRA_FIELDS,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '额外字段(JSON)'
-            )
-            ->addColumn(
-                self::fields_IP_ADDRESS,
-                TableInterface::column_type_VARCHAR,
-                45,
-                '',
-                'IP地址'
-            )
-            ->addColumn(
-                self::fields_USER_AGENT,
-                TableInterface::column_type_VARCHAR,
-                255,
-                '',
-                '用户代理'
-            )
-            ->addColumn(
-                self::fields_REFERER,
-                TableInterface::column_type_VARCHAR,
-                255,
-                '',
-                '来源页面'
-            )
-            ->addColumn(
-                self::fields_STATUS,
-                TableInterface::column_type_VARCHAR,
-                20,
-                "not null default 'new'",
-                '状态'
-            )
-            ->addColumn(
-                self::fields_SUBMITTED_AT,
-                TableInterface::column_type_DATETIME,
-                0,
-                'not null default CURRENT_TIMESTAMP',
-                '提交时间'
-            )
-            ->addColumn(
-                self::fields_CREATE_TIME,
-                TableInterface::column_type_DATETIME,
-                0,
-                'not null default CURRENT_TIMESTAMP',
-                '创建时间'
-            )
-            ->addIndex(TableInterface::index_type_KEY, 'idx_page_id', [self::fields_PAGE_ID], '页面ID索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_email', [self::fields_EMAIL], '邮箱索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_phone', [self::fields_PHONE], '电话索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_status', [self::fields_STATUS], '状态索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_submitted_at', [self::fields_SUBMITTED_AT], '提交时间索引')
-            ->create();
-    }
-
-    /**
-     * 升级表结构
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 添加status字段（如果不存在）
-        if ($setup->tableExist() && !$setup->hasField(self::fields_STATUS)) {
-            // 新增字段（插入到 SUBMITTED_AT 之后，可按需调整顺序）
-            $setup->alterTable()->addColumn(
-                self::fields_STATUS,
-                self::fields_SUBMITTED_AT,
-                TableInterface::column_type_VARCHAR,
-                20,
-                "not null default 'new'",
-                '状态'
-            )->alter();
-
-            // 添加索引
-            $setup->alterTable()->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_status',
-                [self::fields_STATUS]
-            )->alter();
-        }
-    }
-
-    /**
-     * 设置表结构
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
 }
-
