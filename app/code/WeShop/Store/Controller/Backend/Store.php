@@ -41,7 +41,7 @@ class Store extends BackendController
         $listings = $listing->getItems();
         /**@var \WeShop\Store\Model\Store $listing */
         foreach ($listings as &$listing) {
-            $listing = $listing->loadLocalName($listing::fields_LOCAL, 'local_name');
+            $listing = $listing->loadLocalName($listing::schema_fields_LOCAL, 'local_name');
         }
         $this->assign('stores', $listings);
         $this->assign('pagination', $listing->getPagination());
@@ -71,9 +71,9 @@ class Store extends BackendController
     {
         /**@var Locale $local */
         $local = ObjectManager::getInstance(Locale::class);
-        return $local->where($local::fields_IS_INSTALL, 1)
-            ->where($local::fields_IS_ACTIVE, 1)
-            ->where(Locale\Name::fields_DISPLAY_LOCALE_CODE, \Weline\Framework\Http\Cookie::getLangLocal())
+        return $local->where($local::schema_fields_IS_INSTALL, 1)
+            ->where($local::schema_fields_IS_ACTIVE, 1)
+            ->where(Locale\Name::schema_fields_DISPLAY_LOCALE_CODE, \Weline\Framework\Http\Cookie::getLangLocal())
             ->joinModel(Locale\Name::class, 'name', 'main_table.code=name.locale_code')
             ->select()->fetchArray();
     }
@@ -241,7 +241,7 @@ class Store extends BackendController
     public function postDelete(): string
     {
         $id = $this->request->getPost('id');
-        $store = $this->store->where($this->store::fields_ID, $id)->find()->fetch();
+        $store = $this->store->where($this->store::schema_fields_ID, $id)->find()->fetch();
         if ($store->getId()) {
             try {
                 $store->delete();
