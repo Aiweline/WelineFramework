@@ -198,7 +198,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <a href="<?= $this->getBackendUrl('*/admin/website/add') ?>" 
+                                <a href="<?= $this->getBackendUrl('*/backend/websiteManagement/add') ?>" 
                                    class="btn btn-outline-primary btn-sm" 
                                    target="_blank"
                                    title="<?= __('新建站点') ?>">
@@ -2103,16 +2103,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 console.log('🔍 检查 handle 唯一性:', handle, '(页面ID:', currentPageId, ')');
                 
-                const response = await fetch(checkUrl, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    credentials: 'same-origin'
-                });
-                
-                const result = await response.json();
+                var opts = { method: 'GET', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin', silent: true };
+                var res = await window.Weline.Api.request(checkUrl, opts);
+                const result = (res && res.data) || res;
                 console.log('✅ 检查结果:', result);
                 
                 lastCheckedHandle = handle;
@@ -3380,27 +3373,9 @@ async function loadStyleList() {
         const apiUrl = '<?= $this->getBackendUrl('*/backend/page/getStyles') ?>';
         console.log('📡 请求 URL:', apiUrl);
         
-        // 发送AJAX请求
-        const response = await fetch(apiUrl, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            credentials: 'same-origin'
-        });
-        
-        console.log('📥 收到响应:', response.status, response.statusText);
-        
-        // 检查响应状态
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('❌ HTTP错误响应:', response.status, errorText);
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        // 解析JSON
-        const result = await response.json();
+        var opts = { method: 'GET', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin', silent: true };
+        var res = await window.Weline.Api.request(apiUrl, opts);
+        const result = (res && res.data) || res;
         console.log('📦 解析响应数据:', result);
         
         if (result.success && result.data) {
@@ -4344,17 +4319,9 @@ async function autoSaveStyleChange(newStyle) {
         // 更新样式字段
         formData.set('style', newStyle);
         
-        // 发送AJAX请求（WLS 已支持解析 multipart/form-data）
-        const response = await fetch(form.action, {
-            method: 'POST',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: formData,
-            credentials: 'same-origin'
-        });
-        
-        const result = await response.json();
+        var opts = { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData, credentials: 'same-origin' };
+        var res = await window.Weline.Api.request(form.action, opts);
+        const result = (res && res.data) || res;
         
         if (result.success) {
             console.log('✅ 样式保存成功');
@@ -4425,7 +4392,8 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
             '?model=<?= urlencode('GuoLaiRen\\PageBuilder\\Model\\Page\\LocalDescription') ?>' +
             '&field=' + encodeURIComponent('config.' + configKey) +
             '&id=' + pageIdForm +
-            '&value=' + encodeURIComponent(currentValue);
+            '&value=' + encodeURIComponent(currentValue) +
+            '&isIframe=1';
         
         console.log('🌐 打开翻译界面:', translationUrl);
         
@@ -4841,16 +4809,11 @@ window.generateTemplateConfig = function() {
     formData.append('page_id', pageId);
     formData.append('style_code', styleCode);
     
-    // 发送请求
-    fetch('<?= $this->getBackendUrl("*/backend/ai-generate/template-config") ?>', {
-        method: 'POST',
-        body: formData,
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
+    var url = '<?= $this->getBackendUrl("*/backend/ai-generate/template-config") ?>';
+    var opts = { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } };
+    var req = window.Weline.Api.request(url, opts);
+    req.then(function(res) {
+        var data = (res && res.data) || res;
         // 调试日志
         console.log('[AI生成配置] 响应数据:', data);
         
@@ -5491,30 +5454,11 @@ window.generatePageContent = function() {
     if (styleCode) formData.append('style_code', styleCode);
     if (defaultLocale) formData.append('default_locale', defaultLocale);
 
-    // 发送请求
-    fetch('<?= $this->getBackendUrl("*/backend/ai-generate/page-content") ?>', {
-        method: 'POST',
-        body: formData,
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-    })
-    .then(response => {
-        // 检查响应状态码
-        if (!response.ok) {
-            console.error('AI生成请求失败:', response.status, response.statusText);
-        }
-        // 尝试解析JSON，即使状态码不是200
-        return response.text().then(text => {
-            try {
-                return JSON.parse(text);
-            } catch (e) {
-                console.error('响应内容不是有效的JSON:', text.substring(0, 500));
-                throw new Error('服务器返回了无效的响应（HTTP ' + response.status + '）');
-            }
-        });
-    })
-    .then(data => {
+    var url = '<?= $this->getBackendUrl("*/backend/ai-generate/page-content") ?>';
+    var opts = { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } };
+    var req = window.Weline.Api.request(url, opts);
+    req.then(function(res) {
+        var data = (res && res.data) || res;
         // 恢复关闭功能
         const modalElement = document.getElementById('aiGenerateModal');
         const modal = bootstrap.Modal.getInstance(modalElement);

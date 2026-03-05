@@ -58,7 +58,7 @@ class LayoutService
             return $config;
         }
         
-        $pageType = $page->getData(Page::fields_TYPE);
+        $pageType = $page->getData(Page::schema_fields_TYPE);
         
         // 首页直接返回自己的配置
         if ($pageType === Page::TYPE_HOME) {
@@ -88,7 +88,7 @@ class LayoutService
      */
     public function initializeFromPage(PageLayout $layout, Page $page): PageLayout
     {
-        $styleCode = $page->getData(Page::fields_STYLE);
+        $styleCode = $page->getData(Page::schema_fields_STYLE);
         if (empty($styleCode)) {
             return $layout;
         }
@@ -117,7 +117,7 @@ class LayoutService
         $page->load($pageId);
         
         if ($page->getId()) {
-            $pageType = $page->getData(Page::fields_TYPE);
+            $pageType = $page->getData(Page::schema_fields_TYPE);
             $isHomePage = ($pageType === Page::TYPE_HOME);
             
             if (!$isHomePage) {
@@ -192,7 +192,7 @@ class LayoutService
         
         // 如果是子页面添加 header/footer，则添加到首页
         if ($page->getId() && $isHeaderFooter) {
-            $pageType = $page->getData(Page::fields_TYPE);
+            $pageType = $page->getData(Page::schema_fields_TYPE);
             if ($pageType !== Page::TYPE_HOME) {
                 $homePage = $page->getHomePage();
                 if ($homePage && $homePage->getId()) {
@@ -206,10 +206,10 @@ class LayoutService
         
         switch ($position) {
             case 'header':
-                $layout->setData(PageLayout::fields_HEADER_COMPONENT, $componentCode);
+                $layout->setData(PageLayout::schema_fields_HEADER_COMPONENT, $componentCode);
                 break;
             case 'footer':
-                $layout->setData(PageLayout::fields_FOOTER_COMPONENT, $componentCode);
+                $layout->setData(PageLayout::schema_fields_FOOTER_COMPONENT, $componentCode);
                 break;
             default:
                 $instanceId = $layout->addContentComponent($componentCode, [], $fromTemplate, $sortOrder);

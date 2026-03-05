@@ -1119,22 +1119,9 @@ async function initComponentPanel() {
     console.log('[组件面板] 开始加载组件，API URL:', apiUrl);
     
     try {
-        const response = await fetch(apiUrl, {
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        });
-        
-        console.log('[组件面板] HTTP 响应状态:', response.status, response.statusText);
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('[组件面板] HTTP 错误响应:', errorText.substring(0, 500));
-            showComponentError('HTTP错误: ' + response.status + ' ' + response.statusText);
-            return;
-        }
-        
-        const responseText = await response.text();
+        var opts = { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' }, silent: true };
+        var res = await window.Weline.Api.request(apiUrl, opts);
+        var responseText = (res && res.data) !== undefined ? res.data : (typeof res === 'string' ? res : '');
         console.log('[组件面板] 响应长度:', responseText.length, '字符');
         
         let result;
@@ -1697,17 +1684,10 @@ async function previewComponent(componentCode) {
         const styleSelect = document.getElementById('style');
         const styleCode = styleSelect ? styleSelect.value : (window.currentStyle || 'tpmst');
         
-        // 调用预览 API（不传config，使用默认配置）
-        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/preview') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: 'component_code=' + encodeURIComponent(componentCode) + '&style_code=' + encodeURIComponent(styleCode)
-        });
-        
-        const result = await response.json();
+        var url = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/preview') ?>';
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' }, body: 'component_code=' + encodeURIComponent(componentCode) + '&style_code=' + encodeURIComponent(styleCode) };
+        var res = await window.Weline.Api.request(url, opts);
+        const result = (res && res.data) || res;
         
         if (!result.success) {
             throw new Error(result.message || '<?= __('预览失败') ?>');
@@ -2100,17 +2080,9 @@ async function deleteAiComponent(componentId, componentName) {
     
     try {
         const url = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/delete') ?>';
-        const response = await fetch(url, {
-            method: 'POST',
-            credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({ id: componentId })
-        });
-        
-        const result = await response.json();
+        var opts = { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ id: componentId }) };
+        var res = await window.Weline.Api.request(url, opts);
+        const result = (res && res.data) || res;
         
         if (result.success) {
             BackendToast.success(result.message || '<?= __('AI 组件已删除') ?>');
@@ -2207,8 +2179,9 @@ async function openRefineForSavedComponent(code, styleCode) {
     }
     const url = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/info') ?>?code=' + encodeURIComponent(code) + '&include_preview=1';
     try {
-        const resp = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'include' });
-        const json = await resp.json();
+        var opts = { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'include', silent: true };
+        var resp = await window.Weline.Api.request(url, opts);
+        const json = (resp && resp.data) || resp;
         if (!json.success) throw new Error(json.message || '<?= __('加载组件失败') ?>');
         const comp = json.component || {};
         const templateContent = json.template_content || '';
@@ -2639,25 +2612,16 @@ async function _loadAiServiceInfo() {
     const bar = document.getElementById('ai-ws-info-bar');
     if (!bar) return;
     try {
-        const resp = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/ai_info') ?>', {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            credentials: 'include'
-        });
-        const contentType = resp.headers.get('content-type') || '';
-        if (!resp.ok) {
-            throw new Error('<?= __('AI 服务不可用') ?>');
-        }
-        const responseText = await resp.text();
-        let json;
-        if (contentType.indexOf('application/json') !== -1) {
-            json = JSON.parse(responseText);
+        var opts = { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'include', silent: true };
+        var resp = await window.Weline.Api.request('<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/ai_info') ?>', opts);
+        if (!resp || (resp.ok === false)) throw new Error('<?= __('AI 服务不可用') ?>');
+        var json;
+        if (resp.data && typeof resp.data === 'object' && 'success' in resp.data) {
+            json = resp.data;
         } else {
-            try {
-                json = safeJsonParse(responseText);
-                if (!json) throw new Error('<?= __('AI 信息返回格式不正确') ?>');
-            } catch (e) {
-                throw new Error('<?= __('AI 信息返回格式不正确') ?>');
-            }
+            var responseText = (resp && resp.data) !== undefined ? (typeof resp.data === 'string' ? resp.data : JSON.stringify(resp.data)) : '';
+            try { json = responseText ? (JSON.parse(responseText) || safeJsonParse(responseText)) : null; } catch (e) { throw new Error('<?= __('AI 信息返回格式不正确') ?>'); }
+            if (!json) throw new Error('<?= __('AI 信息返回格式不正确') ?>');
         }
         if (!json.success) {
             bar.classList.remove('ai-info-loading');
@@ -3083,11 +3047,9 @@ async function _loadAgentList() {
     if (!container) return;
 
     try {
-        const resp = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/agents') ?>', {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            credentials: 'include'
-        });
-        const json = await resp.json();
+        var opts = { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'include', silent: true };
+        var resp = await window.Weline.Api.request('<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/agents') ?>', opts);
+        const json = (resp && resp.data) || resp;
         if (!json.success || !json.data?.agents?.length) {
             // 没有智能体可用时，自动切换到普通模式
             _switchAiMode('normal');
@@ -3383,13 +3345,10 @@ async function generateComponentWithAgent(params) {
                 _logLine('▶ <?= __('正在调用组件预览接口...') ?>', '#94a3b8');
                 let previewHtml = '';
                 try {
-                    const previewResp = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/preview') ?>', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
-                        body: 'component_code=' + encodeURIComponent(compCode)
-                            + '&style_code=' + encodeURIComponent(compStyleCode)
-                    });
-                    const previewData = await previewResp.json();
+                    var prevUrl = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/preview') ?>';
+                    var prevOpts = { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'}, body: 'component_code=' + encodeURIComponent(compCode) + '&style_code=' + encodeURIComponent(compStyleCode) };
+                    var previewResp = await window.Weline.Api.request(prevUrl, prevOpts);
+                    const previewData = (previewResp && previewResp.data) || previewResp;
                     if (previewData.success && previewData.html) {
                         previewHtml = previewData.html;
                         _logLine('✅ <?= __('组件预览渲染完成') ?> (' + previewHtml.length + ' <?= __('字符') ?>)', '#4ade80');
@@ -3460,14 +3419,14 @@ async function _fetchPreviewById(payload) {
     try {
         const url = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/preview-by-id') ?>';
         const body = draftId ? { draft_id: draftId } : { component_id: componentId };
-        const res = await fetch(url, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(body) });
-        const text = await res.text();
-        if (!res.ok || !text || text.trim().startsWith('<')) {
-            if (text.trim().startsWith('<')) console.warn('Preview-by-id: 接口返回了 HTML 而非 JSON，可能未登录或路由错误');
-            return '';
-        }
-        const data = JSON.parse(text);
-        if (data && data.success && data.html) return data.html;
+        var opts = { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(body) };
+        var res = await window.Weline.Api.request(url, opts);
+        var ok = res && (res.ok !== false);
+        if (!ok) return '';
+        if (res.data && typeof res.data === 'object' && res.data.success && res.data.html) return res.data.html;
+        var text = (res && res.data) !== undefined ? String(res.data) : '';
+        if (!text || text.trim().startsWith('<')) { if (text.trim().startsWith('<')) console.warn('Preview-by-id: 接口返回了 HTML 而非 JSON'); return ''; }
+        try { var data = JSON.parse(text); if (data && data.success && data.html) return data.html; } catch(e) {}
         return '';
     } catch (e) {
         console.warn('Preview-by-id failed:', e);
@@ -3483,14 +3442,14 @@ async function _fetchDraftContentById(payload) {
     try {
         const url = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/draft-content-by-id') ?>';
         const body = draftId ? { draft_id: draftId } : { component_id: componentId };
-        const res = await fetch(url, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(body) });
-        const text = await res.text();
-        if (!res.ok || !text || text.trim().startsWith('<')) {
-            if (text.trim().startsWith('<')) console.warn('Draft-content-by-id: 接口返回了 HTML 而非 JSON，可能未登录或路由错误');
-            return '';
-        }
-        const data = JSON.parse(text);
-        if (data && data.success && data.content !== undefined) return data.content;
+        var opts = { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(body) };
+        var res = await window.Weline.Api.request(url, opts);
+        var ok = res && (res.ok !== false);
+        if (!ok) return '';
+        if (res.data && typeof res.data === 'object' && res.data.success && res.data.content !== undefined) return res.data.content;
+        var text = (res && res.data) !== undefined ? String(res.data) : '';
+        if (!text || text.trim().startsWith('<')) { if (text.trim().startsWith('<')) console.warn('Draft-content-by-id: 接口返回了 HTML 而非 JSON'); return ''; }
+        try { var data = JSON.parse(text); if (data && data.success && data.content !== undefined) return data.content; } catch(e) {}
         return '';
     } catch (e) {
         console.warn('Draft-content-by-id failed:', e);
@@ -3952,26 +3911,21 @@ async function generatePreviewFromCode(templateContent, componentData, validatio
     
     try {
         // 调用后端生成预览
-        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/preview') ?>', {
+        var prevUrl = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/preview') ?>';
+        var prevOpts = {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({
-                template_content: templateContent,
-                category: componentData.region || componentData.category || 'content'
-            })
-        });
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify({ template_content: templateContent, category: componentData.region || componentData.category || 'content' })
+        };
+        var response = await window.Weline.Api.request(prevUrl, prevOpts);
         
         let previewResult = { success: false, html: '' };
-        
-        if (response.ok) {
-            const responseText = await response.text();
-            try {
-                previewResult = safeJsonParse(responseText);
-            } catch (e) {
-                console.warn('预览响应解析失败:', e);
+        var ok = response && (response.ok !== false);
+        if (ok && response.data) {
+            if (typeof response.data === 'object' && response.data !== null) {
+                previewResult = response.data;
+            } else {
+                try { previewResult = safeJsonParse(String(response.data)); } catch (e) { console.warn('预览响应解析失败:', e); }
             }
         }
         
@@ -4083,11 +4037,11 @@ async function generateComponentWithAi(params) {
         if (params.referenceComponent) {
             updateStreamStatus('<?= __('获取参考组件...') ?>', 10);
             try {
-                const refResponse = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/code') ?>?component_code=' + encodeURIComponent(params.referenceComponent) + '&style_code=' + encodeURIComponent(currentStyleCode), {
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                });
-                if (refResponse.ok) {
-                    const refResult = await refResponse.json();
+                var refUrl = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/code') ?>?component_code=' + encodeURIComponent(params.referenceComponent) + '&style_code=' + encodeURIComponent(currentStyleCode);
+                var refOpts = { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' }, silent: true };
+                var refResponse = await window.Weline.Api.request(refUrl, refOpts);
+                if (refResponse && (refResponse.ok !== false)) {
+                    const refResult = (refResponse && refResponse.data) || refResponse;
                     if (refResult.success && refResult.code) {
                         referenceCode = refResult.code;
                     }
@@ -4978,21 +4932,13 @@ async function executeInlineRefine() {
     if (draftIdForRefine) refineBody.draft_id = draftIdForRefine;
     
     try {
-        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/refine') ?>', {
-            method: 'POST',
-            credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify(refineBody)
-        });
-        
-        if (!response.ok) {
-            throw new Error(`<?= __('服务器错误') ?>: ${response.status}`);
+        var refineUrl = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/refine') ?>';
+        var refineOpts = { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(refineBody) };
+        var response = await window.Weline.Api.request(refineUrl, refineOpts);
+        if (!response || response.ok === false) {
+            throw new Error('<?= __('服务器错误') ?>');
         }
-        
-        const responseText = await response.text();
+        const responseText = (response && response.data) !== undefined ? String(response.data) : '';
         let result;
         try {
             result = safeJsonParse(responseText);
@@ -5082,19 +5028,10 @@ async function saveGeneratedComponent(component) {
     BackendToast.info('<?= __('保存中...') ?>', 3000);
     
     try {
-        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/save-component') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({
-                style_code: currentStyleCode,
-                component: component
-            })
-        });
-        
-        const result = await response.json();
+        var url = '<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/save-component') ?>';
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ style_code: currentStyleCode, component: component }) };
+        var res = await window.Weline.Api.request(url, opts);
+        const result = (res && res.data) || res;
         
         if (!result.success) {
             throw new Error(result.message || '<?= __('保存失败') ?>');
@@ -5263,33 +5200,19 @@ async function refineComponentWithAi(adjustmentPrompt) {
     if (draftIdForRefine) refineBody.draft_id = draftIdForRefine;
     
     try {
-        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/refine') ?>', {
-            method: 'POST',
-            credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify(refineBody)
-        });
-        
-        // 检查响应状态
-        if (!response.ok) {
-            throw new Error(`<?= __('服务器错误') ?>: ${response.status} ${response.statusText}`);
-        }
-        
-        // 先获取响应文本
-        const responseText = await response.text();
-        
-        // 尝试解析JSON
+        var refineUrl = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/refine') ?>';
+        var refineOpts = { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(refineBody) };
+        var response = await window.Weline.Api.request(refineUrl, refineOpts);
+        if (!response || response.ok === false) { throw new Error('<?= __('服务器错误') ?>'); }
+        const responseText = (response && response.data) !== undefined ? (typeof response.data === 'object' ? JSON.stringify(response.data) : String(response.data)) : '';
         let result;
+        if (response.data && typeof response.data === 'object' && 'success' in response.data) { result = response.data; } else {
         try {
             result = safeJsonParse(responseText);
         } catch (parseError) {
-            // JSON解析失败，可能是PHP错误输出
             console.error('<?= __('响应解析失败') ?>:', responseText.substring(0, 500));
             throw new Error('<?= __('服务器返回了无效的响应，可能是代码执行错误。请尝试重新微调。') ?>');
-        }
+        } }
         
         if (!result.success) {
             throw new Error(result.message || '<?= __('微调失败') ?>');

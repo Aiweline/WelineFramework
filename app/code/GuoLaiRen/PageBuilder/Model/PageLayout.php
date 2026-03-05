@@ -1,7 +1,5 @@
 <?php
-
 declare(strict_types=1);
-
 /*
  * GuoLaiRen PageBuilder Module
  * 页面布局模型 - 用于存储可视化页面构建器的布局配置
@@ -12,31 +10,37 @@ declare(strict_types=1);
  * 3. 支持组件的自定义配置覆盖
  * 4. 支持恢复到原始模板状态
  */
-
 namespace GuoLaiRen\PageBuilder\Model;
-
-use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
-
+#[Table(comment: '页面构建器-页面布局表')]
+#[Index(name: 'uk_page_id', columns: ['page_id'], type: 'UNIQUE', comment: '页面ID唯一索引')]
+#[Index(name: 'idx_is_active', columns: ['is_active'], comment: '状态索引')]
 class PageLayout extends Model
 {
-    public const table = 'guolairen_page_builder_page_layout';
-    
+    public const schema_table = 'guolairen_page_builder_page_layout';
+    public const schema_primary_key = 'layout_id';
     // 字段定义
-    public const fields_ID = 'layout_id';
-    public const fields_PAGE_ID = 'page_id';               // 关联的页面ID
-    public const fields_LAYOUT_CONFIG = 'layout_config';   // 布局配置（JSON）
-    public const fields_HEADER_COMPONENT = 'header_component';    // Header组件代码
-    public const fields_HEADER_CONFIG = 'header_config';          // Header组件配置（JSON）
-    public const fields_FOOTER_COMPONENT = 'footer_component';    // Footer组件代码
-    public const fields_FOOTER_CONFIG = 'footer_config';          // Footer组件配置（JSON）
-    public const fields_CONTENT_COMPONENTS = 'content_components'; // 内容组件列表（JSON）
-    public const fields_USE_ORIGINAL_TEMPLATE = 'use_original_template'; // 是否使用原始模板
-    public const fields_IS_ACTIVE = 'is_active';
-    public const fields_CREATE_TIME = 'create_time';
-    public const fields_UPDATE_TIME = 'update_time';
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '布局ID')]
+    public const schema_fields_ID = 'layout_id';
+    public const schema_fields_PAGE_ID = 'page_id';               // 关联的页面ID
+    public const schema_fields_LAYOUT_CONFIG = 'layout_config';   // 布局配置（JSON）
+    public const schema_fields_HEADER_COMPONENT = 'header_component';    // Header组件代码
+    public const schema_fields_HEADER_CONFIG = 'header_config';          // Header组件配置（JSON）
+    public const schema_fields_FOOTER_COMPONENT = 'footer_component';    // Footer组件代码
+    public const schema_fields_FOOTER_CONFIG = 'footer_config';          // Footer组件配置（JSON）
+    public const schema_fields_CONTENT_COMPONENTS = 'content_components'; // 内容组件列表（JSON）
+    public const schema_fields_USE_ORIGINAL_TEMPLATE = 'use_original_template'; // 是否使用原始模板
+    #[Col(type: 'smallint', length: 1, nullable: false, default: 1, comment: '是否启用')]
+    public const schema_fields_IS_ACTIVE = 'is_active';
+    #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
+    public const schema_fields_CREATE_TIME = 'create_time';
+    #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '更新时间')]
+    public const schema_fields_UPDATE_TIME = 'update_time';
     
     /**
      * 布局配置示例结构：
@@ -76,7 +80,7 @@ class PageLayout extends Model
      */
     public function getLayoutConfig(): array
     {
-        $config = $this->getData(self::fields_LAYOUT_CONFIG);
+        $config = $this->getData(self::schema_fields_LAYOUT_CONFIG);
         if (empty($config)) {
             return [];
         }
@@ -88,7 +92,7 @@ class PageLayout extends Model
      */
     public function setLayoutConfig(array $config): self
     {
-        return $this->setData(self::fields_LAYOUT_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
+        return $this->setData(self::schema_fields_LAYOUT_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
     }
     
     /**
@@ -96,7 +100,7 @@ class PageLayout extends Model
      */
     public function getHeaderConfig(): array
     {
-        $config = $this->getData(self::fields_HEADER_CONFIG);
+        $config = $this->getData(self::schema_fields_HEADER_CONFIG);
         if (empty($config)) {
             return [];
         }
@@ -108,7 +112,7 @@ class PageLayout extends Model
      */
     public function setHeaderConfig(array $config): self
     {
-        return $this->setData(self::fields_HEADER_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
+        return $this->setData(self::schema_fields_HEADER_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
     }
     
     /**
@@ -116,7 +120,7 @@ class PageLayout extends Model
      */
     public function getFooterConfig(): array
     {
-        $config = $this->getData(self::fields_FOOTER_CONFIG);
+        $config = $this->getData(self::schema_fields_FOOTER_CONFIG);
         if (empty($config)) {
             return [];
         }
@@ -128,7 +132,7 @@ class PageLayout extends Model
      */
     public function setFooterConfig(array $config): self
     {
-        return $this->setData(self::fields_FOOTER_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
+        return $this->setData(self::schema_fields_FOOTER_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
     }
     
     /**
@@ -136,7 +140,7 @@ class PageLayout extends Model
      */
     public function getContentComponents(): array
     {
-        $components = $this->getData(self::fields_CONTENT_COMPONENTS);
+        $components = $this->getData(self::schema_fields_CONTENT_COMPONENTS);
         if (empty($components)) {
             return [];
         }
@@ -155,7 +159,7 @@ class PageLayout extends Model
      */
     public function setContentComponents(array $components): self
     {
-        return $this->setData(self::fields_CONTENT_COMPONENTS, json_encode($components, JSON_UNESCAPED_UNICODE));
+        return $this->setData(self::schema_fields_CONTENT_COMPONENTS, json_encode($components, JSON_UNESCAPED_UNICODE));
     }
     
     /**
@@ -278,7 +282,7 @@ class PageLayout extends Model
      */
     public function isUsingOriginalTemplate(): bool
     {
-        return (bool)$this->getData(self::fields_USE_ORIGINAL_TEMPLATE);
+        return (bool)$this->getData(self::schema_fields_USE_ORIGINAL_TEMPLATE);
     }
     
     /**
@@ -286,7 +290,7 @@ class PageLayout extends Model
      */
     public function useOriginalTemplate(bool $use = true): self
     {
-        return $this->setData(self::fields_USE_ORIGINAL_TEMPLATE, $use ? 1 : 0);
+        return $this->setData(self::schema_fields_USE_ORIGINAL_TEMPLATE, $use ? 1 : 0);
     }
     
     /**
@@ -297,8 +301,8 @@ class PageLayout extends Model
         $layoutModel = \Weline\Framework\Manager\ObjectManager::getInstance(self::class);
         $layout = clone $layoutModel;
         $layout->clear()
-            ->where(self::fields_PAGE_ID, $pageId)
-            ->where(self::fields_IS_ACTIVE, 1)
+            ->where(self::schema_fields_PAGE_ID, $pageId)
+            ->where(self::schema_fields_IS_ACTIVE, 1)
             ->find()
             ->fetch();
         
@@ -319,9 +323,9 @@ class PageLayout extends Model
         $layoutModel = \Weline\Framework\Manager\ObjectManager::getInstance(self::class);
         $layout = clone $layoutModel;
         $layout->clearData()
-            ->setData(self::fields_PAGE_ID, $pageId)
-            ->setData(self::fields_USE_ORIGINAL_TEMPLATE, 1) // 默认使用原始模板
-            ->setData(self::fields_IS_ACTIVE, 1)
+            ->setData(self::schema_fields_PAGE_ID, $pageId)
+            ->setData(self::schema_fields_USE_ORIGINAL_TEMPLATE, 1) // 默认使用原始模板
+            ->setData(self::schema_fields_IS_ACTIVE, 1)
             ->save(true);
         
         return $layout;
@@ -335,7 +339,7 @@ class PageLayout extends Model
      */
     public function initializeFromPage(Page $page): self
     {
-        $styleCode = $page->getData(Page::fields_STYLE);
+        $styleCode = $page->getData(Page::schema_fields_STYLE);
         if (empty($styleCode)) {
             return $this;
         }
@@ -348,11 +352,11 @@ class PageLayout extends Model
         $footerComponent = $styleCode . '-footer';
         
         // 设置基础布局
-        $this->setData(self::fields_HEADER_COMPONENT, $headerComponent);
-        $this->setData(self::fields_FOOTER_COMPONENT, $footerComponent);
+        $this->setData(self::schema_fields_HEADER_COMPONENT, $headerComponent);
+        $this->setData(self::schema_fields_FOOTER_COMPONENT, $footerComponent);
         
         // 获取页面类型
-        $pageType = $page->getData(Page::fields_TYPE);
+        $pageType = $page->getData(Page::schema_fields_TYPE);
         
         // 如果是博客类型页面，设置对应的默认组件
         if (in_array($pageType, [Page::TYPE_BLOG, Page::TYPE_BLOG_CATEGORY, Page::TYPE_BLOG_LIST])) {
@@ -382,7 +386,7 @@ class PageLayout extends Model
                 $actualComponentCode = null;
                 
                 foreach ($components['own'] as $component) {
-                    $componentCode = $component->getData(Component::fields_CODE);
+                    $componentCode = $component->getData(Component::schema_fields_CODE);
                     if ($componentCode === $blogComponent || 
                         $componentCode === $styleCode . '-' . $blogComponent) {
                         $componentExists = true;
@@ -394,7 +398,7 @@ class PageLayout extends Model
                 // 如果组件不存在，尝试不带前缀的组件代码
                 if (!$componentExists) {
                     foreach ($components['own'] as $component) {
-                        $componentCode = $component->getData(Component::fields_CODE);
+                        $componentCode = $component->getData(Component::schema_fields_CODE);
                         // 去掉模板前缀后比较
                         $codeWithoutPrefix = strpos($componentCode, $styleCode . '-') === 0 
                             ? substr($componentCode, strlen($styleCode) + 1) 
@@ -435,7 +439,7 @@ class PageLayout extends Model
         $sortOrder = 10;
         
         foreach ($components['own'] as $component) {
-            $category = $component->getData(Component::fields_CATEGORY);
+            $category = $component->getData(Component::schema_fields_CATEGORY);
             
             // 跳过系统组件
             if ($category === Component::CATEGORY_HEADER || $category === Component::CATEGORY_FOOTER) {
@@ -444,7 +448,7 @@ class PageLayout extends Model
             
             $contentComponents[] = [
                 'id' => uniqid('comp_'),
-                'component' => $component->getData(Component::fields_CODE),
+                'component' => $component->getData(Component::schema_fields_CODE),
                 'config' => [],
                 'from_template' => $styleCode,
                 'sort_order' => $sortOrder,
@@ -482,15 +486,15 @@ class PageLayout extends Model
         
         return [
             'version' => '1.0',
-            'page_id' => $this->getData(self::fields_PAGE_ID),
+            'page_id' => $this->getData(self::schema_fields_PAGE_ID),
             'use_original_template' => $this->isUsingOriginalTemplate(),
             'header' => [
-                'component' => $this->getData(self::fields_HEADER_COMPONENT),
+                'component' => $this->getData(self::schema_fields_HEADER_COMPONENT),
                 'config' => $this->getHeaderConfig(),
             ],
             'content' => $normalizedContent,
             'footer' => [
-                'component' => $this->getData(self::fields_FOOTER_COMPONENT),
+                'component' => $this->getData(self::schema_fields_FOOTER_COMPONENT),
                 'config' => $this->getFooterConfig(),
             ],
         ];
@@ -508,12 +512,12 @@ class PageLayout extends Model
         }
         
         if (isset($config['header'])) {
-            $this->setData(self::fields_HEADER_COMPONENT, $config['header']['component'] ?? '');
+            $this->setData(self::schema_fields_HEADER_COMPONENT, $config['header']['component'] ?? '');
             $this->setHeaderConfig($config['header']['config'] ?? []);
         }
         
         if (isset($config['footer'])) {
-            $this->setData(self::fields_FOOTER_COMPONENT, $config['footer']['component'] ?? '');
+            $this->setData(self::schema_fields_FOOTER_COMPONENT, $config['footer']['component'] ?? '');
             $this->setFooterConfig($config['footer']['config'] ?? []);
         }
         
@@ -534,120 +538,5 @@ class PageLayout extends Model
         }
         
         return $this;
-    }
-
-    /**
-     * 安装表结构
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist()) {
-            return;
-        }
-        
-        $setup->createTable('页面构建器-页面布局表')
-            ->addColumn(
-                self::fields_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                'primary key auto_increment',
-                '布局ID'
-            )
-            ->addColumn(
-                self::fields_PAGE_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                'not null',
-                '关联页面ID'
-            )
-            ->addColumn(
-                self::fields_LAYOUT_CONFIG,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '布局配置(JSON)'
-            )
-            ->addColumn(
-                self::fields_HEADER_COMPONENT,
-                TableInterface::column_type_VARCHAR,
-                100,
-                '',
-                'Header组件代码'
-            )
-            ->addColumn(
-                self::fields_HEADER_CONFIG,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                'Header组件配置(JSON)'
-            )
-            ->addColumn(
-                self::fields_FOOTER_COMPONENT,
-                TableInterface::column_type_VARCHAR,
-                100,
-                '',
-                'Footer组件代码'
-            )
-            ->addColumn(
-                self::fields_FOOTER_CONFIG,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                'Footer组件配置(JSON)'
-            )
-            ->addColumn(
-                self::fields_CONTENT_COMPONENTS,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '内容组件列表(JSON)'
-            )
-            ->addColumn(
-                self::fields_USE_ORIGINAL_TEMPLATE,
-                TableInterface::column_type_SMALLINT,
-                1,
-                'not null default 1',
-                '是否使用原始模板:0自定义布局,1原始模板'
-            )
-            ->addColumn(
-                self::fields_IS_ACTIVE,
-                TableInterface::column_type_SMALLINT,
-                1,
-                'not null default 1',
-                '是否启用'
-            )
-            ->addColumn(
-                self::fields_CREATE_TIME,
-                TableInterface::column_type_DATETIME,
-                0,
-                'not null default CURRENT_TIMESTAMP',
-                '创建时间'
-            )
-            ->addColumn(
-                self::fields_UPDATE_TIME,
-                TableInterface::column_type_DATETIME,
-                0,
-                'not null default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP',
-                '更新时间'
-            )
-            ->addIndex(TableInterface::index_type_UNIQUE, 'uk_page_id', [self::fields_PAGE_ID], '页面ID唯一索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_is_active', [self::fields_IS_ACTIVE], '状态索引')
-            ->create();
-    }
-
-    /**
-     * 升级表结构
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 预留升级逻辑
-    }
-
-    /**
-     * 设置表结构
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
     }
 }

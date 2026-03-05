@@ -166,13 +166,13 @@ class Component extends BackendController
             
             // 检查组件文件是否存在
             if (!$component->fileExists()) {
-                $path = $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_PATH);
+                $path = $component->getData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_PATH);
                 throw new \Exception('组件文件不存在: ' . $path);
             }
             
             $configArray = json_decode($config, true) ?: [];
             // 传递组件所属的模板代码以确保正确渲染
-            $actualStyleCode = $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_STYLE_CODE);
+            $actualStyleCode = $component->getData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_STYLE_CODE);
             $html = $this->componentService->renderPreview($componentCode, $configArray, $actualStyleCode);
             
             // 如果渲染结果为空或只包含注释，尝试提供更详细的错误信息
@@ -353,13 +353,13 @@ class Component extends BackendController
             $actualPosition = null;
             if ($region === 'header') {
                 // Header 区域只能一个，直接替换
-                $layout->setData(PageLayout::fields_HEADER_COMPONENT, $componentCode);
-                $layout->setData(PageLayout::fields_HEADER_CONFIG, json_encode([]));
+                $layout->setData(PageLayout::schema_fields_HEADER_COMPONENT, $componentCode);
+                $layout->setData(PageLayout::schema_fields_HEADER_CONFIG, json_encode([]));
                 $actualPosition = 0;
             } elseif ($region === 'footer') {
                 // Footer 区域只能一个，直接替换
-                $layout->setData(PageLayout::fields_FOOTER_COMPONENT, $componentCode);
-                $layout->setData(PageLayout::fields_FOOTER_CONFIG, json_encode([]));
+                $layout->setData(PageLayout::schema_fields_FOOTER_COMPONENT, $componentCode);
+                $layout->setData(PageLayout::schema_fields_FOOTER_CONFIG, json_encode([]));
                 $actualPosition = 0;
             } else {
                 // Content 区域可以多个，按位置插入或添加到末尾
@@ -597,7 +597,7 @@ class Component extends BackendController
             $page = clone $this->pageModel;
             $page->load($pageId);
             if ($page->getId()) {
-                $page->setData(Page::fields_LAYOUT_CONFIG, json_encode($pageLayoutConfig, JSON_UNESCAPED_UNICODE));
+                $page->setData(Page::schema_fields_LAYOUT_CONFIG, json_encode($pageLayoutConfig, JSON_UNESCAPED_UNICODE));
                 $page->save();
             }
         } catch (\Throwable $e) {
@@ -929,18 +929,18 @@ class Component extends BackendController
             $removedCount = 0;
             if ($region === 'header') {
                 // 清空 header 组件
-                $currentComponent = $layout->getData(PageLayout::fields_HEADER_COMPONENT);
+                $currentComponent = $layout->getData(PageLayout::schema_fields_HEADER_COMPONENT);
                 if (!empty($currentComponent)) {
-                    $layout->setData(PageLayout::fields_HEADER_COMPONENT, '');
-                    $layout->setData(PageLayout::fields_HEADER_CONFIG, '{}');
+                    $layout->setData(PageLayout::schema_fields_HEADER_COMPONENT, '');
+                    $layout->setData(PageLayout::schema_fields_HEADER_CONFIG, '{}');
                     $removedCount = 1;
                 }
             } elseif ($region === 'footer') {
                 // 清空 footer 组件
-                $currentComponent = $layout->getData(PageLayout::fields_FOOTER_COMPONENT);
+                $currentComponent = $layout->getData(PageLayout::schema_fields_FOOTER_COMPONENT);
                 if (!empty($currentComponent)) {
-                    $layout->setData(PageLayout::fields_FOOTER_COMPONENT, '');
-                    $layout->setData(PageLayout::fields_FOOTER_CONFIG, '{}');
+                    $layout->setData(PageLayout::schema_fields_FOOTER_COMPONENT, '');
+                    $layout->setData(PageLayout::schema_fields_FOOTER_CONFIG, '{}');
                     $removedCount = 1;
                 }
             } else {
@@ -951,8 +951,8 @@ class Component extends BackendController
                 if (empty($contentComponents) && $index !== null) {
                     $targetPage = clone $this->pageModel;
                     $targetPage->load($targetPageId);
-                    $styleCode = $targetPage->getData(Page::fields_STYLE);
-                    $targetPageType = $targetPage->getData(Page::fields_TYPE);
+                    $styleCode = $targetPage->getData(Page::schema_fields_STYLE);
+                    $targetPageType = $targetPage->getData(Page::schema_fields_TYPE);
                     
                     if ($styleCode && $targetPageType) {
                         $defaultConfig = $this->componentService->getDefaultLayoutConfigForPageType($styleCode, $targetPageType);
@@ -1078,18 +1078,18 @@ class Component extends BackendController
             // 根据区域类型更新配置
             if ($region === 'header') {
                 // 验证组件代码
-                $currentComponent = $layout->getData(PageLayout::fields_HEADER_COMPONENT);
+                $currentComponent = $layout->getData(PageLayout::schema_fields_HEADER_COMPONENT);
                 if ($currentComponent !== $componentCode) {
                     throw new \Exception('组件代码不匹配');
                 }
-                $layout->setData(PageLayout::fields_HEADER_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
+                $layout->setData(PageLayout::schema_fields_HEADER_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
             } elseif ($region === 'footer') {
                 // 验证组件代码
-                $currentComponent = $layout->getData(PageLayout::fields_FOOTER_COMPONENT);
+                $currentComponent = $layout->getData(PageLayout::schema_fields_FOOTER_COMPONENT);
                 if ($currentComponent !== $componentCode) {
                     throw new \Exception('组件代码不匹配');
                 }
-                $layout->setData(PageLayout::fields_FOOTER_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
+                $layout->setData(PageLayout::schema_fields_FOOTER_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
             } else {
                 // Content 区域：更新指定索引的组件配置
                 $contentComponents = $layout->getContentComponents();
@@ -1098,8 +1098,8 @@ class Component extends BackendController
                 if (empty($contentComponents)) {
                     $targetPage = clone $this->pageModel;
                     $targetPage->load($targetPageId);
-                    $styleCode = $targetPage->getData(Page::fields_STYLE);
-                    $targetPageType = $targetPage->getData(Page::fields_TYPE);
+                    $styleCode = $targetPage->getData(Page::schema_fields_STYLE);
+                    $targetPageType = $targetPage->getData(Page::schema_fields_TYPE);
                     
                     if ($styleCode && $targetPageType) {
                         $defaultConfig = $this->componentService->getDefaultLayoutConfigForPageType($styleCode, $targetPageType);
@@ -1198,8 +1198,8 @@ class Component extends BackendController
             
             // 如果数据库中没有组件，尝试从默认布局配置初始化
             if ($componentCount === 0 && count($newOrder) > 0) {
-                $styleCode = $page->getData(Page::fields_STYLE);
-                $pageType = $page->getData(Page::fields_TYPE);
+                $styleCode = $page->getData(Page::schema_fields_STYLE);
+                $pageType = $page->getData(Page::schema_fields_TYPE);
                 
                 if ($styleCode && $pageType) {
                     $defaultConfig = $this->componentService->getDefaultLayoutConfigForPageType($styleCode, $pageType);

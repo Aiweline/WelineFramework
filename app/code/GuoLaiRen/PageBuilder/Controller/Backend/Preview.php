@@ -221,7 +221,7 @@ class Preview extends BackendController
         $templateDefaults = [];
         try {
             $styleModel = clone $this->styleModel;
-            $styleModel->clear()->where(\GuoLaiRen\PageBuilder\Model\Style::fields_CODE, $styleCode)->find()->fetch();
+            $styleModel->clear()->where(\GuoLaiRen\PageBuilder\Model\Style::schema_fields_CODE, $styleCode)->find()->fetch();
             if ($styleModel->getId()) {
                 $configGroups = $styleModel->getConfigGroups();
                 // 遍历所有配置项，提取默认值
@@ -280,7 +280,7 @@ class Preview extends BackendController
         if ($locale && $locale !== $defaultLocale) {
             $localDesc = clone $this->localDescriptionModel;
             $localDesc->clear()
-                ->where(\GuoLaiRen\PageBuilder\Model\Page\LocalDescription::fields_ID, $page->getId())
+                ->where(\GuoLaiRen\PageBuilder\Model\Page\LocalDescription::schema_fields_ID, $page->getId())
                 ->where('local_code', $locale)
                 ->find()
                 ->fetch();
@@ -381,7 +381,7 @@ class Preview extends BackendController
 
         // 验证样式是否存在
         $styleModel = clone $this->styleModel;
-        $styleModel->clear()->where(\GuoLaiRen\PageBuilder\Model\Style::fields_CODE, $styleCode)->find()->fetch();
+        $styleModel->clear()->where(\GuoLaiRen\PageBuilder\Model\Style::schema_fields_CODE, $styleCode)->find()->fetch();
         
         if (!$styleModel->getId()) {
             echo '<div style="padding: 20px; color: red;">样式模板不存在：' . htmlspecialchars($styleCode ?? '') . '</div>';
@@ -393,22 +393,22 @@ class Preview extends BackendController
         // 注意：必须设置所有整数字段的默认值，避免 PostgreSQL 整数类型错误
         $dummyPage = ObjectManager::make(Page::class);
         $dummyPage->setData([
-            Page::fields_ID => 0,
-            Page::fields_WEBSITE_ID => 0,
-            Page::fields_PARENT_ID => 0,
-            Page::fields_LAYOUT_PAGE_ID => null,
-            Page::fields_STATUS => 1,
-            Page::fields_TITLE => '样式模板预览 - ' . $styleModel->getData('name'),
-            Page::fields_NAME => '样式模板预览',
-            Page::fields_HANDLE => 'template-preview-' . $styleCode,
-            Page::fields_STYLE => $styleCode,
-            Page::fields_TYPE => $pageType, // 设置页面类型，用于加载对应的默认布局配置
-            Page::fields_CONTENT => '',
-            Page::fields_META_DESCRIPTION => '预览模式：使用模板默认配置',
-            Page::fields_LOCALES => '[]',
-            Page::fields_DEFAULT_LOCALE => $locale,
-            Page::fields_STYLE_SETTING => '{}',
-            Page::fields_LAYOUT_CONFIG => '{}',
+            Page::schema_fields_ID => 0,
+            Page::schema_fields_WEBSITE_ID => 0,
+            Page::schema_fields_PARENT_ID => 0,
+            Page::schema_fields_LAYOUT_PAGE_ID => null,
+            Page::schema_fields_STATUS => 1,
+            Page::schema_fields_TITLE => '样式模板预览 - ' . $styleModel->getData('name'),
+            Page::schema_fields_NAME => '样式模板预览',
+            Page::schema_fields_HANDLE => 'template-preview-' . $styleCode,
+            Page::schema_fields_STYLE => $styleCode,
+            Page::schema_fields_TYPE => $pageType, // 设置页面类型，用于加载对应的默认布局配置
+            Page::schema_fields_CONTENT => '',
+            Page::schema_fields_META_DESCRIPTION => '预览模式：使用模板默认配置',
+            Page::schema_fields_LOCALES => '[]',
+            Page::schema_fields_DEFAULT_LOCALE => $locale,
+            Page::schema_fields_STYLE_SETTING => '{}',
+            Page::schema_fields_LAYOUT_CONFIG => '{}',
         ]);
 
         try {
@@ -511,7 +511,7 @@ class Preview extends BackendController
                 // 保存到LocalDescription.config.style_config（语言特定配置）
                 $localDesc = clone $this->localDescriptionModel;
                 $localDesc->clear()
-                    ->where(LocalDescription::fields_ID, $pageId)
+                    ->where(LocalDescription::schema_fields_ID, $pageId)
                     ->where('local_code', $locale)
                     ->find()
                     ->fetch();
@@ -543,7 +543,7 @@ class Preview extends BackendController
                     // 创建新的LocalDescription记录
                     $newLocalDesc = clone $this->localDescriptionModel;
                     $newLocalDesc->clearData()
-                        ->setData(LocalDescription::fields_ID, $pageId)
+                        ->setData(LocalDescription::schema_fields_ID, $pageId)
                         ->setData('local_code', $locale)
                         ->setData('config', json_encode($config))
                         ->setData('name', $page->getData('name'))
@@ -691,7 +691,7 @@ class Preview extends BackendController
                 // 从LocalDescription.config.style_config中删除指定的配置键
                 $localDesc = clone $this->localDescriptionModel;
                 $localDesc->clear()
-                    ->where(LocalDescription::fields_ID, $pageId)
+                    ->where(LocalDescription::schema_fields_ID, $pageId)
                     ->where('local_code', $locale)
                     ->find()
                     ->fetch();

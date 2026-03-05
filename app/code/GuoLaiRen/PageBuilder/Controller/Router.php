@@ -174,23 +174,23 @@ class Router implements RouterInterface
             // 预览模式下，允许访问所有状态的页面
             if ($isPreview) {
                 $page->clear()
-                    ->where(Page::fields_HANDLE, $handle)
+                    ->where(Page::schema_fields_HANDLE, $handle)
                     ->find()
                     ->fetch();
             } else {
                 // 非预览模式：允许访问已发布的页面，或者草稿状态的测试页面
                 // 先查询已发布的页面
                 $page->clear()
-                    ->where(Page::fields_HANDLE, $handle)
-                    ->where(Page::fields_STATUS, Page::STATUS_PUBLISHED)
+                    ->where(Page::schema_fields_HANDLE, $handle)
+                    ->where(Page::schema_fields_STATUS, Page::STATUS_PUBLISHED)
                     ->find()
                     ->fetch();
                 
                 // 如果没找到已发布的页面，再查询测试页面（允许草稿状态）
                 if (!$page->getId()) {
                     $page->clear()
-                        ->where(Page::fields_HANDLE, $handle)
-                        ->where(Page::fields_TYPE, 'test_page')
+                        ->where(Page::schema_fields_HANDLE, $handle)
+                        ->where(Page::schema_fields_TYPE, 'test_page')
                         ->find()
                         ->fetch();
                 }
@@ -253,16 +253,16 @@ class Router implements RouterInterface
             
             // 查询当前站点的首页页面（已发布状态）
             $page->clear()
-                ->where(Page::fields_WEBSITE_ID, $websiteId)
-                ->where(Page::fields_TYPE, Page::TYPE_HOME)
-                ->where(Page::fields_STATUS, Page::STATUS_PUBLISHED)
-                ->where(Page::fields_HANDLE, '', '!=')
+                ->where(Page::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(Page::schema_fields_TYPE, Page::TYPE_HOME)
+                ->where(Page::schema_fields_STATUS, Page::STATUS_PUBLISHED)
+                ->where(Page::schema_fields_HANDLE, '', '!=')
                 ->find()
                 ->fetch();
             
             // 如果找到首页且handle不为空，返回handle
             if ($page->getId()) {
-                $handle = $page->getData(Page::fields_HANDLE);
+                $handle = $page->getData(Page::schema_fields_HANDLE);
                 if (!empty($handle)) {
                     return $handle;
                 }
@@ -271,15 +271,15 @@ class Router implements RouterInterface
             // 如果当前站点没有首页，尝试查找全局首页（website_id = 0）
             if ($websiteId !== 0) {
                 $page->clear()
-                    ->where(Page::fields_WEBSITE_ID, 0)
-                    ->where(Page::fields_TYPE, Page::TYPE_HOME)
-                    ->where(Page::fields_STATUS, Page::STATUS_PUBLISHED)
-                    ->where(Page::fields_HANDLE, '', '!=')
+                    ->where(Page::schema_fields_WEBSITE_ID, 0)
+                    ->where(Page::schema_fields_TYPE, Page::TYPE_HOME)
+                    ->where(Page::schema_fields_STATUS, Page::STATUS_PUBLISHED)
+                    ->where(Page::schema_fields_HANDLE, '', '!=')
                     ->find()
                     ->fetch();
                 
                 if ($page->getId()) {
-                    $handle = $page->getData(Page::fields_HANDLE);
+                    $handle = $page->getData(Page::schema_fields_HANDLE);
                     if (!empty($handle)) {
                         return $handle;
                     }
