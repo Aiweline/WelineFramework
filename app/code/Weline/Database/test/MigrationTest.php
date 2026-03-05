@@ -36,7 +36,7 @@ class MigrationTest extends TestCore
         $tableName = $this->migrationModel->getTable();
         $this->assertStringContainsString('migration', strtolower($tableName));
         // 主键可能需要先执行查询才能获取，检查常量定义
-        $this->assertEquals('migration_id', Migration::fields_ID);
+        $this->assertEquals('migration_id', Migration::schema_fields_ID);
     }
     
     /**
@@ -55,18 +55,18 @@ class MigrationTest extends TestCore
      */
     public function testFieldConstants()
     {
-        $this->assertEquals('migration_id', Migration::fields_ID);
-        $this->assertEquals('module_name', Migration::fields_MODULE);
-        $this->assertEquals('version', Migration::fields_VERSION);
-        $this->assertEquals('migration_file', Migration::fields_FILE);
-        $this->assertEquals('description', Migration::fields_DESCRIPTION);
-        $this->assertEquals('status', Migration::fields_STATUS);
-        $this->assertEquals('executed_at', Migration::fields_EXECUTED_AT);
-        $this->assertEquals('rollback_at', Migration::fields_ROLLBACK_AT);
-        $this->assertEquals('dependencies', Migration::fields_DEPENDENCIES);
-        $this->assertEquals('checksum', Migration::fields_CHECKSUM);
-        $this->assertEquals('created_at', Migration::fields_CREATED_AT);
-        $this->assertEquals('updated_at', Migration::fields_UPDATED_AT);
+        $this->assertEquals('migration_id', Migration::schema_fields_ID);
+        $this->assertEquals('module_name', Migration::schema_fields_MODULE);
+        $this->assertEquals('version', Migration::schema_fields_VERSION);
+        $this->assertEquals('migration_file', Migration::schema_fields_FILE);
+        $this->assertEquals('description', Migration::schema_fields_DESCRIPTION);
+        $this->assertEquals('status', Migration::schema_fields_STATUS);
+        $this->assertEquals('executed_at', Migration::schema_fields_EXECUTED_AT);
+        $this->assertEquals('rollback_at', Migration::schema_fields_ROLLBACK_AT);
+        $this->assertEquals('dependencies', Migration::schema_fields_DEPENDENCIES);
+        $this->assertEquals('checksum', Migration::schema_fields_CHECKSUM);
+        $this->assertEquals('created_at', Migration::schema_fields_CREATED_AT);
+        $this->assertEquals('updated_at', Migration::schema_fields_UPDATED_AT);
     }
     
     /**
@@ -89,11 +89,11 @@ class MigrationTest extends TestCore
         $this->assertGreaterThan(0, $result, '记录迁移应该返回有效的迁移ID');
         
         // 验证数据是否正确保存
-        $this->assertEquals($testData['module_name'], $this->migrationModel->getData(Migration::fields_MODULE));
-        $this->assertEquals($testData['version'], $this->migrationModel->getData(Migration::fields_VERSION));
-        $this->assertEquals($testData['migration_file'], $this->migrationModel->getData(Migration::fields_FILE));
-        $this->assertEquals($testData['description'], $this->migrationModel->getData(Migration::fields_DESCRIPTION));
-        $this->assertEquals($testData['status'], $this->migrationModel->getData(Migration::fields_STATUS));
+        $this->assertEquals($testData['module_name'], $this->migrationModel->getData(Migration::schema_fields_MODULE));
+        $this->assertEquals($testData['version'], $this->migrationModel->getData(Migration::schema_fields_VERSION));
+        $this->assertEquals($testData['migration_file'], $this->migrationModel->getData(Migration::schema_fields_FILE));
+        $this->assertEquals($testData['description'], $this->migrationModel->getData(Migration::schema_fields_DESCRIPTION));
+        $this->assertEquals($testData['status'], $this->migrationModel->getData(Migration::schema_fields_STATUS));
     }
     
     /**
@@ -205,7 +205,7 @@ class MigrationTest extends TestCore
         
         // 检查只返回已安装的迁移
         foreach ($installedMigrations as $migration) {
-            $this->assertEquals(Migration::STATUS_INSTALLED, $migration->getData(Migration::fields_STATUS));
+            $this->assertEquals(Migration::STATUS_INSTALLED, $migration->getData(Migration::schema_fields_STATUS));
         }
     }
     
@@ -232,7 +232,7 @@ class MigrationTest extends TestCore
         $this->assertTrue($result, '更新状态应该成功');
         
         // 验证状态已更新
-        $this->assertEquals(Migration::STATUS_ROLLED_BACK, $this->migrationModel->getData(Migration::fields_STATUS));
+        $this->assertEquals(Migration::STATUS_ROLLED_BACK, $this->migrationModel->getData(Migration::schema_fields_STATUS));
     }
     
     /**

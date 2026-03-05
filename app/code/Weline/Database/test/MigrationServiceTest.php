@@ -31,7 +31,7 @@ class MigrationServiceTest extends TestCore
         $testModules = ['Weline_Test', 'Weline_TestModule'];
         foreach ($testModules as $moduleName) {
             $this->migrationModel->reset()
-                ->where(Migration::fields_MODULE, $moduleName)
+                ->where(Migration::schema_fields_MODULE, $moduleName)
                 ->delete()
                 ->fetch();
         }
@@ -246,8 +246,8 @@ class CreateTableTest20250101V100 implements MigrationInterface
         
         // 先清理可能遗留的测试数据
         $this->migrationModel->reset()
-            ->where(Migration::fields_MODULE, $moduleName)
-            ->where(Migration::fields_FILE, $migrationFile)
+            ->where(Migration::schema_fields_MODULE, $moduleName)
+            ->where(Migration::schema_fields_FILE, $migrationFile)
             ->delete()
             ->fetch();
         
@@ -275,14 +275,14 @@ class CreateTableTest20250101V100 implements MigrationInterface
         
         // 验证状态已更新
         $items = $this->migrationModel->reset()
-            ->where(Migration::fields_MODULE, $moduleName)
-            ->where(Migration::fields_FILE, $migrationFile)
+            ->where(Migration::schema_fields_MODULE, $moduleName)
+            ->where(Migration::schema_fields_FILE, $migrationFile)
             ->limit(1)
             ->select()
             ->fetch()
             ->getItems();
         $migration = $items[0] ?? null;
         $this->assertNotNull($migration);
-        $this->assertEquals(Migration::STATUS_ROLLED_BACK, $migration->getData(Migration::fields_STATUS));
+        $this->assertEquals(Migration::STATUS_ROLLED_BACK, $migration->getData(Migration::schema_fields_STATUS));
     }
 }

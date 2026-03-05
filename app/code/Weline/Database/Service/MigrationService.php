@@ -419,8 +419,8 @@ class MigrationService
     private function updateMigrationStatus(string $moduleName, string $migrationFile, string $status): void
     {
         $items = $this->migrationModel->reset()
-            ->where(Migration::fields_MODULE, $moduleName)
-            ->where(Migration::fields_FILE, $migrationFile)
+            ->where(Migration::schema_fields_MODULE, $moduleName)
+            ->where(Migration::schema_fields_FILE, $migrationFile)
             ->limit(1)
             ->select()
             ->fetch()
