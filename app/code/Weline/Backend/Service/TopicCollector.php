@@ -84,7 +84,7 @@ class TopicCollector
         $model->clearQuery();
 
         if (!$isNew) {
-            $model->where(NotificationTopic::fields_topic_code, $code)
+            $model->where(NotificationTopic::schema_fields_topic_code, $code)
                 ->find()
                 ->fetch();
         }
@@ -113,7 +113,7 @@ class TopicCollector
             if (!in_array($code, $processedCodes, true)) {
                 $model = clone $this->topicModel;
                 $model->clearQuery()
-                    ->where(NotificationTopic::fields_topic_code, $code)
+                    ->where(NotificationTopic::schema_fields_topic_code, $code)
                     ->find()
                     ->fetch();
 
@@ -144,9 +144,9 @@ class TopicCollector
     public function getEnabledTopics(): array
     {
         return $this->topicModel->clearQuery()
-            ->where(NotificationTopic::fields_is_enabled, 1)
-            ->order(NotificationTopic::fields_topic_group)
-            ->order(NotificationTopic::fields_sort_order)
+            ->where(NotificationTopic::schema_fields_is_enabled, 1)
+            ->order(NotificationTopic::schema_fields_topic_group)
+            ->order(NotificationTopic::schema_fields_sort_order)
             ->select()
             ->fetchArray();
     }
@@ -181,7 +181,7 @@ class TopicCollector
     public function getTopicByCode(string $code): ?array
     {
         $topic = $this->topicModel->clearQuery()
-            ->where(NotificationTopic::fields_topic_code, $code)
+            ->where(NotificationTopic::schema_fields_topic_code, $code)
             ->select()
             ->fetch();
 

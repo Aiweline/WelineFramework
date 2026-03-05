@@ -23,8 +23,8 @@ class UserContactServiceTest extends TestCase
         $this->userModel = ObjectManager::getInstance(BackendUser::class);
         
         $user = $this->userModel->clearQuery()
-            ->where(BackendUser::fields_is_enabled, 1)
-            ->order(BackendUser::fields_ID)
+            ->where(BackendUser::schema_fields_is_enabled, 1)
+            ->order(BackendUser::schema_fields_ID)
             ->select()
             ->fetch();
         
