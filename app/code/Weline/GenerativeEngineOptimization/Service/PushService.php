@@ -76,7 +76,7 @@ class PushService
             $adapter = $adapterService->getAdapter($platform);
             
             if (!$adapter) {
-                return new PushResult(false, "平台 {$platform->getData(Platform::fields_PLATFORM_CODE)} 不支持");
+                return new PushResult(false, "平台 {$platform->getData(Platform::schema_fields_PLATFORM_CODE)} 不支持");
             }
 
             // 获取账户
@@ -91,11 +91,11 @@ class PushService
             // 生成Feed并写入pub目录，得到相对URL
             /** @var FeedGeneratorService $feedGenerator */
             $feedGenerator = ObjectManager::getInstance(FeedGeneratorService::class);
-            $feedFormat = $platform->getData(Platform::fields_FEED_FORMAT) ?? 'json_feed';
+            $feedFormat = $platform->getData(Platform::schema_fields_FEED_FORMAT) ?? 'json_feed';
             $relativeUrl = $feedGenerator->generateAndSaveFeed($feed, $feedFormat);
 
             // 使用Feed URL进行推送
-            $feedUrl = $feed->getData(Feed::fields_FEED_URL) ?: $relativeUrl;
+            $feedUrl = $feed->getData(Feed::schema_fields_FEED_URL) ?: $relativeUrl;
 
             $result = $adapter->pushFeedUrl($feedUrl, $account);
 
@@ -104,7 +104,7 @@ class PushService
 
             // 更新Feed最后推送时间
             if ($result->success) {
-                $feed->setData(Feed::fields_LAST_PUSHED_AT, time());
+                $feed->setData(Feed::schema_fields_LAST_PUSHED_AT, time());
                 $feed->save();
             }
 
@@ -208,16 +208,16 @@ class PushService
         $pushLog = ObjectManager::getInstance(PushLog::class);
         
         $pushLog->setData([
-            PushLog::fields_FEED_ID => $feed->getId(),
-            PushLog::fields_PLATFORM_ID => $platform->getId(),
-            PushLog::fields_PLATFORM_ACCOUNT_ID => $account->getId(),
-            PushLog::fields_PUSH_TYPE => $pushType,
-            PushLog::fields_STATUS => $result->success ? PushLog::STATUS_SUCCESS : PushLog::STATUS_FAILED,
-            PushLog::fields_ITEMS_COUNT => $result->itemsCount,
-            PushLog::fields_RESPONSE_DATA => json_encode($result->responseData),
-            PushLog::fields_ERROR_MESSAGE => $result->success ? '' : $result->message,
-            PushLog::fields_PUSHED_AT => time(),
-            PushLog::fields_CREATED_AT => time(),
+            PushLog::schema_fields_FEED_ID => $feed->getId(),
+            PushLog::schema_fields_PLATFORM_ID => $platform->getId(),
+            PushLog::schema_fields_PLATFORM_ACCOUNT_ID => $account->getId(),
+            PushLog::schema_fields_PUSH_TYPE => $pushType,
+            PushLog::schema_fields_STATUS => $result->success ? PushLog::STATUS_SUCCESS : PushLog::STATUS_FAILED,
+            PushLog::schema_fields_ITEMS_COUNT => $result->itemsCount,
+            PushLog::schema_fields_RESPONSE_DATA => json_encode($result->responseData),
+            PushLog::schema_fields_ERROR_MESSAGE => $result->success ? '' : $result->message,
+            PushLog::schema_fields_PUSHED_AT => time(),
+            PushLog::schema_fields_CREATED_AT => time(),
         ]);
         
         $pushLog->save();
@@ -244,16 +244,16 @@ class PushService
         $pushLog = ObjectManager::getInstance(PushLog::class);
         
         $pushLog->setData([
-            PushLog::fields_FEED_ID => $feed->getId(),
-            PushLog::fields_PLATFORM_ID => $platform->getId(),
-            PushLog::fields_PLATFORM_ACCOUNT_ID => $account ? $account->getId() : null,
-            PushLog::fields_PUSH_TYPE => $pushType,
-            PushLog::fields_STATUS => PushLog::STATUS_FAILED,
-            PushLog::fields_ITEMS_COUNT => 0,
-            PushLog::fields_RESPONSE_DATA => '{}',
-            PushLog::fields_ERROR_MESSAGE => $errorMessage,
-            PushLog::fields_PUSHED_AT => time(),
-            PushLog::fields_CREATED_AT => time(),
+            PushLog::schema_fields_FEED_ID => $feed->getId(),
+            PushLog::schema_fields_PLATFORM_ID => $platform->getId(),
+            PushLog::schema_fields_PLATFORM_ACCOUNT_ID => $account ? $account->getId() : null,
+            PushLog::schema_fields_PUSH_TYPE => $pushType,
+            PushLog::schema_fields_STATUS => PushLog::STATUS_FAILED,
+            PushLog::schema_fields_ITEMS_COUNT => 0,
+            PushLog::schema_fields_RESPONSE_DATA => '{}',
+            PushLog::schema_fields_ERROR_MESSAGE => $errorMessage,
+            PushLog::schema_fields_PUSHED_AT => time(),
+            PushLog::schema_fields_CREATED_AT => time(),
         ]);
         
         $pushLog->save();

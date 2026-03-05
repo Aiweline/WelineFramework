@@ -128,12 +128,12 @@ class Platform extends BackendController
             }
 
             $platform->setData([
-                PlatformModel::fields_PLATFORM_CODE => $platformCode,
-                PlatformModel::fields_PLATFORM_NAME => $platformName,
-                PlatformModel::fields_API_ENDPOINT => $apiEndpoint,
-                PlatformModel::fields_FEED_FORMAT => $feedFormat,
-                PlatformModel::fields_IS_ENABLED => $isEnabled,
-                PlatformModel::fields_CONFIG => $config,
+                PlatformModel::schema_fields_PLATFORM_CODE => $platformCode,
+                PlatformModel::schema_fields_PLATFORM_NAME => $platformName,
+                PlatformModel::schema_fields_API_ENDPOINT => $apiEndpoint,
+                PlatformModel::schema_fields_FEED_FORMAT => $feedFormat,
+                PlatformModel::schema_fields_IS_ENABLED => $isEnabled,
+                PlatformModel::schema_fields_CONFIG => $config,
             ]);
 
             $platform->save();
@@ -242,14 +242,14 @@ class Platform extends BackendController
             }
 
             $account->setData([
-                PlatformAccount::fields_PLATFORM_ID => $platformId,
-                PlatformAccount::fields_ACCOUNT_NAME => $accountName,
-                PlatformAccount::fields_API_KEY => $encryptedApiKey,
-                PlatformAccount::fields_API_SECRET => $encryptedApiSecret,
-                PlatformAccount::fields_IS_DEFAULT => $isDefault,
-                PlatformAccount::fields_IS_ACTIVE => $isActive,
-                PlatformAccount::fields_CONFIG => $config,
-                PlatformAccount::fields_STATUS => PlatformAccount::STATUS_PENDING,
+                PlatformAccount::schema_fields_PLATFORM_ID => $platformId,
+                PlatformAccount::schema_fields_ACCOUNT_NAME => $accountName,
+                PlatformAccount::schema_fields_API_KEY => $encryptedApiKey,
+                PlatformAccount::schema_fields_API_SECRET => $encryptedApiSecret,
+                PlatformAccount::schema_fields_IS_DEFAULT => $isDefault,
+                PlatformAccount::schema_fields_IS_ACTIVE => $isActive,
+                PlatformAccount::schema_fields_CONFIG => $config,
+                PlatformAccount::schema_fields_STATUS => PlatformAccount::STATUS_PENDING,
             ]);
 
             $account->save();
@@ -289,7 +289,7 @@ class Platform extends BackendController
 
             /** @var Platform $platformModel */
             $platformModel = ObjectManager::getInstance(PlatformModel::class);
-            $platform = $platformModel->load($account->getData(PlatformAccount::fields_PLATFORM_ID));
+            $platform = $platformModel->load($account->getData(PlatformAccount::schema_fields_PLATFORM_ID));
 
             /** @var PlatformAdapterService $adapterService */
             $adapterService = ObjectManager::getInstance(PlatformAdapterService::class);
@@ -303,9 +303,9 @@ class Platform extends BackendController
 
             // 更新账户状态
             $account->setData([
-                PlatformAccount::fields_STATUS => $result ? PlatformAccount::STATUS_ACTIVE : PlatformAccount::STATUS_FAILED,
-                PlatformAccount::fields_LAST_TEST_TIME => time(),
-                PlatformAccount::fields_LAST_TEST_MESSAGE => $result ? '连接成功' : '连接失败',
+                PlatformAccount::schema_fields_STATUS => $result ? PlatformAccount::STATUS_ACTIVE : PlatformAccount::STATUS_FAILED,
+                PlatformAccount::schema_fields_LAST_TEST_TIME => time(),
+                PlatformAccount::schema_fields_LAST_TEST_MESSAGE => $result ? '连接成功' : '连接失败',
             ]);
             $account->save();
 

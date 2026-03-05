@@ -89,9 +89,9 @@ class FeedGenerateQueue implements QueueInterface
             }
 
             // 检查是否需要生成（如果不强制且已生成，跳过）
-            if (!$force && $feed->getData(Feed::fields_LAST_GENERATED_AT)) {
-                $lastGenerated = (int)$feed->getData(Feed::fields_LAST_GENERATED_AT);
-                $feedUrl = $feed->getData(Feed::fields_FEED_URL);
+            if (!$force && $feed->getData(Feed::schema_fields_LAST_GENERATED_AT)) {
+                $lastGenerated = (int)$feed->getData(Feed::schema_fields_LAST_GENERATED_AT);
+                $feedUrl = $feed->getData(Feed::schema_fields_FEED_URL);
                 if ($lastGenerated > 0 && !empty($feedUrl)) {
                     $queue->setResult("Feed已存在，跳过生成。URL: {$feedUrl}");
                     $queue->setStatus(Queue::status_done);

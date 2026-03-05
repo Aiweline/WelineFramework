@@ -12,45 +12,49 @@ declare(strict_types=1);
 namespace Weline\GenerativeEngineOptimization\Model;
 
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\Framework\Setup\Data\Context;
-
-/**
- * Feed配置模型
- * 
- * @package Weline_GenerativeEngineOptimization
- */
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+/** Feed配置模型 @package Weline_GenerativeEngineOptimization */
+#[Table(comment: 'GEO Feed配置表')]
+#[Index(name: 'idx_feed_type', columns: ['feed_type'], comment: 'Feed类型索引')]
+#[Index(name: 'idx_is_enabled', columns: ['is_enabled'], comment: '启用状态索引')]
+#[Index(name: 'idx_is_auto_push', columns: ['is_auto_push'], comment: '自动推送索引')]
 class Feed extends Model
 {
-    public const table = 'geo_feed';
-    
-    /**
-     * Primary keys
-     */
+
+    public const schema_table = 'geo_feed';
+    public const schema_primary_key = 'id';
     public array $_unit_primary_keys = ['id'];
-    
-    /**
-     * Index sort keys
-     */
     public array $_index_sort_keys = ['id', 'feed_type', 'is_enabled', 'is_auto_push'];
-    
-    /**
-     * Field name constants
-     */
-    public const fields_ID = 'id';
-    public const fields_FEED_NAME = 'feed_name';
-    public const fields_FEED_TYPE = 'feed_type';
-    public const fields_SOURCE_TYPE = 'source_type';
-    public const fields_SOURCE_CONFIG = 'source_config';
-    public const fields_FEED_URL = 'feed_url';
-    public const fields_UPDATE_FREQUENCY = 'update_frequency';
-    public const fields_IS_AUTO_PUSH = 'is_auto_push';
-    public const fields_IS_ENABLED = 'is_enabled';
-    public const fields_LAST_GENERATED_AT = 'last_generated_at';
-    public const fields_LAST_PUSHED_AT = 'last_pushed_at';
-    public const fields_CONFIG = 'config';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
+    #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'ID')]
+    public const schema_fields_ID = 'id';
+    #[Col('varchar', 100, nullable: false, comment: 'Feed名称')]
+    public const schema_fields_FEED_NAME = 'feed_name';
+    #[Col('varchar', 50, default: 'content', comment: 'Feed类型')]
+    public const schema_fields_FEED_TYPE = 'feed_type';
+    #[Col('varchar', 50, default: 'database', comment: '数据源类型')]
+    public const schema_fields_SOURCE_TYPE = 'source_type';
+    #[Col('text', comment: '数据源配置JSON')]
+    public const schema_fields_SOURCE_CONFIG = 'source_config';
+    #[Col('varchar', 255, comment: 'Feed访问URL')]
+    public const schema_fields_FEED_URL = 'feed_url';
+    #[Col('varchar', 50, default: 'daily', comment: '更新频率')]
+    public const schema_fields_UPDATE_FREQUENCY = 'update_frequency';
+    #[Col('int', 1, default: 1, comment: '是否自动推送')]
+    public const schema_fields_IS_AUTO_PUSH = 'is_auto_push';
+    #[Col('int', 1, default: 1, comment: '是否启用')]
+    public const schema_fields_IS_ENABLED = 'is_enabled';
+    #[Col('int', comment: '最后生成时间')]
+    public const schema_fields_LAST_GENERATED_AT = 'last_generated_at';
+    #[Col('int', comment: '最后推送时间')]
+    public const schema_fields_LAST_PUSHED_AT = 'last_pushed_at';
+    #[Col('text', comment: 'Feed配置JSON')]
+    public const schema_fields_CONFIG = 'config';
+    #[Col('int', default: 0, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col('int', default: 0, comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
 
     /**
      * Feed types
@@ -90,61 +94,15 @@ class Feed extends Model
      */
     public function getIdFieldName(): string
     {
-        return self::fields_ID;
+        return self::schema_fields_ID;
     }
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist() === false) {
-            $setup->createTable('GEO Feed配置表')
-                ->addColumn(self::fields_ID, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
-                ->addColumn(self::fields_FEED_NAME, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 100, 'not null', 'Feed名称')
-                ->addColumn(self::fields_FEED_TYPE, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 50, 'default \'content\'', 'Feed类型')
-                ->addColumn(self::fields_SOURCE_TYPE, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 50, 'default \'database\'', '数据源类型')
-                ->addColumn(self::fields_SOURCE_CONFIG, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, 'null', '数据源配置JSON')
-                ->addColumn(self::fields_FEED_URL, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'null', 'Feed访问URL')
-                ->addColumn(self::fields_UPDATE_FREQUENCY, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 50, 'default \'daily\'', '更新频率')
-                ->addColumn(self::fields_IS_AUTO_PUSH, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, 1, 'default 1', '是否自动推送')
-                ->addColumn(self::fields_IS_ENABLED, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, 1, 'default 1', '是否启用')
-                ->addColumn(self::fields_LAST_GENERATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'null', '最后生成时间')
-                ->addColumn(self::fields_LAST_PUSHED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'null', '最后推送时间')
-                ->addColumn(self::fields_CONFIG, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, 'null', 'Feed配置JSON')
-                ->addColumn(self::fields_CREATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
-                ->addColumn(self::fields_UPDATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
-                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_feed_type', self::fields_FEED_TYPE, 'Feed类型索引')
-                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_is_enabled', self::fields_IS_ENABLED, '启用状态索引')
-                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_is_auto_push', self::fields_IS_AUTO_PUSH, '自动推送索引')
-                ->create();
-        }
-    }
-
-    /**
+/**
      * 获取数据源配置数组
-     * 
      * @return array
      */
     public function getSourceConfigArray(): array
     {
-        $config = $this->getData(self::fields_SOURCE_CONFIG);
+        $config = $this->getData(self::schema_fields_SOURCE_CONFIG);
         if (is_string($config)) {
             $decoded = json_decode($config, true);
             return is_array($decoded) ? $decoded : [];
@@ -160,7 +118,7 @@ class Feed extends Model
      */
     public function setSourceConfigArray(array $config): self
     {
-        $this->setData(self::fields_SOURCE_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
+        $this->setData(self::schema_fields_SOURCE_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
         return $this;
     }
 
@@ -171,7 +129,7 @@ class Feed extends Model
      */
     public function getConfigArray(): array
     {
-        $config = $this->getData(self::fields_CONFIG);
+        $config = $this->getData(self::schema_fields_CONFIG);
         if (is_string($config)) {
             $decoded = json_decode($config, true);
             return is_array($decoded) ? $decoded : [];
@@ -187,7 +145,7 @@ class Feed extends Model
      */
     public function setConfigArray(array $config): self
     {
-        $this->setData(self::fields_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
+        $this->setData(self::schema_fields_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
         return $this;
     }
 
@@ -198,7 +156,7 @@ class Feed extends Model
      */
     public function isEnabled(): bool
     {
-        return (int)$this->getData(self::fields_IS_ENABLED) === 1;
+        return (int)$this->getData(self::schema_fields_IS_ENABLED) === 1;
     }
 
     /**
@@ -208,7 +166,7 @@ class Feed extends Model
      */
     public function isAutoPush(): bool
     {
-        return (int)$this->getData(self::fields_IS_AUTO_PUSH) === 1;
+        return (int)$this->getData(self::schema_fields_IS_AUTO_PUSH) === 1;
     }
 
     /**
@@ -220,8 +178,9 @@ class Feed extends Model
     {
         $now = time();
         if (!$this->getId()) {
-            $this->setData(self::fields_CREATED_AT, $now);
+            $this->setData(self::schema_fields_CREATED_AT, $now);
         }
-        $this->setData(self::fields_UPDATED_AT, $now);
+        $this->setData(self::schema_fields_UPDATED_AT, $now);
     }
 }
+

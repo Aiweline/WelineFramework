@@ -89,8 +89,8 @@ class FeedGeneratorService
         $relativeUrl = '/geo-feeds/' . $fileName;
 
         // 同步更新Feed的URL字段
-        $feed->setData(Feed::fields_FEED_URL, $relativeUrl);
-        $feed->setData(Feed::fields_LAST_GENERATED_AT, time());
+        $feed->setData(Feed::schema_fields_FEED_URL, $relativeUrl);
+        $feed->setData(Feed::schema_fields_LAST_GENERATED_AT, time());
         $feed->save();
 
         return $relativeUrl;
@@ -128,10 +128,10 @@ class FeedGeneratorService
     {
         $jsonFeed = [
             'version' => 'https://jsonfeed.org/version/1.1',
-            'title' => $feed->getData(Feed::fields_FEED_NAME),
+            'title' => $feed->getData(Feed::schema_fields_FEED_NAME),
             'description' => $feed->getConfigArray()['description'] ?? '',
-            'home_page_url' => $feed->getData(Feed::fields_FEED_URL) ?? '',
-            'feed_url' => $feed->getData(Feed::fields_FEED_URL) ?? '',
+            'home_page_url' => $feed->getData(Feed::schema_fields_FEED_URL) ?? '',
+            'feed_url' => $feed->getData(Feed::schema_fields_FEED_URL) ?? '',
             'items' => [],
         ];
 
@@ -164,8 +164,8 @@ class FeedGeneratorService
         $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
         $xml .= '<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">' . "\n";
         $xml .= '  <channel>' . "\n";
-        $xml .= '    <title>' . htmlspecialchars($feed->getData(Feed::fields_FEED_NAME)) . '</title>' . "\n";
-        $xml .= '    <link>' . htmlspecialchars($feed->getData(Feed::fields_FEED_URL) ?? '') . '</link>' . "\n";
+        $xml .= '    <title>' . htmlspecialchars($feed->getData(Feed::schema_fields_FEED_NAME)) . '</title>' . "\n";
+        $xml .= '    <link>' . htmlspecialchars($feed->getData(Feed::schema_fields_FEED_URL) ?? '') . '</link>' . "\n";
         $xml .= '    <description>' . htmlspecialchars($feed->getConfigArray()['description'] ?? '') . '</description>' . "\n";
         $xml .= '    <lastBuildDate>' . date('r') . '</lastBuildDate>' . "\n";
 

@@ -62,11 +62,11 @@ class Push extends BackendController
         try {
             /** @var Feed $feedModel */
             $feedModel = ObjectManager::getInstance(Feed::class);
-            $feeds = $feedModel->where(Feed::fields_IS_ENABLED, 1)->select()->fetchArray();
+            $feeds = $feedModel->where(Feed::schema_fields_IS_ENABLED, 1)->select()->fetchArray();
 
             /** @var Platform $platformModel */
             $platformModel = ObjectManager::getInstance(Platform::class);
-            $platforms = $platformModel->where(Platform::fields_IS_ENABLED, 1)->select()->fetchArray();
+            $platforms = $platformModel->where(Platform::schema_fields_IS_ENABLED, 1)->select()->fetchArray();
 
             $this->assign('feeds', $feeds);
             $this->assign('platforms', $platforms);

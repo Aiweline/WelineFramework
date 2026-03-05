@@ -12,43 +12,45 @@ declare(strict_types=1);
 namespace Weline\GenerativeEngineOptimization\Model;
 
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\Framework\Setup\Data\Context;
-
-/**
- * Feed条目模型
- * 
- * @package Weline_GenerativeEngineOptimization
- */
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+/** Feed条目模型 @package Weline_GenerativeEngineOptimization */
+#[Table(comment: 'GEO Feed条目表')]
+#[Index(name: 'idx_feed_id', columns: ['feed_id'], comment: 'Feed ID索引')]
+#[Index(name: 'idx_item_type_id', columns: ['item_type', 'item_id'], comment: '条目类型和ID复合索引')]
+#[Index(name: 'idx_is_published', columns: ['is_published'], comment: '发布状态索引')]
 class FeedItem extends Model
 {
-    public const table = 'geo_feed_item';
-    
-    /**
-     * Primary keys
-     */
+    public const schema_table = 'geo_feed_item';
+    public const schema_primary_key = 'id';
     public array $_unit_primary_keys = ['id'];
-    
-    /**
-     * Index sort keys
-     */
     public array $_index_sort_keys = ['id', 'feed_id', 'item_type', 'item_id', 'is_published'];
-    
-    /**
-     * Field name constants
-     */
-    public const fields_ID = 'id';
-    public const fields_FEED_ID = 'feed_id';
-    public const fields_ITEM_TYPE = 'item_type';
-    public const fields_ITEM_ID = 'item_id';
-    public const fields_TITLE = 'title';
-    public const fields_CONTENT = 'content';
-    public const fields_URL = 'url';
-    public const fields_METADATA = 'metadata';
-    public const fields_IS_PUBLISHED = 'is_published';
-    public const fields_PUBLISHED_AT = 'published_at';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
+
+    #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'ID')]
+    public const schema_fields_ID = 'id';
+    #[Col('int', nullable: false, comment: '关联Feed ID')]
+    public const schema_fields_FEED_ID = 'feed_id';
+    #[Col('varchar', 50, nullable: false, comment: '条目类型')]
+    public const schema_fields_ITEM_TYPE = 'item_type';
+    #[Col('int', nullable: false, comment: '条目ID')]
+    public const schema_fields_ITEM_ID = 'item_id';
+    #[Col('varchar', 255, nullable: false, comment: '标题')]
+    public const schema_fields_TITLE = 'title';
+    #[Col('text', comment: '内容')]
+    public const schema_fields_CONTENT = 'content';
+    #[Col('varchar', 500, nullable: false, comment: 'URL')]
+    public const schema_fields_URL = 'url';
+    #[Col('text', comment: '元数据JSON')]
+    public const schema_fields_METADATA = 'metadata';
+    #[Col('int', 1, default: 0, comment: '是否已发布')]
+    public const schema_fields_IS_PUBLISHED = 'is_published';
+    #[Col('int', comment: '发布时间')]
+    public const schema_fields_PUBLISHED_AT = 'published_at';
+    #[Col('int', default: 0, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col('int', default: 0, comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
 
     /**
      * Initialize model
@@ -65,59 +67,16 @@ class FeedItem extends Model
      */
     public function getIdFieldName(): string
     {
-        return self::fields_ID;
+        return self::schema_fields_ID;
     }
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist() === false) {
-            $setup->createTable('GEO Feed条目表')
-                ->addColumn(self::fields_ID, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
-                ->addColumn(self::fields_FEED_ID, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'not null', '关联Feed ID')
-                ->addColumn(self::fields_ITEM_TYPE, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 50, 'not null', '条目类型')
-                ->addColumn(self::fields_ITEM_ID, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'not null', '条目ID（关联源数据）')
-                ->addColumn(self::fields_TITLE, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'not null', '标题')
-                ->addColumn(self::fields_CONTENT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, 'null', '内容')
-                ->addColumn(self::fields_URL, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 500, 'not null', 'URL')
-                ->addColumn(self::fields_METADATA, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, 'null', '元数据JSON')
-                ->addColumn(self::fields_IS_PUBLISHED, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, 1, 'default 0', '是否已发布')
-                ->addColumn(self::fields_PUBLISHED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'null', '发布时间')
-                ->addColumn(self::fields_CREATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
-                ->addColumn(self::fields_UPDATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
-                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_feed_id', self::fields_FEED_ID, 'Feed ID索引')
-                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_item_type_id', [self::fields_ITEM_TYPE, self::fields_ITEM_ID], '条目类型和ID复合索引')
-                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_is_published', self::fields_IS_PUBLISHED, '发布状态索引')
-                ->create();
-        }
-    }
-
-    /**
+/**
      * 获取元数据数组
      * 
      * @return array
      */
     public function getMetadataArray(): array
     {
-        $metadata = $this->getData(self::fields_METADATA);
+        $metadata = $this->getData(self::schema_fields_METADATA);
         if (is_string($metadata)) {
             $decoded = json_decode($metadata, true);
             return is_array($decoded) ? $decoded : [];
@@ -133,7 +92,7 @@ class FeedItem extends Model
      */
     public function setMetadataArray(array $metadata): self
     {
-        $this->setData(self::fields_METADATA, json_encode($metadata, JSON_UNESCAPED_UNICODE));
+        $this->setData(self::schema_fields_METADATA, json_encode($metadata, JSON_UNESCAPED_UNICODE));
         return $this;
     }
 
@@ -144,7 +103,7 @@ class FeedItem extends Model
      */
     public function isPublished(): bool
     {
-        return (int)$this->getData(self::fields_IS_PUBLISHED) === 1;
+        return (int)$this->getData(self::schema_fields_IS_PUBLISHED) === 1;
     }
 
     /**
@@ -156,8 +115,8 @@ class FeedItem extends Model
     {
         $now = time();
         if (!$this->getId()) {
-            $this->setData(self::fields_CREATED_AT, $now);
+            $this->setData(self::schema_fields_CREATED_AT, $now);
         }
-        $this->setData(self::fields_UPDATED_AT, $now);
+        $this->setData(self::schema_fields_UPDATED_AT, $now);
     }
 }

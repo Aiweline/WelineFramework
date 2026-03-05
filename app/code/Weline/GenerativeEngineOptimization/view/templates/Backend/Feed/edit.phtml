@@ -119,12 +119,11 @@ document.getElementById('feed-form').addEventListener('submit', function(e) {
     
     const formData = new FormData(this);
     
-    fetch('<?= $this->getUrl('generativeengineoptimization/backend/feed/save') ?>', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
+    var feedUrl = '<?= $this->getUrl('generativeengineoptimization/backend/feed/save') ?>';
+    var feedOpts = { method: 'POST', body: formData };
+    window.Weline.Api.request(feedUrl, feedOpts)
+    .then(function(res) {
+        var data = (res && res.data) !== undefined ? res.data : res;
         if (data.success) {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
