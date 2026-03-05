@@ -55,8 +55,8 @@ class FreeShippingService
     ): ?FreeShippingRule {
         // 获取所有启用的免邮规则，按优先级排序
         $rules = $this->getModel()->reset()
-            ->where(FreeShippingRule::fields_IS_ACTIVE, 1)
-            ->order(FreeShippingRule::fields_PRIORITY, 'DESC')
+            ->where(FreeShippingRule::schema_fields_IS_ACTIVE, 1)
+            ->order(FreeShippingRule::schema_fields_PRIORITY, 'DESC')
             ->select()
             ->fetch();
         
@@ -86,7 +86,7 @@ class FreeShippingService
         ?int $regionId,
         ?string $couponCode
     ): bool {
-        $conditionType = $rule->getData(FreeShippingRule::fields_CONDITION_TYPE);
+        $conditionType = $rule->getData(FreeShippingRule::schema_fields_CONDITION_TYPE);
         
         switch ($conditionType) {
             case FreeShippingRule::CONDITION_ORDER_AMOUNT:
@@ -118,7 +118,7 @@ class FreeShippingService
      */
     private function matchOrderAmount(FreeShippingRule $rule, float $orderAmount): bool
     {
-        $minAmount = (float)$rule->getData(FreeShippingRule::fields_MIN_ORDER_AMOUNT);
+        $minAmount = (float)$rule->getData(FreeShippingRule::schema_fields_MIN_ORDER_AMOUNT);
         return $orderAmount >= $minAmount;
     }
 

@@ -15,7 +15,9 @@ $isActive = $this->getData('is_active');
 
 $backendBase = $this->getBackendUrl('shipping/backend/carrier');
 $createUrl = $this->getBackendUrl('shipping/backend/carrier/edit');
+$embed = $this->getData('embed') ?? false;
 ?>
+<?php if (empty($embed)): ?>
 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -31,6 +33,7 @@ $createUrl = $this->getBackendUrl('shipping/backend/carrier/edit');
                         </div>
                     </div>
                 </div>
+<?php endif; ?>
 
                 <div class="row">
                     <div class="col-12">

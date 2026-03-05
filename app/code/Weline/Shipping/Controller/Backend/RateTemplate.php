@@ -33,12 +33,13 @@ class RateTemplate extends BackendController
     public function index()
     {
         $templates = $this->rateTemplate->reset()
-            ->order(RateTemplateModel::fields_ID, 'ASC')
+            ->order(RateTemplateModel::schema_fields_ID, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
 
         $this->assign('templates', $templates);
+        $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
 
         return $this->fetch();
     }
