@@ -277,7 +277,7 @@ class ComponentRenderer
     {
         $component = $this->getComponentResolver()->resolve($componentCode, $preferredStyleCode);
         if ($component) {
-            return $component->getData(Component::fields_STYLE_CODE) ?: $preferredStyleCode;
+            return $component->getData(Component::schema_fields_STYLE_CODE) ?: $preferredStyleCode;
         }
         return $preferredStyleCode;
     }

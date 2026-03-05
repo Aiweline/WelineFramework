@@ -179,7 +179,7 @@ class PageRenderService
         $stylePath = "GuoLaiRen_PageBuilder::templates/style/{$styleCode}";
         
         // 获取页面类型
-        $pageType = $page->getData(Page::fields_TYPE);
+        $pageType = $page->getData(Page::schema_fields_TYPE);
         
         // 获取页面类型对应的布局信息
         $layoutInfo = $this->getLayoutInfoForPageType($styleCode, $pageType);
@@ -492,7 +492,7 @@ class PageRenderService
         // 加载样式模型获取默认配置
         $style = clone $this->styleModel;
         $style->clear()
-            ->where(Style::fields_CODE, $styleCode)
+            ->where(Style::schema_fields_CODE, $styleCode)
             ->find()
             ->fetch();
         
@@ -555,7 +555,7 @@ class PageRenderService
         
         $localDesc = clone $this->localDescriptionModel;
         $localDesc->clear()
-            ->where(LocalDescription::fields_ID, $page->getId())
+            ->where(LocalDescription::schema_fields_ID, $page->getId())
             ->where('local_code', $locale)
             ->find()
             ->fetch();
@@ -578,7 +578,7 @@ class PageRenderService
      */
     private function loadBlogData(Page $page): void
     {
-        $pageType = $page->getData(Page::fields_TYPE);
+        $pageType = $page->getData(Page::schema_fields_TYPE);
         $template = $this->getTemplate();
         
         // 检查是否已有预设的博客数据（由控制器预先设置）
@@ -655,136 +655,37 @@ class PageRenderService
         }
     }
     
-    /**
-     * 根据 slug 获取博客文章
-     */
     private function getBlogPostBySlug(string $slug): ?array
     {
         try {
-            $postClass = '\\GuoLaiRen\\Blog\\Model\\Post';
-            if (!class_exists($postClass)) {
-                return null;
-            }
-            
-            $websiteId = \Weline\Websites\Data\WebsiteData::getWebsiteId();
-            $postModel = \Weline\Framework\Manager\ObjectManager::getInstance($postClass);
-            $query = $postModel->clear()
-                ->where('slug', $slug)
-                ->where('status', 1);
-            
-            // 根据当前网站过滤
-            if ($websiteId) {
-                $query->where('site_id', $websiteId);
-            }
-            
-            $query->find()->fetch();
-            
-            if (!$postModel->getId()) {
-                return null;
-            }
-            
-            return [
-                'post_id' => $postModel->getId(),
-                'title' => $postModel->getData('title'),
-                'slug' => $postModel->getData('slug'),
-                'url' => '/blog/' . $postModel->getData('slug'),
-                'summary' => $postModel->getData('summary'),
-                'content' => $postModel->getData('content'),
-                'cover_image' => $postModel->getData('cover_image'),
-                'author' => $postModel->getData('author'),
-                'published_at' => $postModel->getData('published_at'),
-                'view_count' => $postModel->getData('view_count'),
-                'category_id' => $postModel->getData('category_id'),
-                'tags' => $postModel->getData('tags'),
-            ];
+            $websiteId = (int)\Weline\Websites\Data\WebsiteData::getWebsiteId();
+            return w_query('blog', 'getPostBySlug', ['slug' => $slug, 'site_id' => $websiteId]);
         } catch (\Throwable $e) {
             return null;
         }
     }
     
-    /**
-     * 根据 slug 获取博客分类
-     */
     private function getBlogCategoryBySlug(string $slug): ?array
     {
         try {
-            $categoryClass = '\\GuoLaiRen\\Blog\\Model\\Category';
-            if (!class_exists($categoryClass)) {
-                return null;
-            }
-            
-            $websiteId = \Weline\Websites\Data\WebsiteData::getWebsiteId();
-            $categoryModel = \Weline\Framework\Manager\ObjectManager::getInstance($categoryClass);
-            $query = $categoryModel->clear()
-                ->where('slug', $slug)
-                ->where('status', 1);
-            
-            // 根据当前网站过滤
-            if ($websiteId) {
-                $query->where('site_id', $websiteId);
-            }
-            
-            $query->find()->fetch();
-            
-            if (!$categoryModel->getId()) {
-                return null;
-            }
-            
-            return [
-                'category_id' => $categoryModel->getId(),
-                'name' => $categoryModel->getData('name'),
-                'slug' => $categoryModel->getData('slug'),
-                'url' => '/blog/category/' . $categoryModel->getData('slug'),
-                'description' => $categoryModel->getData('description'),
-            ];
+            $websiteId = (int)\Weline\Websites\Data\WebsiteData::getWebsiteId();
+            return w_query('blog', 'getCategoryBySlug', ['slug' => $slug, 'site_id' => $websiteId]);
         } catch (\Throwable $e) {
             return null;
         }
     }
     
-    /**
-     * 获取分类下的博客文章
-     */
     private function getBlogPostsByCategory(int $categoryId, int $limit = 20): array
     {
         try {
-            $postClass = '\\GuoLaiRen\\Blog\\Model\\Post';
-            if (!class_exists($postClass)) {
-                return [];
-            }
-            
-            $websiteId = \Weline\Websites\Data\WebsiteData::getWebsiteId();
-            $postModel = \Weline\Framework\Manager\ObjectManager::getInstance($postClass);
-            $query = $postModel->clear()
-                ->where('category_id', $categoryId)
-                ->where('status', 1);
-            
-            // 根据当前网站过滤
-            if ($websiteId) {
-                $query->where('site_id', $websiteId);
-            }
-            
-            $posts = $query->order('published_at', 'DESC')
-                ->limit($limit)
-                ->select()
-                ->fetch()
-                ->getItems();
-            
-            $result = [];
-            foreach ($posts as $post) {
-                $result[] = [
-                    'post_id' => $post->getId(),
-                    'title' => $post->getData('title'),
-                    'slug' => $post->getData('slug'),
-                    'url' => '/blog/' . $post->getData('slug'),
-                    'summary' => $post->getData('summary'),
-                    'cover_image' => $post->getData('cover_image'),
-                    'author' => $post->getData('author'),
-                    'published_at' => $post->getData('published_at'),
-                ];
-            }
-            
-            return $result;
+            $websiteId = (int)\Weline\Websites\Data\WebsiteData::getWebsiteId();
+            $result = w_query('blog', 'getPostList', [
+                'site_id' => $websiteId,
+                'category_id' => $categoryId,
+                'page' => 1,
+                'page_size' => $limit,
+            ]);
+            return $result['items'] ?? [];
         } catch (\Throwable $e) {
             return [];
         }
@@ -796,52 +697,18 @@ class PageRenderService
     private function getRelatedBlogPosts(array $currentPost, int $limit = 6): array
     {
         try {
-            $postClass = '\\GuoLaiRen\\Blog\\Model\\Post';
-            if (!class_exists($postClass)) {
-                return [];
-            }
-            
-            $websiteId = \Weline\Websites\Data\WebsiteData::getWebsiteId();
-            $postModel = \Weline\Framework\Manager\ObjectManager::getInstance($postClass);
-            $query = $postModel->clear()
-                ->where('status', 1)
-                ->where('post_id', $currentPost['post_id'], '!=');
-            
-            // 根据当前网站过滤
-            if ($websiteId) {
-                $query->where('site_id', $websiteId);
-            }
-            
-            // 优先同分类文章
-            if (!empty($currentPost['category_id'])) {
-                $query->where('category_id', $currentPost['category_id']);
-            }
-            
-            $posts = $query->order('published_at', 'DESC')
-                ->limit($limit)
-                ->select()
-                ->fetch()
-                ->getItems();
-            
-            $result = [];
-            foreach ($posts as $post) {
-                $result[] = [
-                    'post_id' => $post->getId(),
-                    'title' => $post->getData('title'),
-                    'slug' => $post->getData('slug'),
-                    'url' => '/blog/' . $post->getData('slug'),
-                    'summary' => $post->getData('summary'),
-                    'cover_image' => $post->getData('cover_image'),
-                    'published_at' => $post->getData('published_at'),
-                ];
-            }
-            
-            return $result;
+            $websiteId = (int)\Weline\Websites\Data\WebsiteData::getWebsiteId();
+            return w_query('blog', 'getRelatedPosts', [
+                'category_id' => (int)($currentPost['category_id'] ?? 0),
+                'exclude_post_id' => (int)($currentPost['post_id'] ?? 0),
+                'site_id' => $websiteId,
+                'limit' => $limit,
+            ]);
         } catch (\Throwable $e) {
             return [];
         }
     }
-    
+
     /**
      * 渲染区域
      */
@@ -955,7 +822,7 @@ class PageRenderService
         if ($localizedContent && !empty($localizedContent['content'])) {
             $customContent = $localizedContent['content'];
         } else {
-            $customContent = $page->getData(Page::fields_CONTENT);
+            $customContent = $page->getData(Page::schema_fields_CONTENT);
         }
         
         if (!empty($customContent)) {
@@ -1147,14 +1014,14 @@ class PageRenderService
             // 首先尝试在首选样式中查找
             $component = clone $componentModel;
             $component->clear()
-                ->where($componentModelClass::fields_CODE, $componentCode)
-                ->where($componentModelClass::fields_IS_ACTIVE, 1)
+                ->where($componentModelClass::schema_fields_CODE, $componentCode)
+                ->where($componentModelClass::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
             
             if ($component->getId()) {
-                $path = $component->getData($componentModelClass::fields_PATH);
-                $styleCode = $component->getData($componentModelClass::fields_STYLE_CODE);
+                $path = $component->getData($componentModelClass::schema_fields_PATH);
+                $styleCode = $component->getData($componentModelClass::schema_fields_STYLE_CODE);
                 
                 if ($path) {
                     // 如果是相对路径，转换为模板引用
@@ -1175,14 +1042,14 @@ class PageRenderService
             $prefixedCode = $preferredStyleCode . '-' . $componentCode;
             $component2 = clone $componentModel;
             $component2->clear()
-                ->where($componentModelClass::fields_CODE, $prefixedCode)
-                ->where($componentModelClass::fields_IS_ACTIVE, 1)
+                ->where($componentModelClass::schema_fields_CODE, $prefixedCode)
+                ->where($componentModelClass::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
             
             if ($component2->getId()) {
-                $path = $component2->getData($componentModelClass::fields_PATH);
-                $styleCode = $component2->getData($componentModelClass::fields_STYLE_CODE);
+                $path = $component2->getData($componentModelClass::schema_fields_PATH);
+                $styleCode = $component2->getData($componentModelClass::schema_fields_STYLE_CODE);
                 
                 if ($path) {
                     if (strpos($path, 'style/') === 0) {
@@ -1221,7 +1088,7 @@ class PageRenderService
      */
     private function injectHeaderCustomCode(string $headerHtml, Page $page): string
     {
-        $headerCustomCode = $page->getData(Page::fields_HEADER_CUSTOM_CODE) ?? '';
+        $headerCustomCode = $page->getData(Page::schema_fields_HEADER_CUSTOM_CODE) ?? '';
         if (!empty($headerCustomCode)) {
             $headerHtml = preg_replace(
                 '/(<\/head>)/i',
@@ -1238,7 +1105,7 @@ class PageRenderService
      */
     private function injectFooterCustomCode(string $footerHtml, Page $page): string
     {
-        $footerCustomCode = $page->getData(Page::fields_FOOTER_CUSTOM_CODE) ?? '';
+        $footerCustomCode = $page->getData(Page::schema_fields_FOOTER_CUSTOM_CODE) ?? '';
         if (!empty($footerCustomCode)) {
             $footerHtml = preg_replace(
                 '/(<\/body>)/i',

@@ -567,20 +567,13 @@ async function togglePublish(styleId, isPublished, skipPreviewCheck = false) {
     if (!confirmed) return;
     
     try {
-        const response = await fetch(API_URLS.togglePublish, {
+        var opts = {
             method: 'POST',
-            body: JSON.stringify({
-                style_id: styleId,
-                is_published: isPublished,
-                skip_preview_check: skipPreviewCheck ? '1' : '0'
-            }),
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        });
-        
-        const data = await response.json();
+            body: JSON.stringify({ style_id: styleId, is_published: isPublished, skip_preview_check: skipPreviewCheck ? '1' : '0' }),
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        };
+        var res = await window.Weline.Api.request(API_URLS.togglePublish, opts);
+        const data = (res && res.data) || res;
         
         if (data.success) {
             location.reload();
@@ -673,26 +666,10 @@ async function generatePreviewForPublish(styleCode) {
         const imageData = canvas.toDataURL('image/png', 0.9);
         
         console.log('📤 正在上传预览图...');
-        
-        // 上传到服务器（使用 JSON 格式，WLS 模式不支持 multipart/form-data 解析）
-        const response = await fetch(API_URLS.uploadPreview, {
-            method: 'POST',
-            body: JSON.stringify({
-                style_code: styleCode,
-                image_data: imageData
-            }),
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        });
-        
-        const result = await response.json();
-        
-        if (!result.success) {
-            throw new Error(result.message || '上传失败');
-        }
-        
+        var opts = { method: 'POST', body: JSON.stringify({ style_code: styleCode, image_data: imageData }), headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } };
+        var res = await window.Weline.Api.request(API_URLS.uploadPreview, opts);
+        var result = (res && res.data) || res;
+        if (!result.success) throw new Error(result.message || '上传失败');
         console.log('✅ 预览图生成成功');
         return result;
         
@@ -860,22 +837,9 @@ async function refreshSinglePreview(styleCode) {
         const imageData = canvas.toDataURL('image/png', 0.9);
         
         console.log('📤 正在上传预览图...');
-        
-        // 上传到服务器（使用 JSON 格式，WLS 模式不支持 multipart/form-data 解析）
-        const response = await fetch(API_URLS.uploadPreview, {
-            method: 'POST',
-            body: JSON.stringify({
-                style_code: styleCode,
-                image_data: imageData
-            }),
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        });
-        
-        const result = await response.json();
-        
+        var opts = { method: 'POST', body: JSON.stringify({ style_code: styleCode, image_data: imageData }), headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } };
+        var res = await window.Weline.Api.request(API_URLS.uploadPreview, opts);
+        var result = (res && res.data) || res;
         if (result.success) {
             console.log('✅ 预览图生成成功');
             
@@ -957,16 +921,9 @@ async function generateAllPreviews(force = false) {
     
     try {
         // 获取需要生成预览的模板列表
-        const response = await fetch(API_URLS.generateAllPreviews, {
-            method: 'POST',
-            body: JSON.stringify({ force: force ? '1' : '0' }),
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        });
-        
-        const result = await response.json();
+        var opts = { method: 'POST', body: JSON.stringify({ force: force ? '1' : '0' }), headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } };
+        var res = await window.Weline.Api.request(API_URLS.generateAllPreviews, opts);
+        var result = (res && res.data) || res;
         
         if (!result.success) {
             throw new Error(result.message || '获取模板列表失败');

@@ -1735,9 +1735,10 @@ if (typeof window.openVisualConfig === 'undefined') {
         
         // 如果只有 handle 没有 pageId，需要通过 API 获取
         if (handle && !pageId) {
-            fetch('<?= $this->getBackendUrl('*/backend/page/getPageByHandle') ?>?handle=' + encodeURIComponent(handle))
-                .then(response => response.json())
-                .then(result => {
+            var url = '<?= $this->getBackendUrl('*/backend/page/getPageByHandle') ?>?handle=' + encodeURIComponent(handle);
+                        var req = window.Weline.Api.get(url, { silent: true });
+            req.then(function(res) {
+                    var result = (res && res.data) || res;
                     if (result.success && result.data) {
                         pageId = result.data.page_id || null;
                         window.visualPageId = pageId;
@@ -2043,17 +2044,9 @@ window.updateSaveStatus = function(status, text) {
                 }
             }
             
-            // 发送保存请求
-            const response = await fetch(saveUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify(requestBody)
-            });
-            
-            const result = await response.json();
+            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(requestBody) };
+            var res = await window.Weline.Api.request(saveUrl, opts);
+            const result = (res && res.data) || res;
             
             if (result.success) {
                 if (typeof window.updateSaveStatus === 'function') {
@@ -2226,16 +2219,10 @@ window.saveSeoConfig = async function () {
             meta_keywords: metaKeywordsInput.value || ''
         };
 
-        const response = await fetch('<?= $this->getBackendUrl('*/backend/page/autoSaveSeo') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify(payload)
-        });
-
-        const result = await response.json();
+        var url = '<?= $this->getBackendUrl('*/backend/page/autoSaveSeo') ?>';
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(payload) };
+        var res = await window.Weline.Api.request(url, opts);
+        const result = (res && res.data) || res;
         if (result && result.success) {
             if (typeof window.updateSaveStatus === 'function') {
                 window.updateSaveStatus('saved', '<?= __('已保存') ?>');
@@ -2413,8 +2400,8 @@ async function loadTemplateStyleConfig(forceScan = false) {
             url += '&force_scan=1&t=' + Date.now();
         }
         
-        const response = await fetch(url);
-        const result = await response.json();
+        var res = await window.Weline.Api.get(url, { silent: true });
+        const result = (res && res.data) || res;
         
         if (result.success && result.data) {
             // 显示模板信息（名称 + 代码）
@@ -2794,9 +2781,10 @@ function renderTemplateConfig(configGroups) {
                 (function() {
                     var select = document.getElementById('${fieldId}');
                     if (!select) return;
-                    fetch('<?= $this->getUrl("weline/eav/api/options/attributes") ?>?entity_code=${escapeHtmlForTemplate(entityCode)}')
-                        .then(function(r) { return r.json(); })
-                        .then(function(data) {
+                    var url = '<?= $this->getUrl("weline/eav/api/options/attributes") ?>?entity_code=' + encodeURIComponent(escapeHtmlForTemplate(entityCode));
+                    var req = window.Weline.Api.get(url, { silent: true });
+                    req.then(function(res) {
+                        var data = (res && res.data) || res;
                             if (data.success && data.data.attributes) {
                                 select.innerHTML = '<option value=""><?= __('-- 请选择属性 --') ?></option>';
                                 data.data.attributes.forEach(function(attr) {
@@ -2832,9 +2820,10 @@ function renderTemplateConfig(configGroups) {
                         var select = document.getElementById('${fieldId}');
                         if (!select) return;
                         var currentValues = ${JSON.stringify(selectedValues)};
-                        fetch('<?= $this->getUrl("weline/eav/api/options") ?>?entity_code=${escapeHtmlForTemplate(entityCode)}&attribute_code=${escapeHtmlForTemplate(attributeCode)}')
-                            .then(function(r) { return r.json(); })
-                            .then(function(data) {
+                        var url = '<?= $this->getUrl("weline/eav/api/options") ?>?entity_code=' + encodeURIComponent(escapeHtmlForTemplate(entityCode)) + '&attribute_code=' + encodeURIComponent(escapeHtmlForTemplate(attributeCode));
+                        var req = window.Weline.Api.get(url, { silent: true });
+                        req.then(function(res) {
+                            var data = (res && res.data) || res;
                                 if (data.success && data.data.options) {
                                     select.innerHTML = '<option value=""><?= __('-- 请选择 --') ?></option>';
                                     data.data.options.forEach(function(opt) {
@@ -3148,8 +3137,8 @@ async function loadVisualStyleConfig() {
             url += '&locale=' + encodeURIComponent(locale);
         }
 
-        const response = await fetch(url);
-        const result = await response.json();
+        var res = await window.Weline.Api.get(url, { silent: true });
+        const result = (res && res.data) || res;
         if (result.success && result.data) {
             // 显示模板信息（名称 + 代码）
             if (result.style_info) {
@@ -3565,13 +3554,9 @@ async function handleConfigImport(event) {
             importBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __("导入中...") ?>';
         }
         
-        const response = await fetch(url, {
-            method: 'POST',
-            body: formData,
-            credentials: 'same-origin'
-        });
-        
-        const result = await response.json();
+        var opts = { method: 'POST', body: formData, credentials: 'same-origin' };
+        var res = await window.Weline.Api.request(url, opts);
+        const result = (res && res.data) || res;
         
         if (result.success) {
             BackendToast.success('<?= __("导入成功") ?>：' + (result.message || '<?= __("配置已导入") ?>'));
@@ -3823,20 +3808,11 @@ window.resetAllVisualConfig = function() {
                     };
                 }
                 
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify(requestData)
-                });
-                
-                const result = await response.json();
+                var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(requestData) };
+                var res = await window.Weline.Api.request(url, opts);
+                const result = (res && res.data) || res;
                 
                 if (result.success) {
-                    
-                    // 重新加载配置
                     if (window.isTemplateConfigMode && typeof loadTemplateStyleConfig === 'function') {
                         await loadTemplateStyleConfig();
                     } else if (typeof loadVisualStyleConfig === 'function') {
@@ -3930,20 +3906,11 @@ window.resetVisualConfigGroup = function(section) {
                     };
                 }
                 
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify(requestData)
-                });
-                
-                const result = await response.json();
+                var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(requestData) };
+                var res = await window.Weline.Api.request(url, opts);
+                const result = (res && res.data) || res;
                 
                 if (result.success) {
-                    
-                    // 重新加载配置
                     if (window.isTemplateConfigMode && typeof loadTemplateStyleConfig === 'function') {
                         await loadTemplateStyleConfig();
                     } else if (typeof loadVisualStyleConfig === 'function') {
@@ -5051,20 +5018,10 @@ async function saveComponentOrder() {
         } catch (e) {}
         
         // 调用 API 保存新顺序
-        const response = await fetch('<?= $this->getBackendUrl('*/backend/visual/api/component/reorder') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({
-                page_id: pageId,
-                region: 'content',
-                order: newOrder
-            })
-        });
-        
-        const result = await response.json();
+        var url = '<?= $this->getBackendUrl('*/backend/visual/api/component/reorder') ?>';
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ page_id: pageId, region: 'content', order: newOrder }) };
+        var res = await window.Weline.Api.request(url, opts);
+        const result = (res && res.data) || res;
         
         if (result.success) {
             // 刷新预览以更新索引
@@ -5125,16 +5082,10 @@ window.addComponentToLayout = async function(componentData, region, replace = fa
             requestData.position = position;
         }
         
-        const response = await fetch('<?= $this->getBackendUrl('*/backend/visual/api/component/add') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify(requestData)
-        });
-        
-        const result = await response.json();
+        var url = '<?= $this->getBackendUrl('*/backend/visual/api/component/add') ?>';
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(requestData) };
+        var res = await window.Weline.Api.request(url, opts);
+        const result = (res && res.data) || res;
         
         if (result.success) {
             // 刷新预览，传入添加前保存的滚动位置
@@ -5196,8 +5147,8 @@ window.editComponentInPreview = async function(wrapper) {
             '?component_code=' + encodeURIComponent(componentCode) + 
             '&style_code=' + encodeURIComponent(styleCode);
         
-        const metaResponse = await fetch(metadataUrl);
-        const metaResult = await metaResponse.json();
+        var metaRes = await window.Weline.Api.get(metadataUrl, { silent: true });
+        const metaResult = (metaRes && metaRes.data) || metaRes;
         
         if (!metaResult.success) {
             throw new Error(metaResult.message || '<?= __('获取组件信息失败') ?>');
@@ -5207,8 +5158,8 @@ window.editComponentInPreview = async function(wrapper) {
         const layoutUrl = '<?= $this->getBackendUrl('*/backend/visual/api/component/layoutFields') ?>' + 
             '?page_id=' + pageId;
         
-        const layoutResponse = await fetch(layoutUrl);
-        const layoutResult = await layoutResponse.json();
+        var layoutRes = await window.Weline.Api.get(layoutUrl, { silent: true });
+        const layoutResult = (layoutRes && layoutRes.data) || layoutRes;
         
         let currentConfig = {};
         if (layoutResult.success && layoutResult.layout_config && layoutResult.layout_config[region]) {
@@ -5354,15 +5305,10 @@ window.editComponentInPreview = async function(wrapper) {
                             formData.append('region', region);
                             formData.append('index', index);
                             
-                            const response = await fetch('<?= $this->getBackendUrl("*/backend/ai-generate/component-config") ?>', {
-                                method: 'POST',
-                                body: formData,
-                                headers: {
-                                    'X-Requested-With': 'XMLHttpRequest'
-                                }
-                            });
-                            
-                            const data = await response.json();
+                            var url = '<?= $this->getBackendUrl("*/backend/ai-generate/component-config") ?>';
+                            var opts = { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } };
+                            var res = await window.Weline.Api.request(url, opts);
+                            const data = (res && res.data) || res;
                             
                             if (data.success && data.data) {
                                 // 填充生成的配置到表单
@@ -5418,22 +5364,10 @@ window.editComponentInPreview = async function(wrapper) {
             BackendToast.info('<?= __('保存中...') ?>', 2000);
             
             // 调用API保存配置
-            const saveResponse = await fetch('<?= $this->getBackendUrl('*/backend/visual/api/component/updateConfig') ?>', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify({
-                    page_id: pageId,
-                    component_code: componentCode,
-                    region: region,
-                    index: index,
-                    config: newConfig
-                })
-            });
-            
-            const saveResult = await saveResponse.json();
+            var saveUrl = '<?= $this->getBackendUrl('*/backend/visual/api/component/updateConfig') ?>';
+            var saveOpts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ page_id: pageId, component_code: componentCode, region: region, index: index, config: newConfig }) };
+            var saveRes = await window.Weline.Api.request(saveUrl, saveOpts);
+            const saveResult = (saveRes && saveRes.data) || saveRes;
             
             if (saveResult.success) {
                 BackendToast.success('<?= __('保存成功') ?>');
@@ -5563,16 +5497,10 @@ window.removeComponentInPreview = async function(wrapper) {
         }
         
         
-        const response = await fetch('<?= $this->getBackendUrl('*/backend/visual/api/component/remove') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify(requestData)
-        });
-        
-        const data = await response.json();
+        var url = '<?= $this->getBackendUrl('*/backend/visual/api/component/remove') ?>';
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(requestData) };
+        var res = await window.Weline.Api.request(url, opts);
+        const data = (res && res.data) || res;
         
         
         if (data.success) {

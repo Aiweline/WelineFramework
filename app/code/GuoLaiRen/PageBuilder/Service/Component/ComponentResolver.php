@@ -229,9 +229,9 @@ class ComponentResolver
         // 从数据库查找
         $component = clone $this->getComponentModel();
         $component->clear()
-            ->where(Component::fields_CODE, $code)
-            ->where(Component::fields_STYLE_CODE, $styleCode)
-            ->where(Component::fields_IS_ACTIVE, 1)
+            ->where(Component::schema_fields_CODE, $code)
+            ->where(Component::schema_fields_STYLE_CODE, $styleCode)
+            ->where(Component::schema_fields_IS_ACTIVE, 1)
             ->find()
             ->fetch();
         
@@ -254,9 +254,9 @@ class ComponentResolver
         // 查找所有其他模板中的同名组件
         $component = clone $this->getComponentModel();
         $components = $component->clear()
-            ->where(Component::fields_CODE, $code)
-            ->where(Component::fields_STYLE_CODE, $styleCode, '!=')
-            ->where(Component::fields_IS_ACTIVE, 1)
+            ->where(Component::schema_fields_CODE, $code)
+            ->where(Component::schema_fields_STYLE_CODE, $styleCode, '!=')
+            ->where(Component::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetch()
             ->getItems();
@@ -279,14 +279,14 @@ class ComponentResolver
      */
     public function getComponentTemplatePath(Component $component): ?string
     {
-        $styleCode = $component->getData(Component::fields_STYLE_CODE);
-        $path = $component->getData(Component::fields_PATH);
+        $styleCode = $component->getData(Component::schema_fields_STYLE_CODE);
+        $path = $component->getData(Component::schema_fields_PATH);
         
         // 对于 AI 组件，确保实体文件存在并返回正确的路径
         if ($component->isAIGenerated()) {
             try {
                 $this->getEntityFileManager()->ensureEntityFile($component);
-                $path = $component->getData(Component::fields_PATH);
+                $path = $component->getData(Component::schema_fields_PATH);
             } catch (\Exception $e) {
                 w_log_error("[ComponentResolver] Failed to ensure AI component entity file: " . $e->getMessage());
             }
@@ -313,8 +313,8 @@ class ComponentResolver
      */
     public function getComponentFilePath(Component $component): ?string
     {
-        $styleCode = $component->getData(Component::fields_STYLE_CODE);
-        $path = $component->getData(Component::fields_PATH);
+        $styleCode = $component->getData(Component::schema_fields_STYLE_CODE);
+        $path = $component->getData(Component::schema_fields_PATH);
         
         if (empty($path)) {
             return null;

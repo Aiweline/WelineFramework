@@ -765,22 +765,22 @@ class DomainManagement extends BaseController
         
         try {
             $model = ObjectManager::getInstance(DomainPool::class);
-            $model->clearQuery()->where(DomainPool::fields_STATUS, DomainPool::STATUS_ACTIVE);
+            $model->clearQuery()->where(DomainPool::schema_fields_STATUS, DomainPool::STATUS_ACTIVE);
             
             if ($siteReadyOnly) {
-                $model->where(DomainPool::fields_SITE_READY, 1);
+                $model->where(DomainPool::schema_fields_SITE_READY, 1);
             }
             
             if ($parentDomainId > 0) {
-                $model->where(DomainPool::fields_PARENT_DOMAIN_ID, $parentDomainId);
+                $model->where(DomainPool::schema_fields_PARENT_DOMAIN_ID, $parentDomainId);
             }
             
             if ($search !== '') {
-                $model->where(DomainPool::fields_DOMAIN, '%' . $search . '%', 'LIKE');
+                $model->where(DomainPool::schema_fields_DOMAIN, '%' . $search . '%', 'LIKE');
             }
             
-            $model->order(DomainPool::fields_ROOT_DOMAIN, 'ASC')
-                ->order(DomainPool::fields_DOMAIN, 'ASC');
+            $model->order(DomainPool::schema_fields_ROOT_DOMAIN, 'ASC')
+                ->order(DomainPool::schema_fields_DOMAIN, 'ASC');
             
             // 分页
             $offset = ($page - 1) * $limit;
@@ -792,15 +792,15 @@ class DomainManagement extends BaseController
             $data = [];
             foreach ($domains as $domain) {
                 $data[] = [
-                    'pool_id' => $domain[DomainPool::fields_ID] ?? 0,
-                    'domain' => $domain[DomainPool::fields_DOMAIN] ?? '',
-                    'root_domain' => $domain[DomainPool::fields_ROOT_DOMAIN] ?? '',
-                    'resolve_status' => $domain[DomainPool::fields_RESOLVE_STATUS] ?? 'pending',
-                    'is_local_server' => (int) ($domain[DomainPool::fields_IS_LOCAL_SERVER] ?? 0),
-                    'https_status' => $domain[DomainPool::fields_HTTPS_STATUS] ?? 'none',
-                    'https_expires_at' => $domain[DomainPool::fields_HTTPS_EXPIRES_AT] ?? '',
-                    'site_ready' => (int) ($domain[DomainPool::fields_SITE_READY] ?? 0),
-                    'description' => $domain[DomainPool::fields_DESCRIPTION] ?? '',
+                    'pool_id' => $domain[DomainPool::schema_fields_ID] ?? 0,
+                    'domain' => $domain[DomainPool::schema_fields_DOMAIN] ?? '',
+                    'root_domain' => $domain[DomainPool::schema_fields_ROOT_DOMAIN] ?? '',
+                    'resolve_status' => $domain[DomainPool::schema_fields_RESOLVE_STATUS] ?? 'pending',
+                    'is_local_server' => (int) ($domain[DomainPool::schema_fields_IS_LOCAL_SERVER] ?? 0),
+                    'https_status' => $domain[DomainPool::schema_fields_HTTPS_STATUS] ?? 'none',
+                    'https_expires_at' => $domain[DomainPool::schema_fields_HTTPS_EXPIRES_AT] ?? '',
+                    'site_ready' => (int) ($domain[DomainPool::schema_fields_SITE_READY] ?? 0),
+                    'description' => $domain[DomainPool::schema_fields_DESCRIPTION] ?? '',
                 ];
             }
             
@@ -836,7 +836,7 @@ class DomainManagement extends BaseController
             // 检查是否已存在
             $existing = ObjectManager::getInstance(DomainPool::class, [], false);
             $existing->clearQuery()
-                ->where(DomainPool::fields_DOMAIN, strtolower($subdomain))
+                ->where(DomainPool::schema_fields_DOMAIN, strtolower($subdomain))
                 ->find()
                 ->fetch();
             
@@ -922,13 +922,13 @@ class DomainManagement extends BaseController
 
                 $poolModel = ObjectManager::getInstance(DomainPool::class, [], false);
                 $poolItems = $poolModel->clearQuery()
-                    ->where(DomainPool::fields_ROOT_DOMAIN, $domainName)
+                    ->where(DomainPool::schema_fields_ROOT_DOMAIN, $domainName)
                     ->select()
                     ->fetchArray();
 
                 foreach ($poolItems as $item) {
                     $pool = ObjectManager::getInstance(DomainPool::class, [], false);
-                    $pool->loadByPoolId((int) $item[DomainPool::fields_ID]);
+                    $pool->loadByPoolId((int) $item[DomainPool::schema_fields_ID]);
                     if ($pool->getPoolId()) {
                         $checkResult = $resolveService->checkResolve($pool);
                         $results[$pool->getDomain()] = $checkResult;
@@ -1628,10 +1628,10 @@ class DomainManagement extends BaseController
                         $registrar = ObjectManager::getInstance(\Weline\Websites\Model\DomainRegistrar::class);
                         $registrar->clearData(true);
                         $registrar->clearQuery();
-                        $registrar->where(\Weline\Websites\Model\DomainRegistrar::fields_ID, $registrarId)
+                        $registrar->where(\Weline\Websites\Model\DomainRegistrar::schema_fields_ID, $registrarId)
                             ->find()->fetch();
-                        $registrarCode = (string) ($registrar->getData(\Weline\Websites\Model\DomainRegistrar::fields_CODE) ?? '');
-                        $registrarName = (string) ($registrar->getData(\Weline\Websites\Model\DomainRegistrar::fields_NAME) ?? '');
+                        $registrarCode = (string) ($registrar->getData(\Weline\Websites\Model\DomainRegistrar::schema_fields_CODE) ?? '');
+                        $registrarName = (string) ($registrar->getData(\Weline\Websites\Model\DomainRegistrar::schema_fields_NAME) ?? '');
                     }
                 }
 
@@ -2026,7 +2026,7 @@ class DomainManagement extends BaseController
         $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
 
         $poolDomains = $poolModel->clearQuery()
-            ->where(\Weline\Websites\Model\DomainPool::fields_ROOT_DOMAIN, \strtolower($rootDomain))
+            ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($rootDomain))
             ->select()
             ->fetch();
 
@@ -2177,7 +2177,7 @@ class DomainManagement extends BaseController
             $registrarResolver = ObjectManager::getInstance(DomainRegistrarResolverService::class);
             $accounts = ObjectManager::getInstance(DomainRegistrarAccount::class);
             $allAccounts = $accounts->clearQuery()
-                ->where(DomainRegistrarAccount::fields_STATUS, DomainRegistrarAccount::STATUS_ACTIVE)
+                ->where(DomainRegistrarAccount::schema_fields_STATUS, DomainRegistrarAccount::STATUS_ACTIVE)
                 ->select()
                 ->fetch();
 
@@ -2269,7 +2269,7 @@ class DomainManagement extends BaseController
                     // 1. 删除关联的域名池记录
                     $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
                     $poolRecords = $poolModel->clearQuery()
-                        ->where(\Weline\Websites\Model\DomainPool::fields_ROOT_DOMAIN, \strtolower($domainName))
+                        ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($domainName))
                         ->select()
                         ->fetch();
 
@@ -2281,7 +2281,7 @@ class DomainManagement extends BaseController
                     // 2. 删除关联的 DNS 解析记录（本地记录）
                     $dnsModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainDnsRecord::class, [], false);
                     $dnsRecords = $dnsModel->clearQuery()
-                        ->where(\Weline\Websites\Model\DomainDnsRecord::fields_DOMAIN_ID, $domainId)
+                        ->where(\Weline\Websites\Model\DomainDnsRecord::schema_fields_DOMAIN_ID, $domainId)
                         ->select()
                         ->fetch();
 
@@ -2347,7 +2347,7 @@ class DomainManagement extends BaseController
             // 获取该账户下的所有域名
             $domainModel = ObjectManager::getInstance(Domain::class);
             $domains = $domainModel->clearQuery()
-                ->where(Domain::fields_ACCOUNT_ID, $accountId)
+                ->where(Domain::schema_fields_ACCOUNT_ID, $accountId)
                 ->select()
                 ->fetch();
 
@@ -2374,7 +2374,7 @@ class DomainManagement extends BaseController
                 // 1. 删除关联的域名池记录
                 $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
                 $poolRecords = $poolModel->clearQuery()
-                    ->where(\Weline\Websites\Model\DomainPool::fields_ROOT_DOMAIN, \strtolower($domainName))
+                    ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($domainName))
                     ->select()
                     ->fetch();
 
@@ -2386,7 +2386,7 @@ class DomainManagement extends BaseController
                 // 2. 删除关联的 DNS 解析记录
                 $dnsModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainDnsRecord::class, [], false);
                 $dnsRecords = $dnsModel->clearQuery()
-                    ->where(\Weline\Websites\Model\DomainDnsRecord::fields_DOMAIN_ID, $domainId)
+                    ->where(\Weline\Websites\Model\DomainDnsRecord::schema_fields_DOMAIN_ID, $domainId)
                     ->select()
                     ->fetch();
 
@@ -2466,7 +2466,7 @@ class DomainManagement extends BaseController
                 // 获取该账户下的所有域名
                 $domainModel = ObjectManager::getInstance(Domain::class);
                 $domains = $domainModel->clearQuery()
-                    ->where(Domain::fields_ACCOUNT_ID, $accountId)
+                    ->where(Domain::schema_fields_ACCOUNT_ID, $accountId)
                     ->select()
                     ->fetch();
 
@@ -2485,7 +2485,7 @@ class DomainManagement extends BaseController
                     // 删除关联的域名池记录
                     $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
                     $poolRecords = $poolModel->clearQuery()
-                        ->where(\Weline\Websites\Model\DomainPool::fields_ROOT_DOMAIN, \strtolower($domainName))
+                        ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($domainName))
                         ->select()
                         ->fetch();
 
@@ -2497,7 +2497,7 @@ class DomainManagement extends BaseController
                     // 删除关联的 DNS 解析记录
                     $dnsModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainDnsRecord::class, [], false);
                     $dnsRecords = $dnsModel->clearQuery()
-                        ->where(\Weline\Websites\Model\DomainDnsRecord::fields_DOMAIN_ID, $domainId)
+                        ->where(\Weline\Websites\Model\DomainDnsRecord::schema_fields_DOMAIN_ID, $domainId)
                         ->select()
                         ->fetch();
 

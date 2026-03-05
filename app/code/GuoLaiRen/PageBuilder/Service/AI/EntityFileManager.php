@@ -39,8 +39,8 @@ class EntityFileManager
      */
     public function getEntityRelativePath(Component $component): string
     {
-        $category = $component->getData(Component::fields_CATEGORY) ?: 'content';
-        $code = $component->getData(Component::fields_CODE);
+        $category = $component->getData(Component::schema_fields_CATEGORY) ?: 'content';
+        $code = $component->getData(Component::schema_fields_CODE);
         
         // 从组件代码中提取文件名
         $fileName = $this->codeToFileName($code);
@@ -136,11 +136,11 @@ class EntityFileManager
         if ($updateModel) {
             $hash = $this->calculateContentHash($component);
             $component->setEntityFileHash($hash);
-            $component->setData(Component::fields_ENTITY_GENERATED_AT, date('Y-m-d H:i:s'));
+            $component->setData(Component::schema_fields_ENTITY_GENERATED_AT, date('Y-m-d H:i:s'));
             
             // 更新组件的路径字段，指向实体文件
             $component->setData(
-                Component::fields_PATH, 
+                Component::schema_fields_PATH, 
                 'style/_ai_generated/components/' . $this->getEntityRelativePath($component)
             );
             
@@ -201,13 +201,13 @@ class EntityFileManager
         $componentModel = \Weline\Framework\Manager\ObjectManager::getInstance(Component::class);
         $aiComponents = clone $componentModel;
         $aiComponents->clear()
-            ->where(Component::fields_IS_AI_GENERATED, 1)
+            ->where(Component::schema_fields_IS_AI_GENERATED, 1)
             ->select()
             ->fetch();
         
         $validCodes = [];
         foreach ($aiComponents->getItems() as $component) {
-            $validCodes[] = $component->getData(Component::fields_CODE);
+            $validCodes[] = $component->getData(Component::schema_fields_CODE);
         }
         
         // 扫描实体文件目录
@@ -257,29 +257,29 @@ class EntityFileManager
         $componentModel = \Weline\Framework\Manager\ObjectManager::getInstance(Component::class);
         $aiComponents = clone $componentModel;
         $aiComponents->clear()
-            ->where(Component::fields_IS_AI_GENERATED, 1)
-            ->where(Component::fields_IS_ACTIVE, 1)
-            ->order(Component::fields_SORT_ORDER, 'ASC')
+            ->where(Component::schema_fields_IS_AI_GENERATED, 1)
+            ->where(Component::schema_fields_IS_ACTIVE, 1)
+            ->order(Component::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetch();
         
         $components = [];
         foreach ($aiComponents->getItems() as $component) {
-            $code = $component->getData(Component::fields_CODE);
-            $category = $component->getData(Component::fields_CATEGORY);
+            $code = $component->getData(Component::schema_fields_CODE);
+            $category = $component->getData(Component::schema_fields_CATEGORY);
             
             $components[$code] = [
-                'name' => $component->getData(Component::fields_NAME),
-                'description' => $component->getData(Component::fields_DESCRIPTION),
-                'region' => $component->getData(Component::fields_CATEGORY),
+                'name' => $component->getData(Component::schema_fields_NAME),
+                'description' => $component->getData(Component::schema_fields_DESCRIPTION),
+                'region' => $component->getData(Component::schema_fields_CATEGORY),
                 'category' => $category,
-                'type' => $component->getData(Component::fields_TYPE) ?: 'section',
+                'type' => $component->getData(Component::schema_fields_TYPE) ?: 'section',
                 'file' => $this->getEntityRelativePath($component),
                 'icon' => 'bi-robot', // AI 组件统一使用机器人图标
                 'ai_generated' => true,
-                'ai_version' => $component->getData(Component::fields_AI_VERSION),
+                'ai_version' => $component->getData(Component::schema_fields_AI_VERSION),
                 'compatible_styles' => ['*'],
-                'sort_order' => (int)$component->getData(Component::fields_SORT_ORDER),
+                'sort_order' => (int)$component->getData(Component::schema_fields_SORT_ORDER),
             ];
         }
         
@@ -322,7 +322,7 @@ class EntityFileManager
     public function calculateContentHash(Component $component): string
     {
         $content = $component->getTemplateContent();
-        $configSchema = $component->getData(Component::fields_CONFIG_SCHEMA) ?: '';
+        $configSchema = $component->getData(Component::schema_fields_CONFIG_SCHEMA) ?: '';
         
         return md5($content . $configSchema);
     }
@@ -363,7 +363,7 @@ class EntityFileManager
         $componentModel = \Weline\Framework\Manager\ObjectManager::getInstance(Component::class);
         $aiComponents = clone $componentModel;
         $aiComponents->clear()
-            ->where(Component::fields_IS_AI_GENERATED, 1)
+            ->where(Component::schema_fields_IS_AI_GENERATED, 1)
             ->select()
             ->fetch();
         
@@ -375,7 +375,7 @@ class EntityFileManager
                 }
             } catch (\Exception $e) {
                 $result['errors'][] = [
-                    'code' => $component->getData(Component::fields_CODE),
+                    'code' => $component->getData(Component::schema_fields_CODE),
                     'message' => $e->getMessage(),
                 ];
             }

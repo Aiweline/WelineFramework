@@ -12,8 +12,6 @@ namespace GuoLaiRen\PageBuilder\Helper;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\Page\LocalDescription;
 use Weline\Framework\Http\Cookie;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\SystemConfig\Model\SystemConfig;
 
 class PageHelper
 {
@@ -40,35 +38,35 @@ class PageHelper
         }
 
         // 获取页面指定的默认语言
-        $defaultLocale = $page->getData(Page::fields_DEFAULT_LOCALE);
+        $defaultLocale = $page->getData(Page::schema_fields_DEFAULT_LOCALE);
         
         // 第一层：主表数据（最后的回退选项）
         $result = [
-            'name' => $page->getData(Page::fields_NAME),
-            'title' => $page->getData(Page::fields_TITLE),
-            'content' => $page->getData(Page::fields_CONTENT),
-            'meta_title' => $page->getData(Page::fields_META_TITLE),
-            'meta_description' => $page->getData(Page::fields_META_DESCRIPTION),
-            'meta_keywords' => $page->getData(Page::fields_META_KEYWORDS),
+            'name' => $page->getData(Page::schema_fields_NAME),
+            'title' => $page->getData(Page::schema_fields_TITLE),
+            'content' => $page->getData(Page::schema_fields_CONTENT),
+            'meta_title' => $page->getData(Page::schema_fields_META_TITLE),
+            'meta_description' => $page->getData(Page::schema_fields_META_DESCRIPTION),
+            'meta_keywords' => $page->getData(Page::schema_fields_META_KEYWORDS),
         ];
 
         // 第二层：如果页面指定了默认语言，且当前语言不是默认语言，先尝试获取默认语言的翻译
         if ($defaultLocale && $locale !== $defaultLocale) {
             $defaultTranslation = clone $this->localDescription;
             $defaultTranslation->clear()
-                ->where(LocalDescription::fields_ID, $page->getId())
+                ->where(LocalDescription::schema_fields_ID, $page->getId())
                 ->where('local_code', $defaultLocale)
                 ->find()
                 ->fetch();
 
             if ($defaultTranslation->getId()) {
                 // 用默认语言的翻译覆盖主表数据
-                $result['name'] = $defaultTranslation->getData(LocalDescription::fields_NAME) ?: $result['name'];
-                $result['title'] = $defaultTranslation->getData(LocalDescription::fields_TITLE) ?: $result['title'];
-                $result['content'] = $defaultTranslation->getData(LocalDescription::fields_CONTENT) ?: $result['content'];
-                $result['meta_title'] = $defaultTranslation->getData(LocalDescription::fields_META_TITLE) ?: $result['meta_title'];
-                $result['meta_description'] = $defaultTranslation->getData(LocalDescription::fields_META_DESCRIPTION) ?: $result['meta_description'];
-                $result['meta_keywords'] = $defaultTranslation->getData(LocalDescription::fields_META_KEYWORDS) ?: $result['meta_keywords'];
+                $result['name'] = $defaultTranslation->getData(LocalDescription::schema_fields_NAME) ?: $result['name'];
+                $result['title'] = $defaultTranslation->getData(LocalDescription::schema_fields_TITLE) ?: $result['title'];
+                $result['content'] = $defaultTranslation->getData(LocalDescription::schema_fields_CONTENT) ?: $result['content'];
+                $result['meta_title'] = $defaultTranslation->getData(LocalDescription::schema_fields_META_TITLE) ?: $result['meta_title'];
+                $result['meta_description'] = $defaultTranslation->getData(LocalDescription::schema_fields_META_DESCRIPTION) ?: $result['meta_description'];
+                $result['meta_keywords'] = $defaultTranslation->getData(LocalDescription::schema_fields_META_KEYWORDS) ?: $result['meta_keywords'];
                 
                 // 默认语言的样式配置
                 $config = $defaultTranslation->getData('config');
@@ -81,19 +79,19 @@ class PageHelper
         // 第三层：尝试获取当前语言的翻译数据（最高优先级）
         $translation = clone $this->localDescription;
         $translation->clear()
-            ->where(LocalDescription::fields_ID, $page->getId())
+            ->where(LocalDescription::schema_fields_ID, $page->getId())
             ->where('local_code', $locale)
             ->find()
             ->fetch();
 
         // 如果有当前语言的翻译，使用它覆盖之前的数据
         if ($translation->getId()) {
-            $result['name'] = $translation->getData(LocalDescription::fields_NAME) ?: $result['name'];
-            $result['title'] = $translation->getData(LocalDescription::fields_TITLE) ?: $result['title'];
-            $result['content'] = $translation->getData(LocalDescription::fields_CONTENT) ?: $result['content'];
-            $result['meta_title'] = $translation->getData(LocalDescription::fields_META_TITLE) ?: $result['meta_title'];
-            $result['meta_description'] = $translation->getData(LocalDescription::fields_META_DESCRIPTION) ?: $result['meta_description'];
-            $result['meta_keywords'] = $translation->getData(LocalDescription::fields_META_KEYWORDS) ?: $result['meta_keywords'];
+            $result['name'] = $translation->getData(LocalDescription::schema_fields_NAME) ?: $result['name'];
+            $result['title'] = $translation->getData(LocalDescription::schema_fields_TITLE) ?: $result['title'];
+            $result['content'] = $translation->getData(LocalDescription::schema_fields_CONTENT) ?: $result['content'];
+            $result['meta_title'] = $translation->getData(LocalDescription::schema_fields_META_TITLE) ?: $result['meta_title'];
+            $result['meta_description'] = $translation->getData(LocalDescription::schema_fields_META_DESCRIPTION) ?: $result['meta_description'];
+            $result['meta_keywords'] = $translation->getData(LocalDescription::schema_fields_META_KEYWORDS) ?: $result['meta_keywords'];
             
             // 当前语言的样式配置（最高优先级）
             $config = $translation->getData('config');
@@ -163,7 +161,7 @@ class PageHelper
     {
         $translation = clone $this->localDescription;
         $translation->clear()
-            ->where(LocalDescription::fields_ID, $page->getId())
+            ->where(LocalDescription::schema_fields_ID, $page->getId())
             ->where('local_code', $locale)
             ->find()
             ->fetch();
@@ -181,7 +179,7 @@ class PageHelper
     {
         $translations = clone $this->localDescription;
         $translations = $translations->clear()
-            ->where(LocalDescription::fields_ID, $page->getId())
+            ->where(LocalDescription::schema_fields_ID, $page->getId())
             ->select()
             ->fetch()
             ->getItems();
@@ -205,10 +203,12 @@ class PageHelper
         $currentLocale = Cookie::getLang();
         $content = $this->getLocalizedContent($page, $currentLocale);
         
-        // 检查多语言功能是否开启
-        /** @var SystemConfig $systemConfig */
-        $systemConfig = ObjectManager::getInstance(SystemConfig::class);
-        $i18nEnabled = $systemConfig->getConfig('i18n_enabled', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
+        // 检查多语言功能是否开启（通过查询器，避免跨模块直接调用）
+        $i18nEnabled = w_query('system_config', 'getConfig', [
+            'key' => 'i18n_enabled',
+            'module' => 'GuoLaiRen_PageBuilder',
+            'area' => 'backend',
+        ]);
         $i18nEnabled = $i18nEnabled === null ? '0' : $i18nEnabled; // 默认不开启
         
         // 获取所有已翻译的语言（始终生成，但通过CSS控制显示）
@@ -244,7 +244,7 @@ class PageHelper
     {
         // 这里需要根据您的路由规则来实现
         // 示例实现：
-        $handle = $page->getData(Page::fields_HANDLE);
+        $handle = $page->getData(Page::schema_fields_HANDLE);
         $url = '/pagebuilder/frontend/page/view?handle=' . $handle;
         
         if ($locale) {
@@ -271,14 +271,11 @@ class PageHelper
         }
         
         $availableLocales = [];
-        
-        // 获取I18n模型来获取语言名称
-        $i18nModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\I18n\Model\I18n::class);
-        
+
         foreach ($selectedLocales as $locale) {
             $availableLocales[] = [
                 'code' => $locale,
-                'name' => $i18nModel->getLocaleName($locale),
+                'name' => (string)w_query('i18n', 'getLocaleName', ['code' => $locale]),
                 'has_translation' => in_array($locale, $translatedLocales),
                 'url' => $this->getPageUrl($page, $locale)
             ];

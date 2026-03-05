@@ -17,7 +17,6 @@ namespace GuoLaiRen\PageBuilder\Extends\Module\Weline_Seo\SitemapUrlProvider;
 use GuoLaiRen\PageBuilder\Model\Page;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Provider\AbstractSitemapUrlProvider;
-use Weline\Websites\Model\Website;
 
 /**
  * PageBuilder Sitemap URL 提供者
@@ -28,13 +27,11 @@ use Weline\Websites\Model\Website;
 class PageBuilderSitemapUrlProvider extends AbstractSitemapUrlProvider
 {
     private Page $pageModel;
-    private Website $websiteModel;
-    
+
     public function __construct()
     {
         parent::__construct();
         $this->pageModel = ObjectManager::getInstance(Page::class);
-        $this->websiteModel = ObjectManager::getInstance(Website::class);
     }
     
     /**
@@ -58,17 +55,12 @@ class PageBuilderSitemapUrlProvider extends AbstractSitemapUrlProvider
      */
     public function getWebsiteIds(): array
     {
-        $websites = $this->websiteModel->reset()
-            ->select()
-            ->fetch()
-            ->getItems();
-        
+        $websites = w_query('websites', 'getWebsiteList', []);
         $ids = [];
         foreach ($websites as $website) {
-            $ids[] = (int)$website->getId();
+            $ids[] = (int)($website['website_id'] ?? 0);
         }
-        
-        return $ids;
+        return array_filter($ids);
     }
     
     /**
@@ -87,20 +79,17 @@ class PageBuilderSitemapUrlProvider extends AbstractSitemapUrlProvider
      */
     public function getUrlsForWebsite(int $websiteId): array
     {
-        // 获取站点信息
-        $website = clone $this->websiteModel;
-        $website->load($websiteId);
-        
-        if (!$website->getId()) {
+        $website = w_query('websites', 'getWebsiteById', ['website_id' => $websiteId]);
+        if ($website === null) {
             return [];
         }
-        
-        $baseUrl = rtrim($website->getData('url') ?? '', '/');
+
+        $baseUrl = rtrim($website['url'] ?? '', '/');
         
         // 获取该站点的所有已发布页面
         $pages = $this->pageModel->reset()
-            ->where(Page::fields_WEBSITE_ID, $websiteId)
-            ->where(Page::fields_STATUS, 1) // 已发布
+            ->where(Page::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(Page::schema_fields_STATUS, 1) // 已发布
             ->select()
             ->fetch()
             ->getItems();
@@ -109,8 +98,8 @@ class PageBuilderSitemapUrlProvider extends AbstractSitemapUrlProvider
         
         foreach ($pages as $page) {
             $pageId = $page->getId();
-            $handle = $page->getData(Page::fields_HANDLE); // PageBuilder 使用 handle 作为 URL 标识
-            $updatedAt = $page->getData(Page::fields_UPDATE_TIME) ?? $page->getData(Page::fields_CREATE_TIME);
+            $handle = $page->getData(Page::schema_fields_HANDLE); // PageBuilder 使用 handle 作为 URL 标识
+            $updatedAt = $page->getData(Page::schema_fields_UPDATE_TIME) ?? $page->getData(Page::schema_fields_CREATE_TIME);
             
             if (!$handle) {
                 continue; // 跳过没有 handle 的页面
@@ -120,7 +109,7 @@ class PageBuilderSitemapUrlProvider extends AbstractSitemapUrlProvider
             $fullUrl = $baseUrl . '/' . ltrim($handle, '/');
             
             // 确定更新频率和优先级
-            $pageType = $page->getData(Page::fields_TYPE) ?? 'page';
+            $pageType = $page->getData(Page::schema_fields_TYPE) ?? 'page';
             $changefreq = $this->getChangefreqByType($pageType);
             $priority = $this->getPriorityByType($pageType);
             

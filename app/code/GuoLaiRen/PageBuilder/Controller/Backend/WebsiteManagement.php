@@ -466,8 +466,8 @@ class WebsiteManagement extends BaseController
         try {
             $currencyModel = $this->objectManager->getInstance(Currency::class);
             $currencies = $currencyModel->clearQuery()
-                ->where(Currency::fields_STATUS, 1)
-                ->order(Currency::fields_CODE, 'ASC')
+                ->where(Currency::schema_fields_STATUS, 1)
+                ->order(Currency::schema_fields_CODE, 'ASC')
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -495,8 +495,8 @@ class WebsiteManagement extends BaseController
         $localsModel = $this->objectManager->getInstance(Locals::class);
         $locales = $localsModel
             ->clearQuery()
-            ->where(Locals::fields_TARGET_CODE, $targetCode)
-            ->where(Locals::fields_IS_ACTIVE, 1)
+            ->where(Locals::schema_fields_TARGET_CODE, $targetCode)
+            ->where(Locals::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetchArray();
         
@@ -506,9 +506,9 @@ class WebsiteManagement extends BaseController
         if (!$locales) {
             $allLocales = $localsModel
                 ->clearQuery()
-                ->where(Locals::fields_IS_INSTALL, 1)
-                ->where(Locals::fields_IS_ACTIVE, 1)
-                ->order(Locals::fields_CODE, 'ASC')
+                ->where(Locals::schema_fields_IS_INSTALL, 1)
+                ->where(Locals::schema_fields_IS_ACTIVE, 1)
+                ->order(Locals::schema_fields_CODE, 'ASC')
                 ->select()
                 ->fetchArray();
             

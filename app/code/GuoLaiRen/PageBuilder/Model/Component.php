@@ -1,7 +1,5 @@
 <?php
-
 declare(strict_types=1);
-
 /*
  * GuoLaiRen PageBuilder Module
  * 组件模型 - 用于管理可视化页面构建器的组件
@@ -12,50 +10,76 @@ declare(strict_types=1);
  * 3. 组件可以跨模板使用，但优先推荐同模板组件
  * 4. 支持 header、footer、content-section 三种类型
  */
-
 namespace GuoLaiRen\PageBuilder\Model;
-
-use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
-
+#[Table(comment: '页面构建器-组件表')]
+#[Index(name: 'idx_code', columns: ['code'], comment: '组件代码索引')]
+#[Index(name: 'idx_style_code', columns: ['style_code'], comment: '模板代码索引')]
+#[Index(name: 'idx_category', columns: ['category'], comment: '分类索引')]
+#[Index(name: 'idx_is_active', columns: ['is_active'], comment: '状态索引')]
+#[Index(name: 'idx_is_ai_generated', columns: ['is_ai_generated'], comment: 'AI组件索引')]
 class Component extends Model
 {
-    public const table = 'guolairen_page_builder_component';
-    
+    public const schema_table = 'guolairen_page_builder_component';
+    public const schema_primary_key = 'component_id';
     /**
      * 标志：是否正在同步实体文件（防止递归）
      */
     private bool $syncingEntityFile = false;
-    
     // 字段定义
-    public const fields_ID = 'component_id';
-    public const fields_CODE = 'code';                    // 组件代码（唯一标识）
-    public const fields_NAME = 'name';                    // 组件名称
-    public const fields_DESCRIPTION = 'description';      // 组件描述
-    public const fields_STYLE_CODE = 'style_code';        // 所属模板代码
-    public const fields_CATEGORY = 'category';            // 组件分类：header, footer, content
-    public const fields_TYPE = 'type';                    // 组件类型：section, widget, layout
-    public const fields_PATH = 'path';                    // 组件文件路径
-    public const fields_THUMBNAIL = 'thumbnail';          // 组件缩略图
-    public const fields_CONFIG_SCHEMA = 'config_schema';  // 配置项定义（JSON）
-    public const fields_DEFAULT_CONFIG = 'default_config';// 默认配置（JSON）
-    public const fields_COMPATIBLE_STYLES = 'compatible_styles'; // 兼容的模板列表（JSON）
-    public const fields_DEPENDENCIES = 'dependencies';    // 依赖的其他组件（JSON）
-    public const fields_SORT_ORDER = 'sort_order';        // 排序
-    public const fields_IS_ACTIVE = 'is_active';          // 是否启用
-    public const fields_IS_SYSTEM = 'is_system';          // 是否系统组件（header/footer）
-    public const fields_CREATE_TIME = 'create_time';
-    public const fields_UPDATE_TIME = 'update_time';
-    
-    // AI 组件相关字段
-    public const fields_IS_AI_GENERATED = 'is_ai_generated';    // 是否 AI 生成
-    public const fields_AI_PROMPT = 'ai_prompt';                // AI 生成时的用户提示
-    public const fields_AI_VERSION = 'ai_version';              // AI 生成版本号
-    public const fields_TEMPLATE_CONTENT = 'template_content';  // 组件模板内容（AI 组件存储）
-    public const fields_ENTITY_FILE_HASH = 'entity_file_hash';  // 实体文件内容哈希
-    public const fields_ENTITY_GENERATED_AT = 'entity_generated_at'; // 实体文件生成时间
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '组件ID')]
+    public const schema_fields_ID = 'component_id';
+    #[Col(type: 'varchar', length: 128, nullable: false, comment: '组件代码（唯一标识）')]
+    public const schema_fields_CODE = 'code';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '组件名称')]
+    public const schema_fields_NAME = 'name';
+    #[Col(type: 'varchar', length: 500, nullable: true, comment: '组件描述')]
+    public const schema_fields_DESCRIPTION = 'description';
+    #[Col(type: 'varchar', length: 64, nullable: false, comment: '所属模板代码')]
+    public const schema_fields_STYLE_CODE = 'style_code';
+    #[Col(type: 'varchar', length: 32, nullable: false, comment: '组件分类：header, footer, content')]
+    public const schema_fields_CATEGORY = 'category';
+    #[Col(type: 'varchar', length: 32, nullable: false, comment: '组件类型：section, widget, layout')]
+    public const schema_fields_TYPE = 'type';
+    #[Col(type: 'varchar', length: 512, nullable: true, comment: '组件文件路径')]
+    public const schema_fields_PATH = 'path';
+    #[Col(type: 'varchar', length: 512, nullable: true, comment: '组件缩略图')]
+    public const schema_fields_THUMBNAIL = 'thumbnail';
+    #[Col(type: 'text', nullable: true, comment: '配置项定义（JSON）')]
+    public const schema_fields_CONFIG_SCHEMA = 'config_schema';
+    #[Col(type: 'text', nullable: true, comment: '默认配置（JSON）')]
+    public const schema_fields_DEFAULT_CONFIG = 'default_config';
+    #[Col(type: 'text', nullable: true, comment: '兼容的模板列表（JSON）')]
+    public const schema_fields_COMPATIBLE_STYLES = 'compatible_styles';
+    #[Col(type: 'text', nullable: true, comment: '依赖的其他组件（JSON）')]
+    public const schema_fields_DEPENDENCIES = 'dependencies';
+    #[Col(type: 'int', nullable: false, default: 0, comment: '排序')]
+    public const schema_fields_SORT_ORDER = 'sort_order';
+    #[Col(type: 'smallint', length: 1, nullable: false, default: 1, comment: '是否启用')]
+    public const schema_fields_IS_ACTIVE = 'is_active';
+    #[Col(type: 'smallint', length: 1, nullable: false, default: 0, comment: '是否系统组件')]
+    public const schema_fields_IS_SYSTEM = 'is_system';
+    #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
+    public const schema_fields_CREATE_TIME = 'create_time';
+    #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '更新时间')]
+    public const schema_fields_UPDATE_TIME = 'update_time';
+    #[Col(type: 'smallint', length: 1, nullable: false, default: 0, comment: '是否 AI 生成')]
+    public const schema_fields_IS_AI_GENERATED = 'is_ai_generated';
+    #[Col(type: 'text', nullable: true, comment: 'AI 生成时的用户提示')]
+    public const schema_fields_AI_PROMPT = 'ai_prompt';
+    #[Col(type: 'varchar', length: 32, nullable: true, comment: 'AI 生成版本号')]
+    public const schema_fields_AI_VERSION = 'ai_version';
+    #[Col(type: 'mediumtext', nullable: true, comment: '组件模板内容（AI 组件存储）')]
+    public const schema_fields_TEMPLATE_CONTENT = 'template_content';
+    #[Col(type: 'varchar', length: 64, nullable: true, comment: '实体文件内容哈希')]
+    public const schema_fields_ENTITY_FILE_HASH = 'entity_file_hash';
+    #[Col(type: 'datetime', nullable: true, comment: '实体文件生成时间')]
+    public const schema_fields_ENTITY_GENERATED_AT = 'entity_generated_at';
     
     // 组件分类常量
     public const CATEGORY_HEADER = 'header';
@@ -77,7 +101,7 @@ class Component extends Model
      */
     public function isAIGenerated(): bool
     {
-        return (bool)$this->getData(self::fields_IS_AI_GENERATED);
+        return (bool)$this->getData(self::schema_fields_IS_AI_GENERATED);
     }
     
     /**
@@ -85,7 +109,7 @@ class Component extends Model
      */
     public function setAIGenerated(bool $isAI = true): self
     {
-        return $this->setData(self::fields_IS_AI_GENERATED, $isAI ? 1 : 0);
+        return $this->setData(self::schema_fields_IS_AI_GENERATED, $isAI ? 1 : 0);
     }
     
     /**
@@ -93,7 +117,7 @@ class Component extends Model
      */
     public function getAIPrompt(): string
     {
-        return $this->getData(self::fields_AI_PROMPT) ?: '';
+        return $this->getData(self::schema_fields_AI_PROMPT) ?: '';
     }
     
     /**
@@ -101,7 +125,7 @@ class Component extends Model
      */
     public function setAIPrompt(string $prompt): self
     {
-        return $this->setData(self::fields_AI_PROMPT, $prompt);
+        return $this->setData(self::schema_fields_AI_PROMPT, $prompt);
     }
     
     /**
@@ -109,7 +133,7 @@ class Component extends Model
      */
     public function getTemplateContent(): string
     {
-        return $this->getData(self::fields_TEMPLATE_CONTENT) ?: '';
+        return $this->getData(self::schema_fields_TEMPLATE_CONTENT) ?: '';
     }
     
     /**
@@ -117,7 +141,7 @@ class Component extends Model
      */
     public function setTemplateContent(string $content): self
     {
-        return $this->setData(self::fields_TEMPLATE_CONTENT, $content);
+        return $this->setData(self::schema_fields_TEMPLATE_CONTENT, $content);
     }
     
     /**
@@ -125,7 +149,7 @@ class Component extends Model
      */
     public function getEntityFileHash(): string
     {
-        return $this->getData(self::fields_ENTITY_FILE_HASH) ?: '';
+        return $this->getData(self::schema_fields_ENTITY_FILE_HASH) ?: '';
     }
     
     /**
@@ -133,7 +157,7 @@ class Component extends Model
      */
     public function setEntityFileHash(string $hash): self
     {
-        return $this->setData(self::fields_ENTITY_FILE_HASH, $hash);
+        return $this->setData(self::schema_fields_ENTITY_FILE_HASH, $hash);
     }
     
     /**
@@ -272,7 +296,7 @@ class Component extends Model
      */
     public function getConfigSchema(): array
     {
-        $schema = $this->getData(self::fields_CONFIG_SCHEMA);
+        $schema = $this->getData(self::schema_fields_CONFIG_SCHEMA);
         if (empty($schema)) {
             return [];
         }
@@ -284,7 +308,7 @@ class Component extends Model
      */
     public function setConfigSchema(array $schema): self
     {
-        return $this->setData(self::fields_CONFIG_SCHEMA, json_encode($schema, JSON_UNESCAPED_UNICODE));
+        return $this->setData(self::schema_fields_CONFIG_SCHEMA, json_encode($schema, JSON_UNESCAPED_UNICODE));
     }
     
     /**
@@ -346,7 +370,7 @@ class Component extends Model
         }
         
         // 最后回退到 category
-        $category = $this->getData(self::fields_CATEGORY) ?: self::CATEGORY_CONTENT;
+        $category = $this->getData(self::schema_fields_CATEGORY) ?: self::CATEGORY_CONTENT;
         return [$category];
     }
     
@@ -437,7 +461,7 @@ class Component extends Model
     public function getRegion(): string
     {
         $configSchema = $this->getConfigSchema();
-        return $configSchema['region'] ?? $this->getData(self::fields_CATEGORY) ?? self::CATEGORY_CONTENT;
+        return $configSchema['region'] ?? $this->getData(self::schema_fields_CATEGORY) ?? self::CATEGORY_CONTENT;
     }
     
     /**
@@ -455,7 +479,7 @@ class Component extends Model
      */
     public function getDefaultConfig(): array
     {
-        $config = $this->getData(self::fields_DEFAULT_CONFIG);
+        $config = $this->getData(self::schema_fields_DEFAULT_CONFIG);
         if (empty($config)) {
             return [];
         }
@@ -467,7 +491,7 @@ class Component extends Model
      */
     public function setDefaultConfig(array $config): self
     {
-        return $this->setData(self::fields_DEFAULT_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
+        return $this->setData(self::schema_fields_DEFAULT_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
     }
     
     /**
@@ -475,7 +499,7 @@ class Component extends Model
      */
     public function getCompatibleStyles(): array
     {
-        $styles = $this->getData(self::fields_COMPATIBLE_STYLES);
+        $styles = $this->getData(self::schema_fields_COMPATIBLE_STYLES);
         if (empty($styles)) {
             // 默认兼容所有模板
             return ['*'];
@@ -502,7 +526,7 @@ class Component extends Model
      */
     public function getFullPath(): string
     {
-        $path = $this->getData(self::fields_PATH);
+        $path = $this->getData(self::schema_fields_PATH);
         if (empty($path)) {
             return '';
         }
@@ -528,7 +552,7 @@ class Component extends Model
     public function render(array $config = [], $page = null): string
     {
         if (!$this->fileExists()) {
-            return '<!-- Component file not found: ' . htmlspecialchars($this->getData(self::fields_CODE)) . ' -->';
+            return '<!-- Component file not found: ' . htmlspecialchars($this->getData(self::schema_fields_CODE)) . ' -->';
         }
         
         // 合并默认配置和自定义配置
@@ -555,14 +579,14 @@ class Component extends Model
         // 获取属于该模板的组件
         $ownComponents = clone $componentModel;
         $query = $ownComponents->clear()
-            ->where(self::fields_STYLE_CODE, $styleCode);
+            ->where(self::schema_fields_STYLE_CODE, $styleCode);
         
         if ($activeOnly) {
-            $query->where(self::fields_IS_ACTIVE, 1);
+            $query->where(self::schema_fields_IS_ACTIVE, 1);
         }
         
         $result = [
-            'own' => $query->order(self::fields_SORT_ORDER, 'ASC')
+            'own' => $query->order(self::schema_fields_SORT_ORDER, 'ASC')
                 ->select()
                 ->fetch()
                 ->getItems(),
@@ -573,14 +597,14 @@ class Component extends Model
         if ($includeCompatible) {
             $allComponents = clone $componentModel;
             $allQuery = $allComponents->clear()
-                ->where(self::fields_STYLE_CODE, $styleCode, '!=');
+                ->where(self::schema_fields_STYLE_CODE, $styleCode, '!=');
             
             if ($activeOnly) {
-                $allQuery->where(self::fields_IS_ACTIVE, 1);
+                $allQuery->where(self::schema_fields_IS_ACTIVE, 1);
             }
             
-            $allItems = $allQuery->order(self::fields_STYLE_CODE, 'ASC')
-                ->order(self::fields_SORT_ORDER, 'ASC')
+            $allItems = $allQuery->order(self::schema_fields_STYLE_CODE, 'ASC')
+                ->order(self::schema_fields_SORT_ORDER, 'ASC')
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -588,7 +612,7 @@ class Component extends Model
             // 过滤出兼容的组件
             foreach ($allItems as $component) {
                 if ($component->isCompatibleWith($styleCode)) {
-                    $componentStyleCode = $component->getData(self::fields_STYLE_CODE);
+                    $componentStyleCode = $component->getData(self::schema_fields_STYLE_CODE);
                     if (!isset($result['compatible'][$componentStyleCode])) {
                         $result['compatible'][$componentStyleCode] = [];
                     }
@@ -629,7 +653,7 @@ class Component extends Model
         // 先获取要删除的数量
         $existingComponents = clone $componentModel;
         $toDeleteItems = $existingComponents->clear()
-            ->where(self::fields_STYLE_CODE, $styleCode)
+            ->where(self::schema_fields_STYLE_CODE, $styleCode)
             ->select()
             ->fetch()
             ->getItems();
@@ -639,7 +663,7 @@ class Component extends Model
         if ($result['cleaned'] > 0) {
             $deleteQuery = clone $componentModel;
             $deleteQuery->clear()
-                ->where(self::fields_STYLE_CODE, $styleCode)
+                ->where(self::schema_fields_STYLE_CODE, $styleCode)
                 ->delete()
                 ->fetch();
         }
@@ -828,8 +852,8 @@ class Component extends Model
         // 检查是否已存在（使用 code + style_code 作为唯一键）
         $existing = clone $componentModel;
         $existing->clear()
-            ->where(self::fields_CODE, $componentCode)
-            ->where(self::fields_STYLE_CODE, $styleCode)
+            ->where(self::schema_fields_CODE, $componentCode)
+            ->where(self::schema_fields_STYLE_CODE, $styleCode)
             ->find()
             ->fetch();
         
@@ -846,21 +870,21 @@ class Component extends Model
             || (bool)preg_match('/-ai-\d+$/', $componentCode);
         
         $data = [
-            self::fields_CODE => $componentCode,
-            self::fields_NAME => $metadata['name'] ?? self::formatName($componentCode),
-            self::fields_DESCRIPTION => $metadata['description'] ?? '',
-            self::fields_STYLE_CODE => $styleCode,
-            self::fields_CATEGORY => $metadata['category'] ?? $category,
-            self::fields_TYPE => $metadata['type'] ?? $type,
-            self::fields_PATH => $relativePath,
-            self::fields_THUMBNAIL => $metadata['thumbnail'] ?? '',
-            self::fields_CONFIG_SCHEMA => json_encode($metadata['config_schema'] ?? [], JSON_UNESCAPED_UNICODE),
-            self::fields_DEFAULT_CONFIG => json_encode($metadata['default_config'] ?? [], JSON_UNESCAPED_UNICODE),
-            self::fields_COMPATIBLE_STYLES => json_encode($metadata['compatible_styles'] ?? ['*'], JSON_UNESCAPED_UNICODE),
-            self::fields_IS_SYSTEM => (int)($isSystem ? 1 : 0),
-            self::fields_IS_ACTIVE => 1,
-            self::fields_SORT_ORDER => (int)$sortOrder,
-            self::fields_IS_AI_GENERATED => $isAiGenerated ? 1 : 0,
+            self::schema_fields_CODE => $componentCode,
+            self::schema_fields_NAME => $metadata['name'] ?? self::formatName($componentCode),
+            self::schema_fields_DESCRIPTION => $metadata['description'] ?? '',
+            self::schema_fields_STYLE_CODE => $styleCode,
+            self::schema_fields_CATEGORY => $metadata['category'] ?? $category,
+            self::schema_fields_TYPE => $metadata['type'] ?? $type,
+            self::schema_fields_PATH => $relativePath,
+            self::schema_fields_THUMBNAIL => $metadata['thumbnail'] ?? '',
+            self::schema_fields_CONFIG_SCHEMA => json_encode($metadata['config_schema'] ?? [], JSON_UNESCAPED_UNICODE),
+            self::schema_fields_DEFAULT_CONFIG => json_encode($metadata['default_config'] ?? [], JSON_UNESCAPED_UNICODE),
+            self::schema_fields_COMPATIBLE_STYLES => json_encode($metadata['compatible_styles'] ?? ['*'], JSON_UNESCAPED_UNICODE),
+            self::schema_fields_IS_SYSTEM => (int)($isSystem ? 1 : 0),
+            self::schema_fields_IS_ACTIVE => 1,
+            self::schema_fields_SORT_ORDER => (int)$sortOrder,
+            self::schema_fields_IS_AI_GENERATED => $isAiGenerated ? 1 : 0,
         ];
         
         if ($existing->getId()) {
@@ -912,8 +936,8 @@ class Component extends Model
         // 检查是否已存在（使用 code + style_code 作为唯一键）
         $existing = clone $componentModel;
         $existing->clear()
-            ->where(self::fields_CODE, $componentCode)
-            ->where(self::fields_STYLE_CODE, $styleCode)
+            ->where(self::schema_fields_CODE, $componentCode)
+            ->where(self::schema_fields_STYLE_CODE, $styleCode)
             ->find()
             ->fetch();
         
@@ -931,21 +955,21 @@ class Component extends Model
             || (bool)preg_match('/-ai-\d+$/', $componentCode);
         
         $data = [
-            self::fields_CODE => $componentCode,
-            self::fields_NAME => $config['name'] ?? self::formatName($componentCode),
-            self::fields_DESCRIPTION => $config['description'] ?? '',
-            self::fields_STYLE_CODE => $styleCode,
-            self::fields_CATEGORY => $category,
-            self::fields_TYPE => $config['type'] ?? self::TYPE_SECTION,
-            self::fields_PATH => $relativePath,
-            self::fields_THUMBNAIL => $config['thumbnail'] ?? '',
-            self::fields_CONFIG_SCHEMA => json_encode($config['config_groups'] ?? [], JSON_UNESCAPED_UNICODE),
-            self::fields_DEFAULT_CONFIG => json_encode($config['default_config'] ?? [], JSON_UNESCAPED_UNICODE),
-            self::fields_COMPATIBLE_STYLES => json_encode($config['compatible_styles'] ?? ['*'], JSON_UNESCAPED_UNICODE),
-            self::fields_IS_SYSTEM => (int)$isSystem,
-            self::fields_IS_ACTIVE => 1,
-            self::fields_SORT_ORDER => (int)$sortOrder,
-            self::fields_IS_AI_GENERATED => $isAiGenerated ? 1 : 0,
+            self::schema_fields_CODE => $componentCode,
+            self::schema_fields_NAME => $config['name'] ?? self::formatName($componentCode),
+            self::schema_fields_DESCRIPTION => $config['description'] ?? '',
+            self::schema_fields_STYLE_CODE => $styleCode,
+            self::schema_fields_CATEGORY => $category,
+            self::schema_fields_TYPE => $config['type'] ?? self::TYPE_SECTION,
+            self::schema_fields_PATH => $relativePath,
+            self::schema_fields_THUMBNAIL => $config['thumbnail'] ?? '',
+            self::schema_fields_CONFIG_SCHEMA => json_encode($config['config_groups'] ?? [], JSON_UNESCAPED_UNICODE),
+            self::schema_fields_DEFAULT_CONFIG => json_encode($config['default_config'] ?? [], JSON_UNESCAPED_UNICODE),
+            self::schema_fields_COMPATIBLE_STYLES => json_encode($config['compatible_styles'] ?? ['*'], JSON_UNESCAPED_UNICODE),
+            self::schema_fields_IS_SYSTEM => (int)$isSystem,
+            self::schema_fields_IS_ACTIVE => 1,
+            self::schema_fields_SORT_ORDER => (int)$sortOrder,
+            self::schema_fields_IS_AI_GENERATED => $isAiGenerated ? 1 : 0,
         ];
         
         // 额外存储 region 和 icon 信息到 config_schema
@@ -958,7 +982,7 @@ class Component extends Model
         if (isset($config['icon'])) {
             $configSchema['icon'] = $config['icon'];
         }
-        $data[self::fields_CONFIG_SCHEMA] = json_encode($configSchema, JSON_UNESCAPED_UNICODE);
+        $data[self::schema_fields_CONFIG_SCHEMA] = json_encode($configSchema, JSON_UNESCAPED_UNICODE);
         
         if ($existing->getId()) {
             // 更新现有组件
@@ -1172,7 +1196,7 @@ class Component extends Model
         // 检查是否已存在
         $existing = clone $componentModel;
         $existing->clear()
-            ->where(self::fields_CODE, $componentCode)
+            ->where(self::schema_fields_CODE, $componentCode)
             ->find()
             ->fetch();
         
@@ -1183,18 +1207,18 @@ class Component extends Model
             || (bool)preg_match('/-ai-\d+$/', $componentCode);
         
         $data = [
-            self::fields_CODE => $componentCode,
-            self::fields_NAME => $section['name'],
-            self::fields_DESCRIPTION => $section['description'] ?? '',
-            self::fields_STYLE_CODE => $styleCode,
-            self::fields_CATEGORY => $section['category'] ?? self::CATEGORY_CONTENT,
-            self::fields_TYPE => $section['type'] ?? self::TYPE_SECTION,
-            self::fields_PATH => 'style/' . $styleCode . '/content.phtml#' . $section['code'], // 带锚点标记
-            self::fields_COMPATIBLE_STYLES => json_encode(['*'], JSON_UNESCAPED_UNICODE),
-            self::fields_IS_SYSTEM => 0,
-            self::fields_IS_ACTIVE => 1,
-            self::fields_SORT_ORDER => $section['sort_order'] ?? 10,
-            self::fields_IS_AI_GENERATED => $isAiGenerated ? 1 : 0,
+            self::schema_fields_CODE => $componentCode,
+            self::schema_fields_NAME => $section['name'],
+            self::schema_fields_DESCRIPTION => $section['description'] ?? '',
+            self::schema_fields_STYLE_CODE => $styleCode,
+            self::schema_fields_CATEGORY => $section['category'] ?? self::CATEGORY_CONTENT,
+            self::schema_fields_TYPE => $section['type'] ?? self::TYPE_SECTION,
+            self::schema_fields_PATH => 'style/' . $styleCode . '/content.phtml#' . $section['code'], // 带锚点标记
+            self::schema_fields_COMPATIBLE_STYLES => json_encode(['*'], JSON_UNESCAPED_UNICODE),
+            self::schema_fields_IS_SYSTEM => 0,
+            self::schema_fields_IS_ACTIVE => 1,
+            self::schema_fields_SORT_ORDER => $section['sort_order'] ?? 10,
+            self::schema_fields_IS_AI_GENERATED => $isAiGenerated ? 1 : 0,
         ];
         
         if ($existing->getId()) {
@@ -1226,301 +1250,6 @@ class Component extends Model
         // 首字母大写
         return ucwords($name);
     }
-
-    /**
-     * 安装表结构
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist()) {
-            return;
-        }
-        
-        $setup->createTable('页面构建器-组件表')
-            ->addColumn(
-                self::fields_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                'primary key auto_increment',
-                '组件ID'
-            )
-            ->addColumn(
-                self::fields_CODE,
-                TableInterface::column_type_VARCHAR,
-                100,
-                'not null unique',
-                '组件代码(唯一标识)'
-            )
-            ->addColumn(
-                self::fields_NAME,
-                TableInterface::column_type_VARCHAR,
-                255,
-                'not null',
-                '组件名称'
-            )
-            ->addColumn(
-                self::fields_DESCRIPTION,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '组件描述'
-            )
-            ->addColumn(
-                self::fields_STYLE_CODE,
-                TableInterface::column_type_VARCHAR,
-                100,
-                'not null',
-                '所属模板代码'
-            )
-            ->addColumn(
-                self::fields_CATEGORY,
-                TableInterface::column_type_VARCHAR,
-                50,
-                'not null default "content"',
-                '组件分类：header/footer/content/widget'
-            )
-            ->addColumn(
-                self::fields_TYPE,
-                TableInterface::column_type_VARCHAR,
-                50,
-                'not null default "section"',
-                '组件类型：section/widget/layout/system'
-            )
-            ->addColumn(
-                self::fields_PATH,
-                TableInterface::column_type_VARCHAR,
-                500,
-                'not null',
-                '组件文件路径'
-            )
-            ->addColumn(
-                self::fields_THUMBNAIL,
-                TableInterface::column_type_VARCHAR,
-                500,
-                '',
-                '组件缩略图路径'
-            )
-            ->addColumn(
-                self::fields_CONFIG_SCHEMA,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '配置项定义(JSON)'
-            )
-            ->addColumn(
-                self::fields_DEFAULT_CONFIG,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '默认配置(JSON)'
-            )
-            ->addColumn(
-                self::fields_COMPATIBLE_STYLES,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '兼容的模板列表(JSON)'
-            )
-            ->addColumn(
-                self::fields_DEPENDENCIES,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '依赖的组件(JSON)'
-            )
-            ->addColumn(
-                self::fields_IS_ACTIVE,
-                TableInterface::column_type_SMALLINT,
-                1,
-                'not null default 1',
-                '是否启用'
-            )
-            ->addColumn(
-                self::fields_IS_SYSTEM,
-                TableInterface::column_type_SMALLINT,
-                1,
-                'not null default 0',
-                '是否系统组件'
-            )
-            ->addColumn(
-                self::fields_SORT_ORDER,
-                TableInterface::column_type_INTEGER,
-                0,
-                'not null default 10',
-                '排序'
-            )
-            ->addColumn(
-                self::fields_CREATE_TIME,
-                TableInterface::column_type_DATETIME,
-                0,
-                'not null default CURRENT_TIMESTAMP',
-                '创建时间'
-            )
-            ->addColumn(
-                self::fields_UPDATE_TIME,
-                TableInterface::column_type_DATETIME,
-                0,
-                'not null default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP',
-                '更新时间'
-            )
-            // AI 组件相关字段
-            ->addColumn(
-                self::fields_IS_AI_GENERATED,
-                TableInterface::column_type_SMALLINT,
-                1,
-                'not null default 0',
-                '是否AI生成'
-            )
-            ->addColumn(
-                self::fields_AI_PROMPT,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                'AI生成时的用户提示'
-            )
-            ->addColumn(
-                self::fields_AI_VERSION,
-                TableInterface::column_type_VARCHAR,
-                50,
-                '',
-                'AI生成版本号'
-            )
-            ->addColumn(
-                self::fields_TEMPLATE_CONTENT,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '组件模板内容(AI组件存储)'
-            )
-            ->addColumn(
-                self::fields_ENTITY_FILE_HASH,
-                TableInterface::column_type_VARCHAR,
-                32,
-                '',
-                '实体文件内容哈希'
-            )
-            ->addColumn(
-                self::fields_ENTITY_GENERATED_AT,
-                TableInterface::column_type_DATETIME,
-                0,
-                '',
-                '实体文件生成时间'
-            )
-            ->addIndex(TableInterface::index_type_KEY, 'idx_code', [self::fields_CODE], '组件代码索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_style_code', [self::fields_STYLE_CODE], '模板代码索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_category', [self::fields_CATEGORY], '分类索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_is_active', [self::fields_IS_ACTIVE], '状态索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_is_ai_generated', [self::fields_IS_AI_GENERATED], 'AI组件索引')
-            ->create();
-    }
-
-    /**
-     * 升级表结构
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 添加 AI 组件相关字段（用于已有安装的升级）
-        $this->addAIColumns($setup);
-    }
-    
-    /**
-     * 添加 AI 组件相关字段
-     */
-    private function addAIColumns(ModelSetup $setup): void
-    {
-        // 检查并添加 is_ai_generated 字段
-        if (!$setup->hasField(self::fields_IS_AI_GENERATED)) {
-            $setup->alterTable()
-                ->addColumn(
-                    self::fields_IS_AI_GENERATED,
-                    self::fields_IS_SYSTEM, // 在 is_system 字段之后添加
-                    TableInterface::column_type_SMALLINT,
-                    1,
-                    'not null default 0',
-                    '是否AI生成'
-                )
-                ->alter();
-        }
-        
-        // 检查并添加 ai_prompt 字段
-        if (!$setup->hasField(self::fields_AI_PROMPT)) {
-            $setup->alterTable()
-                ->addColumn(
-                    self::fields_AI_PROMPT,
-                    self::fields_IS_AI_GENERATED,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    '',
-                    'AI生成时的用户提示'
-                )
-                ->alter();
-        }
-        
-        // 检查并添加 ai_version 字段
-        if (!$setup->hasField(self::fields_AI_VERSION)) {
-            $setup->alterTable()
-                ->addColumn(
-                    self::fields_AI_VERSION,
-                    self::fields_AI_PROMPT,
-                    TableInterface::column_type_VARCHAR,
-                    50,
-                    '',
-                    'AI生成版本号'
-                )
-                ->alter();
-        }
-        
-        // 检查并添加 template_content 字段
-        if (!$setup->hasField(self::fields_TEMPLATE_CONTENT)) {
-            $setup->alterTable()
-                ->addColumn(
-                    self::fields_TEMPLATE_CONTENT,
-                    self::fields_AI_VERSION,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    '',
-                    '组件模板内容(AI组件存储)'
-                )
-                ->alter();
-        }
-        
-        // 检查并添加 entity_file_hash 字段
-        if (!$setup->hasField(self::fields_ENTITY_FILE_HASH)) {
-            $setup->alterTable()
-                ->addColumn(
-                    self::fields_ENTITY_FILE_HASH,
-                    self::fields_TEMPLATE_CONTENT,
-                    TableInterface::column_type_VARCHAR,
-                    32,
-                    '',
-                    '实体文件内容哈希'
-                )
-                ->alter();
-        }
-        
-        // 检查并添加 entity_generated_at 字段
-        if (!$setup->hasField(self::fields_ENTITY_GENERATED_AT)) {
-            $setup->alterTable()
-                ->addColumn(
-                    self::fields_ENTITY_GENERATED_AT,
-                    self::fields_ENTITY_FILE_HASH,
-                    TableInterface::column_type_DATETIME,
-                    0,
-                    '',
-                    '实体文件生成时间'
-                )
-                ->alter();
-        }
-    }
-
-    /**
-     * 设置表结构
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-    
     /**
      * 保存后钩子 - 自动同步 AI 组件的实体文件
      */

@@ -9,75 +9,32 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Model;
 
-use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 
+#[Table(comment: 'PageBuilder AI组件草稿表')]
+#[Index(name: 'idx_session', columns: ['session_id'], comment: '会话索引')]
+#[Index(name: 'idx_created', columns: ['created_at'], comment: '创建时间索引')]
 class AiComponentDraft extends Model
 {
-    public const table = 'guolairen_page_builder_ai_component_draft';
+    public const schema_table = 'guolairen_page_builder_ai_component_draft';
+    public const schema_primary_key = 'draft_id';
 
-    public const fields_ID = 'draft_id';
-    public const fields_TEMPLATE_CONTENT = 'template_content';
-    public const fields_COMPONENT_META = 'component_meta';
-    public const fields_SESSION_ID = 'session_id';
-    public const fields_CREATED_AT = 'created_at';
 
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist()) {
-            return;
-        }
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '草稿ID')]
+    public const schema_fields_ID = 'draft_id';
+    #[Col(type: 'longtext', nullable: true, comment: '装配后的完整phtml')]
+    public const schema_fields_TEMPLATE_CONTENT = 'template_content';
+    #[Col(type: 'text', nullable: true, comment: '组件元信息JSON(name,code,region,style_code等)')]
+    public const schema_fields_COMPONENT_META = 'component_meta';
+    #[Col(type: 'varchar', length: 128, nullable: true, comment: '会话ID(可选,用于清理过期草稿)')]
+    public const schema_fields_SESSION_ID = 'session_id';
+    #[Col(type: 'int', nullable: true, comment: '创建时间戳')]
+    public const schema_fields_CREATED_AT = 'created_at';
 
-        $setup->createTable('PageBuilder AI组件草稿表')
-            ->addColumn(
-                self::fields_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                'primary key auto_increment',
-                '草稿ID'
-            )
-            ->addColumn(
-                self::fields_TEMPLATE_CONTENT,
-                TableInterface::column_type_LONG_TEXT,
-                0,
-                '',
-                '装配后的完整phtml'
-            )
-            ->addColumn(
-                self::fields_COMPONENT_META,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '组件元信息JSON(name,code,region,style_code等)'
-            )
-            ->addColumn(
-                self::fields_SESSION_ID,
-                TableInterface::column_type_VARCHAR,
-                128,
-                '',
-                '会话ID(可选,用于清理过期草稿)'
-            )
-            ->addColumn(
-                self::fields_CREATED_AT,
-                TableInterface::column_type_INTEGER,
-                0,
-                '',
-                '创建时间戳'
-            )
-            ->addIndex(TableInterface::index_type_KEY, 'idx_session', [self::fields_SESSION_ID], '会话索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_created', [self::fields_CREATED_AT], '创建时间索引')
-            ->create();
-    }
-
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 暂无升级逻辑
-    }
-
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
 }
+
