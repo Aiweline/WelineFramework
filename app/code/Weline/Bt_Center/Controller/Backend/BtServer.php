@@ -37,21 +37,21 @@ class BtServer extends BackendController
         $query = $this->getBtServerModel()->clear()->select();
 
         if ($platform !== '') {
-            $query->where(BtServerModel::fields_PLATFORM, $platform);
+            $query->where(BtServerModel::schema_fields_PLATFORM, $platform);
         }
 
         if ($keyword !== '') {
             $query->where(
                 [
-                    [BtServerModel::fields_NAME, 'like', "%{$keyword}%"],
-                    [BtServerModel::fields_EXTERNAL_URL, 'like', "%{$keyword}%"],
-                    [BtServerModel::fields_USERNAME, 'like', "%{$keyword}%"],
+                    [BtServerModel::schema_fields_NAME, 'like', "%{$keyword}%"],
+                    [BtServerModel::schema_fields_EXTERNAL_URL, 'like', "%{$keyword}%"],
+                    [BtServerModel::schema_fields_USERNAME, 'like', "%{$keyword}%"],
                 ],
                 'OR'
             );
         }
 
-        $query->order(BtServerModel::fields_CREATED_AT, 'DESC');
+        $query->order(BtServerModel::schema_fields_CREATED_AT, 'DESC');
 
         $servers = $query->fetchArray();
         $platformOptions = BtServerModel::getPlatformOptions();
@@ -150,14 +150,14 @@ class BtServer extends BackendController
                 ]);
             }
 
-            $server->setData(BtServerModel::fields_NAME, $name)
-                ->setData(BtServerModel::fields_PLATFORM, $platform)
-                ->setData(BtServerModel::fields_EXTERNAL_URL, $externalUrl)
-                ->setData(BtServerModel::fields_INTERNAL_URL, $internalUrl)
-                ->setData(BtServerModel::fields_USERNAME, $username)
-                ->setData(BtServerModel::fields_PASSWORD, $password)
-                ->setData(BtServerModel::fields_PORT, $port)
-                ->setData(BtServerModel::fields_DESCRIPTION, (string)($data['description'] ?? ''));
+            $server->setData(BtServerModel::schema_fields_NAME, $name)
+                ->setData(BtServerModel::schema_fields_PLATFORM, $platform)
+                ->setData(BtServerModel::schema_fields_EXTERNAL_URL, $externalUrl)
+                ->setData(BtServerModel::schema_fields_INTERNAL_URL, $internalUrl)
+                ->setData(BtServerModel::schema_fields_USERNAME, $username)
+                ->setData(BtServerModel::schema_fields_PASSWORD, $password)
+                ->setData(BtServerModel::schema_fields_PORT, $port)
+                ->setData(BtServerModel::schema_fields_DESCRIPTION, (string)($data['description'] ?? ''));
 
             $server->save();
 

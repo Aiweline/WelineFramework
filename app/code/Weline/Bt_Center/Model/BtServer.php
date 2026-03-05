@@ -1,55 +1,60 @@
 <?php
-
 declare(strict_types=1);
-
 /*
  * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
  * 邮箱：aiweline@qq.com
  * 网址：aiweline.com
  * 论坛：https://bbs.aiweline.com
  */
-
 namespace Weline\Bt_Center\Model;
-
-use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 /**
  * 宝塔服务器模型
- *
  * @package Weline_Bt_Center
  */
+#[Table(comment: '宝塔服务器表')]
+#[Index(name: 'idx_platform', columns: ['platform'], comment: '平台索引')]
+#[Index(name: 'idx_name', columns: ['name'], comment: '名称索引')]
 class BtServer extends Model
 {
-    public const table = 'weline_bt_server';
-
-    /**
+    public const schema_table = 'weline_bt_server';
+    public const schema_primary_key = 'server_id';
+/**
      * Primary key
      */
     public string $_primary_key = 'server_id';
-
     /**
      * Primary keys
      */
     public array $_unit_primary_keys = ['server_id'];
-
     /**
      * 字段常量
      */
-    public const fields_SERVER_ID = 'server_id';
-    public const fields_PLATFORM = 'platform';
-    public const fields_NAME = 'name';
-    public const fields_EXTERNAL_URL = 'external_url';
-    public const fields_INTERNAL_URL = 'internal_url';
-    public const fields_USERNAME = 'username';
-    public const fields_PASSWORD = 'password';
-    public const fields_PORT = 'port';
-    public const fields_DESCRIPTION = 'description';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
-
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '服务器ID')]
+    public const schema_fields_SERVER_ID = 'server_id';
+    #[Col(type: 'varchar', length: 50, nullable: false, comment: '云平台：aliyun(阿里云)、aws、azure(微软Azure)、tencent(腾讯云)、huawei(华为云)、other(其他)')]
+    public const schema_fields_PLATFORM = 'platform';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '服务器名称/标识')]
+    public const schema_fields_NAME = 'name';
+    #[Col(type: 'varchar', length: 500, nullable: false, comment: '外网IPv4面板地址')]
+    public const schema_fields_EXTERNAL_URL = 'external_url';
+    #[Col(type: 'varchar', length: 500, nullable: true, comment: '内网面板地址')]
+    public const schema_fields_INTERNAL_URL = 'internal_url';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '用户名')]
+    public const schema_fields_USERNAME = 'username';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '密码')]
+    public const schema_fields_PASSWORD = 'password';
+    #[Col(type: 'int', nullable: true, default: 8888, comment: '端口号')]
+    public const schema_fields_PORT = 'port';
+    #[Col(type: 'text', nullable: true, comment: '备注描述')]
+    public const schema_fields_DESCRIPTION = 'description';
+    #[Col(type: 'datetime', nullable: true, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col(type: 'datetime', nullable: true, comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
     /**
      * 平台常量
      */
@@ -59,7 +64,6 @@ class BtServer extends Model
     public const PLATFORM_TENCENT = 'tencent';
     public const PLATFORM_HUAWEI = 'huawei';
     public const PLATFORM_OTHER = 'other';
-
     /**
      * 获取所有平台选项
      */
@@ -74,144 +78,29 @@ class BtServer extends Model
             self::PLATFORM_OTHER => __('其他'),
         ];
     }
-
     /**
      * 获取平台名称
      */
     public function getPlatformName(): string
     {
-        $platform = (string)$this->getData(self::fields_PLATFORM);
+        $platform = (string)$this->getData(self::schema_fields_PLATFORM);
         $options = self::getPlatformOptions();
         return $options[$platform] ?? $platform;
     }
-
     public function _init(): void
     {
         $this->useMainDbMaster();
     }
-
     public function getIdFieldName(): string
     {
-        return self::fields_SERVER_ID;
+        return self::schema_fields_SERVER_ID;
     }
-
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist() === false) {
-            $setup->createTable('宝塔服务器表')
-                ->addColumn(
-                    self::fields_SERVER_ID,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'primary key auto_increment',
-                    '服务器ID'
-                )
-                ->addColumn(
-                    self::fields_PLATFORM,
-                    TableInterface::column_type_VARCHAR,
-                    50,
-                    'not null',
-                    '云平台：aliyun(阿里云)、aws、azure(微软Azure)、tencent(腾讯云)、huawei(华为云)、other(其他)'
-                )
-                ->addColumn(
-                    self::fields_NAME,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    '服务器名称/标识'
-                )
-                ->addColumn(
-                    self::fields_EXTERNAL_URL,
-                    TableInterface::column_type_VARCHAR,
-                    500,
-                    'not null',
-                    '外网IPv4面板地址'
-                )
-                ->addColumn(
-                    self::fields_INTERNAL_URL,
-                    TableInterface::column_type_VARCHAR,
-                    500,
-                    '',
-                    '内网面板地址'
-                )
-                ->addColumn(
-                    self::fields_USERNAME,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    '用户名'
-                )
-                ->addColumn(
-                    self::fields_PASSWORD,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    '密码'
-                )
-                ->addColumn(
-                    self::fields_PORT,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'default 8888',
-                    '端口号'
-                )
-                ->addColumn(
-                    self::fields_DESCRIPTION,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    '',
-                    '备注描述'
-                )
-                ->addColumn(
-                    self::fields_CREATED_AT,
-                    TableInterface::column_type_DATETIME,
-                    0,
-                    '',
-                    '创建时间'
-                )
-                ->addColumn(
-                    self::fields_UPDATED_AT,
-                    TableInterface::column_type_DATETIME,
-                    0,
-                    '',
-                    '更新时间'
-                )
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'idx_platform',
-                    [self::fields_PLATFORM],
-                    '平台索引'
-                )
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'idx_name',
-                    [self::fields_NAME],
-                    '名称索引'
-                )
-                ->create();
-        }
-    }
-
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist() === false) {
-            return;
-        }
-
-        // 预留未来字段升级逻辑
-    }
-
     public function save_before(): void
     {
         $now = date('Y-m-d H:i:s');
         if (!$this->getId()) {
-            $this->setData(self::fields_CREATED_AT, $now);
+            $this->setData(self::schema_fields_CREATED_AT, $now);
         }
-        $this->setData(self::fields_UPDATED_AT, $now);
+        $this->setData(self::schema_fields_UPDATED_AT, $now);
     }
 }
