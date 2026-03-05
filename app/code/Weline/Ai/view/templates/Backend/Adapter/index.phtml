@@ -103,6 +103,19 @@ foreach ($adapters as $a) {
     color: var(--backend-color-text-muted);
     margin-bottom: 16px;
 }
+/* 版本/状态徽章：使用主题变量以适配暗色模式 */
+.weline-adapter-page .adapter-version-badge {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.15)) !important;
+    color: var(--backend-color-info, #50a5f1) !important;
+}
+.weline-adapter-page .adapter-status-badge--active {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.15)) !important;
+    color: var(--backend-color-success, #34c38f) !important;
+}
+.weline-adapter-page .adapter-status-badge--inactive {
+    background: var(--backend-color-bg-tertiary) !important;
+    color: var(--backend-color-text-secondary) !important;
+}
 </style>
 
 <div class="weline-adapter-page">
@@ -272,7 +285,7 @@ foreach ($adapters as $a) {
                                                 <span class="fw-medium"><?= htmlspecialchars($adapter->getData('name')) ?></span>
                                             </td>
                                             <td>
-                                                <span class="badge bg-info bg-opacity-10 text-info">
+                                                <span class="badge adapter-version-badge">
                                                     v<?= htmlspecialchars($adapter->getData('version')) ?>
                                                 </span>
                                             </td>
@@ -283,11 +296,11 @@ foreach ($adapters as $a) {
                                             </td>
                                             <td>
                                                 <?php if ($adapter->getData('is_active')): ?>
-                                                    <span class="badge bg-success bg-opacity-10 text-success">
+                                                    <span class="badge adapter-status-badge--active">
                                                         <i class="mdi mdi-check-circle me-1"></i><lang>激活</lang>
                                                     </span>
                                                 <?php else: ?>
-                                                    <span class="badge bg-secondary bg-opacity-10 text-secondary">
+                                                    <span class="badge adapter-status-badge--inactive">
                                                         <i class="mdi mdi-pause-circle me-1"></i><lang>未激活</lang>
                                                     </span>
                                                 <?php endif; ?>
