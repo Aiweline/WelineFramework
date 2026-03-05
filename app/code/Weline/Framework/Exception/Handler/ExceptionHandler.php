@@ -121,16 +121,18 @@ class ExceptionHandler
      */
     private static function getHttpStatusCode(\Throwable $exception): int
     {
-        // 检查异常是否实现了状态码接口
+        // 检查异常是否实现了状态码接口（返回值强制为 int，避免 string 导致类型错误）
         if (method_exists($exception, 'getStatusCode')) {
-            return $exception->getStatusCode();
+            return (int) $exception->getStatusCode();
         }
 
-        // 根据异常类型映射状态码
+        // 根据异常类型映射状态码（Throwable::getCode() 可能为 string，如 SQLSTATE）
         $code = $exception->getCode();
-        
-        if ($code >= 400 && $code < 600) {
-            return $code;
+        if (is_numeric($code)) {
+            $code = (int) $code;
+            if ($code >= 400 && $code < 600) {
+                return $code;
+            }
         }
 
         // 默认映射
