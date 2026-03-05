@@ -16,12 +16,46 @@ class DetectWebsite implements ObserverInterface
 {
     private const CACHE_KEY_ALL_SITES = 'all_sites';
     private const CACHE_KEY_PREFIX_URL = 'site_url_';
+    private const CACHE_KEY_TABLE_EXISTS = 'website_table_exists';
+
+    /**
+     * 网站表尚未创建时（如未执行 setup:upgrade）直接返回，避免 42P01 导致请求崩溃
+     */
+    private function ensureWebsiteTableExists(Website $websiteModel): bool
+    {
+        $cache = w_cache('website');
+        $exists = $cache->get(self::CACHE_KEY_TABLE_EXISTS);
+        if ($exists !== false) {
+            return (bool) $exists;
+        }
+        try {
+            $websiteModel->clearQuery()->limit(1)->select()->fetchArray();
+            $cache->set(self::CACHE_KEY_TABLE_EXISTS, true, 60);
+            return true;
+        } catch (\PDOException $e) {
+            $code = $e->getCode();
+            $msg = $e->getMessage();
+            // PostgreSQL 42P01 / MySQL 42S02 表不存在
+            if ($code === '42P01' || $code === '42S02' || str_contains($msg, 'does not exist')) {
+                $cache->set(self::CACHE_KEY_TABLE_EXISTS, false, 60);
+                return false;
+            }
+            throw $e;
+        }
+    }
 
     /**
      * @inheritDoc
      */
     public function execute(Event &$event): void
     {
+        /** @var Website $website_model */
+        $website_model = w_obj(Website::class);
+        if (!$this->ensureWebsiteTableExists($website_model)) {
+            $event->setData('sites', []);
+            return;
+        }
+
         $cache = w_cache('website');
         
         $get_sites = $event->getData('get_sites');
@@ -36,8 +70,6 @@ class DetectWebsite implements ObserverInterface
             }
             
             // 缓存未命中，查询数据库
-            /** @var Website $website_model */
-            $website_model = w_obj(Website::class);
             $sites = $website_model->select()->fetchArray();
             
             // 保存到缓存
