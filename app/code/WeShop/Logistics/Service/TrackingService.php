@@ -21,15 +21,15 @@ class TrackingService
         $tracking = ObjectManager::getInstance(Tracking::class);
         
         $tracking->setData([
-            Tracking::fields_order_id => $orderId,
-            Tracking::fields_tracking_number => $trackingNumber,
-            Tracking::fields_carrier => $carrier,
-            Tracking::fields_status => $trackingData['status'] ?? '',
-            Tracking::fields_location => $trackingData['location'] ?? '',
-            Tracking::fields_description => $trackingData['description'] ?? '',
-            Tracking::fields_tracked_at => $trackingData['tracked_at'] ?? date('Y-m-d H:i:s'),
-            Tracking::fields_created_at => date('Y-m-d H:i:s'),
-            Tracking::fields_updated_at => date('Y-m-d H:i:s'),
+            Tracking::schema_fields_order_id => $orderId,
+            Tracking::schema_fields_tracking_number => $trackingNumber,
+            Tracking::schema_fields_carrier => $carrier,
+            Tracking::schema_fields_status => $trackingData['status'] ?? '',
+            Tracking::schema_fields_location => $trackingData['location'] ?? '',
+            Tracking::schema_fields_description => $trackingData['description'] ?? '',
+            Tracking::schema_fields_tracked_at => $trackingData['tracked_at'] ?? date('Y-m-d H:i:s'),
+            Tracking::schema_fields_created_at => date('Y-m-d H:i:s'),
+            Tracking::schema_fields_updated_at => date('Y-m-d H:i:s'),
         ])->save();
         
         return $tracking;
@@ -44,8 +44,8 @@ class TrackingService
         $tracking = ObjectManager::getInstance(Tracking::class);
         
         return $tracking->clear()
-            ->where(Tracking::fields_order_id, $orderId)
-            ->order(Tracking::fields_tracked_at, 'DESC')
+            ->where(Tracking::schema_fields_order_id, $orderId)
+            ->order(Tracking::schema_fields_tracked_at, 'DESC')
             ->select()
             ->fetchArray();
     }
