@@ -4,11 +4,34 @@
 
 基于 **分布式任务总线** 模式的智能体编排系统。实现 PHP 监工自我监督、多任务并行、反向驱动 Cursor 的完整架构。
 
+## 框架新特性与卖点（本版本所依托）
+
+以下为 Weline Framework 与本编排系统协同的核心能力，可作为产品/技术卖点。
+
+### Schema-Diff 模式：自动备份与回滚
+
+- **声明式表结构**：Model 使用 `#[Col]`、`#[Table]` 声明字段与表，无需手写 SQL 迁移脚本。
+- **自动备份**：执行 DDL 前（尤其是 DROP COLUMN）自动备份列数据到 `weline_database_backups`，支持按迁移 ID 恢复。
+- **可回滚**：每条 DDL 记录 `forward_ddl` 与 `rollback_ddl`，迁移记录持久化，便于回滚与审计。
+- **统一入口**：`php bin/w setup:upgrade` 触发 SchemaDiff 阶段，解析所有模块 Model、与库表 diff、按优先级执行 DDL。
+
+### 统一查询（w_query / FrameworkQueryService）
+
+- **模块间查询**：跨模块读数据/做操作统一走 **QueryProvider**，禁止为每次查询创建独立事件。
+- **前后端一致**：后端 `w_query($provider, $operation, $params, $area)`，前端 `window.w_query(...)`，同一套 API。
+- **自省**：`w_query('framework', 'introspect', ['what' => 'providers'])` 可查询已注册的查询器与操作。
+
+### WLS (Weline Server)
+
+- **常驻内存**：Master-Dispatcher-Worker 架构，业务代码常驻内存，减少重复加载。
+- **热重载**：绝大多数代码修改只需 `php bin/w server:reload`，无需重启整个服务。
+- **运维命令**：`server:start` / `server:stop` / `server:status` / `server:benchmark` 等，支持多实例与 SSL。
+
 ## 系统架构
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                     PHP Agent Orchestrator v3.0                             │
+│                     PHP Agent Orchestrator v3.1                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │   👤 用户                                                                   │
@@ -477,6 +500,7 @@ app/code/Agent/CursorSupervisor/
 
 ## 版本历史
 
+- **v3.1** (2026-03): 文档更新：框架卖点与新特性 — Schema-Diff 自动备份/回滚、统一查询（w_query）、WLS 常驻与热重载
 - **v3.0** (2026-02-26): 分布式任务总线架构，Master Brain + Task Pool + Driver + Watchdog
 - **v2.0**: Headless Agent Control 模式
 - **v1.0**: 基础代码监控和 AI 修复
