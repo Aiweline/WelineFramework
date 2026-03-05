@@ -592,8 +592,9 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
 } elseif ($deferSsl && !$isWindows && \function_exists('socket_create')) {
     // 方案2b-socket：仅 Linux，延迟 SSL + socket 扩展 + SO_REUSEADDR，避免 Address already in use（含重试）；Windows 不改动
     // 用于 TCP 透传架构：先监听纯 TCP，accept 后根据首包启用 SSL 或 HTTP 重定向
-    $maxBindRetries = 3;
-    $bindRetryDelay = 1;
+    // 与 Windows 一致：不反复重试，避免关闭后重启时长时间等待
+    $maxBindRetries = 1;
+    $bindRetryDelay = 0;
     $rawSocket = false;
     $lastErrno = 0;
     $lastErrstr = '';
@@ -609,6 +610,9 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
         if (!@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEADDR, 1)) {
             WlsLogger::warning_("设置 SO_REUSEADDR 失败");
         }
+        if (\defined('SO_REUSEPORT') && !@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEPORT, 1)) {
+            WlsLogger::warning_("设置 SO_REUSEPORT 失败（可忽略）");
+        }
         if (@\socket_bind($rawSocket, $host, $port)) {
             break;
         }
@@ -616,7 +620,7 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
         $lastErrstr = \socket_strerror($lastErrno);
         @\socket_close($rawSocket);
         $rawSocket = false;
-        if ($lastErrno !== 98) { // EADDRINUSE on Linux only
+        if ($lastErrno !== 98) { // EADDRINUSE on Linux
             WlsLogger::error_("Socket 绑定失败 (defer-ssl): {$lastErrstr} (errno: {$lastErrno})");
             break;
         }
