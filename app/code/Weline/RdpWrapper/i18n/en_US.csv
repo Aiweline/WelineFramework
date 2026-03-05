@@ -1,14 +1,4 @@
 RDP远程桌面管理,"RDP Remote Desktop Management"
-RDP远程桌面用户管理,"RDP Remote Desktop User Management"
-Windows用户名,"Windows Username"
-显示名称,"Display Name"
-密码提示,"Password Hint"
-是否管理员,"Is Administrator"
-状态,Status
-备注,Remark
-创建时间,"Created At"
-更新时间,"Updated At"
-用户名唯一索引,"Username Unique Index"
 "RDP Wrapper 仅支持 Windows 系统","RDP Wrapper only supports Windows systems"
 "RDP Wrapper 已安装","RDP Wrapper is already installed"
 安装脚本不存在：%{path},"Install script not found: %{path}"
@@ -53,7 +43,12 @@ IP地址,"IP Address"
 远程用户管理,"Remote User Management"
 添加用户,"Add User"
 用户名,Username
+显示名称,"Display Name"
+密码提示,"Password Hint"
 管理员,Administrator
+状态,Status
+备注,Remark
+创建时间,"Created At"
 操作,Actions
 "暂无远程用户，请点击""添加用户""创建新账户","暂无远程用户，请点击""添加用户""创建新账户"
 普通用户,"Standard User"
@@ -107,6 +102,11 @@ Windows,Windows
 未启用,"Not Enabled"
 重置密码,"Reset Password"
 删除,删除
+RDP远程桌面用户管理,"RDP Remote Desktop User Management"
+Windows用户名,"Windows Username"
+是否管理员,"Is Administrator"
+更新时间,"Updated At"
+用户名唯一索引,"Username Unique Index"
 添加远程用户,"Add Remote User"
 "创建后将作为 Windows 登录用户名","Will be used as the Windows login username"
 密码,Password
