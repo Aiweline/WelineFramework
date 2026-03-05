@@ -65,7 +65,7 @@ class View extends BaseController
         }
         
         // 检查分类是否启用
-        $isActive = (int)($category->getData(\WeShop\Catalog\Model\Category::fields_IS_ACTIVE) ?? 0);
+        $isActive = (int)($category->getData(\WeShop\Catalog\Model\Category::schema_fields_IS_ACTIVE) ?? 0);
         if ($isActive !== 1) {
             MessageManager::error(__('分类已禁用'));
             return $this->redirect('weshop') ?? '';
@@ -74,12 +74,12 @@ class View extends BaseController
         // 格式化分类数据
         $categoryData = [
             'category_id' => $category->getId(),
-            'name' => $category->getData(\WeShop\Catalog\Model\Category::fields_NAME) ?? '',
-            'description' => $category->getData(\WeShop\Catalog\Model\Category::fields_DESCRIPTION) ?? '',
-            'handle' => $category->getData(\WeShop\Catalog\Model\Category::fields_HANDLE) ?? '',
-            'image' => $category->getData(\WeShop\Catalog\Model\Category::fields_IMAGE) ?? '',
-            'parent_id' => (int)($category->getData(\WeShop\Catalog\Model\Category::fields_PARENT_ID) ?? 0),
-            'sort_order' => (int)($category->getData(\WeShop\Catalog\Model\Category::fields_SORT_ORDER) ?? 0),
+            'name' => $category->getData(\WeShop\Catalog\Model\Category::schema_fields_NAME) ?? '',
+            'description' => $category->getData(\WeShop\Catalog\Model\Category::schema_fields_DESCRIPTION) ?? '',
+            'handle' => $category->getData(\WeShop\Catalog\Model\Category::schema_fields_HANDLE) ?? '',
+            'image' => $category->getData(\WeShop\Catalog\Model\Category::schema_fields_IMAGE) ?? '',
+            'parent_id' => (int)($category->getData(\WeShop\Catalog\Model\Category::schema_fields_PARENT_ID) ?? 0),
+            'sort_order' => (int)($category->getData(\WeShop\Catalog\Model\Category::schema_fields_SORT_ORDER) ?? 0),
         ];
         
         // 获取子分类
@@ -93,7 +93,7 @@ class View extends BaseController
         while ($parentId > 0) {
             $parentCategory = $categoryService->getCategory($parentId);
             if ($parentCategory && $parentCategory->getId()) {
-                $handleValue = trim((string)($parentCategory->getData(\WeShop\Catalog\Model\Category::fields_HANDLE) ?? ''), '/');
+                $handleValue = trim((string)($parentCategory->getData(\WeShop\Catalog\Model\Category::schema_fields_HANDLE) ?? ''), '/');
                 if ($handleValue !== '') {
                     $pathSegments[] = $handleValue;
                     $path = implode('/', $pathSegments);
@@ -102,11 +102,11 @@ class View extends BaseController
                 }
                 array_unshift($breadcrumbs, [
                     'category_id' => $parentCategory->getId(),
-                    'name' => $parentCategory->getData(\WeShop\Catalog\Model\Category::fields_NAME) ?? '',
+                    'name' => $parentCategory->getData(\WeShop\Catalog\Model\Category::schema_fields_NAME) ?? '',
                     'handle' => $handleValue,
                     'path' => $path,
                 ]);
-                $parentId = (int)($parentCategory->getData(\WeShop\Catalog\Model\Category::fields_PARENT_ID) ?? 0);
+                $parentId = (int)($parentCategory->getData(\WeShop\Catalog\Model\Category::schema_fields_PARENT_ID) ?? 0);
             } else {
                 break;
             }
@@ -159,9 +159,9 @@ class View extends BaseController
         
         // 查询关联到当前分类或其任何子分类的产品
         $productCategory->reset()
-            ->where(ProductCategory::fields_category_id, $categoryIds, 'in')
+            ->where(ProductCategory::schema_fields_category_id, $categoryIds, 'in')
             ->joinProduct()
-            ->where('product.' . Product::fields_status, 1); // status = 1 表示启用
+            ->where('product.' . Product::schema_fields_status, 1); // status = 1 表示启用
         
         // 获取产品关联数据
         $productCategoryList = $productCategory->select()->fetchArray();
@@ -171,11 +171,11 @@ class View extends BaseController
         if (!empty($productCategoryList) && is_array($productCategoryList)) {
             foreach ($productCategoryList as $row) {
                 $productData = $row['product'] ?? $row;
-                $productStatus = (int)($productData['status'] ?? $productData[Product::fields_status] ?? 0);
+                $productStatus = (int)($productData['status'] ?? $productData[Product::schema_fields_status] ?? 0);
                 if ($productStatus !== 1) {
                     continue;
                 }
-                $pid = (int)($productData['product_id'] ?? $productData[Product::fields_ID] ?? $row[ProductCategory::fields_product_id] ?? 0);
+                $pid = (int)($productData['product_id'] ?? $productData[Product::schema_fields_ID] ?? $row[ProductCategory::schema_fields_product_id] ?? 0);
                 if ($pid > 0) {
                     $productIds[] = $pid;
                 }
@@ -205,13 +205,13 @@ class View extends BaseController
                 $productData = $row['product'] ?? $row;
                 
                 // 确保产品状态为启用（status = 1）
-                $productStatus = (int)($productData['status'] ?? $productData[Product::fields_status] ?? 0);
+                $productStatus = (int)($productData['status'] ?? $productData[Product::schema_fields_status] ?? 0);
                 if ($productStatus !== 1) {
                     continue;
                 }
                 
                 // 获取产品ID（优先从product表，否则从主表）
-                $productId = (int)($productData['product_id'] ?? $productData[Product::fields_ID] ?? $row[ProductCategory::fields_product_id] ?? 0);
+                $productId = (int)($productData['product_id'] ?? $productData[Product::schema_fields_ID] ?? $row[ProductCategory::schema_fields_product_id] ?? 0);
                 if ($productId <= 0) {
                     continue;
                 }
@@ -229,14 +229,14 @@ class View extends BaseController
                 
                 $products[] = [
                     'product_id' => $productId,
-                    'name' => $productData['name'] ?? $productData[Product::fields_name] ?? '',
-                    'short_description' => $productData['short_description'] ?? $productData[Product::fields_short_description] ?? '',
-                    'price' => (float)($productData['price'] ?? $productData[Product::fields_price] ?? 0),
-                    'image' => $productData['image'] ?? $productData[Product::fields_image] ?? '',
-                    'sku' => $productData['sku'] ?? $productData[Product::fields_sku] ?? '',
-                    'handle' => $productData['handle'] ?? $productData[Product::fields_HANDLE] ?? '',
-                    'stock' => (int)($productData['stock'] ?? $productData[Product::fields_stock] ?? 0),
-                    'in_stock' => ((int)($productData['stock'] ?? $productData[Product::fields_stock] ?? 0)) > 0,
+                    'name' => $productData['name'] ?? $productData[Product::schema_fields_name] ?? '',
+                    'short_description' => $productData['short_description'] ?? $productData[Product::schema_fields_short_description] ?? '',
+                    'price' => (float)($productData['price'] ?? $productData[Product::schema_fields_price] ?? 0),
+                    'image' => $productData['image'] ?? $productData[Product::schema_fields_image] ?? '',
+                    'sku' => $productData['sku'] ?? $productData[Product::schema_fields_sku] ?? '',
+                    'handle' => $productData['handle'] ?? $productData[Product::schema_fields_HANDLE] ?? '',
+                    'stock' => (int)($productData['stock'] ?? $productData[Product::schema_fields_stock] ?? 0),
+                    'in_stock' => ((int)($productData['stock'] ?? $productData[Product::schema_fields_stock] ?? 0)) > 0,
                 ];
             }
         }
