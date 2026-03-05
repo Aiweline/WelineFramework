@@ -7,7 +7,9 @@ use Weline\Shipping\Model\Zone;
 
 $zones = $this->getData('zones') ?? [];
 $backendBase = $this->getBackendUrl('shipping/backend/zone');
+$embed = $this->getData('embed') ?? false;
 ?>
+<?php if (empty($embed)): ?>
 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -23,6 +25,7 @@ $backendBase = $this->getBackendUrl('shipping/backend/zone');
                         </div>
                     </div>
                 </div>
+<?php endif; ?>
 
                 <div class="row">
                     <div class="col-12">

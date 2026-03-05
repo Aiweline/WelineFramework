@@ -12,7 +12,9 @@ $regionTree = $this->getData('region_tree') ?? [];
 
 $backendBase = $this->getBackendUrl('shipping/backend/region');
 $syncUrl = $this->getBackendUrl('shipping/backend/region/syncFromI18n');
+$embed = $this->getData('embed') ?? false;
 ?>
+<?php if (empty($embed)): ?>
 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -28,6 +30,7 @@ $syncUrl = $this->getBackendUrl('shipping/backend/region/syncFromI18n');
                         </div>
                     </div>
                 </div>
+<?php endif; ?>
 
                 <div class="row">
                     <div class="col-12">

@@ -65,7 +65,7 @@ class DeliveryAddress extends BackendController
             /** @var FrontendUser $customerModel */
             $customerModel = ObjectManager::getInstance(FrontendUser::class, [], false);
             $customers = $customerModel->reset()
-                ->order(FrontendUser::fields_ID, 'DESC')
+                ->order(FrontendUser::schema_fields_ID, 'DESC')
                 ->pagination(1, 1000) // 获取前1000个客户
                 ->select()
                 ->fetch()
@@ -76,11 +76,11 @@ class DeliveryAddress extends BackendController
             foreach ($customers as $customer) {
                 $data = is_array($customer) ? $customer : $customer->getData();
                 $formattedCustomers[] = [
-                    'id' => $data[FrontendUser::fields_ID] ?? $data['user_id'] ?? 0,
-                    'customer_id' => $data[FrontendUser::fields_ID] ?? $data['user_id'] ?? 0,
-                    'name' => $data[FrontendUser::fields_username] ?? $data['username'] ?? '',
+                    'id' => $data[FrontendUser::schema_fields_ID] ?? $data['user_id'] ?? 0,
+                    'customer_id' => $data[FrontendUser::schema_fields_ID] ?? $data['user_id'] ?? 0,
+                    'name' => $data[FrontendUser::schema_fields_username] ?? $data['username'] ?? '',
                     'email' => $data['email'] ?? '',
-                    'username' => $data[FrontendUser::fields_username] ?? $data['username'] ?? '',
+                    'username' => $data[FrontendUser::schema_fields_username] ?? $data['username'] ?? '',
                 ];
             }
             $customers = $formattedCustomers;
@@ -126,7 +126,7 @@ class DeliveryAddress extends BackendController
             /** @var FrontendUser $customerModel */
             $customerModel = ObjectManager::getInstance(FrontendUser::class, [], false);
             $customers = $customerModel->reset()
-                ->order(FrontendUser::fields_ID, 'DESC')
+                ->order(FrontendUser::schema_fields_ID, 'DESC')
                 ->pagination(1, 1000) // 获取前1000个客户
                 ->select()
                 ->fetch()
@@ -137,11 +137,11 @@ class DeliveryAddress extends BackendController
             foreach ($customers as $customer) {
                 $data = is_array($customer) ? $customer : $customer->getData();
                 $formattedCustomers[] = [
-                    'id' => $data[FrontendUser::fields_ID] ?? $data['user_id'] ?? 0,
-                    'customer_id' => $data[FrontendUser::fields_ID] ?? $data['user_id'] ?? 0,
-                    'name' => $data[FrontendUser::fields_username] ?? $data['username'] ?? '',
+                    'id' => $data[FrontendUser::schema_fields_ID] ?? $data['user_id'] ?? 0,
+                    'customer_id' => $data[FrontendUser::schema_fields_ID] ?? $data['user_id'] ?? 0,
+                    'name' => $data[FrontendUser::schema_fields_username] ?? $data['username'] ?? '',
                     'email' => $data['email'] ?? '',
-                    'username' => $data[FrontendUser::fields_username] ?? $data['username'] ?? '',
+                    'username' => $data[FrontendUser::schema_fields_username] ?? $data['username'] ?? '',
                 ];
             }
             $customers = $formattedCustomers;

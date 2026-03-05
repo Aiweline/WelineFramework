@@ -12,29 +12,46 @@ declare(strict_types=1);
 namespace Weline\Shipping\Model;
 
 use Weline\Framework\Database\AbstractModel;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: '配送费用模板表')]
+#[Index(name: 'idx_template_code', columns: ['template_code'], type: 'UNIQUE')]
+#[Index(name: 'idx_calculation_type', columns: ['calculation_type'])]
 class RateTemplate extends AbstractModel
 {
-    public const table = 'w_shipping_rate_templates';
-    
-    public const fields_ID = 'template_id';
-    public const fields_TEMPLATE_NAME = 'template_name';
-    public const fields_TEMPLATE_CODE = 'template_code';
-    public const fields_CALCULATION_TYPE = 'calculation_type';
-    public const fields_BASE_FEE = 'base_fee';
-    public const fields_WEIGHT_UNIT = 'weight_unit';
-    public const fields_WEIGHT_RATE = 'weight_rate';
-    public const fields_VOLUME_UNIT = 'volume_unit';
-    public const fields_VOLUME_RATE = 'volume_rate';
-    public const fields_QUANTITY_RATE = 'quantity_rate';
-    public const fields_MIXED_CONFIG = 'mixed_config';
-    public const fields_CURRENCY_CODE = 'currency_code';
-    public const fields_IS_ACTIVE = 'is_active';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
+    public const schema_table = 'w_shipping_rate_templates';
+    public const schema_primary_key = 'template_id';
+    #[Col('int', null, nullable: false, primaryKey: true, autoIncrement: true, comment: '模板ID')]
+    public const schema_fields_ID = 'template_id';
+    #[Col('varchar', 255, nullable: false, comment: '模板名称')]
+    public const schema_fields_TEMPLATE_NAME = 'template_name';
+    #[Col('varchar', 50, nullable: false, unique: true, comment: '模板代码')]
+    public const schema_fields_TEMPLATE_CODE = 'template_code';
+    #[Col('varchar', 20, nullable: false, comment: '计算类型')]
+    public const schema_fields_CALCULATION_TYPE = 'calculation_type';
+    #[Col('decimal', '10,2', nullable: false, default: 0.00, comment: '基础费用')]
+    public const schema_fields_BASE_FEE = 'base_fee';
+    #[Col('varchar', 10, nullable: false, default: 'kg', comment: '重量单位')]
+    public const schema_fields_WEIGHT_UNIT = 'weight_unit';
+    #[Col('decimal', '10,4', comment: '每单位重量费用')]
+    public const schema_fields_WEIGHT_RATE = 'weight_rate';
+    #[Col('varchar', 10, nullable: false, default: 'm3', comment: '体积单位')]
+    public const schema_fields_VOLUME_UNIT = 'volume_unit';
+    #[Col('decimal', '10,4', comment: '每单位体积费用')]
+    public const schema_fields_VOLUME_RATE = 'volume_rate';
+    #[Col('decimal', '10,2', comment: '每件费用')]
+    public const schema_fields_QUANTITY_RATE = 'quantity_rate';
+    #[Col('text', comment: '混合模式配置JSON')]
+    public const schema_fields_MIXED_CONFIG = 'mixed_config';
+    #[Col('varchar', 3, nullable: false, default: 'USD', comment: '货币代码')]
+    public const schema_fields_CURRENCY_CODE = 'currency_code';
+    #[Col('int', 1, nullable: false, default: 1, comment: '是否启用')]
+    public const schema_fields_IS_ACTIVE = 'is_active';
+    #[Col('datetime', comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col('datetime', comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
 
     // 计算类型常量
     public const CALC_TYPE_WEIGHT = 'weight';
@@ -58,143 +75,17 @@ class RateTemplate extends AbstractModel
      */
     public function _init(): void
     {
-        $this->_table = self::table;
-        $this->_primary_key = self::fields_ID;
+        $this->_table = self::schema_table;
+        $this->_primary_key = self::schema_fields_ID;
     }
-
-    /**
-     * 安装表结构
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('配送费用模板表')
-                ->addColumn(
-                    self::fields_ID,
-                    TableInterface::column_type_INTEGER,
-                    null,
-                    'primary key auto_increment',
-                    '模板ID'
-                )
-                ->addColumn(
-                    self::fields_TEMPLATE_NAME,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    '模板名称'
-                )
-                ->addColumn(
-                    self::fields_TEMPLATE_CODE,
-                    TableInterface::column_type_VARCHAR,
-                    50,
-                    'not null unique',
-                    '模板代码'
-                )
-                ->addColumn(
-                    self::fields_CALCULATION_TYPE,
-                    TableInterface::column_type_VARCHAR,
-                    20,
-                    'not null',
-                    '计算类型：weight/volume/quantity/fixed/mixed'
-                )
-                ->addColumn(
-                    self::fields_BASE_FEE,
-                    TableInterface::column_type_DECIMAL,
-                    '10,2',
-                    'default 0.00',
-                    '基础费用'
-                )
-                ->addColumn(
-                    self::fields_WEIGHT_UNIT,
-                    TableInterface::column_type_VARCHAR,
-                    10,
-                    'default \'kg\'',
-                    '重量单位：kg/lb'
-                )
-                ->addColumn(
-                    self::fields_WEIGHT_RATE,
-                    TableInterface::column_type_DECIMAL,
-                    '10,4',
-                    'default null',
-                    '每单位重量费用'
-                )
-                ->addColumn(
-                    self::fields_VOLUME_UNIT,
-                    TableInterface::column_type_VARCHAR,
-                    10,
-                    'default \'m3\'',
-                    '体积单位：m3/ft3'
-                )
-                ->addColumn(
-                    self::fields_VOLUME_RATE,
-                    TableInterface::column_type_DECIMAL,
-                    '10,4',
-                    'default null',
-                    '每单位体积费用'
-                )
-                ->addColumn(
-                    self::fields_QUANTITY_RATE,
-                    TableInterface::column_type_DECIMAL,
-                    '10,2',
-                    'default null',
-                    '每件费用'
-                )
-                ->addColumn(
-                    self::fields_MIXED_CONFIG,
-                    TableInterface::column_type_TEXT,
-                    null,
-                    'default null',
-                    '混合模式配置（JSON格式）'
-                )
-                ->addColumn(
-                    self::fields_CURRENCY_CODE,
-                    TableInterface::column_type_VARCHAR,
-                    3,
-                    'default \'USD\'',
-                    '货币代码（ISO 4217）'
-                )
-                ->addColumn(
-                    self::fields_IS_ACTIVE,
-                    TableInterface::column_type_INTEGER,
-                    1,
-                    'default 1',
-                    '是否启用：1-是，0-否'
-                )
-                ->addColumn(
-                    self::fields_CREATED_AT,
-                    TableInterface::column_type_DATETIME,
-                    null,
-                    'default CURRENT_TIMESTAMP',
-                    '创建时间'
-                )
-                ->addColumn(
-                    self::fields_UPDATED_AT,
-                    TableInterface::column_type_DATETIME,
-                    null,
-                    'default CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
-                    '更新时间'
-                )
-                ->addIndex(TableInterface::index_type_UNIQUE, 'idx_template_code', self::fields_TEMPLATE_CODE, '模板代码唯一索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_calculation_type', self::fields_CALCULATION_TYPE, '计算类型索引')
-                ->create();
-        }
-    }
-
-    public function upgrade(ModelSetup $setup, Context $context): void {}
-
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
+/**
      * 获取混合模式配置
      * 
      * @return array
      */
     public function getMixedConfig(): array
     {
-        $config = $this->getData(self::fields_MIXED_CONFIG);
+        $config = $this->getData(self::schema_fields_MIXED_CONFIG);
         if (empty($config)) {
             return [];
         }
@@ -209,7 +100,7 @@ class RateTemplate extends AbstractModel
      */
     public function setMixedConfig(array $config): self
     {
-        $this->setData(self::fields_MIXED_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
+        $this->setData(self::schema_fields_MIXED_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
         return $this;
     }
 }

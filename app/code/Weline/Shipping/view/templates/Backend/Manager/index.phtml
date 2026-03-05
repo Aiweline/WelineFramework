@@ -1,0 +1,144 @@
+<?php
+/**
+ * 配送系统管理聚合页：7 个 Tab
+ * @var string $activeTab 当前 Tab：region|zone|carrier|ratetemplate|freeshippingrule|shippingservice|tracking
+ * @var \Weline\Framework\View\Template $this
+ */
+$activeTab = $activeTab ?? 'region';
+$regionUrl = $this->getBackendUrl('shipping/backend/region') . '?embed=1';
+$zoneUrl = $this->getBackendUrl('shipping/backend/zone') . '?embed=1';
+$carrierUrl = $this->getBackendUrl('shipping/backend/carrier') . '?embed=1';
+$rateTemplateUrl = $this->getBackendUrl('shipping/backend/ratetemplate') . '?embed=1';
+$freeShippingRuleUrl = $this->getBackendUrl('shipping/backend/freeshippingrule') . '?embed=1';
+$shippingServiceUrl = $this->getBackendUrl('shipping/backend/shippingservice') . '?embed=1';
+$trackingUrl = $this->getBackendUrl('shipping/backend/tracking') . '?embed=1';
+$baseUrl = $this->getBackendUrl('shipping/backend/manager');
+?>
+<style>
+.weline-shipping-manager { background: var(--backend-color-bg-secondary, #f8f9fa); min-height: calc(100vh - 120px); }
+.weline-shipping-manager .page-title-box { margin-bottom: 1rem; }
+.weline-shipping-manager .nav-tabs { border-bottom: 1px solid var(--backend-color-border, #dee2e6); background: var(--backend-color-card-bg, #fff); padding: 0 1rem; border-radius: 8px 8px 0 0; }
+.weline-shipping-manager .nav-tabs .nav-link { border: none; color: var(--backend-color-text-secondary, #6c757d); padding: 0.75rem 1rem; font-weight: 500; border-bottom: 3px solid transparent; font-size: 0.9rem; }
+.weline-shipping-manager .nav-tabs .nav-link:hover { color: var(--backend-color-primary, #405189); }
+.weline-shipping-manager .nav-tabs .nav-link.active { color: var(--backend-color-primary); border-bottom-color: var(--backend-color-primary); background: transparent; }
+.weline-shipping-manager .tab-content { background: var(--backend-color-card-bg); border: 1px solid var(--backend-color-border); border-top: none; border-radius: 0 0 8px 8px; overflow: hidden; }
+.weline-shipping-manager .tab-pane { display: none; height: calc(100vh - 220px); min-height: 500px; }
+.weline-shipping-manager .tab-pane.active { display: block; }
+.weline-shipping-manager .tab-pane iframe { width: 100%; height: 100%; border: none; display: block; }
+</style>
+
+<div class="weline-shipping-manager">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <h4 class="mb-sm-0">
+                    <i class="mdi mdi-truck-delivery-outline me-2"></i>
+                    <lang>配送系统</lang>
+                </h4>
+                <div class="page-title-right">
+                    <ol class="breadcrumb m-0">
+                        <li class="breadcrumb-item"><a href="javascript:void(0);"><lang>配送管理</lang></a></li>
+                        <li class="breadcrumb-item active"><lang>配送系统</lang></li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs weline-shipping-manager-tabs flex-nowrap overflow-auto" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'region' ? 'active' : '' ?>" href="<?= $baseUrl ?>?tab=region" data-tab="region" data-url="<?= htmlspecialchars($regionUrl) ?>">
+                <i class="mdi mdi-map-marker-outline me-1"></i><lang>地区管理</lang>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'zone' ? 'active' : '' ?>" href="<?= $baseUrl ?>?tab=zone" data-tab="zone" data-url="<?= htmlspecialchars($zoneUrl) ?>">
+                <i class="mdi mdi-map-outline me-1"></i><lang>配送区域</lang>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'carrier' ? 'active' : '' ?>" href="<?= $baseUrl ?>?tab=carrier" data-tab="carrier" data-url="<?= htmlspecialchars($carrierUrl) ?>">
+                <i class="mdi mdi-truck-outline me-1"></i><lang>快递公司</lang>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'ratetemplate' ? 'active' : '' ?>" href="<?= $baseUrl ?>?tab=ratetemplate" data-tab="ratetemplate" data-url="<?= htmlspecialchars($rateTemplateUrl) ?>">
+                <i class="mdi mdi-calculator-variant-outline me-1"></i><lang>费用模板</lang>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'freeshippingrule' ? 'active' : '' ?>" href="<?= $baseUrl ?>?tab=freeshippingrule" data-tab="freeshippingrule" data-url="<?= htmlspecialchars($freeShippingRuleUrl) ?>">
+                <i class="mdi mdi-gift-outline me-1"></i><lang>免邮规则</lang>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'shippingservice' ? 'active' : '' ?>" href="<?= $baseUrl ?>?tab=shippingservice" data-tab="shippingservice" data-url="<?= htmlspecialchars($shippingServiceUrl) ?>">
+                <i class="mdi mdi-truck-fast-outline me-1"></i><lang>配送服务</lang>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'tracking' ? 'active' : '' ?>" href="<?= $baseUrl ?>?tab=tracking" data-tab="tracking" data-url="<?= htmlspecialchars($trackingUrl) ?>">
+                <i class="mdi mdi-map-search-outline me-1"></i><lang>物流跟踪</lang>
+            </a>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <div class="tab-pane <?= $activeTab === 'region' ? 'active' : '' ?>" id="tab-region" data-tab="region">
+            <iframe src="<?= $activeTab === 'region' ? htmlspecialchars($regionUrl) : '' ?>" title="<lang>地区管理</lang>" data-url="<?= htmlspecialchars($regionUrl) ?>"></iframe>
+        </div>
+        <div class="tab-pane <?= $activeTab === 'zone' ? 'active' : '' ?>" id="tab-zone" data-tab="zone">
+            <iframe src="<?= $activeTab === 'zone' ? htmlspecialchars($zoneUrl) : '' ?>" title="<lang>配送区域</lang>" data-url="<?= htmlspecialchars($zoneUrl) ?>"></iframe>
+        </div>
+        <div class="tab-pane <?= $activeTab === 'carrier' ? 'active' : '' ?>" id="tab-carrier" data-tab="carrier">
+            <iframe src="<?= $activeTab === 'carrier' ? htmlspecialchars($carrierUrl) : '' ?>" title="<lang>快递公司</lang>" data-url="<?= htmlspecialchars($carrierUrl) ?>"></iframe>
+        </div>
+        <div class="tab-pane <?= $activeTab === 'ratetemplate' ? 'active' : '' ?>" id="tab-ratetemplate" data-tab="ratetemplate">
+            <iframe src="<?= $activeTab === 'ratetemplate' ? htmlspecialchars($rateTemplateUrl) : '' ?>" title="<lang>费用模板</lang>" data-url="<?= htmlspecialchars($rateTemplateUrl) ?>"></iframe>
+        </div>
+        <div class="tab-pane <?= $activeTab === 'freeshippingrule' ? 'active' : '' ?>" id="tab-freeshippingrule" data-tab="freeshippingrule">
+            <iframe src="<?= $activeTab === 'freeshippingrule' ? htmlspecialchars($freeShippingRuleUrl) : '' ?>" title="<lang>免邮规则</lang>" data-url="<?= htmlspecialchars($freeShippingRuleUrl) ?>"></iframe>
+        </div>
+        <div class="tab-pane <?= $activeTab === 'shippingservice' ? 'active' : '' ?>" id="tab-shippingservice" data-tab="shippingservice">
+            <iframe src="<?= $activeTab === 'shippingservice' ? htmlspecialchars($shippingServiceUrl) : '' ?>" title="<lang>配送服务</lang>" data-url="<?= htmlspecialchars($shippingServiceUrl) ?>"></iframe>
+        </div>
+        <div class="tab-pane <?= $activeTab === 'tracking' ? 'active' : '' ?>" id="tab-tracking" data-tab="tracking">
+            <iframe src="<?= $activeTab === 'tracking' ? htmlspecialchars($trackingUrl) : '' ?>" title="<lang>物流跟踪</lang>" data-url="<?= htmlspecialchars($trackingUrl) ?>"></iframe>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    var tabs = document.querySelectorAll('.weline-shipping-manager-tabs .nav-link');
+    var panes = document.querySelectorAll('.weline-shipping-manager .tab-pane');
+    function switchTab(tab, url) {
+        tabs.forEach(function(t) { t.classList.remove('active'); });
+        panes.forEach(function(p) {
+            p.classList.remove('active');
+            if (p.getAttribute('data-tab') === tab) {
+                p.classList.add('active');
+                var iframe = p.querySelector('iframe');
+                if (iframe && url && !iframe.dataset.loaded) {
+                    iframe.src = iframe.getAttribute('data-url') || url;
+                    iframe.dataset.loaded = '1';
+                }
+            }
+        });
+        var activeTabEl = document.querySelector('.weline-shipping-manager-tabs .nav-link[data-tab="' + tab + '"]');
+        if (activeTabEl) activeTabEl.classList.add('active');
+        if (history.replaceState) {
+            var params = new URLSearchParams(window.location.search);
+            params.set('tab', tab);
+            history.replaceState(null, '', window.location.pathname + '?' + params.toString());
+        }
+    }
+    tabs.forEach(function(tabEl) {
+        tabEl.addEventListener('click', function(e) {
+            e.preventDefault();
+            switchTab(this.getAttribute('data-tab'), this.getAttribute('data-url'));
+        });
+    });
+})();
+</script>

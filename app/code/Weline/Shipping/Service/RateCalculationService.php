@@ -55,8 +55,8 @@ class RateCalculationService
             throw new \RuntimeException(__('费用模板不存在'));
         }
         
-        $calculationType = $template->getData(RateTemplate::fields_CALCULATION_TYPE);
-        $baseFee = (float)$template->getData(RateTemplate::fields_BASE_FEE);
+        $calculationType = $template->getData(RateTemplate::schema_fields_CALCULATION_TYPE);
+        $baseFee = (float)$template->getData(RateTemplate::schema_fields_BASE_FEE);
         
         $fee = $baseFee;
         
@@ -94,7 +94,7 @@ class RateCalculationService
      */
     private function calculateByWeight(RateTemplate $template, float $weight): float
     {
-        $weightRate = (float)$template->getData(RateTemplate::fields_WEIGHT_RATE);
+        $weightRate = (float)$template->getData(RateTemplate::schema_fields_WEIGHT_RATE);
         return $weight * $weightRate;
     }
 
@@ -107,7 +107,7 @@ class RateCalculationService
      */
     private function calculateByVolume(RateTemplate $template, float $volume): float
     {
-        $volumeRate = (float)$template->getData(RateTemplate::fields_VOLUME_RATE);
+        $volumeRate = (float)$template->getData(RateTemplate::schema_fields_VOLUME_RATE);
         return $volume * $volumeRate;
     }
 
@@ -120,7 +120,7 @@ class RateCalculationService
      */
     private function calculateByQuantity(RateTemplate $template, int $quantity): float
     {
-        $quantityRate = (float)$template->getData(RateTemplate::fields_QUANTITY_RATE);
+        $quantityRate = (float)$template->getData(RateTemplate::schema_fields_QUANTITY_RATE);
         return $quantity * $quantityRate;
     }
 
