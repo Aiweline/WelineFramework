@@ -141,6 +141,17 @@ class PassthroughCore
     private int $connectTimeout = 5;
     
     /**
+     * Worker 全部不可用时的自旋等待总时长（秒）
+     * 热重载期间 Worker 可能有短暂空窗，自旋等待可避免请求直接失败
+     */
+    private float $spinWaitMaxSeconds = 3.0;
+    
+    /**
+     * 自旋等待间隔（毫秒）
+     */
+    private int $spinWaitIntervalMs = 50;
+    
+    /**
      * 统计信息
      */
     private array $stats = [
@@ -195,6 +206,12 @@ class PassthroughCore
         }
         if (isset($config['connect_timeout'])) {
             $this->connectTimeout = (int) $config['connect_timeout'];
+        }
+        if (isset($config['spin_wait_max_seconds'])) {
+            $this->spinWaitMaxSeconds = (float) $config['spin_wait_max_seconds'];
+        }
+        if (isset($config['spin_wait_interval_ms'])) {
+            $this->spinWaitIntervalMs = \max(10, (int) $config['spin_wait_interval_ms']);
         }
         
         // 传递缓存配置
@@ -340,7 +357,25 @@ class PassthroughCore
             return $this->registerConnection($connId, $clientSocket, $workerSocket['socket'], $workerSocket['port'], $clientIp, $sni);
         }
         
-        // 所有 Worker 均不可用
+        // 7. 自旋等待：热重载期间 Worker 可能有短暂空窗，重试以降低 404/连接拒绝
+        if ($this->spinWaitMaxSeconds > 0 && !empty($this->workerPorts)) {
+            $deadline = \microtime(true) + $this->spinWaitMaxSeconds;
+            while (\microtime(true) < $deadline) {
+                \usleep($this->spinWaitIntervalMs * 1000);
+                $workerSocket = $this->connectToAvailableWorker($workerPort, $sni);
+                if ($workerSocket !== false) {
+                    $this->stats['failover_routed']++;
+                    return $this->registerConnection($connId, $clientSocket, $workerSocket['socket'], $workerSocket['port'], $clientIp, $sni);
+                }
+                $workerSocket = $this->connectToAnyWorker($workerPort);
+                if ($workerSocket !== false) {
+                    $this->stats['failover_routed']++;
+                    return $this->registerConnection($connId, $clientSocket, $workerSocket['socket'], $workerSocket['port'], $clientIp, $sni);
+                }
+            }
+        }
+        
+        // 所有 Worker 均不可用（含自旋等待后仍失败）
         $this->stats['all_workers_down']++;
         return false;
     }
