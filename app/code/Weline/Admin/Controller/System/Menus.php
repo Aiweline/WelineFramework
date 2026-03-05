@@ -72,7 +72,7 @@ class Menus extends BaseController
                 }
                 
                 $childCount = $this->getMenu()
-                    ->where(Menu::fields_PARENT_SOURCE, $menu->getSource())
+                    ->where(Menu::schema_fields_PARENT_SOURCE, $menu->getSource())
                     ->select()
                     ->fetchArray();
                 
