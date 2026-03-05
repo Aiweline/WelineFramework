@@ -108,6 +108,21 @@
          * @param {function(number, Error): boolean|void} [options.onHttpError] - 同上，与 onError 二选一
          * @param {boolean} [options.silent] - 为 true 时不触发任何错误提示
          */
+        /**
+         * 判断 body 是否为 postMessage 不可克隆类型（FormData/Blob/File 等）
+         */
+        isNonCloneableBody(body) {
+            if (body === undefined || body === null) {
+                return false;
+            }
+            return (
+                typeof FormData !== 'undefined' && body instanceof FormData ||
+                typeof Blob !== 'undefined' && body instanceof Blob ||
+                typeof File !== 'undefined' && body instanceof File ||
+                typeof ReadableStream !== 'undefined' && body instanceof ReadableStream
+            );
+        }
+
         request(url, options = {}) {
             if (!url) {
                 return Promise.reject(new Error('请求地址不能为空'));
@@ -130,21 +145,104 @@
                 });
             }
 
-            this.ensureWorker();
-
             const resolvedUrl = this.resolveUrl(url);
-            const messageId = this.buildMessageId();
+            const prepared = this.prepareOptions(options);
 
+            // FormData/Blob/File 无法通过 postMessage 传给 Worker，改用主线程直接 fetch
+            if (this.isNonCloneableBody(prepared.body)) {
+                return this.directFetch(resolvedUrl, prepared, options);
+            }
+
+            this.ensureWorker();
+            const messageId = this.buildMessageId();
             const payload = {
                 id: messageId,
                 url: resolvedUrl,
-                options: this.prepareOptions(options),
+                options: prepared,
             };
 
             return new Promise((resolve, reject) => {
                 this.pending.set(messageId, { resolve, reject, url, options });
                 this.worker?.postMessage(payload);
             });
+        }
+
+        /**
+         * 主线程直接 fetch，用于 FormData/Blob/File 等无法 postMessage 的 body
+         */
+        async directFetch(url, prepared, originalOptions) {
+            const init = {
+                method: prepared.method || 'GET',
+                credentials: prepared.credentials ?? this.config.useCredentials,
+                headers: prepared.headers,
+                body: prepared.body,
+            };
+            try {
+                const response = await fetch(url, init);
+                const contentType = (response.headers.get('content-type') || '').toLowerCase();
+                let body = null;
+                if (contentType.indexOf('application/json') !== -1) {
+                    try {
+                        body = await response.json();
+                    } catch (e) {
+                        body = { parse_error: true, message: e instanceof Error ? e.message : String(e) };
+                    }
+                } else if (/^text\//.test(contentType)) {
+                    body = await response.text();
+                }
+                const maintenance = response.status === 503 || (
+                    body && typeof body === 'object' &&
+                    (
+                        (typeof body.code === 'string' && body.code.toLowerCase() === 'maintenance') ||
+                        body.maintenance === true ||
+                        (body.data && body.data.maintenance === true)
+                    )
+                );
+                if (maintenance) {
+                    this.handleMaintenance({
+                        ok: false,
+                        status: response.status,
+                        statusText: response.statusText,
+                        headers: {},
+                        body,
+                        maintenance: true,
+                    });
+                    const err = new Error('系统维护中，请求已保存，维护完成后将自动重试');
+                    err.response = { ok: false, status: response.status, statusText: response.statusText, data: body, maintenance: true };
+                    err.maintenance = true;
+                    throw err;
+                }
+                const result = {
+                    ok: response.ok,
+                    status: response.status,
+                    statusText: response.statusText || '',
+                    headers: {},
+                    data: body,
+                    maintenance: false,
+                };
+                response.headers.forEach((v, k) => { result.headers[k] = v; });
+                if (!response.ok) {
+                    const friendlyMessage = (body && typeof body === 'object' && (body.msg || body.message)) ||
+                        (response.status === 404 ? '接口或页面不存在，请刷新重试' : response.status >= 500 ? '服务异常，请稍后重试' : '请求失败');
+                    const error = new Error(friendlyMessage);
+                    error.response = result;
+                    error.status = response.status;
+                    error.requestUrl = url;
+                    this.handleHttpError(response.status, error, originalOptions?.silent, originalOptions);
+                    throw error;
+                }
+                return result;
+            } catch (err) {
+                if (err.response) {
+                    throw err;
+                }
+                const error = new Error(err instanceof Error ? err.message : String(err));
+                error.status = 0;
+                error.requestUrl = url;
+                error.response = { ok: false, status: 0, statusText: '', data: null, maintenance: false };
+                this.handleHttpError(0, error, originalOptions?.silent, originalOptions);
+                throw error;
+            }
         }
 
         ensureWorker() {
