@@ -117,13 +117,13 @@ class EmailBindingService
             if ($customerId) {
                 /** @var ChatSession $session */
                 $session = ObjectManager::getInstance(ChatSession::class);
-                $session->where(ChatSession::fields_session_token, $sessionToken)
+                $session->where(ChatSession::schema_fields_session_token, $sessionToken)
                     ->find()
                     ->fetch();
                 
                 if ($session->getId()) {
                     $session->setCustomerId($customerId)
-                        ->setData(ChatSession::fields_updated_at, date('Y-m-d H:i:s'))
+                        ->setData(ChatSession::schema_fields_updated_at, date('Y-m-d H:i:s'))
                         ->save();
                     
                     // 更新客户语言配置
@@ -146,13 +146,13 @@ class EmailBindingService
                 // 找到客户，绑定到会话
                 /** @var ChatSession $session */
                 $session = ObjectManager::getInstance(ChatSession::class);
-                $session->where(ChatSession::fields_session_token, $sessionToken)
+                $session->where(ChatSession::schema_fields_session_token, $sessionToken)
                     ->find()
                     ->fetch();
                 
                 if ($session->getId()) {
                     $session->setCustomerId($customer->getId())
-                        ->setData(ChatSession::fields_updated_at, date('Y-m-d H:i:s'))
+                        ->setData(ChatSession::schema_fields_updated_at, date('Y-m-d H:i:s'))
                         ->save();
                     
                     // 更新客户语言配置
@@ -165,13 +165,13 @@ class EmailBindingService
             // 如果客户不存在，只更新语言配置中的邮箱
             /** @var CustomerLanguage $language */
             $language = ObjectManager::getInstance(CustomerLanguage::class);
-            $language->where(CustomerLanguage::fields_session_id, $sessionToken)
+            $language->where(CustomerLanguage::schema_fields_session_id, $sessionToken)
                 ->find()
                 ->fetch();
             
             if ($language->getId()) {
                 $language->setEmail($email)
-                    ->setData(CustomerLanguage::fields_updated_at, date('Y-m-d H:i:s'))
+                    ->setData(CustomerLanguage::schema_fields_updated_at, date('Y-m-d H:i:s'))
                     ->save();
             } else {
                 // 创建新的语言配置
@@ -179,8 +179,8 @@ class EmailBindingService
                     ->setEmail($email)
                     ->setSessionId($sessionToken)
                     ->setTargetLocale('zh_Hans_CN')
-                    ->setData(CustomerLanguage::fields_created_at, date('Y-m-d H:i:s'))
-                    ->setData(CustomerLanguage::fields_updated_at, date('Y-m-d H:i:s'))
+                    ->setData(CustomerLanguage::schema_fields_created_at, date('Y-m-d H:i:s'))
+                    ->setData(CustomerLanguage::schema_fields_updated_at, date('Y-m-d H:i:s'))
                     ->save();
             }
 
@@ -201,7 +201,7 @@ class EmailBindingService
     {
         /** @var CustomerLanguage $sessionLanguage */
         $sessionLanguage = ObjectManager::getInstance(CustomerLanguage::class);
-        $sessionLanguage->where(CustomerLanguage::fields_session_id, $sessionToken)
+        $sessionLanguage->where(CustomerLanguage::schema_fields_session_id, $sessionToken)
             ->find()
             ->fetch();
 
@@ -209,16 +209,16 @@ class EmailBindingService
             // 查找或创建客户的语言配置
             /** @var CustomerLanguage $customerLanguage */
             $customerLanguage = ObjectManager::getInstance(CustomerLanguage::class);
-            $customerLanguage->where(CustomerLanguage::fields_customer_id, $customerId)
+            $customerLanguage->where(CustomerLanguage::schema_fields_customer_id, $customerId)
                 ->find()
                 ->fetch();
 
             $customerLanguage->setCustomerId($customerId)
                 ->setTargetLocale($sessionLanguage->getTargetLocale())
-                ->setData(CustomerLanguage::fields_updated_at, date('Y-m-d H:i:s'));
+                ->setData(CustomerLanguage::schema_fields_updated_at, date('Y-m-d H:i:s'));
             
             if (!$customerLanguage->getId()) {
-                $customerLanguage->setData(CustomerLanguage::fields_created_at, date('Y-m-d H:i:s'));
+                $customerLanguage->setData(CustomerLanguage::schema_fields_created_at, date('Y-m-d H:i:s'));
             }
             
             $customerLanguage->save();
