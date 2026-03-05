@@ -41,8 +41,8 @@ class SyncService
             ];
         }
 
-        $localPath = $mapping->getData(SyncMapping::fields_LOCAL_PATH);
-        $remotePath = $mapping->getData(SyncMapping::fields_REMOTE_PATH);
+        $localPath = $mapping->getData(SyncMapping::schema_fields_LOCAL_PATH);
+        $remotePath = $mapping->getData(SyncMapping::schema_fields_REMOTE_PATH);
         
         if (empty($localPath) || empty($remotePath)) {
             return [
@@ -92,9 +92,9 @@ class SyncService
         SyncMapping $mapping,
         ?string $filePath = null
     ): string {
-        $hostAddress = $host->getData(SyncHost::fields_HOST);
-        $port = $host->getData(SyncHost::fields_PORT) ?: 22;
-        $user = $host->getData(SyncHost::fields_USER);
+        $hostAddress = $host->getData(SyncHost::schema_fields_HOST);
+        $port = $host->getData(SyncHost::schema_fields_PORT) ?: 22;
+        $user = $host->getData(SyncHost::schema_fields_USER);
         
         // 构建SSH选项
         $sshOptions = $this->buildSshOptions($host);
@@ -161,9 +161,9 @@ class SyncService
             file_put_contents($keyFile, $keyContent);
             chmod($keyFile, 0600); // 设置权限为仅所有者可读写
             $keyPath = $keyFile;
-        } elseif ($host->getData(SyncHost::fields_KEY_PATH) && file_exists($host->getData(SyncHost::fields_KEY_PATH))) {
+        } elseif ($host->getData(SyncHost::schema_fields_KEY_PATH) && file_exists($host->getData(SyncHost::schema_fields_KEY_PATH))) {
             // 兼容旧数据：如果只有路径，使用路径
-            $keyPath = $host->getData(SyncHost::fields_KEY_PATH);
+            $keyPath = $host->getData(SyncHost::schema_fields_KEY_PATH);
         }
         
         if (!empty($keyPath) && file_exists($keyPath)) {
@@ -185,9 +185,9 @@ class SyncService
      */
     public function testSshConnection(SyncHost $host): array
     {
-        $hostAddress = $host->getData(SyncHost::fields_HOST);
-        $port = $host->getData(SyncHost::fields_PORT) ?: 22;
-        $user = $host->getData(SyncHost::fields_USER);
+        $hostAddress = $host->getData(SyncHost::schema_fields_HOST);
+        $port = $host->getData(SyncHost::schema_fields_PORT) ?: 22;
+        $user = $host->getData(SyncHost::schema_fields_USER);
         $password = $host->getDecryptedPassword();
         $keyContent = $host->getDecryptedKeyContent();
         

@@ -278,9 +278,9 @@ class WatcherService
             $status[] = [
                 'mapping_id' => $mappingId,
                 'type' => 'database',
-                'local_path' => $mapping->getData(SyncMapping::fields_LOCAL_PATH),
-                'remote_path' => $mapping->getData(SyncMapping::fields_REMOTE_PATH),
-                'status' => $mapping->getData(SyncMapping::fields_STATUS),
+                'local_path' => $mapping->getData(SyncMapping::schema_fields_LOCAL_PATH),
+                'remote_path' => $mapping->getData(SyncMapping::schema_fields_REMOTE_PATH),
+                'status' => $mapping->getData(SyncMapping::schema_fields_STATUS),
                 'is_running' => $isRunning,
                 'pid' => $pid,
             ];
