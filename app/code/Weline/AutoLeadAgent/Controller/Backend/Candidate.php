@@ -53,8 +53,8 @@ class Candidate extends BackendController
         // 分页查询
         $offset = ($page - 1) * $limit;
         $candidates = $candidateModel->clear()
-            ->order(LeadCandidate::fields_SCORE, 'DESC')
-            ->order(LeadCandidate::fields_CREATED_AT, 'DESC')
+            ->order(LeadCandidate::schema_fields_SCORE, 'DESC')
+            ->order(LeadCandidate::schema_fields_CREATED_AT, 'DESC')
             ->limit($limit, $offset)
             ->fetch()
             ->getItems();

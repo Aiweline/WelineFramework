@@ -79,7 +79,7 @@ class SetupUpgradeAfter implements ObserverInterface
                     /** @var \Weline\AutoLeadAgent\Model\WasmHash $wasmHashModel */
                     $wasmHashModel = ObjectManager::getInstance(\Weline\AutoLeadAgent\Model\WasmHash::class);
                     $wasmHashModel->clear()
-                        ->where(\Weline\AutoLeadAgent\Model\WasmHash::fields_HASH_VALUE, $currentHash)
+                        ->where(\Weline\AutoLeadAgent\Model\WasmHash::schema_fields_HASH_VALUE, $currentHash)
                         ->find()
                         ->fetch();
                     

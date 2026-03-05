@@ -77,10 +77,10 @@ class TokenService
             /** @var AgentToken $tokenModel */
             $tokenModel = ObjectManager::getInstance(AgentToken::class);
             $tokenModel->clear()
-                ->setData(AgentToken::fields_TOKEN, $token)
-                ->setData(AgentToken::fields_DOMAIN, $domain)
-                ->setData(AgentToken::fields_EXPIRES_AT, $expiresAt)
-                ->setData(AgentToken::fields_WASM_HASH, $wasmHash)
+                ->setData(AgentToken::schema_fields_TOKEN, $token)
+                ->setData(AgentToken::schema_fields_DOMAIN, $domain)
+                ->setData(AgentToken::schema_fields_EXPIRES_AT, $expiresAt)
+                ->setData(AgentToken::schema_fields_WASM_HASH, $wasmHash)
                 ->save();
 
             return $token;
@@ -136,8 +136,8 @@ class TokenService
             /** @var AgentToken $tokenModel */
             $tokenModel = ObjectManager::getInstance(AgentToken::class);
             $tokenRecord = $tokenModel->clear()
-                ->where(AgentToken::fields_TOKEN, $token)
-                ->where(AgentToken::fields_DOMAIN, $domain)
+                ->where(AgentToken::schema_fields_TOKEN, $token)
+                ->where(AgentToken::schema_fields_DOMAIN, $domain)
                 ->find()
                 ->fetch();
 
@@ -146,7 +146,7 @@ class TokenService
             }
 
             // 检查数据库中的过期时间
-            $expiresAt = strtotime($tokenRecord->getData(AgentToken::fields_EXPIRES_AT));
+            $expiresAt = strtotime($tokenRecord->getData(AgentToken::schema_fields_EXPIRES_AT));
             if ($expiresAt < time()) {
                 return false;
             }
@@ -185,7 +185,7 @@ class TokenService
             /** @var AgentToken $tokenModel */
             $tokenModel = ObjectManager::getInstance(AgentToken::class);
             $tokenRecord = $tokenModel->clear()
-                ->where(AgentToken::fields_TOKEN, $token)
+                ->where(AgentToken::schema_fields_TOKEN, $token)
                 ->find()
                 ->fetch();
 
@@ -195,11 +195,11 @@ class TokenService
 
             return [
                 'token_id' => $tokenRecord->getId(),
-                'domain' => $payload['domain'] ?? $tokenRecord->getData(AgentToken::fields_DOMAIN),
-                'exp' => $payload['exp'] ?? strtotime($tokenRecord->getData(AgentToken::fields_EXPIRES_AT)),
-                'wasm_hash' => $payload['wasm_hash'] ?? $tokenRecord->getData(AgentToken::fields_WASM_HASH),
-                'expires_at' => $tokenRecord->getData(AgentToken::fields_EXPIRES_AT),
-                'created_at' => $tokenRecord->getData(AgentToken::fields_CREATED_AT),
+                'domain' => $payload['domain'] ?? $tokenRecord->getData(AgentToken::schema_fields_DOMAIN),
+                'exp' => $payload['exp'] ?? strtotime($tokenRecord->getData(AgentToken::schema_fields_EXPIRES_AT)),
+                'wasm_hash' => $payload['wasm_hash'] ?? $tokenRecord->getData(AgentToken::schema_fields_WASM_HASH),
+                'expires_at' => $tokenRecord->getData(AgentToken::schema_fields_EXPIRES_AT),
+                'created_at' => $tokenRecord->getData(AgentToken::schema_fields_CREATED_AT),
             ];
 
         } catch (\Exception $e) {

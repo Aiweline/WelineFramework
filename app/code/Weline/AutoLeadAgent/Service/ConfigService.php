@@ -37,13 +37,13 @@ class ConfigService
             $configModel = ObjectManager::getInstance(AgentConfig::class);
             
             $configModel->clear()
-                ->where(AgentConfig::fields_CONFIG_KEY, $key)
-                ->where(AgentConfig::fields_SCOPE, $scope)
+                ->where(AgentConfig::schema_fields_CONFIG_KEY, $key)
+                ->where(AgentConfig::schema_fields_SCOPE, $scope)
                 ->find()
                 ->fetch();
 
             if ($configModel->getId()) {
-                $value = $configModel->getData(AgentConfig::fields_CONFIG_VALUE);
+                $value = $configModel->getData(AgentConfig::schema_fields_CONFIG_VALUE);
                 
                 // 对于 default_target_sites，确保始终返回数组
                 if ($key === AgentConfig::CONFIG_DEFAULT_TARGET_SITES) {
@@ -158,8 +158,8 @@ class ConfigService
             
             // 查找是否已存在
             $configModel->clear()
-                ->where(AgentConfig::fields_CONFIG_KEY, $key)
-                ->where(AgentConfig::fields_SCOPE, $scope)
+                ->where(AgentConfig::schema_fields_CONFIG_KEY, $key)
+                ->where(AgentConfig::schema_fields_SCOPE, $scope)
                 ->find()
                 ->fetch();
 
@@ -168,14 +168,14 @@ class ConfigService
 
             if ($configModel->getId()) {
                 // 更新现有配置
-                $configModel->setData(AgentConfig::fields_CONFIG_VALUE, $storedValue)
+                $configModel->setData(AgentConfig::schema_fields_CONFIG_VALUE, $storedValue)
                     ->save();
             } else {
                 // 创建新配置
                 $configModel->clear()
-                    ->setData(AgentConfig::fields_CONFIG_KEY, $key)
-                    ->setData(AgentConfig::fields_CONFIG_VALUE, $storedValue)
-                    ->setData(AgentConfig::fields_SCOPE, $scope)
+                    ->setData(AgentConfig::schema_fields_CONFIG_KEY, $key)
+                    ->setData(AgentConfig::schema_fields_CONFIG_VALUE, $storedValue)
+                    ->setData(AgentConfig::schema_fields_SCOPE, $scope)
                     ->save();
             }
 
@@ -265,7 +265,7 @@ class ConfigService
             
             // 删除指定作用域的所有配置
             $configModel->clear()
-                ->where(AgentConfig::fields_SCOPE, $scope)
+                ->where(AgentConfig::schema_fields_SCOPE, $scope)
                 ->delete();
 
             return true;
@@ -289,8 +289,8 @@ class ConfigService
             $configModel = ObjectManager::getInstance(AgentConfig::class);
             
             $configModel->clear()
-                ->where(AgentConfig::fields_CONFIG_KEY, $key)
-                ->where(AgentConfig::fields_SCOPE, $scope)
+                ->where(AgentConfig::schema_fields_CONFIG_KEY, $key)
+                ->where(AgentConfig::schema_fields_SCOPE, $scope)
                 ->delete();
 
             return true;

@@ -11,8 +11,6 @@ declare(strict_types=1);
 
 namespace Weline\AutoLeadAgent\Service;
 
-use WeShop\Store\Model\Store;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\Exception;
 
 /**
@@ -32,19 +30,17 @@ class StoreProfileService
     public function extractProfile(int $storeId): array
     {
         try {
-            /** @var Store $storeModel */
-            $storeModel = ObjectManager::getInstance(Store::class);
-            $store = $storeModel->load($storeId);
+            $store = w_query('store', 'getStoreById', ['store_id' => $storeId]);
 
-            if (!$store->getId()) {
-                throw new Exception(__('店铺不存在：%{1}', [$storeId]));
+            if ($store === null) {
+                throw new Exception(__('店铺不存在：%{1}', [(string)$storeId]));
             }
 
             // 提取店铺信息
-            $description = $store->getData(Store::fields_DESCRIPTION) ?? '';
-            $name = $store->getData(Store::fields_NAME) ?? '';
-            $metaDescription = $store->getData(Store::fields_META_DESCRIPTION) ?? '';
-            $metaKeywords = $store->getData(Store::fields_META_KEYWORDS) ?? '';
+            $description = $store['description'] ?? '';
+            $name = $store['name'] ?? '';
+            $metaDescription = $store['meta_description'] ?? '';
+            $metaKeywords = $store['meta_keywords'] ?? '';
 
             // 合并所有文本内容
             $textContent = implode(' ', array_filter([
@@ -64,9 +60,9 @@ class StoreProfileService
                 'product_features' => $this->extractProductFeatures($textContent),
                 'keywords' => $this->extractKeywords($textContent),
                 'location' => [
-                    'address' => $store->getData(Store::fields_ADDRESS) ?? '',
-                    'latitude' => $store->getData(Store::fields_LATITUDE) ?? '',
-                    'longitude' => $store->getData(Store::fields_LONGITUDE) ?? '',
+                    'address' => $store['address'] ?? '',
+                    'latitude' => $store['latitude'] ?? '',
+                    'longitude' => $store['longitude'] ?? '',
                 ],
                 'extracted_at' => date('Y-m-d H:i:s'),
             ];

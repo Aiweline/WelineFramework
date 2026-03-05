@@ -1299,13 +1299,13 @@ class WasmCompileService
 
             // 检查是否已存在相同哈希
             $wasmHashModel->clear()
-                ->where(WasmHash::fields_HASH_VALUE, $hash)
+                ->where(WasmHash::schema_fields_HASH_VALUE, $hash)
                 ->find()
                 ->fetch();
 
             if ($wasmHashModel->getId()) {
                 // 更新现有记录
-                $wasmHashModel->setData(WasmHash::fields_WASM_PATH, $filePath)
+                $wasmHashModel->setData(WasmHash::schema_fields_WASM_PATH, $filePath)
                     ->save();
             } else {
                 // 创建新记录
@@ -1313,9 +1313,9 @@ class WasmCompileService
                 $newVersion = $latestVersion + 1;
 
                 $wasmHashModel->clear()
-                    ->setData(WasmHash::fields_WASM_PATH, $filePath)
-                    ->setData(WasmHash::fields_HASH_VALUE, $hash)
-                    ->setData(WasmHash::fields_VERSION, (string)$newVersion)
+                    ->setData(WasmHash::schema_fields_WASM_PATH, $filePath)
+                    ->setData(WasmHash::schema_fields_HASH_VALUE, $hash)
+                    ->setData(WasmHash::schema_fields_VERSION, (string)$newVersion)
                     ->save();
             }
         } catch (\Throwable $e) {
@@ -1333,14 +1333,14 @@ class WasmCompileService
             $wasmHashModel = ObjectManager::getInstance(WasmHash::class);
 
             $wasmHashModel->clear()
-                ->order(WasmHash::fields_VERSION, 'DESC')
+                ->order(WasmHash::schema_fields_VERSION, 'DESC')
                 ->limit(1)
                 ->fetch();
 
             $items = $wasmHashModel->getItems();
             if (!empty($items)) {
                 $latest = reset($items);
-                return (int)$latest->getData(WasmHash::fields_VERSION);
+                return (int)$latest->getData(WasmHash::schema_fields_VERSION);
             }
 
             return 0;

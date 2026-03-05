@@ -80,7 +80,7 @@ class WasmService
             
             // 检查是否已存在相同哈希
             $existing = $wasmHashModel->clear()
-                ->where(WasmHash::fields_HASH_VALUE, $hash)
+                ->where(WasmHash::schema_fields_HASH_VALUE, $hash)
                 ->find()
                 ->fetch();
 
@@ -90,9 +90,9 @@ class WasmService
 
             // 保存新哈希记录
             $wasmHashModel->clear()
-                ->setData(WasmHash::fields_WASM_PATH, $path)
-                ->setData(WasmHash::fields_HASH_VALUE, $hash)
-                ->setData(WasmHash::fields_VERSION, $version)
+                ->setData(WasmHash::schema_fields_WASM_PATH, $path)
+                ->setData(WasmHash::schema_fields_HASH_VALUE, $hash)
+                ->setData(WasmHash::schema_fields_VERSION, $version)
                 ->save();
 
             return $hash;
@@ -120,7 +120,7 @@ class WasmService
                 ->fetch();
 
             if ($latest->getId()) {
-                return $latest->getData(WasmHash::fields_HASH_VALUE);
+                return $latest->getData(WasmHash::schema_fields_HASH_VALUE);
             }
 
             // 如果没有记录，尝试计算当前文件的哈希

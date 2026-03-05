@@ -74,20 +74,20 @@ class TargetWebsite extends BackendController
             $targetWebsiteModel->clear();
             
             if ($isActive !== '') {
-                $targetWebsiteModel->where(TargetWebsiteModel::fields_IS_ACTIVE, (int)$isActive);
+                $targetWebsiteModel->where(TargetWebsiteModel::schema_fields_IS_ACTIVE, (int)$isActive);
             }
             
             if (!empty($search)) {
                 $targetWebsiteModel->where(
-                    '(' . TargetWebsiteModel::fields_NAME . ' LIKE ? OR ' . 
-                    TargetWebsiteModel::fields_DOMAIN . ' LIKE ?)',
+                    '(' . TargetWebsiteModel::schema_fields_NAME . ' LIKE ? OR ' . 
+                    TargetWebsiteModel::schema_fields_DOMAIN . ' LIKE ?)',
                     ['%' . $search . '%', '%' . $search . '%']
                 );
             }
             
             // 分页查询
-            $targetWebsiteModel->order(TargetWebsiteModel::fields_SORT_ORDER, 'ASC')
-                ->order(TargetWebsiteModel::fields_NAME, 'ASC')
+            $targetWebsiteModel->order(TargetWebsiteModel::schema_fields_SORT_ORDER, 'ASC')
+                ->order(TargetWebsiteModel::schema_fields_NAME, 'ASC')
                 ->pagination($page, $pageSize)
                 ->select()
                 ->fetch();
@@ -99,16 +99,16 @@ class TargetWebsite extends BackendController
             $data = [];
             foreach ($items as $item) {
                 $data[] = [
-                    'target_website_id' => $item->getData(TargetWebsiteModel::fields_ID),
-                    'name' => $item->getData(TargetWebsiteModel::fields_NAME),
-                    'domain' => $item->getData(TargetWebsiteModel::fields_DOMAIN),
-                    'search_syntax_template' => $item->getData(TargetWebsiteModel::fields_SEARCH_SYNTAX_TEMPLATE),
-                    'is_active' => (bool)$item->getData(TargetWebsiteModel::fields_IS_ACTIVE),
-                    'sort_order' => (int)$item->getData(TargetWebsiteModel::fields_SORT_ORDER),
-                    'description' => $item->getData(TargetWebsiteModel::fields_DESCRIPTION),
-                    'icon_url' => $item->getData(TargetWebsiteModel::fields_ICON_URL),
-                    'created_at' => $item->getData(TargetWebsiteModel::fields_CREATED_AT),
-                    'updated_at' => $item->getData(TargetWebsiteModel::fields_UPDATED_AT),
+                    'target_website_id' => $item->getData(TargetWebsiteModel::schema_fields_ID),
+                    'name' => $item->getData(TargetWebsiteModel::schema_fields_NAME),
+                    'domain' => $item->getData(TargetWebsiteModel::schema_fields_DOMAIN),
+                    'search_syntax_template' => $item->getData(TargetWebsiteModel::schema_fields_SEARCH_SYNTAX_TEMPLATE),
+                    'is_active' => (bool)$item->getData(TargetWebsiteModel::schema_fields_IS_ACTIVE),
+                    'sort_order' => (int)$item->getData(TargetWebsiteModel::schema_fields_SORT_ORDER),
+                    'description' => $item->getData(TargetWebsiteModel::schema_fields_DESCRIPTION),
+                    'icon_url' => $item->getData(TargetWebsiteModel::schema_fields_ICON_URL),
+                    'created_at' => $item->getData(TargetWebsiteModel::schema_fields_CREATED_AT),
+                    'updated_at' => $item->getData(TargetWebsiteModel::schema_fields_UPDATED_AT),
                 ];
             }
             
@@ -156,12 +156,12 @@ class TargetWebsite extends BackendController
             $data = [];
             foreach ($websites as $website) {
                 $data[] = [
-                    'target_website_id' => $website->getData(TargetWebsiteModel::fields_ID),
-                    'name' => $website->getData(TargetWebsiteModel::fields_NAME),
-                    'domain' => $website->getData(TargetWebsiteModel::fields_DOMAIN),
-                    'search_syntax_template' => $website->getData(TargetWebsiteModel::fields_SEARCH_SYNTAX_TEMPLATE),
-                    'description' => $website->getData(TargetWebsiteModel::fields_DESCRIPTION),
-                    'icon_url' => $website->getData(TargetWebsiteModel::fields_ICON_URL),
+                    'target_website_id' => $website->getData(TargetWebsiteModel::schema_fields_ID),
+                    'name' => $website->getData(TargetWebsiteModel::schema_fields_NAME),
+                    'domain' => $website->getData(TargetWebsiteModel::schema_fields_DOMAIN),
+                    'search_syntax_template' => $website->getData(TargetWebsiteModel::schema_fields_SEARCH_SYNTAX_TEMPLATE),
+                    'description' => $website->getData(TargetWebsiteModel::schema_fields_DESCRIPTION),
+                    'icon_url' => $website->getData(TargetWebsiteModel::schema_fields_ICON_URL),
                 ];
             }
             
@@ -253,13 +253,13 @@ class TargetWebsite extends BackendController
             }
             
             // 设置数据
-            $targetWebsiteModel->setData(TargetWebsiteModel::fields_NAME, $name)
-                ->setData(TargetWebsiteModel::fields_DOMAIN, $domain)
-                ->setData(TargetWebsiteModel::fields_SEARCH_SYNTAX_TEMPLATE, $searchSyntaxTemplate)
-                ->setData(TargetWebsiteModel::fields_IS_ACTIVE, $isActive)
-                ->setData(TargetWebsiteModel::fields_SORT_ORDER, $sortOrder)
-                ->setData(TargetWebsiteModel::fields_DESCRIPTION, $description)
-                ->setData(TargetWebsiteModel::fields_ICON_URL, $iconUrl ?: null)
+            $targetWebsiteModel->setData(TargetWebsiteModel::schema_fields_NAME, $name)
+                ->setData(TargetWebsiteModel::schema_fields_DOMAIN, $domain)
+                ->setData(TargetWebsiteModel::schema_fields_SEARCH_SYNTAX_TEMPLATE, $searchSyntaxTemplate)
+                ->setData(TargetWebsiteModel::schema_fields_IS_ACTIVE, $isActive)
+                ->setData(TargetWebsiteModel::schema_fields_SORT_ORDER, $sortOrder)
+                ->setData(TargetWebsiteModel::schema_fields_DESCRIPTION, $description)
+                ->setData(TargetWebsiteModel::schema_fields_ICON_URL, $iconUrl ?: null)
                 ->save();
             
             return $this->fetchJson([
@@ -369,10 +369,10 @@ class TargetWebsite extends BackendController
                 ]);
             }
             
-            $currentStatus = (int)$targetWebsiteModel->getData(TargetWebsiteModel::fields_IS_ACTIVE);
+            $currentStatus = (int)$targetWebsiteModel->getData(TargetWebsiteModel::schema_fields_IS_ACTIVE);
             $newStatus = $currentStatus ? 0 : 1;
             
-            $targetWebsiteModel->setData(TargetWebsiteModel::fields_IS_ACTIVE, $newStatus)->save();
+            $targetWebsiteModel->setData(TargetWebsiteModel::schema_fields_IS_ACTIVE, $newStatus)->save();
             
             return $this->fetchJson([
                 'success' => true,
