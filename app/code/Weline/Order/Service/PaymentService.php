@@ -69,7 +69,7 @@ class PaymentService
         }
         
         $amount = (float)$paymentData['amount'];
-        $grandTotal = (float)$order->getData(Order::fields_GRAND_TOTAL);
+        $grandTotal = (float)$order->getData(Order::schema_fields_GRAND_TOTAL);
         
         if ($amount > $grandTotal) {
             throw new \Exception(__('支付金额不能超过订单总额'));
@@ -77,19 +77,19 @@ class PaymentService
         
         // 创建支付记录
         $payment = $this->getPaymentModel()->reset();
-        $payment->setData(OrderPayment::fields_ORDER_ID, $orderId);
-        $payment->setData(OrderPayment::fields_PAYMENT_METHOD, $paymentData['payment_method']);
-        $payment->setData(OrderPayment::fields_AMOUNT, $amount);
-        $payment->setData(OrderPayment::fields_CURRENCY, $paymentData['currency'] ?? $order->getData(Order::fields_CURRENCY));
-        $payment->setData(OrderPayment::fields_TRANSACTION_ID, $paymentData['transaction_id'] ?? '');
-        $payment->setData(OrderPayment::fields_STATUS, OrderPayment::STATUS_PAID);
-        $payment->setData(OrderPayment::fields_PAID_AT, date('Y-m-d H:i:s'));
+        $payment->setData(OrderPayment::schema_fields_ORDER_ID, $orderId);
+        $payment->setData(OrderPayment::schema_fields_PAYMENT_METHOD, $paymentData['payment_method']);
+        $payment->setData(OrderPayment::schema_fields_AMOUNT, $amount);
+        $payment->setData(OrderPayment::schema_fields_CURRENCY, $paymentData['currency'] ?? $order->getData(Order::schema_fields_CURRENCY));
+        $payment->setData(OrderPayment::schema_fields_TRANSACTION_ID, $paymentData['transaction_id'] ?? '');
+        $payment->setData(OrderPayment::schema_fields_STATUS, OrderPayment::STATUS_PAID);
+        $payment->setData(OrderPayment::schema_fields_PAID_AT, date('Y-m-d H:i:s'));
         $payment->save();
         
         // 更新订单支付状态
         $paidAmount = $this->getPaidAmount($orderId);
         if ($paidAmount >= $grandTotal) {
-            $order->setData(Order::fields_PAYMENT_STATUS, Order::PAYMENT_STATUS_PAID);
+            $order->setData(Order::schema_fields_PAYMENT_STATUS, Order::PAYMENT_STATUS_PAID);
             $order->save();
             
             // 使用状态机转换订单状态
@@ -107,7 +107,7 @@ class PaymentService
                 'payment' => $payment,
             ]);
         } elseif ($paidAmount > 0) {
-            $order->setData(Order::fields_PAYMENT_STATUS, Order::PAYMENT_STATUS_PARTIAL);
+            $order->setData(Order::schema_fields_PAYMENT_STATUS, Order::PAYMENT_STATUS_PARTIAL);
             $order->save();
         }
         
@@ -130,30 +130,30 @@ class PaymentService
             throw new \Exception(__('支付记录不存在'));
         }
         
-        if ($payment->getData(OrderPayment::fields_STATUS) !== OrderPayment::STATUS_PAID) {
+        if ($payment->getData(OrderPayment::schema_fields_STATUS) !== OrderPayment::STATUS_PAID) {
             throw new \Exception(__('只有已支付的记录才能退款'));
         }
         
-        $paidAmount = (float)$payment->getData(OrderPayment::fields_AMOUNT);
+        $paidAmount = (float)$payment->getData(OrderPayment::schema_fields_AMOUNT);
         if ($amount > $paidAmount) {
             throw new \Exception(__('退款金额不能超过支付金额'));
         }
         
         // 更新支付状态
-        $payment->setData(OrderPayment::fields_STATUS, OrderPayment::STATUS_REFUNDED);
+        $payment->setData(OrderPayment::schema_fields_STATUS, OrderPayment::STATUS_REFUNDED);
         $payment->save();
         
         // 更新订单支付状态
-        $orderId = (int)$payment->getData(OrderPayment::fields_ORDER_ID);
+        $orderId = (int)$payment->getData(OrderPayment::schema_fields_ORDER_ID);
         $order = $this->orderService->getOrder($orderId);
         
         $paidAmount = $this->getPaidAmount($orderId);
-        $grandTotal = (float)$order->getData(Order::fields_GRAND_TOTAL);
+        $grandTotal = (float)$order->getData(Order::schema_fields_GRAND_TOTAL);
         
         if ($paidAmount <= 0) {
-            $order->setData(Order::fields_PAYMENT_STATUS, Order::PAYMENT_STATUS_PENDING);
+            $order->setData(Order::schema_fields_PAYMENT_STATUS, Order::PAYMENT_STATUS_PENDING);
         } elseif ($paidAmount < $grandTotal) {
-            $order->setData(Order::fields_PAYMENT_STATUS, Order::PAYMENT_STATUS_PARTIAL);
+            $order->setData(Order::schema_fields_PAYMENT_STATUS, Order::PAYMENT_STATUS_PARTIAL);
         }
         
         $order->save();
@@ -170,8 +170,8 @@ class PaymentService
     public function getPaymentHistory(int $orderId): array
     {
         $collection = $this->getPaymentModel()->reset()
-            ->where(OrderPayment::fields_ORDER_ID, $orderId)
-            ->order(OrderPayment::fields_CREATED_AT, 'DESC')
+            ->where(OrderPayment::schema_fields_ORDER_ID, $orderId)
+            ->order(OrderPayment::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetch();
         
@@ -187,15 +187,15 @@ class PaymentService
     private function getPaidAmount(int $orderId): float
     {
         $payments = $this->getPaymentModel()->reset()
-            ->where(OrderPayment::fields_ORDER_ID, $orderId)
-            ->where(OrderPayment::fields_STATUS, OrderPayment::STATUS_PAID)
+            ->where(OrderPayment::schema_fields_ORDER_ID, $orderId)
+            ->where(OrderPayment::schema_fields_STATUS, OrderPayment::STATUS_PAID)
             ->select()
             ->fetch()
             ->getItems();
         
         $total = 0;
         foreach ($payments as $payment) {
-            $total += (float)$payment->getData(OrderPayment::fields_AMOUNT);
+            $total += (float)$payment->getData(OrderPayment::schema_fields_AMOUNT);
         }
         
         return $total;
