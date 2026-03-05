@@ -73,9 +73,9 @@ class ShippingServiceManager
         
         // 获取该区域的所有配送服务
         $services = $this->getModel()->reset()
-            ->where(ShippingService::fields_ZONE_ID, $zone->getId())
-            ->where(ShippingService::fields_IS_ACTIVE, 1)
-            ->order(ShippingService::fields_SORT_ORDER, 'ASC')
+            ->where(ShippingService::schema_fields_ZONE_ID, $zone->getId())
+            ->where(ShippingService::schema_fields_IS_ACTIVE, 1)
+            ->order(ShippingService::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetch();
         
@@ -83,12 +83,12 @@ class ShippingServiceManager
         foreach ($services->getItems() as $service) {
             $result[] = [
                 'service_id' => $service->getId(),
-                'service_name' => $service->getData(ShippingService::fields_SERVICE_NAME),
-                'service_code' => $service->getData(ShippingService::fields_SERVICE_CODE),
-                'carrier_id' => $service->getData(ShippingService::fields_CARRIER_ID),
-                'estimated_days_min' => $service->getData(ShippingService::fields_ESTIMATED_DAYS_MIN),
-                'estimated_days_max' => $service->getData(ShippingService::fields_ESTIMATED_DAYS_MAX),
-                'is_free_shipping' => $service->getData(ShippingService::fields_IS_FREE_SHIPPING),
+                'service_name' => $service->getData(ShippingService::schema_fields_SERVICE_NAME),
+                'service_code' => $service->getData(ShippingService::schema_fields_SERVICE_CODE),
+                'carrier_id' => $service->getData(ShippingService::schema_fields_CARRIER_ID),
+                'estimated_days_min' => $service->getData(ShippingService::schema_fields_ESTIMATED_DAYS_MIN),
+                'estimated_days_max' => $service->getData(ShippingService::schema_fields_ESTIMATED_DAYS_MAX),
+                'is_free_shipping' => $service->getData(ShippingService::schema_fields_IS_FREE_SHIPPING),
             ];
         }
         
@@ -124,7 +124,7 @@ class ShippingServiceManager
         }
         
         // 检查是否配置为免邮
-        if ($service->getData(ShippingService::fields_IS_FREE_SHIPPING)) {
+        if ($service->getData(ShippingService::schema_fields_IS_FREE_SHIPPING)) {
             return [
                 'fee' => 0,
                 'is_free' => true,
@@ -133,7 +133,7 @@ class ShippingServiceManager
         }
         
         // 检查免邮规则
-        $freeShippingRuleId = $service->getData(ShippingService::fields_FREE_SHIPPING_RULE_ID);
+        $freeShippingRuleId = $service->getData(ShippingService::schema_fields_FREE_SHIPPING_RULE_ID);
         if ($freeShippingRuleId) {
             $freeRule = $this->freeShippingService->checkFreeShipping(
                 $orderAmount,
@@ -153,7 +153,7 @@ class ShippingServiceManager
         }
         
         // 计算配送费用
-        $rateTemplateId = $service->getData(ShippingService::fields_RATE_TEMPLATE_ID);
+        $rateTemplateId = $service->getData(ShippingService::schema_fields_RATE_TEMPLATE_ID);
         if (!$rateTemplateId) {
             return [
                 'fee' => 0,

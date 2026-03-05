@@ -78,9 +78,9 @@ class ShippingInfo extends FrontendRestController
                 ],
                 'region' => $region ? [
                     'region_id' => $region->getId(),
-                    'region_name' => $region->getData(Region::fields_REGION_NAME),
-                    'region_code' => $region->getData(Region::fields_REGION_CODE),
-                    'country_code' => $region->getData(Region::fields_COUNTRY_CODE),
+                    'region_name' => $region->getData(Region::schema_fields_REGION_NAME),
+                    'region_code' => $region->getData(Region::schema_fields_REGION_CODE),
+                    'country_code' => $region->getData(Region::schema_fields_COUNTRY_CODE),
                 ] : null,
                 'services' => [],
                 'price_rules' => [],
@@ -143,7 +143,7 @@ class ShippingInfo extends FrontendRestController
             }
             
             // 获取价格模板ID
-            $templateId = $service->getData(ShippingServiceModel::fields_RATE_TEMPLATE_ID);
+            $templateId = $service->getData(ShippingServiceModel::schema_fields_RATE_TEMPLATE_ID);
             if (!$templateId) {
                 return [];
             }
@@ -159,16 +159,16 @@ class ShippingInfo extends FrontendRestController
             // 构建价格规则
             return [
                 'template_id' => $template->getId(),
-                'template_name' => $template->getData(RateTemplate::fields_TEMPLATE_NAME),
-                'calculation_type' => $template->getData(RateTemplate::fields_CALCULATION_TYPE),
-                'base_fee' => (float)$template->getData(RateTemplate::fields_BASE_FEE),
-                'weight_unit' => $template->getData(RateTemplate::fields_WEIGHT_UNIT),
-                'weight_rate' => (float)$template->getData(RateTemplate::fields_WEIGHT_RATE),
-                'volume_unit' => $template->getData(RateTemplate::fields_VOLUME_UNIT),
-                'volume_rate' => (float)$template->getData(RateTemplate::fields_VOLUME_RATE),
-                'quantity_rate' => (float)$template->getData(RateTemplate::fields_QUANTITY_RATE),
-                'mixed_config' => $template->getData(RateTemplate::fields_MIXED_CONFIG),
-                'currency_code' => $template->getData(RateTemplate::fields_CURRENCY_CODE) ?: 'CNY',
+                'template_name' => $template->getData(RateTemplate::schema_fields_TEMPLATE_NAME),
+                'calculation_type' => $template->getData(RateTemplate::schema_fields_CALCULATION_TYPE),
+                'base_fee' => (float)$template->getData(RateTemplate::schema_fields_BASE_FEE),
+                'weight_unit' => $template->getData(RateTemplate::schema_fields_WEIGHT_UNIT),
+                'weight_rate' => (float)$template->getData(RateTemplate::schema_fields_WEIGHT_RATE),
+                'volume_unit' => $template->getData(RateTemplate::schema_fields_VOLUME_UNIT),
+                'volume_rate' => (float)$template->getData(RateTemplate::schema_fields_VOLUME_RATE),
+                'quantity_rate' => (float)$template->getData(RateTemplate::schema_fields_QUANTITY_RATE),
+                'mixed_config' => $template->getData(RateTemplate::schema_fields_MIXED_CONFIG),
+                'currency_code' => $template->getData(RateTemplate::schema_fields_CURRENCY_CODE) ?: 'CNY',
             ];
         } catch (\Exception $e) {
             return [];

@@ -50,23 +50,23 @@ class ShippingAddressService
         
         // 应用过滤条件
         if (isset($filters['is_enabled'])) {
-            $model->where(ShippingAddress::fields_IS_ENABLED, $filters['is_enabled']);
+            $model->where(ShippingAddress::schema_fields_IS_ENABLED, $filters['is_enabled']);
         }
         
         if (isset($filters['is_default'])) {
-            $model->where(ShippingAddress::fields_IS_DEFAULT, $filters['is_default']);
+            $model->where(ShippingAddress::schema_fields_IS_DEFAULT, $filters['is_default']);
         }
         
         if (isset($filters['keyword']) && $filters['keyword']) {
             $keyword = "%{$filters['keyword']}%";
-            $model->where(ShippingAddress::fields_NAME, $keyword, 'LIKE', 'OR')
-                  ->where(ShippingAddress::fields_CONTACT_NAME, $keyword, 'LIKE', 'OR')
-                  ->where(ShippingAddress::fields_CONTACT_PHONE, $keyword, 'LIKE', 'OR')
-                  ->where(ShippingAddress::fields_STREET, $keyword, 'LIKE');
+            $model->where(ShippingAddress::schema_fields_NAME, $keyword, 'LIKE', 'OR')
+                  ->where(ShippingAddress::schema_fields_CONTACT_NAME, $keyword, 'LIKE', 'OR')
+                  ->where(ShippingAddress::schema_fields_CONTACT_PHONE, $keyword, 'LIKE', 'OR')
+                  ->where(ShippingAddress::schema_fields_STREET, $keyword, 'LIKE');
         }
         
-        $model->order(ShippingAddress::fields_IS_DEFAULT, 'DESC')
-              ->order(ShippingAddress::fields_CREATED_AT, 'DESC');
+        $model->order(ShippingAddress::schema_fields_IS_DEFAULT, 'DESC')
+              ->order(ShippingAddress::schema_fields_CREATED_AT, 'DESC');
         
         $collection = $model->select()->fetch();
         return $collection->getItems();
@@ -99,7 +99,7 @@ class ShippingAddressService
         $model->setData($data);
         
         // 如果设置为默认，取消其他默认地址
-        if (!empty($data[ShippingAddress::fields_IS_DEFAULT])) {
+        if (!empty($data[ShippingAddress::schema_fields_IS_DEFAULT])) {
             $this->clearDefault();
         }
         
@@ -125,7 +125,7 @@ class ShippingAddressService
         $this->validate($data, $id);
         
         // 如果设置为默认，取消其他默认地址
-        if (!empty($data[ShippingAddress::fields_IS_DEFAULT])) {
+        if (!empty($data[ShippingAddress::schema_fields_IS_DEFAULT])) {
             $this->clearDefault($id);
         }
         
@@ -169,7 +169,7 @@ class ShippingAddressService
         $this->clearDefault($id);
         
         // 设置当前为默认
-        $model->setData(ShippingAddress::fields_IS_DEFAULT, 1);
+        $model->setData(ShippingAddress::schema_fields_IS_DEFAULT, 1);
         $model->save();
         
         return $model;
@@ -190,7 +190,7 @@ class ShippingAddressService
             throw new \Exception(__('地址不存在'));
         }
         
-        $model->setData(ShippingAddress::fields_IS_ENABLED, $enabled ? 1 : 0);
+        $model->setData(ShippingAddress::schema_fields_IS_ENABLED, $enabled ? 1 : 0);
         $model->save();
         
         return $model;
@@ -204,8 +204,8 @@ class ShippingAddressService
     public function getDefault(): ?ShippingAddress
     {
         $model = $this->getModel()->reset()
-            ->where(ShippingAddress::fields_IS_DEFAULT, 1)
-            ->where(ShippingAddress::fields_IS_ENABLED, 1)
+            ->where(ShippingAddress::schema_fields_IS_DEFAULT, 1)
+            ->where(ShippingAddress::schema_fields_IS_ENABLED, 1)
             ->find()
             ->fetch();
         
@@ -221,13 +221,13 @@ class ShippingAddressService
     private function clearDefault(?int $excludeId = null): void
     {
         $model = $this->getModel()->reset()
-            ->where(ShippingAddress::fields_IS_DEFAULT, 1);
+            ->where(ShippingAddress::schema_fields_IS_DEFAULT, 1);
         
         if ($excludeId) {
-            $model->where(ShippingAddress::fields_ID, $excludeId, '!=');
+            $model->where(ShippingAddress::schema_fields_ID, $excludeId, '!=');
         }
         
-        $model->update([ShippingAddress::fields_IS_DEFAULT => 0])->fetch();
+        $model->update([ShippingAddress::schema_fields_IS_DEFAULT => 0])->fetch();
     }
 
     /**
@@ -241,12 +241,12 @@ class ShippingAddressService
     private function validate(array $data, ?int $id = null): void
     {
         $required = [
-            ShippingAddress::fields_NAME => __('地址名称'),
-            ShippingAddress::fields_CONTACT_NAME => __('联系人姓名'),
-            ShippingAddress::fields_CONTACT_PHONE => __('联系电话'),
-            ShippingAddress::fields_PROVINCE => __('省份'),
-            ShippingAddress::fields_CITY => __('城市'),
-            ShippingAddress::fields_STREET => __('街道地址'),
+            ShippingAddress::schema_fields_NAME => __('地址名称'),
+            ShippingAddress::schema_fields_CONTACT_NAME => __('联系人姓名'),
+            ShippingAddress::schema_fields_CONTACT_PHONE => __('联系电话'),
+            ShippingAddress::schema_fields_PROVINCE => __('省份'),
+            ShippingAddress::schema_fields_CITY => __('城市'),
+            ShippingAddress::schema_fields_STREET => __('街道地址'),
         ];
         
         foreach ($required as $field => $label) {
@@ -256,16 +256,16 @@ class ShippingAddressService
         }
         
         // 验证电话号码格式
-        if (!empty($data[ShippingAddress::fields_CONTACT_PHONE])) {
-            $phone = $data[ShippingAddress::fields_CONTACT_PHONE];
+        if (!empty($data[ShippingAddress::schema_fields_CONTACT_PHONE])) {
+            $phone = $data[ShippingAddress::schema_fields_CONTACT_PHONE];
             if (!preg_match('/^1[3-9]\d{9}$|^0\d{2,3}-?\d{7,8}$/', $phone)) {
                 throw new \Exception(__('电话号码格式不正确'));
             }
         }
         
         // 验证邮政编码格式（如果提供）
-        if (!empty($data[ShippingAddress::fields_POSTAL_CODE])) {
-            $postalCode = $data[ShippingAddress::fields_POSTAL_CODE];
+        if (!empty($data[ShippingAddress::schema_fields_POSTAL_CODE])) {
+            $postalCode = $data[ShippingAddress::schema_fields_POSTAL_CODE];
             if (!preg_match('/^\d{6}$/', $postalCode)) {
                 throw new \Exception(__('邮政编码格式不正确，应为6位数字'));
             }

@@ -12,23 +12,27 @@ declare(strict_types=1);
 namespace Weline\Shipping\Model;
 
 use Weline\Framework\Database\AbstractModel;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: '配送区域地区关联表')]
+#[Index(name: 'idx_zone_region', columns: ['zone_id', 'region_id'], type: 'UNIQUE')]
+#[Index(name: 'idx_zone_id', columns: ['zone_id'])]
+#[Index(name: 'idx_region_id', columns: ['region_id'])]
 class ZoneRegion extends AbstractModel
 {
-    public const table = 'w_shipping_zone_regions';
-    
-    public const fields_ID = 'zone_region_id';
-    public const fields_ZONE_ID = 'zone_id';
-    public const fields_REGION_ID = 'region_id';
-    public const fields_CREATED_AT = 'created_at';
 
-    /**
-     * 主键字段
-     */
-    public array $_unit_primary_keys = ['zone_region_id'];
+    public const schema_table = 'w_shipping_zone_regions';
+    public const schema_primary_key = 'zone_region_id';
+    public const schema_primary_keys = ['zone_region_id'];
+    #[Col('int', null, nullable: false, primaryKey: true, autoIncrement: true, comment: '关联ID')]
+    public const schema_fields_ID = 'zone_region_id';
+    #[Col('int', null, nullable: false, comment: '配送区域ID')]
+    public const schema_fields_ZONE_ID = 'zone_id';
+    #[Col('int', null, nullable: false, comment: '地区ID')]
+    public const schema_fields_REGION_ID = 'region_id';
+    #[Col('datetime', comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
 
     /**
      * 索引排序键
@@ -40,60 +44,10 @@ class ZoneRegion extends AbstractModel
      */
     public function _init(): void
     {
-        $this->_table = self::table;
-        $this->_primary_key = self::fields_ID;
     }
 
     /**
-     * 安装表结构
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('配送区域地区关联表')
-                ->addColumn(
-                    self::fields_ID,
-                    TableInterface::column_type_INTEGER,
-                    null,
-                    'primary key auto_increment',
-                    '关联ID'
-                )
-                ->addColumn(
-                    self::fields_ZONE_ID,
-                    TableInterface::column_type_INTEGER,
-                    null,
-                    'not null',
-                    '配送区域ID'
-                )
-                ->addColumn(
-                    self::fields_REGION_ID,
-                    TableInterface::column_type_INTEGER,
-                    null,
-                    'not null',
-                    '地区ID'
-                )
-                ->addColumn(
-                    self::fields_CREATED_AT,
-                    TableInterface::column_type_DATETIME,
-                    null,
-                    'default CURRENT_TIMESTAMP',
-                    '创建时间'
-                )
-                ->addIndex(TableInterface::index_type_UNIQUE, 'idx_zone_region', [self::fields_ZONE_ID, self::fields_REGION_ID], '区域地区唯一索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_zone_id', self::fields_ZONE_ID, '区域ID索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_region_id', self::fields_REGION_ID, '地区ID索引')
-                ->create();
-        }
-    }
-
-    public function upgrade(ModelSetup $setup, Context $context): void {}
-
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
+/**
      * 批量添加关联
      * 
      * @param int $zoneId 配送区域ID
@@ -106,8 +60,8 @@ class ZoneRegion extends AbstractModel
         foreach ($regionIds as $regionId) {
             $model = $this->reset();
             $model->setData([
-                self::fields_ZONE_ID => $zoneId,
-                self::fields_REGION_ID => (int)$regionId,
+                self::schema_fields_ZONE_ID => $zoneId,
+                self::schema_fields_REGION_ID => (int)$regionId,
             ]);
             try {
                 $model->save();
@@ -129,9 +83,10 @@ class ZoneRegion extends AbstractModel
     public function deleteByZoneId(int $zoneId): bool
     {
         return $this->reset()
-            ->where(self::fields_ZONE_ID, $zoneId)
+            ->where(self::schema_fields_ZONE_ID, $zoneId)
             ->delete()
             ->fetch();
     }
 }
+
 

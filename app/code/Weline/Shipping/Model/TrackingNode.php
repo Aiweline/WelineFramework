@@ -12,23 +12,37 @@ declare(strict_types=1);
 namespace Weline\Shipping\Model;
 
 use Weline\Framework\Database\AbstractModel;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: '物流跟踪节点表')]
+#[Index(name: 'idx_tracking_id', columns: ['tracking_id'])]
+#[Index(name: 'idx_node_time', columns: ['node_time'])]
+#[Index(name: 'idx_node_type', columns: ['node_type'])]
 class TrackingNode extends AbstractModel
 {
-    public const table = 'w_shipping_tracking_nodes';
-    
-    public const fields_ID = 'node_id';
-    public const fields_TRACKING_ID = 'tracking_id';
-    public const fields_NODE_TIME = 'node_time';
-    public const fields_NODE_LOCATION = 'node_location';
-    public const fields_NODE_STATUS = 'node_status';
-    public const fields_NODE_DESCRIPTION = 'node_description';
-    public const fields_NODE_TYPE = 'node_type';
-    public const fields_SORT_ORDER = 'sort_order';
-    public const fields_CREATED_AT = 'created_at';
+
+    public const schema_table = 'w_shipping_tracking_nodes';
+    public const schema_primary_key = 'node_id';
+    public const schema_primary_keys = ['node_id'];
+    #[Col('int', null, nullable: false, primaryKey: true, autoIncrement: true, comment: '节点ID')]
+    public const schema_fields_ID = 'node_id';
+    #[Col('int', null, nullable: false, comment: '跟踪记录ID')]
+    public const schema_fields_TRACKING_ID = 'tracking_id';
+    #[Col('datetime', nullable: false, comment: '节点时间')]
+    public const schema_fields_NODE_TIME = 'node_time';
+    #[Col('varchar', 255, comment: '节点位置')]
+    public const schema_fields_NODE_LOCATION = 'node_location';
+    #[Col('varchar', 100, nullable: false, comment: '节点状态描述')]
+    public const schema_fields_NODE_STATUS = 'node_status';
+    #[Col('text', comment: '节点详细描述')]
+    public const schema_fields_NODE_DESCRIPTION = 'node_description';
+    #[Col('varchar', 50, comment: '节点类型')]
+    public const schema_fields_NODE_TYPE = 'node_type';
+    #[Col('int', null, nullable: false, default: 0, comment: '排序')]
+    public const schema_fields_SORT_ORDER = 'sort_order';
+    #[Col('datetime', comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
 
     // 节点类型常量
     public const TYPE_PICKUP = 'pickup';
@@ -36,11 +50,6 @@ class TrackingNode extends AbstractModel
     public const TYPE_ARRIVAL = 'arrival';
     public const TYPE_DELIVERY = 'delivery';
     public const TYPE_EXCEPTION = 'exception';
-
-    /**
-     * 主键字段
-     */
-    public array $_unit_primary_keys = ['node_id'];
 
     /**
      * 索引排序键
@@ -52,95 +61,10 @@ class TrackingNode extends AbstractModel
      */
     public function _init(): void
     {
-        $this->_table = self::table;
-        $this->_primary_key = self::fields_ID;
     }
 
     /**
-     * 安装表结构
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('物流跟踪节点表')
-                ->addColumn(
-                    self::fields_ID,
-                    TableInterface::column_type_INTEGER,
-                    null,
-                    'primary key auto_increment',
-                    '节点ID'
-                )
-                ->addColumn(
-                    self::fields_TRACKING_ID,
-                    TableInterface::column_type_INTEGER,
-                    null,
-                    'not null',
-                    '跟踪记录ID'
-                )
-                ->addColumn(
-                    self::fields_NODE_TIME,
-                    TableInterface::column_type_DATETIME,
-                    null,
-                    'not null',
-                    '节点时间'
-                )
-                ->addColumn(
-                    self::fields_NODE_LOCATION,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'default null',
-                    '节点位置'
-                )
-                ->addColumn(
-                    self::fields_NODE_STATUS,
-                    TableInterface::column_type_VARCHAR,
-                    100,
-                    'not null',
-                    '节点状态描述'
-                )
-                ->addColumn(
-                    self::fields_NODE_DESCRIPTION,
-                    TableInterface::column_type_TEXT,
-                    null,
-                    'default null',
-                    '节点详细描述'
-                )
-                ->addColumn(
-                    self::fields_NODE_TYPE,
-                    TableInterface::column_type_VARCHAR,
-                    50,
-                    'default null',
-                    '节点类型：pickup/transit/arrival/delivery/exception'
-                )
-                ->addColumn(
-                    self::fields_SORT_ORDER,
-                    TableInterface::column_type_INTEGER,
-                    null,
-                    'default 0',
-                    '排序（按时间顺序）'
-                )
-                ->addColumn(
-                    self::fields_CREATED_AT,
-                    TableInterface::column_type_DATETIME,
-                    null,
-                    'default CURRENT_TIMESTAMP',
-                    '创建时间'
-                )
-                ->addIndex(TableInterface::index_type_KEY, 'idx_tracking_id', self::fields_TRACKING_ID, '跟踪记录ID索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_node_time', self::fields_NODE_TIME, '节点时间索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_node_type', self::fields_NODE_TYPE, '节点类型索引')
-                ->create();
-        }
-    }
-
-    public function upgrade(ModelSetup $setup, Context $context): void {}
-
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
+/**
      * 根据跟踪记录ID获取所有节点（按时间排序）
      * 
      * @param int $trackingId 跟踪记录ID
@@ -149,9 +73,9 @@ class TrackingNode extends AbstractModel
     public function getByTrackingId(int $trackingId): \Weline\Framework\Database\Model\Collection
     {
         return $this->reset()
-            ->where(self::fields_TRACKING_ID, $trackingId)
-            ->order(self::fields_NODE_TIME, 'ASC')
-            ->order(self::fields_SORT_ORDER, 'ASC')
+            ->where(self::schema_fields_TRACKING_ID, $trackingId)
+            ->order(self::schema_fields_NODE_TIME, 'ASC')
+            ->order(self::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetch();
     }
@@ -170,13 +94,13 @@ class TrackingNode extends AbstractModel
         foreach ($nodes as $node) {
             $model = $this->reset();
             $model->setData([
-                self::fields_TRACKING_ID => $trackingId,
-                self::fields_NODE_TIME => $node['time'] ?? date('Y-m-d H:i:s'),
-                self::fields_NODE_LOCATION => $node['location'] ?? null,
-                self::fields_NODE_STATUS => $node['status'] ?? '',
-                self::fields_NODE_DESCRIPTION => $node['description'] ?? null,
-                self::fields_NODE_TYPE => $node['type'] ?? null,
-                self::fields_SORT_ORDER => $sortOrder++,
+                self::schema_fields_TRACKING_ID => $trackingId,
+                self::schema_fields_NODE_TIME => $node['time'] ?? date('Y-m-d H:i:s'),
+                self::schema_fields_NODE_LOCATION => $node['location'] ?? null,
+                self::schema_fields_NODE_STATUS => $node['status'] ?? '',
+                self::schema_fields_NODE_DESCRIPTION => $node['description'] ?? null,
+                self::schema_fields_NODE_TYPE => $node['type'] ?? null,
+                self::schema_fields_SORT_ORDER => $sortOrder++,
             ]);
             try {
                 $model->save();
@@ -196,7 +120,7 @@ class TrackingNode extends AbstractModel
      */
     public function getTypeLabel(?string $type = null): string
     {
-        $type = $type ?? $this->getData(self::fields_NODE_TYPE);
+        $type = $type ?? $this->getData(self::schema_fields_NODE_TYPE);
         
         return match ($type) {
             self::TYPE_PICKUP => __('取件'),
@@ -224,4 +148,5 @@ class TrackingNode extends AbstractModel
         ];
     }
 }
+
 

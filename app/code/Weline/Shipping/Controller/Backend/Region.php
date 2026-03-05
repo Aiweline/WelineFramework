@@ -38,7 +38,7 @@ class Region extends BackendController
     {
         // 获取所有已安装国家列表
         $countries = $this->countries->reset()
-            ->where(Countries::fields_IS_INSTALL, 1)
+            ->where(Countries::schema_fields_IS_INSTALL, 1)
             ->select()
             ->fetch()
             ->getItems();
@@ -48,7 +48,7 @@ class Region extends BackendController
         if (!$countryCode && !empty($countries)) {
             /** @var Countries $firstCountry */
             $firstCountry = $countries[0];
-            $countryCode = $firstCountry->getData(Countries::fields_CODE);
+            $countryCode = $firstCountry->getData(Countries::schema_fields_CODE);
         }
 
         $regionTree = [];
@@ -59,6 +59,7 @@ class Region extends BackendController
         $this->assign('countries', $countries);
         $this->assign('current_country_code', $countryCode);
         $this->assign('region_tree', $regionTree);
+        $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
 
         return $this->fetch();
     }
@@ -82,7 +83,7 @@ class Region extends BackendController
         try {
             // 获取所有已安装国家
             $installedCountries = $this->countries->reset()
-                ->where(Countries::fields_IS_INSTALL, 1)
+                ->where(Countries::schema_fields_IS_INSTALL, 1)
                 ->select('code')
                 ->fetch()
                 ->getItems();
@@ -90,8 +91,8 @@ class Region extends BackendController
             $countries = [];
             foreach ($installedCountries as $country) {
                 $countries[] = [
-                    'code' => $country->getData(Countries::fields_CODE),
-                    'name' => $country->getData(Countries::fields_CODE),
+                    'code' => $country->getData(Countries::schema_fields_CODE),
+                    'name' => $country->getData(Countries::schema_fields_CODE),
                 ];
             }
 

@@ -84,8 +84,8 @@ class ZoneService
         // 1. 根据国家代码匹配
         if ($countryCode) {
             $countryRegion = $regionModel->reset()
-                ->where(Region::fields_COUNTRY_CODE, $countryCode)
-                ->where(Region::fields_REGION_TYPE, Region::TYPE_COUNTRY)
+                ->where(Region::schema_fields_COUNTRY_CODE, $countryCode)
+                ->where(Region::schema_fields_REGION_TYPE, Region::TYPE_COUNTRY)
                 ->find()
                 ->fetch();
             
@@ -97,9 +97,9 @@ class ZoneService
         // 2. 根据省/州匹配
         if ($province) {
             $provinceRegion = $regionModel->reset()
-                ->where(Region::fields_COUNTRY_CODE, $countryCode)
-                ->where(Region::fields_REGION_TYPE, Region::TYPE_PROVINCE)
-                ->where(Region::fields_REGION_NAME, $province)
+                ->where(Region::schema_fields_COUNTRY_CODE, $countryCode)
+                ->where(Region::schema_fields_REGION_TYPE, Region::TYPE_PROVINCE)
+                ->where(Region::schema_fields_REGION_NAME, $province)
                 ->find()
                 ->fetch();
             
@@ -111,9 +111,9 @@ class ZoneService
         // 3. 根据市匹配
         if ($city) {
             $cityRegion = $regionModel->reset()
-                ->where(Region::fields_COUNTRY_CODE, $countryCode)
-                ->where(Region::fields_REGION_TYPE, Region::TYPE_CITY)
-                ->where(Region::fields_REGION_NAME, $city)
+                ->where(Region::schema_fields_COUNTRY_CODE, $countryCode)
+                ->where(Region::schema_fields_REGION_TYPE, Region::TYPE_CITY)
+                ->where(Region::schema_fields_REGION_NAME, $city)
                 ->find()
                 ->fetch();
             
@@ -125,9 +125,9 @@ class ZoneService
         // 4. 根据区县匹配（精确匹配）
         if ($district) {
             $districtRegion = $regionModel->reset()
-                ->where(Region::fields_COUNTRY_CODE, $countryCode)
-                ->where(Region::fields_REGION_TYPE, Region::TYPE_DISTRICT)
-                ->where(Region::fields_REGION_NAME, $district)
+                ->where(Region::schema_fields_COUNTRY_CODE, $countryCode)
+                ->where(Region::schema_fields_REGION_TYPE, Region::TYPE_DISTRICT)
+                ->where(Region::schema_fields_REGION_NAME, $district)
                 ->find()
                 ->fetch();
             
@@ -142,7 +142,7 @@ class ZoneService
         
         // 查找包含这些地区的配送区域
         $zoneIds = $zoneRegionModel->reset()
-            ->where(ZoneRegion::fields_REGION_ID, $conditions, 'IN')
+            ->where(ZoneRegion::schema_fields_REGION_ID, $conditions, 'IN')
             ->select()
             ->fetch()
             ->getItems();
@@ -152,7 +152,7 @@ class ZoneService
         }
         
         // 获取第一个匹配的配送区域
-        $zoneId = $zoneIds[0]->getData(ZoneRegion::fields_ZONE_ID);
+        $zoneId = $zoneIds[0]->getData(ZoneRegion::schema_fields_ZONE_ID);
         $zone = $this->getZoneModel()->load($zoneId);
         
         return $zone->getId() ? $zone : null;
@@ -192,13 +192,13 @@ class ZoneService
         $regionModel = $this->getRegionModel();
         
         $zoneRegions = $zoneRegionModel->reset()
-            ->where(ZoneRegion::fields_ZONE_ID, $zoneId)
+            ->where(ZoneRegion::schema_fields_ZONE_ID, $zoneId)
             ->select()
             ->fetch();
         
         $regionIds = [];
         foreach ($zoneRegions->getItems() as $zoneRegion) {
-            $regionIds[] = $zoneRegion->getData(ZoneRegion::fields_REGION_ID);
+            $regionIds[] = $zoneRegion->getData(ZoneRegion::schema_fields_REGION_ID);
         }
         
         if (empty($regionIds)) {
@@ -206,7 +206,7 @@ class ZoneService
         }
         
         return $regionModel->reset()
-            ->where(Region::fields_ID, $regionIds, 'IN')
+            ->where(Region::schema_fields_ID, $regionIds, 'IN')
             ->select()
             ->fetch();
     }

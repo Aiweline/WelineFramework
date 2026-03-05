@@ -6,7 +6,9 @@
 use Weline\Shipping\Model\RateTemplate;
 
 $templates = $this->getData('templates') ?? [];
+$embed = $this->getData('embed') ?? false;
 ?>
+<?php if (empty($embed)): ?>
 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -22,6 +24,7 @@ $templates = $this->getData('templates') ?? [];
                         </div>
                     </div>
                 </div>
+<?php endif; ?>
 
                 <div class="row">
                     <div class="col-12">

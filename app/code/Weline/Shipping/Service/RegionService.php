@@ -53,9 +53,9 @@ class RegionService
             $countryRegions = $model->getByCountryCode($countryCode);
         } else {
             $countryRegions = $model->reset()
-                ->where(Region::fields_REGION_TYPE, Region::TYPE_COUNTRY)
-                ->where(Region::fields_IS_ACTIVE, 1)
-                ->order(Region::fields_SORT_ORDER, 'ASC')
+                ->where(Region::schema_fields_REGION_TYPE, Region::TYPE_COUNTRY)
+                ->where(Region::schema_fields_IS_ACTIVE, 1)
+                ->order(Region::schema_fields_SORT_ORDER, 'ASC')
                 ->select()
                 ->fetch();
         }
@@ -77,13 +77,13 @@ class RegionService
     {
         $node = [
             'region_id' => $region->getId(),
-            'country_code' => $region->getData(Region::fields_COUNTRY_CODE),
-            'region_code' => $region->getData(Region::fields_REGION_CODE),
-            'region_name' => $region->getData(Region::fields_REGION_NAME),
-            'region_type' => $region->getData(Region::fields_REGION_TYPE),
-            'postal_code_pattern' => $region->getData(Region::fields_POSTAL_CODE_PATTERN),
-            'is_active' => $region->getData(Region::fields_IS_ACTIVE),
-            'sort_order' => $region->getData(Region::fields_SORT_ORDER),
+            'country_code' => $region->getData(Region::schema_fields_COUNTRY_CODE),
+            'region_code' => $region->getData(Region::schema_fields_REGION_CODE),
+            'region_name' => $region->getData(Region::schema_fields_REGION_NAME),
+            'region_type' => $region->getData(Region::schema_fields_REGION_TYPE),
+            'postal_code_pattern' => $region->getData(Region::schema_fields_POSTAL_CODE_PATTERN),
+            'is_active' => $region->getData(Region::schema_fields_IS_ACTIVE),
+            'sort_order' => $region->getData(Region::schema_fields_SORT_ORDER),
             'children' => [],
         ];
         
@@ -127,21 +127,21 @@ class RegionService
             
             // 检查是否已存在
             $existing = $model->reset()
-                ->where(Region::fields_COUNTRY_CODE, $countryCode)
-                ->where(Region::fields_REGION_TYPE, Region::TYPE_COUNTRY)
+                ->where(Region::schema_fields_COUNTRY_CODE, $countryCode)
+                ->where(Region::schema_fields_REGION_TYPE, Region::TYPE_COUNTRY)
                 ->find()
                 ->fetch();
             
             if (!$existing->getId()) {
                 $model->reset()
                     ->setData([
-                        Region::fields_COUNTRY_CODE => $countryCode,
-                        Region::fields_PARENT_REGION_ID => null,
-                        Region::fields_REGION_CODE => $countryCode,
-                        Region::fields_REGION_NAME => $countryName,
-                        Region::fields_REGION_TYPE => Region::TYPE_COUNTRY,
-                        Region::fields_IS_ACTIVE => 1,
-                        Region::fields_SORT_ORDER => 0,
+                        Region::schema_fields_COUNTRY_CODE => $countryCode,
+                        Region::schema_fields_PARENT_REGION_ID => null,
+                        Region::schema_fields_REGION_CODE => $countryCode,
+                        Region::schema_fields_REGION_NAME => $countryName,
+                        Region::schema_fields_REGION_TYPE => Region::TYPE_COUNTRY,
+                        Region::schema_fields_IS_ACTIVE => 1,
+                        Region::schema_fields_SORT_ORDER => 0,
                     ])
                     ->save();
                 $count++;
@@ -198,10 +198,10 @@ class RegionService
         // 优先匹配区县
         if ($district) {
             $region = $model->reset()
-                ->where(Region::fields_COUNTRY_CODE, $countryCode)
-                ->where(Region::fields_REGION_TYPE, Region::TYPE_DISTRICT)
-                ->where(Region::fields_REGION_NAME, $district)
-                ->where(Region::fields_IS_ACTIVE, 1)
+                ->where(Region::schema_fields_COUNTRY_CODE, $countryCode)
+                ->where(Region::schema_fields_REGION_TYPE, Region::TYPE_DISTRICT)
+                ->where(Region::schema_fields_REGION_NAME, $district)
+                ->where(Region::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
             
@@ -213,10 +213,10 @@ class RegionService
         // 其次匹配市
         if ($city) {
             $region = $model->reset()
-                ->where(Region::fields_COUNTRY_CODE, $countryCode)
-                ->where(Region::fields_REGION_TYPE, Region::TYPE_CITY)
-                ->where(Region::fields_REGION_NAME, $city)
-                ->where(Region::fields_IS_ACTIVE, 1)
+                ->where(Region::schema_fields_COUNTRY_CODE, $countryCode)
+                ->where(Region::schema_fields_REGION_TYPE, Region::TYPE_CITY)
+                ->where(Region::schema_fields_REGION_NAME, $city)
+                ->where(Region::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
             
@@ -228,10 +228,10 @@ class RegionService
         // 再次匹配省/州
         if ($province) {
             $region = $model->reset()
-                ->where(Region::fields_COUNTRY_CODE, $countryCode)
-                ->where(Region::fields_REGION_TYPE, Region::TYPE_PROVINCE)
-                ->where(Region::fields_REGION_NAME, $province)
-                ->where(Region::fields_IS_ACTIVE, 1)
+                ->where(Region::schema_fields_COUNTRY_CODE, $countryCode)
+                ->where(Region::schema_fields_REGION_TYPE, Region::TYPE_PROVINCE)
+                ->where(Region::schema_fields_REGION_NAME, $province)
+                ->where(Region::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
             
@@ -242,9 +242,9 @@ class RegionService
         
         // 最后匹配国家
         $region = $model->reset()
-            ->where(Region::fields_COUNTRY_CODE, $countryCode)
-            ->where(Region::fields_REGION_TYPE, Region::TYPE_COUNTRY)
-            ->where(Region::fields_IS_ACTIVE, 1)
+            ->where(Region::schema_fields_COUNTRY_CODE, $countryCode)
+            ->where(Region::schema_fields_REGION_TYPE, Region::TYPE_COUNTRY)
+            ->where(Region::schema_fields_IS_ACTIVE, 1)
             ->find()
             ->fetch();
         
