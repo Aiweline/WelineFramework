@@ -53,7 +53,7 @@ class DomainProvisioningService
         }
 
         $existing = clone $this->orderModel;
-        $existing->reset()->where(ProvisioningOrder::fields_DOMAIN, $domain)->find()->fetch();
+        $existing->reset()->where(ProvisioningOrder::schema_fields_DOMAIN, $domain)->find()->fetch();
         if ($existing->getOrderId() > 0 && $existing->getStatus() !== ProvisioningOrder::STATUS_FAILED) {
             return [
                 'success' => false,
@@ -79,16 +79,16 @@ class DomainProvisioningService
 
         $order = clone $this->orderModel;
         $order->clearData();
-        $order->setData(ProvisioningOrder::fields_DOMAIN, $domain);
-        $order->setData(ProvisioningOrder::fields_STATUS, $initialStatus);
-        $order->setData(ProvisioningOrder::fields_REGISTRAR_ACCOUNT_ID, $registrarAccountId);
-        $order->setData(ProvisioningOrder::fields_DNS_VENDOR, $dnsVendor);
-        $order->setData(ProvisioningOrder::fields_DNS_ACCOUNT_ID, $dnsAccountId);
-        $order->setData(ProvisioningOrder::fields_CDN_VENDOR, $cdnVendor);
-        $order->setData(ProvisioningOrder::fields_CDN_ACCOUNT_ID, $cdnAccountId);
-        $order->setData(ProvisioningOrder::fields_WEBSITE_ID, $websiteId);
-        $order->setData(ProvisioningOrder::fields_APPLY_SSL, $applySsl ? 1 : 0);
-        $order->setData(ProvisioningOrder::fields_CURRENT_STEP, $initialStep);
+        $order->setData(ProvisioningOrder::schema_fields_DOMAIN, $domain);
+        $order->setData(ProvisioningOrder::schema_fields_STATUS, $initialStatus);
+        $order->setData(ProvisioningOrder::schema_fields_REGISTRAR_ACCOUNT_ID, $registrarAccountId);
+        $order->setData(ProvisioningOrder::schema_fields_DNS_VENDOR, $dnsVendor);
+        $order->setData(ProvisioningOrder::schema_fields_DNS_ACCOUNT_ID, $dnsAccountId);
+        $order->setData(ProvisioningOrder::schema_fields_CDN_VENDOR, $cdnVendor);
+        $order->setData(ProvisioningOrder::schema_fields_CDN_ACCOUNT_ID, $cdnAccountId);
+        $order->setData(ProvisioningOrder::schema_fields_WEBSITE_ID, $websiteId);
+        $order->setData(ProvisioningOrder::schema_fields_APPLY_SSL, $applySsl ? 1 : 0);
+        $order->setData(ProvisioningOrder::schema_fields_CURRENT_STEP, $initialStep);
         $order->save();
 
         $orderId = $order->getOrderId();
@@ -122,8 +122,8 @@ class DomainProvisioningService
 
         if (!($result['success'] ?? false)) {
             $errorMsg = $result['message'] ?? __('购买失败');
-            $order->setData(ProvisioningOrder::fields_STATUS, ProvisioningOrder::STATUS_FAILED);
-            $order->setData(ProvisioningOrder::fields_ERROR_MESSAGE, $errorMsg);
+            $order->setData(ProvisioningOrder::schema_fields_STATUS, ProvisioningOrder::STATUS_FAILED);
+            $order->setData(ProvisioningOrder::schema_fields_ERROR_MESSAGE, $errorMsg);
             $order->save();
             $this->recordStep($orderId, ProvisioningOrder::STEP_PURCHASE, 'failed', $errorMsg, 0, $result);
             return [
@@ -136,8 +136,8 @@ class DomainProvisioningService
         $first = $result['results'][0] ?? [];
         if (!($first['success'] ?? false)) {
             $errorMsg = $first['message'] ?? __('购买失败');
-            $order->setData(ProvisioningOrder::fields_STATUS, ProvisioningOrder::STATUS_FAILED);
-            $order->setData(ProvisioningOrder::fields_ERROR_MESSAGE, $errorMsg);
+            $order->setData(ProvisioningOrder::schema_fields_STATUS, ProvisioningOrder::STATUS_FAILED);
+            $order->setData(ProvisioningOrder::schema_fields_ERROR_MESSAGE, $errorMsg);
             $order->save();
             $this->recordStep($orderId, ProvisioningOrder::STEP_PURCHASE, 'failed', $errorMsg, 0, $result);
             return [
@@ -148,7 +148,7 @@ class DomainProvisioningService
             ];
         }
 
-        $order->setData(ProvisioningOrder::fields_CURRENT_STEP, ProvisioningOrder::STEP_PURCHASE);
+        $order->setData(ProvisioningOrder::schema_fields_CURRENT_STEP, ProvisioningOrder::STEP_PURCHASE);
         $order->save();
         $this->recordStep($orderId, ProvisioningOrder::STEP_PURCHASE, 'success', '', 0, $result);
         return [
@@ -166,7 +166,7 @@ class DomainProvisioningService
     {
         $domain = strtolower(trim($domain));
         $order = clone $this->orderModel;
-        $order->reset()->where(ProvisioningOrder::fields_DOMAIN, $domain)->find()->fetch();
+        $order->reset()->where(ProvisioningOrder::schema_fields_DOMAIN, $domain)->find()->fetch();
         return $order->getOrderId() > 0 ? $order : null;
     }
 
@@ -182,15 +182,15 @@ class DomainProvisioningService
         }
 
         $domain = $order->getDomain();
-        $dnsVendor = (string) $order->getData(ProvisioningOrder::fields_DNS_VENDOR);
-        $dnsAccountId = (int) $order->getData(ProvisioningOrder::fields_DNS_ACCOUNT_ID);
+        $dnsVendor = (string) $order->getData(ProvisioningOrder::schema_fields_DNS_VENDOR);
+        $dnsAccountId = (int) $order->getData(ProvisioningOrder::schema_fields_DNS_ACCOUNT_ID);
 
         if ($dnsVendor === '' || $dnsAccountId <= 0) {
-            $cdnVendor = (string) $order->getData(ProvisioningOrder::fields_CDN_VENDOR);
-            $cdnAccountId = (int) $order->getData(ProvisioningOrder::fields_CDN_ACCOUNT_ID);
+            $cdnVendor = (string) $order->getData(ProvisioningOrder::schema_fields_CDN_VENDOR);
+            $cdnAccountId = (int) $order->getData(ProvisioningOrder::schema_fields_CDN_ACCOUNT_ID);
             if ($cdnVendor !== '' && $cdnAccountId > 0) {
-                $order->setData(ProvisioningOrder::fields_DNS_VENDOR, $cdnVendor);
-                $order->setData(ProvisioningOrder::fields_DNS_ACCOUNT_ID, $cdnAccountId);
+                $order->setData(ProvisioningOrder::schema_fields_DNS_VENDOR, $cdnVendor);
+                $order->setData(ProvisioningOrder::schema_fields_DNS_ACCOUNT_ID, $cdnAccountId);
                 $order->save();
                 $dnsVendor = $cdnVendor;
                 $dnsAccountId = $cdnAccountId;
@@ -198,9 +198,9 @@ class DomainProvisioningService
         }
 
         $this->recordStep($orderId, ProvisioningOrder::STEP_DNS, 'running', '', $dnsAccountId, []);
-        $order->setData(ProvisioningOrder::fields_STATUS, ProvisioningOrder::STATUS_STEP_DNS);
-        $order->setData(ProvisioningOrder::fields_CURRENT_STEP, ProvisioningOrder::STEP_DNS);
-        $order->setData(ProvisioningOrder::fields_ERROR_MESSAGE, '');
+        $order->setData(ProvisioningOrder::schema_fields_STATUS, ProvisioningOrder::STATUS_STEP_DNS);
+        $order->setData(ProvisioningOrder::schema_fields_CURRENT_STEP, ProvisioningOrder::STEP_DNS);
+        $order->setData(ProvisioningOrder::schema_fields_ERROR_MESSAGE, '');
         $order->save();
 
         $eventData = [
@@ -209,7 +209,7 @@ class DomainProvisioningService
                 'domain' => $domain,
                 'dns_vendor' => $dnsVendor,
                 'dns_account_id' => $dnsAccountId,
-                'website_id' => (int) $order->getData(ProvisioningOrder::fields_WEBSITE_ID),
+                'website_id' => (int) $order->getData(ProvisioningOrder::schema_fields_WEBSITE_ID),
             ],
         ];
         $this->eventsManager->dispatch('Weline_Saas::provisioning::bind_dns', $eventData);
@@ -236,21 +236,21 @@ class DomainProvisioningService
         }
 
         $domain = $order->getDomain();
-        $currentDnsVendor = (string) $order->getData(ProvisioningOrder::fields_DNS_VENDOR);
-        $currentCdnVendor = (string) $order->getData(ProvisioningOrder::fields_CDN_VENDOR);
-        $currentCdnAccountId = (int) $order->getData(ProvisioningOrder::fields_CDN_ACCOUNT_ID);
+        $currentDnsVendor = (string) $order->getData(ProvisioningOrder::schema_fields_DNS_VENDOR);
+        $currentCdnVendor = (string) $order->getData(ProvisioningOrder::schema_fields_CDN_VENDOR);
+        $currentCdnAccountId = (int) $order->getData(ProvisioningOrder::schema_fields_CDN_ACCOUNT_ID);
 
         $vendor = $cdnVendor ?? $currentCdnVendor;
         $accountId = $cdnAccountId ?? $currentCdnAccountId;
 
         if ($vendor !== '' && $vendor !== $currentDnsVendor) {
-            $order->setData(ProvisioningOrder::fields_DNS_VENDOR, $vendor);
-            $order->setData(ProvisioningOrder::fields_DNS_ACCOUNT_ID, $accountId);
+            $order->setData(ProvisioningOrder::schema_fields_DNS_VENDOR, $vendor);
+            $order->setData(ProvisioningOrder::schema_fields_DNS_ACCOUNT_ID, $accountId);
             $order->save();
         }
         if ($vendor !== '') {
-            $order->setData(ProvisioningOrder::fields_CDN_VENDOR, $vendor);
-            $order->setData(ProvisioningOrder::fields_CDN_ACCOUNT_ID, $accountId);
+            $order->setData(ProvisioningOrder::schema_fields_CDN_VENDOR, $vendor);
+            $order->setData(ProvisioningOrder::schema_fields_CDN_ACCOUNT_ID, $accountId);
             $order->save();
         }
 
@@ -263,8 +263,8 @@ class DomainProvisioningService
 
         $adapterInfo = w_query('cdn', 'getAdapterInfo', ['adapter' => $vendor]);
         if ($adapterInfo === null) {
-            $order->setData(ProvisioningOrder::fields_STATUS, ProvisioningOrder::STATUS_FAILED);
-            $order->setData(ProvisioningOrder::fields_ERROR_MESSAGE, __('CDN 适配器不存在：%{1}', [$vendor]));
+            $order->setData(ProvisioningOrder::schema_fields_STATUS, ProvisioningOrder::STATUS_FAILED);
+            $order->setData(ProvisioningOrder::schema_fields_ERROR_MESSAGE, __('CDN 适配器不存在：%{1}', [$vendor]));
             $order->save();
             return ['success' => false, 'message' => __('CDN 适配器不存在：%{1}', [$vendor])];
         }
@@ -278,16 +278,16 @@ class DomainProvisioningService
             }
         }
         if ($accountInfo === null) {
-            $order->setData(ProvisioningOrder::fields_STATUS, ProvisioningOrder::STATUS_FAILED);
-            $order->setData(ProvisioningOrder::fields_ERROR_MESSAGE, __('CDN 账户不存在'));
+            $order->setData(ProvisioningOrder::schema_fields_STATUS, ProvisioningOrder::STATUS_FAILED);
+            $order->setData(ProvisioningOrder::schema_fields_ERROR_MESSAGE, __('CDN 账户不存在'));
             $order->save();
             return ['success' => false, 'message' => __('CDN 账户不存在')];
         }
 
         $this->recordStep($orderId, ProvisioningOrder::STEP_CDN, 'running', $vendor, $accountId, []);
-        $order->setData(ProvisioningOrder::fields_STATUS, ProvisioningOrder::STATUS_STEP_CDN);
-        $order->setData(ProvisioningOrder::fields_CURRENT_STEP, ProvisioningOrder::STEP_CDN);
-        $order->setData(ProvisioningOrder::fields_ERROR_MESSAGE, '');
+        $order->setData(ProvisioningOrder::schema_fields_STATUS, ProvisioningOrder::STATUS_STEP_CDN);
+        $order->setData(ProvisioningOrder::schema_fields_CURRENT_STEP, ProvisioningOrder::STEP_CDN);
+        $order->setData(ProvisioningOrder::schema_fields_ERROR_MESSAGE, '');
         $order->save();
 
         try {
@@ -306,13 +306,13 @@ class DomainProvisioningService
             }
 
             $this->recordStep($orderId, ProvisioningOrder::STEP_CDN, 'success', $vendor, $accountId, ['zone_id' => $zoneId]);
-            $order->setData(ProvisioningOrder::fields_CURRENT_STEP, ProvisioningOrder::STEP_CDN);
+            $order->setData(ProvisioningOrder::schema_fields_CURRENT_STEP, ProvisioningOrder::STEP_CDN);
             $order->save();
             return ['success' => true, 'message' => __('CDN 绑定成功'), 'zone_id' => $zoneId];
         } catch (\Throwable $e) {
             $this->recordStep($orderId, ProvisioningOrder::STEP_CDN, 'failed', $vendor, $accountId, [], $e->getMessage());
-            $order->setData(ProvisioningOrder::fields_STATUS, ProvisioningOrder::STATUS_FAILED);
-            $order->setData(ProvisioningOrder::fields_ERROR_MESSAGE, $e->getMessage());
+            $order->setData(ProvisioningOrder::schema_fields_STATUS, ProvisioningOrder::STATUS_FAILED);
+            $order->setData(ProvisioningOrder::schema_fields_ERROR_MESSAGE, $e->getMessage());
             $order->save();
             return ['success' => false, 'message' => $e->getMessage()];
         }
@@ -330,37 +330,37 @@ class DomainProvisioningService
         }
 
         if (!$order->getApplySsl()) {
-            $order->setData(ProvisioningOrder::fields_STATUS, ProvisioningOrder::STATUS_COMPLETED);
-            $order->setData(ProvisioningOrder::fields_CURRENT_STEP, '');
+            $order->setData(ProvisioningOrder::schema_fields_STATUS, ProvisioningOrder::STATUS_COMPLETED);
+            $order->setData(ProvisioningOrder::schema_fields_CURRENT_STEP, '');
             $order->save();
             return ['success' => true, 'message' => __('已跳过 SSL，流程完成')];
         }
 
         $domain = $order->getDomain();
-        $websiteId = (int) $order->getData(ProvisioningOrder::fields_WEBSITE_ID);
+        $websiteId = (int) $order->getData(ProvisioningOrder::schema_fields_WEBSITE_ID);
         $webroot = \defined('PUB') ? PUB : ((\defined('BP') ? BP : '') . 'pub');
         $email = Env::get('admin_email', 'admin@' . $domain);
 
         $this->recordStep($orderId, ProvisioningOrder::STEP_SSL, 'running', '', 0, []);
-        $order->setData(ProvisioningOrder::fields_STATUS, ProvisioningOrder::STATUS_STEP_SSL);
-        $order->setData(ProvisioningOrder::fields_CURRENT_STEP, ProvisioningOrder::STEP_SSL);
-        $order->setData(ProvisioningOrder::fields_ERROR_MESSAGE, '');
+        $order->setData(ProvisioningOrder::schema_fields_STATUS, ProvisioningOrder::STATUS_STEP_SSL);
+        $order->setData(ProvisioningOrder::schema_fields_CURRENT_STEP, ProvisioningOrder::STEP_SSL);
+        $order->setData(ProvisioningOrder::schema_fields_ERROR_MESSAGE, '');
         $order->save();
 
         $result = $this->sslCertificateService->requestCertificate($domain, $webroot, $email, $websiteId);
 
         if ($result['success'] ?? false) {
             $this->recordStep($orderId, ProvisioningOrder::STEP_SSL, 'success', '', 0, $result);
-            $order->setData(ProvisioningOrder::fields_STATUS, ProvisioningOrder::STATUS_COMPLETED);
-            $order->setData(ProvisioningOrder::fields_CURRENT_STEP, '');
+            $order->setData(ProvisioningOrder::schema_fields_STATUS, ProvisioningOrder::STATUS_COMPLETED);
+            $order->setData(ProvisioningOrder::schema_fields_CURRENT_STEP, '');
             $order->save();
             return ['success' => true, 'message' => __('证书申请成功'), 'cert' => $result['cert'] ?? null];
         }
 
         $msg = $result['message'] ?? __('证书申请失败');
         $this->recordStep($orderId, ProvisioningOrder::STEP_SSL, 'failed', '', 0, $result, $msg);
-        $order->setData(ProvisioningOrder::fields_STATUS, ProvisioningOrder::STATUS_FAILED);
-        $order->setData(ProvisioningOrder::fields_ERROR_MESSAGE, $msg);
+        $order->setData(ProvisioningOrder::schema_fields_STATUS, ProvisioningOrder::STATUS_FAILED);
+        $order->setData(ProvisioningOrder::schema_fields_ERROR_MESSAGE, $msg);
         $order->save();
         return ['success' => false, 'message' => $msg];
     }
@@ -383,7 +383,7 @@ class DomainProvisioningService
         }
 
         $domain = $order->getDomain();
-        $registrarAccountId = (int) $order->getData(ProvisioningOrder::fields_REGISTRAR_ACCOUNT_ID);
+        $registrarAccountId = (int) $order->getData(ProvisioningOrder::schema_fields_REGISTRAR_ACCOUNT_ID);
 
         if ($registrarAccountId <= 0) {
             return ['success' => false, 'message' => __('域名商账号未配置')];
@@ -468,13 +468,13 @@ class DomainProvisioningService
     ): void {
         $step = clone $this->stepModel;
         $step->clearData();
-        $step->setData(ProvisioningStep::fields_PROVISIONING_ORDER_ID, $orderId);
-        $step->setData(ProvisioningStep::fields_STEP_NAME, $stepName);
-        $step->setData(ProvisioningStep::fields_STATUS, $status);
-        $step->setData(ProvisioningStep::fields_VENDOR, $vendor);
-        $step->setData(ProvisioningStep::fields_ACCOUNT_ID, $accountId);
-        $step->setData(ProvisioningStep::fields_RESULT_JSON, $result === [] ? '' : json_encode($result, JSON_UNESCAPED_UNICODE));
-        $step->setData(ProvisioningStep::fields_ERROR_MESSAGE, $errorMessage);
+        $step->setData(ProvisioningStep::schema_fields_PROVISIONING_ORDER_ID, $orderId);
+        $step->setData(ProvisioningStep::schema_fields_STEP_NAME, $stepName);
+        $step->setData(ProvisioningStep::schema_fields_STATUS, $status);
+        $step->setData(ProvisioningStep::schema_fields_VENDOR, $vendor);
+        $step->setData(ProvisioningStep::schema_fields_ACCOUNT_ID, $accountId);
+        $step->setData(ProvisioningStep::schema_fields_RESULT_JSON, $result === [] ? '' : json_encode($result, JSON_UNESCAPED_UNICODE));
+        $step->setData(ProvisioningStep::schema_fields_ERROR_MESSAGE, $errorMessage);
         $step->save();
     }
 }
