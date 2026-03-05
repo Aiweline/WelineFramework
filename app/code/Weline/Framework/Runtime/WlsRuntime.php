@@ -312,7 +312,8 @@ class WlsRuntime implements RuntimeInterface
             // 创建重定向响应，并立即把 HeaderCollector 中的 Cookie 写入响应（登录 302 必须带 Set-Cookie，不依赖 Worker 合并）
             $redirectResponse = \Weline\Framework\Http\WlsResponse::redirect($redirectUrl, $redirectEx->getStatusCode());
             $hc = \Weline\Framework\Http\HeaderCollector::getInstance();
-            foreach ($hc->getCookies() as $cookie) {
+            $cookies = $hc->getCookies();
+            foreach ($cookies as $cookie) {
                 $parts = [\urlencode($cookie['name']) . '=' . \urlencode($cookie['value'])];
                 if (isset($cookie['expire']) && $cookie['expire'] !== 0) {
                     $parts[] = 'Expires=' . \gmdate('D, d M Y H:i:s T', $cookie['expire']);
@@ -334,6 +335,8 @@ class WlsRuntime implements RuntimeInterface
                 }
                 $redirectResponse->addCookieHeader(\implode('; ', $parts));
             }
+            // 诊断头：便于在浏览器中确认 302 是否带 Cookie（0=未带，排查 Session/Nginx）
+            $redirectResponse->setHeader('X-WLS-Redirect-Cookies', (string)\count($cookies));
             return $redirectResponse->toHttpString(false);
             
         } catch (\Weline\Framework\Http\NoRouterException $noRouterEx) {
