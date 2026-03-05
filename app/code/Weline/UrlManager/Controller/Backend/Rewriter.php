@@ -32,7 +32,7 @@ class Rewriter extends \Weline\Framework\App\Controller\BackendController
         // 支持按 website_id 过滤
         $websiteIdFilter = $this->request->getGet('website_id');
         if ($websiteIdFilter !== null && $websiteIdFilter !== '') {
-            $urlRewriteModel->where('main_table.' . UrlRewrite::fields_WEBSITE_ID, (int)$websiteIdFilter);
+            $urlRewriteModel->where('main_table.' . UrlRewrite::schema_fields_WEBSITE_ID, (int)$websiteIdFilter);
         }
         
         $rewrites = $urlRewriteModel->fields('main_table.*,main_table.path as rewrite_path,um.url_id,um.path,um.is_deleted')
@@ -84,8 +84,8 @@ class Rewriter extends \Weline\Framework\App\Controller\BackendController
         /**@var UrlManager $urlManager */
         $urlManager = ObjectManager::getInstance(UrlManager::class);
         $query = $urlManager
-            ->fields('main_table.*,ur.rewrite as rewrite_path,ur.' . UrlRewrite::fields_WEBSITE_ID . ' as website_id')
-            ->where('ur.' . UrlRewrite::fields_URL_IDENTIFY, $uri_identify)
+            ->fields('main_table.*,ur.rewrite as rewrite_path,ur.' . UrlRewrite::schema_fields_WEBSITE_ID . ' as website_id')
+            ->where('ur.' . UrlRewrite::schema_fields_URL_IDENTIFY, $uri_identify)
             ->joinModel(
                 UrlRewrite::class,
                 'ur',
@@ -95,7 +95,7 @@ class Rewriter extends \Weline\Framework\App\Controller\BackendController
         
         // 如果指定了 website_id，加入过滤条件
         if ($websiteId !== null && $websiteId !== '') {
-            $query->where('ur.' . UrlRewrite::fields_WEBSITE_ID, (int)$websiteId);
+            $query->where('ur.' . UrlRewrite::schema_fields_WEBSITE_ID, (int)$websiteId);
         }
         
         $url = $query->find()->fetch();
@@ -113,7 +113,7 @@ class Rewriter extends \Weline\Framework\App\Controller\BackendController
         /**@var UrlRewrite $urlRewrite */
         $urlRewrite = ObjectManager::getInstance(UrlRewrite::class);
         try {
-            $urlRewrite->where($urlRewrite::fields_ID, $rewrite_id)->delete();
+            $urlRewrite->where($urlRewrite::schema_fields_ID, $rewrite_id)->delete();
             $this->getMessageManager()->addError(__('删除成功！'));
         } catch (Exception $exception) {
             $this->getMessageManager()->addError(__('删除失败！') . (DEV ? $exception->getMessage() : ''));
