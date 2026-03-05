@@ -28,18 +28,18 @@ class Save extends BackendController
             }
             
             $couponData = [
-                Coupon::fields_code => $this->request->getParam('code') ?? '',
-                Coupon::fields_name => $this->request->getParam('name') ?? '',
-                Coupon::fields_type => $this->request->getParam('type') ?? 'fixed',
-                Coupon::fields_discount_amount => (float)($this->request->getParam('discount_amount') ?? 0),
-                Coupon::fields_discount_percent => (float)($this->request->getParam('discount_percent') ?? 0),
-                Coupon::fields_minimum_amount => (float)($this->request->getParam('minimum_amount') ?? 0),
-                Coupon::fields_maximum_discount => (float)($this->request->getParam('maximum_discount') ?? 0),
-                Coupon::fields_start_date => $this->request->getParam('start_date') ?? '',
-                Coupon::fields_end_date => $this->request->getParam('end_date') ?? '',
-                Coupon::fields_usage_limit => (int)($this->request->getParam('usage_limit') ?? 0),
-                Coupon::fields_is_active => (int)($this->request->getParam('is_active') ?? 1),
-                Coupon::fields_updated_at => date('Y-m-d H:i:s'),
+                Coupon::schema_fields_code => $this->request->getParam('code') ?? '',
+                Coupon::schema_fields_name => $this->request->getParam('name') ?? '',
+                Coupon::schema_fields_type => $this->request->getParam('type') ?? 'fixed',
+                Coupon::schema_fields_discount_amount => (float)($this->request->getParam('discount_amount') ?? 0),
+                Coupon::schema_fields_discount_percent => (float)($this->request->getParam('discount_percent') ?? 0),
+                Coupon::schema_fields_minimum_amount => (float)($this->request->getParam('minimum_amount') ?? 0),
+                Coupon::schema_fields_maximum_discount => (float)($this->request->getParam('maximum_discount') ?? 0),
+                Coupon::schema_fields_start_date => $this->request->getParam('start_date') ?? '',
+                Coupon::schema_fields_end_date => $this->request->getParam('end_date') ?? '',
+                Coupon::schema_fields_usage_limit => (int)($this->request->getParam('usage_limit') ?? 0),
+                Coupon::schema_fields_is_active => (int)($this->request->getParam('is_active') ?? 1),
+                Coupon::schema_fields_updated_at => date('Y-m-d H:i:s'),
             ];
             
             $coupon->setData($couponData);
