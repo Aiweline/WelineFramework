@@ -352,10 +352,15 @@ class DomainManagement extends BaseController
                 }
 
                 $groupItems = [];
+                $fetchError = '';
 
                 try {
                     $remoteResult = $this->syncService->fetchRemoteDomains($acctId);
                     $remoteDomains = $remoteResult['domains'] ?? [];
+
+                    if (($remoteResult['success'] ?? true) === false) {
+                        $fetchError = (string) ($remoteResult['message'] ?? __('获取域名列表失败'));
+                    }
 
                     foreach ($remoteDomains as $rd) {
                         $domainName = $rd['domain'] ?? '';
@@ -437,7 +442,7 @@ class DomainManagement extends BaseController
                         $allItems[] = $item;
                     }
                 } catch (\Throwable $e) {
-                    // 单个账户失败不影响其他账户
+                    $fetchError = $e->getMessage();
                 }
 
                 // 排序：未拉取在前
@@ -460,6 +465,7 @@ class DomainManagement extends BaseController
                     'pulled' => $pulledCount,
                     'not_pulled' => $notPulledCount,
                     'items' => $groupItems,
+                    'fetch_error' => $fetchError !== '' ? $fetchError : null,
                 ];
             }
 
