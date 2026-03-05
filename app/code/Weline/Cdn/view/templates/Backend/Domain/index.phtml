@@ -180,19 +180,16 @@ $websites = $this->getData('websites') ?: [];
     
     var toggleEnableUrl = '<?= $this->getBackendUrl('*/backend/domain/toggleEnable') ?>';
     var clearCacheUrl = '<?= $this->getBackendUrl('*/backend/domain/clearCache') ?>';
-    
     window.CdnDomainManager = {
         toggleEnable: function(id, enabled) {
-            fetch(toggleEnableUrl, {
+            window.Weline.Api.request(toggleEnableUrl, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: 'id=' + id + '&enabled=' + enabled
             })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
-                if (data.success) {
+            .then(function(response) {
+                var data = response.data;
+                if (response.ok && data && data.success) {
                     if (typeof Swal !== 'undefined') {
                         Swal.fire({
                             icon: 'success',
@@ -244,16 +241,14 @@ $websites = $this->getData('websites') ?: [];
         },
         
         performClearCache: function(id) {
-            fetch(clearCacheUrl, {
+            window.Weline.Api.request(clearCacheUrl, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: 'id=' + id + '&mode=everything'
             })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
-                if (data.success) {
+            .then(function(response) {
+                var data = response.data;
+                if (response.ok && data && data.success) {
                     if (typeof Swal !== 'undefined') {
                         Swal.fire({
                             icon: 'success',

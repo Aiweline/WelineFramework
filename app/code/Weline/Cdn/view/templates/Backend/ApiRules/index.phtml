@@ -150,7 +150,6 @@ $trigger = $this->getData('trigger') ?: '';
     var toggleUrl = '<?= $this->getBackendUrl('*/backend/api-rules/toggle') ?>';
     var viewUrl = '<?= $this->getBackendUrl('*/backend/api-rules/view') ?>';
     var deleteUrl = '<?= $this->getBackendUrl('*/backend/api-rules/delete') ?>';
-    
     window.CdnApiRulesManager = {
         filterRules: function() {
             var module = document.getElementById('moduleFilter').value;
@@ -171,16 +170,16 @@ $trigger = $this->getData('trigger') ?: '';
                 cancelButtonText: '<?= __("取消") ?>'
             }).then(function(result) {
                 if (result.isConfirmed) {
-                    fetch(collectUrl, {
+                    window.Weline.Api.request(collectUrl, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             'X-Requested-With': 'XMLHttpRequest'
                         }
                     })
-                    .then(function(response) { return response.json(); })
-                    .then(function(data) {
-                        if (data.success) {
+                    .then(function(response) {
+                        var data = response.data;
+                        if (response.ok && data && data.success) {
                             Swal.fire({
                                 icon: 'success',
                                 title: '<?= __('成功') ?>',
@@ -192,7 +191,7 @@ $trigger = $this->getData('trigger') ?: '';
                             Swal.fire({
                                 icon: 'error',
                                 title: '<?= __('收集失败') ?>',
-                                text: data.message || '<?= __('收集失败') ?>',
+                                text: (data && data.message) || '<?= __('收集失败') ?>',
                                 confirmButtonText: '<?= __('确定') ?>'
                             });
                         }
@@ -201,7 +200,7 @@ $trigger = $this->getData('trigger') ?: '';
                         Swal.fire({
                             icon: 'error',
                             title: '<?= __('收集失败') ?>',
-                            text: '<?= __('请重试') ?>',
+                            text: (error && error.message) || '<?= __('请重试') ?>',
                             confirmButtonText: '<?= __('确定') ?>'
                         });
                     });
@@ -210,7 +209,7 @@ $trigger = $this->getData('trigger') ?: '';
         },
         
         toggleRule: function(ruleId, enabled) {
-            fetch(toggleUrl, {
+            window.Weline.Api.request(toggleUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -221,9 +220,9 @@ $trigger = $this->getData('trigger') ?: '';
                     enabled: enabled ? 1 : 0
                 })
             })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
-                if (!data.success) {
+            .then(function(response) {
+                var data = response.data;
+                if (!(response.ok && data && data.success)) {
                     Swal.fire({
                         icon: 'error',
                         title: '<?= __('操作失败') ?>',
@@ -259,7 +258,7 @@ $trigger = $this->getData('trigger') ?: '';
                 confirmButtonColor: '#d33'
             }).then(function(result) {
                 if (result.isConfirmed) {
-                    fetch(deleteUrl, {
+                    window.Weline.Api.request(deleteUrl, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -267,9 +266,9 @@ $trigger = $this->getData('trigger') ?: '';
                         },
                         body: JSON.stringify({ id: ruleId })
                     })
-                    .then(function(response) { return response.json(); })
-                    .then(function(data) {
-                        if (data.success) {
+                    .then(function(response) {
+                        var data = response.data;
+                        if (response.ok && data && data.success) {
                             Swal.fire({
                                 icon: 'success',
                                 title: '<?= __('成功') ?>',
@@ -290,7 +289,7 @@ $trigger = $this->getData('trigger') ?: '';
                         Swal.fire({
                             icon: 'error',
                             title: '<?= __('删除失败') ?>',
-                            text: '<?= __('请重试') ?>',
+                            text: (error && error.message) || '<?= __('请重试') ?>',
                             confirmButtonText: '<?= __('确定') ?>'
                         });
                     });

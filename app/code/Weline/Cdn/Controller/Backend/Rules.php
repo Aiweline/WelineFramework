@@ -53,7 +53,7 @@ class Rules extends BackendController
     {
         try {
             $domains = $this->getDomainModel()->reset()
-                ->where(DomainModel::fields_ENABLED, 1)
+                ->where(DomainModel::schema_fields_ENABLED, 1)
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -275,7 +275,7 @@ class Rules extends BackendController
         try {
             $domain = $this->getDomainModel()->reset()->load($id);
             
-            if (!$domain->getData(DomainModel::fields_DOMAIN_ID)) {
+            if (!$domain->getData(DomainModel::schema_fields_DOMAIN_ID)) {
                 Message::error(__('域名不存在'));
                 return $this->redirect('*/backend/rules/index');
             }
@@ -308,7 +308,7 @@ class Rules extends BackendController
         try {
             $domain = $this->getDomainModel()->reset()->load($id);
             
-            if (!$domain->getData(DomainModel::fields_DOMAIN_ID)) {
+            if (!$domain->getData(DomainModel::schema_fields_DOMAIN_ID)) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('域名不存在')
@@ -353,14 +353,14 @@ class Rules extends BackendController
     {
         try {
             $domains = $this->getDomainModel()->reset()
-                ->where(DomainModel::fields_ENABLED, 1)
+                ->where(DomainModel::schema_fields_ENABLED, 1)
                 ->select()
                 ->fetch()
                 ->getItems();
 
             $domainList = [];
             foreach ($domains as $domain) {
-                $domainName = $domain->getData(DomainModel::fields_DOMAIN_NAME);
+                $domainName = $domain->getData(DomainModel::schema_fields_DOMAIN_NAME);
                 $domainList[] = [
                     'domain_id' => $domain->getId(),
                     'domain_name' => $domainName ? (string)$domainName : __('未知域名')
@@ -408,7 +408,7 @@ class Rules extends BackendController
                 ]);
             }
 
-            $domainName = $domain->getData(DomainModel::fields_DOMAIN_NAME);
+            $domainName = $domain->getData(DomainModel::schema_fields_DOMAIN_NAME);
             // 确保域名名称不为空
             if (empty($domainName)) {
                 $domainName = __('未知域名');
@@ -439,7 +439,7 @@ class Rules extends BackendController
             try {
                 $domain = $this->getDomainModel()->reset()->load($id);
                 if ($domain->getId()) {
-                    $domainName = $domain->getData(DomainModel::fields_DOMAIN_NAME) ?: __('未知域名');
+                    $domainName = $domain->getData(DomainModel::schema_fields_DOMAIN_NAME) ?: __('未知域名');
                 }
             } catch (\Exception $ex) {
                 // 忽略获取域名名称的错误
@@ -465,7 +465,7 @@ class Rules extends BackendController
         try {
             // 获取所有启用的域名
             $domains = $this->getDomainModel()->reset()
-                ->where(DomainModel::fields_ENABLED, 1)
+                ->where(DomainModel::schema_fields_ENABLED, 1)
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -492,7 +492,7 @@ class Rules extends BackendController
 
             // 逐个推送域名
             foreach ($domains as $index => $domain) {
-                $domainName = $domain->getData(DomainModel::fields_DOMAIN_NAME);
+                $domainName = $domain->getData(DomainModel::schema_fields_DOMAIN_NAME);
                 $domainId = $domain->getId();
                 $currentIndex = $index + 1;
                 $progress = round($currentIndex / $total * 100, 2);

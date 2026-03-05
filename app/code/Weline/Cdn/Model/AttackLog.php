@@ -13,40 +13,58 @@ declare(strict_types=1);
 namespace Weline\Cdn\Model;
 
 use Weline\Framework\Database\Model;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\Framework\Setup\Data\Context;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: 'CDN攻击日志表')]
+#[Index(name: 'idx_domain', columns: ['domain'])]
+#[Index(name: 'idx_attack_type', columns: ['attack_type'])]
+#[Index(name: 'idx_status', columns: ['status'])]
+#[Index(name: 'idx_created_at', columns: ['created_at'])]
 class AttackLog extends Model
 {
-    public const table = 'cdn_attack_log';
-    
+    public const schema_table = 'cdn_attack_log';
+    public const schema_primary_key = 'log_id';
+
     /**
      * Primary key
      */
     public string $_primary_key = 'log_id';
-    
+
     /**
      * Primary keys
      */
     public array $_unit_primary_keys = ['log_id'];
-    
+
     /**
      * Field name constants
      */
-    public const fields_LOG_ID = 'log_id';
-    public const fields_DOMAIN = 'domain';
-    public const fields_ATTACK_TYPE = 'attack_type';
-    public const fields_ATTACKER_IP = 'attacker_ip';
-    public const fields_ATTACK_COUNT = 'attack_count';
-    public const fields_REASON = 'reason';
-    public const fields_ACTION = 'action';
-    public const fields_CDN_RESPONSE = 'cdn_response';
-    public const fields_STATUS = 'status';
-    public const fields_STARTED_AT = 'started_at';
-    public const fields_ENDED_AT = 'ended_at';
-    public const fields_DURATION = 'duration';
-    public const fields_CREATED_AT = 'created_at';
+    #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: '日志ID')]
+    public const schema_fields_LOG_ID = 'log_id';
+    #[Col('varchar', 255, nullable: false, comment: '被攻击域名')]
+    public const schema_fields_DOMAIN = 'domain';
+    #[Col('varchar', 50, nullable: false, default: 'unknown', comment: '攻击类型')]
+    public const schema_fields_ATTACK_TYPE = 'attack_type';
+    #[Col('varchar', 45, comment: '攻击者IP')]
+    public const schema_fields_ATTACKER_IP = 'attacker_ip';
+    #[Col('int', nullable: false, default: 0, comment: '攻击次数')]
+    public const schema_fields_ATTACK_COUNT = 'attack_count';
+    #[Col('text', comment: '攻击原因')]
+    public const schema_fields_REASON = 'reason';
+    #[Col('varchar', 50, nullable: false, default: 'detected', comment: '执行动作')]
+    public const schema_fields_ACTION = 'action';
+    #[Col('text', comment: 'CDN响应')]
+    public const schema_fields_CDN_RESPONSE = 'cdn_response';
+    #[Col('varchar', 20, nullable: false, default: 'active', comment: '状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col('datetime', comment: '攻击开始时间')]
+    public const schema_fields_STARTED_AT = 'started_at';
+    #[Col('datetime', comment: '攻击结束时间')]
+    public const schema_fields_ENDED_AT = 'ended_at';
+    #[Col('int', comment: '持续时间(秒)')]
+    public const schema_fields_DURATION = 'duration';
+    #[Col('datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
     
     /**
      * 攻击类型常量
@@ -86,134 +104,9 @@ class AttackLog extends Model
      */
     public function getIdFieldName(): string
     {
-        return self::fields_LOG_ID;
+        return self::schema_fields_LOG_ID;
     }
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑
-    }
-
-    /**
-     * 安装表结构
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist()) {
-            return;
-        }
-        
-        $setup->createTable('CDN攻击日志表')
-            ->addColumn(
-                self::fields_LOG_ID,
-                TableInterface::column_type_INTEGER,
-                null,
-                'primary key auto_increment',
-                '日志ID'
-            )
-            ->addColumn(
-                self::fields_DOMAIN,
-                TableInterface::column_type_VARCHAR,
-                255,
-                'not null',
-                '被攻击域名'
-            )
-            ->addColumn(
-                self::fields_ATTACK_TYPE,
-                TableInterface::column_type_VARCHAR,
-                50,
-                'not null default \'unknown\'',
-                '攻击类型'
-            )
-            ->addColumn(
-                self::fields_ATTACKER_IP,
-                TableInterface::column_type_VARCHAR,
-                45,
-                'null',
-                '攻击者IP'
-            )
-            ->addColumn(
-                self::fields_ATTACK_COUNT,
-                TableInterface::column_type_INTEGER,
-                null,
-                'not null default 0',
-                '攻击次数'
-            )
-            ->addColumn(
-                self::fields_REASON,
-                TableInterface::column_type_TEXT,
-                null,
-                'null',
-                '攻击原因'
-            )
-            ->addColumn(
-                self::fields_ACTION,
-                TableInterface::column_type_VARCHAR,
-                50,
-                'not null default \'detected\'',
-                '执行动作'
-            )
-            ->addColumn(
-                self::fields_CDN_RESPONSE,
-                TableInterface::column_type_TEXT,
-                null,
-                'null',
-                'CDN响应'
-            )
-            ->addColumn(
-                self::fields_STATUS,
-                TableInterface::column_type_VARCHAR,
-                20,
-                'not null default \'active\'',
-                '状态'
-            )
-            ->addColumn(
-                self::fields_STARTED_AT,
-                TableInterface::column_type_TIMESTAMP,
-                null,
-                'null',
-                '攻击开始时间'
-            )
-            ->addColumn(
-                self::fields_ENDED_AT,
-                TableInterface::column_type_TIMESTAMP,
-                null,
-                'null',
-                '攻击结束时间'
-            )
-            ->addColumn(
-                self::fields_DURATION,
-                TableInterface::column_type_INTEGER,
-                null,
-                'null',
-                '持续时间(秒)'
-            )
-            ->addColumn(
-                self::fields_CREATED_AT,
-                TableInterface::column_type_TIMESTAMP,
-                null,
-                'not null default CURRENT_TIMESTAMP',
-                '创建时间'
-            )
-            ->addIndex(TableInterface::index_type_KEY, 'idx_domain', self::fields_DOMAIN)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_attack_type', self::fields_ATTACK_TYPE)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_status', self::fields_STATUS)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_created_at', self::fields_CREATED_AT)
-            ->create();
-    }
-    
-    /**
+/**
      * 记录攻击日志
      *
      * @param string $domain 被攻击域名
@@ -235,15 +128,15 @@ class AttackLog extends Model
         array $cdnResponse = []
     ): static {
         $log = new static();
-        $log->setData(self::fields_DOMAIN, $domain);
-        $log->setData(self::fields_ATTACK_TYPE, $attackType);
-        $log->setData(self::fields_ATTACKER_IP, $attackerIp);
-        $log->setData(self::fields_ATTACK_COUNT, $attackCount);
-        $log->setData(self::fields_REASON, $reason);
-        $log->setData(self::fields_ACTION, $action);
-        $log->setData(self::fields_CDN_RESPONSE, \json_encode($cdnResponse, JSON_UNESCAPED_UNICODE));
-        $log->setData(self::fields_STATUS, self::STATUS_ACTIVE);
-        $log->setData(self::fields_STARTED_AT, \date('Y-m-d H:i:s'));
+        $log->setData(self::schema_fields_DOMAIN, $domain);
+        $log->setData(self::schema_fields_ATTACK_TYPE, $attackType);
+        $log->setData(self::schema_fields_ATTACKER_IP, $attackerIp);
+        $log->setData(self::schema_fields_ATTACK_COUNT, $attackCount);
+        $log->setData(self::schema_fields_REASON, $reason);
+        $log->setData(self::schema_fields_ACTION, $action);
+        $log->setData(self::schema_fields_CDN_RESPONSE, \json_encode($cdnResponse, JSON_UNESCAPED_UNICODE));
+        $log->setData(self::schema_fields_STATUS, self::STATUS_ACTIVE);
+        $log->setData(self::schema_fields_STARTED_AT, \date('Y-m-d H:i:s'));
         $log->save();
         
         return $log;
@@ -262,20 +155,20 @@ class AttackLog extends Model
         
         // 查找该域名最近的活跃攻击记录
         $activeLog = $log->reset()
-            ->where(self::fields_DOMAIN, $domain)
-            ->where(self::fields_STATUS, self::STATUS_ACTIVE)
-            ->order(self::fields_LOG_ID, 'DESC')
+            ->where(self::schema_fields_DOMAIN, $domain)
+            ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
+            ->order(self::schema_fields_LOG_ID, 'DESC')
             ->find()
             ->fetch();
         
         if ($activeLog->getId()) {
-            $startedAt = \strtotime($activeLog->getData(self::fields_STARTED_AT));
+            $startedAt = \strtotime($activeLog->getData(self::schema_fields_STARTED_AT));
             $duration = \time() - $startedAt;
             
-            $activeLog->setData(self::fields_STATUS, self::STATUS_RECOVERED);
-            $activeLog->setData(self::fields_ACTION, self::ACTION_RECOVERED);
-            $activeLog->setData(self::fields_ENDED_AT, $now);
-            $activeLog->setData(self::fields_DURATION, $duration);
+            $activeLog->setData(self::schema_fields_STATUS, self::STATUS_RECOVERED);
+            $activeLog->setData(self::schema_fields_ACTION, self::ACTION_RECOVERED);
+            $activeLog->setData(self::schema_fields_ENDED_AT, $now);
+            $activeLog->setData(self::schema_fields_DURATION, $duration);
             $activeLog->save();
             
             return 1;
@@ -299,7 +192,7 @@ class AttackLog extends Model
             self::TYPE_UNKNOWN => __('未知'),
         ];
         
-        $type = $this->getData(self::fields_ATTACK_TYPE);
+        $type = $this->getData(self::schema_fields_ATTACK_TYPE);
         return $types[$type] ?? $type;
     }
     
@@ -314,7 +207,7 @@ class AttackLog extends Model
             self::STATUS_FAILED => __('处理失败'),
         ];
         
-        $status = $this->getData(self::fields_STATUS);
+        $status = $this->getData(self::schema_fields_STATUS);
         return $statuses[$status] ?? $status;
     }
     
@@ -329,7 +222,7 @@ class AttackLog extends Model
             self::ACTION_RECOVERED => __('已恢复'),
         ];
         
-        $action = $this->getData(self::fields_ACTION);
+        $action = $this->getData(self::schema_fields_ACTION);
         return $actions[$action] ?? $action;
     }
     
@@ -338,10 +231,10 @@ class AttackLog extends Model
      */
     public function getDurationFormatted(): string
     {
-        $duration = (int) $this->getData(self::fields_DURATION);
+        $duration = (int) $this->getData(self::schema_fields_DURATION);
         
         if ($duration <= 0) {
-            $startedAt = $this->getData(self::fields_STARTED_AT);
+            $startedAt = $this->getData(self::schema_fields_STARTED_AT);
             if ($startedAt) {
                 $duration = \time() - \strtotime($startedAt);
             }

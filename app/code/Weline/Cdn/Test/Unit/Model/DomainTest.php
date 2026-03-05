@@ -34,17 +34,17 @@ class DomainTest extends TestCase
      */
     public function testFieldConstants(): void
     {
-        $this->assertEquals('domain_id', Domain::fields_DOMAIN_ID);
-        $this->assertEquals('site_id', Domain::fields_SITE_ID);
-        $this->assertEquals('adapter', Domain::fields_ADAPTER);
-        $this->assertEquals('zone_id', Domain::fields_ZONE_ID);
-        $this->assertEquals('domain_name', Domain::fields_DOMAIN_NAME);
-        $this->assertEquals('account_id', Domain::fields_ACCOUNT_ID);
-        $this->assertEquals('inherit_default', Domain::fields_INHERIT_DEFAULT);
-        $this->assertEquals('credentials', Domain::fields_CREDENTIALS);
-        $this->assertEquals('rules_override', Domain::fields_RULES_OVERRIDE);
-        $this->assertEquals('warmup_interval_seconds', Domain::fields_WARMUP_INTERVAL_SECONDS);
-        $this->assertEquals('enabled', Domain::fields_ENABLED);
+        $this->assertEquals('domain_id', Domain::schema_fields_DOMAIN_ID);
+        $this->assertEquals('site_id', Domain::schema_fields_SITE_ID);
+        $this->assertEquals('adapter', Domain::schema_fields_ADAPTER);
+        $this->assertEquals('zone_id', Domain::schema_fields_ZONE_ID);
+        $this->assertEquals('domain_name', Domain::schema_fields_DOMAIN_NAME);
+        $this->assertEquals('account_id', Domain::schema_fields_ACCOUNT_ID);
+        $this->assertEquals('inherit_default', Domain::schema_fields_INHERIT_DEFAULT);
+        $this->assertEquals('credentials', Domain::schema_fields_CREDENTIALS);
+        $this->assertEquals('rules_override', Domain::schema_fields_RULES_OVERRIDE);
+        $this->assertEquals('warmup_interval_seconds', Domain::schema_fields_WARMUP_INTERVAL_SECONDS);
+        $this->assertEquals('enabled', Domain::schema_fields_ENABLED);
     }
 
     /**
@@ -53,22 +53,22 @@ class DomainTest extends TestCase
     public function testSetAndGetData(): void
     {
         $testData = [
-            Domain::fields_SITE_ID => 1,
-            Domain::fields_ADAPTER => 'cloudflare',
-            Domain::fields_ZONE_ID => 'zone-123',
-            Domain::fields_DOMAIN_NAME => 'example.com',
-            Domain::fields_ENABLED => 1,
-            Domain::fields_WARMUP_INTERVAL_SECONDS => 300
+            Domain::schema_fields_SITE_ID => 1,
+            Domain::schema_fields_ADAPTER => 'cloudflare',
+            Domain::schema_fields_ZONE_ID => 'zone-123',
+            Domain::schema_fields_DOMAIN_NAME => 'example.com',
+            Domain::schema_fields_ENABLED => 1,
+            Domain::schema_fields_WARMUP_INTERVAL_SECONDS => 300
         ];
 
         $this->model->setData($testData);
 
-        $this->assertEquals(1, $this->model->getData(Domain::fields_SITE_ID));
-        $this->assertEquals('cloudflare', $this->model->getData(Domain::fields_ADAPTER));
-        $this->assertEquals('zone-123', $this->model->getData(Domain::fields_ZONE_ID));
-        $this->assertEquals('example.com', $this->model->getData(Domain::fields_DOMAIN_NAME));
-        $this->assertEquals(1, $this->model->getData(Domain::fields_ENABLED));
-        $this->assertEquals(300, $this->model->getData(Domain::fields_WARMUP_INTERVAL_SECONDS));
+        $this->assertEquals(1, $this->model->getData(Domain::schema_fields_SITE_ID));
+        $this->assertEquals('cloudflare', $this->model->getData(Domain::schema_fields_ADAPTER));
+        $this->assertEquals('zone-123', $this->model->getData(Domain::schema_fields_ZONE_ID));
+        $this->assertEquals('example.com', $this->model->getData(Domain::schema_fields_DOMAIN_NAME));
+        $this->assertEquals(1, $this->model->getData(Domain::schema_fields_ENABLED));
+        $this->assertEquals(300, $this->model->getData(Domain::schema_fields_WARMUP_INTERVAL_SECONDS));
     }
 
     /**
@@ -102,7 +102,7 @@ class DomainTest extends TestCase
      */
     public function testTableConstant(): void
     {
-        $this->assertEquals('cdn_domain', Domain::table);
+        $this->assertEquals('cdn_domain', Domain::schema_table);
     }
 }
 
