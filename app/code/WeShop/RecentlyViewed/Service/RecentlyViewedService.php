@@ -27,21 +27,21 @@ class RecentlyViewedService
         
         // 检查是否已存在
         $existing = $viewed->clear()
-            ->where(RecentlyViewed::fields_CUSTOMER_ID, $customerId)
-            ->where(RecentlyViewed::fields_PRODUCT_ID, $productId)
+            ->where(RecentlyViewed::schema_fields_CUSTOMER_ID, $customerId)
+            ->where(RecentlyViewed::schema_fields_PRODUCT_ID, $productId)
             ->find()
             ->fetch();
         
         if ($existing && $existing->getId()) {
             // 更新浏览时间
-            $existing->setData(RecentlyViewed::fields_VIEWED_AT, date('Y-m-d H:i:s'))->save();
+            $existing->setData(RecentlyViewed::schema_fields_VIEWED_AT, date('Y-m-d H:i:s'))->save();
             return $existing;
         }
         
         // 创建新记录
         $viewed->clearData()
-            ->setData(RecentlyViewed::fields_CUSTOMER_ID, $customerId)
-            ->setData(RecentlyViewed::fields_PRODUCT_ID, $productId)
+            ->setData(RecentlyViewed::schema_fields_CUSTOMER_ID, $customerId)
+            ->setData(RecentlyViewed::schema_fields_PRODUCT_ID, $productId)
             ->save();
         
         return $viewed;
@@ -60,8 +60,8 @@ class RecentlyViewedService
         $viewed = ObjectManager::getInstance(RecentlyViewed::class);
         
         $items = $viewed->clear()
-            ->where(RecentlyViewed::fields_CUSTOMER_ID, $customerId)
-            ->order(RecentlyViewed::fields_VIEWED_AT, 'DESC')
+            ->where(RecentlyViewed::schema_fields_CUSTOMER_ID, $customerId)
+            ->order(RecentlyViewed::schema_fields_VIEWED_AT, 'DESC')
             ->limit($limit)
             ->select()
             ->fetchArray();
