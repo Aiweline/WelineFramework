@@ -59,7 +59,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         $task_id = $this->request->getPost('task_id');
         try {
             $task = $this->cronTask->load($task_id);
-            $task->setData($task::fields_STATUS, CronStatus::BLOCK->value)
+            $task->setData($task::schema_fields_STATUS, CronStatus::BLOCK->value)
                 ->save();
 //            return $this->fetchJson($this->success(__('锁定任务：%{1}', $task->getData('name'))));
             $this->getMessageManager()->addSuccess(__('锁定任务：%{1}', $task->getData('name')));
@@ -76,7 +76,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         $task_id = $this->request->getPost('task_id');
         try {
             $task = $this->cronTask->load($task_id);
-            $task->setData($task::fields_STATUS, CronStatus::PENDING->value)
+            $task->setData($task::schema_fields_STATUS, CronStatus::PENDING->value)
                 ->save();
 //            return $this->fetchJson($this->success(__('解锁任务：%{1}', $task->getData('name'))));
             $this->getMessageManager()->addSuccess(__('解锁任务：%{1}', $task->getData('name')));
