@@ -233,11 +233,16 @@ public static function callback(): callable
 <!-- 内联翻译 -->
 @lang{允许的文件类型：}
 
-<!-- 内联 URL -->
+<!-- 内联 URL（Taglib 属性中应使用 @ 标签，不要用 <?= $this->getBackendUrl(...) ?>，后者在属性中可能不解析） -->
 @backend-url('path/to/action')
+@url('frontend/path')
+@frontend-url('checkout/cart')
+@api('api/endpoint')
+@backend-api('admin/api/data')
 
 <!-- 在属性中使用 -->
 <form action="@backend-url('save')">
+<w:theme:sse-terminal url="@backend-url('blog/backend/post/trigger-sse')"/>
 ```
 
 ### 4.4 条件标签
