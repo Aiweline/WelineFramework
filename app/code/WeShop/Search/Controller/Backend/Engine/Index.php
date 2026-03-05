@@ -111,7 +111,7 @@ class Index extends BackendController
         $configModel = ObjectManager::getInstance(SearchEngineConfig::class);
         $config = $configModel->getActiveEngineConfig($scope);
         
-        if (!$config || $config[SearchEngineConfig::fields_ENGINE_TYPE] !== $engineType) {
+        if (!$config || $config[SearchEngineConfig::schema_fields_ENGINE_TYPE] !== $engineType) {
             // 如果没有配置，尝试从POST获取配置数据
             $configData = $this->getEngineConfigData($engineType);
             if ($configData === null) {

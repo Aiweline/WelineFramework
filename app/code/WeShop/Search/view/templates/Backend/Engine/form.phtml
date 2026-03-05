@@ -12,10 +12,10 @@ $scopes = $this->getData('scopes') ?? ['default'];
 $availableEngines = $this->getData('availableEngines') ?? [];
 
 $isEdit = !empty($config);
-$engineType = $config[SearchEngineConfig::fields_ENGINE_TYPE] ?? '';
+$engineType = $config[SearchEngineConfig::schema_fields_ENGINE_TYPE] ?? '';
 $configData = [];
-if ($isEdit && !empty($config[SearchEngineConfig::fields_CONFIG_DATA])) {
-    $configData = json_decode($config[SearchEngineConfig::fields_CONFIG_DATA], true) ?? [];
+if ($isEdit && !empty($config[SearchEngineConfig::schema_fields_CONFIG_DATA])) {
+    $configData = json_decode($config[SearchEngineConfig::schema_fields_CONFIG_DATA], true) ?? [];
 }
 ?>
 <div class="content-header">
@@ -57,7 +57,7 @@ if ($isEdit && !empty($config[SearchEngineConfig::fields_CONFIG_DATA])) {
                             <label for="is_active"><?= __('启用状态') ?></label>
                             <div class="form-check">
                                 <input type="checkbox" id="is_active" name="is_active" value="1" 
-                                       class="form-check-input" <?= ($config[SearchEngineConfig::fields_IS_ACTIVE] ?? 0) ? 'checked' : '' ?>>
+                                       class="form-check-input" <?= ($config[SearchEngineConfig::schema_fields_IS_ACTIVE] ?? 0) ? 'checked' : '' ?>>
                                 <label class="form-check-label" for="is_active"><?= __('启用此搜索引擎配置') ?></label>
                             </div>
                         </div>
@@ -65,7 +65,7 @@ if ($isEdit && !empty($config[SearchEngineConfig::fields_CONFIG_DATA])) {
                         <div class="form-group">
                             <label for="priority"><?= __('优先级') ?></label>
                             <input type="number" id="priority" name="priority" class="form-control" 
-                                   value="<?= htmlspecialchars($config[SearchEngineConfig::fields_PRIORITY] ?? 0) ?>" 
+                                   value="<?= htmlspecialchars($config[SearchEngineConfig::schema_fields_PRIORITY] ?? 0) ?>" 
                                    min="0" max="999">
                             <small class="form-text text-muted"><?= __('数字越大优先级越高，当同一作用域有多个配置时，将使用优先级最高的配置') ?></small>
                         </div>
@@ -235,16 +235,11 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         
         const formData = new FormData(this);
-        
-        fetch(this.action, {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
+        var url = this.action;
+        var opts = { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } };
+        window.Weline.Api.request(url, opts)
+        .then(function(response) {
+            var data = (response && response.data) || response;
             if (data.success) {
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
@@ -316,22 +311,12 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
         
-        // 发送测试请求
-        fetch('<?= $this->getUrl('search/backend/engine/test') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: new URLSearchParams({
-                engine_type: 'meilisearch',
-                host: host,
-                api_key: apiKey,
-                index_name: indexName
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
+        var testUrl = '<?= $this->getUrl('search/backend/engine/test') ?>';
+        var testBody = new URLSearchParams({ engine_type: 'meilisearch', host: host, api_key: apiKey, index_name: indexName });
+        var testOpts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' }, body: testBody };
+        window.Weline.Api.request(testUrl, testOpts)
+        .then(function(response) {
+            var data = (response && response.data) || response;
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
                     icon: data.success ? 'success' : 'error',

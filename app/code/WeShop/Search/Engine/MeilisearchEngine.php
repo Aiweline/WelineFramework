@@ -237,10 +237,10 @@ class MeilisearchEngine implements SearchEngineInterface
         // 关键词搜索
         if (!empty($keyword)) {
             $keyword = trim($keyword);
-            $product->where(Product::fields_name, ['like', '%' . $keyword . '%'], 'or')
-                ->where(Product::fields_sku, ['like', '%' . $keyword . '%'], 'or')
-                ->where(Product::fields_short_description, ['like', '%' . $keyword . '%'], 'or')
-                ->where(Product::fields_description, ['like', '%' . $keyword . '%'], 'or');
+            $product->where(Product::schema_fields_name, ['like', '%' . $keyword . '%'], 'or')
+                ->where(Product::schema_fields_sku, ['like', '%' . $keyword . '%'], 'or')
+                ->where(Product::schema_fields_short_description, ['like', '%' . $keyword . '%'], 'or')
+                ->where(Product::schema_fields_description, ['like', '%' . $keyword . '%'], 'or');
         }
         
         // 应用过滤条件
@@ -249,18 +249,18 @@ class MeilisearchEngine implements SearchEngineInterface
         }
         
         if (!empty($filters['price_min'])) {
-            $product->where(Product::fields_price, ['>=', $filters['price_min']]);
+            $product->where(Product::schema_fields_price, ['>=', $filters['price_min']]);
         }
         
         if (!empty($filters['price_max'])) {
-            $product->where(Product::fields_price, ['<=', $filters['price_max']]);
+            $product->where(Product::schema_fields_price, ['<=', $filters['price_max']]);
         }
         
         // 只搜索上架的产品
-        $product->where(Product::fields_status, 1);
+        $product->where(Product::schema_fields_status, 1);
         
         // 排序
-        $orderBy = $filters['order_by'] ?? Product::fields_ID;
+        $orderBy = $filters['order_by'] ?? Product::schema_fields_ID;
         $orderDir = $filters['order_dir'] ?? 'DESC';
         $product->order($orderBy, $orderDir);
         

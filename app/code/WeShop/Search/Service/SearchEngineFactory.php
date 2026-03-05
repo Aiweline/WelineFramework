@@ -39,7 +39,7 @@ class SearchEngineFactory
             return $engine;
         }
         
-        $engineType = $config[SearchEngineConfig::fields_ENGINE_TYPE];
+        $engineType = $config[SearchEngineConfig::schema_fields_ENGINE_TYPE];
         $configData = $configModel->setData($config)->getConfigData();
         
         $engine = self::createEngineByType($engineType);

@@ -28,10 +28,10 @@ class MysqlEngine implements SearchEngineInterface
         // 关键词搜索 - 支持多字段搜索
         if (!empty($keyword)) {
             $keyword = trim($keyword);
-            $product->where(Product::fields_name, ['like', '%' . $keyword . '%'], 'or')
-                ->where(Product::fields_sku, ['like', '%' . $keyword . '%'], 'or')
-                ->where(Product::fields_short_description, ['like', '%' . $keyword . '%'], 'or')
-                ->where(Product::fields_description, ['like', '%' . $keyword . '%'], 'or');
+            $product->where(Product::schema_fields_name, ['like', '%' . $keyword . '%'], 'or')
+                ->where(Product::schema_fields_sku, ['like', '%' . $keyword . '%'], 'or')
+                ->where(Product::schema_fields_short_description, ['like', '%' . $keyword . '%'], 'or')
+                ->where(Product::schema_fields_description, ['like', '%' . $keyword . '%'], 'or');
         }
         
         // 应用过滤条件
@@ -40,18 +40,18 @@ class MysqlEngine implements SearchEngineInterface
         }
         
         if (!empty($filters['price_min'])) {
-            $product->where(Product::fields_price, ['>=', $filters['price_min']]);
+            $product->where(Product::schema_fields_price, ['>=', $filters['price_min']]);
         }
         
         if (!empty($filters['price_max'])) {
-            $product->where(Product::fields_price, ['<=', $filters['price_max']]);
+            $product->where(Product::schema_fields_price, ['<=', $filters['price_max']]);
         }
         
         // 只搜索上架的产品
-        $product->where(Product::fields_status, 1);
+        $product->where(Product::schema_fields_status, 1);
         
         // 排序
-        $orderBy = $filters['order_by'] ?? Product::fields_ID;
+        $orderBy = $filters['order_by'] ?? Product::schema_fields_ID;
         $orderDir = $filters['order_dir'] ?? 'DESC';
         $product->order($orderBy, $orderDir);
         
@@ -76,18 +76,18 @@ class MysqlEngine implements SearchEngineInterface
         /** @var Product $product */
         $product = ObjectManager::getInstance(Product::class);
         $product->clear();
-        $product->where(Product::fields_name, ['like', '%' . $keyword . '%'])
-            ->where(Product::fields_status, 1)
-            ->order(Product::fields_ID, 'DESC')
+        $product->where(Product::schema_fields_name, ['like', '%' . $keyword . '%'])
+            ->where(Product::schema_fields_status, 1)
+            ->order(Product::schema_fields_ID, 'DESC')
             ->limit(min(5, $limit));
         
         $products = $product->select()->fetchArray();
         foreach ($products as $item) {
             $suggestions[] = [
-                'text' => $item[Product::fields_name],
+                'text' => $item[Product::schema_fields_name],
                 'type' => 'product',
                 'icon' => 'fa-shopping-bag',
-                'url' => '/product/view?id=' . $item[Product::fields_ID],
+                'url' => '/product/view?id=' . $item[Product::schema_fields_ID],
             ];
         }
         
@@ -96,18 +96,18 @@ class MysqlEngine implements SearchEngineInterface
             /** @var Category $category */
             $category = ObjectManager::getInstance(Category::class);
             $category->clear();
-            $category->where(Category::fields_NAME, ['like', '%' . $keyword . '%'])
-                ->where(Category::fields_IS_ACTIVE, 1)
-                ->order(Category::fields_ID, 'DESC')
+            $category->where(Category::schema_fields_NAME, ['like', '%' . $keyword . '%'])
+                ->where(Category::schema_fields_IS_ACTIVE, 1)
+                ->order(Category::schema_fields_ID, 'DESC')
                 ->limit(min(3, $limit - count($suggestions)));
             
             $categories = $category->select()->fetchArray();
             foreach ($categories as $item) {
                 $suggestions[] = [
-                    'text' => $item[Category::fields_NAME],
+                    'text' => $item[Category::schema_fields_NAME],
                     'type' => 'category',
                     'icon' => 'fa-folder',
-                    'url' => '/catalog/category/view?id=' . $item[Category::fields_ID],
+                    'url' => '/catalog/category/view?id=' . $item[Category::schema_fields_ID],
                 ];
             }
         }

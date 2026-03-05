@@ -5,145 +5,86 @@ declare(strict_types=1);
 namespace WeShop\Search\Model;
 
 use Weline\Framework\Database\Model;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 /**
  * 搜索历史模型
  * 用于记录用户搜索历史和统计热门搜索词
  */
+#[Table(comment: '搜索历史表')]
+#[Index(name: 'idx_keyword', columns: ['keyword'], type: 'KEY', comment: '关键词索引')]
+#[Index(name: 'idx_search_count', columns: ['search_count'], type: 'KEY', comment: '搜索次数索引')]
+#[Index(name: 'idx_user_id', columns: ['user_id'], type: 'KEY', comment: '用户ID索引')]
+#[Index(name: 'idx_created_at', columns: ['created_at'], type: 'KEY', comment: '创建时间索引')]
 class SearchHistory extends Model
 {
-    public const table = 'weshop_search_history';
-    public const primary_key = 'history_id';
+    public const schema_table = 'weshop_search_history';
+    public const schema_primary_key = 'history_id';
     public string $indexer = 'search_history_indexer';
-    
-    public const fields_ID = 'history_id';
-    public const fields_KEYWORD = 'keyword';
-    public const fields_SEARCH_COUNT = 'search_count';
-    public const fields_RESULT_COUNT = 'result_count';
-    public const fields_USER_ID = 'user_id';
-    public const fields_IP_ADDRESS = 'ip_address';
-    public const fields_USER_AGENT = 'user_agent';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
-    
+
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '历史ID')]
+    public const schema_fields_ID = 'history_id';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '搜索关键词')]
+    public const schema_fields_KEYWORD = 'keyword';
+    #[Col(type: 'int', nullable: false, default: 1, comment: '搜索次数')]
+    public const schema_fields_SEARCH_COUNT = 'search_count';
+    #[Col(type: 'int', nullable: false, default: 0, comment: '结果数量')]
+    public const schema_fields_RESULT_COUNT = 'result_count';
+    #[Col(type: 'int', nullable: true, default: 0, comment: '用户ID')]
+    public const schema_fields_USER_ID = 'user_id';
+    #[Col(type: 'varchar', length: 45, nullable: true, comment: 'IP地址')]
+    public const schema_fields_IP_ADDRESS = 'ip_address';
+    #[Col(type: 'varchar', length: 500, nullable: true, comment: 'User-Agent')]
+    public const schema_fields_USER_AGENT = 'user_agent';
+    #[Col(type: 'datetime', nullable: false, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col(type: 'datetime', nullable: false, comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
+
     public array $_unit_primary_keys = ['history_id'];
     public array $_index_sort_keys = ['keyword', 'search_count', 'created_at'];
-    
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 如果表不存在，执行安装
-        if (!$setup->tableExist()) {
-            $this->install($setup, $context);
-        }
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('搜索历史表')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'auto_increment primary key', '搜索历史ID')
-                ->addColumn(self::fields_KEYWORD, TableInterface::column_type_VARCHAR, 255, 'not null', '搜索关键词')
-                ->addColumn(self::fields_SEARCH_COUNT, TableInterface::column_type_INTEGER, 0, 'not null default 1', '搜索次数')
-                ->addColumn(self::fields_RESULT_COUNT, TableInterface::column_type_INTEGER, 0, 'not null default 0', '结果数量')
-                ->addColumn(self::fields_USER_ID, TableInterface::column_type_INTEGER, 0, 'default 0', '用户ID')
-                ->addColumn(self::fields_IP_ADDRESS, TableInterface::column_type_VARCHAR, 45, '', 'IP地址')
-                ->addColumn(self::fields_USER_AGENT, TableInterface::column_type_VARCHAR, 500, '', '用户代理')
-                ->addColumn(self::fields_CREATED_AT, TableInterface::column_type_DATETIME, 0, 'not null default CURRENT_TIMESTAMP', '创建时间')
-                ->addColumn(self::fields_UPDATED_AT, TableInterface::column_type_DATETIME, 0, 'not null default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP', '更新时间')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_keyword', self::fields_KEYWORD, '关键词索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_search_count', self::fields_SEARCH_COUNT, '搜索次数索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_user_id', self::fields_USER_ID, '用户ID索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_created_at', self::fields_CREATED_AT, '创建时间索引')
-                ->create();
-        }
-    }
-    
-    /**
-     * 记录搜索历史
-     * 
-     * @param string $keyword 搜索关键词
-     * @param int $resultCount 搜索结果数量
-     * @param int|null $userId 用户ID
-     * @return bool
-     */
+
+
     public function recordSearch(string $keyword, int $resultCount = 0, ?int $userId = null): bool
     {
-        if (empty(trim($keyword))) {
-            return false;
-        }
-        
+        if (empty(trim($keyword))) return false;
         $keyword = trim($keyword);
         $this->clear();
-        
-        // 查找是否已存在该关键词的记录
-        $existing = $this->where(self::fields_KEYWORD, $keyword)->find()->fetch();
-        
+        $existing = $this->where(self::schema_fields_KEYWORD, $keyword)->find()->fetch();
         if ($existing) {
-            // 更新搜索次数和结果数量
             $this->clear()
-                ->setId($existing[self::fields_ID])
-                ->setData(self::fields_SEARCH_COUNT, (int)$existing[self::fields_SEARCH_COUNT] + 1)
-                ->setData(self::fields_RESULT_COUNT, $resultCount)
-                ->setData(self::fields_USER_ID, $userId ?? 0)
-                ->setData(self::fields_IP_ADDRESS, $_SERVER['REMOTE_ADDR'] ?? '')
-                ->setData(self::fields_USER_AGENT, $_SERVER['HTTP_USER_AGENT'] ?? '')
+                ->setId($existing[self::schema_fields_ID])
+                ->setData(self::schema_fields_SEARCH_COUNT, (int)$existing[self::schema_fields_SEARCH_COUNT] + 1)
+                ->setData(self::schema_fields_RESULT_COUNT, $resultCount)
+                ->setData(self::schema_fields_USER_ID, $userId ?? 0)
+                ->setData(self::schema_fields_IP_ADDRESS, $_SERVER['REMOTE_ADDR'] ?? '')
+                ->setData(self::schema_fields_USER_AGENT, $_SERVER['HTTP_USER_AGENT'] ?? '')
                 ->save();
         } else {
-            // 创建新记录
             $this->clear()
-                ->setData(self::fields_KEYWORD, $keyword)
-                ->setData(self::fields_SEARCH_COUNT, 1)
-                ->setData(self::fields_RESULT_COUNT, $resultCount)
-                ->setData(self::fields_USER_ID, $userId ?? 0)
-                ->setData(self::fields_IP_ADDRESS, $_SERVER['REMOTE_ADDR'] ?? '')
-                ->setData(self::fields_USER_AGENT, $_SERVER['HTTP_USER_AGENT'] ?? '')
+                ->setData(self::schema_fields_KEYWORD, $keyword)
+                ->setData(self::schema_fields_SEARCH_COUNT, 1)
+                ->setData(self::schema_fields_RESULT_COUNT, $resultCount)
+                ->setData(self::schema_fields_USER_ID, $userId ?? 0)
+                ->setData(self::schema_fields_IP_ADDRESS, $_SERVER['REMOTE_ADDR'] ?? '')
+                ->setData(self::schema_fields_USER_AGENT, $_SERVER['HTTP_USER_AGENT'] ?? '')
                 ->save();
         }
-        
         return true;
     }
-    
-    /**
-     * 获取热门搜索词
-     * 
-     * @param int $limit 返回数量
-     * @param int $days 最近天数
-     * @return array
-     */
+
     public function getPopularKeywords(int $limit = 10, int $days = 30): array
     {
         $this->clear();
-        
-        // 获取最近N天的热门搜索词
         $dateThreshold = date('Y-m-d H:i:s', strtotime("-{$days} days"));
-        $this->where(self::fields_CREATED_AT, ['>=', $dateThreshold])
-            ->order(self::fields_SEARCH_COUNT, 'DESC')
+        $this->where(self::schema_fields_CREATED_AT, ['>=', $dateThreshold])
+            ->order(self::schema_fields_SEARCH_COUNT, 'DESC')
             ->limit($limit);
-        
         $results = $this->select()->fetchArray();
-        
         return array_map(function ($item) {
-            return [
-                'keyword' => $item[self::fields_KEYWORD],
-                'count' => (int)$item[self::fields_SEARCH_COUNT],
-            ];
+            return ['keyword' => $item[self::schema_fields_KEYWORD], 'count' => (int)$item[self::schema_fields_SEARCH_COUNT]];
         }, $results);
     }
 }
+
