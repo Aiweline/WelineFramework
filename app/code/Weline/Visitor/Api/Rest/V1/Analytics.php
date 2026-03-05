@@ -391,9 +391,9 @@ class Analytics extends FrontendRestController
                 ->setStatus($post['status'] ?? AbTest::status_DRAFT)
                 ->setStartDate($post['startDate'] ?? null)
                 ->setEndDate($post['endDate'] ?? null)
-                ->setData(AbTest::fields_VARIANT_A, json_encode($post['variantA'] ?? []))
-                ->setData(AbTest::fields_VARIANT_B, json_encode($post['variantB'] ?? []))
-                ->setData(AbTest::fields_TRAFFIC_SPLIT, $post['trafficSplit'] ?? '50:50');
+                ->setData(AbTest::schema_fields_VARIANT_A, json_encode($post['variantA'] ?? []))
+                ->setData(AbTest::schema_fields_VARIANT_B, json_encode($post['variantB'] ?? []))
+                ->setData(AbTest::schema_fields_TRAFFIC_SPLIT, $post['trafficSplit'] ?? '50:50');
             
             $id = $abTest->save();
             
@@ -442,11 +442,11 @@ class Analytics extends FrontendRestController
             $model = $abTest->reset();
             
             if ($websiteId > 0) {
-                $model->where(AbTest::fields_WEBSITE_ID, $websiteId);
+                $model->where(AbTest::schema_fields_WEBSITE_ID, $websiteId);
             }
             
             if ($status) {
-                $model->where(AbTest::fields_STATUS, $status);
+                $model->where(AbTest::schema_fields_STATUS, $status);
             }
             
             $tests = $model->select()->fetchArray();
@@ -501,15 +501,15 @@ class Analytics extends FrontendRestController
             $query = $model->reset();
             
             if ($websiteId > 0) {
-                $query->where(Pixel::fields_WEBSITE_ID, $websiteId);
+                $query->where(Pixel::schema_fields_WEBSITE_ID, $websiteId);
             }
             
             if ($startDate) {
-                $query->where(Pixel::fields_CREATED_AT, $startDate, '>=');
+                $query->where(Pixel::schema_fields_CREATED_AT, $startDate, '>=');
             }
             
             if ($endDate) {
-                $query->where(Pixel::fields_CREATED_AT, $endDate, '<=');
+                $query->where(Pixel::schema_fields_CREATED_AT, $endDate, '<=');
             }
             
             // 限制导出数量，避免内存溢出
@@ -636,32 +636,32 @@ class Analytics extends FrontendRestController
             // 获取事件统计（在时间范围内）
             // 先获取时间范围内的事件列表
             $model = w_obj(Pixel::class)->reset()
-                ->where(Pixel::fields_WEBSITE_ID, $websiteId)
-                ->field(Pixel::fields_EVENT)
-                ->group(Pixel::fields_EVENT);
+                ->where(Pixel::schema_fields_WEBSITE_ID, $websiteId)
+                ->field(Pixel::schema_fields_EVENT)
+                ->group(Pixel::schema_fields_EVENT);
             
             if ($startDate) {
-                $model->where(Pixel::fields_CREATED_AT, $startDate, '>=');
+                $model->where(Pixel::schema_fields_CREATED_AT, $startDate, '>=');
             }
             if ($endDate) {
-                $model->where(Pixel::fields_CREATED_AT, $endDate, '<=');
+                $model->where(Pixel::schema_fields_CREATED_AT, $endDate, '<=');
             }
             
             $eventResult = $model->select()->fetchArray();
-            $eventList = array_column($eventResult, Pixel::fields_EVENT);
+            $eventList = array_column($eventResult, Pixel::schema_fields_EVENT);
             
             $eventStats = [];
             foreach ($eventList as $event) {
                 // 使用时间范围统计
                 $eventModel = w_obj(Pixel::class)->reset()
-                    ->where(Pixel::fields_WEBSITE_ID, $websiteId)
-                    ->where(Pixel::fields_EVENT, $event);
+                    ->where(Pixel::schema_fields_WEBSITE_ID, $websiteId)
+                    ->where(Pixel::schema_fields_EVENT, $event);
                 
                 if ($startDate) {
-                    $eventModel->where(Pixel::fields_CREATED_AT, $startDate, '>=');
+                    $eventModel->where(Pixel::schema_fields_CREATED_AT, $startDate, '>=');
                 }
                 if ($endDate) {
-                    $eventModel->where(Pixel::fields_CREATED_AT, $endDate, '<=');
+                    $eventModel->where(Pixel::schema_fields_CREATED_AT, $endDate, '<=');
                 }
                 
                 $eventStats[$event] = (int)$eventModel->count();
