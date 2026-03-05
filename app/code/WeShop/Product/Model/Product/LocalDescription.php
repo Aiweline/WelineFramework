@@ -8,13 +8,13 @@ use WeShop\Product\Model\Product;
 class LocalDescription extends LocalModel
 {
     public const indexer = 'product_local_description';
-    public const fields_ID = Product::fields_ID;
-    public const fields_NAME = Product::fields_name;
-    public const fields_DESCRIPTION = Product::fields_description;
-    public const fields_SHORT_DESCRIPTION = Product::fields_short_description;
-    public const fields_META_NAME = Product::fields_meta_name;
-    public const fields_META_DESCRIPTION = Product::fields_meta_description;
-    public const fields_META_KEYWORDS = Product::fields_meta_keywords;
+    public const schema_fields_ID = Product::schema_fields_ID;
+    public const schema_fields_NAME = Product::schema_fields_name;
+    public const schema_fields_DESCRIPTION = Product::schema_fields_description;
+    public const schema_fields_SHORT_DESCRIPTION = Product::schema_fields_short_description;
+    public const schema_fields_META_NAME = Product::schema_fields_meta_name;
+    public const schema_fields_META_DESCRIPTION = Product::schema_fields_meta_description;
+    public const schema_fields_META_KEYWORDS = Product::schema_fields_meta_keywords;
 
     /**
      * 获取本地化产品名称
@@ -22,7 +22,7 @@ class LocalDescription extends LocalModel
      */
     public function getLocalName(): string
     {
-        return (string)$this->getData(self::fields_NAME);
+        return (string)$this->getData(self::schema_fields_NAME);
     }
 
     /**
@@ -31,7 +31,7 @@ class LocalDescription extends LocalModel
      */
     public function getLocalDescription(): string
     {
-        return (string)$this->getData(self::fields_DESCRIPTION);
+        return (string)$this->getData(self::schema_fields_DESCRIPTION);
     }
 
     /**
@@ -40,7 +40,7 @@ class LocalDescription extends LocalModel
      */
     public function getLocalShortDescription(): string
     {
-        return (string)$this->getData(self::fields_SHORT_DESCRIPTION);
+        return (string)$this->getData(self::schema_fields_SHORT_DESCRIPTION);
     }
 
     /**
@@ -49,7 +49,7 @@ class LocalDescription extends LocalModel
      */
     public function getLocalMetaName(): string
     {
-        return (string)$this->getData(self::fields_META_NAME);
+        return (string)$this->getData(self::schema_fields_META_NAME);
     }
 
     /**
@@ -58,7 +58,7 @@ class LocalDescription extends LocalModel
      */
     public function getLocalMetaDescription(): string
     {
-        return (string)$this->getData(self::fields_META_DESCRIPTION);
+        return (string)$this->getData(self::schema_fields_META_DESCRIPTION);
     }
 
     /**
@@ -67,6 +67,6 @@ class LocalDescription extends LocalModel
      */
     public function getLocalMetaKeywords(): string
     {
-        return (string)$this->getData(self::fields_META_KEYWORDS);
+        return (string)$this->getData(self::schema_fields_META_KEYWORDS);
     }
 }
