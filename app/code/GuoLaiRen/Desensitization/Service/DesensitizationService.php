@@ -674,9 +674,9 @@ class DesensitizationService
             
             // 先尝试获取激活的模型
             $collection = $aiModel->reset()
-                ->where(AiModel::fields_IS_ACTIVE, 1)
-                ->order(AiModel::fields_SUPPLIER, 'ASC')
-                ->order(AiModel::fields_NAME, 'ASC')
+                ->where(AiModel::schema_fields_IS_ACTIVE, 1)
+                ->order(AiModel::schema_fields_SUPPLIER, 'ASC')
+                ->order(AiModel::schema_fields_NAME, 'ASC')
                 ->select();
             
             $models = $collection->fetch();
@@ -685,8 +685,8 @@ class DesensitizationService
             if (!$models || (method_exists($models, 'getItems') && count($models->getItems()) == 0)) {
                 Env::log('desensitization.log', "激活的AI模型为空，尝试获取所有模型", 'DEBUG');
                 $collection = $aiModel->reset()
-                    ->order(AiModel::fields_SUPPLIER, 'ASC')
-                    ->order(AiModel::fields_NAME, 'ASC')
+                    ->order(AiModel::schema_fields_SUPPLIER, 'ASC')
+                    ->order(AiModel::schema_fields_NAME, 'ASC')
                     ->select();
                 
                 $models = $collection->fetch();

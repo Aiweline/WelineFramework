@@ -138,13 +138,11 @@ $models = $this->models ?? [];
         resultContent.innerHTML = '<div class="text-center py-4"><i class="mdi mdi-loading mdi-spin me-2"></i><?= __('AI正在润色中，请稍候...') ?></div>';
         resultCard.style.display = 'block';
 
-        fetch('<?= $this->getBackendUrl('*/backend/rewrite/execute') ?>', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data)
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
+        var url = '<?= $this->getBackendUrl('*/backend/rewrite/execute') ?>';
+        var opts = { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) };
+        window.Weline.Api.request(url, opts)
+        .then(function(res) {
+            var data = (res && res.data) !== undefined ? res.data : res;
             if (data.success) {
                 var result = data.data;
                 resultContent.innerHTML = 
