@@ -37,13 +37,13 @@ class TaskNotificationService
         $thresholdDate = date('Y-m-d', strtotime("+{$daysThreshold} days"));
 
         $tasks = $this->getTaskModel()
-            ->where(WeeklyTask::fields_STATUS, WeeklyTask::STATUS_COMPLETED, '!=')
-            ->where(WeeklyTask::fields_END_DATE, null, 'IS NOT')
-            ->where(WeeklyTask::fields_END_DATE, $thresholdDate, '<=')
+            ->where(WeeklyTask::schema_fields_STATUS, WeeklyTask::STATUS_COMPLETED, '!=')
+            ->where(WeeklyTask::schema_fields_END_DATE, null, 'IS NOT')
+            ->where(WeeklyTask::schema_fields_END_DATE, $thresholdDate, '<=')
             ->where(function ($query) {
-                $query->where(WeeklyTask::fields_IS_IMPORTANT, 1)
-                    ->orWhere(WeeklyTask::fields_PRIORITY, WeeklyTask::PRIORITY_URGENT)
-                    ->orWhere(WeeklyTask::fields_PRIORITY, WeeklyTask::PRIORITY_HIGH);
+                $query->where(WeeklyTask::schema_fields_IS_IMPORTANT, 1)
+                    ->orWhere(WeeklyTask::schema_fields_PRIORITY, WeeklyTask::PRIORITY_URGENT)
+                    ->orWhere(WeeklyTask::schema_fields_PRIORITY, WeeklyTask::PRIORITY_HIGH);
             })
             ->select()
             ->fetch()
@@ -51,12 +51,12 @@ class TaskNotificationService
 
         foreach ($tasks as $task) {
             $taskId = $task->getId();
-            $taskName = $task->getData(WeeklyTask::fields_TASK_NAME);
-            $endDate = $task->getData(WeeklyTask::fields_END_DATE);
-            $status = $task->getData(WeeklyTask::fields_STATUS);
-            $priority = (int) ($task->getData(WeeklyTask::fields_PRIORITY) ?: WeeklyTask::PRIORITY_NORMAL);
-            $isImportant = (bool) $task->getData(WeeklyTask::fields_IS_IMPORTANT);
-            $notifiedAt = $task->getData(WeeklyTask::fields_NOTIFIED_AT);
+            $taskName = $task->getData(WeeklyTask::schema_fields_TASK_NAME);
+            $endDate = $task->getData(WeeklyTask::schema_fields_END_DATE);
+            $status = $task->getData(WeeklyTask::schema_fields_STATUS);
+            $priority = (int) ($task->getData(WeeklyTask::schema_fields_PRIORITY) ?: WeeklyTask::PRIORITY_NORMAL);
+            $isImportant = (bool) $task->getData(WeeklyTask::schema_fields_IS_IMPORTANT);
+            $notifiedAt = $task->getData(WeeklyTask::schema_fields_NOTIFIED_AT);
 
             if ($notifiedAt && strtotime($notifiedAt) > strtotime('-4 hours')) {
                 continue;
@@ -83,9 +83,9 @@ class TaskNotificationService
     private function sendOverdueNotification(WeeklyTask $task, int $daysOverdue): void
     {
         $taskId = $task->getId();
-        $taskName = $task->getData(WeeklyTask::fields_TASK_NAME);
-        $status = $task->getData(WeeklyTask::fields_STATUS);
-        $isImportant = (bool) $task->getData(WeeklyTask::fields_IS_IMPORTANT);
+        $taskName = $task->getData(WeeklyTask::schema_fields_TASK_NAME);
+        $status = $task->getData(WeeklyTask::schema_fields_STATUS);
+        $isImportant = (bool) $task->getData(WeeklyTask::schema_fields_IS_IMPORTANT);
 
         $importantMark = $isImportant ? '⭐重点 ' : '';
         $title = __('周报任务已逾期');
@@ -112,10 +112,10 @@ class TaskNotificationService
     private function sendDeadlineNotification(WeeklyTask $task, int $daysLeft): void
     {
         $taskId = $task->getId();
-        $taskName = $task->getData(WeeklyTask::fields_TASK_NAME);
-        $endDate = $task->getData(WeeklyTask::fields_END_DATE);
-        $status = $task->getData(WeeklyTask::fields_STATUS);
-        $isImportant = (bool) $task->getData(WeeklyTask::fields_IS_IMPORTANT);
+        $taskName = $task->getData(WeeklyTask::schema_fields_TASK_NAME);
+        $endDate = $task->getData(WeeklyTask::schema_fields_END_DATE);
+        $status = $task->getData(WeeklyTask::schema_fields_STATUS);
+        $isImportant = (bool) $task->getData(WeeklyTask::schema_fields_IS_IMPORTANT);
 
         $importantMark = $isImportant ? '⭐重点 ' : '';
         $urgency = $daysLeft === 0 ? '今日' : "{$daysLeft} 天后";
@@ -161,7 +161,7 @@ class TaskNotificationService
         $task = $this->getTaskModel();
         $task->load($taskId);
         if ($task->getId()) {
-            $task->setData(WeeklyTask::fields_NOTIFIED_AT, date('Y-m-d H:i:s'));
+            $task->setData(WeeklyTask::schema_fields_NOTIFIED_AT, date('Y-m-d H:i:s'));
             $task->save();
         }
     }
@@ -175,27 +175,27 @@ class TaskNotificationService
         $thresholdDate = date('Y-m-d', strtotime("+{$daysThreshold} days"));
 
         $overdueCount = $this->getTaskModel()
-            ->where(WeeklyTask::fields_STATUS, WeeklyTask::STATUS_COMPLETED, '!=')
-            ->where(WeeklyTask::fields_END_DATE, null, 'IS NOT')
-            ->where(WeeklyTask::fields_END_DATE, $today, '<')
+            ->where(WeeklyTask::schema_fields_STATUS, WeeklyTask::STATUS_COMPLETED, '!=')
+            ->where(WeeklyTask::schema_fields_END_DATE, null, 'IS NOT')
+            ->where(WeeklyTask::schema_fields_END_DATE, $today, '<')
             ->where(function ($query) {
-                $query->where(WeeklyTask::fields_IS_IMPORTANT, 1)
-                    ->orWhere(WeeklyTask::fields_PRIORITY, WeeklyTask::PRIORITY_URGENT)
-                    ->orWhere(WeeklyTask::fields_PRIORITY, WeeklyTask::PRIORITY_HIGH);
+                $query->where(WeeklyTask::schema_fields_IS_IMPORTANT, 1)
+                    ->orWhere(WeeklyTask::schema_fields_PRIORITY, WeeklyTask::PRIORITY_URGENT)
+                    ->orWhere(WeeklyTask::schema_fields_PRIORITY, WeeklyTask::PRIORITY_HIGH);
             })
             ->select()
             ->fetch()
             ->count();
 
         $upcomingCount = $this->getTaskModel()
-            ->where(WeeklyTask::fields_STATUS, WeeklyTask::STATUS_COMPLETED, '!=')
-            ->where(WeeklyTask::fields_END_DATE, null, 'IS NOT')
-            ->where(WeeklyTask::fields_END_DATE, $today, '>=')
-            ->where(WeeklyTask::fields_END_DATE, $thresholdDate, '<=')
+            ->where(WeeklyTask::schema_fields_STATUS, WeeklyTask::STATUS_COMPLETED, '!=')
+            ->where(WeeklyTask::schema_fields_END_DATE, null, 'IS NOT')
+            ->where(WeeklyTask::schema_fields_END_DATE, $today, '>=')
+            ->where(WeeklyTask::schema_fields_END_DATE, $thresholdDate, '<=')
             ->where(function ($query) {
-                $query->where(WeeklyTask::fields_IS_IMPORTANT, 1)
-                    ->orWhere(WeeklyTask::fields_PRIORITY, WeeklyTask::PRIORITY_URGENT)
-                    ->orWhere(WeeklyTask::fields_PRIORITY, WeeklyTask::PRIORITY_HIGH);
+                $query->where(WeeklyTask::schema_fields_IS_IMPORTANT, 1)
+                    ->orWhere(WeeklyTask::schema_fields_PRIORITY, WeeklyTask::PRIORITY_URGENT)
+                    ->orWhere(WeeklyTask::schema_fields_PRIORITY, WeeklyTask::PRIORITY_HIGH);
             })
             ->select()
             ->fetch()
