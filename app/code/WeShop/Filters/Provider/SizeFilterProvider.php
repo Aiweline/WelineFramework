@@ -4,11 +4,6 @@ declare(strict_types=1);
 
 namespace WeShop\Filters\Provider;
 
-use WeShop\Product\Model\Product;
-use Weline\Eav\Model\EavAttribute;
-use Weline\Eav\Model\EavAttribute\Option;
-use Weline\Framework\Manager\ObjectManager;
-
 /**
  * 尺寸筛选提供者
  */
@@ -51,24 +46,25 @@ class SizeFilterProvider extends AbstractFilterProvider
         }
         
         try {
-            $attribute = $this->getSizeAttribute();
-            if (!$attribute || !$attribute->getId()) {
+            $info = $this->getProductAttributeInfo($this->attributeCode);
+            if (!$info || !($info['attribute_id'] ?? 0)) {
                 return [];
             }
-            
-            $sizeValues = $this->getProductSizeValues($productIds, $attribute);
-            
+            $sizeValues = $this->getProductEavValues(
+                (int)$info['attribute_id'],
+                (string)($info['type_code'] ?? 'input_string'),
+                $productIds
+            );
             if (empty($sizeValues)) {
                 return [];
             }
-            
             $sizeCounts = array_count_values($sizeValues);
-            
             $options = [];
-            if ($attribute->hasOption()) {
-                $optionLabels = $this->getOptionLabels($attribute, array_keys($sizeCounts));
+            if (!empty($info['has_option'])) {
+                $optionLabels = $this->getOptionLabelsByAttributeId((int)$info['attribute_id'], array_keys($sizeCounts));
                 foreach ($sizeCounts as $value => $count) {
-                    $label = $optionLabels[$value] ?? $value;
+                    $labelInfo = $optionLabels[$value] ?? null;
+                    $label = $labelInfo ? ($labelInfo['value'] ?: $labelInfo['code']) : $value;
                     $options[] = $this->buildOption(
                         (string)$value,
                         $label,
@@ -108,48 +104,19 @@ class SizeFilterProvider extends AbstractFilterProvider
         }
         
         try {
-            $attribute = $this->getSizeAttribute();
-            if (!$attribute || !$attribute->getId()) {
+            $info = $this->getProductAttributeInfo($this->attributeCode);
+            if (!$info || !($info['attribute_id'] ?? 0)) {
                 return $productIds;
             }
-            return $this->getProductIdsByEavValues($attribute, $productIds, $filterValues);
+            return $this->getProductIdsByEavValues(
+                (int)$info['attribute_id'],
+                (string)($info['type_code'] ?? 'input_string'),
+                $productIds,
+                $filterValues
+            );
         } catch (\Throwable $e) {
             return $productIds;
         }
-    }
-    
-    private function getSizeAttribute(): ?EavAttribute
-    {
-        try {
-            /** @var Product $productModel */
-            $productModel = ObjectManager::getInstance(Product::class);
-            return $productModel->getAttribute($this->attributeCode);
-        } catch (\Throwable $e) {
-            return null;
-        }
-    }
-    
-    private function getProductSizeValues(array $productIds, EavAttribute $attribute): array
-    {
-        return $this->getProductEavValues($attribute, $productIds);
-    }
-    
-    private function getOptionLabels(EavAttribute $attribute, array $optionIds): array
-    {
-        /** @var Option $optionModel */
-        $optionModel = ObjectManager::getInstance(Option::class);
-        $optionModel->reset()
-            ->where('attribute_id', $attribute->getId())
-            ->where('option_id', $optionIds, 'in');
-        
-        $results = $optionModel->select()->fetchArray();
-        
-        $labels = [];
-        foreach ($results as $row) {
-            $labels[$row['option_id']] = $row['value'] ?? $row['code'];
-        }
-        
-        return $labels;
     }
     
     /**
@@ -158,17 +125,13 @@ class SizeFilterProvider extends AbstractFilterProvider
     public function getValueLabel(string $value): string
     {
         try {
-            $attribute = $this->getSizeAttribute();
-            if (!$attribute || !$attribute->getId()) {
+            $info = $this->getProductAttributeInfo($this->attributeCode);
+            if (!$info || !($info['attribute_id'] ?? 0) || empty($info['has_option'])) {
                 return $value;
             }
-            
-            if ($attribute->hasOption()) {
-                $labels = $this->getOptionLabels($attribute, [$value]);
-                return $labels[$value] ?? $value;
-            }
-            
-            return $value;
+            $labels = $this->getOptionLabelsByAttributeId((int)$info['attribute_id'], [$value]);
+            $labelInfo = $labels[$value] ?? null;
+            return $labelInfo ? ($labelInfo['value'] ?: $labelInfo['code']) : $value;
         } catch (\Throwable $e) {
             return $value;
         }

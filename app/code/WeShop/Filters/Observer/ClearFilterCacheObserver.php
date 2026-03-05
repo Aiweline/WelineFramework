@@ -7,8 +7,6 @@ namespace WeShop\Filters\Observer;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use WeShop\Filters\Service\FilterCacheService;
-use WeShop\Product\Model\ProductCategory;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Event\EventsManager;
 
 /**
@@ -92,9 +90,7 @@ class ClearFilterCacheObserver implements ObserverInterface
         }
         
         try {
-            /** @var ProductCategory $productCategory */
-            $productCategory = ObjectManager::getInstance(ProductCategory::class);
-            return $productCategory->getCategoryIdsByProductId($productId);
+            return w_query('product', 'getCategoryIdsByProductId', ['product_id' => $productId]);
         } catch (\Throwable $e) {
             return [];
         }

@@ -6,8 +6,7 @@ namespace WeShop\Filters\Provider;
 
 use WeShop\Filters\Api\FilterProviderInterface;
 use WeShop\Filters\Model\CategoryFilterConfig;
-use WeShop\Product\Model\Product;
-use Weline\Eav\Model\EavAttribute;
+use Weline\Eav\Model\EavAttribute\Option;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -194,67 +193,88 @@ abstract class AbstractFilterProvider implements FilterProviderInterface
     }
     
     /**
-     * 从产品 EAV 值表直接读取属性值（避免 w_getValueModel 在 HTTP 下使用错误表名）
-     * 表名格式: m_eav_product_{typeCode}
+     * 从产品 EAV 值表读取属性值（通过 product 查询器，避免跨模块直接依赖）
      */
-    protected function getProductEavValues(EavAttribute $attribute, array $productIds): array
+    protected function getProductEavValues(int $attributeId, string $typeCode, array $productIds): array
     {
-        if (empty($productIds)) {
+        if (empty($productIds) || $attributeId <= 0) {
             return [];
         }
         try {
-            $typeCode = $attribute->getTypeModel()->getCode();
-            $entityCode = 'product';
-            $valueTable = 'm_eav_' . $entityCode . '_' . $typeCode;
-            /** @var Product $productModel */
-            $productModel = ObjectManager::getInstance(Product::class);
-            $pdo = $productModel->getConnection()->getConnector()->getLink();
-            $placeholders = implode(',', array_fill(0, count($productIds), '?'));
-            $sql = "SELECT value FROM \"{$valueTable}\" WHERE attribute_id = ? AND entity_id IN ({$placeholders})";
-            $params = array_merge([$attribute->getId()], $productIds);
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute($params);
-            $values = [];
-            while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
-                if (isset($row['value']) && $row['value'] !== '' && $row['value'] !== null) {
-                    $values[] = $row['value'];
-                }
-            }
-            return $values;
+            return w_query('product', 'getProductEavValues', [
+                'attribute_id' => $attributeId,
+                'type_code' => $typeCode,
+                'product_ids' => $productIds,
+            ]);
         } catch (\Throwable $e) {
             return [];
         }
     }
 
     /**
-     * 从产品 EAV 值表查询符合属性值的 entity_id 列表（用于 apply 筛选）
+     * 从产品 EAV 值表查询符合属性值的 entity_id 列表（用于 apply 筛选，通过 product 查询器）
      */
-    protected function getProductIdsByEavValues(EavAttribute $attribute, array $productIds, array $filterValues): array
+    protected function getProductIdsByEavValues(int $attributeId, string $typeCode, array $productIds, array $filterValues): array
     {
-        if (empty($productIds) || empty($filterValues)) {
+        if (empty($productIds) || empty($filterValues) || $attributeId <= 0) {
             return [];
         }
         try {
-            $typeCode = $attribute->getTypeModel()->getCode();
-            $valueTable = 'm_eav_product_' . $typeCode;
-            /** @var Product $productModel */
-            $productModel = ObjectManager::getInstance(Product::class);
-            $pdo = $productModel->getConnection()->getConnector()->getLink();
-            $phIds = implode(',', array_fill(0, count($productIds), '?'));
-            $phVals = implode(',', array_fill(0, count($filterValues), '?'));
-            $sql = "SELECT entity_id FROM \"{$valueTable}\" WHERE attribute_id = ? AND value IN ({$phVals}) AND entity_id IN ({$phIds})";
-            $params = array_merge([$attribute->getId()], $filterValues, $productIds);
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute($params);
-            $ids = [];
-            while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
-                if (isset($row['entity_id'])) {
-                    $ids[] = $row['entity_id'];
-                }
-            }
-            return array_unique($ids);
+            return w_query('product', 'filterByEavAttribute', [
+                'attribute_id' => $attributeId,
+                'type_code' => $typeCode,
+                'product_ids' => $productIds,
+                'filter_values' => $filterValues,
+            ]);
         } catch (\Throwable $e) {
             return [];
+        }
+    }
+
+    /**
+     * 根据 attribute_id 获取选项标签（使用 Eav Option，无需 Product 模块）
+     */
+    protected function getOptionLabelsByAttributeId(int $attributeId, array $optionIds): array
+    {
+        if (empty($optionIds) || $attributeId <= 0) {
+            return [];
+        }
+        try {
+            /** @var Option $optionModel */
+            $optionModel = ObjectManager::getInstance(Option::class);
+            $optionModel->reset()
+                ->where('attribute_id', $attributeId)
+                ->where('option_id', $optionIds, 'in');
+            $results = $optionModel->select()->fetchArray();
+            $labels = [];
+            foreach ($results as $row) {
+                $oid = $row['option_id'] ?? null;
+                if ($oid !== null) {
+                    $labels[$oid] = [
+                        'code' => $row['code'] ?? '',
+                        'value' => $row['value'] ?? '',
+                        'swatch_color' => $row['swatch_color'] ?? null,
+                        'swatch_image' => $row['swatch_image'] ?? null,
+                    ];
+                }
+            }
+            return $labels;
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    /**
+     * 获取产品 EAV 属性信息（通过 product 查询器）
+     * @return array{attribute_id: int, type_code: string, has_option: bool}|null
+     */
+    protected function getProductAttributeInfo(string $attributeCode): ?array
+    {
+        try {
+            $info = w_query('product', 'getAttributeInfo', ['attribute_code' => $attributeCode]);
+            return is_array($info) && isset($info['attribute_id']) ? $info : null;
+        } catch (\Throwable $e) {
+            return null;
         }
     }
 
