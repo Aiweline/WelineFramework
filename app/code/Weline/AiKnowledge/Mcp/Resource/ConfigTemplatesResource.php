@@ -237,10 +237,10 @@ class {{ModelName}} extends Model implements DataInterface
 {
     use ModelSetup;
     
-    public const fields_ID = 'id';
-    public const fields_NAME = 'name';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
+    public const schema_fields_ID = 'id';
+    public const schema_fields_NAME = 'name';
+    public const schema_fields_CREATED_AT = 'created_at';
+    public const schema_fields_UPDATED_AT = 'updated_at';
     
     /**
      * @inheritDoc
@@ -254,10 +254,10 @@ class {{ModelName}} extends Model implements DataInterface
     {
         if (!$setup->tableExist()) {
             $setup->createTable()
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 11, 'primary key auto_increment', 'ID')
-                ->addColumn(self::fields_NAME, TableInterface::column_type_VARCHAR, 255, 'not null', 'Name')
-                ->addColumn(self::fields_CREATED_AT, TableInterface::column_type_TIMESTAMP, null, 'default CURRENT_TIMESTAMP', 'Created At')
-                ->addColumn(self::fields_UPDATED_AT, TableInterface::column_type_TIMESTAMP, null, 'default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP', 'Updated At')
+                ->addColumn(self::schema_fields_ID, TableInterface::column_type_INTEGER, 11, 'primary key auto_increment', 'ID')
+                ->addColumn(self::schema_fields_NAME, TableInterface::column_type_VARCHAR, 255, 'not null', 'Name')
+                ->addColumn(self::schema_fields_CREATED_AT, TableInterface::column_type_TIMESTAMP, null, 'default CURRENT_TIMESTAMP', 'Created At')
+                ->addColumn(self::schema_fields_UPDATED_AT, TableInterface::column_type_TIMESTAMP, null, 'default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP', 'Updated At')
                 ->create();
         }
     }
