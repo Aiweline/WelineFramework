@@ -26,7 +26,7 @@ class Taglib extends BackendController
         $listing = $this->taglib
             ->joinModel(Module::class, 'module', 'main_table.module_id=module.module_id')
             ->pagination()
-            ->order($this->taglib::fields_UPDATE_TIME)
+            ->order($this->taglib::schema_fields_UPDATE_TIME)
             ->select()
             ->fetch();
         $this->assign('items', $listing->getItems());
