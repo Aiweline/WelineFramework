@@ -43,13 +43,21 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
 
     /**
      * @inheritDoc
+     *
+     * 切换用户时：无 session 则生成新的，有 session 则切换到该用户的 session。
+     * 若用户已有 session_id，需先 destroy 当前 session 再 start 目标 session，
+     * 否则 Session::start() 在已启动时会直接返回，无法完成切换。
      */
     public function login(AuthenticableInterface $user): void
     {
         $sessionId = $user->getAuthSessionId();
+
         if ($sessionId !== '') {
+            // 用户已有 session：先 destroy 当前 session，再加载该用户的 session
+            $this->session->destroy();
             $this->session->start($sessionId);
         }
+        // 用户无 session：保持当前 session（或由 strategy 创建新 session），后续 regenerate 会生成新 ID
 
         $this->session->set($this->areaConfig->getLoginKey(), $user->getAuthUsername());
         $this->session->set($this->areaConfig->getLoginIdKey(), $user->getAuthIdentifier());
