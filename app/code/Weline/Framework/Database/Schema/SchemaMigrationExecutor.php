@@ -97,7 +97,14 @@ final class SchemaMigrationExecutor
             } else {
                 foreach ($this->splitDdlStatements($forwardSql) as $sql) {
                     if (trim($sql) !== '') {
-                        $connector->query($sql)->fetch();
+                        try {
+                            $connector->query($sql)->fetch();
+                        } catch (\Throwable $e) {
+                            $colName = ($op->payload instanceof \Weline\Framework\Database\Schema\ColumnDefinition)
+                                ? $op->payload->name : '';
+                            $ctx = "table={$op->tableName} kind={$op->kind}" . ($colName !== '' ? " col={$colName}" : '');
+                            throw new \RuntimeException("Schema DDL failed ({$ctx}): " . $e->getMessage(), 0, $e);
+                        }
                     }
                 }
             }
