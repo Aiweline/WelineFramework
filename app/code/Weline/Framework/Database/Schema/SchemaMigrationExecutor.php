@@ -258,9 +258,17 @@ final class SchemaMigrationExecutor
         $create = $connector->createTable();
         $create->createTable($tableName, $payload->comment);
 
+        $pkColumns = [];
+        foreach ($payload->columns as $col) {
+            if ($col->primaryKey) {
+                $pkColumns[] = $col->name;
+            }
+        }
+        $hasCompositePk = count($pkColumns) > 1;
+
         foreach ($payload->columns as $col) {
             $opts = [];
-            if ($col->primaryKey) {
+            if ($col->primaryKey && !$hasCompositePk) {
                 $opts[] = 'PRIMARY KEY';
             }
             if ($col->autoIncrement) {
@@ -284,6 +292,11 @@ final class SchemaMigrationExecutor
             }
             $options = implode(' ', $opts);
             $create->addColumn($col->name, $col->type, $col->length, $options, $col->comment);
+        }
+
+        if ($hasCompositePk) {
+            $quoted = array_map(fn(string $n) => '"' . str_replace('"', '""', $n) . '"', $pkColumns);
+            $create->addConstraints('PRIMARY KEY (' . implode(', ', $quoted) . ')');
         }
 
         foreach ($payload->indexes as $idx) {
