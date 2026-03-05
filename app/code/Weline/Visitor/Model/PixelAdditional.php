@@ -1,103 +1,34 @@
 <?php
-
 namespace Weline\Visitor\Model;
-
-use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: 'weline 访客像素统计-附加数据')]
 class PixelAdditional extends Model
 {
-    public const fields_ID = 'pixel_additional_id';
-    public const fields_PIXEL_ID = 'pixel_id';
-    public const fields_TOTAL_EVENT_DATA = 'total_event_data';
-    
-    public string $table = 'w_pixel_additional';
-
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
+    public const schema_table = 'w_pixel_additional';
+    public const schema_primary_key = 'pixel_additional_id';
+    #[Col('bigint', 0, nullable: false, primaryKey: true, autoIncrement: true, comment: 'ID')]
+    public const schema_fields_ID = 'pixel_additional_id';
+    #[Col('bigint', 0, nullable: false, comment: '像素ID')]
+    public const schema_fields_PIXEL_ID = 'pixel_id';
+    #[Col('text', comment: '总事件数据')]
+    public const schema_fields_TOTAL_EVENT_DATA = 'total_event_data';
+public function getPixelId(): int
     {
-        $this->install($setup, $context);
+        return (int)$this->getData(self::schema_fields_PIXEL_ID);
     }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 检查并添加缺失的字段
-        if (!$setup->tableExist()) {
-            $this->install($setup, $context);
-            return;
-        }
-        
-        // 如果表已存在，检查是否需要添加新字段
-        // 目前所有字段都在install中定义，暂不需要升级逻辑
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist()) {
-            return;
-        }
-        /** @var Pixel $pixel */
-        $pixel = w_obj(Pixel::class);
-        $setup->createTable('weline 访客像素统计-附加数据')
-            ->addColumn(
-                self::fields_ID,
-                TableInterface::column_type_BIGINT,
-                0,
-                'primary key auto_increment',
-                'ID'
-            )
-            ->addColumn(
-                self::fields_PIXEL_ID,
-                TableInterface::column_type_BIGINT,
-                0,
-                'not null',
-                '像素ID'
-            )
-            ->addColumn(
-                self::fields_TOTAL_EVENT_DATA,
-                TableInterface::column_type_TEXT,
-                null,
-                '',
-                '总事件数据'
-            )
-//            ->addForeignKey(
-//                'FK_pixel_id',
-//                self::fields_ID,
-//                $pixel->getTable(),
-//                Pixel::fields_ID,
-//                true)
-            ->create();
-    }
-
-    public function getPixelId(): int
-    {
-        return (int)$this->getData(self::fields_PIXEL_ID);
-    }
-
     public function setPixelId(int $pixel_id): self
     {
-        return $this->setData(self::fields_PIXEL_ID, $pixel_id);
+        return $this->setData(self::schema_fields_PIXEL_ID, $pixel_id);
     }
-
     public function getTotalEventData(): string
     {
-        return (string)$this->getData(self::fields_TOTAL_EVENT_DATA);
+        return (string)$this->getData(self::schema_fields_TOTAL_EVENT_DATA);
     }
-
     public function setTotalEventData(string $total_event_data): self
     {
-        return $this->setData(self::fields_TOTAL_EVENT_DATA, $total_event_data);
+        return $this->setData(self::schema_fields_TOTAL_EVENT_DATA, $total_event_data);
     }
     
     /**
@@ -108,7 +39,7 @@ class PixelAdditional extends Model
      */
     public function getId(mixed $default = 0): int
     {
-        return (int)$this->getData(self::fields_ID, $default);
+        return (int)$this->getData(self::schema_fields_ID, $default);
     }
     
     /**
@@ -121,7 +52,7 @@ class PixelAdditional extends Model
     {
         $model = w_obj(self::class);
         $result = $model->reset()
-            ->where(self::fields_PIXEL_ID, $pixelId)
+            ->where(self::schema_fields_PIXEL_ID, $pixelId)
             ->find()
             ->fetch();
         
