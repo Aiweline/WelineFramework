@@ -187,7 +187,7 @@ class CurrencyImportService
         
         // 查找货币
         $currency = $this->currencyModel->clear()
-            ->where(Currency::fields_CODE, $currencyCode)
+            ->where(Currency::schema_fields_CODE, $currencyCode)
             ->find()
             ->fetch();
         
@@ -345,7 +345,7 @@ class CurrencyImportService
         
         // 查找货币
         $currency = $this->currencyModel->clear()
-            ->where(Currency::fields_CODE, $currencyCode)
+            ->where(Currency::schema_fields_CODE, $currencyCode)
             ->find()
             ->fetch();
         
