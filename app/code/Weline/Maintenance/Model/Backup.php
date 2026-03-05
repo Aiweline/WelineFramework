@@ -1,83 +1,48 @@
 <?php
-
 declare(strict_types=1);
-
 /*
  * 备份记录模型
  * 
  * @author Weline Framework
  * @package Weline\Maintenance\Model
  */
-
 namespace Weline\Maintenance\Model;
-
-use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: '维护模式备份记录表')]
+#[Index(name: 'idx_type', columns: ['backup_type'], comment: '备份类型索引')]
+#[Index(name: 'idx_created', columns: ['created_at'], comment: '创建时间索引')]
 class Backup extends Model
 {
-    public const table = 'weline_maintenance_backup';
-    
-    public const fields_backup_id = 'backup_id';
-    public const fields_backup_type = 'backup_type';
-    public const fields_backup_name = 'backup_name';
-    public const fields_file_path = 'file_path';
-    public const fields_file_size = 'file_size';
-    public const fields_status = 'status';
-    public const fields_created_at = 'created_at';
-    public const fields_created_by = 'created_by';
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // TODO: 实现升级逻辑
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist()) {
-            return;
-        }
-
-        $setup->createTable('维护模式备份记录表')
-            ->addColumn(self::fields_backup_id, TableInterface::column_type_INTEGER, 0, 'auto_increment primary key', '备份ID')
-            ->addColumn(self::fields_backup_type, TableInterface::column_type_VARCHAR, 20, 'not null', '备份类型: full/database/code')
-            ->addColumn(self::fields_backup_name, TableInterface::column_type_VARCHAR, 255, 'not null', '备份文件名')
-            ->addColumn(self::fields_file_path, TableInterface::column_type_VARCHAR, 500, 'not null', '备份文件路径')
-            ->addColumn(self::fields_file_size, TableInterface::column_type_BIGINT, 0, 'default 0', '文件大小(字节)')
-            ->addColumn(self::fields_status, TableInterface::column_type_VARCHAR, 20, 'default \'completed\'', '状态: pending/completed/failed')
-            ->addColumn(self::fields_created_at, TableInterface::column_type_DATETIME, 0, 'not null', '创建时间')
-            ->addColumn(self::fields_created_by, TableInterface::column_type_INTEGER, 0, 'default 0', '创建人ID')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_type', self::fields_backup_type, '备份类型索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_created', self::fields_created_at, '创建时间索引')
-            ->create();
-    }
-
-    /**
+    public const schema_table = 'weline_maintenance_backup';
+    public const schema_primary_key = 'backup_id';
+    #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: '备份ID')]
+    public const schema_fields_backup_id = 'backup_id';
+    #[Col('varchar', 20, nullable: false, comment: '备份类型')]
+    public const schema_fields_backup_type = 'backup_type';
+    #[Col('varchar', 255, nullable: false, comment: '备份文件名')]
+    public const schema_fields_backup_name = 'backup_name';
+    #[Col('varchar', 500, nullable: false, comment: '备份文件路径')]
+    public const schema_fields_file_path = 'file_path';
+    #[Col('bigint', default: 0, comment: '文件大小(字节)')]
+    public const schema_fields_file_size = 'file_size';
+    #[Col('varchar', 20, default: 'completed', comment: '状态')]
+    public const schema_fields_status = 'status';
+    #[Col('datetime', nullable: false, comment: '创建时间')]
+    public const schema_fields_created_at = 'created_at';
+    #[Col('int', default: 0, comment: '创建人ID')]
+    public const schema_fields_created_by = 'created_by';
+/**
      * 获取备份类型
      * 
      * @return string
      */
     public function getBackupType(): string
     {
-        return $this->getData(self::fields_backup_type) ?? '';
+        return $this->getData(self::schema_fields_backup_type) ?? '';
     }
-
     /**
      * 设置备份类型
      * 
@@ -86,9 +51,8 @@ class Backup extends Model
      */
     public function setBackupType(string $type): static
     {
-        return $this->setData(self::fields_backup_type, $type);
+        return $this->setData(self::schema_fields_backup_type, $type);
     }
-
     /**
      * 获取备份名称
      * 
@@ -96,9 +60,8 @@ class Backup extends Model
      */
     public function getBackupName(): string
     {
-        return $this->getData(self::fields_backup_name) ?? '';
+        return $this->getData(self::schema_fields_backup_name) ?? '';
     }
-
     /**
      * 设置备份名称
      * 
@@ -107,9 +70,8 @@ class Backup extends Model
      */
     public function setBackupName(string $name): static
     {
-        return $this->setData(self::fields_backup_name, $name);
+        return $this->setData(self::schema_fields_backup_name, $name);
     }
-
     /**
      * 获取文件路径
      * 
@@ -117,9 +79,8 @@ class Backup extends Model
      */
     public function getFilePath(): string
     {
-        return $this->getData(self::fields_file_path) ?? '';
+        return $this->getData(self::schema_fields_file_path) ?? '';
     }
-
     /**
      * 设置文件路径
      * 
@@ -128,9 +89,8 @@ class Backup extends Model
      */
     public function setFilePath(string $path): static
     {
-        return $this->setData(self::fields_file_path, $path);
+        return $this->setData(self::schema_fields_file_path, $path);
     }
-
     /**
      * 获取文件大小
      * 
@@ -138,9 +98,8 @@ class Backup extends Model
      */
     public function getFileSize(): int
     {
-        return (int)($this->getData(self::fields_file_size) ?? 0);
+        return (int)($this->getData(self::schema_fields_file_size) ?? 0);
     }
-
     /**
      * 设置文件大小
      * 
@@ -149,9 +108,8 @@ class Backup extends Model
      */
     public function setFileSize(int $size): static
     {
-        return $this->setData(self::fields_file_size, $size);
+        return $this->setData(self::schema_fields_file_size, $size);
     }
-
     /**
      * 获取状态
      * 
@@ -159,9 +117,8 @@ class Backup extends Model
      */
     public function getStatus(): string
     {
-        return $this->getData(self::fields_status) ?? 'pending';
+        return $this->getData(self::schema_fields_status) ?? 'pending';
     }
-
     /**
      * 设置状态
      * 
@@ -170,6 +127,6 @@ class Backup extends Model
      */
     public function setStatus(string $status): static
     {
-        return $this->setData(self::fields_status, $status);
+        return $this->setData(self::schema_fields_status, $status);
     }
 }

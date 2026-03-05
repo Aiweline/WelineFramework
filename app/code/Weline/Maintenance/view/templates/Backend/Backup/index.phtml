@@ -134,12 +134,11 @@ $filters = $filters ?? [];
                 var formData = new FormData();
                 formData.append('id', backupId);
                 
-                fetch('<?= $this->getBackendUrl('maintenance/backend/backup/delete') ?>', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(function(response) { return response.json(); })
-                .then(function(data) {
+                var url = '<?= $this->getBackendUrl('maintenance/backend/backup/delete') ?>';
+                var opts = { method: 'POST', body: formData };
+                window.Weline.Api.request(url, opts)
+                .then(function(res) {
+                    var data = (res && res.data) !== undefined ? res.data : res;
                     if (data.success) {
                         AdminToast.success(data.message);
                         setTimeout(function() { location.reload(); }, 1000);
