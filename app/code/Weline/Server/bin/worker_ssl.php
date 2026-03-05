@@ -589,9 +589,63 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
     
     WlsLogger::info_("SO_REUSEPORT socket 创建成功，Worker #{$workerId} 监听 {$host}:{$port}");
     
+} elseif ($deferSsl && !$isWindows && \function_exists('socket_create')) {
+    // 方案2b-socket：仅 Linux，延迟 SSL + socket 扩展 + SO_REUSEADDR，避免 Address already in use（含重试）；Windows 不改动
+    // 用于 TCP 透传架构：先监听纯 TCP，accept 后根据首包启用 SSL 或 HTTP 重定向
+    $maxBindRetries = 3;
+    $bindRetryDelay = 1;
+    $rawSocket = false;
+    $lastErrno = 0;
+    $lastErrstr = '';
+
+    for ($attempt = 1; $attempt <= $maxBindRetries; $attempt++) {
+        $rawSocket = @\socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        if (!$rawSocket) {
+            $lastErrno = \socket_last_error();
+            $lastErrstr = \socket_strerror($lastErrno);
+            WlsLogger::error_("Socket 创建失败 (defer-ssl): {$lastErrstr} (errno: {$lastErrno})");
+            break;
+        }
+        if (!@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEADDR, 1)) {
+            WlsLogger::warning_("设置 SO_REUSEADDR 失败");
+        }
+        if (@\socket_bind($rawSocket, $host, $port)) {
+            break;
+        }
+        $lastErrno = \socket_last_error($rawSocket);
+        $lastErrstr = \socket_strerror($lastErrno);
+        @\socket_close($rawSocket);
+        $rawSocket = false;
+        if ($lastErrno !== 98) { // EADDRINUSE on Linux only
+            WlsLogger::error_("Socket 绑定失败 (defer-ssl): {$lastErrstr} (errno: {$lastErrno})");
+            break;
+        }
+        WlsLogger::warning_("端口 {$port} 占用 (errno: {$lastErrno})，{$bindRetryDelay} 秒后重试 ({$attempt}/{$maxBindRetries})");
+        if ($attempt < $maxBindRetries) {
+            \sleep($bindRetryDelay);
+        }
+    }
+
+    if (!$rawSocket) {
+        WlsLogger::error_("Socket 创建失败 (defer-ssl): {$lastErrstr} (errno: {$lastErrno})");
+        w_log_error("[WLS Worker SSL] Failed to create socket (defer-ssl): {$lastErrstr}");
+        exit(1);
+    }
+    if (!@\socket_listen($rawSocket, 102400)) {
+        WlsLogger::error_("socket_listen 失败: " . \socket_strerror(\socket_last_error($rawSocket)));
+        @\socket_close($rawSocket);
+        exit(1);
+    }
+    $socket = \socket_export_stream($rawSocket);
+    if (!$socket) {
+        WlsLogger::error_("socket_export_stream 失败");
+        @\socket_close($rawSocket);
+        exit(1);
+    }
+    WlsLogger::info_("延迟 SSL 模式: 监听 tcp://{$host}:{$port}，accept 后手动启用 SSL");
+
 } elseif ($deferSsl) {
-    // 方案2b：延迟 SSL 模式（TCP 透传架构）
-    // 先监听纯 TCP，在 accept 后手动启用 SSL（同端口 HTTP→HTTPS 重定向）
+    // 方案2b：Windows 或未走 2b-socket 时，保持原 stream_socket_server 逻辑不变
     $socketOptions = [
         'backlog' => 102400,
         'so_reuseaddr' => true,
@@ -602,7 +656,6 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
         'ssl' => $deferSslOptions,
     ]);
 
-    // 监听纯 TCP（延迟 SSL）
     $socket = @\stream_socket_server(
         "tcp://{$host}:{$port}",
         $errno,
@@ -616,9 +669,8 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
         w_log_error("[WLS Worker SSL] Failed to create socket (defer-ssl): {$errstr}");
         exit(1);
     }
-    
     WlsLogger::info_("延迟 SSL 模式: 监听 tcp://{$host}:{$port}，accept 后手动启用 SSL");
-    
+
 } else {
     // 方案2：标准 stream_socket_server 方式
     $socketOptions = [

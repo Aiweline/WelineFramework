@@ -171,6 +171,11 @@ class Dispatcher
      * 是否 DEV 开发模式（输出详细调试信息）
      */
     private bool $isDevMode = false;
+
+    /**
+     * 上次输出「所有 Worker 不可用」日志时间（节流，避免启动期刷屏）
+     */
+    private float $lastAllWorkersUnavailableLogAt = 0.0;
     
     // ========== IPC 控制通道 ==========
     
@@ -921,10 +926,14 @@ class Dispatcher
                     $this->log("新连接: {$clientIp} (connId: {$connId}) → Worker:{$workerPort}", 'ROUTE');
                 }
             } else {
-                // 所有 Worker 均不可用
-                $healthSummary = $this->passthroughCore->getWorkerHealthSummary();
-                $this->log("所有 Worker 不可用! {$clientIp} (connId: {$connId}), "
-                    . "healthy: {$healthSummary['healthy']}/{$healthSummary['total']}", 'ERROR');
+                // 所有 Worker 均不可用（节流 ERROR 日志，避免启动期刷屏）
+                $now = \microtime(true);
+                if ($now - $this->lastAllWorkersUnavailableLogAt >= 10.0) {
+                    $healthSummary = $this->passthroughCore->getWorkerHealthSummary();
+                    $this->log("所有 Worker 不可用! {$clientIp} (connId: {$connId}), "
+                        . "healthy: {$healthSummary['healthy']}/{$healthSummary['total']}", 'ERROR');
+                    $this->lastAllWorkersUnavailableLogAt = $now;
+                }
                 @\socket_close($clientSocket);
             }
             
