@@ -24,12 +24,12 @@ class CompanyService
         $company = ObjectManager::getInstance(Company::class);
         
         $company->clearData()
-            ->setData(Company::fields_NAME, $companyData['name'] ?? '')
-            ->setData(Company::fields_TAX_ID, $companyData['tax_id'] ?? '')
-            ->setData(Company::fields_ADDRESS, $companyData['address'] ?? '')
-            ->setData(Company::fields_PHONE, $companyData['phone'] ?? '')
-            ->setData(Company::fields_EMAIL, $companyData['email'] ?? '')
-            ->setData(Company::fields_STATUS, $companyData['status'] ?? 'active')
+            ->setData(Company::schema_fields_NAME, $companyData['name'] ?? '')
+            ->setData(Company::schema_fields_TAX_ID, $companyData['tax_id'] ?? '')
+            ->setData(Company::schema_fields_ADDRESS, $companyData['address'] ?? '')
+            ->setData(Company::schema_fields_PHONE, $companyData['phone'] ?? '')
+            ->setData(Company::schema_fields_EMAIL, $companyData['email'] ?? '')
+            ->setData(Company::schema_fields_STATUS, $companyData['status'] ?? 'active')
             ->save();
         
         return $company;
