@@ -44,13 +44,13 @@ class Index extends BaseController
         $deals = [];
         foreach ($dealsResult['items'] as $product) {
             $deals[] = [
-                'product_id' => $product['product_id'] ?? $product[\WeShop\Product\Model\Product::fields_ID] ?? 0,
-                'name' => $product['name'] ?? $product[\WeShop\Product\Model\Product::fields_name] ?? '',
-                'short_description' => $product['short_description'] ?? $product[\WeShop\Product\Model\Product::fields_short_description] ?? '',
-                'price' => $product['price'] ?? $product[\WeShop\Product\Model\Product::fields_price] ?? 0,
-                'image' => $product['image'] ?? $product[\WeShop\Product\Model\Product::fields_image] ?? '',
-                'sku' => $product['sku'] ?? $product[\WeShop\Product\Model\Product::fields_sku] ?? '',
-                'in_stock' => ($product['stock'] ?? $product[\WeShop\Product\Model\Product::fields_stock] ?? 0) > 0,
+                'product_id' => $product['product_id'] ?? $product[\WeShop\Product\Model\Product::schema_fields_ID] ?? 0,
+                'name' => $product['name'] ?? $product[\WeShop\Product\Model\Product::schema_fields_name] ?? '',
+                'short_description' => $product['short_description'] ?? $product[\WeShop\Product\Model\Product::schema_fields_short_description] ?? '',
+                'price' => $product['price'] ?? $product[\WeShop\Product\Model\Product::schema_fields_price] ?? 0,
+                'image' => $product['image'] ?? $product[\WeShop\Product\Model\Product::schema_fields_image] ?? '',
+                'sku' => $product['sku'] ?? $product[\WeShop\Product\Model\Product::schema_fields_sku] ?? '',
+                'in_stock' => ($product['stock'] ?? $product[\WeShop\Product\Model\Product::schema_fields_stock] ?? 0) > 0,
             ];
         }
         
