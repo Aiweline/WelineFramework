@@ -45,9 +45,9 @@ class Mapping extends BackendRestController
             }
             
             $query = $this->syncMapping->clear();
-            $query->where(SyncMapping::fields_HOST_ID, $hostId);
+            $query->where(SyncMapping::schema_fields_HOST_ID, $hostId);
             
-            $mappings = $query->order(SyncMapping::fields_CREATED_AT, 'DESC')
+            $mappings = $query->order(SyncMapping::schema_fields_CREATED_AT, 'DESC')
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -57,15 +57,15 @@ class Mapping extends BackendRestController
                 $mappingId = $mapping->getId();
                 $data[] = [
                     'mapping_id' => $mappingId,
-                    'host_id' => $mapping->getData(SyncMapping::fields_HOST_ID),
-                    'local_path' => $mapping->getData(SyncMapping::fields_LOCAL_PATH),
-                    'remote_path' => $mapping->getData(SyncMapping::fields_REMOTE_PATH),
+                    'host_id' => $mapping->getData(SyncMapping::schema_fields_HOST_ID),
+                    'local_path' => $mapping->getData(SyncMapping::schema_fields_LOCAL_PATH),
+                    'remote_path' => $mapping->getData(SyncMapping::schema_fields_REMOTE_PATH),
                     'include_paths' => $mapping->getIncludePathsArray(),
                     'exclude_patterns' => $mapping->getExcludePatternsArray(),
-                    'status' => (int)$mapping->getData(SyncMapping::fields_STATUS),
+                    'status' => (int)$mapping->getData(SyncMapping::schema_fields_STATUS),
                     'is_running' => $this->watcherService->isWatcherRunning($mappingId),
                     'pid' => $this->watcherService->getWatcherPid($mappingId),
-                    'created_at' => $mapping->getData(SyncMapping::fields_CREATED_AT),
+                    'created_at' => $mapping->getData(SyncMapping::schema_fields_CREATED_AT),
                 ];
             }
 
@@ -91,10 +91,10 @@ class Mapping extends BackendRestController
                 return $this->error('映射不存在');
             }
 
-            $currentStatus = (int)$mapping->getData(SyncMapping::fields_STATUS);
+            $currentStatus = (int)$mapping->getData(SyncMapping::schema_fields_STATUS);
             $newStatus = $currentStatus === 1 ? 0 : 1;
 
-            $mapping->setData(SyncMapping::fields_STATUS, $newStatus);
+            $mapping->setData(SyncMapping::schema_fields_STATUS, $newStatus);
             $mapping->save();
 
             if ($newStatus === 1) {
@@ -103,7 +103,7 @@ class Mapping extends BackendRestController
                 if ($result['success']) {
                     return $this->success('同步已开启', ['status' => $newStatus]);
                 } else {
-                    $mapping->setData(SyncMapping::fields_STATUS, 0);
+                    $mapping->setData(SyncMapping::schema_fields_STATUS, 0);
                     $mapping->save();
                     return $this->error('开启同步失败: ' . $result['message']);
                 }
@@ -203,10 +203,10 @@ class Mapping extends BackendRestController
             }
 
             // 设置数据
-            $mapping->setData(SyncMapping::fields_HOST_ID, $hostId);
-            $mapping->setData(SyncMapping::fields_LOCAL_PATH, $localPath);
-            $mapping->setData(SyncMapping::fields_REMOTE_PATH, $remotePath);
-            $mapping->setData(SyncMapping::fields_STATUS, $status);
+            $mapping->setData(SyncMapping::schema_fields_HOST_ID, $hostId);
+            $mapping->setData(SyncMapping::schema_fields_LOCAL_PATH, $localPath);
+            $mapping->setData(SyncMapping::schema_fields_REMOTE_PATH, $remotePath);
+            $mapping->setData(SyncMapping::schema_fields_STATUS, $status);
             
             // 处理包含路径
             if (!empty($includePaths)) {
