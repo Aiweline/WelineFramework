@@ -238,9 +238,10 @@ $total_pages = $total_pages ?? 1;
         content.innerHTML = '<div class="text-center py-4"><i class="mdi mdi-loading mdi-spin mdi-48px"></i></div>';
         modal.show();
 
-        fetch('<?= $this->getBackendUrl('aws/backend/operation/detail') ?>?id=' + id)
-            .then(function(res) { return res.json(); })
-            .then(function(data) {
+        var url = '<?= $this->getBackendUrl('aws/backend/operation/detail') ?>?id=' + id;
+        window.Weline.Api.get(url, { silent: true })
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success && data.operation) {
                     var op = data.operation;
                     var html = '<table class="table table-borderless">' +

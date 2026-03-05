@@ -158,12 +158,11 @@ $isEdit = $config && $config->getId();
 
         var formData = new FormData(form);
 
-        fetch('<?= $this->getBackendUrl('aws/backend/config/save') ?>', {
-            method: 'POST',
-            body: formData
-        })
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
+        var url = '<?= $this->getBackendUrl('aws/backend/config/save') ?>';
+        var opts = { method: 'POST', body: formData };
+        window.Weline.Api.request(url, opts)
+        .then(function(res) {
+            var data = (res && res.data) !== undefined ? res.data : res;
             submitBtn.innerHTML = originalText;
             submitBtn.disabled = false;
 
