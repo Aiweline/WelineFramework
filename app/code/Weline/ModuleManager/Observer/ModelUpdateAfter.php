@@ -9,14 +9,14 @@ use Weline\Framework\Database\Model;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\ModuleManager\Model\Module;
-use Weline\ModuleManager\Model\Module\Table;
+use Weline\Framework\Setup\Model\ModuleTable;
 
 class ModelUpdateAfter implements ObserverInterface
 {
-    private Table $table;
+    private ModuleTable $table;
 
     public function __construct(
-        Table $table
+        ModuleTable $table
     )
     {
         $this->table = $table;
@@ -31,7 +31,7 @@ class ModelUpdateAfter implements ObserverInterface
         $data = $event->getData('data');
         /**@var Model $model */
         $model = $data->getModel();
-        if ($model::class !== Table::class and $model::class !== Value::class and $model instanceof Model) {
+        if ($model::class !== ModuleTable::class and $model::class !== Value::class and $model instanceof Model) {
             $this->table->reset()->clearData();
             /**@var Module $module */
             $module = $event->getData('module');
@@ -40,16 +40,16 @@ class ModelUpdateAfter implements ObserverInterface
             $table = str_replace('`', '', $table);
             
             # 检查模型类是否已存在
-            /**@var Table $existingModel */
-            $existingModel = $this->table->where($this->table::fields_model, $model::class)->find()->fetch();
+            /**@var ModuleTable $existingModel */
+            $existingModel = $this->table->where($this->table::schema_fields_model, $model::class)->find()->fetch();
             if ($existingModel->getId()) {
                 # 如果模型已存在，跳过插入
                 return;
             }
             
             # 检查表名是否已被其他模型使用
-            /**@var Table $has */
-            $has = $this->table->where($this->table::fields_name, $table)->find()->fetch();
+            /**@var ModuleTable $has */
+            $has = $this->table->where($this->table::schema_fields_name, $table)->find()->fetch();
             if ($has->getId() and $has->getModuleName() != $module->getName() and $has->getModel() != $model::class) {
                 throw new Exception($table . __('表已存在！该表已被：%{1} 模组下的 %{2} 模型创建，请为当前模型 %{3} 更换表名。如果你确认需要移除表，请访问module_table表，手动删除表。', [$has->getModuleName(), $has->getModel(), $model::class]));
             }
@@ -60,9 +60,9 @@ class ModelUpdateAfter implements ObserverInterface
             }
             
             $this->table->reset()->clearData()
-                ->setData($this->table::fields_module_name, $module->getName())
-                ->setData($this->table::fields_name, $table, true)
-                ->setData($this->table::fields_model, $model::class, true)
+                ->setData($this->table::schema_fields_module_name, $module->getName())
+                ->setData($this->table::schema_fields_name, $table, true)
+                ->setData($this->table::schema_fields_model, $model::class, true)
                 ->save(true);
         }
     }
