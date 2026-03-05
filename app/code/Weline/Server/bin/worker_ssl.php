@@ -1573,6 +1573,13 @@ while (true) {
         // 设置 SSE 上下文（让控制器可以直接写入连接）
         \Weline\Framework\Http\Sse\SseContext::setConnection($conn);
         
+        // 诊断：进入 handleRequest 前打点（若此后无「即将写回响应」则说明 handleRequest 阻塞）
+        $uriForLog = '/';
+        if (\preg_match('/^\w+\s+([^\s]+)/', $rawRequest, $m)) {
+            $uriForLog = \parse_url($m[1], \PHP_URL_PATH) ?: $m[1];
+        }
+        WlsLogger::info_("Worker 开始处理请求 connId={$connId} uri=" . (\strlen($uriForLog) > 80 ? \substr($uriForLog, 0, 80) . '...' : $uriForLog));
+        
         // 处理请求
         $response = handleRequest(
             $rawRequest, $runtime, $runtimeError, $instanceName, $workerId, $port, 
@@ -1584,6 +1591,10 @@ while (true) {
         );
         
         $activeRequests--;
+        
+        // 诊断：确认是否到达写响应路径（排查 Linux 无响应）
+        $responseLenPre = \strlen($response);
+        WlsLogger::info_("Worker 即将写回响应 connId={$connId} len={$responseLenPre}");
         
         // 检查是否是 SSE 模式（如果是，响应已经流式发送，不需要再发送）
         $isSseMode = \Weline\Framework\Http\Sse\SseContext::isSseEnabled();
@@ -1602,6 +1613,7 @@ while (true) {
                 // 不阻塞，下次事件循环会继续发送
                 $writeBuffers[$connId] .= $response;
                 $writableConnections[$connId] = $conn;
+                WlsLogger::info_("Worker 响应追加到缓冲区 connId={$connId} len={$responseLen}");
                 goto skip_sync_write;
             }
             
@@ -1640,6 +1652,7 @@ while (true) {
             
             // 如果全部写完，不需要入队
             if ($totalWritten >= $responseLen) {
+                WlsLogger::info_("Worker 已写完响应 connId={$connId} written={$totalWritten}");
                 goto skip_sync_write;
             }
             
@@ -1647,6 +1660,7 @@ while (true) {
             $remainingBytes = $responseLen - $totalWritten;
             $writeBuffers[$connId] = \substr($response, $totalWritten);
             $writableConnections[$connId] = $conn;
+            WlsLogger::info_("Worker 响应入队 connId={$connId} written={$totalWritten} total={$responseLen} remaining={$remainingBytes}");
             
             // 调试日志：追踪大响应的缓冲区状态
             if ($responseLen > 100000) { // 大于 100KB 的响应
