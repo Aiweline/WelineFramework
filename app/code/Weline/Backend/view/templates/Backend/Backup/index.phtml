@@ -131,12 +131,11 @@ $backups = $backups ?? [];
             event.preventDefault();
             var formData = new FormData(event.target);
             
-            fetch('<?= $this->getBackendUrl('*/backup/create') ?>', {
-                method: 'POST',
-                body: formData
-            })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
+            var url = '<?= $this->getBackendUrl('*/backup/create') ?>';
+            var opts = { method: 'POST', body: formData };
+            window.Weline.Api.request(url, opts)
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
                     AdminToast.success(data.message);
                     setTimeout(function() {

@@ -105,21 +105,18 @@ $settings = $settings ?? [];
         save: function(event) {
             event.preventDefault();
             var formData = new FormData(event.target);
-            
-            fetch('<?= $this->getBackendUrl('*/backend/settings/basic/save') ?>', {
-                method: 'POST',
-                body: formData
-            })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
-                if (data.success) {
-                    AdminToast.success(data.message);
+            window.Weline.Api.request('<?= $this->getBackendUrl('*/backend/settings/basic/save') ?>', { method: 'POST', body: formData })
+            .then(function(response) {
+                var data = response.data;
+                var Toast = window.BackendToast || window.AdminToast;
+                if (response.ok && data && data.success) {
+                    Toast.success(data.message || '<?= __('保存成功') ?>');
                 } else {
-                    AdminToast.error(data.message);
+                    Toast.error((data && data.message) || '<?= __('保存失败') ?>');
                 }
             })
             .catch(function(error) {
-                AdminToast.error('<?= __('保存失败') ?>');
+                (window.BackendToast || window.AdminToast).error(error && error.message ? error.message : '<?= __('保存失败') ?>');
             });
         }
     };

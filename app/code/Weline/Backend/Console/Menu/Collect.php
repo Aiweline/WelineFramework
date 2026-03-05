@@ -21,10 +21,41 @@ class Collect implements CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
-        // 收集菜单（默认收集所有已启用模块的菜单）
-        $this->printing->note(__('开始收集菜单...'));
-        $this->menuCollector->collect([]);
-        $this->printing->success(__('菜单收集完成！'));
+        $moduleNames = $this->parseModuleArgs($args);
+
+        // 1. 刷新模块列表（不调用 reload，避免 CLI 下配置重载影响 Scanner 路径解析）
+        $this->printing->note(__('刷新模块列表...'));
+        try {
+            $env = \Weline\Framework\App\Env::getInstance();
+            $env->getModuleList(true);
+            $env->getActiveModules(true);
+            $activeCount = count($env->getActiveModules());
+            $this->printing->success(__('已刷新：%{1} 个激活模块', [$activeCount]));
+        } catch (\Throwable $e) {
+            $this->printing->warning(__('模块刷新失败：%{1}', [$e->getMessage()]));
+        }
+
+        // 2. 收集菜单（指定 -m 时仅收集指定模块）
+        $this->printing->note(
+            !empty($moduleNames)
+                ? __('开始收集模块 %{1} 的菜单...', [implode(', ', $moduleNames)])
+                : __('开始收集菜单...')
+        );
+        $diagnostics = $this->menuCollector->collectWithDiagnostics($moduleNames);
+        $fileMenuCount = $diagnostics['file_menu_count'];
+        $rawConfigCount = $diagnostics['raw_config_count'];
+
+        if ($fileMenuCount === 0) {
+            $msg = __('未从 menu.xml 解析到任何菜单。');
+            if ($rawConfigCount === 0) {
+                $msg .= __(' Scanner 未发现任何 menu.xml 文件，请执行：php bin/w setup:upgrade --route');
+            } else {
+                $msg .= __(' 发现 %{1} 个配置文件但解析失败，请检查 XML 格式。', [$rawConfigCount]);
+            }
+            $this->printing->error($msg);
+        } else {
+            $this->printing->success(__('菜单收集完成！共解析 %{1} 条菜单', [$fileMenuCount]));
+        }
         
         // 清理事件缓存（菜单更新可能触发事件，需要清理事件缓存）
         $this->printing->note(__('清理事件缓存...'));
@@ -46,12 +77,11 @@ class Collect implements CommandInterface
             $this->printing->warning(__('DI编译失败：%{1}', [$e->getMessage()]));
         }
         
-        // 清理全部缓存（优先执行，确保菜单变更后立即生效）
+        // 再次清理缓存（菜单变更后立即生效）
         $this->printing->note(__('清理全部缓存...'));
         try {
-            /** @var \Weline\Framework\Cache\Console\Cache\Clear $cacheClear */
             $cacheClear = ObjectManager::getInstance(\Weline\Framework\Cache\Console\Cache\Clear::class);
-            $cacheClear->execute(['-f']); // 强制清理所有缓存
+            $cacheClear->execute(['-f']);
             $this->printing->success(__('全部缓存清理完成！'));
         } catch (\Throwable $e) {
             $this->printing->warning(__('缓存清理失败：%{1}', [$e->getMessage()]));
@@ -66,19 +96,6 @@ class Collect implements CommandInterface
             $this->printing->success(__('模板缓存清理完成！'));
         } catch (\Throwable $e) {
             $this->printing->warning(__('模板缓存清理失败：%{1}', [$e->getMessage()]));
-        }
-        
-        // 强制重新加载模块列表（清除内存缓存）
-        $this->printing->note(__('刷新模块列表缓存...'));
-        try {
-            // 使用单例方法获取Env实例
-            $env = \Weline\Framework\App\Env::getInstance();
-            // 强制重新获取模块列表，清除内存缓存
-            $env->getModuleList(true);
-            $env->getActiveModules(true);
-            $this->printing->success(__('模块列表缓存已刷新！'));
-        } catch (\Throwable $e) {
-            $this->printing->warning(__('模块列表缓存刷新失败：%{1}', [$e->getMessage()]));
         }
         
         // 清理菜单相关缓存
@@ -107,15 +124,44 @@ class Collect implements CommandInterface
 
     public function help(): array|string
     {
-        // 基于tip的默认help实现
         return \Weline\Framework\Console\CommandHelper::formatHelp(
-            '',
+            'menu:collect',
             $this->tip(),
             [
+                '-m, --module=<模块名>' => '仅收集指定模块的菜单（增量更新）',
                 '-h, --help' => '显示帮助信息',
             ],
-            [],
-            []
+            [
+                '指定 -m 时仅处理指定模块的 menu.xml，其他模块的菜单保持不变。',
+            ],
+            [
+                '全量收集' => 'php bin/w menu:collect',
+                '增量收集指定模块' => 'php bin/w menu:collect -m Weline_Admin',
+            ],
+            'php bin/w menu:collect [-m|--module=<模块名>]'
         );
+    }
+
+    /**
+     * 解析模块参数（支持 -m、--module 及位置参数）
+     */
+    private function parseModuleArgs(array $args): array
+    {
+        $argsModule = $args['module'] ?? $args['m'] ?? [];
+        if (is_string($argsModule)) {
+            $argsModule = array_filter(array_map('trim', explode(' ', $argsModule)));
+        }
+        if (empty($argsModule)) {
+            $positionalArgs = [];
+            foreach ($args as $key => $value) {
+                if (is_numeric($key) && is_string($value) && !str_starts_with($value, '-') && $key > 0) {
+                    $positionalArgs[] = $value;
+                }
+            }
+            if (!empty($positionalArgs)) {
+                $argsModule = $positionalArgs;
+            }
+        }
+        return array_values(array_filter($argsModule));
     }
 }
