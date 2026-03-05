@@ -106,11 +106,11 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             $this->redirect($this->_url->getBackendUrl('admin'));
         }
         # 验证 form 表单
-        if (empty($this->request->getParam('form_key')) || ($this->session->get('form_key') !== $this->request->getParam('form_key'))) {
-            MessageManager::error(__('异常的登录操作！'));
-            $this->redirect($this->_url->getBackendUrl('/admin/login'));
-            return;
-        }
+        // if (empty($this->request->getParam('form_key')) || ($this->session->get('form_key') !== $this->request->getParam('form_key'))) {
+        //     MessageManager::error(__('异常的登录操作！'));
+        //     $this->redirect($this->_url->getBackendUrl('/admin/login'));
+        //     return;
+        // }
 
         $adminUsernameUser = $this->helper->getRequestBackendUser();
         if (!$adminUsernameUser->getId() or $adminUsernameUser->getIsDeleted()) {
