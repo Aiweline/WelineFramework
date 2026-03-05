@@ -50,16 +50,16 @@ class ConfigService
             file_put_contents($keyFile, $keyContent);
             chmod($keyFile, 0600); // 设置权限为仅所有者可读写
             $keyPath = $keyFile;
-        } elseif ($host->getData(SyncHost::fields_KEY_PATH) && file_exists($host->getData(SyncHost::fields_KEY_PATH))) {
+        } elseif ($host->getData(SyncHost::schema_fields_KEY_PATH) && file_exists($host->getData(SyncHost::schema_fields_KEY_PATH))) {
             // 兼容旧数据：如果只有路径，使用路径
-            $keyPath = $host->getData(SyncHost::fields_KEY_PATH);
+            $keyPath = $host->getData(SyncHost::schema_fields_KEY_PATH);
         }
 
         // 获取远程路径数组
         $remotePaths = $mapping->getRemotePathsArray();
         // 兼容旧数据：如果没有 remote_paths，使用 remote_path
         if (empty($remotePaths)) {
-            $remotePath = $mapping->getData(SyncMapping::fields_REMOTE_PATH);
+            $remotePath = $mapping->getData(SyncMapping::schema_fields_REMOTE_PATH);
             if (!empty($remotePath)) {
                 $remotePaths = [$remotePath];
             }
@@ -69,14 +69,14 @@ class ConfigService
         $mappingConfig = [
             'mapping_id' => $mapping->getId(),
             'host' => [
-                'host' => $host->getData(SyncHost::fields_HOST),
-                'port' => $host->getData(SyncHost::fields_PORT) ?: 22,
-                'user' => $host->getData(SyncHost::fields_USER),
+                'host' => $host->getData(SyncHost::schema_fields_HOST),
+                'port' => $host->getData(SyncHost::schema_fields_PORT) ?: 22,
+                'user' => $host->getData(SyncHost::schema_fields_USER),
                 'password' => $host->getDecryptedPassword(),
                 'key_path' => $keyPath,
             ],
             'mapping' => [
-                'local_path' => $mapping->getData(SyncMapping::fields_LOCAL_PATH),
+                'local_path' => $mapping->getData(SyncMapping::schema_fields_LOCAL_PATH),
                 'remote_path' => !empty($remotePaths) ? $remotePaths[0] : '', // 兼容旧代码，使用第一个路径
                 'remote_paths' => $remotePaths, // 多个远程路径
                 'include_paths' => $mapping->getIncludePathsArray(),
@@ -116,7 +116,7 @@ class ConfigService
         $mappingModel = ObjectManager::getInstance(SyncMapping::class);
         
         $mappings = $mappingModel->clear()
-            ->where(SyncMapping::fields_STATUS, 1)
+            ->where(SyncMapping::schema_fields_STATUS, 1)
             ->select()
             ->fetch()
             ->getItems();

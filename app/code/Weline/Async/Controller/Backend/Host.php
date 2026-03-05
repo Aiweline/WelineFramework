@@ -36,7 +36,7 @@ class Host extends BackendController
     public function index()
     {
         $hosts = $this->syncHost->clear()
-            ->order(SyncHost::fields_CREATED_AT, 'DESC')
+            ->order(SyncHost::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetch()
             ->getItems();
@@ -184,8 +184,8 @@ class Host extends BackendController
                 if ($id) {
                     $existingHost = $this->syncHost->clear()->load($id);
                     if ($existingHost->getId()) {
-                        $existingPassword = $existingHost->getData(SyncHost::fields_PASSWORD);
-                        $existingKeyContent = $existingHost->getData(SyncHost::fields_KEY_CONTENT);
+                        $existingPassword = $existingHost->getData(SyncHost::schema_fields_PASSWORD);
+                        $existingKeyContent = $existingHost->getData(SyncHost::schema_fields_KEY_CONTENT);
                         if (empty($existingPassword) && empty($existingKeyContent)) {
                             throw new \RuntimeException(__('SSH密码或密钥至少需要提供一个'));
                         }
@@ -208,28 +208,28 @@ class Host extends BackendController
             }
 
             // 设置数据
-            $hostModel->setData(SyncHost::fields_NAME, $name);
-            $hostModel->setData(SyncHost::fields_HOST, $host);
-            $hostModel->setData(SyncHost::fields_PORT, $port);
-            $hostModel->setData(SyncHost::fields_USER, $user);
+            $hostModel->setData(SyncHost::schema_fields_NAME, $name);
+            $hostModel->setData(SyncHost::schema_fields_HOST, $host);
+            $hostModel->setData(SyncHost::schema_fields_PORT, $port);
+            $hostModel->setData(SyncHost::schema_fields_USER, $user);
             
             // 只有提供了新密码才更新
             if (!empty($password)) {
-                $hostModel->setData(SyncHost::fields_PASSWORD, $password);
+                $hostModel->setData(SyncHost::schema_fields_PASSWORD, $password);
             }
             
             // 保存密钥内容（如果提供了）
             if (!empty($finalKeyContent)) {
-                $hostModel->setData(SyncHost::fields_KEY_CONTENT, $finalKeyContent);
+                $hostModel->setData(SyncHost::schema_fields_KEY_CONTENT, $finalKeyContent);
             }
             
             // 临时保存密钥路径（用于读取，保存后会被清除）
             if (!empty($keyPath)) {
-                $hostModel->setData(SyncHost::fields_KEY_PATH, $keyPath);
+                $hostModel->setData(SyncHost::schema_fields_KEY_PATH, $keyPath);
             }
             
             if (!empty($description)) {
-                $hostModel->setData(SyncHost::fields_DESCRIPTION, $description);
+                $hostModel->setData(SyncHost::schema_fields_DESCRIPTION, $description);
             }
 
             $hostModel->save();

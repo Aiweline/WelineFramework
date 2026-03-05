@@ -78,9 +78,9 @@ class Stop extends CommandAbstract
         $query = $this->syncMapping->clear();
 
         if ($mappingId) {
-            $query->where(SyncMapping::fields_MAPPING_ID, $mappingId);
+            $query->where(SyncMapping::schema_fields_MAPPING_ID, $mappingId);
         } elseif ($hostId) {
-            $query->where(SyncMapping::fields_HOST_ID, $hostId);
+            $query->where(SyncMapping::schema_fields_HOST_ID, $hostId);
         }
 
         $mappings = $query->select()->fetch()->getItems();

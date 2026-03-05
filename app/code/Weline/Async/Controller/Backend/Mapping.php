@@ -53,8 +53,8 @@ class Mapping extends BackendController
         }
 
         $mappings = $this->syncMapping->clear()
-            ->where(SyncMapping::fields_HOST_ID, $hostId)
-            ->order(SyncMapping::fields_CREATED_AT, 'DESC')
+            ->where(SyncMapping::schema_fields_HOST_ID, $hostId)
+            ->order(SyncMapping::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetch()
             ->getItems();
@@ -83,9 +83,9 @@ class Mapping extends BackendController
             }
             
             $query = $this->syncMapping->clear();
-            $query->where(SyncMapping::fields_HOST_ID, $hostId);
+            $query->where(SyncMapping::schema_fields_HOST_ID, $hostId);
             
-            $mappings = $query->order(SyncMapping::fields_CREATED_AT, 'DESC')
+            $mappings = $query->order(SyncMapping::schema_fields_CREATED_AT, 'DESC')
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -95,15 +95,15 @@ class Mapping extends BackendController
                 $mappingId = $mapping->getId();
                 $data[] = [
                     'mapping_id' => $mappingId,
-                    'host_id' => $mapping->getData(SyncMapping::fields_HOST_ID),
-                    'local_path' => $mapping->getData(SyncMapping::fields_LOCAL_PATH),
-                    'remote_path' => $mapping->getData(SyncMapping::fields_REMOTE_PATH),
+                    'host_id' => $mapping->getData(SyncMapping::schema_fields_HOST_ID),
+                    'local_path' => $mapping->getData(SyncMapping::schema_fields_LOCAL_PATH),
+                    'remote_path' => $mapping->getData(SyncMapping::schema_fields_REMOTE_PATH),
                     'include_paths' => $mapping->getIncludePathsArray(),
                     'exclude_patterns' => $mapping->getExcludePatternsArray(),
-                    'status' => (int)$mapping->getData(SyncMapping::fields_STATUS),
+                    'status' => (int)$mapping->getData(SyncMapping::schema_fields_STATUS),
                     'is_running' => $this->watcherService->isWatcherRunning($mappingId),
                     'pid' => $this->watcherService->getWatcherPid($mappingId),
-                    'created_at' => $mapping->getData(SyncMapping::fields_CREATED_AT),
+                    'created_at' => $mapping->getData(SyncMapping::schema_fields_CREATED_AT),
                 ];
             }
 
@@ -281,10 +281,10 @@ class Mapping extends BackendController
             }
 
             // 设置数据
-            $mapping->setData(SyncMapping::fields_HOST_ID, $hostId);
-            $mapping->setData(SyncMapping::fields_LOCAL_PATH, $localPath);
+            $mapping->setData(SyncMapping::schema_fields_HOST_ID, $hostId);
+            $mapping->setData(SyncMapping::schema_fields_LOCAL_PATH, $localPath);
             $mapping->setRemotePathsArray($remotePaths); // 设置多个远程路径
-            $mapping->setData(SyncMapping::fields_STATUS, $status);
+            $mapping->setData(SyncMapping::schema_fields_STATUS, $status);
             
             // 处理包含路径
             if (!empty($includePaths)) {
@@ -362,7 +362,7 @@ class Mapping extends BackendController
                 throw new \RuntimeException(__('映射不存在'));
             }
 
-            $hostId = $hostId ?: $mapping->getData(SyncMapping::fields_HOST_ID);
+            $hostId = $hostId ?: $mapping->getData(SyncMapping::schema_fields_HOST_ID);
 
             // 停止watcher
             if ($this->watcherService->isWatcherRunning($id)) {
@@ -407,12 +407,12 @@ class Mapping extends BackendController
                 throw new \RuntimeException(__('映射不存在'));
             }
 
-            $hostId = $hostId ?: $mapping->getData(SyncMapping::fields_HOST_ID);
+            $hostId = $hostId ?: $mapping->getData(SyncMapping::schema_fields_HOST_ID);
 
-            $currentStatus = (int)$mapping->getData(SyncMapping::fields_STATUS);
+            $currentStatus = (int)$mapping->getData(SyncMapping::schema_fields_STATUS);
             $newStatus = $currentStatus === 1 ? 0 : 1;
 
-            $mapping->setData(SyncMapping::fields_STATUS, $newStatus);
+            $mapping->setData(SyncMapping::schema_fields_STATUS, $newStatus);
             $mapping->save();
 
             if ($newStatus === 1) {
@@ -425,7 +425,7 @@ class Mapping extends BackendController
                     }
                     $this->getMessageManager()->addSuccess(__('同步已开启'));
                 } else {
-                    $mapping->setData(SyncMapping::fields_STATUS, 0);
+                    $mapping->setData(SyncMapping::schema_fields_STATUS, 0);
                     $mapping->save();
                     throw new \RuntimeException(__('开启同步失败: ') . $result['message']);
                 }
@@ -707,9 +707,9 @@ class Mapping extends BackendController
         
         try {
             // 构建SSH命令来列出远程目录
-            $hostAddress = $host->getData(SyncHost::fields_HOST);
-            $port = $host->getData(SyncHost::fields_PORT) ?: 22;
-            $user = $host->getData(SyncHost::fields_USER);
+            $hostAddress = $host->getData(SyncHost::schema_fields_HOST);
+            $port = $host->getData(SyncHost::schema_fields_PORT) ?: 22;
+            $user = $host->getData(SyncHost::schema_fields_USER);
             $password = $host->getDecryptedPassword();
             $keyContent = $host->getDecryptedKeyContent();
             
