@@ -110,6 +110,13 @@ final class SchemaParser
                     $customPk = $pk;
                 }
             }
+            // 若模型主键字段名不是 id（如 user_id、currency_id），则跳过基类的 id 列，避免双主键
+            if ($customPk === null && $ref->hasConstant('schema_fields_ID')) {
+                $idField = $ref->getConstant('schema_fields_ID');
+                if (is_string($idField) && $idField !== '' && $idField !== 'id') {
+                    $customPk = $idField;
+                }
+            }
             if ($ref->hasConstant('schema_primary_keys')) {
                 $pks = $ref->getConstant('schema_primary_keys');
                 if (is_array($pks) && $pks !== []) {
