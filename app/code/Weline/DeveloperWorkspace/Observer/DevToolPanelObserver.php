@@ -83,9 +83,8 @@ class DevToolPanelObserver implements ObserverInterface
             return;
         }
 
-        // 如果是 iframe 请求，不显示面板
-        if ($this->request->getParam('isIframe') === 'true' || 
-            $this->request->getGet('isIframe') === 'true') {
+        // 如果是 iframe 请求（URL 带 isIframe 或 Sec-Fetch-Dest: iframe），不显示 id="dev-tool-panel"
+        if ($this->request->isIframe()) {
             return;
         }
 

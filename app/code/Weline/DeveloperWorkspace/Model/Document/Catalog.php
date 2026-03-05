@@ -1,219 +1,80 @@
 <?php
-
 declare(strict_types=1);
-
 /*
  * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
  * 邮箱：aiweline@qq.com
  * 网址：aiweline.com
  * 论坛：https://bbs.aiweline.com
  */
-
 namespace Weline\DeveloperWorkspace\Model\Document;
-
-use Weline\Framework\Database\Api\Db\TableInterface;
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
-class Catalog extends \Weline\Framework\Database\Model
+#[Table(comment: '目录')]
+#[Index(name: 'idx_unique_name_pid', columns: ['name', 'pid'], type: 'UNIQUE')]
+class Catalog extends Model
 {
-    public string $table = 'developer_workspace_document_catalog';
-    public const fields_ID = 'id';
-    public const fields_NAME = 'name';
-    public const fields_DESCRIPTION = 'description';
-    public const fields_PID = 'pid';
-    public const fields_level = 'level';
-    public const fields_icon = 'icon';
-    public const fields_selectedIcon = 'selectedIcon';
-    public const fields_color = 'color';
-    public const fields_backColor = 'backColor';
-    public const fields_position = 'position';
-    public const fields_is_active = 'is_active';
-    public const fields_is_system = 'is_system';
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
+    public const schema_table = 'developer_workspace_document_catalog';
+    public const schema_primary_key = 'id';
+    #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'ID')]
+    public const schema_fields_ID = 'id';
+    #[Col('varchar', 60, nullable: false, comment: '目录名')]
+    public const schema_fields_NAME = 'name';
+    #[Col('text', nullable: false, comment: '简介')]
+    public const schema_fields_DESCRIPTION = 'description';
+    #[Col('int', comment: '父目录')]
+    public const schema_fields_PID = 'pid';
+    #[Col('int', nullable: false, default: 0, comment: '目录层级')]
+    public const schema_fields_level = 'level';
+    #[Col('varchar', 60, comment: 'icon图标')]
+    public const schema_fields_icon = 'icon';
+    #[Col('varchar', 60, comment: 'icon选中图标')]
+    public const schema_fields_selectedIcon = 'selectedIcon';
+    #[Col('varchar', 60, comment: '颜色')]
+    public const schema_fields_color = 'color';
+    #[Col('varchar', 60, comment: '背景色')]
+    public const schema_fields_backColor = 'backColor';
+    #[Col('int', default: 0, comment: '排序')]
+    public const schema_fields_position = 'position';
+    #[Col('int', 1, default: 0, comment: '是否激活')]
+    public const schema_fields_is_active = 'is_active';
+    #[Col('int', 1, default: 0, comment: '是否系统创建')]
+    public const schema_fields_is_system = 'is_system';
+public function getName()
     {
-        $this->install($setup, $context);
+        return $this->getData(self::schema_fields_NAME);
     }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        $setup->getPrinting()->setup($context->getVersion());
-        $setup->putModel($this);
-
-        if (!$setup->tableExist()) {
-            $setup->getPrinting()->note(__('表不存在，正在创建...'));
-            $this->install($setup, $context);
-            return;
-        }
-        
-        if (!$setup->hasField(self::fields_is_system)) {
-            $setup->getPrinting()->note(__('添加 is_system 字段...'));
-            $alter = $setup->alterTable();
-            $alter->addColumn(self::fields_is_system, '', 'integer', 1, 'default 0', '系统创建');
-            $alter->alter();
-        }
-        
-        // v1.2.0: 唯一索引从 (name, pid, level) 改为 (name, pid)
-        // level 不应参与唯一性约束，同一父分类下不允许同名即可
-        // 旧索引会导致 level 不一致时创建出重复分类
-        $this->migrateUniqueIndex($setup);
-    }
-    
-    /**
-     * 将唯一索引从 (name, pid, level) 迁移为 (name, pid)
-     */
-    private function migrateUniqueIndex(ModelSetup $setup): void
-    {
-        // 1. 删除旧的唯一索引（可能是 name 单字段或 name+pid+level 三字段）
-        $table = $this->getTable();
-        $dbType = $this->getConnection()->getConfigProvider()->getDbType();
-        $isPgsql = stripos($dbType, 'pgsql') !== false || stripos($dbType, 'postgres') !== false;
-        
-        foreach (['name', 'idx_unique_name_pid_level'] as $oldIndex) {
-            if (!$setup->hasIndex($oldIndex)) {
-                continue;
-            }
-            try {
-                if ($isPgsql) {
-                    $setup->query("DROP INDEX IF EXISTS \"{$oldIndex}\"");
-                } else {
-                    $setup->query("ALTER TABLE {$table} DROP INDEX `{$oldIndex}`");
-                }
-                $setup->getPrinting()->success(__('已删除旧索引: %{name}', ['name' => $oldIndex]));
-            } catch (\Exception $e) {
-                $setup->getPrinting()->warning(__('删除索引失败（可能不存在）: %{name}', ['name' => $oldIndex]));
-            }
-        }
-        
-        // 2. 清理重复数据：同一 (name, pid) 下只保留 ID 最小的一条
-        //    将被删除分类关联的文档迁移到保留的分类上
-        $setup->getPrinting()->note(__('清理可能存在的重复分类数据...'));
-        $allCatalogs = $this->clear()->select()->fetchArray();
-        $groups = [];
-        foreach ($allCatalogs as $cat) {
-            $key = ($cat[self::fields_NAME] ?? '') . '|||' . ($cat[self::fields_PID] ?? '0');
-            $groups[$key][] = $cat;
-        }
-        $deletedCount = 0;
-        foreach ($groups as $cats) {
-            if (count($cats) <= 1) {
-                continue;
-            }
-            usort($cats, fn($a, $b) => (int)$a[self::fields_ID] - (int)$b[self::fields_ID]);
-            $keepId = (int)$cats[0][self::fields_ID];
-            for ($i = 1; $i < count($cats); $i++) {
-                $deleteId = (int)$cats[$i][self::fields_ID];
-                // 将文档从被删除的分类迁移到保留的分类
-                try {
-                    $documentTable = (new \Weline\DeveloperWorkspace\Model\Document())->getTable();
-                    $setup->query(
-                        "UPDATE {$documentTable} SET category_id = {$keepId} WHERE category_id = {$deleteId}"
-                    );
-                    $setup->query(
-                        "UPDATE {$this->getTable()} SET pid = {$keepId} WHERE pid = {$deleteId}"
-                    );
-                } catch (\Exception $e) {
-                    // 忽略
-                }
-                $this->clear()->where(self::fields_ID, $deleteId)->delete()->fetch();
-                $deletedCount++;
-            }
-        }
-        if ($deletedCount > 0) {
-            $setup->getPrinting()->warning(__('已清理 %{count} 条重复分类', ['count' => $deletedCount]));
-        }
-        
-        // 3. 创建新的唯一索引 (name, pid)
-        if (!$setup->hasIndex('idx_unique_name_pid')) {
-            $setup->getPrinting()->note(__('添加联合唯一索引 (name, pid)...'));
-            $alter = $setup->alterTable();
-            $alter->addIndex(
-                TableInterface::index_type_UNIQUE,
-                'idx_unique_name_pid',
-                ['name', 'pid'],
-                '分类名称和父ID联合唯一索引'
-            );
-            $alter->alter();
-            $setup->getPrinting()->success(__('联合唯一索引 (name, pid) 已添加'));
-        }
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        // $setup->dropTable();
-        if (!$setup->tableExist()) {
-            $setup->getPrinting()->setup('安装数据表...', $setup->getTable());
-            $setup->createTable('目录')
-                ->addColumn('id', TableInterface::column_type_INTEGER, 0, 'primary key auto_increment', 'ID')
-                ->addColumn('name', TableInterface::column_type_VARCHAR, 60, 'not null ', '目录名')
-                ->addColumn(self::fields_DESCRIPTION, TableInterface::column_type_TEXT, 0, 'not null', '简介')
-                ->addColumn('level', TableInterface::column_type_INTEGER, null, 'not null default 0', '目录层级')
-                ->addColumn('icon', TableInterface::column_type_VARCHAR, 60, '', 'icon 图标')
-                ->addColumn('selectedIcon', TableInterface::column_type_VARCHAR, 60, '', 'icon 选中图标')
-                ->addColumn('color', TableInterface::column_type_VARCHAR, 60, '', '颜色')
-                ->addColumn('backColor', TableInterface::column_type_VARCHAR, 60, '', '背景色')
-                ->addColumn('position', TableInterface::column_type_INTEGER, null, 'default 0', '排序')
-                ->addColumn('is_active', TableInterface::column_type_INTEGER, 1, 'default 0', '是否激活')
-                ->addColumn('is_system', TableInterface::column_type_INTEGER, 1, 'default 0', '是否系统创建')
-                ->addColumn('pid', TableInterface::column_type_INTEGER, 0, '', '父目录')
-                ->addIndex(TableInterface::index_type_UNIQUE, 'idx_unique_name_pid', ['name', 'pid'], '分类名称和父ID联合唯一索引')
-                ->create();
-        }
-    }
-
-    public function getName()
-    {
-        return $this->getData(self::fields_NAME);
-    }
-
     public function setName(string $name): Catalog
     {
-        return $this->setData(self::fields_NAME, $name);
+        return $this->setData(self::schema_fields_NAME, $name);
     }
-
     public function getPid()
     {
-        return $this->getData(self::fields_PID);
+        return $this->getData(self::schema_fields_PID);
     }
-
     public function setPid(string|int $pid): Catalog
     {
-        return $this->setData(self::fields_PID, $pid);
+        return $this->setData(self::schema_fields_PID, $pid);
     }
-
     public function setDescription(string $description): Catalog
     {
-        return $this->setData(self::fields_DESCRIPTION, $description);
+        return $this->setData(self::schema_fields_DESCRIPTION, $description);
     }
-
     public function getDescription(): string
     {
-        return $this->getData(self::fields_DESCRIPTION) ?? '';
+        return $this->getData(self::schema_fields_DESCRIPTION) ?? '';
     }
-
-
     public function isActive(): bool
     {
-        return $this->getData(self::fields_is_active) === 1;
+        return $this->getData(self::schema_fields_is_active) === 1;
     }
-
     public function setIsActive(bool $state): static
     {
-        return $this->setData(self::fields_is_active, $state);
+        return $this->setData(self::schema_fields_is_active, $state);
     }
-
     /**
      * 重写 getTree 方法，添加 is_active 过滤
      * 
@@ -240,7 +101,7 @@ class Catalog extends \Weline\Framework\Database\Model
     {
         $nodes = [];
         $model = $this->reset()
-            ->where(self::fields_is_active, 1)  // 只获取激活的分类
+            ->where(self::schema_fields_is_active, 1)  // 只获取激活的分类
             ->order($order_field, $order_sort);
         if ($parent_id) {
             $model->where($parent_id_field, $parent_id);

@@ -99,8 +99,8 @@ class DocumentScannerIntegrationTest extends TestCase
         if ($result['new'] > 0 || $result['updated'] > 0) {
             // 查询测试创建的文档
             $docs = $this->documentModel->clear()
-                ->where(Document::fields_MODULE_NAME, 'Weline_DeveloperWorkspace')
-                ->where(Document::fields_IS_AUTO_IMPORTED, 1)
+                ->where(Document::schema_fields_MODULE_NAME, 'Weline_DeveloperWorkspace')
+                ->where(Document::schema_fields_IS_AUTO_IMPORTED, 1)
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -135,8 +135,8 @@ class DocumentScannerIntegrationTest extends TestCase
             
             // 查询创建的文档
             $doc = $this->documentModel->clear()
-                ->where(Document::fields_MODULE_NAME, 'Test_Module')
-                ->where(Document::fields_FILE_NAME, 'test-title.md')
+                ->where(Document::schema_fields_MODULE_NAME, 'Test_Module')
+                ->where(Document::schema_fields_FILE_NAME, 'test-title.md')
                 ->find()->fetch();
             
             if ($doc && $doc->getId()) {
@@ -183,12 +183,12 @@ class DocumentScannerIntegrationTest extends TestCase
             
             // 查询创建的文档
             $doc = $this->documentModel->clear()
-                ->where(Document::fields_MODULE_NAME, 'Test_Module')
-                ->where(Document::fields_FILE_NAME, 'long-document.md')
+                ->where(Document::schema_fields_MODULE_NAME, 'Test_Module')
+                ->where(Document::schema_fields_FILE_NAME, 'long-document.md')
                 ->find()->fetch();
             
             if ($doc && $doc->getId()) {
-                $summary = $doc->getData(Document::fields_summary);
+                $summary = $doc->getData(Document::schema_fields_summary);
                 
                 // 验证摘要长度不超过200字符
                 $this->assertLessThanOrEqual(203, mb_strlen($summary)); // 200 + '...'
@@ -249,9 +249,9 @@ class DocumentScannerIntegrationTest extends TestCase
             $this->assertGreaterThanOrEqual(1, $scanResult['scanned']);
 
             $doc = $this->documentModel->clear()
-                ->where(Document::fields_MODULE_NAME, 'Weline_Framework')
-                ->where(Document::fields_FILE_NAME, $fileName)
-                ->where(Document::fields_FILE_PATH, 'view/doc/' . $fileName)
+                ->where(Document::schema_fields_MODULE_NAME, 'Weline_Framework')
+                ->where(Document::schema_fields_FILE_NAME, $fileName)
+                ->where(Document::schema_fields_FILE_PATH, 'view/doc/' . $fileName)
                 ->find()
                 ->fetch();
 

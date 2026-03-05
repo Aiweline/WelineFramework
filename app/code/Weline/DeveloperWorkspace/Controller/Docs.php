@@ -102,7 +102,7 @@ class Docs extends FrontendController
         // 如果指定了分类ID，加载该分类下的文档列表
         if ($catalogId) {
             $documents = $this->documentModel->clear()
-                ->where(Document::fields_CATEGORY_ID, $catalogId)
+                ->where(Document::schema_fields_CATEGORY_ID, $catalogId)
                 ->order('sort_order', 'ASC')
                 ->order('id', 'DESC')
                 ->select()
@@ -161,7 +161,7 @@ class Docs extends FrontendController
             
             // 查询所有这些分类下的文档
             $documents = $this->documentModel->clear()
-                ->where(Document::fields_CATEGORY_ID, $catalogIds, 'in')
+                ->where(Document::schema_fields_CATEGORY_ID, $catalogIds, 'in')
                 ->order('sort_order', 'ASC')
                 ->order('id', 'DESC')
                 ->select()
@@ -524,9 +524,9 @@ class Docs extends FrontendController
             }
             
             $documents = $this->documentModel->clear()
-                ->where(Document::fields_TITLE, '%' . $keyword . '%', 'LIKE')
-                ->where(Document::fields_summary, '%' . $keyword . '%', 'LIKE', 'OR')
-                ->where(Document::fields_CONTEND, '%' . $keyword . '%', 'LIKE', 'OR')
+                ->where(Document::schema_fields_TITLE, '%' . $keyword . '%', 'LIKE')
+                ->where(Document::schema_fields_summary, '%' . $keyword . '%', 'LIKE', 'OR')
+                ->where(Document::schema_fields_CONTEND, '%' . $keyword . '%', 'LIKE', 'OR')
                 ->order('id', 'DESC')
                 ->limit(50)
                 ->select()
@@ -757,7 +757,7 @@ class Docs extends FrontendController
                 /** @var LocaleName $localeNameModel */
                 $localeNameModel = ObjectManager::getInstance(LocaleName::class);
                 $locales = $localeNameModel->clear()
-                    ->order(LocaleName::fields_LOCALE_CODE, 'ASC')
+                    ->order(LocaleName::schema_fields_LOCALE_CODE, 'ASC')
                     ->select()
                     ->fetch()
                     ->getItems();
@@ -765,8 +765,8 @@ class Docs extends FrontendController
                 $result = [];
                 foreach ($locales as $locale) {
                     $result[] = [
-                        'code' => $locale->getData(LocaleName::fields_LOCALE_CODE),
-                        'name' => $locale->getData(LocaleName::fields_DISPLAY_NAME) ?: $locale->getData(LocaleName::fields_DISPLAY_LOCALE_CODE),
+                        'code' => $locale->getData(LocaleName::schema_fields_LOCALE_CODE),
+                        'name' => $locale->getData(LocaleName::schema_fields_DISPLAY_NAME) ?: $locale->getData(LocaleName::schema_fields_DISPLAY_LOCALE_CODE),
                     ];
                 }
                 
@@ -787,14 +787,14 @@ class Docs extends FrontendController
             $result = [];
             foreach ($languageCodes as $code) {
                 $locale = $localeNameModel->clear()
-                    ->where(LocaleName::fields_LOCALE_CODE, $code)
+                    ->where(LocaleName::schema_fields_LOCALE_CODE, $code)
                     ->find()
                     ->fetch();
                 
                 if ($locale->getId()) {
                     $result[] = [
-                        'code' => $locale->getData(LocaleName::fields_LOCALE_CODE),
-                        'name' => $locale->getData(LocaleName::fields_DISPLAY_NAME) ?: $locale->getData(LocaleName::fields_DISPLAY_LOCALE_CODE),
+                        'code' => $locale->getData(LocaleName::schema_fields_LOCALE_CODE),
+                        'name' => $locale->getData(LocaleName::schema_fields_DISPLAY_NAME) ?: $locale->getData(LocaleName::schema_fields_DISPLAY_LOCALE_CODE),
                     ];
                 } else {
                     // 如果找不到详细信息，至少显示代码
