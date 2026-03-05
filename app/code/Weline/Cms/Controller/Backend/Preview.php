@@ -208,7 +208,7 @@ class Preview extends BackendController
         $templateDefaults = [];
         try {
             $styleModel = clone $this->styleModel;
-            $styleModel->clear()->where(\Weline\Cms\Model\Style::fields_CODE, $styleCode)->find()->fetch();
+            $styleModel->clear()->where(\Weline\Cms\Model\Style::schema_fields_CODE, $styleCode)->find()->fetch();
             if ($styleModel->getId()) {
                 $configGroups = $styleModel->getConfigGroups();
                 // 遍历所有配置项，提取默认值
@@ -267,7 +267,7 @@ class Preview extends BackendController
         if ($locale && $locale !== $defaultLocale) {
             $localDesc = clone $this->localDescriptionModel;
             $localDesc->clear()
-                ->where(\Weline\Cms\Model\Page\LocalDescription::fields_ID, $page->getId())
+                ->where(\Weline\Cms\Model\Page\LocalDescription::schema_fields_ID, $page->getId())
                 ->where('local_code', $locale)
                 ->find()
                 ->fetch();
@@ -387,7 +387,7 @@ class Preview extends BackendController
 
         // 验证样式是否存在
         $styleModel = clone $this->styleModel;
-        $styleModel->clear()->where(\Weline\Cms\Model\Style::fields_CODE, $styleCode)->find()->fetch();
+        $styleModel->clear()->where(\Weline\Cms\Model\Style::schema_fields_CODE, $styleCode)->find()->fetch();
         
         if (!$styleModel->getId()) {
             echo '<div style="padding: 20px; color: red;">样式模板不存在：' . htmlspecialchars($styleCode ?? '') . '</div>';
@@ -517,7 +517,7 @@ class Preview extends BackendController
                 // 保存到LocalDescription.config.style_config（语言特定配置）
                 $localDesc = clone $this->localDescriptionModel;
                 $localDesc->clear()
-                    ->where(LocalDescription::fields_ID, $pageId)
+                    ->where(LocalDescription::schema_fields_ID, $pageId)
                     ->where('local_code', $locale)
                     ->find()
                     ->fetch();
@@ -549,7 +549,7 @@ class Preview extends BackendController
                     // 创建新的LocalDescription记录
                     $newLocalDesc = clone $this->localDescriptionModel;
                     $newLocalDesc->clearData()
-                        ->setData(LocalDescription::fields_ID, $pageId)
+                        ->setData(LocalDescription::schema_fields_ID, $pageId)
                         ->setData('local_code', $locale)
                         ->setData('config', json_encode($config))
                         ->setData('name', $page->getData('name'))
@@ -697,7 +697,7 @@ class Preview extends BackendController
                 // 从LocalDescription.config.style_config中删除指定的配置键
                 $localDesc = clone $this->localDescriptionModel;
                 $localDesc->clear()
-                    ->where(LocalDescription::fields_ID, $pageId)
+                    ->where(LocalDescription::schema_fields_ID, $pageId)
                     ->where('local_code', $locale)
                     ->find()
                     ->fetch();

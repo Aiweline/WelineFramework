@@ -61,12 +61,12 @@ class Page extends FrontendController
         // 加载页面（按 website_id + handle 查询）
         $page = clone $this->pageModel;
         $page->clear()
-            ->where(PageModel::fields_WEBSITE_ID, $websiteId)
-            ->where(PageModel::fields_HANDLE, $handle);
+            ->where(PageModel::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(PageModel::schema_fields_HANDLE, $handle);
         
         // 如果不是预览模式，只显示已发布的页面
         if (!$isPreview) {
-            $page->where(PageModel::fields_STATUS, PageModel::STATUS_PUBLISHED);
+            $page->where(PageModel::schema_fields_STATUS, PageModel::STATUS_PUBLISHED);
         }
         
         $page->find()->fetch();
@@ -105,7 +105,7 @@ class Page extends FrontendController
         $this->assign('is_preview', $isPreview);
 
         // 获取页面的样式和样式配置
-        $styleCode = $page->getData(PageModel::fields_STYLE);
+        $styleCode = $page->getData(PageModel::schema_fields_STYLE);
         $allStyleSettings = $page->getStyleSetting(); // 获取页面的所有样式配置
         
         // 获取当前样式的配置值（从所有样式配置中提取）
@@ -126,10 +126,10 @@ class Page extends FrontendController
             // 加载样式信息
             $style = clone $this->styleModel;
 			$style->clear()
-				->where(Style::fields_CODE, $styleCode);
+				->where(Style::schema_fields_CODE, $styleCode);
 			// 预览模式下允许未激活样式；非预览需限制仅激活样式
 			if (!$isPreview) {
-				$style->where(Style::fields_IS_ACTIVE, 1);
+				$style->where(Style::schema_fields_IS_ACTIVE, 1);
 			}
 			$style->find()->fetch();
             
@@ -190,7 +190,7 @@ class Page extends FrontendController
                     $customContent = $localizedContent['content'];
                 } else {
                     // 使用默认语言的自定义内容
-                    $customContent = $page->getData(PageModel::fields_CONTENT);
+                    $customContent = $page->getData(PageModel::schema_fields_CONTENT);
                 }
                 
                 if (!empty($customContent)) {
@@ -323,7 +323,7 @@ class Page extends FrontendController
      */
     private function renderLanguageSwitcher(PageModel $page, array $availableLocales, string $currentLocale): string
     {
-        $handle = $page->getData(PageModel::fields_HANDLE);
+        $handle = $page->getData(PageModel::schema_fields_HANDLE);
         // 使用友好的重写 URL 格式
         $baseUrl = '/' . $handle;
         

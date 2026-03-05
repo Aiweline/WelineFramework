@@ -71,7 +71,7 @@ class Page extends BackendController
         
         // 获取页面列表数据（按创建时间倒序排列）
         $pages = $listModel
-            ->order(PageModel::fields_CREATE_TIME, 'DESC')
+            ->order(PageModel::schema_fields_CREATE_TIME, 'DESC')
             ->pagination()
             ->select()
             ->fetch();
@@ -97,7 +97,7 @@ class Page extends BackendController
         $currentLang = State::getLang() ?: 'zh_Hans_CN';
         $localsQuery = clone $this->localsModel;
         $allLocales = $localsQuery->clear()
-            ->where(Locals::fields_IS_ACTIVE, 1)
+            ->where(Locals::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetch()
             ->getItems();
@@ -222,8 +222,8 @@ class Page extends BackendController
                 $parentPageModel->clear()->load($parentId);
                 if ($parentPageModel->getId()) {
                     // 强制使用父页面的语言设置
-                    $selectedLocales = json_decode(($parentPageModel->getData(PageModel::fields_LOCALES) ?? '') ?? '', true) ?: [];
-                    $defaultLocale = $parentPageModel->getData(PageModel::fields_DEFAULT_LOCALE);
+                    $selectedLocales = json_decode(($parentPageModel->getData(PageModel::schema_fields_LOCALES) ?? '') ?? '', true) ?: [];
+                    $defaultLocale = $parentPageModel->getData(PageModel::schema_fields_DEFAULT_LOCALE);
                     
                     // 确保默认语言在列表中
                     if ($defaultLocale && !in_array($defaultLocale, $selectedLocales)) {
@@ -259,28 +259,28 @@ class Page extends BackendController
             }
             
             $page->clearData()
-                ->setData(PageModel::fields_HANDLE, $data['handle'])
-                ->setData(PageModel::fields_WEBSITE_ID, $websiteId)
-                ->setData(PageModel::fields_TYPE, $data['type'])
-                ->setData(PageModel::fields_NAME, $data['name'])
-                ->setData(PageModel::fields_TITLE, $data['title'])
-                ->setData(PageModel::fields_CONTENT, $data['content'] ?? '')
-                ->setData(PageModel::fields_PARENT_ID, $parentId)
-                ->setData(PageModel::fields_STYLE, $data['style'] ?? '')
-                ->setData(PageModel::fields_STYLE_SETTING, json_encode($allStyleSettings))
-                ->setData(PageModel::fields_GA4_ID, $data['ga4_id'] ?? '')
-                ->setData(PageModel::fields_GTM_ID, $data['gtm_id'] ?? '')
-                ->setData(PageModel::fields_FB_PIXEL_ID, $data['fb_pixel_id'] ?? '')
-                ->setData(PageModel::fields_CTA_EVENT_NAME, $ctaEventName)
-                ->setData(PageModel::fields_LOGO, $data['logo'] ?? '')
-                ->setData(PageModel::fields_ICON, $data['icon'] ?? '')
-                ->setData(PageModel::fields_LOCALES, json_encode($selectedLocales))
-                ->setData(PageModel::fields_DEFAULT_LOCALE, $defaultLocale)
-                ->setData(PageModel::fields_META_TITLE, $data['meta_title'] ?? '')
-                ->setData(PageModel::fields_META_DESCRIPTION, $data['meta_description'] ?? '')
-                ->setData(PageModel::fields_META_KEYWORDS, $data['meta_keywords'] ?? '')
-                ->setData(PageModel::fields_REDIRECT_URL, $data['redirect_url'] ?? '')
-                ->setData(PageModel::fields_STATUS, $data['status'] ?? PageModel::STATUS_DRAFT)
+                ->setData(PageModel::schema_fields_HANDLE, $data['handle'])
+                ->setData(PageModel::schema_fields_WEBSITE_ID, $websiteId)
+                ->setData(PageModel::schema_fields_TYPE, $data['type'])
+                ->setData(PageModel::schema_fields_NAME, $data['name'])
+                ->setData(PageModel::schema_fields_TITLE, $data['title'])
+                ->setData(PageModel::schema_fields_CONTENT, $data['content'] ?? '')
+                ->setData(PageModel::schema_fields_PARENT_ID, $parentId)
+                ->setData(PageModel::schema_fields_STYLE, $data['style'] ?? '')
+                ->setData(PageModel::schema_fields_STYLE_SETTING, json_encode($allStyleSettings))
+                ->setData(PageModel::schema_fields_GA4_ID, $data['ga4_id'] ?? '')
+                ->setData(PageModel::schema_fields_GTM_ID, $data['gtm_id'] ?? '')
+                ->setData(PageModel::schema_fields_FB_PIXEL_ID, $data['fb_pixel_id'] ?? '')
+                ->setData(PageModel::schema_fields_CTA_EVENT_NAME, $ctaEventName)
+                ->setData(PageModel::schema_fields_LOGO, $data['logo'] ?? '')
+                ->setData(PageModel::schema_fields_ICON, $data['icon'] ?? '')
+                ->setData(PageModel::schema_fields_LOCALES, json_encode($selectedLocales))
+                ->setData(PageModel::schema_fields_DEFAULT_LOCALE, $defaultLocale)
+                ->setData(PageModel::schema_fields_META_TITLE, $data['meta_title'] ?? '')
+                ->setData(PageModel::schema_fields_META_DESCRIPTION, $data['meta_description'] ?? '')
+                ->setData(PageModel::schema_fields_META_KEYWORDS, $data['meta_keywords'] ?? '')
+                ->setData(PageModel::schema_fields_REDIRECT_URL, $data['redirect_url'] ?? '')
+                ->setData(PageModel::schema_fields_STATUS, $data['status'] ?? PageModel::STATUS_DRAFT)
                 ->save(true);
             
             // 自动创建 URL 重写规则
@@ -329,7 +329,7 @@ class Page extends BackendController
         $currentLang = State::getLang() ?: 'zh_Hans_CN';
         $localsQuery = clone $this->localsModel;
         $allLocales = $localsQuery->clear()
-            ->where(Locals::fields_IS_ACTIVE, 1)
+            ->where(Locals::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetch()
             ->getItems();
@@ -373,14 +373,14 @@ class Page extends BackendController
         // 获取父页面列表（排除自己）
         $parentPages = clone $this->pageModel;
         $parentPages = $parentPages->clear()
-            ->where(PageModel::fields_ID, $pageId, '!=')
+            ->where(PageModel::schema_fields_ID, $pageId, '!=')
             ->select()
             ->fetch()
             ->getItems();
         $this->assign('parent_pages', $parentPages);
         
         // 如果当前页面有父页面，获取父页面的配置用于继承锁定
-        $currentParentId = $page->getData(PageModel::fields_PARENT_ID);
+        $currentParentId = $page->getData(PageModel::schema_fields_PARENT_ID);
         $parentPageData = null;
         if ($currentParentId && $currentParentId > 0) {
             $parentPageModel = clone $this->pageModel;
@@ -404,7 +404,7 @@ class Page extends BackendController
         // 获取已翻译的语言数据
         $localDescriptions = clone $this->localDescriptionModel;
         $translations = $localDescriptions->clear()
-            ->where(LocalDescription::fields_ID, $pageId)
+            ->where(LocalDescription::schema_fields_ID, $pageId)
             ->select()
             ->fetch()
             ->getItems();
@@ -417,11 +417,11 @@ class Page extends BackendController
             
             // 为多语言内容编辑 Tab 准备数据
             $localizedContents[$localeCode] = [
-                'title' => $translation->getData(LocalDescription::fields_TITLE),
-                'content' => $translation->getData(LocalDescription::fields_CONTENT),
-                'meta_title' => $translation->getData(LocalDescription::fields_META_TITLE),
-                'meta_description' => $translation->getData(LocalDescription::fields_META_DESCRIPTION),
-                'meta_keywords' => $translation->getData(LocalDescription::fields_META_KEYWORDS),
+                'title' => $translation->getData(LocalDescription::schema_fields_TITLE),
+                'content' => $translation->getData(LocalDescription::schema_fields_CONTENT),
+                'meta_title' => $translation->getData(LocalDescription::schema_fields_META_TITLE),
+                'meta_description' => $translation->getData(LocalDescription::schema_fields_META_DESCRIPTION),
+                'meta_keywords' => $translation->getData(LocalDescription::schema_fields_META_KEYWORDS),
             ];
         }
         $this->assign('translations', $translationsData);
@@ -433,7 +433,7 @@ class Page extends BackendController
         $this->assign('styles', []);
         
         // 获取当前页面的样式配置
-        $currentStyle = $page->getData(PageModel::fields_STYLE);
+        $currentStyle = $page->getData(PageModel::schema_fields_STYLE);
         $allStyleSettings = $page->getStyleSetting(); // 所有样式的配置
         
         // 获取当前样式的配置值（从所有样式配置中提取）
@@ -450,7 +450,7 @@ class Page extends BackendController
             $isChildPage = true;
             $relatedPagesModel = clone $this->pageModel;
             $relatedPages = $relatedPagesModel->clear()
-                ->where(PageModel::fields_PARENT_ID, $currentParentId)
+                ->where(PageModel::schema_fields_PARENT_ID, $currentParentId)
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -458,7 +458,7 @@ class Page extends BackendController
             // 当前是父页面，获取其子页面
             $relatedPagesModel = clone $this->pageModel;
             $relatedPages = $relatedPagesModel->clear()
-                ->where(PageModel::fields_PARENT_ID, $pageId)
+                ->where(PageModel::schema_fields_PARENT_ID, $pageId)
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -470,7 +470,7 @@ class Page extends BackendController
         $styleConfigs = [];
         if ($currentStyle) {
             $styleModel = clone $this->styleModel;
-            $styleModel->clear()->where(Style::fields_CODE, $currentStyle)->find()->fetch();
+            $styleModel->clear()->where(Style::schema_fields_CODE, $currentStyle)->find()->fetch();
             if ($styleModel->getId()) {
                 $styleConfigs = $styleModel->getConfigGroups();
             }
@@ -497,7 +497,7 @@ class Page extends BackendController
             }
             
             // 检查当前页面是否有父页面，如果有则强制继承父页面配置
-            $currentParentId = $page->getData(PageModel::fields_PARENT_ID);
+            $currentParentId = $page->getData(PageModel::schema_fields_PARENT_ID);
             
             // 处理选中的语言列表
             $selectedLocales = $this->request->getPost('locales', []);
@@ -509,8 +509,8 @@ class Page extends BackendController
                 $parentPageModel->clear()->load($currentParentId);
                 if ($parentPageModel->getId()) {
                     // 强制使用父页面的语言设置
-                    $selectedLocales = json_decode(($parentPageModel->getData(PageModel::fields_LOCALES) ?? '') ?? '', true) ?: [];
-                    $defaultLocale = $parentPageModel->getData(PageModel::fields_DEFAULT_LOCALE);
+                    $selectedLocales = json_decode(($parentPageModel->getData(PageModel::schema_fields_LOCALES) ?? '') ?? '', true) ?: [];
+                    $defaultLocale = $parentPageModel->getData(PageModel::schema_fields_DEFAULT_LOCALE);
                     
                     // 确保默认语言在列表中
                     if ($defaultLocale && !in_array($defaultLocale, $selectedLocales)) {
@@ -553,31 +553,31 @@ class Page extends BackendController
             // 处理 website_id：如果提供了则更新，否则保持原值
             $websiteId = $data['website_id'] ?? null;
             if ($websiteId !== null && $websiteId !== '') {
-                $page->setData(PageModel::fields_WEBSITE_ID, (int)$websiteId);
+                $page->setData(PageModel::schema_fields_WEBSITE_ID, (int)$websiteId);
             }
             
             // 更新页面
-            $page->setData(PageModel::fields_HANDLE, $data['handle'])
-                ->setData(PageModel::fields_TYPE, $data['type'])
-                ->setData(PageModel::fields_NAME, $data['name'])
-                ->setData(PageModel::fields_TITLE, $data['title'])
-                ->setData(PageModel::fields_CONTENT, $data['content'] ?? '')
-                ->setData(PageModel::fields_PARENT_ID, $data['parent_id'] ?? 0)
-                ->setData(PageModel::fields_STYLE, $data['style'] ?? '')
-                ->setData(PageModel::fields_STYLE_SETTING, json_encode($existingSettings))
-                ->setData(PageModel::fields_GA4_ID, $data['ga4_id'] ?? '')
-                ->setData(PageModel::fields_GTM_ID, $data['gtm_id'] ?? '')
-                ->setData(PageModel::fields_FB_PIXEL_ID, $data['fb_pixel_id'] ?? '')
-                ->setData(PageModel::fields_CTA_EVENT_NAME, $ctaEventName)
-                ->setData(PageModel::fields_LOGO, $data['logo'] ?? '')
-                ->setData(PageModel::fields_ICON, $data['icon'] ?? '')
-                ->setData(PageModel::fields_LOCALES, json_encode($selectedLocales))
-                ->setData(PageModel::fields_DEFAULT_LOCALE, $defaultLocale)
-                ->setData(PageModel::fields_META_TITLE, $data['meta_title'] ?? '')
-                ->setData(PageModel::fields_META_DESCRIPTION, $data['meta_description'] ?? '')
-                ->setData(PageModel::fields_META_KEYWORDS, $data['meta_keywords'] ?? '')
-                ->setData(PageModel::fields_REDIRECT_URL, $data['redirect_url'] ?? '')
-                ->setData(PageModel::fields_STATUS, $data['status'] ?? PageModel::STATUS_DRAFT)
+            $page->setData(PageModel::schema_fields_HANDLE, $data['handle'])
+                ->setData(PageModel::schema_fields_TYPE, $data['type'])
+                ->setData(PageModel::schema_fields_NAME, $data['name'])
+                ->setData(PageModel::schema_fields_TITLE, $data['title'])
+                ->setData(PageModel::schema_fields_CONTENT, $data['content'] ?? '')
+                ->setData(PageModel::schema_fields_PARENT_ID, $data['parent_id'] ?? 0)
+                ->setData(PageModel::schema_fields_STYLE, $data['style'] ?? '')
+                ->setData(PageModel::schema_fields_STYLE_SETTING, json_encode($existingSettings))
+                ->setData(PageModel::schema_fields_GA4_ID, $data['ga4_id'] ?? '')
+                ->setData(PageModel::schema_fields_GTM_ID, $data['gtm_id'] ?? '')
+                ->setData(PageModel::schema_fields_FB_PIXEL_ID, $data['fb_pixel_id'] ?? '')
+                ->setData(PageModel::schema_fields_CTA_EVENT_NAME, $ctaEventName)
+                ->setData(PageModel::schema_fields_LOGO, $data['logo'] ?? '')
+                ->setData(PageModel::schema_fields_ICON, $data['icon'] ?? '')
+                ->setData(PageModel::schema_fields_LOCALES, json_encode($selectedLocales))
+                ->setData(PageModel::schema_fields_DEFAULT_LOCALE, $defaultLocale)
+                ->setData(PageModel::schema_fields_META_TITLE, $data['meta_title'] ?? '')
+                ->setData(PageModel::schema_fields_META_DESCRIPTION, $data['meta_description'] ?? '')
+                ->setData(PageModel::schema_fields_META_KEYWORDS, $data['meta_keywords'] ?? '')
+                ->setData(PageModel::schema_fields_REDIRECT_URL, $data['redirect_url'] ?? '')
+                ->setData(PageModel::schema_fields_STATUS, $data['status'] ?? PageModel::STATUS_DRAFT)
                 ->save();
             
             // 自动创建或更新 URL 重写规则
@@ -607,32 +607,32 @@ class Page extends BackendController
                     // 查找或创建翻译记录
                     $localDesc = clone $this->localDescriptionModel;
                     $existing = $localDesc->clear()
-                        ->where(LocalDescription::fields_ID, $pageId)
+                        ->where(LocalDescription::schema_fields_ID, $pageId)
                         ->where('local_code', $locale)
                         ->find()
                         ->fetch();
                     
                     if ($existing && $existing->getId()) {
                         // 更新现有翻译
-                        $existing->setData(LocalDescription::fields_NAME, $data['name'] ?? '')
-                            ->setData(LocalDescription::fields_TITLE, $translatedTitle)
-                            ->setData(LocalDescription::fields_CONTENT, $translatedContent)
-                            ->setData(LocalDescription::fields_META_TITLE, $translatedMetaTitle)
-                            ->setData(LocalDescription::fields_META_DESCRIPTION, $translatedMetaDesc)
-                            ->setData(LocalDescription::fields_META_KEYWORDS, $translatedMetaKeywords)
+                        $existing->setData(LocalDescription::schema_fields_NAME, $data['name'] ?? '')
+                            ->setData(LocalDescription::schema_fields_TITLE, $translatedTitle)
+                            ->setData(LocalDescription::schema_fields_CONTENT, $translatedContent)
+                            ->setData(LocalDescription::schema_fields_META_TITLE, $translatedMetaTitle)
+                            ->setData(LocalDescription::schema_fields_META_DESCRIPTION, $translatedMetaDesc)
+                            ->setData(LocalDescription::schema_fields_META_KEYWORDS, $translatedMetaKeywords)
                             ->save();
                     } else {
                         // 创建新翻译
                         $newTranslation = clone $this->localDescriptionModel;
                         $newTranslation->clearData()
-                            ->setData(LocalDescription::fields_ID, $pageId)
+                            ->setData(LocalDescription::schema_fields_ID, $pageId)
                             ->setData('local_code', $locale)
-                            ->setData(LocalDescription::fields_NAME, $data['name'] ?? '')
-                            ->setData(LocalDescription::fields_TITLE, $translatedTitle)
-                            ->setData(LocalDescription::fields_CONTENT, $translatedContent)
-                            ->setData(LocalDescription::fields_META_TITLE, $translatedMetaTitle)
-                            ->setData(LocalDescription::fields_META_DESCRIPTION, $translatedMetaDesc)
-                            ->setData(LocalDescription::fields_META_KEYWORDS, $translatedMetaKeywords)
+                            ->setData(LocalDescription::schema_fields_NAME, $data['name'] ?? '')
+                            ->setData(LocalDescription::schema_fields_TITLE, $translatedTitle)
+                            ->setData(LocalDescription::schema_fields_CONTENT, $translatedContent)
+                            ->setData(LocalDescription::schema_fields_META_TITLE, $translatedMetaTitle)
+                            ->setData(LocalDescription::schema_fields_META_DESCRIPTION, $translatedMetaDesc)
+                            ->setData(LocalDescription::schema_fields_META_KEYWORDS, $translatedMetaKeywords)
                             ->save();
                     }
                 }
@@ -694,7 +694,7 @@ class Page extends BackendController
             // 删除翻译数据
             $localDescriptions = clone $this->localDescriptionModel;
             $localDescriptions->clear()
-                ->where(LocalDescription::fields_ID, $pageId)
+                ->where(LocalDescription::schema_fields_ID, $pageId)
                 ->delete()
                 ->fetch();
             
@@ -741,7 +741,7 @@ class Page extends BackendController
         // 获取翻译数据
         $localDescription = clone $this->localDescriptionModel;
         $localDescription->clear()
-            ->where(LocalDescription::fields_ID, $pageId)
+            ->where(LocalDescription::schema_fields_ID, $pageId)
             ->where('local_code', $locale)
             ->find()
             ->fetch();
@@ -762,19 +762,19 @@ class Page extends BackendController
             // 保存或更新翻译
             $localDescription = clone $this->localDescriptionModel;
             $localDescription->clear()
-                ->where(LocalDescription::fields_ID, $pageId)
+                ->where(LocalDescription::schema_fields_ID, $pageId)
                 ->where('local_code', $locale)
                 ->find()
                 ->fetch();
             
-            $localDescription->setData(LocalDescription::fields_ID, $pageId)
+            $localDescription->setData(LocalDescription::schema_fields_ID, $pageId)
                 ->setData('local_code', $locale)
-                ->setData(LocalDescription::fields_NAME, $data['name'] ?? '')
-                ->setData(LocalDescription::fields_TITLE, $data['title'] ?? '')
-                ->setData(LocalDescription::fields_CONTENT, $data['content'] ?? '')
-                ->setData(LocalDescription::fields_META_TITLE, $data['meta_title'] ?? '')
-                ->setData(LocalDescription::fields_META_DESCRIPTION, $data['meta_description'] ?? '')
-                ->setData(LocalDescription::fields_META_KEYWORDS, $data['meta_keywords'] ?? '')
+                ->setData(LocalDescription::schema_fields_NAME, $data['name'] ?? '')
+                ->setData(LocalDescription::schema_fields_TITLE, $data['title'] ?? '')
+                ->setData(LocalDescription::schema_fields_CONTENT, $data['content'] ?? '')
+                ->setData(LocalDescription::schema_fields_META_TITLE, $data['meta_title'] ?? '')
+                ->setData(LocalDescription::schema_fields_META_DESCRIPTION, $data['meta_description'] ?? '')
+                ->setData(LocalDescription::schema_fields_META_KEYWORDS, $data['meta_keywords'] ?? '')
                 ->save(true);
             
             $this->getMessageManager()->addSuccess(__('翻译保存成功！'));
@@ -805,9 +805,9 @@ class Page extends BackendController
             // 获取所有可用样式（只返回已发布的模板）
             $styles = clone $this->styleModel;
             $styleList = $styles->clear()
-                ->where(Style::fields_IS_ACTIVE, 1)
-                ->where(Style::fields_IS_PUBLISHED, 1)
-                ->order(Style::fields_SORT_ORDER, 'ASC')
+                ->where(Style::schema_fields_IS_ACTIVE, 1)
+                ->where(Style::schema_fields_IS_PUBLISHED, 1)
+                ->order(Style::schema_fields_SORT_ORDER, 'ASC')
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -817,11 +817,11 @@ class Page extends BackendController
             foreach ($styleList as $style) {
                 $formattedStyles[] = [
                     'id' => $style->getId(),
-                    'code' => $style->getData(Style::fields_CODE),
-                    'name' => $style->getData(Style::fields_NAME),
-                    'description' => $style->getData(Style::fields_DESCRIPTION),
-                    'path' => $style->getData(Style::fields_PATH),
-                    'preview_image' => $style->getData(Style::fields_PREVIEW_IMAGE),
+                    'code' => $style->getData(Style::schema_fields_CODE),
+                    'name' => $style->getData(Style::schema_fields_NAME),
+                    'description' => $style->getData(Style::schema_fields_DESCRIPTION),
+                    'path' => $style->getData(Style::schema_fields_PATH),
+                    'preview_image' => $style->getData(Style::schema_fields_PREVIEW_IMAGE),
                 ];
             }
             
@@ -862,7 +862,7 @@ class Page extends BackendController
             
             // 获取模板配置定义
             $styleModel = clone $this->styleModel;
-            $styleModel->clear()->where(Style::fields_CODE, $styleCode)->find()->fetch();
+            $styleModel->clear()->where(Style::schema_fields_CODE, $styleCode)->find()->fetch();
             
             if (!$styleModel->getId()) {
                 return $this->fetchJson([
@@ -898,7 +898,7 @@ class Page extends BackendController
                     if ($locale && $locale !== $defaultLocale) {
                         $localDesc = clone $this->localDescriptionModel;
                         $localDesc->clear()
-                            ->where(\Weline\Cms\Model\Page\LocalDescription::fields_ID, $pageId)
+                            ->where(\Weline\Cms\Model\Page\LocalDescription::schema_fields_ID, $pageId)
                             ->where('local_code', $locale)
                             ->find()
                             ->fetch();
@@ -1025,8 +1025,8 @@ class Page extends BackendController
             // 查询数据库检查是否已存在（在同一 website_id 内）
             $existingPage = clone $this->pageModel;
             $existingPage->clear()
-                ->where(PageModel::fields_WEBSITE_ID, $websiteId)
-                ->where(PageModel::fields_HANDLE, $handle)
+                ->where(PageModel::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(PageModel::schema_fields_HANDLE, $handle)
                 ->find()
                 ->fetch();
             
@@ -1047,8 +1047,8 @@ class Page extends BackendController
                         'message' => __('页面句柄已被使用，请使用其他句柄'),
                         'existing_page' => [
                             'id' => $existingPage->getId(),
-                            'name' => $existingPage->getData(PageModel::fields_NAME),
-                            'title' => $existingPage->getData(PageModel::fields_TITLE)
+                            'name' => $existingPage->getData(PageModel::schema_fields_NAME),
+                            'title' => $existingPage->getData(PageModel::schema_fields_TITLE)
                         ]
                     ]);
                 }
@@ -1099,8 +1099,8 @@ class Page extends BackendController
             // 查询页面（按 website_id + handle）
             $page = clone $this->pageModel;
             $page->clear()
-                ->where(PageModel::fields_WEBSITE_ID, $websiteId)
-                ->where(PageModel::fields_HANDLE, $handle)
+                ->where(PageModel::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(PageModel::schema_fields_HANDLE, $handle)
                 ->find()
                 ->fetch();
             
@@ -1164,7 +1164,7 @@ class Page extends BackendController
         }
         
         // 获取前端预览URL（带语言参数和preview标记）
-        $handle = $page->getData(PageModel::fields_HANDLE);
+        $handle = $page->getData(PageModel::schema_fields_HANDLE);
         $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl(
             'cms/frontend/page/view',
             ['handle' => $handle, 'locale' => $locale, 'preview' => '1']
@@ -1203,7 +1203,7 @@ class Page extends BackendController
             }
             
             // 获取预览图路径
-            $previewImage = $style->getData(Style::fields_PREVIEW_IMAGE);
+            $previewImage = $style->getData(Style::schema_fields_PREVIEW_IMAGE);
             
             if (!$previewImage) {
                 header('HTTP/1.1 404 Not Found');
@@ -1274,13 +1274,13 @@ class Page extends BackendController
     private function createOrUpdateUrlRewrite(PageModel $page): void
     {
         try {
-            $handle = $page->getData(PageModel::fields_HANDLE);
+            $handle = $page->getData(PageModel::schema_fields_HANDLE);
             if (empty($handle)) {
                 return;
             }
             
             // 获取页面的 website_id
-            $websiteId = (int)($page->getData(PageModel::fields_WEBSITE_ID) ?? 0);
+            $websiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
             
             // 原始路径
             $originalPath = "cms/frontend/page/view?handle={$handle}";
@@ -1295,25 +1295,25 @@ class Page extends BackendController
             /**@var UrlRewrite $urlRewriteModel */
             $urlRewriteModel = ObjectManager::getInstance(UrlRewrite::class);
             $existingRewrite = $urlRewriteModel->clear()
-                ->where(UrlRewrite::fields_WEBSITE_ID, $websiteId)
-                ->where(UrlRewrite::fields_URL_IDENTIFY, $urlIdentify)
+                ->where(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(UrlRewrite::schema_fields_URL_IDENTIFY, $urlIdentify)
                 ->find()
                 ->fetch();
             
             if ($existingRewrite && $existingRewrite->getId()) {
                 // 更新现有规则
-                $existingRewrite->setData(UrlRewrite::fields_PATH, $originalPath)
-                    ->setData(UrlRewrite::fields_REWRITE, $rewritePath)
+                $existingRewrite->setData(UrlRewrite::schema_fields_PATH, $originalPath)
+                    ->setData(UrlRewrite::schema_fields_REWRITE, $rewritePath)
                     ->save();
             } else {
                 // 创建新规则
                 $newRewrite = clone $urlRewriteModel;
                 $newRewrite->clearData()
-                    ->setData(UrlRewrite::fields_WEBSITE_ID, $websiteId)
-                    ->setData(UrlRewrite::fields_URL_ID, "cms_page_{$page->getId()}")
-                    ->setData(UrlRewrite::fields_URL_IDENTIFY, $urlIdentify)
-                    ->setData(UrlRewrite::fields_PATH, $originalPath)
-                    ->setData(UrlRewrite::fields_REWRITE, $rewritePath)
+                    ->setData(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
+                    ->setData(UrlRewrite::schema_fields_URL_ID, "cms_page_{$page->getId()}")
+                    ->setData(UrlRewrite::schema_fields_URL_IDENTIFY, $urlIdentify)
+                    ->setData(UrlRewrite::schema_fields_PATH, $originalPath)
+                    ->setData(UrlRewrite::schema_fields_REWRITE, $rewritePath)
                     ->save(true);
             }
             
@@ -1540,7 +1540,7 @@ class Page extends BackendController
             
             // 获取样式配置
             $styleModel = clone $this->styleModel;
-            $styleModel->clear()->where(Style::fields_CODE, $styleCode)->find()->fetch();
+            $styleModel->clear()->where(Style::schema_fields_CODE, $styleCode)->find()->fetch();
             
             if (!$styleModel->getId()) {
                 return $this->fetchJson([
@@ -1794,7 +1794,7 @@ class Page extends BackendController
             
             // 获取样式配置定义
             $styleModel = clone $this->styleModel;
-            $styleModel->clear()->where(Style::fields_CODE, $styleCode)->find()->fetch();
+            $styleModel->clear()->where(Style::schema_fields_CODE, $styleCode)->find()->fetch();
             
             if (!$styleModel->getId()) {
                 return $this->fetchJson([

@@ -106,13 +106,13 @@ class Template extends BackendController
             // 使用OR条件组合多个字段的模糊搜索
             // 第一个条件作为起始，后续使用OR连接
             $searchValue = "%{$search}%";
-            $styles->where(Style::fields_CODE, $searchValue, 'LIKE')
-                ->where(Style::fields_NAME, $searchValue, 'LIKE', 'OR')
-                ->where(Style::fields_DESCRIPTION, $searchValue, 'LIKE', 'OR');
+            $styles->where(Style::schema_fields_CODE, $searchValue, 'LIKE')
+                ->where(Style::schema_fields_NAME, $searchValue, 'LIKE', 'OR')
+                ->where(Style::schema_fields_DESCRIPTION, $searchValue, 'LIKE', 'OR');
         }
         
-        $styleList = $styles->order(Style::fields_SORT_ORDER, 'ASC')
-            ->order(Style::fields_CREATE_TIME, 'DESC')
+        $styleList = $styles->order(Style::schema_fields_SORT_ORDER, 'ASC')
+            ->order(Style::schema_fields_CREATE_TIME, 'DESC')
             ->select()
             ->fetch()
             ->getItems();
@@ -129,7 +129,7 @@ class Template extends BackendController
         // 获取所有页面列表（用于选择预览页面）
         $allPages = clone $this->pageModel;
         $pageList = $allPages->clear()
-            ->order(PageModel::fields_CREATE_TIME, 'DESC')
+            ->order(PageModel::schema_fields_CREATE_TIME, 'DESC')
             ->select()
             ->fetch()
             ->getItems();
@@ -165,7 +165,7 @@ class Template extends BackendController
                 ]);
             }
             
-            $style->setData(Style::fields_IS_PUBLISHED, $isPublished ? 1 : 0);
+            $style->setData(Style::schema_fields_IS_PUBLISHED, $isPublished ? 1 : 0);
             $style->save();
             
             return $this->fetchJson([
@@ -197,7 +197,7 @@ class Template extends BackendController
         
         // 检查模板是否存在
         $style = clone $this->styleModel;
-        $style->clear()->where(Style::fields_CODE, $styleCode)->find()->fetch();
+        $style->clear()->where(Style::schema_fields_CODE, $styleCode)->find()->fetch();
         
         if (!$style->getId()) {
             $this->getMessageManager()->addError(__('模板不存在'));
@@ -301,7 +301,7 @@ class Template extends BackendController
             
             // 获取模板配置定义
             $styleModel = clone $this->styleModel;
-            $styleModel->clear()->where(Style::fields_CODE, $styleCode)->find()->fetch();
+            $styleModel->clear()->where(Style::schema_fields_CODE, $styleCode)->find()->fetch();
             
             if (!$styleModel->getId()) {
                 return $this->fetchJson([
@@ -429,7 +429,7 @@ class Template extends BackendController
                     if ($locale && $locale !== $defaultLocale) {
                         $localDesc = clone $this->localDescriptionModel;
                         $localDesc->clear()
-                            ->where(LocalDescription::fields_ID, $pageId)
+                            ->where(LocalDescription::schema_fields_ID, $pageId)
                             ->where('local_code', $locale)
                             ->find()
                             ->fetch();
@@ -495,8 +495,8 @@ class Template extends BackendController
                 'success' => true,
                 'data' => $configGroups,
                 'style_info' => [
-                    'code' => $styleModel->getData(Style::fields_CODE),
-                    'name' => $styleModel->getData(Style::fields_NAME)
+                    'code' => $styleModel->getData(Style::schema_fields_CODE),
+                    'name' => $styleModel->getData(Style::schema_fields_NAME)
                 ]
             ]);
         } catch (\Exception $e) {
@@ -595,7 +595,7 @@ class Template extends BackendController
                 // 保存到LocalDescription.config.style_config（语言特定配置）
                 $localDesc = clone $this->localDescriptionModel;
                 $localDesc->clear()
-                    ->where(LocalDescription::fields_ID, $pageId)
+                    ->where(LocalDescription::schema_fields_ID, $pageId)
                     ->where('local_code', $locale)
                     ->find()
                     ->fetch();
@@ -622,12 +622,12 @@ class Template extends BackendController
                 } else {
                     $newLocalDesc = clone $this->localDescriptionModel;
                     $newLocalDesc->clearData()
-                        ->setData(LocalDescription::fields_ID, $pageId)
+                        ->setData(LocalDescription::schema_fields_ID, $pageId)
                         ->setData('local_code', $locale)
                         ->setData('config', json_encode($config))
-                        ->setData(LocalDescription::fields_NAME, $page->getData('name'))
-                        ->setData(LocalDescription::fields_TITLE, $page->getData('title'))
-                        ->setData(LocalDescription::fields_CONTENT, $page->getData('content'))
+                        ->setData(LocalDescription::schema_fields_NAME, $page->getData('name'))
+                        ->setData(LocalDescription::schema_fields_TITLE, $page->getData('title'))
+                        ->setData(LocalDescription::schema_fields_CONTENT, $page->getData('content'))
                         ->save(true);
                 }
             } else {
