@@ -41,7 +41,7 @@ class MetaTranslation
         /** @var Meta $metaModel */
         $metaModel = ObjectManager::getInstance(Meta::class);
         $meta = $metaModel->reset()
-            ->where(Meta::fields_META_IDENTIFY, $metaIdentify)
+            ->where(Meta::schema_fields_META_IDENTIFY, $metaIdentify)
             ->find()
             ->fetch();
         
@@ -55,9 +55,9 @@ class MetaTranslation
         /** @var MetaLocal $localModel */
         $localModel = ObjectManager::getInstance(MetaLocal::class);
         $localModel->reset()
-            ->where(MetaLocal::fields_META_ID, $metaId)
-            ->where(MetaLocal::fields_LOCALE_CODE, $locale)
-            ->where(MetaLocal::fields_CONFIG_KEY, $configKey)
+            ->where(MetaLocal::schema_fields_META_ID, $metaId)
+            ->where(MetaLocal::schema_fields_LOCALE_CODE, $locale)
+            ->where(MetaLocal::schema_fields_CONFIG_KEY, $configKey)
             ->find()
             ->fetch();
         
@@ -128,7 +128,7 @@ class MetaTranslation
             /** @var Meta $metaModel */
             $metaModel = ObjectManager::getInstance(Meta::class);
             $meta = $metaModel->reset()
-                ->where(Meta::fields_META_IDENTIFY, $metaIdentify)
+                ->where(Meta::schema_fields_META_IDENTIFY, $metaIdentify)
                 ->find()
                 ->fetch();
             
@@ -142,9 +142,9 @@ class MetaTranslation
             /** @var MetaLocal $localModel */
             $localModel = ObjectManager::getInstance(MetaLocal::class);
             $localModel->reset()
-                ->where(MetaLocal::fields_META_ID, $metaId)
-                ->where(MetaLocal::fields_LOCALE_CODE, $locale)
-                ->where(MetaLocal::fields_CONFIG_KEY, $configKey)
+                ->where(MetaLocal::schema_fields_META_ID, $metaId)
+                ->where(MetaLocal::schema_fields_LOCALE_CODE, $locale)
+                ->where(MetaLocal::schema_fields_CONFIG_KEY, $configKey)
                 ->find()
                 ->fetch();
             
@@ -206,7 +206,7 @@ class MetaTranslation
         /** @var Meta $metaModel */
         $metaModel = ObjectManager::getInstance(Meta::class);
         $meta = $metaModel->reset()
-            ->where(Meta::fields_META_IDENTIFY, $metaIdentify)
+            ->where(Meta::schema_fields_META_IDENTIFY, $metaIdentify)
             ->find()
             ->fetch();
         
@@ -220,15 +220,15 @@ class MetaTranslation
         /** @var MetaLocal $localModel */
         $localModel = ObjectManager::getInstance(MetaLocal::class);
         $records = $localModel->reset()
-            ->where(MetaLocal::fields_META_ID, $metaId)
+            ->where(MetaLocal::schema_fields_META_ID, $metaId)
             ->select()
             ->fetchArray();
         
         $translations = [];
         foreach ($records as $record) {
-            $localeCode = $record[MetaLocal::fields_LOCALE_CODE];
-            $configKey = $record[MetaLocal::fields_CONFIG_KEY];
-            $configValue = $record[MetaLocal::fields_CONFIG_VALUE];
+            $localeCode = $record[MetaLocal::schema_fields_LOCALE_CODE];
+            $configKey = $record[MetaLocal::schema_fields_CONFIG_KEY];
+            $configValue = $record[MetaLocal::schema_fields_CONFIG_VALUE];
             
             if (!isset($translations[$localeCode])) {
                 $translations[$localeCode] = [];

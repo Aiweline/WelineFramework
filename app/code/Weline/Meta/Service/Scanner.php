@@ -123,19 +123,19 @@ class Scanner
         // 创建或更新元数据
         /** @var Meta $meta */
         $meta = ObjectManager::getInstance(Meta::class);
-        $meta->where(Meta::fields_NAMESPACE, $finalNamespace)
-             ->where(Meta::fields_META_TYPE, $metaData['type'])
-             ->where(Meta::fields_META_IDENTIFY, $identify)
+        $meta->where(Meta::schema_fields_NAMESPACE, $finalNamespace)
+             ->where(Meta::schema_fields_META_TYPE, $metaData['type'])
+             ->where(Meta::schema_fields_META_IDENTIFY, $identify)
              ->fetch();
 
-        $meta->setData(Meta::fields_NAMESPACE, $finalNamespace);
-        $meta->setData(Meta::fields_META_TYPE, $metaData['type']);
-        $meta->setData(Meta::fields_META_IDENTIFY, $identify);
-        $meta->setData(Meta::fields_FILE_PATH, $this->getRelativePath($filePath));
-        $meta->setData(Meta::fields_FILE_FULL_PATH, $filePath);
-        $meta->setData(Meta::fields_AREA, $metaData['area'] ?? null);
-        $meta->setData(Meta::fields_CATEGORY, $metaData['category'] ?? null);
-        $meta->setData(Meta::fields_META_DATA, json_encode($metaData, JSON_UNESCAPED_UNICODE));
+        $meta->setData(Meta::schema_fields_NAMESPACE, $finalNamespace);
+        $meta->setData(Meta::schema_fields_META_TYPE, $metaData['type']);
+        $meta->setData(Meta::schema_fields_META_IDENTIFY, $identify);
+        $meta->setData(Meta::schema_fields_FILE_PATH, $this->getRelativePath($filePath));
+        $meta->setData(Meta::schema_fields_FILE_FULL_PATH, $filePath);
+        $meta->setData(Meta::schema_fields_AREA, $metaData['area'] ?? null);
+        $meta->setData(Meta::schema_fields_CATEGORY, $metaData['category'] ?? null);
+        $meta->setData(Meta::schema_fields_META_DATA, json_encode($metaData, JSON_UNESCAPED_UNICODE));
 
         $meta->saveMeta($metaData);
         
