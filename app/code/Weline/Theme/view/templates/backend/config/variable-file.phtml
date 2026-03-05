@@ -134,13 +134,10 @@ $refreshPreviewUrl = $this->getUrl('theme/backend/config/variables/refreshPrevie
             formData.append('namespace', 'theme');
             formData.append('strict_mode', 'false');
             
-            fetch('<?= $scanUrl ?>', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.code === 200 || data.success) {
+            window.Weline.Api.request('<?= $scanUrl ?>', { method: 'POST', body: formData })
+            .then(function(response) {
+                var data = response.data;
+                if (response.ok && (data && (data.code === 200 || data.success))) {
                     if (typeof Swal !== 'undefined') {
                         Swal.fire({
                             icon: 'success',
@@ -158,7 +155,7 @@ $refreshPreviewUrl = $this->getUrl('theme/backend/config/variables/refreshPrevie
                         Swal.fire({
                             icon: 'error',
                             title: '<?= __('扫描失败') ?>',
-                            text: data.msg || '<?= __('未知错误') ?>',
+                            text: (data && data.msg) || '<?= __('未知错误') ?>',
                             confirmButtonText: '<?= __('确定') ?>'
                         });
                     } else {
@@ -166,17 +163,18 @@ $refreshPreviewUrl = $this->getUrl('theme/backend/config/variables/refreshPrevie
                     }
                 }
             })
-            .catch(error => {
+            .catch(function(error) {
                 console.error('Error:', error);
+                var msg = error && error.message ? error.message : '<?= __('网络错误') ?>';
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'error',
                         title: '<?= __('扫描失败') ?>',
-                        text: '<?= __('网络错误') ?>',
+                        text: msg,
                         confirmButtonText: '<?= __('确定') ?>'
                     });
                 } else {
-                    console.error('扫描失败：网络错误');
+                    console.error('扫描失败：' + msg);
                 }
             });
         }
