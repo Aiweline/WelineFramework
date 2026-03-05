@@ -93,7 +93,7 @@ class BatchBindService
         if (!$account->getId()) {
             return $this->resultError(__('账户不存在'));
         }
-        if ($account->getData(CdnAccount::fields_ADAPTER) !== $provider) {
+        if ($account->getData(CdnAccount::schema_fields_ADAPTER) !== $provider) {
             return $this->resultError(__('账户与供应商不匹配'));
         }
 
@@ -143,17 +143,17 @@ class BatchBindService
 
         $batch = $this->batchModel->reset();
         $batch->setData([
-            Batch::fields_PROVIDER => $provider,
-            Batch::fields_ACCOUNT_ID => $accountId,
-            Batch::fields_SITE_ID => $this->inferBatchSiteId($entries),
-            Batch::fields_DOMAINS_RAW => $domainsText,
-            Batch::fields_DNS_RECORD_TYPE => $dnsRecordType,
-            Batch::fields_DNS_RECORD_VALUE => $dnsRecordValue,
-            Batch::fields_OVERRIDE => $override,
-            Batch::fields_STATUS => Batch::STATUS_PENDING,
+            Batch::schema_fields_PROVIDER => $provider,
+            Batch::schema_fields_ACCOUNT_ID => $accountId,
+            Batch::schema_fields_SITE_ID => $this->inferBatchSiteId($entries),
+            Batch::schema_fields_DOMAINS_RAW => $domainsText,
+            Batch::schema_fields_DNS_RECORD_TYPE => $dnsRecordType,
+            Batch::schema_fields_DNS_RECORD_VALUE => $dnsRecordValue,
+            Batch::schema_fields_OVERRIDE => $override,
+            Batch::schema_fields_STATUS => Batch::STATUS_PENDING,
         ])->save();
 
-        $batchId = (int)($batch->getData(Batch::fields_BATCH_ID) ?? 0);
+        $batchId = (int)($batch->getData(Batch::schema_fields_BATCH_ID) ?? 0);
         if ($batchId <= 0) {
             return $this->resultError(__('批次创建失败'));
         }
@@ -267,14 +267,14 @@ class BatchBindService
             return [];
         }
         $websites = $this->websiteModel->reset()
-            ->where(Website::fields_ID, $websiteIds, 'IN')
+            ->where(Website::schema_fields_ID, $websiteIds, 'IN')
             ->select()
             ->fetchArray();
 
         $entries = [];
         foreach ($websites as $website) {
-            $siteId = (int)($website[Website::fields_ID] ?? 0);
-            $url = (string)($website[Website::fields_URL] ?? '');
+            $siteId = (int)($website[Website::schema_fields_ID] ?? 0);
+            $url = (string)($website[Website::schema_fields_URL] ?? '');
             $domain = $this->normalizeDomain($url);
             if ($siteId > 0 && $domain !== '') {
                 $entries[] = [
@@ -315,23 +315,23 @@ class BatchBindService
     {
         $conflicts = [];
         $existingDomains = $this->cdnDomainModel->reset()
-            ->where(CdnDomain::fields_DOMAIN_NAME, $domains, 'IN')
+            ->where(CdnDomain::schema_fields_DOMAIN_NAME, $domains, 'IN')
             ->select()
             ->fetchArray();
         $existingMap = [];
         foreach ($existingDomains as $row) {
-            $existingMap[(string)$row[CdnDomain::fields_DOMAIN_NAME]] = $row;
+            $existingMap[(string)$row[CdnDomain::schema_fields_DOMAIN_NAME]] = $row;
         }
 
         $siteIds = array_values(array_unique(array_filter(array_column($entries, 'site_id'))));
         $siteExisting = [];
         if (!empty($siteIds)) {
             $siteDomains = $this->cdnDomainModel->reset()
-                ->where(CdnDomain::fields_SITE_ID, $siteIds, 'IN')
+                ->where(CdnDomain::schema_fields_SITE_ID, $siteIds, 'IN')
                 ->select()
                 ->fetchArray();
             foreach ($siteDomains as $row) {
-                $siteId = (int)$row[CdnDomain::fields_SITE_ID];
+                $siteId = (int)$row[CdnDomain::schema_fields_SITE_ID];
                 $siteExisting[$siteId][] = $row;
             }
         }
@@ -348,10 +348,10 @@ class BatchBindService
             }
             if ($siteId > 0 && isset($siteExisting[$siteId])) {
                 foreach ($siteExisting[$siteId] as $row) {
-                    if ((string)$row[CdnDomain::fields_DOMAIN_NAME] !== $domain) {
+                    if ((string)$row[CdnDomain::schema_fields_DOMAIN_NAME] !== $domain) {
                         $conflicts[] = [
                             'type' => 'site_bound',
-                            'domain' => (string)$row[CdnDomain::fields_DOMAIN_NAME],
+                            'domain' => (string)$row[CdnDomain::schema_fields_DOMAIN_NAME],
                             'site_id' => $siteId,
                         ];
                     }
@@ -548,9 +548,9 @@ TF;
                     continue;
                 }
                 $this->cdnDomainModel->reset()
-                    ->where(CdnDomain::fields_SITE_ID, $siteId)
-                    ->where(CdnDomain::fields_DOMAIN_NAME, $keepDomains, 'NOT IN')
-                    ->update([CdnDomain::fields_ENABLED => 0])
+                    ->where(CdnDomain::schema_fields_SITE_ID, $siteId)
+                    ->where(CdnDomain::schema_fields_DOMAIN_NAME, $keepDomains, 'NOT IN')
+                    ->update([CdnDomain::schema_fields_ENABLED => 0])
                     ->fetch();
             }
         }
@@ -561,23 +561,23 @@ TF;
             $zoneId = (string)($zoneMap[$domain] ?? '');
 
             $existing = $this->cdnDomainModel->reset()
-                ->where(CdnDomain::fields_DOMAIN_NAME, $domain)
+                ->where(CdnDomain::schema_fields_DOMAIN_NAME, $domain)
                 ->find()
                 ->fetch();
 
             $data = [
-                CdnDomain::fields_SITE_ID => $siteId,
-                CdnDomain::fields_ADAPTER => $provider,
-                CdnDomain::fields_ZONE_ID => $zoneId,
-                CdnDomain::fields_DOMAIN_NAME => $domain,
-                CdnDomain::fields_ACCOUNT_ID => $accountId,
-                CdnDomain::fields_INHERIT_DEFAULT => 0,
-                CdnDomain::fields_ENABLED => 1,
+                CdnDomain::schema_fields_SITE_ID => $siteId,
+                CdnDomain::schema_fields_ADAPTER => $provider,
+                CdnDomain::schema_fields_ZONE_ID => $zoneId,
+                CdnDomain::schema_fields_DOMAIN_NAME => $domain,
+                CdnDomain::schema_fields_ACCOUNT_ID => $accountId,
+                CdnDomain::schema_fields_INHERIT_DEFAULT => 0,
+                CdnDomain::schema_fields_ENABLED => 1,
             ];
 
             if ($existing->getId()) {
                 $this->cdnDomainModel->reset()
-                    ->where(CdnDomain::fields_DOMAIN_ID, (int)$existing->getId())
+                    ->where(CdnDomain::schema_fields_DOMAIN_ID, (int)$existing->getId())
                     ->update($data)
                     ->fetch();
             } else {
@@ -598,15 +598,15 @@ TF;
             $zoneId = (string)($zoneMap[$domain] ?? '');
             $this->batchItemModel->reset()
                 ->setData([
-                    BatchItem::fields_BATCH_ID => $batchId,
-                    BatchItem::fields_DOMAIN_NAME => $domain,
-                    BatchItem::fields_SITE_ID => (int)$entry['site_id'],
-                    BatchItem::fields_PROVIDER => $provider,
-                    BatchItem::fields_ACCOUNT_ID => $accountId,
-                    BatchItem::fields_ZONE_ID => $zoneId,
-                    BatchItem::fields_STATUS => $status,
-                    BatchItem::fields_MESSAGE => $message,
-                    BatchItem::fields_DNS_RECORD => json_encode($dnsRecord, JSON_UNESCAPED_UNICODE),
+                    BatchItem::schema_fields_BATCH_ID => $batchId,
+                    BatchItem::schema_fields_DOMAIN_NAME => $domain,
+                    BatchItem::schema_fields_SITE_ID => (int)$entry['site_id'],
+                    BatchItem::schema_fields_PROVIDER => $provider,
+                    BatchItem::schema_fields_ACCOUNT_ID => $accountId,
+                    BatchItem::schema_fields_ZONE_ID => $zoneId,
+                    BatchItem::schema_fields_STATUS => $status,
+                    BatchItem::schema_fields_MESSAGE => $message,
+                    BatchItem::schema_fields_DNS_RECORD => json_encode($dnsRecord, JSON_UNESCAPED_UNICODE),
                 ])
                 ->save();
         }
@@ -615,10 +615,10 @@ TF;
     private function markBatchFailed(int $batchId, string $message): void
     {
         $this->batchModel->reset()
-            ->where(Batch::fields_BATCH_ID, $batchId)
+            ->where(Batch::schema_fields_BATCH_ID, $batchId)
             ->update([
-                Batch::fields_STATUS => Batch::STATUS_FAILED,
-                Batch::fields_RESULT_SUMMARY => json_encode(['message' => $message], JSON_UNESCAPED_UNICODE),
+                Batch::schema_fields_STATUS => Batch::STATUS_FAILED,
+                Batch::schema_fields_RESULT_SUMMARY => json_encode(['message' => $message], JSON_UNESCAPED_UNICODE),
             ])
             ->fetch();
     }
@@ -626,10 +626,10 @@ TF;
     private function markBatchSuccess(int $batchId, array $summary, array $tfResult): void
     {
         $this->batchModel->reset()
-            ->where(Batch::fields_BATCH_ID, $batchId)
+            ->where(Batch::schema_fields_BATCH_ID, $batchId)
             ->update([
-                Batch::fields_STATUS => Batch::STATUS_SUCCESS,
-                Batch::fields_RESULT_SUMMARY => json_encode([
+                Batch::schema_fields_STATUS => Batch::STATUS_SUCCESS,
+                Batch::schema_fields_RESULT_SUMMARY => json_encode([
                     'summary' => $summary,
                     'zones' => $tfResult['zones'] ?? [],
                     'name_servers' => $tfResult['name_servers'] ?? [],
