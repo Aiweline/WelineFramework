@@ -197,9 +197,10 @@
                 return;
             }
 
-            fetch(`<?= $this->getUrl("*/backend/extract") ?>?record_id=${recordId}`)
-            .then(response => response.json())
-            .then(data => {
+            var extractUrl = '<?= $this->getUrl("*/backend/extract") ?>?record_id=' + recordId;
+            window.Weline.Api.get(extractUrl, { silent: true })
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.code === 200) {
                     if (typeof Swal !== 'undefined') {
                         Swal.fire({
@@ -245,9 +246,10 @@
                 return;
             }
 
-            fetch(`<?= $this->getUrl("*/backend/delete") ?>?record_id=${recordId}`)
-            .then(response => response.json())
-            .then(data => {
+            var delUrl = '<?= $this->getUrl("*/backend/delete") ?>?record_id=' + recordId;
+            window.Weline.Api.request(delUrl, { method: 'POST' })
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.code === 200) {
                     if (typeof Swal !== 'undefined') {
                         Swal.fire({
