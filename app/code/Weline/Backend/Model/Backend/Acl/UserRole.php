@@ -12,98 +12,49 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Model\Backend\Acl;
 
-use Weline\Backend\Model\BackendUser;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
-class UserRole extends \Weline\Framework\Database\Model
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: '管理员角色表')]
+#[Index(name: 'idx_backend_acl_user_role_user_role', columns: ['user_id', 'role_id'], type: 'UNIQUE', comment: '用户角色唯一')]
+#[Index(name: 'idx_user_id', columns: ['user_id'], comment: '用户ID索引')]
+#[Index(name: 'idx_role_id', columns: ['role_id'], comment: '角色ID索引')]
+class UserRole extends Model
 {
+    public const schema_primary_key = 'id';
+
     public const fields_ID      = 'user_id';
     public const fields_USER_ID = 'user_id';
     public const fields_ROLE_ID = 'role_id';
 
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
+    #[Col(type: 'int', nullable: false, comment: '用户ID')]
+    public const schema_fields_USER_ID = 'user_id';
+    #[Col(type: 'int', nullable: false, comment: '角色ID')]
+    public const schema_fields_ROLE_ID = 'role_id';
 
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // TODO: Implement upgrade() method.
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-//        $setup->dropTable();
-        if (!$setup->tableExist()) {
-            $setup->createTable('管理员角色表')
-                  ->addColumn(
-                      self::fields_ID,
-                      TableInterface::column_type_INTEGER,
-                      null,
-                      'primary key',
-                      '管理员ID'
-                  )
-                  ->addColumn(
-                      self::fields_ROLE_ID,
-                      TableInterface::column_type_INTEGER,
-                      null,
-                      'not null',
-                      '角色ID'
-                  )
-                  ->addForeignKey(
-                      'USER_ID',
-                      self::fields_ID,
-                      $setup->getTable('backend_user'),
-                      BackendUser::fields_ID,
-                      true,
-
-                  )
-                  ->addAdditional('ENGINE=MyIsam;')
-                  ->create();
-            // 仅在管理员真实存在时分配默认角色，避免安装阶段外键错误
-            /** @var BackendUser $backendUser */
-            $backendUser = ObjectManager::getInstance(BackendUser::class);
-            $backendUser->reset()->load(1);
-            if ($backendUser->getId()) {
-                $this->clear()
-                     ->setData(self::fields_ID, (int)$backendUser->getId())
-                     ->setData(self::fields_ROLE_ID, 1)
-                     ->save(true);
-            }
-        }
-    }
+    /** 业务上按 (user_id, role_id) 唯一定位一条关联 */
+    public array $_unit_primary_keys = [self::schema_fields_USER_ID, self::schema_fields_ROLE_ID];
 
     public function getRoleId()
     {
-        return $this->getData(self::fields_ROLE_ID);
+        return $this->getData(self::schema_fields_ROLE_ID);
     }
 
     public function setRoleId(int $role_id): static
     {
-        $this->setData(self::fields_ROLE_ID, $role_id);
+        $this->setData(self::schema_fields_ROLE_ID, $role_id);
         return $this;
     }
 
     public function getUserId()
     {
-        return $this->getData(self::fields_USER_ID);
+        return $this->getData(self::schema_fields_USER_ID);
     }
 
     public function setUserId(int $user_id): static
     {
-        $this->getData(self::fields_USER_ID, $user_id);
+        $this->setData(self::schema_fields_USER_ID, $user_id);
         return $this;
     }
 }

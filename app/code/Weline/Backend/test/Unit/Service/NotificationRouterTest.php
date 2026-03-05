@@ -27,8 +27,8 @@ class NotificationRouterTest extends TestCase
         
         $userModel = ObjectManager::getInstance(BackendUser::class);
         $user = $userModel->clearQuery()
-            ->where(BackendUser::fields_is_enabled, 1)
-            ->order(BackendUser::fields_ID)
+            ->where(BackendUser::schema_fields_is_enabled, 1)
+            ->order(BackendUser::schema_fields_ID)
             ->select()
             ->fetch();
         
@@ -105,7 +105,7 @@ class NotificationRouterTest extends TestCase
         );
         
         $notification = $notificationModel->clearQuery()
-            ->where(SystemNotification::fields_title, $testTitle)
+            ->where(SystemNotification::schema_fields_title, $testTitle)
             ->select()
             ->fetch();
         
@@ -160,7 +160,7 @@ class NotificationRouterTest extends TestCase
         $channelModel = ObjectManager::getInstance(NotificationChannel::class);
         
         $channels = $channelModel->clearQuery()
-            ->where(NotificationChannel::fields_is_enabled, 1)
+            ->where(NotificationChannel::schema_fields_is_enabled, 1)
             ->select()
             ->fetchArray();
         

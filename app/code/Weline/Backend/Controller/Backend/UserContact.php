@@ -59,16 +59,20 @@ class UserContact extends BackendController
             return $this->jsonError(__('渠道和联系方式不能为空'));
         }
 
-        $contactId = $this->contactService->createContact($userId, $channelCode, $contactValue, [
-            'contact_name' => $contactName,
-            'is_default' => $isDefault,
-        ]);
+        try {
+            $contactId = $this->contactService->createContact($userId, $channelCode, $contactValue, [
+                'contact_name' => $contactName,
+                'is_default' => $isDefault,
+            ]);
+        } catch (\Throwable $e) {
+            return $this->jsonError(__('保存失败：%{1}', [$e->getMessage()]));
+        }
 
         if ($contactId) {
             return $this->jsonSuccess(__('保存成功'), ['contact_id' => $contactId]);
         }
 
-        return $this->jsonError(__('保存失败'));
+        return $this->jsonError(__('保存失败，请稍后重试或联系管理员'));
     }
 
     #[Acl('Weline_Backend::user_contact_update', '更新联系人', 'mdi-pencil', '更新联系人')]

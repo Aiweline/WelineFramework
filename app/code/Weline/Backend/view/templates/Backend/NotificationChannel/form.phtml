@@ -260,12 +260,11 @@ if ($channel) {
             var form = document.getElementById('channelForm');
             var formData = new FormData(form);
 
-            fetch('<?= $this->getBackendUrl('*/backend/notificationchannel/save') ?>', {
-                method: 'POST',
-                body: new URLSearchParams(formData)
-            })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
+            var url = '<?= $this->getBackendUrl('*/backend/notificationchannel/save') ?>';
+            var opts = { method: 'POST', body: new URLSearchParams(formData) };
+            window.Weline.Api.request(url, opts)
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
                     BackendToast.success(data.message);
                     setTimeout(function() {
@@ -287,12 +286,11 @@ if ($channel) {
 
             BackendToast.info('<?= __('正在测试连接...') ?>');
 
-            fetch('<?= $this->getBackendUrl('*/backend/notificationchannel/test') ?>', {
-                method: 'POST',
-                body: new URLSearchParams(formData)
-            })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
+            var url = '<?= $this->getBackendUrl('*/backend/notificationchannel/test') ?>';
+            var opts = { method: 'POST', body: new URLSearchParams(formData) };
+            window.Weline.Api.request(url, opts)
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
                     BackendToast.success(data.message);
                 } else {

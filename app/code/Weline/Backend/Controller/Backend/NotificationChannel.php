@@ -7,6 +7,7 @@ namespace Weline\Backend\Controller\Backend;
 use Weline\Backend\Api\Notification\ChannelAdapterInterface;
 use Weline\Backend\Enum\NotificationType;
 use Weline\Backend\Model\NotificationChannel as ChannelModel;
+use Weline\Backend\Service\ChannelAdapterCollector;
 use Weline\Backend\Service\TopicCollector;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
@@ -17,22 +18,24 @@ class NotificationChannel extends BackendController
 {
     private ChannelModel $channelModel;
     private TopicCollector $topicCollector;
+    private ChannelAdapterCollector $adapterCollector;
 
     public function __construct()
     {
         $this->channelModel = ObjectManager::getInstance(ChannelModel::class);
         $this->topicCollector = ObjectManager::getInstance(TopicCollector::class);
+        $this->adapterCollector = ObjectManager::getInstance(ChannelAdapterCollector::class);
     }
 
     #[Acl('Weline_Backend::notification_channel_index', '渠道列表', 'mdi-format-list-bulleted', '查看通知渠道')]
     public function index(): string
     {
         $channels = $this->channelModel->clearQuery()
-            ->order(ChannelModel::fields_ID)
+            ->order(ChannelModel::schema_fields_ID)
             ->select()
             ->fetchArray();
 
-        $adapters = ObjectManager::getInstances(ChannelAdapterInterface::class);
+        $adapters = $this->adapterCollector->getAdapters();
         $adapterMap = [];
         foreach ($adapters as $adapter) {
             $adapterMap[$adapter->getChannelCode()] = [
@@ -62,7 +65,7 @@ class NotificationChannel extends BackendController
             }
         }
 
-        $adapters = ObjectManager::getInstances(ChannelAdapterInterface::class);
+        $adapters = $this->adapterCollector->getAdapters();
         $adapterOptions = [];
         $configFields = [];
         foreach ($adapters as $adapter) {
@@ -111,7 +114,7 @@ class NotificationChannel extends BackendController
             }
         } else {
             $existing = $this->channelModel->clearQuery()
-                ->where(ChannelModel::fields_channel_code, $channelCode)
+                ->where(ChannelModel::schema_fields_channel_code, $channelCode)
                 ->select()
                 ->fetch();
             if ($existing && $existing->getId()) {
@@ -146,7 +149,7 @@ class NotificationChannel extends BackendController
             return $this->jsonError(__('请选择渠道类型'));
         }
 
-        $adapters = ObjectManager::getInstances(ChannelAdapterInterface::class);
+        $adapters = $this->adapterCollector->getAdapters();
         $adapter = null;
         foreach ($adapters as $a) {
             if ($a->getChannelCode() === $channelCode) {
