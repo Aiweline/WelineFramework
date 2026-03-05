@@ -232,7 +232,7 @@ abstract class AbstractSitemapPlatformAdapter implements SitemapPlatformAdapterI
      */
     protected function buildUrlEntry(array $url, string $baseUrl): string
     {
-        $loc = $url[SitemapUrl::fields_URL] ?? ''; // 使用 fields_URL 而不是 fields_LOC
+        $loc = $url[SitemapUrl::schema_fields_URL] ?? ''; // 使用 fields_URL 而不是 fields_LOC
         if (empty($loc)) {
             return '';
         }
@@ -244,16 +244,16 @@ abstract class AbstractSitemapPlatformAdapter implements SitemapPlatformAdapterI
         $xml = "  <url>\n";
         $xml .= "    <loc>" . htmlspecialchars($loc, ENT_XML1 | ENT_QUOTES, 'UTF-8') . "</loc>\n";
 
-        $lastmod = $url[SitemapUrl::fields_LASTMOD] ?? '';
+        $lastmod = $url[SitemapUrl::schema_fields_LASTMOD] ?? '';
         if (!empty($lastmod)) {
             $lastmod = date('Y-m-d', strtotime($lastmod));
             $xml .= "    <lastmod>{$lastmod}</lastmod>\n";
         }
 
-        $changefreq = $url[SitemapUrl::fields_CHANGEFREQ] ?? 'weekly';
+        $changefreq = $url[SitemapUrl::schema_fields_CHANGEFREQ] ?? 'weekly';
         $xml .= "    <changefreq>{$changefreq}</changefreq>\n";
 
-        $priority = $url[SitemapUrl::fields_PRIORITY] ?? '0.5';
+        $priority = $url[SitemapUrl::schema_fields_PRIORITY] ?? '0.5';
         $xml .= "    <priority>{$priority}</priority>\n";
 
         $xml .= "  </url>\n";
