@@ -44,7 +44,7 @@ class DetectCurrency implements ObserverInterface
             /** @var Currency $currencyModel */
             $currencyModel = ObjectManager::getInstance(Currency::class);
             $currency = $currencyModel->clear()
-                ->where(Currency::fields_CODE, $codeUpper)
+                ->where(Currency::schema_fields_CODE, $codeUpper)
                 ->find()
                 ->fetch();
             
