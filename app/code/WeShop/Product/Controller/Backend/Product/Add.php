@@ -41,7 +41,7 @@ class Add extends BackendController
                 $product['progress'] = 'product_base_info';
             }
             if (isset($product['set_id'])) {
-                $set = $this->product->eav_AttributeSetModel()->where(Set::fields_ID, $product['set_id'])->find()->fetch();
+                $set = $this->product->eav_AttributeSetModel()->where(Set::schema_fields_ID, $product['set_id'])->find()->fetch();
                 $product['set_name'] = $set->getData('name');
             }
             $product['image'] = $product['image'] ?? '';
@@ -218,8 +218,8 @@ class Add extends BackendController
         # 查询属性是否存在
         /**@var EavAttribute[] $attributeDataItems */
         $attributeDataItems = $attribute->reset()
-            ->where($attribute::fields_attribute_id, $attributeIds, 'in')
-            ->where($attribute::fields_eav_entity_id, $eav_entity_id)
+            ->where($attribute::schema_fields_attribute_id, $attributeIds, 'in')
+            ->where($attribute::schema_fields_eav_entity_id, $eav_entity_id)
             ->select()
             ->fetch()
             ->getItems();
