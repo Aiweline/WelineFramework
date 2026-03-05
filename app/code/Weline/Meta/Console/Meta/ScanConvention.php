@@ -954,9 +954,9 @@ class ScanConvention extends CommandAbstract
         /** @var Meta $queryModel */
         $queryModel = ObjectManager::make(Meta::class);
         $existing = $queryModel->reset()
-                              ->where(Meta::fields_NAMESPACE, $namespace)
-                              ->where(Meta::fields_META_TYPE, $type)
-                              ->where(Meta::fields_META_IDENTIFY, $identify)
+                              ->where(Meta::schema_fields_NAMESPACE, $namespace)
+                              ->where(Meta::schema_fields_META_TYPE, $type)
+                              ->where(Meta::schema_fields_META_IDENTIFY, $identify)
                               ->find()
                               ->fetch();
         
@@ -969,15 +969,15 @@ class ScanConvention extends CommandAbstract
             /** @var Meta $updateModel */
             $updateModel = ObjectManager::make(Meta::class);
             $updateModel->load($existing->getId());
-            $updateModel->setData(Meta::fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
-            $updateModel->setData(Meta::fields_SETTING, $settingJson);
-            $updateModel->setData(Meta::fields_FILE_PATH, $metaDataArray['file_path']);
-            $updateModel->setData(Meta::fields_FILE_FULL_PATH, $metaDataArray['file_full_path']);
+            $updateModel->setData(Meta::schema_fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
+            $updateModel->setData(Meta::schema_fields_SETTING, $settingJson);
+            $updateModel->setData(Meta::schema_fields_FILE_PATH, $metaDataArray['file_path']);
+            $updateModel->setData(Meta::schema_fields_FILE_FULL_PATH, $metaDataArray['file_full_path']);
             if ($area) {
-                $updateModel->setData(Meta::fields_AREA, $area);
+                $updateModel->setData(Meta::schema_fields_AREA, $area);
             }
             if ($category) {
-                $updateModel->setData(Meta::fields_CATEGORY, $category);
+                $updateModel->setData(Meta::schema_fields_CATEGORY, $category);
             }
             $updateModel->save();
             $savedMeta = $updateModel;
@@ -986,23 +986,23 @@ class ScanConvention extends CommandAbstract
             /** @var Meta $newMeta */
             $newMeta = ObjectManager::make(Meta::class);
             $newMeta->reset();
-            $newMeta->setData(Meta::fields_NAMESPACE, $namespace);
-            $newMeta->setData(Meta::fields_META_TYPE, $type);
-            $newMeta->setData(Meta::fields_META_IDENTIFY, $identify);
-            $newMeta->setData(Meta::fields_FILE_PATH, $metaDataArray['file_path']);
-            $newMeta->setData(Meta::fields_FILE_FULL_PATH, $metaDataArray['file_full_path']);
-            $newMeta->setData(Meta::fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
-            $newMeta->setData(Meta::fields_SETTING, $settingJson);
+            $newMeta->setData(Meta::schema_fields_NAMESPACE, $namespace);
+            $newMeta->setData(Meta::schema_fields_META_TYPE, $type);
+            $newMeta->setData(Meta::schema_fields_META_IDENTIFY, $identify);
+            $newMeta->setData(Meta::schema_fields_FILE_PATH, $metaDataArray['file_path']);
+            $newMeta->setData(Meta::schema_fields_FILE_FULL_PATH, $metaDataArray['file_full_path']);
+            $newMeta->setData(Meta::schema_fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
+            $newMeta->setData(Meta::schema_fields_SETTING, $settingJson);
             
             if ($area) {
-                $newMeta->setData(Meta::fields_AREA, $area);
+                $newMeta->setData(Meta::schema_fields_AREA, $area);
             }
             if ($category) {
-                $newMeta->setData(Meta::fields_CATEGORY, $category);
+                $newMeta->setData(Meta::schema_fields_CATEGORY, $category);
             }
             
             // 使用 forceCheck 确保唯一键检查，如果已存在则更新
-            $newMeta->forceCheck(true, [Meta::fields_NAMESPACE, Meta::fields_META_TYPE, Meta::fields_META_IDENTIFY])
+            $newMeta->forceCheck(true, [Meta::schema_fields_NAMESPACE, Meta::schema_fields_META_TYPE, Meta::schema_fields_META_IDENTIFY])
                     ->save();
             $savedMeta = $newMeta;
         }
@@ -1084,9 +1084,9 @@ class ScanConvention extends CommandAbstract
         /** @var Meta $queryModel */
         $queryModel = ObjectManager::make(Meta::class);
         $existing = $queryModel->reset()
-                              ->where(Meta::fields_NAMESPACE, $namespace)
-                              ->where(Meta::fields_META_TYPE, $type)
-                              ->where(Meta::fields_META_IDENTIFY, $identify)
+                              ->where(Meta::schema_fields_NAMESPACE, $namespace)
+                              ->where(Meta::schema_fields_META_TYPE, $type)
+                              ->where(Meta::schema_fields_META_IDENTIFY, $identify)
                               ->find()
                               ->fetch();
         
@@ -1096,14 +1096,14 @@ class ScanConvention extends CommandAbstract
             /** @var Meta $updateModel */
             $updateModel = ObjectManager::make(Meta::class);
             $updateModel->load($existing->getId());
-            $updateModel->setData(Meta::fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
-            $updateModel->setData(Meta::fields_FILE_PATH, $filePathFormatted);
-            $updateModel->setData(Meta::fields_FILE_FULL_PATH, $fileFullPathFormatted);
+            $updateModel->setData(Meta::schema_fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
+            $updateModel->setData(Meta::schema_fields_FILE_PATH, $filePathFormatted);
+            $updateModel->setData(Meta::schema_fields_FILE_FULL_PATH, $fileFullPathFormatted);
             if ($area) {
-                $updateModel->setData(Meta::fields_AREA, $area);
+                $updateModel->setData(Meta::schema_fields_AREA, $area);
             }
             if ($category) {
-                $updateModel->setData(Meta::fields_CATEGORY, $category);
+                $updateModel->setData(Meta::schema_fields_CATEGORY, $category);
             }
             $updateModel->save();
             $savedMeta = $updateModel;
@@ -1112,21 +1112,21 @@ class ScanConvention extends CommandAbstract
             /** @var Meta $newMeta */
             $newMeta = ObjectManager::make(Meta::class);
             $newMeta->reset();
-            $newMeta->setData(Meta::fields_NAMESPACE, $namespace);
-            $newMeta->setData(Meta::fields_META_TYPE, $type);
-            $newMeta->setData(Meta::fields_META_IDENTIFY, $identify);
-            $newMeta->setData(Meta::fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
-            $newMeta->setData(Meta::fields_FILE_PATH, $filePathFormatted);
-            $newMeta->setData(Meta::fields_FILE_FULL_PATH, $fileFullPathFormatted);
+            $newMeta->setData(Meta::schema_fields_NAMESPACE, $namespace);
+            $newMeta->setData(Meta::schema_fields_META_TYPE, $type);
+            $newMeta->setData(Meta::schema_fields_META_IDENTIFY, $identify);
+            $newMeta->setData(Meta::schema_fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
+            $newMeta->setData(Meta::schema_fields_FILE_PATH, $filePathFormatted);
+            $newMeta->setData(Meta::schema_fields_FILE_FULL_PATH, $fileFullPathFormatted);
             if ($area) {
-                $newMeta->setData(Meta::fields_AREA, $area);
+                $newMeta->setData(Meta::schema_fields_AREA, $area);
             }
             if ($category) {
-                $newMeta->setData(Meta::fields_CATEGORY, $category);
+                $newMeta->setData(Meta::schema_fields_CATEGORY, $category);
             }
             
             // 使用 forceCheck 确保唯一键检查，如果已存在则更新
-            $newMeta->forceCheck(true, [Meta::fields_NAMESPACE, Meta::fields_META_TYPE, Meta::fields_META_IDENTIFY])
+            $newMeta->forceCheck(true, [Meta::schema_fields_NAMESPACE, Meta::schema_fields_META_TYPE, Meta::schema_fields_META_IDENTIFY])
                     ->save();
             $savedMeta = $newMeta;
         }
@@ -1150,8 +1150,8 @@ class ScanConvention extends CommandAbstract
         }
         
         $translations = [];
-        $namespace = $meta->getData(Meta::fields_NAMESPACE);
-        $identify = $meta->getData(Meta::fields_META_IDENTIFY);
+        $namespace = $meta->getData(Meta::schema_fields_NAMESPACE);
+        $identify = $meta->getData(Meta::schema_fields_META_IDENTIFY);
         
         // 可翻译的字段列表（通常包括name、description等）
         $translatableFields = ['name', 'description', 'label', 'title', 'placeholder', 'help', 'hint'];
