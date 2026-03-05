@@ -33,12 +33,13 @@ class Tracking extends BackendController
     public function index()
     {
         $records = $this->tracking->reset()
-            ->order(TrackingModel::fields_CREATED_AT, 'DESC')
+            ->order(TrackingModel::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetch()
             ->getItems();
 
         $this->assign('records', $records);
+        $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
 
         return $this->fetch();
     }

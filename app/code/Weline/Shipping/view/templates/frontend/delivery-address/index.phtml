@@ -65,15 +65,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             const id = this.getAttribute('data-id');
-            fetch('<?= $frontendUrl ?>shipping/delivery/setDefault', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: 'id=' + id
-            })
-            .then(response => response.json())
-            .then(data => {
+            var url = '<?= $frontendUrl ?>shipping/delivery/setDefault';
+            var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + id };
+            window.Weline.Api.request(url, opts)
+            .then(function(response) {
+                var data = (response && response.data) || response;
                 if (data.success) {
                     location.reload();
                 } else {
@@ -99,15 +95,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             const id = this.getAttribute('data-id');
-            fetch('<?= $frontendUrl ?>shipping/delivery/delete', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: 'id=' + id
-            })
-            .then(response => response.json())
-            .then(data => {
+            var url = '<?= $frontendUrl ?>shipping/delivery/delete';
+            var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + id };
+            window.Weline.Api.request(url, opts)
+            .then(function(response) {
+                var data = (response && response.data) || response;
                 if (data.success) {
                     location.reload();
                 } else {

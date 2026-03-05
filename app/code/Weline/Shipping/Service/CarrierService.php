@@ -48,7 +48,7 @@ class CarrierService
     public function create(array $data): Carrier
     {
         // 验证tracking_url_template必填
-        if (empty($data[Carrier::fields_TRACKING_URL_TEMPLATE])) {
+        if (empty($data[Carrier::schema_fields_TRACKING_URL_TEMPLATE])) {
             throw new \RuntimeException(__('物流跟踪URL模板为必填项，所有快递公司必须支持追踪功能'));
         }
         
@@ -75,7 +75,7 @@ class CarrierService
         }
         
         // 如果更新tracking_url_template，验证必填
-        if (isset($data[Carrier::fields_TRACKING_URL_TEMPLATE]) && empty($data[Carrier::fields_TRACKING_URL_TEMPLATE])) {
+        if (isset($data[Carrier::schema_fields_TRACKING_URL_TEMPLATE]) && empty($data[Carrier::schema_fields_TRACKING_URL_TEMPLATE])) {
             throw new \RuntimeException(__('物流跟踪URL模板为必填项，所有快递公司必须支持追踪功能'));
         }
         
@@ -93,9 +93,9 @@ class CarrierService
     public function getActiveCarriers(): \Weline\Framework\Database\Model\Collection
     {
         return $this->getModel()->reset()
-            ->where(Carrier::fields_IS_ACTIVE, 1)
-            ->order(Carrier::fields_SORT_ORDER, 'ASC')
-            ->order(Carrier::fields_CARRIER_NAME, 'ASC')
+            ->where(Carrier::schema_fields_IS_ACTIVE, 1)
+            ->order(Carrier::schema_fields_SORT_ORDER, 'ASC')
+            ->order(Carrier::schema_fields_CARRIER_NAME, 'ASC')
             ->select()
             ->fetch();
     }
@@ -109,7 +109,7 @@ class CarrierService
     public function getByCode(string $code): ?Carrier
     {
         $carrier = $this->getModel()->reset()
-            ->where(Carrier::fields_CARRIER_CODE, $code)
+            ->where(Carrier::schema_fields_CARRIER_CODE, $code)
             ->find()
             ->fetch();
         
