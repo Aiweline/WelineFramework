@@ -13,17 +13,21 @@ declare(strict_types=1);
 namespace Weline\I18n;
 
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
 
 class LocalModel extends Model implements LocalModelInterface
 {
-    public array $_unit_primary_keys = [self::fields_local_code];
-    public array $_index_sort_keys = [self::fields_local_code];
+
+    #[Col('varchar', 20, nullable: false, comment: '语言代码')]
+    public const schema_fields_LOCALE_CODE = 'locale_code';
+    public array $_unit_primary_keys = [self::schema_fields_local_code];
+    public array $_index_sort_keys = [self::schema_fields_local_code];
     use TraitLocalModel;
 
     public function __init()
     {
         parent::__init();
-        array_unshift($this->_unit_primary_keys, $this::fields_ID);
-        array_unshift($this->_index_sort_keys, $this::fields_ID);
+        array_unshift($this->_unit_primary_keys, $this::schema_fields_ID);
+        array_unshift($this->_index_sort_keys, $this::schema_fields_ID);
     }
 }

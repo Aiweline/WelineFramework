@@ -46,7 +46,7 @@ class InstallAll extends BaseController
             
             $existingCodes = [];
             foreach ($existingCountries as $country) {
-                $existingCodes[] = $country->getData(Countries::fields_CODE);
+                $existingCodes[] = $country->getData(Countries::schema_fields_CODE);
             }
             
             $insert_countries = [];
@@ -57,23 +57,23 @@ class InstallAll extends BaseController
             
             foreach ($availableCountries as $code => $country) {
                 $countryData = [
-                    Countries::fields_CODE => $code,
-                    Countries::fields_FLAG => (string)$i18n->getCountryFlag($code),
-                    Countries::fields_IS_ACTIVE => ($code === 'CN') ? 1 : 0, // 中国默认已激活，其他国家未激活
-                    Countries::fields_IS_INSTALL => ($code === 'CN') ? 1 : 0, // 中国默认已安装，其他国家未安装
+                    Countries::schema_fields_CODE => $code,
+                    Countries::schema_fields_FLAG => (string)$i18n->getCountryFlag($code),
+                    Countries::schema_fields_IS_ACTIVE => ($code === 'CN') ? 1 : 0, // 中国默认已激活，其他国家未激活
+                    Countries::schema_fields_IS_INSTALL => ($code === 'CN') ? 1 : 0, // 中国默认已安装，其他国家未安装
                 ];
                 
                 $displayData = [
-                    Name::fields_COUNTRY_CODE => $code,
-                    Name::fields_DISPLAY_LOCALE_CODE => 'en',
-                    Name::fields_DISPLAY_NAME => $country,
+                    Name::schema_fields_COUNTRY_CODE => $code,
+                    Name::schema_fields_DISPLAY_LOCALE_CODE => 'en',
+                    Name::schema_fields_DISPLAY_NAME => $country,
                 ];
                 
                 if (in_array($code, $existingCodes)) {
                     // 国家已存在，检查是否需要更新
                     $existingCountry = null;
                     foreach ($existingCountries as $existing) {
-                        if ($existing->getData(Countries::fields_CODE) === $code) {
+                        if ($existing->getData(Countries::schema_fields_CODE) === $code) {
                             $existingCountry = $existing;
                             break;
                         }
@@ -83,24 +83,24 @@ class InstallAll extends BaseController
                         // 检查是否需要更新
                         $needsUpdate = false;
                         $updateData = [
-                            Countries::fields_CODE => $code,
-                            Countries::fields_FLAG => $countryData[Countries::fields_FLAG]
+                            Countries::schema_fields_CODE => $code,
+                            Countries::schema_fields_FLAG => $countryData[Countries::schema_fields_FLAG]
                         ];
                         
                         // 检查FLAG字段是否有变化
-                        if ($existingCountry->getData(Countries::fields_FLAG) !== $countryData[Countries::fields_FLAG]) {
+                        if ($existingCountry->getData(Countries::schema_fields_FLAG) !== $countryData[Countries::schema_fields_FLAG]) {
                             $needsUpdate = true;
                         }
                         
                         // 对于中国，确保状态正确
                         if ($code === 'CN') {
-                            $currentInstall = $existingCountry->getData(Countries::fields_IS_INSTALL);
-                            $currentActive = $existingCountry->getData(Countries::fields_IS_ACTIVE);
+                            $currentInstall = $existingCountry->getData(Countries::schema_fields_IS_INSTALL);
+                            $currentActive = $existingCountry->getData(Countries::schema_fields_IS_ACTIVE);
                             
                             if ($currentInstall != 1 || $currentActive != 1) {
                                 $needsUpdate = true;
-                                $updateData[Countries::fields_IS_INSTALL] = 1;
-                                $updateData[Countries::fields_IS_ACTIVE] = 1;
+                                $updateData[Countries::schema_fields_IS_INSTALL] = 1;
+                                $updateData[Countries::schema_fields_IS_ACTIVE] = 1;
                             }
                         }
                         
@@ -129,9 +129,9 @@ class InstallAll extends BaseController
             
             // 插入新国家数据
             if (!empty($insert_countries)) {
-                $countries->clearQuery()->insert($insert_countries, Countries::fields_CODE)->fetch();
+                $countries->clearQuery()->insert($insert_countries, Countries::schema_fields_CODE)->fetch();
                 // 使用联合唯一索引字段作为冲突检测
-                $localeNames->clearQuery()->insert($insert_countries_display, $localeNames::fields_COUNTRY_CODE . ',' . $localeNames::fields_DISPLAY_LOCALE_CODE)->fetch();
+                $localeNames->clearQuery()->insert($insert_countries_display, $localeNames::schema_fields_COUNTRY_CODE . ',' . $localeNames::schema_fields_DISPLAY_LOCALE_CODE)->fetch();
                 $totalProcessed += count($insert_countries);
                 $this->getMessageManager()->addSuccess(__('成功插入%{1}个国家数据！', [count($insert_countries)]));
             }
@@ -140,16 +140,16 @@ class InstallAll extends BaseController
             if (!empty($update_countries)) {
                 foreach ($update_countries as $updateData) {
                     $countries->clearQuery()
-                        ->where(Countries::fields_CODE, $updateData[Countries::fields_CODE])
+                        ->where(Countries::schema_fields_CODE, $updateData[Countries::schema_fields_CODE])
                         ->update($updateData)->fetch();
                 }
                 
                 foreach ($update_countries_display as $displayData) {
                     $localeNames->clearQuery()
-                        ->where(Name::fields_COUNTRY_CODE, $displayData[Name::fields_COUNTRY_CODE])
-                        ->where(Name::fields_DISPLAY_LOCALE_CODE, $displayData[Name::fields_DISPLAY_LOCALE_CODE])
+                        ->where(Name::schema_fields_COUNTRY_CODE, $displayData[Name::schema_fields_COUNTRY_CODE])
+                        ->where(Name::schema_fields_DISPLAY_LOCALE_CODE, $displayData[Name::schema_fields_DISPLAY_LOCALE_CODE])
                         ->update([
-                            Name::fields_DISPLAY_NAME => $displayData[Name::fields_DISPLAY_NAME]
+                            Name::schema_fields_DISPLAY_NAME => $displayData[Name::schema_fields_DISPLAY_NAME]
                         ])->fetch();
                 }
                 $totalProcessed += count($update_countries);
@@ -196,26 +196,26 @@ class InstallAll extends BaseController
             $locale = ObjectManager::getInstance(\Weline\I18n\Model\Locale::class);
             
             // 直接加载zh_Hans_CN区域
-            $locale->clearQuery()->load(\Weline\I18n\Model\Locale::fields_CODE, 'zh_Hans_CN');
+            $locale->clearQuery()->load(\Weline\I18n\Model\Locale::schema_fields_CODE, 'zh_Hans_CN');
             if ($locale->getId()) {
                 // 已存在，使用update方法直接更新（不涉及事务）
                 $locale->clearQuery()
-                    ->where(\Weline\I18n\Model\Locale::fields_CODE, 'zh_Hans_CN')
+                    ->where(\Weline\I18n\Model\Locale::schema_fields_CODE, 'zh_Hans_CN')
                     ->update([
-                        \Weline\I18n\Model\Locale::fields_IS_INSTALL => 1,
-                        \Weline\I18n\Model\Locale::fields_IS_ACTIVE => 1
+                        \Weline\I18n\Model\Locale::schema_fields_IS_INSTALL => 1,
+                        \Weline\I18n\Model\Locale::schema_fields_IS_ACTIVE => 1
                     ])->fetch();
             } else {
                 // 不存在，创建新的区域记录
                 $localeData = [
-                    \Weline\I18n\Model\Locale::fields_CODE => 'zh_Hans_CN',
-                    \Weline\I18n\Model\Locale::fields_COUNTRY_CODE => 'CN',
-                    \Weline\I18n\Model\Locale::fields_IS_INSTALL => 1,
-                    \Weline\I18n\Model\Locale::fields_IS_ACTIVE => 1,
-                    \Weline\I18n\Model\Locale::fields_FLAG => ''
+                    \Weline\I18n\Model\Locale::schema_fields_CODE => 'zh_Hans_CN',
+                    \Weline\I18n\Model\Locale::schema_fields_COUNTRY_CODE => 'CN',
+                    \Weline\I18n\Model\Locale::schema_fields_IS_INSTALL => 1,
+                    \Weline\I18n\Model\Locale::schema_fields_IS_ACTIVE => 1,
+                    \Weline\I18n\Model\Locale::schema_fields_FLAG => ''
                 ];
                 
-                $locale->clearQuery()->insert($localeData, [\Weline\I18n\Model\Locale::fields_CODE])->fetch();
+                $locale->clearQuery()->insert($localeData, [\Weline\I18n\Model\Locale::schema_fields_CODE])->fetch();
             }
         } catch (\Exception $e) {
             // 静默处理异常，不影响主流程

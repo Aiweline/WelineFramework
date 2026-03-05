@@ -176,7 +176,7 @@ class AsyncUpdate extends BaseController
         $existingCountries = $countries->clearQuery()->select()->fetch()->getItems();
         $existingCodes = [];
         foreach ($existingCountries as $country) {
-            $existingCodes[] = $country->getData(Countries::fields_CODE);
+            $existingCodes[] = $country->getData(Countries::schema_fields_CODE);
         }
         
         $processed = 0;
@@ -184,16 +184,16 @@ class AsyncUpdate extends BaseController
         
         foreach ($availableCountries as $code => $country) {
             $countryData = [
-                Countries::fields_CODE => $code,
-                Countries::fields_FLAG => (string)$i18n->getCountryFlag($code),
-                Countries::fields_IS_ACTIVE => ($code === 'CN') ? 1 : 0,
-                Countries::fields_IS_INSTALL => ($code === 'CN') ? 1 : 0,
+                Countries::schema_fields_CODE => $code,
+                Countries::schema_fields_FLAG => (string)$i18n->getCountryFlag($code),
+                Countries::schema_fields_IS_ACTIVE => ($code === 'CN') ? 1 : 0,
+                Countries::schema_fields_IS_INSTALL => ($code === 'CN') ? 1 : 0,
             ];
             
             $displayData = [
-                Name::fields_COUNTRY_CODE => $code,
-                Name::fields_DISPLAY_LOCALE_CODE => 'en',
-                Name::fields_DISPLAY_NAME => $country,
+                Name::schema_fields_COUNTRY_CODE => $code,
+                Name::schema_fields_DISPLAY_LOCALE_CODE => 'en',
+                Name::schema_fields_DISPLAY_NAME => $country,
             ];
             
             if (in_array($code, $existingCodes)) {
@@ -210,16 +210,16 @@ class AsyncUpdate extends BaseController
         
         // 批量插入新国家
         if (!empty($insert_countries)) {
-            $countries->clearQuery()->insert($insert_countries, Countries::fields_CODE)->fetch();
+            $countries->clearQuery()->insert($insert_countries, Countries::schema_fields_CODE)->fetch();
             // 使用联合唯一索引字段作为冲突检测
-            $localeNames->clearQuery()->insert($insert_countries_display, $localeNames::fields_COUNTRY_CODE . ',' . $localeNames::fields_DISPLAY_LOCALE_CODE)->fetch();
+            $localeNames->clearQuery()->insert($insert_countries_display, $localeNames::schema_fields_COUNTRY_CODE . ',' . $localeNames::schema_fields_DISPLAY_LOCALE_CODE)->fetch();
         }
         
         // 批量更新现有国家
         if (!empty($update_countries)) {
             foreach ($update_countries as $updateData) {
                 $countries->clearQuery()
-                    ->where(Countries::fields_CODE, $updateData[Countries::fields_CODE])
+                    ->where(Countries::schema_fields_CODE, $updateData[Countries::schema_fields_CODE])
                     ->update($updateData)->fetch();
             }
         }
@@ -249,18 +249,18 @@ class AsyncUpdate extends BaseController
         $total = count($allCountries);
         
         foreach ($allCountries as $country) {
-            $countryCode = $country->getData(Countries::fields_CODE);
+            $countryCode = $country->getData(Countries::schema_fields_CODE);
             
             try {
                 $countryLocales = $i18n->getCountry($countryCode)->getLocales();
                 
                 foreach ($countryLocales as $localeCode) {
                     $allLocales[] = [
-                        Locale::fields_CODE => $localeCode,
-                        Locale::fields_COUNTRY_CODE => $countryCode,
-                        Locale::fields_IS_ACTIVE => 0,
-                        Locale::fields_IS_INSTALL => 0,
-                        Locale::fields_FLAG => ''
+                        Locale::schema_fields_CODE => $localeCode,
+                        Locale::schema_fields_COUNTRY_CODE => $countryCode,
+                        Locale::schema_fields_IS_ACTIVE => 0,
+                        Locale::schema_fields_IS_INSTALL => 0,
+                        Locale::schema_fields_FLAG => ''
                     ];
                 }
             } catch (\Exception $e) {
@@ -279,7 +279,7 @@ class AsyncUpdate extends BaseController
             
             foreach ($batches as $index => $batch) {
                 try {
-                    $locale->clearQuery()->insert($batch, Locale::fields_CODE)->fetch();
+                    $locale->clearQuery()->insert($batch, Locale::schema_fields_CODE)->fetch();
                 } catch (\Exception $e) {
                     // 忽略重复插入错误
                     if (!str_contains($e->getMessage(), 'UNIQUE constraint failed')) {
@@ -320,15 +320,15 @@ class AsyncUpdate extends BaseController
         $total = count($allLocales) * count($displayLanguages);
         
         foreach ($allLocales as $localeItem) {
-            $localeCode = $localeItem->getData(Locale::fields_CODE);
+            $localeCode = $localeItem->getData(Locale::schema_fields_CODE);
             
             foreach ($displayLanguages as $displayLang) {
                 $name = $this->getLocaleNameWithFallback($localeCode, $displayLang, $i18n);
                 
                 $localeNames[] = [
-                    LocaleName::fields_LOCALE_CODE => $localeCode,
-                    LocaleName::fields_DISPLAY_LOCALE_CODE => $displayLang,
-                    LocaleName::fields_DISPLAY_NAME => $name
+                    LocaleName::schema_fields_LOCALE_CODE => $localeCode,
+                    LocaleName::schema_fields_DISPLAY_LOCALE_CODE => $displayLang,
+                    LocaleName::schema_fields_DISPLAY_NAME => $name
                 ];
                 
                 $processed++;
@@ -346,7 +346,7 @@ class AsyncUpdate extends BaseController
             foreach ($batches as $index => $batch) {
                 try {
                     // 使用联合唯一索引字段作为冲突检测
-                    $localeName->clearQuery()->insert($batch, LocaleName::fields_LOCALE_CODE . ',' . LocaleName::fields_DISPLAY_LOCALE_CODE)->fetch();
+                    $localeName->clearQuery()->insert($batch, LocaleName::schema_fields_LOCALE_CODE . ',' . LocaleName::schema_fields_DISPLAY_LOCALE_CODE)->fetch();
                 } catch (\Exception $e) {
                     // 忽略重复插入错误
                     if (!str_contains($e->getMessage(), 'UNIQUE constraint failed')) {
@@ -382,16 +382,16 @@ class AsyncUpdate extends BaseController
         if ($batch === 0) {
             $allLocales = [];
             foreach ($allCountries as $country) {
-                $countryCode = $country->getData(Countries::fields_CODE);
+                $countryCode = $country->getData(Countries::schema_fields_CODE);
                 $countryLocales = $i18n->getCountry($countryCode)->getLocales();
                 
                 foreach ($countryLocales as $localeCode) {
                     $allLocales[] = [
-                        Locale::fields_CODE => $localeCode,
-                        Locale::fields_COUNTRY_CODE => $countryCode,
-                        Locale::fields_IS_ACTIVE => 0,
-                        Locale::fields_IS_INSTALL => 0,
-                        Locale::fields_FLAG => ''
+                        Locale::schema_fields_CODE => $localeCode,
+                        Locale::schema_fields_COUNTRY_CODE => $countryCode,
+                        Locale::schema_fields_IS_ACTIVE => 0,
+                        Locale::schema_fields_IS_INSTALL => 0,
+                        Locale::schema_fields_FLAG => ''
                     ];
                 }
             }
@@ -408,7 +408,7 @@ class AsyncUpdate extends BaseController
         
         if (!empty($batchData)) {
             // 插入当前批次
-            $locale->clearQuery()->insert($batchData, Locale::fields_CODE)->fetch();
+            $locale->clearQuery()->insert($batchData, Locale::schema_fields_CODE)->fetch();
             
             $processed = ($batch + 1) * self::BATCH_SIZE;
             if ($processed > $total) $processed = $total;
@@ -452,15 +452,15 @@ class AsyncUpdate extends BaseController
             $localeNames = [];
             
             foreach ($allLocales as $localeItem) {
-                $localeCode = $localeItem->getData(Locale::fields_CODE);
+                $localeCode = $localeItem->getData(Locale::schema_fields_CODE);
                 
                 foreach ($displayLanguages as $displayLang) {
                     $localeName = $this->getLocaleNameWithFallback($localeCode, $displayLang, $i18n);
                     
                     $localeNames[] = [
-                        LocaleName::fields_LOCALE_CODE => $localeCode,
-                        LocaleName::fields_DISPLAY_LOCALE_CODE => $displayLang,
-                        LocaleName::fields_DISPLAY_NAME => $localeName
+                        LocaleName::schema_fields_LOCALE_CODE => $localeCode,
+                        LocaleName::schema_fields_DISPLAY_LOCALE_CODE => $displayLang,
+                        LocaleName::schema_fields_DISPLAY_NAME => $localeName
                     ];
                 }
             }
@@ -477,7 +477,7 @@ class AsyncUpdate extends BaseController
         
         if (!empty($batchData)) {
             // 插入当前批次，使用联合唯一索引字段作为冲突检测
-            $localeName->clearQuery()->insert($batchData, LocaleName::fields_LOCALE_CODE . ',' . LocaleName::fields_DISPLAY_LOCALE_CODE)->fetch();
+            $localeName->clearQuery()->insert($batchData, LocaleName::schema_fields_LOCALE_CODE . ',' . LocaleName::schema_fields_DISPLAY_LOCALE_CODE)->fetch();
             
             $processed = ($batch + 1) * self::BATCH_SIZE;
             if ($processed > $total) $processed = $total;
@@ -527,7 +527,7 @@ class AsyncUpdate extends BaseController
         $totalBatches = count($batches);
         
         foreach ($batches as $index => $batch) {
-            $locale->clearQuery()->insert($batch, Locale::fields_CODE)->fetch();
+            $locale->clearQuery()->insert($batch, Locale::schema_fields_CODE)->fetch();
             
             $progress = 30 + (($index + 1) / $totalBatches) * 20;
             $this->setProgress($taskId, "正在插入区域数据... (批次 " . ($index + 1) . "/{$totalBatches})", $progress);
@@ -547,7 +547,7 @@ class AsyncUpdate extends BaseController
         
         foreach ($batches as $index => $batch) {
             // 使用联合唯一索引字段作为冲突检测
-            $localeName->clearQuery()->insert($batch, LocaleName::fields_LOCALE_CODE . ',' . LocaleName::fields_DISPLAY_LOCALE_CODE)->fetch();
+            $localeName->clearQuery()->insert($batch, LocaleName::schema_fields_LOCALE_CODE . ',' . LocaleName::schema_fields_DISPLAY_LOCALE_CODE)->fetch();
             
             $progress = 50 + (($index + 1) / $totalBatches) * 40;
             $this->setProgress($taskId, "正在插入区域名称数据... (批次 " . ($index + 1) . "/{$totalBatches})", $progress);
