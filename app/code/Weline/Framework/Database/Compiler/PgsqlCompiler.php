@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Database\Compiler;
 
 use Weline\Framework\Database\Compiler\Dialect\PgsqlDialect;
+use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Exception\DbException;
 
 /**
@@ -86,7 +87,7 @@ final class PgsqlCompiler extends AbstractCompiler
                     }
                 }
                 if ($conflictFields !== []) {
-                    if ($existUpdateSql === 'DO UPDATE SET ALL_FIELDS') {
+                    if ($existUpdateSql === QueryInterface::EXIST_UPDATE_ALL_FIELDS) {
                         $parts = [];
                         foreach ($insertFields as $f) {
                             if (in_array($f, $insertUpdateWhereFields, true) || ($identityField && $f === $identityField)) {

@@ -15,6 +15,8 @@ use Weline\Framework\Database\Helper\Tool;
 use Weline\Framework\Database\Schema\Column;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Setup\Data\Context;
+use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\I18n\LocalModel;
 use Weline\I18n\Model\Locals;
 
@@ -25,19 +27,24 @@ use Weline\I18n\Model\Locals;
  *
  * 可选 - PHP 8.4+ 类型安全访问（Property Hooks 示例）：
  *   public string $name {
- *       get => (string)$this->getData(self::fields_NAME);
- *       set => $this->setData(self::fields_NAME, trim($value));
+ *       get => (string)$this->getData(self::schema_fields_NAME);
+ *       set => $this->setData(self::schema_fields_NAME, trim($value));
  *   }
  *
  * install/upgrade 中可使用 Column 流式 API（\Weline\Framework\Database\Schema\Column）：
  *   $setup->createTable('注释')
- *       ->addColumn(Column::integer(self::fields_ID)->primaryKey()->autoIncrement()->comment('ID'))
- *       ->addColumn(Column::varchar(self::fields_NAME, 255)->notNull()->comment('名称'))
+ *       ->addColumn(Column::integer(self::schema_fields_ID)->primaryKey()->autoIncrement()->comment('ID'))
+ *       ->addColumn(Column::varchar(self::schema_fields_NAME, 255)->notNull()->comment('名称'))
  *       ->create();
  * 原有 addColumn(string, string, int, string, string) 签名仍支持。
  */
 abstract class Model extends AbstractModel implements ModelInterface
 {
+    /** 表结构由 SchemaDiffStage 负责；子类有建表/种子逻辑可重写 */
+    public function setup(ModelSetup $setup, Context $context): void {}
+    public function upgrade(ModelSetup $setup, Context $context): void {}
+    public function install(ModelSetup $setup, Context $context): void {}
+
     public function columns(): array
     {
         $cache_key = $this->getTable() . '_columns';
@@ -107,7 +114,7 @@ abstract class Model extends AbstractModel implements ModelInterface
         string     $order_sort = 'ASC'
     ): array
     {
-        $main_field = $main_field ?: $this::fields_ID;
+        $main_field = $main_field ?: $this::schema_fields_ID;
         $top_menus = $this->clearData()
             ->where($parent_id_field, $parent_id_value)
             ->order($order_field, $order_sort)
@@ -207,7 +214,7 @@ abstract class Model extends AbstractModel implements ModelInterface
                                    string $order_field = 'position',
                                    string $order_sort = 'ASC'): Model
     {
-        $main_field = $main_field ?: $this::fields_ID;
+        $main_field = $main_field ?: $this::schema_fields_ID;
         $parents = $this->reset()
             ->where($main_field, $model->getData($parent_id_field))
             ->order($order_field, $order_sort)
@@ -262,8 +269,8 @@ abstract class Model extends AbstractModel implements ModelInterface
         if (empty($local_code)) {
             $local_code = Cookie::getLang();
         }
-        $idField = $this::fields_ID;
-        $modelIdField = $model::fields_ID;
+        $idField = $this::schema_fields_ID;
+        $modelIdField = $model::schema_fields_ID;
         $this->joinModel(
             $model,
             'local',
@@ -284,8 +291,8 @@ abstract class Model extends AbstractModel implements ModelInterface
         }
         /**@var Locals $local */
         $local = ObjectManager::make(Locals::class);
-        $local = $local->where(Locals::fields_CODE, $localCode)
-            ->where(Locals::fields_TARGET_CODE, Cookie::getLangLocal())
+        $local = $local->where(Locals::schema_fields_CODE, $localCode)
+            ->where(Locals::schema_fields_TARGET_CODE, Cookie::getLangLocal())
             ->find()->fetch();
         if ($local->getId()) {
             $this->setData($field, $local->getName());

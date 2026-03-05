@@ -163,6 +163,70 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
     /**
      * @inheritDoc
      */
+    public function get(string $key): mixed
+    {
+        return $this->session->get($key);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function set(string $key, mixed $value): void
+    {
+        $this->session->set($key, $value);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function delete(string $key): void
+    {
+        $this->session->delete($key);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getId(): string
+    {
+        return $this->session->getId();
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function start(?string $sessionId = null): void
+    {
+        $this->session->start($sessionId);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function destroy(): void
+    {
+        $this->session->destroy();
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function regenerate(bool $deleteOldSession = true): void
+    {
+        $this->session->regenerate($deleteOldSession);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function isStarted(): bool
+    {
+        return $this->session->isStarted();
+    }
+
+    /**
+     * @inheritDoc
+     */
     public function getArea(): string
     {
         return $this->areaConfig->getArea();
@@ -239,17 +303,6 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
     }
 
     /**
-     * 兼容旧的 delete 方法
-     *
-     * @deprecated 使用 getSession()->delete() 代替
-     */
-    public function delete(string $name): bool
-    {
-        $this->session->delete($name);
-        return true;
-    }
-
-    /**
      * 兼容旧的 isLogin 方法
      *
      * @deprecated 使用 isLoggedIn() 代替
@@ -321,27 +374,6 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
     public function getSessionId(): string
     {
         return $this->session->getId();
-    }
-
-    /**
-     * 兼容旧的 start 方法
-     *
-     * @deprecated 使用 getSession()->start() 代替
-     */
-    public function start(?string $sessionId = null): void
-    {
-        $this->session->start($sessionId);
-    }
-
-    /**
-     * 兼容旧的 destroy 方法
-     *
-     * @deprecated 使用 getSession()->destroy() 代替
-     */
-    public function destroy(string $id = ''): bool
-    {
-        $this->session->destroy();
-        return true;
     }
 
     /**
