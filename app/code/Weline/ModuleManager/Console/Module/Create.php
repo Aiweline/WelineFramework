@@ -1574,15 +1574,15 @@ class Create extends CommandAbstract
             foreach ($batches as $batch) {
                 try {
                     $results = $dictionaryModel->reset()
-                        ->where(\Weline\I18n\Model\Locale\Dictionary::fields_WORD, $batch, 'IN')
-                        ->where(\Weline\I18n\Model\Locale\Dictionary::fields_LOCALE_CODE, $targetLanguage)
+                        ->where(\Weline\I18n\Model\Locale\Dictionary::schema_fields_WORD, $batch, 'IN')
+                        ->where(\Weline\I18n\Model\Locale\Dictionary::schema_fields_LOCALE_CODE, $targetLanguage)
                         ->fetch()
                         ->getItems();
                     
                     if (!empty($results)) {
                         foreach ($results as $result) {
-                            $word = $result->getData(\Weline\I18n\Model\Locale\Dictionary::fields_WORD) ?? '';
-                            $translation = $result->getData(\Weline\I18n\Model\Locale\Dictionary::fields_TRANSLATE) ?? '';
+                            $word = $result->getData(\Weline\I18n\Model\Locale\Dictionary::schema_fields_WORD) ?? '';
+                            $translation = $result->getData(\Weline\I18n\Model\Locale\Dictionary::schema_fields_TRANSLATE) ?? '';
                             if (!empty($word) && !empty($translation)) {
                                 $translated[$word] = $translation;
                             }
@@ -4618,7 +4618,7 @@ XML;
         
         try {
             // 获取模块的所有表
-            $moduleTableModel = ObjectManager::getInstance('Weline\ModuleManager\Model\Module\Table');
+            $moduleTableModel = ObjectManager::getInstance(\Weline\Framework\Setup\Model\ModuleTable::class);
             $moduleTables = $moduleTableModel->reset()
                 ->where('module_name', $moduleName)
                 ->select()

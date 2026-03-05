@@ -7,14 +7,14 @@ use Weline\Framework\Database\Model;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Module\Model\Module;
-use Weline\ModuleManager\Model\Module\Table;
+use Weline\Framework\Setup\Model\ModuleTable;
 
 class ModelUpdateBefore implements ObserverInterface
 {
-    private Table $table;
+    private ModuleTable $table;
 
     public function __construct(
-        Table $table
+        ModuleTable $table
     )
     {
         $this->table = $table;
@@ -29,12 +29,12 @@ class ModelUpdateBefore implements ObserverInterface
         $data = $event->getData('data');
         /**@var Model $model */
         $model = $data->getModel();
-        if ($model::class !== Table::class and $type === 'install') {
+        if ($model::class !== ModuleTable::class and $type === 'install') {
             /**@var Module $module */
             $module = $event->getData('module');
             # 检查是否存在表
-            /**@var Table $modelTable */
-            $modelTable = $this->table->where($this->table::fields_model, $model::class)->find()->fetch();
+            /**@var ModuleTable $modelTable */
+            $modelTable = $this->table->where($this->table::schema_fields_model, $model::class)->find()->fetch();
             if ($modelTable->getName()) {
                 // 如果是同一个模块，不认为是冲突（可能是模块重新安装）
                 if ($module->getName() !== $modelTable->getModuleName()) {
