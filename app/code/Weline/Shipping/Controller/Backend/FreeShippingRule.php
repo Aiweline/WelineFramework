@@ -33,12 +33,13 @@ class FreeShippingRule extends BackendController
     public function index()
     {
         $rules = $this->rule->reset()
-            ->order(FreeShippingRuleModel::fields_PRIORITY, 'DESC')
+            ->order(FreeShippingRuleModel::schema_fields_PRIORITY, 'DESC')
             ->select()
             ->fetch()
             ->getItems();
 
         $this->assign('rules', $rules);
+        $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
 
         return $this->fetch();
     }

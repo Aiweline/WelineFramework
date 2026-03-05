@@ -33,12 +33,13 @@ class Zone extends BackendController
     public function index()
     {
         $zones = $this->zone->reset()
-            ->order(ZoneModel::fields_SORT_ORDER, 'ASC')
+            ->order(ZoneModel::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
 
         $this->assign('zones', $zones);
+        $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
 
         return $this->fetch();
     }

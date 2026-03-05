@@ -33,12 +33,13 @@ class ShippingService extends BackendController
     public function index()
     {
         $services = $this->service->reset()
-            ->order(ShippingServiceModel::fields_SORT_ORDER, 'ASC')
+            ->order(ShippingServiceModel::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
 
         $this->assign('services', $services);
+        $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
 
         return $this->fetch();
     }

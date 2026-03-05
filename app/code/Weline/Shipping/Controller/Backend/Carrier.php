@@ -42,13 +42,13 @@ class Carrier extends BackendController
         
         // 搜索功能：按代码或名称搜索
         if ($keyword) {
-            $query->where(CarrierModel::fields_CARRIER_CODE, 'like', "%{$keyword}%")
-                  ->orWhere(CarrierModel::fields_CARRIER_NAME, 'like', "%{$keyword}%");
+            $query->where(CarrierModel::schema_fields_CARRIER_CODE, 'like', "%{$keyword}%")
+                  ->orWhere(CarrierModel::schema_fields_CARRIER_NAME, 'like', "%{$keyword}%");
         }
         
         // 状态筛选
         if ($isActive !== null && $isActive !== '') {
-            $query->where(CarrierModel::fields_IS_ACTIVE, (int)$isActive);
+            $query->where(CarrierModel::schema_fields_IS_ACTIVE, (int)$isActive);
         }
         
         // 获取总数
@@ -57,8 +57,8 @@ class Carrier extends BackendController
         
         // 分页查询
         $offset = ($page - 1) * $limit;
-        $carriers = $query->order(CarrierModel::fields_SORT_ORDER, 'ASC')
-            ->order(CarrierModel::fields_CARRIER_NAME, 'ASC')
+        $carriers = $query->order(CarrierModel::schema_fields_SORT_ORDER, 'ASC')
+            ->order(CarrierModel::schema_fields_CARRIER_NAME, 'ASC')
             ->limit($limit, $offset)
             ->select()
             ->fetch()
@@ -71,6 +71,7 @@ class Carrier extends BackendController
         $this->assign('total_pages', $totalPages);
         $this->assign('keyword', $keyword);
         $this->assign('is_active', $isActive);
+        $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
 
         return $this->fetch();
     }
@@ -137,22 +138,22 @@ class Carrier extends BackendController
             } else {
                 // 新增模式：检查代码是否已存在
                 $existing = $this->carrier->reset()
-                    ->load(CarrierModel::fields_CARRIER_CODE, $carrierCode);
+                    ->load(CarrierModel::schema_fields_CARRIER_CODE, $carrierCode);
                 if ($existing->getId()) {
                     throw new \RuntimeException(__('快递公司代码已存在'));
                 }
             }
 
             // 设置数据
-            $carrier->setData(CarrierModel::fields_CARRIER_CODE, $carrierCode);
-            $carrier->setData(CarrierModel::fields_CARRIER_NAME, $carrierName);
-            $carrier->setData(CarrierModel::fields_CARRIER_TYPE, $carrierType);
-            $carrier->setData(CarrierModel::fields_TRACKING_URL_TEMPLATE, $trackingUrlTemplate);
-            $carrier->setData(CarrierModel::fields_TRACKING_API_ENDPOINT, $trackingApiEndpoint ?: null);
-            $carrier->setData(CarrierModel::fields_TRACKING_API_METHOD, $trackingApiMethod);
-            $carrier->setData(CarrierModel::fields_TRACKING_SUPPORT_STATUS, $trackingSupportStatus);
-            $carrier->setData(CarrierModel::fields_IS_ACTIVE, $isActive);
-            $carrier->setData(CarrierModel::fields_SORT_ORDER, $sortOrder);
+            $carrier->setData(CarrierModel::schema_fields_CARRIER_CODE, $carrierCode);
+            $carrier->setData(CarrierModel::schema_fields_CARRIER_NAME, $carrierName);
+            $carrier->setData(CarrierModel::schema_fields_CARRIER_TYPE, $carrierType);
+            $carrier->setData(CarrierModel::schema_fields_TRACKING_URL_TEMPLATE, $trackingUrlTemplate);
+            $carrier->setData(CarrierModel::schema_fields_TRACKING_API_ENDPOINT, $trackingApiEndpoint ?: null);
+            $carrier->setData(CarrierModel::schema_fields_TRACKING_API_METHOD, $trackingApiMethod);
+            $carrier->setData(CarrierModel::schema_fields_TRACKING_SUPPORT_STATUS, $trackingSupportStatus);
+            $carrier->setData(CarrierModel::schema_fields_IS_ACTIVE, $isActive);
+            $carrier->setData(CarrierModel::schema_fields_SORT_ORDER, $sortOrder);
             
             // API配置
             if ($apiConfig) {
@@ -219,9 +220,9 @@ class Carrier extends BackendController
                 throw new \RuntimeException(__('快递公司不存在'));
             }
 
-            $currentStatus = $carrier->getData(CarrierModel::fields_IS_ACTIVE);
+            $currentStatus = $carrier->getData(CarrierModel::schema_fields_IS_ACTIVE);
             $newStatus = $currentStatus ? 0 : 1;
-            $carrier->setData(CarrierModel::fields_IS_ACTIVE, $newStatus);
+            $carrier->setData(CarrierModel::schema_fields_IS_ACTIVE, $newStatus);
             $carrier->save();
 
             $this->getMessageManager()->addSuccess($newStatus ? __('启用成功') : __('禁用成功'));
