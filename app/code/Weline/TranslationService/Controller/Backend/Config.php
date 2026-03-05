@@ -101,28 +101,28 @@ class Config extends \Weline\Admin\Controller\BaseController
                 $provider = $this->providerModel->clear();
                 // 新建渠道时，需要设置provider_code
                 if (isset($data['provider_code']) && !empty($data['provider_code'])) {
-                    $provider->setData(TranslationProvider::fields_PROVIDER_CODE, $data['provider_code']);
+                    $provider->setData(TranslationProvider::schema_fields_PROVIDER_CODE, $data['provider_code']);
                 } else {
                     // 如果没有提供，从渠道名称生成
                     $providerCode = strtolower(preg_replace('/[^a-zA-Z0-9]/', '_', $data['provider_name'] ?? ''));
-                    $provider->setData(TranslationProvider::fields_PROVIDER_CODE, $providerCode);
+                    $provider->setData(TranslationProvider::schema_fields_PROVIDER_CODE, $providerCode);
                 }
-                $provider->setData(TranslationProvider::fields_CREATED_AT, date('Y-m-d H:i:s'));
+                $provider->setData(TranslationProvider::schema_fields_CREATED_AT, date('Y-m-d H:i:s'));
             }
 
             // 保存数据
-            $provider->setData(TranslationProvider::fields_PROVIDER_NAME, $data['provider_name'] ?? '');
-            $provider->setData(TranslationProvider::fields_API_KEY, $data['api_key'] ?? '');
-            $provider->setData(TranslationProvider::fields_API_SECRET, $data['api_secret'] ?? '');
-            $provider->setData(TranslationProvider::fields_API_ENDPOINT, $data['api_endpoint'] ?? '');
-            $provider->setData(TranslationProvider::fields_IS_ENABLED, isset($data['is_enabled']) ? 1 : 0);
-            $provider->setData(TranslationProvider::fields_IS_DEFAULT, isset($data['is_default']) ? 1 : 0);
-            $provider->setData(TranslationProvider::fields_PRIORITY, isset($data['priority']) ? (int)$data['priority'] : 0);
-            $provider->setData(TranslationProvider::fields_RATE_LIMIT, isset($data['rate_limit']) ? (int)$data['rate_limit'] : null);
-            $provider->setData(TranslationProvider::fields_DAILY_LIMIT, isset($data['daily_limit']) ? (int)$data['daily_limit'] : null);
-            $provider->setData(TranslationProvider::fields_COST_PER_CHARACTER, isset($data['cost_per_character']) ? (float)$data['cost_per_character'] : 0);
-            $provider->setData(TranslationProvider::fields_DESCRIPTION, $data['description'] ?? '');
-            $provider->setData(TranslationProvider::fields_UPDATED_AT, date('Y-m-d H:i:s'));
+            $provider->setData(TranslationProvider::schema_fields_PROVIDER_NAME, $data['provider_name'] ?? '');
+            $provider->setData(TranslationProvider::schema_fields_API_KEY, $data['api_key'] ?? '');
+            $provider->setData(TranslationProvider::schema_fields_API_SECRET, $data['api_secret'] ?? '');
+            $provider->setData(TranslationProvider::schema_fields_API_ENDPOINT, $data['api_endpoint'] ?? '');
+            $provider->setData(TranslationProvider::schema_fields_IS_ENABLED, isset($data['is_enabled']) ? 1 : 0);
+            $provider->setData(TranslationProvider::schema_fields_IS_DEFAULT, isset($data['is_default']) ? 1 : 0);
+            $provider->setData(TranslationProvider::schema_fields_PRIORITY, isset($data['priority']) ? (int)$data['priority'] : 0);
+            $provider->setData(TranslationProvider::schema_fields_RATE_LIMIT, isset($data['rate_limit']) ? (int)$data['rate_limit'] : null);
+            $provider->setData(TranslationProvider::schema_fields_DAILY_LIMIT, isset($data['daily_limit']) ? (int)$data['daily_limit'] : null);
+            $provider->setData(TranslationProvider::schema_fields_COST_PER_CHARACTER, isset($data['cost_per_character']) ? (float)$data['cost_per_character'] : 0);
+            $provider->setData(TranslationProvider::schema_fields_DESCRIPTION, $data['description'] ?? '');
+            $provider->setData(TranslationProvider::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'));
 
             // 处理支持的语言列表
             if (isset($data['supported_languages']) && is_array($data['supported_languages'])) {
@@ -137,8 +137,8 @@ class Config extends \Weline\Admin\Controller\BaseController
             // 如果设置为默认渠道，取消其他渠道的默认状态
             if (isset($data['is_default']) && $data['is_default']) {
                 $this->providerModel->clear()
-                    ->where(TranslationProvider::fields_IS_DEFAULT, 1)
-                    ->setData(TranslationProvider::fields_IS_DEFAULT, 0)
+                    ->where(TranslationProvider::schema_fields_IS_DEFAULT, 1)
+                    ->setData(TranslationProvider::schema_fields_IS_DEFAULT, 0)
                     ->save();
             }
 
@@ -169,7 +169,7 @@ class Config extends \Weline\Admin\Controller\BaseController
         }
 
         try {
-            $adapter = $this->providerFactory->create($provider->getData(TranslationProvider::fields_PROVIDER_CODE));
+            $adapter = $this->providerFactory->create($provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE));
             if (!$adapter) {
                 return $this->json(['success' => false, 'message' => __('未找到渠道适配器')]);
             }
