@@ -49,22 +49,22 @@ class Order extends BackendController
         $query = $orderModel->select();
         
         if ($status) {
-            $query->where(OrderModel::fields_STATUS, $status);
+            $query->where(OrderModel::schema_fields_STATUS, $status);
         }
         
         if ($paymentStatus) {
-            $query->where(OrderModel::fields_PAYMENT_STATUS, $paymentStatus);
+            $query->where(OrderModel::schema_fields_PAYMENT_STATUS, $paymentStatus);
         }
         
         if ($keyword) {
-            $query->where(OrderModel::fields_ORDER_NUMBER, $keyword, 'LIKE');
+            $query->where(OrderModel::schema_fields_ORDER_NUMBER, $keyword, 'LIKE');
         }
         
         $total = $query->count();
         $totalPages = (int)ceil($total / $limit);
         
         $offset = ($page - 1) * $limit;
-        $orders = $query->order(OrderModel::fields_CREATED_TIME, 'DESC')
+        $orders = $query->order(OrderModel::schema_fields_CREATED_TIME, 'DESC')
             ->limit($limit, $offset)
             ->fetchArray();
         
