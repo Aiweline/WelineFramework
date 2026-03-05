@@ -461,7 +461,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
             $userRole = ObjectManager::getInstance(UserRole::class, [], false);
             
             $userRole->clearData()
-                ->where($userRole::fields_USER_ID, (int)$userId)
+                ->where($userRole::schema_fields_USER_ID, (int)$userId)
                 ->find()
                 ->fetch();
             

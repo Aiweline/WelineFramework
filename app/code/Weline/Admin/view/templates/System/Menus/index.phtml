@@ -671,9 +671,10 @@ $search = $this->getData('search') ?? '';
     function openEditModal(menuId) {
         document.getElementById('menuEditModalTitle').textContent = '<?= __("编辑菜单") ?>';
         
-        fetch(detailUrl + '?id=' + menuId)
-            .then(function(response) { return response.json(); })
-            .then(function(result) {
+        var url = detailUrl + '?id=' + menuId;
+        window.Weline.Api.get(url, { silent: true })
+            .then(function(res) {
+                var result = (res && res.data) !== undefined ? res.data : res;
                 if (result.code === 200 && result.data) {
                     var data = result.data;
                     document.getElementById('menu_id').value = data.menu_id || '';
@@ -714,15 +715,10 @@ $search = $this->getData('search') ?? '';
             return;
         }
 
-        fetch(saveUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(result) {
+        var saveOpts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) };
+        window.Weline.Api.request(saveUrl, saveOpts)
+        .then(function(res) {
+            var result = (res && res.data) !== undefined ? res.data : res;
             if (result.success || result.code === 200) {
                 BackendToast.success('<?= __("保存成功") ?>');
                 menuModal.hide();
@@ -750,12 +746,10 @@ $search = $this->getData('search') ?? '';
             var formData = new FormData();
             formData.append('id', menuId);
 
-            fetch(deleteUrl, {
-                method: 'POST',
-                body: formData
-            })
-            .then(function(response) { return response.json(); })
-            .then(function(result) {
+            var delOpts = { method: 'POST', body: formData };
+            window.Weline.Api.request(deleteUrl, delOpts)
+            .then(function(res) {
+                var result = (res && res.data) !== undefined ? res.data : res;
                 if (result.code === 200) {
                     BackendToast.success(result.msg || '<?= __("删除成功") ?>');
                     setTimeout(function() {

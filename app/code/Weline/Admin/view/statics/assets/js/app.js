@@ -686,17 +686,19 @@ File: Main Js File
         }
         
         var themeConfigUrl;
-        if (typeof window.site !== 'undefined' && window.site.url_host) {
+        if (typeof window.site !== 'undefined' && typeof window.site.buildUrl === 'function') {
+            themeConfigUrl = window.site.buildUrl('system/ThemeConfig/Set');
+        } else if (typeof window.site !== 'undefined' && window.site.url_host) {
             var urlHost = window.site.url_host;
             if (!urlHost.endsWith('/')) {
                 urlHost += '/';
             }
-            themeConfigUrl = urlHost + 'backend/theme-config/set';
-        } else if (typeof window.frontend_url === 'function') {
-            themeConfigUrl = window.frontend_url('/backend/theme-config/set');
+            themeConfigUrl = urlHost + 'system/theme-config/set';
+        } else if (typeof window.backend_url === 'function') {
+            themeConfigUrl = window.backend_url('system/theme-config/set');
         } else {
             var baseUrl = window.location.pathname.split('/').slice(0, 4).join('/');
-            themeConfigUrl = baseUrl + '/backend/theme-config/set';
+            themeConfigUrl = baseUrl + '/system/theme-config/set';
         }
         
         $.ajax({

@@ -67,17 +67,17 @@ class MenuAccessLogObserver implements ObserverInterface
 
         // 根据路由查找对应的ACL资源
         $acl = $this->acl->clearData()
-            ->where(Acl::fields_ROUTE, $route)
-            ->where(Acl::fields_METHOD, $method, '=')
-            ->where(Acl::fields_IS_BACKEND, 1)
+            ->where(Acl::schema_fields_ROUTE, $route)
+            ->where(Acl::schema_fields_METHOD, $method, '=')
+            ->where(Acl::schema_fields_IS_BACKEND, 1)
             ->find()
             ->fetch();
 
         // 如果没有找到对应的ACL，尝试仅根据路由匹配（忽略方法）
         if (!$acl->getId()) {
             $acl = $this->acl->clearData()
-                ->where(Acl::fields_ROUTE, $route)
-                ->where(Acl::fields_IS_BACKEND, 1)
+                ->where(Acl::schema_fields_ROUTE, $route)
+                ->where(Acl::schema_fields_IS_BACKEND, 1)
                 ->find()
                 ->fetch();
         }
