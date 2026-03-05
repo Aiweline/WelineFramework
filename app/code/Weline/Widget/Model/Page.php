@@ -18,14 +18,28 @@ class Page extends AbstractModel
 {
     public const schema_table = 'weline_widget_page';
     public const schema_primary_key = 'page_id';
+
+    #[Col(type: 'integer', length: 11, nullable: false, primaryKey: true, autoIncrement: true, comment: '页面ID')]
+    public const schema_fields_ID = 'page_id';
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: '标题')]
+    public const schema_fields_TITLE = 'title';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '页面句柄')]
+    public const schema_fields_HANDLE = 'handle';
+    #[Col(type: 'text', nullable: true, comment: '页面内容')]
+    public const schema_fields_CONTENT = 'content';
+    #[Col(type: 'text', nullable: true, comment: '元数据JSON')]
+    public const schema_fields_META_DATA = 'meta_data';
+    #[Col(type: 'varchar', length: 20, nullable: true, default: 'enabled', comment: '状态')]
+    public const schema_fields_STATUS = 'status';
+
     public const fields_ID = 'page_id';
     public const fields_TITLE = 'title';
     public const fields_HANDLE = 'handle';
     public const fields_CONTENT = 'content';
     public const fields_META_DATA = 'meta_data';
     public const fields_STATUS = 'status';
-    public const fields_CREATE_TIME = 'created_at';
-    public const fields_UPDATE_TIME = 'updated_at';
+    public const fields_CREATE_TIME = 'create_time';
+    public const fields_UPDATE_TIME = 'update_time';
 /**
      * 获取页面内容（已渲染的 HTML）
      *
