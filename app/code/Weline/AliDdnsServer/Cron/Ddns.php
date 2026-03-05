@@ -214,8 +214,8 @@ class Ddns implements \Weline\Cron\CronTaskInterface
      */
     function IsSame(string $domain, string $host_name, string $ip, string $ip_version = 'ipv4'): bool
     {
-        $ddns = $this->ddnsDomains->where($this->ddnsDomains::fields_DOMAIN, $domain)
-                                  ->where($this->ddnsDomains::fields_HOST_NAME, $host_name)
+        $ddns = $this->ddnsDomains->where($this->ddnsDomains::schema_fields_DOMAIN, $domain)
+                                  ->where($this->ddnsDomains::schema_fields_HOST_NAME, $host_name)
                                   ->find()
                                   ->fetch();
         if ($ddns->getData(strtolower($ip_version)) === $ip) {
