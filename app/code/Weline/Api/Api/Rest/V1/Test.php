@@ -435,7 +435,7 @@ class Test extends FrontendRestController
             $environment = $isSandbox ? 'sandbox' : 'production';
             
             $model = new SandboxTest();
-            $result = $model->clear()->where(SandboxTest::fields_ID, $id)->delete();
+            $result = $model->clear()->where(SandboxTest::schema_fields_ID, $id)->delete();
             
             if (!$result) {
                 throw new \Exception(__('删除失败，数据不存在'));

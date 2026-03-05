@@ -87,8 +87,8 @@ class Auth extends FrontendRestController
             /** @var ApiUser $user */
             $user = ObjectManager::getInstance(ApiUser::class);
             $user->clear()
-                ->where(ApiUser::fields_username, $username)
-                ->where(ApiUser::fields_is_deleted, 0)
+                ->where(ApiUser::schema_fields_username, $username)
+                ->where(ApiUser::schema_fields_is_deleted, 0)
                 ->find()
                 ->fetch();
             if (!$user->getId()) {
