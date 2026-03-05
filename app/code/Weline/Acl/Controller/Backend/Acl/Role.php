@@ -87,7 +87,7 @@ class Role extends \Weline\Admin\Controller\BaseController
             // 检查角色是否已存在（创建新实例避免状态污染，$shared=false）
             /** @var \Weline\Acl\Model\Role $checkRole */
             $checkRole = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false);
-            $existingRole = $checkRole->where(\Weline\Acl\Model\Role::fields_ROLE_NAME, $role_name)->find()->fetch();
+            $existingRole = $checkRole->where(\Weline\Acl\Model\Role::schema_fields_ROLE_NAME, $role_name)->find()->fetch();
             if ($existingRole->getId()) {
                 if ($this->request->isAjax()) {
                     return $this->jsonResponse(false, __('角色已存在！'));
@@ -102,7 +102,7 @@ class Role extends \Weline\Admin\Controller\BaseController
                 /** @var \Weline\Acl\Model\Role $newRole */
                 $newRole = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false);
                 $save_result = $newRole->setData($postData)
-                    ->save(true, \Weline\Acl\Model\Role::fields_ROLE_NAME);
+                    ->save(true, \Weline\Acl\Model\Role::schema_fields_ROLE_NAME);
                 
                 if ($this->request->isAjax()) {
                     if ($save_result) {
@@ -249,17 +249,17 @@ class Role extends \Weline\Admin\Controller\BaseController
         $acls = [];
         foreach ($acl_ids as $acl_id) {
             $acls[] = [
-                RoleAccess::fields_ROLE_ID => $role_id,
-                RoleAccess::fields_SOURCE_ID => $acl_id,
+                RoleAccess::schema_fields_ROLE_ID => $role_id,
+                RoleAccess::schema_fields_SOURCE_ID => $acl_id,
             ];
         }
         /**@var RoleAccess $roleAccessModel */
         $roleAccessModel = ObjectManager::getInstance(RoleAccess::class);
         $roleAccessModel->beginTransaction();
         try {
-            $roleAccessModel->reset()->where(\Weline\Acl\Model\Role::fields_ROLE_ID, $role_id)->delete()->fetch();
+            $roleAccessModel->reset()->where(\Weline\Acl\Model\Role::schema_fields_ROLE_ID, $role_id)->delete()->fetch();
             if ($acls) {
-                $roleAccessModel->reset()->insert($acls,[\Weline\Acl\Model\Role::fields_ROLE_ID, \Weline\Acl\Model\RoleAccess::fields_SOURCE_ID])->fetch();
+                $roleAccessModel->reset()->insert($acls,[\Weline\Acl\Model\Role::schema_fields_ROLE_ID, \Weline\Acl\Model\RoleAccess::schema_fields_SOURCE_ID])->fetch();
             }
             $roleAccessModel->commit();
             $this->getMessageManager()->addSuccess(__('权限分配成功！'));
@@ -305,12 +305,12 @@ class Role extends \Weline\Admin\Controller\BaseController
         $roleModel = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false);
         
         if ($id !== '') {
-            $roleModel->where(\Weline\Acl\Model\Role::fields_ROLE_ID, (int)$id);
+            $roleModel->where(\Weline\Acl\Model\Role::schema_fields_ROLE_ID, (int)$id);
         } elseif ($keyword !== '') {
-            $roleModel->where(\Weline\Acl\Model\Role::fields_ROLE_NAME, '%' . $keyword . '%', 'like');
+            $roleModel->where(\Weline\Acl\Model\Role::schema_fields_ROLE_NAME, '%' . $keyword . '%', 'like');
         }
         
-        $roleModel->limit($limit)->order(\Weline\Acl\Model\Role::fields_ROLE_NAME, 'ASC')->select()->fetch();
+        $roleModel->limit($limit)->order(\Weline\Acl\Model\Role::schema_fields_ROLE_NAME, 'ASC')->select()->fetch();
         
         $data = [];
         foreach ($roleModel->getItems() as $role) {
