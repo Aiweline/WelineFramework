@@ -11,57 +11,27 @@ declare(strict_types=1);
 
 namespace Weline\CacheManager\Model;
 
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
-class Cache extends \Weline\Framework\Database\Model
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: '缓存表')]
+class Cache extends Model
 {
-    public const fields_ID          = 'id';
-    public const fields_NAME        = 'name';
-    public const fields_Status      = 'status';
-    public const fields_Permanently = 'permanently';
-    public const fields_Module      = 'module';
-    public const fields_IDENTITY    = 'identity';
-    public const fields_TYPE        = 'type';
-    public const fields_FILE        = 'file';
-    public const fields_DESCRIPTION = 'description';
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-//        $setup->dropTable();
-        if($setup->tableExist()) $setup->query('TRUNCATE TABLE ' . $this->getTable());
-        if (!$setup->tableExist()) {
-            $setup->getPrinting()->setup('安装数据表...', $setup->getTable());
-            $setup->createTable('缓存')
-                  ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'primary key auto_increment', 'ID')
-                  ->addColumn(self::fields_NAME, TableInterface::column_type_VARCHAR, 255, 'not null', '名称')
-                  ->addColumn(self::fields_Status, TableInterface::column_type_INTEGER, 1, 'not null default 1', '状态:1启用,0禁用')
-                  ->addColumn(self::fields_Permanently, TableInterface::column_type_INTEGER, 1, 'not null default 0', '持久化：0不持久化，1持久化')
-                  ->addColumn(self::fields_Module, TableInterface::column_type_VARCHAR, 255, '', '模组')
-                  ->addColumn(self::fields_TYPE, TableInterface::column_type_INTEGER, 1, 'not null default 0', '类型:0-系统缓存,1-应用缓存')
-                  ->addColumn(self::fields_IDENTITY, TableInterface::column_type_VARCHAR, 255, 'not null', '标志')
-                  ->addColumn(self::fields_FILE, TableInterface::column_type_VARCHAR, 1000, 'not null', '文件位置')
-                  ->addColumn(self::fields_DESCRIPTION, TableInterface::column_type_TEXT, 0, '', '描述')
-                  ->create();
-        }
-    }
+    public const schema_fields_ID          = 'id';
+    public const schema_fields_NAME        = 'name';
+    #[Col(type: 'int', nullable: false, default: 0, comment: '状态')]
+    public const schema_fields_Status      = 'status';
+    #[Col(type: 'int', nullable: false, default: 0, comment: '持久化：0不持久化，1持久化')]
+    public const schema_fields_Permanently = 'permanently';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '模块')]
+    public const schema_fields_Module      = 'module';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '标识')]
+    public const schema_fields_IDENTITY    = 'identity';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '类型')]
+    public const schema_fields_TYPE        = 'type';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '文件')]
+    public const schema_fields_FILE        = 'file';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '描述')]
+    public const schema_fields_DESCRIPTION = 'description';
 }
+
