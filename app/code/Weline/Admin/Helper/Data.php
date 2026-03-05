@@ -64,7 +64,7 @@ class Data extends \Weline\Framework\App\Helper
     public function getSessionUser(string $sess_id): BackendUser
     {
         try {
-            return clone $this->adminUser->clear()->load($this->adminUser::fields_sess_id, $sess_id);
+            return clone $this->adminUser->clear()->load($this->adminUser::schema_fields_sess_id, $sess_id);
         } catch (\Exception $exception) {
             return $this->adminUser;
         }

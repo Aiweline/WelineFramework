@@ -38,18 +38,30 @@ $(function () {
                 }
             }
             showLoading();
-            $.ajax({
-                url: window.url('system/menus/save'),
-                type: 'post',
-                dataType: 'json',
-                data: JSON.stringify(data),
-                success: async (res) => {
-                    console.log(res);
-                }, error: (res) => {
-                    console.log(res)
+            var url = typeof window.url === 'function' ? window.url('system/menus/save') : '/admin/system/menus/save';
+            var req = window.Weline.Api.request(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(function(res) {
+                var ok = res && res.ok;
+                if (ok && typeof BackendToast !== 'undefined') {
+                    BackendToast.success('保存成功');
+                } else if (!ok && typeof BackendToast !== 'undefined') {
+                    BackendToast.error((res && res.data && (res.data.message || res.data.msg)) || '保存失败');
                 }
             })
-            hideLoading();
+            .catch(function(err) {
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.error((err && err.message) || '保存失败');
+                } else {
+                    console.warn('save menu error', err);
+                }
+            })
+            .finally(function() {
+                hideLoading();
+            });
         },
         cancel: function (values) {
             $(".edit i", this)
