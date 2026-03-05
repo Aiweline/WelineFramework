@@ -51,27 +51,27 @@ class DomainPool extends BaseController
             
             $model = clone $this->domainPoolModel;
             $model->clearQuery()
-                ->where(DomainPoolModel::fields_STATUS, DomainPoolModel::STATUS_ACTIVE);
+                ->where(DomainPoolModel::schema_fields_STATUS, DomainPoolModel::STATUS_ACTIVE);
             
             // 只返回可建站域名
             if ($siteReadyOnly) {
-                $model->where(DomainPoolModel::fields_SITE_READY, 1);
+                $model->where(DomainPoolModel::schema_fields_SITE_READY, 1);
             }
             
             // 按根域名ID筛选
             if ($parentDomainId > 0) {
-                $model->where(DomainPoolModel::fields_PARENT_DOMAIN_ID, $parentDomainId);
+                $model->where(DomainPoolModel::schema_fields_PARENT_DOMAIN_ID, $parentDomainId);
             }
             
             // 搜索过滤
             if ($search) {
                 $searchPattern = '%' . $search . '%';
-                $model->where(DomainPoolModel::fields_DOMAIN, $searchPattern, 'LIKE');
+                $model->where(DomainPoolModel::schema_fields_DOMAIN, $searchPattern, 'LIKE');
             }
             
             // 排序
-            $model->order(DomainPoolModel::fields_ROOT_DOMAIN, 'ASC')
-                ->order(DomainPoolModel::fields_DOMAIN, 'ASC');
+            $model->order(DomainPoolModel::schema_fields_ROOT_DOMAIN, 'ASC')
+                ->order(DomainPoolModel::schema_fields_DOMAIN, 'ASC');
             
             // 限制数量
             if ($limit > 0) {
@@ -84,7 +84,7 @@ class DomainPool extends BaseController
             if ($grouped) {
                 $result = [];
                 foreach ($domains as $domain) {
-                    $rootDomain = $domain[DomainPoolModel::fields_ROOT_DOMAIN] ?: $domain[DomainPoolModel::fields_DOMAIN];
+                    $rootDomain = $domain[DomainPoolModel::schema_fields_ROOT_DOMAIN] ?: $domain[DomainPoolModel::schema_fields_DOMAIN];
                     
                     if (!isset($result[$rootDomain])) {
                         $result[$rootDomain] = [
@@ -125,18 +125,18 @@ class DomainPool extends BaseController
     private function formatDomainData(array $domain): array
     {
         return [
-            'pool_id' => $domain[DomainPoolModel::fields_ID] ?? 0,
-            'parent_domain_id' => $domain[DomainPoolModel::fields_PARENT_DOMAIN_ID] ?? 0,
-            'domain' => $domain[DomainPoolModel::fields_DOMAIN] ?? '',
-            'root_domain' => $domain[DomainPoolModel::fields_ROOT_DOMAIN] ?? '',
-            'status' => $domain[DomainPoolModel::fields_STATUS] ?? '',
-            'resolve_status' => $domain[DomainPoolModel::fields_RESOLVE_STATUS] ?? 'pending',
-            'resolved_ip' => $domain[DomainPoolModel::fields_RESOLVED_IP] ?? '',
-            'is_local_server' => (int) ($domain[DomainPoolModel::fields_IS_LOCAL_SERVER] ?? 0),
-            'https_status' => $domain[DomainPoolModel::fields_HTTPS_STATUS] ?? 'none',
-            'https_expires_at' => $domain[DomainPoolModel::fields_HTTPS_EXPIRES_AT] ?? '',
-            'site_ready' => (int) ($domain[DomainPoolModel::fields_SITE_READY] ?? 0),
-            'description' => $domain[DomainPoolModel::fields_DESCRIPTION] ?? '',
+            'pool_id' => $domain[DomainPoolModel::schema_fields_ID] ?? 0,
+            'parent_domain_id' => $domain[DomainPoolModel::schema_fields_PARENT_DOMAIN_ID] ?? 0,
+            'domain' => $domain[DomainPoolModel::schema_fields_DOMAIN] ?? '',
+            'root_domain' => $domain[DomainPoolModel::schema_fields_ROOT_DOMAIN] ?? '',
+            'status' => $domain[DomainPoolModel::schema_fields_STATUS] ?? '',
+            'resolve_status' => $domain[DomainPoolModel::schema_fields_RESOLVE_STATUS] ?? 'pending',
+            'resolved_ip' => $domain[DomainPoolModel::schema_fields_RESOLVED_IP] ?? '',
+            'is_local_server' => (int) ($domain[DomainPoolModel::schema_fields_IS_LOCAL_SERVER] ?? 0),
+            'https_status' => $domain[DomainPoolModel::schema_fields_HTTPS_STATUS] ?? 'none',
+            'https_expires_at' => $domain[DomainPoolModel::schema_fields_HTTPS_EXPIRES_AT] ?? '',
+            'site_ready' => (int) ($domain[DomainPoolModel::schema_fields_SITE_READY] ?? 0),
+            'description' => $domain[DomainPoolModel::schema_fields_DESCRIPTION] ?? '',
         ];
     }
     
@@ -165,7 +165,7 @@ class DomainPool extends BaseController
             // 检查是否已存在
             $existing = clone $this->domainPoolModel;
             $existing->clearQuery()
-                ->where(DomainPoolModel::fields_DOMAIN, strtolower($domain))
+                ->where(DomainPoolModel::schema_fields_DOMAIN, strtolower($domain))
                 ->find()
                 ->fetch();
             
@@ -246,7 +246,7 @@ class DomainPool extends BaseController
                 \Weline\Websites\Model\WebsiteDomain::class
             );
             $usage = $websiteDomainModel->clearQuery()
-                ->where(\Weline\Websites\Model\WebsiteDomain::fields_POOL_ID, $poolId)
+                ->where(\Weline\Websites\Model\WebsiteDomain::schema_fields_POOL_ID, $poolId)
                 ->find()
                 ->fetch();
             

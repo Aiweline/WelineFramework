@@ -74,10 +74,10 @@ class HealthCheckService
         ];
         
         foreach ($domains as $domainData) {
-            $domain = $domainData[WebsiteDomain::fields_DOMAIN];
-            $domainId = (int) $domainData[WebsiteDomain::fields_ID];
-            $hasHttps = (bool) $domainData[WebsiteDomain::fields_HTTPS_ENABLED];
-            $certId = $domainData[WebsiteDomain::fields_CERT_ID] ?? null;
+            $domain = $domainData[WebsiteDomain::schema_fields_DOMAIN];
+            $domainId = (int) $domainData[WebsiteDomain::schema_fields_ID];
+            $hasHttps = (bool) $domainData[WebsiteDomain::schema_fields_HTTPS_ENABLED];
+            $certId = $domainData[WebsiteDomain::schema_fields_CERT_ID] ?? null;
             
             // 执行健康检查
             $checkResult = $this->checkDomain($domain, $hasHttps);
@@ -286,8 +286,8 @@ class HealthCheckService
         $results = [];
         
         foreach ($domains as $domainData) {
-            $domain = $domainData[WebsiteDomain::fields_DOMAIN];
-            $hasHttps = (bool) $domainData[WebsiteDomain::fields_HTTPS_ENABLED];
+            $domain = $domainData[WebsiteDomain::schema_fields_DOMAIN];
+            $hasHttps = (bool) $domainData[WebsiteDomain::schema_fields_HTTPS_ENABLED];
             
             $results[$domain] = $this->checkDomain($domain, $hasHttps);
         }
@@ -314,9 +314,9 @@ class HealthCheckService
         ];
         
         foreach ($domains as $domainData) {
-            $domain = $domainData[WebsiteDomain::fields_DOMAIN];
-            $currentHttps = (bool) $domainData[WebsiteDomain::fields_HTTPS_ENABLED];
-            $certId = $domainData[WebsiteDomain::fields_CERT_ID] ?? null;
+            $domain = $domainData[WebsiteDomain::schema_fields_DOMAIN];
+            $currentHttps = (bool) $domainData[WebsiteDomain::schema_fields_HTTPS_ENABLED];
+            $certId = $domainData[WebsiteDomain::schema_fields_CERT_ID] ?? null;
             
             // 创建一个临时模型实例来检查证书有效性
             $domainModel = ObjectManager::getInstance(WebsiteDomain::class);

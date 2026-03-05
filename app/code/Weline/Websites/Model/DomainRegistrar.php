@@ -13,20 +13,33 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Model;
 
-use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 
+#[Table(comment: '域名商渠道表')]
+#[Index(name: 'uk_code', columns: ['code'], type: 'UNIQUE')]
+#[Index(name: 'idx_status', columns: ['status'])]
 class DomainRegistrar extends Model
 {
-    public const fields_ID = 'registrar_id';
-    public const fields_CODE = 'code';                  // 适配器标识，如 aws_route53
-    public const fields_NAME = 'name';                  // 显示名称
-    public const fields_DESCRIPTION = 'description';    // 描述
-    public const fields_STATUS = 'status';              // 状态：active / disabled
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
+    public const schema_table = 'weline_websites_domain_registrar';
+    public const schema_primary_key = 'registrar_id';
+
+    #[Col('int', 11, nullable: false, primaryKey: true, autoIncrement: true, comment: '域名商ID')]
+    public const schema_fields_ID = 'registrar_id';
+    #[Col('varchar', 100, nullable: false, comment: '适配器标识')]
+    public const schema_fields_CODE = 'code';
+    #[Col('varchar', 255, nullable: false, comment: '显示名称')]
+    public const schema_fields_NAME = 'name';
+    #[Col('varchar', 500, nullable: true, default: '', comment: '描述')]
+    public const schema_fields_DESCRIPTION = 'description';
+    #[Col('varchar', 20, nullable: true, default: 'active', comment: '状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col('datetime', nullable: true, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col('datetime', nullable: true, comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
 
     // 状态常量
     public const STATUS_ACTIVE = 'active';
@@ -36,88 +49,6 @@ class DomainRegistrar extends Model
     public array $_index_sort_keys = ['registrar_id', 'code', 'name'];
 
     /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $this->install($setup, $context);
-        }
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if ($setup->tableExist()) {
-            return;
-        }
-
-        $setup->createTable(__('域名商渠道表'))
-            ->addColumn(
-                self::fields_ID,
-                TableInterface::column_type_INTEGER,
-                11,
-                'primary key auto_increment',
-                __('域名商ID')
-            )
-            ->addColumn(
-                self::fields_CODE,
-                TableInterface::column_type_VARCHAR,
-                100,
-                'not null',
-                __('适配器标识')
-            )
-            ->addColumn(
-                self::fields_NAME,
-                TableInterface::column_type_VARCHAR,
-                255,
-                'not null',
-                __('显示名称')
-            )
-            ->addColumn(
-                self::fields_DESCRIPTION,
-                TableInterface::column_type_VARCHAR,
-                500,
-                "default ''",
-                __('描述')
-            )
-            ->addColumn(
-                self::fields_STATUS,
-                TableInterface::column_type_VARCHAR,
-                20,
-                "default 'active'",
-                __('状态')
-            )
-            ->addColumn(
-                self::fields_CREATED_AT,
-                TableInterface::column_type_DATETIME,
-                0,
-                '',
-                __('创建时间')
-            )
-            ->addColumn(
-                self::fields_UPDATED_AT,
-                TableInterface::column_type_DATETIME,
-                0,
-                '',
-                __('更新时间')
-            )
-            ->addIndex(TableInterface::index_type_UNIQUE, 'uk_code', self::fields_CODE)
-            ->addIndex(TableInterface::index_type_KEY, 'idx_status', self::fields_STATUS)
-            ->create();
-    }
-
-    /**
      * 保存前自动更新时间戳
      */
     public function save_before(): void
@@ -125,10 +56,10 @@ class DomainRegistrar extends Model
         parent::save_before();
 
         $now = \date('Y-m-d H:i:s');
-        $this->setData(self::fields_UPDATED_AT, $now);
+        $this->setData(self::schema_fields_UPDATED_AT, $now);
 
-        if (!$this->getData(self::fields_ID)) {
-            $this->setData(self::fields_CREATED_AT, $now);
+        if (!$this->getData(self::schema_fields_ID)) {
+            $this->setData(self::schema_fields_CREATED_AT, $now);
         }
     }
 
@@ -136,51 +67,51 @@ class DomainRegistrar extends Model
 
     public function getRegistrarId(): int
     {
-        return (int) $this->getData(self::fields_ID);
+        return (int) $this->getData(self::schema_fields_ID);
     }
 
     public function setCode(string $code): self
     {
-        $this->setData(self::fields_CODE, $code);
+        $this->setData(self::schema_fields_CODE, $code);
         return $this;
     }
 
     public function getCode(): string
     {
-        return (string) $this->getData(self::fields_CODE);
+        return (string) $this->getData(self::schema_fields_CODE);
     }
 
     public function setName(string $name): self
     {
-        $this->setData(self::fields_NAME, $name);
+        $this->setData(self::schema_fields_NAME, $name);
         return $this;
     }
 
     public function getName(): string
     {
-        return (string) $this->getData(self::fields_NAME);
+        return (string) $this->getData(self::schema_fields_NAME);
     }
 
     public function setDescription(string $description): self
     {
-        $this->setData(self::fields_DESCRIPTION, $description);
+        $this->setData(self::schema_fields_DESCRIPTION, $description);
         return $this;
     }
 
     public function getDescription(): string
     {
-        return (string) $this->getData(self::fields_DESCRIPTION);
+        return (string) $this->getData(self::schema_fields_DESCRIPTION);
     }
 
     public function setStatus(string $status): self
     {
-        $this->setData(self::fields_STATUS, $status);
+        $this->setData(self::schema_fields_STATUS, $status);
         return $this;
     }
 
     public function getStatus(): string
     {
-        return (string) $this->getData(self::fields_STATUS);
+        return (string) $this->getData(self::schema_fields_STATUS);
     }
 
     // =============== 业务方法 ===============
@@ -191,7 +122,7 @@ class DomainRegistrar extends Model
     public function loadByCode(string $code): self
     {
         $this->clearQuery()
-            ->where(self::fields_CODE, $code)
+            ->where(self::schema_fields_CODE, $code)
             ->find()
             ->fetch();
         return $this;
@@ -203,8 +134,8 @@ class DomainRegistrar extends Model
     public function getActiveRegistrars(): array
     {
         return $this->clearQuery()
-            ->where(self::fields_STATUS, self::STATUS_ACTIVE)
-            ->order(self::fields_NAME, 'ASC')
+            ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
+            ->order(self::schema_fields_NAME, 'ASC')
             ->select()
             ->fetchArray();
     }
@@ -215,7 +146,7 @@ class DomainRegistrar extends Model
     public function getAllRegistrars(): array
     {
         return $this->clearQuery()
-            ->order(self::fields_NAME, 'ASC')
+            ->order(self::schema_fields_NAME, 'ASC')
             ->select()
             ->fetchArray();
     }
