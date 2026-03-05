@@ -25,7 +25,7 @@ class Index extends BackendController
         $pageSize = (int)($this->request->getGet('page_size') ?: 20);
 
         $this->subscriptionPlan->clear()
-            ->order(SubscriptionPlan::fields_SORT_ORDER, 'ASC')
+            ->order(SubscriptionPlan::schema_fields_SORT_ORDER, 'ASC')
             ->pagination($page, $pageSize);
 
         $items = $this->subscriptionPlan->select()->fetchArray();
@@ -80,21 +80,21 @@ class Index extends BackendController
             } else {
                 // 新建
                 $this->subscriptionPlan->clearData();
-                $this->subscriptionPlan->setData(SubscriptionPlan::fields_CREATED_AT, $now);
+                $this->subscriptionPlan->setData(SubscriptionPlan::schema_fields_CREATED_AT, $now);
             }
 
             $this->subscriptionPlan
-                ->setData(SubscriptionPlan::fields_NAME, $data['name'] ?? '')
-                ->setData(SubscriptionPlan::fields_DESCRIPTION, $data['description'] ?? '')
-                ->setData(SubscriptionPlan::fields_PRODUCT_ID, (int)($data['product_id'] ?? 0))
-                ->setData(SubscriptionPlan::fields_PRICE, (float)($data['price'] ?? 0))
-                ->setData(SubscriptionPlan::fields_ORIGINAL_PRICE, (float)($data['original_price'] ?? 0))
-                ->setData(SubscriptionPlan::fields_BILLING_CYCLE, $data['billing_cycle'] ?? 'month')
-                ->setData(SubscriptionPlan::fields_BILLING_INTERVAL, (int)($data['billing_interval'] ?? 1))
-                ->setData(SubscriptionPlan::fields_TRIAL_DAYS, (int)($data['trial_days'] ?? 0))
-                ->setData(SubscriptionPlan::fields_SORT_ORDER, (int)($data['sort_order'] ?? 0))
-                ->setData(SubscriptionPlan::fields_STATUS, (int)($data['status'] ?? 1))
-                ->setData(SubscriptionPlan::fields_UPDATED_AT, $now)
+                ->setData(SubscriptionPlan::schema_fields_NAME, $data['name'] ?? '')
+                ->setData(SubscriptionPlan::schema_fields_DESCRIPTION, $data['description'] ?? '')
+                ->setData(SubscriptionPlan::schema_fields_PRODUCT_ID, (int)($data['product_id'] ?? 0))
+                ->setData(SubscriptionPlan::schema_fields_PRICE, (float)($data['price'] ?? 0))
+                ->setData(SubscriptionPlan::schema_fields_ORIGINAL_PRICE, (float)($data['original_price'] ?? 0))
+                ->setData(SubscriptionPlan::schema_fields_BILLING_CYCLE, $data['billing_cycle'] ?? 'month')
+                ->setData(SubscriptionPlan::schema_fields_BILLING_INTERVAL, (int)($data['billing_interval'] ?? 1))
+                ->setData(SubscriptionPlan::schema_fields_TRIAL_DAYS, (int)($data['trial_days'] ?? 0))
+                ->setData(SubscriptionPlan::schema_fields_SORT_ORDER, (int)($data['sort_order'] ?? 0))
+                ->setData(SubscriptionPlan::schema_fields_STATUS, (int)($data['status'] ?? 1))
+                ->setData(SubscriptionPlan::schema_fields_UPDATED_AT, $now)
                 ->save();
 
             return $this->fetchJson([
@@ -119,7 +119,7 @@ class Index extends BackendController
             $id = (int)$this->request->getPost('id');
 
             $this->subscriptionPlan->reset()
-                ->where(SubscriptionPlan::fields_ID, $id)
+                ->where(SubscriptionPlan::schema_fields_ID, $id)
                 ->delete()
                 ->fetch();
 
