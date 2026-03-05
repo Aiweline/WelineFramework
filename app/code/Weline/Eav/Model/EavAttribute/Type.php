@@ -55,148 +55,148 @@ class Type extends \Weline\Framework\Database\Model
 
     public function getName(): string
     {
-        return $this->getData(self::fields_name) ?: '';
+        return $this->getData(self::schema_fields_name) ?: '';
     }
 
     public function setName(string $name): static
     {
-        return $this->setData(self::fields_name, $name);
+        return $this->setData(self::schema_fields_name, $name);
     }
 
     public function getCode(): string
     {
-        return $this->getData(self::fields_code) ?: '';
+        return $this->getData(self::schema_fields_code) ?: '';
     }
 
     public function setCode(string $code): static
     {
-        return $this->setData(self::fields_code, $code, true);
+        return $this->setData(self::schema_fields_code, $code, true);
     }
 
     public function getFieldType(): string
     {
-        return $this->getData(self::fields_field_type) ?: '';
+        return $this->getData(self::schema_fields_field_type) ?: '';
     }
 
     public function setFieldType(string $field_type): static
     {
-        return $this->setData(self::fields_field_type, $field_type);
+        return $this->setData(self::schema_fields_field_type, $field_type);
     }
 
     public function getFieldLength(): int
     {
-        return intval($this->getData(self::fields_field_length));
+        return intval($this->getData(self::schema_fields_field_length));
     }
 
     public function setFieldLength(int $field_length): static
     {
-        return $this->setData(self::fields_field_length, $field_length);
+        return $this->setData(self::schema_fields_field_length, $field_length);
     }
 
     public function isSwatch(): bool
     {
-        return boolval($this->getData(self::fields_is_swatch));
+        return boolval($this->getData(self::schema_fields_is_swatch));
     }
 
     public function getIsSwatch(): bool
     {
-        return boolval($this->getData(self::fields_is_swatch));
+        return boolval($this->getData(self::schema_fields_is_swatch));
     }
 
     public function setElement(string $element): static
     {
-        return $this->setData(self::fields_element, $element);
+        return $this->setData(self::schema_fields_element, $element);
     }
 
     public function getElement(): string
     {
-        return $this->getData(self::fields_element) ?: 'input';
+        return $this->getData(self::schema_fields_element) ?: 'input';
     }
 
     public function getModelClass(): string
     {
-        return $this->getData(self::fields_model_class) ?: '';
+        return $this->getData(self::schema_fields_model_class) ?: '';
     }
 
     public function setModelClass(string $model): static
     {
-        return $this->setData(self::fields_model_class, $model);
+        return $this->setData(self::schema_fields_model_class, $model);
     }
 
     public function getModelClassData(): string
     {
-        return $this->getData(self::fields_model_class_data) ?: '';
+        return $this->getData(self::schema_fields_model_class_data) ?: '';
     }
 
     public function setModelClassData(string $model_data): static
     {
-        return $this->setData(self::fields_model_class_data, $model_data);
+        return $this->setData(self::schema_fields_model_class_data, $model_data);
     }
 
     public function getDefaultValue(): string|null
     {
-        return $this->getData(self::fields_default_value) ?: null;
+        return $this->getData(self::schema_fields_default_value) ?: null;
     }
 
     public function setDefaultValue(string $default_value): static
     {
-        return $this->setData(self::fields_default_value, $default_value);
+        return $this->setData(self::schema_fields_default_value, $default_value);
     }
 
     public function getRequired(): bool
     {
-        return boolval($this->getData(self::fields_required));
+        return boolval($this->getData(self::schema_fields_required));
     }
 
     public function setRequired(bool $required): static
     {
-        return $this->setData(self::fields_required, $required ? 1 : 0);
+        return $this->setData(self::schema_fields_required, $required ? 1 : 0);
     }
 
     public function getFrontendAttrs(): string
     {
-        return $this->getData(self::fields_frontend_attrs) ?: '';
+        return $this->getData(self::schema_fields_frontend_attrs) ?: '';
     }
 
     public function setFrontendAttrs(string $frontend_attrs): static
     {
-        return $this->setData(self::fields_frontend_attrs, $frontend_attrs);
+        return $this->setData(self::schema_fields_frontend_attrs, $frontend_attrs);
     }
 
 
     public function setIsSwatch(bool $is_swatch): static
     {
-        return $this->setData(self::fields_is_swatch, $is_swatch ? 1 : 0);
+        return $this->setData(self::schema_fields_is_swatch, $is_swatch ? 1 : 0);
     }
 
     public function hasSwatchColor(): bool
     {
-        return boolval($this->getData(self::fields_swatch_color));
+        return boolval($this->getData(self::schema_fields_swatch_color));
     }
 
     public function setHasSwatchColor(bool $has_swatch_color): static
     {
-        return $this->setData(self::fields_swatch_color, $has_swatch_color ? 1 : 0);
+        return $this->setData(self::schema_fields_swatch_color, $has_swatch_color ? 1 : 0);
     }
 
     public function hasSwatchImage(): bool
     {
-        return boolval($this->getData(self::fields_swatch_image));
+        return boolval($this->getData(self::schema_fields_swatch_image));
     }
 
     public function setHasSwatchImage(bool $has_swatch_image): static
     {
-        return $this->setData(self::fields_swatch_image, $has_swatch_image ? 1 : 0);
+        return $this->setData(self::schema_fields_swatch_image, $has_swatch_image ? 1 : 0);
     }
 
     public function hasSwatchText(): bool
     {
-        return boolval($this->getData(self::fields_swatch_text));
+        return boolval($this->getData(self::schema_fields_swatch_text));
     }
 
     public function setHasSwatchText(bool $has_swatch_text): static
     {
-        return $this->setData(self::fields_swatch_text, $has_swatch_text ? 1 : 0);
+        return $this->setData(self::schema_fields_swatch_text, $has_swatch_text ? 1 : 0);
     }
 
     /**
@@ -211,7 +211,7 @@ class Type extends \Weline\Framework\Database\Model
     {
         /**@var EavAttribute $attrbiute */
         $attrbiute = ObjectManager::getInstance(EavAttribute::class);
-        $attrbiute->where(EavAttribute::fields_type_id, $this->getId());
+        $attrbiute->where(EavAttribute::schema_fields_type_id, $this->getId());
         return $attrbiute;
     }
 
@@ -361,10 +361,10 @@ class Type extends \Weline\Framework\Database\Model
                         case 'smallint':
                             $attrsString .= ' type="number"';
                             break;
-                        case self::fields_swatch_image:
+                        case self::schema_fields_swatch_image:
                             $attrsString .= ' type="image"';
                             break;
-                        case self::fields_swatch_color:
+                        case self::schema_fields_swatch_color:
                             $attrsString .= ' type="color"';
                             break;
                         default:

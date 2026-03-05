@@ -87,8 +87,8 @@ Option extends BackendController
         try {
             $result = $optionModel->setData($this->request->getPost())
                 ->forceCheck(true,
-                    [EavAttribute\Option::fields_eav_entity_id, EavAttribute\Option::fields_attribute_id,
-                        EavAttribute\Option::fields_CODE,]
+                    [EavAttribute\Option::schema_fields_eav_entity_id, EavAttribute\Option::schema_fields_attribute_id,
+                        EavAttribute\Option::schema_fields_CODE,]
                 )->save();
             $this->getMessageManager()->addSuccess(__('添加配置项成功！'));
         } catch (\Exception $exception) {
@@ -114,7 +114,7 @@ Option extends BackendController
         try {
             $result       = $optionModel->setData($this->request->getPost())
                 ->forceCheck(true,
-                    [EavAttribute\Option::fields_eav_entity_id, EavAttribute\Option::fields_attribute_id, EavAttribute\Option::fields_eav_entity_id]
+                    [EavAttribute\Option::schema_fields_eav_entity_id, EavAttribute\Option::schema_fields_attribute_id, EavAttribute\Option::schema_fields_eav_entity_id]
                 )->save();
             $json['code'] = 1;
             $json['msg']  = __('添加配置项成功！');

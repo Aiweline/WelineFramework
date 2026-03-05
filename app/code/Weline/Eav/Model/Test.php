@@ -52,8 +52,8 @@ class Test extends EavModel
 //        $setup->dropTable();
         if (!$setup->tableExist()) {
             $setup->createTable('测试Eav表')
-                  ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'primary key auto_increment', '测试ID')
-                  ->addColumn(self::fields_name, TableInterface::column_type_VARCHAR, 60, 'not null', '测试名')
+                  ->addColumn(self::schema_fields_ID, TableInterface::column_type_INTEGER, 0, 'primary key auto_increment', '测试ID')
+                  ->addColumn(self::schema_fields_name, TableInterface::column_type_VARCHAR, 60, 'not null', '测试名')
                   ->create();
             $this->setData('name', 'test1')
                  ->save();
