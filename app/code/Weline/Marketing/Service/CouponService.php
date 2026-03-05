@@ -65,7 +65,7 @@ class CouponService
         // 检查是否已存在
         /** @var Coupon $coupon */
         $coupon = ObjectManager::getInstance(Coupon::class);
-        if ($coupon->load(Coupon::fields_CODE, $code)->getId()) {
+        if ($coupon->load(Coupon::schema_fields_CODE, $code)->getId()) {
             return $this->generateCouponCode($length);
         }
 
@@ -83,7 +83,7 @@ class CouponService
     {
         /** @var Coupon $coupon */
         $coupon = ObjectManager::getInstance(Coupon::class);
-        $coupon->load(Coupon::fields_CODE, $code);
+        $coupon->load(Coupon::schema_fields_CODE, $code);
 
         if (!$coupon->getId()) {
             return null;
@@ -96,7 +96,7 @@ class CouponService
         // 检查客户使用次数限制
         if (!empty($context['customer_id'])) {
             $customerId = $context['customer_id'];
-            $customerLimit = $coupon->getData(Coupon::fields_CUSTOMER_LIMIT);
+            $customerLimit = $coupon->getData(Coupon::schema_fields_CUSTOMER_LIMIT);
             if ($customerLimit) {
                 $usageCount = $this->getCustomerUsageCount($coupon->getId(), $customerId);
                 if ($usageCount >= $customerLimit) {
@@ -106,7 +106,7 @@ class CouponService
         }
 
         // 检查最小订单金额
-        $minAmount = $coupon->getData(Coupon::fields_MIN_AMOUNT);
+        $minAmount = $coupon->getData(Coupon::schema_fields_MIN_AMOUNT);
         if ($minAmount) {
             $subtotal = (float)($context['subtotal'] ?? $context['order']['subtotal'] ?? 0);
             if ($subtotal < $minAmount) {
@@ -115,7 +115,7 @@ class CouponService
         }
 
         // 加载关联规则
-        $ruleId = $coupon->getData(Coupon::fields_RULE_ID);
+        $ruleId = $coupon->getData(Coupon::schema_fields_RULE_ID);
         if ($ruleId) {
             /** @var Rule $rule */
             $rule = ObjectManager::getInstance(Rule::class);
@@ -166,10 +166,10 @@ class CouponService
             $this->recordUsage($coupon->getId(), $rule->getId(), $context, $result['discount_amount'] ?? 0);
 
             // 更新使用次数
-            $coupon->setData(Coupon::fields_USAGE_COUNT, $coupon->getData(Coupon::fields_USAGE_COUNT) + 1);
+            $coupon->setData(Coupon::schema_fields_USAGE_COUNT, $coupon->getData(Coupon::schema_fields_USAGE_COUNT) + 1);
             $coupon->save();
 
-            $rule->setData(Rule::fields_USAGE_COUNT, $rule->getData(Rule::fields_USAGE_COUNT) + 1);
+            $rule->setData(Rule::schema_fields_USAGE_COUNT, $rule->getData(Rule::schema_fields_USAGE_COUNT) + 1);
             $rule->save();
         }
 
@@ -189,11 +189,11 @@ class CouponService
     {
         /** @var RuleUsage $ruleUsage */
         $ruleUsage = ObjectManager::getInstance(RuleUsage::class);
-        $ruleUsage->setData(RuleUsage::fields_COUPON_ID, $couponId);
-        $ruleUsage->setData(RuleUsage::fields_RULE_ID, $ruleId);
-        $ruleUsage->setData(RuleUsage::fields_CUSTOMER_ID, $context['customer_id'] ?? null);
-        $ruleUsage->setData(RuleUsage::fields_ORDER_ID, $context['order_id'] ?? null);
-        $ruleUsage->setData(RuleUsage::fields_DISCOUNT_AMOUNT, $discountAmount);
+        $ruleUsage->setData(RuleUsage::schema_fields_COUPON_ID, $couponId);
+        $ruleUsage->setData(RuleUsage::schema_fields_RULE_ID, $ruleId);
+        $ruleUsage->setData(RuleUsage::schema_fields_CUSTOMER_ID, $context['customer_id'] ?? null);
+        $ruleUsage->setData(RuleUsage::schema_fields_ORDER_ID, $context['order_id'] ?? null);
+        $ruleUsage->setData(RuleUsage::schema_fields_DISCOUNT_AMOUNT, $discountAmount);
         $ruleUsage->save();
     }
 
@@ -208,8 +208,8 @@ class CouponService
     {
         /** @var RuleUsage $ruleUsage */
         $ruleUsage = ObjectManager::getInstance(RuleUsage::class);
-        $ruleUsage->where(RuleUsage::fields_COUPON_ID, $couponId)
-            ->where(RuleUsage::fields_CUSTOMER_ID, $customerId);
+        $ruleUsage->where(RuleUsage::schema_fields_COUPON_ID, $couponId)
+            ->where(RuleUsage::schema_fields_CUSTOMER_ID, $customerId);
         
         return $ruleUsage->count();
     }
@@ -232,18 +232,18 @@ class CouponService
 
         /** @var RuleUsage $ruleUsage */
         $ruleUsage = ObjectManager::getInstance(RuleUsage::class);
-        $ruleUsage->where(RuleUsage::fields_COUPON_ID, $couponId);
+        $ruleUsage->where(RuleUsage::schema_fields_COUPON_ID, $couponId);
         $totalUsage = $ruleUsage->count();
 
         $ruleUsage->reset();
-        $ruleUsage->where(RuleUsage::fields_COUPON_ID, $couponId);
-        $totalDiscount = $ruleUsage->sum(RuleUsage::fields_DISCOUNT_AMOUNT);
+        $ruleUsage->where(RuleUsage::schema_fields_COUPON_ID, $couponId);
+        $totalDiscount = $ruleUsage->sum(RuleUsage::schema_fields_DISCOUNT_AMOUNT);
 
         return [
             'coupon_id' => $couponId,
-            'code' => $coupon->getData(Coupon::fields_CODE),
-            'usage_count' => $coupon->getData(Coupon::fields_USAGE_COUNT),
-            'usage_limit' => $coupon->getData(Coupon::fields_USAGE_LIMIT),
+            'code' => $coupon->getData(Coupon::schema_fields_CODE),
+            'usage_count' => $coupon->getData(Coupon::schema_fields_USAGE_COUNT),
+            'usage_limit' => $coupon->getData(Coupon::schema_fields_USAGE_LIMIT),
             'total_usage' => $totalUsage,
             'total_discount' => $totalDiscount ?? 0,
         ];

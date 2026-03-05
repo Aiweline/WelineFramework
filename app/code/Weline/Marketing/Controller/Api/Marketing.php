@@ -60,9 +60,9 @@ class Marketing extends AbstractRestController
 
             /** @var Rule $rule */
             $rule = ObjectManager::getInstance(Rule::class);
-            $rule->where(Rule::fields_RULE_TYPE, $ruleType)
-                ->where(Rule::fields_STATUS, Rule::STATUS_ACTIVE)
-                ->order(Rule::fields_PRIORITY, 'DESC');
+            $rule->where(Rule::schema_fields_RULE_TYPE, $ruleType)
+                ->where(Rule::schema_fields_STATUS, Rule::STATUS_ACTIVE)
+                ->order(Rule::schema_fields_PRIORITY, 'DESC');
 
             $rules = $rule->select()->fetch()->getItems();
             
@@ -74,7 +74,7 @@ class Marketing extends AbstractRestController
                 $result = $ruleEngine->applyRule($ruleItem, $context);
                 if ($result) {
                     $results[] = $result;
-                    if ($ruleItem->getData(Rule::fields_IS_STOP_PROCESSING)) {
+                    if ($ruleItem->getData(Rule::schema_fields_IS_STOP_PROCESSING)) {
                         break;
                     }
                 }

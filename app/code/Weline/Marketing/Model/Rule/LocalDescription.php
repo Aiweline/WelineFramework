@@ -21,14 +21,15 @@ use Weline\Marketing\Model\Rule\Rule;
  */
 class LocalDescription extends LocalModel
 {
-    public const table = 'weline_marketing_rule_local_description';
+    public const schema_table = 'weline_marketing_rule_local_description';
+    public const schema_primary_key = 'rule_id';
     public const indexer = 'marketing_rule_local_description';
     
     // 关联主表ID
-    public const fields_ID = Rule::fields_ID;
+    public const schema_fields_ID = Rule::schema_fields_ID;
     
     // 多语言字段
-    public const fields_NAME = 'name';           // 规则名称
-    public const fields_DESCRIPTION = 'description'; // 规则描述
+    public const schema_fields_NAME = 'name';           // 规则名称
+    public const schema_fields_DESCRIPTION = 'description'; // 规则描述
 }
 

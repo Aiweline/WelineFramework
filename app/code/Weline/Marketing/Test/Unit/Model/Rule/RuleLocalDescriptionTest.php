@@ -39,7 +39,7 @@ class RuleLocalDescriptionTest extends TestCase
         if ($this->ruleModel->getId()) {
             // 删除关联的翻译数据
             $this->localModel->reset()
-                ->where(LocalDescription::fields_ID, $this->ruleModel->getId())
+                ->where(LocalDescription::schema_fields_ID, $this->ruleModel->getId())
                 ->select()
                 ->fetch()
                 ->walk(function ($item) {
@@ -59,10 +59,10 @@ class RuleLocalDescriptionTest extends TestCase
     {
         // 创建测试规则
         $this->ruleModel->setData([
-            Rule::fields_NAME => 'Load Test Rule',
-            Rule::fields_DESCRIPTION => 'Load Test Description',
-            Rule::fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
-            Rule::fields_STATUS => Rule::STATUS_ACTIVE
+            Rule::schema_fields_NAME => 'Load Test Rule',
+            Rule::schema_fields_DESCRIPTION => 'Load Test Description',
+            Rule::schema_fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
+            Rule::schema_fields_STATUS => Rule::STATUS_ACTIVE
         ]);
         $this->ruleModel->save();
         $ruleId = $this->ruleModel->getId();
@@ -71,10 +71,10 @@ class RuleLocalDescriptionTest extends TestCase
             // 创建中文翻译
             $zhTranslation = ObjectManager::getInstance(LocalDescription::class);
             $zhTranslation->setData([
-                LocalDescription::fields_ID => $ruleId,
-                \Weline\I18n\LocalModelInterface::fields_local_code => 'zh_Hans_CN',
-                LocalDescription::fields_NAME => '加载测试规则',
-                LocalDescription::fields_DESCRIPTION => '加载测试描述'
+                LocalDescription::schema_fields_ID => $ruleId,
+                \Weline\I18n\LocalModelInterface::schema_fields_local_code => 'zh_Hans_CN',
+                LocalDescription::schema_fields_NAME => '加载测试规则',
+                LocalDescription::schema_fields_DESCRIPTION => '加载测试描述'
             ]);
             $zhTranslation->save();
 
@@ -83,7 +83,7 @@ class RuleLocalDescriptionTest extends TestCase
             $loadedRule = ObjectManager::getInstance(Rule::class);
             $loadedRule->reset()
                 ->loadLocalDescription('', LocalDescription::class)
-                ->where('main_table.' . Rule::fields_ID, $ruleId)
+                ->where('main_table.' . Rule::schema_fields_ID, $ruleId)
                 ->find()
                 ->fetch();
 
@@ -111,9 +111,9 @@ class RuleLocalDescriptionTest extends TestCase
     {
         // 创建测试规则
         $this->ruleModel->setData([
-            Rule::fields_NAME => 'Auto Load Test',
-            Rule::fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
-            Rule::fields_STATUS => Rule::STATUS_ACTIVE
+            Rule::schema_fields_NAME => 'Auto Load Test',
+            Rule::schema_fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
+            Rule::schema_fields_STATUS => Rule::STATUS_ACTIVE
         ]);
         $this->ruleModel->save();
         $ruleId = $this->ruleModel->getId();
@@ -122,9 +122,9 @@ class RuleLocalDescriptionTest extends TestCase
             // 创建翻译
             $translation = ObjectManager::getInstance(LocalDescription::class);
             $translation->setData([
-                LocalDescription::fields_ID => $ruleId,
-                \Weline\I18n\LocalModelInterface::fields_local_code => 'zh_Hans_CN',
-                LocalDescription::fields_NAME => '自动加载测试'
+                LocalDescription::schema_fields_ID => $ruleId,
+                \Weline\I18n\LocalModelInterface::schema_fields_local_code => 'zh_Hans_CN',
+                LocalDescription::schema_fields_NAME => '自动加载测试'
             ]);
             $translation->save();
 
@@ -132,7 +132,7 @@ class RuleLocalDescriptionTest extends TestCase
             $rules = ObjectManager::getInstance(Rule::class);
             $rules->reset()
                 ->loadLocalDescription('', LocalDescription::class)
-                ->where(Rule::fields_ID, $ruleId)
+                ->where(Rule::schema_fields_ID, $ruleId)
                 ->select()
                 ->fetch();
 
@@ -163,10 +163,10 @@ class RuleLocalDescriptionTest extends TestCase
     {
         // 创建测试规则
         $this->ruleModel->setData([
-            Rule::fields_NAME => 'Merge Test',
-            Rule::fields_DESCRIPTION => 'Merge Description',
-            Rule::fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
-            Rule::fields_STATUS => Rule::STATUS_ACTIVE
+            Rule::schema_fields_NAME => 'Merge Test',
+            Rule::schema_fields_DESCRIPTION => 'Merge Description',
+            Rule::schema_fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
+            Rule::schema_fields_STATUS => Rule::STATUS_ACTIVE
         ]);
         $this->ruleModel->save();
         $ruleId = $this->ruleModel->getId();
@@ -175,10 +175,10 @@ class RuleLocalDescriptionTest extends TestCase
             // 创建翻译
             $translation = ObjectManager::getInstance(LocalDescription::class);
             $translation->setData([
-                LocalDescription::fields_ID => $ruleId,
-                \Weline\I18n\LocalModelInterface::fields_local_code => 'zh_Hans_CN',
-                LocalDescription::fields_NAME => '合并测试',
-                LocalDescription::fields_DESCRIPTION => '合并描述'
+                LocalDescription::schema_fields_ID => $ruleId,
+                \Weline\I18n\LocalModelInterface::schema_fields_local_code => 'zh_Hans_CN',
+                LocalDescription::schema_fields_NAME => '合并测试',
+                LocalDescription::schema_fields_DESCRIPTION => '合并描述'
             ]);
             $translation->save();
 
@@ -187,13 +187,13 @@ class RuleLocalDescriptionTest extends TestCase
             $rule = ObjectManager::getInstance(Rule::class);
             $rule->reset()
                 ->loadLocalDescription('', LocalDescription::class)
-                ->where('main_table.' . Rule::fields_ID, $ruleId)
+                ->where('main_table.' . Rule::schema_fields_ID, $ruleId)
                 ->find()
                 ->fetch();
 
             // 验证原始字段仍然存在
-            $this->assertEquals('Merge Test', $rule->getData(Rule::fields_NAME));
-            $this->assertEquals('Merge Description', $rule->getData(Rule::fields_DESCRIPTION));
+            $this->assertEquals('Merge Test', $rule->getData(Rule::schema_fields_NAME));
+            $this->assertEquals('Merge Description', $rule->getData(Rule::schema_fields_DESCRIPTION));
 
             // 验证翻译字段已合并
             $this->assertEquals('合并测试', $rule->getData('local_name'));
@@ -219,9 +219,9 @@ class RuleLocalDescriptionTest extends TestCase
     {
         // 创建测试规则
         $this->ruleModel->setData([
-            Rule::fields_NAME => 'Switch Test',
-            Rule::fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
-            Rule::fields_STATUS => Rule::STATUS_ACTIVE
+            Rule::schema_fields_NAME => 'Switch Test',
+            Rule::schema_fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
+            Rule::schema_fields_STATUS => Rule::STATUS_ACTIVE
         ]);
         $this->ruleModel->save();
         $ruleId = $this->ruleModel->getId();
@@ -230,18 +230,18 @@ class RuleLocalDescriptionTest extends TestCase
             // 创建中文翻译
             $zhTranslation = ObjectManager::getInstance(LocalDescription::class);
             $zhTranslation->setData([
-                LocalDescription::fields_ID => $ruleId,
-                \Weline\I18n\LocalModelInterface::fields_local_code => 'zh_Hans_CN',
-                LocalDescription::fields_NAME => '切换测试'
+                LocalDescription::schema_fields_ID => $ruleId,
+                \Weline\I18n\LocalModelInterface::schema_fields_local_code => 'zh_Hans_CN',
+                LocalDescription::schema_fields_NAME => '切换测试'
             ]);
             $zhTranslation->save();
 
             // 创建英文翻译
             $enTranslation = ObjectManager::getInstance(LocalDescription::class);
             $enTranslation->setData([
-                LocalDescription::fields_ID => $ruleId,
-                \Weline\I18n\LocalModelInterface::fields_local_code => 'en_US',
-                LocalDescription::fields_NAME => 'Switch Test'
+                LocalDescription::schema_fields_ID => $ruleId,
+                \Weline\I18n\LocalModelInterface::schema_fields_local_code => 'en_US',
+                LocalDescription::schema_fields_NAME => 'Switch Test'
             ]);
             $enTranslation->save();
 
@@ -250,7 +250,7 @@ class RuleLocalDescriptionTest extends TestCase
             $ruleZh = ObjectManager::getInstance(Rule::class);
             $ruleZh->reset()
                 ->loadLocalDescription('zh_Hans_CN', LocalDescription::class)
-                ->where('main_table.' . Rule::fields_ID, $ruleId)
+                ->where('main_table.' . Rule::schema_fields_ID, $ruleId)
                 ->find()
                 ->fetch();
 
@@ -260,7 +260,7 @@ class RuleLocalDescriptionTest extends TestCase
             $ruleEn = ObjectManager::getInstance(Rule::class);
             $ruleEn->reset()
                 ->loadLocalDescription('en_US', LocalDescription::class)
-                ->where('main_table.' . Rule::fields_ID, $ruleId)
+                ->where('main_table.' . Rule::schema_fields_ID, $ruleId)
                 ->find()
                 ->fetch();
 
@@ -289,10 +289,10 @@ class RuleLocalDescriptionTest extends TestCase
     {
         // 创建测试规则
         $this->ruleModel->setData([
-            Rule::fields_NAME => 'Fallback Test',
-            Rule::fields_DESCRIPTION => 'Fallback Description',
-            Rule::fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
-            Rule::fields_STATUS => Rule::STATUS_ACTIVE
+            Rule::schema_fields_NAME => 'Fallback Test',
+            Rule::schema_fields_DESCRIPTION => 'Fallback Description',
+            Rule::schema_fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
+            Rule::schema_fields_STATUS => Rule::STATUS_ACTIVE
         ]);
         $this->ruleModel->save();
         $ruleId = $this->ruleModel->getId();
@@ -303,13 +303,13 @@ class RuleLocalDescriptionTest extends TestCase
             $rule = ObjectManager::getInstance(Rule::class);
             $rule->reset()
                 ->loadLocalDescription('zh_Hans_CN', LocalDescription::class)
-                ->where('main_table.' . Rule::fields_ID, $ruleId)
+                ->where('main_table.' . Rule::schema_fields_ID, $ruleId)
                 ->find()
                 ->fetch();
 
             // 验证原始字段仍然可用
-            $this->assertEquals('Fallback Test', $rule->getData(Rule::fields_NAME));
-            $this->assertEquals('Fallback Description', $rule->getData(Rule::fields_DESCRIPTION));
+            $this->assertEquals('Fallback Test', $rule->getData(Rule::schema_fields_NAME));
+            $this->assertEquals('Fallback Description', $rule->getData(Rule::schema_fields_DESCRIPTION));
 
             // 验证翻译字段为空或不存在（取决于框架实现）
             $localName = $rule->getData('local_name');
@@ -341,9 +341,9 @@ class RuleLocalDescriptionTest extends TestCase
             for ($i = 1; $i <= 3; $i++) {
                 $rule = ObjectManager::getInstance(Rule::class);
                 $rule->setData([
-                    Rule::fields_NAME => "Multi Load Test {$i}",
-                    Rule::fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
-                    Rule::fields_STATUS => Rule::STATUS_ACTIVE
+                    Rule::schema_fields_NAME => "Multi Load Test {$i}",
+                    Rule::schema_fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
+                    Rule::schema_fields_STATUS => Rule::STATUS_ACTIVE
                 ]);
                 $rule->save();
                 $ruleId = $rule->getId();
@@ -352,9 +352,9 @@ class RuleLocalDescriptionTest extends TestCase
                 // 为每个规则创建翻译
                 $translation = ObjectManager::getInstance(LocalDescription::class);
                 $translation->setData([
-                    LocalDescription::fields_ID => $ruleId,
-                    \Weline\I18n\LocalModelInterface::fields_local_code => 'zh_Hans_CN',
-                    LocalDescription::fields_NAME => "多规则加载测试 {$i}"
+                    LocalDescription::schema_fields_ID => $ruleId,
+                    \Weline\I18n\LocalModelInterface::schema_fields_local_code => 'zh_Hans_CN',
+                    LocalDescription::schema_fields_NAME => "多规则加载测试 {$i}"
                 ]);
                 $translation->save();
             }
@@ -363,7 +363,7 @@ class RuleLocalDescriptionTest extends TestCase
             $rules = ObjectManager::getInstance(Rule::class);
             $rules->reset()
                 ->loadLocalDescription('zh_Hans_CN', LocalDescription::class)
-                ->where(Rule::fields_ID, $ruleIds, 'IN')
+                ->where(Rule::schema_fields_ID, $ruleIds, 'IN')
                 ->select()
                 ->fetch();
 
@@ -380,7 +380,7 @@ class RuleLocalDescriptionTest extends TestCase
             // 清理测试数据
             foreach ($ruleIds as $ruleId) {
                 $this->localModel->reset()
-                    ->where(LocalDescription::fields_ID, $ruleId)
+                    ->where(LocalDescription::schema_fields_ID, $ruleId)
                     ->select()
                     ->fetch()
                     ->walk(function ($item) {
