@@ -1303,9 +1303,11 @@ class WasmCompileService
                 ->find()
                 ->fetch();
 
+            $now = date('Y-m-d H:i:s');
             if ($wasmHashModel->getId()) {
                 // 更新现有记录
                 $wasmHashModel->setData(WasmHash::schema_fields_WASM_PATH, $filePath)
+                    ->setData(WasmHash::schema_fields_UPDATED_AT, $now)
                     ->save();
             } else {
                 // 创建新记录
@@ -1316,6 +1318,8 @@ class WasmCompileService
                     ->setData(WasmHash::schema_fields_WASM_PATH, $filePath)
                     ->setData(WasmHash::schema_fields_HASH_VALUE, $hash)
                     ->setData(WasmHash::schema_fields_VERSION, (string)$newVersion)
+                    ->setData(WasmHash::schema_fields_CREATED_AT, $now)
+                    ->setData(WasmHash::schema_fields_UPDATED_AT, $now)
                     ->save();
             }
         } catch (\Throwable $e) {
