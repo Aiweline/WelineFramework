@@ -64,7 +64,7 @@ class Method extends BackendController
         
         /** @var PaymentMethod $paymentMethod */
         $paymentMethod = ObjectManager::getInstance(PaymentMethod::class);
-        $paymentMethod->load(PaymentMethod::fields_CODE, $code);
+        $paymentMethod->load(PaymentMethod::schema_fields_CODE, $code);
         
         if (!$paymentMethod->getId()) {
             $this->getMessageManager()->addError(__('支付方式不存在'));
@@ -106,7 +106,7 @@ class Method extends BackendController
         
         /** @var PaymentMethod $paymentMethod */
         $paymentMethod = ObjectManager::getInstance(PaymentMethod::class);
-        $paymentMethod->load(PaymentMethod::fields_CODE, $code);
+        $paymentMethod->load(PaymentMethod::schema_fields_CODE, $code);
         
         if (!$paymentMethod->getId()) {
             return $this->error(__('支付方式不存在'));
@@ -123,8 +123,8 @@ class Method extends BackendController
             $paymentMethod->setSupportedDiscountActions($supportedDiscountActions);
         }
         
-        $paymentMethod->setData(PaymentMethod::fields_IS_ACTIVE, $isActive)
-            ->setData(PaymentMethod::fields_SORT_ORDER, $sortOrder)
+        $paymentMethod->setData(PaymentMethod::schema_fields_IS_ACTIVE, $isActive)
+            ->setData(PaymentMethod::schema_fields_SORT_ORDER, $sortOrder)
             ->setConfigData($config)
             ->save();
         
@@ -145,14 +145,14 @@ class Method extends BackendController
         
         /** @var PaymentMethod $paymentMethod */
         $paymentMethod = ObjectManager::getInstance(PaymentMethod::class);
-        $paymentMethod->load(PaymentMethod::fields_CODE, $code);
+        $paymentMethod->load(PaymentMethod::schema_fields_CODE, $code);
         
         if (!$paymentMethod->getId()) {
             return $this->error(__('支付方式不存在'));
         }
         
         $isActive = $paymentMethod->isActive() ? 0 : 1;
-        $paymentMethod->setData(PaymentMethod::fields_IS_ACTIVE, $isActive)
+        $paymentMethod->setData(PaymentMethod::schema_fields_IS_ACTIVE, $isActive)
             ->save();
         
         return $this->success(__('支付方式状态已更新'));
