@@ -27,8 +27,8 @@ class CompareService
         
         // 检查是否已存在
         $existing = $compare->clear()
-            ->where(Compare::fields_CUSTOMER_ID, $customerId)
-            ->where(Compare::fields_PRODUCT_ID, $productId)
+            ->where(Compare::schema_fields_CUSTOMER_ID, $customerId)
+            ->where(Compare::schema_fields_PRODUCT_ID, $productId)
             ->find()
             ->fetch();
         
@@ -38,8 +38,8 @@ class CompareService
         
         // 创建新记录
         $compare->clearData()
-            ->setData(Compare::fields_CUSTOMER_ID, $customerId)
-            ->setData(Compare::fields_PRODUCT_ID, $productId)
+            ->setData(Compare::schema_fields_CUSTOMER_ID, $customerId)
+            ->setData(Compare::schema_fields_PRODUCT_ID, $productId)
             ->save();
         
         return $compare;
@@ -58,7 +58,7 @@ class CompareService
         $compare = ObjectManager::getInstance(Compare::class);
         $compare->load($compareId);
         
-        if (!$compare->getId() || (int)$compare->getData(Compare::fields_CUSTOMER_ID) !== $customerId) {
+        if (!$compare->getId() || (int)$compare->getData(Compare::schema_fields_CUSTOMER_ID) !== $customerId) {
             return false;
         }
         
@@ -77,8 +77,8 @@ class CompareService
         $compare = ObjectManager::getInstance(Compare::class);
         
         $items = $compare->clear()
-            ->where(Compare::fields_CUSTOMER_ID, $customerId)
-            ->order(Compare::fields_CREATED_AT, 'DESC')
+            ->where(Compare::schema_fields_CUSTOMER_ID, $customerId)
+            ->order(Compare::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetchArray();
         
