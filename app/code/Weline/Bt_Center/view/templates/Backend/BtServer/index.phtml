@@ -172,18 +172,13 @@ $platformOptions = $platformOptions ?? [];
     });
     
     function deleteServer(id) {
+        var url = '<?= $this->getBackendUrl('bt_center/backend/bt_server/delete') ?>';
         var formData = new URLSearchParams();
         formData.append('id', id);
-
-        fetch('<?= $this->getBackendUrl('bt_center/backend/bt_server/delete') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: formData
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(resp) {
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: formData };
+        window.Weline.Api.request(url, opts)
+        .then(function(response) {
+            var resp = (response && response.data) || response;
             if (resp.success) {
                 if (typeof AdminToast !== 'undefined') {
                     AdminToast.success(resp.message);
