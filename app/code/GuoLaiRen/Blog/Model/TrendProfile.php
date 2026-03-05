@@ -24,10 +24,13 @@ class TrendProfile extends Model
     public const schema_table = 'guolairen_blog_trend_profile';
     public const schema_primary_key = 'profile_id';
 
-
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '画像ID')]
     public const schema_fields_ID        = 'profile_id';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '画像名称')]
     public const schema_fields_NAME      = 'name';
+    #[Col(type: 'text', nullable: true, comment: '关键词（逗号分隔）')]
     public const schema_fields_KEYWORDS  = 'keywords';
+    #[Col(type: 'int', nullable: false, default: 0, comment: '排序')]
     public const schema_fields_SORT      = 'sort';
     #[Col(type: 'smallint', length: 1, nullable: false, default: 1, comment: '是否启用:0否,1是')]
     public const schema_fields_IS_ACTIVE = 'is_active';
