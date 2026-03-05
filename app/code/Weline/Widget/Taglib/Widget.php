@@ -190,9 +190,12 @@ class Widget implements TaglibInterface
             }
             $cacheKey = md5($type . '|' . $name . '|' . $templatePath . '|' . serialize($params));
             
-            // 检查缓存
+            // 检查缓存（form_key 不能缓存，否则 key 不对）
             if (isset(self::$renderCache[$cacheKey])) {
-                return self::$renderCache[$cacheKey];
+                $cached = self::$renderCache[$cacheKey];
+                if (!str_contains($cached, 'name="form_key"')) {
+                    return $cached;
+                }
             }
         }
         
@@ -210,7 +213,7 @@ class Widget implements TaglibInterface
         // 使用覆盖的模板
         if (!empty($template)) {
             $result = self::renderTemplate($template, $params);
-            if ($cacheKey !== null) {
+            if ($cacheKey !== null && !str_contains($result, 'name="form_key"')) {
                 self::$renderCache[$cacheKey] = $result;
             }
             return $result;
@@ -220,7 +223,7 @@ class Widget implements TaglibInterface
         $widgetTemplate = $widget['template'] ?? '';
         if (!empty($widgetTemplate)) {
             $result = self::renderTemplate($widgetTemplate, $params);
-            if ($cacheKey !== null) {
+            if ($cacheKey !== null && !str_contains($result, 'name="form_key"')) {
                 self::$renderCache[$cacheKey] = $result;
             }
             return $result;
@@ -237,7 +240,7 @@ class Widget implements TaglibInterface
                 $name = $widget['code'] ?? '';
                 $templatePath = $module . '::widgets/' . $type . '/' . $name . '.phtml';
                 $result = self::renderTemplate($templatePath, $params);
-                if ($cacheKey !== null) {
+                if ($cacheKey !== null && !str_contains($result, 'name="form_key"')) {
                     self::$renderCache[$cacheKey] = $result;
                 }
                 return $result;
