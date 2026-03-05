@@ -111,7 +111,11 @@ $attackLogUrl = $this->getBackendUrl('weline_server/backend/server-monitor/attac
         var req = window.Weline.Api.request('/_wls/health?detail=1', { method: 'GET', cache: 'no-cache', silent: true });
         req.then(function(response) {
             if (!response.ok) {
-                // 非 WLS 模式（返回 404）或非本地请求（返回 403）
+                // 403 = 健康检查仅允许本机访问（通过 Nginx/外网访问时会 403，WLS 可能正在运行）
+                if (response.status === 403) {
+                    return { isWls: 'restricted' };
+                }
+                // 404 等 = 非 WLS 模式
                 return { isWls: false };
             }
             return response.json().then(function(data) {
@@ -137,13 +141,20 @@ $attackLogUrl = $this->getBackendUrl('weline_server/backend/server-monitor/attac
             return { isWls: false };
         }).then(function(info) {
             // 兼容旧逻辑
-            var isWls = info.isWls;
+            var isWls = info.isWls === true;
+            var isRestricted = info.isWls === 'restricted';
             if (isWls) {
                 wlsRequestHistory.push({ workerId: info.workerId, workerPort: info.workerPort, timestamp: Date.now() });
                 if (wlsRequestHistory.length > 20) wlsRequestHistory.shift();
             }
             var html = '<div class="wls-stats">';
-            if (!info.isWls) {
+            if (isRestricted) {
+                html += '<div class="wls-no-data"><i class="fa fa-server"></i><p><strong>WLS 可能正在运行</strong></p>';
+                html += '<p style="font-size: 12px; color: #999;">健康检查接口仅允许本机访问。您通过外网或 Nginx 反向代理访问时，此处无法获取详情。</p>';
+                html += '<div class="wls-doc-links" style="justify-content: center;">';
+                html += '<a href="<?= htmlspecialchars($wlsDocsUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" class="wls-doc-link"><i class="fa fa-book"></i> WLS 使用指南</a>';
+                html += '<a href="<?= htmlspecialchars($serverDocsUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" class="wls-doc-link"><i class="fa fa-folder-open"></i> Server 模块文档</a></div></div>';
+            } else if (!info.isWls) {
                 html += '<div class="wls-no-data"><i class="fa fa-server"></i><p><strong>未检测到 WLS 服务</strong></p>';
                 html += '<p style="font-size: 12px; color: #999;">当前页面可能由 Apache/Nginx 或 PHP 内置服务器提供</p>';
                 html += '<div class="wls-doc-links" style="justify-content: center;">';
