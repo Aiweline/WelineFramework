@@ -12,6 +12,14 @@ class WebsiteCurrency extends Model
 {
     public const schema_table = 'weline_websites_website_currency';
     public const schema_primary_key = 'website_currency_id';
+
+    #[Col(type: 'int', nullable: false, primaryKey: true, autoIncrement: true, comment: '关联ID')]
+    public const schema_fields_ID = 'website_currency_id';
+    #[Col(type: 'int', nullable: false, comment: '网站ID')]
+    public const schema_fields_WEBSITE_ID = 'website_id';
+    #[Col(type: 'varchar', length: 10, nullable: false, comment: '货币代码')]
+    public const schema_fields_CURRENCY_CODE = 'currency_code';
+
     public const fields_ID = 'website_currency_id';
     public const fields_WEBSITE_ID = 'website_id';
     public const fields_CURRENCY_CODE = 'currency_code';
