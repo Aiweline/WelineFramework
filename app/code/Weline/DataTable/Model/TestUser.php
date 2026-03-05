@@ -11,116 +11,90 @@ declare(strict_types=1);
 
 namespace Weline\DataTable\Model;
 
-use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: '测试用户表')]
+#[Index(name: 'idx_email', columns: ['email'], type: 'UNIQUE')]
 class TestUser extends Model
 {
-    public const table = 'datatable_test_users';
 
-    public const fields_ID = 'id';
-    public const fields_name = 'name';
-    public const fields_email = 'email';
-    public const fields_phone = 'phone';
-    public const fields_status = 'status';
-    public const fields_gender = 'gender';
-    public const fields_birth_date = 'birth_date';
-    public const fields_avatar = 'avatar';
-    public const fields_bio = 'bio';
-    public const fields_password = 'password';
-    public const fields_website_url = 'website_url';
-    public const fields_search_keyword = 'search_keyword';
-    public const fields_age = 'age';
-    public const fields_price = 'price';
-    public const fields_amount = 'amount';
-    public const fields_count = 'count';
-    public const fields_description = 'description';
-    public const fields_content = 'content';
-    public const fields_detail = 'detail';
-    public const fields_remark = 'remark';
-    public const fields_note = 'note';
-    public const fields_comment = 'comment';
-    public const fields_created_datetime = 'created_datetime';
-    public const fields_login_time = 'login_time';
-    public const fields_birth_month = 'birth_month';
-    public const fields_work_week = 'work_week';
-    public const fields_photo = 'photo';
-    public const fields_attachment = 'attachment';
-    public const fields_theme_color = 'theme_color';
-    public const fields_score_range = 'score_range';
-    public const fields_user_type = 'user_type';
-    public const fields_user_state = 'user_state';
-    public const fields_is_vip = 'is_vip';
-    public const fields_subscription_type = 'subscription_type';
-    public const fields_created_at = 'created_at';
-    public const fields_updated_at = 'updated_at';
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('测试用户表')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'auto_increment primary key', '用户ID')
-                ->addColumn(self::fields_name, TableInterface::column_type_VARCHAR, 100, 'not null', '用户姓名')
-                ->addColumn(self::fields_email, TableInterface::column_type_VARCHAR, 255, 'not null unique', '用户邮箱')
-                ->addColumn(self::fields_phone, TableInterface::column_type_VARCHAR, 20, '', '用户电话')
-                ->addColumn(self::fields_status, TableInterface::column_type_INTEGER, 1, 'default 1', '用户状态：1-启用，0-禁用')
-                ->addColumn(self::fields_gender, TableInterface::column_type_VARCHAR, 20, "default 'male'", '性别：male-男，female-女，other-其他')
-                ->addColumn(self::fields_birth_date, TableInterface::column_type_DATE, 0, '', '出生日期')
-                ->addColumn(self::fields_avatar, TableInterface::column_type_VARCHAR, 255, '', '头像路径')
-                ->addColumn(self::fields_bio, TableInterface::column_type_TEXT, 0, '', '个人简介')
-                ->addColumn(self::fields_password, TableInterface::column_type_VARCHAR, 255, '', '密码')
-                ->addColumn(self::fields_website_url, TableInterface::column_type_VARCHAR, 255, '', '个人网站URL')
-                ->addColumn(self::fields_search_keyword, TableInterface::column_type_VARCHAR, 100, '', '搜索关键词')
-                ->addColumn(self::fields_age, TableInterface::column_type_INTEGER, 3, '', '年龄')
-                ->addColumn(self::fields_price, TableInterface::column_type_DECIMAL, '10,2', '', '价格')
-                ->addColumn(self::fields_amount, TableInterface::column_type_DECIMAL, '10,2', '', '金额')
-                ->addColumn(self::fields_count, TableInterface::column_type_INTEGER, 0, 'default 0', '数量')
-                ->addColumn(self::fields_description, TableInterface::column_type_TEXT, 0, '', '详细描述')
-                ->addColumn(self::fields_content, TableInterface::column_type_TEXT, 0, '', '内容')
-                ->addColumn(self::fields_detail, TableInterface::column_type_TEXT, 0, '', '详细信息')
-                ->addColumn(self::fields_remark, TableInterface::column_type_TEXT, 0, '', '备注')
-                ->addColumn(self::fields_note, TableInterface::column_type_TEXT, 0, '', '备注说明')
-                ->addColumn(self::fields_comment, TableInterface::column_type_TEXT, 0, '', '评论')
-                ->addColumn(self::fields_created_datetime, TableInterface::column_type_DATETIME, 0, '', '创建日期时间')
-                ->addColumn(self::fields_login_time, TableInterface::column_type_TIMESTAMP, 0, '', '登录时间')
-                ->addColumn(self::fields_birth_month, TableInterface::column_type_DATE, 0, '', '出生月份')
-                ->addColumn(self::fields_work_week, TableInterface::column_type_DATE, 0, '', '工作周')
-                ->addColumn(self::fields_photo, TableInterface::column_type_VARCHAR, 255, '', '照片')
-                ->addColumn(self::fields_attachment, TableInterface::column_type_VARCHAR, 255, '', '附件文件')
-                ->addColumn(self::fields_theme_color, TableInterface::column_type_VARCHAR, 7, "default '#000000'", '主题颜色')
-                ->addColumn(self::fields_score_range, TableInterface::column_type_INTEGER, 3, 'default 50', '评分范围')
-                ->addColumn(self::fields_user_type, TableInterface::column_type_VARCHAR, 20, "default 'user'", '用户类型：admin-管理员，user-普通用户，guest-访客')
-                ->addColumn(self::fields_user_state, TableInterface::column_type_INTEGER, 1, 'default 1', '用户状态')
-                ->addColumn(self::fields_is_vip, TableInterface::column_type_INTEGER, 1, 'default 0', '是否VIP：1-是，0-否')
-                ->addColumn(self::fields_subscription_type, TableInterface::column_type_VARCHAR, 20, "default 'free'", '订阅类型：free-免费，basic-基础，premium-高级')
-                ->addColumn(self::fields_created_at, TableInterface::column_type_DATETIME, 0, 'default CURRENT_TIMESTAMP', '创建时间')
-                ->addColumn(self::fields_updated_at, TableInterface::column_type_DATETIME, 0, 'default CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP', '更新时间')
-                ->create();
-        }
-    }
-
-    /**
+    public const schema_table = 'datatable_test_users';
+    public const schema_primary_key = 'id';
+    #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: '用户ID')]
+    public const schema_fields_ID = 'id';
+    #[Col('varchar', 100, nullable: false, comment: '用户姓名')]
+    public const schema_fields_name = 'name';
+    #[Col('varchar', 255, nullable: false, comment: '用户邮箱')]
+    public const schema_fields_email = 'email';
+    #[Col('varchar', 20, comment: '用户电话')]
+    public const schema_fields_phone = 'phone';
+    #[Col('int', 1, default: 1, comment: '用户状态')]
+    public const schema_fields_status = 'status';
+    #[Col('varchar', 20, default: 'male', comment: '性别')]
+    public const schema_fields_gender = 'gender';
+    #[Col('date', comment: '出生日期')]
+    public const schema_fields_birth_date = 'birth_date';
+    #[Col('varchar', 255, comment: '头像路径')]
+    public const schema_fields_avatar = 'avatar';
+    #[Col('text', comment: '个人简介')]
+    public const schema_fields_bio = 'bio';
+    #[Col('varchar', 255, comment: '密码')]
+    public const schema_fields_password = 'password';
+    #[Col('varchar', 255, comment: '个人网站URL')]
+    public const schema_fields_website_url = 'website_url';
+    #[Col('varchar', 100, comment: '搜索关键词')]
+    public const schema_fields_search_keyword = 'search_keyword';
+    #[Col('int', 3, comment: '年龄')]
+    public const schema_fields_age = 'age';
+    #[Col('decimal', '10,2', comment: '价格')]
+    public const schema_fields_price = 'price';
+    #[Col('decimal', '10,2', comment: '金额')]
+    public const schema_fields_amount = 'amount';
+    #[Col('int', default: 0, comment: '数量')]
+    public const schema_fields_count = 'count';
+    #[Col('text', comment: '详细描述')]
+    public const schema_fields_description = 'description';
+    #[Col('text', comment: '内容')]
+    public const schema_fields_content = 'content';
+    #[Col('text', comment: '详细信息')]
+    public const schema_fields_detail = 'detail';
+    #[Col('text', comment: '备注')]
+    public const schema_fields_remark = 'remark';
+    #[Col('text', comment: '备注说明')]
+    public const schema_fields_note = 'note';
+    #[Col('text', comment: '评论')]
+    public const schema_fields_comment = 'comment';
+    #[Col('datetime', comment: '创建日期时间')]
+    public const schema_fields_created_datetime = 'created_datetime';
+    #[Col('datetime', comment: '登录时间')]
+    public const schema_fields_login_time = 'login_time';
+    #[Col('date', comment: '出生月份')]
+    public const schema_fields_birth_month = 'birth_month';
+    #[Col('date', comment: '工作周')]
+    public const schema_fields_work_week = 'work_week';
+    #[Col('varchar', 255, comment: '照片')]
+    public const schema_fields_photo = 'photo';
+    #[Col('varchar', 255, comment: '附件文件')]
+    public const schema_fields_attachment = 'attachment';
+    #[Col('varchar', 7, default: '#000000', comment: '主题颜色')]
+    public const schema_fields_theme_color = 'theme_color';
+    #[Col('int', 3, default: 50, comment: '评分范围')]
+    public const schema_fields_score_range = 'score_range';
+    #[Col('varchar', 20, default: 'user', comment: '用户类型')]
+    public const schema_fields_user_type = 'user_type';
+    #[Col('int', 1, default: 1, comment: '用户状态')]
+    public const schema_fields_user_state = 'user_state';
+    #[Col('int', 1, default: 0, comment: '是否VIP')]
+    public const schema_fields_is_vip = 'is_vip';
+    #[Col('varchar', 20, default: 'free', comment: '订阅类型')]
+    public const schema_fields_subscription_type = 'subscription_type';
+    #[Col('datetime', default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
+    public const schema_fields_created_at = 'created_at';
+    #[Col('datetime', default: 'CURRENT_TIMESTAMP', comment: '更新时间')]
+    public const schema_fields_updated_at = 'updated_at';
+/**
      * 获取测试数据
      */
     public function getTestData(): array
@@ -377,3 +351,4 @@ class TestUser extends Model
         return $options[$value] ?? '未知';
     }
 }
+
