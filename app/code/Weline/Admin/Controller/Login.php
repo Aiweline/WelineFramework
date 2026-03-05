@@ -16,7 +16,9 @@ use Weline\Admin\Helper\MenuUrlValidator;
 use Weline\Backend\Model\BackendUserToken;
 use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Url;
+use Weline\Framework\Session\Strategy\WlsStrategy;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Text;
@@ -222,6 +224,22 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         }
         // 登录成功后立即持久化 Session（避免 WLS 下重定向请求读不到登录态导致循环重定向）
         $this->session->getSession()->save();
+        // WLS 下确保 Session Cookie 随 302 响应发出（双重保障，避免 Worker 合并逻辑遗漏）
+        $sid = $this->session->getId();
+        if ($sid !== '') {
+            $expire = \time() + 86400 * 30;
+            $secure = $this->request->isSecure();
+            HeaderCollector::getInstance()->setCookie(
+                WlsStrategy::SESSION_NAME,
+                $sid,
+                $expire,
+                '/',
+                '',
+                $secure,
+                true,
+                'Lax'
+            );
+        }
         // 有来源网址就跳回来源网址
         $this->redirectReferer();
         # 跳转首页（使用当前请求同源 URL，确保 Cookie 能带上，避免跨 host 丢失 Session）
