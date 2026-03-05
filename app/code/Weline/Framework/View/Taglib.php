@@ -1254,6 +1254,9 @@ class Taglib
                                 }
                             }
                             
+                            // 移除 else 内容开头可能存在的已编译的 <?php else: ?\>（AST 可能已将 <else/> 编译进子内容，导致返回的 fallback 含孤立 else 引发 ParseError）
+                            $else_content = preg_replace('/^\s*<\?php\s*else\s*:?\s*\?>\s*/i', '', $else_content ?? '');
+                            
                             // 统一清理 hook 名称，移除可能混入的 PHP 代码标签和 HTML 标签
                             $hook_name = preg_replace('/<\?php\s*else\s*:?\s*' . self::PHP_CLOSE_TAG . '/i', '', $hook_name);
                             $hook_name = preg_replace('/<\?=\s*else\s*' . self::PHP_CLOSE_TAG . '/i', '', $hook_name);
