@@ -402,6 +402,13 @@ $pages = $this->getData('pages') ?: [];
     align-items: center;
     justify-content: center;
 }
+/* 大屏幕下增高预览区，便于看清整张截图 */
+@media (min-width: 992px) {
+    .style-card-preview { height: 380px; }
+}
+@media (min-width: 1200px) {
+    .style-card-preview { height: 520px; }
+}
 
 .style-card-preview-actions {
     position: absolute;
