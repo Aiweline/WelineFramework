@@ -12,11 +12,11 @@
    - 负责字段数据的备份和恢复
    - 单一职责：专门处理字段级别的数据备份和恢复
 
-2. **FieldBackup Model** (`Weline\Framework\Setup\Db\Model\FieldBackup`)
+2. **FieldBackup Model** (`Weline\Framework\Setup\Model\FieldBackup`)
    - 存储字段**数据值**的备份（行级数据）
    - 记录模块、表名、字段名、主键值、字段值、**模块版本**等信息
 
-3. **FieldDefinitionBackup Model** (`Weline\Framework\Setup\Db\Model\FieldDefinitionBackup`)
+3. **FieldDefinitionBackup Model** (`Weline\Framework\Setup\Model\FieldDefinitionBackup`)
    - 存储字段**结构定义信息**（DDL 元数据，如类型、长度、是否可空、默认值、注释等）
    - 以 JSON 形式保存底层 `information_schema` / `PRAGMA` 返回的一整行结构数据
    - 同样按「模块 + 表名 + 字段名 + **模块版本**」维度管理，方便对比不同时期结构差异

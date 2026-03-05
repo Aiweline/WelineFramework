@@ -33,7 +33,7 @@ abstract class AbstractTable implements TableInterface
 
     protected string $constraints = '';
 
-    /** 建表附加片段，空时由各方言 SchemaCompiler 提供默认值 */
+    /** 建表附加片段，空时由 Connector::getDefaultTableAdditional() 提供 */
     public string $additional = '';
 
     protected ?ConnectorInterface $connector = null;

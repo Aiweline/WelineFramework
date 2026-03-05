@@ -68,15 +68,21 @@ class Upgrade extends CommandAbstract
 
     public function help(): array|string
     {
-        // 基于tip的默认help实现
         return \Weline\Framework\Console\CommandHelper::formatHelp(
-            '',
+            'command:upgrade',
             $this->tip(),
             [
+                '-m, --module=<模块名>' => '仅更新指定模块的命令（增量更新，安装模式下忽略）',
                 '-h, --help' => '显示帮助信息',
             ],
-            [],
-            []
+            [
+                '指定 -m 时为增量更新，仅刷新指定模块的命令。安装模式下始终全量扫描。',
+            ],
+            [
+                '全量更新' => 'php bin/w command:upgrade',
+                '增量更新指定模块' => 'php bin/w command:upgrade -m Weline_Admin',
+            ],
+            'php bin/w command:upgrade [-m|--module=<模块名>]'
         );
     }
 
@@ -136,7 +142,18 @@ class Upgrade extends CommandAbstract
      */
     public function execute(array $args = [], array $data = [])
     {
-        // 删除命令文件
+        $installMode = self::isInstallMode();
+        $moduleNames = $installMode ? [] : $this->parseModuleArgs($args);
+
+        // 增量更新模式：指定模块且非安装模式
+        if (!empty($moduleNames)) {
+            $this->printer->note(__('增量更新模块：%{1}', [implode(', ', $moduleNames)]));
+            $commands = $this->refreshForModules($moduleNames);
+            $this->printer->success(__('指定模块命令已更新！'));
+            return;
+        }
+
+        // 全量更新：删除命令文件
         if (is_file(Env::path_COMMANDS_FILE)) {
             $data = $this->system->exec('rm ' . Env::path_COMMANDS_FILE);
             if ($data) {
@@ -144,8 +161,6 @@ class Upgrade extends CommandAbstract
             }
         }
 
-        // 检查是否处于安装模式
-        $installMode = self::isInstallMode();
         if ($installMode) {
             $this->printer->note(__('安装模式：扫描所有模块命令（包括未激活的模块）'));
         }

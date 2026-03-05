@@ -23,13 +23,21 @@ class Rebuild extends CommandAbstract
      */
     public function execute(array $args = [], array $data = [])
     {
+        $moduleNames = $this->parseModuleArgs($args);
+
         try {
-            $this->printer->setup(__('开始重建事件注册表...'));
+            $this->printer->setup(
+                !empty($moduleNames)
+                    ? __('开始增量重建模块 %{1} 的事件注册表...', [implode(', ', $moduleNames)])
+                    : __('开始重建事件注册表...')
+            );
 
             /** @var EventRegistry $registry */
             $registry = ObjectManager::getInstance(EventRegistry::class);
 
-            $ok = $registry->refresh();
+            $ok = !empty($moduleNames)
+                ? $registry->refreshForModules($moduleNames)
+                : $registry->refresh();
             if ($ok) {
                 // 清除 EventData 缓存
                 EventData::clearCache();
@@ -144,16 +152,19 @@ class Rebuild extends CommandAbstract
             'event:rebuild',
             '扫描所有模块的 event.php 规约文件并重建事件注册表',
             [
+                '-m, --module=<模块名>' => '仅重建指定模块的事件（增量更新）',
                 '--debug' => '显示调试信息（可选）',
             ],
             [
-                '执行后会在项目根目录的 generated/events.php 写入全量事件规约信息。',
+                '执行后会在项目根目录的 generated/events.php 写入事件规约信息。',
+                '指定 -m 时为增量更新，仅刷新指定模块相关的事件和观察者。',
                 '所有事件必须同时具备规约文件 (event.php) 和文档文件 (doc/event/*.md) 才能正常执行。',
             ],
             [
-                '直接重建' => 'php bin/w event:rebuild',
+                '全量重建' => 'php bin/w event:rebuild',
+                '增量重建指定模块' => 'php bin/w event:rebuild -m Weline_Admin',
             ],
-            'php bin/w event:rebuild'
+            'php bin/w event:rebuild [-m|--module=<模块名>]'
         );
     }
 }

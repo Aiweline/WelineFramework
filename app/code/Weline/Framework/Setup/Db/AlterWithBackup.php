@@ -108,7 +108,7 @@ class AlterWithBackup implements AlterInterface
         }
         
         $tableName = $this->modelSetup->getTable();
-        $primaryKey = $model->_primary_key ?? 'id';
+        $primaryKey = $model->getPrimaryKey() ?: 'id';
         
         // 1. 先备份要删除的字段数据
         if (!empty($this->deletedFields) && $context) {

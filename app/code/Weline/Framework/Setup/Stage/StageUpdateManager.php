@@ -55,10 +55,10 @@ class StageUpdateManager
      * 注册阶段
      * 
      * @param StageInterface $stage 阶段对象
-     * @param int|null $order 执行顺序（数字越小越先执行，null表示追加到最后）
+     * @param int|float|null $order 执行顺序（数字越小越先执行，null表示追加到最后）
      * @return void
      */
-    public function registerStage(StageInterface $stage, ?int $order = null): void
+    public function registerStage(StageInterface $stage, int|float|null $order = null): void
     {
         $name = $stage->getName();
         
