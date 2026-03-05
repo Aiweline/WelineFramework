@@ -13,6 +13,8 @@ declare(strict_types=1);
 
 namespace Weline\CacheManager\Controller\System;
 
+use Weline\CacheManager\Cron\CacheCleanup;
+use Weline\Cron\Model\CronTask;
 use Weline\Framework\App\Env;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Cache\CacheManager;
@@ -25,7 +27,6 @@ class Cache extends \Weline\Admin\Controller\BaseController
 
     public function __construct()
     {
-        parent::__construct();
         $this->cacheManager = ObjectManager::getInstance(CacheManager::class);
     }
 
@@ -34,19 +35,60 @@ class Cache extends \Weline\Admin\Controller\BaseController
     {
         /** @var \Weline\CacheManager\Model\Cache $cacheModel */
         $cacheModel = ObjectManager::getInstance(\Weline\CacheManager\Model\Cache::class);
+
+        $search = trim((string) ($this->request->getParam('search') ?? ''));
+        $type = $this->request->getParam('type');
+        $status = $this->request->getParam('status');
+        $permanently = $this->request->getParam('permanently');
+
+        if ($search !== '') {
+            $cacheModel->where(\Weline\CacheManager\Model\Cache::schema_fields_IDENTITY, "%{$search}%", 'like')
+                ->where(\Weline\CacheManager\Model\Cache::schema_fields_NAME, "%{$search}%", 'like', 'OR')
+                ->where(\Weline\CacheManager\Model\Cache::schema_fields_DESCRIPTION, "%{$search}%", 'like', 'OR')
+                ->where(\Weline\CacheManager\Model\Cache::schema_fields_Module, "%{$search}%", 'like', 'OR');
+        }
+        if ($type !== null && $type !== '') {
+            $cacheModel->where(\Weline\CacheManager\Model\Cache::schema_fields_TYPE, (int) $type);
+        }
+        if ($status !== null && $status !== '') {
+            $cacheModel->where(\Weline\CacheManager\Model\Cache::schema_fields_Status, (int) $status);
+        }
+        if ($permanently !== null && $permanently !== '') {
+            $cacheModel->where(\Weline\CacheManager\Model\Cache::schema_fields_Permanently, (int) $permanently);
+        }
+
+        $params = $this->request->getParams();
         $caches = $cacheModel->pagination(
-            $this->request->getParam('page', 1),
-            $this->request->getParam('pageSize', 10),
-            $this->request->getParams()
+            (int) ($params['page'] ?? 1),
+            (int) ($params['pageSize'] ?? 10),
+            $params
         )->select()->fetch();
         
         $poolStats = $this->cacheManager->getAllStats();
+        
+        $cronTasks = [];
+        try {
+            /** @var CronTask $cronTaskModel */
+            $cronTaskModel = ObjectManager::getInstance(CronTask::class);
+            $cronTasks = $cronTaskModel->where('name', '%cache%', 'like')
+                ->order('last_run_time', 'DESC')
+                ->select()
+                ->fetch()
+                ->getItems();
+        } catch (\Throwable $e) {
+            // 忽略：Cron 模块可能未安装
+        }
         
         $this->assign('caches', $caches->getItems());
         $this->assign('pagination', $caches->getPagination());
         $this->assign('total', $caches->getPaginationData()['totalSize']);
         $this->assign('poolStats', $poolStats);
-        
+        $this->assign('cronTasks', $cronTasks);
+        $this->assign('filterSearch', $search);
+        $this->assign('filterType', $type);
+        $this->assign('filterStatus', $status);
+        $this->assign('filterPermanently', $permanently);
+
         return $this->fetch();
     }
 
@@ -151,6 +193,28 @@ class Cache extends \Weline\Admin\Controller\BaseController
             return $this->fetchJson(['code' => 200, 'msg' => 'success', 'data' => $stats]);
         } catch (\Exception $exception) {
             return $this->fetchJson(['code' => 500, 'msg' => $exception->getMessage(), 'data' => null]);
+        }
+    }
+
+    #[Acl('Weline_CacheManager::system_cache_run_cron', '执行定时任务', 'mdi mdi-play', '手动执行缓存清理定时任务')]
+    public function postRunCronTask()
+    {
+        try {
+            /** @var CacheCleanup $cacheCleanup */
+            $cacheCleanup = ObjectManager::getInstance(CacheCleanup::class);
+            $cacheCleanup->execute();
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => __('定时任务执行完成！已清理过期缓存文件。'),
+                'data' => null
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('定时任务执行失败: %{1}。请检查 Cron 配置和日志。', $e->getMessage()),
+                'data' => null
+            ]);
         }
     }
 
