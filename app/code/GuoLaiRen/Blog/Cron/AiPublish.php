@@ -120,16 +120,30 @@ class AiPublish implements CronTaskInterface
             }
 
             if ($hasTrendSource) {
+                $usedKeywords = $this->getUsedKeywordsForQuota($siteId, $profileId);
                 /** @var TrendingKeywordLog $logModel */
                 $logModel = ObjectManager::getInstance(TrendingKeywordLog::class);
-                $logs = $logModel->clear()
+                $allLogs = $logModel->clear()
                     ->where(TrendingKeywordLog::schema_fields_PROFILE_ID, $profileId)
                     ->where(TrendingKeywordLog::schema_fields_USED_AT, null, 'IS')
                     ->order(TrendingKeywordLog::schema_fields_ID, 'ASC')
-                    ->limit($need)
+                    ->limit(max($need * 3, 100))
                     ->select()
                     ->fetch()
                     ->getItems();
+                $logs = [];
+                $seenKw = [];
+                foreach ($allLogs as $log) {
+                    $kw = (string)$log->getData(TrendingKeywordLog::schema_fields_KEYWORD);
+                    if (isset($usedKeywords[$kw]) || isset($seenKw[$kw])) {
+                        continue;
+                    }
+                    $seenKw[$kw] = true;
+                    $logs[] = $log;
+                    if (count($logs) >= $need) {
+                        break;
+                    }
+                }
 
                 $idx = 0;
                 $total = count($logs);
@@ -182,17 +196,21 @@ class AiPublish implements CronTaskInterface
                     continue;
                 }
 
-                $keywords = array_values(array_unique($profile->getKeywordsArray()));
-                if (empty($keywords)) {
+                $rawKeywords = array_values(array_unique($profile->getKeywordsArray()));
+                if (empty($rawKeywords)) {
                     if ($onProgress) {
                         $onProgress('skip', ['reason' => '画像无关键词', 'profile_id' => $profileId, 'raw_keywords' => $profile->getData(TrendProfile::schema_fields_KEYWORDS)]);
                     }
                     continue;
                 }
+                $usedKeywords = $this->getUsedKeywordsForQuota($siteId, $profileId);
+                $keywords = array_values(array_diff($rawKeywords, array_keys($usedKeywords)));
                 $keywords = array_slice($keywords, 0, $need);
                 $total = count($keywords);
-                
-                if ($onProgress) {
+                if ($total === 0 && !empty($rawKeywords) && $onProgress) {
+                    $onProgress('skip', ['reason' => '该画像下关键词均已生成过文章，请添加新关键词或使用趋势同步', 'profile_id' => $profileId]);
+                }
+                if ($onProgress && $total > 0) {
                     $onProgress('fallback_keywords', ['profile_id' => $profileId, 'keywords_count' => $total, 'keywords' => $keywords]);
                 }
 
@@ -248,6 +266,32 @@ class AiPublish implements CronTaskInterface
         return $result;
     }
     
+    /**
+     * 获取该站点+画像下已用于生成文章的关键词（用于排重，避免同一关键词重复生成）
+     *
+     * @return array<string, true> 关键词 => true，便于 in_array 判断
+     */
+    private function getUsedKeywordsForQuota(int $siteId, int $profileId): array
+    {
+        $postModel = ObjectManager::getInstance(PostModel::class);
+        $items = $postModel->clear()
+            ->where(PostModel::schema_fields_SITE_ID, $siteId)
+            ->where(PostModel::schema_fields_TREND_PROFILE_ID, $profileId)
+            ->where(PostModel::schema_fields_SOURCE_KEYWORD, null, 'IS NOT NULL')
+            ->fields(PostModel::schema_fields_SOURCE_KEYWORD)
+            ->select()
+            ->fetch()
+            ->getItems();
+        $used = [];
+        foreach ($items as $row) {
+            $kw = trim((string)$row->getData(PostModel::schema_fields_SOURCE_KEYWORD));
+            if ($kw !== '') {
+                $used[$kw] = true;
+            }
+        }
+        return $used;
+    }
+
     /**
      * 清理错误信息中的 ANSI 颜色代码
      */
@@ -420,6 +464,7 @@ class AiPublish implements CronTaskInterface
             ->setData(PostModel::schema_fields_AUTHOR, RandomAuthorName::generate())
             ->setData(PostModel::schema_fields_STATUS, $asDraft ? PostModel::STATUS_DRAFT : PostModel::STATUS_PUBLISHED)
             ->setData(PostModel::schema_fields_TREND_PROFILE_ID, $profileId)
+            ->setData(PostModel::schema_fields_SOURCE_KEYWORD, $keyword)
             ->setData(PostModel::schema_fields_PUBLISHED_AT, $asDraft ? null : date('Y-m-d H:i:s'))
             ->setData(PostModel::schema_fields_VIEW_COUNT, 0)
             ->setData(PostModel::schema_fields_IS_FEATURED, 0)
