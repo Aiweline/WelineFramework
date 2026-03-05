@@ -143,11 +143,11 @@
 <script>
 function deleteRecord(id) {
     if (confirm('<?= __('确定要删除这条记录吗？') ?>')) {
-        fetch('<?= $this->getUrl("fontsubletter/backend/record/delete") ?>?id=' + id, {
-            method: 'POST'
-        })
-        .then(response => response.json())
-        .then(data => {
+        var url = '<?= $this->getUrl("fontsubletter/backend/record/delete") ?>?id=' + id;
+        var opts = { method: 'POST' };
+        window.Weline.Api.request(url, opts)
+        .then(function(res) {
+            var data = (res && res.data) !== undefined ? res.data : res;
             if (data.code === 200) {
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
