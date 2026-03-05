@@ -1,6 +1,5 @@
 <?php
 declare(strict_types=1);
-
 /*
  * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
  * 作者：Administrator
@@ -9,149 +8,75 @@ declare(strict_types=1);
  * 论坛：https://bbs.aiweline.com
  * 日期：23/4/2024 17:07:22
  */
-
 namespace Weline\Queue\Model\Queue\Type;
-
 use Weline\Eav\EavModel;
 use Weline\Eav\EavModelInterface;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Type;
-use Weline\Framework\Database\Api\Db\TableInterface;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+#[Table(comment: '队列类型属性表')]
+#[Index(name: 'IDX_TYPE_ID', columns: ['type_id'])]
+#[Index(name: 'IDX_ATTR_CODE', columns: ['code'])]
+#[Index(name: 'IDX_ATTR_NAME', columns: ['name'])]
 class Attributes extends Model
 {
-    public const fields_ID = 'type_attribute_id';
+    public const schema_table = 'weline_queue_type_attributes';
+    public const schema_primary_key = 'type_attribute_id';
+    #[Col('int', 11, primaryKey: true, autoIncrement: true, nullable: false, comment: '队列类型属性ID')]
+    public const schema_fields_ID = 'type_attribute_id';
+    #[Col('int', 11, primaryKey: true, autoIncrement: true, nullable: false, comment: '队列类型属性ID')]
+    public const schema_fields_type_attribute_id = 'type_attribute_id';
+    #[Col('int', 11, nullable: false, comment: '属性ID')]
+    public const schema_fields_attribute_id = 'attribute_id';
+    #[Col('int', 11, nullable: false, comment: '队列类型ID')]
+    public const schema_fields_type_id = 'type_id';
+    #[Col('varchar', 255, nullable: false, comment: '队列类型属性编码')]
+    public const schema_fields_code = 'code';
+    #[Col('varchar', 255, nullable: false, comment: '队列类型属性名称')]
+    public const schema_fields_name = 'name';
+    public array $_index_sort_keys = [self::schema_fields_ID, self::schema_fields_type_id, self::schema_fields_name, self::schema_fields_code];
 
-    public const fields_type_attribute_id = 'type_attribute_id';
-    public const fields_attribute_id = 'attribute_id';
-    public const fields_type_id = 'type_id';
-    public const fields_code = 'code';
-    public const fields_name = 'name';
-
-    public array $_index_sort_keys = [self::fields_ID, self::fields_type_id, self::fields_name, self::fields_code];
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
+    public function setTypeId(int $type_id): static
     {
-        $this->install($setup, $context);
+        return $this->setData(self::schema_fields_type_id, $type_id);
     }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
+    public function setCode(string $code): static
     {
-        // TODO: Implement upgrade() method.
+        return $this->setData(self::schema_fields_code, $code);
     }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
+    public function setName(string $name): static
     {
-//        $setup->dropTable();
-        if (!$setup->tableExist()) {
-            $setup->createTable('队列类型属性表')
-                ->addColumn(
-                    self::fields_ID,
-                    TableInterface::column_type_INTEGER,
-                    11,
-                    'primary key auto_increment',
-                    '队列类型属性ID')
-                ->addColumn(
-                    self::fields_type_id,
-                    TableInterface::column_type_INTEGER,
-                    11,
-                    'not null',
-                    '队列类型ID')
-                ->addColumn(
-                    self::fields_attribute_id,
-                    TableInterface::column_type_INTEGER,
-                    11,
-                    'not null',
-                    '属性ID'
-                )->addColumn(
-                    self::fields_code,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    '队列类型属性编码')
-                ->addColumn(
-                    self::fields_name,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    '队列类型属性名称')
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'IDX_TYPE_ID',
-                    self::fields_type_id,
-                    '队列类型ID索引')
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'IDX_ATTR_CODE',
-                    self::fields_code,
-                    '队列类型属性编码索引')
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'IDX_ATTR_NAME',
-                    self::fields_name,
-                    '队列类型属性名索引')
-                ->create();
-        }
+        return $this->setData(self::schema_fields_name, $name);
     }
-
-    function setTypeId(int $type_id): static
+    public function getTypeId(): int
     {
-        return $this->setData(self::fields_type_id, $type_id);
+        return (int)$this->getData(self::schema_fields_type_attribute_id);
     }
-
-    function setCode(string $code): static
+    public function getCode(): string
     {
-        return $this->setData(self::fields_code, $code);
+        return (string)$this->getData(self::schema_fields_code);
     }
-
-    function setName(string $name): static
+    public function getName(): string
     {
-        return $this->setData(self::fields_name, $name);
+        return (string)$this->getData(self::schema_fields_name);
     }
-
-    function getTypeId(): int
+    public function getAttributeId(): int
     {
-        return (int)$this->getData(self::fields_type_attribute_id);
+        return (int)$this->getData(self::schema_fields_attribute_id);
     }
-
-    function getCode(): string
+    public function setAttributeId(int $attribute_id): static
     {
-        return (string)$this->getData(self::fields_code);
+        return $this->setData(self::schema_fields_attribute_id, $attribute_id);
     }
-
-    function getName(): string
-    {
-        return (string)$this->getData(self::fields_name);
-    }
-
-    function getAttributeId(): int
-    {
-        return (int)$this->getData(self::fields_attribute_id);
-    }
-
-    function setAttributeId(int $attribute_id): static
-    {
-        return $this->setData(self::fields_attribute_id, $attribute_id);
-    }
-
-    function getAttributesByTypeId(int $type_id, array $options = []): array
+    public function getAttributesByTypeId(int $type_id, array $options = []): array
     {
         $type_attributes = $this->reset()
-            ->fields(self::fields_attribute_id.', '.self::fields_name)
-            ->where(self::fields_type_id, $type_id)
+            ->fields(self::schema_fields_attribute_id.', '.self::schema_fields_name)
+            ->where(self::schema_fields_type_id, $type_id)
             ->select()
             ->fetchArray();
         if (empty($type_attributes)) {
@@ -159,26 +84,25 @@ class Attributes extends Model
         }
         $typeAttributeNames = [];
         foreach ($type_attributes as $typeAttribute) {
-            $typeAttributeNames[$typeAttribute[self::fields_attribute_id]] = $typeAttribute[self::fields_name];
+            $typeAttributeNames[$typeAttribute[self::schema_fields_attribute_id]] = $typeAttribute[self::schema_fields_name];
         }
-        $type_attributes_ids = array_column($type_attributes, EavAttribute::fields_ID);
+        $type_attributes_ids = array_column($type_attributes, EavAttribute::schema_fields_ID);
         /**@var EavModel $entity */
         $entity        = $options['entity'] ?? null;
         $eav_entity_id = $options['eav_entity_id'] ?? null;
         /** @var EavAttribute $attribute */
         $attribute = ObjectManager::getInstance(EavAttribute::class);
         $wheres    = [
-            [EavAttribute::fields_ID, 'IN', $type_attributes_ids],
+            [EavAttribute::schema_fields_ID, 'IN', $type_attributes_ids],
         ];
         if ($entity) {
-            $wheres[] = [EavAttribute::fields_eav_entity_id, '=', $entity->getEavEntityId()];
+            $wheres[] = [EavAttribute::schema_fields_eav_entity_id, '=', $entity->getEavEntityId()];
         } elseif ($eav_entity_id) {
-            $wheres[] = [EavAttribute::fields_eav_entity_id, '=', $eav_entity_id];
+            $wheres[] = [EavAttribute::schema_fields_eav_entity_id, '=', $eav_entity_id];
         }
-
         $attributes = $attribute->reset()->clearData()
             ->where($wheres)
-            ->order(EavAttribute::fields_dependence, 'ASC')
+            ->order(EavAttribute::schema_fields_dependence, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
@@ -199,13 +123,12 @@ class Attributes extends Model
         }
         return $attributes;
     }
-
-    function getAttributesByTypeCode(int $type_id, string $code, array $options = []): EavAttribute|null
+    public function getAttributesByTypeCode(int $type_id, string $code, array $options = []): EavAttribute|null
     {
         $type_code_attribute = $this->reset()
-            ->fields(self::fields_code.','.self::fields_name)
-            ->where(self::fields_type_id, $type_id)
-            ->where(self::fields_code, $code)
+            ->fields(self::schema_fields_code.','.self::schema_fields_name)
+            ->where(self::schema_fields_type_id, $type_id)
+            ->where(self::schema_fields_code, $code)
             ->find()
             ->fetchArray();
         if (empty($type_code_attribute)) {
@@ -217,23 +140,23 @@ class Attributes extends Model
         /** @var EavAttribute $attribute */
         $attribute = ObjectManager::make(EavAttribute::class);
         $wheres    = [
-            [EavAttribute::fields_code, '=', $code],
+            [EavAttribute::schema_fields_code, '=', $code],
         ];
         if ($entity) {
-            $wheres[] = [EavAttribute::fields_eav_entity_id, '=', $entity->getEavEntityId()];
+            $wheres[] = [EavAttribute::schema_fields_eav_entity_id, '=', $entity->getEavEntityId()];
         }elseif ($eav_entity_id) {
-            $wheres[] = [EavAttribute::fields_eav_entity_id, '=', $eav_entity_id];
+            $wheres[] = [EavAttribute::schema_fields_eav_entity_id, '=', $eav_entity_id];
         }
         $attribute
             ->where($wheres)
-            ->order(EavAttribute::fields_dependence, 'ASC')
+            ->order(EavAttribute::schema_fields_dependence, 'ASC')
             ->find()
             ->fetch();
         $options_data = $options;
         if ($entity) {
             $attribute->current_setEntity($entity);
         }
-        $name = __($type_code_attribute[self::fields_name]);
+        $name = __($type_code_attribute[self::schema_fields_name]);
         $attribute->setName($name);
         $options_data['attrs']['placeholder'] = $name;
         if (empty($options['no_html'])) {

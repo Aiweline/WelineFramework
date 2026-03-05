@@ -73,19 +73,19 @@ QUEUETIP;
     public function execute(): string
     {
         $pageSize = 2;
-        $this->queue->reset()->where($this->queue::fields_finished, 0)
-            ->where($this->queue::fields_auto, 1)
-            ->where($this->queue::fields_status, $this->queue::status_done, '!=')
-            ->where($this->queue::fields_status, $this->queue::status_stop, '!=')
-            ->where($this->queue::fields_status, $this->queue::status_error, '!=')
+        $this->queue->reset()->where($this->queue::schema_fields_finished, 0)
+            ->where($this->queue::schema_fields_auto, 1)
+            ->where($this->queue::schema_fields_status, $this->queue::status_done, '!=')
+            ->where($this->queue::schema_fields_status, $this->queue::status_stop, '!=')
+            ->where($this->queue::schema_fields_status, $this->queue::status_error, '!=')
             ->pagination();
         $pages = $this->queue->pagination['lastPage'];
         foreach (range(1, $pages) as $page) {
-            $queues = $this->queue->reset()->where($this->queue::fields_finished, 0)
-                ->where($this->queue::fields_status, $this->queue::status_done, '!=')
-                ->where($this->queue::fields_status, $this->queue::status_stop, '!=')
-                ->where($this->queue::fields_status, $this->queue::status_error, '!=')
-                ->where($this->queue::fields_auto, 1)
+            $queues = $this->queue->reset()->where($this->queue::schema_fields_finished, 0)
+                ->where($this->queue::schema_fields_status, $this->queue::status_done, '!=')
+                ->where($this->queue::schema_fields_status, $this->queue::status_stop, '!=')
+                ->where($this->queue::schema_fields_status, $this->queue::status_error, '!=')
+                ->where($this->queue::schema_fields_auto, 1)
                 ->pagination($page, $pageSize)
                 ->select()
                 ->fetch()

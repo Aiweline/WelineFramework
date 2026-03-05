@@ -655,8 +655,7 @@
             type: action === 'delete' ? 'danger' : 'warning'
         }).then(function(confirmed) {
             if (!confirmed) return;
-            
-            fetch(config.apiAction, {
+            window.Weline.Api.request(config.apiAction, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -664,9 +663,9 @@
                 },
                 body: JSON.stringify({ id: queueId, action: action })
             })
-            .then(function(response) { return response.json(); })
-            .then(function(result) {
-                if (result.success) {
+            .then(function(response) {
+                var result = response.data;
+                if (response.ok && result && result.success) {
                     BackendToast.success(result.msg);
                     if (action === 'delete') {
                         var row = document.querySelector('tr[data-queue-id="' + queueId + '"]');
@@ -679,11 +678,11 @@
                         setTimeout(function() { location.reload(); }, 800);
                     }
                 } else {
-                    BackendToast.error(result.msg);
+                    BackendToast.error((result && result.msg) || config.text.networkError);
                 }
             })
             .catch(function(error) {
-                BackendToast.error(config.text.networkError + (error.message ? ': ' + error.message : ''));
+                BackendToast.error(config.text.networkError + (error && error.message ? ': ' + error.message : ''));
             });
         });
     }
@@ -701,10 +700,8 @@
             type: action === 'delete' ? 'danger' : 'warning'
         }).then(function(confirmed) {
             if (!confirmed) return;
-            
             BackendToast.info('<?= addslashes(__("正在执行批量操作...")) ?>');
-            
-            fetch(config.apiBatch, {
+            window.Weline.Api.request(config.apiBatch, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -712,17 +709,17 @@
                 },
                 body: JSON.stringify({ ids: ids, action: action })
             })
-            .then(function(response) { return response.json(); })
-            .then(function(result) {
-                if (result.success) {
+            .then(function(response) {
+                var result = response.data;
+                if (response.ok && result && result.success) {
                     BackendToast.success(result.msg);
                     setTimeout(function() { location.reload(); }, 1000);
                 } else {
-                    BackendToast.error(result.msg);
+                    BackendToast.error((result && result.msg) || config.text.networkError);
                 }
             })
             .catch(function(error) {
-                BackendToast.error(config.text.networkError + (error.message ? ': ' + error.message : ''));
+                BackendToast.error(config.text.networkError + (error && error.message ? ': ' + error.message : ''));
             });
         });
     }
