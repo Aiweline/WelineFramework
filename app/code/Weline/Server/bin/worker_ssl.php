@@ -2086,24 +2086,23 @@ function handleRequest(
         // WLS 模式下控制器通过 return 返回 body；对 body trim 并可从 JSON 的 code 解析出状态码
         if (\is_string($result) && \str_starts_with($result, 'HTTP/')) {
             // 合并 Runtime 保存的 Cookie（在 StateManager reset 前提取的副本）
-            // 例如：登录 POST 设置了 Session Cookie → 302 重定向 → Cookie 必须随重定向响应一起发送
+            // 若 302 已在 WlsRuntime 中带上了 Set-Cookie，则不再合并，避免重复头导致浏览器异常
+            $headerEnd = \strpos($result, "\r\n\r\n");
+            $alreadyHasSetCookie = $headerEnd !== false && \stripos(\substr($result, 0, $headerEnd), 'Set-Cookie:') !== false;
             $pendingCookies = $runtime->consumePendingCookies();
-            if (!empty($pendingCookies)) {
-                $headerEnd = \strpos($result, "\r\n\r\n");
-                if ($headerEnd !== false) {
-                    $cookieHeaders = '';
-                    foreach ($pendingCookies as $cookie) {
-                        $parts = [\urlencode($cookie['name']) . '=' . \urlencode($cookie['value'])];
-                        if (isset($cookie['expire']) && $cookie['expire'] !== 0) { $parts[] = 'Expires=' . \gmdate('D, d M Y H:i:s T', $cookie['expire']); }
-                        if (!empty($cookie['path']))     { $parts[] = 'Path=' . $cookie['path']; }
-                        if (!empty($cookie['domain']))   { $parts[] = 'Domain=' . $cookie['domain']; }
-                        if (!empty($cookie['secure']))   { $parts[] = 'Secure'; }
-                        if (!empty($cookie['httpOnly'])) { $parts[] = 'HttpOnly'; }
-                        if (!empty($cookie['sameSite'])) { $parts[] = 'SameSite=' . $cookie['sameSite']; }
-                        $cookieHeaders .= 'Set-Cookie: ' . \implode('; ', $parts) . "\r\n";
-                    }
-                    $result = \substr($result, 0, $headerEnd) . "\r\n" . $cookieHeaders . \substr($result, $headerEnd);
+            if (!empty($pendingCookies) && !$alreadyHasSetCookie && $headerEnd !== false) {
+                $cookieHeaders = '';
+                foreach ($pendingCookies as $cookie) {
+                    $parts = [\urlencode($cookie['name']) . '=' . \urlencode($cookie['value'])];
+                    if (isset($cookie['expire']) && $cookie['expire'] !== 0) { $parts[] = 'Expires=' . \gmdate('D, d M Y H:i:s T', $cookie['expire']); }
+                    if (!empty($cookie['path']))     { $parts[] = 'Path=' . $cookie['path']; }
+                    if (!empty($cookie['domain']))   { $parts[] = 'Domain=' . $cookie['domain']; }
+                    if (!empty($cookie['secure']))   { $parts[] = 'Secure'; }
+                    if (!empty($cookie['httpOnly'])) { $parts[] = 'HttpOnly'; }
+                    if (!empty($cookie['sameSite'])) { $parts[] = 'SameSite=' . $cookie['sameSite']; }
+                    $cookieHeaders .= 'Set-Cookie: ' . \implode('; ', $parts) . "\r\n";
                 }
+                $result = \substr($result, 0, $headerEnd) . "\r\n" . $cookieHeaders . \substr($result, $headerEnd);
             }
             $sni = \Weline\Server\Service\RouteHintService::extractSniFromRawRequest($rawRequest);
             $result = \Weline\Server\Service\RouteHintService::addHintToResponse($result, $sni);
