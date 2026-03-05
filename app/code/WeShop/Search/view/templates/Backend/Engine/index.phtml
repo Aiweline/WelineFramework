@@ -70,14 +70,14 @@ $availableEngines = $this->getData('availableEngines') ?? [];
                                 <tbody>
                                     <?php foreach ($configs as $config): ?>
                                         <?php
-                                        $engineType = $config[SearchEngineConfig::fields_ENGINE_TYPE];
+                                        $engineType = $config[SearchEngineConfig::schema_fields_ENGINE_TYPE];
                                         $engineInfo = $availableEngines[$engineType] ?? null;
-                                        $isActive = (int)($config[SearchEngineConfig::fields_IS_ACTIVE] ?? 0);
+                                        $isActive = (int)($config[SearchEngineConfig::schema_fields_IS_ACTIVE] ?? 0);
                                         ?>
                                         <tr>
                                             <td><?= htmlspecialchars($engineType) ?></td>
                                             <td><?= htmlspecialchars($engineInfo['name'] ?? $engineType) ?></td>
-                                            <td><?= htmlspecialchars($config[SearchEngineConfig::fields_SCOPE] ?? 'default') ?></td>
+                                            <td><?= htmlspecialchars($config[SearchEngineConfig::schema_fields_SCOPE] ?? 'default') ?></td>
                                             <td>
                                                 <?php if ($isActive): ?>
                                                     <span class="badge badge-success"><?= __('启用') ?></span>
@@ -85,9 +85,9 @@ $availableEngines = $this->getData('availableEngines') ?? [];
                                                     <span class="badge badge-secondary"><?= __('禁用') ?></span>
                                                 <?php endif; ?>
                                             </td>
-                                            <td><?= htmlspecialchars($config[SearchEngineConfig::fields_PRIORITY] ?? 0) ?></td>
+                                            <td><?= htmlspecialchars($config[SearchEngineConfig::schema_fields_PRIORITY] ?? 0) ?></td>
                                             <td>
-                                                <a href="<?= $this->getUrl('search/backend/engine/form', ['id' => $config[SearchEngineConfig::fields_ID], 'scope' => $scope]) ?>" 
+                                                <a href="<?= $this->getUrl('search/backend/engine/form', ['id' => $config[SearchEngineConfig::schema_fields_ID], 'scope' => $scope]) ?>" 
                                                    class="btn btn-sm btn-info">
                                                     <i class="mdi mdi-pencil"></i> <?= __('编辑') ?>
                                                 </a>
@@ -98,7 +98,7 @@ $availableEngines = $this->getData('availableEngines') ?? [];
                                                 </button>
                                                 <button type="button" 
                                                         class="btn btn-sm btn-danger" 
-                                                        onclick="deleteConfig(<?= $config[SearchEngineConfig::fields_ID] ?>)">
+                                                        onclick="deleteConfig(<?= $config[SearchEngineConfig::schema_fields_ID] ?>)">
                                                     <i class="mdi mdi-delete"></i> <?= __('删除') ?>
                                                 </button>
                                             </td>
@@ -139,14 +139,11 @@ function testConnection(engineType, scope) {
         return;
     }
     
-    fetch('<?= $this->getUrl('search/backend/engine/test') ?>?engine_type=' + encodeURIComponent(engineType) + '&scope=' + encodeURIComponent(scope), {
-        method: 'GET',
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
+    var url = '<?= $this->getUrl('search/backend/engine/test') ?>?engine_type=' + encodeURIComponent(engineType) + '&scope=' + encodeURIComponent(scope);
+    var opts = { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } };
+    window.Weline.Api.get(url, { silent: true })
+    .then(function(res) {
+        var data = (res && res.data) !== undefined ? res.data : res;
         if (data.success) {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
@@ -211,14 +208,11 @@ function deleteConfig(configId) {
 }
 
 function performDelete(configId) {
-    fetch('<?= $this->getUrl('search/backend/engine/delete') ?>?id=' + configId, {
-        method: 'GET',
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
+    var url = '<?= $this->getUrl('search/backend/engine/delete') ?>?id=' + configId;
+    var opts = { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } };
+    window.Weline.Api.get(url, { silent: true })
+    .then(function(res) {
+        var data = (res && res.data) !== undefined ? res.data : res;
         if (data.success) {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({

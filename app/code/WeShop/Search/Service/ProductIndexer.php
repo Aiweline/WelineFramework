@@ -6,7 +6,6 @@ namespace WeShop\Search\Service;
 
 use WeShop\Product\Model\Product;
 use WeShop\Product\Model\ProductCategory;
-use WeShop\Catalog\Model\Category;
 use WeShop\Search\Engine\MeilisearchEngine;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\Env;
@@ -137,7 +136,7 @@ class ProductIndexer
     private function prepareProductDocument(array $product): ?array
     {
         try {
-            $productId = (int)($product[Product::fields_ID] ?? 0);
+            $productId = (int)($product[Product::schema_fields_ID] ?? 0);
             if ($productId <= 0) {
                 return null;
             }
@@ -149,26 +148,26 @@ class ProductIndexer
             // 构建搜索优化的文档
             $document = [
                 'product_id' => $productId,
-                'name' => $product[Product::fields_name] ?? '',
-                'sku' => $product[Product::fields_sku] ?? '',
-                'spu' => $product[Product::fields_spu] ?? '',
-                'handle' => $product[Product::fields_HANDLE] ?? '',
-                'short_description' => $product[Product::fields_short_description] ?? '',
-                'description' => $product[Product::fields_description] ?? '',
-                'price' => (float)($product[Product::fields_price] ?? 0),
-                'cost' => (float)($product[Product::fields_cost] ?? 0),
-                'stock' => (int)($product[Product::fields_stock] ?? 0),
-                'status' => (int)($product[Product::fields_status] ?? 0),
-                'image' => $product[Product::fields_image] ?? '',
-                'weight' => (float)($product[Product::fields_weight] ?? 0),
+                'name' => $product[Product::schema_fields_name] ?? '',
+                'sku' => $product[Product::schema_fields_sku] ?? '',
+                'spu' => $product[Product::schema_fields_spu] ?? '',
+                'handle' => $product[Product::schema_fields_HANDLE] ?? '',
+                'short_description' => $product[Product::schema_fields_short_description] ?? '',
+                'description' => $product[Product::schema_fields_description] ?? '',
+                'price' => (float)($product[Product::schema_fields_price] ?? 0),
+                'cost' => (float)($product[Product::schema_fields_cost] ?? 0),
+                'stock' => (int)($product[Product::schema_fields_stock] ?? 0),
+                'status' => (int)($product[Product::schema_fields_status] ?? 0),
+                'image' => $product[Product::schema_fields_image] ?? '',
+                'weight' => (float)($product[Product::schema_fields_weight] ?? 0),
                 'category_ids' => $categoryIds,
                 'category_names' => $categoryNames,
                 // 搜索关键词字段（合并多个字段，提高命中率）
                 'searchable_text' => $this->buildSearchableText($product, $categoryNames),
                 // Meta 信息
-                'meta_title' => $product[Product::fields_meta_name] ?? '',
-                'meta_description' => $product[Product::fields_meta_description] ?? '',
-                'meta_keywords' => $product[Product::fields_meta_keywords] ?? '',
+                'meta_title' => $product[Product::schema_fields_meta_name] ?? '',
+                'meta_description' => $product[Product::schema_fields_meta_description] ?? '',
+                'meta_keywords' => $product[Product::schema_fields_meta_keywords] ?? '',
             ];
             
             return $document;
@@ -217,8 +216,8 @@ class ProductIndexer
     }
     
     /**
-     * 获取分类名称数组
-     * 
+     * 获取分类名称数组（通过 catalog 查询器，避免跨模块直接依赖）
+     *
      * @param array $categoryIds
      * @return array
      */
@@ -227,15 +226,8 @@ class ProductIndexer
         if (empty($categoryIds)) {
             return [];
         }
-        
         try {
-            /** @var Category $categoryModel */
-            $categoryModel = ObjectManager::getInstance(Category::class);
-            $categoryModel->clear();
-            $categoryModel->where(Category::fields_ID, ['in', $categoryIds]);
-            $categories = $categoryModel->select()->fetchArray();
-            
-            return array_column($categories, Category::fields_NAME);
+            return w_query('catalog', 'getCategoryNames', ['category_ids' => $categoryIds]);
         } catch (\Exception $e) {
             return [];
         }
@@ -253,28 +245,28 @@ class ProductIndexer
         $texts = [];
         
         // 产品名称
-        if (!empty($product[Product::fields_name])) {
-            $texts[] = $product[Product::fields_name];
+        if (!empty($product[Product::schema_fields_name])) {
+            $texts[] = $product[Product::schema_fields_name];
         }
         
         // SKU
-        if (!empty($product[Product::fields_sku])) {
-            $texts[] = $product[Product::fields_sku];
+        if (!empty($product[Product::schema_fields_sku])) {
+            $texts[] = $product[Product::schema_fields_sku];
         }
         
         // SPU
-        if (!empty($product[Product::fields_spu])) {
-            $texts[] = $product[Product::fields_spu];
+        if (!empty($product[Product::schema_fields_spu])) {
+            $texts[] = $product[Product::schema_fields_spu];
         }
         
         // 简短描述
-        if (!empty($product[Product::fields_short_description])) {
-            $texts[] = strip_tags($product[Product::fields_short_description]);
+        if (!empty($product[Product::schema_fields_short_description])) {
+            $texts[] = strip_tags($product[Product::schema_fields_short_description]);
         }
         
         // 描述（截取前500字符）
-        if (!empty($product[Product::fields_description])) {
-            $description = strip_tags($product[Product::fields_description]);
+        if (!empty($product[Product::schema_fields_description])) {
+            $description = strip_tags($product[Product::schema_fields_description]);
             $texts[] = mb_substr($description, 0, 500);
         }
         
@@ -284,8 +276,8 @@ class ProductIndexer
         }
         
         // Meta 关键词
-        if (!empty($product[Product::fields_meta_keywords])) {
-            $texts[] = $product[Product::fields_meta_keywords];
+        if (!empty($product[Product::schema_fields_meta_keywords])) {
+            $texts[] = $product[Product::schema_fields_meta_keywords];
         }
         
         return implode(' ', $texts);

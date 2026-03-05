@@ -59,8 +59,8 @@ class InstallData
             
             // 检查是否已存在默认配置
             $existing = $configModel->clear()
-                ->where(SearchEngineConfig::fields_ENGINE_TYPE, SearchEngineConfig::ENGINE_MEILISEARCH)
-                ->where(SearchEngineConfig::fields_SCOPE, 'default')
+                ->where(SearchEngineConfig::schema_fields_ENGINE_TYPE, SearchEngineConfig::ENGINE_MEILISEARCH)
+                ->where(SearchEngineConfig::schema_fields_SCOPE, 'default')
                 ->find()
                 ->fetch();
             
