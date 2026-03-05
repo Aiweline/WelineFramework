@@ -151,15 +151,11 @@
             btn.addEventListener('click', function() {
                 var id = this.getAttribute('data-id');
                 
-                fetch('<?= $this->getUrl("*/backend/transaction/query") ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: 'id=' + encodeURIComponent(id)
-                })
-                .then(function(response) { return response.json(); })
-                .then(function(data) {
+                var url = '<?= $this->getUrl("*/backend/transaction/query") ?>';
+                var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + encodeURIComponent(id) };
+                window.Weline.Api.request(url, opts)
+                .then(function(res) {
+                    var data = (res && res.data) !== undefined ? res.data : res;
                     if (data.success) {
                         if (typeof AdminToast !== 'undefined') {
                             AdminToast.success(data.message || '<?= __('查询成功') ?>');

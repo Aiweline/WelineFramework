@@ -71,23 +71,23 @@ class PaymentMethodManager
         
         /** @var PaymentMethod $paymentMethod */
         $paymentMethod = $this->objectManager->getInstance(PaymentMethod::class);
-        $paymentMethod->load(PaymentMethod::fields_CODE, $code);
+        $paymentMethod->load(PaymentMethod::schema_fields_CODE, $code);
         
         if (!$paymentMethod->getId()) {
             // 新建
-            $paymentMethod->setData(PaymentMethod::fields_CODE, $code)
-                ->setData(PaymentMethod::fields_NAME, $provider->getName())
-                ->setData(PaymentMethod::fields_PROVIDER_MODULE, $moduleName)
-                ->setData(PaymentMethod::fields_PROVIDER_CLASS, $reflection->getName())
-                ->setData(PaymentMethod::fields_IS_ACTIVE, 0)
-                ->setData(PaymentMethod::fields_SORT_ORDER, 0)
-                ->setData(PaymentMethod::fields_CONFIG, json_encode([], JSON_UNESCAPED_UNICODE))
+            $paymentMethod->setData(PaymentMethod::schema_fields_CODE, $code)
+                ->setData(PaymentMethod::schema_fields_NAME, $provider->getName())
+                ->setData(PaymentMethod::schema_fields_PROVIDER_MODULE, $moduleName)
+                ->setData(PaymentMethod::schema_fields_PROVIDER_CLASS, $reflection->getName())
+                ->setData(PaymentMethod::schema_fields_IS_ACTIVE, 0)
+                ->setData(PaymentMethod::schema_fields_SORT_ORDER, 0)
+                ->setData(PaymentMethod::schema_fields_CONFIG, json_encode([], JSON_UNESCAPED_UNICODE))
                 ->save();
         } else {
             // 更新
-            $paymentMethod->setData(PaymentMethod::fields_NAME, $provider->getName())
-                ->setData(PaymentMethod::fields_PROVIDER_MODULE, $moduleName)
-                ->setData(PaymentMethod::fields_PROVIDER_CLASS, $reflection->getName())
+            $paymentMethod->setData(PaymentMethod::schema_fields_NAME, $provider->getName())
+                ->setData(PaymentMethod::schema_fields_PROVIDER_MODULE, $moduleName)
+                ->setData(PaymentMethod::schema_fields_PROVIDER_CLASS, $reflection->getName())
                 ->save();
         }
 
@@ -103,8 +103,8 @@ class PaymentMethodManager
     {
         /** @var PaymentMethod $paymentMethod */
         $paymentMethod = $this->objectManager->getInstance(PaymentMethod::class);
-        return $paymentMethod->where(PaymentMethod::fields_IS_ACTIVE, 1)
-            ->order(PaymentMethod::fields_SORT_ORDER, 'ASC')
+        return $paymentMethod->where(PaymentMethod::schema_fields_IS_ACTIVE, 1)
+            ->order(PaymentMethod::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetch();
     }
@@ -119,7 +119,7 @@ class PaymentMethodManager
     {
         /** @var PaymentMethod $paymentMethod */
         $paymentMethod = $this->objectManager->getInstance(PaymentMethod::class);
-        $paymentMethod->load(PaymentMethod::fields_CODE, $code);
+        $paymentMethod->load(PaymentMethod::schema_fields_CODE, $code);
         
         if (!$paymentMethod->getId()) {
             return null;
@@ -136,7 +136,7 @@ class PaymentMethodManager
      */
     public function getProviderInstance(PaymentMethod $paymentMethod): ?PaymentProviderInterface
     {
-        $className = $paymentMethod->getData(PaymentMethod::fields_PROVIDER_CLASS);
+        $className = $paymentMethod->getData(PaymentMethod::schema_fields_PROVIDER_CLASS);
         if (empty($className) || !class_exists($className)) {
             return null;
         }
