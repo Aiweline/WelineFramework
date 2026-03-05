@@ -80,12 +80,12 @@ class Restart extends CommandAbstract
 
         // 重启后台配置的映射
         $query = $this->syncMapping->clear()
-            ->where(SyncMapping::fields_STATUS, 1); // 只重启状态为开启的映射
+            ->where(SyncMapping::schema_fields_STATUS, 1); // 只重启状态为开启的映射
 
         if ($mappingId) {
-            $query->where(SyncMapping::fields_MAPPING_ID, $mappingId);
+            $query->where(SyncMapping::schema_fields_MAPPING_ID, $mappingId);
         } elseif ($hostId) {
-            $query->where(SyncMapping::fields_HOST_ID, $hostId);
+            $query->where(SyncMapping::schema_fields_HOST_ID, $hostId);
         }
 
         $mappings = $query->select()->fetch()->getItems();
