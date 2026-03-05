@@ -41,8 +41,8 @@ class DetectLanguage implements ObserverInterface
             /**@var Locals $local */
             $local = ObjectManager::getInstance(Locals::class);
             $locals = $local
-                ->where(Locals::fields_IS_INSTALL, 1)
-                ->where(Locals::fields_IS_ACTIVE, 1)
+                ->where(Locals::schema_fields_IS_INSTALL, 1)
+                ->where(Locals::schema_fields_IS_ACTIVE, 1)
                 ->select()
                 ->fetchArray();
             

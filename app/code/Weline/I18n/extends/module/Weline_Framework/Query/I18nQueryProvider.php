@@ -7,6 +7,7 @@ namespace Weline\I18n\Extends\Module\Weline_Framework\Query;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\I18n\Model\I18n;
+use Weline\I18n\Model\Locals;
 
 /**
  * I18n 模块查询器
@@ -16,7 +17,8 @@ use Weline\I18n\Model\I18n;
 class I18nQueryProvider implements QueryProviderInterface
 {
     public function __construct(
-        private readonly I18n $i18n
+        private readonly I18n $i18n,
+        private readonly Locals $localsModel
     ) {
     }
 
@@ -29,6 +31,8 @@ class I18nQueryProvider implements QueryProviderInterface
     {
         return match ($operation) {
             'getInstalledLocales' => $this->getInstalledLocales($params),
+            'getLocaleByCode' => $this->getLocaleByCode($params),
+            'getLocaleName' => $this->getLocaleName($params),
             default => throw new \InvalidArgumentException((string)__('I18n 查询器不支持的 operation：%{1}', $operation)),
         };
     }
@@ -59,6 +63,56 @@ class I18nQueryProvider implements QueryProviderInterface
         return $list;
     }
 
+    /**
+     * 根据语言代码获取 Locale 信息
+     *
+     * @param array $params code, target_code (可选)
+     * @return array|null {code, name, ...} 或 null
+     */
+    private function getLocaleByCode(array $params): ?array
+    {
+        $code = (string)($params['code'] ?? '');
+        $targetCode = (string)($params['target_code'] ?? $code);
+
+        if ($code === '') {
+            return null;
+        }
+
+        $locale = clone $this->localsModel;
+        $locale->clear()
+            ->where(Locals::schema_fields_CODE, $code)
+            ->where(Locals::schema_fields_TARGET_CODE, $targetCode)
+            ->where(Locals::schema_fields_IS_ACTIVE, 1)
+            ->find()
+            ->fetch();
+
+        if (!$locale->getId()) {
+            return null;
+        }
+
+        return [
+            'code' => $locale->getData(Locals::schema_fields_CODE),
+            'name' => $locale->getData(Locals::schema_fields_NAME),
+            'target_code' => $locale->getData(Locals::schema_fields_TARGET_CODE),
+            'is_active' => (int)$locale->getData(Locals::schema_fields_IS_ACTIVE),
+        ];
+    }
+
+    /**
+     * 根据语言代码获取显示名称
+     *
+     * @param array $params code, display_locale_code (可选)
+     */
+    private function getLocaleName(array $params): string
+    {
+        $code = (string)($params['code'] ?? '');
+        $displayLocale = (string)($params['display_locale_code'] ?? Cookie::getLangLocal() ?? 'zh_Hans_CN');
+        if ($code === '') {
+            return '';
+        }
+        return $this->i18n->getLocaleName($code, $displayLocale);
+    }
+
     public function getDescriptor(): array
     {
         return [
@@ -76,6 +130,19 @@ class I18nQueryProvider implements QueryProviderInterface
                         ['name' => 'height', 'type' => 'int', 'required' => false, 'description' => __('国旗高度，默认 15')],
                         ['name' => 'installed', 'type' => 'bool', 'required' => false, 'description' => __('仅已安装语言，默认 true')],
                     ],
+                ],
+                [
+                    'name' => 'getLocaleByCode',
+                    'description' => __('根据语言代码获取 Locale 信息'),
+                    'params' => [
+                        ['name' => 'code', 'type' => 'string', 'required' => true],
+                        ['name' => 'target_code', 'type' => 'string', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'getLocaleName',
+                    'description' => __('根据语言代码获取显示名称'),
+                    'params' => [['name' => 'code', 'type' => 'string', 'required' => true]],
                 ],
             ],
         ];

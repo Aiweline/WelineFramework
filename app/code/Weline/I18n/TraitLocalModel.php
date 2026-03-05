@@ -12,7 +12,6 @@ declare(strict_types=1);
 
 namespace Weline\I18n;
 
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
@@ -23,108 +22,33 @@ trait TraitLocalModel
     {
         parent::__init();
         if (!CLI) {
-            $this->where(self::fields_local_code, Cookie::getLang(), '=', 'or')->where(self::fields_local_code, null, 'IS NULL');
+            $this->where(self::schema_fields_local_code, Cookie::getLang(), '=', 'or')->where(self::schema_fields_local_code, null, 'IS NULL');
         }
     }
 
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // TODO: Implement upgrade() method.
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        // $setup->dropTable();
-        if (!$setup->tableExist()) {
-            $creatTable = $setup->createTable()
-                ->addColumn(
-                    $this::fields_ID,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'not null',
-                    'ID'
-                )
-                ->addColumn(
-                    self::fields_local_code,
-                    TableInterface::column_type_VARCHAR,
-                    10,
-                    'not null',
-                    '当地码'
-                )
-                ->addColumn(
-                    self::fields_name,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    '当地名称'
-                );
-            # 添加 config 字段（JSON类型，用于存储复杂数据结构）
-            $creatTable->addColumn(
-                self::fields_config,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '配置数据（JSON格式，支持嵌套字段翻译）'
-            );
-            
-            # 其他翻译字段
-            $not_in_fields = [
-                $this::fields_ID,
-                self::fields_local_code,
-                self::fields_name,
-                self::fields_config,
-                self::fields_CREATE_TIME,
-                self::fields_UPDATE_TIME
-            ];
-            $modelFileds   = $this->getModelFields();
-            foreach ($modelFileds as $key => $modelFiled) {
-                if (!in_array($modelFiled, $not_in_fields)) {
-                    $creatTable->addColumn(
-                        $modelFiled,
-                        TableInterface::column_type_TEXT,
-                        200000,
-                        '',
-                        ''
-                    );
-                }
-            }
-            $creatTable->addConstraints('primary key (' . $this::fields_ID . ',' . self::fields_local_code . ')')
-                ->create();
-        }
-    }
+    /** 使用本 trait 的 Model 须通过 #[Table]/#[Col] 声明表结构，由 SchemaDiffStage 建表 */
+    public function setup(ModelSetup $setup, Context $context): void {}
+    public function upgrade(ModelSetup $setup, Context $context): void {}
+    public function install(ModelSetup $setup, Context $context): void {}
 
     public function getLocalCode()
     {
-        return $this->getData(self::fields_local_code);
+        return $this->getData(self::schema_fields_local_code);
     }
 
     public function setLocalCode(string $local_code)
     {
-        return $this->setData(self::fields_local_code, $local_code);
+        return $this->setData(self::schema_fields_local_code, $local_code);
     }
 
     public function getName()
     {
-        return $this->getData(self::fields_name);
+        return $this->getData(self::schema_fields_name);
     }
 
     public function setName(string $name)
     {
-        return $this->setData(self::fields_name, $name);
+        return $this->setData(self::schema_fields_name, $name);
     }
     
     /**
@@ -136,7 +60,7 @@ trait TraitLocalModel
      */
     public function getConfigValue(string $path)
     {
-        $config = $this->getData(self::fields_config);
+        $config = $this->getData(self::schema_fields_config);
         if (empty($config)) {
             return null;
         }
@@ -169,7 +93,7 @@ trait TraitLocalModel
      */
     public function setConfigValue(string $path, $value)
     {
-        $config = $this->getData(self::fields_config);
+        $config = $this->getData(self::schema_fields_config);
         $data = [];
         
         if (!empty($config)) {
@@ -193,7 +117,7 @@ trait TraitLocalModel
             }
         }
         
-        $this->setData(self::fields_config, json_encode($data, JSON_UNESCAPED_UNICODE));
+        $this->setData(self::schema_fields_config, json_encode($data, JSON_UNESCAPED_UNICODE));
         return $this;
     }
     
@@ -204,7 +128,7 @@ trait TraitLocalModel
      */
     public function getConfig(): array
     {
-        $config = $this->getData(self::fields_config);
+        $config = $this->getData(self::schema_fields_config);
         if (empty($config)) {
             return [];
         }
@@ -221,7 +145,7 @@ trait TraitLocalModel
      */
     public function setConfig(array $config)
     {
-        $this->setData(self::fields_config, json_encode($config, JSON_UNESCAPED_UNICODE));
+        $this->setData(self::schema_fields_config, json_encode($config, JSON_UNESCAPED_UNICODE));
         return $this;
     }
 }
