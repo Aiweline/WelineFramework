@@ -9,28 +9,48 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Model;
 
-use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 
+#[Table(comment: '页面构建器-样式表')]
+#[Index(name: 'idx_code', columns: ['code'], comment: '样式代码索引')]
+#[Index(name: 'idx_is_active', columns: ['is_active'], comment: '状态索引')]
+#[Index(name: 'idx_is_published', columns: ['is_published'], comment: '发布状态索引')]
 class Style extends Model
 {
-    public const table = 'guolairen_page_builder_style';
-    
+    public const schema_table = 'guolairen_page_builder_style';
+    public const schema_primary_key = 'style_id';
+
+
     // 字段定义
-    public const fields_ID = 'style_id';
-    public const fields_CODE = 'code';
-    public const fields_NAME = 'name';
-    public const fields_DESCRIPTION = 'description';
-    public const fields_PATH = 'path';
-    public const fields_PREVIEW_IMAGE = 'preview_image';
-    public const fields_SUPPORTED_TYPES = 'supported_types';
-    public const fields_IS_ACTIVE = 'is_active';
-    public const fields_IS_PUBLISHED = 'is_published';
-    public const fields_SORT_ORDER = 'sort_order';
-    public const fields_CREATE_TIME = 'create_time';
-    public const fields_UPDATE_TIME = 'update_time';
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '样式ID')]
+    public const schema_fields_ID = 'style_id';
+    #[Col(type: 'varchar', length: 100, nullable: false, unique: true, comment: '样式代码(唯一)')]
+    public const schema_fields_CODE = 'code';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '样式名称')]
+    public const schema_fields_NAME = 'name';
+    #[Col(type: 'text', nullable: true, comment: '样式描述')]
+    public const schema_fields_DESCRIPTION = 'description';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '样式模板路径(相对于view/templates/)')]
+    public const schema_fields_PATH = 'path';
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: '预览图片路径')]
+    public const schema_fields_PREVIEW_IMAGE = 'preview_image';
+    #[Col(type: 'text', nullable: true, comment: '支持的页面类型(JSON数组)')]
+    public const schema_fields_SUPPORTED_TYPES = 'supported_types';
+    #[Col(type: 'smallint', length: 1, nullable: false, default: 1, comment: '是否启用:0禁用,1启用')]
+    public const schema_fields_IS_ACTIVE = 'is_active';
+    #[Col(type: 'smallint', length: 1, nullable: false, default: 0, comment: '是否发布:0未发布,1已发布(只有已发布的模板才能在页面创建时选择)')]
+    public const schema_fields_IS_PUBLISHED = 'is_published';
+    #[Col(type: 'int', nullable: false, default: 0, comment: '排序')]
+    public const schema_fields_SORT_ORDER = 'sort_order';
+    #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
+    public const schema_fields_CREATE_TIME = 'create_time';
+    #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '更新时间')]
+    public const schema_fields_UPDATE_TIME = 'update_time';
     
     // 页面类型常量（与Page模型对应）
     public const PAGE_TYPE_ALL = 'all';  // 支持所有类型
@@ -64,7 +84,7 @@ class Style extends Model
      */
     public function getSupportedTypes(): array
     {
-        $types = $this->getData(self::fields_SUPPORTED_TYPES);
+        $types = $this->getData(self::schema_fields_SUPPORTED_TYPES);
         if (empty($types)) {
             return [self::PAGE_TYPE_ALL]; // 默认支持所有类型
         }
@@ -77,7 +97,7 @@ class Style extends Model
      */
     public function setSupportedTypes(array $types): self
     {
-        return $this->setData(self::fields_SUPPORTED_TYPES, json_encode($types));
+        return $this->setData(self::schema_fields_SUPPORTED_TYPES, json_encode($types));
     }
 
     /**
@@ -99,14 +119,14 @@ class Style extends Model
         $query = $styleModel->clear();
         
         if ($activeOnly) {
-            $query->where(self::fields_IS_ACTIVE, 1);
+            $query->where(self::schema_fields_IS_ACTIVE, 1);
         }
         if ($publishedOnly) {
-            $query->where(self::fields_IS_PUBLISHED, 1);
+            $query->where(self::schema_fields_IS_PUBLISHED, 1);
         }
         
         $allStyles = $query
-            ->order(self::fields_SORT_ORDER, 'ASC')
+            ->order(self::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
@@ -176,7 +196,7 @@ class Style extends Model
             // 检查数据库中是否已存在
             $existing = clone $styleModel;
             $existing->clear()
-                ->where(self::fields_CODE, $styleName)
+                ->where(self::schema_fields_CODE, $styleName)
                 ->find()
                 ->fetch();
             
@@ -195,7 +215,7 @@ class Style extends Model
             
             if ($existing->getId()) {
                 // 检查文件是否有更新（比较修改时间）
-                $dbUpdateTime = strtotime($existing->getData(self::fields_UPDATE_TIME));
+                $dbUpdateTime = strtotime($existing->getData(self::schema_fields_UPDATE_TIME));
                 $fileModTime = max(
                     filemtime($headerFile),
                     filemtime($footerFile),
@@ -205,28 +225,28 @@ class Style extends Model
                 // 如果文件有更新，同步到数据库
                 if ($fileModTime > $dbUpdateTime) {
                     // 保留已有的预览图路径，只有当样式目录有新预览图时才覆盖
-                    $existingPreviewImage = $existing->getData(self::fields_PREVIEW_IMAGE);
+                    $existingPreviewImage = $existing->getData(self::schema_fields_PREVIEW_IMAGE);
                     $previewImageToSave = $filePreviewImage ?: $existingPreviewImage;
                     
-                    $existing->setData(self::fields_NAME, self::formatStyleNameStatic($styleName))
-                        ->setData(self::fields_DESCRIPTION, $description)
-                        ->setData(self::fields_PATH, 'style/' . $styleName)
-                        ->setData(self::fields_PREVIEW_IMAGE, $previewImageToSave)
-                        ->setData(self::fields_SUPPORTED_TYPES, json_encode($supportedTypes))
+                    $existing->setData(self::schema_fields_NAME, self::formatStyleNameStatic($styleName))
+                        ->setData(self::schema_fields_DESCRIPTION, $description)
+                        ->setData(self::schema_fields_PATH, 'style/' . $styleName)
+                        ->setData(self::schema_fields_PREVIEW_IMAGE, $previewImageToSave)
+                        ->setData(self::schema_fields_SUPPORTED_TYPES, json_encode($supportedTypes))
                         ->save();
                 }
             } else {
                 // 创建新样式
                 $newStyle = clone $styleModel;
                 $newStyle->clearData()
-                    ->setData(self::fields_CODE, $styleName)
-                    ->setData(self::fields_NAME, self::formatStyleNameStatic($styleName))
-                    ->setData(self::fields_DESCRIPTION, $description)
-                    ->setData(self::fields_PATH, 'style/' . $styleName)
-                    ->setData(self::fields_PREVIEW_IMAGE, $filePreviewImage)
-                    ->setData(self::fields_SUPPORTED_TYPES, json_encode($supportedTypes))
-                    ->setData(self::fields_IS_ACTIVE, 1)
-                    ->setData(self::fields_SORT_ORDER, 10)
+                    ->setData(self::schema_fields_CODE, $styleName)
+                    ->setData(self::schema_fields_NAME, self::formatStyleNameStatic($styleName))
+                    ->setData(self::schema_fields_DESCRIPTION, $description)
+                    ->setData(self::schema_fields_PATH, 'style/' . $styleName)
+                    ->setData(self::schema_fields_PREVIEW_IMAGE, $filePreviewImage)
+                    ->setData(self::schema_fields_SUPPORTED_TYPES, json_encode($supportedTypes))
+                    ->setData(self::schema_fields_IS_ACTIVE, 1)
+                    ->setData(self::schema_fields_SORT_ORDER, 10)
                     ->save(true);
             }
         }
@@ -258,12 +278,12 @@ class Style extends Model
         $fallbackStyle = $fileStyleCodes[0] ?? 'tpmst';
         
         foreach ($dbStyles as $dbStyle) {
-            $code = trim((string) $dbStyle->getData(self::fields_CODE));
-            $styleId = $dbStyle->getData(self::fields_ID);
+            $code = trim((string) $dbStyle->getData(self::schema_fields_CODE));
+            $styleId = $dbStyle->getData(self::schema_fields_ID);
             if ($code === '' || !in_array($code, $fileStyleCodes, true)) {
                 self::deleteStyleAndRelatedData($code, $fallbackStyle);
                 $styleModel->clear()
-                    ->where(self::fields_ID, $styleId)
+                    ->where(self::schema_fields_ID, $styleId)
                     ->delete()
                     ->fetch();
             }
@@ -277,33 +297,33 @@ class Style extends Model
     {
         $componentModel = \Weline\Framework\Manager\ObjectManager::getInstance(Component::class);
         $components = $componentModel->clear()
-            ->where(Component::fields_STYLE_CODE, $styleCode)
+            ->where(Component::schema_fields_STYLE_CODE, $styleCode)
             ->select()
             ->fetch()
             ->getItems();
         
         $componentIds = [];
         foreach ($components as $comp) {
-            $componentIds[] = $comp->getData(Component::fields_ID);
+            $componentIds[] = $comp->getData(Component::schema_fields_ID);
         }
         
         if (!empty($componentIds)) {
             $localDescModel = \Weline\Framework\Manager\ObjectManager::getInstance(Component\LocalDescription::class);
             $localDescModel->clear()
-                ->where(Component\LocalDescription::fields_ID, $componentIds, 'in')
+                ->where(Component\LocalDescription::schema_fields_ID, $componentIds, 'in')
                 ->delete()
                 ->fetch();
             
             $componentModel->clear()
-                ->where(Component::fields_STYLE_CODE, $styleCode)
+                ->where(Component::schema_fields_STYLE_CODE, $styleCode)
                 ->delete()
                 ->fetch();
         }
         
         $pageModel = \Weline\Framework\Manager\ObjectManager::getInstance(Page::class);
         $pageModel->clear()
-            ->where(Page::fields_STYLE, $styleCode)
-            ->update([Page::fields_STYLE => $fallbackStyle])
+            ->where(Page::schema_fields_STYLE, $styleCode)
+            ->update([Page::schema_fields_STYLE => $fallbackStyle])
             ->fetch();
     }
     
@@ -420,7 +440,7 @@ class Style extends Model
      */
     public function getHeaderPath(): string
     {
-        $path = $this->getData(self::fields_PATH);
+        $path = $this->getData(self::schema_fields_PATH);
         return $path . '/header.phtml';
     }
     
@@ -429,7 +449,7 @@ class Style extends Model
      */
     public function getFooterPath(): string
     {
-        $path = $this->getData(self::fields_PATH);
+        $path = $this->getData(self::schema_fields_PATH);
         return $path . '/footer.phtml';
     }
     
@@ -438,7 +458,7 @@ class Style extends Model
      */
     public function getContentPath(): string
     {
-        $path = $this->getData(self::fields_PATH);
+        $path = $this->getData(self::schema_fields_PATH);
         return $path . '/content.phtml';
     }
     
@@ -447,7 +467,7 @@ class Style extends Model
      */
     public function getContentConfigPath(): string
     {
-        $path = $this->getData(self::fields_PATH);
+        $path = $this->getData(self::schema_fields_PATH);
         return $path . '/content.phtml';
     }
     
@@ -457,7 +477,7 @@ class Style extends Model
     public function getReadmePath(): string
     {
         $basePath = BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/';
-        $path = $this->getData(self::fields_PATH);
+        $path = $this->getData(self::schema_fields_PATH);
         return $basePath . $path . '/readme.md';
     }
     
@@ -479,7 +499,7 @@ class Style extends Model
     public function validateStyleFiles(): array
     {
         $basePath = BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/';
-        $path = $this->getData(self::fields_PATH);
+        $path = $this->getData(self::schema_fields_PATH);
         $errors = [];
         
         // 检查header.phtml
@@ -538,7 +558,7 @@ class Style extends Model
     public function parseStyleConfig(): array
     {
         $basePath = BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/';
-        $path = $this->getData(self::fields_PATH);
+        $path = $this->getData(self::schema_fields_PATH);
         $groups = [];
         $configs = [];
         
@@ -1009,13 +1029,13 @@ class Style extends Model
      */
     private function scanColorSchemes(): array
     {
-        $styleCode = $this->getData(self::fields_CODE);
+        $styleCode = $this->getData(self::schema_fields_CODE);
         if (empty($styleCode)) {
             return [];
         }
         
         $basePath = BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/';
-        $stylePath = (string)$this->getData(self::fields_PATH);
+        $stylePath = (string)$this->getData(self::schema_fields_PATH);
         // 规范化分隔符，避免 Windows 下混合斜杠导致 glob 失效
         $stylePath = str_replace('\\', '/', $stylePath);
         $colorsDir = rtrim($basePath, '/\\') . '/' . trim($stylePath, '/\\') . '/colors';
@@ -1326,144 +1346,6 @@ class Style extends Model
     }
 
     /**
-     * 安装表结构
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        // 删除旧表（如果存在）- 仅在重建表结构时临时启用
-        // $setup->dropTable();
-        
-        // 检查表是否已存在
-        if ($setup->tableExist()) {
-            return;
-        }
-        
-        $setup->createTable('页面构建器-样式表')
-            ->addColumn(
-                self::fields_ID,
-                TableInterface::column_type_INTEGER,
-                0,
-                'primary key auto_increment',
-                '样式ID'
-            )
-            ->addColumn(
-                self::fields_CODE,
-                TableInterface::column_type_VARCHAR,
-                100,
-                'not null unique',
-                '样式代码(唯一)'
-            )
-            ->addColumn(
-                self::fields_NAME,
-                TableInterface::column_type_VARCHAR,
-                255,
-                'not null',
-                '样式名称'
-            )
-            ->addColumn(
-                self::fields_DESCRIPTION,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '样式描述'
-            )
-            ->addColumn(
-                self::fields_PATH,
-                TableInterface::column_type_VARCHAR,
-                255,
-                'not null',
-                '样式模板路径(相对于view/templates/)'
-            )
-            ->addColumn(
-                self::fields_PREVIEW_IMAGE,
-                TableInterface::column_type_VARCHAR,
-                255,
-                '',
-                '预览图片路径'
-            )
-            ->addColumn(
-                self::fields_SUPPORTED_TYPES,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '支持的页面类型(JSON数组)'
-            )
-            ->addColumn(
-                self::fields_IS_ACTIVE,
-                TableInterface::column_type_SMALLINT,
-                1,
-                'not null default 1',
-                '是否启用:0禁用,1启用'
-            )
-            ->addColumn(
-                self::fields_IS_PUBLISHED,
-                TableInterface::column_type_SMALLINT,
-                1,
-                'not null default 0',
-                '是否发布:0未发布,1已发布(只有已发布的模板才能在页面创建时选择)'
-            )
-            ->addColumn(
-                self::fields_SORT_ORDER,
-                TableInterface::column_type_INTEGER,
-                0,
-                'not null default 0',
-                '排序'
-            )
-            ->addColumn(
-                self::fields_CREATE_TIME,
-                TableInterface::column_type_DATETIME,
-                0,
-                'not null default CURRENT_TIMESTAMP',
-                '创建时间'
-            )
-            ->addColumn(
-                self::fields_UPDATE_TIME,
-                TableInterface::column_type_DATETIME,
-                0,
-                'not null default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP',
-                '更新时间'
-            )
-            ->addIndex(TableInterface::index_type_KEY, 'idx_code', [self::fields_CODE], '样式代码索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_is_active', [self::fields_IS_ACTIVE], '状态索引')
-            ->create();
-    }
-
-    /**
-     * 升级表结构
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 添加 is_published 字段（如果不存在）
-        if ($setup->tableExist() && !$setup->hasField(self::fields_IS_PUBLISHED)) {
-            $setup->alterTable()->addColumn(
-                self::fields_IS_PUBLISHED,
-                self::fields_IS_ACTIVE,
-                TableInterface::column_type_SMALLINT,
-                1,
-                'not null default 0',
-                '是否发布:0未发布,1已发布(只有已发布的模板才能在页面创建时选择)'
-            )
-            ->addIndex(TableInterface::index_type_KEY, 'idx_is_published', [self::fields_IS_PUBLISHED], '发布状态索引')
-            ->alter();
-        }
-        
-        // 添加 supported_types 字段（如果不存在）
-        if ($setup->tableExist() && !$setup->hasField(self::fields_SUPPORTED_TYPES)) {
-            $setup->alterTable()->addColumn(
-                self::fields_SUPPORTED_TYPES,
-                self::fields_PREVIEW_IMAGE,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '支持的页面类型(JSON数组)'
-            )->alter();
-        }
-        
-        // 扫描并注册默认样式模板
-        $this->scanAndRegisterStyles();
-    }
-    
-    /**
      * 扫描并注册样式模板
      */
     private function scanAndRegisterStyles(): void
@@ -1499,7 +1381,7 @@ class Style extends Model
             // 检查数据库中是否已存在
             $existing = clone $this;
             $existing->clear()
-                ->where(self::fields_CODE, $styleName)
+                ->where(self::schema_fields_CODE, $styleName)
                 ->find()
                 ->fetch();
             
@@ -1507,13 +1389,13 @@ class Style extends Model
                 // 创建新样式
                 $newStyle = clone $this;
                 $newStyle->clearData()
-                    ->setData(self::fields_CODE, $styleName)
-                    ->setData(self::fields_NAME, $this->formatStyleName($styleName))
-                    ->setData(self::fields_DESCRIPTION, $description)
-                    ->setData(self::fields_PATH, 'style/' . $styleName)
-                    ->setData(self::fields_SUPPORTED_TYPES, json_encode($supportedTypes))
-                    ->setData(self::fields_IS_ACTIVE, 1)
-                    ->setData(self::fields_SORT_ORDER, 10)
+                    ->setData(self::schema_fields_CODE, $styleName)
+                    ->setData(self::schema_fields_NAME, $this->formatStyleName($styleName))
+                    ->setData(self::schema_fields_DESCRIPTION, $description)
+                    ->setData(self::schema_fields_PATH, 'style/' . $styleName)
+                    ->setData(self::schema_fields_SUPPORTED_TYPES, json_encode($supportedTypes))
+                    ->setData(self::schema_fields_IS_ACTIVE, 1)
+                    ->setData(self::schema_fields_SORT_ORDER, 10)
                     ->save(true);
             }
         }
@@ -1551,13 +1433,6 @@ class Style extends Model
         $name = str_replace(['_', '-'], ' ', $code);
         return ucwords($name);
     }
-
-    /**
-     * 设置表结构
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
 }
+
 

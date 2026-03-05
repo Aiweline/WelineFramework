@@ -40,7 +40,7 @@ class PageService
      */
     public function getStyleCode(Page $page): string
     {
-        return $page->getData(Page::fields_STYLE) ?? '';
+        return $page->getData(Page::schema_fields_STYLE) ?? '';
     }
     
     /**
@@ -52,8 +52,8 @@ class PageService
         Style::autoScan();
         
         return $this->styleModel->clear()
-            ->where(Style::fields_IS_ACTIVE, 1)
-            ->order(Style::fields_SORT_ORDER, 'ASC')
+            ->where(Style::schema_fields_IS_ACTIVE, 1)
+            ->order(Style::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetch()
             ->getItems();

@@ -1799,12 +1799,11 @@ function generateSitemap() {
     formData.append('generate_all', '1');
     formData.append('use_providers', '1');
     
-    fetch('<?= $this->getBackendUrl('seo/backend/sitemap/generate') ?>', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
+    var url = '<?= $this->getBackendUrl('seo/backend/sitemap/generate') ?>';
+    var opts = { method: 'POST', body: formData };
+    var req = window.Weline.Api.request(url, opts);
+    req.then(function(res) {
+        var data = (res && res.data) || res;
         if (data.success) {
             SafeSwal.fire({
                 icon: 'success',
@@ -1861,17 +1860,13 @@ function loadAccountForm(accountId) {
     const url = '<?= $this->getBackendUrl('seo/backend/account/form', ['module' => $module, 'scope' => $scope]) ?>' + 
                 (accountId > 0 ? '&id=' + accountId : '');
     
-    // 发起请求
+    // 发起请求（返回 HTML，不使用 Weline.Api）
     fetch(url, {
         method: 'GET',
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        }
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
     .then(response => {
-        if (!response.ok) {
-            throw new Error('HTTP error! status: ' + response.status);
-        }
+        if (!response.ok) throw new Error('HTTP error! status: ' + response.status);
         return response.text();
     })
     .then(html => {
@@ -1908,12 +1903,11 @@ function handleAccountFormSubmit(event) {
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span><?= __("保存中...") ?>';
     }
     
-    fetch('<?= $this->getBackendUrl('seo/backend/account/save') ?>', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
+    var url = '<?= $this->getBackendUrl('seo/backend/account/save') ?>';
+    var opts = { method: 'POST', body: formData };
+    var req = window.Weline.Api.request(url, opts);
+    req.then(function(res) {
+        var data = (res && res.data) || res;
         if (data.success) {
             showMessage('success', data.message || '<?= __("确认") ?>');
             
@@ -1977,8 +1971,9 @@ async function loadAccountWebsitesConfig(accountId, container) {
     container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2">' + i18n.loading + '</p></div>';
     
     try {
-        const response = await fetch(`<?= $this->getBackendUrl('seo/backend/account/websites') ?>?account_id=${accountId}`);
-        const data = await response.json();
+        var url = '<?= $this->getBackendUrl('seo/backend/account/websites') ?>?account_id=' + accountId;
+        var res = await window.Weline.Api.get(url, { silent: true });
+        const data = (res && res.data) || res;
         
         if (!data.success) {
             throw new Error(data.message || i18n.loadFailed);
@@ -2159,17 +2154,11 @@ function saveWebsiteConfig(button) {
         }
     });
     
-    fetch('<?= $this->getBackendUrl('seo/backend/account/saveWebsiteConfig') ?>', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            account_id: accountId,
-            website_id: websiteId,
-            config: config
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
+    var url = '<?= $this->getBackendUrl('seo/backend/account/saveWebsiteConfig') ?>';
+    var opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account_id: accountId, website_id: websiteId, config: config }) };
+    var req = window.Weline.Api.request(url, opts);
+    req.then(function(res) {
+        var data = (res && res.data) || res;
         console.log('保存响应:', data);
         
         if (data.success) {
@@ -2258,16 +2247,11 @@ function unbindWebsiteFromAccount(accountId, websiteId) {
             }
         });
         
-        fetch('<?= $this->getBackendUrl('seo/backend/account/unbindWebsite') ?>', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                account_id: accountId,
-                website_id: websiteId
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
+        var url = '<?= $this->getBackendUrl('seo/backend/account/unbindWebsite') ?>';
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account_id: accountId, website_id: websiteId }) };
+        var req = window.Weline.Api.request(url, opts);
+        req.then(function(res) {
+            var data = (res && res.data) || res;
             console.log('解绑响应:', data);
             
             if (data.success) {
@@ -2318,13 +2302,11 @@ function deleteAccount(accountId) {
         cancelButtonText: '<?= __("取消") ?>'
     }).then((result) => {
         if (result.isConfirmed) {
-            fetch('<?= $this->getBackendUrl('seo/backend/account/delete') ?>', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: 'id=' + accountId
-            })
-            .then(response => response.json())
-            .then(data => {
+            var url = '<?= $this->getBackendUrl('seo/backend/account/delete') ?>';
+            var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + accountId };
+            var req = window.Weline.Api.request(url, opts);
+            req.then(function(res) {
+                var data = (res && res.data) || res;
                 if (data.success) {
                     SafeSwal.fire({
                         icon: 'success',
@@ -2373,14 +2355,10 @@ function loadAccountWebsiteBinding(accountId) {
     // 获取账户站点绑定信息
     const url = '<?= $this->getBackendUrl('seo/backend/account/websites') ?>' + '?account_id=' + accountId;
     
-    fetch(url, {
-        method: 'GET',
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
+    var opts = { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } };
+    var req = window.Weline.Api.get(url, { silent: true });
+    req.then(function(res) {
+        var data = (res && res.data) || res;
         if (data.success) {
             allAvailableWebsites = data.websites || [];
             selectedWebsiteIdsForAccount = data.bound_website_ids || [];
@@ -2631,18 +2609,11 @@ function saveAccountWebsiteBindings() {
         }
     });
     
-    fetch('<?= $this->getBackendUrl('seo/backend/account/saveWebsiteBindings') ?>', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data)
-    })
-    .then(response => {
-        console.log('保存响应:', response);
-        return response.json();
-    })
-    .then(resp => {
+    var url = '<?= $this->getBackendUrl('seo/backend/account/saveWebsiteBindings') ?>';
+    var opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) };
+    var req = window.Weline.Api.request(url, opts);
+    req.then(function(res) {
+        var resp = (res && res.data) || res;
         console.log('解析响应:', resp);
         
         if (resp.success) {

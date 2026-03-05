@@ -161,9 +161,9 @@ class ComponentService
     {
         $components = clone $this->componentModel;
         return $components->clear()
-            ->where(Component::fields_STYLE_CODE, self::SHARED_STYLE_CODE)
-            ->where(Component::fields_IS_ACTIVE, 1)
-            ->order(Component::fields_SORT_ORDER, 'ASC')
+            ->where(Component::schema_fields_STYLE_CODE, self::SHARED_STYLE_CODE)
+            ->where(Component::schema_fields_IS_ACTIVE, 1)
+            ->order(Component::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
@@ -445,8 +445,8 @@ class ComponentService
         if ($styleCode) {
             $component = clone $this->componentModel;
             $component->clear()
-                ->where(Component::fields_CODE, $normalizedCode)
-                ->where(Component::fields_STYLE_CODE, $styleCode)
+                ->where(Component::schema_fields_CODE, $normalizedCode)
+                ->where(Component::schema_fields_STYLE_CODE, $styleCode)
                 ->find()
                 ->fetch();
             
@@ -458,8 +458,8 @@ class ComponentService
         // 2. 尝试只用标准化后的 code 查找
         $component = clone $this->componentModel;
         $component->clear()
-            ->where(Component::fields_CODE, $normalizedCode)
-            ->where(Component::fields_IS_ACTIVE, 1)
+            ->where(Component::schema_fields_CODE, $normalizedCode)
+            ->where(Component::schema_fields_IS_ACTIVE, 1)
             ->find()
             ->fetch();
         
@@ -471,8 +471,8 @@ class ComponentService
         if ($normalizedCode !== $componentCode) {
             $component = clone $this->componentModel;
             $component->clear()
-                ->where(Component::fields_CODE, $componentCode)
-                ->where(Component::fields_IS_ACTIVE, 1)
+                ->where(Component::schema_fields_CODE, $componentCode)
+                ->where(Component::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
             
@@ -540,13 +540,13 @@ class ComponentService
         // 尝试每种可能的代码
         foreach (array_unique($possibleCodes) as $code) {
             $component = clone $this->componentModel;
-            $query = $component->clear()->where(Component::fields_CODE, $code);
+            $query = $component->clear()->where(Component::schema_fields_CODE, $code);
             
             if ($styleCode) {
-                $query->where(Component::fields_STYLE_CODE, $styleCode);
+                $query->where(Component::schema_fields_STYLE_CODE, $styleCode);
             }
             
-            $query->where(Component::fields_IS_ACTIVE, 1)->find()->fetch();
+            $query->where(Component::schema_fields_IS_ACTIVE, 1)->find()->fetch();
             
             if ($component->getId()) {
                 return $component;
@@ -576,8 +576,8 @@ class ComponentService
             throw new \Exception('组件不存在: ' . $componentCode);
         }
         
-        $styleCode = $component->getData(Component::fields_STYLE_CODE);
-        $path = $component->getData(Component::fields_PATH);
+        $styleCode = $component->getData(Component::schema_fields_STYLE_CODE);
+        $path = $component->getData(Component::schema_fields_PATH);
         
         if (empty($path)) {
             throw new \Exception('组件路径未定义: ' . $componentCode);
@@ -719,8 +719,8 @@ class ComponentService
         ob_start();
         
         try {
-            $componentCode = $component->getData(Component::fields_CODE);
-            $styleCode = $component->getData(Component::fields_STYLE_CODE);
+            $componentCode = $component->getData(Component::schema_fields_CODE);
+            $styleCode = $component->getData(Component::schema_fields_STYLE_CODE);
             // 直接通过模板渲染获取组件 HTML（使用组件所属模板）
             $html = $this->renderPreview($componentCode, [], $styleCode);
             
@@ -753,10 +753,10 @@ class ComponentService
      */
     public function toArray(Component $component, bool $includePreview = false): array
     {
-        $styleCode = $component->getData(Component::fields_STYLE_CODE);
-        $thumbnail = $component->getData(Component::fields_THUMBNAIL);
-        $category = $component->getData(Component::fields_CATEGORY);
-        $componentCode = $component->getData(Component::fields_CODE);
+        $styleCode = $component->getData(Component::schema_fields_STYLE_CODE);
+        $thumbnail = $component->getData(Component::schema_fields_THUMBNAIL);
+        $category = $component->getData(Component::schema_fields_CATEGORY);
+        $componentCode = $component->getData(Component::schema_fields_CODE);
         
         // 构建缩略图完整路径
         $thumbnailUrl = '';
@@ -785,22 +785,22 @@ class ComponentService
         $result = [
             'id' => $component->getId(),
             'code' => $componentCode,
-            'name' => $component->getData(Component::fields_NAME),
-            'description' => $component->getData(Component::fields_DESCRIPTION),
+            'name' => $component->getData(Component::schema_fields_NAME),
+            'description' => $component->getData(Component::schema_fields_DESCRIPTION),
             'style_code' => $styleCode,
             'category' => $category,
             'region' => $region,
-            'type' => $component->getData(Component::fields_TYPE),
+            'type' => $component->getData(Component::schema_fields_TYPE),
             'thumbnail' => $thumbnail,
             'thumbnail_url' => $thumbnailUrl,
             'icon' => $icon, // 组件图标（用于预览缩略图的后备显示）
             'config_schema' => $configSchema,
             'default_config' => $component->getDefaultConfig(),
             'compatible_styles' => $component->getCompatibleStyles(),
-            'is_system' => (bool)$component->getData(Component::fields_IS_SYSTEM),
+            'is_system' => (bool)$component->getData(Component::schema_fields_IS_SYSTEM),
             'is_shared' => $styleCode === self::SHARED_STYLE_CODE,
-            'is_ai_generated' => (bool)$component->getData(Component::fields_IS_AI_GENERATED),
-            'sort_order' => (int)$component->getData(Component::fields_SORT_ORDER),
+            'is_ai_generated' => (bool)$component->getData(Component::schema_fields_IS_AI_GENERATED),
+            'sort_order' => (int)$component->getData(Component::schema_fields_SORT_ORDER),
             'preview_html' => '',
             'preview_html_encoded' => false, // 标记预览HTML是否已编码
         ];

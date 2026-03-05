@@ -700,9 +700,9 @@ class LayoutAssembler
         // 先精确匹配 code + style_code
         $component = clone $componentModel;
         $component->clear()
-            ->where(\GuoLaiRen\PageBuilder\Model\Component::fields_CODE, $componentCode)
-            ->where(\GuoLaiRen\PageBuilder\Model\Component::fields_STYLE_CODE, $styleCode)
-            ->where(\GuoLaiRen\PageBuilder\Model\Component::fields_IS_ACTIVE, 1)
+            ->where(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_CODE, $componentCode)
+            ->where(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_STYLE_CODE, $styleCode)
+            ->where(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_IS_ACTIVE, 1)
             ->find()
             ->fetch();
         
@@ -716,9 +716,9 @@ class LayoutAssembler
             
             $component = clone $componentModel;
             $component->clear()
-                ->where(\GuoLaiRen\PageBuilder\Model\Component::fields_CODE, $normalizedCode)
-                ->where(\GuoLaiRen\PageBuilder\Model\Component::fields_STYLE_CODE, $styleCode)
-                ->where(\GuoLaiRen\PageBuilder\Model\Component::fields_IS_ACTIVE, 1)
+                ->where(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_CODE, $normalizedCode)
+                ->where(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_STYLE_CODE, $styleCode)
+                ->where(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
         }
@@ -727,8 +727,8 @@ class LayoutAssembler
         if (!$component->getId()) {
             $component = clone $componentModel;
             $component->clear()
-                ->where(\GuoLaiRen\PageBuilder\Model\Component::fields_CODE, $componentCode)
-                ->where(\GuoLaiRen\PageBuilder\Model\Component::fields_IS_ACTIVE, 1)
+                ->where(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_CODE, $componentCode)
+                ->where(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
         }
@@ -738,8 +738,8 @@ class LayoutAssembler
         }
         
         // 获取组件文件路径
-        $path = $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_PATH);
-        $componentStyleCode = $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_STYLE_CODE);
+        $path = $component->getData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_PATH);
+        $componentStyleCode = $component->getData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_STYLE_CODE);
         
         if (empty($path)) {
             return null;
@@ -756,15 +756,15 @@ class LayoutAssembler
         $configSchema = $component->getConfigSchema();
         $metadata = [
             'code' => $componentCode,
-            'actual_code' => $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_CODE),
+            'actual_code' => $component->getData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_CODE),
             'file' => basename($path),
             'style_code' => $componentStyleCode,
-            'name' => $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_NAME),
-            'description' => $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_DESCRIPTION),
-            'category' => $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_CATEGORY),
-            'region' => $configSchema['region'] ?? $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_CATEGORY),
-            'type' => $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_TYPE),
-            'thumbnail' => $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_THUMBNAIL),
+            'name' => $component->getData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_NAME),
+            'description' => $component->getData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_DESCRIPTION),
+            'category' => $component->getData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_CATEGORY),
+            'region' => $configSchema['region'] ?? $component->getData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_CATEGORY),
+            'type' => $component->getData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_TYPE),
+            'thumbnail' => $component->getData(\GuoLaiRen\PageBuilder\Model\Component::schema_fields_THUMBNAIL),
             'config_groups' => $configSchema['config_groups'] ?? [],
             'fields' => $this->parseComponentFields($fullPath),
         ];

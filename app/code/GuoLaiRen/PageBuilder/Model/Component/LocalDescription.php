@@ -16,15 +16,16 @@ use GuoLaiRen\PageBuilder\Model\Component;
 
 class LocalDescription extends LocalModel
 {
-    public const table = 'guolairen_page_builder_component_local_description';
+    public const schema_table = 'guolairen_page_builder_component_local_description';
+    public const schema_primary_key = 'local_description_id';
     public const indexer = 'component_local_description';
     
     // 关联主表ID
-    public const fields_ID = Component::fields_ID;
+    public const schema_fields_ID = Component::schema_fields_ID;
     
     // 多语言字段
-    public const fields_NAME = 'name';
-    public const fields_DESCRIPTION = 'description';
+    public const schema_fields_NAME = 'name';
+    public const schema_fields_DESCRIPTION = 'description';
     
     // AI组件生成历史信息字段（存储在config字段中）
     // config.ai_generation_history 存储历史生成参数

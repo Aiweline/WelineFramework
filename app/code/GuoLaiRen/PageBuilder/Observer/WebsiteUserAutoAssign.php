@@ -50,16 +50,16 @@ class WebsiteUserAutoAssign implements ObserverInterface
         // 先删除该站点之前的归属关系（一个站点只能绑定一个用户）
         $mappingCleaner = clone $this->websiteUser;
         $mappingCleaner->clear()
-            ->where(WebsiteUser::fields_WEBSITE_ID, $websiteId)
+            ->where(WebsiteUser::schema_fields_WEBSITE_ID, $websiteId)
             ->delete()
             ->fetch();
 
         // 为当前用户建立新的归属关系
         $newMapping = clone $this->websiteUser;
         $newMapping->clear()
-            ->setData(WebsiteUser::fields_WEBSITE_ID, $websiteId)
-            ->setData(WebsiteUser::fields_BACKEND_USER_ID, $backendUserId)
-            ->setData(WebsiteUser::fields_IS_OWNER, 1)
+            ->setData(WebsiteUser::schema_fields_WEBSITE_ID, $websiteId)
+            ->setData(WebsiteUser::schema_fields_BACKEND_USER_ID, $backendUserId)
+            ->setData(WebsiteUser::schema_fields_IS_OWNER, 1)
             ->save(true);
     }
 }

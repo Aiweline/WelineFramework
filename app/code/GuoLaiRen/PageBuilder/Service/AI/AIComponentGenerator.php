@@ -142,8 +142,8 @@ class AIComponentGenerator
         // 检查是否已存在同名组件
         $existing = clone $componentModel;
         $existing->clear()
-            ->where(Component::fields_CODE, $result->getCode())
-            ->where(Component::fields_STYLE_CODE, Component::STYLE_CODE_AI_GENERATED)
+            ->where(Component::schema_fields_CODE, $result->getCode())
+            ->where(Component::schema_fields_STYLE_CODE, Component::STYLE_CODE_AI_GENERATED)
             ->find()
             ->fetch();
         
@@ -157,26 +157,26 @@ class AIComponentGenerator
         }
         
         // 设置组件数据
-        $component->setData(Component::fields_CODE, $result->getCode());
-        $component->setData(Component::fields_NAME, $result->getName());
-        $component->setData(Component::fields_DESCRIPTION, $result->getDescription());
-        $component->setData(Component::fields_STYLE_CODE, Component::STYLE_CODE_AI_GENERATED);
-        $component->setData(Component::fields_CATEGORY, $result->getCategory());
-        $component->setData(Component::fields_TYPE, Component::TYPE_SECTION);
-        $component->setData(Component::fields_COMPATIBLE_STYLES, json_encode(['*']));
-        $component->setData(Component::fields_IS_ACTIVE, 1);
-        $component->setData(Component::fields_IS_SYSTEM, 0);
-        $component->setData(Component::fields_SORT_ORDER, 100);
+        $component->setData(Component::schema_fields_CODE, $result->getCode());
+        $component->setData(Component::schema_fields_NAME, $result->getName());
+        $component->setData(Component::schema_fields_DESCRIPTION, $result->getDescription());
+        $component->setData(Component::schema_fields_STYLE_CODE, Component::STYLE_CODE_AI_GENERATED);
+        $component->setData(Component::schema_fields_CATEGORY, $result->getCategory());
+        $component->setData(Component::schema_fields_TYPE, Component::TYPE_SECTION);
+        $component->setData(Component::schema_fields_COMPATIBLE_STYLES, json_encode(['*']));
+        $component->setData(Component::schema_fields_IS_ACTIVE, 1);
+        $component->setData(Component::schema_fields_IS_SYSTEM, 0);
+        $component->setData(Component::schema_fields_SORT_ORDER, 100);
         
         // 设置组件路径（必填字段）
         $category = $result->getCategory() ?: 'content';
         $componentPath = 'style/_ai_generated/components/' . $category . '/' . $result->getCode() . '.phtml';
-        $component->setData(Component::fields_PATH, $componentPath);
+        $component->setData(Component::schema_fields_PATH, $componentPath);
         
         // 设置 AI 相关字段
         $component->setAIGenerated(true);
         $component->setAIPrompt($result->getPrompt());
-        $component->setData(Component::fields_AI_VERSION, self::AI_VERSION);
+        $component->setData(Component::schema_fields_AI_VERSION, self::AI_VERSION);
         $component->setTemplateContent($result->getTemplateContent());
         
         // 设置配置 schema
@@ -186,7 +186,7 @@ class AIComponentGenerator
             'icon' => 'bi-robot',
             'ai_generated' => true,
         ];
-        $component->setData(Component::fields_CONFIG_SCHEMA, json_encode($configSchema, JSON_UNESCAPED_UNICODE));
+        $component->setData(Component::schema_fields_CONFIG_SCHEMA, json_encode($configSchema, JSON_UNESCAPED_UNICODE));
         
         // 保存到数据库
         if ($existing->getId()) {
@@ -702,11 +702,11 @@ HTML;
         
         // 更新允许的字段
         $allowedFields = [
-            'name' => Component::fields_NAME,
-            'description' => Component::fields_DESCRIPTION,
-            'template_content' => Component::fields_TEMPLATE_CONTENT,
-            'is_active' => Component::fields_IS_ACTIVE,
-            'sort_order' => Component::fields_SORT_ORDER,
+            'name' => Component::schema_fields_NAME,
+            'description' => Component::schema_fields_DESCRIPTION,
+            'template_content' => Component::schema_fields_TEMPLATE_CONTENT,
+            'is_active' => Component::schema_fields_IS_ACTIVE,
+            'sort_order' => Component::schema_fields_SORT_ORDER,
         ];
         
         foreach ($updates as $key => $value) {
@@ -717,7 +717,7 @@ HTML;
         
         // 如果模板内容更新了，需要重新生成实体文件
         if (isset($updates['template_content'])) {
-            $component->setData(Component::fields_AI_VERSION, self::AI_VERSION);
+            $component->setData(Component::schema_fields_AI_VERSION, self::AI_VERSION);
         }
         
         $component->save();
@@ -751,7 +751,7 @@ HTML;
             return ['has_references' => false, 'references' => []];
         }
         
-        $componentCode = $component->getData(Component::fields_CODE);
+        $componentCode = $component->getData(Component::schema_fields_CODE);
         $references = [];
         
         $pageLayoutModel = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Model\PageLayout::class);
@@ -759,20 +759,20 @@ HTML;
         
         $layouts = clone $pageLayoutModel;
         $layouts->clear()
-            ->where(\GuoLaiRen\PageBuilder\Model\PageLayout::fields_IS_ACTIVE, 1)
+            ->where(\GuoLaiRen\PageBuilder\Model\PageLayout::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetch();
         
         foreach ($layouts->getItems() as $layout) {
-            $pageId = (int)$layout->getData(\GuoLaiRen\PageBuilder\Model\PageLayout::fields_PAGE_ID);
+            $pageId = (int)$layout->getData(\GuoLaiRen\PageBuilder\Model\PageLayout::schema_fields_PAGE_ID);
             $usedIn = [];
             
-            $headerComponent = $layout->getData(\GuoLaiRen\PageBuilder\Model\PageLayout::fields_HEADER_COMPONENT);
+            $headerComponent = $layout->getData(\GuoLaiRen\PageBuilder\Model\PageLayout::schema_fields_HEADER_COMPONENT);
             if ($headerComponent === $componentCode) {
                 $usedIn[] = 'header';
             }
             
-            $footerComponent = $layout->getData(\GuoLaiRen\PageBuilder\Model\PageLayout::fields_FOOTER_COMPONENT);
+            $footerComponent = $layout->getData(\GuoLaiRen\PageBuilder\Model\PageLayout::schema_fields_FOOTER_COMPONENT);
             if ($footerComponent === $componentCode) {
                 $usedIn[] = 'footer';
             }
@@ -793,8 +793,8 @@ HTML;
                 if ($page->getId()) {
                     $references[] = [
                         'page_id' => $pageId,
-                        'page_name' => $page->getData(\GuoLaiRen\PageBuilder\Model\Page::fields_NAME) ?: $page->getData(\GuoLaiRen\PageBuilder\Model\Page::fields_TITLE),
-                        'page_handle' => $page->getData(\GuoLaiRen\PageBuilder\Model\Page::fields_HANDLE),
+                        'page_name' => $page->getData(\GuoLaiRen\PageBuilder\Model\Page::schema_fields_NAME) ?: $page->getData(\GuoLaiRen\PageBuilder\Model\Page::schema_fields_TITLE),
+                        'page_handle' => $page->getData(\GuoLaiRen\PageBuilder\Model\Page::schema_fields_HANDLE),
                         'used_in' => $usedIn,
                     ];
                 }
@@ -805,7 +805,7 @@ HTML;
             'has_references' => !empty($references),
             'references' => $references,
             'component_code' => $componentCode,
-            'component_name' => $component->getData(Component::fields_NAME),
+            'component_name' => $component->getData(Component::schema_fields_NAME),
         ];
     }
     

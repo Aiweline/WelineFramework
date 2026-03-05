@@ -113,7 +113,7 @@ class LayoutOwnerResolver
     public function getFullLayoutConfig(Page $page, bool $forBackend = false): array
     {
         $layoutOwnerPageId = $this->resolveLayoutOwnerPageId($page);
-        $pageType = $page->getData(Page::fields_TYPE);
+        $pageType = $page->getData(Page::schema_fields_TYPE);
         $styleCode = $page->getData('style') ?: 'default';
         
         // 虚拟页面（id=0）处理：直接使用默认布局配置，不访问数据库
@@ -334,10 +334,10 @@ class LayoutOwnerResolver
         
         return [
             'page_id' => $layoutPage->getId(),
-            'name' => $layoutPage->getData(Page::fields_NAME),
-            'title' => $layoutPage->getData(Page::fields_TITLE),
-            'handle' => $layoutPage->getData(Page::fields_HANDLE),
-            'type' => $layoutPage->getData(Page::fields_TYPE),
+            'name' => $layoutPage->getData(Page::schema_fields_NAME),
+            'title' => $layoutPage->getData(Page::schema_fields_TITLE),
+            'handle' => $layoutPage->getData(Page::schema_fields_HANDLE),
+            'type' => $layoutPage->getData(Page::schema_fields_TYPE),
             'type_name' => $layoutPage->getTypeName(),
         ];
     }
@@ -357,7 +357,7 @@ class LayoutOwnerResolver
     public function saveLayoutConfig(Page $page, array $config): PageLayout
     {
         $layoutOwnerPageId = $this->resolveLayoutOwnerPageId($page);
-        $pageType = $page->getData(Page::fields_TYPE);
+        $pageType = $page->getData(Page::schema_fields_TYPE);
         
         // 处理 header/footer：始终保存到首页
         if ($pageType !== Page::TYPE_HOME) {
