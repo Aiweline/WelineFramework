@@ -435,15 +435,11 @@ function togglePublish(styleId, isPublished) {
     formData.append('style_id', styleId);
     formData.append('is_published', isPublished);
     
-    fetch('<?= $this->getBackendUrl('*/backend/template/togglePublish') ?>', {
-        method: 'POST',
-        body: formData,
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
+    var tplUrl = '<?= $this->getBackendUrl('*/backend/template/togglePublish') ?>';
+    var tplOpts = { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } };
+    window.Weline.Api.request(tplUrl, tplOpts)
+    .then(function(res) {
+        var data = (res && res.data) !== undefined ? res.data : res;
         if (data.success) {
             location.reload();
         } else {
