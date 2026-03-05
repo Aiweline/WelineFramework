@@ -25,9 +25,9 @@ class ReportService
         $order = ObjectManager::getInstance(Order::class);
         
         $orders = $order->clear()
-            ->where(Order::fields_created_at, ['>=', $startDate])
-            ->where(Order::fields_created_at, ['<=', $endDate])
-            ->where(Order::fields_status, 'completed')
+            ->where(Order::schema_fields_created_at, ['>=', $startDate])
+            ->where(Order::schema_fields_created_at, ['<=', $endDate])
+            ->where(Order::schema_fields_status, 'completed')
             ->select()
             ->fetchArray();
         
