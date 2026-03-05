@@ -124,14 +124,14 @@ class Order extends BackendController
             // 获取订单历史
             $historyModel = ObjectManager::getInstance(\Weline\Order\Model\OrderHistory::class);
             $history = $historyModel->reset()
-                ->where(\Weline\Order\Model\OrderHistory::fields_ORDER_ID, $orderId)
-                ->order(\Weline\Order\Model\OrderHistory::fields_CREATED_AT, 'DESC')
+                ->where(\Weline\Order\Model\OrderHistory::schema_fields_ORDER_ID, $orderId)
+                ->order(\Weline\Order\Model\OrderHistory::schema_fields_CREATED_AT, 'DESC')
                 ->select()
                 ->fetch()
                 ->getItems();
             
             // 获取可用状态转换
-            $currentStatus = $order->getData(OrderModel::fields_STATUS);
+            $currentStatus = $order->getData(OrderModel::schema_fields_STATUS);
             $availableTransitions = $this->stateMachine->getAvailableTransitions($currentStatus);
             
             $this->assign('order', $order);

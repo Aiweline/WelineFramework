@@ -64,10 +64,10 @@ class OrderStatusChangedObserver implements ObserverInterface
     {
         /** @var OrderHistory $history */
         $history = ObjectManager::getInstance(OrderHistory::class);
-        $history->setData(OrderHistory::fields_ORDER_ID, $orderId)
-                ->setData(OrderHistory::fields_STATUS, $status)
-                ->setData(OrderHistory::fields_COMMENT, $comment)
-                ->setData(OrderHistory::fields_IS_CUSTOMER_NOTIFIED, $notifyCustomer ? 1 : 0)
+        $history->setData(OrderHistory::schema_fields_ORDER_ID, $orderId)
+                ->setData(OrderHistory::schema_fields_STATUS, $status)
+                ->setData(OrderHistory::schema_fields_COMMENT, $comment)
+                ->setData(OrderHistory::schema_fields_IS_CUSTOMER_NOTIFIED, $notifyCustomer ? 1 : 0)
                 ->save();
     }
     

@@ -42,7 +42,7 @@ class Status extends BackendController
     {
         /** @var OrderStatus $statusModel */
         $statusModel = ObjectManager::getInstance(OrderStatus::class);
-        $statuses = $statusModel->order(OrderStatus::fields_SORT_ORDER, 'ASC')
+        $statuses = $statusModel->order(OrderStatus::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetch();
         
@@ -75,12 +75,12 @@ class Status extends BackendController
         if ($statusModel->getId()) {
             /** @var OrderStatusTranslation $translationModel */
             $translationModel = ObjectManager::getInstance(OrderStatusTranslation::class);
-            $translationList = $translationModel->where(OrderStatusTranslation::fields_STATUS_CODE, $statusModel->getData(OrderStatus::fields_CODE))
+            $translationList = $translationModel->where(OrderStatusTranslation::schema_fields_STATUS_CODE, $statusModel->getData(OrderStatus::schema_fields_CODE))
                 ->select()
                 ->fetch();
             
             foreach ($translationList as $translation) {
-                $translations[$translation->getData(OrderStatusTranslation::fields_LOCALE)] = $translation;
+                $translations[$translation->getData(OrderStatusTranslation::schema_fields_LOCALE)] = $translation;
             }
         }
         
@@ -121,9 +121,9 @@ class Status extends BackendController
             }
             $oldStatus = clone $statusModel;
             // 如果修改了代码，检查新代码是否已存在
-            if ($statusModel->getData(OrderStatus::fields_CODE) !== $code) {
+            if ($statusModel->getData(OrderStatus::schema_fields_CODE) !== $code) {
                 $existing = ObjectManager::getInstance(OrderStatus::class);
-                $existing->load(OrderStatus::fields_CODE, $code);
+                $existing->load(OrderStatus::schema_fields_CODE, $code);
                 if ($existing->getId()) {
                     return $this->error(__('状态代码已存在'));
                 }
@@ -131,7 +131,7 @@ class Status extends BackendController
         } else {
             // 新建时检查代码是否已存在
             $existing = ObjectManager::getInstance(OrderStatus::class);
-            $existing->load(OrderStatus::fields_CODE, $code);
+            $existing->load(OrderStatus::schema_fields_CODE, $code);
             if ($existing->getId()) {
                 return $this->error(__('状态代码已存在'));
             }
@@ -152,13 +152,13 @@ class Status extends BackendController
         ];
         $this->eventsManager->dispatch('Weline_Order::order_status_save_before', $eventData);
         
-        $statusModel->setData(OrderStatus::fields_CODE, $code)
-            ->setData(OrderStatus::fields_NAME, $name)
-            ->setData(OrderStatus::fields_DESCRIPTION, $description)
-            ->setData(OrderStatus::fields_COLOR, $color)
-            ->setData(OrderStatus::fields_ICON, $icon)
-            ->setData(OrderStatus::fields_IS_ACTIVE, $isActive)
-            ->setData(OrderStatus::fields_SORT_ORDER, $sortOrder)
+        $statusModel->setData(OrderStatus::schema_fields_CODE, $code)
+            ->setData(OrderStatus::schema_fields_NAME, $name)
+            ->setData(OrderStatus::schema_fields_DESCRIPTION, $description)
+            ->setData(OrderStatus::schema_fields_COLOR, $color)
+            ->setData(OrderStatus::schema_fields_ICON, $icon)
+            ->setData(OrderStatus::schema_fields_IS_ACTIVE, $isActive)
+            ->setData(OrderStatus::schema_fields_SORT_ORDER, $sortOrder)
             ->save();
         
         // 保存翻译
@@ -172,15 +172,15 @@ class Status extends BackendController
                 }
                 
                 $translationModel->reset();
-                $translationModel->where(OrderStatusTranslation::fields_STATUS_CODE, $code)
-                    ->where(OrderStatusTranslation::fields_LOCALE, $locale)
+                $translationModel->where(OrderStatusTranslation::schema_fields_STATUS_CODE, $code)
+                    ->where(OrderStatusTranslation::schema_fields_LOCALE, $locale)
                     ->find()
                     ->fetch();
                 
-                $translationModel->setData(OrderStatusTranslation::fields_STATUS_CODE, $code)
-                    ->setData(OrderStatusTranslation::fields_LOCALE, $locale)
-                    ->setData(OrderStatusTranslation::fields_NAME, $translationData['name'])
-                    ->setData(OrderStatusTranslation::fields_DESCRIPTION, $translationData['description'] ?? '')
+                $translationModel->setData(OrderStatusTranslation::schema_fields_STATUS_CODE, $code)
+                    ->setData(OrderStatusTranslation::schema_fields_LOCALE, $locale)
+                    ->setData(OrderStatusTranslation::schema_fields_NAME, $translationData['name'])
+                    ->setData(OrderStatusTranslation::schema_fields_DESCRIPTION, $translationData['description'] ?? '')
                     ->save();
             }
         }
@@ -222,7 +222,7 @@ class Status extends BackendController
         
         // 检查是否有订单使用此状态
         $orderModel = ObjectManager::getInstance(\Weline\Order\Model\Order::class);
-        $count = $orderModel->where(\Weline\Order\Model\Order::fields_STATUS, $statusModel->getData(OrderStatus::fields_CODE))
+        $count = $orderModel->where(\Weline\Order\Model\Order::schema_fields_STATUS, $statusModel->getData(OrderStatus::schema_fields_CODE))
             ->count();
         
         if ($count > 0) {
@@ -233,14 +233,14 @@ class Status extends BackendController
         $eventData = [
             'status' => $statusModel,
             'status_id' => $id,
-            'code' => $statusModel->getData(OrderStatus::fields_CODE),
+            'code' => $statusModel->getData(OrderStatus::schema_fields_CODE),
         ];
         $this->eventsManager->dispatch('Weline_Order::order_status_delete_before', $eventData);
         
         // 删除翻译
         /** @var OrderStatusTranslation $translationModel */
         $translationModel = ObjectManager::getInstance(OrderStatusTranslation::class);
-        $translationModel->where(OrderStatusTranslation::fields_STATUS_CODE, $statusModel->getData(OrderStatus::fields_CODE))
+        $translationModel->where(OrderStatusTranslation::schema_fields_STATUS_CODE, $statusModel->getData(OrderStatus::schema_fields_CODE))
             ->delete();
         
         // 删除状态
@@ -276,7 +276,7 @@ class Status extends BackendController
         }
         
         $isActive = $statusModel->isActive() ? 0 : 1;
-        $statusModel->setData(OrderStatus::fields_IS_ACTIVE, $isActive)
+        $statusModel->setData(OrderStatus::schema_fields_IS_ACTIVE, $isActive)
             ->save();
         
         return $this->success(__('状态状态已更新'));

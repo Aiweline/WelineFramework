@@ -74,7 +74,7 @@ class Refund extends BackendController
         
         try {
             $refund = $this->refundService->processRefund($refundId);
-            $orderId = (int)$refund->getData(\Weline\Order\Model\OrderRefund::fields_ORDER_ID);
+            $orderId = (int)$refund->getData(\Weline\Order\Model\OrderRefund::schema_fields_ORDER_ID);
             $this->getMessageManager()->addSuccess(__('退款处理成功'));
             $this->redirect('order/backend/order/view?id=' . $orderId);
         } catch (\Exception $e) {

@@ -126,15 +126,11 @@
     'use strict';
     
     function performDelete(id) {
-        fetch('<?= $this->getBackendUrl("order/backend/status/delete") ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: 'id=' + encodeURIComponent(id)
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
+        var url = '<?= $this->getBackendUrl("order/backend/status/delete") ?>';
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + encodeURIComponent(id) };
+                window.Weline.Api.request(url, opts)
+        .then(function(res) {
+            var data = (res && res.data) !== undefined ? res.data : res;
             if (data.success) {
                 if (typeof AdminToast !== 'undefined') {
                     AdminToast.success('<?= __('状态已删除') ?>');
@@ -160,15 +156,11 @@
             btn.addEventListener('click', function() {
                 var id = this.getAttribute('data-id');
                 
-                fetch('<?= $this->getBackendUrl("order/backend/status/toggle") ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: 'id=' + encodeURIComponent(id)
-                })
-                .then(function(response) { return response.json(); })
-                .then(function(data) {
+                var url = '<?= $this->getBackendUrl("order/backend/status/toggle") ?>';
+                var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + encodeURIComponent(id) };
+                window.Weline.Api.request(url, opts)
+                .then(function(res) {
+                    var data = (res && res.data) !== undefined ? res.data : res;
                     if (data.success) {
                         location.reload();
                     } else {
