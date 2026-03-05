@@ -170,10 +170,10 @@ class LayoutDependencyTracker
             
             // 查询该主题在指定命名空间下的变量配置，且更新时间在指定时间之后
             $metaConfig->clearQuery()
-                ->where(MetaConfig::fields_IDENTIFY_ID, (string)$theme->getId())
-                ->where(MetaConfig::fields_NAMESPACE, $namespace)
-                ->where(MetaConfig::fields_CONFIG_KEY, $configKeyPrefix, 'LIKE')
-                ->where(MetaConfig::fields_UPDATE_TIME, $sinceTimestamp, '>');
+                ->where(MetaConfig::schema_fields_IDENTIFY_ID, (string)$theme->getId())
+                ->where(MetaConfig::schema_fields_NAMESPACE, $namespace)
+                ->where(MetaConfig::schema_fields_CONFIG_KEY, $configKeyPrefix, 'LIKE')
+                ->where(MetaConfig::schema_fields_UPDATE_TIME, $sinceTimestamp, '>');
             
             $collection = $metaConfig->select()->fetch();
             $items = $collection->getItems();

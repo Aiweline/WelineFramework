@@ -253,10 +253,10 @@ class ThemeTemplate implements TaglibInterface
                         /** @var \Weline\I18n\Model\Locale\Dictionary $localeDict */
                         $localeDict = ObjectManager::getInstance(\Weline\I18n\Model\Locale\Dictionary::class);
                         $md5 = \Weline\I18n\Model\Locale\Dictionary::generateMd5($translationKey, $locale);
-                        $localeDict->load($md5, \Weline\I18n\Model\Locale\Dictionary::fields_MD5);
+                        $localeDict->load($md5, \Weline\I18n\Model\Locale\Dictionary::schema_fields_MD5);
                         
                         if ($localeDict->getId()) {
-                            $translation = $localeDict->getData(\Weline\I18n\Model\Locale\Dictionary::fields_TRANSLATE);
+                            $translation = $localeDict->getData(\Weline\I18n\Model\Locale\Dictionary::schema_fields_TRANSLATE);
                             if (!empty($translation)) {
                                 $path = str_replace($fullMatch, $translation, $path);
                                 continue;

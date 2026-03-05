@@ -57,12 +57,12 @@ class ThemeLayoutService
         try {
             // 使用 fetchArray() 获取原始数组数据，避免返回对象导致的问题
             $layouts = $this->themeLayout->reset()
-                ->where(ThemeLayout::fields_THEME_ID, $themeId)
-                ->where(ThemeLayout::fields_PAGE_TYPE, $pageType)
-                ->where(ThemeLayout::fields_IS_ACTIVE, 1)
-                ->where(ThemeLayout::fields_STATUS, $status)
-                ->order(ThemeLayout::fields_AREA)
-                ->order(ThemeLayout::fields_SORT_ORDER)
+                ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
+                ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
+                ->where(ThemeLayout::schema_fields_IS_ACTIVE, 1)
+                ->where(ThemeLayout::schema_fields_STATUS, $status)
+                ->order(ThemeLayout::schema_fields_AREA)
+                ->order(ThemeLayout::schema_fields_SORT_ORDER)
                 ->select()
                 ->fetchArray();
 
@@ -77,18 +77,18 @@ class ThemeLayoutService
                     continue;
                 }
                 
-                $area = $layout[ThemeLayout::fields_AREA] ?? '';
+                $area = $layout[ThemeLayout::schema_fields_AREA] ?? '';
                 if (isset($groupedLayout[$area])) {
-                    $config = $layout[ThemeLayout::fields_CONFIG] ?? '{}';
+                    $config = $layout[ThemeLayout::schema_fields_CONFIG] ?? '{}';
                     $groupedLayout[$area]['widgets'][] = [
-                        'layout_id' => $layout[ThemeLayout::fields_ID] ?? 0,
-                        'widget_code' => $layout[ThemeLayout::fields_WIDGET_CODE] ?? '',
-                        'widget_module' => $layout[ThemeLayout::fields_WIDGET_MODULE] ?? '',
-                        'widget_type' => $layout[ThemeLayout::fields_WIDGET_TYPE] ?? '',
-                        'slot_id' => $layout[ThemeLayout::fields_SLOT_ID] ?? null,
+                        'layout_id' => $layout[ThemeLayout::schema_fields_ID] ?? 0,
+                        'widget_code' => $layout[ThemeLayout::schema_fields_WIDGET_CODE] ?? '',
+                        'widget_module' => $layout[ThemeLayout::schema_fields_WIDGET_MODULE] ?? '',
+                        'widget_type' => $layout[ThemeLayout::schema_fields_WIDGET_TYPE] ?? '',
+                        'slot_id' => $layout[ThemeLayout::schema_fields_SLOT_ID] ?? null,
                         'config' => is_string($config) ? json_decode($config, true) : $config,
-                        'sort_order' => $layout[ThemeLayout::fields_SORT_ORDER] ?? 0,
-                        'status' => $layout[ThemeLayout::fields_STATUS] ?? $status,
+                        'sort_order' => $layout[ThemeLayout::schema_fields_SORT_ORDER] ?? 0,
+                        'status' => $layout[ThemeLayout::schema_fields_STATUS] ?? $status,
                     ];
                 }
             }
@@ -269,14 +269,14 @@ class ThemeLayoutService
     {
         try {
             $query = $this->themeLayout->clearQuery()
-                ->where(ThemeLayout::fields_THEME_ID, $themeId)
-                ->where(ThemeLayout::fields_PAGE_TYPE, $pageType)
-                ->where(ThemeLayout::fields_AREA, $area)
-                ->where(ThemeLayout::fields_STATUS, $status)
-                ->where(ThemeLayout::fields_SORT_ORDER, $fromSortOrder, '>=');
+                ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
+                ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
+                ->where(ThemeLayout::schema_fields_AREA, $area)
+                ->where(ThemeLayout::schema_fields_STATUS, $status)
+                ->where(ThemeLayout::schema_fields_SORT_ORDER, $fromSortOrder, '>=');
 
             if ($slotId !== null && $slotId !== '') {
-                $query->where(ThemeLayout::fields_SLOT_ID, $slotId);
+                $query->where(ThemeLayout::schema_fields_SLOT_ID, $slotId);
             }
 
             $widgets = $query->select()->fetch();
@@ -285,8 +285,8 @@ class ThemeLayoutService
             }
 
             foreach ($widgets as $widget) {
-                $id = (int)($widget[ThemeLayout::fields_ID] ?? 0);
-                $currentOrder = (int)($widget[ThemeLayout::fields_SORT_ORDER] ?? 0);
+                $id = (int)($widget[ThemeLayout::schema_fields_ID] ?? 0);
+                $currentOrder = (int)($widget[ThemeLayout::schema_fields_SORT_ORDER] ?? 0);
                 if ($id > 0) {
                     $this->themeLayout->clearQuery()->load($id);
                     $this->themeLayout->setSortOrder($currentOrder + 1)->save();
@@ -311,18 +311,18 @@ class ThemeLayoutService
     {
         try {
             $query = $this->themeLayout->clearQuery()
-                ->where(ThemeLayout::fields_THEME_ID, $themeId)
-                ->where(ThemeLayout::fields_PAGE_TYPE, $pageType)
-                ->where(ThemeLayout::fields_STATUS, $status);
+                ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
+                ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
+                ->where(ThemeLayout::schema_fields_STATUS, $status);
 
             // 如果有插槽ID，按插槽删除（不限制 area，因为旧数据的 area 可能不一致）
             // 否则按区域+部件代码删除
             if ($slotId) {
-                $query->where(ThemeLayout::fields_SLOT_ID, $slotId);
+                $query->where(ThemeLayout::schema_fields_SLOT_ID, $slotId);
             } else {
                 // 删除同类型的部件（独占整个区域）
-                $query->where(ThemeLayout::fields_AREA, $area);
-                $query->where(ThemeLayout::fields_WIDGET_CODE, $widgetCode);
+                $query->where(ThemeLayout::schema_fields_AREA, $area);
+                $query->where(ThemeLayout::schema_fields_WIDGET_CODE, $widgetCode);
             }
 
             $existingWidgets = $query->select()->fetch();
@@ -330,17 +330,17 @@ class ThemeLayoutService
             // 如果按 slotId 没找到，尝试按 area = slotId 查找（兼容旧数据）
             if ($slotId && (!is_array($existingWidgets) || count($existingWidgets) === 0)) {
                 $existingWidgets = $this->themeLayout->reset()
-                    ->where(ThemeLayout::fields_THEME_ID, $themeId)
-                    ->where(ThemeLayout::fields_PAGE_TYPE, $pageType)
-                    ->where(ThemeLayout::fields_STATUS, $status)
-                    ->where(ThemeLayout::fields_AREA, $slotId)  // 旧数据可能把 slotId 存在 area 字段
+                    ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
+                    ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
+                    ->where(ThemeLayout::schema_fields_STATUS, $status)
+                    ->where(ThemeLayout::schema_fields_AREA, $slotId)  // 旧数据可能把 slotId 存在 area 字段
                     ->select()->fetch();
             }
 
             if (is_array($existingWidgets)) {
                 foreach ($existingWidgets as $widget) {
-                    if (is_array($widget) && isset($widget[ThemeLayout::fields_ID])) {
-                        $this->deleteWidget((int)$widget[ThemeLayout::fields_ID]);
+                    if (is_array($widget) && isset($widget[ThemeLayout::schema_fields_ID])) {
+                        $this->deleteWidget((int)$widget[ThemeLayout::schema_fields_ID]);
                     }
                 }
             }
@@ -417,9 +417,9 @@ class ThemeLayoutService
     {
         // 先删除该页面该状态的所有布局
         $this->themeLayout->reset()
-            ->where(ThemeLayout::fields_THEME_ID, $themeId)
-            ->where(ThemeLayout::fields_PAGE_TYPE, $pageType)
-            ->where(ThemeLayout::fields_STATUS, $status)
+            ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
+            ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
+            ->where(ThemeLayout::schema_fields_STATUS, $status)
             ->delete()
             ->fetch();
 
@@ -485,9 +485,9 @@ class ThemeLayoutService
 
                 // 2. 删除旧的已发布记录（全量替换，避免残留）
                 $this->themeLayout->reset()
-                    ->where(ThemeLayout::fields_THEME_ID, $themeId)
-                    ->where(ThemeLayout::fields_PAGE_TYPE, $type)
-                    ->where(ThemeLayout::fields_STATUS, ThemeLayout::STATUS_PUBLISHED)
+                    ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
+                    ->where(ThemeLayout::schema_fields_PAGE_TYPE, $type)
+                    ->where(ThemeLayout::schema_fields_STATUS, ThemeLayout::STATUS_PUBLISHED)
                     ->delete()
                     ->fetch();
 
@@ -538,11 +538,11 @@ class ThemeLayoutService
     {
         try {
             $query = $this->themeLayout->reset()
-                ->where(ThemeLayout::fields_THEME_ID, $themeId)
-                ->where(ThemeLayout::fields_STATUS, ThemeLayout::STATUS_DRAFT);
+                ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
+                ->where(ThemeLayout::schema_fields_STATUS, ThemeLayout::STATUS_DRAFT);
 
             if ($pageType) {
-                $query->where(ThemeLayout::fields_PAGE_TYPE, $pageType);
+                $query->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType);
             }
 
             // 使用 fetchArray() 替代 fetchOriginal()，与其他方法保持一致
@@ -564,11 +564,11 @@ class ThemeLayoutService
     {
         try {
             $query = $this->themeLayout->reset()
-                ->where(ThemeLayout::fields_THEME_ID, $themeId)
-                ->where(ThemeLayout::fields_STATUS, ThemeLayout::STATUS_DRAFT);
+                ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
+                ->where(ThemeLayout::schema_fields_STATUS, ThemeLayout::STATUS_DRAFT);
 
             if ($pageType) {
-                $query->where(ThemeLayout::fields_PAGE_TYPE, $pageType);
+                $query->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType);
             }
 
             $query->delete()->fetch();
@@ -761,11 +761,11 @@ class ThemeLayoutService
     public function getSlotWidgets(int $themeId, string $pageType, string $slotId, string $status = 'draft'): array
     {
         $layouts = $this->themeLayout->reset()
-            ->where(ThemeLayout::fields_THEME_ID, $themeId)
-            ->where(ThemeLayout::fields_PAGE_TYPE, $pageType)
-            ->where(ThemeLayout::fields_STATUS, $status)
-            ->where(ThemeLayout::fields_SLOT_ID, $slotId)
-            ->order(ThemeLayout::fields_SORT_ORDER, 'ASC')
+            ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
+            ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
+            ->where(ThemeLayout::schema_fields_STATUS, $status)
+            ->where(ThemeLayout::schema_fields_SLOT_ID, $slotId)
+            ->order(ThemeLayout::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetchArray();
 

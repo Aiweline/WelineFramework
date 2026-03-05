@@ -407,16 +407,16 @@ class ThemeConfig extends BackendController
                         }
                         
                         $meta = $metaModel->reset()
-                            ->where(\Weline\Meta\Model\Meta::fields_META_IDENTIFY, $metaIdentifyForQuery)
-                            ->where(\Weline\Meta\Model\Meta::fields_NAMESPACE, 'theme')
-                            ->where(\Weline\Meta\Model\Meta::fields_META_TYPE, $typeForStorage)
-                            ->where(\Weline\Meta\Model\Meta::fields_AREA, $area)
+                            ->where(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY, $metaIdentifyForQuery)
+                            ->where(\Weline\Meta\Model\Meta::schema_fields_NAMESPACE, 'theme')
+                            ->where(\Weline\Meta\Model\Meta::schema_fields_META_TYPE, $typeForStorage)
+                            ->where(\Weline\Meta\Model\Meta::schema_fields_AREA, $area)
                             ->find()
                             ->fetch();
                         
                         if ($meta && $meta->getId()) {
                             $metaId = (int)$meta->getId();
-                            $metaIdentify = $meta->getData(\Weline\Meta\Model\Meta::fields_META_IDENTIFY);
+                            $metaIdentify = $meta->getData(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY);
                         } else {
                             $metaIdentify = $baseIdentify;
                         }

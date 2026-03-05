@@ -63,6 +63,8 @@ if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
     // 使用LayoutAssetsManager获取CSS URL（使用 Observer 设置的主题对象）
     $assetsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\LayoutAssetsManager::class);
     try {
+        // 确保布局 CSS 存在（LayoutAssetsGenerator 可能尚未运行）
+        $assetsManager->ensureLayoutCssGenerated($area, $layoutType, $layoutOption, $theme);
         $cssUrl = $assetsManager->getCssUrl($area, $layoutType, $layoutOption, $theme, $this) ?? '';
         ?>
 <!-- 布局CSS（包含变量、色盘和布局特定样式）：<?= htmlspecialchars((string)$layoutType, ENT_QUOTES, 'UTF-8') ?>/<?= htmlspecialchars((string)$layoutOption, ENT_QUOTES, 'UTF-8') ?> -->
@@ -294,13 +296,12 @@ html {
         };
     }
     
-    // 性能优化：预加载关键资源
+    // 性能优化：预加载网站根路径（用于后续导航），而非当前页 URL
     if ('requestIdleCallback' in window) {
         requestIdleCallback(function() {
-            // 在空闲时预加载可能需要的资源
             const link = document.createElement('link');
             link.rel = 'prefetch';
-            link.href = window.__WelineThemeConfig?.baseUrl || '/';
+            link.href = (window.location.origin || '') + '/';
             document.head.appendChild(link);
         });
     }

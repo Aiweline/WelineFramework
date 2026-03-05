@@ -644,17 +644,17 @@ class Layout extends BackendController
         
         // 查询条件：namespace=theme, meta_type={type}, category=path, area=area
         // 对于 color 和 variable 类型，category 可能为空（因为这些目录本身就是类型目录）
-        $metasResult = $metaModel->where(\Weline\Meta\Model\Meta::fields_NAMESPACE, 'theme')
-                                 ->where(\Weline\Meta\Model\Meta::fields_META_TYPE, $type)
-                                 ->where(\Weline\Meta\Model\Meta::fields_AREA, $area);
+        $metasResult = $metaModel->where(\Weline\Meta\Model\Meta::schema_fields_NAMESPACE, 'theme')
+                                 ->where(\Weline\Meta\Model\Meta::schema_fields_META_TYPE, $type)
+                                 ->where(\Weline\Meta\Model\Meta::schema_fields_AREA, $area);
         
         // 对于 colors 和 variable 类型，category 可能为空（因为这些目录本身就是类型目录）
         // 使用 OR 条件：category IS NULL OR category = '' OR category = path
         if (($type === 'colors' && $path === 'colors') || ($type === 'variable' && $path === 'variables')) {
-            $categoryField = \Weline\Meta\Model\Meta::fields_CATEGORY;
+            $categoryField = \Weline\Meta\Model\Meta::schema_fields_CATEGORY;
             $metasResult->whereRaw("{$categoryField} IS NULL OR {$categoryField} = '' OR {$categoryField} = '{$path}'");
         } else {
-            $metasResult->where(\Weline\Meta\Model\Meta::fields_CATEGORY, $path);
+            $metasResult->where(\Weline\Meta\Model\Meta::schema_fields_CATEGORY, $path);
         }
         
         $metasResult = $metasResult->select()->fetch();
@@ -673,9 +673,9 @@ class Layout extends BackendController
                     'metas' => array_map(function($meta) {
                         return [
                             'id' => $meta->getId(),
-                            'meta_identify' => $meta->getData(\Weline\Meta\Model\Meta::fields_META_IDENTIFY),
-                            'category' => $meta->getData(\Weline\Meta\Model\Meta::fields_CATEGORY),
-                            'meta_type' => $meta->getData(\Weline\Meta\Model\Meta::fields_META_TYPE),
+                            'meta_identify' => $meta->getData(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY),
+                            'category' => $meta->getData(\Weline\Meta\Model\Meta::schema_fields_CATEGORY),
+                            'meta_type' => $meta->getData(\Weline\Meta\Model\Meta::schema_fields_META_TYPE),
                         ];
                     }, $metas)
                 ]);
@@ -688,12 +688,12 @@ class Layout extends BackendController
             foreach ($metas as $meta) {
                 // 从 meta_identify 中提取文件名
                 // 格式：theme.frontend.{type}s.category.default
-                $metaIdentify = $meta->getData(\Weline\Meta\Model\Meta::fields_META_IDENTIFY);
+                $metaIdentify = $meta->getData(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY);
                 $identifyParts = explode('.', $metaIdentify);
                 $fileName = end($identifyParts); // 最后一个部分就是文件名
                 
                 // 解析 meta_data JSON
-                $metaData = $meta->getData(\Weline\Meta\Model\Meta::fields_META_DATA);
+                $metaData = $meta->getData(\Weline\Meta\Model\Meta::schema_fields_META_DATA);
                 $metaDataArray = [];
                 if (!empty($metaData)) {
                     $metaDataArray = json_decode($metaData, true) ?: [];
@@ -705,31 +705,31 @@ class Layout extends BackendController
                 
                 // 查询该文件的 name 字段
                 $nameFieldModel = ObjectManager::make(\Weline\Meta\Model\Meta::class);
-                $nameField = $nameFieldModel->where(\Weline\Meta\Model\Meta::fields_NAMESPACE, 'theme')
-                                            ->where(\Weline\Meta\Model\Meta::fields_META_TYPE, 'field')
-                                            ->where(\Weline\Meta\Model\Meta::fields_META_IDENTIFY, "theme.{$area}.{$typeForStorage}.{$path}.{$fileName}.name")
-                                            ->where(\Weline\Meta\Model\Meta::fields_AREA, $area)
+                $nameField = $nameFieldModel->where(\Weline\Meta\Model\Meta::schema_fields_NAMESPACE, 'theme')
+                                            ->where(\Weline\Meta\Model\Meta::schema_fields_META_TYPE, 'field')
+                                            ->where(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY, "theme.{$area}.{$typeForStorage}.{$path}.{$fileName}.name")
+                                            ->where(\Weline\Meta\Model\Meta::schema_fields_AREA, $area)
                                             ->find()
                                             ->fetch();
                 
                 $itemName = '';
                 if ($nameField && $nameField->getId()) {
-                    $nameMetaData = json_decode($nameField->getData(\Weline\Meta\Model\Meta::fields_META_DATA), true) ?: [];
+                    $nameMetaData = json_decode($nameField->getData(\Weline\Meta\Model\Meta::schema_fields_META_DATA), true) ?: [];
                     $itemName = $nameMetaData['attributes']['default'] ?? $nameMetaData['attributes']['name'] ?? '';
                 }
                 
                 // 如果 name 字段不存在，尝试查询目录级别的 name（兼容旧数据）
                 if (empty($itemName)) {
                     $nameFieldModel2 = ObjectManager::make(\Weline\Meta\Model\Meta::class);
-                    $nameField2 = $nameFieldModel2->where(\Weline\Meta\Model\Meta::fields_NAMESPACE, 'theme')
-                                                  ->where(\Weline\Meta\Model\Meta::fields_META_TYPE, 'field')
-                                                  ->where(\Weline\Meta\Model\Meta::fields_META_IDENTIFY, "theme.{$area}.{$typeForStorage}.{$path}.name")
-                                                  ->where(\Weline\Meta\Model\Meta::fields_AREA, $area)
+                    $nameField2 = $nameFieldModel2->where(\Weline\Meta\Model\Meta::schema_fields_NAMESPACE, 'theme')
+                                                  ->where(\Weline\Meta\Model\Meta::schema_fields_META_TYPE, 'field')
+                                                  ->where(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY, "theme.{$area}.{$typeForStorage}.{$path}.name")
+                                                  ->where(\Weline\Meta\Model\Meta::schema_fields_AREA, $area)
                                                   ->find()
                                                   ->fetch();
                     
                     if ($nameField2 && $nameField2->getId()) {
-                        $nameMetaData2 = json_decode($nameField2->getData(\Weline\Meta\Model\Meta::fields_META_DATA), true) ?: [];
+                        $nameMetaData2 = json_decode($nameField2->getData(\Weline\Meta\Model\Meta::schema_fields_META_DATA), true) ?: [];
                         $itemName = $nameMetaData2['attributes']['default'] ?? $nameMetaData2['attributes']['name'] ?? '';
                     }
                 }
@@ -741,37 +741,37 @@ class Layout extends BackendController
                 
                 // 查询该文件的 description 字段
                 $descFieldModel = ObjectManager::make(\Weline\Meta\Model\Meta::class);
-                $descField = $descFieldModel->where(\Weline\Meta\Model\Meta::fields_NAMESPACE, 'theme')
-                                            ->where(\Weline\Meta\Model\Meta::fields_META_TYPE, 'field')
-                                            ->where(\Weline\Meta\Model\Meta::fields_META_IDENTIFY, "theme.{$area}.{$typeForStorage}.{$path}.{$fileName}.description")
-                                            ->where(\Weline\Meta\Model\Meta::fields_AREA, $area)
+                $descField = $descFieldModel->where(\Weline\Meta\Model\Meta::schema_fields_NAMESPACE, 'theme')
+                                            ->where(\Weline\Meta\Model\Meta::schema_fields_META_TYPE, 'field')
+                                            ->where(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY, "theme.{$area}.{$typeForStorage}.{$path}.{$fileName}.description")
+                                            ->where(\Weline\Meta\Model\Meta::schema_fields_AREA, $area)
                                             ->find()
                                             ->fetch();
                 
                 $itemDescription = '';
                 if ($descField && $descField->getId()) {
-                    $descMetaData = json_decode($descField->getData(\Weline\Meta\Model\Meta::fields_META_DATA), true) ?: [];
+                    $descMetaData = json_decode($descField->getData(\Weline\Meta\Model\Meta::schema_fields_META_DATA), true) ?: [];
                     $itemDescription = $descMetaData['attributes']['default'] ?? $descMetaData['attributes']['name'] ?? '';
                 }
                 
                 // 如果 description 字段不存在，尝试查询目录级别的 description（兼容旧数据）
                 if (empty($itemDescription)) {
                     $descFieldModel2 = ObjectManager::make(\Weline\Meta\Model\Meta::class);
-                    $descField2 = $descFieldModel2->where(\Weline\Meta\Model\Meta::fields_NAMESPACE, 'theme')
-                                                  ->where(\Weline\Meta\Model\Meta::fields_META_TYPE, 'field')
-                                                  ->where(\Weline\Meta\Model\Meta::fields_META_IDENTIFY, "theme.{$area}.{$typeForStorage}.{$path}.description")
-                                                  ->where(\Weline\Meta\Model\Meta::fields_AREA, $area)
+                    $descField2 = $descFieldModel2->where(\Weline\Meta\Model\Meta::schema_fields_NAMESPACE, 'theme')
+                                                  ->where(\Weline\Meta\Model\Meta::schema_fields_META_TYPE, 'field')
+                                                  ->where(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY, "theme.{$area}.{$typeForStorage}.{$path}.description")
+                                                  ->where(\Weline\Meta\Model\Meta::schema_fields_AREA, $area)
                                                   ->find()
                                                   ->fetch();
                     
                     if ($descField2 && $descField2->getId()) {
-                        $descMetaData2 = json_decode($descField2->getData(\Weline\Meta\Model\Meta::fields_META_DATA), true) ?: [];
+                        $descMetaData2 = json_decode($descField2->getData(\Weline\Meta\Model\Meta::schema_fields_META_DATA), true) ?: [];
                         $itemDescription = $descMetaData2['attributes']['default'] ?? $descMetaData2['attributes']['name'] ?? '';
                     }
                 }
                 
-                $filePath = $meta->getData(\Weline\Meta\Model\Meta::fields_FILE_PATH);
-                $fileFullPath = $meta->getData(\Weline\Meta\Model\Meta::fields_FILE_FULL_PATH);
+                $filePath = $meta->getData(\Weline\Meta\Model\Meta::schema_fields_FILE_PATH);
+                $fileFullPath = $meta->getData(\Weline\Meta\Model\Meta::schema_fields_FILE_FULL_PATH);
                 
                 // 对于色系类型，尝试从 meta_data 或 CSS 文件中提取主题标识和主要颜色
                 $themeIdentifier = '';
@@ -900,8 +900,8 @@ class Layout extends BackendController
             $configMetaModel = ObjectManager::make(\Weline\Meta\Model\Meta::class);
             
             // 先尝试精确匹配目录级别的 Meta 记录
-            $configMeta = $configMetaModel->where(\Weline\Meta\Model\Meta::fields_NAMESPACE, 'theme')
-                                          ->where(\Weline\Meta\Model\Meta::fields_META_IDENTIFY, $configMetaIdentify)
+            $configMeta = $configMetaModel->where(\Weline\Meta\Model\Meta::schema_fields_NAMESPACE, 'theme')
+                                          ->where(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY, $configMetaIdentify)
                                           ->find()
                                           ->fetch();
             
@@ -909,10 +909,10 @@ class Layout extends BackendController
             if (!$configMeta || !$configMeta->getId()) {
                 // 查找该目录下的第一个文件 Meta 记录
                 $fileMetasResult = $configMetaModel->reset()
-                                                   ->where(\Weline\Meta\Model\Meta::fields_NAMESPACE, 'theme')
-                                                   ->where(\Weline\Meta\Model\Meta::fields_META_TYPE, $type)
-                                                   ->where(\Weline\Meta\Model\Meta::fields_CATEGORY, $path)
-                                                   ->where(\Weline\Meta\Model\Meta::fields_AREA, $area)
+                                                   ->where(\Weline\Meta\Model\Meta::schema_fields_NAMESPACE, 'theme')
+                                                   ->where(\Weline\Meta\Model\Meta::schema_fields_META_TYPE, $type)
+                                                   ->where(\Weline\Meta\Model\Meta::schema_fields_CATEGORY, $path)
+                                                   ->where(\Weline\Meta\Model\Meta::schema_fields_AREA, $area)
                                                    ->select()
                                                    ->fetch();
                 
@@ -930,7 +930,7 @@ class Layout extends BackendController
             } else {
                 // 如果找到了精确匹配
                 $configMetaId = (int)$configMeta->getId();
-                $configMetaIdentifyValue = $configMeta->getData(\Weline\Meta\Model\Meta::fields_META_IDENTIFY) ?: $configMetaIdentify;
+                $configMetaIdentifyValue = $configMeta->getData(\Weline\Meta\Model\Meta::schema_fields_META_IDENTIFY) ?: $configMetaIdentify;
             }
         } catch (\Exception $e) {
             // 忽略错误

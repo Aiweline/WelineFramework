@@ -335,17 +335,17 @@ class CssVariableScanner
         /** @var Meta $metaModel */
         $metaModel = ObjectManager::make(Meta::class);
         $metaModel->reset();
-        $metaModel->setData(Meta::fields_NAMESPACE, 'theme');
-        $metaModel->setData(Meta::fields_META_TYPE, 'variables');
-        $metaModel->setData(Meta::fields_META_IDENTIFY, $metaIdentify);
-        $metaModel->setData(Meta::fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
-        $metaModel->setData(Meta::fields_SETTING, json_encode($setting, JSON_UNESCAPED_UNICODE));
-        $metaModel->setData(Meta::fields_AREA, $area);
-        $metaModel->setData(Meta::fields_CATEGORY, $variableFile);
+        $metaModel->setData(Meta::schema_fields_NAMESPACE, 'theme');
+        $metaModel->setData(Meta::schema_fields_META_TYPE, 'variables');
+        $metaModel->setData(Meta::schema_fields_META_IDENTIFY, $metaIdentify);
+        $metaModel->setData(Meta::schema_fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
+        $metaModel->setData(Meta::schema_fields_SETTING, json_encode($setting, JSON_UNESCAPED_UNICODE));
+        $metaModel->setData(Meta::schema_fields_AREA, $area);
+        $metaModel->setData(Meta::schema_fields_CATEGORY, $variableFile);
         
         // 使用 forceCheck 确保唯一键检查，如果已存在则更新，不存在则插入
         // 这样可以避免并发情况下的唯一约束冲突
-        $metaModel->forceCheck(true, [Meta::fields_NAMESPACE, Meta::fields_META_TYPE, Meta::fields_META_IDENTIFY])
+        $metaModel->forceCheck(true, [Meta::schema_fields_NAMESPACE, Meta::schema_fields_META_TYPE, Meta::schema_fields_META_IDENTIFY])
                 ->save();
     }
     

@@ -216,11 +216,11 @@ class Index extends BackendController
         try {
             // 先取消激活所有主题（只更新 is_active，避免 UPDATE 整行触发 module_name 唯一约束冲突）
             $theme->clearQuery();
-            $theme->where(WelineTheme::fields_IS_ACTIVE, 1)->update(['is_active' => 0])->fetch();
+            $theme->where(WelineTheme::schema_fields_IS_ACTIVE, 1)->update(['is_active' => 0])->fetch();
 
             // 仅将指定主题的 is_active 置为 1，不调用 save() 以免 UPDATE 整行导致 module_name 重复冲突
             $theme->clearQuery();
-            $theme->where(WelineTheme::fields_ID, $themeId)->update(['is_active' => 1])->fetch();
+            $theme->where(WelineTheme::schema_fields_ID, $themeId)->update(['is_active' => 1])->fetch();
 
             // 清除主题缓存
             $theme->_cache->delete('theme');

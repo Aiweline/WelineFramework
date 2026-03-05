@@ -73,6 +73,7 @@ class Variables extends BackendController
         $this->assign('area', $area);
         $this->assign('scope', $scope);
         $this->assign('variableFiles', $variableFiles);
+        $this->assign('scanUrl', $this->getUrl('meta/backend/scanner/scan'));
         
         return $this->fetch('Weline_Theme::templates/backend/config/variable-file.phtml');
     }

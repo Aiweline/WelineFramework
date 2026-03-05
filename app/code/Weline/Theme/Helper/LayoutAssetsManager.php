@@ -14,6 +14,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Template;
+use Weline\Theme\Helper\CssVariableInjector;
 use Weline\Theme\Model\WelineTheme;
 
 /**
@@ -194,6 +195,55 @@ class LayoutAssetsManager
         return $path;
     }
     
+    /**
+     * 确保布局 CSS 文件存在，若不存在则按需生成（仅包含 CSS 变量）
+     * 用于解决 LayoutAssetsGenerator 未运行时（如首次请求）的 404 问题
+     *
+     * @param string $area 区域
+     * @param string $layoutType 布局类型
+     * @param string $layoutOption 布局选项
+     * @param WelineTheme|null $theme 主题对象
+     * @return bool 文件是否存在或已成功生成
+     */
+    public function ensureLayoutCssGenerated(
+        string $area,
+        string $layoutType,
+        string $layoutOption,
+        ?WelineTheme $theme = null
+    ): bool {
+        $cssPath = $this->getGeneratedCssPath($area, $layoutType, $layoutOption, $theme);
+        if (is_file($cssPath)) {
+            return true;
+        }
+        try {
+            /** @var CssVariableInjector $injector */
+            $injector = ObjectManager::getInstance(CssVariableInjector::class);
+            $cssVariables = $injector->generateCssVariables($area, $theme, 'default');
+            $cssContent = $cssVariables . "\n";
+            if (!empty($cssContent)) {
+                $dir = dirname($cssPath);
+                if (!is_dir($dir)) {
+                    mkdir($dir, 0755, true);
+                }
+                return file_put_contents($cssPath, $cssContent) !== false;
+            }
+        } catch (\Throwable $e) {
+            if (defined('DEV') && DEV) {
+                try {
+                    Env::getInstance()->getLogger()?->warning('LayoutAssetsManager: 按需生成布局CSS失败', [
+                        'area' => $area,
+                        'layoutType' => $layoutType,
+                        'layoutOption' => $layoutOption,
+                        'error' => $e->getMessage()
+                    ]);
+                } catch (\Throwable) {
+                    // 忽略
+                }
+            }
+        }
+        return false;
+    }
+
     /**
      * 复制文件到静态目录（已废弃，文件现在直接在编译阶段生成到pub/static）
      * 

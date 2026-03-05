@@ -123,21 +123,17 @@ document.getElementById('partials-config-form').addEventListener('submit', funct
         backendData.append(`partials[${key}]`, backendPartials[key]);
     });
     
-    // 先保存前端配置
-    fetch('<?= $this->getUrl('theme/backend/config/partials/save') ?>', {
-        method: 'POST',
-        body: frontendData
-    }).then(response => response.json()).then(data => {
+    var url = '<?= $this->getUrl('theme/backend/config/partials/save') ?>';
+    var req = window.Weline.Api.request(url, { method: 'POST', body: frontendData });
+    req.then(function(res) {
+        var data = (res && res.data) || res;
         if (data.status === 'success') {
-            // 再保存后端配置
-            return fetch('<?= $this->getUrl('theme/backend/config/partials/save') ?>', {
-                method: 'POST',
-                body: backendData
-            });
+            var req2 = window.Weline.Api.request(url, { method: 'POST', body: backendData });
+            return req2.then(function(r) { return (r && r.data) || r; });
         } else {
             throw new Error(data.message || '<?= __('保存失败') ?>');
         }
-    }).then(response => response.json()).then(data => {
+    }).then(function(data) {
         if (data.status === 'success') {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({

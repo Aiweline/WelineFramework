@@ -66,6 +66,7 @@ class SseTerminal implements TaglibInterface
             $t_connected = addslashes(__('已连接'));
             $t_disconnected = addslashes(__('已断开'));
             $t_error = addslashes(__('连接错误'));
+            $t_connection_failed = addslashes(__('连接失败（可能为网络问题或服务端异常），请查看下方日志或服务器终端。'));
             $t_clear = addslashes(__('清空'));
             $t_copy = addslashes(__('复制'));
             $t_stop = addslashes(__('停止'));
@@ -283,6 +284,7 @@ function start(url) {
         } else {
             setStatus('error', '$t_error');
             log('$t_error', 'error');
+            log('$t_connection_failed', 'error');
         }
         if (eventCallbacks.error) eventCallbacks.error(e);
     };

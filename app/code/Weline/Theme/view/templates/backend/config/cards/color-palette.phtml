@@ -166,12 +166,10 @@ $saveVariablesUrl = $this->getUrl('theme/backend/config/layout/saveColorPaletteV
         formData.append('scope', scope);
         formData.append('palette_name', paletteName);
         
-        fetch(saveUrl, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
+        var opts = { method: 'POST', body: formData };
+        window.Weline.Api.request(saveUrl, opts)
+        .then(function(res) {
+            var data = (res && res.data) !== undefined ? res.data : res;
             if (data.code === 200) {
                 // 更新选中状态
                 document.querySelectorAll('.color-palette-wheel-card').forEach(card => {
@@ -283,19 +281,16 @@ $saveVariablesUrl = $this->getUrl('theme/backend/config/layout/saveColorPaletteV
         formData.append('scope', scope);
         formData.append('palette_name', paletteName);
         
-        fetch(getUrl, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
+        var getOpts = { method: 'POST', body: formData };
+        window.Weline.Api.request(getUrl, getOpts)
+        .then(function(res) {
+            var data = (res && res.data) !== undefined ? res.data : res;
             if (data.code === 200 && data.data && data.data.palette) {
                 // 使用AJAX加载弹窗内容
                 const paletteJson = encodeURIComponent(JSON.stringify(data.data.palette));
-                fetch(modalUrl + '?palette=' + paletteJson + '&palette_name=' + encodeURIComponent(paletteName) + '&area=' + area + '&scope=' + scope + '&theme_id=' + themeId, {
-                    method: 'GET'
-                })
-                .then(response => response.text())
+                var modalFetchUrl = modalUrl + '?palette=' + paletteJson + '&palette_name=' + encodeURIComponent(paletteName) + '&area=' + area + '&scope=' + scope + '&theme_id=' + themeId;
+                fetch(modalFetchUrl, { method: 'GET' })
+                .then(function(r) { return r.text(); })
                 .then(html => {
                     const modalContent = modal.querySelector('.modal-content');
                     if (modalContent) {

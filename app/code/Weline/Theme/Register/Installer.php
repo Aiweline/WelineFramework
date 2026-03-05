@@ -258,7 +258,7 @@ class Installer implements RegisterInterface
         }
 
         $this->welineTheme->clearData()->clearQuery();
-        $this->welineTheme->load(WelineTheme::fields_MODULE_NAME, $module_name);
+        $this->welineTheme->load(WelineTheme::schema_fields_MODULE_NAME, $module_name);
 
         $action_string = __('安装');
         if ($this->welineTheme->getId()) {
