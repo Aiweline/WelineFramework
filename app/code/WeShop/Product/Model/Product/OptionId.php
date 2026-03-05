@@ -1,128 +1,47 @@
 <?php
 
+declare(strict_types=1);
+
 namespace WeShop\Product\Model\Product;
 
-use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 
+#[Table(comment: '产品选项ID表')]
+#[Index(name: 'PRODUCT_PARENT_PRODUCT_ID', columns: ['parent_product_id'], type: 'KEY', comment: '父产品ID索引')]
+#[Index(name: 'PRODUCT_ATTRIBUTE_ID', columns: ['attribute_id'], type: 'KEY', comment: '属性ID索引')]
+#[Index(name: 'PRODUCT_OPTION_ID', columns: ['option_id'], type: 'KEY', comment: '选项ID索引')]
 class OptionId extends Model
 {
-    public const table = 'weshop_product_option_id';
-    public const primary_key = 'product_option_id';
+    public const schema_table = 'weshop_product_option_id';
+    public const schema_primary_key = 'attribute_id';
     public const indexer = 'product_option_id_indexer';
     public array $_unit_primary_keys = ['attribute_id', 'option_id', 'product_id'];
     public array $_index_sort_keys = ['parent_product_id', 'attribute_id', 'option_id', 'product_id'];
-    
-    public const fields_ID = 'product_option_id';
-    public const fields_ATTRIBUTE_ID = 'attribute_id';
-    public const fields_PRODUCT_ID = 'product_id';
-    public const fields_PRENT_PRODUCT_ID = 'parent_product_id';
-    public const fields_OPTION_ID = 'option_id';
 
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
+    #[Col(type: 'int', length: 11, nullable: true, default: 0, comment: '父产品ID')]
+    public const schema_fields_PARENT_PRODUCT_ID = 'parent_product_id';
+    #[Col(type: 'int', length: 11, nullable: false, primaryKey: true, comment: '属性ID')]
+    public const schema_fields_ATTRIBUTE_ID = 'attribute_id';
+    #[Col(type: 'int', length: 11, nullable: false, primaryKey: true, comment: '选项ID')]
+    public const schema_fields_OPTION_ID = 'option_id';
+    #[Col(type: 'int', length: 11, nullable: false, primaryKey: true, comment: '产品ID')]
+    public const schema_fields_PRODUCT_ID = 'product_id';
 
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // TODO: Implement upgrade() method.
-    }
+    public function setup(ModelSetup $setup, Context $context): void {}
+    public function upgrade(ModelSetup $setup, Context $context): void {}
+    public function install(ModelSetup $setup, Context $context): void {}
 
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-//        $setup->dropTable();
-        if (!$setup->tableExist()) {
-            $setup->createTable()
-                ->addColumn(
-                    self::fields_PRENT_PRODUCT_ID,
-                    TableInterface::column_type_INTEGER,
-                    11,
-                    'default 0',
-                    '父产品ID',
-                )
-                ->addColumn(
-                    self::fields_ATTRIBUTE_ID,
-                    TableInterface::column_type_INTEGER,
-                    11,
-                    'not null',
-                    '选项ID',
-                )
-                ->addColumn(
-                    self::fields_OPTION_ID,
-                    TableInterface::column_type_INTEGER,
-                    11,
-                    'not null',
-                    '选项ID',
-                )
-                ->addColumn(
-                    self::fields_PRODUCT_ID,
-                    TableInterface::column_type_INTEGER,
-                    11,
-                    'not null',
-                    '产品ID',
-                )
-                ->addIndex(TableInterface::index_type_KEY, 'PRODUCT_PARENT_PRODUCT_ID', self::fields_OPTION_ID, '父产品ID索引')
-                ->addIndex(TableInterface::index_type_KEY, 'PRODUCT_ATTRIBUTE_ID', self::fields_ATTRIBUTE_ID, '属性ID索引')
-                ->addIndex(TableInterface::index_type_KEY, 'PRODUCT_OPTION_ID', self::fields_OPTION_ID, '选项ID索引')
-                ->addConstraints('primary key (' . self::fields_ATTRIBUTE_ID . ',' . self::fields_OPTION_ID . ',' . self::fields_PRODUCT_ID . ')')
-                ->addAdditional('ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci')
-                ->create();
-        }
-    }
-
-    function getParentProductId(): int
-    {
-        return $this->getData(self::fields_PRENT_PRODUCT_ID);
-    }
-
-    function setParentProductId(int $parent_product_id): static
-    {
-        $this->setData(self::fields_PRENT_PRODUCT_ID, $parent_product_id);
-        return $this;
-    }
-
-    function getAttributeId(): int
-    {
-        return $this->getData(self::fields_ATTRIBUTE_ID);
-    }
-
-    function setAttributeId(int $attribute_id): static
-    {
-        $this->setData(self::fields_ATTRIBUTE_ID, $attribute_id);
-        return $this;
-    }
-
-    function getOptionId(): int
-    {
-        return $this->getData(self::fields_OPTION_ID);
-    }
-
-    function setOptionId(int $option_id): static
-    {
-        $this->setData(self::fields_OPTION_ID, $option_id);
-        return $this;
-    }
-
-    function getProductId(): int
-    {
-        return $this->getData(self::fields_PRODUCT_ID);
-    }
-
-    function setProductId(int $product_id): static
-    {
-        $this->setData(self::fields_PRODUCT_ID, $product_id);
-        return $this;
-    }
+    function getParentProductId(): int { return (int) $this->getData(self::schema_fields_PARENT_PRODUCT_ID); }
+    function setParentProductId(int $parent_product_id): static { $this->setData(self::schema_fields_PARENT_PRODUCT_ID, $parent_product_id); return $this; }
+    function getAttributeId(): int { return (int) $this->getData(self::schema_fields_ATTRIBUTE_ID); }
+    function setAttributeId(int $attribute_id): static { $this->setData(self::schema_fields_ATTRIBUTE_ID, $attribute_id); return $this; }
+    function getOptionId(): int { return (int) $this->getData(self::schema_fields_OPTION_ID); }
+    function setOptionId(int $option_id): static { $this->setData(self::schema_fields_OPTION_ID, $option_id); return $this; }
+    function getProductId(): int { return (int) $this->getData(self::schema_fields_PRODUCT_ID); }
+    function setProductId(int $product_id): static { $this->setData(self::schema_fields_PRODUCT_ID, $product_id); return $this; }
 }

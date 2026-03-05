@@ -42,7 +42,7 @@ class ProductService
     {
         /** @var Product $product */
         $product = ObjectManager::getInstance(Product::class);
-        $product->load(Product::fields_sku, $sku);
+        $product->load(Product::schema_fields_sku, $sku);
         
         if ($product->getId()) {
             return $product;
@@ -63,10 +63,10 @@ class ProductService
         $product = ObjectManager::getInstance(Product::class);
         
         // 先尝试通过 handle 查询（如果模型有 handle 字段）
-        if (defined(Product::class . '::fields_HANDLE')) {
+        if (defined(Product::class . '::schema_fields_HANDLE')) {
             $product->clear()
-                ->where(Product::fields_HANDLE, $handle)
-                ->where(Product::fields_status, 'enabled')
+                ->where(Product::schema_fields_HANDLE, $handle)
+                ->where(Product::schema_fields_status, 'enabled')
                 ->find()
                 ->fetch();
             
@@ -77,8 +77,8 @@ class ProductService
         
         // 如果通过 handle 没找到，尝试通过sku查询
         $product->clear()
-            ->where(Product::fields_sku, $handle)
-            ->where(Product::fields_status, 'enabled')
+            ->where(Product::schema_fields_sku, $handle)
+            ->where(Product::schema_fields_status, 'enabled')
             ->find()
             ->fetch();
         
@@ -109,23 +109,23 @@ class ProductService
         }
         
         if (!empty($filters['status'])) {
-            $product->where(Product::fields_status, $filters['status']);
+            $product->where(Product::schema_fields_status, $filters['status']);
         }
         
         if (!empty($filters['name'])) {
-            $product->where(Product::fields_name, ['like', '%' . $filters['name'] . '%']);
+            $product->where(Product::schema_fields_name, ['like', '%' . $filters['name'] . '%']);
         }
         
         if (!empty($filters['min_price'])) {
-            $product->where(Product::fields_price, ['>=', $filters['min_price']]);
+            $product->where(Product::schema_fields_price, ['>=', $filters['min_price']]);
         }
         
         if (!empty($filters['max_price'])) {
-            $product->where(Product::fields_price, ['<=', $filters['max_price']]);
+            $product->where(Product::schema_fields_price, ['<=', $filters['max_price']]);
         }
         
         // 排序
-        $orderBy = $filters['order_by'] ?? Product::fields_ID;
+        $orderBy = $filters['order_by'] ?? Product::schema_fields_ID;
         $orderDir = $filters['order_dir'] ?? 'DESC';
         $product->order($orderBy, $orderDir);
         
@@ -152,8 +152,8 @@ class ProductService
         /** @var Product $product */
         $product = ObjectManager::getInstance(Product::class);
         
-        if (!empty($productData[Product::fields_ID])) {
-            $product->load($productData[Product::fields_ID]);
+        if (!empty($productData[Product::schema_fields_ID])) {
+            $product->load($productData[Product::schema_fields_ID]);
         }
         
         // 触发保存前事件
@@ -164,7 +164,7 @@ class ProductService
         
         // 设置数据
         foreach ($productData as $key => $value) {
-            if ($key !== Product::fields_ID) {
+            if ($key !== Product::schema_fields_ID) {
                 $product->setData($key, $value);
             }
         }
@@ -227,8 +227,8 @@ class ProductService
             throw new \Exception(__('产品不存在'));
         }
         
-        $oldPrice = (float)$product->getData(Product::fields_price);
-        $product->setData(Product::fields_price, $newPrice);
+        $oldPrice = (float)$product->getData(Product::schema_fields_price);
+        $product->setData(Product::schema_fields_price, $newPrice);
         $product->save();
         
         // 触发价格变更事件
@@ -258,8 +258,8 @@ class ProductService
             throw new \Exception(__('产品不存在'));
         }
         
-        $oldStatus = $product->getData(Product::fields_status);
-        $product->setData(Product::fields_status, $status);
+        $oldStatus = $product->getData(Product::schema_fields_status);
+        $product->setData(Product::schema_fields_status, $status);
         $product->save();
         
         // 触发状态变更事件
@@ -289,7 +289,7 @@ class ProductService
             return false;
         }
         
-        $stock = (int)$product->getData(Product::fields_stock);
+        $stock = (int)$product->getData(Product::schema_fields_stock);
         return $stock >= $quantity;
     }
 }
