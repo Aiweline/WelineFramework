@@ -348,6 +348,23 @@ class ServiceOrchestrator
             
             // 每个服务类型启动完毕后 poll IPC，确保所有 register/ready 消息被处理
             $this->controlServer?->poll(0, 200000);
+
+            // Session Server 就绪后再启动 Worker，避免 Worker 因连不上 Session 而进入降级模式
+            if ($role === 'session_server') {
+                foreach ($instances as $instance) {
+                    if ($instance !== null && $instance->port !== null) {
+                        if ($context->frontend) {
+                            echo "\033[33m    等待 Session Server#{$instance->instanceId} 就绪...\033[0m\n";
+                        }
+                        $ready = $this->waitForInstanceReady($role, $instance->instanceId, $this->startupTimeout);
+                        if (!$ready) {
+                            WlsLogger::warning_("[Orchestrator] Session Server#{$instance->instanceId} 就绪超时 ({$this->startupTimeout}s)，继续启动 Worker");
+                        } elseif ($context->frontend) {
+                            echo "\033[32m    ✓ Session Server#{$instance->instanceId} 就绪\033[0m\n";
+                        }
+                    }
+                }
+            }
         }
 
         if ($context->frontend) {
