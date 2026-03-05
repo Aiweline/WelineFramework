@@ -65,12 +65,12 @@ class LeadSearchService
             }
             
             $taskModel->clear()
-                ->setData(SearchTask::fields_STORE_ID, $storeId) // 保留兼容字段
-                ->setData(SearchTask::fields_SOURCE_TYPE, $sourceType)
-                ->setData(SearchTask::fields_SOURCE_ID, $sourceId)
-                ->setData(SearchTask::fields_STATUS, SearchTask::STATUS_PENDING)
-                ->setData(SearchTask::fields_PROGRESS, 0.00)
-                ->setData(SearchTask::fields_FOUND_COUNT, 0)
+                ->setData(SearchTask::schema_fields_STORE_ID, $storeId) // 保留兼容字段
+                ->setData(SearchTask::schema_fields_SOURCE_TYPE, $sourceType)
+                ->setData(SearchTask::schema_fields_SOURCE_ID, $sourceId)
+                ->setData(SearchTask::schema_fields_STATUS, SearchTask::STATUS_PENDING)
+                ->setData(SearchTask::schema_fields_PROGRESS, 0.00)
+                ->setData(SearchTask::schema_fields_FOUND_COUNT, 0)
                 ->setSelectedSearchEnginesArray($selectedSearchEngines)
                 ->setSelectedTargetWebsitesArray($selectedTargetWebsites)
                 ->save();
@@ -111,8 +111,8 @@ class LeadSearchService
             $candidateModel = ObjectManager::getInstance(LeadCandidate::class);
             
             $candidates = $candidateModel->clear()
-                ->where(LeadCandidate::fields_STORE_ID, $task->getStoreId())
-                ->order(LeadCandidate::fields_SCORE, 'DESC')
+                ->where(LeadCandidate::schema_fields_STORE_ID, $task->getStoreId())
+                ->order(LeadCandidate::schema_fields_SCORE, 'DESC')
                 ->fetch()
                 ->getItems();
 
@@ -120,23 +120,23 @@ class LeadSearchService
             foreach ($candidates as $candidate) {
                 $resultData[] = [
                     'candidate_id' => $candidate->getId(),
-                    'score' => $candidate->getData(LeadCandidate::fields_SCORE),
-                    'source_url' => $candidate->getData(LeadCandidate::fields_SOURCE_URL),
-                    'status' => $candidate->getData(LeadCandidate::fields_STATUS),
-                    'profile_data' => json_decode($candidate->getData(LeadCandidate::fields_PROFILE_DATA), true),
+                    'score' => $candidate->getData(LeadCandidate::schema_fields_SCORE),
+                    'source_url' => $candidate->getData(LeadCandidate::schema_fields_SOURCE_URL),
+                    'status' => $candidate->getData(LeadCandidate::schema_fields_STATUS),
+                    'profile_data' => json_decode($candidate->getData(LeadCandidate::schema_fields_PROFILE_DATA), true),
                 ];
             }
 
             return [
                 'task_id' => $task->getId(),
-                'store_id' => $task->getData(SearchTask::fields_STORE_ID),
-                'status' => $task->getData(SearchTask::fields_STATUS),
-                'progress' => $task->getData(SearchTask::fields_PROGRESS),
-                'found_count' => (int)$task->getData(SearchTask::fields_FOUND_COUNT),
+                'store_id' => $task->getData(SearchTask::schema_fields_STORE_ID),
+                'status' => $task->getData(SearchTask::schema_fields_STATUS),
+                'progress' => $task->getData(SearchTask::schema_fields_PROGRESS),
+                'found_count' => (int)$task->getData(SearchTask::schema_fields_FOUND_COUNT),
                 'candidates' => $resultData,
                 'candidate_count' => count($resultData),
-                'created_at' => $task->getData(SearchTask::fields_CREATED_AT),
-                'updated_at' => $task->getData(SearchTask::fields_UPDATED_AT),
+                'created_at' => $task->getData(SearchTask::schema_fields_CREATED_AT),
+                'updated_at' => $task->getData(SearchTask::schema_fields_UPDATED_AT),
             ];
 
         } catch (\Exception $e) {
@@ -163,8 +163,8 @@ class LeadSearchService
                 return false;
             }
 
-            $task->setData(SearchTask::fields_STATUS, $status)
-                ->setData(SearchTask::fields_PROGRESS, $progress)
+            $task->setData(SearchTask::schema_fields_STATUS, $status)
+                ->setData(SearchTask::schema_fields_PROGRESS, $progress)
                 ->save();
 
             return true;
@@ -193,9 +193,9 @@ class LeadSearchService
                 return false;
             }
 
-            $task->setData(SearchTask::fields_RESULT_DATA, json_encode($resultData, JSON_UNESCAPED_UNICODE))
-                ->setData(SearchTask::fields_STATUS, SearchTask::STATUS_COMPLETED)
-                ->setData(SearchTask::fields_PROGRESS, 100.00)
+            $task->setData(SearchTask::schema_fields_RESULT_DATA, json_encode($resultData, JSON_UNESCAPED_UNICODE))
+                ->setData(SearchTask::schema_fields_STATUS, SearchTask::STATUS_COMPLETED)
+                ->setData(SearchTask::schema_fields_PROGRESS, 100.00)
                 ->save();
 
             return true;
@@ -221,16 +221,16 @@ class LeadSearchService
 
             $taskModel->clear()
                 ->where(
-                    SearchTask::fields_STATUS,
+                    SearchTask::schema_fields_STATUS,
                     [SearchTask::STATUS_PENDING, SearchTask::STATUS_RUNNING],
                     'in'
                 );
 
             if ($storeId !== null) {
-                $taskModel->where(SearchTask::fields_STORE_ID, $storeId);
+                $taskModel->where(SearchTask::schema_fields_STORE_ID, $storeId);
             }
 
-            $taskModel->order(SearchTask::fields_CREATED_AT, 'DESC')
+            $taskModel->order(SearchTask::schema_fields_CREATED_AT, 'DESC')
                 ->limit(1)
                 ->fetch();
 
@@ -267,12 +267,12 @@ class LeadSearchService
 
             return [
                 'task_id'     => $task->getId(),
-                'store_id'    => $task->getData(SearchTask::fields_STORE_ID),
-                'status'      => $task->getData(SearchTask::fields_STATUS),
-                'progress'    => $task->getData(SearchTask::fields_PROGRESS),
-                'found_count' => (int)$task->getData(SearchTask::fields_FOUND_COUNT),
-                'created_at'  => $task->getData(SearchTask::fields_CREATED_AT),
-                'updated_at'  => $task->getData(SearchTask::fields_UPDATED_AT),
+                'store_id'    => $task->getData(SearchTask::schema_fields_STORE_ID),
+                'status'      => $task->getData(SearchTask::schema_fields_STATUS),
+                'progress'    => $task->getData(SearchTask::schema_fields_PROGRESS),
+                'found_count' => (int)$task->getData(SearchTask::schema_fields_FOUND_COUNT),
+                'created_at'  => $task->getData(SearchTask::schema_fields_CREATED_AT),
+                'updated_at'  => $task->getData(SearchTask::schema_fields_UPDATED_AT),
             ];
         } catch (\Exception $e) {
             throw new Exception(__('获取任务详情失败：%{1}', [$e->getMessage()]));

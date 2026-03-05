@@ -53,7 +53,7 @@ class Token extends BackendController
         // 分页查询
         $offset = ($page - 1) * $limit;
         $tokens = $tokenModel->clear()
-            ->order(AgentToken::fields_CREATED_AT, 'DESC')
+            ->order(AgentToken::schema_fields_CREATED_AT, 'DESC')
             ->limit($limit, $offset)
             ->fetch()
             ->getItems();
