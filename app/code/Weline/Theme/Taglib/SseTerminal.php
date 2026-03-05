@@ -38,6 +38,7 @@ class SseTerminal implements TaglibInterface
         return [
             'id' => true,            // 组件唯一ID（必填）
             'url' => false,          // SSE 端点 URL（可通过 JS 设置）
+            'path' => false,         // 后台路由 path（如 blog/backend/post/trigger-sse），优先于 url，自动解析为 getBackendUrl）
             'title' => false,        // 终端标题
             'height' => false,       // 终端高度，默认 300px
             'auto-scroll' => false,  // 是否自动滚动到底部，默认 true
@@ -75,6 +76,8 @@ class SseTerminal implements TaglibInterface
 
             // 解析属性
             $code = \Weline\Taglib\Taglib::attributes($attributes);
+            // path 优先：若提供 path 则用 getBackendUrl 解析为完整 URL
+            $code .= "\nif (!empty(\$Taglib__path ?? '')) { \$Taglib__url = (string)\$this->getBackendUrl(\$Taglib__path); }";
 
             $html = [];
             $html[] = '<?php ' . $code . ' ?>';
@@ -438,6 +441,7 @@ JS;
 <ul>
     <li><code>id</code>：组件唯一ID（必填）</li>
     <li><code>url</code>：SSE 端点 URL（可选，也可通过 JS 设置）</li>
+    <li><code>path</code>：后台路由 path（如 blog/backend/post/trigger-sse），自动解析为完整 URL，优先于 url</li>
     <li><code>title</code>：终端标题，默认"终端输出"</li>
     <li><code>height</code>：终端高度，默认 300px</li>
     <li><code>auto-scroll</code>：是否自动滚动到底部，默认 true</li>
@@ -449,10 +453,17 @@ JS;
 
 <h4>使用示例</h4>
 <pre>
-&lt;!-- 基础用法 --&gt;
+&lt;!-- 使用 path（推荐，后台 SSE 直接填路由） --&gt;
 &lt;w:theme:sse-terminal 
     id="my-terminal"
-    url="@backend-url('module/controller/sse-action')"
+    path="blog/backend/post/trigger-ai-publish-sse"
+    title="任务执行"
+/&gt;
+
+&lt;!-- 使用 url（完整 URL） --&gt;
+&lt;w:theme:sse-terminal 
+    id="my-terminal"
+    url="/backend/xxx/sse"
     title="任务执行"
 /&gt;
 
