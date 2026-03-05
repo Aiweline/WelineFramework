@@ -1,67 +1,36 @@
 <?php
-
 declare(strict_types=1);
-
 namespace WeShop\GiftCard\Model;
-
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 /**
  * 礼品卡模型
  */
-class GiftCard extends \Weline\Framework\Database\Model
+#[Table(comment: 'WeShop礼品卡表')]
+#[Index(name: 'idx_card_number', columns: ['card_number'], type: 'UNIQUE', comment: '卡号唯一索引')]
+class GiftCard extends Model
 {
-    public const table = 'weshop_gift_card';
-    public const primary_key = 'card_id';
+    public const schema_table = 'weshop_gift_card';
+    public const schema_primary_key = 'card_id';
     public string $indexer = 'gift_card_indexer';
-    
-    public const fields_ID = 'card_id';
-    public const fields_CARD_NUMBER = 'card_number';
-    public const fields_AMOUNT = 'amount';
-    public const fields_BALANCE = 'balance';
-    public const fields_STATUS = 'status';
-    public const fields_EXPIRES_AT = 'expires_at';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
-    
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '礼品卡ID')]
+    public const schema_fields_ID = 'card_id';
+    #[Col(type: 'varchar', length: 50, nullable: false, comment: '卡号')]
+    public const schema_fields_CARD_NUMBER = 'card_number';
+    #[Col(type: 'decimal', length: '10,2', nullable: false, default: 0.00, comment: '面额')]
+    public const schema_fields_AMOUNT = 'amount';
+    #[Col(type: 'decimal', length: '10,2', nullable: false, default: 0.00, comment: '余额')]
+    public const schema_fields_BALANCE = 'balance';
+    #[Col(type: 'varchar', length: 20, nullable: true, default: 'active', comment: '状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col(type: 'datetime', nullable: true, comment: '过期时间')]
+    public const schema_fields_EXPIRES_AT = 'expires_at';
+    #[Col(type: 'datetime', nullable: false, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col(type: 'datetime', nullable: false, comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
     public array $_unit_primary_keys = ['card_id'];
     public array $_index_sort_keys = ['card_number', 'status'];
-    
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 升级逻辑
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('WeShop礼品卡表')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'auto_increment primary key', '礼品卡ID')
-                ->addColumn(self::fields_CARD_NUMBER, TableInterface::column_type_VARCHAR, 50, 'not null unique', '卡号')
-                ->addColumn(self::fields_AMOUNT, TableInterface::column_type_DECIMAL, '10,2', 'not null default 0.00', '面额')
-                ->addColumn(self::fields_BALANCE, TableInterface::column_type_DECIMAL, '10,2', 'not null default 0.00', '余额')
-                ->addColumn(self::fields_STATUS, TableInterface::column_type_VARCHAR, 20, "default 'active'", '状态')
-                ->addColumn(self::fields_EXPIRES_AT, TableInterface::column_type_DATETIME, 0, '', '过期时间')
-                ->addColumn(self::fields_CREATED_AT, TableInterface::column_type_DATETIME, 0, 'not null default CURRENT_TIMESTAMP', '创建时间')
-                ->addColumn(self::fields_UPDATED_AT, TableInterface::column_type_DATETIME, 0, 'not null default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP', '更新时间')
-                ->addIndex(TableInterface::index_type_UNIQUE, 'idx_card_number', self::fields_CARD_NUMBER, '卡号唯一索引')
-                ->create();
-        }
-    }
 }
