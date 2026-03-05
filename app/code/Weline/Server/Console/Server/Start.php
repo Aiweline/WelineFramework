@@ -557,6 +557,19 @@ class Start extends CommandAbstract
             }
         }
         
+        // ========== 检查 Session Server 端口（多 Worker 时 Master 会启动 Session Server，需提前释放避免 Address already in use） ==========
+        $sessionServerPort = (int) (Env::get('session.server_port') ?? 19970);
+        if ($count > 1 && $sessionServerPort > 0) {
+            if (!$this->checkAndReleasePort($host, $sessionServerPort, $forceRestart, 'Session Server', $instanceName)) {
+                if (!empty($maintenanceEnabledByUs)) {
+                    $this->disableMaintenanceMode();
+                    $this->printer->note(__('维护模式已关闭（Session Server 端口检查未通过）。'));
+                }
+                $this->printer->note(__('解决方案：先执行 php bin/w server:stop，或使用 -r 强制重启（仅杀框架进程）'));
+                return;
+            }
+        }
+
         // ========== 检查 HTTP 重定向端口（在启动前检测，避免启动到一半才报错） ==========
         if ($sslEnabled && $httpRedirectPort > 0) {
             if (!$this->checkAndReleasePort($host, $httpRedirectPort, $forceRestart, 'HTTP Redirect', $instanceName)) {
@@ -629,9 +642,13 @@ class Start extends CommandAbstract
     
     /**
      * 仅运行 Master 进程（由 startMasterInBackground 通过子进程调用，从实例文件恢复状态）
+     * 非 Windows 下调用 posix_setsid() 脱离控制终端，避免 SSH 断开或父进程退出时收到 SIGHUP 导致 Master 退出。
      */
     protected function runMasterOnly(string $instanceName): void
     {
+        if (!IS_WIN && \function_exists('posix_setsid')) {
+            @\posix_setsid();
+        }
         $instanceFile = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $instanceName . '.json';
         if (!\is_file($instanceFile)) {
             $this->printer->error(__('实例文件不存在：%{1}', [$instanceFile]));
