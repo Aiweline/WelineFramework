@@ -323,9 +323,10 @@
     // 加载图表数据
     function loadChartData() {
         // 每日上传趋势图
-        fetch('<?= $this->getUrl("fontsubletter/backend/admin/getChartData", ["type" => "daily"]) ?>')
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
+        var dailyUrl = '<?= $this->getUrl("fontsubletter/backend/admin/getChartData", ["type" => "daily"]) ?>';
+        window.Weline.Api.get(dailyUrl, { silent: true })
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.code === 200) {
                     var ctx = document.getElementById('dailyChart').getContext('2d');
                     new Chart(ctx, {
@@ -349,9 +350,10 @@
             });
 
         // 格式分布图
-        fetch('<?= $this->getUrl("fontsubletter/backend/admin/getChartData", ["type" => "format"]) ?>')
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
+        var formatUrl = '<?= $this->getUrl("fontsubletter/backend/admin/getChartData", ["type" => "format"]) ?>';
+        window.Weline.Api.get(formatUrl, { silent: true })
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.code === 200) {
                     var ctx = document.getElementById('formatChart').getContext('2d');
                     new Chart(ctx, {
@@ -381,15 +383,11 @@
     window.FslAdmin = {
         deleteRecord: function(id) {
             if (confirm('<?= __('确定要删除这条记录吗？') ?>')) {
-                fetch('<?= $this->getUrl("fontsubletter/backend/record/delete") ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: 'id=' + id
-                })
-                .then(function(response) { return response.json(); })
-                .then(function(data) {
+                var url = '<?= $this->getUrl("fontsubletter/backend/record/delete") ?>';
+                var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + id };
+                window.Weline.Api.request(url, opts)
+                .then(function(res) {
+                    var data = (res && res.data) !== undefined ? res.data : res;
                     if (data.code === 200) {
                         AdminToast.success('<?= __('删除成功') ?>');
                         setTimeout(function() { location.reload(); }, 1000);

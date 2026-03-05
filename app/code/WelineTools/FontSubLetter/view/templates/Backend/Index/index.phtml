@@ -397,12 +397,11 @@
 
         showProgress();
         
-        fetch('<?= $this->getUrl("*/backend/upload") ?>', {
-            method: 'POST',
-            body: formData
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
+        var url = '<?= $this->getUrl("*/backend/upload") ?>';
+        var opts = { method: 'POST', body: formData };
+        window.Weline.Api.request(url, opts)
+        .then(function(res) {
+            var data = (res && res.data) !== undefined ? res.data : res;
             hideProgress();
             if (data.code === 200) {
                 showFileInfo(data.data);
@@ -444,9 +443,10 @@
         showProgress();
         document.getElementById('progressText').textContent = '<?= __('提取字符中...') ?>';
 
-        fetch('<?= $this->getUrl("*/backend/extract") ?>?record_id=' + currentRecordId)
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
+        var extractUrl = '<?= $this->getUrl("*/backend/extract") ?>?record_id=' + currentRecordId;
+        window.Weline.Api.get(extractUrl, { silent: true })
+        .then(function(res) {
+            var data = (res && res.data) !== undefined ? res.data : res;
             hideProgress();
             
             if (data.code === 200) {
@@ -653,12 +653,11 @@
         formData.append('record_id', currentRecordId);
         formData.append('selected_chars', JSON.stringify(allChars));
 
-        fetch('<?= $this->getUrl("*/backend/generate") ?>', {
-            method: 'POST',
-            body: formData
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
+        var genUrl = '<?= $this->getUrl("*/backend/generate") ?>';
+        var genOpts = { method: 'POST', body: formData };
+        window.Weline.Api.request(genUrl, genOpts)
+        .then(function(res) {
+            var data = (res && res.data) !== undefined ? res.data : res;
             hideProgress();
             if (data.code === 200) {
                 AdminToast.success('<?= __('子集字体生成成功') ?>');
