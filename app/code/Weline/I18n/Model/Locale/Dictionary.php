@@ -1,6 +1,5 @@
 <?php
 declare(strict_types=1);
-
 /*
  * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
  * 作者：Admin
@@ -9,56 +8,28 @@ declare(strict_types=1);
  * 论坛：https://bbs.aiweline.com
  * 日期：2022/12/29 22:34:35
  */
-
 namespace Weline\I18n\Model\Locale;
-
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
-class Dictionary extends \Weline\Framework\Database\Model
+use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
+#[Table(comment: '地区词典')]
+#[Index(name: 'idx_code', columns: ['locale_code'], comment: '区码索引')]
+class Dictionary extends Model
 {
-    public const table = 'i18n_locale_dictionary';
-    public const fields_ID = 'md5';
-    public const fields_MD5 = 'md5';
-    public const fields_WORD = 'word';
-    public const fields_LOCALE_CODE = 'locale_code';
-    public const fields_TRANSLATE = 'translate';
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // TODO: Implement upgrade() method.
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-//        $setup->dropTable();
-        if (!$setup->tableExist()) {
-            $setup->createTable()
-                ->addColumn(self::fields_ID, TableInterface::column_type_VARCHAR, 128, 'primary key not null', 'MD5指纹')
-                ->addColumn(self::fields_WORD, TableInterface::column_type_TEXT, null, 'not null', '词')
-                ->addColumn(self::fields_LOCALE_CODE, TableInterface::column_type_VARCHAR, 12, 'not null', '地区码')
-                ->addColumn(self::fields_TRANSLATE, TableInterface::column_type_TEXT, null, 'not null', '翻译')
-                ->addIndex(\Weline\Framework\Database\Api\Db\TableInterface::index_type_KEY, 'idx_code', self::fields_LOCALE_CODE, '区码索引')
-                ->create();
-        }
-    }
-
-    /**
+    public const schema_table = 'i18n_locale_dictionary';
+    public const schema_primary_key = 'md5';
+    #[Col('varchar', 128, primaryKey: true, nullable: false, comment: 'MD5指纹')]
+    public const schema_fields_ID = 'md5';
+    #[Col('varchar', 128, primaryKey: true, nullable: false, comment: 'MD5指纹')]
+    public const schema_fields_MD5 = 'md5';
+    #[Col('text', nullable: false, comment: '词')]
+    public const schema_fields_WORD = 'word';
+    #[Col('varchar', 12, nullable: false, comment: '地区码')]
+    public const schema_fields_LOCALE_CODE = 'locale_code';
+    #[Col('text', nullable: false, comment: '翻译')]
+    public const schema_fields_TRANSLATE = 'translate';
+/**
      * 生成统一的MD5指纹
      * 确保所有地方使用相同的算法生成MD5
      * 
@@ -70,7 +41,6 @@ class Dictionary extends \Weline\Framework\Database\Model
     {
         return md5($word . $locale_code);
     }
-
     /**
      * 根据词汇和语言代码获取MD5
      * 

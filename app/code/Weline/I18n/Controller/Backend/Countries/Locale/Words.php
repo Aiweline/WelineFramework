@@ -67,7 +67,7 @@ class Words extends BaseController
                 # 每一批插入999条，数据库限制
                 $words = array_chunk($words, 999);
                 foreach ($words as $batch => $word) {
-                    $this->dictionary->insert($word, $this->dictionary::fields_ID)->fetch();
+                    $this->dictionary->insert($word, $this->dictionary::schema_fields_ID)->fetch();
                 }
                 $this->dictionary->commit();
             } catch (\Exception $exception) {
@@ -96,9 +96,9 @@ class Words extends BaseController
         // 查询已安装并且已经激活的地方代码
         $locale = $this->locale->clear()->where(
             [
-                $this->locale::fields_CODE => $locale_code,
-                $this->locale::fields_IS_ACTIVE => 1,
-                $this->locale::fields_IS_INSTALL => 1
+                $this->locale::schema_fields_CODE => $locale_code,
+                $this->locale::schema_fields_IS_ACTIVE => 1,
+                $this->locale::schema_fields_IS_INSTALL => 1
             ]
         )->where('n.display_locale_code', Cookie::getLangLocal())
             ->where('ln.display_locale_code', Cookie::getLangLocal())
@@ -112,11 +112,11 @@ class Words extends BaseController
         $this->assign('locale', $locale);
         // 如果存在搜索
         if ($search = $this->request->getGet('search')) {
-            $this->localeDictionary->where($this->localeDictionary::fields_WORD, "%$search%", 'like', 'or')
-                ->where($this->localeDictionary::fields_TRANSLATE, "%$search%", 'like');
+            $this->localeDictionary->where($this->localeDictionary::schema_fields_WORD, "%$search%", 'like', 'or')
+                ->where($this->localeDictionary::schema_fields_TRANSLATE, "%$search%", 'like');
         }
         // 获取当前操作的词典
-        $this->localeDictionary->where(Locale\Dictionary::fields_LOCALE_CODE, $locale->getId())
+        $this->localeDictionary->where(Locale\Dictionary::schema_fields_LOCALE_CODE, $locale->getId())
             ->order('create_time', 'desc')
             ->order('update_time', 'asc')
             ->pagination()
@@ -141,7 +141,7 @@ class Words extends BaseController
         $words = $this->dictionary->select()->fetchArray();
         foreach ($words as $key => $word) {
             unset($words[$key]);
-            $words[$word[$this->dictionary::fields_WORD]] = $word[$this->dictionary::fields_WORD];
+            $words[$word[$this->dictionary::schema_fields_WORD]] = $word[$this->dictionary::schema_fields_WORD];
         }
         // 获取收集到的词
         $collected_words = array_merge($words, $this->i18n->getCollectedWords());
@@ -152,10 +152,10 @@ class Words extends BaseController
                 $md5 = $this->localeDictionary->getMd5($key, $locale_code);
                 if (!isset($md5s[$md5])) {
                     $collected_words[] = [
-                        $this->localeDictionary::fields_WORD => $key,
-                        $this->localeDictionary::fields_LOCALE_CODE => $locale_code,
-                        $this->localeDictionary::fields_MD5 => $md5,
-                        $this->localeDictionary::fields_TRANSLATE => $key,
+                        $this->localeDictionary::schema_fields_WORD => $key,
+                        $this->localeDictionary::schema_fields_LOCALE_CODE => $locale_code,
+                        $this->localeDictionary::schema_fields_MD5 => $md5,
+                        $this->localeDictionary::schema_fields_TRANSLATE => $key,
                     ];
                 }
                 $md5s[$md5] = true;
@@ -167,7 +167,7 @@ class Words extends BaseController
                 # 分999个为一批
                 $collected_words = array_chunk($collected_words, 999);
                 foreach ($collected_words as $collected_word) {
-                    $this->localeDictionary->reset()->insert($collected_word, $this->localeDictionary::fields_MD5)->fetch();
+                    $this->localeDictionary->reset()->insert($collected_word, $this->localeDictionary::schema_fields_MD5)->fetch();
                 }
                 $this->localeDictionary->commit();
                 Message::success(__('词典收集成功！一共更新 %{1} 个词。', count($collected_words)));
@@ -197,7 +197,7 @@ class Words extends BaseController
         // 更新翻译
         $this->localeDictionary->beginTransaction();
         try {
-            $this->localeDictionary->insert($data, $this->localeDictionary::fields_MD5, $this->localeDictionary::fields_TRANSLATE)->fetch();
+            $this->localeDictionary->insert($data, $this->localeDictionary::schema_fields_MD5, $this->localeDictionary::schema_fields_TRANSLATE)->fetch();
             $this->localeDictionary->commit();
             return $this->fetchJson($this->success(__('成功保存！')));
         } catch (\Exception $exception) {
@@ -209,7 +209,7 @@ class Words extends BaseController
     public function postRestore()
     {
         $data = $this->request->getPost();
-        if (!isset($data['md5']) || !$this->localeDictionary->load($this->localeDictionary::fields_MD5, $data['md5'])->getId()) {
+        if (!isset($data['md5']) || !$this->localeDictionary->load($this->localeDictionary::schema_fields_MD5, $data['md5'])->getId()) {
             return $this->fetchJson($this->error(__('地区码不存在！')));
         }
         if (!isset($data['code']) || !$this->locale->load($data['code'])->getId()) {
@@ -221,18 +221,18 @@ class Words extends BaseController
             return $this->fetchJson($this->error(__('国家码不存在！')));
         }
         // 恢复原词
-        $this->localeDictionary->setData($this->localeDictionary::fields_TRANSLATE, $this->localeDictionary->getData
-        ($this->localeDictionary::fields_WORD))->save(true);
-        return $this->fetchJson($this->success(__('恢复成功！'), $this->localeDictionary->getData($this->localeDictionary::fields_WORD)));
+        $this->localeDictionary->setData($this->localeDictionary::schema_fields_TRANSLATE, $this->localeDictionary->getData
+        ($this->localeDictionary::schema_fields_WORD))->save(true);
+        return $this->fetchJson($this->success(__('恢复成功！'), $this->localeDictionary->getData($this->localeDictionary::schema_fields_WORD)));
     }
 
     public function push()
     {
         $code = $this->request->getParam('code');
         $locale = $this->locale->where([
-            $this->locale::fields_IS_ACTIVE => 1,
-            $this->locale::fields_IS_INSTALL => 1,
-            $this->locale::fields_CODE => $code
+            $this->locale::schema_fields_IS_ACTIVE => 1,
+            $this->locale::schema_fields_IS_INSTALL => 1,
+            $this->locale::schema_fields_CODE => $code
         ])
             ->find()
             ->fetch();
@@ -280,7 +280,7 @@ REGISTER_CONTENT;
             touch($pack_file);
         }
         $locale_dictionaries = $this->localeDictionary
-            ->where($this->localeDictionary::fields_LOCALE_CODE, $code)
+            ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $code)
             ->select()
             ->fetchArray();
         $pack_file_content = '';

@@ -75,10 +75,10 @@ class Local extends \Weline\Framework\App\Controller\FrontendController
 //        $local_codes = [];
 //        foreach ($locals as $local) {
 //            $local_codes[] = $local['code'];
-//            $model->where($model::fields_local_code, $local['code'], '=', 'or');
+//            $model->where($model::schema_fields_local_code, $local['code'], '=', 'or');
 //        }
         $local_descriptions = $model->reset()
-            ->where($model::fields_ID, $id)
+            ->where($model::schema_fields_ID, $id)
             ->select()
             ->fetchArray();
         
@@ -94,7 +94,7 @@ class Local extends \Weline\Framework\App\Controller\FrontendController
         foreach ($locals as $local) {
             $in_ = false;
             foreach ($local_descriptions as &$local_description) {
-                if ($local_description[$model::fields_local_code] == $local['code']) {
+                if ($local_description[$model::schema_fields_local_code] == $local['code']) {
                     $local_description['local'] = $local;
                     $in_ = true;
                     continue;
@@ -102,16 +102,16 @@ class Local extends \Weline\Framework\App\Controller\FrontendController
             }
             if (!$in_) {
                 $local_descriptions[] = [
-                    $model::fields_local_code => $local['code'],
+                    $model::schema_fields_local_code => $local['code'],
                     $field => $value,
-                    $model::fields_ID => $id,
+                    $model::schema_fields_ID => $id,
                     'local' => $local
                 ];
             }
         }
         $this->assign('local_descriptions', $local_descriptions);
         $this->assign('translate_field', $field);
-        $this->assign('id_field', $model::fields_ID);
+        $this->assign('id_field', $model::schema_fields_ID);
         $this->assign('value', $value);
         $this->assign('id', $id);
         $params = $this->request->getGet();
@@ -160,8 +160,8 @@ class Local extends \Weline\Framework\App\Controller\FrontendController
                 // 获取现有的 config 数据
                 $existingModel = clone $model;
                 $existingModel->clear()
-                    ->where($model::fields_ID, $description[$model::fields_ID])
-                    ->where($model::fields_local_code, $description[$model::fields_local_code])
+                    ->where($model::schema_fields_ID, $description[$model::schema_fields_ID])
+                    ->where($model::schema_fields_local_code, $description[$model::schema_fields_local_code])
                     ->find()
                     ->fetch();
                 
@@ -181,13 +181,13 @@ class Local extends \Weline\Framework\App\Controller\FrontendController
             }
             
             // 使用 config 字段更新
-            $model->reset()->insert($insertDesriptions, $model::fields_ID . ',local_code', 'config')->fetch();
+            $model->reset()->insert($insertDesriptions, $model::schema_fields_ID . ',local_code', 'config')->fetch();
         } else {
             // 处理普通字段
             foreach ($descriptions as $description) {
                 $insertDesriptions[] = $description;
             }
-            $model->reset()->insert($insertDesriptions, $model::fields_ID . ',local_code', $field)->fetch();
+            $model->reset()->insert($insertDesriptions, $model::schema_fields_ID . ',local_code', $field)->fetch();
         }
         
         $this->getMessageManager()->addSuccess(__('翻译完成!'));

@@ -236,7 +236,7 @@ class AiTranslationService
         $untranslatedWords = [];
 
         foreach ($allWords as $wordData) {
-            $word = $wordData[Dictionary::fields_WORD] ?? '';
+            $word = $wordData[Dictionary::schema_fields_WORD] ?? '';
             if (empty($word)) {
                 continue;
             }
@@ -244,7 +244,7 @@ class AiTranslationService
             // 检查是否已存在翻译
             $md5 = LocaleDictionary::generateMd5($word, $targetLocale);
             $existingTranslation = $this->localeDictionary->clear()
-                ->where(LocaleDictionary::fields_MD5, $md5)
+                ->where(LocaleDictionary::schema_fields_MD5, $md5)
                 ->find()
                 ->fetch();
 
@@ -271,27 +271,27 @@ class AiTranslationService
 
         // 检查是否已存在
         $existingTranslation = $this->localeDictionary->clear()
-            ->where(LocaleDictionary::fields_MD5, $md5)
+            ->where(LocaleDictionary::schema_fields_MD5, $md5)
             ->find()
             ->fetch();
 
         if ($existingTranslation->getId()) {
             // 更新现有翻译
             $this->localeDictionary->clear()
-                ->where(LocaleDictionary::fields_MD5, $md5)
+                ->where(LocaleDictionary::schema_fields_MD5, $md5)
                 ->update([
-                    LocaleDictionary::fields_TRANSLATE => $translation
+                    LocaleDictionary::schema_fields_TRANSLATE => $translation
                 ])
                 ->fetch();
         } else {
             // 创建新翻译
             $this->localeDictionary->clear()
                 ->insert([
-                    LocaleDictionary::fields_MD5 => $md5,
-                    LocaleDictionary::fields_WORD => $word,
-                    LocaleDictionary::fields_LOCALE_CODE => $localeCode,
-                    LocaleDictionary::fields_TRANSLATE => $translation
-                ], LocaleDictionary::fields_MD5)
+                    LocaleDictionary::schema_fields_MD5 => $md5,
+                    LocaleDictionary::schema_fields_WORD => $word,
+                    LocaleDictionary::schema_fields_LOCALE_CODE => $localeCode,
+                    LocaleDictionary::schema_fields_TRANSLATE => $translation
+                ], LocaleDictionary::schema_fields_MD5)
                 ->fetch();
         }
     }
@@ -343,7 +343,7 @@ class AiTranslationService
                     // 保存翻译（如果已存在则跳过）
                     $md5 = LocaleDictionary::generateMd5($word, $localeCode);
                     $existing = $this->localeDictionary->clear()
-                        ->where(LocaleDictionary::fields_MD5, $md5)
+                        ->where(LocaleDictionary::schema_fields_MD5, $md5)
                         ->find()
                         ->fetch();
 

@@ -13,50 +13,38 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Model\Locale;
 
-use Weline\Framework\Database\Api\Db\TableInterface;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 
+#[Table(comment: '地区/语言展示名')]
+#[Index(name: 'idx_locale_code', columns: ['locale_code'], comment: '区码索引')]
+#[Index(name: 'idx_display_locale_code', columns: ['display_locale_code'], comment: '展示区码索引')]
+#[Index(name: 'uk_locale_display_locale', columns: ['locale_code', 'display_locale_code'], type: 'UNIQUE', comment: '区域语言唯一索引')]
 class Name extends \Weline\Framework\Database\Model
 {
-    public const table = "i18n_locale_name";
-    public const fields_ID = 'locale_code';
+    public const schema_table = 'i18n_locale_name';
+    /** @var list<string> */
+    public const schema_primary_keys = ['locale_code', 'display_locale_code'];
     public const fields_LOCALE_CODE = 'locale_code';
     public const fields_DISPLAY_LOCALE_CODE = 'display_locale_code';
     public const fields_DISPLAY_NAME = 'display_name';
 
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
+    #[Col('varchar', 12, nullable: false, comment: '地区码')]
+    public const schema_fields_ID = 'locale_code';
+    #[Col('varchar', 12, nullable: false, comment: '地区码')]
+    public const schema_fields_LOCALE_CODE = 'locale_code';
+    #[Col('varchar', 12, nullable: false, comment: '展示地区码')]
+    public const schema_fields_DISPLAY_LOCALE_CODE = 'display_locale_code';
+    #[Col('varchar', 255, nullable: false, comment: '地区名')]
+    public const schema_fields_DISPLAY_NAME = 'display_name';
 
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // 重装模块触发 install 即可
-    }
+    public array $_unit_primary_keys = ['locale_code', 'display_locale_code'];
 
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-    //    $setup->dropTable();
-        if (!$setup->tableExist()) {
-            $setup->createTable()
-                ->addColumn(self::fields_ID, TableInterface::column_type_VARCHAR, 12, 'not null', '地区码')
-                ->addColumn(self::fields_DISPLAY_LOCALE_CODE, TableInterface::column_type_VARCHAR, 12, 'not null', '展示地区码')
-                ->addColumn(self::fields_DISPLAY_NAME, TableInterface::column_type_VARCHAR, 255, 'not null', '地区名')
-                ->addIndex(\Weline\Framework\Database\Api\Db\TableInterface::index_type_KEY, 'idx_locale_code', self::fields_LOCALE_CODE, '区码索引')
-                ->addIndex(\Weline\Framework\Database\Api\Db\TableInterface::index_type_KEY, 'idx_display_locale_code', self::fields_DISPLAY_LOCALE_CODE, '展示区码索引')
-                // 添加联合唯一索引，用于支持 PostgreSQL 的 ON CONFLICT 语法
-                ->addIndex(\Weline\Framework\Database\Api\Db\TableInterface::index_type_UNIQUE, 'uk_locale_display_locale', self::fields_LOCALE_CODE . ',' . self::fields_DISPLAY_LOCALE_CODE, '区域语言唯一索引')
-                ->create();
-        }
-    }
+    /** 表结构由 SchemaDiffStage 负责 */
+    public function setup(ModelSetup $setup, Context $context): void {}
+    public function upgrade(ModelSetup $setup, Context $context): void {}
+    public function install(ModelSetup $setup, Context $context): void {}
 }

@@ -54,7 +54,7 @@ class CountryUpdateService
             
             $existingCountryCodes = [];
             foreach ($existingCountries as $country) {
-                $existingCountryCodes[] = $country->getData(Countries::fields_CODE);
+                $existingCountryCodes[] = $country->getData(Countries::schema_fields_CODE);
             }
             
             // 比较可用国家数量和已存在国家数量
@@ -75,7 +75,7 @@ class CountryUpdateService
             // 检查显示名称数据是否完整
             $displayNames = $this->localeNames
                 ->clearQuery()
-                ->where(Name::fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal())
+                ->where(Name::schema_fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal())
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -116,15 +116,15 @@ class CountryUpdateService
             
             foreach ($countries as $code => $country) {
                 $insert_countries[] = [
-                    Countries::fields_CODE => $code,
-                    Countries::fields_FLAG => (string)$this->i18n->getCountryFlag($code),
-                    Countries::fields_IS_ACTIVE => 0,
-                    Countries::fields_IS_INSTALL => 0,
+                    Countries::schema_fields_CODE => $code,
+                    Countries::schema_fields_FLAG => (string)$this->i18n->getCountryFlag($code),
+                    Countries::schema_fields_IS_ACTIVE => 0,
+                    Countries::schema_fields_IS_INSTALL => 0,
                 ];
                 $insert_countries_display[] = [
-                    Name::fields_COUNTRY_CODE => $code,
-                    Name::fields_DISPLAY_LOCALE_CODE => Cookie::getLangLocal(),
-                    Name::fields_DISPLAY_NAME => $country,
+                    Name::schema_fields_COUNTRY_CODE => $code,
+                    Name::schema_fields_DISPLAY_LOCALE_CODE => Cookie::getLangLocal(),
+                    Name::schema_fields_DISPLAY_NAME => $country,
                 ];
             }
 
@@ -133,13 +133,13 @@ class CountryUpdateService
             
             try {
                 // 插入国家数据（使用INSERT IGNORE或ON DUPLICATE KEY UPDATE）
-                $this->countries->clearQuery()->insert($insert_countries, Countries::fields_CODE)->fetch();
+                $this->countries->clearQuery()->insert($insert_countries, Countries::schema_fields_CODE)->fetch();
                 
                 // 插入显示名称数据
                 $this->localeNames->insert($insert_countries_display, [
-                    $this->localeNames::fields_COUNTRY_CODE,
-                    $this->localeNames::fields_DISPLAY_LOCALE_CODE,
-                    $this->localeNames::fields_DISPLAY_NAME
+                    $this->localeNames::schema_fields_COUNTRY_CODE,
+                    $this->localeNames::schema_fields_DISPLAY_LOCALE_CODE,
+                    $this->localeNames::schema_fields_DISPLAY_NAME
                 ])->fetch();
                 
                 $this->countries->commit();
@@ -227,7 +227,7 @@ class CountryUpdateService
             
             $activeCountries = $this->countries
                 ->clearQuery()
-                ->where(Countries::fields_IS_ACTIVE, 1)
+                ->where(Countries::schema_fields_IS_ACTIVE, 1)
                 ->select()
                 ->fetch()
                 ->getItems();

@@ -35,22 +35,22 @@ class Words extends \Weline\Framework\App\Controller\BackendController
         } else {
             foreach ($locals as $code => $local_name) {
                 $need_locals[] = [
-                    Locals::fields_ID          => $code,
-                    Locals::fields_TARGET_CODE => Cookie::getLangLocal(),
-                    Locals::fields_NAME        => $local_name,
-                    Locals::fields_FLAG        => $I18n->getCountryFlagWithLocal($code)['flag'] ?? '',
+                    Locals::schema_fields_ID          => $code,
+                    Locals::schema_fields_TARGET_CODE => Cookie::getLangLocal(),
+                    Locals::schema_fields_NAME        => $local_name,
+                    Locals::schema_fields_FLAG        => $I18n->getCountryFlagWithLocal($code)['flag'] ?? '',
                 ];
             }
         }
         $I18n->i18nCache->set($cache_key, $need_locals, 0);
         /**@var Locals $localsModel */
         $localsModel = ObjectManager::getInstance(Locals::class);
-        $localsModel->insert($need_locals, Locals::fields_ID)->fetch();
+        $localsModel->insert($need_locals, Locals::schema_fields_ID)->fetch();
         $localsModel->clearData();
-        $locals = $localsModel->where(Locals::fields_TARGET_CODE, Cookie::getLangLocal())->pagination()->select()->fetch();
+        $locals = $localsModel->where(Locals::schema_fields_TARGET_CODE, Cookie::getLangLocal())->pagination()->select()->fetch();
         $this->assign('locals', $locals->getItems());
         $this->assign('pagination', $locals->getPagination());
-        $target_local = $localsModel->where(Locals::fields_CODE, Cookie::getLangLocal())->find()->fetch();
+        $target_local = $localsModel->where(Locals::schema_fields_CODE, Cookie::getLangLocal())->find()->fetch();
         $this->assign('target_local', $target_local);
         return $this->fetch();
     }

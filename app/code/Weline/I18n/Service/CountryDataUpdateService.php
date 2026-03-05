@@ -71,16 +71,16 @@ class CountryDataUpdateService
         
         foreach ($availableCountries as $code => $country) {
             $countryData = [
-                Countries::fields_CODE => $code,
-                Countries::fields_FLAG => (string)$this->i18n->getCountryFlag($code),
-                Countries::fields_IS_ACTIVE => ($code === 'CN') ? 1 : 0, // 中国默认已激活，其他国家未激活
-                Countries::fields_IS_INSTALL => ($code === 'CN') ? 1 : 0, // 中国默认已安装，其他国家未安装
+                Countries::schema_fields_CODE => $code,
+                Countries::schema_fields_FLAG => (string)$this->i18n->getCountryFlag($code),
+                Countries::schema_fields_IS_ACTIVE => ($code === 'CN') ? 1 : 0, // 中国默认已激活，其他国家未激活
+                Countries::schema_fields_IS_INSTALL => ($code === 'CN') ? 1 : 0, // 中国默认已安装，其他国家未安装
             ];
             
             $displayData = [
-                Name::fields_COUNTRY_CODE => $code,
-                Name::fields_DISPLAY_NAME => $country,
-                Name::fields_DISPLAY_LOCALE_CODE => Cookie::getLangLocal(),
+                Name::schema_fields_COUNTRY_CODE => $code,
+                Name::schema_fields_DISPLAY_NAME => $country,
+                Name::schema_fields_DISPLAY_LOCALE_CODE => Cookie::getLangLocal(),
             ];
             
             $insert_countries[] = $countryData;
@@ -95,12 +95,12 @@ class CountryDataUpdateService
                 // 分批插入，每批999条，数据库限制
                 $insert_countries = array_chunk($insert_countries, 50);
                 foreach ($insert_countries as $batch) {
-                    $this->countries->clear()->insert($batch, Countries::fields_CODE)->fetch();
+                    $this->countries->clear()->insert($batch, Countries::schema_fields_CODE)->fetch();
                 }
                 $insert_countries_display = array_chunk($insert_countries_display, 50);
                 foreach ($insert_countries_display as $batch) {
                     // 使用联合唯一索引字段作为冲突检测
-                    $this->localeNames->clear()->insert($batch, Name::fields_COUNTRY_CODE . ',' . Name::fields_DISPLAY_LOCALE_CODE)->fetch();
+                    $this->localeNames->clear()->insert($batch, Name::schema_fields_COUNTRY_CODE . ',' . Name::schema_fields_DISPLAY_LOCALE_CODE)->fetch();
                 }
                 $this->countries->commit();
             } catch (\Exception $e) {
@@ -128,12 +128,12 @@ class CountryDataUpdateService
         // 检查每个国家是否有对应的显示名称
         $missingData = [];
         foreach ($allCountries as $country) {
-            $countryCode = $country->getData(Countries::fields_CODE);
+            $countryCode = $country->getData(Countries::schema_fields_CODE);
             
             // 检查是否存在显示名称
             $existingName = $this->localeNames->clearQuery()
-                ->where(Name::fields_COUNTRY_CODE, $countryCode)
-                ->where(Name::fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal())
+                ->where(Name::schema_fields_COUNTRY_CODE, $countryCode)
+                ->where(Name::schema_fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal())
                 ->find()
                 ->fetch();
             if (!$existingName->getId()) {
@@ -141,9 +141,9 @@ class CountryDataUpdateService
                 $countryNames = $this->i18n->getCountries(Cookie::getLangLocal());
                 if (isset($countryNames[$countryCode])) {
                     $missingData[] = [
-                        Name::fields_COUNTRY_CODE => $countryCode,
-                        Name::fields_DISPLAY_NAME => $countryNames[$countryCode],
-                        Name::fields_DISPLAY_LOCALE_CODE => Cookie::getLangLocal()
+                        Name::schema_fields_COUNTRY_CODE => $countryCode,
+                        Name::schema_fields_DISPLAY_NAME => $countryNames[$countryCode],
+                        Name::schema_fields_DISPLAY_LOCALE_CODE => Cookie::getLangLocal()
                     ];
                 }
             }
@@ -155,7 +155,7 @@ class CountryDataUpdateService
             $this->localeNames->beginTransaction();
             try {
             $this->localeNames->clearQuery()
-                    ->insert($missingData, Name::fields_COUNTRY_CODE.',' . Name::fields_DISPLAY_LOCALE_CODE)
+                    ->insert($missingData, Name::schema_fields_COUNTRY_CODE.',' . Name::schema_fields_DISPLAY_LOCALE_CODE)
                     ->fetch();
                 $this->localeNames->commit();
             } catch (\Exception $e) {
