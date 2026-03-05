@@ -70,7 +70,7 @@ class RefundService
         }
         
         $refundAmount = (float)$refundData['amount'];
-        $grandTotal = (float)$order->getData(Order::fields_GRAND_TOTAL);
+        $grandTotal = (float)$order->getData(Order::schema_fields_GRAND_TOTAL);
         
         if ($refundAmount > $grandTotal) {
             throw new \Exception(__('退款金额不能超过订单总额'));
@@ -84,10 +84,10 @@ class RefundService
         
         // 创建退款记录
         $refund = $this->getRefundModel()->reset();
-        $refund->setData(OrderRefund::fields_ORDER_ID, $orderId);
-        $refund->setData(OrderRefund::fields_AMOUNT, $refundAmount);
-        $refund->setData(OrderRefund::fields_REASON, $refundData['reason'] ?? '');
-        $refund->setData(OrderRefund::fields_STATUS, OrderRefund::STATUS_PENDING);
+        $refund->setData(OrderRefund::schema_fields_ORDER_ID, $orderId);
+        $refund->setData(OrderRefund::schema_fields_AMOUNT, $refundAmount);
+        $refund->setData(OrderRefund::schema_fields_REASON, $refundData['reason'] ?? '');
+        $refund->setData(OrderRefund::schema_fields_STATUS, OrderRefund::STATUS_PENDING);
         $refund->save();
         
         return $refund;
@@ -108,21 +108,21 @@ class RefundService
             throw new \Exception(__('退款记录不存在'));
         }
         
-        if ($refund->getData(OrderRefund::fields_STATUS) !== OrderRefund::STATUS_PENDING) {
+        if ($refund->getData(OrderRefund::schema_fields_STATUS) !== OrderRefund::STATUS_PENDING) {
             throw new \Exception(__('只有待处理的退款才能处理'));
         }
         
         // 更新退款状态
-        $refund->setData(OrderRefund::fields_STATUS, OrderRefund::STATUS_REFUNDED);
-        $refund->setData(OrderRefund::fields_REFUNDED_AT, date('Y-m-d H:i:s'));
+        $refund->setData(OrderRefund::schema_fields_STATUS, OrderRefund::STATUS_REFUNDED);
+        $refund->setData(OrderRefund::schema_fields_REFUNDED_AT, date('Y-m-d H:i:s'));
         $refund->save();
         
         // 更新订单状态
-        $orderId = (int)$refund->getData(OrderRefund::fields_ORDER_ID);
+        $orderId = (int)$refund->getData(OrderRefund::schema_fields_ORDER_ID);
         $order = $this->orderService->getOrder($orderId);
         
         $refundedAmount = $this->getRefundedAmount($orderId);
-        $grandTotal = (float)$order->getData(Order::fields_GRAND_TOTAL);
+        $grandTotal = (float)$order->getData(Order::schema_fields_GRAND_TOTAL);
         
         if ($refundedAmount >= $grandTotal) {
             // 使用状态机转换订单状态
@@ -153,8 +153,8 @@ class RefundService
     public function getRefundHistory(int $orderId): array
     {
         $collection = $this->getRefundModel()->reset()
-            ->where(OrderRefund::fields_ORDER_ID, $orderId)
-            ->order(OrderRefund::fields_CREATED_AT, 'DESC')
+            ->where(OrderRefund::schema_fields_ORDER_ID, $orderId)
+            ->order(OrderRefund::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetch();
         
@@ -170,15 +170,15 @@ class RefundService
     private function getRefundedAmount(int $orderId): float
     {
         $refunds = $this->getRefundModel()->reset()
-            ->where(OrderRefund::fields_ORDER_ID, $orderId)
-            ->where(OrderRefund::fields_STATUS, OrderRefund::STATUS_REFUNDED)
+            ->where(OrderRefund::schema_fields_ORDER_ID, $orderId)
+            ->where(OrderRefund::schema_fields_STATUS, OrderRefund::STATUS_REFUNDED)
             ->select()
             ->fetch()
             ->getItems();
         
         $total = 0;
         foreach ($refunds as $refund) {
-            $total += (float)$refund->getData(OrderRefund::fields_AMOUNT);
+            $total += (float)$refund->getData(OrderRefund::schema_fields_AMOUNT);
         }
         
         return $total;

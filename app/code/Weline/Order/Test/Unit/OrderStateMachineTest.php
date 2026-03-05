@@ -74,7 +74,7 @@ class OrderStateMachineTest extends TestCase
         $this->stateMachine->transition($orderId, Order::STATUS_PROCESSING, '开始处理订单');
         
         $updatedOrder = $orderService->getOrder($orderId);
-        $this->assertEquals(Order::STATUS_PROCESSING, $updatedOrder->getData(Order::fields_STATUS));
+        $this->assertEquals(Order::STATUS_PROCESSING, $updatedOrder->getData(Order::schema_fields_STATUS));
     }
     
     /**

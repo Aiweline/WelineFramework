@@ -61,21 +61,21 @@ class FulfillmentService
         $order = $this->orderService->getOrder($orderId);
         
         // 验证订单是否可以发货
-        if ($order->getData(Order::fields_STATUS) !== Order::STATUS_PAID) {
+        if ($order->getData(Order::schema_fields_STATUS) !== Order::STATUS_PAID) {
             throw new \Exception(__('只有已支付的订单才能发货'));
         }
         
         // 创建发货记录
         $shipment = $this->getShipmentModel()->reset();
-        $shipment->setData(OrderShipment::fields_ORDER_ID, $orderId);
-        $shipment->setData(OrderShipment::fields_TRACKING_NUMBER, $shipmentData['tracking_number'] ?? '');
-        $shipment->setData(OrderShipment::fields_CARRIER, $shipmentData['carrier'] ?? '');
-        $shipment->setData(OrderShipment::fields_STATUS, OrderShipment::STATUS_SHIPPED);
-        $shipment->setData(OrderShipment::fields_SHIPPED_AT, date('Y-m-d H:i:s'));
+        $shipment->setData(OrderShipment::schema_fields_ORDER_ID, $orderId);
+        $shipment->setData(OrderShipment::schema_fields_TRACKING_NUMBER, $shipmentData['tracking_number'] ?? '');
+        $shipment->setData(OrderShipment::schema_fields_CARRIER, $shipmentData['carrier'] ?? '');
+        $shipment->setData(OrderShipment::schema_fields_STATUS, OrderShipment::STATUS_SHIPPED);
+        $shipment->setData(OrderShipment::schema_fields_SHIPPED_AT, date('Y-m-d H:i:s'));
         $shipment->save();
         
         // 更新订单发货状态
-        $order->setData(Order::fields_FULFILLMENT_STATUS, Order::FULFILLMENT_STATUS_SHIPPED);
+        $order->setData(Order::schema_fields_FULFILLMENT_STATUS, Order::FULFILLMENT_STATUS_SHIPPED);
         $order->save();
         
         // 使用状态机转换订单状态
@@ -112,7 +112,7 @@ class FulfillmentService
             throw new \Exception(__('发货记录不存在'));
         }
         
-        $shipment->setData(OrderShipment::fields_TRACKING_NUMBER, $trackingNumber);
+        $shipment->setData(OrderShipment::schema_fields_TRACKING_NUMBER, $trackingNumber);
         $shipment->save();
         
         return $shipment;
@@ -133,15 +133,15 @@ class FulfillmentService
             throw new \Exception(__('发货记录不存在'));
         }
         
-        $shipment->setData(OrderShipment::fields_STATUS, OrderShipment::STATUS_DELIVERED);
-        $shipment->setData(OrderShipment::fields_DELIVERED_AT, date('Y-m-d H:i:s'));
+        $shipment->setData(OrderShipment::schema_fields_STATUS, OrderShipment::STATUS_DELIVERED);
+        $shipment->setData(OrderShipment::schema_fields_DELIVERED_AT, date('Y-m-d H:i:s'));
         $shipment->save();
         
         // 更新订单状态为已完成
-        $orderId = (int)$shipment->getData(OrderShipment::fields_ORDER_ID);
+        $orderId = (int)$shipment->getData(OrderShipment::schema_fields_ORDER_ID);
         $order = $this->orderService->getOrder($orderId);
         
-        $order->setData(Order::fields_FULFILLMENT_STATUS, Order::FULFILLMENT_STATUS_DELIVERED);
+        $order->setData(Order::schema_fields_FULFILLMENT_STATUS, Order::FULFILLMENT_STATUS_DELIVERED);
         $order->save();
         
         // 使用状态机转换订单状态
@@ -171,8 +171,8 @@ class FulfillmentService
     public function getShipments(int $orderId): array
     {
         $collection = $this->getShipmentModel()->reset()
-            ->where(OrderShipment::fields_ORDER_ID, $orderId)
-            ->order(OrderShipment::fields_CREATED_AT, 'DESC')
+            ->where(OrderShipment::schema_fields_ORDER_ID, $orderId)
+            ->order(OrderShipment::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetch();
         

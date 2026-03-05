@@ -56,8 +56,8 @@ class InvoiceService
         
         // 检查是否已生成发票
         $existingInvoice = $this->getInvoiceModel()->reset()
-            ->where(OrderInvoice::fields_ORDER_ID, $orderId)
-            ->where(OrderInvoice::fields_STATUS, OrderInvoice::STATUS_ISSUED)
+            ->where(OrderInvoice::schema_fields_ORDER_ID, $orderId)
+            ->where(OrderInvoice::schema_fields_STATUS, OrderInvoice::STATUS_ISSUED)
             ->find()
             ->fetch();
         
@@ -67,11 +67,11 @@ class InvoiceService
         
         // 创建发票
         $invoice = $this->getInvoiceModel()->reset();
-        $invoice->setData(OrderInvoice::fields_ORDER_ID, $orderId);
-        $invoice->setData(OrderInvoice::fields_INVOICE_NUMBER, $invoice->generateInvoiceNumber());
-        $invoice->setData(OrderInvoice::fields_AMOUNT, $order->getData(Order::fields_GRAND_TOTAL));
-        $invoice->setData(OrderInvoice::fields_STATUS, OrderInvoice::STATUS_ISSUED);
-        $invoice->setData(OrderInvoice::fields_ISSUED_AT, date('Y-m-d H:i:s'));
+        $invoice->setData(OrderInvoice::schema_fields_ORDER_ID, $orderId);
+        $invoice->setData(OrderInvoice::schema_fields_INVOICE_NUMBER, $invoice->generateInvoiceNumber());
+        $invoice->setData(OrderInvoice::schema_fields_AMOUNT, $order->getData(Order::schema_fields_GRAND_TOTAL));
+        $invoice->setData(OrderInvoice::schema_fields_STATUS, OrderInvoice::STATUS_ISSUED);
+        $invoice->setData(OrderInvoice::schema_fields_ISSUED_AT, date('Y-m-d H:i:s'));
         $invoice->save();
         
         return $invoice;
@@ -104,8 +104,8 @@ class InvoiceService
     public function getInvoiceList(int $orderId): array
     {
         $collection = $this->getInvoiceModel()->reset()
-            ->where(OrderInvoice::fields_ORDER_ID, $orderId)
-            ->order(OrderInvoice::fields_CREATED_AT, 'DESC')
+            ->where(OrderInvoice::schema_fields_ORDER_ID, $orderId)
+            ->order(OrderInvoice::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetch();
         

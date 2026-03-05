@@ -76,7 +76,7 @@ class Shipment extends BackendController
         
         try {
             $shipment = $this->fulfillmentService->updateTracking($shipmentId, $trackingNumber);
-            $orderId = (int)$shipment->getData(\Weline\Order\Model\OrderShipment::fields_ORDER_ID);
+            $orderId = (int)$shipment->getData(\Weline\Order\Model\OrderShipment::schema_fields_ORDER_ID);
             $this->getMessageManager()->addSuccess(__('物流单号更新成功'));
             $this->redirect('order/backend/order/view?id=' . $orderId);
         } catch (\Exception $e) {
@@ -101,7 +101,7 @@ class Shipment extends BackendController
         
         try {
             $shipment = $this->fulfillmentService->markAsDelivered($shipmentId);
-            $orderId = (int)$shipment->getData(\Weline\Order\Model\OrderShipment::fields_ORDER_ID);
+            $orderId = (int)$shipment->getData(\Weline\Order\Model\OrderShipment::schema_fields_ORDER_ID);
             $this->getMessageManager()->addSuccess(__('标记成功'));
             $this->redirect('order/backend/order/view?id=' . $orderId);
         } catch (\Exception $e) {

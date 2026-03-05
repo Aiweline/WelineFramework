@@ -54,7 +54,7 @@ class OrderServiceTest extends TestCase
         
         $this->assertInstanceOf(Order::class, $order);
         $this->assertNotEmpty($order->getId());
-        $this->assertNotEmpty($order->getData(Order::fields_ORDER_NUMBER));
+        $this->assertNotEmpty($order->getData(Order::schema_fields_ORDER_NUMBER));
     }
     
     /**
@@ -113,7 +113,7 @@ class OrderServiceTest extends TestCase
         $this->orderService->cancelOrder($orderId, '测试取消原因');
         
         $cancelledOrder = $this->orderService->getOrder($orderId);
-        $this->assertEquals(Order::STATUS_CANCELLED, $cancelledOrder->getData(Order::fields_STATUS));
+        $this->assertEquals(Order::STATUS_CANCELLED, $cancelledOrder->getData(Order::schema_fields_STATUS));
     }
     
     /**
@@ -141,9 +141,9 @@ class OrderServiceTest extends TestCase
         
         $this->orderService->calculateTotals($order, $items);
         
-        $this->assertEquals(250.00, $order->getData(Order::fields_SUBTOTAL));
-        $this->assertEquals(15.00, $order->getData(Order::fields_TAX_AMOUNT));
-        $this->assertEquals(5.00, $order->getData(Order::fields_DISCOUNT_AMOUNT));
+        $this->assertEquals(250.00, $order->getData(Order::schema_fields_SUBTOTAL));
+        $this->assertEquals(15.00, $order->getData(Order::schema_fields_TAX_AMOUNT));
+        $this->assertEquals(5.00, $order->getData(Order::schema_fields_DISCOUNT_AMOUNT));
     }
 }
 

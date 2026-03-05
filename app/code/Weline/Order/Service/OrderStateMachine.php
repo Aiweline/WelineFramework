@@ -104,7 +104,7 @@ class OrderStateMachine
             throw new \Exception(__('订单不存在'));
         }
         
-        $currentStatus = $order->getData(Order::fields_STATUS);
+        $currentStatus = $order->getData(Order::schema_fields_STATUS);
         
         // 1. 检查基本转换规则
         if (!$this->canTransition($currentStatus, $newStatus)) {
@@ -129,8 +129,8 @@ class OrderStateMachine
         }
         
         // 4. 执行状态更新
-        $order->setData(Order::fields_STATUS, $newStatus);
-        $order->setData(Order::fields_STATE, $newStatus);
+        $order->setData(Order::schema_fields_STATUS, $newStatus);
+        $order->setData(Order::schema_fields_STATE, $newStatus);
         $order->save();
         
         // 5. 触发变更后事件（订单历史记录等逻辑由观察者处理）
