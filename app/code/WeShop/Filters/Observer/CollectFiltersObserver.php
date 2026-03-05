@@ -77,7 +77,7 @@ class CollectFiltersObserver implements ObserverInterface
         
         // 注册配置中的EAV属性筛选器
         foreach ($filterConfigs as $config) {
-            $attributeId = $config[CategoryFilterConfig::fields_attribute_id] ?? null;
+            $attributeId = $config[CategoryFilterConfig::schema_fields_attribute_id] ?? null;
             
             if ($attributeId) {
                 // 获取属性信息并注册筛选器
@@ -96,9 +96,9 @@ class CollectFiltersObserver implements ObserverInterface
      */
     private function registerEavAttributeFilter(array $config, array $productIds): void
     {
-        $attributeId = $config[CategoryFilterConfig::fields_attribute_id] ?? 0;
-        $filterCode = $config[CategoryFilterConfig::fields_filter_code] ?? '';
-        $sortOrder = $config[CategoryFilterConfig::fields_sort_order] ?? 100;
+        $attributeId = $config[CategoryFilterConfig::schema_fields_attribute_id] ?? 0;
+        $filterCode = $config[CategoryFilterConfig::schema_fields_filter_code] ?? '';
+        $sortOrder = $config[CategoryFilterConfig::schema_fields_sort_order] ?? 100;
         
         if ($attributeId <= 0 || empty($filterCode)) {
             return;
@@ -116,8 +116,8 @@ class CollectFiltersObserver implements ObserverInterface
         
         // 创建并注册筛选器
         $provider = EavAttributeFilterProvider::create($attributeCode, '', $sortOrder);
-        $provider->setDisplayType($config[CategoryFilterConfig::fields_display_type] ?? 'list');
-        $provider->setCollapsed((bool)($config[CategoryFilterConfig::fields_is_collapsed] ?? false));
+        $provider->setDisplayType($config[CategoryFilterConfig::schema_fields_display_type] ?? 'list');
+        $provider->setCollapsed((bool)($config[CategoryFilterConfig::schema_fields_is_collapsed] ?? false));
         
         $this->filterRegistry->register($provider);
     }

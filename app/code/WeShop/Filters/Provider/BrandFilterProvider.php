@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace WeShop\Filters\Provider;
 
-use WeShop\Product\Model\Product;
-use Weline\Eav\Model\EavAttribute;
-use Weline\Eav\Model\EavAttribute\Option;
-use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 品牌筛选提供者
@@ -81,27 +77,22 @@ class BrandFilterProvider extends AbstractFilterProvider
     private function getEavBrandOptions(array $productIds, array $appliedFilters): array
     {
         try {
-            // 获取品牌属性
-            $attribute = $this->getBrandAttribute();
-            if (!$attribute || !$attribute->getId()) {
+            $info = $this->getProductAttributeInfo($this->attributeCode);
+            if (!$info || !($info['attribute_id'] ?? 0)) {
                 return [];
             }
-            
-            // 获取产品的品牌值
-            $brandValues = $this->getProductBrandValues($productIds, $attribute);
-            
+            $brandValues = $this->getProductEavValues(
+                (int)$info['attribute_id'],
+                (string)($info['type_code'] ?? 'input_string'),
+                $productIds
+            );
             if (empty($brandValues)) {
                 return [];
             }
-            
-            // 统计每个品牌的产品数量
             $brandCounts = array_count_values($brandValues);
-            
-            // 获取品牌选项标签
             $options = [];
-            if ($attribute->hasOption()) {
-                // 从选项表获取标签
-                $optionLabels = $this->getOptionLabels($attribute, array_keys($brandCounts));
+            if (!empty($info['has_option'])) {
+                $optionLabels = $this->getOptionLabelsByAttributeId((int)$info['attribute_id'], array_keys($brandCounts));
                 foreach ($brandCounts as $value => $count) {
                     $label = $optionLabels[$value] ?? $value;
                     $options[] = $this->buildOption(
@@ -154,58 +145,19 @@ class BrandFilterProvider extends AbstractFilterProvider
         }
         
         try {
-            $attribute = $this->getBrandAttribute();
-            if (!$attribute || !$attribute->getId()) {
+            $info = $this->getProductAttributeInfo($this->attributeCode);
+            if (!$info || !($info['attribute_id'] ?? 0)) {
                 return $productIds;
             }
-            return $this->getProductIdsByEavValues($attribute, $productIds, $filterValues);
+            return $this->getProductIdsByEavValues(
+                (int)$info['attribute_id'],
+                (string)($info['type_code'] ?? 'input_string'),
+                $productIds,
+                $filterValues
+            );
         } catch (\Throwable $e) {
             return $productIds;
         }
-    }
-    
-    /**
-     * 获取品牌属性
-     */
-    private function getBrandAttribute(): ?EavAttribute
-    {
-        try {
-            // 获取产品实体的品牌属性
-            /** @var Product $productModel */
-            $productModel = ObjectManager::getInstance(Product::class);
-            return $productModel->getAttribute($this->attributeCode);
-        } catch (\Throwable $e) {
-            return null;
-        }
-    }
-    
-    /**
-     * 获取产品的品牌值
-     */
-    private function getProductBrandValues(array $productIds, EavAttribute $attribute): array
-    {
-        return $this->getProductEavValues($attribute, $productIds);
-    }
-    
-    /**
-     * 获取选项标签
-     */
-    private function getOptionLabels(EavAttribute $attribute, array $optionIds): array
-    {
-        /** @var Option $optionModel */
-        $optionModel = ObjectManager::getInstance(Option::class);
-        $optionModel->reset()
-            ->where('attribute_id', $attribute->getId())
-            ->where('option_id', $optionIds, 'in');
-        
-        $results = $optionModel->select()->fetchArray();
-        
-        $labels = [];
-        foreach ($results as $row) {
-            $labels[$row['option_id']] = $row['value'] ?? $row['code'];
-        }
-        
-        return $labels;
     }
     
     /**
@@ -232,17 +184,13 @@ class BrandFilterProvider extends AbstractFilterProvider
     public function getValueLabel(string $value): string
     {
         try {
-            $attribute = $this->getBrandAttribute();
-            if (!$attribute || !$attribute->getId()) {
+            $info = $this->getProductAttributeInfo($this->attributeCode);
+            if (!$info || !($info['attribute_id'] ?? 0) || empty($info['has_option'])) {
                 return $value;
             }
-            
-            if ($attribute->hasOption()) {
-                $labels = $this->getOptionLabels($attribute, [$value]);
-                return $labels[$value] ?? $value;
-            }
-            
-            return $value;
+            $labels = $this->getOptionLabelsByAttributeId((int)$info['attribute_id'], [$value]);
+            $labelInfo = $labels[$value] ?? null;
+            return $labelInfo ? ($labelInfo['value'] ?: $labelInfo['code']) : $value;
         } catch (\Throwable $e) {
             return $value;
         }
