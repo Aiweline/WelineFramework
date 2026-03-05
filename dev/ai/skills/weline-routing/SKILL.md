@@ -39,6 +39,7 @@ alwaysApply: false
 **相互参照：**
 - 创建控制器 → 参考 `module-development` + `weline-routing`
 - 生成URL → 参考 `weline-routing`
+- 模板中 URL → 使用 `@backend-url`、`@url` 等静态 @ 标签（见下方「模板 URL 标签」）
 - 用户提示 → 参考 `friendly-notifications`
 - WLS 状态问题 → 参考 `weline-server`（状态管理章节）
 
@@ -421,6 +422,30 @@ JS;
 - ✅ **始终使用** `Url` 服务生成完整URL
 - ✅ **路径格式** 始终为 `module/controller/action`
 - ✅ **后台路由** 必须使用 `getBackendUrl()`
+
+#### 5.3 模板中的 URL 生成（@ 静态标签）
+
+模板中（尤其是 Taglib 属性、`<script>` 内）应使用 **@ 静态标签** 而非 PHP 输出，因 Taglib 属性值可能不解析 PHP、导致 URL 原样输出为 `<?= ... ?>` 字面量：
+
+| 标签 | 用途 |
+|------|------|
+| `@url('path')` | 前台 URL |
+| `@frontend-url('path')` | 前台 URL |
+| `@backend-url('path')` | 后台 URL |
+| `@api('path')` | API URL |
+| `@backend-api('path')` | 后台 API URL |
+
+```html
+<!-- ❌ Taglib 属性中 PHP 可能不解析 -->
+<w:theme:sse-terminal url="<?= $this->getBackendUrl('blog/backend/post/sse') ?>"/>
+
+<!-- ✅ 使用 @backend-url 在编译期展开 -->
+<w:theme:sse-terminal url="@backend-url('blog/backend/post/sse')"/>
+
+<!-- href、action、JS 变量同理 -->
+<a href="@backend-url('admin/dashboard')">仪表盘</a>
+<script>var url = '@backend-api('api/data')';</script>
+```
 
 ### 6. 前端调用规范
 
