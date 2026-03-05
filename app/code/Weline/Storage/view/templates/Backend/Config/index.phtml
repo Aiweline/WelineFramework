@@ -96,12 +96,10 @@ document.querySelectorAll('.btn-delete').forEach(btn => {
         
         const id = this.dataset.id;
         try {
-            const res = await fetch('<?= $this->getUrl('storage/backend/config/delete') ?>', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'id=' + encodeURIComponent(id)
-            });
-            const data = await res.json();
+            var url = '<?= $this->getUrl('storage/backend/config/delete') ?>';
+            var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + encodeURIComponent(id) };
+            var res = await window.Weline.Api.request(url, opts);
+            var data = (res && res.data) !== undefined ? res.data : res;
             
             if (data.code === 200) {
                 AdminToast.success(data.msg);
@@ -119,12 +117,10 @@ document.querySelectorAll('.btn-set-default').forEach(btn => {
     btn.addEventListener('click', async function() {
         const id = this.dataset.id;
         try {
-            const res = await fetch('<?= $this->getUrl('storage/backend/config/setDefault') ?>', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'id=' + encodeURIComponent(id)
-            });
-            const data = await res.json();
+            var url = '<?= $this->getUrl('storage/backend/config/setDefault') ?>';
+            var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + encodeURIComponent(id) };
+            var res = await window.Weline.Api.request(url, opts);
+            var data = (res && res.data) !== undefined ? res.data : res;
             
             if (data.code === 200) {
                 AdminToast.success(data.msg);
