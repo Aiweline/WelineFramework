@@ -182,11 +182,6 @@ $is_logged_in = $this->is_logged_in ?? false;
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="<?= $this->getUrl('*/frontend/assistant') ?>">
-                        <i class="mdi mdi-robot"></i> <?= __('我的助手') ?>
-                    </a>
-                </li>
-                <li class="nav-item">
                     <a class="nav-link" href="<?= $this->getUrl('*/frontend/center') ?>">
                         <i class="mdi mdi-account"></i> <?= __('个人中心') ?>
                     </a>
@@ -336,15 +331,10 @@ async function sendMessage() {
         const scenarioCode = document.getElementById('scenarioSelect').value;
 
         // 调用API
-        const response = await fetch('<?= $this->getFrontendUrl('*/frontend/chat/send') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: `message=${encodeURIComponent(message)}&model_code=${modelCode}&scenario_code=${scenarioCode}`
-        });
-
-        const data = await response.json();
+        var url = '<?= $this->getFrontendUrl('*/frontend/chat/send') ?>';
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `message=${encodeURIComponent(message)}&model_code=${modelCode}&scenario_code=${scenarioCode}` };
+        var res = await window.Weline.Api.request(url, opts);
+        const data = (res && res.data) || res;
 
         if (data.success) {
             aiContentDiv.textContent = data.data.response;

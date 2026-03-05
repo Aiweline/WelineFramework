@@ -87,11 +87,11 @@ class MultiTenantManager
 
         // 创建租户
         $tenant = new AiTenant();
-        $tenant->setData(AiTenant::fields_TENANT_NAME, $tenantName)
-               ->setData(AiTenant::fields_TENANT_CODE, $tenantCode)
-               ->setData(AiTenant::fields_TENANT_TYPE, $tenantType)
-               ->setData(AiTenant::fields_STATUS, AiTenant::STATUS_ACTIVE)
-               ->setData(AiTenant::fields_PLAN_TYPE, $planType)
+        $tenant->setData(AiTenant::schema_fields_TENANT_NAME, $tenantName)
+               ->setData(AiTenant::schema_fields_TENANT_CODE, $tenantCode)
+               ->setData(AiTenant::schema_fields_TENANT_TYPE, $tenantType)
+               ->setData(AiTenant::schema_fields_STATUS, AiTenant::STATUS_ACTIVE)
+               ->setData(AiTenant::schema_fields_PLAN_TYPE, $planType)
                ->setResourceQuota($resourceQuota)
                ->setBillingInfo($billingInfo)
                ->save();
@@ -108,7 +108,7 @@ class MultiTenantManager
     public function getTenant(string $tenantCode): ?AiTenant
     {
         $tenant = $this->tenantModel->reset()
-            ->where(AiTenant::fields_TENANT_CODE, $tenantCode)
+            ->where(AiTenant::schema_fields_TENANT_CODE, $tenantCode)
             ->find()
             ->fetch();
 
@@ -170,10 +170,10 @@ class MultiTenantManager
 
         // 创建租户用户关联
         $tenantUser = new AiTenantUser();
-        $tenantUser->setData(AiTenantUser::fields_TENANT_ID, $this->currentTenant->getId())
-                  ->setData(AiTenantUser::fields_USER_ID, $userId)
-                  ->setData(AiTenantUser::fields_ROLE, $role)
-                  ->setData(AiTenantUser::fields_IS_ACTIVE, 1)
+        $tenantUser->setData(AiTenantUser::schema_fields_TENANT_ID, $this->currentTenant->getId())
+                  ->setData(AiTenantUser::schema_fields_USER_ID, $userId)
+                  ->setData(AiTenantUser::schema_fields_ROLE, $role)
+                  ->setData(AiTenantUser::schema_fields_IS_ACTIVE, 1)
                   ->setPermissions($permissions)
                   ->save();
 
@@ -215,8 +215,8 @@ class MultiTenantManager
         }
 
         $tenantUser = $this->tenantUserModel->reset()
-            ->where(AiTenantUser::fields_TENANT_ID, $this->currentTenant->getId())
-            ->where(AiTenantUser::fields_USER_ID, $userId)
+            ->where(AiTenantUser::schema_fields_TENANT_ID, $this->currentTenant->getId())
+            ->where(AiTenantUser::schema_fields_USER_ID, $userId)
             ->find()
             ->fetch();
 
@@ -266,14 +266,14 @@ class MultiTenantManager
         }
 
         $query = $this->tenantUserModel->reset()
-            ->where(AiTenantUser::fields_TENANT_ID, $this->currentTenant->getId());
+            ->where(AiTenantUser::schema_fields_TENANT_ID, $this->currentTenant->getId());
 
         if ($role) {
-            $query->where(AiTenantUser::fields_ROLE, $role);
+            $query->where(AiTenantUser::schema_fields_ROLE, $role);
         }
 
         if ($activeOnly) {
-            $query->where(AiTenantUser::fields_IS_ACTIVE, 1);
+            $query->where(AiTenantUser::schema_fields_IS_ACTIVE, 1);
         }
 
         return $query->select()->fetch();
@@ -294,10 +294,10 @@ class MultiTenantManager
 
         foreach ($data as $field => $value) {
             if (in_array($field, [
-                AiTenant::fields_TENANT_NAME,
-                AiTenant::fields_TENANT_TYPE,
-                AiTenant::fields_STATUS,
-                AiTenant::fields_PLAN_TYPE
+                AiTenant::schema_fields_TENANT_NAME,
+                AiTenant::schema_fields_TENANT_TYPE,
+                AiTenant::schema_fields_STATUS,
+                AiTenant::schema_fields_PLAN_TYPE
             ])) {
                 $this->currentTenant->setData($field, $value);
             }
@@ -369,8 +369,8 @@ class MultiTenantManager
         }
 
         $userCount = $this->tenantUserModel->reset()
-            ->where(AiTenantUser::fields_TENANT_ID, $this->currentTenant->getId())
-            ->where(AiTenantUser::fields_IS_ACTIVE, 1)
+            ->where(AiTenantUser::schema_fields_TENANT_ID, $this->currentTenant->getId())
+            ->where(AiTenantUser::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetch()
             ->count();
@@ -401,7 +401,7 @@ class MultiTenantManager
     private function tenantCodeExists(string $tenantCode): bool
     {
         $tenant = $this->tenantModel->reset()
-            ->where(AiTenant::fields_TENANT_CODE, $tenantCode)
+            ->where(AiTenant::schema_fields_TENANT_CODE, $tenantCode)
             ->find()
             ->fetch();
 
@@ -420,11 +420,11 @@ class MultiTenantManager
         $query = $this->tenantModel->reset();
 
         if ($status) {
-            $query->where(AiTenant::fields_STATUS, $status);
+            $query->where(AiTenant::schema_fields_STATUS, $status);
         }
 
         if ($type) {
-            $query->where(AiTenant::fields_TENANT_TYPE, $type);
+            $query->where(AiTenant::schema_fields_TENANT_TYPE, $type);
         }
 
         return $query->select()->fetch();
@@ -442,7 +442,7 @@ class MultiTenantManager
             throw new Exception("未设置当前租户上下文");
         }
 
-        $this->currentTenant->setData(AiTenant::fields_STATUS, AiTenant::STATUS_SUSPENDED);
+        $this->currentTenant->setData(AiTenant::schema_fields_STATUS, AiTenant::STATUS_SUSPENDED);
         return $this->currentTenant->save();
     }
 
@@ -458,7 +458,7 @@ class MultiTenantManager
             throw new Exception("未设置当前租户上下文");
         }
 
-        $this->currentTenant->setData(AiTenant::fields_STATUS, AiTenant::STATUS_ACTIVE);
+        $this->currentTenant->setData(AiTenant::schema_fields_STATUS, AiTenant::STATUS_ACTIVE);
         return $this->currentTenant->save();
     }
 }

@@ -518,8 +518,8 @@ class ModelSyncService
      */
     private function resolveBaseUrl(array $providerConfig, ?Account $account): string
     {
-        if ($account && $account->getData(Account::fields_BASE_URL)) {
-            return (string)$account->getData(Account::fields_BASE_URL);
+        if ($account && $account->getData(Account::schema_fields_BASE_URL)) {
+            return (string)$account->getData(Account::schema_fields_BASE_URL);
         }
         return (string)($providerConfig['base_url'] ?? '');
     }

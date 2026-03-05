@@ -9,10 +9,8 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\AiTenant;
 use Weline\Ai\Model\AiApiKey;
-use Weline\Ai\Model\AiAssistant;
 use Weline\Ai\Service\AiModelService;
 use Weline\Ai\Service\AiApiKeyService;
-use Weline\Ai\Service\AiAssistantService;
 
 /**
  * AI模块集成测试
@@ -239,52 +237,6 @@ class AiModuleIntegrationTest extends TestCase
         // 清理
         if ($testTenant->getId()) {
             $testTenant->delete();
-        }
-    }
-
-    /**
-     * 测试6: 助手功能
-     */
-    public function testAssistantFunctionality()
-    {
-        // 先确保有模型
-        $testModel = clone $this->aiModel;
-        $testModel->setData([
-            'supplier' => 'TestVendor',
-            'model_code' => 'test-assistant-model-' . time(),
-            'name' => '助手测试模型',
-            'version' => '1.0',
-            'status' => 'active',
-            'is_active' => true,
-            'token_price_input' => 0.01,
-            'token_price_output' => 0.02,
-        ]);
-        $testModel->save();
-        $modelId = $testModel->getId();
-
-        // 创建助手
-        $assistant = ObjectManager::getInstance(AiAssistant::class);
-        $assistant->setData([
-            'name' => '测试助手',
-            'description' => '这是一个测试助手',
-            'prompt_template' => '你是一个AI助手，请帮助用户...',
-            'model_id' => $modelId,
-            'user_id' => 1,
-            'tenant_id' => 1,
-            'is_public' => true,
-            'status' => 'active',
-        ]);
-        $assistant->save();
-
-        $this->assertNotEmpty($assistant->getId(), "助手应该创建成功");
-        echo "✓ 助手创建成功\n";
-
-        // 清理
-        if ($assistant->getId()) {
-            $assistant->delete();
-        }
-        if ($testModel->getId() && $testModel->canDelete()) {
-            $testModel->delete();
         }
     }
 

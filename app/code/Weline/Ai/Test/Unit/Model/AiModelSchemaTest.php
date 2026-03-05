@@ -51,25 +51,25 @@ class AiModelSchemaTest extends TestCase
     public function testAllFieldConstantsExist(): void
     {
         $requiredFields = [
-            AiModel::fields_ID => 'id',
-            AiModel::fields_SUPPLIER => 'supplier',
-            AiModel::fields_MODEL_CODE => 'model_code',
-            AiModel::fields_NAME => 'name',
-            AiModel::fields_VERSION => 'version',
-            AiModel::fields_IS_COPY => 'is_copy',
-            AiModel::fields_ORIGIN_MODEL_ID => 'origin_model_id',
-            AiModel::fields_CONFIG => 'config',
-            AiModel::fields_CAPABILITIES => 'capabilities',
-            AiModel::fields_MAX_TOKENS => 'max_tokens',
-            AiModel::fields_COST_PER_TOKEN => 'cost_per_token',
-            AiModel::fields_TOKEN_PRICE_INPUT => 'token_price_input',
-            AiModel::fields_TOKEN_PRICE_OUTPUT => 'token_price_output',
-            AiModel::fields_PROXY_INFO => 'proxy_info',
-            AiModel::fields_STATUS => 'status',
-            AiModel::fields_IS_ACTIVE => 'is_active',
-            AiModel::fields_IS_DEFAULT => 'is_default',
-            AiModel::fields_CREATED_AT => 'created_at',
-            AiModel::fields_UPDATED_AT => 'updated_at',
+            AiModel::schema_fields_ID => 'id',
+            AiModel::schema_fields_SUPPLIER => 'supplier',
+            AiModel::schema_fields_MODEL_CODE => 'model_code',
+            AiModel::schema_fields_NAME => 'name',
+            AiModel::schema_fields_VERSION => 'version',
+            AiModel::schema_fields_IS_COPY => 'is_copy',
+            AiModel::schema_fields_ORIGIN_MODEL_ID => 'origin_model_id',
+            AiModel::schema_fields_CONFIG => 'config',
+            AiModel::schema_fields_CAPABILITIES => 'capabilities',
+            AiModel::schema_fields_MAX_TOKENS => 'max_tokens',
+            AiModel::schema_fields_COST_PER_TOKEN => 'cost_per_token',
+            AiModel::schema_fields_TOKEN_PRICE_INPUT => 'token_price_input',
+            AiModel::schema_fields_TOKEN_PRICE_OUTPUT => 'token_price_output',
+            AiModel::schema_fields_PROXY_INFO => 'proxy_info',
+            AiModel::schema_fields_STATUS => 'status',
+            AiModel::schema_fields_IS_ACTIVE => 'is_active',
+            AiModel::schema_fields_IS_DEFAULT => 'is_default',
+            AiModel::schema_fields_CREATED_AT => 'created_at',
+            AiModel::schema_fields_UPDATED_AT => 'updated_at',
         ];
 
         $missingFields = [];
@@ -183,21 +183,21 @@ class AiModelSchemaTest extends TestCase
         $testSupplier = 'test-unique-supplier';
         $testModelCode = 'test-unique-model-' . uniqid();
         
-        $model1->setData(AiModel::fields_SUPPLIER, $testSupplier)
-               ->setData(AiModel::fields_MODEL_CODE, $testModelCode)
-               ->setData(AiModel::fields_NAME, 'Unique Test 1')
-               ->setData(AiModel::fields_VERSION, '1.0.0')
-               ->setData(AiModel::fields_IS_COPY, 0)
-               ->setData(AiModel::fields_CONFIG, json_encode(['test' => true]))
-               ->setData(AiModel::fields_CAPABILITIES, json_encode(['chat' => true]))
-               ->setData(AiModel::fields_MAX_TOKENS, 4096)
-               ->setData(AiModel::fields_COST_PER_TOKEN, '0.0015')
-               ->setData(AiModel::fields_TOKEN_PRICE_INPUT, 0.03)
-               ->setData(AiModel::fields_TOKEN_PRICE_OUTPUT, 0.06)
-               ->setData(AiModel::fields_PROXY_INFO, null)
-               ->setData(AiModel::fields_STATUS, 'active')
-               ->setData(AiModel::fields_IS_ACTIVE, 1)
-               ->setData(AiModel::fields_IS_DEFAULT, 0)
+        $model1->setData(AiModel::schema_fields_SUPPLIER, $testSupplier)
+               ->setData(AiModel::schema_fields_MODEL_CODE, $testModelCode)
+               ->setData(AiModel::schema_fields_NAME, 'Unique Test 1')
+               ->setData(AiModel::schema_fields_VERSION, '1.0.0')
+               ->setData(AiModel::schema_fields_IS_COPY, 0)
+               ->setData(AiModel::schema_fields_CONFIG, json_encode(['test' => true]))
+               ->setData(AiModel::schema_fields_CAPABILITIES, json_encode(['chat' => true]))
+               ->setData(AiModel::schema_fields_MAX_TOKENS, 4096)
+               ->setData(AiModel::schema_fields_COST_PER_TOKEN, '0.0015')
+               ->setData(AiModel::schema_fields_TOKEN_PRICE_INPUT, 0.03)
+               ->setData(AiModel::schema_fields_TOKEN_PRICE_OUTPUT, 0.06)
+               ->setData(AiModel::schema_fields_PROXY_INFO, null)
+               ->setData(AiModel::schema_fields_STATUS, 'active')
+               ->setData(AiModel::schema_fields_IS_ACTIVE, 1)
+               ->setData(AiModel::schema_fields_IS_DEFAULT, 0)
                ->save();
         
         $this->assertNotEmpty($model1->getId(), '第一个测试模型应成功创建');
@@ -205,21 +205,21 @@ class AiModelSchemaTest extends TestCase
         // 尝试创建第二个具有相同supplier+model_code的模型（应该失败）
         $model2 = ObjectManager::getInstance(AiModel::class);
         $model2->clearData()->reset();
-        $model2->setData(AiModel::fields_SUPPLIER, $testSupplier)
-               ->setData(AiModel::fields_MODEL_CODE, $testModelCode)
-               ->setData(AiModel::fields_NAME, 'Unique Test 2')
-               ->setData(AiModel::fields_VERSION, '2.0.0')
-               ->setData(AiModel::fields_IS_COPY, 0)
-               ->setData(AiModel::fields_CONFIG, json_encode(['test' => true]))
-               ->setData(AiModel::fields_CAPABILITIES, json_encode(['chat' => true]))
-               ->setData(AiModel::fields_MAX_TOKENS, 8192)
-               ->setData(AiModel::fields_COST_PER_TOKEN, '0.003')
-               ->setData(AiModel::fields_TOKEN_PRICE_INPUT, 0.05)
-               ->setData(AiModel::fields_TOKEN_PRICE_OUTPUT, 0.10)
-               ->setData(AiModel::fields_PROXY_INFO, null)
-               ->setData(AiModel::fields_STATUS, 'active')
-               ->setData(AiModel::fields_IS_ACTIVE, 1)
-               ->setData(AiModel::fields_IS_DEFAULT, 0);
+        $model2->setData(AiModel::schema_fields_SUPPLIER, $testSupplier)
+               ->setData(AiModel::schema_fields_MODEL_CODE, $testModelCode)
+               ->setData(AiModel::schema_fields_NAME, 'Unique Test 2')
+               ->setData(AiModel::schema_fields_VERSION, '2.0.0')
+               ->setData(AiModel::schema_fields_IS_COPY, 0)
+               ->setData(AiModel::schema_fields_CONFIG, json_encode(['test' => true]))
+               ->setData(AiModel::schema_fields_CAPABILITIES, json_encode(['chat' => true]))
+               ->setData(AiModel::schema_fields_MAX_TOKENS, 8192)
+               ->setData(AiModel::schema_fields_COST_PER_TOKEN, '0.003')
+               ->setData(AiModel::schema_fields_TOKEN_PRICE_INPUT, 0.05)
+               ->setData(AiModel::schema_fields_TOKEN_PRICE_OUTPUT, 0.10)
+               ->setData(AiModel::schema_fields_PROXY_INFO, null)
+               ->setData(AiModel::schema_fields_STATUS, 'active')
+               ->setData(AiModel::schema_fields_IS_ACTIVE, 1)
+               ->setData(AiModel::schema_fields_IS_DEFAULT, 0);
         
         $duplicateInsertFailed = false;
         try {
@@ -261,21 +261,21 @@ class AiModelSchemaTest extends TestCase
     public function testCanCreateAndReadModelWithAllFields(): void
     {
         $testData = [
-            AiModel::fields_SUPPLIER => 'test-supplier',
-            AiModel::fields_MODEL_CODE => 'test-model-' . uniqid(),
-            AiModel::fields_NAME => '测试模型',
-            AiModel::fields_VERSION => '1.0.0',
-            AiModel::fields_IS_COPY => 0,
-            AiModel::fields_CONFIG => json_encode(['test' => true]),
-            AiModel::fields_CAPABILITIES => json_encode(['chat' => true]),
-            AiModel::fields_MAX_TOKENS => 4096,
-            AiModel::fields_COST_PER_TOKEN => '0.0015',
-            AiModel::fields_TOKEN_PRICE_INPUT => 0.03,
-            AiModel::fields_TOKEN_PRICE_OUTPUT => 0.06,
-            AiModel::fields_PROXY_INFO => json_encode(['host' => 'proxy.example.com']),
-            AiModel::fields_STATUS => 'active',
-            AiModel::fields_IS_ACTIVE => 1,
-            AiModel::fields_IS_DEFAULT => 0,
+            AiModel::schema_fields_SUPPLIER => 'test-supplier',
+            AiModel::schema_fields_MODEL_CODE => 'test-model-' . uniqid(),
+            AiModel::schema_fields_NAME => '测试模型',
+            AiModel::schema_fields_VERSION => '1.0.0',
+            AiModel::schema_fields_IS_COPY => 0,
+            AiModel::schema_fields_CONFIG => json_encode(['test' => true]),
+            AiModel::schema_fields_CAPABILITIES => json_encode(['chat' => true]),
+            AiModel::schema_fields_MAX_TOKENS => 4096,
+            AiModel::schema_fields_COST_PER_TOKEN => '0.0015',
+            AiModel::schema_fields_TOKEN_PRICE_INPUT => 0.03,
+            AiModel::schema_fields_TOKEN_PRICE_OUTPUT => 0.06,
+            AiModel::schema_fields_PROXY_INFO => json_encode(['host' => 'proxy.example.com']),
+            AiModel::schema_fields_STATUS => 'active',
+            AiModel::schema_fields_IS_ACTIVE => 1,
+            AiModel::schema_fields_IS_DEFAULT => 0,
         ];
 
         // 创建测试模型
@@ -291,12 +291,12 @@ class AiModelSchemaTest extends TestCase
         $loadedModel = ObjectManager::getInstance(AiModel::class);
         $loadedModel->load($model->getId());
         
-        $this->assertEquals($testData[AiModel::fields_SUPPLIER], $loadedModel->getData(AiModel::fields_SUPPLIER));
-        $this->assertEquals($testData[AiModel::fields_MODEL_CODE], $loadedModel->getData(AiModel::fields_MODEL_CODE));
-        $this->assertEquals($testData[AiModel::fields_TOKEN_PRICE_INPUT], $loadedModel->getData(AiModel::fields_TOKEN_PRICE_INPUT));
-        $this->assertEquals($testData[AiModel::fields_TOKEN_PRICE_OUTPUT], $loadedModel->getData(AiModel::fields_TOKEN_PRICE_OUTPUT));
-        $this->assertEquals($testData[AiModel::fields_IS_ACTIVE], $loadedModel->getData(AiModel::fields_IS_ACTIVE));
-        $this->assertEquals($testData[AiModel::fields_IS_DEFAULT], $loadedModel->getData(AiModel::fields_IS_DEFAULT));
+        $this->assertEquals($testData[AiModel::schema_fields_SUPPLIER], $loadedModel->getData(AiModel::schema_fields_SUPPLIER));
+        $this->assertEquals($testData[AiModel::schema_fields_MODEL_CODE], $loadedModel->getData(AiModel::schema_fields_MODEL_CODE));
+        $this->assertEquals($testData[AiModel::schema_fields_TOKEN_PRICE_INPUT], $loadedModel->getData(AiModel::schema_fields_TOKEN_PRICE_INPUT));
+        $this->assertEquals($testData[AiModel::schema_fields_TOKEN_PRICE_OUTPUT], $loadedModel->getData(AiModel::schema_fields_TOKEN_PRICE_OUTPUT));
+        $this->assertEquals($testData[AiModel::schema_fields_IS_ACTIVE], $loadedModel->getData(AiModel::schema_fields_IS_ACTIVE));
+        $this->assertEquals($testData[AiModel::schema_fields_IS_DEFAULT], $loadedModel->getData(AiModel::schema_fields_IS_DEFAULT));
 
         // 清理测试数据
         $loadedModel->delete()->fetch();
@@ -309,20 +309,20 @@ class AiModelSchemaTest extends TestCase
     {
         // 模拟 ModelCollector::createNewModel() 的数据结构
         $modelData = [
-            AiModel::fields_SUPPLIER => 'openai',
-            AiModel::fields_MODEL_CODE => 'gpt-4-schema-test-' . uniqid(),
-            AiModel::fields_NAME => 'GPT-4 Schema Test',
-            AiModel::fields_VERSION => '1.0.0',
-            AiModel::fields_CONFIG => json_encode(['temperature' => 0.7]),
-            AiModel::fields_CAPABILITIES => json_encode(['chat' => true, 'completion' => true]),
-            AiModel::fields_MAX_TOKENS => 8192,
-            AiModel::fields_COST_PER_TOKEN => '0.00003',
-            AiModel::fields_TOKEN_PRICE_INPUT => 0.03,
-            AiModel::fields_TOKEN_PRICE_OUTPUT => 0.06,
-            AiModel::fields_PROXY_INFO => null,
-            AiModel::fields_STATUS => 'active',
-            AiModel::fields_IS_ACTIVE => 1,
-            AiModel::fields_IS_DEFAULT => 0,
+            AiModel::schema_fields_SUPPLIER => 'openai',
+            AiModel::schema_fields_MODEL_CODE => 'gpt-4-schema-test-' . uniqid(),
+            AiModel::schema_fields_NAME => 'GPT-4 Schema Test',
+            AiModel::schema_fields_VERSION => '1.0.0',
+            AiModel::schema_fields_CONFIG => json_encode(['temperature' => 0.7]),
+            AiModel::schema_fields_CAPABILITIES => json_encode(['chat' => true, 'completion' => true]),
+            AiModel::schema_fields_MAX_TOKENS => 8192,
+            AiModel::schema_fields_COST_PER_TOKEN => '0.00003',
+            AiModel::schema_fields_TOKEN_PRICE_INPUT => 0.03,
+            AiModel::schema_fields_TOKEN_PRICE_OUTPUT => 0.06,
+            AiModel::schema_fields_PROXY_INFO => null,
+            AiModel::schema_fields_STATUS => 'active',
+            AiModel::schema_fields_IS_ACTIVE => 1,
+            AiModel::schema_fields_IS_DEFAULT => 0,
         ];
 
         $model = ObjectManager::getInstance(AiModel::class);
@@ -359,7 +359,7 @@ class AiModelSchemaTest extends TestCase
             
             if ($testModels && method_exists($testModels, 'getItems')) {
                 foreach ($testModels->getItems() as $testModel) {
-                    $modelCode = $testModel->getData(AiModel::fields_MODEL_CODE);
+                    $modelCode = $testModel->getData(AiModel::schema_fields_MODEL_CODE);
                     // 删除所有包含'test'的测试数据
                     if ($modelCode && (strpos($modelCode, 'test') !== false || strpos($modelCode, 'gpt-4-schema-test') !== false)) {
                         try {

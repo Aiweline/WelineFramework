@@ -157,7 +157,7 @@ class TranslationService
         if (!$defaultModel) {
             throw new Exception(__('未配置翻译默认模型'));
         }
-        $modelCode = $defaultModel->getData(\Weline\Ai\Model\AiModel::fields_MODEL_CODE);
+        $modelCode = $defaultModel->getData(\Weline\Ai\Model\AiModel::schema_fields_MODEL_CODE);
         
         // 准备适配器参数
         $targetLanguage = $this->getLanguageName($targetLocale);
@@ -323,7 +323,7 @@ class TranslationService
     ): string {
         // 获取翻译模型
         $defaultModel = $this->defaultModelManager->getDefaultModel('translation');
-        $modelCode = $defaultModel ? $defaultModel->getData(\Weline\Ai\Model\AiModel::fields_MODEL_CODE) : null;
+        $modelCode = $defaultModel ? $defaultModel->getData(\Weline\Ai\Model\AiModel::schema_fields_MODEL_CODE) : null;
         
         // 准备适配器参数
         // 注意：$targetLocale 已经被 validateAndGetLocale 标准化了（如 ja-JP）

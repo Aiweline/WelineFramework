@@ -161,12 +161,10 @@
         data.append('priority', priority);
         data.append('is_active', isActive);
 
-        fetch('<?= $this->getBackendUrl('*/backend/default-model/set-default') ?>', {
-            method: 'POST',
-            body: data
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
+        var url = '<?= $this->getBackendUrl('*/backend/default-model/set-default') ?>';
+        var req = window.Weline.Api.request(url, { method: 'POST', body: data });
+        req.then(function(res) {
+            var data = (res && res.data) || res;
             if (data.success) {
                 Swal.fire({
                     icon: 'success',
@@ -248,12 +246,10 @@
                     }
                 });
                 
-                fetch('<?= $this->getBackendUrl('*/backend/default-model/batch-set') ?>', {
-                    method: 'POST',
-                    body: data
-                })
-                .then(function(response) { return response.json(); })
-                .then(function(data) {
+                var url = '<?= $this->getBackendUrl('*/backend/default-model/batch-set') ?>';
+                var req = window.Weline.Api.request(url, { method: 'POST', body: data });
+                req.then(function(res) {
+                    var data = (res && res.data) || res;
                     if (data.success) {
                         Swal.fire({
                             icon: 'success',
@@ -297,11 +293,10 @@
             cancelButtonText: '<?= __('取消') ?>'
         }).then(function(result) {
             if (result.isConfirmed) {
-                fetch('<?= $this->getBackendUrl('*/backend/default-model/clear-cache') ?>', {
-                    method: 'POST'
-                })
-                .then(function(response) { return response.json(); })
-                .then(function(data) {
+                var url = '<?= $this->getBackendUrl('*/backend/default-model/clear-cache') ?>';
+                var req = window.Weline.Api.request(url, { method: 'POST' });
+                req.then(function(res) {
+                    var data = (res && res.data) || res;
                     if (data.success) {
                         Swal.fire(
                             '<?= __('已清除！') ?>',
@@ -339,11 +334,10 @@
             cancelButtonText: '<?= __('取消') ?>'
         }).then(function(result) {
             if (result.isConfirmed) {
-                fetch('<?= $this->getBackendUrl('*/backend/default-model/initialize') ?>', {
-                    method: 'POST'
-                })
-                .then(function(response) { return response.json(); })
-                .then(function(data) {
+                var url = '<?= $this->getBackendUrl('*/backend/default-model/initialize') ?>';
+                var req = window.Weline.Api.request(url, { method: 'POST' });
+                req.then(function(res) {
+                    var data = (res && res.data) || res;
                     if (data.success) {
                         Swal.fire(
                             '<?= __('初始化成功！') ?>',
@@ -372,9 +366,10 @@
     };
 
     function updateProtectedModelsList() {
-        fetch('<?= $this->getBackendUrl('*/backend/default-model/get-protected') ?>')
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
+        var url = '<?= $this->getBackendUrl('*/backend/default-model/get-protected') ?>';
+        var req = window.Weline.Api.get(url, { silent: true });
+        req.then(function(res) {
+            var data = (res && res.data) || res;
                 var container = document.getElementById('protectedModelsList');
                 if (data.success && data.data.length > 0) {
                     var html = '<ul class="list-group">';

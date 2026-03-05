@@ -286,7 +286,7 @@ class AdapterScanner
         
         // 检查是否已存在
         $existingAdapter = $this->scenarioAdapter->reset()
-            ->where(AiScenarioAdapter::fields_CODE, $code)
+            ->where(AiScenarioAdapter::schema_fields_CODE, $code)
             ->find()
             ->fetch();
 
@@ -331,18 +331,18 @@ class AdapterScanner
     private function createNewAdapter(ScenarioAdapterInterface $adapter, string $relativePath): bool
     {
         $data = [
-            AiScenarioAdapter::fields_CODE => $adapter->getCode(),
-            AiScenarioAdapter::fields_NAME => $adapter->getName(),
-            AiScenarioAdapter::fields_DESCRIPTION => $adapter->getDescription(),
-            AiScenarioAdapter::fields_VERSION => $adapter->getVersion(),
-            AiScenarioAdapter::fields_CLASS_NAME => get_class($adapter),
-            AiScenarioAdapter::fields_FILE_PATH => $relativePath,
-            AiScenarioAdapter::fields_SUPPORTED_MODELS => json_encode($adapter->getSupportedModelTypes()),
-            AiScenarioAdapter::fields_PARAM_TEMPLATE => json_encode($adapter->getParamTemplate()),
-            AiScenarioAdapter::fields_EXAMPLES => json_encode($adapter->getExamples()),
-            AiScenarioAdapter::fields_IS_ACTIVE => 1,
-            AiScenarioAdapter::fields_CREATED_TIME => time(),
-            AiScenarioAdapter::fields_UPDATED_TIME => time()
+            AiScenarioAdapter::schema_fields_CODE => $adapter->getCode(),
+            AiScenarioAdapter::schema_fields_NAME => $adapter->getName(),
+            AiScenarioAdapter::schema_fields_DESCRIPTION => $adapter->getDescription(),
+            AiScenarioAdapter::schema_fields_VERSION => $adapter->getVersion(),
+            AiScenarioAdapter::schema_fields_CLASS_NAME => get_class($adapter),
+            AiScenarioAdapter::schema_fields_FILE_PATH => $relativePath,
+            AiScenarioAdapter::schema_fields_SUPPORTED_MODELS => json_encode($adapter->getSupportedModelTypes()),
+            AiScenarioAdapter::schema_fields_PARAM_TEMPLATE => json_encode($adapter->getParamTemplate()),
+            AiScenarioAdapter::schema_fields_EXAMPLES => json_encode($adapter->getExamples()),
+            AiScenarioAdapter::schema_fields_IS_ACTIVE => 1,
+            AiScenarioAdapter::schema_fields_CREATED_TIME => time(),
+            AiScenarioAdapter::schema_fields_UPDATED_TIME => time()
         ];
 
         $newAdapter = new AiScenarioAdapter();
@@ -363,16 +363,16 @@ class AdapterScanner
     {
         // 只更新允许更新的字段
         $updateData = [
-            AiScenarioAdapter::fields_CODE => $adapter->getCode(),
-            AiScenarioAdapter::fields_NAME => $adapter->getName(),
-            AiScenarioAdapter::fields_DESCRIPTION => $adapter->getDescription(),
-            AiScenarioAdapter::fields_VERSION => $adapter->getVersion(),
-            AiScenarioAdapter::fields_CLASS_NAME => get_class($adapter),
-            AiScenarioAdapter::fields_FILE_PATH => $relativePath,
-            AiScenarioAdapter::fields_SUPPORTED_MODELS => json_encode($adapter->getSupportedModelTypes()),
-            AiScenarioAdapter::fields_PARAM_TEMPLATE => json_encode($adapter->getParamTemplate()),
-            AiScenarioAdapter::fields_EXAMPLES => json_encode($adapter->getExamples()),
-            AiScenarioAdapter::fields_UPDATED_TIME => time()
+            AiScenarioAdapter::schema_fields_CODE => $adapter->getCode(),
+            AiScenarioAdapter::schema_fields_NAME => $adapter->getName(),
+            AiScenarioAdapter::schema_fields_DESCRIPTION => $adapter->getDescription(),
+            AiScenarioAdapter::schema_fields_VERSION => $adapter->getVersion(),
+            AiScenarioAdapter::schema_fields_CLASS_NAME => get_class($adapter),
+            AiScenarioAdapter::schema_fields_FILE_PATH => $relativePath,
+            AiScenarioAdapter::schema_fields_SUPPORTED_MODELS => json_encode($adapter->getSupportedModelTypes()),
+            AiScenarioAdapter::schema_fields_PARAM_TEMPLATE => json_encode($adapter->getParamTemplate()),
+            AiScenarioAdapter::schema_fields_EXAMPLES => json_encode($adapter->getExamples()),
+            AiScenarioAdapter::schema_fields_UPDATED_TIME => time()
         ];
 
         foreach ($updateData as $field => $value) {
@@ -399,8 +399,8 @@ class AdapterScanner
 
         // 从数据库获取
         $adapterRecord = $this->scenarioAdapter->reset()
-            ->where(AiScenarioAdapter::fields_CODE, $code)
-            ->where(AiScenarioAdapter::fields_IS_ACTIVE, 1)
+            ->where(AiScenarioAdapter::schema_fields_CODE, $code)
+            ->where(AiScenarioAdapter::schema_fields_IS_ACTIVE, 1)
             ->find()
             ->fetch();
 
@@ -410,14 +410,14 @@ class AdapterScanner
             return $this->loadAdapterFromCode($code);
         }
 
-        $className = $adapterRecord->getData(AiScenarioAdapter::fields_CLASS_NAME);
+        $className = $adapterRecord->getData(AiScenarioAdapter::schema_fields_CLASS_NAME);
         if (empty($className)) {
             // 类名为空，尝试从代码中加载
             return $this->loadAdapterFromCode($code);
         }
         
         // 优先使用保存的文件路径
-        $relativePath = $adapterRecord->getData(AiScenarioAdapter::fields_FILE_PATH);
+        $relativePath = $adapterRecord->getData(AiScenarioAdapter::schema_fields_FILE_PATH);
         $adapterFile = null;
         
         if (!empty($relativePath)) {
@@ -625,7 +625,7 @@ class AdapterScanner
     public function getAllActiveAdapters(): array
     {
         $adapterRecords = $this->scenarioAdapter->reset()
-            ->where(AiScenarioAdapter::fields_IS_ACTIVE, 1)
+            ->where(AiScenarioAdapter::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetch();
 
@@ -645,7 +645,7 @@ class AdapterScanner
                 continue;
             }
             
-            $code = $record->getData(AiScenarioAdapter::fields_CODE);
+            $code = $record->getData(AiScenarioAdapter::schema_fields_CODE);
             $adapter = $this->getAdapter($code);
             
             if ($adapter) {
@@ -721,7 +721,7 @@ class AdapterScanner
             ->count();
 
         $activeCount = $this->scenarioAdapter->reset()
-            ->where(AiScenarioAdapter::fields_IS_ACTIVE, 1)
+            ->where(AiScenarioAdapter::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetch()
             ->count();
@@ -752,11 +752,11 @@ class AdapterScanner
                     continue;
                 }
                 
-                $className = $record->getData(AiScenarioAdapter::fields_CLASS_NAME);
+                $className = $record->getData(AiScenarioAdapter::schema_fields_CLASS_NAME);
                 
                 // 检查类是否存在
                 if (!class_exists($className)) {
-                    $record->setData(AiScenarioAdapter::fields_IS_ACTIVE, 0);
+                    $record->setData(AiScenarioAdapter::schema_fields_IS_ACTIVE, 0);
                     $record->save();
                     $cleanedCount++;
                     continue;
@@ -766,13 +766,13 @@ class AdapterScanner
                 try {
                     $instance = new $className();
                     if (!$instance instanceof ScenarioAdapterInterface) {
-                        $record->setData(AiScenarioAdapter::fields_IS_ACTIVE, 0);
+                        $record->setData(AiScenarioAdapter::schema_fields_IS_ACTIVE, 0);
                         $record->save();
                         $cleanedCount++;
                     }
                 } catch (\Exception $e) {
                     // 如果实例化失败，也标记为无效
-                    $record->setData(AiScenarioAdapter::fields_IS_ACTIVE, 0);
+                    $record->setData(AiScenarioAdapter::schema_fields_IS_ACTIVE, 0);
                     $record->save();
                     $cleanedCount++;
                 }

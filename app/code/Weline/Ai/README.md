@@ -8,7 +8,6 @@
 
 1. **✅ 核心模型层**
    - `AiModel` - AI模型数据模型
-   - `AiAssistant` - AI助手模型
    - `AiApiKey` - API密钥管理模型
    - `AiDefaultModel` - 默认模型配置模型
    - `AiScenarioAdapter` - 场景适配器模型
@@ -28,9 +27,11 @@
    - 自动扫描和注册机制
 
 4. **✅ 后台管理界面**
-   - `Model` - 模型管理控制器
-   - `Adapter` - 适配器管理控制器
-   - `DefaultModel` - 默认模型配置控制器
+   - `Manager` - AI 管理聚合页（模型 | 适配器 | 供应商账户）
+   - `Adapter` - 场景配置
+   - `Model` - 模型管理
+   - `Provider` - 供应商账户
+   - `DefaultModel` - 默认模型配置
 
 5. **✅ API接口**
    - `Chat` - 聊天API控制器
@@ -137,13 +138,13 @@ Weline_Ai/
 ├── Model/              # 数据模型层
 ├── Service/            # 业务服务层
 ├── Adapter/            # 场景适配器
-├── Controller/         # 控制器层
-│   ├── Backend/        # 后台管理
-│   └── Api/           # API接口
-├── Console/           # CLI命令
+├── Controller/
+│   ├── Backend/        # 后台：Manager、Adapter、Model、Provider、DefaultModel
+│   └── Api/            # REST API 接口
+├── Console/            # CLI 命令
 ├── etc/
 │   └── models/        # 模型配置文件
-└── doc/              # 文档
+└── doc/
     ├── 开发/
     └── 用户/
 ```

@@ -287,14 +287,10 @@ $isIframe = $this->request->getGet('isIframe');
         btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('复制中...') ?>';
         
         var formData = new FormData(this);
-        
-        fetch('<?= $this->getBackendUrl('*/backend/model/copy') ?>', {
-            method: 'POST',
-            body: formData
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
-            if (data.success) {
+        window.Weline.Api.request('<?= $this->getBackendUrl('*/backend/model/copy') ?>', { method: 'POST', body: formData })
+        .then(function(response) {
+            var data = response.data;
+            if (response.ok && data && data.success) {
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'success',
@@ -316,11 +312,12 @@ $isIframe = $this->request->getGet('isIframe');
                     }, 500);
                 }
             } else {
+                var errMsg = (data && (data.message || data.msg)) || '<?= __('复制失败') ?>';
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'error',
                         title: '<?= __('复制失败') ?>',
-                        text: data.message,
+                        text: errMsg,
                         confirmButtonText: '<?= __('确定') ?>'
                     });
                 } else {

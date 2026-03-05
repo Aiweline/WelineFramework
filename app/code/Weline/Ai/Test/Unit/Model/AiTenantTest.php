@@ -34,16 +34,16 @@ class AiTenantTest extends TestCase
      */
     public function testFieldConstants()
     {
-        $this->assertEquals('id', AiTenant::fields_ID);
-        $this->assertEquals('name', AiTenant::fields_NAME);
-        $this->assertEquals('domain', AiTenant::fields_DOMAIN);
-        $this->assertEquals('config', AiTenant::fields_CONFIG);
-        $this->assertEquals('quota_monthly', AiTenant::fields_QUOTA_MONTHLY);
-        $this->assertEquals('usage_monthly', AiTenant::fields_USAGE_MONTHLY);
-        $this->assertEquals('billing_plan', AiTenant::fields_BILLING_PLAN);
-        $this->assertEquals('status', AiTenant::fields_STATUS);
-        $this->assertEquals('created_at', AiTenant::fields_CREATED_AT);
-        $this->assertEquals('updated_at', AiTenant::fields_UPDATED_AT);
+        $this->assertEquals('id', AiTenant::schema_fields_ID);
+        $this->assertEquals('name', AiTenant::schema_fields_NAME);
+        $this->assertEquals('domain', AiTenant::schema_fields_DOMAIN);
+        $this->assertEquals('config', AiTenant::schema_fields_CONFIG);
+        $this->assertEquals('quota_monthly', AiTenant::schema_fields_QUOTA_MONTHLY);
+        $this->assertEquals('usage_monthly', AiTenant::schema_fields_USAGE_MONTHLY);
+        $this->assertEquals('billing_plan', AiTenant::schema_fields_BILLING_PLAN);
+        $this->assertEquals('status', AiTenant::schema_fields_STATUS);
+        $this->assertEquals('created_at', AiTenant::schema_fields_CREATED_AT);
+        $this->assertEquals('updated_at', AiTenant::schema_fields_UPDATED_AT);
     }
 
     /**
@@ -52,22 +52,22 @@ class AiTenantTest extends TestCase
     public function testSetAndGetData()
     {
         $testData = [
-            AiTenant::fields_NAME => 'Test Tenant',
-            AiTenant::fields_DOMAIN => 'test.example.com',
-            AiTenant::fields_QUOTA_MONTHLY => 10000,
-            AiTenant::fields_USAGE_MONTHLY => 1500,
-            AiTenant::fields_BILLING_PLAN => 'enterprise',
-            AiTenant::fields_STATUS => 'active'
+            AiTenant::schema_fields_NAME => 'Test Tenant',
+            AiTenant::schema_fields_DOMAIN => 'test.example.com',
+            AiTenant::schema_fields_QUOTA_MONTHLY => 10000,
+            AiTenant::schema_fields_USAGE_MONTHLY => 1500,
+            AiTenant::schema_fields_BILLING_PLAN => 'enterprise',
+            AiTenant::schema_fields_STATUS => 'active'
         ];
 
         $this->model->setData($testData);
 
-        $this->assertEquals('Test Tenant', $this->model->getData(AiTenant::fields_NAME));
-        $this->assertEquals('test.example.com', $this->model->getData(AiTenant::fields_DOMAIN));
-        $this->assertEquals(10000, $this->model->getData(AiTenant::fields_QUOTA_MONTHLY));
-        $this->assertEquals(1500, $this->model->getData(AiTenant::fields_USAGE_MONTHLY));
-        $this->assertEquals('enterprise', $this->model->getData(AiTenant::fields_BILLING_PLAN));
-        $this->assertEquals('active', $this->model->getData(AiTenant::fields_STATUS));
+        $this->assertEquals('Test Tenant', $this->model->getData(AiTenant::schema_fields_NAME));
+        $this->assertEquals('test.example.com', $this->model->getData(AiTenant::schema_fields_DOMAIN));
+        $this->assertEquals(10000, $this->model->getData(AiTenant::schema_fields_QUOTA_MONTHLY));
+        $this->assertEquals(1500, $this->model->getData(AiTenant::schema_fields_USAGE_MONTHLY));
+        $this->assertEquals('enterprise', $this->model->getData(AiTenant::schema_fields_BILLING_PLAN));
+        $this->assertEquals('active', $this->model->getData(AiTenant::schema_fields_STATUS));
     }
 
     /**
@@ -78,8 +78,8 @@ class AiTenantTest extends TestCase
         $statuses = ['active', 'suspended', 'inactive'];
 
         foreach ($statuses as $status) {
-            $this->model->setData(AiTenant::fields_STATUS, $status);
-            $this->assertEquals($status, $this->model->getData(AiTenant::fields_STATUS));
+            $this->model->setData(AiTenant::schema_fields_STATUS, $status);
+            $this->assertEquals($status, $this->model->getData(AiTenant::schema_fields_STATUS));
         }
     }
 
@@ -91,8 +91,8 @@ class AiTenantTest extends TestCase
         $plans = ['free', 'basic', 'professional', 'enterprise'];
 
         foreach ($plans as $plan) {
-            $this->model->setData(AiTenant::fields_BILLING_PLAN, $plan);
-            $this->assertEquals($plan, $this->model->getData(AiTenant::fields_BILLING_PLAN));
+            $this->model->setData(AiTenant::schema_fields_BILLING_PLAN, $plan);
+            $this->assertEquals($plan, $this->model->getData(AiTenant::schema_fields_BILLING_PLAN));
         }
     }
 
@@ -104,11 +104,11 @@ class AiTenantTest extends TestCase
         $quotaMonthly = 50000;
         $usageMonthly = 12500;
 
-        $this->model->setData(AiTenant::fields_QUOTA_MONTHLY, $quotaMonthly);
-        $this->model->setData(AiTenant::fields_USAGE_MONTHLY, $usageMonthly);
+        $this->model->setData(AiTenant::schema_fields_QUOTA_MONTHLY, $quotaMonthly);
+        $this->model->setData(AiTenant::schema_fields_USAGE_MONTHLY, $usageMonthly);
 
-        $this->assertEquals($quotaMonthly, $this->model->getData(AiTenant::fields_QUOTA_MONTHLY));
-        $this->assertEquals($usageMonthly, $this->model->getData(AiTenant::fields_USAGE_MONTHLY));
+        $this->assertEquals($quotaMonthly, $this->model->getData(AiTenant::schema_fields_QUOTA_MONTHLY));
+        $this->assertEquals($usageMonthly, $this->model->getData(AiTenant::schema_fields_USAGE_MONTHLY));
         
         // 测试剩余配额
         $remaining = $quotaMonthly - $usageMonthly;
@@ -121,9 +121,9 @@ class AiTenantTest extends TestCase
     public function testDomainUniqueness()
     {
         $domain = 'unique.example.com';
-        $this->model->setData(AiTenant::fields_DOMAIN, $domain);
+        $this->model->setData(AiTenant::schema_fields_DOMAIN, $domain);
 
-        $this->assertEquals($domain, $this->model->getData(AiTenant::fields_DOMAIN));
+        $this->assertEquals($domain, $this->model->getData(AiTenant::schema_fields_DOMAIN));
         
         // 验证域名格式（简单验证）
         $this->assertStringContainsString('.', $domain);
@@ -135,9 +135,9 @@ class AiTenantTest extends TestCase
     public function testTenantName()
     {
         $name = 'Enterprise Tenant ' . time();
-        $this->model->setData(AiTenant::fields_NAME, $name);
+        $this->model->setData(AiTenant::schema_fields_NAME, $name);
 
-        $this->assertEquals($name, $this->model->getData(AiTenant::fields_NAME));
+        $this->assertEquals($name, $this->model->getData(AiTenant::schema_fields_NAME));
     }
 
     /**
@@ -147,11 +147,11 @@ class AiTenantTest extends TestCase
     {
         $currentTime = time();
 
-        $this->model->setData(AiTenant::fields_CREATED_AT, $currentTime);
-        $this->model->setData(AiTenant::fields_UPDATED_AT, $currentTime);
+        $this->model->setData(AiTenant::schema_fields_CREATED_AT, $currentTime);
+        $this->model->setData(AiTenant::schema_fields_UPDATED_AT, $currentTime);
 
-        $this->assertEquals($currentTime, $this->model->getData(AiTenant::fields_CREATED_AT));
-        $this->assertEquals($currentTime, $this->model->getData(AiTenant::fields_UPDATED_AT));
+        $this->assertEquals($currentTime, $this->model->getData(AiTenant::schema_fields_CREATED_AT));
+        $this->assertEquals($currentTime, $this->model->getData(AiTenant::schema_fields_UPDATED_AT));
     }
 
     /**
@@ -160,16 +160,16 @@ class AiTenantTest extends TestCase
     public function testIsActiveStatus()
     {
         // 测试活跃状态
-        $this->model->setData(AiTenant::fields_STATUS, 'active');
-        $this->assertEquals('active', $this->model->getData(AiTenant::fields_STATUS));
+        $this->model->setData(AiTenant::schema_fields_STATUS, 'active');
+        $this->assertEquals('active', $this->model->getData(AiTenant::schema_fields_STATUS));
 
         // 测试暂停状态
-        $this->model->setData(AiTenant::fields_STATUS, 'suspended');
-        $this->assertNotEquals('active', $this->model->getData(AiTenant::fields_STATUS));
+        $this->model->setData(AiTenant::schema_fields_STATUS, 'suspended');
+        $this->assertNotEquals('active', $this->model->getData(AiTenant::schema_fields_STATUS));
 
         // 测试非活跃状态
-        $this->model->setData(AiTenant::fields_STATUS, 'inactive');
-        $this->assertNotEquals('active', $this->model->getData(AiTenant::fields_STATUS));
+        $this->model->setData(AiTenant::schema_fields_STATUS, 'inactive');
+        $this->assertNotEquals('active', $this->model->getData(AiTenant::schema_fields_STATUS));
     }
 
     protected function tearDown(): void

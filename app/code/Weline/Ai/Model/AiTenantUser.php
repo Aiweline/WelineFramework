@@ -5,130 +5,47 @@ declare(strict_types=1);
 namespace Weline\Ai\Model;
 
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\Framework\Setup\Data\Context;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 
 /**
  * AI Tenant User Entity
- * 
+ *
  * Manages tenant-user associations.
- * 
+ *
  * @package Weline_Ai
  */
+#[Table(comment: 'AI Tenant User')]
+#[Index(name: 'uk_tenant_user', columns: ['tenant_id', 'user_id'], type: 'UNIQUE')]
+#[Index(name: 'idx_user_id', columns: ['user_id'])]
+#[Index(name: 'idx_role', columns: ['role'])]
 class AiTenantUser extends Model
 {
-    // 框架自动推导表名：AiTenantUser → ai_tenant_user
-    
-    /**
-     * Unit primary keys
-     */
-    public array $_unit_primary_keys = ['id'];
-    
-    /**
-     * Index sort keys
-     */
-    public array $_index_sort_keys = ['id', 'tenant_id', 'user_id'];
-    
-    /**
-     * Field name constants
-     */
-    public const fields_ID = 'id';
-    public const fields_TENANT_ID = 'tenant_id';
-    public const fields_USER_ID = 'user_id';
-    public const fields_ROLE = 'role';
-    public const fields_PERMISSIONS = 'permissions';
-    public const fields_CREATED_AT = 'created_at';
+    public const schema_table = 'ai_tenant_user';
+    public const schema_primary_key = 'id';
 
-    /**
-     * Role constants
-     */
+    /** @var array Unit primary keys */
+    public array $_unit_primary_keys = ['id'];
+
+    /** @var array Index sort keys */
+    public array $_index_sort_keys = ['id', 'tenant_id', 'user_id'];
+
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '映射ID')]
+    public const schema_fields_ID = 'id';
+    #[Col(type: 'int', nullable: false, comment: '租户ID')]
+    public const schema_fields_TENANT_ID = 'tenant_id';
+    #[Col(type: 'int', nullable: false, comment: '用户ID')]
+    public const schema_fields_USER_ID = 'user_id';
+    #[Col(type: 'varchar', length: 50, nullable: false, comment: '角色')]
+    public const schema_fields_ROLE = 'role';
+    #[Col(type: 'text', nullable: true, comment: '权限列表（JSON）')]
+    public const schema_fields_PERMISSIONS = 'permissions';
+    #[Col(type: 'timestamp', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+
     public const ROLE_OWNER = 'owner';
     public const ROLE_ADMIN = 'admin';
     public const ROLE_MEMBER = 'member';
-
-    /**
-     * Install database table
-     *
-     * @param ModelSetup $setup
-     * @param Context $context
-     * @return void
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        $this->useMainDbMaster();
-        
-        if ($setup->tableExist() === false) {
-            $setup->createTable('AI Tenant User')
-            ->addColumn(
-                self::fields_ID,
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER,
-                0,
-                'primary key auto_increment',
-                '映射ID'
-            )
-            ->addColumn(
-                self::fields_TENANT_ID,
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER,
-                0,
-                'not null',
-                '租户ID'
-            )
-            ->addColumn(
-                self::fields_USER_ID,
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER,
-                0,
-                'not null',
-                '用户ID'
-            )
-            ->addColumn(
-                self::fields_ROLE,
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR,
-                50,
-                'not null',
-                '角色'
-            )
-            ->addColumn(
-                self::fields_PERMISSIONS,
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT,
-                0,
-                'null',
-                '权限列表（JSON）'
-            )
-            ->addColumn(
-                self::fields_CREATED_AT,
-                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TIMESTAMP,
-                0,
-                'not null default current_timestamp',
-                '创建时间'
-            )
-            ->addIndex('UNIQUE', 'uk_tenant_user', [self::fields_TENANT_ID, self::fields_USER_ID])
-            ->addIndex('INDEX', 'idx_user_id', self::fields_USER_ID)
-            ->addIndex('INDEX', 'idx_role', self::fields_ROLE)
-            ->create();
-        }
-    }
-
-    /**
-     * Setup database table
-     *
-     * @param ModelSetup $setup
-     * @param Context $context
-     * @return void
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * Upgrade database table
-     *
-     * @param ModelSetup $setup
-     * @param Context $context
-     * @return void
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // Future upgrades will be added here
-    }
 }
+

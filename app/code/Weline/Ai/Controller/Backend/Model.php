@@ -74,6 +74,9 @@ class Model extends BackendController
         if ($this->request->isAjax() || $this->request->getGet('format') === 'json') {
             return $this->indexJson();
         }
+        if ($this->request->getGet('embed') === '1') {
+            $this->layoutType = 'default.blank';
+        }
         try {
             $page = (int)$this->request->getGet('page', 1);
             $pageSize = 20;
@@ -81,7 +84,7 @@ class Model extends BackendController
             // 获取模型列表 - 使用fetchArray避免内存问题
             $modelData = $this->getAiModel()->reset()
                 ->pagination($page, $pageSize)
-                ->order(AiModel::fields_CREATED_AT, 'DESC')
+                ->order(AiModel::schema_fields_CREATED_AT, 'DESC')
                 ->select()
                 ->fetchArray();
 
@@ -161,6 +164,8 @@ class Model extends BackendController
             $this->assign('pagination', null); // 简化分页
             $this->assign('total', (string)$total);
             $this->assign('vendors', $vendors);
+            $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
+            $this->assign('activeTab', 'model');
 
             return $this->fetch();
         } catch (\Exception $e) {
@@ -169,6 +174,8 @@ class Model extends BackendController
             $this->assign('models', []);
             $this->assign('total', '0');
             $this->assign('vendors', []);
+            $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
+            $this->assign('activeTab', 'model');
             return $this->fetch();
         }
     }
@@ -177,7 +184,7 @@ class Model extends BackendController
     {
         try {
             $models = $this->getAiModel()->reset()
-                ->order(\Weline\Ai\Model\AiModel::fields_CREATED_AT, 'DESC')
+                ->order(\Weline\Ai\Model\AiModel::schema_fields_CREATED_AT, 'DESC')
                 ->select()
                 ->fetchArray();
             usort($models, function ($a, $b) {
@@ -327,7 +334,7 @@ class Model extends BackendController
         // 优先通过模型代码加载
         if (!empty($modelCode)) {
             $model = $this->getAiModel()->reset()
-                ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                 ->find()
                 ->fetch();
         } else {
@@ -345,22 +352,22 @@ class Model extends BackendController
             // 如果要激活模型，需要检查连通性：
             // 1) 供应商连通性成功；2) 若存在自配置，则自配置连通性也必须成功
             if (!$model->isActive()) {
-                $providerOk = ($model->getData(AiModel::fields_PROVIDER_TEST_STATUS) === 'success');
+                $providerOk = ($model->getData(AiModel::schema_fields_PROVIDER_TEST_STATUS) === 'success');
                 // 判断是否存在自配置api_key
                 $hasSelfConfig = false;
-                $providerCfgRaw = $model->getData(AiModel::fields_PROVIDER_CONFIG);
+                $providerCfgRaw = $model->getData(AiModel::schema_fields_PROVIDER_CONFIG);
                 if (!empty($providerCfgRaw)) {
                     $pCfg = is_string($providerCfgRaw) ? json_decode($providerCfgRaw, true) : $providerCfgRaw;
                     $hasSelfConfig = is_array($pCfg) && !empty($pCfg['api_key']);
                 }
                 if (!$hasSelfConfig) {
-                    $cfgRaw = $model->getData(AiModel::fields_CONFIG);
+                    $cfgRaw = $model->getData(AiModel::schema_fields_CONFIG);
                     if (!empty($cfgRaw)) {
                         $cCfg = is_string($cfgRaw) ? json_decode($cfgRaw, true) : $cfgRaw;
                         $hasSelfConfig = is_array($cCfg) && !empty($cCfg['api_key']);
                     }
                 }
-                $selfOk = !$hasSelfConfig || ($model->getData(AiModel::fields_SELF_CONFIG_TEST_STATUS) === 'success');
+                $selfOk = !$hasSelfConfig || ($model->getData(AiModel::schema_fields_SELF_CONFIG_TEST_STATUS) === 'success');
 
                 if (!$providerOk) {
                     return $this->jsonResponse([
@@ -377,7 +384,7 @@ class Model extends BackendController
             }
             
             $newStatus = $model->isActive() ? 0 : 1;
-            $model->setData(AiModel::fields_IS_ACTIVE, $newStatus);
+            $model->setData(AiModel::schema_fields_IS_ACTIVE, $newStatus);
             $model->save();
 
             return $this->jsonResponse([
@@ -422,12 +429,12 @@ class Model extends BackendController
         try {
             // 取消其他模型的默认状态
             $this->getAiModel()->reset()
-                ->where(AiModel::fields_IS_DEFAULT, 1)
-                ->update([AiModel::fields_IS_DEFAULT => 0])
+                ->where(AiModel::schema_fields_IS_DEFAULT, 1)
+                ->update([AiModel::schema_fields_IS_DEFAULT => 0])
                 ->fetch();
 
             // 设置当前模型为默认
-            $model->setData(AiModel::fields_IS_DEFAULT, 1);
+            $model->setData(AiModel::schema_fields_IS_DEFAULT, 1);
             $model->save();
 
             return $this->jsonResponse([
@@ -499,7 +506,7 @@ class Model extends BackendController
 
             // 加载模型
             $model = $this->getAiModel()->reset()
-                ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                 ->find()
                 ->fetch();
             // 结果容器
@@ -534,10 +541,10 @@ class Model extends BackendController
 
                     // 保存自配置测试成功状态
                     $this->getAiModel()->reset()
-                        ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                        ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                         ->update([
-                            AiModel::fields_SELF_CONFIG_TEST_STATUS => 'success',
-                            AiModel::fields_SELF_CONFIG_TEST_TIME => time()
+                            AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'success',
+                            AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
                         ])->fetch();
                 } catch (\Exception $e) {
                     $results['self_config']['success'] = false;
@@ -545,10 +552,10 @@ class Model extends BackendController
 
                     // 保存自配置测试失败状态
                     $this->getAiModel()->reset()
-                        ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                        ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                         ->update([
-                            AiModel::fields_SELF_CONFIG_TEST_STATUS => 'failed',
-                            AiModel::fields_SELF_CONFIG_TEST_TIME => time()
+                            AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'failed',
+                            AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
                         ])->fetch();
                 }
             }
@@ -558,10 +565,10 @@ class Model extends BackendController
             /** @var Account $accountModel */
             $accountModel = ObjectManager::getInstance(Account::class);
             $accounts = $accountModel->clear()
-                ->where(Account::fields_PROVIDER_CODE, $providerCode)
-                ->where(Account::fields_IS_ACTIVE, 1)
-                ->order(Account::fields_IS_DEFAULT, 'DESC')
-                ->order(Account::fields_BALANCE, 'DESC')
+                ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
+                ->where(Account::schema_fields_IS_ACTIVE, 1)
+                ->order(Account::schema_fields_IS_DEFAULT, 'DESC')
+                ->order(Account::schema_fields_BALANCE, 'DESC')
                 ->select()
                 ->fetchArray();
             
@@ -595,14 +602,14 @@ class Model extends BackendController
                             $results['provider_account']['duration'] = $duration;
                             $results['provider_account']['account_name'] = $testAccount->getData('account_name');
                             $results['provider_account']['account_id'] = $testAccount->getId();
-                            $results['provider_account']['connection_status'] = $testAccount->getData(Account::fields_CONNECTION_STATUS);
+                            $results['provider_account']['connection_status'] = $testAccount->getData(Account::schema_fields_CONNECTION_STATUS);
                             
                             // 保存供应商测试成功状态
                             $this->getAiModel()->reset()
-                                ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                                ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                                 ->update([
-                                    AiModel::fields_PROVIDER_TEST_STATUS => 'success',
-                                    AiModel::fields_PROVIDER_TEST_TIME => time()
+                                    AiModel::schema_fields_PROVIDER_TEST_STATUS => 'success',
+                                    AiModel::schema_fields_PROVIDER_TEST_TIME => time()
                                 ])->fetch();
                             
                             // 找到可用的账户后，跳出循环
@@ -624,10 +631,10 @@ class Model extends BackendController
                     
                     // 保存供应商测试失败状态
                     $this->getAiModel()->reset()
-                        ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                        ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                         ->update([
-                            AiModel::fields_PROVIDER_TEST_STATUS => 'failed',
-                            AiModel::fields_PROVIDER_TEST_TIME => time()
+                            AiModel::schema_fields_PROVIDER_TEST_STATUS => 'failed',
+                            AiModel::schema_fields_PROVIDER_TEST_TIME => time()
                         ])->fetch();
                 }
             } else {
@@ -641,10 +648,10 @@ class Model extends BackendController
             $overallSuccess = ($results['self_config']['success'] || $results['provider_account']['success']);
             try {
                 $this->getAiModel()->reset()
-                    ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                    ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                     ->update([
-                        AiModel::fields_CONNECTION_TEST_STATUS => $overallSuccess ? 'success' : 'failed',
-                        AiModel::fields_CONNECTION_TEST_TIME => time()
+                        AiModel::schema_fields_CONNECTION_TEST_STATUS => $overallSuccess ? 'success' : 'failed',
+                        AiModel::schema_fields_CONNECTION_TEST_TIME => time()
                     ])->fetch();
             } catch (\Exception $saveEx) {
                 Env::log('ai_model.log', 'Failed to save connection test status: ' . $saveEx->getMessage(), 'WARNING');
@@ -687,14 +694,14 @@ class Model extends BackendController
         
         // 创建临时模型用于测试
         $testModel = clone $model;
-        $testModel->setData(AiModel::fields_CONFIG, json_encode([
+        $testModel->setData(AiModel::schema_fields_CONFIG, json_encode([
             'api_key' => $providerConfig['api_key'],
             'base_url' => $providerConfig['base_url'] ?? '',
             'model' => $modelCode
         ]));
         
         // 获取对应的Provider
-        $providerCode = $model->getData(AiModel::fields_SUPPLIER);
+        $providerCode = $model->getData(AiModel::schema_fields_SUPPLIER);
         $accountService = ObjectManager::getInstance(AccountService::class);
         $provider = $accountService->getProviderInstance($providerCode);
         
@@ -746,7 +753,7 @@ class Model extends BackendController
         try {
             // 获取模型
             $model = $this->getAiModel()->reset()
-                ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                 ->find()
                 ->fetch();
             
@@ -770,10 +777,10 @@ class Model extends BackendController
             
             // 保存自配置测试成功状态
             $this->getAiModel()->reset()
-                ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                 ->update([
-                    AiModel::fields_SELF_CONFIG_TEST_STATUS => 'success',
-                    AiModel::fields_SELF_CONFIG_TEST_TIME => time()
+                    AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'success',
+                    AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
                 ])->fetch();
             
             return $this->jsonResponse([
@@ -790,10 +797,10 @@ class Model extends BackendController
             // 保存自配置测试失败状态
             try {
                 $this->getAiModel()->reset()
-                    ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                    ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                     ->update([
-                        AiModel::fields_SELF_CONFIG_TEST_STATUS => 'failed',
-                        AiModel::fields_SELF_CONFIG_TEST_TIME => time()
+                        AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'failed',
+                        AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
                     ])->fetch();
             } catch (\Exception $saveEx) {
                 Env::log('ai_model.log', 'Failed to save self config test status: ' . $saveEx->getMessage(), 'WARNING');
@@ -861,6 +868,14 @@ class Model extends BackendController
             // 新建模型
             $this->assign('model', null);
         }
+
+        // 供应商选项（供 search-select 使用）
+        $providers = VendorConfigManager::getSupportedProviders();
+        $opts = [];
+        foreach ($providers as $code => $info) {
+            $opts[] = $code . ':' . ($info['name'] ?? $code);
+        }
+        $this->assign('providerOptionsStr', implode(',', $opts));
         
         return $this->fetch('offcanvas_edit');
     }
@@ -881,24 +896,23 @@ class Model extends BackendController
         try {
             $model = $this->getAiModel()->reset();
             
-            // 优先根据模型代码加载（以模型代码作为唯一标识）
-            if (!empty($modelCodeFromRequest)) {
-                $loaded = $model->reset()
-                    ->where(\Weline\Ai\Model\AiModel::fields_MODEL_CODE, $modelCodeFromRequest)
-                    ->find()
-                    ->fetch();
-                if ($loaded && $loaded->getId()) {
-                    $model = $loaded;
-                } elseif ($id) {
-                    // 回退：根据ID加载（兼容旧入口）
+            $isNew = ($id === 0);
+            // 新建（id=0）：不加载，后续直接 setData + save
+            if (!$isNew) {
+                // 优先根据模型代码加载（以模型代码作为唯一标识）
+                if (!empty($modelCodeFromRequest)) {
+                    $loaded = $model->reset()
+                        ->where(\Weline\Ai\Model\AiModel::schema_fields_MODEL_CODE, $modelCodeFromRequest)
+                        ->find()
+                        ->fetch();
+                    if ($loaded && $loaded->getId()) {
+                        $model = $loaded;
+                    } else {
+                        $model->load($id);
+                    }
+                } else {
                     $model->load($id);
                 }
-            } elseif ($id) {
-                // 未传模型代码时，按ID加载
-                $model->load($id);
-            }
-
-            if ($id || !empty($modelCodeFromRequest)) {
                 if (!$model->getId()) {
                     if ($isAjax) {
                         return $this->jsonResponse([
@@ -916,25 +930,25 @@ class Model extends BackendController
             if (!$id || $model->isCopied()) {
                 // 只在明确提供时才更新供应商，避免清空已有值
                 if (isset($data['vendor']) || isset($data['supplier'])) {
-                    $model->setData(AiModel::fields_SUPPLIER, $data['vendor'] ?? $data['supplier']);
+                    $model->setData(AiModel::schema_fields_SUPPLIER, $data['vendor'] ?? $data['supplier']);
                 }
                 if (isset($data['model_code'])) {
-                    $model->setData(AiModel::fields_MODEL_CODE, $data['model_code']);
+                    $model->setData(AiModel::schema_fields_MODEL_CODE, $data['model_code']);
                 }
                 if (isset($data['model_version']) || isset($data['version'])) {
-                    $model->setData(AiModel::fields_VERSION, $data['model_version'] ?? $data['version'] ?? '1.0');
+                    $model->setData(AiModel::schema_fields_VERSION, $data['model_version'] ?? $data['version'] ?? '1.0');
                 }
             }
             
             // 模型名称始终可以修改（用于区分复制模型）
-            $model->setData(AiModel::fields_NAME, $data['model_name'] ?? $data['name'] ?? '');
+            $model->setData(AiModel::schema_fields_NAME, $data['model_name'] ?? $data['name'] ?? '');
             
             // 令牌价格：只在字段存在时更新，避免清空已有数据
             if (isset($data['token_price_input'])) {
-                $model->setData(AiModel::fields_TOKEN_PRICE_INPUT, $data['token_price_input']);
+                $model->setData(AiModel::schema_fields_TOKEN_PRICE_INPUT, $data['token_price_input']);
             }
             if (isset($data['token_price_output'])) {
-                $model->setData(AiModel::fields_TOKEN_PRICE_OUTPUT, $data['token_price_output']);
+                $model->setData(AiModel::schema_fields_TOKEN_PRICE_OUTPUT, $data['token_price_output']);
             }
             
             // 处理激活状态：如果提交了is_active字段则使用，否则根据status判断
@@ -991,7 +1005,7 @@ class Model extends BackendController
                 }
                 
                 // 检查连通性测试状态
-                $testStatus = $model->getData(AiModel::fields_CONNECTION_TEST_STATUS);
+                $testStatus = $model->getData(AiModel::schema_fields_CONNECTION_TEST_STATUS);
                 if ($testStatus !== 'success') {
                     if ($isAjax) {
                         return $this->jsonResponse([
@@ -1006,14 +1020,14 @@ class Model extends BackendController
             
             // 设置激活状态
             if ($wantToActivate) {
-                $model->setData(AiModel::fields_IS_ACTIVE, 1);
+                $model->setData(AiModel::schema_fields_IS_ACTIVE, 1);
             } else {
-                $model->setData(AiModel::fields_IS_ACTIVE, 0);
+                $model->setData(AiModel::schema_fields_IS_ACTIVE, 0);
             }
             
             // 处理默认模型：只有明确勾选才设置，否则不修改
             if (isset($data['is_default'])) {
-                $model->setData(AiModel::fields_IS_DEFAULT, 1);
+                $model->setData(AiModel::schema_fields_IS_DEFAULT, 1);
             }
             
             // 处理配置JSON
@@ -1026,9 +1040,9 @@ class Model extends BackendController
                 if (isset($config['stream'])) {
                     $config['stream'] = (bool)$config['stream'];
                 }
-                $model->setData(AiModel::fields_CONFIG, json_encode($config, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+                $model->setData(AiModel::schema_fields_CONFIG, json_encode($config, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
             } else {
-                $model->setData(AiModel::fields_CONFIG, $data['config_json'] ?? '');
+                $model->setData(AiModel::schema_fields_CONFIG, $data['config_json'] ?? '');
             }
             
             // 处理代理信息JSON
@@ -1038,12 +1052,12 @@ class Model extends BackendController
                     return $value !== '' && $value !== null;
                 });
                 if (!empty($proxy)) {
-                    $model->setData(AiModel::fields_PROXY_INFO, json_encode($proxy, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+                    $model->setData(AiModel::schema_fields_PROXY_INFO, json_encode($proxy, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
                 } else {
-                    $model->setData(AiModel::fields_PROXY_INFO, '');
+                    $model->setData(AiModel::schema_fields_PROXY_INFO, '');
                 }
             } else {
-                $model->setData(AiModel::fields_PROXY_INFO, $data['proxy_info'] ?? '');
+                $model->setData(AiModel::schema_fields_PROXY_INFO, $data['proxy_info'] ?? '');
             }
             
             // 处理提供商配置JSON
@@ -1053,23 +1067,23 @@ class Model extends BackendController
                     return $value !== '' && $value !== null;
                 });
                 if (!empty($providerConfig)) {
-                    $model->setData(AiModel::fields_PROVIDER_CONFIG, json_encode($providerConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+                    $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, json_encode($providerConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
                 } else {
-                    $model->setData(AiModel::fields_PROVIDER_CONFIG, '');
+                    $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, '');
                 }
             } else {
-                $model->setData(AiModel::fields_PROVIDER_CONFIG, $data['provider_config_json'] ?? '');
+                $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, $data['provider_config_json'] ?? '');
             }
             
             // 处理其他字段
             if (isset($data['max_tokens'])) {
-                $model->setData(AiModel::fields_MAX_TOKENS, (int)$data['max_tokens']);
+                $model->setData(AiModel::schema_fields_MAX_TOKENS, (int)$data['max_tokens']);
             }
             if (isset($data['cost_per_token'])) {
-                $model->setData(AiModel::fields_COST_PER_TOKEN, (string)$data['cost_per_token']);
+                $model->setData(AiModel::schema_fields_COST_PER_TOKEN, (string)$data['cost_per_token']);
             }
             if (isset($data['status'])) {
-                $model->setData(AiModel::fields_STATUS, $data['status']);
+                $model->setData(AiModel::schema_fields_STATUS, $data['status']);
             }
             
             // 保存
@@ -1162,7 +1176,7 @@ class Model extends BackendController
             
             // 检查模型代码是否已存在
             $existingModel = $this->getAiModel()->clearData()->reset()
-                ->where(AiModel::fields_MODEL_CODE, $data['model_code'])
+                ->where(AiModel::schema_fields_MODEL_CODE, $data['model_code'])
                 ->find()
                 ->fetch();
             
@@ -1178,10 +1192,10 @@ class Model extends BackendController
             $copiedModel = $this->getAiModel()->reset();
             
             // 复制基本信息（使用新的名称和代码）
-            $copiedModel->setData(AiModel::fields_SUPPLIER, $originalModel->getVendor());
-            $copiedModel->setData(AiModel::fields_MODEL_CODE, $data['model_code']);
-            $copiedModel->setData(AiModel::fields_NAME, $data['model_name']);
-            $copiedModel->setData(AiModel::fields_VERSION, $originalModel->getModelVersion());
+            $copiedModel->setData(AiModel::schema_fields_SUPPLIER, $originalModel->getVendor());
+            $copiedModel->setData(AiModel::schema_fields_MODEL_CODE, $data['model_code']);
+            $copiedModel->setData(AiModel::schema_fields_NAME, $data['model_name']);
+            $copiedModel->setData(AiModel::schema_fields_VERSION, $originalModel->getModelVersion());
             
             // 处理配置信息
             // 如果用户提供了新的配置，使用新配置；否则复制原配置
@@ -1204,35 +1218,35 @@ class Model extends BackendController
                     
                     // 合并配置：新配置覆盖原配置
                     $mergedConfig = array_merge($originalConfig, $newConfig);
-                    $copiedModel->setData(AiModel::fields_CONFIG, json_encode($mergedConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+                    $copiedModel->setData(AiModel::schema_fields_CONFIG, json_encode($mergedConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
                 } else {
                     // 用户没有提供任何配置，使用原配置
-                    $copiedModel->setData(AiModel::fields_CONFIG, $originalModel->getConfigJson());
+                    $copiedModel->setData(AiModel::schema_fields_CONFIG, $originalModel->getConfigJson());
                 }
             } else {
                 // 复制原配置
-                $copiedModel->setData(AiModel::fields_CONFIG, $originalModel->getConfigJson());
+                $copiedModel->setData(AiModel::schema_fields_CONFIG, $originalModel->getConfigJson());
             }
             
             // 复制其他配置信息
-            $copiedModel->setData(AiModel::fields_PROXY_INFO, $originalModel->getProxyInfo());
-            $copiedModel->setData(AiModel::fields_TOKEN_PRICE_INPUT, $originalModel->getTokenPriceInput());
-            $copiedModel->setData(AiModel::fields_TOKEN_PRICE_OUTPUT, $originalModel->getTokenPriceOutput());
-            $copiedModel->setData(AiModel::fields_MAX_TOKENS, $originalModel->getMaxTokens());
-            $copiedModel->setData(AiModel::fields_COST_PER_TOKEN, $originalModel->getCostPerToken());
+            $copiedModel->setData(AiModel::schema_fields_PROXY_INFO, $originalModel->getProxyInfo());
+            $copiedModel->setData(AiModel::schema_fields_TOKEN_PRICE_INPUT, $originalModel->getTokenPriceInput());
+            $copiedModel->setData(AiModel::schema_fields_TOKEN_PRICE_OUTPUT, $originalModel->getTokenPriceOutput());
+            $copiedModel->setData(AiModel::schema_fields_MAX_TOKENS, $originalModel->getMaxTokens());
+            $copiedModel->setData(AiModel::schema_fields_COST_PER_TOKEN, $originalModel->getCostPerToken());
             
             // 复制能力信息（如果有）
-            if ($originalModel->getData(AiModel::fields_CAPABILITIES)) {
-                $copiedModel->setData(AiModel::fields_CAPABILITIES, $originalModel->getData(AiModel::fields_CAPABILITIES));
+            if ($originalModel->getData(AiModel::schema_fields_CAPABILITIES)) {
+                $copiedModel->setData(AiModel::schema_fields_CAPABILITIES, $originalModel->getData(AiModel::schema_fields_CAPABILITIES));
             }
             
             // 设置状态（复制模型默认启用但不是默认模型）
-            $copiedModel->setData(AiModel::fields_IS_ACTIVE, 1);
-            $copiedModel->setData(AiModel::fields_IS_DEFAULT, 0);
+            $copiedModel->setData(AiModel::schema_fields_IS_ACTIVE, 1);
+            $copiedModel->setData(AiModel::schema_fields_IS_DEFAULT, 0);
             
             // 标记为复制模型
-            $copiedModel->setData(AiModel::fields_IS_COPY, 1);
-            $copiedModel->setData(AiModel::fields_ORIGIN_MODEL_ID, $originalModel->getId());
+            $copiedModel->setData(AiModel::schema_fields_IS_COPY, 1);
+            $copiedModel->setData(AiModel::schema_fields_ORIGIN_MODEL_ID, $originalModel->getId());
             
             // 保存
             $saveResult = $copiedModel->save();
@@ -1388,7 +1402,7 @@ class Model extends BackendController
             foreach ($ids as $id) {
                 $model = $this->getAiModel()->reset()->load((int)$id);
                 if ($model->getId()) {
-                    $model->setData(AiModel::fields_IS_ACTIVE, 1);
+                    $model->setData(AiModel::schema_fields_IS_ACTIVE, 1);
                     $model->save();
                     $count++;
                 }
@@ -1431,7 +1445,7 @@ class Model extends BackendController
             foreach ($ids as $id) {
                 $model = $this->getAiModel()->reset()->load((int)$id);
                 if ($model->getId()) {
-                    $model->setData(AiModel::fields_IS_ACTIVE, 0);
+                    $model->setData(AiModel::schema_fields_IS_ACTIVE, 0);
                     $model->save();
                     $count++;
                 }
@@ -1586,7 +1600,7 @@ class Model extends BackendController
                 continue;
             }
             
-            $modelCode = $model->getData(AiModel::fields_MODEL_CODE);
+            $modelCode = $model->getData(AiModel::schema_fields_MODEL_CODE);
             
             try {
                 // 获取供应商代码
@@ -1609,16 +1623,16 @@ class Model extends BackendController
                 
                 // 更新连接状态
                 $this->getAiModel()->reset()
-                    ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                    ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                     ->update([
-                        AiModel::fields_CONNECTION_TEST_STATUS => 'success',
-                        AiModel::fields_CONNECTION_TEST_TIME => time()
+                        AiModel::schema_fields_CONNECTION_TEST_STATUS => 'success',
+                        AiModel::schema_fields_CONNECTION_TEST_TIME => time()
                     ])->fetch();
                 
                 $results[] = [
                     'model_id' => $modelId,
                     'model_code' => $modelCode,
-                    'model_name' => $model->getData(AiModel::fields_NAME),
+                    'model_name' => $model->getData(AiModel::schema_fields_NAME),
                     'success' => true,
                     'message' => __('测试成功'),
                     'duration' => $duration,
@@ -1630,10 +1644,10 @@ class Model extends BackendController
                 // 更新连接状态为失败
                 try {
                     $this->getAiModel()->reset()
-                        ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                        ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                         ->update([
-                            AiModel::fields_CONNECTION_TEST_STATUS => 'failed',
-                            AiModel::fields_CONNECTION_TEST_TIME => time()
+                            AiModel::schema_fields_CONNECTION_TEST_STATUS => 'failed',
+                            AiModel::schema_fields_CONNECTION_TEST_TIME => time()
                         ])->fetch();
                 } catch (\Exception $saveEx) {
                     // 忽略保存错误
@@ -1642,7 +1656,7 @@ class Model extends BackendController
                 $results[] = [
                     'model_id' => $modelId,
                     'model_code' => $modelCode,
-                    'model_name' => $model->getData(AiModel::fields_NAME),
+                    'model_name' => $model->getData(AiModel::schema_fields_NAME),
                     'success' => false,
                     'message' => $e->getMessage()
                 ];

@@ -714,12 +714,10 @@ if (!empty($displayConfig)) {
         formData.append('id', modelId);
         formData.append('prompt', prompt);
         
-        fetch('<?= $this->getBackendUrl("*/backend/model/testConnection") ?>', {
-            method: 'POST',
-            body: formData
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
+        var tcUrl = '<?= $this->getBackendUrl("*/backend/model/testConnection") ?>';
+        var tcReq = window.Weline.Api.request(tcUrl, { method: 'POST', body: formData });
+        tcReq.then(function(res) {
+            var data = (res && res.data) || res;
             testModelBtn.disabled = false;
             testModelBtn.innerHTML = '<i class="mdi mdi-play-circle"></i> <?= __('测试模型') ?>';
             

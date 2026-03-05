@@ -40,12 +40,12 @@ class Debug implements CommandInterface
             $this->printing->error('  ❌ 没有找到任何供应商账户！请先添加供应商账户。');
         } else {
             foreach ($accounts->getItems() as $acc) {
-                $apiKey = $acc->getData(Account::fields_API_KEY);
+                $apiKey = $acc->getData(Account::schema_fields_API_KEY);
                 $apiKeyPreview = $apiKey ? '...' . substr($apiKey, -4) : '(空)';
-                $status = $acc->getData(Account::fields_CONNECTION_STATUS);
-                $balance = $acc->getData(Account::fields_BALANCE);
-                $isActive = $acc->getData(Account::fields_IS_ACTIVE);
-                $isDefault = $acc->getData(Account::fields_IS_DEFAULT);
+                $status = $acc->getData(Account::schema_fields_CONNECTION_STATUS);
+                $balance = $acc->getData(Account::schema_fields_BALANCE);
+                $isActive = $acc->getData(Account::schema_fields_IS_ACTIVE);
+                $isDefault = $acc->getData(Account::schema_fields_IS_DEFAULT);
                 
                 $statusIcon = match($status) {
                     'success' => '✅',
@@ -60,8 +60,8 @@ class Debug implements CommandInterface
                     '  [%s] ID=%d | %s | %s | key=%s | balance=%.2f | active=%s | default=%s',
                     $statusIcon,
                     $acc->getId(),
-                    $acc->getData(Account::fields_PROVIDER_CODE),
-                    $acc->getData(Account::fields_ACCOUNT_NAME) ?: '(无名称)',
+                    $acc->getData(Account::schema_fields_PROVIDER_CODE),
+                    $acc->getData(Account::schema_fields_ACCOUNT_NAME) ?: '(无名称)',
                     $apiKeyPreview,
                     (float)$balance,
                     $activeIcon,
@@ -97,8 +97,8 @@ class Debug implements CommandInterface
         /** @var AiModel $modelModel */
         $modelModel = ObjectManager::getInstance(AiModel::class);
         $models = $modelModel->reset()
-            ->where(AiModel::fields_IS_ACTIVE, 1)
-            ->order(AiModel::fields_IS_DEFAULT, 'DESC')
+            ->where(AiModel::schema_fields_IS_ACTIVE, 1)
+            ->order(AiModel::schema_fields_IS_DEFAULT, 'DESC')
             ->select()
             ->fetch();
         
@@ -110,7 +110,7 @@ class Debug implements CommandInterface
                 $config = $mdl->getConfig();
                 $hasProviderKey = !empty($providerConfig['api_key'] ?? '');
                 $hasConfigKey = !empty($config['api_key'] ?? '');
-                $isDefault = $mdl->getData(AiModel::fields_IS_DEFAULT);
+                $isDefault = $mdl->getData(AiModel::schema_fields_IS_DEFAULT);
                 
                 $defaultIcon = $isDefault ? '★' : ' ';
                 $keyIcon = ($hasProviderKey || $hasConfigKey) ? '🔑' : '  ';
@@ -119,9 +119,9 @@ class Debug implements CommandInterface
                     '  %s%s %s | %s | supplier=%s',
                     $defaultIcon,
                     $keyIcon,
-                    $mdl->getData(AiModel::fields_MODEL_CODE),
+                    $mdl->getData(AiModel::schema_fields_MODEL_CODE),
                     $mdl->getName(),
-                    $mdl->getData(AiModel::fields_SUPPLIER) ?: '(未设置)'
+                    $mdl->getData(AiModel::schema_fields_SUPPLIER) ?: '(未设置)'
                 ));
             }
         }
@@ -145,7 +145,7 @@ class Debug implements CommandInterface
                     $supplier,
                     $account->getId(),
                     $keyPreview,
-                    (float)$account->getData(Account::fields_BALANCE)
+                    (float)$account->getData(Account::schema_fields_BALANCE)
                 ));
             } else {
                 $this->printing->warning(sprintf('  ⚠️  %s: 无可用账户', $supplier));

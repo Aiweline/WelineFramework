@@ -259,7 +259,7 @@ public function setup(Setup $setup, Context $context)
     });
     
     // 2. ai_api_key - API密钥管理
-    // 3. ai_assistant - AI助手定义
+    // (已移除 ai_assistant)
     // 4. ai_tenant - 多租户管理
     // 5. ai_model_monitoring - 模型性能监控
 }

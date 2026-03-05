@@ -1,15 +1,13 @@
 <?php
 /**
  * 个人中心首页
- * 
+ *
  * @var int $api_key_count
- * @var int $assistant_count
  * @var array $user
  */
 /**@var \Weline\Framework\View\Template $this */
 
 $api_key_count = $this->api_key_count ?? 0;
-$assistant_count = $this->assistant_count ?? 0;
 $user = $this->user ?? [];
 ?>
 <!DOCTYPE html>
@@ -189,11 +187,6 @@ $user = $this->user ?? [];
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="<?= $this->getUrl('*/frontend/assistant') ?>">
-                        <i class="mdi mdi-robot"></i> <?= __('我的助手') ?>
-                    </a>
-                </li>
-                <li class="nav-item">
                     <a class="nav-link active" href="<?= $this->getUrl('*/frontend/center') ?>">
                         <i class="mdi mdi-account"></i> <?= __('个人中心') ?>
                     </a>
@@ -207,7 +200,7 @@ $user = $this->user ?? [];
     <!-- 页面标题 -->
     <div class="page-header">
         <h1><i class="mdi mdi-account-circle"></i> <?= __('个人中心') ?></h1>
-        <p><?= __('管理您的API密钥、助手和个人设置') ?></p>
+        <p><?= __('管理您的API密钥和个人设置') ?></p>
     </div>
 
     <!-- 统计卡片 -->
@@ -218,14 +211,6 @@ $user = $this->user ?? [];
             </div>
             <h3><?= number_format($api_key_count) ?></h3>
             <p><?= __('API密钥') ?></p>
-        </div>
-
-        <div class="stat-card">
-            <div class="icon green">
-                <i class="mdi mdi-robot"></i>
-            </div>
-            <h3><?= number_format($assistant_count) ?></h3>
-            <p><?= __('我的助手') ?></p>
         </div>
 
         <div class="stat-card">
@@ -248,18 +233,6 @@ $user = $this->user ?? [];
                         <div>
                             <div class="action-title"><?= __('管理API密钥') ?></div>
                             <div class="action-desc"><?= __('创建、查看和管理您的API密钥') ?></div>
-                        </div>
-                    </div>
-                    <i class="mdi mdi-chevron-right"></i>
-                </a>
-            </li>
-            <li>
-                <a href="<?= $this->getUrl('*/frontend/assistant') ?>">
-                    <div class="action-content">
-                        <i class="mdi mdi-robot text-success"></i>
-                        <div>
-                            <div class="action-title"><?= __('我的助手') ?></div>
-                            <div class="action-desc"><?= __('创建和管理您的AI助手') ?></div>
                         </div>
                     </div>
                     <i class="mdi mdi-chevron-right"></i>

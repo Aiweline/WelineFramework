@@ -27,9 +27,6 @@ php bin/w phpunit:run app/code/Weline/Ai/tests/unit/test_ai_model_validation.php
 # AI API Key 验证测试
 php bin/w phpunit:run app/code/Weline/Ai/tests/unit/test_ai_api_key_validation.php
 
-# AI Assistant 验证测试
-php bin/w phpunit:run app/code/Weline/Ai/tests/unit/test_ai_assistant_validation.php
-
 # AI Tenant 验证测试
 php bin/w phpunit:run app/code/Weline/Ai/tests/unit/test_ai_tenant_validation.php
 ```
@@ -53,8 +50,6 @@ php bin/w phpunit:run app/code/Weline/Ai/tests/integration/ModelManagementTest.p
 # API Key 认证测试
 php bin/w phpunit:run app/code/Weline/Ai/tests/integration/ApiKeyAuthTest.php
 
-# 助手管理测试
-php bin/w phpunit:run app/code/Weline/Ai/tests/integration/AssistantManagementTest.php
 ```
 
 ---

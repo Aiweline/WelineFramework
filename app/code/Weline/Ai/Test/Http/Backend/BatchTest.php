@@ -14,31 +14,13 @@ echo "  Weline_Ai 后台路由批量测试\n";
 echo "========================================\n";
 echo "\n";
 
-// 定义所有需要测试的路由
+// 定义所有需要测试的路由（精简后仅保留 AI 管理、场景配置、模型、适配器、供应商、默认模型）
 $routes = [
-    'apikey/index' => 'API密钥管理',
-    'recharge/index' => '充值管理',
-    'market/index' => '助手市场',
-    'assistant/index' => '助手管理',
+    'manager/index' => 'AI管理',
     'model/index' => 'AI模型管理',
-    'defaultmodel/index' => '默认模型管理',
-    'tenant/index' => '租户管理',
-    'user/index' => '用户管理',
     'adapter/index' => '场景适配器',
-    'rating/index' => '评分管理',
-    'insights/index' => '数据洞察',
-    'abtesting/index' => 'A/B测试管理',
-    'contentsafety/index' => '内容安全管理',
-    'customersupport/index' => '客户支持管理',
-    'developertools/index' => '开发者工具',
-    'marketingtools/index' => '营销工具',
-    'modelbenchmark/index' => '模型基准测试',
-    'modeldeployment/index' => '模型部署管理',
-    'modelversioning/index' => '模型版本控制',
-    'securityscan/index' => '安全扫描',
-    'thirdpartyintegration/index' => '第三方集成',
-    'trainingdata/index' => '训练数据管理',
-    'test/index' => '测试控制器',
+    'provider/index' => '供应商账户',
+    'defaultmodel/index' => '默认模型管理',
 ];
 
 // 统计
