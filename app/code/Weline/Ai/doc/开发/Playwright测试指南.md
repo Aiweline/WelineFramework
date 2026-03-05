@@ -99,7 +99,6 @@ tests/e2e/
 │   ├── backend/              # 后台测试
 │   │   ├── model.spec.js     # 模型管理
 │   │   ├── apikey.spec.js    # API密钥
-│   │   ├── assistant.spec.js # AI助手
 │   │   └── adapter.spec.js   # 适配器
 │   └── frontend/             # 前台测试
 │       ├── chat.spec.js      # 聊天功能
@@ -235,13 +234,13 @@ test.describe('AI模型管理', () => {
 });
 ```
 
-### 示例3：API密钥管理测试
+### 示例3：AI 管理聚合页测试
 
 ```javascript
-// tests/e2e/specs/backend/apikey.spec.js
+// tests/e2e/specs/backend/manager.spec.js
 import { test, expect } from '@playwright/test';
 
-test.describe('API密钥管理', () => {
+test.describe('AI 管理', () => {
   test.beforeEach(async ({ page }) => {
     // 登录
     await page.goto('/admin/login');
@@ -250,37 +249,24 @@ test.describe('API密钥管理', () => {
     await page.click('button[type="submit"]');
     await page.waitForURL('**/admin/**');
 
-    // 访问API密钥页
-    await page.goto('/ai/backend/apikey/index');
+    // 访问 AI 管理页
+    await page.goto('/ai/backend/manager');
   });
 
-  test('应该能够创建API密钥', async ({ page }) => {
-    // 点击创建按钮
-    await page.click('button:has-text("创建密钥")');
-
-    // 填写表单
-    await page.fill('input[name="name"]', '测试密钥');
-    await page.fill('input[name="quota_monthly"]', '1000');
-
-    // 提交
-    await page.click('button:has-text("创建")');
-
-    // 验证成功
-    await expect(page.locator('.alert-success')).toBeVisible();
-    
-    // 验证密钥显示（只显示一次）
-    await expect(page.locator('.api-key-display')).toBeVisible();
+  test('应该显示模型 Tab', async ({ page }) => {
+    await page.click('a[data-tab="model"]');
+    await expect(page.locator('#model-tab-content')).toBeVisible();
   });
 
-  test('应该显示配额使用情况', async ({ page }) => {
-    // 验证统计卡片
-    await expect(page.locator('.stats-card')).toHaveCount(4);
-    
-    // 验证各个统计项
-    await expect(page.locator('.total-count')).toBeVisible();
-    await expect(page.locator('.pending-count')).toBeVisible();
-    await expect(page.locator('.active-count')).toBeVisible();
-    await expect(page.locator('.rejected-count')).toBeVisible();
+  test('应该能够新增模型', async ({ page }) => {
+    await page.click('a[data-tab="model"]');
+    await page.click('button:has-text("新增模型")');
+    await expect(page.locator('.offcanvas')).toBeVisible();
+  });
+
+  test('应该显示适配器 Tab', async ({ page }) => {
+    await page.click('a[data-tab="adapter"]');
+    await expect(page.locator('#adapter-tab-content')).toBeVisible();
   });
 });
 ```
@@ -370,7 +356,6 @@ npx playwright show-report
 - [ ] 登录/登出
 - [ ] 模型管理（CRUD）
 - [ ] API密钥管理（CRUD）
-- [ ] AI助手管理（CRUD）
 - [ ] 场景适配器管理
 - [ ] 统计监控页面
 

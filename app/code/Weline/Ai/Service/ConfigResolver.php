@@ -81,17 +81,25 @@ class ConfigResolver
         // 过滤空值，避免后续 array_merge 时用空字符串覆盖有效值
         $config = $this->filterEmptyValues($model->getConfig());
         
-        // 优先级2: 后台默认供应商账户（提供 api_key、base_url）
-        $defaultAccount = $this->getDefaultProviderAccount($providerCode);
-        if ($defaultAccount && $defaultAccount->getId()) {
-            $config = array_merge($config, $this->extractAccountConfig($defaultAccount));
+        // 优先级2: 供应商账户（指定 account_id 或默认账户）
+        $modelProviderConfig = $model->getProviderConfig();
+        $accountId = isset($modelProviderConfig['account_id']) ? (int)$modelProviderConfig['account_id'] : 0;
+        $account = null;
+        if ($accountId > 0) {
+            $account = $this->getAccountById($accountId);
+        }
+        if (!$account || !$account->getId()) {
+            $account = $this->getDefaultProviderAccount($providerCode);
+        }
+        if ($account && $account->getId()) {
+            $config = array_merge($config, $this->extractAccountConfig($account));
         }
         
-        // 优先级3: 模型关联的 provider_config
-        // 过滤空值，避免用空 api_key 覆盖账户的有效值
-        $modelProviderConfig = $model->getProviderConfig();
+        // 优先级3: 模型关联的 provider_config 覆盖（排除 account_id，仅用于展示）
         if (!empty($modelProviderConfig)) {
-            $config = array_merge($config, $this->filterEmptyValues($modelProviderConfig));
+            $overrides = $modelProviderConfig;
+            unset($overrides['account_id']);
+            $config = array_merge($config, $this->filterEmptyValues($overrides));
         }
         
         // 优先级4（最高）: 用户提供的配置
@@ -115,20 +123,24 @@ class ConfigResolver
     private function resolveFrontendConfig(AiModel $model, string $providerCode, array $userConfig, ?int $userId): array
     {
         // 优先级1（最低）: 模型的基础配置
-        // 过滤空值，避免后续 array_merge 时用空字符串覆盖有效值
         $config = $this->filterEmptyValues($model->getConfig());
         
-        // 优先级2: 后台默认供应商账户
-        $defaultAccount = $this->getDefaultProviderAccount($providerCode);
-        if ($defaultAccount && $defaultAccount->getId()) {
-            $config = array_merge($config, $this->extractAccountConfig($defaultAccount));
+        // 优先级2: 供应商账户（指定 account_id 或默认）
+        $modelProviderConfig = $model->getProviderConfig();
+        $accountId = isset($modelProviderConfig['account_id']) ? (int)$modelProviderConfig['account_id'] : 0;
+        $account = ($accountId > 0) ? $this->getAccountById($accountId) : null;
+        if (!$account || !$account->getId()) {
+            $account = $this->getDefaultProviderAccount($providerCode);
+        }
+        if ($account && $account->getId()) {
+            $config = array_merge($config, $this->extractAccountConfig($account));
         }
         
-        // 优先级3: 模型关联的配置
-        // 过滤空值，避免用空 api_key 覆盖账户的有效值
-        $modelProviderConfig = $model->getProviderConfig();
+        // 优先级3: 模型关联的配置覆盖（排除 account_id）
         if (!empty($modelProviderConfig)) {
-            $config = array_merge($config, $this->filterEmptyValues($modelProviderConfig));
+            $overrides = $modelProviderConfig;
+            unset($overrides['account_id']);
+            $config = array_merge($config, $this->filterEmptyValues($overrides));
         }
         
         // 优先级4: 用户为模型配置的供应商账户
@@ -154,13 +166,23 @@ class ConfigResolver
     {
         /** @var AiModel $model */
         $model = ObjectManager::getInstance(AiModel::class);
-        $model = $model->where(AiModel::fields_MODEL_CODE, $modelCode);
+        $model = $model->where(AiModel::schema_fields_MODEL_CODE, $modelCode);
         if (!$allowInactive) {
-            $model = $model->where(AiModel::fields_IS_ACTIVE, 1);
+            $model = $model->where(AiModel::schema_fields_IS_ACTIVE, 1);
         }
         return $model->find()->fetch();
     }
     
+    /**
+     * 根据 ID 获取供应商账户
+     */
+    private function getAccountById(int $id): ?Account
+    {
+        /** @var Account $account */
+        $account = ObjectManager::getInstance(Account::class)->load($id);
+        return ($account->getId() && $account->getData(Account::schema_fields_IS_ACTIVE)) ? $account : null;
+    }
+
     /**
      * 获取默认供应商账户
      * 
@@ -174,11 +196,11 @@ class ConfigResolver
         
         // 首先尝试获取默认且可用的账户
         $defaultAccount = $account->reset()
-            ->where(Account::fields_PROVIDER_CODE, $providerCode)
-            ->where(Account::fields_IS_DEFAULT, 1)
-            ->where(Account::fields_IS_ACTIVE, 1)
-            ->where(Account::fields_CONNECTION_STATUS, Account::STATUS_SUCCESS)
-            ->where(Account::fields_BALANCE, 0, '>')
+            ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
+            ->where(Account::schema_fields_IS_DEFAULT, 1)
+            ->where(Account::schema_fields_IS_ACTIVE, 1)
+            ->where(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS)
+            ->where(Account::schema_fields_BALANCE, 0, '>')
             ->find()
             ->fetch();
         
@@ -188,11 +210,11 @@ class ConfigResolver
         
         // 如果没有默认账户，获取任意可用账户
         $availableAccount = $account->reset()
-            ->where(Account::fields_PROVIDER_CODE, $providerCode)
-            ->where(Account::fields_IS_ACTIVE, 1)
-            ->where(Account::fields_CONNECTION_STATUS, Account::STATUS_SUCCESS)
-            ->where(Account::fields_BALANCE, 0, '>')
-            ->order(Account::fields_BALANCE, 'DESC')
+            ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
+            ->where(Account::schema_fields_IS_ACTIVE, 1)
+            ->where(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS)
+            ->where(Account::schema_fields_BALANCE, 0, '>')
+            ->order(Account::schema_fields_BALANCE, 'DESC')
             ->find()
             ->fetch();
         
@@ -208,7 +230,7 @@ class ConfigResolver
         $account = ObjectManager::getInstance(Account::class);
         return $account->where('user_id', $userId)
                       ->where('model_id', $modelId)
-                      ->where(Account::fields_IS_ACTIVE, 1) // 使用IS_ACTIVE字段
+                      ->where(Account::schema_fields_IS_ACTIVE, 1) // 使用IS_ACTIVE字段
                       ->find()
                       ->fetch();
     }
@@ -227,19 +249,19 @@ class ConfigResolver
         }
         
         // API 基础 URL
-        $baseUrl = $account->getData(Account::fields_BASE_URL);
+        $baseUrl = $account->getData(Account::schema_fields_BASE_URL);
         if (!empty($baseUrl)) {
             $config['base_url'] = $baseUrl;
         }
         
         // API Secret（如有）
-        $apiSecret = $account->getData(Account::fields_API_SECRET);
+        $apiSecret = $account->getData(Account::schema_fields_API_SECRET);
         if (!empty($apiSecret)) {
             $config['api_secret'] = $apiSecret;
         }
         
         // 代理配置
-        $proxyConfig = $account->getData(Account::fields_PROXY_CONFIG);
+        $proxyConfig = $account->getData(Account::schema_fields_PROXY_CONFIG);
         if (!empty($proxyConfig)) {
             $proxyData = is_string($proxyConfig) ? json_decode($proxyConfig, true) : $proxyConfig;
             if (is_array($proxyData) && !empty($proxyData['enabled'])) {
@@ -248,7 +270,7 @@ class ConfigResolver
         }
         
         // 额外配置（从 config 字段）
-        $extraConfig = $account->getData(Account::fields_CONFIG);
+        $extraConfig = $account->getData(Account::schema_fields_CONFIG);
         if (!empty($extraConfig)) {
             $extraData = is_string($extraConfig) ? json_decode($extraConfig, true) : $extraConfig;
             if (is_array($extraData)) {

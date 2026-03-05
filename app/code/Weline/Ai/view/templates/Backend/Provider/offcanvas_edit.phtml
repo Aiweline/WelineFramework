@@ -1,0 +1,206 @@
+<?php
+/**
+ * 供应商账户 Offcanvas 编辑模板
+ *
+ * 用于新建和编辑供应商账户（在 iframe 中加载）
+ *
+ * @var \Weline\Ai\Model\Provider\Account|null $account
+ * @var array $providers
+ */
+$account = $this->getData('account');
+$providers = $this->getData('providers') ?? [];
+$isEdit = $account && $account->getId();
+$title = $isEdit ? __('编辑供应商账户') : __('新建供应商账户');
+?>
+
+<style>
+.weline-ai-provider-edit-offcanvas {
+    background-color: var(--backend-color-body-bg, #fff);
+    padding: 0.75rem;
+}
+
+.weline-ai-provider-edit-offcanvas .weline-ai-offcanvas-title-bar {
+    padding: 0.5rem 0.75rem;
+    background-color: var(--backend-color-card-bg, #f8f9fa);
+    border-bottom: 2px solid var(--backend-color-border, #dee2e6);
+    margin: -0.75rem -0.75rem 0.75rem -0.75rem;
+}
+
+.weline-ai-provider-edit-offcanvas .weline-ai-offcanvas-title-bar h5 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #495057);
+}
+
+.weline-ai-provider-edit-offcanvas .form-label.required::after {
+    content: ' *';
+    color: var(--backend-color-danger, red);
+}
+
+.weline-ai-provider-edit-offcanvas .form-control,
+.weline-ai-provider-edit-offcanvas .form-select {
+    font-size: 0.875rem;
+}
+
+.weline-ai-provider-edit-offcanvas .form-text {
+    font-size: 0.8rem;
+    color: var(--backend-color-text-muted, #6c757d);
+}
+</style>
+
+<div class="weline-ai-provider-edit-offcanvas">
+    <div class="weline-ai-offcanvas-title-bar">
+        <h5 class="mb-0">
+            <i class="mdi mdi-account-key me-2"></i><?= $title ?>
+        </h5>
+    </div>
+
+    <form id="weline-ai-provider-offcanvas-form" method="post">
+        <?php if ($isEdit): ?>
+            <input type="hidden" name="id" value="<?= $account->getId() ?>">
+        <?php endif; ?>
+
+        <div class="mb-3">
+            <label for="weline-ai-oc-provider" class="form-label required"><lang>供应商</lang></label>
+            <select class="form-select" id="weline-ai-oc-provider" name="provider_code" required <?= $isEdit ? 'readonly' : '' ?>>
+                <option value=""><?= __('请选择供应商') ?></option>
+                <?php foreach ($providers as $code => $info): ?>
+                    <option value="<?= $code ?>"
+                            data-base-url="<?= htmlspecialchars($info['base_url'] ?? '') ?>"
+                            data-name="<?= htmlspecialchars($info['name'] ?? '') ?>"
+                            <?= $isEdit && $account->getData('provider_code') === $code ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($info['name'] ?? $code) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label for="weline-ai-oc-account-name" class="form-label required"><lang>账户名称</lang></label>
+            <input type="text" class="form-control" id="weline-ai-oc-account-name" name="account_name"
+                   value="<?= $isEdit ? htmlspecialchars((string)$account->getData('account_name')) : '' ?>" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="weline-ai-oc-api-key" class="form-label <?= !$isEdit ? 'required' : '' ?>">API<lang>密钥</lang></label>
+            <input type="password" class="form-control" id="weline-ai-oc-api-key" name="api_key"
+                   placeholder="<?= $isEdit ? __('留空保持不变') : __('请输入API密钥') ?>" <?= !$isEdit ? 'required' : '' ?>>
+            <small class="form-text"><?= __('API密钥将被加密存储') ?></small>
+        </div>
+
+        <div class="mb-3">
+            <label for="weline-ai-oc-base-url" class="form-label">API<lang>基础URL</lang></label>
+            <input type="url" class="form-control" id="weline-ai-oc-base-url" name="base_url"
+                   value="<?= $isEdit ? htmlspecialchars((string)$account->getData('base_url')) : '' ?>"
+                   placeholder="<?= __('留空使用默认值') ?>">
+        </div>
+
+        <div class="mb-3">
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" id="weline-ai-oc-is-active" name="is_active" value="1"
+                       <?= $isEdit && $account->getData('is_active') ? 'checked' : '' ?>>
+                <label class="form-check-label" for="weline-ai-oc-is-active"><lang>激活账户</lang></label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" id="weline-ai-oc-is-default" name="is_default" value="1"
+                       <?= $isEdit && $account->getData('is_default') ? 'checked' : '' ?>>
+                <label class="form-check-label" for="weline-ai-oc-is-default"><lang>设为默认</lang></label>
+            </div>
+        </div>
+
+        <input type="hidden" name="balance" value="<?= $isEdit ? (float)$account->getData('balance') : 0 ?>">
+        <input type="hidden" name="currency" value="<?= $isEdit ? htmlspecialchars((string)$account->getData('currency')) : 'USD' ?>">
+
+        <div class="d-flex gap-2 mt-3">
+            <button type="submit" class="btn btn-primary">
+                <i class="mdi mdi-content-save me-1"></i><lang>保存</lang>
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="(function(){try{var w=window.parent;if(w!==window&&w.bootstrap){var oc=w.document.querySelector('.offcanvas.show');if(oc)w.bootstrap.Offcanvas.getInstance(oc)&&w.bootstrap.Offcanvas.getInstance(oc).hide();}else{w.location.reload();}}catch(e){window.location.reload();}})();">
+                <i class="mdi mdi-close me-1"></i><lang>关闭</lang>
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+(function() {
+    'use strict';
+
+    var form = document.getElementById('weline-ai-provider-offcanvas-form');
+    if (!form) return;
+
+    // 供应商选择时自动填充
+    var providerSelect = document.getElementById('weline-ai-oc-provider');
+    if (providerSelect && !providerSelect.readOnly) {
+        providerSelect.addEventListener('change', function() {
+            var opt = this.options[this.selectedIndex];
+            var baseUrl = document.getElementById('weline-ai-oc-base-url');
+            var accountName = document.getElementById('weline-ai-oc-account-name');
+            if (opt && opt.value) {
+                var url = opt.getAttribute('data-base-url');
+                var name = opt.getAttribute('data-name');
+                if (url && baseUrl && !baseUrl.value.trim()) baseUrl.value = url;
+                if (name && accountName && !accountName.value.trim()) accountName.value = name;
+            }
+        });
+    }
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+
+        var submitBtn = form.querySelector('button[type="submit"]');
+        var originalHtml = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i><?= __('保存中...') ?>';
+
+        var data = {};
+        new FormData(form).forEach(function(v, k) { data[k] = v; });
+        if (!data.is_active) data.is_active = 0;
+        if (!data.is_default) data.is_default = 0;
+
+        var saveUrl = '<?= $this->getBackendUrl('*/backend/provider/save') ?>';
+        var saveOpts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) };
+        var req = window.Weline.Api.request(saveUrl, saveOpts);
+        req.then(function(res) {
+            var resData = (res && res.data) || res;
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalHtml;
+            if (resData && resData.success) {
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.success(resData.message || '<?= __('保存成功') ?>');
+                } else if (typeof AdminToast !== 'undefined') {
+                    AdminToast.success(resData.message || '<?= __('保存成功') ?>');
+                }
+                try {
+                    if (window.parent && window.parent !== window) {
+                        window.parent.location.reload();
+                    } else {
+                        window.location.reload();
+                    }
+                } catch (err) {
+                    window.location.reload();
+                }
+            } else {
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.error(res.message || '<?= __('保存失败') ?>');
+                } else if (typeof AdminToast !== 'undefined') {
+                    AdminToast.error(resData.message || '<?= __('保存失败') ?>');
+                }
+            }
+        })
+        .catch(function(err) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalHtml;
+            if (typeof BackendToast !== 'undefined') {
+                BackendToast.error('<?= __('保存失败，请重试') ?>');
+            } else if (typeof AdminToast !== 'undefined') {
+                AdminToast.error('<?= __('保存失败，请重试') ?>');
+            }
+        });
+    });
+})();
+</script>

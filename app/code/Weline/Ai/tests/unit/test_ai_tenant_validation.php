@@ -206,7 +206,7 @@ class AiTenantValidationTest extends TestCase
         $this->tenant->setData([
             'name' => 'Test Tenant',
             'config' => [
-                'features' => ['ai_chat', 'ai_assistant'],
+                'features' => ['ai_chat'],
                 'limits' => ['max_users' => 100],
                 'settings' => ['timezone' => 'UTC'],
             ],

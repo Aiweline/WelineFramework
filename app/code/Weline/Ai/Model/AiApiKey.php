@@ -5,114 +5,99 @@ declare(strict_types=1);
 namespace Weline\Ai\Model;
 
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\Framework\Setup\Data\Context;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
+use Weline\Framework\Database\Schema\Attribute\Table;
 
 /**
  * AI API Key Entity
- * 
+ *
  * Manages API keys with quota tracking and status management.
- * 
+ *
  * @package Weline_Ai
  */
+#[Table(comment: 'AI API密钥表')]
+#[Index(name: 'idx_token', columns: ['token'], type: 'UNIQUE', comment: 'Token唯一索引')]
 class AiApiKey extends Model
 {
-    // 框架自动推导表名：AiApiKey → ai_api_key （遵循Constitution XI.A原则）
-    // 禁止声明 protected $_table，让ORM自动推导
+    public const schema_table = 'weline_ai_ai_api_key';
+    public const schema_primary_key = 'id';
+
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'ID')]
+    public const schema_fields_ID = 'id';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: '名称')]
+    public const schema_fields_NAME = 'name';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: 'Token')]
+    public const schema_fields_TOKEN = 'token';
+    #[Col(type: 'int', nullable: false, comment: '用户ID')]
+    public const schema_fields_USER_ID = 'user_id';
+    #[Col(type: 'int', nullable: false, comment: '租户ID')]
+    public const schema_fields_TENANT_ID = 'tenant_id';
+    #[Col(type: 'varchar', length: 20, nullable: false, default: 'pending', comment: '状态')]
+    public const schema_fields_STATUS = 'status';
+    #[Col(type: 'int', nullable: true, default: 0, comment: '每日配额')]
+    public const schema_fields_QUOTA_DAILY = 'quota_daily';
+    #[Col(type: 'int', nullable: true, default: 0, comment: '每月配额')]
+    public const schema_fields_QUOTA_MONTHLY = 'quota_monthly';
+    #[Col(type: 'int', nullable: true, default: 0, comment: '每日使用')]
+    public const schema_fields_USAGE_DAILY = 'usage_daily';
+    #[Col(type: 'int', nullable: true, default: 0, comment: '每月使用')]
+    public const schema_fields_USAGE_MONTHLY = 'usage_monthly';
+    #[Col(type: 'int', nullable: true, default: 0, comment: '调用次数')]
+    public const schema_fields_CALL_COUNT = 'call_count';
+    #[Col(type: 'int', nullable: true, comment: '最后使用时间戳')]
+    public const schema_fields_LAST_USED_TIME = 'last_used_time';
+    #[Col(type: 'timestamp', nullable: true, comment: '最后使用时间')]
+    public const schema_fields_LAST_USED_AT = 'last_used_at';
+    #[Col(type: 'timestamp', nullable: true, comment: '过期时间')]
+    public const schema_fields_EXPIRES_AT = 'expires_at';
+    #[Col(type: 'timestamp', nullable: true, comment: '创建时间')]
+    public const schema_fields_CREATED_AT = 'created_at';
+    #[Col(type: 'timestamp', nullable: true, comment: '更新时间')]
+    public const schema_fields_UPDATED_AT = 'updated_at';
 
     public const STATUS_PENDING = 'pending';
     public const STATUS_APPROVED = 'approved';
     public const STATUS_SUSPENDED = 'suspended';
     public const STATUS_REVOKED = 'revoked';
-    
-    /**
-     * Field name constants（参考AiModel.php和install()方法）
-     */
-    public const fields_ID = 'id';
-    public const fields_NAME = 'name';
-    public const fields_TOKEN = 'token';
-    public const fields_USER_ID = 'user_id';
-    public const fields_TENANT_ID = 'tenant_id';
-    public const fields_STATUS = 'status';
-    public const fields_QUOTA_DAILY = 'quota_daily'; // 每日成本控制限额（单位：元）
-    public const fields_QUOTA_MONTHLY = 'quota_monthly'; // 每月成本控制限额（单位：元）
-    public const fields_USAGE_DAILY = 'usage_daily'; // 今日已使用金额（单位：元）
-    public const fields_USAGE_MONTHLY = 'usage_monthly'; // 本月已使用金额（单位：元）
-    public const fields_CALL_COUNT = 'call_count'; // 累计调用次数
-    public const fields_LAST_USED_TIME = 'last_used_time'; // 最后使用时间
-    public const fields_LAST_USED_AT = 'last_used_at';
-    public const fields_EXPIRES_AT = 'expires_at';
-    public const fields_CREATED_AT = 'created_at';
-    public const fields_UPDATED_AT = 'updated_at';
-    
-    /**
-     * Unit primary keys
-     */
+
     public array $_unit_primary_keys = ['id'];
-    
-    /**
-     * Initialize model（参考AiModel.php的成功案例）
-     */
+
     public function _init(): void
     {
         $this->useMainDbMaster();
-        // 框架自动推导表名：AiApiKey → ai_api_key
     }
 
-    public function setup(ModelSetup $setup, Context $context): void
+    public function getIdFieldName(): string
     {
-        $this->install($setup, $context);
-    }
-    public function upgrade(ModelSetup $setup, Context $context): void {}
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        $setup->getPrinting()->setup('安装数据表...' . self::table);
-
-        if ($setup->tableExist() === false) {
-            $setup->createTable('AI API密钥表')
-                ->addColumn('id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
-                ->addColumn('name', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'not null', '名称')
-                ->addColumn('token', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'not null', 'Token')
-                ->addColumn('user_id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'not null', '用户ID')
-                ->addColumn('tenant_id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'not null', '租户ID')
-                ->addColumn('status', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'default \'pending\'', '状态')
-                ->addColumn('quota_daily', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, '', '每日配额')
-                ->addColumn('quota_monthly', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, '', '每月配额')
-                ->addColumn('usage_daily', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '每日使用')
-                ->addColumn('usage_monthly', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '每月使用')
-                ->addColumn('last_used_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TIMESTAMP, null, '', '最后使用时间')
-                ->addColumn('expires_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TIMESTAMP, null, '', '过期时间')
-                ->addColumn('created_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TIMESTAMP, null, 'not null DEFAULT CURRENT_TIMESTAMP', '创建时间')
-                ->addColumn('updated_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TIMESTAMP, null, 'not null DEFAULT CURRENT_TIMESTAMP', '更新时间')
-                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_UNIQUE, 'idx_token', self::fields_TOKEN, 'Token唯一索引')
-                ->create();
-        }
+        return self::schema_fields_ID;
     }
 
+    /** Whether the key is active and not expired */
     public function isActive(): bool
     {
-        return $this->getData('status') === self::STATUS_APPROVED 
+        return $this->getData(self::schema_fields_STATUS) === self::STATUS_APPROVED
             && !$this->isExpired();
     }
 
     public function isExpired(): bool
     {
-        $expiresAt = $this->getData('expires_at');
-        return $expiresAt && strtotime($expiresAt) < time();
+        $expiresAt = $this->getData(self::schema_fields_EXPIRES_AT);
+        return $expiresAt && strtotime((string) $expiresAt) < time();
     }
 
     public function hasQuota(): bool
     {
-        $dailyQuota = $this->getData('quota_daily');
-        $monthlyQuota = $this->getData('quota_monthly');
-        $dailyUsage = $this->getData('usage_daily');
-        $monthlyUsage = $this->getData('usage_monthly');
+        $dailyQuota = $this->getData(self::schema_fields_QUOTA_DAILY);
+        $monthlyQuota = $this->getData(self::schema_fields_QUOTA_MONTHLY);
+        $dailyUsage = $this->getData(self::schema_fields_USAGE_DAILY);
+        $monthlyUsage = $this->getData(self::schema_fields_USAGE_MONTHLY);
 
-        if ($dailyQuota && $dailyUsage >= $dailyQuota) {
+        if ($dailyQuota && (int) $dailyUsage >= (int) $dailyQuota) {
             return false;
         }
 
-        if ($monthlyQuota && $monthlyUsage >= $monthlyQuota) {
+        if ($monthlyQuota && (int) $monthlyUsage >= (int) $monthlyQuota) {
             return false;
         }
 
@@ -121,26 +106,26 @@ class AiApiKey extends Model
 
     public function incrementUsage(): void
     {
-        $this->setData('usage_daily', $this->getData('usage_daily') + 1);
-        $this->setData('usage_monthly', $this->getData('usage_monthly') + 1);
-        $this->setData('last_used_at', date('Y-m-d H:i:s'));
+        $this->setData(self::schema_fields_USAGE_DAILY, (int) $this->getData(self::schema_fields_USAGE_DAILY) + 1);
+        $this->setData(self::schema_fields_USAGE_MONTHLY, (int) $this->getData(self::schema_fields_USAGE_MONTHLY) + 1);
+        $this->setData(self::schema_fields_LAST_USED_AT, date('Y-m-d H:i:s'));
     }
 
     public function validate(): bool
     {
-        if (empty($this->getData('name'))) {
+        if (empty($this->getData(self::schema_fields_NAME))) {
             throw new \InvalidArgumentException('API Key name is required');
         }
 
-        if (empty($this->getData('token'))) {
+        if (empty($this->getData(self::schema_fields_TOKEN))) {
             throw new \InvalidArgumentException('API Key token is required');
         }
 
-        if (empty($this->getData('user_id'))) {
+        if (empty($this->getData(self::schema_fields_USER_ID))) {
             throw new \InvalidArgumentException('User ID is required');
         }
 
-        if (empty($this->getData('tenant_id'))) {
+        if (empty($this->getData(self::schema_fields_TENANT_ID))) {
             throw new \InvalidArgumentException('Tenant ID is required');
         }
 
