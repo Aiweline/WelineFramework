@@ -4,6 +4,7 @@
  */
 const EavManager = (function() {
     'use strict';
+    var __ = (typeof window !== 'undefined' && typeof window.__ === 'function') ? window.__ : function(s) { return s; };
 
     // 配置
     let config = {
@@ -65,22 +66,22 @@ const EavManager = (function() {
     const nodeTypes = {
         entity: {
             icon: 'mdi-cube-outline',
-            label: '实体',
+            label: __('实体'),
             color: '#6f42c1'
         },
         set: {
             icon: 'mdi-folder-outline',
-            label: '属性集',
+            label: __('属性集'),
             color: '#fd7e14'
         },
         group: {
             icon: 'mdi-folder-multiple-outline',
-            label: '属性组',
+            label: __('属性组'),
             color: '#20c997'
         },
         attribute: {
             icon: 'mdi-tag-outline',
-            label: '属性',
+            label: __('属性'),
             color: '#0dcaf0'
         }
     };
@@ -137,29 +138,21 @@ const EavManager = (function() {
     function loadTree(search = '', preserveExpanded = true, onLoaded) {
         state.loading = true;
         showLoading();
-
-        $.ajax({
-            url: config.apiBase + '/tree',  // /eav/backend/manager/tree
-            method: 'GET',
-            data: { search: search },
-            dataType: 'json',
-            success: function(response) {
-                if (response.success) {
-                    state.treeData = response.data;
-                    renderTree(preserveExpanded);
-                    if (typeof onLoaded === 'function') {
-                        onLoaded();
-                    }
-                } else {
-                    showError(response.message || '加载失败');
-                }
-            },
-            error: function(xhr, status, error) {
-                showError('网络错误: ' + error);
-            },
-            complete: function() {
-                state.loading = false;
+        var url = config.apiBase + '/tree' + (search ? '?search=' + encodeURIComponent(search) : '');
+        window.Weline.Api.get(url, { silent: true })
+        .then(function(response) {
+            var res = (response && response.data) || response;
+            if (res && res.success) {
+                state.treeData = res.data || [];
+                renderTree(preserveExpanded);
+                if (typeof onLoaded === 'function') onLoaded();
+            } else {
+                showError((res && res.message) || __('加载失败'));
             }
+        }).catch(function(err) {
+            showError(__('网络错误') + ': ' + (err && err.message ? err.message : __('加载失败')));
+        }).finally(function() {
+            state.loading = false;
         });
     }
 
@@ -170,7 +163,7 @@ const EavManager = (function() {
         $(config.treeContainer).html(`
             <div class="tree-loading">
                 <i class="mdi mdi-loading mdi-spin me-2"></i>
-                加载中...
+                ` + __('加载中...') + `
             </div>
         `);
     }
@@ -197,7 +190,7 @@ const EavManager = (function() {
             container.html(`
                 <div class="text-muted text-center p-3">
                     <i class="mdi mdi-database-off-outline d-block mb-2" style="font-size: 32px;"></i>
-                    暂无数据
+                    ` + __('暂无数据') + `
                 </div>
             `);
             return;
@@ -342,50 +335,32 @@ const EavManager = (function() {
         
         renderTree(true); // 先渲染显示加载中，保持展开状态
         saveStateToStorage(); // 保存展开状态
-
-        $.ajax({
-            url: config.apiBase + '/children',
-            method: 'GET',
-            data: { type: node.type, id: node.nodeId },
-            dataType: 'json',
-            timeout: 30000, // 30秒超时
-            success: function(response) {
-                // 移除加载状态
-                state.loadingNodes.delete(node.id);
-                
-                if (response.success) {
-                    node.children = response.data || [];
-                    node.lazy = false; // 关键：标记已加载完成
-                    renderTree(true); // 渲染时保持展开状态
-                    if (typeof onLoaded === 'function') {
-                        onLoaded();
-                    }
-                } else {
-                    showToast(response.message || '加载子节点失败', 'error');
-                    // 加载失败时也要设置 lazy = false，避免重复显示加载中
-                    node.lazy = false;
-                    node.children = [];
-                    node.loadError = true;
-                    renderTree(true);
-                    if (typeof onLoaded === 'function') {
-                        onLoaded();
-                    }
-                }
-            },
-            error: function(xhr, status, error) {
-                // 移除加载状态
-                state.loadingNodes.delete(node.id);
-                
-                showToast('网络错误: ' + error, 'error');
-                // 加载失败时也要设置 lazy = false，避免持续显示加载中
+        var url = config.apiBase + '/children?type=' + encodeURIComponent(node.type) + '&id=' + encodeURIComponent(node.nodeId);
+        window.Weline.Api.get(url, { silent: true })
+        .then(function(response) {
+            state.loadingNodes.delete(node.id);
+            var res = (response && response.data) || response;
+            if (res && res.success) {
+                node.children = res.data || [];
+                node.lazy = false;
+                renderTree(true);
+                if (typeof onLoaded === 'function') onLoaded();
+            } else {
+                showToast((res && res.message) || '加载子节点失败', 'error');
                 node.lazy = false;
                 node.children = [];
                 node.loadError = true;
                 renderTree(true);
-                if (typeof onLoaded === 'function') {
-                    onLoaded();
-                }
+                if (typeof onLoaded === 'function') onLoaded();
             }
+        }).catch(function(err) {
+            state.loadingNodes.delete(node.id);
+            showToast('网络错误: ' + (err && err.message || ''), 'error');
+            node.lazy = false;
+            node.children = [];
+            node.loadError = true;
+            renderTree(true);
+            if (typeof onLoaded === 'function') onLoaded();
         });
     }
 
@@ -1007,31 +982,20 @@ const EavManager = (function() {
 
         const $submitBtn = $form.find('button[type="submit"]');
         $submitBtn.prop('disabled', true).html('<i class="mdi mdi-loading mdi-spin me-1"></i> 保存中...');
-
-        $.ajax({
-            url: config.apiBase + '/' + getSaveAction(type),
-            method: 'POST',
-            data: formData,
-            processData: false,
-            contentType: false,
-            dataType: 'json',
-            success: function(response) {
-                if (response.success) {
-                    showToast(response.message || '保存成功', 'success');
-                    // 只刷新右侧详情，不刷新左侧树，避免左侧一直显示「加载中...」
-                    if (state.selectedNode) {
-                        loadDetailForm(state.selectedNode);
-                    }
-                } else {
-                    showToast(response.message || '保存失败', 'error');
-                }
-            },
-            error: function(xhr, status, error) {
-                showToast('网络错误: ' + error, 'error');
-            },
-            complete: function() {
-                $submitBtn.prop('disabled', false).html('<i class="mdi mdi-content-save me-1"></i> 保存');
+        var url = config.apiBase + '/' + getSaveAction(type);
+        window.Weline.Api.request(url, { method: 'POST', body: formData, silent: true })
+        .then(function(response) {
+            var res = (response && response.data) || response;
+            if (res && res.success) {
+                showToast((res.message || '保存成功'), 'success');
+                if (state.selectedNode) loadDetailForm(state.selectedNode);
+            } else {
+                showToast((res && res.message || '保存失败'), 'error');
             }
+        }).catch(function(err) {
+            showToast('网络错误: ' + (err && err.message || ''), 'error');
+        }).finally(function() {
+            $submitBtn.prop('disabled', false).html('<i class="mdi mdi-content-save me-1"></i> 保存');
         });
     }
 
@@ -1064,24 +1028,21 @@ const EavManager = (function() {
      * 执行删除
      */
     function performDelete(node) {
-        $.ajax({
-            url: config.apiBase + '/delete',
-            method: 'POST',
-            data: { type: node.type, id: node.nodeId },
-            dataType: 'json',
-            success: function(response) {
-                if (response.success) {
-                    showToast(response.message || '删除成功', 'success');
-                    state.selectedNode = null;
-                    resetDetailPanel();
-                    loadTree();
-                } else {
-                    showToast(response.message || '删除失败', 'error');
-                }
-            },
-            error: function(xhr, status, error) {
-                showToast('网络错误: ' + error, 'error');
+        var url = config.apiBase + '/delete';
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'type=' + encodeURIComponent(node.type) + '&id=' + encodeURIComponent(node.nodeId) };
+        window.Weline.Api.request(url, Object.assign(opts, { silent: true }))
+        .then(function(response) {
+            var res = (response && response.data) || response;
+            if (res && res.success) {
+                showToast((res.message || '删除成功'), 'success');
+                state.selectedNode = null;
+                resetDetailPanel();
+                loadTree();
+            } else {
+                showToast((res && res.message || '删除失败'), 'error');
             }
+        }).catch(function(err) {
+            showToast('网络错误: ' + (err && err.message || ''), 'error');
         });
     }
 

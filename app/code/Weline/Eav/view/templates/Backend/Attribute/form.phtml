@@ -764,17 +764,14 @@
                     return false;
                 }
                 console.log(this.params, '@lang{获取已填写数据}', this.tableData, '@lang{第5部分的数据}');
-                $.ajax({
-                    type: 'POST',
-                    url: "@backend-url('*/backend/attribute/save')",
-                    data: {
-                        'base': this.params,
-                        'option': this.tableData
-                    },
-                    success: function (res) {
-                        if (res.code == 0) {
+                var saveUrl = "@backend-url('*/backend/attribute/save')";
+                var saveData = { base: this.params, option: this.tableData };
+                var req = window.Weline.Api.request(saveUrl, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(saveData) });
+                req.then(function(res) {
+                    var resData = (res && res.data) || res;
+                    if (resData && resData.code == 0) {
                             Swal.fire({
-                                title: res.msg,
+                                title: resData.msg,
                                 icon: 'success',
                                 confirmButtonText: '@lang{好的}'
                             }).then(function(result) {
@@ -784,8 +781,7 @@
                                 }
                             });
                         }
-                    }
-                });
+                }).catch(function() {});
             },
             closeImgModel: function() {
                 console.log($('#callBackImg').val(), '图片回显的值');
@@ -834,12 +830,11 @@
                     });
                     return false;
                 }
-                $.ajax({
-                    type: "get",
-                    url: '@backend-url("*/backend/attribute/search")?field=code&limit=1&search=' + code + '&eav_entity_id=' + eav_entity_id + '&set_id=' + set_id + '&group_id=' + group_id,
-                    dataType: "json",
-                    success: function(res) {
-                        if (res.items.length > 0) {
+                var searchUrl = '@backend-url("*/backend/attribute/search")?field=code&limit=1&search=' + encodeURIComponent(code) + '&eav_entity_id=' + eav_entity_id + '&set_id=' + set_id + '&group_id=' + group_id;
+                var req2 = window.Weline.Api.get(searchUrl, { silent: true });
+                req2.then(function(res) {
+                    var resData2 = (res && res.data) || res;
+                    if (resData2 && resData2.items && resData2.items.length > 0) {
                             Swal.fire({
                                 title: '@lang{属性已存在！}',
                                 text: '@lang{该属性已存在！}',
@@ -853,11 +848,7 @@
                         } else {
                             $('#progress-attribute-code').css({border: 'green 1px solid'});
                         }
-                    },
-                    error: function(res) {
-                        console.log(res);
-                    }
-                });
+                }).catch(function(res) { console.log(res); });
             }, 500),
             debounceSaveType: debounce(function (type) {
                 var data_has_option = 0;
@@ -865,20 +856,10 @@
                     data_has_option = 1;
                     this.params.data_has_option = data_has_option;
                 }
-                $.ajax({
-                    type: "post",
-                    url: "@backend-url('backend/user-data')",
-                    dataType: "json",
-                    data: {
-                        scope: 'attribute',
-                        name: 'data_has_option',
-                        value: data_has_option
-                    },
-                    success: function(res) {},
-                    error: function(res) {
-                        console.log(res, '保存失败');
-                    }
-                });
+                var udUrl = "@backend-url('backend/user-data')";
+                var udBody = 'scope=attribute&name=data_has_option&value=' + encodeURIComponent(data_has_option);
+                var req3 = window.Weline.Api.request(udUrl, { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: udBody, silent: true });
+                req3.catch(function(res) { console.log(res, '保存失败'); });
             }, 500),
             checkCode: function(e) {
                 this.debounceChange(this.params.code, this.params.eav_entity_id, this.params.set_id, this.params.group_id);
@@ -910,14 +891,10 @@
                     if (result.isConfirmed) {
                         self.tableData.splice(index, 1);
                         if (row.option_id) {
-                            $.ajax({
-                                type: "post",
-                                url: "@backend-url('*/backend/attribute/option/delete')",
-                                data: {
-                                    id: row.option_id
-                                },
-                                dataType: "json"
-                            });
+                            var delUrl = "@backend-url('*/backend/attribute/option/delete')";
+                            var delBody = 'id=' + encodeURIComponent(row.option_id);
+                            var req4 = window.Weline.Api.request(delUrl, { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: delBody, silent: true });
+                            req4.catch(function() {});
                         }
                     }
                 });
@@ -1047,55 +1024,47 @@
             },
             renderSearchEntities: function(e) {
                 var self = this;
-                $.ajax({
-                    url: '@backend-url("*/backend/entity/search")?search=' + this.EntitiesVal,
-                    success: function(res) {
-                        self.entities = res['items'];
+                var url = '@backend-url("*/backend/entity/search")?search=' + encodeURIComponent(this.EntitiesVal);
+                var req = window.Weline.Api.get(url, { silent: true });
+                req.then(function(res) {
+                    var data = (res && res.data) || res;
+                    if (data && data.items) {
+                        self.entities = data.items;
                         self.EntitiesVal = '';
                     }
-                });
+                }).catch(function() {});
             },
             renderSearchEntityAttributeSet: function(e) {
                 var self = this;
-                $.ajax({
-                    url: '@backend-url("*/backend/attribute/set/search")?search=' + this.entityGroup + '&eav_entity_id=' +
-                        this.params.eav_entity_id,
-                    success: function(res) {
-                        if (res['msg']) {
-                            Swal.fire({
-                                title: '警告！',
-                                text: res['msg'],
-                                icon: 'error',
-                                dangerMode: true,
-                                confirmButtonText: '@lang{好的}'
-                            });
-                            return false;
-                        }
-                        self.sets = res['items'];
+                var url = '@backend-url("*/backend/attribute/set/search")?search=' + encodeURIComponent(this.entityGroup) + '&eav_entity_id=' + this.params.eav_entity_id;
+                var req = window.Weline.Api.get(url, { silent: true });
+                req.then(function(res) {
+                    var data = (res && res.data) || res;
+                    if (data && data.msg) {
+                        Swal.fire({ title: '警告！', text: data.msg, icon: 'error', dangerMode: true, confirmButtonText: '@lang{好的}' });
+                        return;
+                    }
+                    if (data && data.items) {
+                        self.sets = data.items;
                         self.entityGroup = '';
                     }
-                });
+                }).catch(function() {});
             },
             renderSearchEntityAttributeSetGroup: function(e) {
                 var self = this;
-                $.ajax({
-                    url: '@backend-url("*/backend/attribute/group/search")?search=' + this.entityNameGroup +
-                        '&eav_entity_id=' + this.params.eav_entity_id + '&set_id=' + this.params.set_id,
-                    success: function(res) {
-                        if (res['msg']) {
-                            Swal.fire({
-                                title: '警告！',
-                                text: res['msg'],
-                                icon: 'error',
-                                dangerMode: true,
-                                confirmButtonText: '@lang{好的}'
-                            });
-                            return false;
-                        }
-                        self.groups = res['items'];
+                var url = '@backend-url("*/backend/attribute/group/search")?search=' + encodeURIComponent(this.entityNameGroup) + '&eav_entity_id=' + this.params.eav_entity_id + '&set_id=' + this.params.set_id;
+                var req = window.Weline.Api.get(url, { silent: true });
+                req.then(function(res) {
+                    var data = (res && res.data) || res;
+                    if (data && data.msg) {
+                        Swal.fire({ title: '警告！', text: data.msg, icon: 'error', dangerMode: true, confirmButtonText: '@lang{好的}' });
+                        return;
+                    }
+                    if (data && data.items) {
+                        self.groups = data.items;
                         self.entityNameGroup = '';
                     }
-                });
+                }).catch(function() {});
             },
             findLabel: function(arr, id, key, name) {
                 var label = '';

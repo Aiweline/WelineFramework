@@ -129,8 +129,8 @@ abstract class EavModel extends Model implements EavInterface
         // 查找属性
         $attribute = clone $this->attribute;
         $attribute->reset()->clearData()
-            ->where($this->attribute::fields_eav_entity_id, $this->getEavEntityId())
-            ->where($this->attribute::fields_code, $code)
+            ->where($this->attribute::schema_fields_eav_entity_id, $this->getEavEntityId())
+            ->where($this->attribute::schema_fields_code, $code)
             ->find()
             ->fetch();
         if (!$attribute->getId()) {
@@ -159,7 +159,7 @@ abstract class EavModel extends Model implements EavInterface
         }
         // 数据库读取属性
         $attributes = $this->attribute
-            ->where($this->attribute::fields_eav_entity_id, $this->getEavEntityId())
+            ->where($this->attribute::schema_fields_eav_entity_id, $this->getEavEntityId())
             ->select()
             ->fetch()
             ->getItems();
@@ -191,10 +191,10 @@ abstract class EavModel extends Model implements EavInterface
     ): bool
     {
         if ($this->attribute->clear()->where([
-            $this->attribute::fields_eav_entity_id => $this->getEntityCode(),
-            $this->attribute::fields_code => $code,
-            $this->attribute::fields_group_id => $group_code,
-            $this->attribute::fields_set_id => $set_code,
+            $this->attribute::schema_fields_eav_entity_id => $this->getEntityCode(),
+            $this->attribute::schema_fields_code => $code,
+            $this->attribute::schema_fields_group_id => $group_code,
+            $this->attribute::schema_fields_set_id => $set_code,
         ])
             ->find()->fetch()->getId()) {
 //            throw new Exception(__('实体（%{1}）已经存在属性（%{2}）', [$this->getEntityCode(), $code]));
@@ -207,21 +207,21 @@ abstract class EavModel extends Model implements EavInterface
         try {
             $this->attribute->current_setEntity($this)->clear()->setData(
                 [
-                    $this->attribute::fields_code => $code,
-                    $this->attribute::fields_set_id => $set->getId(),
-                    $this->attribute::fields_name => $name,
-                    $this->attribute::fields_type_id => $type->getId(),
-                    $this->attribute::fields_group_id => $group->getId(),
-                    $this->attribute::fields_eav_entity_id => $eavEntity->getId(),
+                    $this->attribute::schema_fields_code => $code,
+                    $this->attribute::schema_fields_set_id => $set->getId(),
+                    $this->attribute::schema_fields_name => $name,
+                    $this->attribute::schema_fields_type_id => $type->getId(),
+                    $this->attribute::schema_fields_group_id => $group->getId(),
+                    $this->attribute::schema_fields_eav_entity_id => $eavEntity->getId(),
                     // 数据配置组
-                    $this->attribute::fields_data_is_multiple => intval($data_is_multiple),
-                    $this->attribute::fields_data_has_option => intval($data_has_option),
+                    $this->attribute::schema_fields_data_is_multiple => intval($data_is_multiple),
+                    $this->attribute::schema_fields_data_has_option => intval($data_has_option),
                     // 系统字段
-                    $this->attribute::fields_is_system => intval($is_system),
+                    $this->attribute::schema_fields_is_system => intval($is_system),
                     // 基本设置组
-                    $this->attribute::fields_basic_is_enable => intval($basic_is_enable),
+                    $this->attribute::schema_fields_basic_is_enable => intval($basic_is_enable),
                 ]
-            )->forceCheck(true, $this->attribute->_unit_primary_keys)->save();
+            )->forceCheck(true, $this->attribute->getUnitPrimaryKeys())->save();
             return true;
         } catch (\Exception $exception) {
             p($exception->getMessage());
@@ -307,7 +307,7 @@ abstract class EavModel extends Model implements EavInterface
         }
         /**@var EavEntity $entityModel */
         $entityModel = ObjectManager::getInstance(EavEntity::class);
-        $entityModel->load($entityModel::fields_code, $code);
+        $entityModel->load($entityModel::schema_fields_code, $code);
         if ($entityModel->getId()) {
             $this->exist_entities[$code] = $entityModel;
             return $entityModel;
@@ -327,8 +327,8 @@ abstract class EavModel extends Model implements EavInterface
                 $this->unsetAttributeValues($code);
             }
             $attribute = clone $this->attribute;
-            $attribute->clear()->where($this->attribute::fields_eav_entity_id, $this->getEavEntityId())
-                ->where($this->attribute::fields_code, $code)
+            $attribute->clear()->where($this->attribute::schema_fields_eav_entity_id, $this->getEavEntityId())
+                ->where($this->attribute::schema_fields_code, $code)
                 ->delete()->fetch();
             return true;
         } catch (\ReflectionException|Exception|Core $e) {
@@ -343,7 +343,7 @@ abstract class EavModel extends Model implements EavInterface
     {
         try {
             $attribute = clone $this->attribute->current_setEntity($this);
-            $attribute->load($attribute::fields_code, $code);
+            $attribute->load($attribute::schema_fields_code, $code);
             $valueModel = clone $attribute->w_getValueModel();
             $valueModel->where('attribute_id', $attribute->getId())
                 ->where('entity_id', $this->getId())
@@ -393,9 +393,9 @@ abstract class EavModel extends Model implements EavInterface
         $eav_entity_id = $this->eav_Entity()->getId();
         $set_id = $this->getAttributeSet($set_code)->getId();
         
-        $attributeGroup = $attributeGroup->where($attributeGroup::fields_code, $group_code)
-            ->where($attributeGroup::fields_eav_entity_id, $eav_entity_id)
-            ->where($attributeGroup::fields_set_id, $set_id)
+        $attributeGroup = $attributeGroup->where($attributeGroup::schema_fields_code, $group_code)
+            ->where($attributeGroup::schema_fields_eav_entity_id, $eav_entity_id)
+            ->where($attributeGroup::schema_fields_set_id, $set_id)
             ->find()
             ->fetch();
             
@@ -427,7 +427,7 @@ abstract class EavModel extends Model implements EavInterface
         if ($entity = $this->eavCache->get($this->getEntityCode())) {
             return $this->entity->addData($entity);
         }
-        $entity = $this->entity->load($this->entity::fields_code, $this->getEntityCode());
+        $entity = $this->entity->load($this->entity::schema_fields_code, $this->getEntityCode());
         $this->eavCache->set($this->getEntityCode(), $entity->getData());
         return $entity;
     }
@@ -445,7 +445,7 @@ abstract class EavModel extends Model implements EavInterface
     {
         /**@var Set $set */
         $set = ObjectManager::getInstance(Set::class);
-        $set->where('main_table.' . Set::fields_eav_entity_id, $this->eav_Entity()->getId());
+        $set->where('main_table.' . Set::schema_fields_eav_entity_id, $this->eav_Entity()->getId());
         return $set;
     }
 
@@ -462,7 +462,7 @@ abstract class EavModel extends Model implements EavInterface
     {
         /**@var Group $group */
         $group = ObjectManager::getInstance(Group::class);
-        $group->where('main_table.' . Group::fields_eav_entity_id, $this->eav_Entity()->getId());
+        $group->where('main_table.' . Group::schema_fields_eav_entity_id, $this->eav_Entity()->getId());
         return $group;
     }
 
@@ -479,7 +479,7 @@ abstract class EavModel extends Model implements EavInterface
     {
         /**@var EavAttribute $attribute */
         $attribute = ObjectManager::getInstance(EavAttribute::class);
-        $attribute->where('main_table.' . EavAttribute::fields_eav_entity_id, $this->eav_Entity()->getId());
+        $attribute->where('main_table.' . EavAttribute::schema_fields_eav_entity_id, $this->eav_Entity()->getId());
         $attribute->current_setEntity($this);
         return $attribute;
     }

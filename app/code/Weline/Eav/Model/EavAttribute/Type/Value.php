@@ -23,19 +23,20 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class Value extends \Weline\Framework\Database\Model
 {
-    public const fields_ID = 'value_id';
-    public const fields_value_id = 'value_id';
-    public const fields_attribute_id = 'attribute_id';
-    public const fields_entity_id = 'entity_id';
-    public const fields_value = 'value';
-//    public const fields_is_swatch   = 'is_swatch';
-//    public const fields_swatch_image   = 'swatch_image';
-//    public const fields_swatch_color   = 'swatch_color';
-//    public const fields_swatch_text    = 'swatch_text';
+    /** 值表按实体+类型动态创建，无固定表名 */
+    public const schema_table = '';
+    /** @var list<string> */
+    public const schema_primary_keys = ['attribute_id', 'entity_id'];
+
+    public const schema_fields_ID = 'value_id';
+    public const schema_fields_value_id = 'value_id';
+    public const schema_fields_attribute_id = 'attribute_id';
+    public const schema_fields_entity_id = 'entity_id';
+    public const schema_fields_value = 'value';
 
     public array $attributes_type_fields = [];
-    public array $_index_sort_keys = [self::fields_attribute_id, self::fields_entity_id];
-    public array $_unit_primary_keys = [self::fields_attribute_id, self::fields_entity_id];
+    public array $_index_sort_keys = [self::schema_fields_attribute_id, self::schema_fields_entity_id];
+    public array $_unit_primary_keys = [self::schema_fields_attribute_id, self::schema_fields_entity_id];
 
     private ?EavAttribute $attribute = null;
 
@@ -79,42 +80,42 @@ class Value extends \Weline\Framework\Database\Model
                 if (!$setup->tableExist($eav_entity_type_table)) {
                     $table = $setup->createTable('实体' . $entity->getCode() . '的Eav模型' . $type->getCode() . '类型数据表', $eav_entity_type_table);
                     $table->addColumn(
-                        self::fields_value_id,
+                        self::schema_fields_value_id,
                         TableInterface::column_type_BIGINT,
                         18,
                         'primary key auto_increment',
                         '属性值ID'
                     )->addColumn(
-                        self::fields_attribute_id,
+                        self::schema_fields_attribute_id,
                         TableInterface::column_type_INTEGER,
                         11,
                         'not null',
                         '属性ID'
                     )
                         ->addColumn(
-                            self::fields_entity_id,
+                            self::schema_fields_entity_id,
                             $entity->getEavEntityIdFieldType(),
                             $entity->getEavEntityIdFieldLength(),
                             'not null',
                             '实体ID'
                         )
                         ->addColumn(
-                            self::fields_value,
+                            self::schema_fields_value,
                             $type->getFieldType(),
                             $type->getFieldLength(),
                             'not null',
                             '属性值'
                         );
                     if ($type->getIsSwatch()) {
-                        $table->addColumn($type::fields_is_swatch, TableInterface::column_type_BOOLEAN, 0, 'default 0', '是否有样本');
+                        $table->addColumn($type::schema_fields_is_swatch, TableInterface::column_type_BOOLEAN, 0, 'default 0', '是否有样本');
                         if ($type->hasSwatchImage()) {
-                            $table->addColumn($type::fields_swatch_image, TableInterface::column_type_VARCHAR, 255, '', '样本图片');
+                            $table->addColumn($type::schema_fields_swatch_image, TableInterface::column_type_VARCHAR, 255, '', '样本图片');
                         }
                         if ($type->hasSwatchColor()) {
-                            $table->addColumn($type::fields_swatch_color, TableInterface::column_type_VARCHAR, 255, '', '样本颜色');
+                            $table->addColumn($type::schema_fields_swatch_color, TableInterface::column_type_VARCHAR, 255, '', '样本颜色');
                         }
                         if ($type->hasSwatchText()) {
-                            $table->addColumn($type::fields_swatch_text, TableInterface::column_type_VARCHAR, 255, '', '样本文本');
+                            $table->addColumn($type::schema_fields_swatch_text, TableInterface::column_type_VARCHAR, 255, '', '样本文本');
                         }
                     }
                     $table
@@ -145,7 +146,7 @@ class Value extends \Weline\Framework\Database\Model
             throw new Exception(__('属性不存在！'));
         }
         $this->attribute = $attribute;
-        $this->setData(self::fields_attribute_id, $attribute->getId());
+        $this->setData(self::schema_fields_attribute_id, $attribute->getId());
         $this->getTable();
         return $this;
     }
@@ -171,10 +172,10 @@ class Value extends \Weline\Framework\Database\Model
             throw new Exception(__('属性类型不存在！无法获取属性类型字段。'));
         }
         $this->attributes_type_fields[$attribute_or_id] = [
-            $type::fields_is_swatch => $type->getIsSwatch(),
-            $type::fields_swatch_image => $type->getSwatchImage(),
-            $type::fields_swatch_color => $type->getSwatchColor(),
-            $type::fields_swatch_text => $type->getSwatchText(),
+            $type::schema_fields_is_swatch => $type->getIsSwatch(),
+            $type::schema_fields_swatch_image => $type->getSwatchImage(),
+            $type::schema_fields_swatch_color => $type->getSwatchColor(),
+            $type::schema_fields_swatch_text => $type->getSwatchText(),
         ];
         return $this->attributes_type_fields[$attribute_or_id];
     }
@@ -191,7 +192,7 @@ class Value extends \Weline\Framework\Database\Model
 
     public function getAttributeId(): int
     {
-        return $this->getData(self::fields_attribute_id) ?: 0;
+        return $this->getData(self::schema_fields_attribute_id) ?: 0;
     }
 
     public function getTable(string $table = ''): string
@@ -215,32 +216,32 @@ class Value extends \Weline\Framework\Database\Model
 
     public function setValueId(int $value_id): static
     {
-        return $this->setData(self::fields_ID, $value_id);
+        return $this->setData(self::schema_fields_ID, $value_id);
     }
 
     public function getValueId(): int
     {
-        return intval($this->getData(self::fields_ID));
+        return intval($this->getData(self::schema_fields_ID));
     }
 
     public function setEntityId(string|int $id): static
     {
-        return $this->setData(self::fields_entity_id, $id);
+        return $this->setData(self::schema_fields_entity_id, $id);
     }
 
     public function getEavEntityId(): int|string
     {
-        return $this->getData(self::fields_entity_id);
+        return $this->getData(self::schema_fields_entity_id);
     }
 
     public function setValue(string|int $value): static
     {
-        return $this->setData(self::fields_value, $value);
+        return $this->setData(self::schema_fields_value, $value);
     }
 
     public function getValue(): string|int
     {
-        return $this->getData(self::fields_value);
+        return $this->getData(self::schema_fields_value);
     }
 
     public function getSwatchValues(): array
@@ -255,7 +256,7 @@ class Value extends \Weline\Framework\Database\Model
 
     public function getIsSwatch(): bool
     {
-        return $this->getData(EavAttribute\Type::fields_is_swatch) ? true : false;
+        return $this->getData(EavAttribute\Type::schema_fields_is_swatch) ? true : false;
     }
 
 
@@ -264,43 +265,43 @@ class Value extends \Weline\Framework\Database\Model
         if (!$this->getIsSwatch()) {
             throw new Exception(__('此属性没有样本，无法为属性值设置样本！'));
         }
-        return $this->setData(EavAttribute\Type::fields_is_swatch, $is_swatch);
+        return $this->setData(EavAttribute\Type::schema_fields_is_swatch, $is_swatch);
     }
 
     public function getSwatchImage(): string
     {
-        return $this->getData(EavAttribute\Type::fields_swatch_image) ?? '';
+        return $this->getData(EavAttribute\Type::schema_fields_swatch_image) ?? '';
     }
 
 
     public function setSwatchImage(string $swatch_iamge): static
     {
         $this->checkSwatchType();
-        return $this->setData(EavAttribute\Type::fields_swatch_image, $swatch_iamge);
+        return $this->setData(EavAttribute\Type::schema_fields_swatch_image, $swatch_iamge);
     }
 
     public function getSwatchColor(): string
     {
-        return $this->getData(EavAttribute\Type::fields_swatch_color) ?? '';
+        return $this->getData(EavAttribute\Type::schema_fields_swatch_color) ?? '';
     }
 
 
     public function setSwatchColor(string $swatch_color): static
     {
         $this->checkSwatchType();
-        return $this->setData(EavAttribute\Type::fields_swatch_color, $swatch_color);
+        return $this->setData(EavAttribute\Type::schema_fields_swatch_color, $swatch_color);
     }
 
     public function getSwatchText(): string
     {
-        return $this->getData(EavAttribute\Type::fields_swatch_text) ?? '';
+        return $this->getData(EavAttribute\Type::schema_fields_swatch_text) ?? '';
     }
 
 
     public function setSwatchText(string $swatch_text): static
     {
         $this->checkSwatchType();
-        return $this->setData(EavAttribute\Type::fields_swatch_text, $swatch_text);
+        return $this->setData(EavAttribute\Type::schema_fields_swatch_text, $swatch_text);
     }
 
     private function checkSwatchType()

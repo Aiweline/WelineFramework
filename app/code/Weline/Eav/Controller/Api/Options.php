@@ -57,7 +57,7 @@ class Options extends BackendController
             } elseif ($entityCode && $attributeCode) {
                 // 获取实体ID
                 $this->eavEntity->reset()
-                    ->where(EavEntity::fields_code, $entityCode)
+                    ->where(EavEntity::schema_fields_code, $entityCode)
                     ->find()
                     ->fetch();
 
@@ -69,8 +69,8 @@ class Options extends BackendController
                 }
 
                 $this->eavAttribute->reset()
-                    ->where(EavAttribute::fields_eav_entity_id, $this->eavEntity->getId())
-                    ->where(EavAttribute::fields_code, $attributeCode)
+                    ->where(EavAttribute::schema_fields_eav_entity_id, $this->eavEntity->getId())
+                    ->where(EavAttribute::schema_fields_code, $attributeCode)
                     ->find()
                     ->fetch();
             } else {
@@ -89,10 +89,10 @@ class Options extends BackendController
 
             // 查询选项
             $query = $this->attributeOption->reset()
-                ->where(Option::fields_attribute_id, $this->eavAttribute->getId());
+                ->where(Option::schema_fields_attribute_id, $this->eavAttribute->getId());
 
             if ($search) {
-                $query->where(Option::fields_value, ['like', '%' . $search . '%']);
+                $query->where(Option::schema_fields_value, ['like', '%' . $search . '%']);
             }
 
             // 分页
@@ -107,12 +107,12 @@ class Options extends BackendController
             if (is_array($options)) {
                 foreach ($options as $option) {
                     $formattedOptions[] = [
-                        'id' => (int)($option[Option::fields_option_id] ?? 0),
-                        'code' => $option[Option::fields_code] ?? '',
-                        'value' => $option[Option::fields_value] ?? '',
-                        'swatch_image' => $option[Option::fields_swatch_image] ?? null,
-                        'swatch_color' => $option[Option::fields_swatch_color] ?? null,
-                        'swatch_text' => $option[Option::fields_swatch_text] ?? null,
+                        'id' => (int)($option[Option::schema_fields_option_id] ?? 0),
+                        'code' => $option[Option::schema_fields_code] ?? '',
+                        'value' => $option[Option::schema_fields_value] ?? '',
+                        'swatch_image' => $option[Option::schema_fields_swatch_image] ?? null,
+                        'swatch_color' => $option[Option::schema_fields_swatch_color] ?? null,
+                        'swatch_text' => $option[Option::schema_fields_swatch_text] ?? null,
                     ];
                 }
             }
@@ -165,7 +165,7 @@ class Options extends BackendController
 
             // 获取实体
             $this->eavEntity->reset()
-                ->where(EavEntity::fields_code, $entityCode)
+                ->where(EavEntity::schema_fields_code, $entityCode)
                 ->find()
                 ->fetch();
 
@@ -178,15 +178,15 @@ class Options extends BackendController
 
             // 查询属性
             $query = $this->eavAttribute->reset()
-                ->where(EavAttribute::fields_eav_entity_id, $this->eavEntity->getId())
-                ->where(EavAttribute::fields_is_enable, 1);
+                ->where(EavAttribute::schema_fields_eav_entity_id, $this->eavEntity->getId())
+                ->where(EavAttribute::schema_fields_is_enable, 1);
 
             if ($setId) {
-                $query->where(EavAttribute::fields_set_id, $setId);
+                $query->where(EavAttribute::schema_fields_set_id, $setId);
             }
 
             if ($hasOptionOnly) {
-                $query->where(EavAttribute::fields_has_option, 1);
+                $query->where(EavAttribute::schema_fields_has_option, 1);
             }
 
             $attributes = $query->select()->fetch();
@@ -196,14 +196,14 @@ class Options extends BackendController
             if (is_array($attributes)) {
                 foreach ($attributes as $attribute) {
                     $formattedAttributes[] = [
-                        'id' => (int)($attribute[EavAttribute::fields_attribute_id] ?? 0),
-                        'code' => $attribute[EavAttribute::fields_code] ?? '',
-                        'name' => $attribute[EavAttribute::fields_name] ?? '',
-                        'type_id' => (int)($attribute[EavAttribute::fields_type_id] ?? 0),
-                        'set_id' => (int)($attribute[EavAttribute::fields_set_id] ?? 0),
-                        'group_id' => (int)($attribute[EavAttribute::fields_group_id] ?? 0),
-                        'has_option' => (bool)($attribute[EavAttribute::fields_has_option] ?? false),
-                        'multiple_valued' => (bool)($attribute[EavAttribute::fields_multiple_valued] ?? false),
+                        'id' => (int)($attribute[EavAttribute::schema_fields_attribute_id] ?? 0),
+                        'code' => $attribute[EavAttribute::schema_fields_code] ?? '',
+                        'name' => $attribute[EavAttribute::schema_fields_name] ?? '',
+                        'type_id' => (int)($attribute[EavAttribute::schema_fields_type_id] ?? 0),
+                        'set_id' => (int)($attribute[EavAttribute::schema_fields_set_id] ?? 0),
+                        'group_id' => (int)($attribute[EavAttribute::schema_fields_group_id] ?? 0),
+                        'has_option' => (bool)($attribute[EavAttribute::schema_fields_has_option] ?? false),
+                        'multiple_valued' => (bool)($attribute[EavAttribute::schema_fields_multiple_valued] ?? false),
                     ];
                 }
             }
@@ -245,9 +245,9 @@ class Options extends BackendController
             if (is_array($entities)) {
                 foreach ($entities as $entity) {
                     $formattedEntities[] = [
-                        'id' => (int)($entity[EavEntity::fields_ID] ?? 0),
-                        'code' => $entity[EavEntity::fields_code] ?? '',
-                        'name' => $entity[EavEntity::fields_name] ?? '',
+                        'id' => (int)($entity[EavEntity::schema_fields_ID] ?? 0),
+                        'code' => $entity[EavEntity::schema_fields_code] ?? '',
+                        'name' => $entity[EavEntity::schema_fields_name] ?? '',
                     ];
                 }
             }
