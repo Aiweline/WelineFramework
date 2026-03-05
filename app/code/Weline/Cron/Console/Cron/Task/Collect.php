@@ -67,13 +67,13 @@ class Collect implements CommandInterface
                     $taskObject = ObjectManager::getInstance($task);
                     if ($taskObject instanceof CronTaskInterface) {
                         $this->cronTask->clearData()
-                            ->setData(CronTask::fields_NAME, $taskObject->name())
-                            ->setData(CronTask::fields_EXECUTE_NAME, $taskObject->execute_name(), true)
-                            ->setData(CronTask::fields_CLASS, $taskObject::class)
-                            ->setData(CronTask::fields_TIP, $taskObject->tip())
-                            ->setData(CronTask::fields_CRON_TIME, $taskObject->cron_time())
-                            ->setData(CronTask::fields_BLOCK_UNLOCK_TIMEOUT, $taskObject->unlock_timeout())
-                            ->setData(CronTask::fields_MODULE, $module['name'])
+                            ->setData(CronTask::schema_fields_NAME, $taskObject->name())
+                            ->setData(CronTask::schema_fields_EXECUTE_NAME, $taskObject->execute_name(), true)
+                            ->setData(CronTask::schema_fields_CLASS, $taskObject::class)
+                            ->setData(CronTask::schema_fields_TIP, $taskObject->tip())
+                            ->setData(CronTask::schema_fields_CRON_TIME, $taskObject->cron_time())
+                            ->setData(CronTask::schema_fields_BLOCK_UNLOCK_TIMEOUT, $taskObject->unlock_timeout())
+                            ->setData(CronTask::schema_fields_MODULE, $module['name'])
                             ->save();
                     }
                 }
