@@ -72,6 +72,10 @@ FAQ,FAQ
 适配器不存在,"The adapter does not exist."
 "成功扫描 %{count} 个适配器","Successfully scanned %{count} adapters"
 "适配器扫描失败: %{error}","Adapter scan failed: %{error}"
+请选择要设置的适配器,请选择要设置的适配器
+请选择默认模型,请选择默认模型
+"已为 %{count} 个适配器设置默认模型","已为 %{count} 个适配器设置默认模型"
+批量设置失败：%{error},批量设置失败：%{error}
 删除成功,"Delete successful"
 删除失败：%{error},删除失败：%{error}
 请选择要删除的适配器,请选择要删除的适配器
@@ -255,7 +259,9 @@ AI模块资源扫描完成,AI模块资源扫描完成
 "智能体类 %{1} 必须实现 AgentInterface 接口","智能体类 %{1} 必须实现 AgentInterface 接口"
 "指定的模型 ""%{1}"" 不存在","指定的模型 ""%{1}"" 不存在"
 "指定的模型 ""%{1}"" 未激活","指定的模型 ""%{1}"" 未激活"
-"场景 ""%{1}"" 未配置默认模型","场景 ""%{1}"" 未配置默认模型"
+"场景适配器 ""%{1}"" 的默认模型 ""%{2}"" 不存在，请到模型列表中添加或到场景适配器管理中更换默认模型","场景适配器 ""%{1}"" 的默认模型 ""%{2}"" 不存在，请到模型列表中添加或到场景适配器管理中更换默认模型"
+"场景适配器 ""%{1}"" 的默认模型 ""%{2}"" 未激活，请在模型列表中激活该模型","场景适配器 ""%{1}"" 的默认模型 ""%{2}"" 未激活，请在模型列表中激活该模型"
+"场景 ""%{1}"" 未配置默认模型（可在「场景适配器」中为该适配器设置默认模型，或在「默认模型配置」中配置）","场景 ""%{1}"" 未配置默认模型（可在「场景适配器」中为该适配器设置默认模型，或在「默认模型配置」中配置）"
 "场景 ""%{1}"" 的默认模型 ""%{2}"" 不存在","场景 ""%{1}"" 的默认模型 ""%{2}"" 不存在"
 "场景 ""%{1}"" 的默认模型 ""%{2}"" 未激活","场景 ""%{1}"" 的默认模型 ""%{2}"" 未激活"
 未配置全局默认模型,未配置全局默认模型
@@ -272,6 +278,8 @@ AI模块资源扫描完成,AI模块资源扫描完成
 没有满足条件的%{provider}供应商账户（需激活）,"No %{provider} provider account meets the conditions (needs to be activated)"
 没有满足条件的%{provider}供应商账户（需激活、连通成功且余额>0）,"No %{provider} provider account meets the conditions (needs to be activated, connection successful and balance > 0)"
 智能体不存在：%{1},智能体不存在：%{1}
+"AI 返回格式异常，无法解析","AI 返回格式异常，无法解析"
+流式返回格式异常，无法解析,流式返回格式异常，无法解析
 模型不存在：%{1},"Model does not exist: %{1}"
 用户不存在,"User does not exist"
 账户余额不足，当前余额：%{1}，需要：%{2},"Insufficient account balance, current balance: %{1}, required: %{2}"
@@ -361,14 +369,18 @@ AI助手,"AI assistant"
 清理无效,清理无效
 已选择,Selected
 项,项
+批量设置默认模型,批量设置默认模型
 批量激活,"Batch activation"
 批量禁用,"Batch disable"
 批量删除,"Batch delete"
 取消选择,取消选择
 名称,Name
+默认模型,"Default model"
 操作,Operation
 暂无场景适配器,暂无场景适配器
 "请点击""扫描适配器""按钮来扫描和收集适配器。","请点击""扫描适配器""按钮来扫描和收集适配器。"
+"为当前选中的适配器统一设置默认使用的 AI 模型。","为当前选中的适配器统一设置默认使用的 AI 模型。"
+确定设置,确定设置
 删除,Delete
 确定要扫描场景适配器吗？这将发现所有模块中的适配器并更新数据库记录。,确定要扫描场景适配器吗？这将发现所有模块中的适配器并更新数据库记录。
 确定扫描,确定扫描
@@ -391,6 +403,11 @@ AI助手,"AI assistant"
 确定要清理无效的适配器吗？这将删除代码文件已不存在的适配器记录。,确定要清理无效的适配器吗？这将删除代码文件已不存在的适配器记录。
 清理无效适配器,清理无效适配器
 确定清理,确定清理
+请先选择要设置默认模型的适配器,请先选择要设置默认模型的适配器
+"暂无可用的 AI 模型，请先在模型管理中配置并激活模型。","暂无可用的 AI 模型，请先在模型管理中配置并激活模型。"
+加载模型列表失败：,加载模型列表失败：
+设置成功,设置成功
+设置失败,设置失败
 是,Yes
 否,No
 示例,Example
@@ -400,7 +417,6 @@ AI助手,"AI assistant"
 初始化默认配置,"Initialize default configuration"
 默认模型用于当用户未指定模型时自动选择。每种服务类型只能设置一个默认模型。,"The default model is used for automatic selection when the user does not specify a model. Only one default model can be set for each service type."
 服务类型,"Service Type"
-默认模型,"Default model"
 优先级,Priority
 保存,Save
 保存全部,"Save all"
@@ -731,6 +747,7 @@ AI聊天助手,"AI Chat Assistant"
 请输入您的消息...,"Please enter your message..."
 确定要清空聊天记录吗？,"Are you sure you want to clear the chat history?"
 错误：,Error:
+"场景 ""%{1}"" 未配置默认模型","场景 ""%{1}"" 未配置默认模型"
 加载助手列表失败：%{1},"Failed to load assistant list: %{1}"
 助手不存在,"The assistant does not exist"
 加载失败：%{1},"Failed to load: %{1}"
@@ -1096,7 +1113,6 @@ API密钥列表,"API Key List"
 设置配额限制,设置配额限制
 请输入新的配额限制：,"Please enter the new quota limit:"
 请输入有效的配额限制,请输入有效的配额限制
-设置失败,设置失败
 设置失败：,"Setup failed:"
 确定要删除这个API密钥吗？此操作不可恢复！,"Are you sure you want to delete this API key? This action cannot be undone!"
 "编辑 API Key","Edit API Key"
@@ -1470,13 +1486,13 @@ API请求超时时间，0表示不限制，默认120秒,API请求超时时间，
 "%{1} ??????? %{2}??? %{3}??? %{4}??? %{5}","%{1} sync success: models %{2}, updated %{3}, created %{4}, skipped %{5}"
 "%{1} ?????%{2}","%{1} sync failed: %{2}"
 "???????? %{1} ???","Model collection completed, total %{1}"
-???????,"Model collection skipped"
+???????,"Please select default model"
 "??? %{1} ?????????","Provider %{1} has no models API configured"
 "??? %{1} ????API Key?????????","Provider %{1} has no available API key for model sync"
 "??? %{1} ??? base_url","Provider %{1} base_url is not configured"
 "??? %{1} ??????: %{2}","Provider %{1} failed to fetch models: %{2}"
 "??? %{1} ????????","Provider %{1} returned empty model list"
-????????,"Model list request failed"
+????????,"Batch Set Default Model"
 "?????????HTTP???: %{1}","Model list request failed, HTTP status: %{1}"
 "??????????: %{1}","Model list response parse failed: %{1}"
 "????????? %{1} ???","Model sync completed, collected %{1} models"
@@ -1484,3 +1500,11 @@ API请求超时时间，0表示不限制，默认120秒,API请求超时时间，
 "AI???????%{1}??? %{2} ???","AI model sync done: %{1}; collected %{2} models"
 AI???????%{1},"AI model sync failed: %{1}"
 "???API Key?????????????","No API key configured, using existing model list to complete sync"
+"?????????????????? AI ???","Set the default AI model for all selected adapters."
+????,"Save failed"
+???????????????,"Please select adapters first"
+"????? AI ???????????????????","No AI models available. Please configure and activate models in Model Management first."
+?????????,"Failed to load model list:"
+??????????,"Please select adapters to update"
+"?? %{count} ??????????","Default model set for %{count} adapter(s)"
+???????%{error},"Batch set failed: %{error}"

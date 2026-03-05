@@ -355,19 +355,33 @@ class AiService
             }
         }
 
-        // 2. 根据场景代码选择默认模型
+        // 2. 根据场景适配器配置的默认模型选择（ai_scenario_adapter.default_model）
+        if (!$model || !$model->getId()) {
+            if ($scenarioCode) {
+                $adapterDefaultModelCode = $this->adapterScanner->getDefaultModelCodeForAdapter($scenarioCode);
+                if ($adapterDefaultModelCode) {
+                    $model = $this->aiModel->reset()
+                        ->where(AiModel::schema_fields_MODEL_CODE, $adapterDefaultModelCode)
+                        ->where(AiModel::schema_fields_IS_ACTIVE, 1)
+                        ->find()
+                        ->fetch();
+                }
+            }
+        }
+
+        // 3. 根据场景代码在默认模型配置表中的配置选择（ai_default_model）
         if (!$model || !$model->getId()) {
             if ($scenarioCode) {
                 $model = $this->defaultModelManager->getDefaultModel($scenarioCode);
             }
         }
 
-        // 3. 使用全局默认模型
+        // 4. 使用全局默认模型
         if (!$model || !$model->getId()) {
             $model = $this->defaultModelManager->getDefaultModel(DefaultModelManager::SERVICE_TYPE_DEFAULT);
         }
 
-        // 4. 如果找不到默认模型，使用任意一个已激活的默认标记模型
+        // 5. 如果找不到默认模型，使用任意一个已激活的默认标记模型
         if (!$model || !$model->getId()) {
             $model = $this->aiModel->reset()
                 ->where(AiModel::schema_fields_IS_ACTIVE, 1)
@@ -376,7 +390,7 @@ class AiService
                 ->fetch();
         }
 
-        // 5. 如果找到模型，用 config 覆盖 provider_config（读取时覆盖，不保存到数据库）
+        // 6. 如果找到模型，用 config 覆盖 provider_config（读取时覆盖，不保存到数据库）
         if ($model && $model->getId()) {
             $this->mergeConfigToProviderConfig($model);
             return $model;
@@ -430,12 +444,29 @@ class AiService
             }
         }
         
-        // 检查场景默认模型
+        $adapterDefaultModelCode = null;
+        // 检查场景适配器默认模型（ai_scenario_adapter.default_model）
+        if ($scenarioCode) {
+            $adapterDefaultModelCode = $this->adapterScanner->getDefaultModelCodeForAdapter($scenarioCode);
+            if ($adapterDefaultModelCode) {
+                $model = $this->aiModel->reset()
+                    ->where(AiModel::schema_fields_MODEL_CODE, $adapterDefaultModelCode)
+                    ->find()
+                    ->fetch();
+                if (!$model->getId()) {
+                    $reasons[] = __('场景适配器 "%{1}" 的默认模型 "%{2}" 不存在，请到模型列表中添加或到场景适配器管理中更换默认模型', [$scenarioCode, $adapterDefaultModelCode]);
+                } elseif (!$model->getData(AiModel::schema_fields_IS_ACTIVE)) {
+                    $reasons[] = __('场景适配器 "%{1}" 的默认模型 "%{2}" 未激活，请在模型列表中激活该模型', [$scenarioCode, $adapterDefaultModelCode]);
+                }
+            }
+        }
+
+        // 检查场景在默认模型配置表中的配置（ai_default_model）
         if ($scenarioCode) {
             $defaultConfig = $this->defaultModelManager->getDefaultModelForService($scenarioCode);
-            if (!$defaultConfig) {
-                $reasons[] = __('场景 "%{1}" 未配置默认模型', [$scenarioCode]);
-            } else {
+            if (!$defaultConfig && !$adapterDefaultModelCode) {
+                $reasons[] = __('场景 "%{1}" 未配置默认模型（可在「场景适配器」中为该适配器设置默认模型，或在「默认模型配置」中配置）', [$scenarioCode]);
+            } elseif ($defaultConfig) {
                 $modelCode = $defaultConfig->getData(\Weline\Ai\Model\AiDefaultModel::schema_fields_MODEL_CODE);
                 $model = $this->aiModel->reset()
                     ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
@@ -493,9 +524,11 @@ class AiService
         $configUrl = $urlBuilder->getBackendUrl('ai/backend/defaultmodel');
         $modelListUrl = $urlBuilder->getBackendUrl('ai/backend/model');
         $providerUrl = $urlBuilder->getBackendUrl('ai/backend/provider');
-        
+        $adapterUrl = $urlBuilder->getBackendUrl('ai/backend/adapter');
         $linkHtml = '<div class="ai-config-links" style="margin-top: 10px;">'
-            . '<a href="' . $configUrl . '" class="btn btn-sm btn-primary me-2" target="_blank">'
+            . '<a href="' . $adapterUrl . '" class="btn btn-sm btn-primary me-2" target="_blank">'
+            . '<i class="mdi mdi-puzzle me-1"></i>' . __('场景适配器') . '</a>'
+            . '<a href="' . $configUrl . '" class="btn btn-sm btn-outline-secondary me-2" target="_blank">'
             . '<i class="mdi mdi-star-settings me-1"></i>' . __('配置默认模型') . '</a>'
             . '<a href="' . $modelListUrl . '" class="btn btn-sm btn-outline-secondary me-2" target="_blank">'
             . '<i class="mdi mdi-robot me-1"></i>' . __('模型列表') . '</a>'
