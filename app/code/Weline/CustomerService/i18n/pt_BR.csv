@@ -1,5 +1,43 @@
-邮箱地址不能为空,"O endereço de email não pode estar vazio"
+客服人员管理,"Gerenciamento de agentes de serviço"
+加载客服人员失败：%{1},"Falha ao carregar agentes de serviço: %{1}"
+客服名称不能为空,"O nome do agente não pode estar vazio"
 邮箱格式不正确,"Formato de email inválido"
+请选择后台用户,"Por favor selecione um usuário backend"
+客服人员不存在,"Agente de serviço não existe"
+保存成功,"Salvo com sucesso"
+保存失败：%{1},"Falha ao salvar: %{1}"
+无效的客服ID,"ID de agente inválido"
+删除成功,"Excluído com sucesso"
+删除失败：%{1},"Falha ao excluir: %{1}"
+获取成功,"Recuperado com sucesso"
+获取统计数据失败：%{1},"Falha ao obter estatísticas: %{1}"
+客服配置,"Configuração do serviço"
+加载配置失败：%{1},"Falha ao carregar configuração: %{1}"
+您不是客服人员，无法使用工作台,"Você não é um agente de serviço"
+客服工作台,"Console de atendimento"
+加载工作台失败：%{1},"Falha ao carregar console: %{1}"
+您不是客服人员,您不是客服人员
+获取会话列表失败：%{1},"Falha ao obter lista de sessões: %{1}"
+无效的会话ID,"ID de sessão inválido"
+会话不存在,"A sessão não existe"
+无权访问此会话,"Sem permissão para acessar esta sessão"
+获取消息失败：%{1},"Falha ao obter mensagens: %{1}"
+消息内容不能为空,"O conteúdo da mensagem não pode estar vazio"
+发送成功,"Enviado com sucesso"
+发送消息失败：%{1},"Falha ao enviar mensagem: %{1}"
+会话已被分配,"A sessão já está atribuída"
+已达到最大会话数限制,"Limite máximo de sessões atingido"
+分配成功,"Atribuído com sucesso"
+分配会话失败：%{1},"Falha ao atribuir sessão: %{1}"
+无权关闭此会话,"Sem permissão para fechar esta sessão"
+会话已关闭,"Sessão fechada"
+关闭会话失败：%{1},"Falha ao fechar sessão: %{1}"
+获取客服状态失败：%{1},"Falha ao obter status: %{1}"
+会话管理,"Gerenciamento de sessões"
+加载会话失败：%{1},"Falha ao carregar sessões: %{1}"
+会话详情,"Detalhes da sessão"
+加载会话详情失败：%{1},"Falha ao carregar detalhes da sessão: %{1}"
+邮箱地址不能为空,"O endereço de email não pode estar vazio"
 会话令牌不能为空,"O token de sessão não pode estar vazio"
 验证邮件已发送，请查收,"Email de verificação enviado"
 发送验证邮件失败，请稍后重试,"Falha ao enviar email de verificação"
@@ -11,133 +49,82 @@
 验证失败：%{1},"Falha na verificação: %{1}"
 客服聊天,"Chat de atendimento"
 获取会话失败：%{1},"Falha ao obter sessão: %{1}"
-消息内容不能为空,"O conteúdo da mensagem não pode estar vazio"
-无效的会话ID,"ID de sessão inválido"
-发送消息失败：%{1},"Falha ao enviar mensagem: %{1}"
-获取消息失败：%{1},"Falha ao obter mensagens: %{1}"
 语言代码不能为空,"O código do idioma não pode estar vazio"
 语言设置成功,"Idioma definido com sucesso"
 设置语言失败：%{1},"Falha ao definir idioma: %{1}"
-会话管理,"Gerenciamento de sessões"
-加载会话失败：%{1},"Falha ao carregar sessões: %{1}"
-会话不存在,"A sessão não existe"
-会话详情,"Detalhes da sessão"
-加载会话详情失败：%{1},"Falha ao carregar detalhes da sessão: %{1}"
-会话已关闭,"Sessão fechada"
-关闭会话失败：%{1},"Falha ao fechar sessão: %{1}"
-客服配置,"Configuração do serviço"
-加载配置失败：%{1},"Falha ao carregar configuração: %{1}"
-保存成功,"Salvo com sucesso"
-保存失败：%{1},"Falha ao salvar: %{1}"
-您不是客服人员，无法使用工作台,"Você não é um agente de serviço"
-客服工作台,"Console de atendimento"
-加载工作台失败：%{1},"Falha ao carregar console: %{1}"
-您不是客服人员,您不是客服人员
-获取成功,"Recuperado com sucesso"
-获取会话列表失败：%{1},"Falha ao obter lista de sessões: %{1}"
-无权访问此会话,"Sem permissão para acessar esta sessão"
-发送成功,"Enviado com sucesso"
-会话已被分配,"A sessão já está atribuída"
-已达到最大会话数限制,"Limite máximo de sessões atingido"
-分配成功,"Atribuído com sucesso"
-分配会话失败：%{1},"Falha ao atribuir sessão: %{1}"
-无权关闭此会话,"Sem permissão para fechar esta sessão"
-获取统计数据失败：%{1},"Falha ao obter estatísticas: %{1}"
-获取客服状态失败：%{1},"Falha ao obter status: %{1}"
-客服人员管理,"Gerenciamento de agentes de serviço"
-加载客服人员失败：%{1},"Falha ao carregar agentes de serviço: %{1}"
-客服名称不能为空,"O nome do agente não pode estar vazio"
-请选择后台用户,"Por favor selecione um usuário backend"
-客服人员不存在,"Agente de serviço não existe"
-无效的客服ID,"ID de agente inválido"
-删除成功,"Excluído com sucesso"
-删除失败：%{1},"Falha ao excluir: %{1}"
-邮箱绑定验证,"Verificação de email"
-已绑定邮箱,"Email vinculado"
-返回首页,Início
-绑定成功后，您将收到客服回复的邮件通知,"Receba notificações após vincular"
-验证失败,Falhou
-返回上一页,返回上一页
-如有问题，请,"Se tiver perguntas"
-联系客服,"Contatar serviço"
-验证成功,Verificado
-您的邮箱,"Seu email"
-已成功绑定到客服会话。,"Vinculado à sessão"
-此页面用于独立聊天界面，实际聊天功能通过右下角悬浮按钮使用。,"Use o botão flutuante para conversar"
-返回列表,Voltar
-会话信息,"Informações da sessão"
-会话ID,"ID da sessão"
-客户ID,"ID do cliente"
-客服ID,"ID do agente"
-客户语言,"Idioma do cliente"
-客服语言,"Idioma do agente"
-状态,Status
+客服消息翻译,"Tradução de mensagens de serviço"
+客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。,"O módulo de serviço solicita tradução através deste evento."
+"客服服务 - 邮箱绑定验证","Serviço de atendimento - Verificação de email"
+客服系统,"Sistema de atendimento"
+客服服务,"Serviço de atendimento"
+检测中...,Verificando...
+设置,Configurações
+收起,Minimizar
+我的语言,"Meu idioma"
+简体中文,"Chinês simplificado"
+繁體中文,"Chinês tradicional"
+显示模式,"Modo de exibição"
+仅显示译文,"Apenas tradução"
+原文+译文,"Original + Tradução"
+仅显示原文,"Apenas original"
+欢迎使用客服服务！,"Bem-vindo ao serviço de atendimento!"
+请输入您的问题，我们的客服将尽快为您解答。,"Por favor digite sua pergunta"
+输入消息...,"Digite uma mensagem..."
+绑定邮箱,"Vincular email"
+绑定邮箱后，您可以收到客服回复的邮件通知。,"Vincule seu email para receber notificações"
+邮箱地址,"Endereço de email"
+请输入您的邮箱,"Por favor digite seu email"
+取消,Cancelar
+发送验证邮件,"Enviar email de verificação"
 等待中,Aguardando
-进行中,Ativo
-已关闭,Fechado
-创建时间,"Criado em"
-聊天记录,"Histórico do chat"
 暂无消息,"Sem mensagens"
-客户,Cliente
-客服,Agente
-翻译：,Tradução:
-全部状态,"Todos os status"
-消息数,Mensagens
-操作,Ações
+接单,Aceitar
 暂无会话,"Sem sessões"
-查看,Ver
-关闭,Fechar
+会话,Sessão
+关闭会话,"Fechar sessão"
+发送,Enviar
+发送失败,"Falha ao enviar"
+发送失败，请稍后重试,发送失败，请稍后重试
+确定要接单此会话吗？,"Aceitar esta sessão?"
+分配失败,"Falha na atribuição"
+分配失败，请稍后重试,分配失败，请稍后重试
 确定要关闭此会话吗？,"Fechar esta sessão?"
+请选择一个会话开始聊天,"Selecione uma sessão para conversar"
 关闭失败,"Falha ao fechar"
-工作量统计,"Estatísticas de carga de trabalho"
-今日,Hoje
-本周,"Esta semana"
-本月,"Este mês"
-全部,Tudo
-会话数,Sessões
-响应率,"Taxa de resposta"
-已响应,Respondido
-完结率,"Taxa de fechamento"
-秒,segundos
-分钟,minutos
-平均响应时间,"Tempo de resposta médio"
+关闭失败，请稍后重试,关闭失败，请稍后重试
+刚刚,"Agora mesmo"
+分钟前,"minutos atrás"
+小时前,"horas atrás"
+已关闭,Fechado
+进行中,Ativo
 最快,"Mais rápido"
 最慢,"Mais lento"
-平均会话时长（分钟）,"Duração média (min)"
-平均消息,"Mensagens médias"
-会话列表,"Lista de sessões"
-刷新,Atualizar
-等待分配,等待分配
-接单,Aceitar
-我的会话,"Minhas sessões"
-请选择一个会话开始聊天,"Selecione uma sessão para conversar"
-启用客服服务,"Habilitar serviço"
-启用,Habilitar
-禁用,Desativar
-默认客服语言,"Idioma padrão do agente"
-简体中文,"Chinês simplificado"
-English,English
-默认客户语言,"Idioma padrão do cliente"
+最短,"Mais curto"
+分钟,minutos
+最长,"Mais longo"
+秒,segundos
+客服在线,Online
 "AI 智能客服","Serviço IA"
-"当没有客服人员在线时，可启用 AI 自动回复客户消息。","Habilite resposta automática IA quando não há agentes online"
-"启用 AI 自动回复","Habilitar resposta IA"
-"启用后，客户端将显示蓝色""AI 智能客服""状态而非灰色""离线""","Mostra status IA azul em vez de Offline cinza"
-"AI 模型","Modelo IA"
-"使用的 AI 模型标识，需在 Weline_Ai 模块中配置对应供应商","Identificador do modelo IA"
-保存配置,"Salvar configuração"
-保存失败,"Falha ao salvar"
+客服离线,Offline
+请输入有效的邮箱地址,"Por favor digite um endereço de email válido"
+会话未初始化，请刷新页面重试,"Sessão não inicializada"
+验证邮件已发送，请查收您的邮箱,验证邮件已发送，请查收您的邮箱
 添加客服,"Adicionar agente"
 ID,ID
 客服名称,"Nome do agente"
 关联用户,"Usuário associado"
 邮箱,Email
 语言,Idioma
+状态,Status
 最大会话数,"Sessões máx."
 总会话数,"Sessões totais"
 总消息数,"Mensagens totais"
+平均响应时间,"Tempo de resposta médio"
+操作,Ações
 暂无客服人员,"Sem agentes"
 支持的语言,"Idiomas suportados"
 激活,Ativar
+禁用,Desativar
 查看统计,"Ver estatísticas"
 编辑,Editar
 删除,Excluir
@@ -150,9 +137,9 @@ ID,ID
 客服可以接待的所有语言（勾选多个可接待全球客户）,"Todos os idiomas suportados"
 最大并发会话数,"Sessões simultâneas máx."
 激活状态,"Status ativo"
-取消,Cancelar
 保存,Salvar
 编辑客服,"Editar agente"
+保存失败,"Falha ao salvar"
 确定要删除此客服吗？,"Excluir este agente?"
 删除失败,"Falha ao excluir"
 获取统计数据失败,"Falha nas estatísticas"
@@ -162,47 +149,60 @@ ID,ID
 响应时间,"Tempo de resposta"
 平均,Média
 会话时长,"Duração da sessão"
-最短,"Mais curto"
-最长,"Mais longo"
-会话,Sessão
-关闭会话,"Fechar sessão"
-输入消息...,"Digite uma mensagem..."
-发送,Enviar
-发送失败,"Falha ao enviar"
-发送失败，请稍后重试,发送失败，请稍后重试
-确定要接单此会话吗？,"Aceitar esta sessão?"
-分配失败,"Falha na atribuição"
-分配失败，请稍后重试,分配失败，请稍后重试
-关闭失败，请稍后重试,关闭失败，请稍后重试
-刚刚,"Agora mesmo"
-分钟前,"minutos atrás"
-小时前,"horas atrás"
-欢迎使用客服服务！,"Bem-vindo ao serviço de atendimento!"
-请输入您的问题，我们的客服将尽快为您解答。,"Por favor digite sua pergunta"
-客服在线,Online
-客服离线,Offline
-请输入有效的邮箱地址,"Por favor digite um endereço de email válido"
-会话未初始化，请刷新页面重试,"Sessão não inicializada"
-验证邮件已发送，请查收您的邮箱,验证邮件已发送，请查收您的邮箱
-客服服务,"Serviço de atendimento"
-检测中...,Verificando...
-设置,Configurações
-收起,Minimizar
-我的语言,"Meu idioma"
-繁體中文,"Chinês tradicional"
-显示模式,"Modo de exibição"
-仅显示译文,"Apenas tradução"
-原文+译文,"Original + Tradução"
-仅显示原文,"Apenas original"
-绑定邮箱,"Vincular email"
-绑定邮箱后，您可以收到客服回复的邮件通知。,"Vincule seu email para receber notificações"
-邮箱地址,"Endereço de email"
-请输入您的邮箱,"Por favor digite seu email"
-发送验证邮件,"Enviar email de verificação"
-客服消息翻译,"Tradução de mensagens de serviço"
-客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。,"O módulo de serviço solicita tradução através deste evento."
-"客服服务 - 邮箱绑定验证","Serviço de atendimento - Verificação de email"
-客服系统,"Sistema de atendimento"
+启用客服服务,"Habilitar serviço"
+启用,Habilitar
+默认客服语言,"Idioma padrão do agente"
+English,English
+默认客户语言,"Idioma padrão do cliente"
+"当没有客服人员在线时，可启用 AI 自动回复客户消息。","Habilite resposta automática IA quando não há agentes online"
+"启用 AI 自动回复","Habilitar resposta IA"
+"启用后，客户端将显示蓝色""AI 智能客服""状态而非灰色""离线""","Mostra status IA azul em vez de Offline cinza"
+"AI 模型","Modelo IA"
+"使用的 AI 模型标识，需在 Weline_Ai 模块中配置对应供应商","Identificador do modelo IA"
+保存配置,"Salvar configuração"
+客服,Agente
+工作量统计,"Estatísticas de carga de trabalho"
+今日,Hoje
+本周,"Esta semana"
+本月,"Este mês"
+全部,Tudo
+会话数,Sessões
+消息数,Mensagens
+客户,Cliente
+响应率,"Taxa de resposta"
+已响应,Respondido
+完结率,"Taxa de fechamento"
+平均会话时长（分钟）,"Duração média (min)"
+平均消息,"Mensagens médias"
+会话列表,"Lista de sessões"
+刷新,Atualizar
+等待分配,等待分配
+我的会话,"Minhas sessões"
+全部状态,"Todos os status"
+会话ID,"ID da sessão"
+客户ID,"ID do cliente"
+客户语言,"Idioma do cliente"
+客服语言,"Idioma do agente"
+创建时间,"Criado em"
+查看,Ver
+关闭,Fechar
+返回列表,Voltar
+会话信息,"Informações da sessão"
+客服ID,"ID do agente"
+聊天记录,"Histórico do chat"
+翻译：,Tradução:
+邮箱绑定验证,"Verificação de email"
+验证成功,Verificado
+您的邮箱,"Seu email"
+已成功绑定到客服会话。,"Vinculado à sessão"
+返回首页,Início
+验证失败,Falhou
+已绑定邮箱,"Email vinculado"
+绑定成功后，您将收到客服回复的邮件通知,"Receba notificações após vincular"
+返回上一页,返回上一页
+如有问题，请,"Se tiver perguntas"
+联系客服,"Contatar serviço"
+此页面用于独立聊天界面，实际聊天功能通过右下角悬浮按钮使用。,"Use o botão flutuante para conversar"
 无效的请求方法,"Método inválido"
 添加客服功能待实现,"A implementar"
 源文本,"Texto fonte"
