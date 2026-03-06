@@ -21,6 +21,17 @@ $totalPages = (int)($total_pages ?? 0);
 $eventType = $event_type ?? '';
 $keyword = $keyword ?? '';
 $eventTypes = $event_types ?? [];
+// 闭包替代全局函数，避免模板被多次包含时 Cannot redeclare function（禁止在模板中定义全局函数）
+$getEventTypeBadgeClass = function ($eventType) {
+    $classes = [
+        \Weline\Acl\Model\SecurityLog::EVENT_LOGIN_FAILED => 'danger',
+        \Weline\Acl\Model\SecurityLog::EVENT_LOGIN_SUCCESS => 'success',
+        \Weline\Acl\Model\SecurityLog::EVENT_PERMISSION_DENIED => 'warning',
+        \Weline\Acl\Model\SecurityLog::EVENT_ACL_VIOLATION => 'danger',
+        \Weline\Acl\Model\SecurityLog::EVENT_SUSPICIOUS_ACTIVITY => 'warning',
+    ];
+    return $classes[$eventType] ?? 'secondary';
+};
 ?>
 <!-- 页面标题 -->
 <div class="row">
@@ -107,7 +118,7 @@ $eventTypes = $event_types ?? [];
                             <tr>
                                 <td><?= $logData['log_id'] ?? $logData['id'] ?? '' ?></td>
                                 <td>
-                                    <span class="badge bg-<?= getEventTypeBadgeClass($logData['event_type'] ?? '') ?>">
+                                    <span class="badge bg-<?= $getEventTypeBadgeClass($logData['event_type'] ?? '') ?>">
                                         <?= htmlspecialchars($eventTypeLabel) ?>
                                     </span>
                                 </td>
@@ -189,18 +200,3 @@ $eventTypes = $event_types ?? [];
 })();
 </script>
 
-<?php
-/**
- * 获取事件类型的Badge样式类
- */
-function getEventTypeBadgeClass($eventType) {
-    $classes = [
-        \Weline\Acl\Model\SecurityLog::EVENT_LOGIN_FAILED => 'danger',
-        \Weline\Acl\Model\SecurityLog::EVENT_LOGIN_SUCCESS => 'success',
-        \Weline\Acl\Model\SecurityLog::EVENT_PERMISSION_DENIED => 'warning',
-        \Weline\Acl\Model\SecurityLog::EVENT_ACL_VIOLATION => 'danger',
-        \Weline\Acl\Model\SecurityLog::EVENT_SUSPICIOUS_ACTIVITY => 'warning',
-    ];
-    return $classes[$eventType] ?? 'secondary';
-}
-?>
