@@ -19,6 +19,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Session;
+use Weline\Framework\Session\Strategy\WlsStrategy;
 
 class ResponseRedirectBefore implements ObserverInterface
 {
@@ -117,8 +118,12 @@ class ResponseRedirectBefore implements ObserverInterface
             $backendSession = SessionFactory::getInstance()->createBackendSession();
             
             if (!$backendSession->isLoggedIn()) {
-                // 未登录用户重定向到登录页
-                $loginUrl = $this->request->getUrlBuilder()->getBackendUrl('admin/login');
+                // 诊断：是否带 Session Cookie（便于排查 WLS 下登录后仍跳回登录页）
+                $sessId = (string) ($_COOKIE[WlsStrategy::SESSION_NAME] ?? '');
+                $hint = $sessId !== '' ? \substr($sessId, 0, 8) . '...' : 'none';
+                w_log_warning('[Backend] Redirect to login: cookie_sid=' . $hint . ' (session empty or not logged in)', [], 'session');
+                // 未登录用户重定向到登录页（同源 URL，避免 admin ↔ login 循环重定向）
+                $loginUrl = $this->getBackendLoginUrlSameOrigin();
                 $data->setData('url', $loginUrl);
                 $data->setData('code', 302);
                 return;
@@ -280,5 +285,35 @@ class ResponseRedirectBefore implements ObserverInterface
             w_log_error("CSRF验证失败: " . $e->getMessage());
             return false;
         }
+    }
+
+    /**
+     * 使用当前请求的 scheme+host 及后台路由前缀生成登录 URL（如 .../admin_xxx/CNY/zh_Hans_CN/admin/login）。
+     */
+    protected function getBackendLoginUrlSameOrigin(): string
+    {
+        $pathPart = $this->getBackendPathWithPrefix('admin/login');
+        $scheme = $this->request->isSecure() ? 'https' : 'http';
+        $host = $this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost';
+        return $scheme . '://' . $host . $pathPart;
+    }
+
+    /**
+     * 获取带后台路由前缀的路径；仅当 WELINE_AREA_ROUTE 已含后端 prefix 时使用，否则用 Env 拼接。
+     */
+    protected function getBackendPathWithPrefix(string $path): string
+    {
+        $backendPrefix = \Weline\Framework\App\Env::getAreaRoutePrefix('backend');
+        $areaRoute = $this->request->getServer('WELINE_AREA_ROUTE') ?? '';
+        if ($areaRoute !== '' && $backendPrefix !== null && $backendPrefix !== ''
+            && (str_starts_with($areaRoute, $backendPrefix . '/') || $areaRoute === $backendPrefix)) {
+            return '/' . \trim($areaRoute, '/') . '/' . \ltrim($path, '/');
+        }
+        if ($backendPrefix !== null && $backendPrefix !== '') {
+            $currency = $this->request->getServer('WELINE_USER_CURRENCY') ?? $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY';
+            $language = $this->request->getServer('WELINE_USER_LANG') ?? $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
+            return '/' . $backendPrefix . '/' . $currency . '/' . $language . '/' . \ltrim($path, '/');
+        }
+        return $this->request->getUrlBuilder()->getBackendUrlPath($path);
     }
 }

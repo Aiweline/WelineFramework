@@ -592,8 +592,9 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
 } elseif ($deferSsl && !$isWindows && \function_exists('socket_create')) {
     // 方案2b-socket：仅 Linux，延迟 SSL + socket 扩展 + SO_REUSEADDR，避免 Address already in use（含重试）；Windows 不改动
     // 用于 TCP 透传架构：先监听纯 TCP，accept 后根据首包启用 SSL 或 HTTP 重定向
-    $maxBindRetries = 3;
-    $bindRetryDelay = 1;
+    // 与 Windows 一致：不反复重试，避免关闭后重启时长时间等待
+    $maxBindRetries = 1;
+    $bindRetryDelay = 0;
     $rawSocket = false;
     $lastErrno = 0;
     $lastErrstr = '';
@@ -609,6 +610,9 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
         if (!@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEADDR, 1)) {
             WlsLogger::warning_("设置 SO_REUSEADDR 失败");
         }
+        if (\defined('SO_REUSEPORT') && !@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEPORT, 1)) {
+            WlsLogger::warning_("设置 SO_REUSEPORT 失败（可忽略）");
+        }
         if (@\socket_bind($rawSocket, $host, $port)) {
             break;
         }
@@ -616,7 +620,7 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
         $lastErrstr = \socket_strerror($lastErrno);
         @\socket_close($rawSocket);
         $rawSocket = false;
-        if ($lastErrno !== 98) { // EADDRINUSE on Linux only
+        if ($lastErrno !== 98) { // EADDRINUSE on Linux
             WlsLogger::error_("Socket 绑定失败 (defer-ssl): {$lastErrstr} (errno: {$lastErrno})");
             break;
         }
@@ -1569,6 +1573,13 @@ while (true) {
         // 设置 SSE 上下文（让控制器可以直接写入连接）
         \Weline\Framework\Http\Sse\SseContext::setConnection($conn);
         
+        // 诊断：进入 handleRequest 前打点（若此后无「即将写回响应」则说明 handleRequest 阻塞）
+        $uriForLog = '/';
+        if (\preg_match('/^\w+\s+([^\s]+)/', $rawRequest, $m)) {
+            $uriForLog = \parse_url($m[1], \PHP_URL_PATH) ?: $m[1];
+        }
+        WlsLogger::info_("Worker 开始处理请求 connId={$connId} uri=" . (\strlen($uriForLog) > 80 ? \substr($uriForLog, 0, 80) . '...' : $uriForLog));
+        
         // 处理请求
         $response = handleRequest(
             $rawRequest, $runtime, $runtimeError, $instanceName, $workerId, $port, 
@@ -1580,6 +1591,10 @@ while (true) {
         );
         
         $activeRequests--;
+        
+        // 诊断：确认是否到达写响应路径（排查 Linux 无响应）
+        $responseLenPre = \strlen($response);
+        WlsLogger::info_("Worker 即将写回响应 connId={$connId} len={$responseLenPre}");
         
         // 检查是否是 SSE 模式（如果是，响应已经流式发送，不需要再发送）
         $isSseMode = \Weline\Framework\Http\Sse\SseContext::isSseEnabled();
@@ -1598,6 +1613,7 @@ while (true) {
                 // 不阻塞，下次事件循环会继续发送
                 $writeBuffers[$connId] .= $response;
                 $writableConnections[$connId] = $conn;
+                WlsLogger::info_("Worker 响应追加到缓冲区 connId={$connId} len={$responseLen}");
                 goto skip_sync_write;
             }
             
@@ -1636,6 +1652,7 @@ while (true) {
             
             // 如果全部写完，不需要入队
             if ($totalWritten >= $responseLen) {
+                WlsLogger::info_("Worker 已写完响应 connId={$connId} written={$totalWritten}");
                 goto skip_sync_write;
             }
             
@@ -1643,6 +1660,7 @@ while (true) {
             $remainingBytes = $responseLen - $totalWritten;
             $writeBuffers[$connId] = \substr($response, $totalWritten);
             $writableConnections[$connId] = $conn;
+            WlsLogger::info_("Worker 响应入队 connId={$connId} written={$totalWritten} total={$responseLen} remaining={$remainingBytes}");
             
             // 调试日志：追踪大响应的缓冲区状态
             if ($responseLen > 100000) { // 大于 100KB 的响应
@@ -1973,9 +1991,15 @@ function handleRequest(
         $isHttp11 = \strpos($rawRequest, 'HTTP/1.1') !== false;
         $hasClose = \stripos($rawRequest, 'Connection: close') !== false;
         $keepAlive = $isHttp11 && !$hasClose;
-        
-        if (!$isLocal) {
-            // 非本地请求：返回 403（极简响应）
+        // 可选：允许外网访问健康检查（仅测试/内网环境建议开启，生产建议关闭）
+        $healthAllowRemote = false;
+        if (\defined('BP') && \is_file(BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php')) {
+            $env = @include BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php';
+            $healthAllowRemote = (bool)($env['server']['servers'][$instanceName]['health_allow_remote']
+                ?? $env['wls']['health_allow_remote'] ?? false);
+        }
+        if (!$isLocal && !$healthAllowRemote) {
+            // 非本地请求且未配置允许：返回 403（极简响应）
             return $keepAlive
                 ? "HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\nConnection: keep-alive\r\n\r\nForbidden"
                 : "HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\nConnection: close\r\n\r\nForbidden";
@@ -2076,24 +2100,23 @@ function handleRequest(
         // WLS 模式下控制器通过 return 返回 body；对 body trim 并可从 JSON 的 code 解析出状态码
         if (\is_string($result) && \str_starts_with($result, 'HTTP/')) {
             // 合并 Runtime 保存的 Cookie（在 StateManager reset 前提取的副本）
-            // 例如：登录 POST 设置了 Session Cookie → 302 重定向 → Cookie 必须随重定向响应一起发送
+            // 若 302 已在 WlsRuntime 中带上了 Set-Cookie，则不再合并，避免重复头导致浏览器异常
+            $headerEnd = \strpos($result, "\r\n\r\n");
+            $alreadyHasSetCookie = $headerEnd !== false && \stripos(\substr($result, 0, $headerEnd), 'Set-Cookie:') !== false;
             $pendingCookies = $runtime->consumePendingCookies();
-            if (!empty($pendingCookies)) {
-                $headerEnd = \strpos($result, "\r\n\r\n");
-                if ($headerEnd !== false) {
-                    $cookieHeaders = '';
-                    foreach ($pendingCookies as $cookie) {
-                        $parts = [\urlencode($cookie['name']) . '=' . \urlencode($cookie['value'])];
-                        if (isset($cookie['expire']) && $cookie['expire'] !== 0) { $parts[] = 'Expires=' . \gmdate('D, d M Y H:i:s T', $cookie['expire']); }
-                        if (!empty($cookie['path']))     { $parts[] = 'Path=' . $cookie['path']; }
-                        if (!empty($cookie['domain']))   { $parts[] = 'Domain=' . $cookie['domain']; }
-                        if (!empty($cookie['secure']))   { $parts[] = 'Secure'; }
-                        if (!empty($cookie['httpOnly'])) { $parts[] = 'HttpOnly'; }
-                        if (!empty($cookie['sameSite'])) { $parts[] = 'SameSite=' . $cookie['sameSite']; }
-                        $cookieHeaders .= 'Set-Cookie: ' . \implode('; ', $parts) . "\r\n";
-                    }
-                    $result = \substr($result, 0, $headerEnd) . "\r\n" . $cookieHeaders . \substr($result, $headerEnd);
+            if (!empty($pendingCookies) && !$alreadyHasSetCookie && $headerEnd !== false) {
+                $cookieHeaders = '';
+                foreach ($pendingCookies as $cookie) {
+                    $parts = [\urlencode($cookie['name']) . '=' . \urlencode($cookie['value'])];
+                    if (isset($cookie['expire']) && $cookie['expire'] !== 0) { $parts[] = 'Expires=' . \gmdate('D, d M Y H:i:s T', $cookie['expire']); }
+                    if (!empty($cookie['path']))     { $parts[] = 'Path=' . $cookie['path']; }
+                    if (!empty($cookie['domain']))   { $parts[] = 'Domain=' . $cookie['domain']; }
+                    if (!empty($cookie['secure']))   { $parts[] = 'Secure'; }
+                    if (!empty($cookie['httpOnly'])) { $parts[] = 'HttpOnly'; }
+                    if (!empty($cookie['sameSite'])) { $parts[] = 'SameSite=' . $cookie['sameSite']; }
+                    $cookieHeaders .= 'Set-Cookie: ' . \implode('; ', $parts) . "\r\n";
                 }
+                $result = \substr($result, 0, $headerEnd) . "\r\n" . $cookieHeaders . \substr($result, $headerEnd);
             }
             $sni = \Weline\Server\Service\RouteHintService::extractSniFromRawRequest($rawRequest);
             $result = \Weline\Server\Service\RouteHintService::addHintToResponse($result, $sni);

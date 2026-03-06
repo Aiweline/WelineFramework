@@ -19,8 +19,12 @@ class Upgrade implements UpgradeInterface
      */
     public function setup(Setup $setup, Context $context): void
     {
+        $version = $context->getVersion();
+
         $this->ensureDefaultAdminUser();
-        $this->ensureUser1HasRole1();
+        if (version_compare($version, '1.2.1', '<')) {
+            $this->ensureUser1HasRole1();
+        }
     }
 
     /** 为管理员 ID=1 补全默认角色 role_id=1（升级修复） */

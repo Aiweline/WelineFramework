@@ -30,13 +30,19 @@ class SessionServerProvider extends AbstractServiceProvider
         return 'Session Server';
     }
 
+    /**
+     * 多 Worker 时启用（>1）；也可通过 env server.session_server.enabled 强制开启。
+     */
     public function isEnabled(ServiceContext $context): bool
     {
+        $force = $context->envConfig['server']['session_server']['enabled'] ?? null;
+        if ($force !== null) {
+            return (bool) $force;
+        }
         $workerCount = $context->getWorkerCount();
         if ($workerCount === 'auto') {
             $workerCount = $this->getAutoCpuCount();
         }
-
         return (int) $workerCount > 1;
     }
 
