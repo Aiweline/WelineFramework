@@ -86,4 +86,10 @@ interface SessionStrategyInterface
      * @param int $lifetime Cookie 生存时间（秒），0 表示浏览器会话
      */
     public function setCookie(string $sessionId, int $lifetime = 0): void;
+
+    /**
+     * 请求结束前将 Session 落盘并关闭（避免 302 等提前结束导致未写入）
+     * FPM：调用 session_write_close()；WLS：无操作（persist 已写存储）。
+     */
+    public function writeClose(): void;
 }
