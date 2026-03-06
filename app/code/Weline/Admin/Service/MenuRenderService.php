@@ -133,16 +133,10 @@ class MenuRenderService
             return [];
         }
 
-        // WLS 兼容：按当前用户的 role_id 重新加载 Role，避免 ObjectManager 复用导致菜单权限不全（如 demo 账户）
-        $roleId = (int) ($user->getRole()->getRoleId() ?: 0);
-        if ($roleId <= 0) {
-            return [];
-        }
-        $role = ObjectManager::getInstance(Role::class, [], false)->load($roleId);
-        if (!$role->getId()) {
-            return [];
-        }
-        return $this->menuModel->getMenuTreeByRole($role);
+        // WLS 兼容逻辑已在 MenuService 中处理，这里只根据 userId 调用服务
+        /** @var \Weline\Backend\Service\MenuServiceInterface $menuService */
+        $menuService = ObjectManager::getInstance(\Weline\Backend\Service\MenuService::class);
+        return $menuService->getMenuTreeByUserId((int)$user->getId());
     }
 
     /**
