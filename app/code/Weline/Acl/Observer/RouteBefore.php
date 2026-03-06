@@ -172,6 +172,14 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     if (method_exists($user, 'getRoleModel')) {
                         $role = $user->getRoleModel();
                     }
+                    // WLS 兼容：按当前用户的 role_id 重新加载 Role，避免 ObjectManager 复用导致拿到上一请求的 role（如 role_id=1）
+                    // 否则会出现：首次请求误判为超管放行，刷新后才正确拦截
+                    if ($role && method_exists($user, 'getRole')) {
+                        $roleId = (int) ($user->getRole()->getRoleId() ?: 0);
+                        if ($roleId > 0) {
+                            $role = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false)->load($roleId);
+                        }
+                    }
                 }
             }
             
