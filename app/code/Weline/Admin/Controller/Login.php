@@ -13,6 +13,8 @@ namespace Weline\Admin\Controller;
 
 use Weline\Admin\Helper\Data;
 use Weline\Admin\Helper\MenuUrlValidator;
+use Weline\Backend\Service\MenuService;
+use Weline\Backend\Service\MenuServiceInterface;
 use Weline\Backend\Model\BackendUserToken;
 use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Http\Cookie;
@@ -33,16 +35,18 @@ class Login extends \Weline\Framework\App\Controller\BackendController
     protected BackendUser $adminUser;
     private Data $helper;
     private MessageManager $messageManager;
+    private MenuServiceInterface $menuService;
 
     public function __construct(
         BackendUser    $adminUser,
         MessageManager $messageManager,
-        Data           $helper
-    )
-    {
+        Data           $helper,
+        MenuService    $menuService
+    ) {
         $this->adminUser = $adminUser;
         $this->helper = $helper;
         $this->messageManager = $messageManager;
+        $this->menuService = $menuService;
     }
 
     public function index()
@@ -273,8 +277,16 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         }
         // 有来源网址就跳回来源网址
         $this->redirectReferer();
-        # 跳转首页（使用当前请求同源 URL，确保 Cookie 能带上，避免跨 host 丢失 Session）
-        $this->redirect($this->getBackendUrlSameOrigin('admin'));
+
+        // 若没有来源网址，尝试根据角色菜单计算默认入口路由
+        $role = $adminUsernameUser->getRoleModel();
+        $defaultRoute = null;
+        if ($role && $role->getId()) {
+            $defaultRoute = $this->menuService->getDefaultEntryRoute((int)$role->getId());
+        }
+        $targetPath = $defaultRoute ?: 'admin';
+        // 跳转后台入口（使用当前请求同源 URL，确保 Cookie 能带上，避免跨 host 丢失 Session）
+        $this->redirect($this->getBackendUrlSameOrigin($targetPath));
     }
 
     private function redirectReferer(): void

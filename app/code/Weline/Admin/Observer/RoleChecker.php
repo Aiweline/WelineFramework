@@ -25,6 +25,7 @@ class RoleChecker implements \Weline\Framework\Event\ObserverInterface
         // WLS 兼容：每次执行时获取当前请求的 BackendSession，避免 Observer 单例持有旧请求的 session
         $session = SessionFactory::getInstance()->createBackendSession();
         $user = $session->getUser();
+        
         if ($user === null || !method_exists($user, 'getRole')) {
             return;
         }
