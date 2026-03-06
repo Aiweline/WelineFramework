@@ -965,6 +965,7 @@ class Install extends CommandAbstract
      */
     private function printExtensionInstallGuide(string $ext): void
     {
+        $pkg = ObjectManager::getInstance(ExtensionInstallStrategyMap::class)->getDistroPackageName($ext);
         if (PHP_OS_FAMILY === 'Windows') {
             $this->printer->printing(__('    Windows 安装方式:'));
             $this->printer->printing(__('      1. 从 https://pecl.php.net 下载 php_%{ext}.dll', ['ext' => $ext]));
@@ -972,8 +973,8 @@ class Install extends CommandAbstract
             $this->printer->printing(__('      3. 在 php.ini 中添加 extension=%{ext}', ['ext' => $ext]));
         } else {
             $this->printer->printing(__('    Linux/macOS 安装方式:'));
-            $this->printer->printing(__('      Ubuntu/Debian: sudo apt install php-%{ext}', ['ext' => $ext]));
-            $this->printer->printing(__('      CentOS/RHEL: sudo yum install php-%{ext}', ['ext' => $ext]));
+            $this->printer->printing(__('      Ubuntu/Debian: sudo apt install php-%{pkg}', ['pkg' => $pkg]));
+            $this->printer->printing(__('      CentOS/RHEL: sudo yum install php-%{pkg}', ['pkg' => $pkg]));
             $this->printer->printing(__('      macOS: brew install php && pecl install %{ext}', ['ext' => $ext]));
             $this->printer->printing(__('      通用: pecl install %{ext}', ['ext' => $ext]));
         }
