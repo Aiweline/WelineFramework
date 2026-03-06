@@ -853,11 +853,15 @@ done
 add_to_path "$ROOT/bin"
 
 # 安装后：由 setup/server_installer/run.php 执行（与 Windows 一致；无 PHP 则报错退出）
-# 优先用 extend/server/php/bin/php（含 Mac 下指向 brew 的软链），再尝试 PATH 中的 php，Mac 下再显式查 brew 路径
+# 优先使用系统 PHP（如 /usr/bin/php），系统中无 php 命令时再回落到 extend/server/php 下的 PHP
 PHP_EXE=""
-[[ -x "$SERVER_DIR/php/bin/php" ]] && PHP_EXE="$SERVER_DIR/php/bin/php"
-[[ -z "$PHP_EXE" ]] && [[ -x "$SERVER_DIR/php/php" ]] && PHP_EXE="$SERVER_DIR/php/php"
-[[ -z "$PHP_EXE" ]] && command -v php &>/dev/null && PHP_EXE="$(command -v php)"
+if command -v php &>/dev/null; then
+  PHP_EXE="$(command -v php)"
+elif [[ -x "$SERVER_DIR/php/bin/php" ]]; then
+  PHP_EXE="$SERVER_DIR/php/bin/php"
+elif [[ -x "$SERVER_DIR/php/php" ]]; then
+  PHP_EXE="$SERVER_DIR/php/php"
+fi
 if [[ -z "$PHP_EXE" ]] && [[ "$PLATFORM" == "mac" ]]; then
   for p in "$(brew --prefix php@8.4 2>/dev/null)" "$(brew --prefix php@8.3 2>/dev/null)" "$(brew --prefix php 2>/dev/null)"; do
     [[ -n "$p" ]] && [[ -x "$p/bin/php" ]] && PHP_EXE="$p/bin/php" && break
