@@ -15,17 +15,12 @@ class Upgrade implements UpgradeInterface
 {
     /**
      * 升级时确保存在默认管理员用户，并为 user_id=1 补全角色记录（修复历史上 Install 未正确写入 user_id 的问题）
+     * 每次升级都执行补全逻辑，避免首次安装时因阶段顺序导致 Install 未写入而缺数据。
      */
     public function setup(Setup $setup, Context $context): void
     {
-        $version = $context->getVersion();
-
-        if (version_compare($version, '1.0.3', '<')) {
-            $this->ensureDefaultAdminUser();
-        }
-        if (version_compare($version, '1.2.1', '<')) {
-            $this->ensureUser1HasRole1();
-        }
+        $this->ensureDefaultAdminUser();
+        $this->ensureUser1HasRole1();
     }
 
     /** 为管理员 ID=1 补全默认角色 role_id=1（升级修复） */
