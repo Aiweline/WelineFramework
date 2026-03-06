@@ -421,33 +421,107 @@ PROMPT;
     }
     
     /**
-     * 执行提交
+     * 执行提交（遇权限不足时提示 sudo 修复并重试一次）
      */
     public function commit(array $files, string $message): array
     {
-        // 暂存文件
+        $result = $this->doCommit($files, $message);
+        if ($result['success']) {
+            return $result;
+        }
+        $output = $result['output'];
+        if ($this->isPermissionDeniedOutput($output)) {
+            $dirs = $this->extractPermissionDeniedDirs($output);
+            if ($dirs !== []) {
+                $this->progress('⚠️ 检测到目录权限不足，需要 sudo 修复。请在下方输入当前用户密码后回车。', 'note');
+                if ($this->fixPermissionWithSudo($dirs)) {
+                    $this->progress('🔄 权限已修复，正在重试提交...', 'info');
+                    return $this->doCommit($files, $message);
+                }
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * 实际执行 git add + git commit
+     */
+    private function doCommit(array $files, string $message): array
+    {
+        $output = [];
         foreach ($files as $file) {
             $filePath = $file['file'];
             $status = $file['status'] ?? 'M';
-            
             if ($status === 'D') {
                 exec('git rm ' . escapeshellarg($filePath) . ' 2>&1', $output);
             } else {
                 exec('git add ' . escapeshellarg($filePath) . ' 2>&1', $output);
             }
         }
-        
-        // 提交（使用 escapeshellarg 正确处理中文和特殊字符）
         $cmd = 'git commit -m ' . escapeshellarg($message) . ' 2>&1';
-        
         $output = [];
         exec($cmd, $output, $returnCode);
-        
         return [
             'success' => $returnCode === 0,
             'message' => $message,
             'output' => implode("\n", $output),
         ];
+    }
+
+    private function isPermissionDeniedOutput(string $output): bool
+    {
+        return str_contains($output, '权限不够') || str_contains($output, '权限不足')
+            || str_contains($output, 'Permission denied') || str_contains($output, '无法打开目录');
+    }
+
+    /**
+     * 从 git 警告中解析出无法访问的目录路径（相对或绝对）
+     * 例如：无法打开目录 'app/code/Weline/Component/view/tpl/': 权限不够
+     */
+    private function extractPermissionDeniedDirs(string $output): array
+    {
+        if (preg_match_all("/无法打开目录\s*'([^']+)'/u", $output, $m)) {
+            return array_values(array_unique($m[1]));
+        }
+        if (preg_match_all("/Permission denied[^\n]*['\"]?([\/\w.-]+)['\"]?/", $output, $m)) {
+            return array_values(array_unique($m[1]));
+        }
+        return [];
+    }
+
+    /**
+     * 使用 sudo chown 修复目录归属，会提示用户输入密码（仅 Linux/macOS）
+     */
+    private function fixPermissionWithSudo(array $dirs): bool
+    {
+        $os = PHP_OS_FAMILY ?? '';
+        if ($os !== 'Linux' && $os !== 'Darwin') {
+            $this->progress('当前系统不支持自动 sudo 修复，请手动执行 chown 后重试。', 'note');
+            return false;
+        }
+        $root = getcwd() ?: '';
+        if ($root === '') {
+            return false;
+        }
+        $user = trim((string) (shell_exec('whoami') ?? ''));
+        if ($user === '') {
+            return false;
+        }
+        $absDirs = [];
+        foreach ($dirs as $d) {
+            $path = str_starts_with($d, '/') ? $d : $root . '/' . $d;
+            if (is_dir($path)) {
+                $absDirs[] = $path;
+            }
+        }
+        if ($absDirs === []) {
+            return false;
+        }
+        $list = implode(' ', array_map('escapeshellarg', $absDirs));
+        $cmd = "sudo chown -R " . escapeshellarg($user) . " " . $list . " 2>&1";
+        $this->progress("执行: sudo chown -R {$user} <目录>", 'note');
+        passthru($cmd, $exitCode);
+        return $exitCode === 0;
     }
     
     /**
