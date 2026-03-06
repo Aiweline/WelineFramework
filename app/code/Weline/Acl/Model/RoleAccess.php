@@ -62,7 +62,8 @@ class RoleAccess extends Model
     ): array
     {
         $main_field = $main_field ?: $this::schema_fields_ID;
-        $top_menus = $this->clearData()
+        // WLS 兼容：clear() 重置查询状态，避免上一请求的 role_id 污染
+        $top_menus = $this->clear()
             ->joinModel(Acl::class, 'a', 'a.source_id=main_table.source_id and main_table.role_id=' . $role->getId(''), 'right')
             ->where($parent_id_field, $parent_id_value)
             ->order($order_field, $order_sort)
@@ -145,7 +146,9 @@ class RoleAccess extends Model
 
     public function getRoleAccessList(Role $roleModel): array
     {
-        return $this->joinModel($roleModel, 'r', 'main_table.role_id=r.role_id')
+        // WLS 兼容：清除上一请求的查询状态，避免 role_id 混用导致非超管只看到部分权限
+        return $this->clear()
+            ->joinModel($roleModel, 'r', 'main_table.role_id=r.role_id')
             ->joinModel(Acl::class, 'a', 'main_table.source_id=a.source_id')
             ->where('main_table.role_id', $roleModel->getId())
             ->select()
@@ -154,7 +157,9 @@ class RoleAccess extends Model
 
     public function getRoleAccessListArray(Role $roleModel): array
     {
-        return $this->joinModel($roleModel, 'r', 'main_table.role_id=r.role_id')
+        // WLS 兼容：清除上一请求的查询状态
+        return $this->clear()
+            ->joinModel($roleModel, 'r', 'main_table.role_id=r.role_id')
             ->joinModel(Acl::class, 'a', 'main_table.source_id=a.source_id')
             ->where('main_table.role_id', $roleModel->getId())
             ->select()
