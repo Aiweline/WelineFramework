@@ -179,9 +179,10 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     return;
                 } else {
                     $this->session->logout();
-                    /**@var EventsManager $event */
-                    $event = ObjectManager::getInstance(EventsManager::class);
-                    $event->dispatch('Weline_Acl::no_access_redirect_before');
+                    /**@var EventsManager $eventsManager */
+                    $eventsManager = ObjectManager::getInstance(EventsManager::class);
+                    $noAccessData = ['data' => ['reason' => 'not_logged_in']];
+                    $eventsManager->dispatch('Weline_Acl::no_access_redirect_before', $noAccessData);
                     $request->getResponse()->noRouter(DEV ? 403 : 404);
                     return;
                 }
@@ -206,9 +207,10 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     return;
                 } else {
                     $this->session->logout();
-                    /**@var EventsManager $event */
-                    $event = ObjectManager::getInstance(EventsManager::class);
-                    $event->dispatch('Weline_Acl::no_access_redirect_before');
+                    /**@var EventsManager $eventsManager */
+                    $eventsManager = ObjectManager::getInstance(EventsManager::class);
+                    $noAccessData = ['data' => ['reason' => 'no_role']];
+                    $eventsManager->dispatch('Weline_Acl::no_access_redirect_before', $noAccessData);
                     $request->getResponse()->noRouter(DEV ? 403 : 404);
                     return;
                 }
@@ -245,9 +247,10 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                         /**@var MessageManager $message */
                         $message = ObjectManager::getInstance(MessageManager::class);
                         $message->addWarning(__('你没有任何权限！请联系管理员！'));
-                        /**@var EventsManager $event */
-                        $event = ObjectManager::getInstance(EventsManager::class);
-                        $event->dispatch('Weline_Acl::no_access_redirect_before');
+                        /**@var EventsManager $eventsManager */
+                        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+                        $noAccessData = ['data' => ['reason' => 'no_any_permission']];
+                        $eventsManager->dispatch('Weline_Acl::no_access_redirect_before', $noAccessData);
                         $request->getResponse()->noRouter(DEV ? 403 : 404);
                         return;
                     }
@@ -325,9 +328,10 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                                             $this->findAccessUrlRouteToRedirect($request, $access_sources);
                                         }
                                     }
-                                    /**@var EventsManager $event */
-                                    $event = ObjectManager::getInstance(EventsManager::class);
-                                    $event->dispatch('Weline_Acl::no_access_redirect_before');
+                                    /**@var EventsManager $eventsManager */
+                                    $eventsManager = ObjectManager::getInstance(EventsManager::class);
+                                    $noAccessData = ['data' => ['reason' => 'no_permission_for_route']];
+                                    $eventsManager->dispatch('Weline_Acl::no_access_redirect_before', $noAccessData);
                                     if (!$request->isApiBackend()) {
                                         $request->getResponse()->noRouter(DEV ? 403 : 404);
                                     }
@@ -378,9 +382,10 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                                         $this->findAccessUrlRouteToRedirect($request, $access_sources);
                                     }
                                 }
-                                /**@var EventsManager $event */
-                                $event = ObjectManager::getInstance(EventsManager::class);
-                                $event->dispatch('Weline_Acl::no_access_redirect_before');
+                                /**@var EventsManager $eventsManager */
+                                $eventsManager = ObjectManager::getInstance(EventsManager::class);
+                                $noAccessData = ['data' => ['reason' => 'no_permission_for_route']];
+                                $eventsManager->dispatch('Weline_Acl::no_access_redirect_before', $noAccessData);
                                 if (!$request->isApiBackend()) {
                                     $request->getResponse()->noRouter(DEV ? 403 : 404);
                                 }
@@ -516,9 +521,10 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         }
         // 没有任何可使用权限
         $this->session->logout();
-        /**@var EventsManager $event */
-        $event = ObjectManager::getInstance(EventsManager::class);
-        $event->dispatch('Weline_Acl::no_access_redirect_before');
+        /**@var EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        $noAccessData = ['data' => ['reason' => 'no_usable_permission']];
+        $eventsManager->dispatch('Weline_Acl::no_access_redirect_before', $noAccessData);
         $request->getResponse()->noRouter(DEV ? 403 : 404);
     }
 
