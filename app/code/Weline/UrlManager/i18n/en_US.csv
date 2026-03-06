@@ -16,25 +16,25 @@
 重写路由,重写路由
 输入网站ID，0表示默认,输入网站ID，0表示默认
 输入路径,输入路径
-添加,Add
-"URL ID","URL ID"
 指纹,指纹
+模组ID,模组ID
+模组,模组
 类型,Type
 创建时间,"Create time"
 更新时间,"Update time"
-是否已删除,是否已删除
 操作,Operation
+URL管理,URL管理
+系统配置,系统配置
+URL管理器,URL管理器
+添加,Add
+"URL ID","URL ID"
+是否已删除,是否已删除
 自定义,自定义
 前台,前台
 是,Yes
 否,No
 编辑,Edit
 删除,Delete
-URL管理,URL管理
-系统配置,系统配置
-URL管理器,URL管理器
-模组ID,模组ID
-模组,模组
 "Weline Admin 管理面板","Weline Admin 管理面板"
 加载Sitemap管理失败：%{1},加载Sitemap管理失败：%{1}
 无效的请求方法,无效的请求方法

@@ -26,9 +26,10 @@ INSTALL_MYSQL_VERSION="${INSTALL_MYSQL_VERSION:-8.0}"
 WELINE_REPO_URL="${WELINE_REPO_URL:-https://gitee.com/aiweline/WelineFramework.git}"
 
 usage() {
-  echo "Usage: $0 [--path-only] [-f|--force] [-b BRANCH] [php] [pgsql] [mysql]"
+  echo "Usage: $0 [--path-only] [--rebuild-php] [-f|--force] [-b BRANCH] [php] [pgsql] [mysql]"
   echo "  No args: install php and pgsql (default)."
   echo "  --path-only: only add extend/server/*/bin to PATH, do not download/install."
+  echo "  --rebuild-php: on Linux, remove existing extend/server/php and recompile (e.g. to add missing extensions like xsl)."
   echo "  -f, --force: force reinstall even if env.php exists (will prompt for confirmation)."
   echo "  -b BRANCH: when run.php is missing, clone this branch (default: master)."
   exit 0
@@ -36,6 +37,7 @@ usage() {
 
 # 解析参数
 PATH_ONLY=false
+REBUILD_PHP=false
 BRANCH="master"
 FORCE_INSTALL=false
 COMPONENTS=()
@@ -43,6 +45,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help) usage ;;
     --path-only) PATH_ONLY=true; shift ;;
+    --rebuild-php) REBUILD_PHP=true; shift ;;
     -f|--force) FORCE_INSTALL=true; shift ;;
     -b) [[ -n "${2:-}" ]] && { BRANCH="$2"; shift 2; } || shift ;;
     php|pgsql|mysql)
@@ -185,7 +188,7 @@ ensure_git_installed() {
     fi
   elif [[ "$PLATFORM" == "linux" ]]; then
     if [[ -f /etc/debian_version ]]; then
-      run_privileged apt-get update && run_privileged apt-get install -y git || return 1
+      run_apt_update_once && run_privileged apt-get install -y git || return 1
     elif [[ -f /etc/redhat-release ]]; then
       if command -v dnf &>/dev/null; then
         run_privileged dnf install -y git || return 1
@@ -278,12 +281,12 @@ install_php_system_deps() {
   if [[ "$PLATFORM" == "linux" ]]; then
     if [[ -f /etc/debian_version ]]; then
       echo "Installing Linux build dependencies (apt)..."
-      run_privileged apt-get update
+      run_apt_update_once || true
       run_privileged apt-get install -y \
         build-essential autoconf libtool pkg-config bison re2c \
         libxml2-dev libssl-dev libcurl4-openssl-dev libsqlite3-dev \
         libzip-dev libpng-dev libjpeg-dev libfreetype6-dev libonig-dev \
-        libxslt1-dev libpq-dev libicu-dev zlib1g-dev
+        libxslt1-dev libpq-dev libicu-dev zlib1g-dev libgd-dev
       return
     fi
     if [[ -f /etc/redhat-release ]]; then
@@ -293,13 +296,13 @@ install_php_system_deps() {
           gcc gcc-c++ make autoconf libtool pkgconfig bison re2c \
           libxml2-devel openssl-devel libcurl-devel sqlite-devel \
           libzip-devel libpng-devel libjpeg-turbo-devel freetype-devel \
-          oniguruma-devel libxslt-devel postgresql-devel libicu-devel zlib-devel
+          oniguruma-devel libxslt-devel postgresql-devel libicu-devel zlib-devel gd-devel
       elif command -v yum &>/dev/null; then
         run_privileged yum install -y \
           gcc gcc-c++ make autoconf libtool pkgconfig bison re2c \
           libxml2-devel openssl-devel libcurl-devel sqlite-devel \
           libzip-devel libpng-devel libjpeg-turbo-devel freetype-devel \
-          oniguruma-devel libxslt-devel postgresql-devel libicu-devel zlib-devel
+          oniguruma-devel libxslt-devel postgresql-devel libicu-devel zlib-devel gd-devel
       else
         echo "ERROR: Neither dnf nor yum found. Please install PHP build dependencies manually." >&2
         return 1
@@ -315,54 +318,128 @@ install_php_system_deps() {
   return 1
 }
 
+# 校验是否为有效 gzip 压缩包（避免 404 的 HTML 或损坏文件被当缓存使用）
+is_valid_gzip_tarball() {
+  local f="$1"
+  [[ -f "$f" ]] || return 1
+  gzip -t "$f" 2>/dev/null || return 1
+  tar -tzf "$f" >/dev/null 2>&1 || return 1
+  return 0
+}
+
 download_php_source() {
   local tarball="$1"
   local found=""
   local used_cache=""
   mkdir -p "$PHP_SRC_CACHE"
-  # 若缓存中已有该大版本任一补丁，优先用缓存中版本最高的，避免重复下载
+  # 若缓存中已有该大版本任一补丁，优先用缓存；使用前必须校验，无效则删除并重新下载
   for p in 20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0; do
     local ver="${PHP_VERSION}.${p}"
     local cache_file="$PHP_SRC_CACHE/php-${ver}.tar.gz"
     if [[ -f "$cache_file" ]]; then
-      echo "Using cached php-src version: $ver"
-      cp -f "$cache_file" "$tarball"
-      found="$ver"
-      used_cache=1
-      break
+      if is_valid_gzip_tarball "$cache_file"; then
+        echo "Using cached php-src version: $ver"
+        cp -f "$cache_file" "$tarball"
+        found="$ver"
+        used_cache=1
+        break
+      else
+        echo "Cached file invalid or corrupted, removing: $cache_file"
+        rm -f "$cache_file"
+      fi
     fi
   done
   if [[ -n "$found" ]]; then
     return 0
   fi
+  local base="https://www.php.net"
+  local connect_timeout="${PHP_CONNECT_TIMEOUT:-15}"
+  local max_time="${PHP_DOWNLOAD_TIMEOUT:-120}"
   for p in 20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0; do
     local ver="${PHP_VERSION}.${p}"
     local cache_file="$PHP_SRC_CACHE/php-${ver}.tar.gz"
-    local url="https://www.php.net/distributions/php-${ver}.tar.gz"
+    local url="${base}/distributions/php-${ver}.tar.gz"
     echo "Trying PHP source ${ver} ..."
     if command -v curl &>/dev/null; then
-      if curl -L -s -f -o "$tarball" "$url"; then
-        cp -f "$tarball" "$cache_file"
-        found="$ver"
-        break
+      if curl -L -f -s -o "$tarball" --connect-timeout "$connect_timeout" --max-time "$max_time" "$url"; then
+        if is_valid_gzip_tarball "$tarball"; then
+          cp -f "$tarball" "$cache_file"
+          found="$ver"
+          break
+        fi
       fi
     elif command -v wget &>/dev/null; then
-      if wget -q -O "$tarball" "$url"; then
-        cp -f "$tarball" "$cache_file"
-        found="$ver"
-        break
+      if wget -q -O "$tarball" --connect-timeout="$connect_timeout" --timeout="$max_time" "$url"; then
+        if is_valid_gzip_tarball "$tarball"; then
+          cp -f "$tarball" "$cache_file"
+          found="$ver"
+          break
+        fi
       fi
     else
       echo "ERROR: curl or wget is required to download php-src." >&2
       return 1
     fi
   done
+
   if [[ -z "$found" ]]; then
-    echo "Download failed. Check network/VPN, then retry." >&2
+    echo "下载失败，请开启 VPN 或检查网络后重试。" >&2
     return 1
   fi
   [[ -z "$used_cache" ]] && echo "Downloaded php-src version: $found"
   return 0
+}
+
+# 从 composer.json 与 Weline Framework requirements.php 动态收集所需 PHP 扩展（去重、小写）
+get_required_php_extensions() {
+  local exts=""
+  if [[ -f "$ROOT/composer.json" ]]; then
+    exts=$(grep -oE '"ext-[a-zA-Z0-9_-]+"' "$ROOT/composer.json" 2>/dev/null | sed 's/"ext-//;s/"//g' | tr '[:upper:]' '[:lower:]' | tr '\n' ' ')
+  fi
+  local req="$ROOT/app/code/Weline/Framework/Env/env/requirements.php"
+  if [[ -f "$req" ]]; then
+    local fw
+    fw=$(sed -n "/'extensions'/,/],/p" "$req" 2>/dev/null | grep -oE "'[A-Za-z0-9_]+'" | tr -d "'" | tr '[:upper:]' '[:lower:]' | tr '\n' ' ')
+    exts="$exts $fw"
+  fi
+  # 去重、排序、每行一个
+  echo "$exts" | tr ' ' '\n' | grep -v '^$' | sort -u
+}
+
+# 根据扩展名输出 PHP configure 选项（每行一个）；不支持的扩展跳过
+get_php_configure_flags_for_extensions() {
+  local exts
+  exts=$(get_required_php_extensions)
+  # 无 composer/requirements 时使用默认扩展集，保证框架与 composer 可运行
+  [[ -z "$exts" ]] && exts="bcmath curl exif fileinfo gd iconv intl json libxml dom simplexml mbstring opcache pcntl pdo pgsql sockets sqlite3 zip xsl zlib"
+  local seen_pdo=0 seen_libxml=0
+  local ext
+  for ext in $exts; do
+    case "$ext" in
+      bcmath)     echo "--enable-bcmath" ;;
+      curl)       echo "--with-curl" ;;
+      exif)       echo "--enable-exif" ;;
+      fileinfo)   echo "--enable-fileinfo" ;;
+      gd)         echo "--enable-gd" ;;
+      iconv)      echo "--with-iconv" ;;
+      intl)       echo "--enable-intl" ;;
+      json)       ;;  # PHP 8 内置
+      libxml|dom|simplexml)
+        [[ $seen_libxml -eq 0 ]] && { echo "--with-libxml"; seen_libxml=1; } ;;
+      mbstring)   echo "--enable-mbstring" ;;
+      opcache)    echo "--enable-opcache" ;;
+      pcntl)      echo "--enable-pcntl" ;;
+      sockets)    echo "--enable-sockets" ;;
+      pdo)
+        [[ $seen_pdo -eq 0 ]] && { echo "--with-pdo-pgsql"; echo "--with-pdo-sqlite"; seen_pdo=1; } ;;
+      pgsql)      echo "--with-pgsql" ;;
+      sqlite3)    echo "--with-sqlite3" ;;
+      zip)        echo "--with-zip" ;;
+      xsl)        echo "--with-xsl" ;;
+      zlib)       echo "--with-zlib" ;;
+      *)          ;;
+    esac
+  done
 }
 
 install_php_from_source() {
@@ -371,18 +448,27 @@ install_php_from_source() {
   local tarball="$build_root/php-src.tar.gz"
   mkdir -p "$build_root"
 
-  download_php_source "$tarball"
+  if ! download_php_source "$tarball"; then
+    rm -rf "$build_root"
+    return 1
+  fi
 
   echo "Extracting php-src ..."
-  tar -xzf "$tarball" -C "$build_root"
+  if ! tar -xzf "$tarball" -C "$build_root"; then
+    echo "ERROR: php-src extract failed (invalid or corrupted tarball). Removing bad cache for this version." >&2
+    rm -rf "$build_root"
+    rm -f "$PHP_SRC_CACHE"/php-"${PHP_VERSION}".*.tar.gz
+    return 1
+  fi
   local src_dir
   src_dir=$(find "$build_root" -maxdepth 1 -type d -name "php-${PHP_VERSION}.*" | head -1)
   if [[ -z "$src_dir" ]]; then
     src_dir=$(find "$build_root" -maxdepth 1 -type d -name "php-*" | head -1)
   fi
   if [[ -z "$src_dir" ]]; then
-    echo "ERROR: php-src extract failed." >&2
+    echo "ERROR: php-src extract failed (no php-* directory found)." >&2
     rm -rf "$build_root"
+    rm -f "$PHP_SRC_CACHE"/php-"${PHP_VERSION}".*.tar.gz
     return 1
   fi
 
@@ -403,6 +489,7 @@ install_php_from_source() {
     export LDFLAGS="-L$brew_prefix/lib -L$brew_prefix/opt/icu4c/lib -L$brew_prefix/opt/libpq/lib ${LDFLAGS:-}"
   fi
 
+  # 基础选项 + 根据框架与 composer 所需扩展动态生成的 configure 选项
   local -a conf
   conf=(
     "./configure"
@@ -411,20 +498,15 @@ install_php_from_source() {
     "--with-config-file-scan-dir=$dest/conf.d"
     "--with-zlib"
     "--with-openssl"
-    "--with-curl"
-    "--enable-mbstring"
-    "--enable-exif"
-    "--enable-intl"
-    "--enable-bcmath"
-    "--enable-opcache"
-    "--enable-pcntl"
-    "--with-xsl"
-    "--with-pdo-pgsql"
-    "--with-pgsql"
-    "--with-sqlite3"
-    "--with-pdo-sqlite"
-    "--with-iconv"
   )
+  local required_exts
+  required_exts=$(get_required_php_extensions)
+  echo "PHP extensions required by framework/composer: ${required_exts:-（使用默认）}"
+  while IFS= read -r flag; do
+    [[ -n "$flag" ]] && conf+=("$flag")
+  done < <(get_php_configure_flags_for_extensions)
+  # xsl 固定编译进 PHP，不依赖动态解析
+  conf+=("--with-xsl")
 
   if [[ "$PLATFORM" == "mac" && -n "$brew_prefix" ]]; then
     conf+=(
@@ -538,9 +620,15 @@ install_php() {
   fi
 
   # Linux：检测 extend/server/php 或从源码编译
+  if [[ "$REBUILD_PHP" == true ]] && [[ -d "$dest" ]]; then
+    echo "Removing existing PHP at $dest (--rebuild-php) to recompile with required extensions..."
+    rm -rf "$dest"
+    php_exe=""
+  else
   [[ -x "$dest/php.exe" ]] && php_exe="$dest/php.exe"
   [[ -z "$php_exe" ]] && [[ -x "$dest/php" ]] && php_exe="$dest/php"
   [[ -z "$php_exe" ]] && [[ -x "$dest/bin/php" ]] && php_exe="$dest/bin/php"
+  fi
   if [[ -n "$php_exe" ]]; then
     local installed
     installed=$(get_installed_php_major_minor "$php_exe")
@@ -586,7 +674,124 @@ install_pgsql_via_brew() {
   echo "PostgreSQL (brew $formula) linked at $SERVER_DIR/pgsql/bin -> $pg_prefix/bin"
 }
 
-# ---- PostgreSQL ----（Linux 仅检测；Mac 用 brew 自动安装并软链到 extend/server/pgsql；初始化与 Win 一致由 run.php Step 5b 完成）
+# 一次安装流程内只执行一次 apt-get update（避免重复更新）
+APT_UPDATED=0
+run_apt_update_once() {
+  [[ "$PLATFORM" != "linux" ]] && return 0
+  [[ -f /etc/debian_version ]] || return 0
+  [[ "$APT_UPDATED" -eq 1 ]] && return 0
+  if run_privileged apt-get update; then
+    APT_UPDATED=1
+    return 0
+  fi
+  local id=""
+  [[ -f /etc/os-release ]] && { . /etc/os-release; id="${ID:-}"; }
+  if [[ "$id" == "kali" ]]; then
+    echo "apt-get update 失败，正在恢复 Kali 官方源并重试..."
+    restore_kali_official_sources
+    if run_privileged apt-get update; then
+      APT_UPDATED=1
+      return 0
+    fi
+  fi
+  return 1
+}
+
+# Kali：若当前源无效（如被误换成 Debian 镜像），恢复为 Kali 官方源
+restore_kali_official_sources() {
+  run_privileged tee /etc/apt/sources.list >/dev/null <<'KALIEOF'
+deb http://http.kali.org/kali kali-rolling main non-free non-free-firmware contrib
+KALIEOF
+  echo "已恢复 Kali 官方源: http.kali.org"
+}
+
+# Linux：用 apt/dnf 安装 PostgreSQL，并软链到 extend/server/pgsql/bin（与 Mac 一致，run.php 复用）
+install_pgsql_linux() {
+  local dest="$SERVER_DIR/pgsql"
+  if [[ -f /etc/debian_version ]]; then
+    echo "Installing PostgreSQL ${INSTALL_PGSQL_VERSION} (apt, 使用官方源)..."
+    if ! run_apt_update_once; then
+      echo "apt-get update 失败，请检查 /etc/apt/sources.list 或恢复发行版官方源后重试。" >&2
+      return 1
+    fi
+    if ! run_privileged apt-get install -y "postgresql-${INSTALL_PGSQL_VERSION}" "postgresql-client-${INSTALL_PGSQL_VERSION}" 2>/dev/null; then
+      echo "未找到 postgresql-${INSTALL_PGSQL_VERSION}，改为安装发行版默认 PostgreSQL..."
+      run_privileged apt-get install -y postgresql postgresql-client || return 1
+    fi
+  elif [[ -f /etc/redhat-release ]]; then
+    echo "Installing PostgreSQL (dnf/yum)..."
+    if command -v dnf &>/dev/null; then
+      run_privileged dnf install -y "postgresql${INSTALL_PGSQL_VERSION}-server" "postgresql${INSTALL_PGSQL_VERSION}" 2>/dev/null || \
+      run_privileged dnf install -y postgresql-server postgresql || return 1
+    elif command -v yum &>/dev/null; then
+      run_privileged yum install -y "postgresql${INSTALL_PGSQL_VERSION}-server" "postgresql${INSTALL_PGSQL_VERSION}" 2>/dev/null || \
+      run_privileged yum install -y postgresql-server postgresql || return 1
+    else
+      echo "ERROR: dnf or yum required for PostgreSQL install." >&2
+      return 1
+    fi
+  else
+    echo "ERROR: Unsupported Linux distro for auto PostgreSQL install." >&2
+    return 1
+  fi
+  local pg_bin
+  pg_bin=$(command -v psql 2>/dev/null)
+  [[ -z "$pg_bin" ]] && pg_bin=$(run_privileged which psql 2>/dev/null)
+  [[ -z "$pg_bin" ]] && pg_bin="/usr/bin/psql"
+  local pg_dir
+  pg_dir="$(dirname "$pg_bin")"
+  if [[ ! -x "$pg_dir/psql" ]] && [[ -x "/usr/bin/psql" ]]; then
+    pg_dir="/usr/bin"
+  fi
+  if [[ ! -x "$pg_dir/psql" ]]; then
+    echo "ERROR: psql not found after install. Check PostgreSQL installation." >&2
+    return 1
+  fi
+  mkdir -p "$dest"
+  rm -rf "$dest/bin"
+  ln -sf "$pg_dir" "$dest/bin"
+  add_to_path "$dest/bin"
+
+  # 数据目录：extend/server/pgsql/data（与 Windows 同目录，var 易被删除不推荐）
+  local pgsql_data="$dest/data"
+  mkdir -p "$pgsql_data"
+  local pg_bindir=""
+  for d in "/usr/lib/postgresql/${INSTALL_PGSQL_VERSION}/bin" "/usr/pgsql-${INSTALL_PGSQL_VERSION}/bin" "$pg_dir"; do
+    [[ -n "$d" ]] && [[ -x "$d/initdb" ]] && { pg_bindir="$d"; break; }
+  done
+  if [[ -z "$pg_bindir" ]] && [[ -d /usr/lib/postgresql ]]; then
+    for sub in /usr/lib/postgresql/*/bin; do
+      [[ -x "$sub/initdb" ]] && { pg_bindir="$sub"; break; }
+    done
+  fi
+  if [[ -z "$pg_bindir" ]]; then
+    pg_bindir="$(run_privileged sh -c 'command -v initdb 2>/dev/null | xargs dirname 2>/dev/null')"
+  fi
+  if [[ -z "$pg_bindir" ]] || [[ "$pg_bindir" == "." ]] || [[ ! -x "$pg_bindir/initdb" ]]; then
+    echo "ERROR: initdb not found. Install postgresql-${INSTALL_PGSQL_VERSION} (apt) or postgresql${INSTALL_PGSQL_VERSION}-server (dnf)." >&2
+    return 1
+  fi
+
+  run_privileged systemctl stop postgresql 2>/dev/null || run_privileged service postgresql stop 2>/dev/null || true
+  run_privileged systemctl disable postgresql 2>/dev/null || true
+
+  pg_ctl_opts=(-o "-k $pgsql_data")
+  if [[ -f "$pgsql_data/PG_VERSION" ]]; then
+    if ! PATH="$pg_bindir:$PATH" "$pg_bindir/pg_ctl" -D "$pgsql_data" status 2>/dev/null | grep -q "running"; then
+      echo "Starting PostgreSQL cluster at $pgsql_data..."
+      PATH="$pg_bindir:$PATH" "$pg_bindir/pg_ctl" -D "$pgsql_data" -l "$pgsql_data/logfile" start "${pg_ctl_opts[@]}"
+    fi
+  else
+    echo "Initializing PostgreSQL data directory at $pgsql_data (当前用户运行)..."
+    PATH="$pg_bindir:$PATH" "$pg_bindir/initdb" -D "$pgsql_data" -E UTF8 -U postgres
+    PATH="$pg_bindir:$PATH" "$pg_bindir/pg_ctl" -D "$pgsql_data" -l "$pgsql_data/logfile" start "${pg_ctl_opts[@]}"
+  fi
+
+  echo "PostgreSQL installed and linked at $dest/bin -> $pg_dir, data at $pgsql_data"
+  echo "  重启后需手动启动: pg_ctl -D $pgsql_data -l $pgsql_data/logfile start ${pg_ctl_opts[*]}"
+}
+
+# ---- PostgreSQL ----（Linux：apt/dnf 自动安装并软链；Mac：Homebrew；初始化由 run.php Step 5b 完成）
 install_pgsql() {
   local dest="$SERVER_DIR/pgsql"
   if [[ -f "$dest/bin/psql" ]] || [[ -f "$dest/bin/postgres" ]]; then
@@ -601,6 +806,11 @@ install_pgsql() {
   if [[ "$PLATFORM" == "mac" ]]; then
     echo "========== PostgreSQL (Mac, Homebrew) =========="
     install_pgsql_via_brew
+    return
+  fi
+  if [[ "$PLATFORM" == "linux" ]]; then
+    echo "========== PostgreSQL (Linux) =========="
+    install_pgsql_linux
     return
   fi
   echo "PostgreSQL not at $dest. Install manually, then run: $0 --path-only pgsql"
@@ -633,8 +843,7 @@ for c in "${COMPONENTS[@]}"; do
   case "$c" in
     php)
       if ! install_php; then
-        echo "ERROR: PHP installation failed." >&2
-        echo "  On Mac: 若因权限报错，请将当前用户设为管理员后重试，或由管理员执行: brew install php@$PHP_VERSION" >&2
+        echo "ERROR: PHP installation failed. 请开启 VPN 或检查网络后重试。" >&2
         exit 1
       fi
       ;;
@@ -664,6 +873,66 @@ if [[ -z "$PHP_EXE" ]] || ! "$PHP_EXE" -v &>/dev/null; then
   exit 1
 fi
 
+# 在首次运行 php（run.php）前，确保 Framework 所需 PHP 扩展已安装
+# 扩展列表与 app/code/Weline/Framework/Env/env/requirements.php 的 extensions 保持一致
+# 若当前 PHP 为 extend/server/php（自编译），apt 安装 php-xml 无效，仅提示 --rebuild-php
+ensure_framework_php_extensions() {
+  local -a needed=(PDO json iconv fileinfo dom libxml simplexml intl mbstring sockets)
+  local -a missing=()
+  local ext
+  for ext in "${needed[@]}"; do
+    "$PHP_EXE" -m 2>/dev/null | grep -qxi "^${ext}$" || missing+=("$ext")
+  done
+  [[ ${#missing[@]} -eq 0 ]] && return 0
+
+  # 当前使用的是自编译 PHP（extend/server/php）时，apt 包只影响系统 PHP，无法给自编译 PHP 加扩展
+  local php_exe_abs
+  php_exe_abs="$(cd "$ROOT" 2>/dev/null && cd "$(dirname "$PHP_EXE")" 2>/dev/null && pwd 2>/dev/null)/$(basename "$PHP_EXE")" || true
+  local server_php_abs
+  server_php_abs="$(cd "$ROOT" 2>/dev/null && cd "$SERVER_DIR/php" 2>/dev/null && pwd 2>/dev/null)" || true
+  if [[ -n "$server_php_abs" ]] && [[ -n "$php_exe_abs" ]] && [[ "$php_exe_abs" == "$server_php_abs"* ]]; then
+    echo "WARNING: Framework requires PHP extensions that are missing in built PHP: ${missing[*]}." >&2
+    echo "  This PHP is from extend/server/php (built from source). apt install will not affect it." >&2
+    echo "  Install build deps and rebuild PHP: sudo apt install -y libxml2-dev libssl-dev ... then run: $0 --rebuild-php" >&2
+    return 0
+  fi
+
+  echo "Framework requires PHP extensions that are missing: ${missing[*]}. Installing..."
+  run_apt_update_once
+  local php_ver
+  php_ver=$("$PHP_EXE" -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;" 2>/dev/null)
+  if [[ -z "$php_ver" ]]; then
+    php_ver=$("$PHP_EXE" -v 2>/dev/null | grep -Eo '[0-9]+\.[0-9]+' | head -1)
+  fi
+  if [[ "$PLATFORM" == "linux" ]]; then
+    if [[ -f /etc/debian_version ]]; then
+      # 不吞错误，安装失败时用户可见
+      if ! run_privileged apt-get install -y "php${php_ver}-xml" "php${php_ver}-intl" "php${php_ver}-fileinfo" "php${php_ver}-mbstring" 2>/dev/null; then
+        run_privileged apt-get install -y "php-xml" "php-intl" "php-fileinfo" "php-mbstring" 2>/dev/null || true
+      fi
+      run_privileged phpenmod -v "$php_ver" xml intl fileinfo mbstring 2>/dev/null || true
+    elif [[ -f /etc/redhat-release ]]; then
+      if command -v dnf &>/dev/null; then
+        run_privileged dnf install -y "php-xml" "php-intl" "php-fileinfo" "php-mbstring" || true
+      elif command -v yum &>/dev/null; then
+        run_privileged yum install -y "php-xml" "php-intl" "php-fileinfo" "php-mbstring" || true
+      fi
+    fi
+  elif [[ "$PLATFORM" == "mac" ]]; then
+    echo "On macOS ensure Homebrew PHP has xml/intl: brew install php@${php_ver}; brew link --overwrite --force php@${php_ver}"
+  fi
+  # 再次检查，若仍缺则明确提示
+  missing=()
+  for ext in "${needed[@]}"; do
+    "$PHP_EXE" -m 2>/dev/null | grep -qxi "^${ext}$" || missing+=("$ext")
+  done
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "WARNING: These PHP extensions are still missing: ${missing[*]}. run.php may fail. Install them and re-run install." >&2
+    echo "  Debian/Ubuntu/Kali: sudo apt install -y php${php_ver}-xml php${php_ver}-intl php${php_ver}-fileinfo php${php_ver}-mbstring" >&2
+  fi
+  return 0
+}
+
 # 若 setup/server_installer/run.php 不存在，说明代码未安装：按 -b 指定分支拉取，未指定则 master
 if [[ ! -f "$ROOT/setup/server_installer/run.php" ]]; then
   ensure_git_installed || { echo "ERROR: Git is required to install code. Install Git and re-run." >&2; exit 1; }
@@ -672,7 +941,7 @@ if [[ ! -f "$ROOT/setup/server_installer/run.php" ]]; then
     git -C "$ROOT" fetch origin 2>/dev/null || true
     git -C "$ROOT" checkout "$BRANCH" 2>/dev/null || git -C "$ROOT" pull origin "$BRANCH" 2>/dev/null || true
   else
-    tmp_clone="$(mktemp -d)"
+    tmp_clone=`mktemp -d 2>/dev/null` || tmp_clone="/tmp/weline-clone-$$"
     if ! git clone -b "$BRANCH" "$WELINE_REPO_URL" "$tmp_clone"; then
       echo "ERROR: Clone failed. Manual: git clone -b $BRANCH $WELINE_REPO_URL ." >&2
       rm -rf "$tmp_clone"
@@ -692,6 +961,9 @@ if [[ ! -f "$ROOT/setup/server_installer/run.php" ]]; then
   fi
   echo "Code installed (branch: $BRANCH)."
 fi
+
+# 在运行 run.php 前必须已安装 Framework 声明的 PHP 扩展（避免 Class \"DOMDocument\" not found 等）
+ensure_framework_php_extensions
 
 # 将项目目录权限设为当前用户（避免后续操作权限问题；每次安装均执行）
 fix_project_ownership() {

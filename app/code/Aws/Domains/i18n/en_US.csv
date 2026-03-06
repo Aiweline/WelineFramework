@@ -1,25 +1,11 @@
-配置不存在,"Configuration not found"
-无效的请求方法,无效的请求方法
-配置名称不能为空,"Configuration name is required"
-"Access Key ID 不能为空","Access Key ID is required"
-配置名称已存在,"Configuration name already exists"
-"Secret Access Key 不能为空","Secret Access Key is required"
-配置保存成功,"Configuration saved successfully"
-配置保存失败：%1,"Configuration save failed: %1"
-无效的配置ID,无效的配置ID
-配置删除成功,"Configuration deleted successfully"
-配置删除失败：%1,"Configuration delete failed: %1"
-配置未启用,配置未启用
-连接测试成功,"Connection test successful"
-连接测试失败：%1,"Connection test failed: %1"
-已设为默认配置,"Set as default configuration"
-操作失败：%1,"Operation failed: %1"
+操作记录不存在,操作记录不存在
 域名不能为空,域名不能为空
 "请先配置 AWS 凭证","Please configure AWS credentials first"
 获取域名详情失败：%1,"Failed to get domain detail: %1"
 "域名 %1 可以注册","Domain %1 is available for registration"
 "域名 %1 不可用（%2）","Domain %1 is not available (%2)"
 检查失败,"Check failed"
+无效的请求方法,无效的请求方法
 "注册年限必须在 1-10 年之间","注册年限必须在 1-10 年之间"
 "%1 不能为空","%1 不能为空"
 域名注册请求已提交，操作ID：%1,"Domain registration request submitted, Operation ID: %1"
@@ -34,7 +20,45 @@
 自动续费已开启,"Auto-renewal enabled"
 自动续费已关闭,"Auto-renewal disabled"
 操作失败,操作失败
-操作记录不存在,操作记录不存在
+配置不存在,"Configuration not found"
+配置名称不能为空,"Configuration name is required"
+"Access Key ID 不能为空","Access Key ID is required"
+配置名称已存在,"Configuration name already exists"
+"Secret Access Key 不能为空","Secret Access Key is required"
+配置保存成功,"Configuration saved successfully"
+配置保存失败：%1,"Configuration save failed: %1"
+无效的配置ID,无效的配置ID
+配置删除成功,"Configuration deleted successfully"
+配置删除失败：%1,"Configuration delete failed: %1"
+配置未启用,配置未启用
+连接测试成功,"Connection test successful"
+连接测试失败：%1,"Connection test failed: %1"
+已设为默认配置,"Set as default configuration"
+操作失败：%1,"Operation failed: %1"
+操作记录,"Operation Log"
+搜索,搜索
+重置,Reset
+域名,domain
+操作类型,"Operation Type"
+状态,Status
+"AWS 操作ID","AWS Operation ID"
+操作人,Operator
+创建时间,"Created At"
+操作,Actions
+暂无记录,"No records"
+上一页,Previous
+下一页,"Next Page"
+共,Total
+条记录,records
+操作详情,"Operation Detail"
+关闭,Close
+操作ID,"Operation ID"
+错误信息,"Error Message"
+更新时间,"Updated At"
+请求数据,"Request Data"
+响应数据,"Response Data"
+获取失败,"Failed to get"
+请求失败,"Request failed"
 "编辑 AWS 配置","Edit AWS Configuration"
 "新增 AWS 配置","Add AWS Configuration"
 返回列表,"Back to List"
@@ -55,16 +79,12 @@
 保存中...,Saving...
 保存成功,"Saved successfully"
 保存失败,"Save failed"
-请求失败,"Request failed"
 AWS配置管理,"AWS Configuration Management"
 新增配置,"Add Configuration"
 ID,ID
 名称,名称
 区域,Region
 默认,Default
-状态,Status
-创建时间,"Created At"
-操作,Actions
 暂无配置，请点击上方按钮新增,"No configuration yet, please click the button above to add"
 设为默认,"Set as Default"
 启用,Enabled
@@ -80,76 +100,13 @@ ID,ID
 连接测试失败,连接测试失败
 确定要删除此配置吗？此操作不可撤销。,"Are you sure you want to delete this configuration? This action cannot be undone."
 删除失败,删除失败
-域名查询,"Domain Check"
-前往配置,"Go to Configuration"
-"AWS 账户","AWS 账户"
-域名,domain
-"输入完整域名，包含后缀（如 .com, .net 等）","Enter full domain name including suffix (e.g., .com, .net)"
-查询,Search
-域名建议,"Domain Suggestions"
-获取建议,"Get Suggestions"
-"输入域名后点击""获取建议""按钮","输入域名后点击""获取建议""按钮"
-例如：example.com,"e.g., example.com"
-请输入域名,"Please enter a domain name"
-查询中...,Checking...
-立即购买,"Buy Now"
-查询失败,查询失败
-请先输入域名,"Please enter a domain first"
-获取中...,Getting...
-可用,Available
-暂无建议,"No suggestions"
-获取失败,"Failed to get"
-域名详情,"Domain Detail"
-基本信息,"Basic Information"
-注册商,Registrar
-更新时间,"Updated At"
-到期时间,"Expiration Date"
-自动续费,"Auto Renew"
-已开启,已开启
-已关闭,已关闭
-"WHOIS 隐私","WHOIS Privacy"
-"域名服务器 (Nameservers)",Nameservers
-暂无域名服务器配置,"No nameservers configured"
-"修改 DNS","Modify DNS"
-管理员联系人,"Admin Contact"
-无信息,"No information"
-注册人联系人,"Registrant Contact"
-技术联系人,"Tech Contact"
-域名状态,"Domain Status"
-无状态信息,"No status information"
-快捷操作,"Quick Actions"
-续费域名,"Renew Domain"
-开启自动续费,"Enable Auto Renew"
-关闭自动续费,"Disable Auto Renew"
-开启,开启
-关闭,Close
-确定要,"Are you sure you want to"
-自动续费吗？,auto-renewal?
-域名列表,"Domain List"
 购买域名,"Register Domain"
-选择账户：,"Select Account:"
-转移锁定,"Transfer Lock"
-暂无域名,"No domains yet"
-已锁定,Locked
-未锁定,Unlocked
-首页,"First Page"
-下一页,"Next Page"
-详情,Details
-续费,Renew
-DNS,DNS
-的自动续费吗？,的自动续费吗？
-修改域名服务器,"Modify Nameservers"
-返回详情,"Back to Detail"
-添加,Add
-"至少需要提供 2 个域名服务器","At least 2 nameservers are required"
-常用域名服务器,"Common Nameservers"
-"修改域名服务器后，DNS 变更可能需要 24-48 小时才能完全生效","DNS changes may take 24-48 hours to fully propagate after modifying nameservers"
-例如：ns1.example.com,"e.g., ns1.example.com"
-"至少需要保留 2 个域名服务器","At least 2 nameservers must be kept"
-"至少需要提供 2 个有效的域名服务器","At least 2 valid nameservers are required"
+前往配置,"Go to Configuration"
 域名信息,"Domain Information"
+"AWS 账户","AWS 账户"
 检查可用性,"Check Availability"
 注册年限,"Registration Period"
+开启自动续费,"Enable Auto Renew"
 "开启 WHOIS 隐私保护","Enable WHOIS Privacy Protection"
 联系人信息,"Contact Information"
 联系人类型,"Contact Type"
@@ -170,15 +127,73 @@ DNS,DNS
 电话,Phone
 格式：+国际区号.电话号码,"Format: +country_code.phone_number"
 "注册域名后将自动从您的 AWS 账户扣费","Registration fee will be charged to your AWS account"
+例如：example.com,"e.g., example.com"
 年,year(s)
 个人可留空,"Can be left empty for individuals"
 请选择,"Please Select"
 "例如：+1.1234567890 或 +86.13800138000","e.g., +1.1234567890 or +86.13800138000"
+请输入域名,"Please enter a domain name"
 域名可以注册,"Domain is available"
 域名不可用,"Domain is not available"
 "确定要购买此域名吗？费用将从您的 AWS 账户扣除。","Are you sure you want to purchase this domain? Fees will be charged to your AWS account."
 处理中...,Processing...
 域名注册请求已提交,域名注册请求已提交
+修改域名服务器,"Modify Nameservers"
+返回详情,"Back to Detail"
+"域名服务器 (Nameservers)",Nameservers
+添加,Add
+"至少需要提供 2 个域名服务器","At least 2 nameservers are required"
+常用域名服务器,"Common Nameservers"
+"修改域名服务器后，DNS 变更可能需要 24-48 小时才能完全生效","DNS changes may take 24-48 hours to fully propagate after modifying nameservers"
+例如：ns1.example.com,"e.g., ns1.example.com"
+"至少需要保留 2 个域名服务器","At least 2 nameservers must be kept"
+"至少需要提供 2 个有效的域名服务器","At least 2 valid nameservers are required"
+域名查询,"Domain Check"
+"输入完整域名，包含后缀（如 .com, .net 等）","Enter full domain name including suffix (e.g., .com, .net)"
+查询,Search
+域名建议,"Domain Suggestions"
+获取建议,"Get Suggestions"
+"输入域名后点击""获取建议""按钮","输入域名后点击""获取建议""按钮"
+查询中...,Checking...
+立即购买,"Buy Now"
+查询失败,查询失败
+请先输入域名,"Please enter a domain first"
+获取中...,Getting...
+可用,Available
+暂无建议,"No suggestions"
+域名详情,"Domain Detail"
+基本信息,"Basic Information"
+注册商,Registrar
+到期时间,"Expiration Date"
+自动续费,"Auto Renew"
+已开启,已开启
+已关闭,已关闭
+"WHOIS 隐私","WHOIS Privacy"
+暂无域名服务器配置,"No nameservers configured"
+"修改 DNS","Modify DNS"
+管理员联系人,"Admin Contact"
+无信息,"No information"
+注册人联系人,"Registrant Contact"
+技术联系人,"Tech Contact"
+域名状态,"Domain Status"
+无状态信息,"No status information"
+快捷操作,"Quick Actions"
+续费域名,"Renew Domain"
+关闭自动续费,"Disable Auto Renew"
+开启,开启
+确定要,"Are you sure you want to"
+自动续费吗？,auto-renewal?
+域名列表,"Domain List"
+选择账户：,"Select Account:"
+转移锁定,"Transfer Lock"
+暂无域名,"No domains yet"
+已锁定,Locked
+未锁定,Unlocked
+首页,"First Page"
+详情,Details
+续费,Renew
+DNS,DNS
+的自动续费吗？,的自动续费吗？
 续费信息,"Renewal Information"
 续费年限,"Renewal Period"
 当前到期年份,"Current Expiry Year"
@@ -188,21 +203,6 @@ DNS,DNS
 确认续费,"Confirm Renewal"
 "确定要续费此域名吗？费用将从您的 AWS 账户扣除。","Are you sure you want to renew this domain? Fees will be charged to your AWS account."
 域名续费请求已提交,域名续费请求已提交
-操作记录,"Operation Log"
-搜索,搜索
-重置,Reset
-操作类型,"Operation Type"
-"AWS 操作ID","AWS Operation ID"
-操作人,Operator
-暂无记录,"No records"
-上一页,Previous
-共,Total
-条记录,records
-操作详情,"Operation Detail"
-操作ID,"Operation ID"
-错误信息,"Error Message"
-请求数据,"Request Data"
-响应数据,"Response Data"
 AWS域名管理,"AWS Domain Management"
 AWS配置,"AWS Configuration"
 "点击测试连接""按钮验证配置是否正确""","Click 'Test Connection' button to verify the configuration"

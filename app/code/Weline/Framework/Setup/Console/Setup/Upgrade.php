@@ -1654,7 +1654,46 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $stageNumber++;
         $this->printing->note($stageNumber . '、提交所有更新阶段（批量执行）...', '系统');
         try {
-            // 第一步：先提交模块安装/升级阶段（可能产生新的模块，需要重新收集任务）
+            // 第一步：先提交 SchemaDiff 等数据库阶段，确保表已创建，再执行模块 Install/Upgrade（种子数据依赖表已存在）
+            if (!$isRouteOnly && $databaseStage !== null) {
+                $frameworkDbBootstrapStage = $stageManager->getStage('framework_db_bootstrap');
+                $moduleManagerBootstrapStage = $stageManager->getStage('module_manager_bootstrap');
+                $needBootstrapTables = $shouldCommitStage(self::STAGE_EAV_SCHEMA) || $shouldCommitStage(self::STAGE_SCHEMA_DIFF) || $shouldCommitStage(self::STAGE_DATABASE_UPDATE);
+                if ($needBootstrapTables && $frameworkDbBootstrapStage && $frameworkDbBootstrapStage->isPrepared() && !$frameworkDbBootstrapStage->isCommitted()) {
+                    $this->printing->note(__('   - 提交 Framework 数据库引导阶段（%{1}）（依赖阶段，先执行）...', [self::STAGE_FRAMEWORK_DB_BOOTSTRAP]));
+                    $frameworkDbBootstrapStage->commit();
+                } elseif ($shouldCommitStage(self::STAGE_FRAMEWORK_DB_BOOTSTRAP) && $frameworkDbBootstrapStage && $frameworkDbBootstrapStage->isPrepared()) {
+                    $this->printing->note(__('   - 提交 Framework 数据库引导阶段（%{1}）...', [self::STAGE_FRAMEWORK_DB_BOOTSTRAP]));
+                    $frameworkDbBootstrapStage->commit();
+                } elseif ($stageFilter !== null && !$shouldCommitStage(self::STAGE_FRAMEWORK_DB_BOOTSTRAP) && !$needBootstrapTables) {
+                    $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_FRAMEWORK_DB_BOOTSTRAP]));
+                }
+                if ($needBootstrapTables && $moduleManagerBootstrapStage && $moduleManagerBootstrapStage->isPrepared() && !$moduleManagerBootstrapStage->isCommitted()) {
+                    $this->printing->note(__('   - 提交 ModuleManager 引导阶段（%{1}）（依赖阶段，先执行）...', [self::STAGE_MODULE_MANAGER_BOOTSTRAP]));
+                    $moduleManagerBootstrapStage->commit();
+                } elseif ($shouldCommitStage(self::STAGE_MODULE_MANAGER_BOOTSTRAP) && $moduleManagerBootstrapStage && $moduleManagerBootstrapStage->isPrepared()) {
+                    $this->printing->note(__('   - 提交 ModuleManager 引导阶段（%{1}）...', [self::STAGE_MODULE_MANAGER_BOOTSTRAP]));
+                    $moduleManagerBootstrapStage->commit();
+                } elseif ($stageFilter !== null && !$shouldCommitStage(self::STAGE_MODULE_MANAGER_BOOTSTRAP)) {
+                    $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_MODULE_MANAGER_BOOTSTRAP]));
+                }
+                $eavSchemaStage = $stageManager->getStage('eav_schema');
+                if ($shouldCommitStage(self::STAGE_EAV_SCHEMA) && $eavSchemaStage && $eavSchemaStage->isPrepared()) {
+                    $this->printing->note(__('   - 提交 EavSchema 阶段（%{1}）...', [self::STAGE_EAV_SCHEMA]));
+                    $eavSchemaStage->commit();
+                } elseif ($stageFilter !== null && !$shouldCommitStage(self::STAGE_EAV_SCHEMA)) {
+                    $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_EAV_SCHEMA]));
+                }
+                $schemaDiffStage = $stageManager->getStage('schema_diff');
+                if ($shouldCommitStage(self::STAGE_SCHEMA_DIFF) && $schemaDiffStage && $schemaDiffStage->isPrepared()) {
+                    $this->printing->note(__('   - 提交 SchemaDiff 阶段（%{1}）（表结构先于 Install 种子数据）...', [self::STAGE_SCHEMA_DIFF]));
+                    $schemaDiffStage->commit();
+                } elseif ($stageFilter !== null && !$shouldCommitStage(self::STAGE_SCHEMA_DIFF)) {
+                    $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_SCHEMA_DIFF]));
+                }
+            }
+
+            // 第二步：提交模块安装/升级阶段（此时表已存在，Install 种子数据可正常写入）
             if ($shouldCommitStage(self::STAGE_MODULE_SETUP)) {
                 $this->printing->note(__('   - 提交模块安装/升级阶段（%{1}）...', [self::STAGE_MODULE_SETUP]));
                 $moduleSetupStage->commit();
@@ -1770,44 +1809,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 }
             }
             
-            // 第二步：先提交 Framework 数据库引导阶段（创建 m_weline_database_migrations 等），再 EavSchema / SchemaDiff / 数据库更新（仅在非仅更新路由模式下执行）
+            // 第三步：提交数据库更新阶段（framework/eav/schema_diff 已在第一步提交）
             if (!$isRouteOnly && $databaseStage !== null) {
-                $frameworkDbBootstrapStage = $stageManager->getStage('framework_db_bootstrap');
-                $moduleManagerBootstrapStage = $stageManager->getStage('module_manager_bootstrap');
-                $needBootstrapTables = $shouldCommitStage(self::STAGE_EAV_SCHEMA) || $shouldCommitStage(self::STAGE_SCHEMA_DIFF) || $shouldCommitStage(self::STAGE_DATABASE_UPDATE);
-                // 若将执行 eav_schema / schema_diff / database_update 任一阶段，必须先提交 framework_db_bootstrap，确保 migrations 等表存在（即使用户仅指定 --stage=schema_diff）
-                if ($needBootstrapTables && $frameworkDbBootstrapStage && $frameworkDbBootstrapStage->isPrepared() && !$frameworkDbBootstrapStage->isCommitted()) {
-                    $this->printing->note(__('   - 提交 Framework 数据库引导阶段（%{1}）（依赖阶段，先执行）...', [self::STAGE_FRAMEWORK_DB_BOOTSTRAP]));
-                    $frameworkDbBootstrapStage->commit();
-                } elseif ($shouldCommitStage(self::STAGE_FRAMEWORK_DB_BOOTSTRAP) && $frameworkDbBootstrapStage && $frameworkDbBootstrapStage->isPrepared()) {
-                    $this->printing->note(__('   - 提交 Framework 数据库引导阶段（%{1}）...', [self::STAGE_FRAMEWORK_DB_BOOTSTRAP]));
-                    $frameworkDbBootstrapStage->commit();
-                } elseif ($stageFilter !== null && !$shouldCommitStage(self::STAGE_FRAMEWORK_DB_BOOTSTRAP) && !$needBootstrapTables) {
-                    $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_FRAMEWORK_DB_BOOTSTRAP]));
-                }
-                if ($needBootstrapTables && $moduleManagerBootstrapStage && $moduleManagerBootstrapStage->isPrepared() && !$moduleManagerBootstrapStage->isCommitted()) {
-                    $this->printing->note(__('   - 提交 ModuleManager 引导阶段（%{1}）（依赖阶段，先执行）...', [self::STAGE_MODULE_MANAGER_BOOTSTRAP]));
-                    $moduleManagerBootstrapStage->commit();
-                } elseif ($shouldCommitStage(self::STAGE_MODULE_MANAGER_BOOTSTRAP) && $moduleManagerBootstrapStage && $moduleManagerBootstrapStage->isPrepared()) {
-                    $this->printing->note(__('   - 提交 ModuleManager 引导阶段（%{1}）...', [self::STAGE_MODULE_MANAGER_BOOTSTRAP]));
-                    $moduleManagerBootstrapStage->commit();
-                } elseif ($stageFilter !== null && !$shouldCommitStage(self::STAGE_MODULE_MANAGER_BOOTSTRAP)) {
-                    $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_MODULE_MANAGER_BOOTSTRAP]));
-                }
-                $eavSchemaStage = $stageManager->getStage('eav_schema');
-                if ($shouldCommitStage(self::STAGE_EAV_SCHEMA) && $eavSchemaStage && $eavSchemaStage->isPrepared()) {
-                    $this->printing->note(__('   - 提交 EavSchema 阶段（%{1}）...', [self::STAGE_EAV_SCHEMA]));
-                    $eavSchemaStage->commit();
-                } elseif ($stageFilter !== null && !$shouldCommitStage(self::STAGE_EAV_SCHEMA)) {
-                    $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_EAV_SCHEMA]));
-                }
-                $schemaDiffStage = $stageManager->getStage('schema_diff');
-                if ($shouldCommitStage(self::STAGE_SCHEMA_DIFF) && $schemaDiffStage && $schemaDiffStage->isPrepared()) {
-                    $this->printing->note(__('   - 提交 SchemaDiff 阶段（%{1}）...', [self::STAGE_SCHEMA_DIFF]));
-                    $schemaDiffStage->commit();
-                } elseif ($stageFilter !== null && !$shouldCommitStage(self::STAGE_SCHEMA_DIFF)) {
-                    $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_SCHEMA_DIFF]));
-                }
                 if ($shouldCommitStage(self::STAGE_DATABASE_UPDATE)) {
                     $this->printing->note(__('   - 提交数据库更新阶段（%{1}）...', [self::STAGE_DATABASE_UPDATE]));
                     $databaseStage->commit();
@@ -1820,7 +1823,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 }
             }
             
-            // 第三步：提交路由更新阶段
+            // 第四步：提交路由更新阶段
             if ($shouldCommitStage(self::STAGE_ROUTE_UPDATE)) {
                 $this->printing->note(__('   - 提交路由更新阶段（%{1}）...', [self::STAGE_ROUTE_UPDATE]));
                 $routeStage->commit();
@@ -1828,7 +1831,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_ROUTE_UPDATE]));
             }
             
-            // 第四步：提交文件更新阶段
+            // 第五步：提交文件更新阶段
             if ($shouldCommitStage(self::STAGE_FILE_UPDATE)) {
                 $this->printing->note(__('   - 提交文件更新阶段（%{1}）...', [self::STAGE_FILE_UPDATE]));
                 $fileStage->commit();

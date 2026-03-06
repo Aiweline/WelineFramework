@@ -18,9 +18,9 @@ use Weline\Framework\Plugin\Cache\PluginCache;
 class Clear implements \Weline\Framework\Console\CommandInterface
 {
     /**
-     * @var CachePoolInterface
+     * @var CachePoolInterface|null 插件缓存池，Di 编译阶段可能尚未就绪而为 null
      */
-    private CachePoolInterface $pluginCache;
+    private ?CachePoolInterface $pluginCache;
 
     /**
      * @var Printing
@@ -28,11 +28,11 @@ class Clear implements \Weline\Framework\Console\CommandInterface
     private Printing $printing;
 
     public function __construct(
-        PluginCache $pluginCache,
-        Printing    $printing
+        ?PluginCache $pluginCache,
+        Printing     $printing
     )
     {
-        $this->pluginCache = $pluginCache->create();
+        $this->pluginCache = $pluginCache !== null ? $pluginCache->create() : null;
         $this->printing    = $printing;
     }
 
@@ -41,8 +41,12 @@ class Clear implements \Weline\Framework\Console\CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
-        $this->pluginCache->clear();
-        $this->printing->success(__('拦截器缓存清理成功！'), '系统');
+        if ($this->pluginCache !== null) {
+            $this->pluginCache->clear();
+            $this->printing->success(__('拦截器缓存清理成功！'), '系统');
+        } else {
+            $this->printing->note(__('插件缓存未就绪，跳过清理。'));
+        }
     }
 
     /**
