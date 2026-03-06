@@ -1,9 +1,9 @@
-库存变更,"Stock Change"
-库存数量变更时触发（增加/减少）。,库存数量变更时触发（增加/减少）。
-低库存警告,"Low Stock Warning"
-库存低于阈值时触发。,库存低于阈值时触发。
-缺货,"Out of Stock"
-产品库存归零时触发。,产品库存归零时触发。
+库存记录不存在！,"Stock record does not exist!"
+库存保存成功！,"Stock saved successfully!"
+库存保存失败！,"Failed to save stock!"
+库存调整成功！,"Stock adjusted successfully!"
+库存调整失败！,"Failed to adjust stock!"
+产品ID无效！,"Invalid product ID!"
 库存源添加成功！,"Source added successfully!"
 库存源添加失败！,"Failed to add source!"
 库存源不存在！,"Source does not exist!"
@@ -12,12 +12,12 @@
 默认库存源不能删除！,"Default source cannot be deleted!"
 库存源删除成功！,"Source deleted successfully!"
 库存源删除失败！,"Failed to delete source!"
-库存记录不存在！,"Stock record does not exist!"
-库存保存成功！,"Stock saved successfully!"
-库存保存失败！,"Failed to save stock!"
-库存调整成功！,"Stock adjusted successfully!"
-库存调整失败！,"Failed to adjust stock!"
-产品ID无效！,"Invalid product ID!"
+库存变更,"Stock Change"
+库存数量变更时触发（增加/减少）。,库存数量变更时触发（增加/减少）。
+低库存警告,"Low Stock Warning"
+库存低于阈值时触发。,库存低于阈值时触发。
+缺货,"Out of Stock"
+产品库存归零时触发。,产品库存归零时触发。
 库存管理,"Inventory Management"
 库存源管理,"Source Management"
 产品库存,"Product Stock"

@@ -3,6 +3,13 @@
 编辑成功！,编辑成功！
 你删除的资源不存在！,你删除的资源不存在！
 删除成功！,删除成功！
+Aliyun,Aliyun
+Ddns,Ddns
+配置,配置
+阿里云账号授权信息,阿里云账号授权信息
+填写来自阿里云账号的授权信息：accessKeyId和accessSecret。,填写来自阿里云账号的授权信息：accessKeyId和accessSecret。
+填写正确！,填写正确！
+保存,保存
 阿里云>动态域名解析,阿里云>动态域名解析
 阿里云,阿里云
 Ddns域名列表,Ddns域名列表
@@ -28,13 +35,6 @@ ipv6,ipv6
 创建时间,创建时间
 更新时间,更新时间
 操作,操作
-Aliyun,Aliyun
-Ddns,Ddns
-配置,配置
-阿里云账号授权信息,阿里云账号授权信息
-填写来自阿里云账号的授权信息：accessKeyId和accessSecret。,填写来自阿里云账号的授权信息：accessKeyId和accessSecret。
-填写正确！,填写正确！
-保存,保存
 Aliyun动态域名解析,Aliyun动态域名解析
 属性配置项弹窗,属性配置项弹窗
 保存更改,保存更改
