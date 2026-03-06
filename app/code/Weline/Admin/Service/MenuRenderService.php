@@ -11,9 +11,11 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Service;
 
+use Weline\Acl\Model\Role;
 use Weline\Admin\Model\MenuAccessLog;
 use Weline\Backend\Model\BackendUser;
 use Weline\Backend\Model\Menu;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Http\Request;
@@ -131,7 +133,15 @@ class MenuRenderService
             return [];
         }
 
-        $role = $user->getRoleModel();
+        // WLS 兼容：按当前用户的 role_id 重新加载 Role，避免 ObjectManager 复用导致菜单权限不全（如 demo 账户）
+        $roleId = (int) ($user->getRole()->getRoleId() ?: 0);
+        if ($roleId <= 0) {
+            return [];
+        }
+        $role = ObjectManager::getInstance(Role::class, [], false)->load($roleId);
+        if (!$role->getId()) {
+            return [];
+        }
         return $this->menuModel->getMenuTreeByRole($role);
     }
 

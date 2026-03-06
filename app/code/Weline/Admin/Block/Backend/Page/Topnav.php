@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Block\Backend\Page;
 
+use Weline\Acl\Model\Role;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Manager\ObjectManager;
@@ -60,10 +61,15 @@ class Topnav extends \Weline\Framework\View\Block
         $session = SessionFactory::getInstance()->createBackendSession();
         /**@var \Weline\Backend\Model\BackendUser $user */
         $user = $session->getLoginUser();
-        if ($user) {
-            $role = $user->getRoleModel();
-            // 使用 getMenuTreeByRole 方法获取菜单树
-            $menus = $this->menu->getMenuTreeByRole($role);
+        if ($user && $user->getId()) {
+            // WLS 兼容：按当前用户的 role_id 重新加载 Role，避免菜单权限不全
+            $roleId = (int) ($user->getRole()->getRoleId() ?: 0);
+            if ($roleId > 0) {
+                $role = ObjectManager::getInstance(Role::class, [], false)->load($roleId);
+                $menus = $role->getId() ? $this->menu->getMenuTreeByRole($role) : [];
+            } else {
+                $menus = [];
+            }
         } else {
             $menus = [];
         }
