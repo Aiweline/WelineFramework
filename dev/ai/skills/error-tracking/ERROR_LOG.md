@@ -4,6 +4,51 @@
 
 ---
 
+## [2026-03-07] 未定义 ACL 的后台路由被误当成受控资源拦截 ✅ 已修复
+
+**错误类型**: ACL 权限判定 / 后台路由访问控制
+
+**错误信息**:
+```text
+后台请求：
+http://test.aiweline.com/admin_696f02955db39/CNY/zh_Hans_CN/system/theme-config/set
+
+需求：不在权限内的，都属于白色 ACL，不用权限管理，谁都可访问。
+实际：未在 ACL 中定义的路由仍被 RouteBefore + AclService 拦截。
+```
+
+**根本原因**:
+1. `Weline\Acl\Observer\RouteBefore` 只检查显式白名单表 `WhiteAclSource`，未判断“当前路由是否根本没有 ACL 定义”。
+2. `Weline\Acl\Service\AclService::isRouteAllowed()` 默认把“角色 ACL 中没有匹配 route”视为拒绝，但没有先区分“该 route 是否属于 ACL 管控范围”。
+3. 结果是未配置 `#[Acl]` / 未收集到 `weline_acl` 的后台路由，也被误判成需要权限控制。
+
+**解决方案**:
+1. 在 `AclServiceInterface` 新增 `isRouteProtected()`，专门判断某个 route 是否在 `weline_acl` 中有定义。
+2. 在 `AclService::isRouteAllowed()` 中增加短路逻辑：未定义 ACL 的 route 直接返回允许，视为白色 ACL。
+3. 在 `RouteBefore::validateBackendAccess()` 中前移白色 ACL 判断：若当前后台路由未定义 ACL，则直接放行，不再做登录/角色/权限校验。
+
+**验证方法**:
+```bash
+php -l "E:/WelineFramework/DEV-workspace/app/code/Weline/Acl/Service/AclServiceInterface.php"
+php -l "E:/WelineFramework/DEV-workspace/app/code/Weline/Acl/Service/AclService.php"
+php -l "E:/WelineFramework/DEV-workspace/app/code/Weline/Acl/Observer/RouteBefore.php"
+ReadLints(paths=[AclServiceInterface.php, AclService.php, RouteBefore.php])
+```
+
+**验证结果**: ✅ 成功（3 个目标文件语法检查通过；本次修改未引入新的目标文件 lint 错误）
+
+**预防措施**:
+1. ACL 判定必须先区分“路由是否受 ACL 管控”，不能把“未定义 route”直接当成“无权限”。
+2. 白名单语义应覆盖两类场景：显式白名单表，以及 `weline_acl` 中根本不存在定义的 route。
+3. 修改后台 ACL 拦截逻辑时，优先确认是“受控资源判定错误”还是“角色权限不足”，避免把未受控页面误拦截。
+
+**相关文件**:
+- `app/code/Weline/Acl/Service/AclServiceInterface.php`
+- `app/code/Weline/Acl/Service/AclService.php`
+- `app/code/Weline/Acl/Observer/RouteBefore.php`
+
+---
+
 ## [2026-02-25] WLS 模式下语言/货币在请求间不稳定 ✅ 已修复
 
 **错误类型**: WLS 状态泄漏 / 空字符串 vs unset

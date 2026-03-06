@@ -159,6 +159,13 @@ __('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count]
 | `SQLSTATE[23505]: Unique violation` on save() | 同理，查不到已有记录导致 INSERT 冲突 | 同上 |
 | `clone + load() + save()` 偶发插入而非更新 | query 对象共享状态 | 同上；或业务层在 save() 前手动 `$model->getQuery()->clearQuery()` |
 
+### ACL 未定义路由被误拦截
+
+| 症状 | 原因 | 解决方案 |
+|---|---|---|
+| 后台某个未配置 `#[Acl]` 的路由也被权限系统拦截 | ACL 判定逻辑只看“角色是否命中 route”，没有先判断“该 route 是否存在 ACL 定义” | 先查 `weline_acl.route` 是否存在该 route；不存在则按白色 ACL 放行 |
+| 需求是“不在权限内的都属于白色 ACL”，但仍要求登录/角色 | `RouteBefore` 仅检查显式白名单表 `WhiteAclSource`，没有把“未定义 ACL 的 route”视为白名单 | 在拦截前增加 `isRouteProtected()` 判定，未定义 ACL 的 route 直接 return |
+
 ### WLS 状态泄漏
 
 | 错误 | 原因 | 解决方案 |

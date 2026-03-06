@@ -30,6 +30,16 @@ interface AclServiceInterface
     public function isRouteAllowed(int $roleId, string $routePath, string $httpMethod): bool;
 
     /**
+     * 判断给定路由是否存在 ACL 定义。
+     *
+     * 不存在 ACL 定义的路由视为“白色 ACL”，不参与权限控制。
+     *
+     * @param string $routePath 规范化后的路由路径（不含前后斜杠）
+     * @return bool
+     */
+    public function isRouteProtected(string $routePath): bool;
+
+    /**
      * 角色是否至少拥有一条 ACL 记录（真正意义上的“有/无权限”粗判）。
      *
      * @param int $roleId
