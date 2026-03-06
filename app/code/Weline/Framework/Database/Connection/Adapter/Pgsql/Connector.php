@@ -91,7 +91,7 @@ final class Connector extends Query implements ConnectorInterface
             if (PHP_OS_FAMILY === 'Windows') {
                 $installHint = ' ' . __('Windows: Ensure php_pdo_pgsql.dll and php_pgsql.dll are enabled in php.ini.');
             } elseif (PHP_OS_FAMILY === 'Linux') {
-                $installHint = ' ' . __('Linux: Run "apt-get install php-pgsql" or "yum install php-pgsql" to install the extension, then restart PHP-FPM/Apache.');
+                $installHint = ' ' . __('Linux: Run "php bin/w env:install" (will prompt for sudo), or manually: "apt-get install php-pgsql" / "yum install php-pgsql". Then restart WLS/PHP-FPM/Apache.');
             }
             throw new LinkException(__('PostgreSQL 驱动不存在：%{1}。可用驱动列表：%{2}。%{3}更多驱动配置请转到 php.ini 中开启。', [$db_type, $availableDrivers, $installHint]));
         }
