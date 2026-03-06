@@ -283,7 +283,11 @@ class Menu extends Model
     {
         /**@var RoleAccess $roleSourceModel */
         $roleSourceModel = ObjectManager::getInstance(RoleAccess::class);
-        $roleAccess = $roleSourceModel->where(RoleAccess::schema_fields_ROLE_ID, $role->getId(0))->select()->fetchArray();
+        // WLS 兼容：清除上一请求的查询状态，避免 role_id 混用导致菜单/权限不全（如 demo 账户只显示部分菜单）
+        $roleAccess = $roleSourceModel->clear()
+            ->where(RoleAccess::schema_fields_ROLE_ID, $role->getId(0))
+            ->select()
+            ->fetchArray();
         $roleAccessSources = [];
         foreach ($roleAccess as $roleAccess) {
             $roleAccessSources[] = $roleAccess[RoleAccess::schema_fields_SOURCE_ID];
