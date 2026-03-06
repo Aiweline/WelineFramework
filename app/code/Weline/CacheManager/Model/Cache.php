@@ -18,6 +18,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 class Cache extends Model
 {
     public const schema_fields_ID          = 'id';
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: '适配器类名或名称')]
     public const schema_fields_NAME        = 'name';
     #[Col(type: 'int', nullable: false, default: 0, comment: '状态')]
     public const schema_fields_Status      = 'status';
