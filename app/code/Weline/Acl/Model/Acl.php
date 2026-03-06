@@ -171,6 +171,11 @@ class Acl extends \Weline\Framework\Database\Model
         return intval($this->getData(self::schema_fields_ACL_ID));
     }
 
+    public function getSourceId(): string
+    {
+        return (string) ($this->getData(self::schema_fields_SOURCE_ID) ?? '');
+    }
+
     public function getSourceName(): string
     {
         return $this->getData(self::schema_fields_SOURCE_NAME);
