@@ -11,34 +11,6 @@ URL别名已存在，请更换一个,"URL slug already exists"
 该分类下还有子分类，无法删除,"Cannot delete category with subcategories"
 该分类下还有文章，无法删除,"Cannot delete category with posts"
 分类已删除,"Category deleted successfully"
-关键词画像,"Keyword Profiles"
-新建关键词画像,新建关键词画像
-新建,新建
-画像名称不能为空,"Profile name is required"
-画像已创建,"Profile created"
-画像不存在,"Profile not found"
-编辑关键词画像,编辑关键词画像
-编辑,编辑
-画像已保存,"Profile saved"
-画像已删除,"Profile deleted"
-该画像暂无关键词,该画像暂无关键词
-趋势词分析,"Trend Keywords"
-请选择画像,请选择画像
-"Trends 配置","Trends Config"
-无效的请求方法,无效的请求方法
-保存成功,保存成功
-保存失败：%{1},保存失败：%{1}
-站点发文配额,"Site Publish Quota"
-新建站点发文配额,新建站点发文配额
-请选择站点和画像,"Please select site and profile"
-该站点+画像的配额已存在,"Quota for this site+profile already exists"
-配额已创建,"Quota created"
-配额不存在,"Quota not found"
-编辑站点发文配额,编辑站点发文配额
-配额已保存,"Quota saved"
-所选分类不存在,"Selected category not found"
-所选分类必须属于该站点,"Selected category must belong to this site"
-配额已删除,"Quota deleted"
 内容管理,内容管理
 趋势增长词模式,"Trend Growth Mode"
 画像关键词兜底模式,"Profile Keyword Fallback Mode"
@@ -61,167 +33,118 @@ URL别名已存在，请更换一个,"URL slug already exists"
 已标记为未使用,"Marked as unused"
 日志已删除,"Log deleted"
 "已清理 %{days} 天前的旧日志","Cleared logs older than %{days} days"
-返回列表,"Back to List"
-发布时间：,"Published At:"
-摘要：,Summary:
-返回博客列表,"Back to Blog List"
-博客,Blog
-暂时还没有博客文章，稍后再来看看吧～,"No blog posts yet"
-阅读更多,"Read More"
-上一页,"Previous Page"
-下一页,"Next Page"
-该分类下还没有文章，请稍后再来查看。,"No posts in this category yet."
-阅读,Views
-博客分类,"Blog Categories"
-最近文章,"Recent Posts"
-画像,画像
-刷新,Refresh
-"Top 10 趋势词","Top 10 Trend Keywords"
-排名,Rank
-关键词,关键词
-趋势值,Value
-日期,Date
-地区,Region
-"暂无趋势数据，请确认已配置 SerpApi API Key 并选择画像。","No trend data; please set SerpApi API Key and select a profile."
-前往配置,"Go to Config"
-"获取 API Key","Get API Key"
-请选择画像后点击刷新。,"Select a profile and click Refresh."
-分类列表,"Category List"
+画像不存在,"Profile not found"
+该画像暂无关键词,该画像暂无关键词
+趋势词分析,"Trend Keywords"
+请选择画像,请选择画像
+关键词画像,"Keyword Profiles"
+新建关键词画像,新建关键词画像
+新建,新建
+画像名称不能为空,"Profile name is required"
+画像已创建,"Profile created"
+编辑关键词画像,编辑关键词画像
+编辑,编辑
+画像已保存,"Profile saved"
+画像已删除,"Profile deleted"
+"Trends 配置","Trends Config"
+无效的请求方法,无效的请求方法
+保存成功,保存成功
+保存失败：%{1},保存失败：%{1}
+站点发文配额,"Site Publish Quota"
+新建站点发文配额,新建站点发文配额
+请选择站点和画像,"Please select site and profile"
+该站点+画像的配额已存在,"Quota for this site+profile already exists"
+配额已创建,"Quota created"
+配额不存在,"Quota not found"
+编辑站点发文配额,编辑站点发文配额
+配额已保存,"Quota saved"
+所选分类不存在,"Selected category not found"
+所选分类必须属于该站点,"Selected category must belong to this site"
+配额已删除,"Quota deleted"
+"Blog AI 自动发文","Blog AI Auto Publish"
+"按站点+画像配额，从增长词记录中取词，调用 AI 生成标题+摘要+正文并写入博客（草稿或直接发布）","按站点+画像配额，从增长词记录中取词，调用 AI 生成标题+摘要+正文并写入博客（草稿或直接发布）"
+当前模式：%{mode}，待处理配额：%{count},"Current mode: %{mode}, quotas to process: %{count}"
+"Blog AI 发文失败（关键词 %{keyword}，log_id %{log_id}）：%{error}","Blog AI publish failed (keyword %{keyword}, log_id %{log_id}): %{error}"
+"自动发文完成：本次发布 %{count} 篇","Auto publish done: %{count} posts published"
+可能原因：,可能原因：
+请先在「趋势站点配额」中配置：站点、画像、每日篇数、默认分类。,请先在「趋势站点配额」中配置：站点、画像、每日篇数、默认分类。
+配额未设置默认分类,配额未设置默认分类
+默认分类不存在或不属于该站点,默认分类不存在或不属于该站点
+今日该配额已发满，明日再试,今日该配额已发满，明日再试
+当前无未使用的增长词，请先运行「趋势同步」或明日再试,当前无未使用的增长词，请先运行「趋势同步」或明日再试
+请启用画像,请启用画像
+请在该画像中配置关键词,请在该画像中配置关键词
+"请检查 AI 服务配置或稍后重试。","请检查 AI 服务配置或稍后重试。"
+场景适配器,场景适配器
+配置默认模型,配置默认模型
+模型列表,模型列表
+供应商账户,供应商账户
+"未配置 AI 默认模型（可在「场景适配器」中为文章生成适配器设置默认模型，或在「默认模型配置」中配置）","AI default model not configured (set in Scenario Adapters for article generation, or in Default Model config)"
+"AI 模型配置检查失败：%{1}","AI 模型配置检查失败：%{1}"
+文章生成失败,文章生成失败
+"Blog 趋势同步","Blog Trend Sync"
+每日拉取各画像关键词趋势，计算日/周环比，将满足阈值的增长词写入记录表,每日拉取各画像关键词趋势，计算日/周环比，将满足阈值的增长词写入记录表
+未配置趋势数据源，已跳过,未配置趋势数据源，已跳过
+没有启用的画像,没有启用的画像
+"趋势同步完成：写入 %{count} 条增长词记录","Trend sync done: %{count} growth records written"
+"Blog 查询器不支持的操作：%{1}","Blog 查询器不支持的操作：%{1}"
+博客查询,博客查询
+提供博客文章与分类查询能力,提供博客文章与分类查询能力
+获取分类列表,获取分类列表
+"根据 slug 获取分类","根据 slug 获取分类"
+"根据 slug 获取文章","根据 slug 获取文章"
+获取文章列表（分页）,获取文章列表（分页）
+获取相关文章,获取相关文章
+获取最近文章,获取最近文章
+增加文章浏览量,增加文章浏览量
+获取带标签的文章（用于标签云）,获取带标签的文章（用于标签云）
+启用,Enabled
+禁用,Disabled
+已发布,Published
+草稿,Draft
+"请先在 Trends 配置中填写 SerpApi API Key","Please set SerpApi API Key in Trends Config"
+"Google Trends SerpApi 错误：%{error}","Google Trends SerpApi error: %{error}"
+"请先在 Trends 配置中填写 Service Account JSON","Please set Service Account JSON in Trends Config"
+"Google Trends 请求失败（已重试）：%{url}","Google Trends request failed (retried): %{url}"
 分类名称,"Category Name"
 URL别名,"URL Slug"
-文章数,"Post Count"
-排序,"Sort Order"
-状态,Status
-操作,Actions
-禁用,Disabled
-取消,取消
-确定,确定
-博客分类管理,博客分类管理
-首页,Homepage
-搜索分类...,"Search categories..."
-暂无分类，请点击右上角按钮创建,"No categories yet"
-启用,Enabled
-删除,删除
-确定要删除这个分类吗？,"Are you sure you want to delete this category?"
 只能包含小写字母、数字和连字符,只能包含小写字母、数字和连字符
 所属站点,所属站点
 请选择,请选择
+请选择所属站点,请选择所属站点
 父级分类,"Parent Category"
 无（顶级分类）,"None (Top Level)"
+排序,"Sort Order"
 数字越小越靠前,"Smaller number appears first"
+状态,Status
 分类描述,"Category Description"
 SEO设置,"SEO Settings"
 SEO标题,"SEO Title"
 留空则使用分类名称,"Leave empty to use category name"
 SEO描述,"SEO Description"
 SEO关键词,"SEO Keywords"
+返回列表,"Back to List"
+帮助说明,Help
+分类用于对博客文章进行归类整理。,"Categories are used to organize blog posts."
+URL别名将用于生成分类页面的访问地址。,"URL slug will be used to generate category page URL."
+排序数字越小，分类在列表中显示越靠前。,"Smaller sort order number appears first."
+首页,Homepage
+博客分类,"Blog Categories"
 封面图片,封面图片
 点击上方按钮选择或上传封面图片,点击上方按钮选择或上传封面图片
 "关键词1, 关键词2, 关键词3","关键词1, 关键词2, 关键词3"
 保存分类,"Save Category"
 创建分类,创建分类
-请选择所属站点,请选择所属站点
-帮助说明,Help
-分类用于对博客文章进行归类整理。,"Categories are used to organize blog posts."
-URL别名将用于生成分类页面的访问地址。,"URL slug will be used to generate category page URL."
-排序数字越小，分类在列表中显示越靠前。,"Smaller sort order number appears first."
-画像列表,"Profile List"
-搜索画像...,"Search profiles..."
-暂无画像，请点击右上角新建,"No profiles yet"
-画像名称,"Profile Name"
-确定要删除该画像吗？,"Delete this profile?"
-例如：棋牌,例如：棋牌
-"多个关键词用英文逗号分隔，如：棋牌, 赌博, 博彩","多个关键词用英文逗号分隔，如：棋牌, 赌博, 博彩"
-保存,保存
-创建,创建
-日志列表,"Log List"
-清理旧日志,"Clear Old Logs"
-暂无增长词日志,"No trending keyword logs"
-对比值,"Compare Value"
-增长率,增长率
-类型,Type
-趋势日期,"Trend Date"
-日环比,Day-over-Day
-周环比,Week-over-Week
-已使用,Used
-未使用,Unused
-全部画像,"All Profiles"
-全部状态,"All Status"
-搜索关键词...,"Search keywords..."
-确定要清理30天前的已使用日志吗？,"Are you sure to clear used logs older than 30 days?"
-标记为未使用,标记为未使用
-标记为已使用,标记为已使用
-确定要删除该日志吗？,"Are you sure to delete this log?"
-配额列表,"Quota List"
-暂无配额，请点击右上角新建,"No quotas yet"
-每日篇数,"Posts per day"
-默认分类,"Default Category"
-未设置,未设置
-确定要删除该配额吗？,"Delete this quota?"
-站点,Site
-每日发文篇数,"Articles per day"
-该站点下的博客分类，用于自动发文归属；未设置则跳过该绑定。,"Blog categories for this site; skip if not set."
-请确保所配置的关键词与自动生成的内容符合您所在地区法律法规及平台政策，并自行承担相关责任。,"Ensure keywords and generated content comply with local laws and platform policies."
-数据源,"Data Source"
-无（不拉取趋势）,"None (no trend fetching)"
-"官方 API（Service Account）","Official API (Service Account)"
-"SerpApi API Key","SerpApi API Key"
-"在 SerpApi 注册并获取 API Key，用于拉取 Google Trends 数据。","Register at SerpApi and get API Key for fetching Google Trends data."
-配置说明,"Setup Guide"
-"1. 访问","1. Visit"
-"注册账号（有免费额度 250次/月）；","to register (free tier: 250 searches/month);"
-"2. 在 Dashboard 中创建 API Key；","2. Create API Key in Dashboard;"
-"3. 将 API Key 粘贴到上方输入框并保存。","3. Paste API Key above and save."
-"Service Account JSON","Service Account JSON"
-"从 Google Cloud 控制台创建服务账号并下载 JSON 密钥，将完整内容粘贴到此处。","Create service account in Google Cloud Console, download JSON key, paste full content here."
-"1. 打开 Google Cloud Console，创建或选择项目；","1. Open Google Cloud Console, create or select project;"
-"2. 启用 Google Trends API（若可用）；","2. Enable Google Trends API if available;"
-"3. 创建服务账号，下载 JSON 密钥文件；","3. Create service account and download JSON key;"
-"4. 将 JSON 文件内容完整粘贴到上方文本框。","4. Paste full JSON content in the text box above."
-增长趋势判定,"Growth Trend Rule"
-比较基准,"Comparison Base"
-仅日环比,"Day over day only"
-仅周环比,"Week over week only"
-两者都算,Both
-增长率阈值（%）,"Growth threshold (%)"
-"仅当增长率大于此值时记录为“有增长”，0 表示大于昨日/上周即记录。","Record as growth only when rate exceeds this value; 0 means any increase."
-地区与语言,地区与语言
-趋势地区,"Trend Region"
-默认语言,"Default Language"
-自动发文,"Auto Publish"
-自动生成的文章先存为草稿（需人工审核后发布）,"Save auto-generated posts as draft for review"
-保存配置,"Save Config"
-保存失败，请重试,"Save failed, please retry"
-博客文章列表,"Blog Posts List"
-生成SEO文章,"Generate SEO Articles"
-标题,标题
-发布时间,"Published At"
-创建时间,"Created At"
-已发布,Published
-草稿,Draft
-发布,Publish
-"AI 生成 SEO 文章","AI 生成 SEO 文章"
-关闭,关闭
-博客文章管理,博客文章管理
-博客文章,"Blog Post"
-当前模式：%{mode},"Current mode: %{mode}"
-按标题或URL别名搜索,"Search by title or URL slug"
-搜索,Search
-当前还没有博客文章，请点击右上角“新建博客”创建。,当前还没有博客文章，请点击右上角“新建博客”创建。
-确定要审批并发布该文章吗？,"Are you sure you want to approve and publish this article?"
-审批发布,"Approve & Publish"
-编辑文章,编辑文章
-确定要删除该博客文章吗？,"Are you sure you want to delete this blog post?"
-删除文章,删除文章
-"共 %{total} 条记录，第 %{page}/%{pages} 页","共 %{total} 条记录，第 %{page}/%{pages} 页"
-确定发布,"Confirm Publish"
-任务正在执行中，确定要关闭吗？,任务正在执行中，确定要关闭吗？
-生成中...,Generating...
-成功生成,成功生成
-篇文章，即将刷新页面...,篇文章，即将刷新页面...
-未生成文章，请检查配额与关键词配置。,未生成文章，请检查配额与关键词配置。
-执行完成,执行完成
-连接失败或执行出错，请查看下方终端输出。,"Connection failed or execution error. Check the terminal output below."
+分类列表,"Category List"
+文章数,"Post Count"
+操作,Actions
+取消,取消
+确定,确定
+博客分类管理,博客分类管理
+搜索分类...,"Search categories..."
+暂无分类，请点击右上角按钮创建,"No categories yet"
+删除,删除
+确定要删除这个分类吗？,"Are you sure you want to delete this category?"
 博客表单,博客表单
 基本信息,基本信息
 文章标题,"Post Title"
@@ -236,6 +159,7 @@ URL别名将用于生成分类页面的访问地址。,"URL slug will be used to
 支持富文本编辑，所见即所得，支持Markdown语法,支持富文本编辑，所见即所得，支持Markdown语法
 发布设置,"Publish Settings"
 新建站点,新建站点
+发布时间,"Published At"
 留空则使用当前时间,留空则使用当前时间
 设为精选文章,"Set as Featured"
 精选文章会在首页或列表顶部展示,"Featured posts will be shown at the top"
@@ -270,47 +194,123 @@ URL别名将用于生成分类页面的访问地址。,"URL slug will be used to
 站点创建成功,站点创建成功
 保存失败,保存失败
 网络错误，请重试,网络错误，请重试
-"Blog AI 自动发文","Blog AI Auto Publish"
-"按站点+画像配额，从增长词记录中取词，调用 AI 生成标题+摘要+正文并写入博客（草稿或直接发布）","按站点+画像配额，从增长词记录中取词，调用 AI 生成标题+摘要+正文并写入博客（草稿或直接发布）"
-当前模式：%{mode}，待处理配额：%{count},"Current mode: %{mode}, quotas to process: %{count}"
-"Blog AI 发文失败（关键词 %{keyword}，log_id %{log_id}）：%{error}","Blog AI publish failed (keyword %{keyword}, log_id %{log_id}): %{error}"
-"自动发文完成：本次发布 %{count} 篇","Auto publish done: %{count} posts published"
-可能原因：,可能原因：
-请先在「趋势站点配额」中配置：站点、画像、每日篇数、默认分类。,请先在「趋势站点配额」中配置：站点、画像、每日篇数、默认分类。
-配额未设置默认分类,配额未设置默认分类
-默认分类不存在或不属于该站点,默认分类不存在或不属于该站点
-今日该配额已发满，明日再试,今日该配额已发满，明日再试
-当前无未使用的增长词，请先运行「趋势同步」或明日再试,当前无未使用的增长词，请先运行「趋势同步」或明日再试
-请启用画像,请启用画像
-请在该画像中配置关键词,请在该画像中配置关键词
-"请检查 AI 服务配置或稍后重试。","请检查 AI 服务配置或稍后重试。"
-场景适配器,场景适配器
-配置默认模型,配置默认模型
-模型列表,模型列表
-供应商账户,供应商账户
-"未配置 AI 默认模型（可在「场景适配器」中为文章生成适配器设置默认模型，或在「默认模型配置」中配置）","AI default model not configured (set in Scenario Adapters for article generation, or in Default Model config)"
-"AI 模型配置检查失败：%{1}","AI 模型配置检查失败：%{1}"
-文章生成失败,文章生成失败
-"Blog 趋势同步","Blog Trend Sync"
-每日拉取各画像关键词趋势，计算日/周环比，将满足阈值的增长词写入记录表,每日拉取各画像关键词趋势，计算日/周环比，将满足阈值的增长词写入记录表
-未配置趋势数据源，已跳过,未配置趋势数据源，已跳过
-没有启用的画像,没有启用的画像
-"趋势同步完成：写入 %{count} 条增长词记录","Trend sync done: %{count} growth records written"
-"请先在 Trends 配置中填写 SerpApi API Key","Please set SerpApi API Key in Trends Config"
-"Google Trends SerpApi 错误：%{error}","Google Trends SerpApi error: %{error}"
-"请先在 Trends 配置中填写 Service Account JSON","Please set Service Account JSON in Trends Config"
-"Google Trends 请求失败（已重试）：%{url}","Google Trends request failed (retried): %{url}"
-"Blog 查询器不支持的操作：%{1}","Blog 查询器不支持的操作：%{1}"
-博客查询,博客查询
-提供博客文章与分类查询能力,提供博客文章与分类查询能力
-获取分类列表,获取分类列表
-"根据 slug 获取分类","根据 slug 获取分类"
-"根据 slug 获取文章","根据 slug 获取文章"
-获取文章列表（分页）,获取文章列表（分页）
-获取相关文章,获取相关文章
-获取最近文章,获取最近文章
-增加文章浏览量,增加文章浏览量
-获取带标签的文章（用于标签云）,获取带标签的文章（用于标签云）
+博客文章列表,"Blog Posts List"
+生成SEO文章,"Generate SEO Articles"
+标题,标题
+创建时间,"Created At"
+发布,Publish
+"AI 生成 SEO 文章","AI 生成 SEO 文章"
+关闭,关闭
+博客文章管理,博客文章管理
+博客文章,"Blog Post"
+当前模式：%{mode},"Current mode: %{mode}"
+按标题或URL别名搜索,"Search by title or URL slug"
+搜索,Search
+当前还没有博客文章，请点击右上角“新建博客”创建。,当前还没有博客文章，请点击右上角“新建博客”创建。
+确定要审批并发布该文章吗？,"Are you sure you want to approve and publish this article?"
+审批发布,"Approve & Publish"
+编辑文章,编辑文章
+确定要删除该博客文章吗？,"Are you sure you want to delete this blog post?"
+删除文章,删除文章
+"共 %{total} 条记录，第 %{page}/%{pages} 页","共 %{total} 条记录，第 %{page}/%{pages} 页"
+确定发布,"Confirm Publish"
+任务正在执行中，确定要关闭吗？,任务正在执行中，确定要关闭吗？
+生成中...,Generating...
+成功生成,成功生成
+篇文章，即将刷新页面...,篇文章，即将刷新页面...
+未生成文章，请检查配额与关键词配置。,未生成文章，请检查配额与关键词配置。
+执行完成,执行完成
+连接失败或执行出错，请查看下方终端输出。,"Connection failed or execution error. Check the terminal output below."
+日志列表,"Log List"
+清理旧日志,"Clear Old Logs"
+暂无增长词日志,"No trending keyword logs"
+画像,画像
+关键词,关键词
+趋势值,Value
+对比值,"Compare Value"
+增长率,增长率
+类型,Type
+趋势日期,"Trend Date"
+日环比,Day-over-Day
+周环比,Week-over-Week
+已使用,Used
+未使用,Unused
+全部画像,"All Profiles"
+全部状态,"All Status"
+搜索关键词...,"Search keywords..."
+确定要清理30天前的已使用日志吗？,"Are you sure to clear used logs older than 30 days?"
+标记为未使用,标记为未使用
+标记为已使用,标记为已使用
+确定要删除该日志吗？,"Are you sure to delete this log?"
+刷新,Refresh
+"Top 10 趋势词","Top 10 Trend Keywords"
+排名,Rank
+日期,Date
+地区,Region
+"暂无趋势数据，请确认已配置 SerpApi API Key 并选择画像。","No trend data; please set SerpApi API Key and select a profile."
+前往配置,"Go to Config"
+"获取 API Key","Get API Key"
+请选择画像后点击刷新。,"Select a profile and click Refresh."
+画像名称,"Profile Name"
+例如：棋牌,例如：棋牌
+"多个关键词用英文逗号分隔，如：棋牌, 赌博, 博彩","多个关键词用英文逗号分隔，如：棋牌, 赌博, 博彩"
+保存,保存
+创建,创建
+画像列表,"Profile List"
+搜索画像...,"Search profiles..."
+暂无画像，请点击右上角新建,"No profiles yet"
+确定要删除该画像吗？,"Delete this profile?"
+请确保所配置的关键词与自动生成的内容符合您所在地区法律法规及平台政策，并自行承担相关责任。,"Ensure keywords and generated content comply with local laws and platform policies."
+数据源,"Data Source"
+无（不拉取趋势）,"None (no trend fetching)"
+"官方 API（Service Account）","Official API (Service Account)"
+"SerpApi API Key","SerpApi API Key"
+"在 SerpApi 注册并获取 API Key，用于拉取 Google Trends 数据。","Register at SerpApi and get API Key for fetching Google Trends data."
+配置说明,"Setup Guide"
+"1. 访问","1. Visit"
+"注册账号（有免费额度 250次/月）；","to register (free tier: 250 searches/month);"
+"2. 在 Dashboard 中创建 API Key；","2. Create API Key in Dashboard;"
+"3. 将 API Key 粘贴到上方输入框并保存。","3. Paste API Key above and save."
+"Service Account JSON","Service Account JSON"
+"从 Google Cloud 控制台创建服务账号并下载 JSON 密钥，将完整内容粘贴到此处。","Create service account in Google Cloud Console, download JSON key, paste full content here."
+"1. 打开 Google Cloud Console，创建或选择项目；","1. Open Google Cloud Console, create or select project;"
+"2. 启用 Google Trends API（若可用）；","2. Enable Google Trends API if available;"
+"3. 创建服务账号，下载 JSON 密钥文件；","3. Create service account and download JSON key;"
+"4. 将 JSON 文件内容完整粘贴到上方文本框。","4. Paste full JSON content in the text box above."
+增长趋势判定,"Growth Trend Rule"
+比较基准,"Comparison Base"
+仅日环比,"Day over day only"
+仅周环比,"Week over week only"
+两者都算,Both
+增长率阈值（%）,"Growth threshold (%)"
+"仅当增长率大于此值时记录为“有增长”，0 表示大于昨日/上周即记录。","Record as growth only when rate exceeds this value; 0 means any increase."
+地区与语言,地区与语言
+趋势地区,"Trend Region"
+默认语言,"Default Language"
+自动发文,"Auto Publish"
+自动生成的文章先存为草稿（需人工审核后发布）,"Save auto-generated posts as draft for review"
+保存配置,"Save Config"
+保存失败，请重试,"Save failed, please retry"
+站点,Site
+每日发文篇数,"Articles per day"
+默认分类,"Default Category"
+未设置,未设置
+该站点下的博客分类，用于自动发文归属；未设置则跳过该绑定。,"Blog categories for this site; skip if not set."
+配额列表,"Quota List"
+暂无配额，请点击右上角新建,"No quotas yet"
+每日篇数,"Posts per day"
+确定要删除该配额吗？,"Delete this quota?"
+博客,Blog
+该分类下还没有文章，请稍后再来查看。,"No posts in this category yet."
+阅读,Views
+上一页,"Previous Page"
+下一页,"Next Page"
+最近文章,"Recent Posts"
+暂时还没有博客文章，稍后再来看看吧～,"No blog posts yet"
+阅读更多,"Read More"
+发布时间：,"Published At:"
+摘要：,Summary:
+返回博客列表,"Back to Blog List"
 "未配置 AI 默认模型","未配置 AI 默认模型"
 "AI 默认模型配置无效（模型代码 %{1} 不存在）","AI 默认模型配置无效（模型代码 %{1} 不存在）"
 "AI 默认模型 ""%{1}"" 未激活","AI 默认模型 ""%{1}"" 未激活"

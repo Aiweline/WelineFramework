@@ -419,6 +419,20 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
     background: var(--backend-color-bg-secondary, #f8f9fa) !important;
 }
 
+/* jstree 自定义图标使用 MDI 字体时需覆盖默认 background，否则不显示 */
+#acl .jstree-anchor > .jstree-themeicon.jstree-themeicon-custom.mdi,
+#acl .jstree-anchor > .jstree-themeicon.jstree-themeicon-custom[class*="mdi-"] {
+    background: none !important;
+    background-image: none !important;
+    font-size: 1.1em;
+    width: auto;
+    min-width: 1em;
+    height: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .weline-acl-module-badge {
     display: inline-block;
     font-size: 10px;
@@ -731,7 +745,7 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
         'checkbox': {
             'keep_selected_style': false,
             'three_state': true,
-            'cascade': 'up+down+undetermined'
+            'cascade': 'up'
         },
         'search': {
             'show_only_matches': true,
@@ -758,15 +772,7 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
         updateStatistics();
     });
     
-    $('#acl').on('select_node.jstree', function (e, data) {
-        var tree = $('#acl').jstree(true);
-        var node = data.node;
-
-        if (node.parent !== '#') {
-            var parentNode = tree.get_node(node.parent);
-            tree.select_node(parentNode, true);
-        }
-        
+    $('#acl').on('select_node.jstree', function () {
         updateStatistics();
     });
     

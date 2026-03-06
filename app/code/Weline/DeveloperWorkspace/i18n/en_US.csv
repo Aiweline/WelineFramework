@@ -1,11 +1,4 @@
-开发工具面板,开发工具面板
-在页面中显示开发工具面板，提供路由查看、API文档等功能。仅在开发模式下显示。,在页面中显示开发工具面板，提供路由查看、API文档等功能。仅在开发模式下显示。
-开发工具面板-扩展标签,开发工具面板-扩展标签
-"在开发工具面板标签栏「耗时统计」之后注入扩展标签按钮，由各模块自行实现（如 WLS 等）。","在开发工具面板标签栏「耗时统计」之后注入扩展标签按钮，由各模块自行实现（如 WLS 等）。"
-开发工具面板-扩展搜索区,开发工具面板-扩展搜索区
-"在开发工具面板搜索区域之后注入扩展标签对应的搜索区 HTML 与注册脚本。","在开发工具面板搜索区域之后注入扩展标签对应的搜索区 HTML 与注册脚本。"
-开发工具标题,开发工具标题
-在开发工具面板中显示标题内容。,在开发工具面板中显示标题内容。
+开发文档,"Development Documentation"
 "📚 开始扫描模块文档...","📚 StartScanModule documents..."
 "✅ 文档扫描完成！","✅ DocumentScanComplete！"
 "📊 扫描统计:","📊 ScanStatistics:"
@@ -22,17 +15,7 @@
 强制重新扫描（会删除旧的自动导入文档）,"Force rescan（Will deleteOldAuto importedDocument）"
 扫描所有模块文档（增量导入）,"Scan allModule documents（Incremental import）"
 强制重新扫描所有文档,"Force rescanAllDocument"
-启动Key错误,"Start KeyError"
-"沙盒环境已关闭,接下来操作的数据将影响正式线上数据库！","Sandbox environmentHas been closed,NextOperated dataWill affectFormal online database！"
-"沙盒环境已启动! 接下来操作的数据将写入沙盒数据库！","Sandbox environmentHas been started! NextOperated dataWill write toSandbox database！"
-WelineFramework开发文档,"WelineFrameworkDevelopment Documentation"
 分类ID不能为空,"Category IDCannot be empty"
-文档ID不能为空,"Document IDCannot be empty"
-文档不存在,"Document does not exist"
-文档路径信息不完整,"Document pathInformation incomplete"
-无法读取文档文件,"Unable to readDocument file"
-搜索关键词不能为空,"Search keywordCannot be empty"
-API文档管理,API文档管理
 分类不存在,"Category does not exist"
 系统分类不允许删除,"System categoryNot allowed to delete"
 下层有系统分类，不允许删除,"Lower level hasSystem category，Not allowed to delete"
@@ -47,59 +30,81 @@ API文档管理,API文档管理
 排序已保存,"Sort saved"
 保存失败：,保存失败：
 获取成功,"Get successful"
-沙盒启动Key设置成功,"Sandbox Start KeySet successful"
 添加,Add
 修改,Modify
 文件上传失败！,"File uploadFailed!"
+文档ID不能为空,"Document IDCannot be empty"
+文档不存在,"Document does not exist"
 未知,Unknown
-加载沙盒配置失败：%{1},加载沙盒配置失败：%{1}
+启动Key错误,"Start KeyError"
+"沙盒环境已关闭,接下来操作的数据将影响正式线上数据库！","Sandbox environmentHas been closed,NextOperated dataWill affectFormal online database！"
+"沙盒环境已启动! 接下来操作的数据将写入沙盒数据库！","Sandbox environmentHas been started! NextOperated dataWill write toSandbox database！"
+沙盒启动Key设置成功,"Sandbox Start KeySet successful"
+加载Debug配置失败：%{1},加载Debug配置失败：%{1}
 无效的请求方法,无效的请求方法
 保存成功,保存成功
 保存失败：%{1},保存失败：%{1}
-加载Debug配置失败：%{1},加载Debug配置失败：%{1}
 加载开发面板配置失败：%{1},加载开发面板配置失败：%{1}
+加载沙盒配置失败：%{1},加载沙盒配置失败：%{1}
+WelineFramework开发文档,"WelineFrameworkDevelopment Documentation"
+文档路径信息不完整,"Document pathInformation incomplete"
+无法读取文档文件,"Unable to readDocument file"
+搜索关键词不能为空,"Search keywordCannot be empty"
+API文档管理,API文档管理
+开发工具面板,开发工具面板
+在页面中显示开发工具面板，提供路由查看、API文档等功能。仅在开发模式下显示。,在页面中显示开发工具面板，提供路由查看、API文档等功能。仅在开发模式下显示。
+开发工具面板-扩展标签,开发工具面板-扩展标签
+"在开发工具面板标签栏「耗时统计」之后注入扩展标签按钮，由各模块自行实现（如 WLS 等）。","在开发工具面板标签栏「耗时统计」之后注入扩展标签按钮，由各模块自行实现（如 WLS 等）。"
+开发工具面板-扩展搜索区,开发工具面板-扩展搜索区
+"在开发工具面板搜索区域之后注入扩展标签对应的搜索区 HTML 与注册脚本。","在开发工具面板搜索区域之后注入扩展标签对应的搜索区 HTML 与注册脚本。"
+开发工具标题,开发工具标题
+在开发工具面板中显示标题内容。,在开发工具面板中显示标题内容。
 开发助手,"Development Assistant"
 关闭沙盒环境,"Close sandbox environment"
 确定,OK
-开发文档,"Development Documentation"
-编写和管理开发文档,"Write andManagementDevelopment Documentation"
-API文档,API文档
-目录管理,DirectoryManagement
-新增文章,NewArticle
-文档分类,DocumentCategory
-加载中...,Loading...
-暂无文章,NoArticle
-"点击""新增文章""按钮开始创建您的第一篇文档","Click""NewArticle""ButtonStart creatingYourFirstDocument"
-自动导入,"Auto imported"
-作者:,Author:
-查看,View
-编辑,Edit
-删除,Delete
-文档详情,DocumentDetails
-正在加载文档...,LoadingDocument...
-加载文档失败，请重试,"LoadDocumentFailed, please retry"
-加载文档失败，请刷新页面重试,"LoadDocumentFailed, please refreshPageRetry"
-分类:,Category:
-未分类,Uncategorized
-创建时间:,CreateTime:
-更新时间:,UpdateTime:
-模块:,Module:
-无标题,"No Title"
-暂无内容,NoContent
-错误,Error
-jstree库未加载，请刷新页面重试,"jstree library not loaded, please refresh page and retry"
-全部文档,AllDocument
-未命名分类,UnnamedCategory
-该分类下暂无文档,该分类下暂无文档
-你确定要操作么？,"Are you sure you want to proceed?"
-操作后你将无法恢复！,Operation后你将无法恢复！
-是的，我确定要删除！,是的，我确定要Delete！
-不要，取消吧！,"No, cancel!"
-已删除！,已Delete！
-文章已经被删除了！,文章已经被Delete了！
-好的,好的
-删除提示！,DeleteTip！
-文章删除失败，请重试！,"ArticleDeleteFailed, please retry！"
+正在清理旧的API文档...,正在清理旧的API文档...
+清理完成,"Cleanup complete"
+正在生成API文档...,正在生成API文档...
+"更新API文档: %{method}","更新API文档: %{method}"
+"新增API文档: %{method}","新增API文档: %{method}"
+"处理模块分类: %{name}","处理模块分类: %{name}"
+正在清理旧的自动导入文档和分类...,"CleaningOldAuto importedDocuments and categories..."
+"找到 %{count} 个模块包含 doc 目录，开始扫描...","Found %{count} modulesContain doc Directory, start scanning..."
+"[%{current}/%{total}] 正在扫描模块: %{name}","[%{current}/%{total}] ScanningModule: %{name}"
+"路径: %{path}","Path: %{path}"
+"模块 %{name} 的开发文档","模块 %{name} 的开发文档"
+"扫描完成: 文档 %{scanned} 个, 新增 %{new} 个, 更新 %{updated} 个","ScanComplete: Document %{scanned} , new %{new} , updated %{updated} "
+正在清理不存在的文档和分类...,"CleaningNon-existentDocuments and categories..."
+"跳过深层目录（超过6层）: %{path}","跳过深层目录（超过6层）: %{path}"
+"无法获取文件时间: %{path}","无法获取文件时间: %{path}"
+"分类变更: %{path}","分类变更: %{path}"
+"无法读取文件: %{path}","Unable to readFile: %{path}"
+"更新: %{path}","Update: %{path}"
+"新增: %{path}","New: %{path}"
+"目录 %{name}","Directory %{name}"
+"已删除 %{count} 个不存在的文档","已删除 %{count} 个不存在的文档"
+无需删除文档,"No need to deleteDocument"
+"已删除 %{count} 个不存在的分类","Deleted %{count} non-existentCategory"
+无需删除分类,"No need to deleteCategory"
+正在检查并清理重复文档...,正在检查并清理重复文档...
+没有发现需要清理的文档,没有发现需要清理的文档
+"共清理 %{count} 条重复文档","共清理 %{count} 条重复文档"
+"📡 开始导入API文档...","📡 开始导入API文档..."
+"API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}","API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}"
+"API文档导入失败: %{error}","API文档导入失败: %{error}"
+前言,前言
+说在前面,说在前面
+安装,安装
+安装文档,安装文档
+快速开始,快速开始
+框架模组,框架模组
+框架规范,框架规范
+框架类的规范,框架类的规范
+模型文档,模型文档
+使用控制器,使用控制器
+模组事件,模组事件
+WelineFramework插件功能,WelineFramework插件功能
+开发,Development
 管理开发文档,"ManagementDevelopment Documentation"
 "开发文档编辑器 有新的开发文档时可以随时编辑","Development DocumentationEditor When there is a newDevelopment documentationCan at any timeEdit"
 保存,Save
@@ -124,6 +129,7 @@ jstree库未加载，请刷新页面重试,"jstree library not loaded, please re
 左侧点击分类可在右侧编辑，拖拽节点可调整分类顺序和层级，空白处按住鼠标可以左右拖动,"Click category on the left to edit on the right, drag nodes to adjust category order and hierarchy, hold mouse in blank area to drag left and right"
 添加顶级分类,"AddTop Category"
 关闭,Close
+加载中...,Loading...
 正在加载分类树...,"LoadingCategory tree..."
 "暂无分类，点击""添加顶级分类""开始创建","NoCategory, click""AddTop Category""Start creating"
 添加分类,AddCategory
@@ -135,6 +141,8 @@ jstree库未加载，请刷新页面重试,"jstree library not loaded, please re
 请输入分类名称,"Please enterCategory name"
 请输入分类描述,"Please enterCategory description"
 取消,Cancel
+删除,Delete
+编辑,Edit
 删除分类,DeleteCategory
 系统分类不允许编辑,"System categoryNot allowedEdit"
 系统分类,"System category"
@@ -160,6 +168,7 @@ jstree实例不可用，请刷新页面重试,"jstreeInstanceNot available, plea
 确定要删除分类,"Are you sure toDeleteCategory"
 "⚠️ 警告：删除分类会同时删除其所有子分类！","⚠️ Warning: Deleting category will also delete all its subcategories!"
 此操作不可恢复，请谨慎操作！,"This operationCannot be recovered, please be carefulOperation！"
+未命名分类,UnnamedCategory
 确认,Confirm
 确认删除吗？,ConfirmDelete?
 删除请求失败,DeleteRequestFailed
@@ -171,6 +180,44 @@ jstree实例不可用，请刷新页面重试,"jstreeInstanceNot available, plea
 层级,Level
 系统分类不允许修改名称,"System categoryNot allowedModifyName"
 这是系统分类，部分字段不允许修改,"This isSystem category, someFieldsNot allowedModify"
+编写和管理开发文档,"Write andManagementDevelopment Documentation"
+API文档,API文档
+目录管理,DirectoryManagement
+新增文章,NewArticle
+文档分类,DocumentCategory
+暂无文章,NoArticle
+"点击""新增文章""按钮开始创建您的第一篇文档","Click""NewArticle""ButtonStart creatingYourFirstDocument"
+自动导入,"Auto imported"
+作者:,Author:
+查看,View
+文档详情,DocumentDetails
+正在加载文档...,LoadingDocument...
+加载文档失败，请重试,"LoadDocumentFailed, please retry"
+加载文档失败，请刷新页面重试,"LoadDocumentFailed, please refreshPageRetry"
+分类:,Category:
+未分类,Uncategorized
+创建时间:,CreateTime:
+更新时间:,UpdateTime:
+模块:,Module:
+无标题,"No Title"
+暂无内容,NoContent
+错误,Error
+jstree库未加载，请刷新页面重试,"jstree library not loaded, please refresh page and retry"
+全部文档,AllDocument
+该分类下暂无文档,该分类下暂无文档
+你确定要操作么？,"Are you sure you want to proceed?"
+操作后你将无法恢复！,Operation后你将无法恢复！
+是的，我确定要删除！,是的，我确定要Delete！
+不要，取消吧！,"No, cancel!"
+已删除！,已Delete！
+文章已经被删除了！,文章已经被Delete了！
+好的,好的
+删除提示！,DeleteTip！
+文章删除失败，请重试！,"ArticleDeleteFailed, please retry！"
+开发文档管理器,"Development DocumentationManager"
+系统,System
+新建文档,NewDocument
+新建一篇开发文档,"NewADevelopment Documentation"
 沙盒环境配置,"Sandbox environmentConfigure"
 沙盒环境是一套数据隔离的可提供给测试人员对代码进行测试的环境，测试时数据不会写入正式数据库，而是写入沙盒数据库。,沙盒环境是一套数据隔离的可提供给测试人员对代码进行测试的环境，测试时数据不会写入正式数据库，而是写入沙盒数据库。
 可配置参数：,ConfigurableParameters:
@@ -189,24 +236,42 @@ jstree实例不可用，请刷新页面重试,"jstreeInstanceNot available, plea
 沙盒Key验证成功,"Sandbox KeyVerification successful"
 请输入沙盒Key,"Please enterSandbox Key"
 提交,Submit
-开发文档管理器,"Development DocumentationManager"
-系统,System
-新建文档,NewDocument
-新建一篇开发文档,"NewADevelopment Documentation"
-"WelineFramework 开发文档","WelineFramework Development Documentation"
+Debug配置,Debug配置
+提示,提示
+Debug配置功能正在开发中，敬请期待。,Debug配置功能正在开发中，敬请期待。
+开发面板配置,开发面板配置
+开发面板配置功能正在开发中，敬请期待。,开发面板配置功能正在开发中，敬请期待。
+沙盒配置,沙盒配置
+沙盒配置功能正在开发中，敬请期待。,沙盒配置功能正在开发中，敬请期待。
+返回欢迎页,"BackWelcome Page"
+返回上一页,"BackPrevious Page"
+"搜索 ...","Search ..."
+头部语言,HeaderLanguage
+中国,China
+头像,Avatar
+资料,Profile
+我的钱包,MyWallet
+设置,Settings
+锁定屏幕,LockScreen
+退出,Exit
+菜单布局,MenuLayout
+菜单明亮,MenuBright
+图标菜单,IconMenu
+图文菜单,"Image TextMenu"
+主题布局,ThemeLayout
+水平布局,HorizontalLayout
+水平顶黑,"HorizontalTop Black"
+水平盒子,HorizontalBox
+主题颜色,ThemeColor
+明亮模式,BrightMode
+暗黑模式,DarkMode
+RTL模式,RTLMode
 当前货币,当前货币
 当前语言,当前语言
 默认货币,默认货币
 默认语言,默认语言
-选择分类查看文档,SelectCategoryViewDocument
-搜索文档...,SearchDocument...
 语言,语言
 货币,货币
-返回文档列表,BackDocumentList
-返回网站,返回网站
-请从左侧选择分类查看文档,"Please fromLeftSelectCategoryViewDocument"
-"Weline Framework API接口文档","Weline Framework API接口文档"
-暂无API文档,暂无API文档
 API接口,API接口
 选择接口查看详情,选择接口查看详情
 收起/展开,收起/展开
@@ -218,6 +283,7 @@ API接口,API接口
 正式环境调试,正式环境调试
 登录,登录
 切换主题,切换主题
+暂无API文档,暂无API文档
 请选择API接口,请选择API接口
 从左侧列表中选择一个API接口查看详细信息,从左侧列表中选择一个API接口查看详细信息
 等待选择API,等待选择API
@@ -301,79 +367,13 @@ Header值,Header值
 已导入示例请求参数,已导入示例请求参数
 后端API用户登录,后端API用户登录
 前端API用户登录,前端API用户登录
-设置,Settings
-菜单布局,MenuLayout
-菜单明亮,MenuBright
-图标菜单,IconMenu
-图文菜单,"Image TextMenu"
-主题布局,ThemeLayout
-水平布局,HorizontalLayout
-水平顶黑,"HorizontalTop Black"
-水平盒子,HorizontalBox
-主题颜色,ThemeColor
-明亮模式,BrightMode
-暗黑模式,DarkMode
-RTL模式,RTLMode
-"搜索 ...","Search ..."
-头部语言,HeaderLanguage
-中国,China
-头像,Avatar
-资料,Profile
-我的钱包,MyWallet
-锁定屏幕,LockScreen
-退出,Exit
-返回欢迎页,"BackWelcome Page"
-返回上一页,"BackPrevious Page"
-开发面板配置,开发面板配置
-提示,提示
-开发面板配置功能正在开发中，敬请期待。,开发面板配置功能正在开发中，敬请期待。
-沙盒配置,沙盒配置
-沙盒配置功能正在开发中，敬请期待。,沙盒配置功能正在开发中，敬请期待。
-Debug配置,Debug配置
-Debug配置功能正在开发中，敬请期待。,Debug配置功能正在开发中，敬请期待。
-开发,Development
-正在清理旧的自动导入文档和分类...,"CleaningOldAuto importedDocuments and categories..."
-清理完成,"Cleanup complete"
-"找到 %{count} 个模块包含 doc 目录，开始扫描...","Found %{count} modulesContain doc Directory, start scanning..."
-"[%{current}/%{total}] 正在扫描模块: %{name}","[%{current}/%{total}] ScanningModule: %{name}"
-"路径: %{path}","Path: %{path}"
-"模块 %{name} 的开发文档","模块 %{name} 的开发文档"
-"扫描完成: 文档 %{scanned} 个, 新增 %{new} 个, 更新 %{updated} 个","ScanComplete: Document %{scanned} , new %{new} , updated %{updated} "
-正在清理不存在的文档和分类...,"CleaningNon-existentDocuments and categories..."
-"跳过深层目录（超过6层）: %{path}","跳过深层目录（超过6层）: %{path}"
-"无法获取文件时间: %{path}","无法获取文件时间: %{path}"
-"分类变更: %{path}","分类变更: %{path}"
-"无法读取文件: %{path}","Unable to readFile: %{path}"
-"更新: %{path}","Update: %{path}"
-"新增: %{path}","New: %{path}"
-"目录 %{name}","Directory %{name}"
-"已删除 %{count} 个不存在的文档","已删除 %{count} 个不存在的文档"
-无需删除文档,"No need to deleteDocument"
-"已删除 %{count} 个不存在的分类","Deleted %{count} non-existentCategory"
-无需删除分类,"No need to deleteCategory"
-正在检查并清理重复文档...,正在检查并清理重复文档...
-没有发现需要清理的文档,没有发现需要清理的文档
-"共清理 %{count} 条重复文档","共清理 %{count} 条重复文档"
-"📡 开始导入API文档...","📡 开始导入API文档..."
-"API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}","API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}"
-"API文档导入失败: %{error}","API文档导入失败: %{error}"
-正在清理旧的API文档...,正在清理旧的API文档...
-正在生成API文档...,正在生成API文档...
-"更新API文档: %{method}","更新API文档: %{method}"
-"新增API文档: %{method}","新增API文档: %{method}"
-"处理模块分类: %{name}","处理模块分类: %{name}"
-前言,前言
-说在前面,说在前面
-安装,安装
-安装文档,安装文档
-快速开始,快速开始
-框架模组,框架模组
-框架规范,框架规范
-框架类的规范,框架类的规范
-模型文档,模型文档
-使用控制器,使用控制器
-模组事件,模组事件
-WelineFramework插件功能,WelineFramework插件功能
+"Weline Framework API接口文档","Weline Framework API接口文档"
+"WelineFramework 开发文档","WelineFramework Development Documentation"
+选择分类查看文档,SelectCategoryViewDocument
+搜索文档...,SearchDocument...
+返回文档列表,BackDocumentList
+返回网站,返回网站
+请从左侧选择分类查看文档,"Please fromLeftSelectCategoryViewDocument"
 表不存在，正在创建...,"Table does not exist, creating..."
 "添加 is_system 字段...","Add is_system Fields..."
 "已删除旧索引: %{name}","已删除旧索引: %{name}"

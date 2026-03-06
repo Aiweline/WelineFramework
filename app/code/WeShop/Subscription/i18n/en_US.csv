@@ -1,14 +1,3 @@
-请先登录,"Please login first"
-订阅已取消,"Subscription has been cancelled"
-取消失败：%{error},"Cancellation failed: %{error}"
-订阅已暂停,"Subscription has been paused"
-暂停失败：%{error},"Pause failed: %{error}"
-订阅已恢复,"Subscription has been resumed"
-恢复失败：%{error},"Resume failed: %{error}"
-我的订阅,"My Subscriptions"
-订阅不存在,"Subscription not found"
-无权查看此订阅,"No permission to view this subscription"
-订阅详情,"Subscription Details"
 订阅计划管理,"Subscription Plan Management"
 编辑订阅计划,"Edit Subscription Plan"
 新建订阅计划,"New Subscription Plan"
@@ -19,47 +8,99 @@
 删除失败：%{error},"Delete failed: %{error}"
 订阅管理,"Subscription Management"
 缺少订阅ID,"Missing subscription ID"
-返回,Back
-暂停,Pause
-恢复,Resume
+订阅不存在,"Subscription not found"
+订阅详情,"Subscription Details"
+订阅已取消,"Subscription has been cancelled"
+取消失败：%{error},"Cancellation failed: %{error}"
+订阅已暂停,"Subscription has been paused"
+暂停失败：%{error},"Pause failed: %{error}"
+订阅已恢复,"Subscription has been resumed"
+恢复失败：%{error},"Resume failed: %{error}"
+请先登录,"Please login first"
+我的订阅,"My Subscriptions"
+无权查看此订阅,"No permission to view this subscription"
+试用中,Trialing
+生效中,Active
+已暂停,Paused
+逾期,"Past Due"
+已取消,Cancelled
+已过期,Expired
+创建订阅,"Subscription Created"
+续费,Renewed
 取消订阅,"Subscription Cancelled"
-当前周期,"Current Period"
-下次计费,"Next Billing"
-续费次数,"Renewal Count"
-试用结束时间,"Trial Ends At"
-订阅计划,"Subscription Plans"
-计划名称,"Plan Name"
-计划描述,"Plan Description"
-试用天数,"Trial Days"
+暂停订阅,"Subscription Paused"
+恢复订阅,"Subscription Resumed"
+订阅过期,订阅过期
+升级计划,"Plan Upgraded"
+降级计划,"Plan Downgraded"
+支付失败,"Payment Failed"
+试用开始,"Trial Started"
+试用结束,"Trial Ended"
 天,Day
-历史记录,History
-暂无历史记录,"No history records"
-取消原因,"Cancel Reason"
-全部,All
+周,Week
+月,Month
+年,Year
+每%{interval}%{cycle},"Every %{interval} %{cycle}"
+每%{cycle},"Every %{cycle}"
+订阅计划不存在,"Subscription plan not found"
+订阅计划已停用,"Subscription plan is disabled"
+创建订阅：%{plan},"Subscription created: %{plan}"
+订阅状态不允许续费,"Subscription status does not allow renewal"
+续费成功，第%{count}次续费,"Renewal successful, renewal #%{count}"
+无权操作此订阅,"No permission to manage this subscription"
+当前订阅状态不允许取消,"Current subscription status does not allow cancellation"
+取消订阅，原因：%{reason},"Subscription cancelled, reason: %{reason}"
+当前订阅状态不允许暂停,"Current subscription status does not allow pause"
+当前订阅状态不允许恢复,"Current subscription status does not allow resume"
+支付失败，订阅已逾期,"Payment failed, subscription is past due"
+订阅已过期,"Subscription has expired"
+查看全部,查看全部
 暂无订阅,"No subscriptions yet"
-查看,View
-取消,Cancel
-暂无订阅计划,"No subscription plans yet"
+订阅,订阅
 订阅价格,"Subscription Price"
+查看详情,查看详情
+返回,Back
+计划名称,"Plan Name"
+关联产品,"Associated Product"
+计划描述,"Plan Description"
 原价,"Original Price"
 计费周期,"Billing Cycle"
-关联产品,"Associated Product"
+计费间隔,"Billing Interval"
+试用天数,"Trial Days"
 排序,"Sort Order"
 状态,Status
-操作,Actions
 启用,Enabled
 停用,Disabled
+保存,保存
+错误,错误
+暂无订阅计划,"No subscription plans yet"
+操作,Actions
 确认删除,"Confirm Delete"
 确认删除此订阅计划？,"Are you sure to delete this subscription plan?"
 确认,确认
-错误,错误
-计费间隔,"Billing Interval"
-保存,保存
+取消,Cancel
+总计,Total
+活跃订阅,"Active Subscriptions"
+试用订阅,"Trial Subscriptions"
+逾期订阅,"Past Due Subscriptions"
+订阅列表,"Subscription List"
+全部,All
 客户ID,"Customer ID"
-支付方式,"Payment Method"
+订阅计划,"Subscription Plans"
+下次计费,"Next Billing"
+续费次数,"Renewal Count"
 创建时间,"Created At"
+查看,View
+暂停,Pause
+恢复,Resume
+支付方式,"Payment Method"
+当前周期,"Current Period"
+试用结束时间,"Trial Ends At"
 取消时间,"Cancelled At"
+取消原因,"Cancel Reason"
 暂停时间,"Paused At"
+历史记录,History
+暂无历史记录,"No history records"
 金额,Amount
 订单ID,"Order ID"
 备注,Note
@@ -70,47 +111,6 @@
 确认暂停此订阅？,确认暂停此订阅？
 确认恢复,确认恢复
 确认恢复此订阅？,确认恢复此订阅？
-总计,Total
-活跃订阅,"Active Subscriptions"
-试用订阅,"Trial Subscriptions"
-逾期订阅,"Past Due Subscriptions"
-订阅列表,"Subscription List"
-查看全部,查看全部
-订阅,订阅
-查看详情,查看详情
-订阅计划不存在,"Subscription plan not found"
-订阅计划已停用,"Subscription plan is disabled"
-创建订阅：%{plan},"Subscription created: %{plan}"
-订阅状态不允许续费,"Subscription status does not allow renewal"
-续费成功，第%{count}次续费,"Renewal successful, renewal #%{count}"
-无权操作此订阅,"No permission to manage this subscription"
-当前订阅状态不允许取消,"Current subscription status does not allow cancellation"
-取消订阅，原因：%{reason},"Subscription cancelled, reason: %{reason}"
-当前订阅状态不允许暂停,"Current subscription status does not allow pause"
-暂停订阅,"Subscription Paused"
-当前订阅状态不允许恢复,"Current subscription status does not allow resume"
-恢复订阅,"Subscription Resumed"
-支付失败，订阅已逾期,"Payment failed, subscription is past due"
-订阅已过期,"Subscription has expired"
-周,Week
-月,Month
-年,Year
-每%{interval}%{cycle},"Every %{interval} %{cycle}"
-每%{cycle},"Every %{cycle}"
-创建订阅,"Subscription Created"
-续费,Renewed
-订阅过期,订阅过期
-升级计划,"Plan Upgraded"
-降级计划,"Plan Downgraded"
-支付失败,"Payment Failed"
-试用开始,"Trial Started"
-试用结束,"Trial Ended"
-试用中,Trialing
-生效中,Active
-已暂停,Paused
-逾期,"Past Due"
-已取消,Cancelled
-已过期,Expired
 编辑,Edit
 删除,Delete
 产品ID,"Product ID"
