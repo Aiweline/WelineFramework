@@ -1,9 +1,198 @@
-网站保存后,网站保存后
-网站保存后触发，可用于更新缓存、通知等相关操作。,网站保存后触发，可用于更新缓存、通知等相关操作。
-域名购买成功,"Domain Purchase Success"
-"域名购买成功后触发，可用于通知、自动 DNS 解析、证书申请等后续操作。数据包含 domain、order_id、website_id、auto_create_site。","Triggered after a domain is successfully purchased. Can be used for notifications, auto DNS resolution, certificate requests, etc. Data includes domain, order_id, website_id, auto_create_site."
-域名池解析偏离本站,域名池解析偏离本站
-"域名解析结果偏离本站（如 DNS 指向变更）时触发，用于发送通知提醒管理员。","域名解析结果偏离本站（如 DNS 指向变更）时触发，用于发送通知提醒管理员。"
+域名管理标签页导航,"Domain Management Tab Navigation"
+"在域名管理页面的标签页导航区域动态追加标签页按钮。其他模块（如 Server 模块的证书管理）可通过此 Hook 注入新的 Tab 按钮。","Dynamically append tab buttons in the domain management page navigation area. Other modules (e.g., Server module certificate management) can inject new tabs via this Hook."
+域名管理标签页内容,"Domain Management Tab Content"
+"在域名管理页面的标签页内容区域动态追加标签页内容面板。与 tabs Hook 配合使用，注入对应的 Tab 内容。","Dynamically append tab content panels in the domain management page. Used together with the tabs Hook to inject corresponding Tab content."
+id属性不能为空,id属性不能为空
+搜索域名...,"Search domain..."
+点击选择域名（可多选）,点击选择域名（可多选）
+请选择域名,"Select Domain"
+加载中...,加载中...
+清空,清空
+确定,确定
+点击选择多个域名，选中后点击确定,点击选择多个域名，选中后点击确定
+点击选择域名，选择后将自动填充相关字段,"Click to select domain. Related fields will be auto-filled."
+未找到匹配的域名,"No matching domain found"
+加载失败,加载失败
+暂无可用域名，请先添加,"No domains available. Please add one first."
+"已选择 %s 个域名","已选择 %s 个域名"
+可建站,可建站
+证书到期,证书到期
+"Amazon Web Services Route 53 域名注册服务，支持域名注册、DNS 管理和健康检查。","Amazon Web Services Route 53 domain registration service, supporting domain registration, DNS management, and health checks."
+"Access Key ID","Access Key ID"
+"Secret Access Key","Secret Access Key"
+区域,Region
+"AWS Route53 配置获取指南","AWS Route53 配置获取指南"
+"1. 登录 AWS 控制台：https://console.aws.amazon.com","1. 登录 AWS 控制台：https://console.aws.amazon.com"
+"2. 进入 IAM 服务 → 用户 → 选择或创建用户","2. 进入 IAM 服务 → 用户 → 选择或创建用户"
+"3. 在「安全凭证」选项卡中，点击「创建访问密钥」","3. 在「安全凭证」选项卡中，点击「创建访问密钥」"
+"4. 选择「应用程序外部使用」，创建密钥","4. 选择「应用程序外部使用」，创建密钥"
+"5. 将「访问密钥 ID」填入上方「Access Key ID」字段","5. 将「访问密钥 ID」填入上方「Access Key ID」字段"
+"6. 将「秘密访问密钥」填入上方「Secret Access Key」字段","6. 将「秘密访问密钥」填入上方「Secret Access Key」字段"
+"7. 确保该用户具有 Route53Domains 和 Route53 的完整权限","7. 确保该用户具有 Route53Domains 和 Route53 的完整权限"
+"8. 区域选择 us-east-1（Route53 域名注册仅支持此区域）","8. 区域选择 us-east-1（Route53 域名注册仅支持此区域）"
+"API Key 和 Secret 不能为空","API Key and Secret cannot be empty"
+"AWS Route53 适配器尚未完成 API 对接，请稍后再试。","AWS Route53 adapter API integration not yet complete. Please try again later."
+"AWS Route53 DNS 适配器尚未完成 API 对接，请稍后再试。","AWS Route53 DNS 适配器尚未完成 API 对接，请稍后再试。"
+"AWS Route53 Nameserver 修改功能尚未完成 API 对接，请稍后再试。","AWS Route53 Nameserver 修改功能尚未完成 API 对接，请稍后再试。"
+"AWS Route53 Nameserver 获取功能尚未完成 API 对接","AWS Route53 Nameserver retrieval API not implemented yet"
+"GName 域名注册商，支持域名注册、续费、转入、DNS 管理和 DNSSEC 配置。","GName 域名注册商，支持域名注册、续费、转入、DNS 管理和 DNSSEC 配置。"
+"APP ID","APP ID"
+"GName 平台分配的 APP ID","GName 平台分配的 APP ID"
+"APP Key","APP Key"
+"API 域名","API 域名"
+"默认联系人模板 ID","默认联系人模板 ID"
+注册域名时使用的联系人模板（可选）,注册域名时使用的联系人模板（可选）
+"GName API 配置获取指南","GName API 配置获取指南"
+【前置条件】,【前置条件】
+"1. 注册 GName 账号：https://www.gname.com/register","1. 注册 GName 账号：https://www.gname.com/register"
+"2. 升级为经销商账号：https://www.gname.com/agent","2. 升级为经销商账号：https://www.gname.com/agent"
+"3. 签署 API 服务协议（企业/平台必需）","3. 签署 API 服务协议（企业/平台必需）"
+"- 联系商务邮箱：business@gname.com","- 联系商务邮箱：business@gname.com"
+"- 或提交工单：https://www.gname.com/user#/wt_add","- 或提交工单：https://www.gname.com/user#/wt_add"
+"- 或拨打热线：+65-65189986","- 或拨打热线：+65-65189986"
+"【获取 API 凭证】","【获取 API 凭证】"
+"4. 登录后进入「控制中心」→「API 管理」","4. 登录后进入「控制中心」→「API 管理」"
+"5. 协议签署完成后可查看 APP ID 和 APP Key","5. 协议签署完成后可查看 APP ID 和 APP Key"
+"6. 将 APP ID 填入上方「APP ID」字段","6. 将 APP ID 填入上方「APP ID」字段"
+"7. 将 APP Key 填入上方「APP Key」字段","7. 将 APP Key 填入上方「APP Key」字段"
+"8. API 域名保持默认（api.gname.com）即可","8. API 域名保持默认（api.gname.com）即可"
+未知错误,未知错误
+"GName API 连接失败：%{1}（错误码：%{2}，请求ID：%{3}，AppID：%{4}，API地址：%{5}）","GName API 连接失败：%{1}（错误码：%{2}，请求ID：%{3}，AppID：%{4}，API地址：%{5}）"
+"GName API 连接失败：%{1}","GName API 连接失败：%{1}"
+域名可注册,域名可注册
+域名为溢价域名,域名为溢价域名
+"API 权限错误：%{1}（错误码：%{2}）","API 权限错误：%{1}（错误码：%{2}）"
+域名不可注册,域名不可注册
+%{1}（错误码：%{2}）,%{1}（错误码：%{2}）
+域名注册提交成功,域名注册提交成功
+溢价域名，需确认金额后再提交,溢价域名，需确认金额后再提交
+域名注册失败：%{1}（错误码：%{2}）,域名注册失败：%{1}（错误码：%{2}）
+"API 请求失败","API 请求失败"
+获取域名列表失败：%{1}（错误码：%{2}）,获取域名列表失败：%{1}（错误码：%{2}）
+获取域名详情失败：%{1}（错误码：%{2}）,获取域名详情失败：%{1}（错误码：%{2}）
+"DNS 修改成功","DNS 修改成功"
+"DNS 修改失败：%{1}（错误码：%{2}）","DNS 修改失败：%{1}（错误码：%{2}）"
+获取联系人模板列表失败：%{1}（错误码：%{2}）,获取联系人模板列表失败：%{1}（错误码：%{2}）
+"获取 TLD 价格列表失败：%{1}（错误码：%{2}）","获取 TLD 价格列表失败：%{1}（错误码：%{2}）"
+获取账户余额失败：%{1}（错误码：%{2}）,获取账户余额失败：%{1}（错误码：%{2}）
+"GName APP ID 不能为空","GName APP ID 不能为空"
+"GName APP Key 不能为空","GName APP Key 不能为空"
+"GName API 请求失败：%{1}","GName API 请求失败：%{1}"
+网络错误,网络错误
+"GName API 响应解析失败 (HTTP %{1}): %{2}","GName API 响应解析失败 (HTTP %{1}): %{2}"
+空响应,空响应
+"获取 DNS 记录失败：%{1}（错误码：%{2}）","获取 DNS 记录失败：%{1}（错误码：%{2}）"
+"DNS 记录添加成功","DNS record added successfully"
+"（域名 DNS 可能已切换到其他服务商，请到对应服务商处添加解析）","（域名 DNS 可能已切换到其他服务商，请到对应服务商处添加解析）"
+（域名可能不存在或已过期）,（域名可能不存在或已过期）
+"（域名 DNS 可能已切换到其他服务商）","（域名 DNS 可能已切换到其他服务商）"
+"（无权操作此域名 DNS，可能已切换到其他服务商）","（无权操作此域名 DNS，可能已切换到其他服务商）"
+"DNS 记录添加失败：%{1}（错误码：%{2}）","DNS 记录添加失败：%{1}（错误码：%{2}）"
+"DNS 记录更新成功","DNS record updated successfully"
+"DNS 记录更新失败：%{1}（错误码：%{2}）","DNS 记录更新失败：%{1}（错误码：%{2}）"
+"DNS 记录删除成功","DNS record deleted successfully"
+"DNS 记录删除失败：%{1}（错误码：%{2}）","DNS 记录删除失败：%{1}（错误码：%{2}）"
+"GName 默认 DNS 服务器","GName default DNS servers"
+"Microsoft Azure 域名注册与 DNS 管理服务，支持域名注册和 Azure DNS Zone 管理。","Microsoft Azure domain registration and DNS management service, supporting domain registration and Azure DNS Zone management."
+"客户端 ID (Client ID)","Client ID"
+"客户端密钥 (Client Secret)","Client Secret"
+"订阅 ID (Subscription ID)","Subscription ID"
+"租户 ID (Tenant ID)","Tenant ID"
+"Azure DNS 配置获取指南","Azure DNS 配置获取指南"
+"1. 登录 Azure 门户：https://portal.azure.com","1. 登录 Azure 门户：https://portal.azure.com"
+"2. 进入「Azure Active Directory」→「应用注册」→「新注册」","2. 进入「Azure Active Directory」→「应用注册」→「新注册」"
+"3. 创建应用后，在「概述」页面获取：","3. 创建应用后，在「概述」页面获取："
+"- 应用程序(客户端) ID → 填入「客户端 ID」","- 应用程序(客户端) ID → 填入「客户端 ID」"
+"- 目录(租户) ID → 填入「租户 ID」","- 目录(租户) ID → 填入「租户 ID」"
+"4. 在「证书和密码」→「新客户端密码」创建密钥","4. 在「证书和密码」→「新客户端密码」创建密钥"
+"- 复制密钥值 → 填入「客户端密钥」（仅显示一次）","- 复制密钥值 → 填入「客户端密钥」（仅显示一次）"
+"5. 进入「订阅」，复制订阅 ID → 填入「订阅 ID」","5. 进入「订阅」，复制订阅 ID → 填入「订阅 ID」"
+"6. 在订阅的「访问控制(IAM)」中，为应用分配「DNS Zone 参与者」角色","6. 在订阅的「访问控制(IAM)」中，为应用分配「DNS Zone 参与者」角色"
+"Client ID 和 Client Secret 不能为空","Client ID and Client Secret cannot be empty"
+"Azure DNS 适配器尚未完成 API 对接，请稍后再试。","Azure DNS adapter API integration not yet complete. Please try again later."
+"Azure DNS Nameserver 修改功能尚未完成 API 对接，请稍后再试。","Azure DNS Nameserver 修改功能尚未完成 API 对接，请稍后再试。"
+"Azure DNS Nameserver 获取功能尚未完成 API 对接","Azure DNS Nameserver retrieval API not implemented yet"
+"Cloudflare DNS 服务提供商，支持 DNS 记录管理、CDN 加速、DDoS 防护。可用于将域名的 DNS 解析切换到 Cloudflare。","Cloudflare DNS provider, supports DNS record management, CDN acceleration, DDoS protection. Can be used to switch domain DNS resolution to Cloudflare."
+"API Token","API Token"
+"Cloudflare API Token","Cloudflare API Token"
+"Account ID","Account ID"
+"必填：登录 CF 控制台 → 任意域名 → Overview → 右下角 API 区域","必填：登录 CF 控制台 → 任意域名 → Overview → 右下角 API 区域"
+"Cloudflare API 配置获取指南","Cloudflare API Configuration Guide"
+"【获取 API Token】","[Get API Token]"
+"1. 登录 Cloudflare 控制台：https://dash.cloudflare.com/","1. 登录 Cloudflare 控制台：https://dash.cloudflare.com/"
+"2. 点击右上角头像 → My Profile","2. 点击右上角头像 → My Profile"
+"3. 左侧菜单选择 API Tokens","3. 左侧菜单选择 API Tokens"
+"4. 点击 Create Token","4. 点击 Create Token"
+"5. 选择 ""Edit zone DNS"" 模板（或自定义权限）","5. 选择 ""Edit zone DNS"" 模板（或自定义权限）"
+"6. Zone Resources 选择 ""All zones"" 或指定域名","6. Zone Resources 选择 ""All zones"" 或指定域名"
+"7. 点击 Continue to summary → Create Token","7. 点击 Continue to summary → Create Token"
+"8. 复制生成的 API Token 填入上方字段","8. 复制生成的 API Token 填入上方字段"
+【权限要求】,"[Permission Requirements]"
+"- Zone:DNS:Edit（DNS 记录管理必需）","- Zone:DNS:Edit（DNS 记录管理必需）"
+"- Zone:Zone:Read（获取域名列表必需）","- Zone:Zone:Read（获取域名列表必需）"
+"- Zone:Zone Settings:Edit（可选，修改 DNS 设置）","- Zone:Zone Settings:Edit（可选，修改 DNS 设置）"
+"【获取 Account ID（必填）】","【获取 Account ID（必填）】"
+"1. 进入任意已添加的域名","1. 进入任意已添加的域名"
+"2. 在 Overview 页面右下角找到「API」区域","2. 在 Overview 页面右下角找到「API」区域"
+"3. 复制「Account ID」填入上方字段","3. 复制「Account ID」填入上方字段"
+"API 验证失败","API 验证失败"
+"Cloudflare API 连接失败：%{1}","Cloudflare API connection failed: %{1}"
+"Cloudflare 主要是 DNS 服务提供商，域名注册功能有限。请通过其他域名商购买域名后，将 DNS 切换到 Cloudflare。","Cloudflare is primarily a DNS provider with limited domain registration. Please purchase domains from other registrars and switch DNS to Cloudflare."
+"Cloudflare 域名注册功能暂不支持，请通过其他域名商购买后切换 DNS 到 Cloudflare。","Cloudflare domain registration is not supported. Please purchase from other registrars and switch DNS to Cloudflare."
+"Cloudflare Account ID 未配置，无法获取注册域名列表","Cloudflare Account ID 未配置，无法获取注册域名列表"
+获取注册域名列表失败,获取注册域名列表失败
+"Cloudflare Registrar API 错误：%{1}","Cloudflare Registrar API 错误：%{1}"
+获取域名列表失败,获取域名列表失败
+"Cloudflare Zones API 错误：%{1}","Cloudflare Zones API 错误：%{1}"
+"域名未在 Cloudflare 中找到","Domain not found in Cloudflare"
+获取域名详情失败,"Failed to get domain details"
+"域名 %{1} 未在 Cloudflare 中找到","Domain %{1} not found in Cloudflare"
+"获取 DNS 记录失败","Failed to get DNS records"
+"Cloudflare API 错误：%{1}","Cloudflare API error: %{1}"
+添加记录失败,"Failed to add record"
+更新记录失败,"Failed to update record"
+删除记录失败,"Failed to delete record"
+"Cloudflare 不支持通过 API 修改 Nameserver。请在域名注册商处将 Nameserver 切换到 Cloudflare 分配的服务器。","Cloudflare does not support modifying Nameservers via API. Please switch Nameservers at your domain registrar to those assigned by Cloudflare."
+"Cloudflare 需要指定域名才能获取分配的 Nameserver","Cloudflare requires domain name to get assigned Nameservers"
+"域名已在 Cloudflare 中，使用已分配的 Nameserver","Domain already in Cloudflare, using assigned Nameservers"
+"域名已添加到 Cloudflare","Domain added to Cloudflare"
+"无法获取 Cloudflare Nameserver","Cannot get Cloudflare Nameservers"
+"无法自动获取 Cloudflare Account ID。","无法自动获取 Cloudflare Account ID。"
+【解决方案】,【解决方案】
+"方案一：创建 Token 时添加「Account → Account Settings → Read」权限","方案一：创建 Token 时添加「Account → Account Settings → Read」权限"
+"方案二：手动填写 Account ID：","方案二：手动填写 Account ID："
+"1. 登录 Cloudflare 控制台 https://dash.cloudflare.com","1. 登录 Cloudflare 控制台 https://dash.cloudflare.com"
+"2. 进入任意已添加的域名","2. 进入任意已添加的域名"
+"3. 在右下角「API」区域找到「Account ID」","3. 在右下角「API」区域找到「Account ID」"
+"4. 复制并填入本系统的账户配置中","4. 复制并填入本系统的账户配置中"
+添加域名失败,"Failed to add domain"
+"域名已添加到 Cloudflare，请将 Nameserver 切换到：%{1}","Domain added to Cloudflare. Please switch Nameservers to: %{1}"
+"获取 Cloudflare Account ID 失败：%{1}","获取 Cloudflare Account ID 失败：%{1}"
+"Cloudflare API 返回空账户列表，Token 可能没有 Account:Read 权限","Cloudflare API 返回空账户列表，Token 可能没有 Account:Read 权限"
+"Cloudflare API Token 不能为空","Cloudflare API Token cannot be empty"
+网络请求失败：%{1},"Network request failed: %{1}"
+"API 响应格式错误","API response format error"
+阿里云域名,"Aliyun Domains"
+"阿里云域名注册服务，支持域名注册、续费、DNS 解析和域名交易。","Aliyun domain registration service, supporting domain registration, renewal, DNS resolution, and domain trading."
+华东1（杭州）,"East China 1 (Hangzhou)"
+华东2（上海）,"East China 2 (Shanghai)"
+华北2（北京）,"North China 2 (Beijing)"
+华南1（深圳）,"South China 1 (Shenzhen)"
+亚太东南（新加坡）,"Asia Pacific Southeast (Singapore)"
+阿里云域名配置获取指南,阿里云域名配置获取指南
+"1. 登录阿里云控制台：https://www.aliyun.com","1. 登录阿里云控制台：https://www.aliyun.com"
+"2. 右上角头像 → 「AccessKey 管理」","2. 右上角头像 → 「AccessKey 管理」"
+"3. 建议创建子用户 AccessKey（更安全），或使用主账号 AccessKey","3. 建议创建子用户 AccessKey（更安全），或使用主账号 AccessKey"
+"4. 点击「创建 AccessKey」，完成手机验证","4. 点击「创建 AccessKey」，完成手机验证"
+"5. 将「AccessKey ID」填入上方对应字段","5. 将「AccessKey ID」填入上方对应字段"
+"6. 将「AccessKey Secret」填入上方对应字段（仅创建时显示一次，请妥善保存）","6. 将「AccessKey Secret」填入上方对应字段（仅创建时显示一次，请妥善保存）"
+"7. 如使用子用户，需授予「AliyunDomainFullAccess」权限","7. 如使用子用户，需授予「AliyunDomainFullAccess」权限"
+"8. 区域可保持默认（华东1-杭州）","8. 区域可保持默认（华东1-杭州）"
+"AccessKey ID 和 AccessKey Secret 不能为空","AccessKey ID and AccessKey Secret cannot be empty"
+"阿里云域名适配器尚未完成 API 对接，请稍后再试。","Aliyun domain adapter API integration not yet complete. Please try again later."
+"阿里云 DNS 适配器尚未完成 API 对接，请稍后再试。","阿里云 DNS 适配器尚未完成 API 对接，请稍后再试。"
+"阿里云 Nameserver 修改功能尚未完成 API 对接，请稍后再试。","阿里云 Nameserver 修改功能尚未完成 API 对接，请稍后再试。"
+"阿里云 DNS 默认服务器","Aliyun DNS default servers"
 "开始 v1.6.0 域名池数据迁移...","开始 v1.6.0 域名池数据迁移..."
 （试运行模式，不会实际修改数据）,（试运行模式，不会实际修改数据）
 "步骤 1: 为根域名生成子域名到域名池...","步骤 1: 为根域名生成子域名到域名池..."
@@ -24,6 +213,27 @@
 "（试运行模式已完成，移除 --dry-run 参数以实际执行）","（试运行模式已完成，移除 --dry-run 参数以实际执行）"
 迁移完成,迁移完成
 "v1.6.0 域名池数据迁移","v1.6.0 域名池数据迁移"
+请至少填写一个网站地址（域名或域名/子路径）,请至少填写一个网站地址（域名或域名/子路径）
+"该域名根路径已被站点「%{1}」使用，请使用子路径（如 /shop）","The domain root path is already used by site 「%{1}」. Please use a subpath (e.g. /shop)"
+"该地址 %{1} 已被站点「%{2}」使用","The address %{1} is already used by site 「%{2}」"
+网站保存失败，未能获取网站ID,网站保存失败，未能获取网站ID
+网站添加成功,网站添加成功
+"网站添加失败: %{1}","网站添加失败: %{1}"
+网站ID不能为空,网站ID不能为空
+网站不存在,网站不存在
+"保存关联货币失败: %{1}","保存关联货币失败: %{1}"
+"保存关联语言失败: %{1}","保存关联语言失败: %{1}"
+网站更新成功,网站更新成功
+站点名称不能为空,站点名称不能为空
+站点代码不能为空,站点代码不能为空
+站点URL不能为空,站点URL不能为空
+站点代码已存在,站点代码已存在
+站点创建成功,站点创建成功
+创建失败：,创建失败：
+默认网站不允许删除,默认网站不允许删除
+网站删除成功,网站删除成功
+"网站删除失败: %{1}","网站删除失败: %{1}"
+当前语言没有对应语言包翻译，请前往i18n模块对%{1}语言的地区语言进行更新,当前语言没有对应语言包翻译，请前往i18n模块对%{1}语言的地区语言进行更新
 获取域名商列表失败：%{error},"Failed to get registrar list: %{error}"
 域名商代码不能为空,域名商代码不能为空
 未找到域名商适配器,未找到域名商适配器
@@ -71,12 +281,10 @@
 "同步 DNS 记录失败：%{error}","同步 DNS 记录失败：%{error}"
 "域名 ID 和记录值不能为空","域名 ID 和记录值不能为空"
 "添加 DNS 记录失败","添加 DNS 记录失败"
-"DNS 记录添加成功","DNS record added successfully"
 "添加 DNS 记录失败：%{error}","添加 DNS 记录失败：%{error}"
 "域名 ID 和记录 ID 不能为空","域名 ID 和记录 ID 不能为空"
 本地记录已删除,本地记录已删除
 本地记录已删除，远程删除失败：%{error},本地记录已删除，远程删除失败：%{error}
-"DNS 记录删除成功","DNS record deleted successfully"
 "删除 DNS 记录失败：%{error}","删除 DNS 记录失败：%{error}"
 请选择要添加DNS记录的域名,请选择要添加DNS记录的域名
 无法获取服务器公网IP,"Unable to get server public IP"
@@ -157,32 +365,6 @@
 "没有需要清理的 DNS 服务商域名","没有需要清理的 DNS 服务商域名"
 "清理完成：共删除 %{1} 个误同步的域名（来自 %{2} 个 DNS 服务商账户）","清理完成：共删除 %{1} 个误同步的域名（来自 %{2} 个 DNS 服务商账户）"
 清理失败：%{1},清理失败：%{1}
-请至少填写一个网站地址（域名或域名/子路径）,请至少填写一个网站地址（域名或域名/子路径）
-"该域名根路径已被站点「%{1}」使用，请使用子路径（如 /shop）","The domain root path is already used by site 「%{1}」. Please use a subpath (e.g. /shop)"
-"该地址 %{1} 已被站点「%{2}」使用","The address %{1} is already used by site 「%{2}」"
-网站保存失败，未能获取网站ID,网站保存失败，未能获取网站ID
-网站添加成功,网站添加成功
-"网站添加失败: %{1}","网站添加失败: %{1}"
-网站ID不能为空,网站ID不能为空
-网站不存在,网站不存在
-"保存关联货币失败: %{1}","保存关联货币失败: %{1}"
-"保存关联语言失败: %{1}","保存关联语言失败: %{1}"
-网站更新成功,网站更新成功
-站点名称不能为空,站点名称不能为空
-站点代码不能为空,站点代码不能为空
-站点URL不能为空,站点URL不能为空
-站点代码已存在,站点代码已存在
-站点创建成功,站点创建成功
-创建失败：,创建失败：
-默认网站不允许删除,默认网站不允许删除
-网站删除成功,网站删除成功
-"网站删除失败: %{1}","网站删除失败: %{1}"
-当前语言没有对应语言包翻译，请前往i18n模块对%{1}语言的地区语言进行更新,当前语言没有对应语言包翻译，请前往i18n模块对%{1}语言的地区语言进行更新
-加载维护模式失败：%{1},加载维护模式失败：%{1}
-无效的请求方法,无效的请求方法
-无效的网站ID,无效的网站ID
-维护模式状态已更新,维护模式状态已更新
-更新失败：%{1},更新失败：%{1}
 域名不能为空,域名不能为空
 "域名 %{1} 已存在于域名池中","域名 %{1} 已存在于域名池中"
 子域名添加成功,子域名添加成功
@@ -192,129 +374,16 @@
 删除失败：%{1},删除失败：%{1}
 "解析正常，IP: %{1}","解析正常，IP: %{1}"
 解析异常：%{1},解析异常：%{1}
-未知错误,未知错误
 检测失败：%{1},检测失败：%{1}
 "parent_domain_id 不能为空","parent_domain_id 不能为空"
 加载备份管理失败：%{1},加载备份管理失败：%{1}
+无效的请求方法,无效的请求方法
+无效的网站ID,无效的网站ID
 备份创建成功,备份创建成功
 备份创建失败：%{1},备份创建失败：%{1}
-域名解析状态检测,域名解析状态检测
-"定期检测域名 DNS 解析状态，验证是否指向本服务器","定期检测域名 DNS 解析状态，验证是否指向本服务器"
-域名池解析状态检测,域名池解析状态检测
-"定期检测域名池（可建站子域名）的 DNS 解析状态，验证是否指向本服务器，更新建站就绪状态","定期检测域名池（可建站子域名）的 DNS 解析状态，验证是否指向本服务器，更新建站就绪状态"
-"网站 HTTPS 状态同步","Website HTTPS Status Sync"
-"根据证书有效性自动同步域名的 HTTPS 状态，证书失效自动回退 HTTP","Auto-sync domain HTTPS status based on certificate validity, auto rollback to HTTP when expired"
-"HTTPS 状态同步完成：共 %{1} 个域名，启用 %{2} 个，禁用 %{3} 个，未变化 %{4} 个","HTTPS sync complete: %{1} domains total, %{2} enabled, %{3} disabled, %{4} unchanged"
-"HTTPS 状态同步失败：%{1}","HTTPS status sync failed: %{1}"
-域名池证书自动申请,域名池证书自动申请
-没有需要申请证书的域名池域名,没有需要申请证书的域名池域名
-"[DomainPoolCertificateRequest] %{1} 证书申请成功","[DomainPoolCertificateRequest] %{1} 证书申请成功"
-"[DomainPoolCertificateRequest] %{1} 证书申请失败: %{2}","[DomainPoolCertificateRequest] %{1} 证书申请失败: %{2}"
-"[DomainPoolCertificateRequest] %{1} 证书申请异常: %{2}","[DomainPoolCertificateRequest] %{1} 证书申请异常: %{2}"
-"域名池证书申请完成：检查 %{1} 个，申请 %{2} 个，成功 %{3} 个，失败 %{4} 个","域名池证书申请完成：检查 %{1} 个，申请 %{2} 个，成功 %{3} 个，失败 %{4} 个"
-域名池证书申请任务异常：%{1},域名池证书申请任务异常：%{1}
-域名自动同步,域名自动同步
-"定期从域名商 API 同步域名数据到本地数据库","定期从域名商 API 同步域名数据到本地数据库"
-"根域 NS 归属检测","根域 NS 归属检测"
-"定期检测根域名的 NS 归属情况，识别是否托管到 Cloudflare 等外部 DNS 服务商","定期检测根域名的 NS 归属情况，识别是否托管到 Cloudflare 等外部 DNS 服务商"
-域名自动解析,域名自动解析
-"自动为未解析到本服务器的域名添加 DNS 记录","自动为未解析到本服务器的域名添加 DNS 记录"
-网站域名健康检查,"Website Domain Health Check"
-"定期检查所有网站域名的可访问性，自动同步 HTTPS 状态","Periodically check all website domain accessibility and auto-sync HTTPS status"
-"健康检查完成：共 %{1} 个域名，健康 %{2} 个，不健康 %{3} 个，HTTPS 状态更新 %{4} 个","Health check complete: %{1} domains total, %{2} healthy, %{3} unhealthy, %{4} HTTPS status updated"
-健康检查失败：%{1},"Health check failed: %{1}"
-id属性不能为空,id属性不能为空
-搜索域名...,"Search domain..."
-点击选择域名（可多选）,点击选择域名（可多选）
-请选择域名,"Select Domain"
-加载中...,加载中...
-清空,清空
-确定,确定
-点击选择多个域名，选中后点击确定,点击选择多个域名，选中后点击确定
-点击选择域名，选择后将自动填充相关字段,"Click to select domain. Related fields will be auto-filled."
-未找到匹配的域名,"No matching domain found"
-加载失败,加载失败
-暂无可用域名，请先添加,"No domains available. Please add one first."
-"已选择 %s 个域名","已选择 %s 个域名"
-可建站,可建站
-证书到期,证书到期
-"域名商适配器扩展点，用于接入第三方域名注册商 API（如 GoDaddy、Namecheap 等）。适配器实现域名可用性检查、购买和管理功能。","Domain registrar adapter extension point for integrating third-party domain registrar APIs (e.g., GoDaddy, Namecheap). Adapters implement domain availability checking, purchasing, and management."
-"域名商适配器实现类，在模块的 extends/module/Weline_Websites/Registrar/ 目录下创建PHP文件","Domain registrar adapter implementation class. Create a PHP file in the module's extends/module/Weline_Websites/Registrar/ directory."
-"必须实现 DomainRegistrarInterface 接口","Must implement DomainRegistrarInterface interface"
-返回适配器唯一标识,"Returns adapter unique identifier"
-返回适配器显示名称,"Returns adapter display name"
-返回适配器描述,"Returns adapter description"
-返回适配器版本,"Returns adapter version"
-返回适配器所需的配置字段定义,"Returns adapter required configuration field definitions"
-"测试 API 连通性","Test API connectivity"
-检查域名可用性,"Check domain availability"
-批量检查域名可用性,"Batch check domain availability"
-购买域名,购买域名
-获取已有域名列表,"Get existing domain list"
-获取域名详情,"Get domain detail"
-"GoDaddy、Namecheap、Dynadot 等域名商适配器可通过此扩展点接入","GoDaddy, Namecheap, Dynadot and other registrar adapters can be integrated through this extension point"
-正常,Active
-处理中,处理中
-已过期,已过期
-已暂停,已暂停
-待检测,待检测
-已解析,已解析
-解析错误,"Resolve errors"
-无证书,无证书
-申请中,申请中
-有效,有效
-申请错误,申请错误
-"从根域名 %{1} 自动生成","从根域名 %{1} 自动生成"
-子域名不能为空,子域名不能为空
-找不到根域名,找不到根域名
-"域名 %{1} 已存在于域名池","域名 %{1} 已存在于域名池"
-"子域名 %{1} 已添加到域名池","子域名 %{1} 已添加到域名池"
-账户未启用,账户未启用
-账户「%{1}」关联的域名商不存在或未配置（registrar_id=%{2}）,账户「%{1}」关联的域名商不存在或未配置（registrar_id=%{2}）
-账户「%{1}」的域名商适配器「%{2}」未注册,账户「%{1}」的域名商适配器「%{2}」未注册
-"「%{1}」是 DNS 服务商，不是域名注册商，跳过域名同步（域名归属应以实际注册商为准）","「%{1}」是 DNS 服务商，不是域名注册商，跳过域名同步（域名归属应以实际注册商为准）"
-该账户下没有域名,该账户下没有域名
-"同步完成：新增 %{1}，更新 %{2}，删除 %{3}","同步完成：新增 %{1}，更新 %{2}，删除 %{3}"
-同步失败：%{1},同步失败：%{1}
-没有启用的域名商账户,没有启用的域名商账户
-"✓ %{1}：同步 %{2} 个域名","✓ %{1}：同步 %{2} 个域名"
-"✗ %{1}：%{2}","✗ %{1}：%{2}"
-"同步完成：%{1}/%{2} 个账户成功，共同步 %{3} 个域名","同步完成：%{1}/%{2} 个账户成功，共同步 %{3} 个域名"
-【成功】,【成功】
-【失败】,【失败】
-请选择要操作的域名,请选择要操作的域名
-未找到指定的域名,未找到指定的域名
-不支持的操作类型：%{1},不支持的操作类型：%{1}
-"批量操作完成：成功 %{1}，失败 %{2}","批量操作完成：成功 %{1}，失败 %{2}"
-"DNS 服务器不能为空","DNS 服务器不能为空"
-数据无效,数据无效
-适配器不支持此操作,适配器不支持此操作
-"适配器不支持修改 DNS","适配器不支持修改 DNS"
-账户关联的域名商不存在或未配置,账户关联的域名商不存在或未配置
-域名商适配器「%{1}」未注册,域名商适配器「%{1}」未注册
-"获取成功，共 %{1} 个域名","获取成功，共 %{1} 个域名"
-"（注意：「%{1}」是 DNS 服务商，非域名注册商，这些域名可能已属于其他注册商账户）","（注意：「%{1}」是 DNS 服务商，非域名注册商，这些域名可能已属于其他注册商账户）"
-获取失败：%{1},获取失败：%{1}
-域名商适配器未注册,域名商适配器未注册
-"「%{1}」是 DNS 服务商而非域名注册商，无法导入域名。域名归属应以实际注册商（如 GName、阿里云）为准，DNS 服务商只用于管理 DNS 解析。","「%{1}」是 DNS 服务商而非域名注册商，无法导入域名。域名归属应以实际注册商（如 GName、阿里云）为准，DNS 服务商只用于管理 DNS 解析。"
-未在远程找到要导入的域名,未在远程找到要导入的域名
-"导入完成：新增 %{1}，已存在 %{2}，入池 %{3}","导入完成：新增 %{1}，已存在 %{2}，入池 %{3}"
-导入失败：%{1},导入失败：%{1}
-购买条目不能为空,"Purchase items cannot be empty"
-购买失败,"Purchase failed"
-"购买完成：%{success} 成功，%{fail} 失败","Purchase completed: %{success} succeeded, %{fail} failed"
-"域名入池失败: %{domain}, 错误: %{error}","Failed to add domain to pool: %{domain}, error: %{error}"
-"域名绑站失败: %{domain}, 错误: %{error}","Failed to bind domain to site: %{domain}, error: %{error}"
-"创建自动解析任务失败: %{domain}, 错误: %{error}","创建自动解析任务失败: %{domain}, 错误: %{error}"
-"从 ExtendsData 扫描域名商适配器失败:","从 ExtendsData 扫描域名商适配器失败:"
-"加载域名商适配器失败: %{file}, 错误: %{error}","Failed to load domain registrar adapter: %{file}, error: %{error}"
-访问正常,"Access OK"
-"HTTPS 证书无效，已自动回退 HTTP","HTTPS certificate invalid, automatically rolled back to HTTP"
-"HTTP %{1}","HTTP %{1}"
-"无法获取服务器公网 IP","无法获取服务器公网 IP"
-"域名商不支持 DNS 管理","域名商不支持 DNS 管理"
-没有可添加的解析记录,没有可添加的解析记录
-"域名 DNS 托管在 %{1}，但未配置该服务商账户。请在「域名商账户」中添加 %{1} 账户。","域名 DNS 托管在 %{1}，但未配置该服务商账户。请在「域名商账户」中添加 %{1} 账户。"
+加载维护模式失败：%{1},加载维护模式失败：%{1}
+维护模式状态已更新,维护模式状态已更新
+更新失败：%{1},更新失败：%{1}
 域名列表,域名列表
 刷新服务器IP,刷新服务器IP
 导入域名,导入域名
@@ -336,11 +405,15 @@ id属性不能为空,id属性不能为空
 清理DNS域名,清理DNS域名
 所有账号,所有账号
 解析状态,解析状态
+已解析,已解析
 未解析,未解析
+解析错误,"Resolve errors"
 指向本服务器,指向本服务器
 HTTPS状态,HTTPS状态
 证书有效,证书有效
 即将过期,即将过期
+已过期,已过期
+无证书,无证书
 域名,Domain
 服务商,服务商
 解析IP,解析IP
@@ -415,6 +488,7 @@ DNS服务商,DNS服务商
 域名商账户下暂无域名,域名商账户下暂无域名
 以下域名尚未拉取到本地，请选择域名后点击「导入选中」按钮,以下域名尚未拉取到本地，请选择域名后点击「导入选中」按钮
 导入选中,导入选中
+正常,Active
 已拉取,已拉取
 未拉取,未拉取
 导入,导入
@@ -430,8 +504,10 @@ DNS服务商,DNS服务商
 查看全部状态,查看全部状态
 本地暂无已拉取的域名，正在从域名商获取...,本地暂无已拉取的域名，正在从域名商获取...
 暂无域名数据,暂无域名数据
+待检测,待检测
 错误,错误
 无,无
+有效,有效
 本机,本机
 注册,注册
 转存域名池,转存域名池
@@ -525,6 +601,11 @@ DNS管理,DNS管理
 清理完成,清理完成
 已清理的账户,已清理的账户
 清理失败,清理失败
+域名服务,"Domain Service"
+后台,Backend
+网站服务,"Website Service"
+域名商管理,"Registrar Management"
+域名购买,"Domain Purchase"
 批量购买域名,"Bulk Domain Purchase"
 选择域名商账号,"Select Registrar Account"
 请选择域名商账号,"Select a registrar account"
@@ -559,20 +640,15 @@ DNS管理,DNS管理
 个域名，确认继续？,"domain(s). Continue?"
 正在提交购买请求...,"Submitting purchase request..."
 购买请求已提交,"Purchase request submitted"
+购买失败,"Purchase failed"
 订单号,"Order No."
 数量,Count
 时间,Time
-域名服务,"Domain Service"
-后台,Backend
-网站服务,"Website Service"
-域名商管理,"Registrar Management"
-域名购买,"Domain Purchase"
 域名商账号管理,"Registrar Account Management"
 添加账号,"Add Account"
 "暂无域名商账号，请点击""添加账号""配置域名服务商。","暂无域名商账号，请点击""添加账号""配置域名服务商。"
 渠道,Provider
 账号名称,"Account Name"
-区域,Region
 创建时间,"Created At"
 禁用,Disabled
 测试连接,"Test Connection"
@@ -596,6 +672,14 @@ DNS管理,DNS管理
 连接成功,"Connection successful"
 连接失败,"Connection failed"
 测试失败,"Test failed"
+面板,Panel
+网站列表,网站列表
+搜索,搜索
+搜索名称、代码或URL,搜索名称、代码或URL
+正在搜索...,正在搜索...
+服务器返回的不是有效的JSON数据,服务器返回的不是有效的JSON数据
+搜索失败,搜索失败
+搜索出错，请刷新页面重试,搜索出错，请刷新页面重试
 选择域名,选择域名
 从域名池选择已就绪的域名（可多选）；选择后网站代码与网站地址将自动填充，可再编辑。同一域名被多站使用时须填写不同子路径。,从域名池选择已就绪的域名（可多选）；选择后网站代码与网站地址将自动填充，可再编辑。同一域名被多站使用时须填写不同子路径。
 网站名称,"Website Name"
@@ -614,14 +698,6 @@ DNS管理,DNS管理
 绑定后将自动提交sitemap到该SEO账户的搜索引擎,绑定后将自动提交sitemap到该SEO账户的搜索引擎
 SEO账户管理请前往：,SEO账户管理请前往：
 "SEO管理 > 账户管理","SEO管理 > 账户管理"
-面板,Panel
-网站列表,网站列表
-搜索,搜索
-搜索名称、代码或URL,搜索名称、代码或URL
-正在搜索...,正在搜索...
-服务器返回的不是有效的JSON数据,服务器返回的不是有效的JSON数据
-搜索失败,搜索失败
-搜索出错，请刷新页面重试,搜索出错，请刷新页面重试
 网站维护模式,网站维护模式
 提示,提示
 开启维护模式后，前台将显示维护页面，但后台仍可正常访问。,开启维护模式后，前台将显示维护页面，但后台仍可正常访问。
@@ -646,189 +722,123 @@ SEO账户管理请前往：,SEO账户管理请前往：
 大小,大小
 下载,下载
 暂无备份文件,暂无备份文件
-"Microsoft Azure 域名注册与 DNS 管理服务，支持域名注册和 Azure DNS Zone 管理。","Microsoft Azure domain registration and DNS management service, supporting domain registration and Azure DNS Zone management."
-"客户端 ID (Client ID)","Client ID"
-"客户端密钥 (Client Secret)","Client Secret"
-"订阅 ID (Subscription ID)","Subscription ID"
-"租户 ID (Tenant ID)","Tenant ID"
-"Azure DNS 配置获取指南","Azure DNS 配置获取指南"
-"1. 登录 Azure 门户：https://portal.azure.com","1. 登录 Azure 门户：https://portal.azure.com"
-"2. 进入「Azure Active Directory」→「应用注册」→「新注册」","2. 进入「Azure Active Directory」→「应用注册」→「新注册」"
-"3. 创建应用后，在「概述」页面获取：","3. 创建应用后，在「概述」页面获取："
-"- 应用程序(客户端) ID → 填入「客户端 ID」","- 应用程序(客户端) ID → 填入「客户端 ID」"
-"- 目录(租户) ID → 填入「租户 ID」","- 目录(租户) ID → 填入「租户 ID」"
-"4. 在「证书和密码」→「新客户端密码」创建密钥","4. 在「证书和密码」→「新客户端密码」创建密钥"
-"- 复制密钥值 → 填入「客户端密钥」（仅显示一次）","- 复制密钥值 → 填入「客户端密钥」（仅显示一次）"
-"5. 进入「订阅」，复制订阅 ID → 填入「订阅 ID」","5. 进入「订阅」，复制订阅 ID → 填入「订阅 ID」"
-"6. 在订阅的「访问控制(IAM)」中，为应用分配「DNS Zone 参与者」角色","6. 在订阅的「访问控制(IAM)」中，为应用分配「DNS Zone 参与者」角色"
-"Client ID 和 Client Secret 不能为空","Client ID and Client Secret cannot be empty"
-"Azure DNS 适配器尚未完成 API 对接，请稍后再试。","Azure DNS adapter API integration not yet complete. Please try again later."
-"Azure DNS Nameserver 修改功能尚未完成 API 对接，请稍后再试。","Azure DNS Nameserver 修改功能尚未完成 API 对接，请稍后再试。"
-"Azure DNS Nameserver 获取功能尚未完成 API 对接","Azure DNS Nameserver retrieval API not implemented yet"
-"Amazon Web Services Route 53 域名注册服务，支持域名注册、DNS 管理和健康检查。","Amazon Web Services Route 53 domain registration service, supporting domain registration, DNS management, and health checks."
-"Access Key ID","Access Key ID"
-"Secret Access Key","Secret Access Key"
-"AWS Route53 配置获取指南","AWS Route53 配置获取指南"
-"1. 登录 AWS 控制台：https://console.aws.amazon.com","1. 登录 AWS 控制台：https://console.aws.amazon.com"
-"2. 进入 IAM 服务 → 用户 → 选择或创建用户","2. 进入 IAM 服务 → 用户 → 选择或创建用户"
-"3. 在「安全凭证」选项卡中，点击「创建访问密钥」","3. 在「安全凭证」选项卡中，点击「创建访问密钥」"
-"4. 选择「应用程序外部使用」，创建密钥","4. 选择「应用程序外部使用」，创建密钥"
-"5. 将「访问密钥 ID」填入上方「Access Key ID」字段","5. 将「访问密钥 ID」填入上方「Access Key ID」字段"
-"6. 将「秘密访问密钥」填入上方「Secret Access Key」字段","6. 将「秘密访问密钥」填入上方「Secret Access Key」字段"
-"7. 确保该用户具有 Route53Domains 和 Route53 的完整权限","7. 确保该用户具有 Route53Domains 和 Route53 的完整权限"
-"8. 区域选择 us-east-1（Route53 域名注册仅支持此区域）","8. 区域选择 us-east-1（Route53 域名注册仅支持此区域）"
-"API Key 和 Secret 不能为空","API Key and Secret cannot be empty"
-"AWS Route53 适配器尚未完成 API 对接，请稍后再试。","AWS Route53 adapter API integration not yet complete. Please try again later."
-"AWS Route53 DNS 适配器尚未完成 API 对接，请稍后再试。","AWS Route53 DNS 适配器尚未完成 API 对接，请稍后再试。"
-"AWS Route53 Nameserver 修改功能尚未完成 API 对接，请稍后再试。","AWS Route53 Nameserver 修改功能尚未完成 API 对接，请稍后再试。"
-"AWS Route53 Nameserver 获取功能尚未完成 API 对接","AWS Route53 Nameserver retrieval API not implemented yet"
-"Cloudflare DNS 服务提供商，支持 DNS 记录管理、CDN 加速、DDoS 防护。可用于将域名的 DNS 解析切换到 Cloudflare。","Cloudflare DNS provider, supports DNS record management, CDN acceleration, DDoS protection. Can be used to switch domain DNS resolution to Cloudflare."
-"API Token","API Token"
-"Cloudflare API Token","Cloudflare API Token"
-"Account ID","Account ID"
-"必填：登录 CF 控制台 → 任意域名 → Overview → 右下角 API 区域","必填：登录 CF 控制台 → 任意域名 → Overview → 右下角 API 区域"
-"Cloudflare API 配置获取指南","Cloudflare API Configuration Guide"
-"【获取 API Token】","[Get API Token]"
-"1. 登录 Cloudflare 控制台：https://dash.cloudflare.com/","1. 登录 Cloudflare 控制台：https://dash.cloudflare.com/"
-"2. 点击右上角头像 → My Profile","2. 点击右上角头像 → My Profile"
-"3. 左侧菜单选择 API Tokens","3. 左侧菜单选择 API Tokens"
-"4. 点击 Create Token","4. 点击 Create Token"
-"5. 选择 ""Edit zone DNS"" 模板（或自定义权限）","5. 选择 ""Edit zone DNS"" 模板（或自定义权限）"
-"6. Zone Resources 选择 ""All zones"" 或指定域名","6. Zone Resources 选择 ""All zones"" 或指定域名"
-"7. 点击 Continue to summary → Create Token","7. 点击 Continue to summary → Create Token"
-"8. 复制生成的 API Token 填入上方字段","8. 复制生成的 API Token 填入上方字段"
-【权限要求】,"[Permission Requirements]"
-"- Zone:DNS:Edit（DNS 记录管理必需）","- Zone:DNS:Edit（DNS 记录管理必需）"
-"- Zone:Zone:Read（获取域名列表必需）","- Zone:Zone:Read（获取域名列表必需）"
-"- Zone:Zone Settings:Edit（可选，修改 DNS 设置）","- Zone:Zone Settings:Edit（可选，修改 DNS 设置）"
-"【获取 Account ID（必填）】","【获取 Account ID（必填）】"
-"1. 进入任意已添加的域名","1. 进入任意已添加的域名"
-"2. 在 Overview 页面右下角找到「API」区域","2. 在 Overview 页面右下角找到「API」区域"
-"3. 复制「Account ID」填入上方字段","3. 复制「Account ID」填入上方字段"
-"API 验证失败","API 验证失败"
-"Cloudflare API 连接失败：%{1}","Cloudflare API connection failed: %{1}"
-"Cloudflare 主要是 DNS 服务提供商，域名注册功能有限。请通过其他域名商购买域名后，将 DNS 切换到 Cloudflare。","Cloudflare is primarily a DNS provider with limited domain registration. Please purchase domains from other registrars and switch DNS to Cloudflare."
-"Cloudflare 域名注册功能暂不支持，请通过其他域名商购买后切换 DNS 到 Cloudflare。","Cloudflare domain registration is not supported. Please purchase from other registrars and switch DNS to Cloudflare."
-"Cloudflare Account ID 未配置，无法获取注册域名列表","Cloudflare Account ID 未配置，无法获取注册域名列表"
-获取注册域名列表失败,获取注册域名列表失败
-"Cloudflare Registrar API 错误：%{1}","Cloudflare Registrar API 错误：%{1}"
-获取域名列表失败,获取域名列表失败
-"Cloudflare Zones API 错误：%{1}","Cloudflare Zones API 错误：%{1}"
-"域名未在 Cloudflare 中找到","Domain not found in Cloudflare"
-获取域名详情失败,"Failed to get domain details"
-"域名 %{1} 未在 Cloudflare 中找到","Domain %{1} not found in Cloudflare"
-"获取 DNS 记录失败","Failed to get DNS records"
-"Cloudflare API 错误：%{1}","Cloudflare API error: %{1}"
-添加记录失败,"Failed to add record"
-更新记录失败,"Failed to update record"
-"DNS 记录更新成功","DNS record updated successfully"
-删除记录失败,"Failed to delete record"
-"Cloudflare 不支持通过 API 修改 Nameserver。请在域名注册商处将 Nameserver 切换到 Cloudflare 分配的服务器。","Cloudflare does not support modifying Nameservers via API. Please switch Nameservers at your domain registrar to those assigned by Cloudflare."
-"Cloudflare 需要指定域名才能获取分配的 Nameserver","Cloudflare requires domain name to get assigned Nameservers"
-"域名已在 Cloudflare 中，使用已分配的 Nameserver","Domain already in Cloudflare, using assigned Nameservers"
-"域名已添加到 Cloudflare","Domain added to Cloudflare"
-"无法获取 Cloudflare Nameserver","Cannot get Cloudflare Nameservers"
-"无法自动获取 Cloudflare Account ID。","无法自动获取 Cloudflare Account ID。"
-【解决方案】,【解决方案】
-"方案一：创建 Token 时添加「Account → Account Settings → Read」权限","方案一：创建 Token 时添加「Account → Account Settings → Read」权限"
-"方案二：手动填写 Account ID：","方案二：手动填写 Account ID："
-"1. 登录 Cloudflare 控制台 https://dash.cloudflare.com","1. 登录 Cloudflare 控制台 https://dash.cloudflare.com"
-"2. 进入任意已添加的域名","2. 进入任意已添加的域名"
-"3. 在右下角「API」区域找到「Account ID」","3. 在右下角「API」区域找到「Account ID」"
-"4. 复制并填入本系统的账户配置中","4. 复制并填入本系统的账户配置中"
-添加域名失败,"Failed to add domain"
-"域名已添加到 Cloudflare，请将 Nameserver 切换到：%{1}","Domain added to Cloudflare. Please switch Nameservers to: %{1}"
-"获取 Cloudflare Account ID 失败：%{1}","获取 Cloudflare Account ID 失败：%{1}"
-"Cloudflare API 返回空账户列表，Token 可能没有 Account:Read 权限","Cloudflare API 返回空账户列表，Token 可能没有 Account:Read 权限"
-"Cloudflare API Token 不能为空","Cloudflare API Token cannot be empty"
-网络请求失败：%{1},"Network request failed: %{1}"
-"API 响应格式错误","API response format error"
-"GName 域名注册商，支持域名注册、续费、转入、DNS 管理和 DNSSEC 配置。","GName 域名注册商，支持域名注册、续费、转入、DNS 管理和 DNSSEC 配置。"
-"APP ID","APP ID"
-"GName 平台分配的 APP ID","GName 平台分配的 APP ID"
-"APP Key","APP Key"
-"API 域名","API 域名"
-"默认联系人模板 ID","默认联系人模板 ID"
-注册域名时使用的联系人模板（可选）,注册域名时使用的联系人模板（可选）
-"GName API 配置获取指南","GName API 配置获取指南"
-【前置条件】,【前置条件】
-"1. 注册 GName 账号：https://www.gname.com/register","1. 注册 GName 账号：https://www.gname.com/register"
-"2. 升级为经销商账号：https://www.gname.com/agent","2. 升级为经销商账号：https://www.gname.com/agent"
-"3. 签署 API 服务协议（企业/平台必需）","3. 签署 API 服务协议（企业/平台必需）"
-"- 联系商务邮箱：business@gname.com","- 联系商务邮箱：business@gname.com"
-"- 或提交工单：https://www.gname.com/user#/wt_add","- 或提交工单：https://www.gname.com/user#/wt_add"
-"- 或拨打热线：+65-65189986","- 或拨打热线：+65-65189986"
-"【获取 API 凭证】","【获取 API 凭证】"
-"4. 登录后进入「控制中心」→「API 管理」","4. 登录后进入「控制中心」→「API 管理」"
-"5. 协议签署完成后可查看 APP ID 和 APP Key","5. 协议签署完成后可查看 APP ID 和 APP Key"
-"6. 将 APP ID 填入上方「APP ID」字段","6. 将 APP ID 填入上方「APP ID」字段"
-"7. 将 APP Key 填入上方「APP Key」字段","7. 将 APP Key 填入上方「APP Key」字段"
-"8. API 域名保持默认（api.gname.com）即可","8. API 域名保持默认（api.gname.com）即可"
-"GName API 连接失败：%{1}（错误码：%{2}，请求ID：%{3}，AppID：%{4}，API地址：%{5}）","GName API 连接失败：%{1}（错误码：%{2}，请求ID：%{3}，AppID：%{4}，API地址：%{5}）"
-"GName API 连接失败：%{1}","GName API 连接失败：%{1}"
-域名可注册,域名可注册
-域名为溢价域名,域名为溢价域名
-"API 权限错误：%{1}（错误码：%{2}）","API 权限错误：%{1}（错误码：%{2}）"
-域名不可注册,域名不可注册
-%{1}（错误码：%{2}）,%{1}（错误码：%{2}）
-域名注册提交成功,域名注册提交成功
-溢价域名，需确认金额后再提交,溢价域名，需确认金额后再提交
-域名注册失败：%{1}（错误码：%{2}）,域名注册失败：%{1}（错误码：%{2}）
-"API 请求失败","API 请求失败"
-获取域名列表失败：%{1}（错误码：%{2}）,获取域名列表失败：%{1}（错误码：%{2}）
-获取域名详情失败：%{1}（错误码：%{2}）,获取域名详情失败：%{1}（错误码：%{2}）
-"DNS 修改成功","DNS 修改成功"
-"DNS 修改失败：%{1}（错误码：%{2}）","DNS 修改失败：%{1}（错误码：%{2}）"
-获取联系人模板列表失败：%{1}（错误码：%{2}）,获取联系人模板列表失败：%{1}（错误码：%{2}）
-"获取 TLD 价格列表失败：%{1}（错误码：%{2}）","获取 TLD 价格列表失败：%{1}（错误码：%{2}）"
-获取账户余额失败：%{1}（错误码：%{2}）,获取账户余额失败：%{1}（错误码：%{2}）
-"GName APP ID 不能为空","GName APP ID 不能为空"
-"GName APP Key 不能为空","GName APP Key 不能为空"
-"GName API 请求失败：%{1}","GName API 请求失败：%{1}"
-网络错误,网络错误
-"GName API 响应解析失败 (HTTP %{1}): %{2}","GName API 响应解析失败 (HTTP %{1}): %{2}"
-空响应,空响应
-"获取 DNS 记录失败：%{1}（错误码：%{2}）","获取 DNS 记录失败：%{1}（错误码：%{2}）"
-"（域名 DNS 可能已切换到其他服务商，请到对应服务商处添加解析）","（域名 DNS 可能已切换到其他服务商，请到对应服务商处添加解析）"
-（域名可能不存在或已过期）,（域名可能不存在或已过期）
-"（域名 DNS 可能已切换到其他服务商）","（域名 DNS 可能已切换到其他服务商）"
-"（无权操作此域名 DNS，可能已切换到其他服务商）","（无权操作此域名 DNS，可能已切换到其他服务商）"
-"DNS 记录添加失败：%{1}（错误码：%{2}）","DNS 记录添加失败：%{1}（错误码：%{2}）"
-"DNS 记录更新失败：%{1}（错误码：%{2}）","DNS 记录更新失败：%{1}（错误码：%{2}）"
-"DNS 记录删除失败：%{1}（错误码：%{2}）","DNS 记录删除失败：%{1}（错误码：%{2}）"
-"GName 默认 DNS 服务器","GName default DNS servers"
-阿里云域名,"Aliyun Domains"
-"阿里云域名注册服务，支持域名注册、续费、DNS 解析和域名交易。","Aliyun domain registration service, supporting domain registration, renewal, DNS resolution, and domain trading."
-华东1（杭州）,"East China 1 (Hangzhou)"
-华东2（上海）,"East China 2 (Shanghai)"
-华北2（北京）,"North China 2 (Beijing)"
-华南1（深圳）,"South China 1 (Shenzhen)"
-亚太东南（新加坡）,"Asia Pacific Southeast (Singapore)"
-阿里云域名配置获取指南,阿里云域名配置获取指南
-"1. 登录阿里云控制台：https://www.aliyun.com","1. 登录阿里云控制台：https://www.aliyun.com"
-"2. 右上角头像 → 「AccessKey 管理」","2. 右上角头像 → 「AccessKey 管理」"
-"3. 建议创建子用户 AccessKey（更安全），或使用主账号 AccessKey","3. 建议创建子用户 AccessKey（更安全），或使用主账号 AccessKey"
-"4. 点击「创建 AccessKey」，完成手机验证","4. 点击「创建 AccessKey」，完成手机验证"
-"5. 将「AccessKey ID」填入上方对应字段","5. 将「AccessKey ID」填入上方对应字段"
-"6. 将「AccessKey Secret」填入上方对应字段（仅创建时显示一次，请妥善保存）","6. 将「AccessKey Secret」填入上方对应字段（仅创建时显示一次，请妥善保存）"
-"7. 如使用子用户，需授予「AliyunDomainFullAccess」权限","7. 如使用子用户，需授予「AliyunDomainFullAccess」权限"
-"8. 区域可保持默认（华东1-杭州）","8. 区域可保持默认（华东1-杭州）"
-"AccessKey ID 和 AccessKey Secret 不能为空","AccessKey ID and AccessKey Secret cannot be empty"
-"阿里云域名适配器尚未完成 API 对接，请稍后再试。","Aliyun domain adapter API integration not yet complete. Please try again later."
-"阿里云 DNS 适配器尚未完成 API 对接，请稍后再试。","阿里云 DNS 适配器尚未完成 API 对接，请稍后再试。"
-"阿里云 Nameserver 修改功能尚未完成 API 对接，请稍后再试。","阿里云 Nameserver 修改功能尚未完成 API 对接，请稍后再试。"
-"阿里云 DNS 默认服务器","Aliyun DNS default servers"
-"域名 %{domain} 解析已不再指向本服务器。当前解析 IP：%{resolved}，本服务器 IP：%{expected}。请检查 DNS 解析配置。","域名 %{domain} 解析已不再指向本服务器。当前解析 IP：%{resolved}，本服务器 IP：%{expected}。请检查 DNS 解析配置。"
-更新证书状态失败：%{1},"Update certificate status failed: %{1}"
-获取域名列表失败：%{1},"Get domain list failed: %{1}"
+"域名商适配器扩展点，用于接入第三方域名注册商 API（如 GoDaddy、Namecheap 等）。适配器实现域名可用性检查、购买和管理功能。","Domain registrar adapter extension point for integrating third-party domain registrar APIs (e.g., GoDaddy, Namecheap). Adapters implement domain availability checking, purchasing, and management."
+"域名商适配器实现类，在模块的 extends/module/Weline_Websites/Registrar/ 目录下创建PHP文件","Domain registrar adapter implementation class. Create a PHP file in the module's extends/module/Weline_Websites/Registrar/ directory."
+"必须实现 DomainRegistrarInterface 接口","Must implement DomainRegistrarInterface interface"
+返回适配器唯一标识,"Returns adapter unique identifier"
+返回适配器显示名称,"Returns adapter display name"
+返回适配器描述,"Returns adapter description"
+返回适配器版本,"Returns adapter version"
+返回适配器所需的配置字段定义,"Returns adapter required configuration field definitions"
+"测试 API 连通性","Test API connectivity"
+检查域名可用性,"Check domain availability"
+批量检查域名可用性,"Batch check domain availability"
+购买域名,购买域名
+获取已有域名列表,"Get existing domain list"
+获取域名详情,"Get domain detail"
+"GoDaddy、Namecheap、Dynadot 等域名商适配器可通过此扩展点接入","GoDaddy, Namecheap, Dynadot and other registrar adapters can be integrated through this extension point"
+网站域名健康检查,"Website Domain Health Check"
+"定期检查所有网站域名的可访问性，自动同步 HTTPS 状态","Periodically check all website domain accessibility and auto-sync HTTPS status"
+"健康检查完成：共 %{1} 个域名，健康 %{2} 个，不健康 %{3} 个，HTTPS 状态更新 %{4} 个","Health check complete: %{1} domains total, %{2} healthy, %{3} unhealthy, %{4} HTTPS status updated"
+健康检查失败：%{1},"Health check failed: %{1}"
+域名解析状态检测,域名解析状态检测
+"定期检测域名 DNS 解析状态，验证是否指向本服务器","定期检测域名 DNS 解析状态，验证是否指向本服务器"
+域名自动解析,域名自动解析
+"自动为未解析到本服务器的域名添加 DNS 记录","自动为未解析到本服务器的域名添加 DNS 记录"
+域名池证书自动申请,域名池证书自动申请
+没有需要申请证书的域名池域名,没有需要申请证书的域名池域名
+"[DomainPoolCertificateRequest] %{1} 证书申请成功","[DomainPoolCertificateRequest] %{1} 证书申请成功"
+"[DomainPoolCertificateRequest] %{1} 证书申请失败: %{2}","[DomainPoolCertificateRequest] %{1} 证书申请失败: %{2}"
+"[DomainPoolCertificateRequest] %{1} 证书申请异常: %{2}","[DomainPoolCertificateRequest] %{1} 证书申请异常: %{2}"
+"域名池证书申请完成：检查 %{1} 个，申请 %{2} 个，成功 %{3} 个，失败 %{4} 个","域名池证书申请完成：检查 %{1} 个，申请 %{2} 个，成功 %{3} 个，失败 %{4} 个"
+域名池证书申请任务异常：%{1},域名池证书申请任务异常：%{1}
+域名池解析状态检测,域名池解析状态检测
+"定期检测域名池（可建站子域名）的 DNS 解析状态，验证是否指向本服务器，更新建站就绪状态","定期检测域名池（可建站子域名）的 DNS 解析状态，验证是否指向本服务器，更新建站就绪状态"
+域名自动同步,域名自动同步
+"定期从域名商 API 同步域名数据到本地数据库","定期从域名商 API 同步域名数据到本地数据库"
+"根域 NS 归属检测","根域 NS 归属检测"
+"定期检测根域名的 NS 归属情况，识别是否托管到 Cloudflare 等外部 DNS 服务商","定期检测根域名的 NS 归属情况，识别是否托管到 Cloudflare 等外部 DNS 服务商"
+"网站 HTTPS 状态同步","Website HTTPS Status Sync"
+"根据证书有效性自动同步域名的 HTTPS 状态，证书失效自动回退 HTTP","Auto-sync domain HTTPS status based on certificate validity, auto rollback to HTTP when expired"
+"HTTPS 状态同步完成：共 %{1} 个域名，启用 %{2} 个，禁用 %{3} 个，未变化 %{4} 个","HTTPS sync complete: %{1} domains total, %{2} enabled, %{3} disabled, %{4} unchanged"
+"HTTPS 状态同步失败：%{1}","HTTPS status sync failed: %{1}"
+网站保存后,网站保存后
+网站保存后触发，可用于更新缓存、通知等相关操作。,网站保存后触发，可用于更新缓存、通知等相关操作。
+域名购买成功,"Domain Purchase Success"
+"域名购买成功后触发，可用于通知、自动 DNS 解析、证书申请等后续操作。数据包含 domain、order_id、website_id、auto_create_site。","Triggered after a domain is successfully purchased. Can be used for notifications, auto DNS resolution, certificate requests, etc. Data includes domain, order_id, website_id, auto_create_site."
+域名池解析偏离本站,域名池解析偏离本站
+"域名解析结果偏离本站（如 DNS 指向变更）时触发，用于发送通知提醒管理员。","域名解析结果偏离本站（如 DNS 指向变更）时触发，用于发送通知提醒管理员。"
+"从 ExtendsData 扫描域名商适配器失败:","从 ExtendsData 扫描域名商适配器失败:"
+"加载域名商适配器失败: %{file}, 错误: %{error}","Failed to load domain registrar adapter: %{file}, error: %{error}"
+"从根域名 %{1} 自动生成","从根域名 %{1} 自动生成"
+子域名不能为空,子域名不能为空
+找不到根域名,找不到根域名
+"域名 %{1} 已存在于域名池","域名 %{1} 已存在于域名池"
+"子域名 %{1} 已添加到域名池","子域名 %{1} 已添加到域名池"
+购买条目不能为空,"Purchase items cannot be empty"
+"购买完成：%{success} 成功，%{fail} 失败","Purchase completed: %{success} succeeded, %{fail} failed"
+"域名入池失败: %{domain}, 错误: %{error}","Failed to add domain to pool: %{domain}, error: %{error}"
+"域名绑站失败: %{domain}, 错误: %{error}","Failed to bind domain to site: %{domain}, error: %{error}"
+"创建自动解析任务失败: %{domain}, 错误: %{error}","创建自动解析任务失败: %{domain}, 错误: %{error}"
+访问正常,"Access OK"
+"HTTPS 证书无效，已自动回退 HTTP","HTTPS certificate invalid, automatically rolled back to HTTP"
+"HTTP %{1}","HTTP %{1}"
+账户未启用,账户未启用
+账户「%{1}」关联的域名商不存在或未配置（registrar_id=%{2}）,账户「%{1}」关联的域名商不存在或未配置（registrar_id=%{2}）
+账户「%{1}」的域名商适配器「%{2}」未注册,账户「%{1}」的域名商适配器「%{2}」未注册
+"「%{1}」是 DNS 服务商，不是域名注册商，跳过域名同步（域名归属应以实际注册商为准）","「%{1}」是 DNS 服务商，不是域名注册商，跳过域名同步（域名归属应以实际注册商为准）"
+该账户下没有域名,该账户下没有域名
+"同步完成：新增 %{1}，更新 %{2}，删除 %{3}","同步完成：新增 %{1}，更新 %{2}，删除 %{3}"
+同步失败：%{1},同步失败：%{1}
+没有启用的域名商账户,没有启用的域名商账户
+"✓ %{1}：同步 %{2} 个域名","✓ %{1}：同步 %{2} 个域名"
+"✗ %{1}：%{2}","✗ %{1}：%{2}"
+"同步完成：%{1}/%{2} 个账户成功，共同步 %{3} 个域名","同步完成：%{1}/%{2} 个账户成功，共同步 %{3} 个域名"
+【成功】,【成功】
+【失败】,【失败】
+请选择要操作的域名,请选择要操作的域名
+未找到指定的域名,未找到指定的域名
+不支持的操作类型：%{1},不支持的操作类型：%{1}
+"批量操作完成：成功 %{1}，失败 %{2}","批量操作完成：成功 %{1}，失败 %{2}"
+"DNS 服务器不能为空","DNS 服务器不能为空"
+数据无效,数据无效
+适配器不支持此操作,适配器不支持此操作
+"适配器不支持修改 DNS","适配器不支持修改 DNS"
+账户关联的域名商不存在或未配置,账户关联的域名商不存在或未配置
+域名商适配器「%{1}」未注册,域名商适配器「%{1}」未注册
+"获取成功，共 %{1} 个域名","获取成功，共 %{1} 个域名"
+"（注意：「%{1}」是 DNS 服务商，非域名注册商，这些域名可能已属于其他注册商账户）","（注意：「%{1}」是 DNS 服务商，非域名注册商，这些域名可能已属于其他注册商账户）"
+获取失败：%{1},获取失败：%{1}
+域名商适配器未注册,域名商适配器未注册
+"「%{1}」是 DNS 服务商而非域名注册商，无法导入域名。域名归属应以实际注册商（如 GName、阿里云）为准，DNS 服务商只用于管理 DNS 解析。","「%{1}」是 DNS 服务商而非域名注册商，无法导入域名。域名归属应以实际注册商（如 GName、阿里云）为准，DNS 服务商只用于管理 DNS 解析。"
+未在远程找到要导入的域名,未在远程找到要导入的域名
+"导入完成：新增 %{1}，已存在 %{2}，入池 %{3}","导入完成：新增 %{1}，已存在 %{2}，入池 %{3}"
+导入失败：%{1},导入失败：%{1}
+"无法获取服务器公网 IP","无法获取服务器公网 IP"
+"域名商不支持 DNS 管理","域名商不支持 DNS 管理"
+没有可添加的解析记录,没有可添加的解析记录
+"域名 DNS 托管在 %{1}，但未配置该服务商账户。请在「域名商账户」中添加 %{1} 账户。","域名 DNS 托管在 %{1}，但未配置该服务商账户。请在「域名商账户」中添加 %{1} 账户。"
+"货币 %{1} 不被当前网站允许","货币 %{1} 不被当前网站允许"
 域名注册服务,域名注册服务
 "通过 GName 等域名商注册和管理域名","通过 GName 等域名商注册和管理域名"
 "DNS 管理","DNS 管理"
 "域名 NS 切换和 DNS 记录管理","域名 NS 切换和 DNS 记录管理"
-"同步 HTTPS 状态失败：%{1}","Sync HTTPS status failed: %{1}"
-"货币 %{1} 不被当前网站允许","货币 %{1} 不被当前网站允许"
-"回退 HTTPS 状态失败：%{1}","Rollback HTTPS status failed: %{1}"
+更新证书状态失败：%{1},"Update certificate status failed: %{1}"
+"域名 %{domain} 解析已不再指向本服务器。当前解析 IP：%{resolved}，本服务器 IP：%{expected}。请检查 DNS 解析配置。","域名 %{domain} 解析已不再指向本服务器。当前解析 IP：%{resolved}，本服务器 IP：%{expected}。请检查 DNS 解析配置。"
+获取域名列表失败：%{1},"Get domain list failed: %{1}"
 "语言 %{1} 不被当前网站允许","语言 %{1} 不被当前网站允许"
+"回退 HTTPS 状态失败：%{1}","Rollback HTTPS status failed: %{1}"
+"同步 HTTPS 状态失败：%{1}","Sync HTTPS status failed: %{1}"
+域名到期提醒,域名到期提醒
+域名管理,域名管理
+域名即将到期的提醒通知,域名即将到期的提醒通知
+域名同步通知,域名同步通知
+域名同步完成或异常的通知,域名同步完成或异常的通知
+域名转移通知,域名转移通知
+域名转入/转出状态变更通知,域名转入/转出状态变更通知
+域名续费通知,域名续费通知
+域名续费成功或失败的通知,域名续费成功或失败的通知
+域名池内域名解析不再指向本服务器时的通知,域名池内域名解析不再指向本服务器时的通知
 "Websites 查询器不支持的操作：%{1}","Websites 查询器不支持的操作：%{1}"
 域名与网站查询,域名与网站查询
 提供域名注册商、账号管理、域名列表、可用性检查、购买等能力,提供域名注册商、账号管理、域名列表、可用性检查、购买等能力
@@ -877,20 +887,10 @@ SEO账户管理请前往：,SEO账户管理请前往：
 未找到适配器：%{1},未找到适配器：%{1}
 "域名商 %{1} 不支持 NS 切换","域名商 %{1} 不支持 NS 切换"
 "修改 DNS 失败：%{1}","修改 DNS 失败：%{1}"
-域名到期提醒,域名到期提醒
-域名管理,域名管理
-域名即将到期的提醒通知,域名即将到期的提醒通知
-域名同步通知,域名同步通知
-域名同步完成或异常的通知,域名同步完成或异常的通知
-域名转移通知,域名转移通知
-域名转入/转出状态变更通知,域名转入/转出状态变更通知
-域名续费通知,域名续费通知
-域名续费成功或失败的通知,域名续费成功或失败的通知
-域名池内域名解析不再指向本服务器时的通知,域名池内域名解析不再指向本服务器时的通知
-域名管理标签页导航,"Domain Management Tab Navigation"
-"在域名管理页面的标签页导航区域动态追加标签页按钮。其他模块（如 Server 模块的证书管理）可通过此 Hook 注入新的 Tab 按钮。","Dynamically append tab buttons in the domain management page navigation area. Other modules (e.g., Server module certificate management) can inject new tabs via this Hook."
-域名管理标签页内容,"Domain Management Tab Content"
-"在域名管理页面的标签页内容区域动态追加标签页内容面板。与 tabs Hook 配合使用，注入对应的 Tab 内容。","Dynamically append tab content panels in the domain management page. Used together with the tabs Hook to inject corresponding Tab content."
+处理中,处理中
+已暂停,已暂停
+申请中,申请中
+申请错误,申请错误
 任务ID,任务ID
 域名商账户ID,域名商账户ID
 "状态: pending, processing, success, failed","状态: pending, processing, success, failed"
