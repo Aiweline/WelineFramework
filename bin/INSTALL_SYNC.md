@@ -1,7 +1,7 @@
 # install 脚本跨平台同步说明
 
 **bin/install.bat**（Windows，纯 BAT + 内联 PowerShell，无 .ps1）  
-**bin/install.sh**（Linux / macOS）
+**bin/install.sh**（Linux / macOS，启动器，主逻辑在 **bin/install.bash**；支持 `sh bin/install.sh` 或 `bash bin/install.sh`）
 
 三端行为需保持一致。修改 **install.bat** 或 **install.sh** 时，请同步修改另一端的对应逻辑。安装后步骤（composer/env/setup/server）由 **setup/server_installer/run.php** 统一执行。
 
