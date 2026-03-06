@@ -431,8 +431,14 @@ env.php中的服务器信息:,env.php中的服务器信息:
 阶段准备失败：%{1},阶段准备失败：%{1}
 "✓ 所有阶段验证通过","✓ 所有阶段验证通过"
 阶段验证失败：%{1},阶段验证失败：%{1}
-"- 提交模块安装/升级阶段（%{1}）...","- 提交模块安装/升级阶段（%{1}）..."
+"- 提交 Framework 数据库引导阶段（%{1}）（依赖阶段，先执行）...","- 提交 Framework 数据库引导阶段（%{1}）（依赖阶段，先执行）..."
+"- 提交 Framework 数据库引导阶段（%{1}）...","- 提交 Framework 数据库引导阶段（%{1}）..."
 "- 跳过阶段 %{1}","- 跳过阶段 %{1}"
+"- 提交 ModuleManager 引导阶段（%{1}）（依赖阶段，先执行）...","- 提交 ModuleManager 引导阶段（%{1}）（依赖阶段，先执行）..."
+"- 提交 ModuleManager 引导阶段（%{1}）...","- 提交 ModuleManager 引导阶段（%{1}）..."
+"- 提交 EavSchema 阶段（%{1}）...","- 提交 EavSchema 阶段（%{1}）..."
+"- 提交 SchemaDiff 阶段（%{1}）（表结构先于 Install 种子数据）...","- 提交 SchemaDiff 阶段（%{1}）（表结构先于 Install 种子数据）..."
+"- 提交模块安装/升级阶段（%{1}）...","- 提交模块安装/升级阶段（%{1}）..."
 检测到模块安装/升级，重新收集后续任务...,检测到模块安装/升级，重新收集后续任务...
 "- 重新收集数据库更新任务...","- 重新收集数据库更新任务..."
 "- 重新收集路由注册任务...","- 重新收集路由注册任务..."
@@ -442,12 +448,6 @@ env.php中的服务器信息:,env.php中的服务器信息:
 验证失败,验证失败
 数据库更新阶段验证失败：%{1},数据库更新阶段验证失败：%{1}
 路由更新阶段验证失败：%{1},路由更新阶段验证失败：%{1}
-"- 提交 Framework 数据库引导阶段（%{1}）（依赖阶段，先执行）...","- 提交 Framework 数据库引导阶段（%{1}）（依赖阶段，先执行）..."
-"- 提交 Framework 数据库引导阶段（%{1}）...","- 提交 Framework 数据库引导阶段（%{1}）..."
-"- 提交 ModuleManager 引导阶段（%{1}）（依赖阶段，先执行）...","- 提交 ModuleManager 引导阶段（%{1}）（依赖阶段，先执行）..."
-"- 提交 ModuleManager 引导阶段（%{1}）...","- 提交 ModuleManager 引导阶段（%{1}）..."
-"- 提交 EavSchema 阶段（%{1}）...","- 提交 EavSchema 阶段（%{1}）..."
-"- 提交 SchemaDiff 阶段（%{1}）...","- 提交 SchemaDiff 阶段（%{1}）..."
 "- 提交数据库更新阶段（%{1}）...","- 提交数据库更新阶段（%{1}）..."
 "- 仅更新路由模式，跳过数据库更新阶段提交","- 仅更新路由模式，跳过数据库更新阶段提交"
 "- 提交路由更新阶段（%{1}）...","- 提交路由更新阶段（%{1}）..."
@@ -872,6 +872,21 @@ SQL调试输出,SQL调试输出
 "以 JSON 格式输出结果","以 JSON 格式输出结果"
 基本检测,基本检测
 "JSON 输出","JSON 输出"
+当前环境配置（env.php）：,当前环境配置（env.php）：
+"显示环境配置（env.php），支持按 key 筛选","显示环境配置（env.php），支持按 key 筛选"
+"显示 env.php 中的配置项。不传 key 显示全部，传 key 显示该键（支持点号分隔的嵌套键）。","显示 env.php 中的配置项。不传 key 显示全部，传 key 显示该键（支持点号分隔的嵌套键）。"
+"配置键名（可选），支持点号分隔（如 server.worker_count）","配置键名（可选），支持点号分隔（如 server.worker_count）"
+显示全部配置,显示全部配置
+"显示 server 配置","显示 server 配置"
+"显示 Worker 数量","显示 Worker 数量"
+显示数据库类型,显示数据库类型
+"无效参数（需要 key=value）: %{1}","无效参数（需要 key=value）: %{1}"
+"无效参数（key 为空）: %{1}","无效参数（key 为空）: %{1}"
+"配置写入失败: %{1}","配置写入失败: %{1}"
+"设置环境配置（env.php），支持 key=value 格式","设置环境配置（env.php），支持 key=value 格式"
+"设置 env.php 中的配置项，支持点号分隔的嵌套键。使用 key=value 格式，可一次设置多项。","设置 env.php 中的配置项，支持点号分隔的嵌套键。使用 key=value 格式，可一次设置多项。"
+"配置项，如 server.worker_count=2；可写多个，用空格分隔","配置项，如 server.worker_count=2；可写多个，用空格分隔"
+"设置监听地址与 Worker 数","设置监听地址与 Worker 数"
 "当前以管理员身份运行 ✔","当前以管理员身份运行 ✔"
 当前非管理员身份运行,当前非管理员身份运行
 "部分操作（如修改 php.ini、安装扩展）可能需要管理员权限","部分操作（如修改 php.ini、安装扩展）可能需要管理员权限"
@@ -981,8 +996,8 @@ SQL调试输出,SQL调试输出
 "2. 放入 PHP 的 ext 目录","2. 放入 PHP 的 ext 目录"
 "3. 在 php.ini 中添加 extension=%{ext}","3. 在 php.ini 中添加 extension=%{ext}"
 "Linux/macOS 安装方式:","Linux/macOS 安装方式:"
-"Ubuntu/Debian: sudo apt install php-%{ext}","Ubuntu/Debian: sudo apt install php-%{ext}"
-"CentOS/RHEL: sudo yum install php-%{ext}","CentOS/RHEL: sudo yum install php-%{ext}"
+"Ubuntu/Debian: sudo apt install php-%{pkg}","Ubuntu/Debian: sudo apt install php-%{pkg}"
+"CentOS/RHEL: sudo yum install php-%{pkg}","CentOS/RHEL: sudo yum install php-%{pkg}"
 "macOS: brew install php && pecl install %{ext}","macOS: brew install php && pecl install %{ext}"
 "通用: pecl install %{ext}","通用: pecl install %{ext}"
 检测并尝试自动修复环境依赖问题,检测并尝试自动修复环境依赖问题
@@ -1148,7 +1163,6 @@ SQL调试输出,SQL调试输出
 "无法回退到普通插入：SQL 准备失败","无法回退到普通插入：SQL 准备失败"
 执行信息：,执行信息：
 "Windows: Ensure php_pdo_pgsql.dll and php_pgsql.dll are enabled in php.ini.","Windows: Ensure php_pdo_pgsql.dll and php_pgsql.dll are enabled in php.ini."
-"Linux: Run ""apt-get install php-pgsql"" or ""yum install php-pgsql"" to install the extension, then restart PHP-FPM/Apache.","Linux: Run ""apt-get install php-pgsql"" or ""yum install php-pgsql"" to install the extension, then restart PHP-FPM/Apache."
 "PostgreSQL 驱动不存在：%{1}。可用驱动列表：%{2}。%{3}更多驱动配置请转到 php.ini 中开启。","PostgreSQL 驱动不存在：%{1}。可用驱动列表：%{2}。%{3}更多驱动配置请转到 php.ini 中开启。"
 "PostgreSQL 版本校验未通过（连接已建立，升级可继续）：%{1}","PostgreSQL 版本校验未通过（连接已建立，升级可继续）：%{1}"
 数据库连接未初始化,数据库连接未初始化
@@ -1796,6 +1810,13 @@ KEY,KEY
 系统正在升级维护，请稍后再试。,系统正在升级维护，请稍后再试。
 请求超时，服务器响应时间过长，请稍后重试。,请求超时，服务器响应时间过长，请稍后重试。
 请求处理失败，请稍后重试。,请求处理失败，请稍后重试。
+"用法: php bin/w env:set <key>=<value> [<key2>=<value2> ...]","用法: php bin/w env:set <key>=<value> [<key2>=<value2> ...]"
+"示例: php bin/w env:set server.worker_count=2","示例: php bin/w env:set server.worker_count=2"
+"示例: php bin/w env:set server.host=0.0.0.0 server.worker_count=4","示例: php bin/w env:set server.host=0.0.0.0 server.worker_count=4"
+"- 提交 SchemaDiff 阶段（%{1}）...","- 提交 SchemaDiff 阶段（%{1}）..."
+"Ubuntu/Debian: sudo apt install php-%{ext}","Ubuntu/Debian: sudo apt install php-%{ext}"
+"CentOS/RHEL: sudo yum install php-%{ext}","CentOS/RHEL: sudo yum install php-%{ext}"
+"Linux: Run ""apt-get install php-pgsql"" or ""yum install php-pgsql"" to install the extension, then restart PHP-FPM/Apache.","Linux: Run ""apt-get install php-pgsql"" or ""yum install php-pgsql"" to install the extension, then restart PHP-FPM/Apache."
 Model升级,Model升级
 "无法获取表 %{1} 的结构","无法获取表 %{1} 的结构"
 模型更新前,模型更新前
