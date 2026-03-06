@@ -49,6 +49,49 @@ ReadLints(paths=[AclServiceInterface.php, AclService.php, RouteBefore.php])
 
 ---
 
+## [2026-03-07] PostgreSQL save() 使用错误冲突字段导致 25P02 事务中止 ✅ 已修复
+
+**错误类型**: PostgreSQL / ORM save / ON CONFLICT 冲突字段不匹配
+
+**错误信息**:
+```text
+SQLSTATE[25P02]: In failed sql transaction: 7 ERROR: current transaction is aborted, commands ignored until end of transaction block
+
+执行SQL:
+INSERT INTO "public"."m_backend_user_config" AS "main_table"
+("key","value","user_id","module","name")
+VALUES ('backend_theme_config', '...', 2, 'Weline_Backend', '主题设置')
+```
+
+**根本原因**:
+1. `Weline\Backend\Model\BackendUserConfig` 表的真实唯一索引是 `(user_id, key)`。
+2. `setConfig()` / `setDefaultConfig()` 在 `setData(..., true)` 时把 `module`、`name` 也当成冲突检测字段带进了 `save()`。
+3. PostgreSQL 生成 `ON CONFLICT (key, user_id, module, name)` 时，找不到与之完全匹配的唯一约束，先触发 `ON CONFLICT specification` 错误。
+4. 同一事务内后续 SQL 又继续执行，于是表面上看到的是 `25P02 current transaction is aborted`。
+
+**解决方案**:
+1. `BackendUserConfig::setConfig()` 只将 `user_id`、`key` 作为冲突字段。
+2. `module`、`name` 改为普通更新字段，不再参与 `ON CONFLICT` 冲突判定。
+3. `setDefaultConfig()` 同步做相同修复，保证 CLI / 默认配置写入逻辑一致。
+
+**验证方法**:
+```bash
+php -l "E:/WelineFramework/DEV-workspace/app/code/Weline/Backend/Model/BackendUserConfig.php"
+ReadLints(paths=[BackendUserConfig.php])
+```
+
+**验证结果**: ✅ 成功（语法检查通过；目标文件无新增 lint 错误）
+
+**预防措施**:
+1. PostgreSQL 的 `ON CONFLICT (...)` 字段必须与真实唯一索引/唯一约束完全匹配，不能随意多带字段。
+2. `setData(..., true)` 只应用于真正的唯一键/冲突键字段，普通业务字段不要误标为冲突字段。
+3. 看到 `25P02` 时优先追前一条 SQL 的首个异常，不要把它误当成根因。
+
+**相关文件**:
+- `app/code/Weline/Backend/Model/BackendUserConfig.php`
+
+---
+
 ## [2026-02-25] WLS 模式下语言/货币在请求间不稳定 ✅ 已修复
 
 **错误类型**: WLS 状态泄漏 / 空字符串 vs unset
