@@ -11,6 +11,10 @@ final class SetupPgsqlDatabase
 {
     private string $projectRoot;
     private array $env;
+    /** 是否刚执行过“自动设置 postgres 密码”并失败（用于避免重复长提示） */
+    private bool $lastAutoSetAttempted = false;
+    /** 最近一次 PDO 连接失败原因（用于提示磁盘满等） */
+    private string $lastPdoConnectionError = '';
 
     public function __construct(string $projectRoot, array $env)
     {
@@ -33,8 +37,21 @@ final class SetupPgsqlDatabase
         // 超管：仅用于连接并创建 weline 用户/库，不用于应用运行时
         // Mac (Homebrew) 默认只创建当前系统用户为超管、无 postgres 用户，故需回退尝试当前用户+空密码
         $initCreds = $this->resolveInitUserAndPassword($host, $port);
+        $autoSetTriedAndFailed = false;
         if ($initCreds === null) {
-            $this->echoPgsqlInitRequired(trim($this->env['PGSQL_INIT_USER'] ?? 'postgres'));
+            $ok = $this->tryAutoSetPostgresPasswordLinux($host, $port);
+            if ($ok) {
+                $initCreds = $this->resolveInitUserAndPassword($host, $port);
+            } else {
+                $autoSetTriedAndFailed = $this->didTryAutoSetPostgresPasswordLinux();
+            }
+        }
+        if ($initCreds === null) {
+            if ($this->isLastErrorNoSpace()) {
+                echo "\n  检测到连接失败原因可能为磁盘空间不足（could not write init file / 设备上没有空间）。\n";
+                echo "  请先执行 df -h 检查磁盘，并清理空间后重试（例如：清理 /var、/tmp、项目 var/tmp、apt 缓存等）。\n\n";
+            }
+            $this->echoPgsqlInitRequired(trim($this->env['PGSQL_INIT_USER'] ?? 'postgres'), $autoSetTriedAndFailed);
             return false;
         }
         [$initUser, $initPass] = $initCreds;
@@ -130,7 +147,8 @@ final class SetupPgsqlDatabase
             }
             return null;
         }
-        foreach (['', 'postgres', 'weline'] as $try) {
+        // 未配置时默认尝试：密码 postgres、空密码、weline
+        foreach (['postgres', '', 'weline'] as $try) {
             if ($this->connectPdo($host, $port, 'postgres', $initUser, $try) !== null) {
                 return [$initUser, $try];
             }
@@ -149,24 +167,73 @@ final class SetupPgsqlDatabase
     }
 
     /**
-     * 醒目提示：PostgreSQL 初始化需要什么（连不上 postgres 时输出）
+     * Linux 下连接失败时尝试自动为 postgres 用户设置密码 postgres。
+     * extend 内 PostgreSQL 以当前用户运行，直接用 psql 连接即可（无需 sudo）。
      */
-    private function echoPgsqlInitRequired(string $initUser): void
+    private function tryAutoSetPostgresPasswordLinux(string $host, string $port): bool
     {
+        $this->lastAutoSetAttempted = false;
+        if (PHP_OS_FAMILY !== 'Linux') {
+            return false;
+        }
+        $initUser = trim($this->env['PGSQL_INIT_USER'] ?? 'postgres');
+        if (strtolower($initUser) !== 'postgres') {
+            return false;
+        }
+        if (trim($this->env['PGSQL_INIT_PASSWORD'] ?? '') !== '') {
+            return false;
+        }
+        $psqlExe = $this->getPsqlPath();
+        if ($psqlExe === null) {
+            return false;
+        }
+        $this->lastAutoSetAttempted = true;
+        $h = in_array($host, ['', 'localhost'], true) ? '127.0.0.1' : $host;
+        $sql = "ALTER USER postgres WITH PASSWORD 'postgres';";
+        $cmd = escapeshellarg($psqlExe) . ' -h ' . escapeshellarg($h) . ' -p ' . escapeshellarg($port) . ' -U postgres -c ' . escapeshellarg($sql);
+        $code = -1;
+        $execOut = [];
+        @exec($cmd . ' 2>&1', $execOut, $code);
+        if ($code !== 0) {
+            echo "  自动设置 postgres 密码未成功。手动执行: psql -h 127.0.0.1 -p 5432 -U postgres -c \"ALTER USER postgres WITH PASSWORD 'postgres';\"\n";
+            return false;
+        }
+        echo "  已自动为 postgres 用户设置密码，正在重试连接...\n";
+        return true;
+    }
+
+    private function didTryAutoSetPostgresPasswordLinux(): bool
+    {
+        return $this->lastAutoSetAttempted;
+    }
+
+    /**
+     * 醒目提示：PostgreSQL 初始化需要什么（连不上 postgres 时输出）
+     * @param bool $short 为 true 时仅输出一行（上方已输出过 sudo 说明时用）
+     */
+    private function echoPgsqlInitRequired(string $initUser, bool $short = false): void
+    {
+        if ($short) {
+            echo "\n  请按上方提示在终端执行 sudo 命令后，重新运行: php bin/w env:install -y  或  bin/install.sh\n\n";
+            return;
+        }
         $isMac = (PHP_OS_FAMILY === 'Darwin');
         echo "\n";
         echo "========================================\n";
-        echo "  需要配置 weline.env 才能完成数据库初始化\n";
+        echo "  未配置时默认使用：用户 postgres、密码 postgres、数据库 weline\n";
+        echo "  若连接失败，请在项目根目录 weline.env 中设置：\n";
         echo "========================================\n";
-        echo "  在项目根目录的 weline.env 中设置：\n";
         echo "  - PGSQL_INIT_USER=" . $initUser . "   （超管用户名，默认 postgres）\n";
-        echo "  - PGSQL_INIT_PASSWORD=你的postgres密码  （必填，与 PostgreSQL 里 postgres 用户密码一致）\n";
+        echo "  - PGSQL_INIT_PASSWORD=postgres  （默认 postgres，与 PostgreSQL 中 postgres 用户密码一致）\n";
         echo "\n";
         if ($isMac) {
             echo "  Mac (Homebrew) 若从未设过 postgres 密码，可先执行：\n";
-            echo "    psql postgres -c \"ALTER USER postgres WITH PASSWORD '你的密码';\"\n";
-            echo "  再把相同密码填入 weline.env 的 PGSQL_INIT_PASSWORD。\n";
+            echo "    psql postgres -c \"ALTER USER postgres WITH PASSWORD 'postgres';\"\n";
             echo "  并确认服务已启动：brew services start postgresql@16\n";
+            echo "\n";
+        } else {
+            echo "  Linux 若使用 extend 内 PostgreSQL（当前用户运行），可为 postgres 用户设密码：\n";
+            echo "    psql -h 127.0.0.1 -p 5432 -U postgres -c \"ALTER USER postgres WITH PASSWORD 'postgres';\"\n";
             echo "\n";
         }
         echo "  修改后重新执行：php setup/server_installer/run.php  或  bin/install.sh\n";
@@ -183,8 +250,17 @@ final class SetupPgsqlDatabase
             $pdo = new \PDO($dsn, $user, $pass, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
             return $pdo;
         } catch (\Throwable $e) {
+            $this->lastPdoConnectionError = $e->getMessage();
             return null;
         }
+    }
+
+    private function isLastErrorNoSpace(): bool
+    {
+        $msg = $this->lastPdoConnectionError;
+        return stripos($msg, 'No space left') !== false
+            || strpos($msg, '设备上没有空间') !== false
+            || stripos($msg, 'could not write init file') !== false;
     }
 
     private function databaseExistsViaPdo(\PDO $pdo, string $dbname): bool

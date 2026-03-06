@@ -27,7 +27,10 @@ return [
         'dom',
         'libxml',
         'simplexml',
-        'intl',  // I18n 多语言排序等需要；未安装时 Symfony Polyfill 仅支持 en，zh_Hans_CN 会报错
+        'intl',   // I18n 多语言排序等需要；未安装时 Symfony Polyfill 仅支持 en，zh_Hans_CN 会报错
+        'mbstring',
+        'sockets', // WLS / 队列等常驻进程与网络 I/O
+        'pdo_pgsql', // PostgreSQL 支持；使用 pgsql 时须安装（apt-get install php-pgsql / yum install php-pgsql）
     ],
 
     // 必需的函数（须未被 disable_functions）

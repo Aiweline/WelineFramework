@@ -11,14 +11,24 @@ $projectRoot = dirname(__DIR__, 2);
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'EnvLoader.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'SetupPgsqlDatabase.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'ConfigurePhpIni.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'EnsurePgsqlData.php';
 
 $argv = $GLOBALS['argv'] ?? [];
 
-// === 检测系统是否已安装（env.php 存在） ===
+// === 检测系统是否已安装（env.php 存在且非空配置） ===
 $envPhpFile = $projectRoot . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'env.php';
 $forceInstall = in_array('-f', $argv, true) || in_array('--force', $argv, true);
 
-if (is_file($envPhpFile)) {
+/** env.php 非空（含 db 等有效配置）才视为已安装 */
+$isEnvPhpInstalled = static function (string $path): bool {
+    if (!is_file($path) || filesize($path) < 10) {
+        return false;
+    }
+    $config = @include $path;
+    return is_array($config) && isset($config['db']) && $config['db'] !== [];
+};
+
+if ($isEnvPhpInstalled($envPhpFile)) {
     if (!$forceInstall) {
         // 系统已安装，提示用户
         echo "\n";
@@ -162,6 +172,9 @@ if (is_dir($pgsqlBin)) {
     }
 }
 
+// 5a. 若 extend/server/pgsql 存在，确保 data 已初始化并启动（与 install.sh Linux 数据目录一致）
+(new EnsurePgsqlData($projectRoot))->ensure();
+
 // 5b. 每次运行都执行：根据 weline.env 同步 env.php 的 db，并视情况建库/校验连接
 echo "Step 5b: PostgreSQL database init (from weline.env DB_*)...\n";
 $setupDb = new SetupPgsqlDatabase($projectRoot, $env);
@@ -179,7 +192,7 @@ if (!$step5bOk && DIRECTORY_SEPARATOR === '\\' && is_dir($pgsqlBin)) {
 }
 
 if (!$step5bOk) {
-    fwrite(STDERR, "ERROR: PostgreSQL database init failed. 请按上方提示在 weline.env 中设置 PGSQL_INIT_PASSWORD 后重新执行。\n");
+    fwrite(STDERR, "ERROR: PostgreSQL database init failed. 未配置时默认使用 postgres/postgres 与数据库 weline；若连接失败请按上方提示配置后重试。\n");
     exit(1);
 }
 
@@ -211,11 +224,7 @@ if ($code !== 0) {
     exit(1);
 }
 
-// 9. 清除安装模式标志
-// 安装完成后，后续的 command:upgrade 将只扫描已激活的模块
-@unlink($installModeFlagFile);
-echo "安装模式已关闭。\n";
-
+// 9. server:stop / server:start（在清除安装模式前执行，此时命令收集仍会扫描所有模块，server:* 可用）
 // 10. server:stop（可选步骤，失败不影响安装）
 $stopCode = $run('bin/w server:stop');
 if ($stopCode !== 0) {
@@ -247,5 +256,9 @@ if ($code !== 0) {
     }
     echo "\n";
 }
+
+// 12. 清除安装模式标志（放在 server:stop/start 之后，确保执行时仍能解析 server:* 命令）
+@unlink($installModeFlagFile);
+echo "安装模式已关闭。\n";
 
 exit(0);

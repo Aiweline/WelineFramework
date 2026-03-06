@@ -1306,16 +1306,20 @@ class WasmCompileService
             if ($wasmHashModel->getId()) {
                 // 更新现有记录
                 $wasmHashModel->setData(WasmHash::schema_fields_WASM_PATH, $filePath)
+                    ->setData(WasmHash::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
                     ->save();
             } else {
                 // 创建新记录
                 $latestVersion = $this->getLatestVersion();
                 $newVersion = $latestVersion + 1;
+                $now = date('Y-m-d H:i:s');
 
                 $wasmHashModel->clear()
                     ->setData(WasmHash::schema_fields_WASM_PATH, $filePath)
                     ->setData(WasmHash::schema_fields_HASH_VALUE, $hash)
                     ->setData(WasmHash::schema_fields_VERSION, (string)$newVersion)
+                    ->setData(WasmHash::schema_fields_CREATED_AT, $now)
+                    ->setData(WasmHash::schema_fields_UPDATED_AT, $now)
                     ->save();
             }
         } catch (\Throwable $e) {

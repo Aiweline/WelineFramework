@@ -1653,6 +1653,9 @@ class Start extends CommandAbstract
             return false;
         }
 
+        // 释放启动锁，否则 sudo 子进程无法获取锁（父进程持锁导致子进程报「正在被另一个进程启动中」）
+        $this->releaseStartLock();
+
         $exitCode = 0;
         if ($canPassthru) {
             @\passthru($relaunchCommand, $exitCode);
@@ -1756,7 +1759,10 @@ class Start extends CommandAbstract
             $this->printer->note(__('已取消。你可以手动执行：%{1}', [$relaunchCommand]));
             return false;
         }
-        
+
+        // 释放启动锁，否则 sudo 子进程无法获取锁
+        $this->releaseStartLock();
+
         $exitCode = 0;
         if (\function_exists('passthru')) {
             @\passthru($relaunchCommand, $exitCode);

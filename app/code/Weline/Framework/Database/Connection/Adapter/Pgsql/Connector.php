@@ -550,7 +550,7 @@ SQL;
         return match (true) {
             in_array($baseType, ['varchar', 'char', 'text', 'longtext', 'mediumtext', 'tinytext'], true) => "''",
             in_array($baseType, ['int', 'integer', 'bigint', 'smallint', 'tinyint', 'mediumint'], true) => '0',
-            in_array($baseType, ['decimal', 'numeric', 'float', 'double'], true) => '0',
+            in_array($baseType, ['decimal', 'numeric', 'float', 'double', 'real'], true) => '0',
             $baseType === 'bool' || $baseType === 'boolean' => 'false',
             $baseType === 'date' => "'1970-01-01'",
             $isDateLike => "'1970-01-01 00:00:00'",

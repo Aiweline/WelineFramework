@@ -9,8 +9,6 @@
 存储源切换,存储源切换
 用户切换存储源时触发。,用户切换存储源时触发。
 本地存储,本地存储
-允许的文件类型：,允许的文件类型：
-允许的文件大小：,允许的文件大小：
 Storage,Storage
 "Local Storage","Local Storage"
 Folders,Folders
@@ -70,6 +68,8 @@ OK,OK
 清除选择,"Clear Selection"
 选择模式,"Selection Mode"
 选择文件,"Select Files"
+允许的文件类型：,允许的文件类型：
+允许的文件大小：,允许的文件大小：
 媒体文件管理器,媒体文件管理器
 建议尺寸：,建议尺寸：
 允许类型：,允许类型：

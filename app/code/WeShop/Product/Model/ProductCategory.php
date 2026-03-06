@@ -17,8 +17,12 @@ class ProductCategory extends Model
     public const schema_table = "weshop_product_category";
     public const schema_primary_key = "product_category_id";
     public string $indexer = "product_category_indexer";
+
+    #[Col(type: 'integer', length: 11, nullable: false, primaryKey: true, autoIncrement: true, comment: '产品分类ID')]
     public const schema_fields_ID = "product_category_id";
+    #[Col(type: 'integer', length: 11, nullable: false, comment: '产品ID')]
     public const schema_fields_product_id = "product_id";
+    #[Col(type: 'integer', length: 11, nullable: false, comment: '分类ID')]
     public const schema_fields_category_id = "category_id";
 
     public array $_unit_primary_keys = ["product_category_id"];

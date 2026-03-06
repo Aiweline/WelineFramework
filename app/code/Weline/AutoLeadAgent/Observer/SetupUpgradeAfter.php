@@ -25,6 +25,9 @@ use Weline\AutoLeadAgent\Service\WasmCompileService;
  */
 class SetupUpgradeAfter implements ObserverInterface
 {
+    /** 防止 upgrade_after 多次触发时重复下载/安装 WASI SDK */
+    private static bool $wasmCheckDone = false;
+
     public function __construct(
         private Printing $printing
     ) {
@@ -48,7 +51,13 @@ class SetupUpgradeAfter implements ObserverInterface
             ]));
             return;
         }
-        
+
+        // 同一进程内 upgrade_after 可能多次触发，避免重复下载/安装 WASI SDK
+        if (self::$wasmCheckDone) {
+            return;
+        }
+        self::$wasmCheckDone = true;
+
         $this->printing->note(__(''));
         $this->printing->note(__('=== AutoLeadAgent WASM 编译检查 ==='));
 

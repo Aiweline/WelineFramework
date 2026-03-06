@@ -145,8 +145,12 @@ class Install extends CommandAbstract
         // 权限检测提示
         $this->printPrivilegeStatus();
 
-        $skipConfirm = isset($args['y']) || isset($args['yes']);
-        $target = isset($args[1]) && is_string($args[1]) && $args[1] !== '' ? trim($args[1]) : null;
+        $skipConfirm = !empty($args['y']) || !empty($args['yes']) || !empty($args['-y']);
+        // 仅当第一个参数不是选项（不以 - 开头）时才视为推荐项名称，避免 env:install -y 被当成安装名为 -y 的推荐项
+        $target = null;
+        if (isset($args[1]) && is_string($args[1]) && $args[1] !== '' && !str_starts_with(trim($args[1]), '-')) {
+            $target = trim($args[1]);
+        }
 
         $this->forceRetry = isset($args['force']) || isset($args['F']);
         if ($this->forceRetry) {
@@ -161,6 +165,11 @@ class Install extends CommandAbstract
         $this->checker->setRequirements($requirements);
         $result = $this->checker->check();
         $this->printer->note('');
+
+        // 非交互（如被 run.php 或 CI 调用）时，检测到缺失依赖则自动执行安装，不等待确认
+        if (!$skipConfirm && $result->hasError() && function_exists('stream_isatty') && !@stream_isatty(STDIN)) {
+            $skipConfirm = true;
+        }
 
         if ($target !== null) {
             $this->executeInstallTarget($target, $result, $skipConfirm);
@@ -373,6 +382,7 @@ class Install extends CommandAbstract
 
         // 2. 尝试安装缺失的扩展
         $missing = $result->getMissingExtensions();
+        $triedRebuildPhp = false;
         if (!empty($missing)) {
             $this->printer->note(__('【步骤 2】尝试安装缺失的扩展...'));
             foreach ($missing as $ext) {
@@ -382,9 +392,26 @@ class Install extends CommandAbstract
                     $successCount++;
                     $this->printer->success(__('    扩展 %{ext} 已启用 ✔', ['ext' => $ext]));
                 } else {
+                    // 项目自带 PHP（extend/server/php）时，包管理器安装的扩展无效，尝试重编 PHP（仅试一次）
+                    if (
+                        !$triedRebuildPhp
+                        && PHP_OS_FAMILY !== 'Windows'
+                        && str_contains((string) PHP_BINARY, 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php')
+                    ) {
+                        $triedRebuildPhp = true;
+                        $this->printer->note(__('    当前为项目自带 PHP，正在尝试重编 PHP 以加入缺失扩展（bin/install.sh --rebuild-php php）...'));
+                        if ($this->tryRebuildProjectPhp()) {
+                            $this->printer->success(__('    PHP 已重新编译完成。请再次运行 php bin/w env:check 验证环境。'));
+                            $successCount++;
+                            break; // 当前进程仍为旧 PHP，后续扩展需重跑 env:check 后再判
+                        }
+                    }
                     $failCount++;
                     $this->printer->warning(__('    扩展 %{ext} 自动安装失败，请参考以下指引手动安装', ['ext' => $ext]));
                     $this->printExtensionInstallGuide($ext);
+                    if (str_contains((string) PHP_BINARY, 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php')) {
+                        $this->printer->note(__('    若当前使用的是项目自带的 PHP，可手动执行: bin/install.sh --rebuild-php php'));
+                    }
                 }
             }
             $this->printer->note('');
@@ -766,14 +793,18 @@ class Install extends CommandAbstract
                 @exec($cmd . ' 2>&1', $output, $returnCode);
                 if ($returnCode === 0) {
                     $this->printer->success(__('    %{name} 执行成功', ['name' => $s['name']]));
+                    // 用当前进程的 PHP 校验扩展是否已加载（避免 PATH 下另一份 php 导致误判）
                     $checkOutput = [];
-                    @exec('php -m 2>&1', $checkOutput, $checkCode);
+                    @exec(escapeshellarg(PHP_BINARY) . ' -m 2>&1', $checkOutput, $checkCode);
                     $loadedExts = array_map('strtolower', $checkOutput);
                     if (in_array(strtolower($ext), $loadedExts, true)) {
                         return true;
                     }
-                    $this->tryEnableExtensionInIniLinux($ext);
-                    return true;
+                    // 包管理器装的是系统 PHP，当前若是项目自带 PHP 则未生效，尝试 php.ini 启用或返回 false 以触发重编
+                    if ($this->tryEnableExtensionInIniLinux($ext)) {
+                        return true;
+                    }
+                    // 未加载到当前 PHP，不返回 true，便于后续尝试重编项目 PHP
                 } else {
                     // 输出错误信息帮助诊断
                     $errorOutput = implode("\n", array_slice($output, 0, 3));
@@ -877,6 +908,30 @@ class Install extends CommandAbstract
             return true;
         }
 
+        return false;
+    }
+
+    /**
+     * 尝试执行 bin/install.sh --rebuild-php php（仅 Linux，项目自带 PHP 时用）
+     * 成功返回 true，否则 false
+     */
+    private function tryRebuildProjectPhp(): bool
+    {
+        $root = \defined('BP') ? rtrim(BP, DIRECTORY_SEPARATOR) : (getcwd() ?: '');
+        if ($root === '' || !is_file($root . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'install.sh')) {
+            return false;
+        }
+        $installSh = $root . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'install.sh';
+        $cmd = 'bash ' . escapeshellarg($installSh) . ' --rebuild-php php 2>&1';
+        $oldCwd = getcwd();
+        if ($oldCwd !== false && @chdir($root)) {
+            try {
+                passthru($cmd, $code);
+            } finally {
+                @chdir($oldCwd);
+            }
+            return isset($code) && $code === 0;
+        }
         return false;
     }
 
