@@ -79,11 +79,12 @@ class EavSchemaStage extends AbstractStage
             $registry->createTable($setup, $schema);
             $tableName = $schema->getTableName();
             $fullTableName = $prefix . $tableName;
-            $this->eventsManager->dispatch(self::EVENT_TABLE_DDL_AFTER, new DataObject([
+            $eventData = new DataObject([
                 'module_name' => self::EAV_MODULE_NAME,
                 'table_name' => $fullTableName,
                 'model_class' => null,
-            ]));
+            ]);
+            $this->eventsManager->dispatch(self::EVENT_TABLE_DDL_AFTER, $eventData);
         }
 
         $this->committed = true;
