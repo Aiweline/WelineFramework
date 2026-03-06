@@ -596,7 +596,8 @@ class Processer
                     @\fclose($procPipes[0]);
                     $procPipes[0] = null;
                 }
-                if (isset($procPipes[1])) {
+                // $block=false 时不再等待子 shell 输出 PID，立即关闭管道并返回 0，避免 CLI 卡在“使用说明”后不退出
+                if ($block && isset($procPipes[1])) {
                     \stream_set_blocking($procPipes[1], true);
                     $output = \stream_get_contents($procPipes[1]);
                     $output = \trim($output);
@@ -604,7 +605,7 @@ class Processer
                         $pid = (int)$output;
                     }
                 }
-                if ($pid <= 0) {
+                if ($block && $pid <= 0) {
                     $pid = (int) \proc_get_status($process)['pid'];
                 }
                 if (isset($procPipes[1])) @\fclose($procPipes[1]);
@@ -615,6 +616,7 @@ class Processer
                     $pid = self::setPid($pname, $pid);
                     return $pid;
                 }
+                return 0;
             }
             
             if ($enableLog && $lastError !== null) {
