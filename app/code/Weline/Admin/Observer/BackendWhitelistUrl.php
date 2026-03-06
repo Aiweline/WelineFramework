@@ -25,6 +25,7 @@ class BackendWhitelistUrl implements \Weline\Framework\Event\ObserverInterface
         ['path' => 'admin/login/verificationcode'],
         ['path' => 'admin/login/index'],
         ['path' => 'admin/login'],
+        ['path' => 'admin/login/logout'],
     ];
     private Url $url;
     /**
