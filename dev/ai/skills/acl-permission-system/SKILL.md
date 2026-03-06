@@ -225,6 +225,29 @@ class MyController extends \Weline\Framework\App\Controller\BackendController
 
 **说明：** 这是正常现象。`s:up` 会重新收集 menu.xml 和控制器权限，现在的代码会正确保留 menu.xml 设置的 `parent_source` 和 `type`。
 
+### 未定义 `#[Acl]` 的路由也被拦截
+
+**现象：**
+- 某个后台路由没有配置 `#[Acl]`、也不在 `weline_acl` 中，却仍然被权限系统拦截
+- 用户诉求是“未定义 ACL 的路由都属于白色 ACL，不做权限管理”
+
+**正确语义：**
+1. 显式配置在 `WhiteAclSource` 的路径，属于白名单
+2. `weline_acl.route` 中根本不存在定义的路由，也属于白色 ACL
+3. 只有已定义到 `weline_acl` 的 route，才进入角色权限判定
+
+**修复要点：**
+```php
+// RouteBefore 中先判断当前路由是否受 ACL 管控
+if (!$aclService->isRouteProtected($uri)) {
+    return; // 未定义 ACL，按白色 ACL 放行
+}
+```
+
+**不要这样做：**
+- 不要把“角色 ACL 未命中 route”直接等同于“当前 route 受控且无权限”
+- 不要仅依赖 `WhiteAclSource` 判断白名单，而忽略了“route 本身没有 ACL 定义”的情况
+
 ## 4. 数据库表结构
 
 ### weline_acl 表关键字段

@@ -141,6 +141,11 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         }
         
         if (!in_array(strtolower($uri), $white_lists)) {
+            // 未定义 ACL 的后台路由按白色 ACL 处理，不做登录/角色/权限校验
+            if (!$this->aclService->isRouteProtected($uri)) {
+                return;
+            }
+
             // 获取用户和角色（支持多种认证方式）
             $user = null;
             $role = null;
