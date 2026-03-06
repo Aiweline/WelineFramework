@@ -108,6 +108,7 @@ $attackLogUrl = $this->getBackendUrl('weline_server/backend/server-monitor/attac
         
         // 使用 WLS 健康检查接口获取服务状态，而不是请求当前页面
         // /_wls/health?detail=1 返回完整的 JSON 信息
+        // Weline.Api.request 返回 { ok, status, data }，body 已在 data 中，无 .json() 方法
         var req = window.Weline.Api.request('/_wls/health?detail=1', { method: 'GET', cache: 'no-cache', silent: true });
         req.then(function(response) {
             if (!response.ok) {
@@ -118,24 +119,24 @@ $attackLogUrl = $this->getBackendUrl('weline_server/backend/server-monitor/attac
                 // 404 等 = 非 WLS 模式
                 return { isWls: false };
             }
-            return response.json().then(function(data) {
-                // 健康检查接口返回的 JSON 格式（参考 worker.php /_wls/health?detail=1）
-                // 字段：status, instance, worker_id, port, connections, active_requests, 
-                //       total_requests, memory_usage, memory_peak, uptime, php_version, ssl, timestamp
-                var memoryMb = data.memory_usage ? (data.memory_usage / 1024 / 1024).toFixed(2) : null;
-                return {
-                    workerId: data.worker_id !== undefined ? String(data.worker_id) : null,
-                    workerPort: data.port ? String(data.port) : null,
-                    workerPid: '-', // 健康检查接口不返回 PID，但可从 X-WLS-Worker-PID 响应头获取（待扩展）
-                    instance: data.instance || 'default',
-                    requestCount: data.total_requests !== undefined ? String(data.total_requests) : '0',
-                    memory: memoryMb,
-                    uptime: data.uptime !== undefined ? String(data.uptime) : '0',
-                    connections: data.connections || 0,
-                    activeRequests: data.active_requests || 0,
-                    isWls: data.status === 'healthy'
-                };
-            });
+            var data = response.data;
+            if (!data || typeof data !== 'object') {
+                return { isWls: false };
+            }
+            // 健康检查接口返回的 JSON 格式（参考 worker.php /_wls/health?detail=1）
+            var memoryMb = data.memory_usage ? (data.memory_usage / 1024 / 1024).toFixed(2) : null;
+            return {
+                workerId: data.worker_id !== undefined ? String(data.worker_id) : null,
+                workerPort: data.port ? String(data.port) : null,
+                workerPid: '-',
+                instance: data.instance || 'default',
+                requestCount: data.total_requests !== undefined ? String(data.total_requests) : '0',
+                memory: memoryMb,
+                uptime: data.uptime !== undefined ? String(data.uptime) : '0',
+                connections: data.connections || 0,
+                activeRequests: data.active_requests || 0,
+                isWls: data.status === 'healthy'
+            };
         }).catch(function() {
             // 请求失败（可能是非 WLS 模式，健康检查接口不存在）
             return { isWls: false };
