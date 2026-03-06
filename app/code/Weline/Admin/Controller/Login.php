@@ -54,6 +54,14 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         }
         //        $this->session->delete('backend_disable_login');
         $this->assign('post_url', $this->_url->getBackendUrl('admin/login/post'));
+        // 无权限重定向原因：仅当次请求通过 GET 传入，显示一次即不再保留，刷新后不显示
+        $noAccessReason = $this->request->getParam('no_access_reason');
+        if ($noAccessReason !== null && $noAccessReason !== '') {
+            [$title, $msg] = $this->getNoAccessMessageByReason((string) $noAccessReason);
+            $this->assign('no_access_message', \Weline\Framework\Manager\MessageManager::process_message($msg, $title, 'warning'));
+        } else {
+            $this->assign('no_access_message', '');
+        }
         # 检测验证码
         if ($this->session->get('need_backend_verification_code')) {
             $this->assign('need_backend_verification_code', true);
@@ -97,6 +105,27 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             }
         }
         return $this->fetch();
+    }
+
+    /**
+     * 根据 no_access_reason 参数返回 [title, message]，与 NoAccessRedirectBefore 中 reason 一致。
+     */
+    private function getNoAccessMessageByReason(string $reason): array
+    {
+        switch ($reason) {
+            case 'not_logged_in':
+                return [__('未登录'), __('访问后台需要先登录。')];
+            case 'no_role':
+                return [__('无权限'), __('用户没有分配角色，请联系管理员。')];
+            case 'no_any_permission':
+                return [__('无权限'), __('您没有任何后台权限，请联系管理员。')];
+            case 'no_permission_for_route':
+                return [__('无权限'), __('您没有访问该页面的权限，请联系管理员。')];
+            case 'no_usable_permission':
+                return [__('无权限'), __('当前没有可用的访问入口，请重新登录或联系管理员。')];
+            default:
+                return [__('无权限'), __('您没有访问该页面的权限，请先登录或联系管理员。')];
+        }
     }
 
     public function postPost(): void
@@ -224,6 +253,8 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         }
         // 登录成功后立即持久化 Session（避免 WLS 下重定向请求读不到登录态导致循环重定向）
         $this->session->getSession()->save();
+        // Session::start() 已注册 shutdown 时 save + writeClose，302 前会落盘；此处再显式 writeClose 一次，确保 302 前必已写入
+        $this->session->getSession()->getStrategy()->writeClose();
         // WLS 下确保 Session Cookie 随 302 响应发出（双重保障，避免 Worker 合并逻辑遗漏）
         $sid = $this->session->getId();
         if ($sid !== '') {
