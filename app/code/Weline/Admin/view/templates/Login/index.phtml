@@ -14,11 +14,11 @@
     @template(Weline_Admin::common/head.phtml)
 </head>
 
-<body class="bg-pattern">
+<body class="bg-pattern weline-admin-login-page">
 <div class="account-pages my-5 pt-5">
     <div class="container">
         <div class="row justify-content-center">
-            <div class="col-xl-4 col-lg-4 col-md-4 col-sm-6 col-xs-12">
+            <div class="col-12 col-sm-10 col-md-6 col-lg-5 col-xl-4">
                 <div class="card">
                     <div class="card-body p-4">
                         <div class="">
@@ -31,7 +31,7 @@
                             <!-- end row -->
                             <h4 class="font-size-18 text-muted mt-2 text-center"><?= __('欢迎回来！') ?></h4>
                             <p class="mb-3 text-center"><?= __('登录 Weline 管理面板') ?>.</p>
-                            <div class='row'>
+                            <div class="row weline-admin-login-messages">
                                 <!--消息-->
                                 <template>Weline_Component::message.phtml</template>
                             </div>
@@ -73,8 +73,8 @@
                                             $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
                                             ?>
                                         </div>
-                                        <div class="row">
-                                            <div class="col">
+                                        <div class="row weline-admin-login-options align-items-center">
+                                            <div class="col-12 col-sm-auto">
                                                 <div class="form-check">
                                                     <input type="checkbox" class="form-check-input" name="remember"
                                                            id="customControlInline" <?= $session->getData('remember_expire_time') ? "checked" : '' ?>>
@@ -87,8 +87,8 @@
                                                     </label>
                                                 </div>
                                             </div>
-                                            <div class="col-7">
-                                                <div class="text-md-end mt-3 mt-md-0">
+                                            <div class="col-12 col-sm">
+                                                <div class="text-md-end mt-2 mt-sm-0 weline-admin-login-forgot">
                                                     <a href="auth-recoverpw.html" class="text-muted"><i
                                                                 class="mdi mdi-lock"></i> <?= __('忘记密码？') ?></a>
                                                 </div>
