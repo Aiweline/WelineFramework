@@ -19,6 +19,12 @@ use Weline\Framework\Session\Strategy\SessionStrategyInterface;
  */
 class Session implements SessionInterface
 {
+    /** 本请求内已 start 的 Session 实例（用于 shutdown 时统一 save + writeClose） */
+    private static array $instancesForShutdown = [];
+
+    /** 是否已注册 shutdown（只注册一次） */
+    private static bool $shutdownRegistered = false;
+
     /** 存储实例 */
     private SessionStorageInterface $storage;
 
@@ -71,6 +77,26 @@ class Session implements SessionInterface
         $this->sessionId = $this->strategy->initialize($sessionId, $this->data);
         $this->started = true;
         $this->dirty = false;
+
+        self::$instancesForShutdown[$this->sessionId ?: spl_object_id($this)] = $this;
+        if (!self::$shutdownRegistered) {
+            self::$shutdownRegistered = true;
+            register_shutdown_function([self::class, 'flushOnShutdown']);
+        }
+    }
+
+    /**
+     * 请求结束前统一落盘并关闭，避免 302 等提前结束导致 Session 未写入
+     */
+    public static function flushOnShutdown(): void
+    {
+        foreach (self::$instancesForShutdown as $session) {
+            if ($session instanceof self) {
+                $session->save();
+                $session->getStrategy()->writeClose();
+            }
+        }
+        self::$instancesForShutdown = [];
     }
 
     /**
