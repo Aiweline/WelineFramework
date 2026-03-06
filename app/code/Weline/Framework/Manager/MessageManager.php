@@ -81,6 +81,20 @@ class MessageManager
     }
 
     /**
+     * 设置单条错误消息（覆盖旧消息，不追加）。用于登录等场景，避免 WLS 下多次失败时消息累计。
+     * 先清空再 set，读取后由 render() 删除 session。
+     */
+    public static function setSingleError(string $msg = '', string $title = '', string $class = 'danger'): void
+    {
+        $session = self::session();
+        foreach (self::keys as $key) {
+            $session->delete($key);
+        }
+        $session->set('system-message', self::process_message($msg, $title ?: __('错误！'), $class));
+        $session->set('has-error', '1');
+    }
+
+    /**
      * @return bool
      * @deprecated 弃用函数 使用静态函数 has_error_message() 代替
      */
@@ -237,20 +251,21 @@ class MessageManager
         return (bool)self::session()->get('has-notes');
     }
 
+    /**
+     * 输出并消费消息：读取后立即删除并持久化，WLS 下必须「读后即删」否则会累计重复显示。
+     */
     public function render(): string
     {
-        // 始终使用 self::session() 获取当前请求的 session，避免 WLS 常驻内存下实例不一致
         $session = self::session();
-        $html = "<div class='system message'>{$session->get('system-message')}</div>";
-        // 使用当前 session 清理，确保消息被正确消费
+        $content = $session->get('system-message') ?? '';
+        // 读取后立即删除并持久化，避免 WLS 跨请求残留导致提示累计
         foreach (self::keys as $key) {
             $session->delete($key);
         }
-        // 显式刷写到 session 存储，确保清空后的状态持久化（WLS/Redis 等跨请求生效）
-        if (\method_exists($session, 'save')) {
+        if (method_exists($session, 'save')) {
             $session->save();
         }
-        return $html;
+        return "<div class='system message'>{$content}</div>";
     }
 
     /**
