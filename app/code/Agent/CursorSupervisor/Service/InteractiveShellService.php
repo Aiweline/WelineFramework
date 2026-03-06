@@ -550,7 +550,7 @@ class InteractiveShellService
   /done            完成当前计划
 
   🔧 Git 操作:
-  /commit          智能 Git 提交 (/c)
+  /commit          智能 Git 提交 (/c)，可加 --no-ai/-n 跳过 AI（卡住时用）
   /git             查看 Git 状态 (/g)
 
   📡 监控 (独立运行):
