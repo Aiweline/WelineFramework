@@ -129,8 +129,9 @@ class BackendUserConfig extends Model
             ->setData(self::schema_fields_key, $key, true)
             ->setData(self::schema_fields_value, $value)
             ->setData(self::schema_fields_user_id, $userSession->getUserId(), true)
-            ->setData(self::schema_fields_module, $module, true)
-            ->setData(self::schema_fields_name, $name, true)
+            // 仅 user_id + key 是真实唯一键；module/name 只是普通更新字段，不能参与 PG 的 ON CONFLICT
+            ->setData(self::schema_fields_module, $module)
+            ->setData(self::schema_fields_name, $name)
             ->save(true);
     }
     private static function key(string $key, string $module = '', string $name = ''): string
@@ -164,8 +165,9 @@ class BackendUserConfig extends Model
             ->setData(self::schema_fields_key, $key, true)
             ->setData(self::schema_fields_value, $value)
             ->setData(self::schema_fields_user_id, 0, true)
-            ->setData(self::schema_fields_module, $module, true)
-            ->setData(self::schema_fields_name, $name, true)
+            // 仅 user_id + key 是真实唯一键；module/name 只是普通更新字段，不能参与 PG 的 ON CONFLICT
+            ->setData(self::schema_fields_module, $module)
+            ->setData(self::schema_fields_name, $name)
             ->save();
     }
     public function save(string|array|bool|AbstractModel $data = [], string|array|null $sequence = ''): bool|int

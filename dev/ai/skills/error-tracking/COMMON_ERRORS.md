@@ -166,6 +166,13 @@ __('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count]
 | 后台某个未配置 `#[Acl]` 的路由也被权限系统拦截 | ACL 判定逻辑只看“角色是否命中 route”，没有先判断“该 route 是否存在 ACL 定义” | 先查 `weline_acl.route` 是否存在该 route；不存在则按白色 ACL 放行 |
 | 需求是“不在权限内的都属于白色 ACL”，但仍要求登录/角色 | `RouteBefore` 仅检查显式白名单表 `WhiteAclSource`，没有把“未定义 ACL 的 route”视为白名单 | 在拦截前增加 `isRouteProtected()` 判定，未定义 ACL 的 route 直接 return |
 
+### PostgreSQL ON CONFLICT 字段不匹配
+
+| 症状 | 原因 | 解决方案 |
+|---|---|---|
+| `SQLSTATE[25P02]: current transaction is aborted` 出现在一次 `save()`/`insert()` 后 | 前一条 SQL 其实已经因为 `ON CONFLICT (...)` 不匹配真实唯一约束而失败，`25P02` 只是事务中止后的连带报错 | 先检查首个异常；确认 `ON CONFLICT` 字段与数据库唯一索引完全一致 |
+| 配置表/字典表 `save()` 在 PostgreSQL 下报错，但 MySQL 正常 | 业务代码把普通字段也当成冲突字段（如 `module`,`name`），生成的冲突键超过真实唯一索引范围 | `setData(..., true)` 仅用于真实唯一键字段，普通字段改为普通 `setData()` |
+
 ### WLS 状态泄漏
 
 | 错误 | 原因 | 解决方案 |

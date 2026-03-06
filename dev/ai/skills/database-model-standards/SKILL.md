@@ -268,6 +268,26 @@ $sql = "INSERT INTO table (field1, field2) VALUES (?, ?) ON DUPLICATE KEY UPDATE
 $sql = "INSERT INTO table (field1, field2) VALUES (?, ?) ON CONFLICT (field1) DO UPDATE SET ...";
 ```
 
+**PostgreSQL 特别注意：**
+- `insert($data, $conflictFields)` / `save(true)` 最终生成的 `ON CONFLICT (...)` 字段，**必须与数据库中真实存在的唯一索引完全一致**
+- 不能把普通业务字段误当成冲突字段，否则 PostgreSQL 会先报 `there is no unique or exclusion constraint matching the ON CONFLICT specification`，随后同事务里的后续 SQL 常表现为 `SQLSTATE[25P02]: current transaction is aborted`
+
+```php
+// ✅ 正确：真实唯一键是 (user_id, key)
+$model->setData('user_id', $userId, true)
+    ->setData('key', $key, true)
+    ->setData('module', $module) // 普通字段，不参与冲突键
+    ->setData('name', $name)     // 普通字段，不参与冲突键
+    ->save(true);
+
+// ❌ 错误：把 module、name 也塞进冲突键
+$model->setData('user_id', $userId, true)
+    ->setData('key', $key, true)
+    ->setData('module', $module, true)
+    ->setData('name', $name, true)
+    ->save(true);
+```
+
 ### 5. 删除重复数据使用模型方法
 
 ```php
