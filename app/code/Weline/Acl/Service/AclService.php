@@ -55,6 +55,10 @@ class AclService implements AclServiceInterface
         if ($roleId === 1) {
             return true;
         }
+        // 未定义 ACL 的路由不参与权限控制，视为白色 ACL
+        if (!$this->isRouteProtected($routePath)) {
+            return true;
+        }
 
         $entries = $this->getRoleAclEntries($roleId);
         if (empty($entries)) {
@@ -75,6 +79,25 @@ class AclService implements AclServiceInterface
             }
         }
         return false;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function isRouteProtected(string $routePath): bool
+    {
+        $routePath = trim($routePath, '/');
+        if ($routePath === '') {
+            return false;
+        }
+
+        $row = $this->aclModel->clear()
+            ->where(Acl::schema_fields_ROUTE, $routePath)
+            ->limit(1)
+            ->find()
+            ->fetch();
+
+        return (bool)$row->getId();
     }
 
     /**
