@@ -13,8 +13,9 @@ declare(strict_types=1);
 
 namespace Weline\Acl\Observer;
 
-use Weline\Acl\Model\Acl;
 use Weline\Acl\Model\WhiteAclSource;
+use Weline\Acl\Service\AclService;
+use Weline\Acl\Service\AclServiceInterface;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
@@ -38,11 +39,20 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
      * @var CachePoolInterface
      */
     private CachePoolInterface $aclCache;
+    /**
+     * @var AclServiceInterface
+     */
+    private AclServiceInterface $aclService;
 
     public function __construct(
-        WhiteAclSource $whiteAclSource
-    )
-    {$this->session = SessionFactory::getInstance()->createBackendSession();$this->whiteAclSource = $whiteAclSource;$this->aclCache = w_cache('acl');}
+        WhiteAclSource $whiteAclSource,
+        AclService     $aclService
+    ) {
+        $this->session = SessionFactory::getInstance()->createBackendSession();
+        $this->whiteAclSource = $whiteAclSource;
+        $this->aclCache = w_cache('acl');
+        $this->aclService = $aclService;
+    }
 
     /**
      * @inheritDoc
@@ -227,182 +237,50 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             }
             $can_referer = $this->getCanReferer($referer, $request);
             
-            // 非超管需要验证权限
+            // 非超管角色统一通过 AclService 做权限判定
             if ($role->getId() !== 1) {
-                // 如果事件中没有传递权限列表，从角色中获取
-                if (empty($access_sources)) {
-                    // 检测角色中是否有此路由
-                    $access_sources = $role->getAccess();
-                    /**@var \Weline\Acl\Model\RoleAccess $access_source */
-                    foreach ($access_sources as $key => $access_source) {
-                        unset($access_sources[$key]);
-                        if (is_array($access_source) && isset($access_source['route'])) {
-                            $access_source['route'] = trim($access_source['route'], '/-');
-                        } elseif (is_object($access_source) && method_exists($access_source, 'getData')) {
-                            $access_source = $access_source->getData();
-                            if (isset($access_source['route'])) {
-                                $access_source['route'] = trim($access_source['route'], '/-');
-                            }
-                        }
-                        $access_sources[] = $access_source;
-                    }
-                }
-                // 没有任何权限的后台用户404，等待超管给权限，否则后台都没办法进入
-                if (empty($access_sources)) {
+                $roleId = (int)$role->getId();
+                // 没有任何 ACL 权限：直接按“无任何权限”处理
+                if (!$this->aclService->hasAnyPermission($roleId)) {
                     if ($request->isApiBackend()) {
                         $this->returnApiError(403, __('你没有任何权限！请联系管理员！'), $request);
                         return;
-                    } else {
-                        $this->session->logout();
-                        /**@var MessageManager $message */
-                        $message = ObjectManager::getInstance(MessageManager::class);
-                        $message->addWarning(__('你没有任何权限！请联系管理员！'));
-                        /**@var EventsManager $eventsManager */
-                        $eventsManager = ObjectManager::getInstance(EventsManager::class);
-                        $noAccessData = ['data' => ['reason' => 'no_any_permission']];
-                        $eventsManager->dispatch('Weline_Acl::no_access_redirect_before', $noAccessData);
-                        $request->getResponse()->noRouter(DEV ? 403 : 404);
+                    }
+                    $this->session->logout();
+                    /** @var MessageManager $message */
+                    $message = ObjectManager::getInstance(MessageManager::class);
+                    $message->addWarning(__('你没有任何权限！请联系管理员！'));
+                    /** @var EventsManager $eventsManager */
+                    $eventsManager = ObjectManager::getInstance(EventsManager::class);
+                    $noAccessData = ['data' => ['reason' => 'no_any_permission']];
+                    $eventsManager->dispatch('Weline_Acl::no_access_redirect_before', $noAccessData);
+                    $request->getResponse()->noRouter(DEV ? 403 : 404);
+                    return;
+                }
+
+                // 当前路由是否允许
+                $allowed = $this->aclService->isRouteAllowed($roleId, $uri, $request->getMethod());
+                if (!$allowed) {
+                    // 无权限访问当前路由的处理逻辑维持原有分支语义：返回错误或尝试寻找可跳转入口
+                    if ($request->isApiBackend()) {
+                        $this->returnApiError(403, __('你无权进行该操作！你不具备：%{1} 操作权限！', [$request->getMethod()]), $request);
                         return;
                     }
-                }
-                // 已有的权限中检测
-                $has_access = false;
-                foreach ($access_sources as $access_source) {
-                    $accessRoute = is_array($access_source) ? ($access_source['route'] ?? '') : ($access_source->getData('route') ?? '');
-                    $accessMethod = is_array($access_source) ? ($access_source['method'] ?? '') : ($access_source->getData('method') ?? '');
-                    
-                    // 路由匹配
-                    if ($uri === $accessRoute) {
-                        // 方法匹配
-                        if ($accessMethod) {
-                            if ($request->getMethod() === $accessMethod) {
-                                $has_access = true;
-                                break;
-                            }
-                        } else {
-                            $has_access = true;
-                            break;
-                        }
+
+                    // 使用现有的 fallback 行为：尝试根据角色权限找到可访问的菜单路由
+                    if (empty($access_sources)) {
+                        $access_sources = $this->aclService->getRoleAclEntries($roleId);
                     }
-                }
-                // 检测没有权限的情况下是否该路由存在于acl系统控制中
-                if (!$has_access) {
-                    // 读取所有资源路径
-                    $all_acl_cache_key = 'backend_all_acl_sources';
-                    $acl_sources = $this->aclCache->get($all_acl_cache_key);
-                    if (empty($acl_sources)) {
-                        /**@var Acl $aclModel */
-                        $aclModel = ObjectManager::getInstance(Acl::class);
-                        $acl_sources = $aclModel->select()->fetchArray();
-                        $this->aclCache->set($all_acl_cache_key, $acl_sources);
+                    $this->findAccessUrlRouteToRedirect($request, $access_sources);
+
+                    /** @var EventsManager $eventsManager */
+                    $eventsManager = ObjectManager::getInstance(EventsManager::class);
+                    $noAccessData = ['data' => ['reason' => 'no_permission_for_route']];
+                    $eventsManager->dispatch('Weline_Acl::no_access_redirect_before', $noAccessData);
+                    if (!$request->isApiBackend()) {
+                        $request->getResponse()->noRouter(DEV ? 403 : 404);
                     }
-                    foreach ($acl_sources as $acl_source) {
-                        // 路由匹配
-                        if ($uri === $acl_source['route']) {
-                            // 方法匹配
-                            if ($acl_source['method']) {
-                                if ($request->getMethod() === $acl_source['method']) {
-                                    if ($can_referer) {
-                                        // 判断referer是否可跳转，解决无限重定向问题
-                                        $referer_in_access = false;
-                                        foreach ($access_sources as $access_source_item) {
-                                            $accessRoute = is_array($access_source_item) ? ($access_source_item['route'] ?? '') : ($access_source_item->getData('route') ?? '');
-                                            if ($accessRoute === $request->getUrlPath($referer)) {
-                                                $referer_in_access = true;
-                                                break;
-                                            }
-                                        }
-                                        if ($referer_in_access) {
-                                            $can_referer = true;
-                                        } else {
-                                            $can_referer = false;
-                                        }
-                                    }
-                                    // 没有权限又存在于acl控制列表中
-                                    if ($can_referer) {
-                                        if ($request->isApiBackend()) {
-                                            $this->returnApiError(403, __('你无权进行该操作！你不具备：%{1} 操作权限！', [$request->getMethod()]), $request);
-                                            return;
-                                        } else {
-                                            /**@var MessageManager $message */
-                                            $message = ObjectManager::getInstance(MessageManager::class);
-                                            $message->addWarning(__('你无权进行该操作！已将你带回来源网址！你不具备：%{1} 操作权限！', $request->getMethod()));
-                                            $request->getResponse()->redirect($referer);
-                                        }
-                                    } else {
-                                        // 找一个有权限的get请求路由访问
-                                        if ($request->isApiBackend()) {
-                                            $this->returnApiError(403, __('你无权进行该操作！你不具备：%{1} 操作权限！', [$request->getMethod()]), $request);
-                                            return;
-                                        } else {
-                                            $this->findAccessUrlRouteToRedirect($request, $access_sources);
-                                        }
-                                    }
-                                    /**@var EventsManager $eventsManager */
-                                    $eventsManager = ObjectManager::getInstance(EventsManager::class);
-                                    $noAccessData = ['data' => ['reason' => 'no_permission_for_route']];
-                                    $eventsManager->dispatch('Weline_Acl::no_access_redirect_before', $noAccessData);
-                                    if (!$request->isApiBackend()) {
-                                        $request->getResponse()->noRouter(DEV ? 403 : 404);
-                                    }
-                                    return;
-                                } else {
-                                    if ($request->isApiBackend()) {
-                                        $this->returnApiError(403, __('你无权进行该操作！你不具备：%{1} 操作权限！', [$request->getMethod()]), $request);
-                                        return;
-                                    } else {
-                                        // 找一个有权限的get请求路由访问
-                                        $this->findAccessUrlRouteToRedirect($request, $access_sources);
-                                    }
-                                }
-                            } else {
-                                if ($can_referer) {
-                                    // 判断referer是否可跳转，解决无限重定向问题
-                                    $referer_in_access = false;
-                                    foreach ($access_sources as $access_source) {
-                                        $accessRoute = is_array($access_source) ? ($access_source['route'] ?? '') : ($access_source->getData('route') ?? '');
-                                        if ($accessRoute === $request->getUrlPath($referer)) {
-                                            $referer_in_access = true;
-                                            break;
-                                        }
-                                    }
-                                    if ($referer_in_access) {
-                                        $can_referer = true;
-                                    } else {
-                                        $can_referer = false;
-                                    }
-                                }
-                                // 没有权限又存在于acl控制列表中
-                                if ($can_referer) {
-                                    if ($request->isApiBackend()) {
-                                        $this->returnApiError(403, __('你无权进行该操作！'), $request);
-                                        return;
-                                    } else {
-                                        /**@var MessageManager $message */
-                                        $message = ObjectManager::getInstance(MessageManager::class);
-                                        $message->addWarning(__('你无权进行该操作！已将你带回来源网址！'));
-                                        $request->getResponse()->redirect($referer);
-                                    }
-                                } else {
-                                    // 找一个有权限的get请求路由访问
-                                    if ($request->isApiBackend()) {
-                                        $this->returnApiError(403, __('你无权进行该操作！'), $request);
-                                        return;
-                                    } else {
-                                        $this->findAccessUrlRouteToRedirect($request, $access_sources);
-                                    }
-                                }
-                                /**@var EventsManager $eventsManager */
-                                $eventsManager = ObjectManager::getInstance(EventsManager::class);
-                                $noAccessData = ['data' => ['reason' => 'no_permission_for_route']];
-                                $eventsManager->dispatch('Weline_Acl::no_access_redirect_before', $noAccessData);
-                                if (!$request->isApiBackend()) {
-                                    $request->getResponse()->noRouter(DEV ? 403 : 404);
-                                }
-                                return;
-                            }
-                        }
-                    }
+                    return;
                 }
             }
         }
@@ -504,6 +382,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
 
     private function findAccessUrlRouteToRedirect(Request &$request, array &$access_sources)
     {
+        // 优先按照严格规则（非 add/edit 等、GET 方法、menus 类型）寻找可跳转入口
         foreach ($access_sources as $access_source) {
             $accessRoute = is_array($access_source) ? ($access_source['route'] ?? '') : ($access_source->getData('route') ?? '');
             $accessMethod = is_array($access_source) ? ($access_source['method'] ?? '') : ($access_source->getData('method') ?? '');
@@ -511,28 +390,44 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             $route = strtolower($accessRoute);
             $method = strtolower($accessMethod);
             if (($method === 'get' || $method === '') && $route) {
-                # 跳过添加和编辑页面
+                // 跳过添加、编辑等操作页
                 if (!self::canReferer($route)) {
                     continue;
                 }
-                # 跳过非PC
+                // 只使用菜单类型作为入口
                 if ($accessType !== 'menus') {
                     continue;
                 }
-                if (($method === 'get' || $method === '') && $route) {
-                    /**@var MessageManager $message */
-                    $message = ObjectManager::getInstance(MessageManager::class);
-                    $message->addWarning(__('你无权进行该操作！你不具备：%{1} 路由：%{2} 操作权限！已将你带到你可访问的页面！', [
-                        $request->getMethod(),
-                        $request->getUri()
-                    ]));
-                    // 使用后台 URL 构建器生成正确的后台地址
-                    $backendUrl = $request->getUrlBuilder()->getBackendUrl($accessRoute);
-                    $request->getResponse()->redirect($backendUrl);
-                }
+
+                /** @var MessageManager $message */
+                $message = ObjectManager::getInstance(MessageManager::class);
+                $message->addWarning(__('你无权进行该操作！你不具备：%{1} 路由：%{2} 操作权限！已将你带到你可访问的页面！', [
+                    $request->getMethod(),
+                    $request->getUri()
+                ]));
+                // 使用后台 URL 构建器生成正确的后台地址
+                $backendUrl = $request->getUrlBuilder()->getBackendUrl($accessRoute);
+                $request->getResponse()->redirect($backendUrl);
+                return;
             }
         }
-        // 没有任何可使用权限
+
+        // 严格规则下没有找到入口时，降级为“宽松模式”：只要是 menus 类型且有路由，就拿第一个作为入口
+        foreach ($access_sources as $access_source) {
+            $accessRoute = is_array($access_source) ? ($access_source['route'] ?? '') : ($access_source->getData('route') ?? '');
+            $accessType = is_array($access_source) ? ($access_source['type'] ?? '') : ($access_source->getData('type') ?? '');
+            if (!$accessRoute || $accessType !== 'menus') {
+                continue;
+            }
+            $backendUrl = $request->getUrlBuilder()->getBackendUrl($accessRoute);
+            /** @var MessageManager $message */
+            $message = ObjectManager::getInstance(MessageManager::class);
+            $message->addWarning(__('你无权进行该操作！已将你带到你可访问的后台页面：%{1}', [$backendUrl]));
+            $request->getResponse()->redirect($backendUrl);
+            return;
+        }
+
+        // 没有任何 menus 类型的权限，视为“没有可用入口”
         $this->session->logout();
         /**@var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);

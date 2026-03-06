@@ -40,7 +40,6 @@ class NoAccessRedirectBefore implements \Weline\Framework\Event\ObserverInterfac
         } catch (\Throwable $e) {
             throw $e;
         }
-        
         if ($isBackend) {
             try {
                 $data = $event->getData('data') ?? [];
