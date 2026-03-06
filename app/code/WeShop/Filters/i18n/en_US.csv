@@ -1,57 +1,27 @@
-筛选器收集,"Filter collection"
-收集所有可用的筛选器，其他模块可通过此事件添加自定义筛选,"Collect all available filters; other modules can add custom filters via this event"
-筛选条件应用前,"Before applying filters"
-在应用筛选条件前触发，允许修改筛选参数,"Fired before applying filters; allows modifying filter params"
-筛选条件应用后,"After applying filters"
-在应用筛选条件后触发，允许处理筛选结果,"Fired after applying filters; allows processing result"
-筛选选项收集,"Filter options collection"
-收集指定筛选器的选项，允许其他模块修改选项,收集指定筛选器的选项，允许其他模块修改选项
-筛选计数收集,"Filter count collection"
-收集筛选选项的产品计数,"Collect product counts for filter options"
-筛选缓存清除,"Filter cache clear"
-筛选缓存被清除时触发,"Fired when filter cache is cleared"
-无效的筛选配置,"Invalid filter configuration"
-筛选配置已保存,"Filter configuration saved"
-"保存失败: %1","Save failed: %1"
-无效的价格区间配置,"Invalid price range configuration"
-价格区间已保存,"Price ranges saved"
-分类筛选缓存已清除,"Category filter cache cleared"
-所有筛选缓存已清除,"All filter cache cleared"
-"清除缓存失败: %1","Clear cache failed: %1"
-无效的分类ID,"Invalid category ID"
-参数无效,"Invalid parameter"
-新品,"New Arrivals"
-新品上市,新品上市
-配送方式,Shipping
-免运费,"Free Shipping"
-当日达,"Same Day Delivery"
-次日达,"Next Day Delivery"
-快递,"Express Delivery"
-用户评分,"Customer Reviews"
-及以上,"and above"
-尺寸,Size
-颜色,Color
-价格区间,"Price Range"
 促销,"On Sale"
 促销商品,促销商品
 9折及以上,"10% off or more"
 8折及以上,"20% off or more"
 7折及以上,"30% off or more"
 5折及以上,"50% off or more"
+新品,"New Arrivals"
+新品上市,新品上市
+用户评分,"Customer Reviews"
+及以上,"and above"
+材质,Material
+尺寸,Size
+品牌,Brand
 库存状态,Availability
 有货,"In Stock"
 缺货,"Out of Stock"
 库存紧张,"Low Stock"
-材质,Material
-品牌,Brand
-低于,Under
-筛选条件,Filters
-清除全部,"Clear All"
-移除,Remove
-展开更多筛选,"Show More Filters"
-收起筛选,"Show Less"
-"共 %{count} 件商品","共 %{count} 件商品"
-该分类下暂无商品,该分类下暂无商品
+颜色,Color
+配送方式,Shipping
+免运费,"Free Shipping"
+当日达,"Same Day Delivery"
+次日达,"Next Day Delivery"
+快递,"Express Delivery"
+价格区间,"Price Range"
 筛选容器,"Filter container"
 筛选区域的主容器，包含所有筛选组件,"Main filter area container for all filter components"
 筛选头部,"Filter header"
@@ -82,5 +52,35 @@ EAV属性筛选,"EAV attribute filter"
 显示筛选后的产品数量,"Show product count after filtering"
 分类筛选配置,"Category filter configuration"
 在分类编辑页面配置可筛选属性,"Configure filterable attributes on category edit"
+无效的分类ID,"Invalid category ID"
+参数无效,"Invalid parameter"
+无效的筛选配置,"Invalid filter configuration"
+筛选配置已保存,"Filter configuration saved"
+"保存失败: %1","Save failed: %1"
+无效的价格区间配置,"Invalid price range configuration"
+价格区间已保存,"Price ranges saved"
+分类筛选缓存已清除,"Category filter cache cleared"
+所有筛选缓存已清除,"All filter cache cleared"
+"清除缓存失败: %1","Clear cache failed: %1"
+筛选条件,Filters
+清除全部,"Clear All"
+移除,Remove
+"共 %{count} 件商品","共 %{count} 件商品"
+该分类下暂无商品,该分类下暂无商品
+展开更多筛选,"Show More Filters"
+收起筛选,"Show Less"
+筛选器收集,"Filter collection"
+收集所有可用的筛选器，其他模块可通过此事件添加自定义筛选,"Collect all available filters; other modules can add custom filters via this event"
+筛选条件应用前,"Before applying filters"
+在应用筛选条件前触发，允许修改筛选参数,"Fired before applying filters; allows modifying filter params"
+筛选条件应用后,"After applying filters"
+在应用筛选条件后触发，允许处理筛选结果,"Fired after applying filters; allows processing result"
+筛选选项收集,"Filter options collection"
+收集指定筛选器的选项，允许其他模块修改选项,收集指定筛选器的选项，允许其他模块修改选项
+筛选计数收集,"Filter count collection"
+收集筛选选项的产品计数,"Collect product counts for filter options"
+筛选缓存清除,"Filter cache clear"
+筛选缓存被清除时触发,"Fired when filter cache is cleared"
+低于,Under
 子分类,Subcategories
 上级分类,"Parent Category"
