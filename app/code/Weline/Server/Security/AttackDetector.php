@@ -72,11 +72,11 @@ class AttackDetector
      * 默认规则
      */
     private array $defaultRules = [
-        // 频率限制
+        // 频率限制（登录重定向循环会导致同一 IP 短时间内大量请求，max_requests 不宜过低以免误封）
         'rate_limit' => [
             'enabled' => true,
             'window' => 60,           // 时间窗口（秒）
-            'max_requests' => 100,    // 最大请求数
+            'max_requests' => 200,    // 最大请求数（原 100，提高以避免 admin↔login 重定向循环误封）
             'block_duration' => 300,  // 封禁时长（秒）
         ],
         // 路径级限流（可精细控制 Query API 等路径）
@@ -986,6 +986,14 @@ class AttackDetector
     public function unblock(string $ip): void
     {
         unset($this->blockedIps[$ip]);
+    }
+
+    /**
+     * 清空全部封禁（用于运维：清理封印数据）
+     */
+    public function clearAllBlocks(): void
+    {
+        $this->blockedIps = [];
     }
     
     /**
