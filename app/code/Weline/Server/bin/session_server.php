@@ -109,7 +109,10 @@ $sessionConfig['persist_path'] = BP . 'var' . DIRECTORY_SEPARATOR . 'session' . 
 $server = new \Weline\Server\Session\Server\SessionServer($sessionConfig);
 
 if (!$server->start($host, $port)) {
-    WlsLogger::error_("Failed to start Session Server on {$host}:{$port}");
+    $detail = $server->getLastBindError();
+    WlsLogger::error_(
+        "Failed to start Session Server on {$host}:{$port}" . ($detail !== null ? ": {$detail}" : '')
+    );
     exit(1);
 }
 

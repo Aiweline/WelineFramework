@@ -16,7 +16,9 @@ use Weline\Admin\Helper\MenuUrlValidator;
 use Weline\Backend\Model\BackendUserToken;
 use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Url;
+use Weline\Framework\Session\Strategy\WlsStrategy;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Text;
@@ -48,7 +50,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         if ($this->session->isLoggedIn()) {
             // 有来源网址就跳回来源网址
             $this->redirectReferer();
-            $this->redirect($this->_url->getBackendUrl('admin'));
+            $this->redirect($this->getBackendUrlSameOrigin('admin'));
         }
         //        $this->session->delete('backend_disable_login');
         $this->assign('post_url', $this->_url->getBackendUrl('admin/login/post'));
@@ -103,7 +105,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         if ($this->session->isLoggedIn()) {
             // 有来源网址就跳回来源网址
             $this->redirectReferer();
-            $this->redirect($this->_url->getBackendUrl('admin'));
+            $this->redirect($this->getBackendUrlSameOrigin('admin'));
         }
         # 验证 form 表单
         // if (empty($this->request->getParam('form_key')) || ($this->session->get('form_key') !== $this->request->getParam('form_key'))) {
@@ -220,10 +222,28 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             $this->redirect($this->_url->getBackendUrl('/admin/login'));
             return;
         }
+        // 登录成功后立即持久化 Session（避免 WLS 下重定向请求读不到登录态导致循环重定向）
+        $this->session->getSession()->save();
+        // WLS 下确保 Session Cookie 随 302 响应发出（双重保障，避免 Worker 合并逻辑遗漏）
+        $sid = $this->session->getId();
+        if ($sid !== '') {
+            $expire = \time() + 86400 * 30;
+            $secure = $this->request->isSecure();
+            HeaderCollector::getInstance()->setCookie(
+                WlsStrategy::SESSION_NAME,
+                $sid,
+                $expire,
+                '/',
+                '',
+                $secure,
+                true,
+                'Lax'
+            );
+        }
         // 有来源网址就跳回来源网址
         $this->redirectReferer();
-        # 跳转首页
-        $this->redirect($this->_url->getBackendUrl('admin'));
+        # 跳转首页（使用当前请求同源 URL，确保 Cookie 能带上，避免跨 host 丢失 Session）
+        $this->redirect($this->getBackendUrlSameOrigin('admin'));
     }
 
     private function redirectReferer(): void
@@ -236,7 +256,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 $refererRoutePath = trim($parsed['uri'] ?? '', '/');
                 if ($refererRoutePath && MenuUrlValidator::isValidLoginRedirectTarget($refererRoutePath)) {
                     $this->session->delete('backend_login_referer');
-                    $this->redirect($backend_login_referer);
+                    $this->redirect($this->ensureSameOrigin($backend_login_referer));
                     return;
                 } else {
                     // 不是有效跳转目标，清除
@@ -252,13 +272,57 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 $parsed = \Weline\Framework\Http\Url::parser($referer);
                 $refererRoutePath = trim($parsed['uri'] ?? '', '/');
                 if ($refererRoutePath && MenuUrlValidator::isValidLoginRedirectTarget($refererRoutePath)) {
-                    $this->redirect($referer);
+                    $this->redirect($this->ensureSameOrigin($referer));
                 } else {
                     // 不是有效跳转目标，清除
                     $this->session->delete('referer');
                 }
             }
         }
+    }
+
+    /**
+     * 使用当前请求的 scheme+host 及后台路由前缀生成后台 URL，保证含 admin_xxx 前缀且同源。
+     */
+    private function getBackendUrlSameOrigin(string $path): string
+    {
+        $pathPart = $this->getBackendPathWithPrefix($path);
+        $scheme = $this->request->isSecure() ? 'https' : 'http';
+        $host = $this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost';
+        return $scheme . '://' . $host . $pathPart;
+    }
+
+    /**
+     * 获取带后台路由前缀的路径（如 /admin_696f02955db39/CNY/zh_Hans_CN/admin），避免重定向丢失后端 key。
+     * 仅当 WELINE_AREA_ROUTE 已含后端 prefix 时使用；否则用 Env backend prefix + 货币 + 语言 拼接。
+     */
+    private function getBackendPathWithPrefix(string $path): string
+    {
+        $backendPrefix = \Weline\Framework\App\Env::getAreaRoutePrefix('backend');
+        $areaRoute = $this->request->getServer('WELINE_AREA_ROUTE') ?? '';
+        if ($areaRoute !== '' && $backendPrefix !== null && $backendPrefix !== ''
+            && (str_starts_with($areaRoute, $backendPrefix . '/') || $areaRoute === $backendPrefix)) {
+            return '/' . \trim($areaRoute, '/') . '/' . \ltrim($path, '/');
+        }
+        if ($backendPrefix !== null && $backendPrefix !== '') {
+            $currency = $this->request->getServer('WELINE_USER_CURRENCY') ?? $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY';
+            $language = $this->request->getServer('WELINE_USER_LANG') ?? $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
+            return '/' . $backendPrefix . '/' . $currency . '/' . $language . '/' . \ltrim($path, '/');
+        }
+        return $this->_url->getBackendUrlPath($path);
+    }
+
+    /**
+     * 将 URL 规范为当前请求同源（保留 path+query，替换 scheme+host），path 已含后台前缀则不再改写。
+     */
+    private function ensureSameOrigin(string $url): string
+    {
+        $parsed = \parse_url($url);
+        $path = $parsed['path'] ?? '/';
+        $query = isset($parsed['query']) && $parsed['query'] !== '' ? '?' . $parsed['query'] : '';
+        $scheme = $this->request->isSecure() ? 'https' : 'http';
+        $host = $this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost';
+        return $scheme . '://' . $host . $path . $query;
     }
 
     public function logout(): void
