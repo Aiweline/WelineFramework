@@ -153,6 +153,21 @@ class ServerInstanceManager
     }
 
     /**
+     * 更新实例的 Master PID（Orchestrator 启动完成后调用，供 server:status 等正确显示）
+     */
+    public function updateMasterPid(string $instanceName, int $masterPid): void
+    {
+        $file = $this->getInstanceFile($instanceName);
+        if (!\is_file($file)) {
+            return;
+        }
+        $this->atomicUpdateJson($file, function (array $data) use ($masterPid): array {
+            $data['master_pid'] = $masterPid;
+            return $data;
+        });
+    }
+
+    /**
      * 注册单个服务实例（子进程调用或 Orchestrator 单个更新）
      */
     public function registerService(string $instanceName, ServiceInfo $service): void
