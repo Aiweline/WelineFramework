@@ -309,8 +309,35 @@ class WlsRuntime implements RuntimeInterface
                 w_log_warning("[WLS Redirect Warning] Too many redirects: {$redirectCount}, current URI: {$currentUri}, redirect to: {$redirectUrl}");
             }
             
-            // 创建重定向响应（空响应体，状态码和 Location 头由 WlsResponse 处理）
-            return \Weline\Framework\Http\WlsResponse::redirect($redirectUrl, $redirectEx->getStatusCode())->toHttpString(false);
+            // 创建重定向响应，并立即把 HeaderCollector 中的 Cookie 写入响应（登录 302 必须带 Set-Cookie，不依赖 Worker 合并）
+            $redirectResponse = \Weline\Framework\Http\WlsResponse::redirect($redirectUrl, $redirectEx->getStatusCode());
+            $hc = \Weline\Framework\Http\HeaderCollector::getInstance();
+            $cookies = $hc->getCookies();
+            foreach ($cookies as $cookie) {
+                $parts = [\urlencode($cookie['name']) . '=' . \urlencode($cookie['value'])];
+                if (isset($cookie['expire']) && $cookie['expire'] !== 0) {
+                    $parts[] = 'Expires=' . \gmdate('D, d M Y H:i:s T', $cookie['expire']);
+                }
+                if (!empty($cookie['path'])) {
+                    $parts[] = 'Path=' . $cookie['path'];
+                }
+                if (!empty($cookie['domain'])) {
+                    $parts[] = 'Domain=' . $cookie['domain'];
+                }
+                if (!empty($cookie['secure'])) {
+                    $parts[] = 'Secure';
+                }
+                if (!empty($cookie['httpOnly'])) {
+                    $parts[] = 'HttpOnly';
+                }
+                if (!empty($cookie['sameSite'])) {
+                    $parts[] = 'SameSite=' . $cookie['sameSite'];
+                }
+                $redirectResponse->addCookieHeader(\implode('; ', $parts));
+            }
+            // 诊断头：便于在浏览器中确认 302 是否带 Cookie（0=未带，排查 Session/Nginx）
+            $redirectResponse->setHeader('X-WLS-Redirect-Cookies', (string)\count($cookies));
+            return $redirectResponse->toHttpString(false);
             
         } catch (\Weline\Framework\Http\NoRouterException $noRouterEx) {
             // 无路由异常：转换为 404/403 响应

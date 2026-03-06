@@ -108,6 +108,11 @@ class ControlMessage
     public const ACTION_MAINTENANCE_DISABLE = 'maintenance_disable';
     /** 滚动重启：逐个重启 Worker，期间由维护 Worker 接管流量 */
     public const ACTION_ROLLING_RESTART = 'rolling_restart';
+    /** 解封 IP / 清空封禁列表（Master 转发给 Dispatcher） */
+    public const ACTION_SECURITY_UNBLOCK = 'security_unblock';
+
+    /** Master → Dispatcher：解封指定 IP 或清空全部封禁 */
+    public const TYPE_SECURITY_UNBLOCK = 'security_unblock';
 
     // ========== 复活优先级 ==========
 
@@ -372,8 +377,12 @@ class ControlMessage
 
     /**
      * 构建 command 消息
+     *
+     * @param string $action 动作
+     * @param string $reloadType 重载类型（仅 reload 时用）
+     * @param array $payload 可选载荷（如 security_unblock 时传 ip / clear_all）
      */
-    public static function command(string $action, string $reloadType = ''): string
+    public static function command(string $action, string $reloadType = '', array $payload = []): string
     {
         $data = [
             'type'   => self::TYPE_COMMAND,
@@ -381,6 +390,24 @@ class ControlMessage
         ];
         if ($reloadType !== '') {
             $data['reload_type'] = $reloadType;
+        }
+        foreach ($payload as $k => $v) {
+            $data[$k] = $v;
+        }
+        return self::encode($data);
+    }
+
+    /**
+     * 构建 security_unblock 消息（Master → Dispatcher）
+     *
+     * @param string|null $ip 解封指定 IP，为 null 且 clear_all 为 true 时清空全部
+     * @param bool $clearAll 是否清空全部封禁
+     */
+    public static function securityUnblock(?string $ip = null, bool $clearAll = false): string
+    {
+        $data = ['type' => self::TYPE_SECURITY_UNBLOCK, 'clear_all' => $clearAll];
+        if ($ip !== null && $ip !== '') {
+            $data['ip'] = $ip;
         }
         return self::encode($data);
     }

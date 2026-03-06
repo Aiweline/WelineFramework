@@ -343,29 +343,48 @@ $socket = null;
 if ($useReusePort && $supportsReusePort && \function_exists('socket_create')) {
     WlsLogger::info_("使用 socket 扩展创建 SO_REUSEPORT socket...");
     
-    // 创建原始 socket
-    $rawSocket = @\socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+    $rawSocket = false;
+    $maxBindRetries = 1;
+    $bindRetryDelay = 0;
+    $lastErrno = 0;
+    $lastErrstr = '';
+
+    for ($attempt = 1; $attempt <= $maxBindRetries; $attempt++) {
+        $rawSocket = @\socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        if (!$rawSocket) {
+            $lastErrno = \socket_last_error();
+            $lastErrstr = \socket_strerror($lastErrno);
+            WlsLogger::error_("socket_create 失败: {$lastErrstr}");
+            break;
+        }
+        if (!@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEADDR, 1)) {
+            WlsLogger::warning_("设置 SO_REUSEADDR 失败");
+        }
+        if (!@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEPORT, 1)) {
+            WlsLogger::error_("设置 SO_REUSEPORT 失败: " . \socket_strerror(\socket_last_error($rawSocket)));
+            @\socket_close($rawSocket);
+            $rawSocket = false;
+            break;
+        }
+        if (@\socket_bind($rawSocket, $host, $port)) {
+            break;
+        }
+        $lastErrno = \socket_last_error($rawSocket);
+        $lastErrstr = \socket_strerror($lastErrno);
+        @\socket_close($rawSocket);
+        $rawSocket = false;
+        if ($lastErrno !== 98 && $lastErrno !== 10048) {
+            WlsLogger::error_("socket_bind 失败: {$lastErrstr} (errno: {$lastErrno})");
+            break;
+        }
+        WlsLogger::warning_("端口 {$port} 占用 (errno: {$lastErrno})，{$bindRetryDelay} 秒后重试 ({$attempt}/{$maxBindRetries})");
+        if ($attempt < $maxBindRetries) {
+            \sleep($bindRetryDelay);
+        }
+    }
+
     if (!$rawSocket) {
-        WlsLogger::error_("socket_create 失败: " . \socket_strerror(\socket_last_error()));
-        exit(1);
-    }
-    
-    // 设置 SO_REUSEADDR
-    if (!@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEADDR, 1)) {
-        WlsLogger::warning_("设置 SO_REUSEADDR 失败");
-    }
-    
-    // 设置 SO_REUSEPORT
-    if (!@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEPORT, 1)) {
-        WlsLogger::error_("设置 SO_REUSEPORT 失败: " . \socket_strerror(\socket_last_error($rawSocket)));
-        @\socket_close($rawSocket);
-        exit(1);
-    }
-    
-    // 绑定地址
-    if (!@\socket_bind($rawSocket, $host, $port)) {
-        WlsLogger::error_("socket_bind 失败: " . \socket_strerror(\socket_last_error($rawSocket)));
-        @\socket_close($rawSocket);
+        WlsLogger::error_("Socket 创建失败: " . ($lastErrstr ?: \socket_strerror($lastErrno)));
         exit(1);
     }
     
@@ -403,17 +422,35 @@ if ($useReusePort && $supportsReusePort && \function_exists('socket_create')) {
         'socket' => $socketOptions
     ]);
 
-    $socket = @\stream_socket_server(
-        "tcp://{$host}:{$port}",
-        $errno,
-        $errstr,
-        STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
-        $context
-    );
+    $maxStreamRetries = 1;
+    $streamRetryDelay = 0;
+    $socket = null;
+    $streamErrno = 0;
+    $streamErrstr = '';
+
+    for ($attempt = 1; $attempt <= $maxStreamRetries; $attempt++) {
+        $socket = @\stream_socket_server(
+            "tcp://{$host}:{$port}",
+            $streamErrno,
+            $streamErrstr,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+            $context
+        );
+        if ($socket) {
+            break;
+        }
+        if ($streamErrno !== 98 && $streamErrno !== 10048) {
+            break;
+        }
+        WlsLogger::warning_("端口 {$port} 占用 (errno: {$streamErrno})，{$streamRetryDelay} 秒后重试 ({$attempt}/{$maxStreamRetries})");
+        if ($attempt < $maxStreamRetries) {
+            \sleep($streamRetryDelay);
+        }
+    }
 
     if (!$socket) {
-        WlsLogger::error_("Socket 创建失败: {$errstr} (errno: {$errno})");
-        w_log_error("[WLS Worker] Failed to create socket: {$errstr}");
+        WlsLogger::error_("Socket 创建失败: {$streamErrstr} (errno: {$streamErrno})");
+        w_log_error("[WLS Worker] Failed to create socket: {$streamErrstr}");
         exit(1);
     }
 }
@@ -610,10 +647,11 @@ $logReload = function (string $method) use ($workerId, $instanceName) {
 $shouldExit = false;
 
 // Worker 优雅退出函数（统一使用进程管理器清理）
-// 优雅关闭配置
-$gracefulShutdownTimeout = 30; // 等待活跃请求的最大时间（秒）
+// 优雅关闭配置：热重载给足时间排水，停止服务器短超时（与 Windows 一致，不长时间等待）
+$gracefulShutdownTimeout = 30; // 热重载时等待活跃请求的最大时间（秒）
+$stopShutdownTimeout = 3;      // server:stop 时等待连接的最大时间（秒）
 
-$gracefulExit = function (string $reason = '', bool $waitForRequests = true) use ($socket, &$connections, &$requestBuffers, &$connectionLastActivity, &$activeRequests, $processName, $gracefulShutdownTimeout, &$ipcClient, $workerId, $port, $isMaintenanceWorker) {
+$gracefulExit = function (string $reason = '', bool $waitForRequests = true) use ($socket, &$connections, &$requestBuffers, &$connectionLastActivity, &$activeRequests, $processName, $gracefulShutdownTimeout, $stopShutdownTimeout, &$ipcClient, $workerId, $port, $isMaintenanceWorker) {
     // 刷新日志缓冲区
     WlsLogger::flush_(true);
     
@@ -629,12 +667,15 @@ $gracefulExit = function (string $reason = '', bool $waitForRequests = true) use
     }
     WlsLogger::info_("已停止接受新连接");
     
+    // 停止服务器用短超时，热重载用长超时（与 Windows 一致）
+    $waitTimeout = (\str_contains($reason, '热重载') || $reason === '') ? $gracefulShutdownTimeout : $stopShutdownTimeout;
+    
     // 等待活跃请求完成
     if ($waitForRequests && !empty($connections)) {
         $waitStart = \time();
         WlsLogger::info_("等待 " . \count($connections) . " 个活跃连接完成...");
         
-        while (!empty($connections) && (\time() - $waitStart) < $gracefulShutdownTimeout) {
+        while (!empty($connections) && (\time() - $waitStart) < $waitTimeout) {
             // 继续处理现有连接的数据
             $read = $connections;
             $write = [];
@@ -1288,9 +1329,15 @@ function handleRequest(
         $isHttp11 = \strpos($rawRequest, 'HTTP/1.1') !== false;
         $hasClose = \stripos($rawRequest, 'Connection: close') !== false;
         $keepAlive = $isHttp11 && !$hasClose;
-        
-        if (!$isLocal) {
-            // 非本地请求：返回 403（极简响应）
+        // 可选：允许外网访问健康检查（仅测试/内网环境建议开启，生产建议关闭）
+        $healthAllowRemote = false;
+        if (\defined('BP') && \is_file(BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php')) {
+            $env = @include BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php';
+            $healthAllowRemote = (bool)($env['server']['servers'][$instanceName]['health_allow_remote']
+                ?? $env['wls']['health_allow_remote'] ?? false);
+        }
+        if (!$isLocal && !$healthAllowRemote) {
+            // 非本地请求且未配置允许：返回 403（极简响应）
             return $keepAlive
                 ? "HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\nConnection: keep-alive\r\n\r\nForbidden"
                 : "HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\nConnection: close\r\n\r\nForbidden";
@@ -1399,6 +1446,37 @@ function handleRequest(
         // 如果以 "HTTP/" 开头，说明已经是完整的 HTTP 响应，直接返回
         if (\is_string($result) && \str_starts_with($result, 'HTTP/')) {
             WlsLogger::info_("返回已格式化的 HTTP 响应（可能是重定向）");
+            // 合并 Runtime 保存的 Cookie（登录 302 等必须随响应发送 Set-Cookie，与 worker_ssl 一致）
+            $pendingCookies = $runtime->consumePendingCookies();
+            if (!empty($pendingCookies)) {
+                $headerEnd = \strpos($result, "\r\n\r\n");
+                if ($headerEnd !== false) {
+                    $cookieHeaders = '';
+                    foreach ($pendingCookies as $cookie) {
+                        $parts = [\urlencode($cookie['name']) . '=' . \urlencode($cookie['value'])];
+                        if (isset($cookie['expire']) && $cookie['expire'] !== 0) {
+                            $parts[] = 'Expires=' . \gmdate('D, d M Y H:i:s T', $cookie['expire']);
+                        }
+                        if (!empty($cookie['path'])) {
+                            $parts[] = 'Path=' . $cookie['path'];
+                        }
+                        if (!empty($cookie['domain'])) {
+                            $parts[] = 'Domain=' . $cookie['domain'];
+                        }
+                        if (!empty($cookie['secure'])) {
+                            $parts[] = 'Secure';
+                        }
+                        if (!empty($cookie['httpOnly'])) {
+                            $parts[] = 'HttpOnly';
+                        }
+                        if (!empty($cookie['sameSite'])) {
+                            $parts[] = 'SameSite=' . $cookie['sameSite'];
+                        }
+                        $cookieHeaders .= 'Set-Cookie: ' . \implode('; ', $parts) . "\r\n";
+                    }
+                    $result = \substr($result, 0, $headerEnd) . "\r\n" . $cookieHeaders . \substr($result, $headerEnd);
+                }
+            }
             $sni = \Weline\Server\Service\RouteHintService::extractSniFromRawRequest($rawRequest);
             $result = \Weline\Server\Service\RouteHintService::addHintToResponse($result, $sni);
             // HEAD 请求只返回头，不返回 body
