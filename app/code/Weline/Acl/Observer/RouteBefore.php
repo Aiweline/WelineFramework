@@ -136,15 +136,18 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             $role = null;
             $access_sources = [];
             
-            // 尝试从事件中获取用户权限和角色（用于第三方认证）
+            // 事件中的 user/role 仅由 API 请求时 ApiControllerInitBefore 设置；后台页面请求不设置，走下方 Session 分支。
             $eventUser = $event->getData('user');
             $eventRole = $event->getData('role');
             $eventAccessSources = $event->getData('access_sources');
             
-            if ($eventUser && $eventRole) {
-                // 使用事件传递的用户和角色（第三方认证）
+            if ($eventUser) {
+                // 使用事件传递的用户（API/第三方认证）；role 优先用事件，否则从用户模型取
                 $user = $eventUser;
                 $role = $eventRole;
+                if (!$role && method_exists($user, 'getRoleModel')) {
+                    $role = $user->getRoleModel();
+                }
                 $access_sources = $eventAccessSources ?? [];
             } else {
                 // WLS 兼容：从 SessionFactory 获取当前请求的 BackendSession 实例
@@ -172,13 +175,12 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 }
             }
             
-            // 如果没有用户，返回未授权
+            // 如果没有用户，返回未授权（不调用 logout，避免重定向后 Session 未就绪时误清登录态）
             if (!$user) {
                 if ($request->isApiBackend()) {
                     $this->returnApiError(401, __('请先登录'), $request);
                     return;
                 } else {
-                    $this->session->logout();
                     /**@var EventsManager $eventsManager */
                     $eventsManager = ObjectManager::getInstance(EventsManager::class);
                     $noAccessData = ['data' => ['reason' => 'not_logged_in']];
@@ -434,15 +436,18 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         $role = null;
         $access_sources = [];
         
-        // 尝试从事件中获取用户权限和角色（用于第三方认证）
+        // 事件中的 user/role 由 API 请求时 ApiControllerInitBefore 设置；否则走 Session 分支。
         $eventUser = $event->getData('user');
         $eventRole = $event->getData('role');
         $eventAccessSources = $event->getData('access_sources');
         
-        if ($eventUser && $eventRole) {
-            // 使用事件传递的用户和角色（第三方认证）
+        if ($eventUser) {
+            // 使用事件传递的用户；role 优先用事件，否则从用户模型取
             $user = $eventUser;
             $role = $eventRole;
+            if (!$role && method_exists($user, 'getRoleModel')) {
+                $role = $user->getRoleModel();
+            }
             $access_sources = $eventAccessSources ?? [];
         } else {
             // 使用Session认证（传统方式）
