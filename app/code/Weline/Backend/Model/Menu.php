@@ -198,9 +198,9 @@ class Menu extends Model
      */
     public function getMenuTreeByRole(Role $role): array
     {
-        // 先查询所有菜单类型的权限（type='menus'）的 source_id
-        $menuSources = self::Acl()
-            ->reset()
+        // WLS 兼容：每次使用新 Acl 实例，避免共享实例残留上一请求的 where/select 导致菜单不全
+        $aclModel = ObjectManager::getInstance(Acl::class, [], false);
+        $menuSources = $aclModel->reset()
             ->where(Acl::schema_fields_TYPE, 'menus')
             ->where(Acl::schema_fields_IS_ENABLE, 1)
             ->select()
@@ -218,7 +218,9 @@ class Menu extends Model
             if (empty($allowedSources)) {
                 return [];
             }
-            $aclTree = self::Acl()
+            // 把菜单树所需祖先 source_id 一并加入，否则 getTree 只查 selected 会导致父节点缺失、只渲染出少量菜单
+            $allowedSources = $this->expandAllowedSourcesWithAncestors($menuSources, $allowedSources);
+            $aclTree = ObjectManager::getInstance(Acl::class, [], false)
                 ->getTree(
                     Acl::schema_fields_PARENT_SOURCE,
                     '',
@@ -229,8 +231,7 @@ class Menu extends Model
                     'source_name'
                 );
         } else {
-            // 管理员角色，只查询菜单类型的权限
-            $aclTree = self::Acl()
+            $aclTree = ObjectManager::getInstance(Acl::class, [], false)
                 ->getTree(
                     Acl::schema_fields_PARENT_SOURCE,
                     '',
@@ -256,8 +257,8 @@ class Menu extends Model
     {
         $filtered = [];
         foreach ($tree as $node) {
-            // 只保留菜单类型的记录
-            if (isset($node['type']) && $node['type'] === 'menus') {
+            $type = $node['type'] ?? $node[Acl::schema_fields_TYPE] ?? null;
+            if ($type === 'menus' || $type === Acl::type_MENUS) {
                 // 递归过滤子节点
                 if (isset($node['nodes']) && is_array($node['nodes'])) {
                     $node['nodes'] = $this->filterMenuTree($node['nodes']);
@@ -267,6 +268,34 @@ class Menu extends Model
         }
         return $filtered;
     }
+    /**
+     * 将 allowedSources 扩展为包含所有祖先 source_id，以便 getTree 能构建完整层级（否则只会有叶子、菜单只显示几条）
+     *
+     * @param array $menuSources 所有 type=menus 的 ACL 行（含 source_id、parent_source）
+     * @param array $allowedSources 角色有权限的菜单 source_id 列表
+     * @return array 扩展后的 source_id 列表（含祖先）
+     */
+    protected function expandAllowedSourcesWithAncestors(array $menuSources, array $allowedSources): array
+    {
+        $parentMap = [];
+        foreach ($menuSources as $row) {
+            $sid = $row[Acl::schema_fields_SOURCE_ID] ?? '';
+            $pid = $row[Acl::schema_fields_PARENT_SOURCE] ?? '';
+            if ($sid !== '' && $pid !== '') {
+                $parentMap[$sid] = $pid;
+            }
+        }
+        $expanded = array_flip($allowedSources);
+        foreach ($allowedSources as $sid) {
+            $current = $parentMap[$sid] ?? '';
+            while ($current !== '' && $current !== null) {
+                $expanded[$current] = true;
+                $current = $parentMap[$current] ?? '';
+            }
+        }
+        return array_keys($expanded);
+    }
+
     /**
      * @DESC          # 方法描述
      *
@@ -281,16 +310,16 @@ class Menu extends Model
      */
     protected function getRoleAccessSources(Role $role): mixed
     {
-        /**@var RoleAccess $roleSourceModel */
-        $roleSourceModel = ObjectManager::getInstance(RoleAccess::class);
-        // WLS 兼容：清除上一请求的查询状态，避免 role_id 混用导致菜单/权限不全（如 demo 账户只显示部分菜单）
+        // WLS 兼容：使用新实例查询，避免共享 RoleAccess 残留上一请求条件导致 demo 等角色菜单不全
+        /** @var RoleAccess $roleSourceModel */
+        $roleSourceModel = ObjectManager::getInstance(RoleAccess::class, [], false);
         $roleAccess = $roleSourceModel->clear()
             ->where(RoleAccess::schema_fields_ROLE_ID, $role->getId(0))
             ->select()
             ->fetchArray();
         $roleAccessSources = [];
-        foreach ($roleAccess as $roleAccess) {
-            $roleAccessSources[] = $roleAccess[RoleAccess::schema_fields_SOURCE_ID];
+        foreach ($roleAccess as $row) {
+            $roleAccessSources[] = $row[RoleAccess::schema_fields_SOURCE_ID];
         }
         return $roleAccessSources;
     }

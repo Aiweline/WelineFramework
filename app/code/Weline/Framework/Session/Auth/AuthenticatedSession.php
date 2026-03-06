@@ -134,6 +134,15 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
 
     /**
      * @inheritDoc
+     * 前台即当前登录 Customer（与 getUser() 同义）
+     */
+    public function getCustomer(): ?AuthenticableInterface
+    {
+        return $this->getUser();
+    }
+
+    /**
+     * @inheritDoc
      */
     public function getUserId(): int|string|null
     {
