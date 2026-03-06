@@ -89,10 +89,13 @@ class WasmService
             }
 
             // 保存新哈希记录
+            $now = date('Y-m-d H:i:s');
             $wasmHashModel->clear()
                 ->setData(WasmHash::schema_fields_WASM_PATH, $path)
                 ->setData(WasmHash::schema_fields_HASH_VALUE, $hash)
                 ->setData(WasmHash::schema_fields_VERSION, $version)
+                ->setData(WasmHash::schema_fields_CREATED_AT, $now)
+                ->setData(WasmHash::schema_fields_UPDATED_AT, $now)
                 ->save();
 
             return $hash;
