@@ -192,11 +192,25 @@ class ExtensionInstallStrategyMap
     }
 
     /**
+     * 扩展名 → 发行版包名映射（PHP 扩展名与 apt/dnf 包名不一致时使用）
+     * 例如：pdo_pgsql 在 Debian 中包名为 pgsql（对应 apt 包 php-pgsql）
+     */
+    public function getDistroPackageName(string $ext): string
+    {
+        $map = [
+            'pdo_pgsql' => 'pgsql',
+        ];
+        return $map[$ext] ?? $ext;
+    }
+
+    /**
      * 构建全部策略：每条含 cmd, name, check, platforms
      */
     private function buildAllStrategies(string $ext, string $phpVersion): array
     {
         $extQ = escapeshellarg($ext);
+        $pkg = $this->getDistroPackageName($ext);
+        $pkgQ = escapeshellarg($pkg);
         $list = [];
 
         // Docker（优先在容器内识别）
@@ -217,13 +231,13 @@ class ExtensionInstallStrategyMap
             ];
         }
         $list[] = [
-            'cmd'       => 'brew install php-' . $extQ,
-            'name'      => 'brew (php-' . $ext . ')',
+            'cmd'       => 'brew install php-' . $pkgQ,
+            'name'      => 'brew (php-' . $pkg . ')',
             'check'     => 'brew',
             'platforms' => [self::PLATFORM_DARWIN],
         ];
 
-        // phpenmod (Debian/Ubuntu 已安装未启用)
+        // phpenmod (Debian/Ubuntu 已安装未启用)，使用 PHP 扩展名
         $list[] = [
             'cmd'       => 'phpenmod ' . $extQ,
             'name'      => 'phpenmod',
@@ -231,11 +245,11 @@ class ExtensionInstallStrategyMap
             'platforms' => [self::PLATFORM_LINUX_APT],
         ];
 
-        // apt (Debian/Ubuntu)
-        foreach (['php' . $phpVersion . '-' . $ext, 'php-' . $ext] as $pkg) {
+        // apt (Debian/Ubuntu)，使用发行版包名（如 pdo_pgsql → pgsql）
+        foreach (['php' . $phpVersion . '-' . $pkg, 'php-' . $pkg] as $pkgName) {
             $list[] = [
-                'cmd'       => 'apt-get install -y ' . escapeshellarg($pkg),
-                'name'      => 'apt (' . $pkg . ')',
+                'cmd'       => 'apt-get install -y ' . escapeshellarg($pkgName),
+                'name'      => 'apt (' . $pkgName . ')',
                 'check'     => 'apt-get',
                 'platforms' => [self::PLATFORM_LINUX_APT],
             ];
@@ -243,7 +257,7 @@ class ExtensionInstallStrategyMap
 
         // dnf (Fedora/RHEL 新)
         $list[] = [
-            'cmd'       => 'dnf install -y php-' . $extQ,
+            'cmd'       => 'dnf install -y php-' . $pkgQ,
             'name'      => 'dnf',
             'check'     => 'dnf',
             'platforms' => [self::PLATFORM_LINUX_DNF],
@@ -251,7 +265,7 @@ class ExtensionInstallStrategyMap
 
         // yum (CentOS/RHEL 旧)
         $list[] = [
-            'cmd'       => 'yum install -y php-' . $extQ,
+            'cmd'       => 'yum install -y php-' . $pkgQ,
             'name'      => 'yum',
             'check'     => 'yum',
             'platforms' => [self::PLATFORM_LINUX_YUM],
@@ -259,7 +273,7 @@ class ExtensionInstallStrategyMap
 
         // apk (Alpine)
         $list[] = [
-            'cmd'       => 'apk add php' . $phpVersion . '-' . $ext . ' 2>/dev/null || apk add php-' . $ext,
+            'cmd'       => 'apk add php' . $phpVersion . '-' . $pkg . ' 2>/dev/null || apk add php-' . $pkg,
             'name'      => 'apk',
             'check'     => 'apk',
             'platforms' => [self::PLATFORM_LINUX_APK],
@@ -267,7 +281,7 @@ class ExtensionInstallStrategyMap
 
         // pacman (Arch)
         $list[] = [
-            'cmd'       => 'pacman -S --noconfirm php-' . $ext,
+            'cmd'       => 'pacman -S --noconfirm php-' . $pkg,
             'name'      => 'pacman',
             'check'     => 'pacman',
             'platforms' => [self::PLATFORM_LINUX_PACMAN],
