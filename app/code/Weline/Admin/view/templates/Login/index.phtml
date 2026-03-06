@@ -32,6 +32,9 @@
                             <h4 class="font-size-18 text-muted mt-2 text-center"><?= __('欢迎回来！') ?></h4>
                             <p class="mb-3 text-center"><?= __('登录 Weline 管理面板') ?>.</p>
                             <div class="row weline-admin-login-messages">
+                                <?php if (!empty($this->getData('no_access_message'))): ?>
+                                <div class="col-12"><?= $this->getData('no_access_message') ?></div>
+                                <?php endif; ?>
                                 <!--消息-->
                                 <template>Weline_Component::message.phtml</template>
                             </div>
