@@ -1,60 +1,3 @@
-"模型类不存在: %{1}","Model class does not exist: %{1}"
-"数据删除失败: %{1}","Data deletion failed: %{1}"
-记录不存在,"Record does not exist"
-记录已永久删除,"Record permanently deleted"
-记录已移至回收站,"Record moved to trash"
-数据删除成功,"Data deleted successfully"
-"删除失败: %{1}","Delete failed: %{1}"
-"批量删除完成，成功: %{1}，失败: %{2}","Batch deletion completed, success: %{1}, failed: %{2}"
-"主模型类不存在: %{1}","Main model class does not exist: %{1}"
-"缺少必需参数: model 和 data","Missing required parameters: model and data"
-"记录创建失败: %{1}","Record creation failed: %{1}"
-记录创建失败,"Record creation failed"
-"表 %{1} 的记录创建失败","Record creation failed for table %{1}"
-"缺少必需参数: model、id 和 data","Missing required parameters: model, id and data"
-记录更新成功,"Record updated successfully"
-记录更新失败,"Record update failed"
-"记录更新失败: %{1}","Record update failed: %{1}"
-"批量更新完成，成功: %{1}，失败: %{2}","批量更新完成，成功: %{1}，失败: %{2}"
-"批量状态变更完成，成功: %{1}，失败: %{2}","批量状态变更完成，成功: %{1}，失败: %{2}"
-"缺少必需参数: model 和 id/ids","Missing required parameters: model and id/ids"
-"成功删除 %{1} 条记录","Successfully deleted %{1} records"
-删除失败,"Delete failed"
-"记录删除失败: %{1}","Record deletion failed: %{1}"
-"ID %{1} 删除失败: %{2}","ID %{1} deletion failed: %{2}"
-"批量移至回收站完成，成功: %{1}，失败: %{2}","Batch moved to trash completed, success: %{1}, failed: %{2}"
-"批量删除失败: %{1}","Batch deletion failed: %{1}"
-图片删除成功,"Image deleted successfully"
-图片删除失败,"Image deletion failed"
-"图片删除失败: %{1}","Image deletion failed: %{1}"
-"缺少必需参数: model 和 scope","Missing required parameters: model and scope"
-"永久删除失败: %{1}","Permanent deletion failed: %{1}"
-永久删除失败,"Permanent deletion failed"
-请输入%{1},"Please enter %{1}"
-未找到任何字段,未找到任何字段
-"模型 %{1} 没有可用的字段，或者所有字段都被排除了","模型 %{1} 没有可用的字段，或者所有字段都被排除了"
-获取字段成功,获取字段成功
-启用,Enable
-禁用,Disable
-类型1,类型1
-类型2,类型2
-"缺少必需参数: model 或 record_id","缺少必需参数: model 或 record_id"
-获取记录成功,获取记录成功
-"获取记录失败: %{1}","获取记录失败: %{1}"
-%{1}标签必须指定%{2}属性或位于d-table标签内！,%{1}标签必须指定%{2}属性或位于d-table标签内！
-"field标签（字段：%{1}）缺少必填属性belong！请指定belong=""t-header""、belong=""t-filter""或belong=""d-form""。","field标签（字段：%{1}）缺少必填属性belong！请指定belong=""t-header""、belong=""t-filter""或belong=""d-form""。"
-"field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。","field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。"
-"field标签（字段：%{1}）的belong属性值""%{2}""与父标签类型""%{3}""不匹配！请确保belong属性值与父标签类型一致。","field标签（字段：%{1}）的belong属性值""%{2}""与父标签类型""%{3}""不匹配！请确保belong属性值与父标签类型一致。"
-field标签（字段：%{1}）配置错误：%{2}。请确保在父标签（t-header或t-filter）中正确设置了model属性，或确保field标签位于d-table标签内。,field标签（字段：%{1}）配置错误：%{2}。请确保在父标签（t-header或t-filter）中正确设置了model属性，或确保field标签位于d-table标签内。
-"field标签验证失败：Model类""%{1}""不存在！请检查类名是否正确，确保Model类已正确加载。常见Model类：Weline\Demo\Model\Demo、WeShop\Product\Model\Product等。","field标签验证失败：Model类""%{1}""不存在！请检查类名是否正确，确保Model类已正确加载。常见Model类：Weline\Demo\Model\Demo、WeShop\Product\Model\Product等。"
-"field标签（字段：%{1}）在Model类""%{2}""中不存在！可用字段：%{3}。请检查字段名称是否正确，或确认该字段在Model中已定义。","field标签（字段：%{1}）在Model类""%{2}""中不存在！可用字段：%{3}。请检查字段名称是否正确，或确认该字段在Model中已定义。"
-"field标签验证失败：实例化Model类""%{1}""时发生错误：%{2}。请检查Model类是否正确配置。","field标签验证失败：实例化Model类""%{1}""时发生错误：%{2}。请检查Model类是否正确配置。"
-field标签（字段：%{1}）在t-header上下文中不支持type属性，或type值无效：%{2}。在t-header中，field标签主要用于定义表格列，不需要指定type属性。,field标签（字段：%{1}）在t-header上下文中不支持type属性，或type值无效：%{2}。在t-header中，field标签主要用于定义表格列，不需要指定type属性。
-field标签（字段：%{1}）在t-header上下文中不支持%{2}属性！该属性仅用于t-filter中的过滤器字段。请将%{2}属性移除，或将该field标签移动到t-filter标签内。%{3},field标签（字段：%{1}）在t-header上下文中不支持%{2}属性！该属性仅用于t-filter中的过滤器字段。请将%{2}属性移除，或将该field标签移动到t-filter标签内。%{3}
-field标签（字段：%{1}）在t-filter上下文中，type属性值无效：%{2}。有效值：%{3}。请检查type属性值是否正确。,field标签（字段：%{1}）在t-filter上下文中，type属性值无效：%{2}。有效值：%{3}。请检查type属性值是否正确。
-"field标签（字段：%{1}）在t-filter上下文中，select类型的字段必须指定options属性！请添加options属性，格式：value:label,value2:label2。","field标签（字段：%{1}）在t-filter上下文中，select类型的字段必须指定options属性！请添加options属性，格式：value:label,value2:label2。"
-"field标签（字段：%{1}）在t-filter上下文中，select类型的options属性格式错误：%{2}。正确格式：value:label,value2:label2。请检查options属性格式。","field标签（字段：%{1}）在t-filter上下文中，select类型的options属性格式错误：%{2}。正确格式：value:label,value2:label2。请检查options属性格式。"
-field标签（字段：%{1}）在t-filter上下文中不支持%{2}属性！该属性仅用于t-header中的表格头部字段。请将%{2}属性移除，或将该field标签移动到t-header标签内。%{3},field标签（字段：%{1}）在t-filter上下文中不支持%{2}属性！该属性仅用于t-header中的表格头部字段。请将%{2}属性移除，或将该field标签移动到t-header标签内。%{3}
 添加,Add
 新增记录,"Add Record"
 编辑记录,"Edit Record"
@@ -100,8 +43,68 @@ d-table标签必须指定scope属性！,"d-table tag must specify scope attribut
 显示字段,"Display Fields"
 筛选字段,"Filter Fields"
 保存配置,"Save Configuration"
+"field标签（字段：%{1}）缺少必填属性belong！请指定belong=""t-header""、belong=""t-filter""或belong=""d-form""。","field标签（字段：%{1}）缺少必填属性belong！请指定belong=""t-header""、belong=""t-filter""或belong=""d-form""。"
+"field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。","field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。"
+"field标签（字段：%{1}）的belong属性值""%{2}""与父标签类型""%{3}""不匹配！请确保belong属性值与父标签类型一致。","field标签（字段：%{1}）的belong属性值""%{2}""与父标签类型""%{3}""不匹配！请确保belong属性值与父标签类型一致。"
+field标签（字段：%{1}）配置错误：%{2}。请确保在父标签（t-header或t-filter）中正确设置了model属性，或确保field标签位于d-table标签内。,field标签（字段：%{1}）配置错误：%{2}。请确保在父标签（t-header或t-filter）中正确设置了model属性，或确保field标签位于d-table标签内。
+"field标签验证失败：Model类""%{1}""不存在！请检查类名是否正确，确保Model类已正确加载。常见Model类：Weline\Demo\Model\Demo、WeShop\Product\Model\Product等。","field标签验证失败：Model类""%{1}""不存在！请检查类名是否正确，确保Model类已正确加载。常见Model类：Weline\Demo\Model\Demo、WeShop\Product\Model\Product等。"
+"field标签（字段：%{1}）在Model类""%{2}""中不存在！可用字段：%{3}。请检查字段名称是否正确，或确认该字段在Model中已定义。","field标签（字段：%{1}）在Model类""%{2}""中不存在！可用字段：%{3}。请检查字段名称是否正确，或确认该字段在Model中已定义。"
+"field标签验证失败：实例化Model类""%{1}""时发生错误：%{2}。请检查Model类是否正确配置。","field标签验证失败：实例化Model类""%{1}""时发生错误：%{2}。请检查Model类是否正确配置。"
+field标签（字段：%{1}）在t-header上下文中不支持type属性，或type值无效：%{2}。在t-header中，field标签主要用于定义表格列，不需要指定type属性。,field标签（字段：%{1}）在t-header上下文中不支持type属性，或type值无效：%{2}。在t-header中，field标签主要用于定义表格列，不需要指定type属性。
+field标签（字段：%{1}）在t-header上下文中不支持%{2}属性！该属性仅用于t-filter中的过滤器字段。请将%{2}属性移除，或将该field标签移动到t-filter标签内。%{3},field标签（字段：%{1}）在t-header上下文中不支持%{2}属性！该属性仅用于t-filter中的过滤器字段。请将%{2}属性移除，或将该field标签移动到t-filter标签内。%{3}
+field标签（字段：%{1}）在t-filter上下文中，type属性值无效：%{2}。有效值：%{3}。请检查type属性值是否正确。,field标签（字段：%{1}）在t-filter上下文中，type属性值无效：%{2}。有效值：%{3}。请检查type属性值是否正确。
+"field标签（字段：%{1}）在t-filter上下文中，select类型的字段必须指定options属性！请添加options属性，格式：value:label,value2:label2。","field标签（字段：%{1}）在t-filter上下文中，select类型的字段必须指定options属性！请添加options属性，格式：value:label,value2:label2。"
+"field标签（字段：%{1}）在t-filter上下文中，select类型的options属性格式错误：%{2}。正确格式：value:label,value2:label2。请检查options属性格式。","field标签（字段：%{1}）在t-filter上下文中，select类型的options属性格式错误：%{2}。正确格式：value:label,value2:label2。请检查options属性格式。"
+field标签（字段：%{1}）在t-filter上下文中不支持%{2}属性！该属性仅用于t-header中的表格头部字段。请将%{2}属性移除，或将该field标签移动到t-header标签内。%{3},field标签（字段：%{1}）在t-filter上下文中不支持%{2}属性！该属性仅用于t-header中的表格头部字段。请将%{2}属性移除，或将该field标签移动到t-header标签内。%{3}
+%{1}标签必须指定%{2}属性或位于d-table标签内！,%{1}标签必须指定%{2}属性或位于d-table标签内！
+"DataTable 综合功能测试","DataTable 综合功能测试"
+"Weline Admin 管理面板","Weline Admin 管理面板"
+DataTable,DataTable
+测试,测试
+综合测试,综合测试
+全面测试DataTable模块的核心功能，包括表格显示、表单、字段类型、多模型查询等,全面测试DataTable模块的核心功能，包括表格显示、表单、字段类型、多模型查询等
+功能概览,功能概览
+核心功能,核心功能
+标签注册系统,标签注册系统
+表格显示功能,表格显示功能
+表单功能,表单功能
+字段类型支持,字段类型支持
+多模型查询,多模型查询
+高级特性,高级特性
+属性继承机制,属性继承机制
+上下文管理,上下文管理
+自动生成功能,自动生成功能
+字段验证,字段验证
+JavaScript集成,JavaScript集成
+功能测试,功能测试
+点击以下按钮测试不同的DataTable功能模块：,点击以下按钮测试不同的DataTable功能模块：
+其他,其他
+开始测试,开始测试
+基础功能,基础功能
+基本表格功能,基本表格功能
+过滤搜索,过滤搜索
+排序分页,排序分页
+高级功能,高级功能
+字段类型,字段类型
+属性继承,属性继承
+CRUD操作,CRUD操作
+标签功能验证,标签功能验证
+验证DataTable标签系统的各个组件是否正常工作：,验证DataTable标签系统的各个组件是否正常工作：
+开始验证,开始验证
+验证结果：,验证结果：
+使用示例,使用示例
+以下是DataTable的基本使用示例：,以下是DataTable的基本使用示例：
+基本表格,基本表格
+带过滤器的表格,带过滤器的表格
+测试数据,测试数据
+可用模型,可用模型
+测试范围标识,测试范围标识
+验证中...,验证中...
+验证失败：,验证失败：
+重新验证,重新验证
 加载字段失败,"Failed to load fields"
 网络错误,"Network error"
+请输入%{1},"Please enter %{1}"
 请选择,"Please Select"
 加载记录失败,"Failed to load record"
 请检查表单中的错误,"Please check form for errors"
@@ -176,7 +179,9 @@ d-table标签必须指定scope属性！,"d-table tag must specify scope attribut
 即将删除的记录：,"Records to be deleted:"
 共选中,"Total Selected"
 正在删除...,Deleting...
+记录已移至回收站,"Record moved to trash"
 删除成功,"Delete Success"
+删除失败,"Delete failed"
 您有未保存的编辑内容，确定要离开吗？,"You have unsaved changes. Are you sure you want to leave?"
 重试,重试
 受保护,Protected
@@ -209,51 +214,46 @@ d-table标签必须指定scope属性！,"d-table tag must specify scope attribut
 重置配置失败，请稍后重试,"Failed to reset configuration, please try again later"
 收起,Collapse
 网络错误：%{1},"Network error: %{1}"
-"DataTable 综合功能测试","DataTable 综合功能测试"
-"Weline Admin 管理面板","Weline Admin 管理面板"
-DataTable,DataTable
-测试,测试
-综合测试,综合测试
-全面测试DataTable模块的核心功能，包括表格显示、表单、字段类型、多模型查询等,全面测试DataTable模块的核心功能，包括表格显示、表单、字段类型、多模型查询等
-功能概览,功能概览
-核心功能,核心功能
-标签注册系统,标签注册系统
-表格显示功能,表格显示功能
-表单功能,表单功能
-字段类型支持,字段类型支持
-多模型查询,多模型查询
-高级特性,高级特性
-属性继承机制,属性继承机制
-上下文管理,上下文管理
-自动生成功能,自动生成功能
-字段验证,字段验证
-JavaScript集成,JavaScript集成
-功能测试,功能测试
-点击以下按钮测试不同的DataTable功能模块：,点击以下按钮测试不同的DataTable功能模块：
-其他,其他
-开始测试,开始测试
-基础功能,基础功能
-基本表格功能,基本表格功能
-过滤搜索,过滤搜索
-排序分页,排序分页
-高级功能,高级功能
-字段类型,字段类型
-属性继承,属性继承
-CRUD操作,CRUD操作
-标签功能验证,标签功能验证
-验证DataTable标签系统的各个组件是否正常工作：,验证DataTable标签系统的各个组件是否正常工作：
-开始验证,开始验证
-验证结果：,验证结果：
-使用示例,使用示例
-以下是DataTable的基本使用示例：,以下是DataTable的基本使用示例：
-基本表格,基本表格
-带过滤器的表格,带过滤器的表格
-测试数据,测试数据
-可用模型,可用模型
-测试范围标识,测试范围标识
-验证中...,验证中...
-验证失败：,验证失败：
-重新验证,重新验证
+未找到任何字段,未找到任何字段
+"模型 %{1} 没有可用的字段，或者所有字段都被排除了","模型 %{1} 没有可用的字段，或者所有字段都被排除了"
+获取字段成功,获取字段成功
+启用,Enable
+禁用,Disable
+类型1,类型1
+类型2,类型2
+"缺少必需参数: model 或 record_id","缺少必需参数: model 或 record_id"
+"模型类不存在: %{1}","Model class does not exist: %{1}"
+记录不存在,"Record does not exist"
+获取记录成功,获取记录成功
+"获取记录失败: %{1}","获取记录失败: %{1}"
+"数据删除失败: %{1}","Data deletion failed: %{1}"
+记录已永久删除,"Record permanently deleted"
+数据删除成功,"Data deleted successfully"
+"删除失败: %{1}","Delete failed: %{1}"
+"批量删除完成，成功: %{1}，失败: %{2}","Batch deletion completed, success: %{1}, failed: %{2}"
+"主模型类不存在: %{1}","Main model class does not exist: %{1}"
+"缺少必需参数: model 和 data","Missing required parameters: model and data"
+"记录创建失败: %{1}","Record creation failed: %{1}"
+记录创建失败,"Record creation failed"
+"表 %{1} 的记录创建失败","Record creation failed for table %{1}"
+"缺少必需参数: model、id 和 data","Missing required parameters: model, id and data"
+记录更新成功,"Record updated successfully"
+记录更新失败,"Record update failed"
+"记录更新失败: %{1}","Record update failed: %{1}"
+"批量更新完成，成功: %{1}，失败: %{2}","批量更新完成，成功: %{1}，失败: %{2}"
+"批量状态变更完成，成功: %{1}，失败: %{2}","批量状态变更完成，成功: %{1}，失败: %{2}"
+"缺少必需参数: model 和 id/ids","Missing required parameters: model and id/ids"
+"成功删除 %{1} 条记录","Successfully deleted %{1} records"
+"记录删除失败: %{1}","Record deletion failed: %{1}"
+"ID %{1} 删除失败: %{2}","ID %{1} deletion failed: %{2}"
+"批量移至回收站完成，成功: %{1}，失败: %{2}","Batch moved to trash completed, success: %{1}, failed: %{2}"
+"批量删除失败: %{1}","Batch deletion failed: %{1}"
+图片删除成功,"Image deleted successfully"
+图片删除失败,"Image deletion failed"
+"图片删除失败: %{1}","Image deletion failed: %{1}"
+"缺少必需参数: model 和 scope","Missing required parameters: model and scope"
+"永久删除失败: %{1}","Permanent deletion failed: %{1}"
+永久删除失败,"Permanent deletion failed"
 "警告: %{1}","Warning: %{1}"
 "缺少必需参数: model。请传递 model 参数指定表单对应的模型类名，例如：WeShop\Store\Model\Store","缺少必需参数: model。请传递 model 参数指定表单对应的模型类名，例如：WeShop\Store\Model\Store"
 "获取字段失败: %{1}","获取字段失败: %{1}"

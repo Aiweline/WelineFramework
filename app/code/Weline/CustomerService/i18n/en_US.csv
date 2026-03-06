@@ -1,3 +1,31 @@
+客服消息翻译,"Customer Service Message Translation"
+客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。,"The customer service module requests translation service through this event. Event data includes text to be translated, source language, target language, etc. Translation modules can listen to this event and provide translation services."
+会话管理,"Session Management"
+加载会话失败：%{1},"Failed to load sessions: %{1}"
+无效的会话ID,"Invalid session ID"
+会话不存在,"Session does not exist"
+会话详情,会话详情
+加载会话详情失败：%{1},"Failed to load session details: %{1}"
+会话已关闭,"Session closed"
+关闭会话失败：%{1},"Failed to close session: %{1}"
+您不是客服人员，无法使用工作台,您不是客服人员，无法使用工作台
+客服工作台,"Customer Service Console"
+加载工作台失败：%{1},加载工作台失败：%{1}
+您不是客服人员,您不是客服人员
+获取成功,获取成功
+获取会话列表失败：%{1},获取会话列表失败：%{1}
+无权访问此会话,无权访问此会话
+获取消息失败：%{1},"Failed to get messages: %{1}"
+消息内容不能为空,"Message content cannot be empty"
+发送成功,发送成功
+发送消息失败：%{1},"Failed to send message: %{1}"
+会话已被分配,会话已被分配
+已达到最大会话数限制,已达到最大会话数限制
+分配成功,分配成功
+分配会话失败：%{1},分配会话失败：%{1}
+无权关闭此会话,无权关闭此会话
+获取统计数据失败：%{1},获取统计数据失败：%{1}
+获取客服状态失败：%{1},"Failed to get agent status: %{1}"
 客服人员管理,客服人员管理
 加载客服人员失败：%{1},"Failed to load service agents: %{1}"
 客服名称不能为空,"Service agent name cannot be empty"
@@ -9,34 +37,8 @@
 无效的客服ID,无效的客服ID
 删除成功,"Deleted successfully"
 删除失败：%{1},"Failed to delete: %{1}"
-获取成功,获取成功
-获取统计数据失败：%{1},获取统计数据失败：%{1}
 客服配置,"Service Configuration"
 加载配置失败：%{1},"Failed to load configuration: %{1}"
-您不是客服人员，无法使用工作台,您不是客服人员，无法使用工作台
-客服工作台,"Customer Service Console"
-加载工作台失败：%{1},加载工作台失败：%{1}
-您不是客服人员,您不是客服人员
-获取会话列表失败：%{1},获取会话列表失败：%{1}
-无效的会话ID,"Invalid session ID"
-会话不存在,"Session does not exist"
-无权访问此会话,无权访问此会话
-获取消息失败：%{1},"Failed to get messages: %{1}"
-消息内容不能为空,"Message content cannot be empty"
-发送成功,发送成功
-发送消息失败：%{1},"Failed to send message: %{1}"
-会话已被分配,会话已被分配
-已达到最大会话数限制,已达到最大会话数限制
-分配成功,分配成功
-分配会话失败：%{1},分配会话失败：%{1}
-无权关闭此会话,无权关闭此会话
-会话已关闭,"Session closed"
-关闭会话失败：%{1},"Failed to close session: %{1}"
-获取客服状态失败：%{1},"Failed to get agent status: %{1}"
-会话管理,"Session Management"
-加载会话失败：%{1},"Failed to load sessions: %{1}"
-会话详情,会话详情
-加载会话详情失败：%{1},"Failed to load session details: %{1}"
 邮箱地址不能为空,"Email address cannot be empty"
 会话令牌不能为空,"Session token cannot be empty"
 验证邮件已发送，请查收,"Verification email sent, please check"
@@ -52,75 +54,64 @@
 语言代码不能为空,"Language code cannot be empty"
 语言设置成功,"Language set successfully"
 设置语言失败：%{1},"Failed to set language: %{1}"
-客服消息翻译,"Customer Service Message Translation"
-客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。,"The customer service module requests translation service through this event. Event data includes text to be translated, source language, target language, etc. Translation modules can listen to this event and provide translation services."
 "客服服务 - 邮箱绑定验证","Customer Service - Email Binding Verification"
 客服系统,"Customer Service System"
-客服服务,"Customer Service"
-检测中...,Checking...
-设置,Settings
-收起,Minimize
-我的语言,"My Language"
-简体中文,"Simplified Chinese"
-繁體中文,"Traditional Chinese"
-显示模式,"Display Mode"
-仅显示译文,"Translation Only"
-原文+译文,"Original + Translation"
-仅显示原文,"Original Only"
-欢迎使用客服服务！,"Welcome to Customer Service!"
-请输入您的问题，我们的客服将尽快为您解答。,"Please enter your question, and our customer service will answer you as soon as possible."
-输入消息...,"Type a message..."
-绑定邮箱,"Bind Email"
-绑定邮箱后，您可以收到客服回复的邮件通知。,"After binding your email, you can receive email notifications for customer service replies."
-邮箱地址,"Email Address"
-请输入您的邮箱,"Please enter your email"
-取消,Cancel
-发送验证邮件,"Send Verification Email"
+客服,Agent
+工作量统计,"Workload Statistics"
+今日,Today
+本周,"This Week"
+本月,"This Month"
+全部,All
+会话数,Sessions
+已关闭,Closed
+进行中,Active
+消息数,Messages
+客户,Customer
+响应率,"Response Rate"
+已响应,Responded
+完结率,"Close Rate"
+秒,seconds
+分钟,minutes
+平均响应时间,"Avg Response Time"
+最快,Fastest
+最慢,Slowest
+平均会话时长（分钟）,"Avg Session Duration (min)"
+平均消息,"Avg Messages"
+会话列表,会话列表
+刷新,刷新
+等待分配,等待分配
 等待中,Waiting
 暂无消息,"No messages"
 接单,接单
+我的会话,我的会话
 暂无会话,"No sessions"
-会话,Session
-关闭会话,"Close Session"
-发送,Send
-发送失败,"Failed to send"
-发送失败，请稍后重试,"Failed to send, please try again later"
-确定要接单此会话吗？,"Are you sure you want to accept this session?"
-分配失败,"Assignment failed"
-分配失败，请稍后重试,分配失败，请稍后重试
-确定要关闭此会话吗？,"Are you sure you want to close this session?"
 请选择一个会话开始聊天,请选择一个会话开始聊天
+全部状态,"All Status"
+会话ID,"Session ID"
+客户ID,"Customer ID"
+客户语言,"Customer Language"
+客服语言,"Agent Language"
+状态,Status
+创建时间,"Created At"
+操作,Actions
+查看,View
+关闭,Close
+确定要关闭此会话吗？,"Are you sure you want to close this session?"
 关闭失败,"Close failed"
-关闭失败，请稍后重试,关闭失败，请稍后重试
-刚刚,"Just now"
-分钟前,"minutes ago"
-小时前,"hours ago"
-已关闭,Closed
-进行中,Active
-最快,Fastest
-最慢,Slowest
-最短,Shortest
-分钟,minutes
-最长,Longest
-秒,seconds
-客服在线,"Customer Service Online"
-"AI 智能客服","AI Customer Service"
-客服离线,"Customer Service Offline"
-请输入有效的邮箱地址,"Please enter a valid email address"
-会话未初始化，请刷新页面重试,"Session not initialized, please refresh the page and try again"
-验证邮件已发送，请查收您的邮箱,"Verification email sent, please check your email"
+返回列表,返回列表
+会话信息,"Session Information"
+客服ID,"Agent ID"
+聊天记录,"Chat History"
+翻译：,"Translation: "
 添加客服,"Add Agent"
 ID,ID
 客服名称,"Agent Name"
 关联用户,"Associated User"
 邮箱,Email
 语言,Language
-状态,Status
 最大会话数,"Max Sessions"
 总会话数,"Total Sessions"
 总消息数,"Total Messages"
-平均响应时间,"Avg Response Time"
-操作,Actions
 暂无客服人员,"No service agents"
 支持的语言,"Supported Languages"
 激活,激活
@@ -137,6 +128,7 @@ ID,ID
 客服可以接待的所有语言（勾选多个可接待全球客户）,"All languages the agent can serve (check multiple for global customers)"
 最大并发会话数,"Max Concurrent Sessions"
 激活状态,"Active Status"
+取消,Cancel
 保存,保存
 编辑客服,"Edit Agent"
 保存失败,"Failed to save"
@@ -149,48 +141,22 @@ ID,ID
 响应时间,"Response Time"
 平均,Average
 会话时长,"Session Duration"
+最短,Shortest
+最长,Longest
 启用客服服务,"Enable Customer Service"
 启用,Enable
 默认客服语言,"Default Agent Language"
+简体中文,"Simplified Chinese"
 English,English
 默认客户语言,"Default Customer Language"
+"AI 智能客服","AI Customer Service"
 "当没有客服人员在线时，可启用 AI 自动回复客户消息。","When no service agents are online, AI can be enabled to automatically reply to customer messages."
 "启用 AI 自动回复","Enable AI Auto-Reply"
 "启用后，客户端将显示蓝色""AI 智能客服""状态而非灰色""离线""","When enabled, the client will display blue 'AI Customer Service' status instead of gray 'Offline'"
 "AI 模型","AI Model"
 "使用的 AI 模型标识，需在 Weline_Ai 模块中配置对应供应商","AI model identifier, configure the corresponding provider in the Weline_Ai module"
 保存配置,"Save Configuration"
-客服,Agent
-工作量统计,"Workload Statistics"
-今日,Today
-本周,"This Week"
-本月,"This Month"
-全部,All
-会话数,Sessions
-消息数,Messages
-客户,Customer
-响应率,"Response Rate"
-已响应,Responded
-完结率,"Close Rate"
-平均会话时长（分钟）,"Avg Session Duration (min)"
-平均消息,"Avg Messages"
-会话列表,会话列表
-刷新,刷新
-等待分配,等待分配
-我的会话,我的会话
-全部状态,"All Status"
-会话ID,"Session ID"
-客户ID,"Customer ID"
-客户语言,"Customer Language"
-客服语言,"Agent Language"
-创建时间,"Created At"
-查看,View
-关闭,Close
-返回列表,返回列表
-会话信息,"Session Information"
-客服ID,"Agent ID"
-聊天记录,"Chat History"
-翻译：,"Translation: "
+此页面用于独立聊天界面，实际聊天功能通过右下角悬浮按钮使用。,"This page is for standalone chat interface. The actual chat function is available through the floating button in the bottom right corner."
 邮箱绑定验证,邮箱绑定验证
 验证成功,"Verification Successful"
 您的邮箱,"Your Email"
@@ -202,7 +168,41 @@ English,English
 返回上一页,"Go Back"
 如有问题，请,"If you have any questions, please"
 联系客服,"Contact Customer Service"
-此页面用于独立聊天界面，实际聊天功能通过右下角悬浮按钮使用。,"This page is for standalone chat interface. The actual chat function is available through the floating button in the bottom right corner."
+客服服务,"Customer Service"
+检测中...,Checking...
+设置,Settings
+收起,Minimize
+我的语言,"My Language"
+繁體中文,"Traditional Chinese"
+显示模式,"Display Mode"
+仅显示译文,"Translation Only"
+原文+译文,"Original + Translation"
+仅显示原文,"Original Only"
+欢迎使用客服服务！,"Welcome to Customer Service!"
+请输入您的问题，我们的客服将尽快为您解答。,"Please enter your question, and our customer service will answer you as soon as possible."
+输入消息...,"Type a message..."
+绑定邮箱,"Bind Email"
+绑定邮箱后，您可以收到客服回复的邮件通知。,"After binding your email, you can receive email notifications for customer service replies."
+邮箱地址,"Email Address"
+请输入您的邮箱,"Please enter your email"
+发送验证邮件,"Send Verification Email"
+会话,Session
+关闭会话,"Close Session"
+发送,Send
+发送失败,"Failed to send"
+发送失败，请稍后重试,"Failed to send, please try again later"
+确定要接单此会话吗？,"Are you sure you want to accept this session?"
+分配失败,"Assignment failed"
+分配失败，请稍后重试,分配失败，请稍后重试
+关闭失败，请稍后重试,关闭失败，请稍后重试
+刚刚,"Just now"
+分钟前,"minutes ago"
+小时前,"hours ago"
+客服在线,"Customer Service Online"
+客服离线,"Customer Service Offline"
+请输入有效的邮箱地址,"Please enter a valid email address"
+会话未初始化，请刷新页面重试,"Session not initialized, please refresh the page and try again"
+验证邮件已发送，请查收您的邮箱,"Verification email sent, please check your email"
 无效的请求方法,"Invalid request method"
 添加客服功能待实现,"Add agent feature to be implemented"
 编辑客服功能待实现,"Edit agent feature to be implemented"

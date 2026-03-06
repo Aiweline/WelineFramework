@@ -288,12 +288,15 @@ class PaymentRecord
 
 ## 技能引用
 
-开发时参考：
+规则与技能主仓：`dev/ai`（`.cursor/rules`、`.cursor/skills`、`.cursor/plans` 为目录联结，指向 `dev/ai`）。
 
-- **代码生成**: `.cursor/skills/code-generation-standards/SKILL.md`
-- **主题开发**: `.cursor/skills/theme-development/SKILL.md`
-- **模块开发**: `.cursor/skills/module-development/SKILL.md`
-- **数据库模型**: `.cursor/skills/database-model-standards/SKILL.md`
+开发时参考（路径可用 `dev/ai/skills/...` 或 `.cursor/skills/...`）：
+
+- **代码生成**: `dev/ai/skills/code-generation-standards/SKILL.md`
+- **主题开发**: `dev/ai/skills/theme-development/SKILL.md`
+- **模块开发**: `dev/ai/skills/module-development/SKILL.md`
+- **数据库模型**: `dev/ai/skills/database-model-standards/SKILL.md`
+- **约束文档**: `dev/ai/AI 提示词.md`、`dev/ai/AI-常犯错误.md`
 
 ---
 

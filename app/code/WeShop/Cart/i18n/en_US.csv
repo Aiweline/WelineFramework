@@ -1,26 +1,3 @@
-请求方法不允许,请求方法不允许
-无效的产品ID,无效的产品ID
-请先登录,请先登录
-产品不存在,产品不存在
-产品已下架,产品已下架
-请选择产品规格,请选择产品规格
-所选规格组合不可用,所选规格组合不可用
-"库存不足，当前库存: %1","库存不足，当前库存: %1"
-已成功加入购物车,已成功加入购物车
-"添加购物车失败: %1","添加购物车失败: %1"
-"获取产品选项失败: %1","获取产品选项失败: %1"
-Product,Product
-"Your cart is empty","Your cart is empty"
-"Start Shopping","Start Shopping"
-"Please login first","Please login first"
-"Invalid cart item","Invalid cart item"
-"Item removed from cart","Item removed from cart"
-"Invalid quantity","Invalid quantity"
-"Cart updated","Cart updated"
-购物车ID不能为空,购物车ID不能为空
-已从购物车移除,已从购物车移除
-数量必须大于0,数量必须大于0
-购物车更新成功,购物车更新成功
 添加到购物车之前,添加到购物车之前
 在商品添加到购物车之前触发，可用于验证库存、检查限购等。,在商品添加到购物车之前触发，可用于验证库存、检查限购等。
 添加到购物车之后,添加到购物车之后
@@ -49,6 +26,72 @@ Product,Product
 在应用优惠券之后触发。,在应用优惠券之后触发。
 迷你购物车已加载,迷你购物车已加载
 "在迷你购物车数据加载完成后触发，用于 AJAX 请求响应。","在迷你购物车数据加载完成后触发，用于 AJAX 请求响应。"
+请求方法不允许,请求方法不允许
+无效的产品ID,无效的产品ID
+请先登录,请先登录
+产品不存在,产品不存在
+产品已下架,产品已下架
+"库存不足，当前库存: %1","库存不足，当前库存: %1"
+已成功加入购物车,已成功加入购物车
+"添加购物车失败: %1","添加购物车失败: %1"
+购物车ID不能为空,购物车ID不能为空
+数量必须大于0,数量必须大于0
+购物车更新成功,购物车更新成功
+已从购物车移除,已从购物车移除
+Product,Product
+"Your cart is empty","Your cart is empty"
+"Start Shopping","Start Shopping"
+请选择产品规格,请选择产品规格
+所选规格组合不可用,所选规格组合不可用
+"获取产品选项失败: %1","获取产品选项失败: %1"
+"Please login first","Please login first"
+"Invalid cart item","Invalid cart item"
+"Invalid quantity","Invalid quantity"
+"Cart updated","Cart updated"
+"Item removed from cart","Item removed from cart"
+无权更新此购物车项,无权更新此购物车项
+购物车项不存在,购物车项不存在
+无权移除此购物车项,无权移除此购物车项
+"Decrease quantity","Decrease quantity"
+"Increase quantity","Increase quantity"
+"Remove item","Remove item"
+Cart,Cart
+"Open Cart","Open Cart"
+选择规格,选择规格
+关闭,关闭
+数量,数量
+加入购物车,加入购物车
+缺货,缺货
+"View Cart","View Cart"
+"Shopping Cart","Shopping Cart"
+"Close cart","Close cart"
+Subtotal,Subtotal
+"Shipping and taxes calculated at checkout","Shipping and taxes calculated at checkout"
+Checkout,Checkout
+"%1 items in your cart","%1 items in your cart"
+Price,Price
+Quantity,Quantity
+Total,Total
+"Sold by","Sold by"
+"In Stock","In Stock"
+"Out of Stock","Out of Stock"
+"Save for later","Save for later"
+Remove,Remove
+"Continue Shopping","Continue Shopping"
+"Order Summary","Order Summary"
+"Enter coupon code","Enter coupon code"
+Apply,Apply
+Shipping,Shipping
+"Calculated at checkout","Calculated at checkout"
+Tax,Tax
+"Proceed to Checkout","Proceed to Checkout"
+"Secure Checkout","Secure Checkout"
+"Free Returns","Free Returns"
+暂无可选规格,暂无可选规格
+库存:,库存:
+已加入购物车,"Added to cart"
+添加购物车失败,"Failed to add to cart"
+已添加,Added
 购物车页面头部之后,购物车页面头部之后
 "在购物车页面 head 标签结束前插入内容，可用于添加购物车专用的CSS/JS。","在购物车页面 head 标签结束前插入内容，可用于添加购物车专用的CSS/JS。"
 "购物车页面 body 开始","购物车页面 body 开始"
@@ -118,49 +161,6 @@ Product,Product
 购物车侧边栏（兼容）,购物车侧边栏（兼容）
 迷你购物车商品列表前（兼容）,迷你购物车商品列表前（兼容）
 迷你购物车商品列表后（兼容）,迷你购物车商品列表后（兼容）
-无权更新此购物车项,无权更新此购物车项
-购物车项不存在,购物车项不存在
-无权移除此购物车项,无权移除此购物车项
-Cart,Cart
-"Open Cart","Open Cart"
-加入购物车,加入购物车
-缺货,缺货
-选择规格,选择规格
-关闭,关闭
-数量,数量
-暂无可选规格,暂无可选规格
-库存:,库存:
-已加入购物车,"Added to cart"
-添加购物车失败,"Failed to add to cart"
-已添加,Added
-"Decrease quantity","Decrease quantity"
-"Increase quantity","Increase quantity"
-"Remove item","Remove item"
-"Shopping Cart","Shopping Cart"
-"%1 items in your cart","%1 items in your cart"
-Price,Price
-Quantity,Quantity
-Total,Total
-"Sold by","Sold by"
-"In Stock","In Stock"
-"Out of Stock","Out of Stock"
-"Save for later","Save for later"
-Remove,Remove
-"Continue Shopping","Continue Shopping"
-"Order Summary","Order Summary"
-"Enter coupon code","Enter coupon code"
-Apply,Apply
-Subtotal,Subtotal
-Shipping,Shipping
-"Calculated at checkout","Calculated at checkout"
-Tax,Tax
-"Proceed to Checkout","Proceed to Checkout"
-"Secure Checkout","Secure Checkout"
-"Free Returns","Free Returns"
-"View Cart","View Cart"
-"Close cart","Close cart"
-"Shipping and taxes calculated at checkout","Shipping and taxes calculated at checkout"
-Checkout,Checkout
 在购物车商品列表前渲染内容。,在购物车商品列表前渲染内容。
 在购物车商品列表后渲染内容。,在购物车商品列表后渲染内容。
 购物车总计前,购物车总计前

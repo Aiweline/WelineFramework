@@ -137,7 +137,8 @@ class FileAdapter implements CacheAdapterInterface
             return true;
         }
 
-        $files = array_diff(scandir($dir), ['.', '..']);
+        $entries = @scandir($dir);
+        $files = is_array($entries) ? array_diff($entries, ['.', '..']) : [];
         
         foreach ($files as $file) {
             $path = $dir . DS . $file;
