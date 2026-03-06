@@ -1,3 +1,11 @@
+搜索组件：快速构建搜索框,"Search Component: Quickly build search box"
+回车搜索,"Press Enter to search"
+OffCanvas组件：侧边栏弹出窗,"OffCanvas Component: Sidebar popup window"
+排序组件：快速构建排序按钮,"Sort Component: Quickly build sort buttons"
+排序点击时请求的地址,"URL to request when sort is clicked"
+"结构说明：参数名=>映射的字段:排序方法 英文逗号隔开每个排序","Structure: paramName=>mappedField:sortMethod, separate each sort with comma"
+控制器获取对应sorter可以获取这些排序字段,"Controller can get these sort fields by getting the corresponding sorter"
+排序器属性sorter不能为空，示例：%{1},"Sorter attribute cannot be empty, example: %{1}"
 组件库,"Component Library"
 "加载组件列表失败: %{1}","Failed to load component list: %{1}"
 请指定组件类名,"Please specify component class name"
@@ -5,6 +13,7 @@
 组件详情,"Component Details"
 "加载组件详情失败: %{1}","Failed to load component details: %{1}"
 仅支持AJAX请求,仅支持AJAX请求
+清空条件,"Clear Conditions"
 总组件数,"Total Components"
 当前显示,"Currently Displayed"
 模块数,"Number of Modules"
@@ -33,20 +42,11 @@
 暂无文档,"No documentation available"
 完整类名,"Full Class Name"
 使用文档,"Usage Documentation"
-成功提示！,Success!
+警告提示！,Warning!
 倒计时关闭页面...,"Countdown closing page..."
 页面将在,"Page will close in"
 秒后关闭,seconds
-警告提示！,Warning!
-清空条件,"Clear Conditions"
-排序组件：快速构建排序按钮,"Sort Component: Quickly build sort buttons"
-排序点击时请求的地址,"URL to request when sort is clicked"
-"结构说明：参数名=>映射的字段:排序方法 英文逗号隔开每个排序","Structure: paramName=>mappedField:sortMethod, separate each sort with comma"
-控制器获取对应sorter可以获取这些排序字段,"Controller can get these sort fields by getting the corresponding sorter"
-排序器属性sorter不能为空，示例：%{1},"Sorter attribute cannot be empty, example: %{1}"
-OffCanvas组件：侧边栏弹出窗,"OffCanvas Component: Sidebar popup window"
-搜索组件：快速构建搜索框,"Search Component: Quickly build search box"
-回车搜索,"Press Enter to search"
+成功提示！,Success!
 "DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到","DEBUG mode: Initialization error, please check if the form is correct! Block [Weline\Component\Block\OffCanvas] specified form not found"
 无法访问表单内容，请稍后重试,"Unable to access form content, please try again later"
 未找到表单，请检查页面是否正确加载,"Form not found, please check if the page is loaded correctly"

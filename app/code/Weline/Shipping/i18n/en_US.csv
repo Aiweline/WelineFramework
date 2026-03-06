@@ -1,5 +1,21 @@
-国家代码不能为空,"Country code cannot be empty"
-配送服务ID不能为空,"Shipping service ID cannot be empty"
+快递公司不存在,"Carrier does not exist"
+快递公司代码不能为空,"Carrier code cannot be empty"
+快递公司名称不能为空,"Carrier name cannot be empty"
+物流跟踪URL模板为必填项，所有快递公司必须支持追踪功能,"Tracking URL template is required, all carriers must support tracking"
+快递公司代码已存在,"Carrier code already exists"
+API配置JSON格式错误,"API configuration JSON format error"
+更新成功,"Updated successfully"
+创建成功,"Created successfully"
+参数错误,"Invalid parameter"
+删除成功,"Deleted successfully"
+启用成功,"Enabled successfully"
+禁用成功,"Disabled successfully"
+地址不存在,"Address does not exist"
+客户ID不能为空,"Customer ID cannot be empty"
+设置成功,"Set successfully"
+地区编辑功能暂未开放，请通过数据库或后续版本管理。,地区编辑功能暂未开放，请通过数据库或后续版本管理。
+同步完成，新增国家数量：%{1},同步完成，新增国家数量：%{1}
+同步失败：%{1},同步失败：%{1}
 %{1}不能为空,"%{1} cannot be empty"
 配送地址更新成功,配送地址更新成功
 暂无配送地址,暂无配送地址
@@ -8,163 +24,54 @@
 地址数据不能为空,地址数据不能为空
 同步成功,同步成功
 自动定位地址,自动定位地址
+国家代码不能为空,"Country code cannot be empty"
+获取配送信息成功,获取配送信息成功
+配送服务ID不能为空,"Shipping service ID cannot be empty"
 物流单号不能为空,"Tracking number cannot be empty"
 快递公司ID不能为空,"Carrier ID cannot be empty"
 订单ID不能为空,"Order ID cannot be empty"
 功能待实现,"Feature not yet implemented"
-地址不存在,"Address does not exist"
-更新成功,"Updated successfully"
-创建成功,"Created successfully"
-参数错误,"Invalid parameter"
-删除成功,"Deleted successfully"
-设置成功,"Set successfully"
-获取配送信息成功,获取配送信息成功
-客户ID不能为空,"Customer ID cannot be empty"
-启用成功,"Enabled successfully"
-禁用成功,"Disabled successfully"
-快递公司不存在,"Carrier does not exist"
-快递公司代码不能为空,"Carrier code cannot be empty"
-快递公司名称不能为空,"Carrier name cannot be empty"
-物流跟踪URL模板为必填项，所有快递公司必须支持追踪功能,"Tracking URL template is required, all carriers must support tracking"
-快递公司代码已存在,"Carrier code already exists"
-API配置JSON格式错误,"API configuration JSON format error"
-地区编辑功能暂未开放，请通过数据库或后续版本管理。,地区编辑功能暂未开放，请通过数据库或后续版本管理。
-同步完成，新增国家数量：%{1},同步完成，新增国家数量：%{1}
-同步失败：%{1},同步失败：%{1}
-收货地址详情,收货地址详情
-编辑,Edit
-返回列表,返回列表
-默认地址,默认地址
-收货人,收货人
+待发货,Pending
+运输中,"In Transit"
+已送达,Delivered
+异常,Exception
+不支持追踪,"Not Supported"
+取件,Pickup
+到达,Arrival
+派送,Delivery
+无权操作此地址,"No permission to operate this address"
+地址名称,"Address Name"
+收货人姓名,"Recipient Name"
 联系电话,"Contact Phone"
-国家,Country
 省份,Province
 城市,City
-区县,District
 街道地址,"Street Address"
-邮政编码,"Postal Code"
-完整地址,完整地址
-创建时间,"Created At"
-更新时间,更新时间
-收货地址管理,"Delivery Address Management"
-新增地址,"Add Address"
-暂无地址，请添加收货地址,暂无地址，请添加收货地址
-默认,Default
-电话,电话
-地址,Address
-邮编,邮编
-设为默认,设为默认
-删除,删除
-确定要设置为默认地址吗？,"Are you sure you want to set this as the default address?"
-操作失败,操作失败
-确定,确定
-确定要删除此地址吗？,确定要删除此地址吗？
-编辑收货地址,编辑收货地址
-新增收货地址,新增收货地址
-地址名称,"Address Name"
-例如：家、公司、学校等,例如：家、公司、学校等
-收货人姓名,"Recipient Name"
-设为默认地址,"Set as Default Address"
-保存,Save
-取消,取消
-发货地址详情,发货地址详情
-联系人,Contact
-发货地址管理,"Shipping Address Management"
-暂无地址，请添加发货地址,暂无地址，请添加发货地址
-编辑发货地址,"Edit Shipping Address"
-新增发货地址,"Add Shipping Address"
-例如：主仓库、分仓库等,例如：主仓库、分仓库等
+电话号码格式不正确,"Invalid phone number format"
+邮政编码格式不正确，应为6位数字,"Invalid postal code format, should be 6 digits"
+费用模板不存在,"Rate template does not exist"
 联系人姓名,"Contact Name"
-运送地址管理,运送地址管理
-系统,System
-运送地址列表,运送地址列表
-全部客户,全部客户
-搜索地址名称、联系人、电话或街道,"Search address name, contact, phone or street"
-搜索,Search
-重置,Reset
-ID,ID
-客户ID,客户ID
-状态,Status
-操作,Actions
-暂无数据,"No data available"
-是,Yes
-否,No
-启用,Enable
-禁用,Disable
-确定要删除这个地址吗？,"Are you sure you want to delete this address?"
-上一页,"Previous Page"
-下一页,"Next Page"
-编辑运送地址,"Edit Delivery Address"
-新增运送地址,"Add Delivery Address"
-新增,Add
-客户,Customer
-请选择客户,"Please select customer"
-请输入地址名称/标签,"Please enter address name/label"
-请输入收货人姓名,请输入收货人姓名
-请输入联系电话,"Please enter contact phone"
-请输入国家,"Please enter country"
-请输入省份,"Please enter province"
-请输入城市,"Please enter city"
-请输入区县,"Please enter district"
-请输入街道地址,"Please enter street address"
-请输入邮政编码,"Please enter postal code"
-选项,Options
-返回,Back
-配送区域,"Shipping Zone"
-配送区域列表,配送区域列表
-当前暂无配送区域，请后续在此页面完善配置。,当前暂无配送区域，请后续在此页面完善配置。
-区域名称,区域名称
-区域代码,区域代码
-发货地址列表,"Shipping Address List"
-全部状态,"All Status"
-请输入联系人姓名,"Please enter contact name"
-配送服务,"Shipping Service"
-配送服务列表,配送服务列表
-当前暂无配送服务配置，请后续在此页面完善配置。,当前暂无配送服务配置，请后续在此页面完善配置。
-服务名称,服务名称
-服务代码,服务代码
-快递公司ID,快递公司ID
-区域ID,区域ID
-配送系统,"Shipping System"
-配送管理,"Shipping Management"
-地区管理,"Region Management"
-快递公司,Carrier
-费用模板,"Rate Template"
-免邮规则,"Free Shipping Rule"
-物流跟踪,Tracking
-费用模板列表,费用模板列表
-当前暂无费用模板配置，请后续在此页面完善配置。,当前暂无费用模板配置，请后续在此页面完善配置。
-模板名称,模板名称
-模板代码,模板代码
-计算类型,计算类型
-物流跟踪记录列表,物流跟踪记录列表
-当前暂无物流跟踪记录。,当前暂无物流跟踪记录。
-物流单号,物流单号
-当前位置,当前位置
-最后查询时间,最后查询时间
-快递公司列表,快递公司列表
-新增快递公司,"Add Carrier"
-搜索快递公司代码或名称,"Search carrier code or name"
-当前暂无快递公司配置，请后续在此页面完善配置。,当前暂无快递公司配置，请后续在此页面完善配置。
-代码,代码
-名称,名称
-类型,类型
-追踪支持,"Tracking Support"
-排序,排序
-API,API
-手动,Manual
-支持,Supported
-不支持,不支持
-确定要禁用这个快递公司吗？,"Are you sure you want to disable this carrier?"
-确定要启用这个快递公司吗？,"Are you sure you want to enable this carrier?"
-确定要删除这个快递公司吗？,"Are you sure you want to delete this carrier?"
-"共 %{1} 条记录，第 %{2} / %{3} 页","Total %{1} records, Page %{2} / %{3}"
+配送服务不存在,"Shipping service does not exist"
+该快递公司暂不支持在线追踪，请联系客服查询,"This carrier does not support online tracking, please contact customer service"
+客服电话：400-xxx-xxxx,"Customer Service: 400-xxx-xxxx"
+查询失败：%{1},"Query failed: %{1}"
+发货地址,"Shipping Address"
+收货地址,"Delivery Address"
+发货地址管理,"Shipping Address Management"
+收货地址管理,"Delivery Address Management"
 编辑快递公司,"Edit Carrier"
+新增快递公司,"Add Carrier"
+系统,System
+快递公司,Carrier
+编辑,Edit
+新增,Add
 快递公司代码,"Carrier Code"
 请输入快递公司代码，如：SF、ZTO等,请输入快递公司代码，如：SF、ZTO等
 代码必须唯一，编辑后不可修改,"Code must be unique and cannot be modified after editing"
 快递公司名称,"Carrier Name"
 请输入快递公司名称，如：顺丰速运,请输入快递公司名称，如：顺丰速运
+类型,类型
+手动,Manual
+API,API
 手动类型需要手动输入物流信息，API类型可通过接口自动获取,"Manual type requires manual input of logistics information, API type can automatically obtain through interface"
 物流跟踪URL模板,物流跟踪URL模板
 例如：https://www.sf-express.com/track/{tracking_number},"Example: https://www.sf-express.com/track/{tracking_number}"
@@ -176,37 +83,130 @@ API配置,"API Configuration"
 "JSON格式，例如：{""api_key"":""your_key"",""api_secret"":""your_secret""}","JSON格式，例如：{""api_key"":""your_key"",""api_secret"":""your_secret""}"
 API配置信息，JSON格式,"API configuration information, JSON format"
 追踪支持状态,追踪支持状态
+支持,Supported
+不支持,不支持
+排序,排序
 数字越小越靠前，默认为0,"Smaller numbers appear first, default is 0"
-地区列表,地区列表
-确定要从i18n同步国家数据吗？,确定要从i18n同步国家数据吗？
-从i18n同步国家,从i18n同步国家
-当前国家暂无地区数据，请先从i18n同步或手动添加。,当前国家暂无地区数据，请先从i18n同步或手动添加。
-地区名称,地区名称
-地区代码,地区代码
+状态,Status
+启用,Enable
+保存,Save
+返回,Back
+快递公司列表,快递公司列表
+搜索快递公司代码或名称,"Search carrier code or name"
+全部状态,"All Status"
+禁用,Disable
+搜索,Search
+重置,Reset
+当前暂无快递公司配置，请后续在此页面完善配置。,当前暂无快递公司配置，请后续在此页面完善配置。
+代码,代码
+名称,名称
+追踪支持,"Tracking Support"
+操作,Actions
+确定要禁用这个快递公司吗？,"Are you sure you want to disable this carrier?"
+确定要启用这个快递公司吗？,"Are you sure you want to enable this carrier?"
+删除,删除
+确定要删除这个快递公司吗？,"Are you sure you want to delete this carrier?"
+上一页,"Previous Page"
+下一页,"Next Page"
+"共 %{1} 条记录，第 %{2} / %{3} 页","Total %{1} records, Page %{2} / %{3}"
+编辑运送地址,"Edit Delivery Address"
+新增运送地址,"Add Delivery Address"
+运送地址管理,运送地址管理
+客户,Customer
+请选择客户,"Please select customer"
+请输入地址名称/标签,"Please enter address name/label"
+请输入收货人姓名,请输入收货人姓名
+请输入联系电话,"Please enter contact phone"
+国家,Country
+请输入国家,"Please enter country"
+请输入省份,"Please enter province"
+请输入城市,"Please enter city"
+区县,District
+请输入区县,"Please enter district"
+请输入街道地址,"Please enter street address"
+邮政编码,"Postal Code"
+请输入邮政编码,"Please enter postal code"
+选项,Options
+设为默认地址,"Set as Default Address"
+运送地址列表,运送地址列表
+新增地址,"Add Address"
+全部客户,全部客户
+搜索地址名称、联系人、电话或街道,"Search address name, contact, phone or street"
+ID,ID
+客户ID,客户ID
+联系人,Contact
+地址,Address
+默认,Default
+创建时间,"Created At"
+暂无数据,"No data available"
+是,Yes
+否,No
+确定要设置为默认地址吗？,"Are you sure you want to set this as the default address?"
+确定要删除这个地址吗？,"Are you sure you want to delete this address?"
+免邮规则,"Free Shipping Rule"
 免邮规则列表,免邮规则列表
 当前暂无免邮规则配置，请后续在此页面完善配置。,当前暂无免邮规则配置，请后续在此页面完善配置。
 规则名称,规则名称
 规则代码,规则代码
 条件类型,条件类型
 优先级,优先级
-发货地址,"Shipping Address"
-收货地址,"Delivery Address"
-无权操作此地址,"No permission to operate this address"
-电话号码格式不正确,"Invalid phone number format"
-邮政编码格式不正确，应为6位数字,"Invalid postal code format, should be 6 digits"
-配送服务不存在,"Shipping service does not exist"
-费用模板不存在,"Rate template does not exist"
-该快递公司暂不支持在线追踪，请联系客服查询,"This carrier does not support online tracking, please contact customer service"
-客服电话：400-xxx-xxxx,"Customer Service: 400-xxx-xxxx"
-查询失败：%{1},"Query failed: %{1}"
-待发货,Pending
-运输中,"In Transit"
-已送达,Delivered
-异常,Exception
-不支持追踪,"Not Supported"
-取件,Pickup
-到达,Arrival
-派送,Delivery
+配送系统,"Shipping System"
+配送管理,"Shipping Management"
+地区管理,"Region Management"
+配送区域,"Shipping Zone"
+费用模板,"Rate Template"
+配送服务,"Shipping Service"
+物流跟踪,Tracking
+费用模板列表,费用模板列表
+当前暂无费用模板配置，请后续在此页面完善配置。,当前暂无费用模板配置，请后续在此页面完善配置。
+模板名称,模板名称
+模板代码,模板代码
+计算类型,计算类型
+地区列表,地区列表
+确定要从i18n同步国家数据吗？,确定要从i18n同步国家数据吗？
+从i18n同步国家,从i18n同步国家
+当前国家暂无地区数据，请先从i18n同步或手动添加。,当前国家暂无地区数据，请先从i18n同步或手动添加。
+地区名称,地区名称
+地区代码,地区代码
+编辑发货地址,"Edit Shipping Address"
+新增发货地址,"Add Shipping Address"
+请输入联系人姓名,"Please enter contact name"
+发货地址列表,"Shipping Address List"
+配送服务列表,配送服务列表
+当前暂无配送服务配置，请后续在此页面完善配置。,当前暂无配送服务配置，请后续在此页面完善配置。
+服务名称,服务名称
+服务代码,服务代码
+快递公司ID,快递公司ID
+区域ID,区域ID
+物流跟踪记录列表,物流跟踪记录列表
+当前暂无物流跟踪记录。,当前暂无物流跟踪记录。
+物流单号,物流单号
+当前位置,当前位置
+最后查询时间,最后查询时间
+配送区域列表,配送区域列表
+当前暂无配送区域，请后续在此页面完善配置。,当前暂无配送区域，请后续在此页面完善配置。
+区域名称,区域名称
+区域代码,区域代码
+编辑收货地址,编辑收货地址
+新增收货地址,新增收货地址
+返回列表,返回列表
+例如：家、公司、学校等,例如：家、公司、学校等
+取消,取消
+暂无地址，请添加收货地址,暂无地址，请添加收货地址
+收货人,收货人
+电话,电话
+邮编,邮编
+设为默认,设为默认
+操作失败,操作失败
+确定,确定
+确定要删除此地址吗？,确定要删除此地址吗？
+收货地址详情,收货地址详情
+默认地址,默认地址
+完整地址,完整地址
+更新时间,更新时间
+例如：主仓库、分仓库等,例如：主仓库、分仓库等
+暂无地址，请添加发货地址,暂无地址，请添加发货地址
+发货地址详情,发货地址详情
 搜索菜单,搜索菜单
 搜索菜单...,搜索菜单...
 常用菜单,常用菜单

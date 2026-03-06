@@ -1,94 +1,21 @@
-结账页面头部之前,"Before Checkout Page Head"
-"在渲染结账页面的 <head> 标签之前触发，允许其他模块在头部开始处注入内容（如CSS、JavaScript等）。","Triggered before rendering the <head> tag of the checkout page, allowing other modules to inject content at the beginning of the head (such as CSS, JavaScript, etc.)."
-结账页面头部之后,"After Checkout Page Head"
-"在渲染结账页面的 <head> 标签之后触发，允许其他模块在头部结束处注入内容。","Triggered after rendering the <head> tag of the checkout page, allowing other modules to inject content at the end of the head."
-结账页面内容之前,"Before Checkout Page Content"
-在渲染结账页面的主要内容之前触发，允许其他模块在内容开始处注入内容（如横幅、提示信息等）。,"Triggered before rendering the main content of the checkout page, allowing other modules to inject content at the beginning of the content (such as banners, tips, etc.)."
-结账页面内容之后,"After Checkout Page Content"
-在渲染结账页面的主要内容之后触发，允许其他模块在内容结束处注入内容（如推荐商品、优惠信息等）。,"Triggered after rendering the main content of the checkout page, allowing other modules to inject content at the end of the content (such as recommended products, promotional information, etc.)."
-结账表单之前,"Before Checkout Form"
-在渲染结账表单之前触发，允许其他模块在表单开始处注入内容（如优惠券输入框、促销信息等）。,"Triggered before rendering the checkout form, allowing other modules to inject content at the beginning of the form (such as coupon input boxes, promotional information, etc.)."
-结账表单之后,"After Checkout Form"
-在渲染结账表单之后触发，允许其他模块在表单结束处注入内容（如支付方式选择、额外信息等）。,"Triggered after rendering the checkout form, allowing other modules to inject content at the end of the form (such as payment method selection, additional information, etc.)."
-支付方式选择区域之前,"Before Payment Methods Selection"
-在渲染支付方式选择区域之前触发，允许支付模块在支付方式选择区域开始处注入内容。,"Triggered before rendering the payment methods selection area, allowing payment modules to inject content at the beginning of the payment methods selection area."
-支付方式选择区域之后,"After Payment Methods Selection"
-在渲染支付方式选择区域之后触发，允许支付模块在支付方式选择区域结束处注入内容。,"Triggered after rendering the payment methods selection area, allowing payment modules to inject content at the end of the payment methods selection area."
-订单列表内容之前,"Before Order List Content"
-在渲染订单列表页面内容之前触发，允许其他模块在订单列表开始处注入内容（如筛选器、统计信息等）。,"Triggered before rendering the order list page content, allowing other modules to inject content at the beginning of the order list (such as filters, statistics, etc.)."
-订单列表内容之后,"After Order List Content"
-在渲染订单列表页面内容之后触发，允许其他模块在订单列表结束处注入内容。,"Triggered after rendering the order list page content, allowing other modules to inject content at the end of the order list."
-订单详情内容之前,"Before Order Detail Content"
-在渲染订单详情页面内容之前触发，允许其他模块在订单详情开始处注入内容（如订单状态提示、操作按钮等）。,"Triggered before rendering the order detail page content, allowing other modules to inject content at the beginning of the order detail (such as order status tips, action buttons, etc.)."
-订单详情内容之后,"After Order Detail Content"
-在渲染订单详情页面内容之后触发，允许其他模块在订单详情结束处注入内容（如相关推荐、评价入口等）。,"Triggered after rendering the order detail page content, allowing other modules to inject content at the end of the order detail (such as related recommendations, review entry, etc.)."
-后台订单列表筛选器,"Backend Order List Filters"
-在后台订单列表页面的筛选器区域注入内容，允许其他模块添加自定义筛选条件。,"Inject content into the filter area of the backend order list page, allowing other modules to add custom filter conditions."
-后台订单详情页之前,"Before Backend Order Detail Page"
-在后台订单详情页面内容之前注入内容，允许其他模块在订单详情页顶部添加自定义内容。,"Inject content before the backend order detail page content, allowing other modules to add custom content at the top of the order detail page."
-后台订单详情页之后,"After Backend Order Detail Page"
-在后台订单详情页面内容之后注入内容，允许其他模块在订单详情页底部添加自定义内容。,"Inject content after the backend order detail page content, allowing other modules to add custom content at the bottom of the order detail page."
-我的订单,"My Orders"
+订单管理,"Order Management"
+订单不存在,"Order does not exist"
 订单详情,"Order Details"
 无效的请求方法,"Invalid request method"
-请先登录,"Please login first"
-订单不存在,"Order does not exist"
-无权操作此订单,"No permission to operate this order"
-订单已取消,"Order cancelled"
-取消订单失败：%{1},"Failed to cancel order: %{1}"
+参数不完整,"Incomplete parameters"
+订单状态更新成功,"Order status updated successfully"
+更新失败：%{1},"Update failed: %{1}"
 结账,Checkout
+请先登录,"Please login first"
 订单创建成功,"Order created successfully"
 订单创建失败：%{1},"Order creation failed: %{1}"
 结账成功,"Checkout Successful"
 支付处理成功,"Payment processed successfully"
 支付处理失败：%{1},"Payment processing failed: %{1}"
-订单管理,"Order Management"
-参数不完整,"Incomplete parameters"
-订单状态更新成功,"Order status updated successfully"
-更新失败：%{1},"Update failed: %{1}"
-订单信息,"Order Information"
-订单号,"Order Number"
-客户ID,"Customer ID"
-订单状态,"Order Status"
-支付状态,"Payment Status"
-配送状态,"Shipping Status"
-创建时间,"Created Time"
-订单项,"Order Items"
-产品名称,"Product Name"
-SKU,SKU
-数量,Quantity
-单价,"Unit Price"
-总价,"Total Price"
-费用明细,"Cost Details"
-商品小计,Subtotal
-运费,"Shipping Fee"
-税费,Tax
-折扣,Discount
-订单总额,"Total Amount"
-返回列表,"Back to List"
-全部,All
-待处理,Pending
-处理中,Processing
-已完成,Completed
-已取消,Cancelled
-待支付,"Pending Payment"
-已支付,Paid
-支付失败,"Payment Failed"
-请输入订单号,"Please enter order number"
-搜索,Search
-操作,Actions
-暂无订单,"No Orders"
-查看,View
-返回订单列表,"Back to Order List"
-查看详情,"View Details"
-取消订单,"Cancel Order"
-确定要取消此订单吗？,"Are you sure you want to cancel this order?"
-收货地址,"Shipping Address"
-配送方式,"Shipping Method"
-支付方式,"Payment Method"
-提交订单,"Submit Order"
-感谢您的购买！您的订单已成功创建。,"Thank you for your purchase! Your order has been created successfully."
-查看订单详情,"View Order Details"
+我的订单,"My Orders"
+无权操作此订单,"No permission to operate this order"
+订单已取消,"Order cancelled"
+取消订单失败：%{1},"Failed to cancel order: %{1}"
 结账数据验证前,"Before Checkout Validation"
 在验证结账数据之前触发，允许其他模块修改验证数据或执行预处理操作。,"Triggered before validating checkout data, allowing other modules to modify validation data or perform preprocessing operations."
 结账数据验证后,"After Checkout Validation"
@@ -133,24 +60,97 @@ SKU,SKU
 在处理支付回调之后触发，允许其他模块验证支付结果、更新订单状态、处理退款等。,"Triggered after processing payment callback, allowing other modules to verify payment results, update order status, process refunds, etc."
 支付成功,"Payment Success"
 当支付成功时触发，允许其他模块执行成功后的操作，如更新订单状态、发送通知、增加积分等。,"Triggered when payment succeeds, allowing other modules to perform post-success operations, such as updating order status, sending notifications, adding points, etc."
+支付失败,"Payment Failed"
 当支付失败时触发，允许其他模块执行失败后的操作，如记录日志、发送通知、释放库存等。,"Triggered when payment fails, allowing other modules to perform post-failure operations, such as logging, sending notifications, releasing inventory, etc."
-订单无法取消,"Order cannot be cancelled"
+结账页面头部之前,"Before Checkout Page Head"
+"在渲染结账页面的 <head> 标签之前触发，允许其他模块在头部开始处注入内容（如CSS、JavaScript等）。","Triggered before rendering the <head> tag of the checkout page, allowing other modules to inject content at the beginning of the head (such as CSS, JavaScript, etc.)."
+结账页面头部之后,"After Checkout Page Head"
+"在渲染结账页面的 <head> 标签之后触发，允许其他模块在头部结束处注入内容。","Triggered after rendering the <head> tag of the checkout page, allowing other modules to inject content at the end of the head."
+结账页面内容之前,"Before Checkout Page Content"
+在渲染结账页面的主要内容之前触发，允许其他模块在内容开始处注入内容（如横幅、提示信息等）。,"Triggered before rendering the main content of the checkout page, allowing other modules to inject content at the beginning of the content (such as banners, tips, etc.)."
+结账页面内容之后,"After Checkout Page Content"
+在渲染结账页面的主要内容之后触发，允许其他模块在内容结束处注入内容（如推荐商品、优惠信息等）。,"Triggered after rendering the main content of the checkout page, allowing other modules to inject content at the end of the content (such as recommended products, promotional information, etc.)."
+结账表单之前,"Before Checkout Form"
+在渲染结账表单之前触发，允许其他模块在表单开始处注入内容（如优惠券输入框、促销信息等）。,"Triggered before rendering the checkout form, allowing other modules to inject content at the beginning of the form (such as coupon input boxes, promotional information, etc.)."
+结账表单之后,"After Checkout Form"
+在渲染结账表单之后触发，允许其他模块在表单结束处注入内容（如支付方式选择、额外信息等）。,"Triggered after rendering the checkout form, allowing other modules to inject content at the end of the form (such as payment method selection, additional information, etc.)."
+支付方式选择区域之前,"Before Payment Methods Selection"
+在渲染支付方式选择区域之前触发，允许支付模块在支付方式选择区域开始处注入内容。,"Triggered before rendering the payment methods selection area, allowing payment modules to inject content at the beginning of the payment methods selection area."
+支付方式选择区域之后,"After Payment Methods Selection"
+在渲染支付方式选择区域之后触发，允许支付模块在支付方式选择区域结束处注入内容。,"Triggered after rendering the payment methods selection area, allowing payment modules to inject content at the end of the payment methods selection area."
+订单列表内容之前,"Before Order List Content"
+在渲染订单列表页面内容之前触发，允许其他模块在订单列表开始处注入内容（如筛选器、统计信息等）。,"Triggered before rendering the order list page content, allowing other modules to inject content at the beginning of the order list (such as filters, statistics, etc.)."
+订单列表内容之后,"After Order List Content"
+在渲染订单列表页面内容之后触发，允许其他模块在订单列表结束处注入内容。,"Triggered after rendering the order list page content, allowing other modules to inject content at the end of the order list."
+订单详情内容之前,"Before Order Detail Content"
+在渲染订单详情页面内容之前触发，允许其他模块在订单详情开始处注入内容（如订单状态提示、操作按钮等）。,"Triggered before rendering the order detail page content, allowing other modules to inject content at the beginning of the order detail (such as order status tips, action buttons, etc.)."
+订单详情内容之后,"After Order Detail Content"
+在渲染订单详情页面内容之后触发，允许其他模块在订单详情结束处注入内容（如相关推荐、评价入口等）。,"Triggered after rendering the order detail page content, allowing other modules to inject content at the end of the order detail (such as related recommendations, review entry, etc.)."
+后台订单列表筛选器,"Backend Order List Filters"
+在后台订单列表页面的筛选器区域注入内容，允许其他模块添加自定义筛选条件。,"Inject content into the filter area of the backend order list page, allowing other modules to add custom filter conditions."
+后台订单详情页之前,"Before Backend Order Detail Page"
+在后台订单详情页面内容之前注入内容，允许其他模块在订单详情页顶部添加自定义内容。,"Inject content before the backend order detail page content, allowing other modules to add custom content at the top of the order detail page."
+后台订单详情页之后,"After Backend Order Detail Page"
+在后台订单详情页面内容之后注入内容，允许其他模块在订单详情页底部添加自定义内容。,"Inject content after the backend order detail page content, allowing other modules to add custom content at the bottom of the order detail page."
+待处理,Pending
+处理中,Processing
+已完成,Completed
+已取消,Cancelled
+已退款,Refunded
+待支付,"Pending Payment"
+已支付,Paid
+待发货,"Pending Shipment"
+已发货,Shipped
+已送达,Delivered
+成功,Success
+失败,Failed
 客户ID不能为空,"Customer ID cannot be empty"
 订单项不能为空,"Order items cannot be empty"
 "订单项 %{1} 的产品ID不能为空","Product ID of order item %{1} cannot be empty"
 "订单项 %{1} 的数量必须大于0","Quantity of order item %{1} must be greater than 0"
 "订单项 %{1} 的价格无效","Price of order item %{1} is invalid"
 收货地址不能为空,"Shipping address cannot be empty"
+订单无法取消,"Order cannot be cancelled"
 订单ID不能为空,订单ID不能为空
 支付方式不能为空,"Payment method cannot be empty"
 支付金额无效,"Payment amount is invalid"
 订单已支付,"Order has been paid"
-成功,Success
-失败,Failed
-已退款,Refunded
-待发货,"Pending Shipment"
-已发货,Shipped
-已送达,Delivered
+订单状态,"Order Status"
+全部,All
+支付状态,"Payment Status"
+订单号,"Order Number"
+请输入订单号,"Please enter order number"
+搜索,Search
+客户ID,"Customer ID"
+订单总额,"Total Amount"
+创建时间,"Created Time"
+操作,Actions
+暂无订单,"No Orders"
+查看,View
+订单信息,"Order Information"
+配送状态,"Shipping Status"
+订单项,"Order Items"
+产品名称,"Product Name"
+SKU,SKU
+数量,Quantity
+单价,"Unit Price"
+总价,"Total Price"
+费用明细,"Cost Details"
+商品小计,Subtotal
+运费,"Shipping Fee"
+税费,Tax
+折扣,Discount
+返回列表,"Back to List"
+收货地址,"Shipping Address"
+配送方式,"Shipping Method"
+支付方式,"Payment Method"
+提交订单,"Submit Order"
+感谢您的购买！您的订单已成功创建。,"Thank you for your purchase! Your order has been created successfully."
+查看订单详情,"View Order Details"
+返回订单列表,"Back to Order List"
+查看详情,"View Details"
+取消订单,"Cancel Order"
+确定要取消此订单吗？,"Are you sure you want to cancel this order?"
 订单创建前,"Before Order Creation"
 在创建订单之前触发，允许其他模块（如支付模块）在订单创建前进行数据验证、修改订单数据等操作。,"Triggered before order creation"
 订单创建后,"After Order Creation"
