@@ -131,30 +131,43 @@ class WlsRuntime implements RuntimeInterface
         // 性能统计：仅当请求耗时 > 1 秒时写入 var/log/wls_timing.log，便于定位 TTFB 瓶颈
         $t0 = \microtime(true);
         $timing = [
-            'uri' => '', 
-            'run_before_ms' => 0, 
+            'uri' => '',
+            'run_before_ms' => 0,
             'url_parser_call_ms' => 0,
             'process_url_parse_ms' => 0,
-            'url_parser_ms' => 0, 
+            'url_parser_ms' => 0,
             'router_init_ms' => 0,
             'router_start_call_ms' => 0,
-            'router_start_ms' => 0, 
-            'run_after_ms' => 0, 
-            'reset_ms' => 0, 
+            'router_start_ms' => 0,
+            'run_after_ms' => 0,
+            'reset_ms' => 0,
             'total_ms' => 0
         ];
-        
-        // 初始化请求上下文
-        RequestContext::init();
         
         // 重置重定向计数器（每个新请求重置）
         if (!isset($_SERVER['WLS_REDIRECT_COUNT'])) {
             $_SERVER['WLS_REDIRECT_COUNT'] = 0;
         }
         
-
         // 直接写入调试日志（WlsRuntime::handle 开始）
         try {
+            // WLS 状态管理：必须先按当前请求更新 $_SERVER，再初始化 RequestContext。
+            // 否则 RequestContext::init() -> syncFromServer() 会读到上一请求的 $_SERVER，
+            // 导致 area_router、WELINE_AREA 等错误，进而出现 502/404 或“存了上一个人的访问链接”。
+            if ($request !== null) {
+                ObjectManager::setInstance(Request::class, $request);
+                $resolvedClass = ObjectManager::parserClass(Request::class);
+                if ($resolvedClass !== Request::class) {
+                    ObjectManager::setInstance($resolvedClass, $request);
+                }
+                $this->globalsEmulator->emulate($request);
+            }
+            $timing['uri'] = ($_SERVER['REQUEST_URI'] ?? '') ?: '/';
+            // 早期从 URL 提取语言/货币，供 RequestContext::syncFromServer() 使用
+            $this->parseUrlLangCurrency($timing['uri']);
+            // 在 $_SERVER 已为当前请求后再初始化请求上下文
+            RequestContext::init();
+            
             // DEV 环境或前端模式：记录请求日志
             $isDev = \defined('DEV') && DEV;
             $isFrontend = \defined('WLS_FRONTEND_MODE') && WLS_FRONTEND_MODE;
@@ -162,31 +175,11 @@ class WlsRuntime implements RuntimeInterface
                 $this->logWlsRequest($request, $isFrontend);
             }
             
-            // WLS 模式：将当前请求注册到 ObjectManager，确保 Router 和其他组件能获取到正确的 Request
-            // 必须在 emulate 之前注册，因为 Router::__init() 会从 ObjectManager 获取 Request
-            if ($request !== null) {
-                // 注册到 Request::class（原始类名）
-                ObjectManager::setInstance(Request::class, $request);
-                // 注册到解析后的类名（ObjectManager::parserClass 会将 Request::class 解析为 Request\Interceptor）
-                $resolvedClass = ObjectManager::parserClass(Request::class);
-                if ($resolvedClass !== Request::class) {
-                    ObjectManager::setInstance($resolvedClass, $request);
-                }
-            }
-            // 模拟超全局变量
-            if ($request !== null) {
-                $this->globalsEmulator->emulate($request);
-            }
-            $timing['uri'] = ($_SERVER['REQUEST_URI'] ?? '') ?: '/';
-            
             $_SERVER['WELINE_PARSER_URL'] = true;
             $_SERVER['WELINE_IS_MEDIA'] = false;
             $_SERVER['WLS_REQUEST_COUNT'] = $this->requestCount;
             
-            // 早期 URL 解析：在 run_before 事件之前，从 URL 路径中提取语言和货币
-            // URL 结构：/backendKey/USD/zh_Hans_CN/module/area/controller
-            // 确保 run_before 事件处理器能获取到正确的语言/货币
-            $this->parseUrlLangCurrency($timing['uri']);
+            // 语言/货币已在 init() 前通过 parseUrlLangCurrency() 从 URL 提取，run_before 可直接使用
             
             $t1 = \microtime(true);
             // 触发 run_before 事件
