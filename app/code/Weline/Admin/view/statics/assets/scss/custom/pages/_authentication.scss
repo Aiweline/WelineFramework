@@ -16,3 +16,105 @@
     display: $display-block;
   }
 }
+
+// 登录页小屏幕兼容（weline-admin-login-page）
+.weline-admin-login-page {
+  .account-pages {
+    min-height: 100vh;
+  }
+
+  .weline-logo.auth-logo {
+    height: 80px;
+    max-width: 100%;
+    object-fit: contain;
+  }
+
+  // 消息区域：小屏下紧凑，避免多条重复提示占满屏幕
+  .weline-admin-login-messages {
+    .alert {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.875rem;
+    }
+  }
+
+  @media (max-width: 575.98px) {
+    .account-pages {
+      margin-top: var(--backend-spacing-md, 1rem) !important;
+      padding-top: var(--backend-spacing-md, 1rem) !important;
+      margin-bottom: var(--backend-spacing-md, 1rem) !important;
+      padding-left: var(--backend-spacing-sm, 0.5rem);
+      padding-right: var(--backend-spacing-sm, 0.5rem);
+    }
+
+    .account-pages .container {
+      max-width: 100%;
+      padding-left: var(--backend-spacing-sm, 0.5rem);
+      padding-right: var(--backend-spacing-sm, 0.5rem);
+    }
+
+    .account-pages .card {
+      margin-left: 0;
+      margin-right: 0;
+    }
+
+    .account-pages .card-body {
+      padding: var(--backend-padding-card-sm, 1rem);
+    }
+
+    .weline-logo.auth-logo {
+      height: 64px;
+    }
+
+    .weline-admin-login-page h4.font-size-18 {
+      font-size: 1rem;
+      margin-top: var(--backend-spacing-sm, 0.5rem);
+    }
+
+    .weline-admin-login-page .mb-3.text-center {
+      margin-bottom: var(--backend-spacing-sm, 0.5rem) !important;
+    }
+
+    .weline-admin-login-messages .alert {
+      padding: 0.4rem 0.6rem;
+      font-size: 0.8125rem;
+    }
+
+    /* 多条提示时限制高度并可滚动，避免占满小屏 */
+    .weline-admin-login-messages {
+      max-height: 8rem;
+      overflow-y: auto;
+    }
+
+    .weline-admin-login-options .col-12 {
+      flex: 0 0 100%;
+      max-width: 100%;
+    }
+
+    .weline-admin-login-forgot {
+      text-align: left;
+    }
+
+    .d-grid.mt-4 {
+      margin-top: var(--backend-spacing-lg, 1.5rem) !important;
+    }
+
+    .mt-5.text-center {
+      margin-top: var(--backend-spacing-xl, 2rem) !important;
+    }
+
+    .mt-5.text-center p {
+      font-size: 0.875rem;
+    }
+  }
+
+  @media (min-width: 576px) and (max-width: 767.98px) {
+    .account-pages {
+      margin-top: var(--backend-spacing-xl, 2rem) !important;
+      padding-top: var(--backend-spacing-xl, 2rem) !important;
+    }
+
+    .weline-logo.auth-logo {
+      height: 72px;
+    }
+  }
+}
