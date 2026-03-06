@@ -756,6 +756,9 @@ class Start extends CommandAbstract
         }
         
         $this->printer->success(__('服务器已在后台运行。使用 php bin/w server:status 查看状态，php bin/w server:stop 停止服务。'));
+        if (\function_exists('flush')) {
+            @\flush();
+        }
         
         // Windows + HTTPS 时在「服务器已在后台运行」之后集中提示，避免被前面输出淹没
         if (IS_WIN && $sslEnabled) {
