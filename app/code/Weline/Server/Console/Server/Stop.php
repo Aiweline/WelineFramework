@@ -143,6 +143,8 @@ class Stop extends CommandAbstract
         if ($instanceInfo === null) {
             $this->printer->warning(__('实例 [%{1}] 不存在', [$name]));
             $this->printer->note(__('使用 server:listing 查看所有实例'));
+            // 清理可能残留的启动锁（如上次 server:start 崩溃遗留），便于后续启动
+            $this->releaseStartLock($name);
             return;
         }
         

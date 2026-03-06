@@ -1,10 +1,3 @@
-请先登录,"Please log in first"
-请输入原密码,"Please enter your current password"
-原密码错误,"Current password is incorrect"
-新密码长度不能少于6位,"New password must be at least 6 characters"
-两次输入的新密码不一致,"New passwords do not match"
-更新成功,"Updated successfully"
-更新失败：%{1},"Update failed: %{1}"
 您已登录,"You are already logged in"
 用户名和密码不能为空,"Username and password cannot be empty"
 用户不存在,"User does not exist"
@@ -12,7 +5,13 @@
 密码错误,"Incorrect password"
 登录成功,"Login successful"
 登录失败：%{1},"Login failed: %{1}"
-退出成功,退出成功
+请先登录,"Please log in first"
+请输入原密码,"Please enter your current password"
+原密码错误,"Current password is incorrect"
+新密码长度不能少于6位,"New password must be at least 6 characters"
+两次输入的新密码不一致,"New passwords do not match"
+更新成功,"Updated successfully"
+更新失败：%{1},"Update failed: %{1}"
 用户注册,用户注册
 您已登录，无需注册,"You are already logged in, no need to register"
 请填写完整信息,"Please complete all required fields"
@@ -22,6 +21,7 @@
 用户名已被使用,"Username is already taken"
 注册成功,"Registration successful"
 注册失败：%{1},"Registration failed: %{1}"
+退出成功,退出成功
 无法统计令牌数量：%{1},无法统计令牌数量：%{1}
 加载前端客户失败：%{1},加载前端客户失败：%{1}
 无效的用户ID,"Invalid user ID"
@@ -35,15 +35,67 @@
 删除成功,"Deleted successfully"
 令牌已重置,"Tokens have been reset"
 密码已重置,"Password has been reset"
-账户,账户
-我的订单,我的订单
-账户设置,账户设置
-个人资料,个人资料
-收货地址,收货地址
-修改密码,修改密码
-退出登录,退出登录
+欢迎回来,欢迎回来
+请登录您的账户以继续,请登录您的账户以继续
+用户名或邮箱,用户名或邮箱
+请输入用户名或邮箱,请输入用户名或邮箱
+密码,Password
+请输入密码,请输入密码
+记住登录状态,记住登录状态
+本次会话（关闭浏览器后失效）,本次会话（关闭浏览器后失效）
+6小时,6小时
+1天,1天
+1周,1周
+1个月,1个月
 登录,登录
+登录中...,登录中...
+还没有账户？,还没有账户？
+立即注册,立即注册
+登录成功！,登录成功！
+登录失败，请检查用户名和密码,登录失败，请检查用户名和密码
+登录请求失败，请稍后重试,登录请求失败，请稍后重试
+用户登录,用户登录
+创建账户,创建账户
+已有账户？,已有账户？
+立即登录,立即登录
 注册,注册
+注册中...,注册中...
+注册成功！,注册成功！
+注册失败，请稍后重试,注册失败，请稍后重试
+注册请求失败，请稍后重试,注册请求失败，请稍后重试
+用户名,Username
+3-20个字符,3-20个字符
+至少6位字符,至少6位字符
+建议使用字母、数字和特殊字符组合,建议使用字母、数字和特殊字符组合
+确认密码,确认密码
+再次输入密码,再次输入密码
+欢迎回来！您可以在这里管理您的账户信息,欢迎回来！您可以在这里管理您的账户信息
+未知,未知
+更新失败，请稍后重试,更新失败，请稍后重试
+请填写所有字段,请填写所有字段
+修改失败，请稍后重试,修改失败，请稍后重试
+个人资料,个人资料
+用户名不可修改,用户名不可修改
+用户ID,用户ID
+头像URL,头像URL
+预览,预览
+输入头像图片的完整URL地址,输入头像图片的完整URL地址
+邮箱,邮箱
+邮箱不可修改,邮箱不可修改
+保存更改,保存更改
+修改密码,修改密码
+原密码,原密码
+请输入当前密码以验证身份,请输入当前密码以验证身份
+新密码,新密码
+确认新密码,确认新密码
+再次输入新密码,再次输入新密码
+再次输入新密码以确认,再次输入新密码以确认
+登录信息,登录信息
+最后登录IP,最后登录IP
+保存中...,保存中...
+修改中...,修改中...
+安全设置,安全设置
+退出登录,退出登录
 前端客户,"Frontend Customers"
 新增客户,"Add Customer"
 搜索关键字,Keyword
@@ -53,7 +105,6 @@
 客户列表,"Customer List"
 共,共
 条记录,条记录
-用户名,Username
 最近登录IP,"Last Login IP"
 尝试次数,"Login Attempts"
 Session标识,"Session ID"
@@ -68,7 +119,6 @@ Session标识,"Session ID"
 上一页,上一页
 下一页,下一页
 暂无客户数据,"No customers yet"
-密码,Password
 留空则不修改当前密码,"Leave empty to keep current password"
 头像,Avatar
 可填写图片URL或内联SVG标识,"Provide image URL or inline SVG identifier"
@@ -78,7 +128,6 @@ Session标识,"Session ID"
 取消,取消
 保存,保存
 重置密码,"Reset Password"
-新密码,新密码
 留空则系统自动生成强密码,"Leave empty to auto-generate a strong password"
 重置密码后将自动注销该客户的所有会话与令牌。,"Resetting the password logs out all sessions and tokens."
 新密码：,新密码：
@@ -89,59 +138,10 @@ Session标识,"Session ID"
 操作成功,Success
 确定要重置该客户的令牌吗？此操作会强制该客户重新登录。,"Reset tokens for this customer? This forces a re-login."
 确定要删除该客户吗？此操作不可撤销。,"Delete this customer? This action cannot be undone."
-欢迎回来！您可以在这里管理您的账户信息,欢迎回来！您可以在这里管理您的账户信息
-未知,未知
-更新失败，请稍后重试,更新失败，请稍后重试
-请填写所有字段,请填写所有字段
-修改失败，请稍后重试,修改失败，请稍后重试
-用户名不可修改,用户名不可修改
-用户ID,用户ID
-头像URL,头像URL
-预览,预览
-输入头像图片的完整URL地址,输入头像图片的完整URL地址
-邮箱,邮箱
-邮箱不可修改,邮箱不可修改
-保存更改,保存更改
-原密码,原密码
-请输入当前密码以验证身份,请输入当前密码以验证身份
-至少6位字符,至少6位字符
-建议使用字母、数字和特殊字符组合,建议使用字母、数字和特殊字符组合
-确认新密码,确认新密码
-再次输入新密码,再次输入新密码
-再次输入新密码以确认,再次输入新密码以确认
-登录信息,登录信息
-最后登录IP,最后登录IP
-保存中...,保存中...
-修改中...,修改中...
-欢迎回来,欢迎回来
-请登录您的账户以继续,请登录您的账户以继续
-用户名或邮箱,用户名或邮箱
-请输入用户名或邮箱,请输入用户名或邮箱
-请输入密码,请输入密码
-记住登录状态,记住登录状态
-本次会话（关闭浏览器后失效）,本次会话（关闭浏览器后失效）
-6小时,6小时
-1天,1天
-1周,1周
-1个月,1个月
-登录中...,登录中...
-还没有账户？,还没有账户？
-立即注册,立即注册
-登录成功！,登录成功！
-登录失败，请检查用户名和密码,登录失败，请检查用户名和密码
-登录请求失败，请稍后重试,登录请求失败，请稍后重试
-用户登录,用户登录
-创建账户,创建账户
-已有账户？,已有账户？
-立即登录,立即登录
-注册中...,注册中...
-注册成功！,注册成功！
-注册失败，请稍后重试,注册失败，请稍后重试
-注册请求失败，请稍后重试,注册请求失败，请稍后重试
-3-20个字符,3-20个字符
-确认密码,确认密码
-再次输入密码,再次输入密码
-安全设置,安全设置
+账户,账户
+我的订单,我的订单
+账户设置,账户设置
+收货地址,收货地址
 我的账户,我的账户
 "您好, %{1}","您好, %{1}"
 用户,用户

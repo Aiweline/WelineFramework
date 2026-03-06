@@ -1,11 +1,126 @@
-优惠券代码不能为空,"Coupon code cannot be empty"
-优惠券无效或已过期,"Coupon is invalid or expired"
-加载活动列表失败：%{1},"Failed to load campaign list: %{1}"
 加载优惠券列表失败：%{1},"Failed to load coupon list: %{1}"
 加载规则列表失败：%{1},"Failed to load rule list: %{1}"
 加载规则表单失败：%{1},"Failed to load rule form: %{1}"
 规则保存成功,"Rule saved successfully"
 保存规则失败：%{1},"Failed to save rule: %{1}"
+加载活动列表失败：%{1},"Failed to load campaign list: %{1}"
+优惠券代码不能为空,"Coupon code cannot be empty"
+优惠券无效或已过期,"Coupon is invalid or expired"
+货币代码,"Currency Code"
+根据货币代码进行条件判断,"Condition based on currency code"
+操作符,Operator
+属于,In
+不属于,"Not In"
+等于,Equals
+人民币,"Chinese Yuan"
+美元,"US Dollar"
+欧元,Euro
+英镑,"British Pound"
+日元,"Japanese Yen"
+支付方式,"Payment Method"
+根据支付方式进行条件判断,"Condition based on payment method"
+配送方式,"Shipping Method"
+根据配送方式进行条件判断,"Condition based on shipping method"
+订单金额,"Order Amount"
+根据订单小计金额进行条件判断,"Condition based on order subtotal"
+"订单金额 >=","Order Amount >="
+"订单金额 <=","Order Amount <="
+"订单金额 >","Order Amount >"
+"订单金额 <","Order Amount <"
+金额,Amount
+订单商品数量,"Order Item Count"
+根据订单中商品数量进行条件判断,"Condition based on order item count"
+"商品数 >=","Item Count >="
+"商品数 <=","Item Count <="
+"商品数 >","Item Count >"
+"商品数 <","Item Count <"
+"商品数 =","Item Count ="
+数量,Quantity
+订单数量,"Order Count"
+根据客户订单数量进行条件判断,"Condition based on order count"
+"订单数 >=","Order Count >="
+"订单数 <=","Order Count <="
+"订单数 >","Order Count >"
+"订单数 <","Order Count <"
+"订单数 =","Order Count ="
+累计消费,"Total Spent"
+根据客户累计消费金额进行条件判断,"Condition based on total spent"
+"累计消费 >=","Total Spent >="
+"累计消费 <=","Total Spent <="
+"累计消费 >","Total Spent >"
+"累计消费 <","Total Spent <"
+生日,Birthday
+根据客户生日进行条件判断（支持生日月、生日周、生日当天）,"Condition based on customer birthday (supports birthday month, week, and day)"
+类型,Type
+生日月,"Birthday Month"
+生日周（前后3天）,"Birthday Week (±3 days)"
+生日当天,"Birthday Day"
+客户标签,"Customer Tags"
+根据客户标签进行条件判断,"Condition based on customer tags"
+属性,Attribute
+包含任一标签,"Contains Any Tag"
+不包含任一标签,"Not Contains Any Tag"
+标签,标签
+注册时间,"Registration Date"
+根据客户注册时间进行条件判断,"Condition based on registration date"
+"注册时间 >=","Registration Date >="
+"注册时间 <=","Registration Date <="
+"注册时间 =","Registration Date ="
+日期,Date
+VIP等级,"VIP Level"
+根据客户VIP等级进行条件判断,"Condition based on VIP level"
+"等级 >=","Level >="
+"等级 <=","Level <="
+客户组,"Customer Group"
+根据客户所属的客户组进行条件判断,"Condition based on customer group"
+产品品牌,"Product Brand"
+根据产品品牌进行条件判断,"Condition based on product brand"
+品牌,Brand
+产品库存状态,"Product Stock Status"
+根据产品库存状态进行条件判断,"Condition based on product stock status"
+不等于,"Not Equals"
+库存状态,"Stock Status"
+有库存,"In Stock"
+缺货,"Out of Stock"
+产品分类,"Product Category"
+根据产品分类进行条件判断,"Condition based on product category"
+分类,Category
+产品SKU,"Product SKU"
+根据产品SKU进行条件判断,"Condition based on product SKU"
+包含,Contains
+不包含,"Not Contains"
+包含（模糊）,"Contains (Fuzzy)"
+SKU,SKU
+产品价格,"Product Price"
+根据产品价格进行条件判断,"Condition based on product price"
+"价格 >=","Price >="
+"价格 <=","Price <="
+"价格 >","Price >"
+"价格 <","Price <"
+价格,Price
+匹配类型,"Match Type"
+任一产品,"Any Product"
+所有产品,"All Products"
+省份/州,Region
+根据省份或州进行条件判断,"Condition based on region"
+城市,City
+根据城市进行条件判断,"Condition based on city"
+国家,Country
+根据国家进行条件判断,"Condition based on country"
+星期几,"Day of Week"
+根据星期几进行条件判断,"Condition based on day of week"
+星期,Week
+星期日,Sunday
+星期一,Monday
+星期二,Tuesday
+星期三,Wednesday
+星期四,Thursday
+星期五,Friday
+星期六,Saturday
+日期范围,"Date Range"
+根据日期范围进行条件判断,"Condition based on date range"
+开始日期,"Start Date"
+结束日期,"End Date"
 买X送Y,"Buy X Get Y"
 购买X件商品，赠送Y件商品（或折扣）,"Buy X items, get Y items (or discount)"
 "买 %d 送 %d，共赠送 %d 件商品，优惠 %.2f 元","Buy %d get %d, total %d free items, discount %.2f yuan"
@@ -18,153 +133,22 @@
 百分比折扣,"Percentage Discount"
 固定金额折扣,"Fixed Amount Discount"
 折扣值（百分比或金额）,"Discount Value (Percentage or Amount)"
-按固定金额折扣,"Fixed amount discount"
-"优惠 %.2f 元","Discount %.2f yuan"
-折扣金额,折扣金额
-应用于,"Apply To"
-订单小计,"Order Subtotal"
-运费,Shipping
 按百分比折扣，支持设置最大折扣金额,"Percentage discount with maximum discount amount support"
 "享受 %.2f%% 折扣，优惠 %.2f 元","Enjoy %.2f%% discount, save %.2f yuan"
 折扣百分比,"Discount Percentage"
 最大折扣金额,"Maximum Discount Amount"
+应用于,"Apply To"
+订单小计,"Order Subtotal"
+运费,Shipping
+按固定金额折扣,"Fixed amount discount"
+"优惠 %.2f 元","Discount %.2f yuan"
+折扣金额,折扣金额
+免运费,"Free Shipping"
+免除订单运费,"Free shipping for order"
 赠品产品,"Gift Product"
 赠送指定产品,"Gift specified product"
 "赠送产品 ID: %d，数量: %d","Gift product ID: %d, quantity: %d"
 产品ID,"Product ID"
-数量,Quantity
-免运费,"Free Shipping"
-免除订单运费,"Free shipping for order"
-货币代码,"Currency Code"
-根据货币代码进行条件判断,"Condition based on currency code"
-操作符,Operator
-属于,In
-不属于,"Not In"
-等于,Equals
-人民币,"Chinese Yuan"
-美元,"US Dollar"
-欧元,Euro
-英镑,"British Pound"
-日元,"Japanese Yen"
-生日,Birthday
-根据客户生日进行条件判断（支持生日月、生日周、生日当天）,"Condition based on customer birthday (supports birthday month, week, and day)"
-类型,Type
-生日月,"Birthday Month"
-生日周（前后3天）,"Birthday Week (±3 days)"
-生日当天,"Birthday Day"
-客户组,"Customer Group"
-根据客户所属的客户组进行条件判断,"Condition based on customer group"
-属性,Attribute
-客户标签,"Customer Tags"
-根据客户标签进行条件判断,"Condition based on customer tags"
-包含任一标签,"Contains Any Tag"
-不包含任一标签,"Not Contains Any Tag"
-标签,标签
-订单数量,"Order Count"
-根据客户订单数量进行条件判断,"Condition based on order count"
-"订单数 >=","Order Count >="
-"订单数 <=","Order Count <="
-"订单数 >","Order Count >"
-"订单数 <","Order Count <"
-"订单数 =","Order Count ="
-注册时间,"Registration Date"
-根据客户注册时间进行条件判断,"Condition based on registration date"
-"注册时间 >=","Registration Date >="
-"注册时间 <=","Registration Date <="
-"注册时间 =","Registration Date ="
-日期,Date
-累计消费,"Total Spent"
-根据客户累计消费金额进行条件判断,"Condition based on total spent"
-"累计消费 >=","Total Spent >="
-"累计消费 <=","Total Spent <="
-"累计消费 >","Total Spent >"
-"累计消费 <","Total Spent <"
-金额,Amount
-VIP等级,"VIP Level"
-根据客户VIP等级进行条件判断,"Condition based on VIP level"
-"等级 >=","Level >="
-"等级 <=","Level <="
-城市,City
-根据城市进行条件判断,"Condition based on city"
-国家,Country
-根据国家进行条件判断,"Condition based on country"
-省份/州,Region
-根据省份或州进行条件判断,"Condition based on region"
-订单商品数量,"Order Item Count"
-根据订单中商品数量进行条件判断,"Condition based on order item count"
-"商品数 >=","Item Count >="
-"商品数 <=","Item Count <="
-"商品数 >","Item Count >"
-"商品数 <","Item Count <"
-"商品数 =","Item Count ="
-支付方式,"Payment Method"
-根据支付方式进行条件判断,"Condition based on payment method"
-配送方式,"Shipping Method"
-根据配送方式进行条件判断,"Condition based on shipping method"
-订单金额,"Order Amount"
-根据订单小计金额进行条件判断,"Condition based on order subtotal"
-"订单金额 >=","Order Amount >="
-"订单金额 <=","Order Amount <="
-"订单金额 >","Order Amount >"
-"订单金额 <","Order Amount <"
-产品品牌,"Product Brand"
-根据产品品牌进行条件判断,"Condition based on product brand"
-品牌,Brand
-产品分类,"Product Category"
-根据产品分类进行条件判断,"Condition based on product category"
-分类,Category
-产品价格,"Product Price"
-根据产品价格进行条件判断,"Condition based on product price"
-"价格 >=","Price >="
-"价格 <=","Price <="
-"价格 >","Price >"
-"价格 <","Price <"
-价格,Price
-匹配类型,"Match Type"
-任一产品,"Any Product"
-所有产品,"All Products"
-产品SKU,"Product SKU"
-根据产品SKU进行条件判断,"Condition based on product SKU"
-包含,Contains
-不包含,"Not Contains"
-包含（模糊）,"Contains (Fuzzy)"
-SKU,SKU
-产品库存状态,"Product Stock Status"
-根据产品库存状态进行条件判断,"Condition based on product stock status"
-不等于,"Not Equals"
-库存状态,"Stock Status"
-有库存,"In Stock"
-缺货,"Out of Stock"
-日期范围,"Date Range"
-根据日期范围进行条件判断,"Condition based on date range"
-开始日期,"Start Date"
-结束日期,"End Date"
-星期几,"Day of Week"
-根据星期几进行条件判断,"Condition based on day of week"
-星期,Week
-星期日,Sunday
-星期一,Monday
-星期二,Tuesday
-星期三,Wednesday
-星期四,Thursday
-星期五,Friday
-星期六,Saturday
-促销活动列表,"Campaign List"
-添加活动,"Add Campaign"
-ID,ID
-活动名称,"Campaign Name"
-状态,Status
-开始时间,开始时间
-结束时间,结束时间
-预算,Budget
-已花费,Spent
-操作,Action
-编辑,Edit
-优惠券列表,"Coupon List"
-添加优惠券,"Add Coupon"
-优惠券代码,"Coupon Code"
-折扣值,"Discount Value"
-使用次数,"Usage Count"
 营销规则,"Marketing Rule"
 后台,后台
 营销,营销
@@ -174,8 +158,24 @@ ID,ID
 暂无数据,暂无数据
 启用,启用
 禁用,禁用
+ID,ID
 规则名称,"Rule Name"
+状态,Status
 优先级,Priority
+使用次数,"Usage Count"
+操作,Action
+优惠券列表,"Coupon List"
+添加优惠券,"Add Coupon"
+优惠券代码,"Coupon Code"
+折扣值,"Discount Value"
+编辑,Edit
+促销活动列表,"Campaign List"
+添加活动,"Add Campaign"
+活动名称,"Campaign Name"
+开始时间,开始时间
+结束时间,结束时间
+预算,Budget
+已花费,Spent
 营销规则管理,营销规则管理
 营销规则列表,"Marketing Rule List"
 市场营销,Marketing
