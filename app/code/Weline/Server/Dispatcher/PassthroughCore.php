@@ -427,7 +427,7 @@ class PassthroughCore
         if (empty($this->workerPorts)) {
             $now = \microtime(true);
             if ($now - $this->lastEmptyWorkerPortsStderrAt >= 10.0) {
-                \fwrite(\STDERR, "[PassthroughCore] 没有可用 Worker 端口！workerPorts 为空\n");
+                $this->writeStderr("[PassthroughCore] 没有可用 Worker 端口！workerPorts 为空\n");
                 $this->lastEmptyWorkerPortsStderrAt = $now;
             }
             return false;
@@ -755,7 +755,7 @@ class PassthroughCore
         if (!\in_array($port, $this->workerPorts, true)) {
             $this->workerPorts[] = $port;
             $this->workerCount = \count($this->workerPorts);
-            \fwrite(\STDERR, "[PassthroughCore] 添加 Worker 端口: {$port}, 当前列表: " . \implode(',', $this->workerPorts) . "\n");
+            $this->writeStderr("[PassthroughCore] 添加 Worker 端口: {$port}, 当前列表: " . \implode(',', $this->workerPorts) . "\n");
         }
 
         // 添加或重置健康状态
@@ -780,6 +780,26 @@ class PassthroughCore
     public function getWorkerPorts(): array
     {
         return $this->workerPorts;
+    }
+
+    /**
+     * 向 STDERR 写入一行，仅在流可写时写入，避免守护进程下 STDERR 关闭导致 Notice (errno=5 EIO)
+     */
+    private function writeStderr(string $message): void
+    {
+        if (!\defined('STDERR') || !\is_resource(\STDERR)) {
+            return;
+        }
+        $meta = @\stream_get_meta_data(\STDERR);
+        if (empty($meta['mode']) || (!\str_contains($meta['mode'], 'w') && !\str_contains($meta['mode'], 'a'))) {
+            return;
+        }
+        $prev = \set_error_handler(static fn () => true, \E_WARNING | \E_NOTICE);
+        try {
+            @\fwrite(\STDERR, $message);
+        } finally {
+            \restore_error_handler();
+        }
     }
     
     /**

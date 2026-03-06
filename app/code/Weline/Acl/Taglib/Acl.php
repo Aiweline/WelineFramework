@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Weline\Acl\Taglib;
 
+use Weline\Acl\Model\Role;
 use Weline\Acl\Model\RoleAccess;
 use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
@@ -142,7 +143,18 @@ class Acl implements TaglibInterface
         
         // 获取对应用户和角色
         $user = $session->getUser();
-        $role = $user->getRoleModel();
+        if (!$user || !\method_exists($user, 'getRole')) {
+            self::$permissionCache[$source] = false;
+            return false;
+        }
+        // WLS 兼容：按当前用户的 role_id 重新加载 Role，避免线上/多 Worker 下复用错误角色导致权限不一致
+        /** @var BackendUser $user 已通过 method_exists 确保有 getRole() */
+        $roleId = (int) ($user->getRole()->getRoleId() ?: 0);
+        if ($roleId <= 0) {
+            self::$permissionCache[$source] = false;
+            return false;
+        }
+        $role = ObjectManager::getInstance(Role::class, [], false)->load($roleId);
         
         // 超级管理员直接返回 true
         if ($role->getId() === 1) {

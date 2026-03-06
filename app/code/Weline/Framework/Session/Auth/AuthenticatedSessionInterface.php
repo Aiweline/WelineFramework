@@ -44,6 +44,13 @@ interface AuthenticatedSessionInterface extends SessionLifecycleInterface
     public function getUser(): ?AuthenticableInterface;
 
     /**
+     * 获取当前登录客户（前台即 Customer，与 getUser() 同义；后台无客户概念时也返回当前用户）
+     *
+     * @return AuthenticableInterface|null 前台为 Customer，未登录返回 null
+     */
+    public function getCustomer(): ?AuthenticableInterface;
+
+    /**
      * 获取当前登录用户 ID
      *
      * @return int|string|null 用户 ID，未登录返回 null

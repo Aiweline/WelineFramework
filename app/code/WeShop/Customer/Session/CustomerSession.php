@@ -59,6 +59,14 @@ class CustomerSession implements AuthenticatedSessionInterface
     /**
      * @inheritDoc
      */
+    public function getCustomer(): ?AuthenticableInterface
+    {
+        return $this->session->getCustomer();
+    }
+
+    /**
+     * @inheritDoc
+     */
     public function getUserId(): int|string|null
     {
         return $this->session->getUserId();
