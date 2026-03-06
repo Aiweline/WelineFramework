@@ -147,6 +147,14 @@ final class WlsStrategy implements SessionStrategyInterface
 
     /**
      * @inheritDoc
+     * WLS 下 persist 已直接写存储，无需额外关闭。
+     */
+    public function writeClose(): void
+    {
+    }
+
+    /**
+     * @inheritDoc
      */
     public function setCookie(string $sessionId, int $lifetime = 0): void
     {
