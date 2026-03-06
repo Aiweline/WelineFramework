@@ -1,26 +1,3 @@
-百度翻译API密钥未配置,"Baidu Translation API key not configured"
-百度翻译错误：%{1},"Baidu Translation error: %{1}"
-百度翻译响应格式错误,"Baidu Translation response format error"
-百度翻译语言检测失败：%{1},"Baidu Translation language detection failed: %{1}"
-Google翻译API密钥未配置,"Google Translation API key not configured"
-Google翻译响应格式错误,"Google Translation response format error"
-Google翻译语言检测失败,"Google Translation language detection failed"
-有道翻译API密钥未配置,"Youdao Translation API key not configured"
-有道翻译错误：%{1},"Youdao Translation error: %{1}"
-有道翻译响应格式错误,"Youdao Translation response format error"
-有道翻译语言检测失败：%{1},"Youdao Translation language detection failed: %{1}"
-腾讯翻译API密钥未配置,"Tencent Translation API key not configured"
-腾讯翻译API需要实现完整的签名算法，请参考腾讯云文档,"Tencent Translation API requires complete signature algorithm implementation, please refer to Tencent Cloud documentation"
-腾讯翻译语言检测失败：%{1},腾讯翻译语言检测失败：%{1}
-DeepL翻译API密钥未配置,"DeepL Translation API key not configured"
-DeepL翻译响应格式错误,"DeepL Translation response format error"
-DeepL翻译语言检测失败：%{1},"DeepL Translation language detection failed: %{1}"
-请求失败：%{1},"Request failed: %{1}"
-请求失败，HTTP状态码：%{1},"Request failed, HTTP status code: %{1}"
-响应解析失败：%{1},"Response parsing failed: %{1}"
-Microsoft翻译API密钥未配置,"Microsoft Translation API key not configured"
-Microsoft翻译响应格式错误,"Microsoft Translation response format error"
-Microsoft翻译语言检测失败,"Microsoft Translation language detection failed"
 仅支持POST请求,"Only POST requests are supported"
 文本不能为空,"Text cannot be empty"
 文本数组不能为空,"Text array cannot be empty"
@@ -39,105 +16,7 @@ Microsoft翻译语言检测失败,"Microsoft Translation language detection fail
 记录不存在,"Record does not exist"
 请选择要删除的记录,"Please select records to delete"
 "成功删除 %{1} 条记录","Successfully deleted %{1} records"
-AI翻译,AI翻译
-提示,提示
-未找到目标输入框：%{1},未找到目标输入框：%{1}
-确定,确定
-输入框内容为空，无法翻译,输入框内容为空，无法翻译
-翻译服务配置,"Translation Service Configuration"
-配置和管理翻译服务渠道，支持Google、百度、DeepL、Microsoft等主流翻译服务,"Configure and manage translation service channels, supporting mainstream translation services such as Google, Baidu, DeepL, Microsoft, etc."
-渠道列表,"Channel List"
-添加渠道,"Add Channel"
-暂无渠道配置,"No channel configuration"
-渠道名称,"Channel Name"
-渠道代码,"Channel Code"
-状态,Status
-默认,Default
-优先级,Priority
-操作,Actions
-启用,Enabled
-禁用,Disabled
-是,Yes
-否,No
-编辑,Edit
-测试,Test
-确定要删除此渠道配置吗？,"Are you sure you want to delete this channel configuration?"
-删除,Delete
-测试中...,Testing...
-测试成功,测试成功
-未知错误,未知错误
-测试失败,"Test failed"
-编辑渠道配置,"Edit Channel Configuration"
-添加渠道配置,"Add Channel Configuration"
-基本信息,"Basic Information"
-渠道代码不可修改,"Channel code cannot be modified"
-渠道代码（小写字母、数字、下划线），留空自动生成,"Channel code (lowercase letters, numbers, underscores), leave blank for auto-generation"
-描述,Description
-API配置,"API Configuration"
-API密钥,"API Key"
-从翻译服务提供商获取API密钥,"Get API key from translation service provider"
-API密钥（Secret）,"API Secret"
-部分服务商需要额外的Secret密钥,"Some providers require additional Secret key"
-API端点URL,"API Endpoint URL"
-API接口地址，留空使用默认地址,"API endpoint address, leave blank to use default address"
-高级配置,"Advanced Configuration"
-启用渠道,"Enable Channel"
-设为默认渠道,"Set as Default Channel"
-数字越大优先级越高,"Higher number means higher priority"
-速率限制（每分钟）,"Rate Limit (per minute)"
-每日限制,"Daily Limit"
-每字符成本,"Cost per Character"
-支持的语言,"Supported Languages"
-选择支持的语言,"Select Supported Languages"
-全选,"Select All"
-全不选,"Deselect All"
-保存,Save
-取消,Cancel
-翻译记录详情,"Translation Record Details"
-返回列表,"Back to List"
-记录ID,"Record ID"
-渠道,Channel
-成功,Success
-失败,Failed
-待处理,Pending
-语言,Language
-字符数,"Character Count"
-成本,Cost
-响应时间,"Response Time"
-调用模块,"Calling Module"
-创建时间,"Created At"
-错误信息,"Error Message"
-翻译内容,"Translation Content"
-源文本,"Source Text"
 翻译文本,"Translated Text"
-请求数据,"Request Data"
-响应数据,"Response Data"
-翻译记录管理,"Translation Record Management"
-查看和管理翻译服务的使用记录和统计信息,"View and manage translation service usage records and statistics"
-总记录数,"Total Records"
-今日：%{1},"Today: %{1}"
-成功记录,"Successful Records"
-失败：%{1},"Failed: %{1}"
-总字符数,"Total Characters"
-总成本,"Total Cost"
-今日：¥%{1},"Today: ¥%{1}"
-筛选条件,"Filter Conditions"
-全部,All
-源语言,"Source Language"
-目标语言,"Target Language"
-开始日期,"Start Date"
-结束日期,"End Date"
-筛选,Filter
-重置,Reset
-翻译记录,"Translation Records"
-批量删除,"Batch Delete"
-导出统计,"Export Statistics"
-暂无翻译记录,"No translation records"
-ID,ID
-确定要删除此记录吗？,"Are you sure you want to delete this record?"
-上一页,"Previous Page"
-下一页,"Next Page"
-确定要删除选中的记录吗？,"Are you sure you want to delete the selected records?"
 "翻译文本事件，其他模块可以通过触发此事件来使用翻译服务。观察者会执行翻译并设置 translated_text 字段。","翻译文本事件，其他模块可以通过触发此事件来使用翻译服务。观察者会执行翻译并设置 translated_text 字段。"
 批量翻译,批量翻译
 "批量翻译事件，其他模块可以通过触发此事件来批量翻译多个文本。观察者会执行批量翻译并设置 translated_texts 字段。","批量翻译事件，其他模块可以通过触发此事件来批量翻译多个文本。观察者会执行批量翻译并设置 translated_texts 字段。"
@@ -155,11 +34,132 @@ ID,ID
 批量翻译后事件，在批量翻译完成后触发，允许其他模块修改翻译结果或执行后处理操作。,批量翻译后事件，在批量翻译完成后触发，允许其他模块修改翻译结果或执行后处理操作。
 批量翻译错误,批量翻译错误
 批量翻译错误事件，在批量翻译失败时触发，允许其他模块处理错误、实现降级方案等。,批量翻译错误事件，在批量翻译失败时触发，允许其他模块处理错误、实现降级方案等。
+目标语言不能为空,"Target language cannot be empty"
+"事件处理异常: %{1}","Event processing exception: %{1}"
+请求失败：%{1},"Request failed: %{1}"
+请求失败，HTTP状态码：%{1},"Request failed, HTTP status code: %{1}"
+响应解析失败：%{1},"Response parsing failed: %{1}"
+百度翻译API密钥未配置,"Baidu Translation API key not configured"
+百度翻译错误：%{1},"Baidu Translation error: %{1}"
+百度翻译响应格式错误,"Baidu Translation response format error"
+百度翻译语言检测失败：%{1},"Baidu Translation language detection failed: %{1}"
+DeepL翻译API密钥未配置,"DeepL Translation API key not configured"
+DeepL翻译响应格式错误,"DeepL Translation response format error"
+DeepL翻译语言检测失败：%{1},"DeepL Translation language detection failed: %{1}"
+Google翻译API密钥未配置,"Google Translation API key not configured"
+Google翻译响应格式错误,"Google Translation response format error"
+Google翻译语言检测失败,"Google Translation language detection failed"
+Microsoft翻译API密钥未配置,"Microsoft Translation API key not configured"
+Microsoft翻译响应格式错误,"Microsoft Translation response format error"
+Microsoft翻译语言检测失败,"Microsoft Translation language detection failed"
+腾讯翻译API密钥未配置,"Tencent Translation API key not configured"
+腾讯翻译API需要实现完整的签名算法，请参考腾讯云文档,"Tencent Translation API requires complete signature algorithm implementation, please refer to Tencent Cloud documentation"
+腾讯翻译语言检测失败：%{1},腾讯翻译语言检测失败：%{1}
+有道翻译API密钥未配置,"Youdao Translation API key not configured"
+有道翻译错误：%{1},"Youdao Translation error: %{1}"
+有道翻译响应格式错误,"Youdao Translation response format error"
+有道翻译语言检测失败：%{1},"Youdao Translation language detection failed: %{1}"
 适配器类不存在：%{1},适配器类不存在：%{1}
 适配器类必须实现ProviderInterface接口：%{1},适配器类必须实现ProviderInterface接口：%{1}
 未找到可用的翻译渠道,"No available translation channel found"
 未找到渠道适配器：%{1},"Channel adapter not found: %{1}"
-"事件处理异常: %{1}","Event processing exception: %{1}"
-目标语言不能为空,"Target language cannot be empty"
+编辑渠道配置,"Edit Channel Configuration"
+添加渠道配置,"Add Channel Configuration"
+基本信息,"Basic Information"
+渠道名称,"Channel Name"
+渠道代码,"Channel Code"
+渠道代码不可修改,"Channel code cannot be modified"
+渠道代码（小写字母、数字、下划线），留空自动生成,"Channel code (lowercase letters, numbers, underscores), leave blank for auto-generation"
+描述,Description
+API配置,"API Configuration"
+API密钥,"API Key"
+从翻译服务提供商获取API密钥,"Get API key from translation service provider"
+API密钥（Secret）,"API Secret"
+部分服务商需要额外的Secret密钥,"Some providers require additional Secret key"
+API端点URL,"API Endpoint URL"
+API接口地址，留空使用默认地址,"API endpoint address, leave blank to use default address"
+高级配置,"Advanced Configuration"
+启用渠道,"Enable Channel"
+设为默认渠道,"Set as Default Channel"
+优先级,Priority
+数字越大优先级越高,"Higher number means higher priority"
+速率限制（每分钟）,"Rate Limit (per minute)"
+每日限制,"Daily Limit"
+每字符成本,"Cost per Character"
+支持的语言,"Supported Languages"
+选择支持的语言,"Select Supported Languages"
+全选,"Select All"
+全不选,"Deselect All"
+保存,Save
+取消,Cancel
+翻译服务配置,"Translation Service Configuration"
+配置和管理翻译服务渠道，支持Google、百度、DeepL、Microsoft等主流翻译服务,"Configure and manage translation service channels, supporting mainstream translation services such as Google, Baidu, DeepL, Microsoft, etc."
+渠道列表,"Channel List"
+添加渠道,"Add Channel"
+暂无渠道配置,"No channel configuration"
+状态,Status
+默认,Default
+操作,Actions
+启用,Enabled
+禁用,Disabled
+是,Yes
+否,No
+编辑,Edit
+测试,Test
+确定要删除此渠道配置吗？,"Are you sure you want to delete this channel configuration?"
+删除,Delete
+测试中...,Testing...
+测试成功,测试成功
+未知错误,未知错误
+确定,确定
+测试失败,"Test failed"
+翻译记录管理,"Translation Record Management"
+查看和管理翻译服务的使用记录和统计信息,"View and manage translation service usage records and statistics"
+总记录数,"Total Records"
+今日：%{1},"Today: %{1}"
+成功记录,"Successful Records"
+失败：%{1},"Failed: %{1}"
+总字符数,"Total Characters"
+总成本,"Total Cost"
+今日：¥%{1},"Today: ¥%{1}"
+筛选条件,"Filter Conditions"
+渠道,Channel
+全部,All
+成功,Success
+失败,Failed
+待处理,Pending
+源语言,"Source Language"
+目标语言,"Target Language"
+调用模块,"Calling Module"
+开始日期,"Start Date"
+结束日期,"End Date"
+筛选,Filter
+重置,Reset
+翻译记录,"Translation Records"
+批量删除,"Batch Delete"
+导出统计,"Export Statistics"
+暂无翻译记录,"No translation records"
+ID,ID
+源文本,"Source Text"
+语言,Language
+字符数,"Character Count"
+成本,Cost
+响应时间,"Response Time"
+创建时间,"Created At"
+确定要删除此记录吗？,"Are you sure you want to delete this record?"
+上一页,"Previous Page"
+下一页,"Next Page"
+提示,提示
+确定要删除选中的记录吗？,"Are you sure you want to delete the selected records?"
+翻译记录详情,"Translation Record Details"
+返回列表,"Back to List"
+记录ID,"Record ID"
+错误信息,"Error Message"
+翻译内容,"Translation Content"
+请求数据,"Request Data"
+响应数据,"Response Data"
+AI翻译,AI翻译
+未找到目标输入框：%{1},未找到目标输入框：%{1}
+输入框内容为空，无法翻译,输入框内容为空，无法翻译
 翻译服务模块，为其他模块提供全球主流翻译渠道对接服务,"Translation Service Module, providing global mainstream translation channel integration services for other modules"
 渠道代码由系统自动生成，不可修改,"Channel code is automatically generated by the system and cannot be modified"

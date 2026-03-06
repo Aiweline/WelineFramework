@@ -1,19 +1,3 @@
-测试数量不能为负数,"Test count cannot be negative"
-API文档导入测试成功,"API documentation import test successful"
-测试标题不能为空,"Test title cannot be empty"
-测试内容不能为空,"Test content cannot be empty"
-创建成功,"Created successfully"
-测试名称不能为空,测试名称不能为空
-创建失败,"Creation failed"
-数据已写入沙盒数据库,"Data has been written to sandbox database"
-数据已写入正式数据库,"Data has been written to production database"
-数据来自沙盒数据库,"Data from sandbox database"
-数据来自正式数据库,"Data from production database"
-数据ID不能为空,数据ID不能为空
-删除失败，数据不存在,"Deletion failed, data does not exist"
-删除成功,"Deleted successfully"
-数据已从沙盒数据库删除,"Data has been deleted from sandbox database"
-数据已从正式数据库删除,"Data has been deleted from production database"
 用户名和密码不能为空,"Username and password cannot be empty"
 用户不存在,"User does not exist"
 用户已被禁用,"User has been disabled"
@@ -39,13 +23,29 @@ Token无效或已过期,Token无效或已过期
 Token无效,Token无效
 获取token信息成功,"Get token information successful"
 获取token信息失败：%{1},"Failed to get token information: %{1}"
-测试成功,测试成功
 用户未登录,用户未登录
-鍔犺浇API闆嗘垚闈㈡澘澶辫触锛?{1},鍔犺浇API闆嗘垚闈㈡澘澶辫触锛?{1}
+测试成功,测试成功
+测试数量不能为负数,"Test count cannot be negative"
+API文档导入测试成功,"API documentation import test successful"
+测试标题不能为空,"Test title cannot be empty"
+测试内容不能为空,"Test content cannot be empty"
+创建成功,"Created successfully"
+测试名称不能为空,测试名称不能为空
+创建失败,"Creation failed"
+数据已写入沙盒数据库,"Data has been written to sandbox database"
+数据已写入正式数据库,"Data has been written to production database"
+数据来自沙盒数据库,"Data from sandbox database"
+数据来自正式数据库,"Data from production database"
+数据ID不能为空,数据ID不能为空
+删除失败，数据不存在,"Deletion failed, data does not exist"
+删除成功,"Deleted successfully"
+数据已从沙盒数据库删除,"Data has been deleted from sandbox database"
+数据已从正式数据库删除,"Data has been deleted from production database"
 仅支持POST请求,仅支持POST请求
 配置保存成功！,配置保存成功！
 没有需要保存的配置,没有需要保存的配置
 保存失败：%{1},保存失败：%{1}
+鍔犺浇API闆嗘垚闈㈡澘澶辫触锛?{1},鍔犺浇API闆嗘垚闈㈡澘澶辫触锛?{1}
 用户ID不能为空,用户ID不能为空
 用户名不能为空,用户名不能为空
 用户名长度必须在3-50字符之间,用户名长度必须在3-50字符之间
@@ -72,6 +72,11 @@ Token无效,Token无效
 该用户尚未分配角色，请先分配角色,该用户尚未分配角色，请先分配角色
 权限分配成功！,权限分配成功！
 权限分配失败：%{1},权限分配失败：%{1}
+配置值不能为负数：%{1},配置值不能为负数：%{1}
+公开接口不允许携带Cookie,"Public API does not allow cookies"
+请先登录,"Please login first"
+IP地址不在白名单中,"IP address is not in whitelist"
+用户代理不匹配,"User agent does not match"
 API模块配置,API模块配置
 配置API令牌刷新周期等参数,配置API令牌刷新周期等参数
 令牌刷新配置,令牌刷新配置
@@ -89,9 +94,36 @@ API模块配置,API模块配置
 建议值：2592000秒（30天）。范围：86400-31536000秒,建议值：2592000秒（30天）。范围：86400-31536000秒
 保存配置,保存配置
 返回,返回
+API集成,API集成
+API用户,API用户
+启用用户,启用用户
+沙盒账户,沙盒账户
+活跃令牌,活跃令牌
+快速操作,快速操作
+"日常的 API 管理入口","日常的 API 管理入口"
+沙盒密钥,沙盒密钥
+新建API用户,新建API用户
+管理API用户,管理API用户
+打开API文档,打开API文档
+沙盒调试,沙盒调试
+集成提示,集成提示
+API用户需分配角色方可访问接口,API用户需分配角色方可访问接口
+沙盒账户默认强制使用沙盒数据库,沙盒账户默认强制使用沙盒数据库
+文档中的在线调试会自动携带登录令牌,文档中的在线调试会自动携带登录令牌
+最近创建的API用户,最近创建的API用户
+快速查看最新的授权账号,快速查看最新的授权账号
+查看全部,查看全部
+用户名,用户名
+邮箱,邮箱
+状态,状态
+沙盒,沙盒
+创建时间,创建时间
+启用,启用
+禁用,禁用
+正式,正式
+暂无API用户，立即创建第一个吧。,暂无API用户，立即创建第一个吧。
 API用户权限分配,API用户权限分配
 API,API
-API用户,API用户
 编辑用户,编辑用户
 权限分配,权限分配
 为API用户分配权限资源,为API用户分配权限资源
@@ -101,9 +133,7 @@ API用户,API用户
 菜单,菜单
 链接,链接
 其他,其他
-用户名,用户名
 请输入用户名（3-50字符）,请输入用户名（3-50字符）
-邮箱,邮箱
 请输入有效的邮箱地址,请输入有效的邮箱地址
 密码,密码
 角色,角色
@@ -113,7 +143,6 @@ API用户,API用户
 "范围：86400（1天）到 2592000（30天），默认7天","范围：86400（1天）到 2592000（30天），默认7天"
 刷新令牌有效期（秒）,刷新令牌有效期（秒）
 "范围：604800（7天）到 7776000（90天），默认30天","范围：604800（7天）到 7776000（90天），默认30天"
-启用,启用
 "API Key","API Key"
 复制,复制
 "API Key用于标识API用户","API Key用于标识API用户"
@@ -135,33 +164,4 @@ API用户,API用户
 默认604800（7天），范围：86400-2592000（1-30天）,默认604800（7天），范围：86400-2592000（1-30天）
 默认2592000（30天），范围：604800-7776000（7-90天）,默认2592000（30天），范围：604800-7776000（7-90天）
 已复制到剪贴板,已复制到剪贴板
-API集成,API集成
-启用用户,启用用户
-沙盒账户,沙盒账户
-活跃令牌,活跃令牌
-快速操作,快速操作
-"日常的 API 管理入口","日常的 API 管理入口"
-沙盒密钥,沙盒密钥
-新建API用户,新建API用户
-管理API用户,管理API用户
-打开API文档,打开API文档
-沙盒调试,沙盒调试
-集成提示,集成提示
-API用户需分配角色方可访问接口,API用户需分配角色方可访问接口
-沙盒账户默认强制使用沙盒数据库,沙盒账户默认强制使用沙盒数据库
-文档中的在线调试会自动携带登录令牌,文档中的在线调试会自动携带登录令牌
-最近创建的API用户,最近创建的API用户
-快速查看最新的授权账号,快速查看最新的授权账号
-查看全部,查看全部
-状态,状态
-沙盒,沙盒
-创建时间,创建时间
-禁用,禁用
-正式,正式
-暂无API用户，立即创建第一个吧。,暂无API用户，立即创建第一个吧。
-公开接口不允许携带Cookie,"Public API does not allow cookies"
-请先登录,"Please login first"
-IP地址不在白名单中,"IP address is not in whitelist"
-用户代理不匹配,"User agent does not match"
-配置值不能为负数：%{1},配置值不能为负数：%{1}
 API文档缓存,"API Documentation Cache"

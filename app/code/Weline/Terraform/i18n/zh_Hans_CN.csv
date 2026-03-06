@@ -1,5 +1,27 @@
 无效的请求方法,无效的请求方法
 执行失败：%{error},执行失败：%{error}
+DNS记录类型不合法,DNS记录类型不合法
+DNS记录类型不能为空,DNS记录类型不能为空
+DNS记录值不能为空,DNS记录值不能为空
+请选择供应商,请选择供应商
+请选择账户,请选择账户
+供应商不存在：%{provider},供应商不存在：%{provider}
+账户不存在,账户不存在
+账户与供应商不匹配,账户与供应商不匹配
+手动输入域名时必须选择网站,手动输入域名时必须选择网站
+请输入域名或选择网站,请输入域名或选择网站
+本批次包含已绑定域名或已绑定网站，是否确认替换绑定？,本批次包含已绑定域名或已绑定网站，是否确认替换绑定？
+批次创建失败,批次创建失败
+暂不支持该供应商,暂不支持该供应商
+"Cloudflare 账户缺少 API Token 或 Account ID","Cloudflare 账户缺少 API Token 或 Account ID"
+"Terraform 执行失败：%{message}","Terraform 执行失败：%{message}"
+批量绑定已完成,批量绑定已完成
+"Terraform 未安装或不可用","Terraform 未安装或不可用"
+初始化失败,初始化失败
+应用失败,应用失败
+输出失败,输出失败
+"解析 Terraform 输出失败","解析 Terraform 输出失败"
+%{prefix}：%{detail},%{prefix}：%{detail}
 Terraform批量绑定,Terraform批量绑定
 首页,首页
 CDN管理,CDN管理
@@ -15,7 +37,6 @@ DNS记录,DNS记录
 选择网站,选择网站
 绑定网站,绑定网站
 请选择网站,请选择网站
-手动输入域名时必须选择网站,手动输入域名时必须选择网站
 域名列表,域名列表
 网站名称,网站名称
 网站地址,网站地址
@@ -24,27 +45,6 @@ DNS记录,DNS记录
 执行结果,执行结果
 "记录值，如 example.cdn.com 或 1.2.3.4","记录值，如 example.cdn.com 或 1.2.3.4"
 "每行一个域名，例如 example.com","每行一个域名，例如 example.com"
-DNS记录类型不合法,DNS记录类型不合法
-DNS记录类型不能为空,DNS记录类型不能为空
-DNS记录值不能为空,DNS记录值不能为空
-请选择供应商,请选择供应商
-请选择账户,请选择账户
-供应商不存在：%{provider},供应商不存在：%{provider}
-账户不存在,账户不存在
-账户与供应商不匹配,账户与供应商不匹配
-请输入域名或选择网站,请输入域名或选择网站
-本批次包含已绑定域名或已绑定网站，是否确认替换绑定？,本批次包含已绑定域名或已绑定网站，是否确认替换绑定？
-批次创建失败,批次创建失败
-暂不支持该供应商,暂不支持该供应商
-"Cloudflare 账户缺少 API Token 或 Account ID","Cloudflare 账户缺少 API Token 或 Account ID"
-"Terraform 执行失败：%{message}","Terraform 执行失败：%{message}"
-批量绑定已完成,批量绑定已完成
-"Terraform 未安装或不可用","Terraform 未安装或不可用"
-初始化失败,初始化失败
-应用失败,应用失败
-输出失败,输出失败
-"解析 Terraform 输出失败","解析 Terraform 输出失败"
-%{prefix}：%{detail},%{prefix}：%{detail}
 "批次完成：共 %{total} 个，成功 %{success} 个，失败 %{failed} 个，跳过 %{skipped} 个","批次完成：共 %{total} 个，成功 %{success} 个，失败 %{failed} 个，跳过 %{skipped} 个"
 "Zone ID","Zone ID"
 "Name Servers","Name Servers"

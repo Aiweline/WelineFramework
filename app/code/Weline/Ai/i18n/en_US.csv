@@ -1,9 +1,3 @@
-id属性不能为空,"The id attribute cannot be empty."
-搜索AI模型...,"Searching for AI models..."
-使用默认模型,"Using the default model"
-提示：点击选择AI模型，输入关键词搜索（800ms防抖）,"Tip: Click to select an AI model, enter keywords to search (800ms debounce)"
-未找到匹配的模型,"No matching model found."
-加载失败,"Failed to load"
 文章生成适配器,文章生成适配器
 "专为 Blog 和 PageBuilder 模块设计的 AI 文章生成适配器。支持多种文章类型、多语言、SEO 优化、自定义风格和长度。输出结构化 JSON 格式，包含标题、摘要、正文、SEO 元信息等。","专为 Blog 和 PageBuilder 模块设计的 AI 文章生成适配器。支持多种文章类型、多语言、SEO 优化、自定义风格和长度。输出结构化 JSON 格式，包含标题、摘要、正文、SEO 元信息等。"
 无效的文章类型：%{type},无效的文章类型：%{type}
@@ -50,6 +44,7 @@ FAQ,FAQ
 "FAQ 生成","FAQ 生成"
 生成常见问题解答,生成常见问题解答
 主题：电商退换货政策,主题：电商退换货政策
+搜索AI模型...,"Searching for AI models..."
 "ai:agent:scan 扫描并注册智能体","ai:agent:scan 扫描并注册智能体"
 显示帮助信息,显示帮助信息
 显示详细信息,显示详细信息
@@ -73,87 +68,6 @@ FAQ,FAQ
 未知错误,"Unknown error"
 "模型收集完成，共 %{1} 个模型","模型收集完成，共 %{1} 个模型"
 已跳过模型收集,已跳过模型收集
-个人中心,"Personal Center"
-API密钥管理,"API Key Management"
-请先登录,"Please login first"
-无效的请求方法,"Invalid request method"
-密钥名称不能为空,"The key name cannot be empty."
-API密钥创建成功，等待管理员审核,"API key created successfully, awaiting administrator review."
-创建失败：%{1},"Creation failed: %{1}"
-无权操作此密钥,"No permission to operate this key."
-API密钥已删除,"The API key has been deleted."
-删除失败：%{1},"Deletion failed: %{1}"
-使用统计,"Using statistics"
-个人设置,"Personal Settings"
-AI聊天,"AI Chat"
-消息内容不能为空,"The message content cannot be empty."
-生成失败：%1,"Generation failed: %1"
-聊天历史已清空,"Chat history has been cleared."
-仅支持POST请求,"Only POST requests are supported"
-请输入提示词,"Please enter the prompt"
-生成成功,"Generated successfully"
-获取成功,"Retrieval successful"
-获取模型列表失败,"Failed to retrieve the model list."
-请选择模型,"Please select a model"
-配置保存成功,"Configuration saved successfully"
-保存配置失败,"Failed to save configuration."
-获取余额失败,"Failed to retrieve balance"
-AI助手工具,"AI Assistant Tool"
-多种AI模型,"Multiple AI models"
-"支持OpenAI GPT、Claude等多种主流AI模型，满足不同场景需求","Supporting mainstream AI models such as OpenAI GPT and Claude to meet diverse scenario requirements."
-场景适配器,"Scene adapter"
-提供翻译、代码生成、内容创作等专业场景适配器，优化生成效果,"Providing professional scenario adapters for translation, code generation, content creation, etc., to optimize generation outcomes."
-API接口,"API interface"
-"提供RESTful API和流式接口，支持实时响应和批量处理","Provides RESTful APIs and streaming interfaces, supporting real-time responses and batch processing."
-安全可靠,"Safe and reliable"
-完善的API密钥管理、访问控制和内容安全检测机制,"Comprehensive API key management, access control, and content security detection mechanisms."
-高性能,"High performance"
-智能缓存、并发控制和负载均衡，确保快速响应,"Intelligent caching, concurrency control, and load balancing ensure rapid response."
-国际化,Internationalization
-支持多语言界面和内容，自动语言检测和转换,"Supports multilingual interfaces and content, with automatic language detection and conversion."
-功能特性,Features
-使用指南,"User Guide"
-基础文本生成,"Basic text generation"
-翻译场景,"Translation scenario"
-流式响应,"Streaming response"
-定价信息,"Pricing Information"
-AI供应商账户管理,"AI Supplier Account Management"
-供应商代码不能为空,供应商代码不能为空
-"供应商不存在: %{1}","供应商不存在: %{1}"
-添加供应商账户,"Add supplier account"
-账户ID无效,"The account ID is invalid."
-账户不存在,"Account does not exist."
-编辑供应商账户,"Edit supplier account"
-请选择供应商,"Please select a supplier"
-请输入账户名称,"Please enter the account name"
-请输入API密钥,"Please enter the API key"
-账户保存成功,"Account saved successfully"
-该账户有使用记录，无法删除,"This account has usage records and cannot be deleted."
-账户删除成功,"Account deleted successfully"
-请先测试连接成功后再激活账户,"Please activate your account only after testing the connection successfully."
-账户已激活,"Account activated"
-账户已停用,"Account deactivated."
-使用记录,"Usage record"
-待测试,"To be tested"
-连接正常,"Connection normal"
-连接失败,"Connection failed"
-测试中,"Under test"
-未知状态,"Unknown status"
-账户ID不能为空,"Account ID cannot be empty."
-"获取账户数据失败: %{msg}","Failed to get account data: %{msg}"
-文本生成,"Text generation"
-图像生成,"Image generation"
-音频生成,"Audio generation"
-视频生成,"Video generation"
-代码生成,"Code Generation"
-翻译,Translate
-向量嵌入,"Vector embeddings"
-默认配置初始化成功,"Default configuration initialized successfully"
-默认配置已存在，无需初始化,"The default configuration already exists; no initialization is needed."
-"初始化失败: %{error}","Initialization failed: %{error}"
-默认模型缓存清除成功,"Default model cache cleared successfully."
-"清除缓存失败: %{error}","Failed to clear cache: %{error}"
-"获取受保护模型列表失败: %{error}","获取受保护模型列表失败: %{error}"
 适配器ID不能为空,"Adapter ID cannot be empty."
 适配器不存在,"The adapter does not exist."
 "成功扫描 %{count} 个适配器","Successfully scanned %{count} adapters"
@@ -172,6 +86,20 @@ AI供应商账户管理,"AI Supplier Account Management"
 禁用,Disable
 "成功%{status} %{count} 个适配器","成功%{status} %{count} 个适配器"
 批量操作失败：%{error},批量操作失败：%{error}
+文本生成,"Text generation"
+图像生成,"Image generation"
+音频生成,"Audio generation"
+视频生成,"Video generation"
+代码生成,"Code Generation"
+翻译,Translate
+向量嵌入,"Vector embeddings"
+场景适配器,"Scene adapter"
+默认配置初始化成功,"Default configuration initialized successfully"
+默认配置已存在，无需初始化,"The default configuration already exists; no initialization is needed."
+"初始化失败: %{error}","Initialization failed: %{error}"
+默认模型缓存清除成功,"Default model cache cleared successfully."
+"清除缓存失败: %{error}","Failed to clear cache: %{error}"
+"获取受保护模型列表失败: %{error}","获取受保护模型列表失败: %{error}"
 模型ID不能为空,"Model ID cannot be empty."
 模型不存在,"Model does not exist"
 "模型同步完成，收集 %{1} 个模型","模型同步完成，收集 %{1} 个模型"
@@ -232,127 +160,184 @@ API响应为空,"API response is empty"
 没有可用的%{provider}供应商账户,没有可用的%{provider}供应商账户
 测试成功,"Test successful"
 "获取供应商列表失败: %{1}","获取供应商列表失败: %{1}"
+供应商代码不能为空,供应商代码不能为空
 "不支持的供应商: %{1}","不支持的供应商: %{1}"
 "获取模型列表失败: %{1}","获取模型列表失败: %{1}"
-首页,Home
-聊天,Chat
-管理您的API密钥和个人设置,管理您的API密钥和个人设置
-API密钥,"API Key"
-今日使用次数,"Number of uses today"
-快速操作,"Quick operation"
-管理API密钥,"Manage API keys"
-创建、查看和管理您的API密钥,"Create, view, and manage your API keys"
-使用AI模型进行对话,"Using AI models for conversation."
-修改个人信息和偏好设置,"Modify personal information and preferences"
-最近活动,"Recent activities"
-暂无活动记录,"No activity records"
-AI聊天助手,"AI Chat Assistant"
-设置,Settings
-清空,Clear
-选择模型,"Select model"
-无,Nothing
-欢迎使用AI聊天助手！,"Welcome to the AI Chat Assistant!"
-请输入您的问题，我会尽力为您解答。,"Please enter your question, and I will do my best to answer it for you."
-请输入您的消息...,"Please enter your message..."
-确定要清空聊天记录吗？,"Are you sure you want to clear the chat history?"
-错误：,Error:
-请求失败：,"Request failed:"
-供应商,Supplier
-账户名称,账户名称
-密钥,密钥
-基础URL,基础URL
-激活账户,激活账户
-设为默认,设为默认
-保存,Save
-关闭,Close
-新建供应商账户,新建供应商账户
-留空保持不变,留空保持不变
-API密钥将被加密存储,API密钥将被加密存储
-留空使用默认值,留空使用默认值
-保存中...,Saving...
-保存成功,"Save successful"
-保存失败,保存失败
-保存失败，请重试,保存失败，请重试
-AI助手,"AI assistant"
-系统管理,"System Management"
+AI供应商账户管理,"AI Supplier Account Management"
+"供应商不存在: %{1}","供应商不存在: %{1}"
+添加供应商账户,"Add supplier account"
+账户ID无效,"The account ID is invalid."
+账户不存在,"Account does not exist."
+编辑供应商账户,"Edit supplier account"
+请选择供应商,"Please select a supplier"
+请输入账户名称,"Please enter the account name"
+请输入API密钥,"Please enter the API key"
+账户保存成功,"Account saved successfully"
+该账户有使用记录，无法删除,"This account has usage records and cannot be deleted."
+账户删除成功,"Account deleted successfully"
+请先测试连接成功后再激活账户,"Please activate your account only after testing the connection successfully."
+账户已激活,"Account activated"
+账户已停用,"Account deactivated."
+使用记录,"Usage record"
+待测试,"To be tested"
+连接正常,"Connection normal"
+连接失败,"Connection failed"
+测试中,"Under test"
+未知状态,"Unknown status"
+账户ID不能为空,"Account ID cannot be empty."
+"获取账户数据失败: %{msg}","Failed to get account data: %{msg}"
+仅支持POST请求,"Only POST requests are supported"
+请先登录,"Please login first"
+请输入提示词,"Please enter the prompt"
+生成成功,"Generated successfully"
+获取成功,"Retrieval successful"
+获取模型列表失败,"Failed to retrieve the model list."
+请选择模型,"Please select a model"
+配置保存成功,"Configuration saved successfully"
+保存配置失败,"Failed to save configuration."
+获取余额失败,"Failed to retrieve balance"
+个人中心,"Personal Center"
+API密钥管理,"API Key Management"
+无效的请求方法,"Invalid request method"
+密钥名称不能为空,"The key name cannot be empty."
+API密钥创建成功，等待管理员审核,"API key created successfully, awaiting administrator review."
+创建失败：%{1},"Creation failed: %{1}"
+无权操作此密钥,"No permission to operate this key."
+API密钥已删除,"The API key has been deleted."
+删除失败：%{1},"Deletion failed: %{1}"
+使用统计,"Using statistics"
+个人设置,"Personal Settings"
+AI聊天,"AI Chat"
+消息内容不能为空,"The message content cannot be empty."
+生成失败：%1,"Generation failed: %1"
+聊天历史已清空,"Chat history has been cleared."
+AI助手工具,"AI Assistant Tool"
+多种AI模型,"Multiple AI models"
+"支持OpenAI GPT、Claude等多种主流AI模型，满足不同场景需求","Supporting mainstream AI models such as OpenAI GPT and Claude to meet diverse scenario requirements."
+提供翻译、代码生成、内容创作等专业场景适配器，优化生成效果,"Providing professional scenario adapters for translation, code generation, content creation, etc., to optimize generation outcomes."
+API接口,"API interface"
+"提供RESTful API和流式接口，支持实时响应和批量处理","Provides RESTful APIs and streaming interfaces, supporting real-time responses and batch processing."
+安全可靠,"Safe and reliable"
+完善的API密钥管理、访问控制和内容安全检测机制,"Comprehensive API key management, access control, and content security detection mechanisms."
+高性能,"High performance"
+智能缓存、并发控制和负载均衡，确保快速响应,"Intelligent caching, concurrency control, and load balancing ensure rapid response."
+国际化,Internationalization
+支持多语言界面和内容，自动语言检测和转换,"Supports multilingual interfaces and content, with automatic language detection and conversion."
+功能特性,Features
+使用指南,"User Guide"
+基础文本生成,"Basic text generation"
+翻译场景,"Translation scenario"
+流式响应,"Streaming response"
+定价信息,"Pricing Information"
+"AI模型同步完成：%{1}；收集 %{2} 个模型","AI模型同步完成：%{1}；收集 %{2} 个模型"
+AI模型同步失败：%{1},AI模型同步失败：%{1}
+AI监控告警,"AI Monitoring Alerts"
+在AI模型监控触发告警时触发，允许其他模块监听并处理告警通知。事件数据包含告警信息、监控数据、模型代码、租户ID等。,"Triggered when an AI model monitoring alert is activated, allowing other modules to listen for and process alarm notifications. The event data includes alert information, monitoring data, model code, tenant ID, etc."
+AI翻译调用,AI翻译调用
+其他模块可以通过触发此事件调用AI进行翻译。支持批量翻译和增量翻译。事件数据包含待翻译词列表、目标语言、源语言等。,其他模块可以通过触发此事件调用AI进行翻译。支持批量翻译和增量翻译。事件数据包含待翻译词列表、目标语言、源语言等。
+点击前往配置供应商账户,"Click to configure provider account"
+点击前往配置API密钥,"Click to configure API key"
+点击前往配置模型,"Click to configure model"
+点击前往配置,"Click to configure"
+API密钥未配置或配置不完整,"API key is not configured or incomplete"
+没有可用的%{provider}供应商账户，请先配置供应商账户,"No available %{provider} provider account, please configure provider account first"
+没有可用的供应商账户，请先配置供应商账户,"No available provider account, please configure provider account first"
+供应商账户信息不完整，缺少：%{field},"Provider account information is incomplete, missing: %{field}"
+供应商账户信息不完整，请检查配置,"Provider account information is incomplete, please check configuration"
+"扫描到 %{count} 个场景适配器","Scanned %{count} scene adapters"
+"扫描到 %{count} 个智能体","扫描到 %{count} 个智能体"
+开始扫描AI模块资源...,开始扫描AI模块资源...
+正在扫描场景适配器...,正在扫描场景适配器...
+未发现新的场景适配器,未发现新的场景适配器
+正在扫描智能体...,正在扫描智能体...
+未发现新的智能体,未发现新的智能体
+正在扫描AI模型...,正在扫描AI模型...
+"扫描到 %{count} 个AI模型","扫描到 %{count} 个AI模型"
+未发现新的AI模型,未发现新的AI模型
+AI模块资源扫描完成,AI模块资源扫描完成
+"AI模块资源扫描失败: %{error}","AI模块资源扫描失败: %{error}"
+"智能体类 %{1} 必须实现 AgentInterface 接口","智能体类 %{1} 必须实现 AgentInterface 接口"
+"指定的模型 ""%{1}"" 不存在","指定的模型 ""%{1}"" 不存在"
+"指定的模型 ""%{1}"" 未激活","指定的模型 ""%{1}"" 未激活"
+"场景适配器 ""%{1}"" 的默认模型 ""%{2}"" 不存在，请到模型列表中添加或到场景适配器管理中更换默认模型","场景适配器 ""%{1}"" 的默认模型 ""%{2}"" 不存在，请到模型列表中添加或到场景适配器管理中更换默认模型"
+"场景适配器 ""%{1}"" 的默认模型 ""%{2}"" 未激活，请在模型列表中激活该模型","场景适配器 ""%{1}"" 的默认模型 ""%{2}"" 未激活，请在模型列表中激活该模型"
+"场景 ""%{1}"" 未配置默认模型（可在「场景适配器」中为该适配器设置默认模型，或在「默认模型配置」中配置）","场景 ""%{1}"" 未配置默认模型（可在「场景适配器」中为该适配器设置默认模型，或在「默认模型配置」中配置）"
+"场景 ""%{1}"" 的默认模型 ""%{2}"" 不存在","场景 ""%{1}"" 的默认模型 ""%{2}"" 不存在"
+"场景 ""%{1}"" 的默认模型 ""%{2}"" 未激活","场景 ""%{1}"" 的默认模型 ""%{2}"" 未激活"
+未配置全局默认模型,未配置全局默认模型
+"全局默认模型 ""%{1}"" 不存在","全局默认模型 ""%{1}"" 不存在"
+"全局默认模型 ""%{1}"" 未激活","全局默认模型 ""%{1}"" 未激活"
+系统中没有已激活的默认模型,系统中没有已激活的默认模型
+系统中没有任何已激活的AI模型,系统中没有任何已激活的AI模型
+无法选择合适的AI模型，请检查模型配置,无法选择合适的AI模型，请检查模型配置
+配置默认模型,配置默认模型
+模型列表,"Model list"
 供应商账户,"Supplier account"
-添加账户,添加账户
-刷新,Refresh
-请重试,请重试
-提示,Tip
-请先选择供应商,请先选择供应商
-确定,确定
-请先填写API密钥,请先填写API密钥
-成功,Success
-操作失败,"Operation failed"
-确定要删除此账户吗？此操作不可恢复！,确定要删除此账户吗？此操作不可恢复！
-删除失败,"Delete failed"
-网络错误,"Network error"
-（如需要）,（如需要）
-账户余额,账户余额
-货币单位,货币单位
-账户设置,账户设置
-总花费,"Total cost"
-连接状态,连接状态
-启用代理,启用代理
-代理类型,代理类型
-代理地址,代理地址
-端口,Port
-用户名（可选）,用户名（可选）
-密码（可选）,密码（可选）
-返回列表,"Return to list"
-测试连接,"Test connection"
-某些供应商可能需要,某些供应商可能需要
-自定义API端点，例如使用代理服务或私有部署,自定义API端点，例如使用代理服务或私有部署
-美元,美元
-人民币,人民币
-欧元,欧元
-只有设置为默认的账户才能被模型调用,只有设置为默认的账户才能被模型调用
-已连接,已连接
-最后测试,最后测试
-已设置,已设置
-测试中...,Testing...
+无法选择合适的AI模型。原因：%{1},无法选择合适的AI模型。原因：%{1}
+"场景适配器不存在: %{code}","Scenario adapter does not exist: %{code}"
+没有满足条件的%{provider}供应商账户（需激活）,"No %{provider} provider account meets the conditions (needs to be activated)"
+没有满足条件的%{provider}供应商账户（需激活、连通成功且余额>0）,"No %{provider} provider account meets the conditions (needs to be activated, connection successful and balance > 0)"
+智能体不存在：%{1},智能体不存在：%{1}
+"AI 返回格式异常，无法解析","AI 返回格式异常，无法解析"
+流式返回格式异常，无法解析,流式返回格式异常，无法解析
+模型不存在：%{1},"Model does not exist: %{1}"
+用户不存在,"User does not exist"
+账户余额不足，当前余额：%{1}，需要：%{2},"Insufficient account balance, current balance: %{1}, required: %{2}"
+"模型不存在: %{code}","Model does not exist: %{code}"
+"模型 %{code} 缺少API密钥配置","Model %{code} is missing API key configuration"
+"模型 %{code} 缺少API基础URL配置","Model %{code} is missing API base URL configuration"
+聊天服务,"Chat Service"
+翻译服务,"Translation Service"
+内容生成,"Content Generation"
+图片生成,"Image Generation"
+数据分析,"Data Analysis"
+默认服务,"Default Service"
+此模型被用作以下服务的默认模型：%{1},"This model is used as the default model for the following services: %{1}"
+"服务类型 %{1} 没有配置默认模型","Service type %{1} has no default model configured"
+"模型配置目录不存在: %{dir}","Model configuration directory does not exist: %{dir}"
+"处理模型配置文件失败: %{file}, 错误: %{msg}","Failed to process model configuration file: %{file}, error: %{msg}"
+无法删除受保护的模型,"Cannot delete protected model"
+"删除模型时发生错误: %{msg}","Error occurred while deleting model: %{msg}"
+"JSON解析错误: %{err}, 文件: %{file}","JSON parsing error: %{err}, file: %{file}"
+"缺少必需字段 %{field} 在文件: %{file}","Missing required field %{field} in file: %{file}"
+"缺少必需字段 name 或 model_name 在文件: %{file}","Missing required field name or model_name in file: %{file}"
+"缺少必需字段: %{label}","Missing required field: %{label}"
+Token价格必须是数字,"Token price must be a number"
+默认状态必须是布尔值或0/1,"Default status must be a boolean or 0/1"
+"状态值必须是 active 或 inactive","Status value must be active or inactive"
+"Model #%{id} not found","Model #%{id} not found"
+该模型为系统原始模型，不能删除。如需移除请先取消保护或联系管理员。,"This model is a system original model and cannot be deleted. To remove it, please cancel protection first or contact administrator."
+"删除失败: %{msg}","Delete failed: %{msg}"
+"不支持的供应商: %{provider}","Unsupported provider: %{provider}"
 连接测试成功,"Connection test successful"
-连接测试失败,连接测试失败
-测试失败，请重试,测试失败，请重试
-导出,导出
-总请求数,总请求数
-总令牌数,总令牌数
-成功率,"Success rate"
-开始日期,开始日期
-结束日期,结束日期
-筛选,Screening
-重置,Reset
-时间,Time
-模型,Model
-用户,User
-请求类型,请求类型
-输入令牌,输入令牌
-输出令牌,输出令牌
-总令牌,总令牌
-花费,Spent
-耗时,耗时
-状态,Status
-操作,Operation
-使用详情,使用详情
-加载中...,Loading...
-加载失败，请重试,加载失败，请重试
-暂无数据,"No data available"
-失败,Failed
-上一页,Previous
-下一页,Next
-请求ID,请求ID
-错误信息,"Error message"
-请求数据,请求数据
-响应数据,响应数据
+"连接测试失败: %{msg}","Connection test failed: %{msg}"
+"AI请求超时（已设置超时时间为 %d 秒）。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试增加超时时间设置；3) 简化请求内容；4) 稍后重试。","AI请求超时（已设置超时时间为 %d 秒）。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试增加超时时间设置；3) 简化请求内容；4) 稍后重试。"
+"AI请求超时。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试设置合理的超时时间；3) 简化请求内容；4) 稍后重试。","AI请求超时。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试设置合理的超时时间；3) 简化请求内容；4) 稍后重试。"
+"供应商 %{1} 未配置模型列表接口","供应商 %{1} 未配置模型列表接口"
+"供应商 %{1} 缺少可用API Key，无法同步模型列表","供应商 %{1} 缺少可用API Key，无法同步模型列表"
+"供应商 %{1} 未配置 base_url","供应商 %{1} 未配置 base_url"
+"供应商 %{1} 获取模型失败: %{2}","供应商 %{1} 获取模型失败: %{2}"
+"供应商 %{1} 返回模型列表为空","供应商 %{1} 返回模型列表为空"
+"未配置API Key，使用已有模型列表完成同步","未配置API Key，使用已有模型列表完成同步"
+模型列表请求失败,模型列表请求失败
+"模型列表请求失败，HTTP状态码: %{1}","模型列表请求失败，HTTP状态码: %{1}"
+"模型列表响应解析失败: %{1}","模型列表响应解析失败: %{1}"
+未配置翻译默认模型,未配置翻译默认模型
+id属性不能为空,"The id attribute cannot be empty."
+使用默认模型,"Using the default model"
+提示：点击选择AI模型，输入关键词搜索（800ms防抖）,"Tip: Click to select an AI model, enter keywords to search (800ms debounce)"
+未找到匹配的模型,"No matching model found."
+加载失败,"Failed to load"
 适配器详情,"Adapter Details"
 详情,Details
+返回列表,"Return to list"
 启用,Enable
 基本信息,"Basic Information"
 适配器ID,"Adapter ID"
 适配器代码,"Adapter code"
 适配器名称,"Adapter name"
 版本,Version
+状态,Status
 未激活,"Not activated"
 支持的模型类型,"Supported model types"
 参数模板,"Parameter template"
@@ -367,11 +352,16 @@ AI助手,"AI assistant"
 确定要切换适配器状态吗？,"Are you sure you want to switch the adapter status?"
 确定切换,确定切换
 取消,Cancel
+成功,Success
 状态已切换,状态已切换
+操作失败,"Operation failed"
+确定,确定
 操作失败：,"Operation failed:"
+网络错误,"Network error"
 请稍后重试,请稍后重试
 网络错误，请稍后重试,"Network error, please try again later."
 场景适配器管理,"Scene Adapter Management"
+AI助手,"AI assistant"
 总适配器,总适配器
 已激活,Activated
 扫描适配器,"Scan adapter"
@@ -386,6 +376,7 @@ AI助手,"AI assistant"
 取消选择,取消选择
 名称,Name
 默认模型,"Default model"
+操作,Operation
 暂无场景适配器,暂无场景适配器
 "请点击""扫描适配器""按钮来扫描和收集适配器。","请点击""扫描适配器""按钮来扫描和收集适配器。"
 "为当前选中的适配器统一设置默认使用的 AI 模型。","为当前选中的适配器统一设置默认使用的 AI 模型。"
@@ -396,9 +387,11 @@ AI助手,"AI assistant"
 确定要切换此适配器的状态吗？,确定要切换此适配器的状态吗？
 切换状态,切换状态
 状态更新失败,状态更新失败
+请求失败：,"Request failed:"
 确定要删除此适配器吗？此操作不可恢复。,确定要删除此适配器吗？此操作不可恢复。
 删除适配器,删除适配器
 确定删除,确定删除
+删除失败,"Delete failed"
 请先选择要删除的适配器,请先选择要删除的适配器
 确定要删除选中的,确定要删除选中的
 个适配器吗？此操作不可恢复。,个适配器吗？此操作不可恢复。
@@ -425,18 +418,23 @@ AI助手,"AI assistant"
 默认模型用于当用户未指定模型时自动选择。每种服务类型只能设置一个默认模型。,"The default model is used for automatic selection when the user does not specify a model. Only one default model can be set for each service type."
 服务类型,"Service Type"
 优先级,Priority
+保存,Save
 保存全部,"Save all"
 清除缓存,"Clear cache"
 受保护的模型,"Protected model"
 以下模型被设置为默认模型，无法删除：,"The following model is set as the default model and cannot be deleted:"
+提示,Tip
 保存成功！,"Save successful!"
 错误,错误
 保存失败：,"Save failed:"
 请求失败,请求失败
 确认,确认
 确定要保存所有默认模型配置吗？,"Are you sure you want to save all default model configurations?"
+保存中...,Saving...
 正在保存所有配置，请稍候...,正在保存所有配置，请稍候...
+保存成功,"Save successful"
 所有默认模型配置已成功保存！,所有默认模型配置已成功保存！
+保存失败,保存失败
 确定要清除默认模型缓存吗？,"Are you sure you want to clear the default model cache?"
 此操作将刷新默认模型配置缓存。,此操作将刷新默认模型配置缓存。
 确定清除,确定清除
@@ -453,79 +451,135 @@ AI助手,"AI assistant"
 初始化失败！,初始化失败！
 初始化失败：,"Initialization failed:"
 暂无受保护的模型,"No protected models"
-适配器,Adapter
 "AI 管理","AI 管理"
 "AI 中心","AI 中心"
-模型ID,"Model ID"
-模型名称,"Model name"
+模型,Model
+适配器,Adapter
+复制模型,"Copy model"
+"您正在复制模型: <strong>%{1}</strong>","You are copying the model: <strong>%{1}</strong>"
+复制的模型将继承原始模型的所有配置，您可以在复制后修改其配置。,"The copied model will inherit all configurations of the original model, and you can modify its configurations after copying."
+原始模型信息,"Original model information"
+供应商,Supplier
 模型代码,"Model code"
+模型版本,"Model version"
+新模型配置,"New model configuration"
+模型名称,"Model name"
+副本,副本
+请输入新模型的名称,"Please enter the name of the new model"
+自定义名称用于区分不同配置,"Custom names are used to distinguish between different configurations."
+唯一标识符，建议添加后缀,"Unique identifier, it is recommended to add a suffix"
+API密钥,"API Key"
+输入新的API密钥,"Enter a new API key"
+留空则使用原配置,"Leave blank to use the original configuration."
+API地址,"API address"
+输入新的API地址,"Enter a new API address"
+温度参数,"Temperature parameter"
+最大令牌数,"Maximum token count"
+"Top P","Top P"
+注意：,Note:
+"复制的模型将自动标记为""复制模型""状态","The copied model will be automatically marked as ""Copy Model"" status."
+复制的模型不会被设置为默认模型,"The copied model will not be set as the default model."
+您可以在复制后修改其API配置、定价和代理设置,"You can modify its API configuration, pricing, and proxy settings after copying."
+复制模型可以删除，但原始模型不能删除,"The copy model can be deleted, but the original model cannot be deleted."
+确认复制,"Confirm copy"
+格式错误,格式错误
+模型代码只能包含字母、数字、点号(.)、下划线(_)和中划线(-),模型代码只能包含字母、数字、点号(.)、下划线(_)和中划线(-)
+复制中...,Copying...
+复制成功,复制成功
+模型已成功复制,模型已成功复制
+复制成功！,"Copy successful!"
+复制失败,复制失败
+复制失败：,"Copy failed:"
+模型ID,"Model ID"
 输入Token价格,"Input Token Price"
 输出Token价格,"Output Token Price"
 模型配置,"Model configuration"
 代理配置,"Proxy configuration"
+测试连接,"Test connection"
 确定要测试此模型的连接吗？,"Are you sure you want to test the connection of this model?"
+测试中...,Testing...
 连接测试成功！,"Connection test successful!"
+连接测试失败,连接测试失败
 连接测试失败：,"Connection test failed:"
-编辑模型,"Edit Model"
+请重试,请重试
+AI模型,"AI model"
+"编辑模型: %{1}","Edit model: %{1}"
 新建模型,"New model"
-基础信息,基础信息
-原始模型基本信息不可修改,"The basic information of the original model cannot be modified."
-请选择或搜索供应商...,请选择或搜索供应商...
-快速新建供应商账户,快速新建供应商账户
-新建账户,新建账户
-"AI 模型的提供商","Provider of AI models"
-使用默认账户,使用默认账户
-留空使用默认账户，或选择指定账户,留空使用默认账户，或选择指定账户
-例如：gpt-3.5-turbo,"For example: gpt-3.5-turbo"
-模型的唯一标识符,"The unique identifier of the model"
-"例如：GPT-3.5 Turbo","For example: GPT-3.5 Turbo"
-模型的显示名称,"Model Display Name"
-版本号,"Version number"
-例如：1.0,"For example: 1.0"
-模型的版本号,模型的版本号
-拷贝模型,拷贝模型
-"原始模型ID: %{1}","Original Model ID: %{1}"
+编辑,Edit
+新建,New
+（原始模型基本信息不可修改）,"(The basic information of the original model cannot be modified)"
+"例如: OpenAI, Google, Anthropic","For example: OpenAI, Google, Anthropic"
+AI模型供应商名称（不可修改）,"AI Model Supplier Name (Not Modifiable)"
+AI模型供应商名称,"AI model supplier name"
+"例如: gpt-4, claude-3","For example: gpt-4, claude-3"
+模型唯一标识代码（不可修改）,"Model Unique Identification Code (non-modifiable)"
+模型唯一标识代码,"Model unique identification code"
+"例如: GPT-4 Turbo","For example: GPT-4 Turbo"
+模型显示名称,"Model display name"
+"例如: 1.0, 2.5","For example: 1.0, 2.5"
+模型版本号（不可修改）,"Model version number (not editable)"
+模型版本号,"Model version number"
+API配置,"API Configuration"
+输入API密钥,"Enter API key"
+API访问密钥,"API access key"
+"例如: https://api.openai.com/v1","For example: https://api.openai.com/v1"
+API基础URL,"API Base URL"
+"温度系数 (Temperature)","温度系数 (Temperature)"
+控制输出随机性，0-2之间,"Control the randomness of the output, between 0 and 2."
+最大Token数,"Maximum Token Count"
+最大生成token数量,"Maximum token generation count"
+超时时间（秒）,超时时间（秒）
+API请求超时时间，0表示不限制，默认180秒,API请求超时时间，0表示不限制，默认180秒
+核采样参数，0-1之间,"Nuclear sampling parameter, between 0 and 1"
+"频率惩罚 (Frequency Penalty)","频率惩罚 (Frequency Penalty)"
+降低重复词汇，-2到2之间,"Reduce repetitive vocabulary, between -2 and 2."
+"存在惩罚 (Presence Penalty)","存在惩罚 (Presence Penalty)"
+鼓励新话题，-2到2之间,"Encourage new topics, between -2 and 2."
+启用流式输出,"Enable streaming output"
+实时返回生成内容,"Return generated content in real time"
+每1000个输入token的价格,"The price per 1000 input tokens"
+每1000个输出token的价格,"Price per 1000 output tokens"
 提供商配置,"Provider Configuration"
 可选,Optional
 配置JSON,"Configure JSON"
 JSON格式的提供商特定配置。所有字段都可自定义，预置值仅供参考。,"Provider-specific configuration in JSON format. All fields are customizable, preset values are for reference only."
-技术参数,"Technical parameters"
-最大令牌数,"Maximum token count"
-模型支持的最大令牌数,"The maximum number of tokens supported by the model."
-每令牌成本,"Cost per token"
-每1000个令牌的成本（美元）,"Cost per 1000 tokens (USD)"
-配置参数,"Configuration parameters"
-Temperature,Temperature
-"控制输出随机性 (0.0 - 2.0)","控制输出随机性 (0.0 - 2.0)"
-"Top P","Top P"
-"核采样参数 (0.0 - 1.0)","核采样参数 (0.0 - 1.0)"
-流式输出,"Streaming output"
-启用流式输出，实时返回生成的内容,"Enable streaming output to return generated content in real-time."
-超时时间（秒）,超时时间（秒）
-API请求超时时间，0表示不限制，默认180秒,API请求超时时间，0表示不限制，默认180秒
-状态管理,"State Management"
-已弃用,Deprecated
-维护中,"Under maintenance"
-模型的当前状态,"The current state of the model"
+代理主机,"Proxy host"
+"例如: proxy.example.com","For example: proxy.example.com"
+代理服务器地址,"Proxy server address"
+代理端口,"Agent port"
+"例如: 8080","For example: 8080"
+代理服务器端口,"Proxy server port"
+代理用户名,"Proxy username"
+如需认证请填写,"If certification is required, please fill in."
+代理认证用户名（可选）,"Proxy authentication username (optional)"
+代理密码,"Proxy password"
+代理认证密码（可选）,"Proxy authentication password (optional)"
+状态设置,"Status setting"
+启用此模型,"Enable this model"
+只有启用的模型才能被使用,"Only enabled models can be used."
+设为默认模型,"Set as default model"
+默认模型将在未指定模型时使用,"The default model will be used when no model is specified."
 模型测试,"Model testing"
 测试提示词,"Test prompt"
 "例如: 你好，请介绍一下你自己","Hello, please introduce yourself."
-开始测试,"Start testing"
-测试结果,"Test results"
-格式错误,格式错误
-提供商配置JSON格式错误，请检查语法,"Provider configuration JSON format is incorrect, please check the syntax."
-模型已成功保存,模型已成功保存
-请输入测试提示词,"Please enter a test prompt"
+输入测试提示词，点击测试按钮查看响应结果,"Enter the test prompt and click the test button to view the response result."
 测试模型,"Testing model"
+测试结果,"Test results"
+请填写必填项：供应商、模型代码、模型名称,"Please fill in the required fields: Supplier, Model Code, Model Name"
+提供商配置JSON格式错误，请检查语法,"Provider configuration JSON format is incorrect, please check the syntax."
+请输入测试提示词,"Please enter a test prompt"
+失败,Failed
+未测,"Not measured"
+测试失败,"Test failed"
 AI模型管理,"AI Model Management"
-AI模型,"AI model"
 个模型,"A model"
 批量测试,"Batch testing"
 新增模型,新增模型
 筛选条件,"Screening criteria"
 全部,All
 搜索,Search
-模型列表,"Model list"
+筛选,Screening
+重置,Reset
 ID,ID
 类型,Type
 输入价格,"Input price"
@@ -551,8 +605,11 @@ ID,ID
 供应商连通性测试失败,"Supplier connectivity test failed."
 供应商连通性待测试,"Supplier connectivity pending testing."
 模型详情,"Model Details"
+关闭,Close
+编辑模型,"Edit Model"
 连通测试,"Connectivity test"
 自配置连通测试,"Self-configuration connectivity test"
+刷新,Refresh
 原始模型不能删除,"The original model cannot be deleted."
 请先选择要激活的模型,"Please select the model you wish to activate first."
 确定要激活选中的模型吗？,确定要激活选中的模型吗？
@@ -561,7 +618,6 @@ ID,ID
 请先选择要删除的模型,"Please select the model you wish to delete first."
 确定要删除选中的模型吗？此操作不可恢复！注意：只能删除复制的模型，原始模型无法删除。,确定要删除选中的模型吗？此操作不可恢复！注意：只能删除复制的模型，原始模型无法删除。
 请先选择要测试的模型,"Please select the model to test first."
-测试失败,"Test failed"
 测试失败：,"Test failed:"
 确定要删除模型,"Are you sure you want to delete the model?"
 吗？,?
@@ -572,181 +628,125 @@ ID,ID
 条件不足,"Insufficient conditions"
 无法激活,"Unable to activate"
 无法激活:,"Unable to activate:"
-"编辑模型: %{1}","Edit model: %{1}"
-编辑,Edit
-新建,New
-（原始模型基本信息不可修改）,"(The basic information of the original model cannot be modified)"
-"例如: OpenAI, Google, Anthropic","For example: OpenAI, Google, Anthropic"
-AI模型供应商名称（不可修改）,"AI Model Supplier Name (Not Modifiable)"
-AI模型供应商名称,"AI model supplier name"
-"例如: gpt-4, claude-3","For example: gpt-4, claude-3"
-模型唯一标识代码（不可修改）,"Model Unique Identification Code (non-modifiable)"
-模型唯一标识代码,"Model unique identification code"
-"例如: GPT-4 Turbo","For example: GPT-4 Turbo"
-模型显示名称,"Model display name"
-模型版本,"Model version"
-"例如: 1.0, 2.5","For example: 1.0, 2.5"
-模型版本号（不可修改）,"Model version number (not editable)"
-模型版本号,"Model version number"
-API配置,"API Configuration"
-输入API密钥,"Enter API key"
-API访问密钥,"API access key"
-API地址,"API address"
-"例如: https://api.openai.com/v1","For example: https://api.openai.com/v1"
-API基础URL,"API Base URL"
-"温度系数 (Temperature)","温度系数 (Temperature)"
-控制输出随机性，0-2之间,"Control the randomness of the output, between 0 and 2."
-最大Token数,"Maximum Token Count"
-最大生成token数量,"Maximum token generation count"
-核采样参数，0-1之间,"Nuclear sampling parameter, between 0 and 1"
-"频率惩罚 (Frequency Penalty)","频率惩罚 (Frequency Penalty)"
-降低重复词汇，-2到2之间,"Reduce repetitive vocabulary, between -2 and 2."
-"存在惩罚 (Presence Penalty)","存在惩罚 (Presence Penalty)"
-鼓励新话题，-2到2之间,"Encourage new topics, between -2 and 2."
-启用流式输出,"Enable streaming output"
-实时返回生成内容,"Return generated content in real time"
-每1000个输入token的价格,"The price per 1000 input tokens"
-每1000个输出token的价格,"Price per 1000 output tokens"
-代理主机,"Proxy host"
-"例如: proxy.example.com","For example: proxy.example.com"
-代理服务器地址,"Proxy server address"
-代理端口,"Agent port"
-"例如: 8080","For example: 8080"
-代理服务器端口,"Proxy server port"
-代理用户名,"Proxy username"
-如需认证请填写,"If certification is required, please fill in."
-代理认证用户名（可选）,"Proxy authentication username (optional)"
-代理密码,"Proxy password"
-代理认证密码（可选）,"Proxy authentication password (optional)"
-状态设置,"Status setting"
-启用此模型,"Enable this model"
-只有启用的模型才能被使用,"Only enabled models can be used."
-设为默认模型,"Set as default model"
-默认模型将在未指定模型时使用,"The default model will be used when no model is specified."
-输入测试提示词，点击测试按钮查看响应结果,"Enter the test prompt and click the test button to view the response result."
-请填写必填项：供应商、模型代码、模型名称,"Please fill in the required fields: Supplier, Model Code, Model Name"
-未测,"Not measured"
-复制模型,"Copy model"
-"您正在复制模型: <strong>%{1}</strong>","You are copying the model: <strong>%{1}</strong>"
-复制的模型将继承原始模型的所有配置，您可以在复制后修改其配置。,"The copied model will inherit all configurations of the original model, and you can modify its configurations after copying."
-原始模型信息,"Original model information"
-新模型配置,"New model configuration"
-副本,副本
-请输入新模型的名称,"Please enter the name of the new model"
-自定义名称用于区分不同配置,"Custom names are used to distinguish between different configurations."
-唯一标识符，建议添加后缀,"Unique identifier, it is recommended to add a suffix"
-输入新的API密钥,"Enter a new API key"
-留空则使用原配置,"Leave blank to use the original configuration."
-输入新的API地址,"Enter a new API address"
-温度参数,"Temperature parameter"
-注意：,Note:
-"复制的模型将自动标记为""复制模型""状态","The copied model will be automatically marked as ""Copy Model"" status."
-复制的模型不会被设置为默认模型,"The copied model will not be set as the default model."
-您可以在复制后修改其API配置、定价和代理设置,"You can modify its API configuration, pricing, and proxy settings after copying."
-复制模型可以删除，但原始模型不能删除,"The copy model can be deleted, but the original model cannot be deleted."
-确认复制,"Confirm copy"
-模型代码只能包含字母、数字、点号(.)、下划线(_)和中划线(-),模型代码只能包含字母、数字、点号(.)、下划线(_)和中划线(-)
-复制中...,Copying...
-复制成功,复制成功
-模型已成功复制,模型已成功复制
-复制成功！,"Copy successful!"
-复制失败,复制失败
-复制失败：,"Copy failed:"
 原始模型,"Original model"
+技术参数,"Technical parameters"
+配置参数,"Configuration parameters"
 代理信息,"Agent Information"
+端口,Port
 用户名,Username
 "此模型是从原始模型 ID: %{1} 复制而来","This model was copied from the original model ID: %{1}"
-"AI模型同步完成：%{1}；收集 %{2} 个模型","AI模型同步完成：%{1}；收集 %{2} 个模型"
-AI模型同步失败：%{1},AI模型同步失败：%{1}
-AI监控告警,"AI Monitoring Alerts"
-在AI模型监控触发告警时触发，允许其他模块监听并处理告警通知。事件数据包含告警信息、监控数据、模型代码、租户ID等。,"Triggered when an AI model monitoring alert is activated, allowing other modules to listen for and process alarm notifications. The event data includes alert information, monitoring data, model code, tenant ID, etc."
-AI翻译调用,AI翻译调用
-其他模块可以通过触发此事件调用AI进行翻译。支持批量翻译和增量翻译。事件数据包含待翻译词列表、目标语言、源语言等。,其他模块可以通过触发此事件调用AI进行翻译。支持批量翻译和增量翻译。事件数据包含待翻译词列表、目标语言、源语言等。
-"AI 返回格式异常，无法解析","AI 返回格式异常，无法解析"
-流式返回格式异常，无法解析,流式返回格式异常，无法解析
-"AI请求超时（已设置超时时间为 %d 秒）。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试增加超时时间设置；3) 简化请求内容；4) 稍后重试。","AI请求超时（已设置超时时间为 %d 秒）。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试增加超时时间设置；3) 简化请求内容；4) 稍后重试。"
-"AI请求超时。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试设置合理的超时时间；3) 简化请求内容；4) 稍后重试。","AI请求超时。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试设置合理的超时时间；3) 简化请求内容；4) 稍后重试。"
-"不支持的供应商: %{provider}","Unsupported provider: %{provider}"
-"连接测试失败: %{msg}","Connection test failed: %{msg}"
-"供应商 %{1} 未配置模型列表接口","供应商 %{1} 未配置模型列表接口"
-"供应商 %{1} 缺少可用API Key，无法同步模型列表","供应商 %{1} 缺少可用API Key，无法同步模型列表"
-"供应商 %{1} 未配置 base_url","供应商 %{1} 未配置 base_url"
-"供应商 %{1} 获取模型失败: %{2}","供应商 %{1} 获取模型失败: %{2}"
-"供应商 %{1} 返回模型列表为空","供应商 %{1} 返回模型列表为空"
-"未配置API Key，使用已有模型列表完成同步","未配置API Key，使用已有模型列表完成同步"
-模型列表请求失败,模型列表请求失败
-"模型列表请求失败，HTTP状态码: %{1}","模型列表请求失败，HTTP状态码: %{1}"
-"模型列表响应解析失败: %{1}","模型列表响应解析失败: %{1}"
-模型不存在：%{1},"Model does not exist: %{1}"
-用户不存在,"User does not exist"
-账户余额不足，当前余额：%{1}，需要：%{2},"Insufficient account balance, current balance: %{1}, required: %{2}"
-"Model #%{id} not found","Model #%{id} not found"
-该模型为系统原始模型，不能删除。如需移除请先取消保护或联系管理员。,"This model is a system original model and cannot be deleted. To remove it, please cancel protection first or contact administrator."
-"删除失败: %{msg}","Delete failed: %{msg}"
-"智能体类 %{1} 必须实现 AgentInterface 接口","智能体类 %{1} 必须实现 AgentInterface 接口"
-"模型配置目录不存在: %{dir}","Model configuration directory does not exist: %{dir}"
-"处理模型配置文件失败: %{file}, 错误: %{msg}","Failed to process model configuration file: %{file}, error: %{msg}"
-无法删除受保护的模型,"Cannot delete protected model"
-"删除模型时发生错误: %{msg}","Error occurred while deleting model: %{msg}"
-"JSON解析错误: %{err}, 文件: %{file}","JSON parsing error: %{err}, file: %{file}"
-"缺少必需字段 %{field} 在文件: %{file}","Missing required field %{field} in file: %{file}"
-"缺少必需字段 name 或 model_name 在文件: %{file}","Missing required field name or model_name in file: %{file}"
-"缺少必需字段: %{label}","Missing required field: %{label}"
-Token价格必须是数字,"Token price must be a number"
-默认状态必须是布尔值或0/1,"Default status must be a boolean or 0/1"
-"状态值必须是 active 或 inactive","Status value must be active or inactive"
-"模型不存在: %{code}","Model does not exist: %{code}"
-"模型 %{code} 缺少API密钥配置","Model %{code} is missing API key configuration"
-"模型 %{code} 缺少API基础URL配置","Model %{code} is missing API base URL configuration"
-未配置翻译默认模型,未配置翻译默认模型
-"指定的模型 ""%{1}"" 不存在","指定的模型 ""%{1}"" 不存在"
-"指定的模型 ""%{1}"" 未激活","指定的模型 ""%{1}"" 未激活"
-"场景适配器 ""%{1}"" 的默认模型 ""%{2}"" 不存在，请到模型列表中添加或到场景适配器管理中更换默认模型","场景适配器 ""%{1}"" 的默认模型 ""%{2}"" 不存在，请到模型列表中添加或到场景适配器管理中更换默认模型"
-"场景适配器 ""%{1}"" 的默认模型 ""%{2}"" 未激活，请在模型列表中激活该模型","场景适配器 ""%{1}"" 的默认模型 ""%{2}"" 未激活，请在模型列表中激活该模型"
-"场景 ""%{1}"" 未配置默认模型（可在「场景适配器」中为该适配器设置默认模型，或在「默认模型配置」中配置）","场景 ""%{1}"" 未配置默认模型（可在「场景适配器」中为该适配器设置默认模型，或在「默认模型配置」中配置）"
-"场景 ""%{1}"" 的默认模型 ""%{2}"" 不存在","场景 ""%{1}"" 的默认模型 ""%{2}"" 不存在"
-"场景 ""%{1}"" 的默认模型 ""%{2}"" 未激活","场景 ""%{1}"" 的默认模型 ""%{2}"" 未激活"
-未配置全局默认模型,未配置全局默认模型
-"全局默认模型 ""%{1}"" 不存在","全局默认模型 ""%{1}"" 不存在"
-"全局默认模型 ""%{1}"" 未激活","全局默认模型 ""%{1}"" 未激活"
-系统中没有已激活的默认模型,系统中没有已激活的默认模型
-系统中没有任何已激活的AI模型,系统中没有任何已激活的AI模型
-无法选择合适的AI模型，请检查模型配置,无法选择合适的AI模型，请检查模型配置
-配置默认模型,配置默认模型
-无法选择合适的AI模型。原因：%{1},无法选择合适的AI模型。原因：%{1}
-"场景适配器不存在: %{code}","Scenario adapter does not exist: %{code}"
-没有满足条件的%{provider}供应商账户（需激活）,"No %{provider} provider account meets the conditions (needs to be activated)"
-没有满足条件的%{provider}供应商账户（需激活、连通成功且余额>0）,"No %{provider} provider account meets the conditions (needs to be activated, connection successful and balance > 0)"
-智能体不存在：%{1},智能体不存在：%{1}
-聊天服务,"Chat Service"
-翻译服务,"Translation Service"
-内容生成,"Content Generation"
-图片生成,"Image Generation"
-数据分析,"Data Analysis"
-默认服务,"Default Service"
-此模型被用作以下服务的默认模型：%{1},"This model is used as the default model for the following services: %{1}"
-"服务类型 %{1} 没有配置默认模型","Service type %{1} has no default model configured"
-"扫描到 %{count} 个场景适配器","Scanned %{count} scene adapters"
-"扫描到 %{count} 个智能体","扫描到 %{count} 个智能体"
-开始扫描AI模块资源...,开始扫描AI模块资源...
-正在扫描场景适配器...,正在扫描场景适配器...
-未发现新的场景适配器,未发现新的场景适配器
-正在扫描智能体...,正在扫描智能体...
-未发现新的智能体,未发现新的智能体
-正在扫描AI模型...,正在扫描AI模型...
-"扫描到 %{count} 个AI模型","扫描到 %{count} 个AI模型"
-未发现新的AI模型,未发现新的AI模型
-AI模块资源扫描完成,AI模块资源扫描完成
-"AI模块资源扫描失败: %{error}","AI模块资源扫描失败: %{error}"
-点击前往配置供应商账户,"Click to configure provider account"
-点击前往配置API密钥,"Click to configure API key"
-点击前往配置模型,"Click to configure model"
-点击前往配置,"Click to configure"
-API密钥未配置或配置不完整,"API key is not configured or incomplete"
-没有可用的%{provider}供应商账户，请先配置供应商账户,"No available %{provider} provider account, please configure provider account first"
-没有可用的供应商账户，请先配置供应商账户,"No available provider account, please configure provider account first"
-供应商账户信息不完整，缺少：%{field},"Provider account information is incomplete, missing: %{field}"
-供应商账户信息不完整，请检查配置,"Provider account information is incomplete, please check configuration"
+基础信息,基础信息
+原始模型基本信息不可修改,"The basic information of the original model cannot be modified."
+请选择或搜索供应商...,请选择或搜索供应商...
+快速新建供应商账户,快速新建供应商账户
+新建账户,新建账户
+"AI 模型的提供商","Provider of AI models"
+使用默认账户,使用默认账户
+留空使用默认账户，或选择指定账户,留空使用默认账户，或选择指定账户
+例如：gpt-3.5-turbo,"For example: gpt-3.5-turbo"
+模型的唯一标识符,"The unique identifier of the model"
+"例如：GPT-3.5 Turbo","For example: GPT-3.5 Turbo"
+模型的显示名称,"Model Display Name"
+版本号,"Version number"
+例如：1.0,"For example: 1.0"
+模型的版本号,模型的版本号
+拷贝模型,拷贝模型
+"原始模型ID: %{1}","Original Model ID: %{1}"
+模型支持的最大令牌数,"The maximum number of tokens supported by the model."
+每令牌成本,"Cost per token"
+每1000个令牌的成本（美元）,"Cost per 1000 tokens (USD)"
+Temperature,Temperature
+"控制输出随机性 (0.0 - 2.0)","控制输出随机性 (0.0 - 2.0)"
+"核采样参数 (0.0 - 1.0)","核采样参数 (0.0 - 1.0)"
+流式输出,"Streaming output"
+启用流式输出，实时返回生成的内容,"Enable streaming output to return generated content in real-time."
+状态管理,"State Management"
+已弃用,Deprecated
+维护中,"Under maintenance"
+模型的当前状态,"The current state of the model"
+开始测试,"Start testing"
+模型已成功保存,模型已成功保存
+账户名称,账户名称
+密钥,密钥
+（如需要）,（如需要）
+基础URL,基础URL
+账户余额,账户余额
+货币单位,货币单位
+账户设置,账户设置
+激活账户,激活账户
+设为默认,设为默认
+总花费,"Total cost"
+连接状态,连接状态
+启用代理,启用代理
+代理类型,代理类型
+代理地址,代理地址
+用户名（可选）,用户名（可选）
+密码（可选）,密码（可选）
+留空保持不变,留空保持不变
+API密钥将被加密存储,API密钥将被加密存储
+某些供应商可能需要,某些供应商可能需要
+留空使用默认值,留空使用默认值
+自定义API端点，例如使用代理服务或私有部署,自定义API端点，例如使用代理服务或私有部署
+美元,美元
+人民币,人民币
+欧元,欧元
+只有设置为默认的账户才能被模型调用,只有设置为默认的账户才能被模型调用
+已连接,已连接
+最后测试,最后测试
+已设置,已设置
+请先选择供应商,请先选择供应商
+请先填写API密钥,请先填写API密钥
+保存失败，请重试,保存失败，请重试
+测试失败，请重试,测试失败，请重试
+系统管理,"System Management"
+添加账户,添加账户
+确定要删除此账户吗？此操作不可恢复！,确定要删除此账户吗？此操作不可恢复！
+新建供应商账户,新建供应商账户
+导出,导出
+总请求数,总请求数
+总令牌数,总令牌数
+成功率,"Success rate"
+开始日期,开始日期
+结束日期,结束日期
+时间,Time
+用户,User
+请求类型,请求类型
+输入令牌,输入令牌
+输出令牌,输出令牌
+总令牌,总令牌
+花费,Spent
+耗时,耗时
+使用详情,使用详情
+加载中...,Loading...
+加载失败，请重试,加载失败，请重试
+暂无数据,"No data available"
+上一页,Previous
+下一页,Next
+请求ID,请求ID
+错误信息,"Error message"
+请求数据,请求数据
+响应数据,响应数据
+首页,Home
+聊天,Chat
+管理您的API密钥和个人设置,管理您的API密钥和个人设置
+今日使用次数,"Number of uses today"
+快速操作,"Quick operation"
+管理API密钥,"Manage API keys"
+创建、查看和管理您的API密钥,"Create, view, and manage your API keys"
+使用AI模型进行对话,"Using AI models for conversation."
+修改个人信息和偏好设置,"Modify personal information and preferences"
+最近活动,"Recent activities"
+暂无活动记录,"No activity records"
+AI聊天助手,"AI Chat Assistant"
+设置,Settings
+清空,Clear
+选择模型,"Select model"
+无,Nothing
+欢迎使用AI聊天助手！,"Welcome to the AI Chat Assistant!"
+请输入您的问题，我会尽力为您解答。,"Please enter your question, and I will do my best to answer it for you."
+请输入您的消息...,"Please enter your message..."
+确定要清空聊天记录吗？,"Are you sure you want to clear the chat history?"
+错误：,Error:
 "场景 ""%{1}"" 未配置默认模型","场景 ""%{1}"" 未配置默认模型"
 加载助手列表失败：%{1},"Failed to load assistant list: %{1}"
 助手不存在,"The assistant does not exist"
