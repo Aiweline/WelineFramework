@@ -31,7 +31,7 @@ class SchemaDiffStage extends AbstractStage
         'weline_module_backup',
     ];
 
-    /** 不参与 SchemaDiff 的 Model 类（bootstrap/系统表，由 FrameworkDbBootstrapStage 创建） */
+    /** 不参与 SchemaDiff 的 Model 类（bootstrap/系统表，由 FrameworkDbBootstrapStage 创建；或表名动态依赖运行时数据的模型） */
     private const EXCLUDE_MODEL_CLASSES = [
         \Weline\Framework\Setup\Model\Migration::class,
         \Weline\Framework\Setup\Model\MigrationBackup::class,
@@ -39,6 +39,7 @@ class SchemaDiffStage extends AbstractStage
         \Weline\Framework\Setup\Model\ModuleBackup::class,
         \Weline\Database\Model\Migration::class,
         \Weline\Database\Model\MigrationBackup::class,
+        \Weline\Eav\Model\EavAttribute\Type\Value::class, // 表名按 entity+type 动态计算，getTable() 依赖 attribute，SchemaDiff 不解析
     ];
 
     /** @var list<SchemaDiffOp> */

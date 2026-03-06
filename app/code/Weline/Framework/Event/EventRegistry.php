@@ -449,6 +449,7 @@ class EventRegistry
     private function organizeRegistryData(array $scannedData, array $observersData = []): array
     {
         $registry = [];
+        $logDocWarnings = getenv('WELINE_EVENT_DOC_WARNINGS') === '1';
         // 快速查询：事件名到模块名的映射（用于性能优化）
         $eventToModuleMap = [];
         // 动态事件模式列表（用于匹配动态事件）
@@ -481,23 +482,25 @@ class EventRegistry
                     $hasSpec = $eventInfo['has_spec'] ?? false;
                     $hasDoc = $eventInfo['has_doc'] ?? false;
                     
-                    // 如果缺少规约或文档，记录警告
-                    if (!$hasSpec || !$hasDoc) {
+                    // 如果缺少规约或文档，记录警告（缺少文档仅当 WELINE_EVENT_DOC_WARNINGS=1 时警告，避免日志刷屏）
+                    if (!$hasSpec || (!$hasDoc && $logDocWarnings)) {
                         $warnings = [];
                         if (!$hasSpec) {
                             $warnings[] = '缺少事件规约文件 (event.php)';
                         }
-                        if (!$hasDoc) {
+                        if (!$hasDoc && $logDocWarnings) {
                             $warnings[] = '缺少事件文档文件 (doc/event/*.md)';
                         }
-                        $warningMessage = sprintf(
-                            "[事件注册警告] 动态事件模式 '%s' (%s 模块) %s。建议在构建注册表时修复。",
-                            $eventName,
-                            $moduleName,
-                        implode('，', $warnings)
-                    );
-                    w_log_warning($warningMessage);
-                }
+                        if ($warnings !== []) {
+                            $warningMessage = sprintf(
+                                "[事件注册警告] 动态事件模式 '%s' (%s 模块) %s。建议在构建注册表时修复。",
+                                $eventName,
+                                $moduleName,
+                                implode('，', $warnings)
+                            );
+                            w_log_warning($warningMessage);
+                        }
+                    }
                 
                 $dynamicEventPatterns[$eventName] = [
                         'name' => $eventInfo['name'] ?? $eventName,
@@ -534,22 +537,24 @@ class EventRegistry
                 $hasSpec = $eventInfo['has_spec'] ?? false;
                 $hasDoc = $eventInfo['has_doc'] ?? false;
                 
-                // 如果缺少规约或文档，记录警告（但不阻止注册表的构建）
-                if (!$hasSpec || !$hasDoc) {
+                // 如果缺少规约或文档，记录警告（缺少文档仅当 WELINE_EVENT_DOC_WARNINGS=1 时警告，避免日志刷屏）
+                if (!$hasSpec || (!$hasDoc && $logDocWarnings)) {
                     $warnings = [];
                     if (!$hasSpec) {
                         $warnings[] = '缺少事件规约文件 (event.php)';
                     }
-                    if (!$hasDoc) {
+                    if (!$hasDoc && $logDocWarnings) {
                         $warnings[] = '缺少事件文档文件 (doc/event/*.md)';
                     }
-                    $warningMessage = sprintf(
-                        "[事件注册警告] 事件 '%s' (%s 模块) %s。建议在构建注册表时修复。",
-                        $eventName,
-                        $moduleName,
-                        implode('，', $warnings)
-                    );
-                    w_log_warning($warningMessage);
+                    if ($warnings !== []) {
+                        $warningMessage = sprintf(
+                            "[事件注册警告] 事件 '%s' (%s 模块) %s。建议在构建注册表时修复。",
+                            $eventName,
+                            $moduleName,
+                            implode('，', $warnings)
+                        );
+                        w_log_warning($warningMessage);
+                    }
                 }
                 
                 // 添加新事件

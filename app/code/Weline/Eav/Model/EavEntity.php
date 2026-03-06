@@ -13,27 +13,36 @@ declare(strict_types=1);
 namespace Weline\Eav\Model;
 
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
  * EAV实体模型 (SRP - 单一职责原则)
- * 
- * 表结构定义已迁移到 Schema/EavEntitySchema.php
- * 本类只负责数据操作和业务逻辑
+ *
+ * 表结构由 #[Table]/#[Col] 声明，供 SchemaDiff 同步；与 Schema/EavEntitySchema.php 定义一致。
  */
+#[Table(comment: 'EAV实体表')]
 class EavEntity extends Model
 {
     public const schema_table = 'eav_entity';
     /** @var list<string> */
-    public const schema_primary_keys = ['eav_entity_id', 'code', 'name'];
+    public const schema_primary_keys = ['eav_entity_id'];
 
+    #[Col('int', 11, nullable: false, primaryKey: true, autoIncrement: true, comment: '实体ID')]
     public const schema_fields_ID = 'eav_entity_id';
     public const schema_fields_eav_entity_id = 'eav_entity_id';
+    #[Col('varchar', 255, nullable: false, unique: true, comment: '实体代码')]
     public const schema_fields_code = 'code';
+    #[Col('varchar', 255, nullable: false, comment: '实体名')]
     public const schema_fields_name = 'name';
+    #[Col('varchar', 255, nullable: false, comment: '实体类')]
     public const schema_fields_class = 'class';
+    #[Col('smallint', 1, nullable: false, default: 0, comment: '是否系统')]
     public const schema_fields_is_system = 'is_system';
+    #[Col('varchar', 60, nullable: false, comment: '实体ID字段类型')]
     public const schema_fields_eav_entity_id_field_type = 'eav_entity_id_field_type';
+    #[Col('smallint', 5, nullable: false, comment: '实体ID字段长度')]
     public const schema_fields_eav_entity_id_field_length = 'eav_entity_id_field_length';
 
     public array $_unit_primary_keys = ['eav_entity_id', 'code', 'name'];

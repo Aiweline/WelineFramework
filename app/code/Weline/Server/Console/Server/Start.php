@@ -1451,6 +1451,10 @@ class Start extends CommandAbstract
      */
     protected function parseInstanceName(array $args): string
     {
+        // 策略/后台启动 Master 时使用 --instance=name，优先识别
+        if (isset($args['instance']) && (string) $args['instance'] !== '') {
+            return (string) $args['instance'];
+        }
         // 选项值（需要跳过的）
         $optionValues = [];
         $valueOptions = ['port', 'p', 'host', 'h', 'count', 'c'];

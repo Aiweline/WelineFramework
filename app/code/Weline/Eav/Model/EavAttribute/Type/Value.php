@@ -201,7 +201,8 @@ class Value extends \Weline\Framework\Database\Model
             return parent::getTable($table);
         }
         if (!$this->attribute) {
-            throw new Exception(__('属性不存在！'));
+            // SchemaParser/其他场景在未设置 attribute 时调用 getTable()，返回占位表名避免抛错；实际值表由 install() 按 entity+type 创建
+            return parent::getTable('eav_attribute_type_value');
         }
         // 如果已经计算过表名，直接返回
         if (!empty($this->origin_table_name)) {

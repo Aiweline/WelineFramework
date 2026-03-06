@@ -591,7 +591,11 @@ class Processer
             
             if (\is_resource($process)) {
                 $pid = 0;
-                
+                // 先关闭 stdin 写端，避免子 shell 在读取 stdin 时阻塞导致不退出、父进程 stream_get_contents 永远等不到 EOF（Linux 不加 -frontend 时“退不出来”的根因）
+                if (isset($procPipes[0])) {
+                    @\fclose($procPipes[0]);
+                    $procPipes[0] = null;
+                }
                 if (isset($procPipes[1])) {
                     \stream_set_blocking($procPipes[1], true);
                     $output = \stream_get_contents($procPipes[1]);
@@ -603,8 +607,6 @@ class Processer
                 if ($pid <= 0) {
                     $pid = (int) \proc_get_status($process)['pid'];
                 }
-                
-                if (isset($procPipes[0])) @\fclose($procPipes[0]);
                 if (isset($procPipes[1])) @\fclose($procPipes[1]);
                 if (isset($procPipes[2])) @\fclose($procPipes[2]);
                 @\proc_close($process);
