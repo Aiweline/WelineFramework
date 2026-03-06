@@ -1,15 +1,11 @@
-前言,前言
-说在前面,说在前面
-安装,安装
-安装文档,安装文档
-快速开始,快速开始
-框架模组,框架模组
-框架规范,框架规范
-框架类的规范,框架类的规范
-模型文档,模型文档
-使用控制器,使用控制器
-模组事件,模组事件
-WelineFramework插件功能,WelineFramework插件功能
+开发工具面板,开发工具面板
+在页面中显示开发工具面板，提供路由查看、API文档等功能。仅在开发模式下显示。,在页面中显示开发工具面板，提供路由查看、API文档等功能。仅在开发模式下显示。
+开发工具面板-扩展标签,开发工具面板-扩展标签
+"在开发工具面板标签栏「耗时统计」之后注入扩展标签按钮，由各模块自行实现（如 WLS 等）。","在开发工具面板标签栏「耗时统计」之后注入扩展标签按钮，由各模块自行实现（如 WLS 等）。"
+开发工具面板-扩展搜索区,开发工具面板-扩展搜索区
+"在开发工具面板搜索区域之后注入扩展标签对应的搜索区 HTML 与注册脚本。","在开发工具面板搜索区域之后注入扩展标签对应的搜索区 HTML 与注册脚本。"
+开发工具标题,开发工具标题
+在开发工具面板中显示标题内容。,在开发工具面板中显示标题内容。
 "📚 开始扫描模块文档...","📚 StartScanModule documents..."
 "✅ 文档扫描完成！","✅ DocumentScanComplete！"
 "📊 扫描统计:","📊 ScanStatistics:"
@@ -26,20 +22,17 @@ WelineFramework插件功能,WelineFramework插件功能
 强制重新扫描（会删除旧的自动导入文档）,"Force rescan（Will deleteOldAuto importedDocument）"
 扫描所有模块文档（增量导入）,"Scan allModule documents（Incremental import）"
 强制重新扫描所有文档,"Force rescanAllDocument"
+启动Key错误,"Start KeyError"
+"沙盒环境已关闭,接下来操作的数据将影响正式线上数据库！","Sandbox environmentHas been closed,NextOperated dataWill affectFormal online database！"
+"沙盒环境已启动! 接下来操作的数据将写入沙盒数据库！","Sandbox environmentHas been started! NextOperated dataWill write toSandbox database！"
+WelineFramework开发文档,"WelineFrameworkDevelopment Documentation"
+分类ID不能为空,"Category IDCannot be empty"
 文档ID不能为空,"Document IDCannot be empty"
 文档不存在,"Document does not exist"
 文档路径信息不完整,"Document pathInformation incomplete"
 无法读取文档文件,"Unable to readDocument file"
-启动Key错误,"Start KeyError"
-"沙盒环境已关闭,接下来操作的数据将影响正式线上数据库！","Sandbox environmentHas been closed,NextOperated dataWill affectFormal online database！"
-"沙盒环境已启动! 接下来操作的数据将写入沙盒数据库！","Sandbox environmentHas been started! NextOperated dataWill write toSandbox database！"
-添加,Add
-修改,Modify
-文件上传失败！,"File uploadFailed!"
-未知,Unknown
-获取成功,"Get successful"
-沙盒启动Key设置成功,"Sandbox Start KeySet successful"
-分类ID不能为空,"Category IDCannot be empty"
+搜索关键词不能为空,"Search keywordCannot be empty"
+API文档管理,API文档管理
 分类不存在,"Category does not exist"
 系统分类不允许删除,"System categoryNot allowed to delete"
 下层有系统分类，不允许删除,"Lower level hasSystem category，Not allowed to delete"
@@ -53,90 +46,22 @@ WelineFramework插件功能,WelineFramework插件功能
 系统分类不允许拖动排序,"System categoryNot allowed to drag and sort"
 排序已保存,"Sort saved"
 保存失败：,保存失败：
-WelineFramework开发文档,"WelineFrameworkDevelopment Documentation"
-搜索关键词不能为空,"Search keywordCannot be empty"
-API文档管理,API文档管理
-加载Debug配置失败：%{1},加载Debug配置失败：%{1}
+获取成功,"Get successful"
+沙盒启动Key设置成功,"Sandbox Start KeySet successful"
+添加,Add
+修改,Modify
+文件上传失败！,"File uploadFailed!"
+未知,Unknown
+加载沙盒配置失败：%{1},加载沙盒配置失败：%{1}
 无效的请求方法,无效的请求方法
 保存成功,保存成功
 保存失败：%{1},保存失败：%{1}
-加载沙盒配置失败：%{1},加载沙盒配置失败：%{1}
+加载Debug配置失败：%{1},加载Debug配置失败：%{1}
 加载开发面板配置失败：%{1},加载开发面板配置失败：%{1}
-开发文档,"Development Documentation"
-正在清理旧的API文档...,正在清理旧的API文档...
-清理完成,"Cleanup complete"
-正在生成API文档...,正在生成API文档...
-"更新API文档: %{method}","更新API文档: %{method}"
-"新增API文档: %{method}","新增API文档: %{method}"
-"处理模块分类: %{name}","处理模块分类: %{name}"
-正在清理旧的自动导入文档和分类...,"CleaningOldAuto importedDocuments and categories..."
-"找到 %{count} 个模块包含 doc 目录，开始扫描...","Found %{count} modulesContain doc Directory, start scanning..."
-"[%{current}/%{total}] 正在扫描模块: %{name}","[%{current}/%{total}] ScanningModule: %{name}"
-"路径: %{path}","Path: %{path}"
-"模块 %{name} 的开发文档","模块 %{name} 的开发文档"
-"扫描完成: 文档 %{scanned} 个, 新增 %{new} 个, 更新 %{updated} 个","ScanComplete: Document %{scanned} , new %{new} , updated %{updated} "
-正在清理不存在的文档和分类...,"CleaningNon-existentDocuments and categories..."
-"跳过深层目录（超过6层）: %{path}","跳过深层目录（超过6层）: %{path}"
-"无法获取文件时间: %{path}","无法获取文件时间: %{path}"
-"分类变更: %{path}","分类变更: %{path}"
-"无法读取文件: %{path}","Unable to readFile: %{path}"
-"更新: %{path}","Update: %{path}"
-"新增: %{path}","New: %{path}"
-"目录 %{name}","Directory %{name}"
-"已删除 %{count} 个不存在的文档","已删除 %{count} 个不存在的文档"
-无需删除文档,"No need to deleteDocument"
-"已删除 %{count} 个不存在的分类","Deleted %{count} non-existentCategory"
-无需删除分类,"No need to deleteCategory"
-正在检查并清理重复文档...,正在检查并清理重复文档...
-没有发现需要清理的文档,没有发现需要清理的文档
-"共清理 %{count} 条重复文档","共清理 %{count} 条重复文档"
-"📡 开始导入API文档...","📡 开始导入API文档..."
-"API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}","API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}"
-"API文档导入失败: %{error}","API文档导入失败: %{error}"
 开发助手,"Development Assistant"
 关闭沙盒环境,"Close sandbox environment"
 确定,OK
-"搜索 ...","Search ..."
-头部语言,HeaderLanguage
-中国,China
-头像,Avatar
-资料,Profile
-我的钱包,MyWallet
-设置,Settings
-锁定屏幕,LockScreen
-退出,Exit
-返回欢迎页,"BackWelcome Page"
-返回上一页,"BackPrevious Page"
-菜单布局,MenuLayout
-菜单明亮,MenuBright
-图标菜单,IconMenu
-图文菜单,"Image TextMenu"
-主题布局,ThemeLayout
-水平布局,HorizontalLayout
-水平顶黑,"HorizontalTop Black"
-水平盒子,HorizontalBox
-主题颜色,ThemeColor
-明亮模式,BrightMode
-暗黑模式,DarkMode
-RTL模式,RTLMode
-设置开启沙盒环境的Key,Settings开启沙盒环境的Key
-"设置开启沙盒环境的Key，一旦设置后，前端启用沙盒环境则需要特定的Key,才能启用。","Settings开启沙盒环境的Key，一旦Settings后，前端启用沙盒环境则需要特定的Key,才能启用。"
-沙盒Key,"Sandbox Key"
-沙盒Key验证成功,"Sandbox KeyVerification successful"
-请输入沙盒Key,"Please enterSandbox Key"
-提交,Submit
-沙盒环境配置,"Sandbox environmentConfigure"
-沙盒环境是一套数据隔离的可提供给测试人员对代码进行测试的环境，测试时数据不会写入正式数据库，而是写入沙盒数据库。,沙盒环境是一套数据隔离的可提供给测试人员对代码进行测试的环境，测试时数据不会写入正式数据库，而是写入沙盒数据库。
-可配置参数：,ConfigurableParameters:
-控制沙盒环境参数来达到测试系统环境。,"ControlSandbox environmentParameterTo achieveTest systemEnvironment。"
-沙盒启动Key,"Sandbox Start Key"
-当前沙盒状态：,"Current Sandbox Status:"
-@if{enabled=>'开启'|'关闭'},@if{enabled=>'Open'|'Close'}
-当前Key：,"Current Key:"
-沙盒启动Key配置。使用时在请求后面加上sandbox参数。示例：,沙盒启动Key配置。使用时在请求后面加上sandbox参数。示例：
-开启沙盒,OpenSandbox
-关闭沙盒请在Cookie中删除或者设置：w_sandbox值。示例：,"To close sandbox, please delete or set w_sandbox value in Cookie. Example:"
-关闭沙盒,CloseSandbox
+开发文档,"Development Documentation"
 编写和管理开发文档,"Write andManagementDevelopment Documentation"
 API文档,API文档
 目录管理,DirectoryManagement
@@ -175,10 +100,29 @@ jstree库未加载，请刷新页面重试,"jstree library not loaded, please re
 好的,好的
 删除提示！,DeleteTip！
 文章删除失败，请重试！,"ArticleDeleteFailed, please retry！"
+管理开发文档,"ManagementDevelopment Documentation"
+"开发文档编辑器 有新的开发文档时可以随时编辑","Development DocumentationEditor When there is a newDevelopment documentationCan at any timeEdit"
+保存,Save
+返回,Back
+标题,Title
+请输入标题,"Please enterTitle"
+作者,Author
+请输入作者,"Please enterAuthor"
+摘要,Summary
+请输入摘要,"Please enterSummary"
+分类,Category
+文章内容,"Article content"
+文章内容不能为空,"Article contentCannot be empty"
+粗体,Bold
+红色文字,RedText
+红色标题,RedTitle
+示例1,Example1
+示例2,Example2
+表格样式,TableStyle
+表格行1,表格行1
 开发文档分类管理,"Development DocumentationCategory Management"
 左侧点击分类可在右侧编辑，拖拽节点可调整分类顺序和层级，空白处按住鼠标可以左右拖动,"Click category on the left to edit on the right, drag nodes to adjust category order and hierarchy, hold mouse in blank area to drag left and right"
 添加顶级分类,"AddTop Category"
-返回,Back
 关闭,Close
 正在加载分类树...,"LoadingCategory tree..."
 "暂无分类，点击""添加顶级分类""开始创建","NoCategory, click""AddTop Category""Start creating"
@@ -191,7 +135,6 @@ jstree库未加载，请刷新页面重试,"jstree library not loaded, please re
 请输入分类名称,"Please enterCategory name"
 请输入分类描述,"Please enterCategory description"
 取消,Cancel
-保存,Save
 删除分类,DeleteCategory
 系统分类不允许编辑,"System categoryNot allowedEdit"
 系统分类,"System category"
@@ -228,43 +171,42 @@ jstree实例不可用，请刷新页面重试,"jstreeInstanceNot available, plea
 层级,Level
 系统分类不允许修改名称,"System categoryNot allowedModifyName"
 这是系统分类，部分字段不允许修改,"This isSystem category, someFieldsNot allowedModify"
-管理开发文档,"ManagementDevelopment Documentation"
-"开发文档编辑器 有新的开发文档时可以随时编辑","Development DocumentationEditor When there is a newDevelopment documentationCan at any timeEdit"
-标题,Title
-请输入标题,"Please enterTitle"
-作者,Author
-请输入作者,"Please enterAuthor"
-摘要,Summary
-请输入摘要,"Please enterSummary"
-分类,Category
-文章内容,"Article content"
-文章内容不能为空,"Article contentCannot be empty"
-粗体,Bold
-红色文字,RedText
-红色标题,RedTitle
-示例1,Example1
-示例2,Example2
-表格样式,TableStyle
-表格行1,表格行1
+沙盒环境配置,"Sandbox environmentConfigure"
+沙盒环境是一套数据隔离的可提供给测试人员对代码进行测试的环境，测试时数据不会写入正式数据库，而是写入沙盒数据库。,沙盒环境是一套数据隔离的可提供给测试人员对代码进行测试的环境，测试时数据不会写入正式数据库，而是写入沙盒数据库。
+可配置参数：,ConfigurableParameters:
+控制沙盒环境参数来达到测试系统环境。,"ControlSandbox environmentParameterTo achieveTest systemEnvironment。"
+沙盒启动Key,"Sandbox Start Key"
+当前沙盒状态：,"Current Sandbox Status:"
+@if{enabled=>'开启'|'关闭'},@if{enabled=>'Open'|'Close'}
+当前Key：,"Current Key:"
+沙盒启动Key配置。使用时在请求后面加上sandbox参数。示例：,沙盒启动Key配置。使用时在请求后面加上sandbox参数。示例：
+开启沙盒,OpenSandbox
+关闭沙盒请在Cookie中删除或者设置：w_sandbox值。示例：,"To close sandbox, please delete or set w_sandbox value in Cookie. Example:"
+关闭沙盒,CloseSandbox
+设置开启沙盒环境的Key,Settings开启沙盒环境的Key
+"设置开启沙盒环境的Key，一旦设置后，前端启用沙盒环境则需要特定的Key,才能启用。","Settings开启沙盒环境的Key，一旦Settings后，前端启用沙盒环境则需要特定的Key,才能启用。"
+沙盒Key,"Sandbox Key"
+沙盒Key验证成功,"Sandbox KeyVerification successful"
+请输入沙盒Key,"Please enterSandbox Key"
+提交,Submit
 开发文档管理器,"Development DocumentationManager"
 系统,System
 新建文档,NewDocument
 新建一篇开发文档,"NewADevelopment Documentation"
-沙盒配置,沙盒配置
-提示,提示
-沙盒配置功能正在开发中，敬请期待。,沙盒配置功能正在开发中，敬请期待。
-开发面板配置,开发面板配置
-开发面板配置功能正在开发中，敬请期待。,开发面板配置功能正在开发中，敬请期待。
-Debug配置,Debug配置
-Debug配置功能正在开发中，敬请期待。,Debug配置功能正在开发中，敬请期待。
-"Weline Framework API接口文档","Weline Framework API接口文档"
-暂无API文档,暂无API文档
+"WelineFramework 开发文档","WelineFramework Development Documentation"
 当前货币,当前货币
 当前语言,当前语言
 默认货币,默认货币
 默认语言,默认语言
+选择分类查看文档,SelectCategoryViewDocument
+搜索文档...,SearchDocument...
 语言,语言
 货币,货币
+返回文档列表,BackDocumentList
+返回网站,返回网站
+请从左侧选择分类查看文档,"Please fromLeftSelectCategoryViewDocument"
+"Weline Framework API接口文档","Weline Framework API接口文档"
+暂无API文档,暂无API文档
 API接口,API接口
 选择接口查看详情,选择接口查看详情
 收起/展开,收起/展开
@@ -359,21 +301,79 @@ Header值,Header值
 已导入示例请求参数,已导入示例请求参数
 后端API用户登录,后端API用户登录
 前端API用户登录,前端API用户登录
-"WelineFramework 开发文档","WelineFramework Development Documentation"
-选择分类查看文档,SelectCategoryViewDocument
-搜索文档...,SearchDocument...
-返回文档列表,BackDocumentList
-返回网站,返回网站
-请从左侧选择分类查看文档,"Please fromLeftSelectCategoryViewDocument"
+设置,Settings
+菜单布局,MenuLayout
+菜单明亮,MenuBright
+图标菜单,IconMenu
+图文菜单,"Image TextMenu"
+主题布局,ThemeLayout
+水平布局,HorizontalLayout
+水平顶黑,"HorizontalTop Black"
+水平盒子,HorizontalBox
+主题颜色,ThemeColor
+明亮模式,BrightMode
+暗黑模式,DarkMode
+RTL模式,RTLMode
+"搜索 ...","Search ..."
+头部语言,HeaderLanguage
+中国,China
+头像,Avatar
+资料,Profile
+我的钱包,MyWallet
+锁定屏幕,LockScreen
+退出,Exit
+返回欢迎页,"BackWelcome Page"
+返回上一页,"BackPrevious Page"
+开发面板配置,开发面板配置
+提示,提示
+开发面板配置功能正在开发中，敬请期待。,开发面板配置功能正在开发中，敬请期待。
+沙盒配置,沙盒配置
+沙盒配置功能正在开发中，敬请期待。,沙盒配置功能正在开发中，敬请期待。
+Debug配置,Debug配置
+Debug配置功能正在开发中，敬请期待。,Debug配置功能正在开发中，敬请期待。
 开发,Development
-开发工具面板,开发工具面板
-在页面中显示开发工具面板，提供路由查看、API文档等功能。仅在开发模式下显示。,在页面中显示开发工具面板，提供路由查看、API文档等功能。仅在开发模式下显示。
-开发工具面板-扩展标签,开发工具面板-扩展标签
-"在开发工具面板标签栏「耗时统计」之后注入扩展标签按钮，由各模块自行实现（如 WLS 等）。","在开发工具面板标签栏「耗时统计」之后注入扩展标签按钮，由各模块自行实现（如 WLS 等）。"
-开发工具面板-扩展搜索区,开发工具面板-扩展搜索区
-"在开发工具面板搜索区域之后注入扩展标签对应的搜索区 HTML 与注册脚本。","在开发工具面板搜索区域之后注入扩展标签对应的搜索区 HTML 与注册脚本。"
-开发工具标题,开发工具标题
-在开发工具面板中显示标题内容。,在开发工具面板中显示标题内容。
+正在清理旧的自动导入文档和分类...,"CleaningOldAuto importedDocuments and categories..."
+清理完成,"Cleanup complete"
+"找到 %{count} 个模块包含 doc 目录，开始扫描...","Found %{count} modulesContain doc Directory, start scanning..."
+"[%{current}/%{total}] 正在扫描模块: %{name}","[%{current}/%{total}] ScanningModule: %{name}"
+"路径: %{path}","Path: %{path}"
+"模块 %{name} 的开发文档","模块 %{name} 的开发文档"
+"扫描完成: 文档 %{scanned} 个, 新增 %{new} 个, 更新 %{updated} 个","ScanComplete: Document %{scanned} , new %{new} , updated %{updated} "
+正在清理不存在的文档和分类...,"CleaningNon-existentDocuments and categories..."
+"跳过深层目录（超过6层）: %{path}","跳过深层目录（超过6层）: %{path}"
+"无法获取文件时间: %{path}","无法获取文件时间: %{path}"
+"分类变更: %{path}","分类变更: %{path}"
+"无法读取文件: %{path}","Unable to readFile: %{path}"
+"更新: %{path}","Update: %{path}"
+"新增: %{path}","New: %{path}"
+"目录 %{name}","Directory %{name}"
+"已删除 %{count} 个不存在的文档","已删除 %{count} 个不存在的文档"
+无需删除文档,"No need to deleteDocument"
+"已删除 %{count} 个不存在的分类","Deleted %{count} non-existentCategory"
+无需删除分类,"No need to deleteCategory"
+正在检查并清理重复文档...,正在检查并清理重复文档...
+没有发现需要清理的文档,没有发现需要清理的文档
+"共清理 %{count} 条重复文档","共清理 %{count} 条重复文档"
+"📡 开始导入API文档...","📡 开始导入API文档..."
+"API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}","API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}"
+"API文档导入失败: %{error}","API文档导入失败: %{error}"
+正在清理旧的API文档...,正在清理旧的API文档...
+正在生成API文档...,正在生成API文档...
+"更新API文档: %{method}","更新API文档: %{method}"
+"新增API文档: %{method}","新增API文档: %{method}"
+"处理模块分类: %{name}","处理模块分类: %{name}"
+前言,前言
+说在前面,说在前面
+安装,安装
+安装文档,安装文档
+快速开始,快速开始
+框架模组,框架模组
+框架规范,框架规范
+框架类的规范,框架类的规范
+模型文档,模型文档
+使用控制器,使用控制器
+模组事件,模组事件
+WelineFramework插件功能,WelineFramework插件功能
 表不存在，正在创建...,"Table does not exist, creating..."
 "添加 is_system 字段...","Add is_system Fields..."
 "已删除旧索引: %{name}","已删除旧索引: %{name}"
