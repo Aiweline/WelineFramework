@@ -333,6 +333,16 @@ class ServiceOrchestrator
 
             WlsLogger::info_("[Orchestrator] 启动服务 {$displayName} (role={$role}, instances={$instanceCount}, priority={$provider->getPriority()})");
 
+            // 启动 Session Server 前释放其端口，避免残留进程导致 Address already in use
+            if ($role === 'session_server') {
+                $sessionPort = $provider->getPort(1, $context);
+                if ($sessionPort > 0) {
+                    Processer::killProcessByPort($sessionPort);
+                    Processer::forceReleasePort($sessionPort);
+                    \usleep(500000);
+                }
+            }
+
             // 使用 Fiber 批量并发启动同一服务类型的所有实例
             $instances = $this->startInstancesBatch($provider, $instanceCount, $context);
             
@@ -348,6 +358,23 @@ class ServiceOrchestrator
             
             // 每个服务类型启动完毕后 poll IPC，确保所有 register/ready 消息被处理
             $this->controlServer?->poll(0, 200000);
+
+            // Session Server 就绪后再启动 Worker，避免 Worker 因连不上 Session 而进入降级模式
+            if ($role === 'session_server') {
+                foreach ($instances as $instance) {
+                    if ($instance !== null && $instance->port !== null) {
+                        if ($context->frontend) {
+                            echo "\033[33m    等待 Session Server#{$instance->instanceId} 就绪...\033[0m\n";
+                        }
+                        $ready = $this->waitForInstanceReady($role, $instance->instanceId, $this->startupTimeout);
+                        if (!$ready) {
+                            WlsLogger::warning_("[Orchestrator] Session Server#{$instance->instanceId} 就绪超时 ({$this->startupTimeout}s)，继续启动 Worker");
+                        } elseif ($context->frontend) {
+                            echo "\033[32m    ✓ Session Server#{$instance->instanceId} 就绪\033[0m\n";
+                        }
+                    }
+                }
+            }
         }
 
         if ($context->frontend) {
@@ -388,6 +415,7 @@ class ServiceOrchestrator
         
         // 委托给 Manager 持久化
         $manager->updateServices($context->instanceName, $services);
+        $manager->updateMasterPid($context->instanceName, $context->masterPid);
         WlsLogger::debug_('[Orchestrator] 服务实例信息已持久化');
     }
 
@@ -630,20 +658,20 @@ class ServiceOrchestrator
         $this->sendStopProgress('阶段1/6: 广播 DRAIN - 通知子进程停止接受新请求');
         $this->broadcastDrainToAll();
 
-        // ========== 阶段 2：等待排水完成 ==========
+        // ========== 阶段 2：等待排水完成（短超时，与 Windows 一致，不长时间等待）==========
         WlsLogger::info_('[Orchestrator] 阶段2: 等待排水完成');
         $this->sendStopProgress('阶段2/6: 等待排水完成 - 子进程处理完当前请求');
-        $this->waitForAllDrained($this->drainTimeout, true);
+        $this->waitForAllDrained(2.0, true);
 
         // ========== 阶段 3：广播 SHUTDOWN ==========
         WlsLogger::info_('[Orchestrator] 阶段3: 广播 SHUTDOWN');
         $this->sendStopProgress('阶段3/6: 广播 SHUTDOWN - 通知子进程退出');
         $this->broadcastShutdownToAll();
 
-        // ========== 阶段 4：等待所有 IPC 连接断开 ==========
+        // ========== 阶段 4：等待所有 IPC 连接断开（短超时）==========
         WlsLogger::info_('[Orchestrator] 阶段4: 等待子进程退出');
         $this->sendStopProgress('阶段4/6: 等待子进程退出');
-        $this->waitForAllDisconnectedWithProgress(5.0);
+        $this->waitForAllDisconnectedWithProgress(3.0);
 
         // ========== 阶段 5：校验并强制杀死残留进程 ==========
         WlsLogger::info_('[Orchestrator] 阶段5: 校验子进程退出状态');
@@ -2357,6 +2385,28 @@ class ServiceOrchestrator
                 if (!$result['success']) {
                     $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(false, $result, $result['message']));
                 }
+                break;
+
+            case ControlMessage::ACTION_SECURITY_UNBLOCK:
+                $ip = $msg['ip'] ?? null;
+                $clearAll = !empty($msg['clear_all']);
+                $dispatchers = $this->registry->getInstancesByRole('dispatcher');
+                $sent = 0;
+                foreach ($dispatchers as $dispatcher) {
+                    if ($dispatcher->ipcClientId !== null && $this->controlServer !== null) {
+                        $this->controlServer->sendTo(
+                            $dispatcher->ipcClientId,
+                            ControlMessage::securityUnblock($ip !== null && $ip !== '' ? $ip : null, $clearAll)
+                        );
+                        $sent++;
+                    }
+                }
+                $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
+                    true,
+                    ['dispatchers_notified' => $sent],
+                    $clearAll ? __('已通知 %{1} 个 Dispatcher 清空封禁列表', [$sent])
+                        : ($ip !== null && $ip !== '' ? __('已通知 %{1} 个 Dispatcher 解封 IP %{2}', [$sent, $ip]) : __('未指定 ip 或 clear_all'))
+                ));
                 break;
         }
     }

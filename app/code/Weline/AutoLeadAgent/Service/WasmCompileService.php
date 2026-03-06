@@ -1303,10 +1303,11 @@ class WasmCompileService
                 ->find()
                 ->fetch();
 
+            $now = date('Y-m-d H:i:s');
             if ($wasmHashModel->getId()) {
                 // 更新现有记录
                 $wasmHashModel->setData(WasmHash::schema_fields_WASM_PATH, $filePath)
-                    ->setData(WasmHash::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
+                    ->setData(WasmHash::schema_fields_UPDATED_AT, $now)
                     ->save();
             } else {
                 // 创建新记录

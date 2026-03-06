@@ -16,4 +16,8 @@ namespace Weline\Framework\Session;
  */
 interface SessionInterface extends SessionDataInterface, SessionLifecycleInterface
 {
+    /**
+     * 手动持久化未保存的变更（用于重定向前确保写入完成，避免 WLS 下跨请求读不到）
+     */
+    public function save(): void;
 }
