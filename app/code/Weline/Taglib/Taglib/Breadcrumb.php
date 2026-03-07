@@ -13,7 +13,6 @@ declare(strict_types=1);
 namespace Weline\Taglib\Taglib;
 
 use TheSeer\Tokenizer\Exception;
-use Weline\Backend\Model\Menu;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;

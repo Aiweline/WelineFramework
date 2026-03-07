@@ -556,6 +556,7 @@ class Stop extends CommandAbstract
     {
         $this->printer->note(__('清理残留进程...'));
         
+        // 新前缀（当前版本使用）
         $prefixes = [
             'weline-wls-master-' . $name,
             'weline-wls-worker-' . $name,
@@ -564,10 +565,24 @@ class Stop extends CommandAbstract
             'weline-wls-redirect-' . $name,
         ];
         
+        // 旧前缀兼容（历史版本可能遗留）
+        $legacyPrefixes = [
+            'weline-master-' . $name . '-worker-',
+        ];
+        
         $totalKilled = 0;
         foreach ($prefixes as $prefix) {
             $killed = Processer::killByProcessNamePrefix($prefix);
             $totalKilled += $killed;
+        }
+        
+        // 清理旧前缀残留（每个 Worker ID）
+        $count = (int)($instanceData['count'] ?? 4);
+        foreach ($legacyPrefixes as $legacyPrefix) {
+            for ($i = 1; $i <= $count; $i++) {
+                $killed = Processer::killByProcessNamePrefix($legacyPrefix . $i);
+                $totalKilled += $killed;
+            }
         }
         
         if ($totalKilled > 0) {
@@ -585,9 +600,14 @@ class Stop extends CommandAbstract
         // Master
         Processer::removePidFile('--name=' . MasterProcess::getMasterProcessName($name));
         
-        // Workers
+        // Workers（新前缀）
         for ($i = 1; $i <= $count; $i++) {
             Processer::removePidFile('--name=weline-wls-worker-' . $name . '-' . $i);
+        }
+        
+        // Workers（旧前缀兼容清理）
+        for ($i = 1; $i <= $count; $i++) {
+            Processer::removePidFile('--name=weline-master-' . $name . '-worker-' . $i);
         }
         
         // Dispatcher

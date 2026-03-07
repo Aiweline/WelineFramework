@@ -13,28 +13,28 @@ namespace Weline\Backend\Service;
 
 use Weline\Acl\Model\Acl;
 use Weline\Backend\Config\MenuXmlReader;
-use Weline\Backend\Model\Menu;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 菜单收集服务
  *
- * - 采用「先全量 diff 再批量执行」策略，确保删除 menu.xml 中的菜单时能被正确感知
+ * - 直接将 menu.xml 写入 weline_acl(type=menus)
+ * - 采用「先全量 diff 再批量执行」策略
  * - 支持：不指定模块时收集所有，指定模块时仅处理该模块
  * - 禁用模块的菜单做软禁用（is_enable=0）
  */
 class MenuCollector
 {
-    private Menu $menu;
+    private Acl $acl;
     private MenuXmlReader $menuReader;
 
     public function __construct(
-        Menu          $menu,
+        Acl           $acl,
         MenuXmlReader $menuReader
     )
     {
-        $this->menu = $menu;
+        $this->acl = $acl;
         $this->menuReader = $menuReader;
     }
 
@@ -77,19 +77,16 @@ class MenuCollector
         $disabledModules = $this->getDisabledModules();
 
         [$file_menus, $modules_xml_menus] = $this->buildFileMenus($modulesFilter, $disabledModules, $modules_info);
-        $db_menus = $this->buildDbMenus($modulesFilter);
+        $db_menus = $this->buildDbAclMenus($modulesFilter);
 
-        // 保护：未指定模块且文件端为空时，不执行破坏性操作（避免 Scanner/缓存异常导致误删全表）
+        // 保护：未指定模块且文件端为空时，不执行破坏性操作
         if (empty($modulesFilter) && empty($file_menus)) {
-            $this->syncAcl();
             return [$modules_xml_menus, [], $modules_info, count($file_menus)];
         }
 
         $diff = $this->computeDiff($file_menus, $db_menus, $disabledModules);
 
         $this->executeBatch($diff, $file_menus, $db_menus);
-
-        $this->syncAcl();
 
         return [$modules_xml_menus, [], $modules_info, count($file_menus)];
     }
@@ -112,15 +109,15 @@ class MenuCollector
         foreach ($modules_xml_menus as $module => $menus) {
             $data = $menus['data'] ?? [];
             foreach ($data as $menu) {
-                $menu[Menu::schema_fields_MODULE] = $module;
-                $menu[Menu::schema_fields_PARENT_SOURCE] = $menu['parent'] ?? '';
-                $menu[Menu::schema_fields_ACTION] = trim($menu[Menu::schema_fields_ACTION] ?? '', '/');
-                unset($menu['parent']);
+                $menu['module'] = $module;
+                $menu['parent_source'] = $menu['parent'] ?? '';
+                $menu['route'] = trim($menu['action'] ?? '', '/');
+                unset($menu['parent'], $menu['action']);
 
                 $menu = $this->replaceModuleAction($menu, $modules_info);
-                $menu[Menu::schema_fields_IS_ENABLE] = in_array($module, $disabledModules, true) ? 0 : 1;
+                $menu['is_enable'] = in_array($module, $disabledModules, true) ? 0 : 1;
 
-                $source = $menu[Menu::schema_fields_SOURCE] ?? '';
+                $source = $menu['source'] ?? '';
                 if ($source !== '') {
                     $file_menus[$source] = $menu;
                 }
@@ -130,20 +127,24 @@ class MenuCollector
     }
 
     /**
-     * 构建数据库端菜单状态（source => row）
+     * 构建数据库端 ACL 菜单状态（source_id => row）
+     * 直接从 weline_acl 读取 type=menus 的记录
      */
-    private function buildDbMenus(array $modulesFilter): array
+    private function buildDbAclMenus(array $modulesFilter): array
     {
-        $this->menu->reset();
+        $this->acl->reset();
+        $this->acl->where(Acl::schema_fields_TYPE, Acl::type_MENUS);
+        
         if (!empty($modulesFilter)) {
-            $this->menu->where(Menu::schema_fields_MODULE, $modulesFilter, 'in');
+            $this->acl->where(Acl::schema_fields_MODULE, $modulesFilter, 'in');
         }
-        $rows = $this->menu->select()->fetchArray();
+        
+        $rows = $this->acl->select()->fetchArray();
         $db_menus = [];
         foreach ($rows as $row) {
-            $source = $row[Menu::schema_fields_SOURCE] ?? '';
-            if ($source !== '') {
-                $db_menus[$source] = $row;
+            $sourceId = $row[Acl::schema_fields_SOURCE_ID] ?? '';
+            if ($sourceId !== '') {
+                $db_menus[$sourceId] = $row;
             }
         }
         return $db_menus;
@@ -175,9 +176,9 @@ class MenuCollector
         $sourcesToDelete = [];
         $sourcesToDisable = [];
         foreach ($removed as $source) {
-            $module = $db_menus[$source][Menu::schema_fields_MODULE] ?? '';
+            $module = $db_menus[$source][Acl::schema_fields_MODULE] ?? '';
             $children = [];
-            $this->collectChildMenuSources($source, $children);
+            $this->collectChildAclSources($source, $children);
             $all = array_merge([$source], $children);
             if (in_array($module, $disabledModules, true)) {
                 foreach ($all as $s) {
@@ -202,19 +203,24 @@ class MenuCollector
         ];
     }
 
+    /**
+     * 比较菜单数据是否变化
+     */
     private function menuDataChanged(array $file, array $db): bool
     {
         $fields = [
-            Menu::schema_fields_TITLE,
-            Menu::schema_fields_ACTION,
-            Menu::schema_fields_ICON,
-            Menu::schema_fields_ORDER,
-            Menu::schema_fields_PARENT_SOURCE,
-            Menu::schema_fields_IS_ENABLE,
+            'source_name' => Acl::schema_fields_SOURCE_NAME,
+            'route' => Acl::schema_fields_ROUTE,
+            'icon' => Acl::schema_fields_ICON,
+            'order' => Acl::schema_fields_ORDER,
+            'parent_source' => Acl::schema_fields_PARENT_SOURCE,
+            'is_enable' => Acl::schema_fields_IS_ENABLE,
+            'module' => Acl::schema_fields_MODULE,
         ];
-        foreach ($fields as $f) {
-            $fv = $file[$f] ?? '';
-            $dv = $db[$f] ?? '';
+        
+        foreach ($fields as $fileKey => $dbKey) {
+            $fv = $file[$fileKey] ?? '';
+            $dv = $db[$dbKey] ?? '';
             if ((string)$fv !== (string)$dv) {
                 return true;
             }
@@ -232,120 +238,86 @@ class MenuCollector
         $to_update = $diff['to_update'];
         $to_add_sources = $diff['to_add'];
 
+        // 删除：从 ACL 表删除
         if (!empty($to_delete)) {
-            $this->menu->reset()
-                ->where(Menu::schema_fields_SOURCE, $to_delete, 'in')
+            $this->acl->reset()
+                ->where(Acl::schema_fields_SOURCE_ID, $to_delete, 'in')
                 ->delete()
                 ->fetch();
         }
 
+        // 软禁用：更新 is_enable = 0
         if (!empty($to_disable)) {
-            $this->menu->reset()
-                ->where(Menu::schema_fields_SOURCE, $to_disable, 'in')
-                ->update([Menu::schema_fields_IS_ENABLE => 0])
+            $this->acl->reset()
+                ->where(Acl::schema_fields_SOURCE_ID, $to_disable, 'in')
+                ->update([Acl::schema_fields_IS_ENABLE => 0])
                 ->fetch();
         }
 
-        $id_map = [];
-        foreach ($db_menus as $source => $row) {
-            $id_map[$source] = [
-                'menu_id' => (int)($row[Menu::schema_fields_ID] ?? 0),
-                'level' => (int)($row[Menu::schema_fields_LEVEL] ?? 0),
-                'path' => (string)($row[Menu::schema_fields_PATH] ?? ''),
-            ];
-        }
-
+        // 更新
         foreach ($to_update as $source => $file_data) {
-            $this->applyMenuUpdate($source, $file_data, $db_menus[$source] ?? [], $id_map, $db_menus);
+            $this->applyAclUpdate($source, $file_data);
         }
 
+        // 新增：按拓扑排序确保父节点先插入
         $to_add_ordered = $this->topologicalSortAdd($to_add_sources, $file_menus);
         foreach ($to_add_ordered as $source) {
             $file_data = $file_menus[$source] ?? [];
             if (empty($file_data)) {
                 continue;
             }
-            $this->applyMenuInsert($source, $file_data, $id_map);
+            $this->applyAclInsert($source, $file_data);
         }
     }
 
-    private function applyMenuUpdate(string $source, array $file_data, array $db_row, array &$id_map, array $db_menus): void
+    /**
+     * 更新 ACL 菜单记录
+     */
+    private function applyAclUpdate(string $source, array $file_data): void
     {
-        $parent_source = $file_data[Menu::schema_fields_PARENT_SOURCE] ?? '';
-        $pid = 0;
-        $level = 1;
-        $path = '';
-        $menu_id = (int)($db_row[Menu::schema_fields_ID] ?? 0);
-
-        if ($parent_source !== '') {
-            $pid = $id_map[$parent_source]['menu_id'] ?? 0;
-            $parent_level = $id_map[$parent_source]['level'] ?? 0;
-            $level = $parent_level + 1;
-            $parent_path = $id_map[$parent_source]['path'] ?? ($db_menus[$parent_source][Menu::schema_fields_PATH] ?? '');
-            $path = $parent_path ? ($parent_path . '/' . $menu_id) : (string)$menu_id;
-        } else {
-            $path = (string)$menu_id;
-        }
-
         $row = [
-            Menu::schema_fields_TITLE => $file_data[Menu::schema_fields_TITLE] ?? '',
-            Menu::schema_fields_ACTION => $file_data[Menu::schema_fields_ACTION] ?? '',
-            Menu::schema_fields_ICON => $file_data[Menu::schema_fields_ICON] ?? '',
-            Menu::schema_fields_ORDER => (int)($file_data[Menu::schema_fields_ORDER] ?? 0),
-            Menu::schema_fields_PARENT_SOURCE => $parent_source,
-            Menu::schema_fields_PID => $pid,
-            Menu::schema_fields_LEVEL => $level,
-            Menu::schema_fields_PATH => $path,
-            Menu::schema_fields_IS_ENABLE => (int)($file_data[Menu::schema_fields_IS_ENABLE] ?? 1),
+            Acl::schema_fields_SOURCE_NAME => $file_data['title'] ?? $file_data['name'] ?? $source,
+            Acl::schema_fields_ROUTE => $file_data['route'] ?? '',
+            Acl::schema_fields_ICON => $file_data['icon'] ?? '',
+            Acl::schema_fields_ORDER => (int)($file_data['order'] ?? 0),
+            Acl::schema_fields_PARENT_SOURCE => $file_data['parent_source'] ?? '',
+            Acl::schema_fields_MODULE => $file_data['module'] ?? '',
+            Acl::schema_fields_IS_ENABLE => (int)($file_data['is_enable'] ?? 1),
+            Acl::schema_fields_IS_BACKEND => (int)($file_data['is_backend'] ?? 1),
+            Acl::schema_fields_TYPE => Acl::type_MENUS,
+            Acl::schema_fields_DOCUMENT => ($file_data['is_system'] ?? 0) ? __('系统菜单') : __('用户菜单'),
         ];
 
-        $this->menu->reset()
-            ->where(Menu::schema_fields_SOURCE, $source)
+        $this->acl->reset()
+            ->where(Acl::schema_fields_SOURCE_ID, $source)
             ->update($row)
             ->fetch();
     }
 
-    private function applyMenuInsert(string $source, array $file_data, array &$id_map): void
+    /**
+     * 插入 ACL 菜单记录
+     */
+    private function applyAclInsert(string $source, array $file_data): void
     {
-        $parent_source = $file_data[Menu::schema_fields_PARENT_SOURCE] ?? '';
-        $pid = 0;
-        $level = 1;
-
-        if ($parent_source !== '') {
-            $pid = $id_map[$parent_source]['menu_id'] ?? 0;
-            $parent_level = $id_map[$parent_source]['level'] ?? 0;
-            $level = $parent_level + 1;
-        }
-
         $row = [
-            Menu::schema_fields_SOURCE => $source,
-            Menu::schema_fields_NAME => $file_data['name'] ?? $source,
-            Menu::schema_fields_TITLE => $file_data[Menu::schema_fields_TITLE] ?? '',
-            Menu::schema_fields_ACTION => $file_data[Menu::schema_fields_ACTION] ?? '',
-            Menu::schema_fields_ICON => $file_data[Menu::schema_fields_ICON] ?? '',
-            Menu::schema_fields_ORDER => (int)($file_data[Menu::schema_fields_ORDER] ?? 0),
-            Menu::schema_fields_MODULE => $file_data[Menu::schema_fields_MODULE] ?? '',
-            Menu::schema_fields_PARENT_SOURCE => $parent_source,
-            Menu::schema_fields_PID => $pid,
-            Menu::schema_fields_LEVEL => $level,
-            Menu::schema_fields_PATH => '',
-            Menu::schema_fields_IS_SYSTEM => (int)($file_data[Menu::schema_fields_IS_SYSTEM] ?? 0),
-            Menu::schema_fields_IS_ENABLE => (int)($file_data[Menu::schema_fields_IS_ENABLE] ?? 1),
-            Menu::schema_fields_IS_BACKEND => (int)($file_data[Menu::schema_fields_IS_BACKEND] ?? 1),
+            Acl::schema_fields_SOURCE_ID => $source,
+            Acl::schema_fields_SOURCE_NAME => $file_data['title'] ?? $file_data['name'] ?? $source,
+            Acl::schema_fields_ROUTE => $file_data['route'] ?? '',
+            Acl::schema_fields_ROUTER => '',
+            Acl::schema_fields_ICON => $file_data['icon'] ?? '',
+            Acl::schema_fields_ORDER => (int)($file_data['order'] ?? 0),
+            Acl::schema_fields_PARENT_SOURCE => $file_data['parent_source'] ?? '',
+            Acl::schema_fields_MODULE => $file_data['module'] ?? '',
+            Acl::schema_fields_CLASS => '',
+            Acl::schema_fields_METHOD => 'GET',
+            Acl::schema_fields_REWRITE => '',
+            Acl::schema_fields_TYPE => Acl::type_MENUS,
+            Acl::schema_fields_DOCUMENT => ($file_data['is_system'] ?? 0) ? __('系统菜单') : __('用户菜单'),
+            Acl::schema_fields_IS_ENABLE => (int)($file_data['is_enable'] ?? 1),
+            Acl::schema_fields_IS_BACKEND => (int)($file_data['is_backend'] ?? 1),
         ];
 
-        $this->menu->clear()->setData($row)->save(true, 'source');
-        $menu_id = (int)$this->menu->getData(Menu::schema_fields_ID);
-
-        $parent_path = $parent_source !== '' ? ($id_map[$parent_source]['path'] ?? '') : '';
-        $path = $parent_path ? ($parent_path . '/' . $menu_id) : (string)$menu_id;
-
-        $id_map[$source] = ['menu_id' => $menu_id, 'level' => $level, 'path' => $path];
-
-        $this->menu->reset()
-            ->where(Menu::schema_fields_SOURCE, $source)
-            ->update([Menu::schema_fields_PATH => $path])
-            ->fetch();
+        $this->acl->reset()->setData($row)->save(true, Acl::schema_fields_SOURCE_ID);
     }
 
     /**
@@ -359,7 +331,7 @@ class MenuCollector
         while (!empty($queue)) {
             $next = [];
             foreach ($queue as $source) {
-                $parent = $file_menus[$source][Menu::schema_fields_PARENT_SOURCE] ?? '';
+                $parent = $file_menus[$source]['parent_source'] ?? '';
                 if ($parent === '' || in_array($parent, $seen, true) || !isset($file_menus[$parent])) {
                     $result[] = $source;
                     $seen[] = $source;
@@ -376,6 +348,9 @@ class MenuCollector
         return $result;
     }
 
+    /**
+     * 获取禁用的模块列表
+     */
     private function getDisabledModules(): array
     {
         $all = Env::getInstance()->getModuleList();
@@ -389,79 +364,31 @@ class MenuCollector
         return $disabled;
     }
 
-    private function syncAcl(): void
-    {
-        $all_menus = $this->menu->reset()->order('order', 'ASC')->select()->fetchArray();
-        $collected_menu_sources = array_column($all_menus, 'source');
-
-        /** @var Acl $aclModel */
-        $aclModel = ObjectManager::getInstance(Acl::class);
-
-        if (!empty($collected_menu_sources)) {
-            $aclModel->reset()
-                ->where(Acl::schema_fields_TYPE, 'menus')
-                ->where(Acl::schema_fields_SOURCE_ID, $collected_menu_sources, 'not in')
-                ->update([Acl::schema_fields_TYPE => 'pc'])
-                ->fetch();
-            $aclModel->reset()
-                ->where(Acl::schema_fields_TYPE, 'menus')
-                ->where(Acl::schema_fields_SOURCE_ID, $collected_menu_sources, 'not in')
-                ->delete()
-                ->fetch();
-        } else {
-            $aclModel->reset()
-                ->where(Acl::schema_fields_TYPE, 'menus')
-                ->delete()
-                ->fetch();
-        }
-
-        $acl_items = [];
-        foreach ($all_menus as $menu) {
-            $acl_items[] = [
-                Acl::schema_fields_SOURCE_ID => $menu['source'],
-                Acl::schema_fields_ORDER => $menu['order'],
-                Acl::schema_fields_PARENT_SOURCE => $menu['parent_source'],
-                Acl::schema_fields_TYPE => 'menus',
-                Acl::schema_fields_CLASS => '',
-                Acl::schema_fields_MODULE => $menu['module'],
-                Acl::schema_fields_SOURCE_NAME => $menu['title'],
-                Acl::schema_fields_ROUTER => '',
-                Acl::schema_fields_ROUTE => trim($menu['action'] ?? '', '/'),
-                Acl::schema_fields_METHOD => 'GET',
-                Acl::schema_fields_DOCUMENT => ($menu['is_system'] ?? 0) ? __('系统菜单') : __('用户菜单'),
-                Acl::schema_fields_REWRITE => '',
-                Acl::schema_fields_ICON => $menu['icon'],
-                Acl::schema_fields_IS_ENABLE => $menu['is_enable'],
-                Acl::schema_fields_IS_BACKEND => $menu['is_backend'],
-            ];
-        }
-
-        if (!empty($acl_items)) {
-            $aclModel->reset()->insert($acl_items, 'source_id')->fetch();
-        }
-    }
-
     /**
-     * 递归收集子菜单的 source（从当前 DB 查询）
+     * 递归收集子 ACL 菜单的 source_id
      */
-    private function collectChildMenuSources(string $parentSource, array &$sources): void
+    private function collectChildAclSources(string $parentSource, array &$sources): void
     {
-        $children = $this->menu->reset()
-            ->where(Menu::schema_fields_PARENT_SOURCE, $parentSource)
+        $children = $this->acl->reset()
+            ->where(Acl::schema_fields_PARENT_SOURCE, $parentSource)
+            ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
             ->select()
             ->fetchArray();
         foreach ($children as $child) {
-            $s = $child[Menu::schema_fields_SOURCE] ?? '';
+            $s = $child[Acl::schema_fields_SOURCE_ID] ?? '';
             if ($s !== '' && !in_array($s, $sources, true)) {
                 $sources[] = $s;
-                $this->collectChildMenuSources($s, $sources);
+                $this->collectChildAclSources($s, $sources);
             }
         }
     }
 
+    /**
+     * 替换模块路由占位符
+     */
     private function replaceModuleAction(array $menu, array &$modules_info): array
     {
-        if (strpos($menu[Menu::schema_fields_ACTION] ?? '', '*') === false) {
+        if (strpos($menu['route'] ?? '', '*') === false) {
             return $menu;
         }
         $module = $menu['module'] ?? '';
@@ -480,7 +407,7 @@ class MenuCollector
         $router = $is_backend
             ? ($backend_router ?: $front_router ?: $fallback)
             : ($front_router ?: $fallback);
-        $menu[Menu::schema_fields_ACTION] = str_replace('*', $router, $menu[Menu::schema_fields_ACTION]);
+        $menu['route'] = str_replace('*', $router, $menu['route']);
         return $menu;
     }
 }
