@@ -33,6 +33,21 @@ class ServerInstanceManager
         'dispatcher' => 'Dispatcher',
         'redirect' => 'HTTP Redirect',
         'maintenance' => 'Maintenance Worker',
+        'memory_server' => 'Memory Service',
+        'memory_cache' => 'Memory Cache Service',
+        'memory_session' => 'Memory Session Service',
+    ];
+
+    /** 服务角色优先级映射（用于旧格式回填） */
+    private const ROLE_PRIORITIES = [
+        'session_server' => 10,
+        'worker' => 20,
+        'dispatcher' => 30,
+        'redirect' => 40,
+        'maintenance' => 50,
+        'memory_server' => 12,
+        'memory_cache' => 15,
+        'memory_session' => 16,
     ];
 
     /**
@@ -245,7 +260,15 @@ class ServerInstanceManager
      */
     public function getDisplayName(string $role): string
     {
-        return self::ROLE_DISPLAY_NAMES[$role] ?? \ucfirst(\str_replace('_', ' ', $role));
+        return self::ROLE_DISPLAY_NAMES[$role] ?? \ucwords(\str_replace('_', ' ', $role));
+    }
+
+    /**
+     * 获取服务角色优先级
+     */
+    public function getRolePriority(string $role): int
+    {
+        return self::ROLE_PRIORITIES[$role] ?? 99;
     }
 
     /**
@@ -291,6 +314,9 @@ class ServerInstanceManager
                 foreach ($instances as $instData) {
                     $instData['role'] = $role;
                     $instData['display_name'] = $displayName;
+                    if (!isset($instData['priority'])) {
+                        $instData['priority'] = $this->getRolePriority($role);
+                    }
                     $services[] = ServiceInfo::fromArray($instData);
                 }
             }
@@ -322,6 +348,7 @@ class ServerInstanceManager
             pid: $sessionServerPid,
             port: $sessionServerPort,
             state: $this->guessState($sessionServerPid, $sessionServerPort),
+            priority: $this->getRolePriority('session_server'),
         );
 
         // Workers
@@ -339,6 +366,7 @@ class ServerInstanceManager
                 pid: $pid,
                 port: $port,
                 state: $this->guessState($pid, $port),
+                priority: $this->getRolePriority('worker'),
             );
         }
 
@@ -353,6 +381,7 @@ class ServerInstanceManager
                 pid: $dispatcherPid,
                 port: $dispatcherPort,
                 state: $this->guessState($dispatcherPid, $dispatcherPort),
+                priority: $this->getRolePriority('dispatcher'),
             );
         }
 
@@ -367,6 +396,7 @@ class ServerInstanceManager
                 pid: $redirectPid,
                 port: $redirectPort,
                 state: $this->guessState($redirectPid, $redirectPort),
+                priority: $this->getRolePriority('redirect'),
             );
         }
 
@@ -378,10 +408,12 @@ class ServerInstanceManager
      */
     private function guessState(int $pid, ?int $port): string
     {
-        if ($port !== null && $port > 0 && Processer::isPortInUse($port)) {
+        if ($pid > 0 && Processer::processExists($pid)) {
             return ServiceInstance::STATE_READY;
         }
-        if ($pid > 0 && Processer::processExists($pid)) {
+        // 仅在缺失 PID 时，才用端口作为弱信号推断“可能运行中”。
+        // 否则会把“其他实例占用同端口”误判为当前实例在线。
+        if ($pid <= 0 && $port !== null && $port > 0 && Processer::isPortInUse($port)) {
             return ServiceInstance::STATE_READY;
         }
         return ServiceInstance::STATE_STOPPED;

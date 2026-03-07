@@ -4,6 +4,174 @@
 
 ---
 
+## [2026-03-07] WLS 下登录错误消息跨请求累积（MessageManager 追加语义）✅ 已修复
+
+**错误类型**: WLS 会话消息消费链路 / 业务提示累积
+
+**错误信息**:
+```text
+后台登录连续失败后，登录页会显示多条历史错误消息（例如“登录凭据错误”重复累计）。
+预期是每次只显示当前一次失败消息。
+```
+
+**根本原因**:
+1. `MessageManager::error()` 采用 `append('system-message', ...)`，属于“可累积”语义。  
+2. 登录场景需要“单条最新提示”，但仍调用了通用 `error()`，在 WLS 常驻下更容易暴露累计效果。  
+3. 登录控制器有多处失败分支均走 `error()`，导致连续失败时消息自然叠加。
+
+**解决方案**:
+1. 仅在登录控制器中将 `MessageManager::error()` 替换为 `MessageManager::setSingleError()`。  
+2. 保持 `MessageManager::error()` 通用追加语义不变，避免影响其他页面需要多条提示的场景。  
+3. 登录失败提示改为“覆盖式单条消息”，确保每次失败只展示最新一条。
+
+**验证方法**:
+```bash
+php -l "app/code/Weline/Admin/Controller/Login.php"
+```
+
+**验证结果**: ✅ 成功（语法检查通过）
+
+**预防措施**:
+1. 登录、OTP、验证码等“单状态反馈”场景优先使用 `setSingleError()`。  
+2. 保留 `error()` 作为通用追加接口，避免全局语义破坏。  
+3. WLS 下涉及 session 消息时优先明确“追加”还是“覆盖”语义。
+
+**相关文件**:
+- `app/code/Weline/Admin/Controller/Login.php`
+- `app/code/Weline/Framework/Manager/MessageManager.php`
+
+---
+
+## [2026-03-07] WLS 每请求清空 EventsManager 观察者缓存导致请求稳定变慢
+
+**错误类型**: WLS 性能回退 / 请求生命周期状态管理误判
+
+**错误信息**:
+```text
+[WorkerSSL] 准备进入框架处理 ... 到 Worker 已写完响应约 4 秒
+复测中 401/404 请求稳定在 3.6~3.9s（不符合预期）
+```
+
+**根本原因**:
+1. 将 `EventsManager` 的 `observerCache/eventsObservers/moduleStatusCache` 误当作“请求级状态”在每次请求结束后清空。  
+2. 下一次请求会重新触发事件观察者解析与模块状态检查，导致前置链路每请求都发生重建开销。  
+3. 该缓存本质是进程级只读热缓存，应在配置变更/注册表刷新时清理，而非按请求清理。
+
+**解决方案**:
+1. 保留 `EventsManager::resetRequestState()` 对请求级 `$events` 的重置。  
+2. 从 `resetRequestState()` 中移除 `clearObserverCache()` 与 `moduleStatusCache` 清空动作。  
+3. 观察者缓存仅由显式刷新路径触发清理（例如注册表刷新）。
+
+**验证方法**:
+```bash
+php bin/w server:reload
+curl -k -o NUL -s -w "code=%{http_code} total=%{time_total}\n" "https://127.0.0.1:9981/fCifCY5ACt5EnTo72e5c8qUKfiqbT2Bk/dev/tool/rest/v1/document/modules"
+curl -k -o NUL -s -w "code=%{http_code} total=%{time_total}\n" "https://127.0.0.1:9981/fCifCY5ACt5EnTo72e5c8qUKfiqbT2Bk/admin"
+```
+
+**验证结果**: ✅ 成功
+- 修复前：`document/modules`（401）约 `3.68~3.86s`，`/admin`（404）约 `3.56s`。  
+- 修复后：`document/modules`（401）约 `0.08~0.16s`，`/admin`（404）约 `0.02~0.05s`。  
+- 说明：瓶颈确认为请求前置链路缓存被误清导致的重建开销。
+
+**预防措施**:
+1. WLS 状态治理先做“请求级/进程级”分层：仅请求级数据注册到 `StateManager`。  
+2. 事件观察者与模块状态缓存默认视为进程级热缓存，禁止按请求清理。  
+3. 任何新增 reset 项必须附带“修复前后延迟对比”验证。
+
+**相关文件**:
+- `app/code/Weline/Framework/Event/EventsManager.php`
+- `app/code/Weline/Framework/Runtime/StateManager.php`
+
+
+## [2026-03-07] WLS 状态/维护/重载链路三处一致性缺陷（已修复）
+
+**错误类型**: WLS 进程状态判定 / IPC 滚动重启流程 / 多实例重载通知
+
+**错误信息**:
+```text
+1) server:status 显示服务“运行中”，但 PID 已不存在，端口不可达
+2) server:maintenance rolling 完成后，status 仍显示 maintenance_mode=true
+3) cache:clear 提示 “WLS 重载：所有通知方式均失败”，但实例实际在运行
+```
+
+**根本原因**:
+1. `ServiceInfo::isRunning()` 仅看持久化 `state`，未优先校验 PID 存活；`guessState()` 端口优先导致跨实例端口误判。  
+2. `finishRollingRestart()` 在 `rollingRestartInProgress=true` 时先调用 `disableMaintenanceMode()`，被保护逻辑拒绝。  
+3. `CliCommandExecutedObserver` IPC 重载仅通知 `default`，忽略命名实例。  
+
+**解决方案**:
+1. `ServiceInfo::isRunning()` 改为“PID 优先、端口回退、状态兜底”；新增短缓存减少重复系统调用。  
+2. `ServerInstanceManager::guessState()` 改为“PID 优先，仅在无 PID 时才用端口弱推断”。  
+3. `ServiceOrchestrator::finishRollingRestart()` 先清理 rolling 标志再禁用 maintenance。  
+4. 滚动重启与优雅重载增加“新实例 READY 超时”失败判定，避免假成功。  
+5. `Maintenance` 命令修正运行实例统计键与 services 结构解析。  
+6. `CliCommandExecutedObserver` 改为广播到所有运行实例，而非固定 `default`。  
+
+**验证方法**:
+```bash
+php vendor/bin/phpunit app/code/Weline/Server/Test/Unit/Service/ServiceInfoRuntimeStatusTest.php
+php bin/w server:stop --all -f
+php bin/w server:start verify_http -p 8443 --no-ssl -r -f
+php bin/w server:maintenance rolling verify_http
+php bin/w server:maintenance status verify_http
+php bin/w cache:clear
+php bin/w server:stop verify_http -f
+```
+
+**验证结果**: ✅ 成功
+- 滚动重启后 maintenance 状态能正确回落为“未启用”。  
+- `cache:clear` 可通过 IPC 命中运行实例（不再仅 default）。  
+- 停机后状态可正确反映为 stopped（不再“假在线”）。  
+
+**相关文件**:
+- `app/code/Weline/Server/Service/Contract/ServiceInfo.php`
+- `app/code/Weline/Server/Service/ServerInstanceManager.php`
+- `app/code/Weline/Server/Service/ServiceOrchestrator.php`
+- `app/code/Weline/Server/Console/Server/Maintenance.php`
+- `app/code/Weline/Server/Observer/CliCommandExecutedObserver.php`
+
+---
+
+## [2026-03-07] `http:req` 并发模式 `-H` 单头字符串触发 TypeError
+
+**错误类型**: PHP 类型错误 / CLI 参数归一化缺失
+
+**错误信息**:
+```text
+TypeError: Weline\Framework\Http\Console\Http\Request::executeConcurrentRequests():
+Argument #4 ($headers) must be of type array, string given
+```
+
+**根本原因**:
+1. `http:req` 在入口直接读取 `$args['header'] ?? $args['H']`。  
+2. 用户传参 `-H='Host: alpha.local'` 时是单字符串，不是数组。  
+3. 并发路径 `executeConcurrentRequests()` 强类型要求 `array $headers`，导致直接抛异常。
+
+**解决方案**:
+1. 在 `Request` 命令入口增加 `normalizeHeaders()`，将 `string|array` 统一为 `array`。  
+2. 新增 `parseSingleHeader()`，把 `"Header: value"` 解析为 `['Header' => 'value']`。  
+3. 保留兼容：已传 `key => value` 的数组不变，数字索引字符串数组逐项解析。
+
+**验证方法**:
+```bash
+php bin/w http:req /_wls/health -P=10001 --http -H='Host: alpha.local' -C -t=5
+```
+
+**验证结果**: ✅ 成功
+- 不再出现 TypeError。  
+- 并发请求可完成并输出统计结果。
+
+**预防措施**:
+1. CLI 命令入口参数应先做 `string|array` 归一化再进入强类型方法。  
+2. `-H/--header` 这类多态参数，统一支持“单条字符串 + 数组”两种输入。
+
+**相关文件**:
+- `app/code/Weline/Framework/Http/Console/Http/Request.php`
+- `dev/ai/skills/error-tracking/COMMON_ERRORS.md`
+
+---
+
 ## [2026-03-07] WLS Worker 内存溢出 - WlsMemoryAdapter serialize 触发 OOM ✅ 已修复
 
 **错误类型**: WLS 内存管理 / 缓存设计
@@ -1749,5 +1917,54 @@ php "app/code/Weline/Server/Test/Service/standalone_test.php"
 - `app/code/Weline/Server/bin/session_server.php`
 - `app/code/Weline/Server/bin/http_redirect_worker.php`
 - `app/code/Weline/Server/Dispatcher/Dispatcher.php`
+
+---
+
+## [2026-03-07] PageBuilder i18n CSV 编码损坏（NUL/乱码尾段）✅ 已修复
+
+**错误类型**: i18n 文件编码/数据完整性（UTF-8 失效）
+
+**错误信息**:
+```text
+PageBuilder i18n 文件尾部出现 NUL 字节与乱码片段：
+- zh_Hans_CN.csv: NUL=233（坏行区间 2510-2556）
+- en_US.csv: NUL=1（坏行 2514）
+并导致部分翻译 key 显示为问号字符串（????）。
+```
+
+**根本原因**:
+1. 历史写入中混入了二进制片段（含 `\x00`），使 CSV 处于“可读但不可维护”状态。  
+2. 文件尾段发生编码污染，导致部分 key 语义丢失（显示为 `?`）。  
+3. 翻译文件长期累积后未进行结构化健康检查（UTF-8/NUL/CSV 列数）。
+
+**解决方案**:
+1. 清理并重写损坏尾段，移除 NUL 及不可解析片段。  
+2. 对 `zh_Hans_CN.csv` / `en_US.csv` 统一恢复为 UTF-8（无 NUL）。  
+3. 执行 `php bin/w i18n:collect` 重新回收翻译键，确保 CSV 结构可用。  
+4. 对本次新增的域名状态文案补齐翻译项（解析/HTTPS/建站状态）。
+
+**验证方法**:
+```bash
+php bin/w i18n:collect
+python -c "…统计 NUL、UTF-8 decode、CSV 两列结构…"
+ReadLints(paths=[DomainManagement/index.phtml, QuickBuild/wizard.phtml, WebsiteManagement/form.phtml])
+```
+
+**验证结果**: ✅ 成功
+- `zh_Hans_CN.csv`：NUL=0，UTF-8 可解码，CSV 行结构合法（2列）。  
+- `en_US.csv`：NUL=0，UTF-8 可解码，CSV 行结构合法（2列）。  
+- 本次改动模板文件无新增 lints。
+
+**预防措施**:
+1. i18n 文件提交前必须执行三项健康检查：`NUL=0`、`UTF-8 strict decode`、`CSV 每行 2 列`。  
+2. 出现尾段乱码时优先做“分段修复”（保留健康前缀 + 重建损坏尾段），避免全量重写。  
+3. 修复后必须执行 `i18n:collect`，让键回收与文件结构再次对齐。
+
+**相关文件**:
+- `app/code/GuoLaiRen/PageBuilder/i18n/zh_Hans_CN.csv`
+- `app/code/GuoLaiRen/PageBuilder/i18n/en_US.csv`
+- `app/code/GuoLaiRen/PageBuilder/view/templates/Backend/DomainManagement/index.phtml`
+- `app/code/GuoLaiRen/PageBuilder/view/templates/Backend/QuickBuild/wizard.phtml`
+- `app/code/GuoLaiRen/PageBuilder/view/templates/Backend/WebsiteManagement/form.phtml`
 
 ---

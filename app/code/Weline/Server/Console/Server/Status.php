@@ -264,24 +264,23 @@ class Status extends CommandAbstract
         foreach ($info->services as $service) {
             $servicesByRole[$service->role][] = $service;
         }
-        
-        $roleOrder = ['session_server', 'redirect', 'dispatcher', 'worker', 'maintenance'];
-        $sortedRoles = [];
-        foreach ($roleOrder as $role) {
-            if (isset($servicesByRole[$role])) {
-                $sortedRoles[$role] = $servicesByRole[$role];
+
+        // 使用服务优先级排序角色，避免新增角色需要在此硬编码维护
+        \uasort($servicesByRole, static function (array $left, array $right): int {
+            $leftPriority = isset($left[0]) ? (int)$left[0]->priority : 99;
+            $rightPriority = isset($right[0]) ? (int)$right[0]->priority : 99;
+            if ($leftPriority !== $rightPriority) {
+                return $leftPriority <=> $rightPriority;
             }
-        }
-        foreach ($servicesByRole as $role => $services) {
-            if (!isset($sortedRoles[$role])) {
-                $sortedRoles[$role] = $services;
-            }
-        }
-        
-        $roleKeys = \array_keys($sortedRoles);
+            $leftRole = isset($left[0]) ? (string)$left[0]->role : '';
+            $rightRole = isset($right[0]) ? (string)$right[0]->role : '';
+            return \strcmp($leftRole, $rightRole);
+        });
+
+        $roleKeys = \array_keys($servicesByRole);
         $lastRoleIndex = \count($roleKeys) - 1;
         
-        foreach ($sortedRoles as $roleIndex => $services) {
+        foreach ($servicesByRole as $roleIndex => $services) {
             $roleKeyIndex = \array_search($roleIndex, $roleKeys, true);
             $isLastRole = ($roleKeyIndex === $lastRoleIndex);
             
@@ -310,16 +309,8 @@ class Status extends CommandAbstract
         $prefix = $isLast ? '└─' : '├─';
         
         $portStr = $service->port !== null && $service->port > 0 ? (__('端口：') . $service->port) : '';
-        
-        // 特殊处理不同服务类型的显示
-        $label = match ($service->role) {
-            'session_server' => __('Session Server') . ' (' . $portStr . ')',
-            'redirect' => __('HTTP 重定向') . ' (' . $portStr . ')',
-            'dispatcher' => 'Dispatcher (' . $portStr . ')',
-            'worker' => 'Worker #' . $service->instanceId . ' (' . $portStr . ')',
-            'maintenance' => __('Maintenance Worker') . ' (' . $portStr . ')',
-            default => $service->displayName . ' #' . $service->instanceId . ' (' . $portStr . ')',
-        };
+
+        $label = $service->displayName . ' #' . $service->instanceId . ' (' . $portStr . ')';
         
         $this->printer->$color("  │");
         $this->printer->$color("  {$prefix} {$label} {$icon} {$statusStr}");

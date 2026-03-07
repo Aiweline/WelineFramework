@@ -6,10 +6,8 @@ namespace Weline\Saas\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\EventsManager;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Saas\Model\ProvisioningOrder;
 use Weline\Saas\Model\ProvisioningStep;
-use Weline\Server\Service\SslCertificateService;
 
 /**
  * 一站式配置编排：购买域名 → 绑定 DNS → 绑定 CDN → 申请 SSL
@@ -22,18 +20,15 @@ class DomainProvisioningService
 {
     private ProvisioningOrder $orderModel;
     private ProvisioningStep $stepModel;
-    private SslCertificateService $sslCertificateService;
     private EventsManager $eventsManager;
 
     public function __construct(
         ProvisioningOrder $orderModel,
         ProvisioningStep $stepModel,
-        SslCertificateService $sslCertificateService,
         EventsManager $eventsManager
     ) {
         $this->orderModel = $orderModel;
         $this->stepModel = $stepModel;
-        $this->sslCertificateService = $sslCertificateService;
         $this->eventsManager = $eventsManager;
     }
 
@@ -347,7 +342,13 @@ class DomainProvisioningService
         $order->setData(ProvisioningOrder::schema_fields_ERROR_MESSAGE, '');
         $order->save();
 
-        $result = $this->sslCertificateService->requestCertificate($domain, $webroot, $email, $websiteId);
+        $result = w_query('server', 'requestCertificate', [
+            'domain' => $domain,
+            'webroot' => $webroot,
+            'email' => $email,
+            'website_id' => $websiteId,
+            'provider' => 'letsencrypt',
+        ]);
 
         if ($result['success'] ?? false) {
             $this->recordStep($orderId, ProvisioningOrder::STEP_SSL, 'success', '', 0, $result);

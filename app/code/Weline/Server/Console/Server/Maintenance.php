@@ -53,7 +53,7 @@ class Maintenance extends CommandAbstract
         
         // 检查服务器是否运行
         $stats = $manager->getRunningStats();
-        if ($stats['masters'] === 0) {
+        if (($stats['instances'] ?? 0) === 0) {
             $this->printer->warning(__('未检测到运行中的 WLS Master'));
             $this->printer->note(__('请先启动服务器：php bin/w server:start'));
             return;
@@ -195,11 +195,14 @@ class Maintenance extends CommandAbstract
         $rollingRestart = $data['rolling_restart_in_progress'] ?? false;
         $maintenanceWorkers = 0;
         
-        // 从 services 中统计维护 Worker
+        // 从 services 快照中统计维护 Worker（结构：role => ['instances' => [...]]）
         $services = $data['services'] ?? [];
-        foreach ($services as $service) {
-            if (($service['role'] ?? '') === 'maintenance' && ($service['state'] ?? '') === 'ready') {
-                $maintenanceWorkers++;
+        $maintenanceGroup = $services['maintenance']['instances'] ?? [];
+        if (\is_array($maintenanceGroup)) {
+            foreach ($maintenanceGroup as $service) {
+                if (($service['state'] ?? '') === 'ready') {
+                    $maintenanceWorkers++;
+                }
             }
         }
         
@@ -421,18 +424,20 @@ class Maintenance extends CommandAbstract
      */
     protected function parseInstanceName(array $args): string
     {
-        // 跳过子命令，查找实例名
         $skipCommands = ['enable', 'on', 'disable', 'off', 'rolling', 'restart', 'status'];
-        
+        $positionalArgs = [];
         foreach ($args as $key => $val) {
             if (\is_int($key) && \is_string($val) && !str_starts_with($val, '-')) {
-                $lower = \strtolower($val);
-                if (!\in_array($lower, $skipCommands, true)) {
-                    return $val;
-                }
+                $positionalArgs[] = $val;
             }
         }
-        
+        \array_shift($positionalArgs);  // 移除命令名（如 server:maintenance）
+        foreach ($positionalArgs as $val) {
+            $lower = \strtolower($val);
+            if (!\in_array($lower, $skipCommands, true)) {
+                return $val;
+            }
+        }
         return $args['instance'] ?? $args['name'] ?? 'default';
     }
     

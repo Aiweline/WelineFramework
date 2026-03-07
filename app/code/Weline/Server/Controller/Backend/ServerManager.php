@@ -11,8 +11,10 @@ declare(strict_types=1);
 namespace Weline\Server\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\App\Env;
+use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\OptimizationGuideService;
+use Weline\Server\Service\Control\BackendStatusService;
+use Weline\Server\Service\Control\IpcControlGateway;
 
 /**
  * ServerManager - 服务器管理
@@ -29,13 +31,21 @@ class ServerManager extends BackendController
      * 优化指南服务
      */
     private OptimizationGuideService $guideService;
+    private BackendStatusService $statusService;
+    private IpcControlGateway $ipcGateway;
     
     /**
      * 构造函数
      */
-    public function __construct(OptimizationGuideService $guideService)
+    public function __construct(
+        OptimizationGuideService $guideService,
+        BackendStatusService $statusService,
+        IpcControlGateway $ipcGateway
+    )
     {
         $this->guideService = $guideService;
+        $this->statusService = $statusService;
+        $this->ipcGateway = $ipcGateway;
     }
     
     /**
@@ -61,11 +71,14 @@ class ServerManager extends BackendController
             ];
         }
         
+        $instance = (string)$this->request->getGet('instance', 'default');
+        $statusDto = $this->statusService->getStatusDto($instance, true);
         return [
             'success' => true,
             'servers' => $this->guideService->getServerStatus(),
             'summary' => $this->guideService->getOptimizationSummary(),
             'php_info' => $this->guideService->getPhpInfo(),
+            'orchestrator' => $statusDto,
             'timestamp' => \time(),
         ];
     }
@@ -86,27 +99,13 @@ class ServerManager extends BackendController
      */
     public function postStart(): array
     {
-        $instance = $this->request->getPost('instance', 'default');
+        $instance = (string)$this->request->getPost('instance', 'default');
         $workers = (int)$this->request->getPost('workers', 0);
-        
-        // 构建命令
-        $command = PHP_BINARY . ' ' . BP . 'bin/w server:start ' . \escapeshellarg($instance);
-        if ($workers > 0) {
-            $command .= ' -c ' . $workers;
-        }
-        
-        // 在后台执行
-        if (\strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN') {
-            \pclose(\popen("start /B {$command}", 'r'));
-        } else {
-            \exec("{$command} > /dev/null 2>&1 &");
-        }
-        
-        \usleep(500000); // 等待 500ms
-        
+
+        $result = $this->ipcGateway->startInstance($instance, $workers);
         return [
-            'success' => true,
-            'message' => __('服务器启动命令已发送'),
+            'success' => (bool)($result['success'] ?? false),
+            'message' => (string)($result['message'] ?? __('启动命令已提交')),
             'servers' => $this->guideService->getServerStatus(),
         ];
     }
@@ -116,19 +115,12 @@ class ServerManager extends BackendController
      */
     public function postStop(): array
     {
-        $instance = $this->request->getPost('instance', 'default');
-        
-        // 构建命令
-        $command = PHP_BINARY . ' ' . BP . 'bin/w server:stop ' . \escapeshellarg($instance);
-        
-        // 执行
-        $output = [];
-        \exec($command, $output, $exitCode);
-        
+        $instance = (string)$this->request->getPost('instance', 'default');
+        $result = $this->ipcGateway->command($instance, ControlMessage::ACTION_STOP, '', [], 8.0);
         return [
-            'success' => $exitCode === 0,
-            'message' => $exitCode === 0 ? __('服务器已停止') : __('停止失败'),
-            'output' => \implode("\n", $output),
+            'success' => (bool)($result['success'] ?? false),
+            'message' => (string)($result['message'] ?? __('停止命令已发送')),
+            'output' => '',
             'servers' => $this->guideService->getServerStatus(),
         ];
     }
@@ -138,21 +130,58 @@ class ServerManager extends BackendController
      */
     public function postRestart(): array
     {
-        $instance = $this->request->getPost('instance', 'default');
-        
-        // 先停止
-        $stopResult = $this->postStop();
-        
-        \usleep(500000); // 等待 500ms
-        
-        // 再启动
-        $_POST['instance'] = $instance;
-        $startResult = $this->postStart();
-        
+        $instance = (string)$this->request->getPost('instance', 'default');
+        // 后台重启语义统一映射到 Orchestrator 强制 reload（控制面统一）
+        $result = $this->ipcGateway->command(
+            $instance,
+            ControlMessage::ACTION_RELOAD,
+            ControlMessage::RELOAD_TYPE_FORCE,
+            [],
+            8.0
+        );
         return [
-            'success' => $startResult['success'],
-            'message' => __('服务器已重启'),
+            'success' => (bool)($result['success'] ?? false),
+            'message' => (string)($result['message'] ?? __('重启命令已发送')),
             'servers' => $this->guideService->getServerStatus(),
+        ];
+    }
+
+    public function postReload(): array
+    {
+        $instance = (string)$this->request->getPost('instance', 'default');
+        $result = $this->ipcGateway->command(
+            $instance,
+            ControlMessage::ACTION_RELOAD,
+            ControlMessage::RELOAD_TYPE_CODE,
+            [],
+            8.0
+        );
+        return [
+            'success' => (bool)($result['success'] ?? false),
+            'message' => (string)($result['message'] ?? __('热重载命令已发送')),
+            'servers' => $this->guideService->getServerStatus(),
+        ];
+    }
+
+    public function postMaintenanceEnable(): array
+    {
+        $instance = (string)$this->request->getPost('instance', 'default');
+        $result = $this->ipcGateway->command($instance, ControlMessage::ACTION_MAINTENANCE_ENABLE, '', [], 8.0);
+        return [
+            'success' => (bool)($result['success'] ?? false),
+            'message' => (string)($result['message'] ?? __('维护模式已启用')),
+            'data' => $result['data'] ?? [],
+        ];
+    }
+
+    public function postMaintenanceDisable(): array
+    {
+        $instance = (string)$this->request->getPost('instance', 'default');
+        $result = $this->ipcGateway->command($instance, ControlMessage::ACTION_MAINTENANCE_DISABLE, '', [], 8.0);
+        return [
+            'success' => (bool)($result['success'] ?? false),
+            'message' => (string)($result['message'] ?? __('维护模式已禁用')),
+            'data' => $result['data'] ?? [],
         ];
     }
 }

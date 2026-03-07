@@ -100,6 +100,14 @@ class Session implements SessionInterface
     }
 
     /**
+     * WLS 每请求重置：清空 shutdown 待落盘队列，避免跨请求残留引用。
+     */
+    public static function resetRequestState(): void
+    {
+        self::$instancesForShutdown = [];
+    }
+
+    /**
      * @inheritDoc
      */
     public function destroy(): void

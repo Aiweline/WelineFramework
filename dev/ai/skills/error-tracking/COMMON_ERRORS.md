@@ -16,6 +16,10 @@
 |------|------|----------|
 | `Cannot pass by reference` | 引用参数传了字面量 | 使用变量 |
 | `Type error` | 参数类型不匹配 | 检查类型声明 |
+| `executeConcurrentRequests(): Argument #4 ($headers) must be of type array, string given` | `http:req -H` 传入单字符串头，未先归一化为数组/键值对 | 在命令入口统一做 header 归一化，支持 `"Host: a.com"` 与数组形式 |
+| `server:status` 显示运行中但 PID 不存在 | 仅依赖实例文件 `state` 或端口弱信号，未以 PID 存活为准 | 状态判定改为 PID 优先（`Processer::processExists`），端口仅作无 PID 回退 |
+| `maintenance rolling` 完成后仍显示维护模式启用 | 在滚动标志未清理前调用 disable，被“滚动中”保护拒绝 | 先清 `rollingRestartInProgress`，再执行 `disableMaintenanceMode()` |
+| `cache:clear` 提示 WLS 重载失败（命名实例运行中） | IPC 重载只通知 `default` 实例，忽略命名实例 | 遍历运行中的所有实例发送 IPC reload 通知 |
 | `pagination(): Argument #1 ($page) must be of type int, string given` | GET/POST 参数为 string | 传参前用 `(int) $this->request->getParam('page', 1)` 等 |
 | `Undefined method` | 方法不存在 | 检查类名和方法名 |
 | `Undefined property` | 属性未声明或未初始化 | 检查属性声明和构造函数赋值 |
@@ -62,6 +66,7 @@
 | 翻译中显示 `%1` 原文 | 使用了 `%1` 格式（无花括号） | **必须使用 `%{1}` 格式** |
 | 占位符未替换 | 占位符格式错误 | 使用 `%{1}`, `%{name}` 或 `%{}` |
 | 翻译参数丢失 | 参数数量不匹配 | 确保参数数量与占位符数量一致 |
+| i18n CSV 尾部出现乱码或 `?`/NUL | 文件被混入二进制片段或非 UTF-8 尾段 | 先清理损坏尾段并统一 UTF-8，再执行 `php bin/w i18n:collect`；修复后校验 `NUL=0`、UTF-8 strict decode、CSV 两列结构 |
 
 ### i18n 占位符格式对照表 ⚠️ 极易出错
 
@@ -181,6 +186,8 @@ __('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count]
 | 模板路径指向上个模块 | Template 单例 `view_dir` 等残留 | 同上 |
 | backend/frontend 区域判断错误 | `State::$is_backend` 残留 | `registerStaticReset(State::class, 'is_backend', false)` + 清除 ObjectManager 实例 |
 | 单例类 `??` 操作符不覆盖已有值 | WLS 下单例跨请求保留，`??` 跳过赋值 | 重置单例实例，或改用无条件赋值 |
+| 后台 REST 请求稳定慢 3-4 秒（连 401/404 都慢） | 将 `EventsManager` 观察者缓存按请求清空，导致每请求重建事件观察者/模块状态 | `resetRequestState()` 仅清请求级 `$events`；保留 `observerCache/eventsObservers/moduleStatusCache` 为进程级热缓存 |
+| 登录失败提示越试越多（“登录凭据错误”重复） | 登录场景误用 `MessageManager::error()`（append 语义），连续失败自然累积 | 登录控制器改用 `MessageManager::setSingleError()`；保留 `error()` 给需要多条提示的通用场景 |
 
 ### HTTP 请求测试（查看页面源码）
 

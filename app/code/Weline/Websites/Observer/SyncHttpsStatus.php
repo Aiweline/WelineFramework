@@ -103,7 +103,6 @@ class SyncHttpsStatus implements ObserverInterface
         $poolModel = ObjectManager::getInstance(DomainPool::class);
         $pools = $poolModel->clearQuery()
             ->where(DomainPool::schema_fields_ROOT_DOMAIN, $rootDomain)
-            ->where(DomainPool::schema_fields_CERT_ID, 0)
             ->select()
             ->fetchArray();
         

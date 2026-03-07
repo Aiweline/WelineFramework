@@ -12,6 +12,11 @@ use Weline\DataTable\Helper\TableContext;
 class Field implements TaglibInterface
 {
     const default_sortable = false;
+    
+    /**
+     * 请求级模板字段缓存（WLS 下由 StateManager 每请求重置）
+     */
+    private static array $templateFields = [];
 
     static public function name(): string
     {
@@ -265,17 +270,14 @@ class Field implements TaglibInterface
      */
     private static function recordTemplateField(string $scope, string $belong, string $fieldName, array $fieldConfig): void
     {
-        // 使用静态数组来存储模板字段配置
-        static $templateFields = [];
-        
-        if (!isset($templateFields[$scope])) {
-            $templateFields[$scope] = [
+        if (!isset(self::$templateFields[$scope])) {
+            self::$templateFields[$scope] = [
                 't-header' => [],
                 't-filter' => []
             ];
         }
         
-        $templateFields[$scope][$belong][$fieldName] = $fieldConfig;
+        self::$templateFields[$scope][$belong][$fieldName] = $fieldConfig;
         
         // 将配置存储到TableContext中（如果TableContext支持的话）
         if (method_exists(TableContext::class, 'recordTemplateField')) {

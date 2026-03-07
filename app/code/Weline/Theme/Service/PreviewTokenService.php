@@ -300,6 +300,14 @@ class PreviewTokenService
     }
 
     /**
+     * WLS 请求结束后重置请求级静态状态，防止跨请求残留。
+     */
+    public static function resetRequestState(): void
+    {
+        self::resetDetection();
+    }
+
+    /**
      * 静态方法：快速检测是否处于预览模式
      * 
      * @return bool

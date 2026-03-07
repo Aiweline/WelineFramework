@@ -77,6 +77,7 @@ class CertificateAutoRenew implements CronTaskInterface
             'renewed' => 0,
             'failed' => 0,
             'skipped' => 0,
+            'reminded' => 0,
             'errors' => [],
         ];
         
@@ -120,6 +121,17 @@ class CertificateAutoRenew implements CronTaskInterface
                     // 加载证书模型
                     $cert = clone $certModel;
                     $cert->setData($certData);
+                    $expiresAt = (string)($certData[SslCertificate::schema_fields_EXPIRES_AT] ?? '');
+                    $daysLeft = $expiresAt !== '' ? (int)\floor((\strtotime($expiresAt) - \time()) / 86400) : -1;
+
+                    if ($daysLeft >= 0 && $daysLeft <= self::RENEW_BEFORE_DAYS) {
+                        $results['reminded']++;
+                        w_log_warning(\sprintf(
+                            '[CertificateAutoRenew] %s - %s',
+                            $domain,
+                            __('证书将在 %{1} 天后过期，已触发续签尝试', [$daysLeft])
+                        ));
+                    }
                     
                     // 执行续签
                     $email = $this->getContactEmail($domain);
@@ -162,8 +174,9 @@ class CertificateAutoRenew implements CronTaskInterface
             
             // 构建结果消息
             $message = \sprintf(
-                __('证书自动续签完成：检查 %{1} 个，成功 %{2} 个，失败 %{3} 个，跳过 %{4} 个'),
+                __('证书自动续签完成：检查 %{1} 个，提醒 %{2} 个，成功 %{3} 个，失败 %{4} 个，跳过 %{5} 个'),
                 $results['checked'],
+                $results['reminded'],
                 $results['renewed'],
                 $results['failed'],
                 $results['skipped']

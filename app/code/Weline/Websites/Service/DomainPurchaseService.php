@@ -278,6 +278,11 @@ class DomainPurchaseService
                 $pool->clearData();
                 $pool->setDomain($domain);
                 $pool->setStatus(DomainPool::STATUS_ACTIVE);
+                $pool->setResolveStatus(DomainPool::RESOLVE_STATUS_PENDING);
+                $pool->setDnsStatus(DomainPool::INFRA_STATUS_PENDING);
+                $pool->setCdnStatus(DomainPool::INFRA_STATUS_PENDING);
+                $pool->setHttpsStatus(DomainPool::HTTPS_STATUS_NONE);
+                $pool->setSiteReady(false);
                 $pool->save();
             }
         } catch (\Exception $e) {

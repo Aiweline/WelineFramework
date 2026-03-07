@@ -34,6 +34,9 @@ class ControlMessage
     /** Master → Worker：通知清缓存（原地执行，不重启） */
     public const TYPE_CACHE_CLEAR = 'cache_clear';
 
+    /** Master → Worker：下发驱动路由策略（file-only hijack + 服务端点） */
+    public const TYPE_ROUTING_POLICY = 'routing_policy';
+
     /** Master → Dispatcher：将指定端口加入黑名单 */
     public const TYPE_DRAIN = 'drain';
 
@@ -60,6 +63,8 @@ class ControlMessage
 
     /** 子进程 → Master：上报运行状态 */
     public const TYPE_STATUS_REPORT = 'status_report';
+    /** 子进程 → Master：上报请求遥测事件 */
+    public const TYPE_TELEMETRY = 'telemetry';
 
     /** CLI → Master：CLI 命令 */
     public const TYPE_COMMAND = 'command';
@@ -86,6 +91,7 @@ class ControlMessage
     public const ROLE_REDIRECT = 'redirect';
     public const ROLE_MAINTENANCE = 'maintenance';
     public const ROLE_SESSION_SERVER = 'session_server';
+    public const ROLE_MEMORY_SERVER = 'memory_server';
 
     // ========== 重载类型 ==========
 
@@ -110,6 +116,8 @@ class ControlMessage
     public const ACTION_ROLLING_RESTART = 'rolling_restart';
     /** 解封 IP / 清空封禁列表（Master 转发给 Dispatcher） */
     public const ACTION_SECURITY_UNBLOCK = 'security_unblock';
+    /** 获取流量遥测快照 */
+    public const ACTION_TELEMETRY_QUERY = 'telemetry_query';
 
     /** Master → Dispatcher：解封指定 IP 或清空全部封禁 */
     public const TYPE_SECURITY_UNBLOCK = 'security_unblock';
@@ -296,6 +304,19 @@ class ControlMessage
     }
 
     /**
+     * 构建 routing_policy 消息
+     *
+     * @param array<string, mixed> $policy
+     */
+    public static function routingPolicy(array $policy): string
+    {
+        return self::encode([
+            'type' => self::TYPE_ROUTING_POLICY,
+            'data' => $policy,
+        ]);
+    }
+
+    /**
      * 构建 drain 消息
      */
     public static function drain(array $ports): string
@@ -372,6 +393,28 @@ class ControlMessage
             'connections' => $connections,
             'memory'      => $memory,
             'requests'    => $requests,
+        ]);
+    }
+
+    /**
+     * 构建 telemetry 消息（子进程 -> Master）
+     */
+    public static function telemetry(
+        string $instance,
+        string $host,
+        int $status,
+        int $latencyMs,
+        int $bytesOut,
+        int $ts = 0
+    ): string {
+        return self::encode([
+            'type' => self::TYPE_TELEMETRY,
+            'instance' => $instance,
+            'host' => $host,
+            'status' => $status,
+            'latency_ms' => $latencyMs,
+            'bytes_out' => $bytesOut,
+            'ts' => $ts > 0 ? $ts : \time(),
         ]);
     }
 
