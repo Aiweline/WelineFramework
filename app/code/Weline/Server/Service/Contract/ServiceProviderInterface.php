@@ -66,6 +66,31 @@ interface ServiceProviderInterface
     public function getReloadStrategy(): string;
 
     /**
+     * 是否需要在启动阶段等待 READY 后再继续后续服务启动
+     */
+    public function requiresStartupReadyBarrier(): bool;
+
+    /**
+     * 是否支持 DRAIN（优雅排水）
+     */
+    public function supportsDrain(): bool;
+
+    /**
+     * 是否支持 SHUTDOWN 控制命令
+     */
+    public function supportsShutdown(): bool;
+
+    /**
+     * 是否支持重载命令
+     */
+    public function supportsReload(): bool;
+
+    /**
+     * 是否属于核心关键角色（用于断连升级策略）
+     */
+    public function isCriticalRole(): bool;
+
+    /**
      * 构建启动命令
      *
      * @param int $instanceId 实例 ID（从 1 开始）

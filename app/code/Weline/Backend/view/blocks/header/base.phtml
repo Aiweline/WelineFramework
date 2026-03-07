@@ -2,6 +2,7 @@
 /**@var \Weline\Framework\View\Template $this */
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Session\SessionFactory;
 
 /**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
 $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
@@ -18,8 +19,8 @@ $current_module = $this->request->getModuleName();
 $area = \Weline\Framework\App\Env::getInstance()->getConfig('admin');
 $api_area = \Weline\Framework\App\Env::getInstance()->getConfig('api');
 $api_admin_area = \Weline\Framework\App\Env::getInstance()->getConfig('api_admin');
-/**@var \Weline\Backend\Session\BackendSession $session */
-$session = \Weline\Framework\App\Env::getInstance(\Weline\Backend\Session\BackendSession::class);
+/**@var \Weline\Framework\Session\Auth\AuthenticatedSessionInterface $session */
+$session = SessionFactory::backend();
 $user_id = $session->getLoginUserID();
 $url_host = $this->request->getUrlBuilder()->getBackendUrl('/', [], false);
 $api_host = $this->request->getUrlBuilder()->getApiUrl('/', [], false);

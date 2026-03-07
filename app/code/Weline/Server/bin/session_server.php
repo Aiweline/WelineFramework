@@ -27,6 +27,7 @@ $masterPid = 0;
 $isFrontend = false;
 $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
+$role = 'session_server';
 
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
@@ -39,6 +40,11 @@ foreach ($argv as $arg) {
         $orchestratorEpoch = (int)\substr($arg, 8);
     } elseif (\str_starts_with($arg, '--launch-id=')) {
         $orchestratorLaunchId = (string)\substr($arg, 12);
+    } elseif (\str_starts_with($arg, '--role=')) {
+        $argRole = (string)\substr($arg, 7);
+        if ($argRole !== '') {
+            $role = $argRole;
+        }
     } elseif ($arg === '--frontend' || $arg === '-f') {
         $isFrontend = true;
     }
@@ -66,6 +72,7 @@ if ($isFrontend && !\defined('WLS_FRONTEND_MODE')) {
 ErrorBootstrap::init('SessionServer:' . $port, [
     'port' => $port,
     'instance' => $instanceName,
+    'role' => $role,
     'process_name' => $processName,
 ]);
 
@@ -73,7 +80,7 @@ ErrorBootstrap::init('SessionServer:' . $port, [
 if ($isFrontend) {
     WlsLogger::getInstance()
         ->setStdoutEnabled(true)
-        ->setProcessTag('SessionServer:' . $port);
+        ->setProcessTag(\ucfirst(\str_replace('_', '-', $role)) . ':' . $port);
 }
 
 if ($processName) {
@@ -105,6 +112,8 @@ $isDev = (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE)
 $sessionConfig = $envConfig['session']['drivers']['wls'] ?? $envConfig['session']['wls']['wls_server'] ?? [];
 $sessionConfig['port'] = $port;
 $sessionConfig['persist_path'] = BP . 'var' . DIRECTORY_SEPARATOR . 'session' . DIRECTORY_SEPARATOR;
+$safeRole = \preg_replace('/[^a-z0-9_]/i', '_', (string)$role) ?: 'session_server';
+$sessionConfig['token_file_name'] = $safeRole . '.token';
 
 $server = new \Weline\Server\Session\Server\SessionServer($sessionConfig);
 
@@ -117,73 +126,51 @@ if (!$server->start($host, $port)) {
 }
 
 WlsLogger::info_("Started on tcp://{$host}:{$port}");
-WlsLogger::info_("Instance: {$instanceName}, PID: " . \getmypid());
+WlsLogger::info_("Instance: {$instanceName}, role={$role}, PID: " . \getmypid());
 WlsLogger::info_("DEV=" . ($isDev ? 'ON' : 'OFF') . ", Frontend=" . ($isFrontend ? 'ON' : 'OFF'));
 WlsLogger::info_("Config: max_sessions=" . ($sessionConfig['max_sessions'] ?? 50000) .
     ", persist_interval=" . ($sessionConfig['persist_interval'] ?? 60) . "s" .
     ", session_ttl=" . ($sessionConfig['session_ttl'] ?? 3600) . "s");
 
-$ipcClient = null;
 $ipcReceivedShutdown = false;
-
-if ($controlPort <= 0) {
-    $_instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
-    if (\is_file($_instanceFile)) {
-        $_instData = @\json_decode(\file_get_contents($_instanceFile), true);
-        $controlPort = (int)($_instData['control_port'] ?? 0);
-    }
-    unset($_instanceFile, $_instData);
-}
-
+$kernel = null;
+$orphanGuard = new \Weline\Server\IPC\ChildControl\MasterOrphanGuard();
+$controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
 if ($controlPort > 0) {
-    $ipcClient = new \Weline\Server\IPC\ControlClient();
-    $ipcClient->setSelfTag('SessionServer');
-
-    if ($ipcClient->connect('127.0.0.1', $controlPort)) {
-        $ipcClient->register(\Weline\Server\IPC\ControlMessage::ROLE_SESSION_SERVER, \getmypid(), $port, 0, $orchestratorEpoch, $orchestratorLaunchId);
-        $ipcClient->sendReady(\Weline\Server\IPC\ControlMessage::ROLE_SESSION_SERVER, 0, $port, $orchestratorEpoch, $orchestratorLaunchId);
-
-        $ipcClient->onMessage(function (array $msg) use ($server, &$ipcReceivedShutdown, $ipcClient, $port) {
-            $type = $msg['type'] ?? '';
-
-            switch ($type) {
-                case \Weline\Server\IPC\ControlMessage::TYPE_DRAIN:
-                    // Session server 没有 HTTP 请求需要排水，直接完成
-                    WlsLogger::info_('Received drain signal, completing immediately...');
-                    $ipcClient->sendDrainingComplete(0, $port);
-                    break;
-                    
-                case \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN:
-                    WlsLogger::info_('Received shutdown signal, stopping...');
-                    $ipcReceivedShutdown = true;
-                    $server->setRunning(false);
-                    break;
-
-                case \Weline\Server\IPC\ControlMessage::TYPE_CACHE_CLEAR:
-                    WlsLogger::info_('Received cache_clear, persisting sessions...');
-                    $server->getStore()->forcePersist();
-                    break;
-
-                default:
-                    WlsLogger::debug_("Received unknown message type: {$type}");
-            }
-        });
-
-        $ipcClient->onDisconnect(function (bool $receivedShutdown) use ($server, $masterPid, $instanceName, $controlPort, &$ipcReceivedShutdown) {
-            if ($receivedShutdown || $ipcReceivedShutdown) {
-                WlsLogger::info_('收到 Master shutdown 信号，Session Server 优雅退出');
-                $server->setRunning(false);
-                return;
-            }
-
-            WlsLogger::warning_("Master PID {$masterPid} 已死亡，Session Server 自行退出（孤儿保护）");
+    $identity = new \Weline\Server\IPC\ChildControl\ChildProcessIdentity(
+        $role,
+        \getmypid(),
+        $port,
+        0,
+        $orchestratorEpoch,
+        $orchestratorLaunchId
+    );
+    $handler = new \Weline\Server\IPC\ChildControl\Handler\SessionServerControlHandler(
+        static function () use (&$kernel): void {
+            $kernel?->sendDrainingComplete();
+        },
+        static function () use (&$ipcReceivedShutdown, $server): void {
+            $ipcReceivedShutdown = true;
             $server->setRunning(false);
-        });
-
+        },
+        static function () use ($server): void {
+            $server->getStore()->forcePersist();
+        },
+        static function () use ($server): void {
+            $server->setRunning(false);
+        }
+    );
+    $kernel = new \Weline\Server\IPC\ChildControl\SubprocessControlKernel(
+        $identity,
+        $handler,
+        'SessionServer',
+        $isDev
+    );
+    if ($kernel->connectAndRegister($controlPort)) {
         WlsLogger::info_("Connected to Master IPC on port {$controlPort}");
     } else {
         WlsLogger::warning_("Failed to connect to Master IPC on port {$controlPort}");
-        $ipcClient = null;
+        $kernel = null;
     }
 }
 
@@ -196,12 +183,6 @@ if (\function_exists('pcntl_signal')) {
     });
 }
 
-// 孤儿保护：主动检测 Master 存活状态
-$lastMasterCheck = \time();
-$masterCheckInterval = 5; // 每 5 秒检查一次
-$masterDeadCount = 0;     // Master 连续不可达计数
-$masterDeadThreshold = 3; // 连续 3 次（15 秒）确认 Master 死亡后自行退出
-
 while ($server->isRunning()) {
     // 信号派发（Linux/macOS）
     if (\function_exists('pcntl_signal_dispatch')) {
@@ -211,33 +192,22 @@ while ($server->isRunning()) {
     $server->tick(50000); // 50ms
     
     // 每次循环都检查 IPC 消息（确保及时响应 shutdown 等命令）
-    if ($ipcClient !== null && $ipcClient->isConnected()) {
-        $ipcClient->handleReadable();
+    if ($kernel !== null && $kernel->isConnected()) {
+        $kernel->tick();
     }
-    
-    // 孤儿保护：定期检查 Master 是否存活
-    $now = \time();
-    if ($now - $lastMasterCheck >= $masterCheckInterval) {
-        $lastMasterCheck = $now;
-        
-        // IPC 连接正常则 Master 存活
-        if ($ipcClient !== null && $ipcClient->isConnected()) {
-            $masterDeadCount = 0;
-        } else {
-            // IPC 断开，检查 Master 进程是否存在
-            $masterAlive = \Weline\Framework\System\Process\Processer::processExists($masterPid);
-            if ($masterAlive) {
-                // Master 存活但 IPC 断开，可能是网络问题，尝试重连
-                $masterDeadCount = 0;
-            } else {
-                $masterDeadCount++;
-                WlsLogger::warning_("Master PID {$masterPid} 不可达且 IPC 断开 ({$masterDeadCount}/{$masterDeadThreshold})");
-                if ($masterDeadCount >= $masterDeadThreshold) {
-                    WlsLogger::warning_("Master PID {$masterPid} 已死亡，Session Server 自行退出（孤儿保护）");
-                    $server->setRunning(false);
-                }
-            }
-        }
+
+    if ($kernel !== null && !$kernel->isConnected() && !$ipcReceivedShutdown) {
+        $kernel->reconnect();
+    }
+
+    if ($orphanGuard->shouldExit(
+        $masterPid,
+        $kernel !== null && $kernel->isConnected(),
+        $ipcReceivedShutdown,
+        'SessionServer'
+    )) {
+        WlsLogger::warning_("Master PID {$masterPid} 已死亡，Session Server 自行退出（孤儿保护）");
+        $server->setRunning(false);
     }
 }
 

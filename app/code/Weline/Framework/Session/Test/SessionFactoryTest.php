@@ -9,9 +9,13 @@ use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Session\SessionInterface;
 use Weline\Framework\Session\Storage\FileStorage;
+use Weline\Framework\Session\Storage\RedisStorage;
 use Weline\Framework\Session\Storage\SessionStorageInterface;
+use Weline\Framework\Session\Storage\WlsSharedStorage;
 use Weline\Framework\Session\Strategy\FpmStrategy;
 use Weline\Framework\Session\Strategy\SessionStrategyInterface;
+use Weline\Framework\Runtime\Runtime;
+use Weline\Server\Service\Runtime\RoutingPolicyRegistry;
 
 /**
  * SessionFactory 单元测试
@@ -41,6 +45,8 @@ class SessionFactoryTest extends TestCase
     {
         $this->factory->resetRequestInstances();
         SessionFactory::resetAll();
+        Runtime::resetModeCache();
+        RoutingPolicyRegistry::clear();
     }
 
     public function testCreateStorage(): void
@@ -154,5 +160,56 @@ class SessionFactoryTest extends TestCase
         $this->assertIsArray($config);
         $this->assertEquals('file', $config['default']);
         $this->assertEquals(3600, $config['lifetime']);
+    }
+
+    public function testWlsModeHijacksFileDefaultToWlsStorage(): void
+    {
+        Runtime::setMode('wls');
+        RoutingPolicyRegistry::clear();
+
+        $factory = new SessionFactory([
+            'default' => 'file',
+            'drivers' => [
+                'file' => ['path' => 'var/test_session/'],
+            ],
+        ]);
+
+        $storage = $factory->createStorage();
+        $this->assertInstanceOf(WlsSharedStorage::class, $storage);
+    }
+
+    public function testWlsModeKeepsRedisDefaultUnchanged(): void
+    {
+        Runtime::setMode('wls');
+        RoutingPolicyRegistry::clear();
+
+        $factory = new SessionFactory([
+            'default' => 'redis',
+            'drivers' => [
+                'redis' => [
+                    'host' => '127.0.0.1',
+                    'port' => 6379,
+                ],
+            ],
+        ]);
+
+        $storage = $factory->createStorage();
+        $this->assertInstanceOf(RedisStorage::class, $storage);
+    }
+
+    public function testWlsModeExplicitFileStorageIsHijackedToWls(): void
+    {
+        Runtime::setMode('wls');
+        RoutingPolicyRegistry::clear();
+
+        $factory = new SessionFactory([
+            'default' => 'redis',
+            'drivers' => [
+                'file' => ['path' => 'var/test_session/'],
+            ],
+        ]);
+
+        $storage = $factory->createStorage('file');
+        $this->assertInstanceOf(WlsSharedStorage::class, $storage);
     }
 }

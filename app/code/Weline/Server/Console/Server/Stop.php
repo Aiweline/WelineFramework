@@ -150,7 +150,6 @@ class Stop extends CommandAbstract
         
         $masterPid = $instanceInfo->masterPid;
         $controlPort = $instanceInfo->controlPort;
-        $count = $instanceInfo->workerCount;
         
         $this->printer->setup(__('停止 Weline Server'));
         echo "\n";
@@ -192,7 +191,7 @@ class Stop extends CommandAbstract
         $manager->deleteInstance($name);
         
         // 清理 PID 文件
-        $this->cleanupPidFiles($name, $count);
+        $this->cleanupPidFiles($name, $instanceInfo);
         
         // 释放启动锁
         $this->releaseStartLock($name);
@@ -419,7 +418,9 @@ class Stop extends CommandAbstract
         \stream_set_timeout($conn, 1);
         \stream_set_blocking($conn, false);
         
-        $timeout = $force ? 8 : self::IPC_TIMEOUT;
+        // force 模式用于“更快进入停止流程”，不应把 IPC 等待缩短到低于 Orchestrator 的正常停机时长，
+        // 否则会频繁误判超时并走强杀 Master，造成状态抖动。
+        $timeout = $force ? max(self::IPC_TIMEOUT, 20) : self::IPC_TIMEOUT;
         $deadline = \microtime(true) + $timeout;
         $lastProgress = '';
         $masterAboutToExit = false; // 只在收到 "Master 即将退出" 时置 true
@@ -595,28 +596,27 @@ class Stop extends CommandAbstract
     /**
      * 清理 PID 文件
      */
-    protected function cleanupPidFiles(string $name, int $count): void
+    protected function cleanupPidFiles(string $name, ServerInstanceInfo $info): void
     {
         // Master
         Processer::removePidFile('--name=' . MasterProcess::getMasterProcessName($name));
-        
-        // Workers（新前缀）
+
+        // 统一按服务元信息清理，新增服务无需改 stop 命令
+        foreach ($info->services as $service) {
+            $processName = (string)($service->metadata['process_name'] ?? '');
+            if ($processName !== '') {
+                Processer::removePidFile('--name=' . $processName);
+            }
+        }
+
+        // 兼容历史命名前缀（防止老实例残留）
+        $count = $info->workerCount;
         for ($i = 1; $i <= $count; $i++) {
             Processer::removePidFile('--name=weline-wls-worker-' . $name . '-' . $i);
-        }
-        
-        // Workers（旧前缀兼容清理）
-        for ($i = 1; $i <= $count; $i++) {
             Processer::removePidFile('--name=weline-master-' . $name . '-worker-' . $i);
         }
-        
-        // Dispatcher
         Processer::removePidFile('--name=weline-wls-dispatcher-' . $name);
-        
-        // SessionServer
         Processer::removePidFile('--name=weline-wls-session-' . $name);
-        
-        // HTTP Redirect
         Processer::removePidFile('--name=' . MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name);
         
         // 清理残留 PID 文件

@@ -12,7 +12,6 @@ use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Service\DomainPoolResolveService;
 use Weline\Websites\Service\DomainRegistrarResolverService;
-use Weline\Websites\Service\DomainSyncService;
 use Weline\Websites\Service\ServerIpService;
 use Weline\Websites\Service\SubdomainGeneratorService;
 
@@ -23,12 +22,10 @@ use Weline\Websites\Service\SubdomainGeneratorService;
 class DomainManagement extends BaseController
 {
     private QuickBuildAggregator $aggregator;
-    private DomainSyncService $syncService;
 
-    public function __construct(QuickBuildAggregator $aggregator, DomainSyncService $syncService)
+    public function __construct(QuickBuildAggregator $aggregator)
     {
         $this->aggregator = $aggregator;
-        $this->syncService = $syncService;
     }
 
     #[Acl('GuoLaiRen_PageBuilder::domain_management_index', '域名管理首页', 'mdi-dns', '查看域名管理')]
@@ -37,11 +34,11 @@ class DomainManagement extends BaseController
         $accounts = $this->aggregator->queryRegistrarAccounts([]);
         $registrars = $this->aggregator->queryRegistrars();
 
-        $activeAccounts = $this->syncService->getActiveAccounts();
+        $activeAccounts = $this->aggregator->getActiveRegistrarAccounts();
 
-        $lastSyncTime = $this->syncService->getLastSyncTime();
+        $lastSyncTime = $this->aggregator->getDomainLastSyncTime();
 
-        $statusOptions = Domain::getStatusOptions();
+        $statusOptions = $this->aggregator->getDomainStatusOptions();
 
         $this->assign('title', __('域名管理'));
         $this->assign('accounts', $accounts);
@@ -243,7 +240,7 @@ class DomainManagement extends BaseController
 
         try {
             // 获取要查询的账户列表
-            $activeAccounts = $this->syncService->getActiveAccounts();
+            $activeAccounts = $this->aggregator->getActiveRegistrarAccounts();
             $accountMap = [];
             foreach ($activeAccounts as $acct) {
                 $accountMap[(int) ($acct['account_id'] ?? 0)] = $acct['account_name'] ?? '';
@@ -275,7 +272,7 @@ class DomainManagement extends BaseController
             $filters = $accountId > 0 ? ['account_id' => $accountId] : [];
             $localPage = 1;
             do {
-                $localResult = $this->syncService->getDomains($filters, $localPage, 500);
+                $localResult = $this->aggregator->getLocalDomains($filters, $localPage, 500);
                 foreach ($localResult['items'] ?? [] as $item) {
                     $localDomains[$item['domain'] ?? ''] = $item;
                 }
@@ -355,7 +352,7 @@ class DomainManagement extends BaseController
                 $fetchError = '';
 
                 try {
-                    $remoteResult = $this->syncService->fetchRemoteDomains($acctId);
+                    $remoteResult = $this->aggregator->getRemoteDomains($acctId);
                     $remoteDomains = $remoteResult['domains'] ?? [];
 
                     if (($remoteResult['success'] ?? true) === false) {
@@ -509,12 +506,12 @@ class DomainManagement extends BaseController
         try {
             // 如果指定了账户，直接使用
             if ($accountId > 0) {
-                $result = $this->syncService->importDomains($accountId, $domains, $autoResolve);
+                $result = $this->aggregator->importDomains($accountId, $domains, $autoResolve);
                 return $this->fetchJson($result);
             }
 
             // 未指定账户时，需要为每个域名找到对应的账户
-            $activeAccounts = $this->syncService->getActiveAccounts();
+            $activeAccounts = $this->aggregator->getActiveRegistrarAccounts();
             if ($activeAccounts === []) {
                 return $this->fetchJson(['success' => false, 'msg' => __('没有可用的域名商账户')]);
             }
@@ -527,7 +524,7 @@ class DomainManagement extends BaseController
                     continue;
                 }
                 try {
-                    $remoteResult = $this->syncService->fetchRemoteDomains($acctId);
+                    $remoteResult = $this->aggregator->getRemoteDomains($acctId);
                     foreach ($remoteResult['domains'] ?? [] as $rd) {
                         $domainName = \strtolower($rd['domain'] ?? '');
                         if ($domainName !== '' && !isset($domainAccountMap[$domainName])) {
@@ -561,7 +558,7 @@ class DomainManagement extends BaseController
             $errors = [];
             foreach ($accountDomains as $acctId => $acctDomains) {
                 try {
-                    $result = $this->syncService->importDomains($acctId, $acctDomains, $autoResolve);
+                    $result = $this->aggregator->importDomains($acctId, $acctDomains, $autoResolve);
                     if ($result['success'] ?? false) {
                         $totalImported += $result['imported'] ?? \count($acctDomains);
                         if ($result['auto_resolve_queued'] ?? false) {
@@ -601,9 +598,9 @@ class DomainManagement extends BaseController
 
         try {
             if ($accountId > 0) {
-                $result = $this->syncService->syncAccount($accountId);
+                $result = $this->aggregator->syncDomains($accountId);
             } else {
-                $result = $this->syncService->syncAllAccounts();
+                $result = $this->aggregator->syncDomains();
             }
             return $this->fetchJson($result);
         } catch (\Throwable $e) {
@@ -634,7 +631,7 @@ class DomainManagement extends BaseController
         }
 
         try {
-            $result = $this->syncService->batchOperate($domainIds, $operation, $params);
+            $result = $this->aggregator->batchOperateDomains($domainIds, $operation, $params);
             return $this->fetchJson($result);
         } catch (\Throwable $e) {
             return $this->fetchJson(['success' => false, 'message' => __('操作失败：%{1}', [$e->getMessage()])]);
@@ -649,7 +646,7 @@ class DomainManagement extends BaseController
         $accountId = (int) $this->request->getPost('account_id', 0);
 
         try {
-            $lastSyncTime = $this->syncService->getLastSyncTime($accountId);
+            $lastSyncTime = $this->aggregator->getDomainLastSyncTime($accountId);
 
             return $this->fetchJson([
                 'success' => true,

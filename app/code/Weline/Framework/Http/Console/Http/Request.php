@@ -74,7 +74,7 @@ class Request extends CommandAbstract
         $lines = isset($args['n']) ? (int)($args['n']) : 3;
         $verifyTls = isset($args['tls']) ? (bool)($args['tls']) : false;
         $method = strtoupper($args['method'] ?? $args['m'] ?? 'GET');
-        $headers = $args['header'] ?? $args['H'] ?? [];
+        $headers = $this->normalizeHeaders($args['header'] ?? $args['H'] ?? []);
         $body = $args['data'] ?? $args['d'] ?? '';
         $overridePort = isset($args['port']) || isset($args['P']) ? (int)($args['port'] ?? $args['P']) : null;
         // --https 强制 HTTPS，--http 强制 HTTP
@@ -214,6 +214,67 @@ class Request extends CommandAbstract
             return '/';
         }
         return $path;
+    }
+
+    /**
+     * 规范化请求头参数，兼容 string|array 输入。
+     *
+     * - 单个请求头字符串：'Host: example.com'
+     * - 多个请求头数组：['Host: a', 'X-Test: 1'] 或 ['Host' => 'a']
+     */
+    private function normalizeHeaders(mixed $headers): array
+    {
+        if (\is_array($headers)) {
+            $normalized = [];
+            foreach ($headers as $key => $value) {
+                // 保持已是 key=>value 的形式
+                if (!\is_int($key)) {
+                    $normalized[(string)$key] = (string)$value;
+                    continue;
+                }
+                // 兼容 "Header: value" 字符串数组
+                if (\is_string($value)) {
+                    $parsed = $this->parseSingleHeader($value);
+                    if ($parsed !== null) {
+                        [$hKey, $hValue] = $parsed;
+                        $normalized[$hKey] = $hValue;
+                    }
+                }
+            }
+            return $normalized;
+        }
+        if (\is_string($headers)) {
+            $header = \trim($headers);
+            if ($header === '') {
+                return [];
+            }
+            $parsed = $this->parseSingleHeader($header);
+            if ($parsed === null) {
+                return [];
+            }
+            return [$parsed[0] => $parsed[1]];
+        }
+        return [];
+    }
+
+    /**
+     * 解析单条请求头字符串，格式必须为 "Header: value"。
+     *
+     * @return array{0:string,1:string}|null
+     */
+    private function parseSingleHeader(string $header): ?array
+    {
+        $line = \trim($header);
+        if ($line === '' || !\str_contains($line, ':')) {
+            return null;
+        }
+        [$name, $value] = \explode(':', $line, 2);
+        $name = \trim($name);
+        $value = \trim($value);
+        if ($name === '') {
+            return null;
+        }
+        return [$name, $value];
     }
 
     /**

@@ -158,7 +158,7 @@ class Widget implements TaglibInterface
                 }
 
                 return $html;
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 w_log_error("Widget 标签渲染错误: " . $e->getMessage(), [], 'WidgetTaglib');
                 return "<!-- Widget 错误: " . htmlspecialchars($e->getMessage()) . " -->";
             }
@@ -279,7 +279,7 @@ class Widget implements TaglibInterface
             }
 
             return '<!-- Widget 错误: Block 类缺少 render() 方法 -->';
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             w_log_error("Widget Block 渲染错误: " . $e->getMessage(), [], 'WidgetTaglib');
             return '<!-- Widget 错误: ' . htmlspecialchars($e->getMessage()) . ' -->';
         }
@@ -311,25 +311,30 @@ class Widget implements TaglibInterface
             return '<!-- Widget 错误: 模板渲染循环引用 -->';
         }
         
+        $renderDepth++;
+        $renderingTemplates[$templateKey] = true;
         try {
-            $renderDepth++;
-            $renderingTemplates[$templateKey] = true;
-            
             /** @var Template $template */
             $template = ObjectManager::getInstance(Template::class);
 
             // 直接使用 fetchHtml 传递参数，避免先 assign 再 fetch 的开销
             $result = $template->fetchHtml($templatePath, $params);
-            
-            $renderDepth--;
-            unset($renderingTemplates[$templateKey]);
             return is_string($result) ? $result : '';
-        } catch (\Exception $e) {
-            $renderDepth--;
-            unset($renderingTemplates[$templateKey]);
+        } catch (\Throwable $e) {
             w_log_error("Widget 模板渲染错误: " . $e->getMessage(), [], 'WidgetTaglib');
             return '<!-- Widget 错误: ' . htmlspecialchars($e->getMessage()) . ' -->';
+        } finally {
+            $renderDepth = max(0, $renderDepth - 1);
+            unset($renderingTemplates[$templateKey]);
         }
+    }
+
+    /**
+     * WLS 每请求重置请求级渲染缓存，避免跨请求复用错误模板输出。
+     */
+    public static function resetRequestState(): void
+    {
+        self::$renderCache = [];
     }
 
     /**

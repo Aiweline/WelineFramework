@@ -389,7 +389,7 @@ class WlsRuntime implements RuntimeInterface
             $timing['ip'] = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
             $timing['timestamp'] = date('Y-m-d H:i:s');
             $timing['redirect_count'] = $_SERVER['WLS_REDIRECT_COUNT'] ?? 0;
-            
+
             // 总是记录到控制台（如果超过500ms或DEV模式）
             // 在DEV模式下，总是记录性能数据；在生产模式下，只记录超过500ms的请求
             if ($timing['total_ms'] >= 500 || $isDev) {
