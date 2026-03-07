@@ -49,15 +49,6 @@
                   sort="0"/>
     </event>
     
-    <!-- Session 存储类型解析：检测 WLS Session Server 并设置 storage_type -->
-    <event name="Weline_Framework_Session::storage_resolve">
-        <observer name="Weline_Server::wls_session_storage"
-                  instance="Weline\Server\Observer\WlsSessionStorageObserver"
-                  disabled="false"
-                  shared="true"
-                  sort="10"/>
-    </event>
-    
     <!-- Master 复活失败时向后台报错，由 Admin 消息中心展示 -->
     <event name="Weline_Server::service::master_resurrection_failed">
         <observer name="Weline_Server::master_resurrection_failed_notify"

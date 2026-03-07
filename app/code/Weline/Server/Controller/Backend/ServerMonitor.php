@@ -13,9 +13,14 @@ declare(strict_types=1);
 namespace Weline\Server\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Security\AttackDetector;
 use Weline\Server\Model\AttackLog;
 use Weline\Server\Model\ServerStatusLog;
+use Weline\Server\Service\Benchmark\ServerBenchmarkService;
+use Weline\Server\Service\Control\BackendStatusService;
+use Weline\Server\Service\Control\IpcControlGateway;
+use Weline\Server\Service\Telemetry\MetricsFlushScheduler;
 use Weline\Server\Service\OptimizationGuideService;
 
 /**
@@ -39,6 +44,10 @@ class ServerMonitor extends BackendController
      * 优化指南服务
      */
     private OptimizationGuideService $guideService;
+    private BackendStatusService $backendStatusService;
+    private IpcControlGateway $ipcGateway;
+    private ServerBenchmarkService $benchmarkService;
+    private MetricsFlushScheduler $metricsFlushScheduler;
     
     /**
      * 构造函数
@@ -46,11 +55,19 @@ class ServerMonitor extends BackendController
     public function __construct(
         ServerStatusLog $statusLog,
         AttackLog $attackLog,
-        OptimizationGuideService $guideService
+        OptimizationGuideService $guideService,
+        BackendStatusService $backendStatusService,
+        IpcControlGateway $ipcGateway,
+        ServerBenchmarkService $benchmarkService,
+        MetricsFlushScheduler $metricsFlushScheduler
     ) {
         $this->statusLog = $statusLog;
         $this->attackLog = $attackLog;
         $this->guideService = $guideService;
+        $this->backendStatusService = $backendStatusService;
+        $this->ipcGateway = $ipcGateway;
+        $this->benchmarkService = $benchmarkService;
+        $this->metricsFlushScheduler = $metricsFlushScheduler;
     }
     
     /**
@@ -80,6 +97,7 @@ class ServerMonitor extends BackendController
         
         // Master API 文档
         $this->assign('masterApiDocs', $this->getMasterApiDocs());
+        $this->assign('benchmarkList', $this->benchmarkService->list(1, 10));
         
         return $this->fetch();
     }
@@ -90,6 +108,14 @@ class ServerMonitor extends BackendController
     public function getStatus(): array
     {
         $instance = $this->request->getGet('instance', 'default');
+        $statusDto = $this->backendStatusService->getStatusDto((string)$instance, true);
+        $traffic = $this->ipcGateway->command(
+            (string)$instance,
+            ControlMessage::ACTION_TELEMETRY_QUERY,
+            '',
+            ['instance' => (string)$instance, 'window_sec' => 300],
+            4.0
+        );
         
         return [
             'success' => true,
@@ -97,8 +123,84 @@ class ServerMonitor extends BackendController
                 'server_status' => $this->guideService->getServerStatus(),
                 'status_logs' => $this->statusLog->getLatestStatus($instance),
                 'server_stats' => $this->statusLog->getStatistics($instance),
+                'status_dto' => $statusDto['data'] ?? [],
+                'traffic' => $traffic['data'] ?? [],
                 'timestamp' => \time(),
             ],
+        ];
+    }
+
+    public function postBenchmark(): array
+    {
+        $instance = (string)$this->request->getPost('instance', 'default');
+        $target = (string)$this->request->getPost('target', '');
+        $concurrency = (int)$this->request->getPost('concurrency', 100);
+        $requests = (int)$this->request->getPost('requests', 5000);
+        if ($target === '') {
+            return [
+                'success' => false,
+                'message' => __('请先输入压测目标 URL，例如 http://127.0.0.1:9981/_wls/health。'),
+            ];
+        }
+        $result = $this->benchmarkService->runAndStore($instance, $target, $concurrency, $requests);
+        return [
+            'success' => (bool)($result['success'] ?? false),
+            'message' => (bool)($result['success'] ?? false) ? __('压测完成') : (string)($result['message'] ?? __('压测失败')),
+            'data' => $result,
+        ];
+    }
+
+    public function getBenchmarks(): array
+    {
+        $page = (int)$this->request->getGet('page', 1);
+        $limit = (int)$this->request->getGet('limit', 20);
+        return [
+            'success' => true,
+            'data' => $this->benchmarkService->list($page, $limit),
+        ];
+    }
+
+    public function getBenchmarkDetail(): array
+    {
+        $id = (int)$this->request->getGet('id', 0);
+        if ($id <= 0) {
+            return ['success' => false, 'message' => __('请传入有效的压测记录 ID。')];
+        }
+        $detail = $this->benchmarkService->detail($id);
+        if ($detail === null) {
+            return ['success' => false, 'message' => __('未找到对应的压测记录。')];
+        }
+        return ['success' => true, 'data' => $detail];
+    }
+
+    public function getTraffic(): array
+    {
+        $instance = (string)$this->request->getGet('instance', 'default');
+        $window = (int)$this->request->getGet('window_sec', 300);
+        $host = (string)$this->request->getGet('host', '');
+        $result = $this->ipcGateway->command(
+            $instance,
+            ControlMessage::ACTION_TELEMETRY_QUERY,
+            '',
+            ['instance' => $instance, 'window_sec' => $window, 'host' => $host],
+            4.0
+        );
+        return [
+            'success' => (bool)($result['success'] ?? false),
+            'message' => (string)($result['message'] ?? ''),
+            'data' => $result['data'] ?? [],
+        ];
+    }
+
+    public function getTrafficHistory(): array
+    {
+        $instance = (string)$this->request->getGet('instance', 'default');
+        $host = (string)$this->request->getGet('host', '');
+        $fromTs = (int)$this->request->getGet('from_ts', \time() - 3600);
+        $toTs = (int)$this->request->getGet('to_ts', \time());
+        return [
+            'success' => true,
+            'data' => $this->metricsFlushScheduler->queryHistory($instance, $fromTs, $toTs, $host ?: null),
         ];
     }
     

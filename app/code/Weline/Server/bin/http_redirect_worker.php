@@ -134,56 +134,32 @@ WlsLogger::info_("Instance: {$instanceName}, HTTP→HTTPS 301 Redirect, Target p
 WlsLogger::info_("DEV=" . ($isDev ? 'ON' : 'OFF') . ", Frontend=" . ($isFrontend ? 'ON' : 'OFF'));
 
 // ========== IPC 控制通道 ==========
-$ipcClient = null;
 $ipcReceivedShutdown = false;
-
-// 获取控制端口
-if ($controlPort <= 0) {
-    $_instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
-    if (\is_file($_instanceFile)) {
-        $_instData = @\json_decode(\file_get_contents($_instanceFile), true);
-        $controlPort = (int)($_instData['control_port'] ?? 0);
-    }
-    unset($_instanceFile, $_instData);
-}
-
+$orphanGuard = new \Weline\Server\IPC\ChildControl\MasterOrphanGuard();
+$kernel = null;
+$controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
 if ($controlPort > 0) {
-    $ipcClient = new \Weline\Server\IPC\ControlClient();
-    $ipcClient->setSelfTag('Redirect');
-    // DEV 模式下输出详细 IPC SEND/RECV 明细
-    $ipcClient->setVerboseLog($isDev);
-    if ($ipcClient->connect('127.0.0.1', $controlPort)) {
-        $ipcClient->register(
-            \Weline\Server\IPC\ControlMessage::ROLE_REDIRECT,
-            \getmypid(),
-            $httpPort,
-            0,
-            $orchestratorEpoch,
-            $orchestratorLaunchId
-        );
-        
-        // 上报就绪
-        $ipcClient->sendReady(\Weline\Server\IPC\ControlMessage::ROLE_REDIRECT, 0, $httpPort, $orchestratorEpoch, $orchestratorLaunchId);
-        
-        // 设置消息处理器
-        $ipcClient->onMessage(function (array $msg, \Weline\Server\IPC\ControlClient $client) use (&$ipcReceivedShutdown) {
-            if (($msg['type'] ?? '') === \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN) {
-                $ipcReceivedShutdown = true;
-            }
-        });
-        
-        // 设置断开处理器（复活优先级 1 = HTTP Redirect，延迟 1 秒）
-        $ipcClient->onDisconnect(function (bool $receivedShutdown, \Weline\Server\IPC\ControlClient $client) use (&$ipcReceivedShutdown, $instanceName, $controlPort) {
-            // 已收到 shutdown，不做任何复活/重连操作
-            if ($receivedShutdown || $ipcReceivedShutdown) {
-                WlsLogger::info_('Master 连接断开（已收到 shutdown，不复活）');
-                return;
-            }
-            WlsLogger::warning_('Master 连接意外断开，控制面已收口，不执行子进程复活。');
-            $client->tryReconnect();
-        });
-    } else {
-        $ipcClient = null;
+    $identity = new \Weline\Server\IPC\ChildControl\ChildProcessIdentity(
+        \Weline\Server\IPC\ControlMessage::ROLE_REDIRECT,
+        \getmypid(),
+        $httpPort,
+        0,
+        $orchestratorEpoch,
+        $orchestratorLaunchId
+    );
+    $handler = new \Weline\Server\IPC\ChildControl\Handler\RedirectControlHandler(
+        static function (bool $shutdown) use (&$ipcReceivedShutdown): void {
+            $ipcReceivedShutdown = $shutdown;
+        }
+    );
+    $kernel = new \Weline\Server\IPC\ChildControl\SubprocessControlKernel(
+        $identity,
+        $handler,
+        'Redirect',
+        $isDev
+    );
+    if (!$kernel->connectAndRegister($controlPort)) {
+        $kernel = null;
     }
 }
 // ========== IPC 控制通道结束 ==========
@@ -192,24 +168,20 @@ $connections = [];
 $requestBuffers = [];
 
 // 优雅退出函数（统一使用进程管理器清理）
-$gracefulExit = function (string $reason = '') use ($socket, &$connections, $processName, &$ipcClient, $httpPort) {
+$gracefulExit = function (string $reason = '') use ($socket, &$connections, $processName, &$kernel, $httpPort) {
     if ($reason) {
         WlsLogger::warning_("退出: {$reason}");
     }
     
     // 通知 Master 即将退出（IPC exited 消息）
-    if ($ipcClient && $ipcClient->isConnected()) {
-        $ipcClient->send(\Weline\Server\IPC\ControlMessage::exited(
-            \Weline\Server\IPC\ControlMessage::ROLE_REDIRECT,
-            \getmypid(),
-            $httpPort
-        ));
+    if ($kernel && $kernel->isConnected()) {
+        $kernel->sendExited();
         WlsLogger::info_("已发送 exited 消息给 Master");
     }
     
     // 关闭 IPC 客户端
-    if ($ipcClient) {
-        $ipcClient->close();
+    if ($kernel) {
+        $kernel->close();
     }
     
     foreach ($connections as $conn) {
@@ -233,12 +205,6 @@ if (\function_exists('pcntl_signal')) {
     });
 }
 
-// ========== 孤儿检测：Master PID 存活检查 ==========
-$lastMasterCheck = \time();
-$masterCheckInterval = 5;
-$masterDeadCount = 0;
-$masterDeadThreshold = 3;
-
 while (true) {
     if (\function_exists('pcntl_signal_dispatch')) {
         \pcntl_signal_dispatch();
@@ -250,60 +216,26 @@ while (true) {
     }
     
     // ========== 孤儿检测（IPC 优先） ==========
-    $now = \time();
-    if ($masterPid > 0 && !$ipcReceivedShutdown && ($now - $lastMasterCheck) >= $masterCheckInterval) {
-        $lastMasterCheck = $now;
-        
-        // IPC 连接正常 → Master 存活，无需 PID 检测
-        if ($ipcClient && $ipcClient->isConnected()) {
-            $masterDeadCount = 0;
-        } else {
-            // IPC 断开，用 PID 检测确认 Master 是否真的死了
-            $masterAlive = false;
-            if (\function_exists('posix_kill')) {
-                $masterAlive = @\posix_kill($masterPid, 0);
-                // macOS/Linux: 非 root 进程探测 root 进程时可能返回 EPERM（进程存在但无权限）
-                if (!$masterAlive && \function_exists('posix_get_last_error')) {
-                    $errno = (int)@\posix_get_last_error();
-                    $eperm = 1; // EPERM
-                    if ($errno === $eperm) {
-                        $masterAlive = true;
-                    }
-                }
-            } elseif (\defined('IS_WIN') && IS_WIN) {
-                // Windows: 使用 Processer::isRunningByPid() 检测
-                $masterAlive = \Weline\Framework\System\Process\Processer::isRunningByPid($masterPid);
-            } else {
-                $masterAlive = @\file_exists("/proc/{$masterPid}");
-                if (!$masterAlive) {
-                    @\exec("kill -0 {$masterPid} 2>/dev/null", $output, $code);
-                    $masterAlive = ($code === 0);
-                }
-            }
-            
-            if ($masterAlive) {
-                $masterDeadCount = 0;
-            } else {
-                $masterDeadCount++;
-                WlsLogger::warning_("Master PID {$masterPid} 不可达且 IPC 断开 ({$masterDeadCount}/{$masterDeadThreshold})");
-                if ($masterDeadCount >= $masterDeadThreshold) {
-                    WlsLogger::warning_("Master PID {$masterPid} 已死亡，自行退出（孤儿保护）");
-                    $gracefulExit('孤儿检测：Master 已死亡');
-                }
-            }
-        }
+    if ($orphanGuard->shouldExit(
+        $masterPid,
+        $kernel !== null && $kernel->isConnected(),
+        $ipcReceivedShutdown,
+        'Redirect'
+    )) {
+        WlsLogger::warning_("Master PID {$masterPid} 已死亡，自行退出（孤儿保护）");
+        $gracefulExit('孤儿检测：Master 已死亡');
     }
     
     // IPC 重连
-    if ($ipcClient && !$ipcClient->isConnected() && !$ipcReceivedShutdown) {
-        $ipcClient->tryReconnect();
+    if ($kernel && !$kernel->isConnected() && !$ipcReceivedShutdown) {
+        $kernel->reconnect();
     }
 
     // 构建 stream_select 读数组
     $readSockets = \array_merge([$socket], $connections);
     
     // 加入 IPC 控制 socket
-    $ipcSocket = ($ipcClient && $ipcClient->isConnected()) ? $ipcClient->getSocket() : null;
+    $ipcSocket = ($kernel && $kernel->isConnected()) ? $kernel->getSocket() : null;
     if ($ipcSocket && \is_resource($ipcSocket)) {
         $readSockets[] = $ipcSocket;
     }
@@ -319,8 +251,8 @@ while (true) {
 
     // 处理 IPC 控制通道消息（处理后从 $read 移除，防止被 HTTP 连接循环误关闭）
     if ($ipcSocket && \in_array($ipcSocket, $read, true)) {
-        if ($ipcClient) {
-            $ipcClient->handleReadable();
+        if ($kernel) {
+            $kernel->tick();
         }
         $ipcKey = \array_search($ipcSocket, $read, true);
         if ($ipcKey !== false) {

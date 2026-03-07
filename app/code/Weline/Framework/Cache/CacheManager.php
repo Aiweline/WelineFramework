@@ -196,13 +196,18 @@ class CacheManager implements CacheManagerInterface
     private function resolveDriver(string $identity, array $poolConfig): string
     {
         if (Runtime::isPersistent()) {
-            if (isset($poolConfig['wls_driver'])) {
-                return $poolConfig['wls_driver'];
+            $configuredDriver = (string)($poolConfig['driver'] ?? $this->config['default'] ?? 'file');
+            $configuredDriver = \strtolower(\trim($configuredDriver));
+            if ($configuredDriver === '') {
+                $configuredDriver = 'file';
             }
-            if (isset($this->config['wls_default'])) {
-                return $this->config['wls_default'];
+
+            // WLS 常驻模式下仅接管 file，其他驱动保持原样
+            if ($configuredDriver === 'file' && $this->shouldHijackFileToWlsMemory()) {
+                return 'wls_memory';
             }
-            return 'wls_memory';
+
+            return $configuredDriver;
         }
 
         if (isset($poolConfig['driver'])) {
@@ -210,6 +215,18 @@ class CacheManager implements CacheManagerInterface
         }
 
         return $this->config['default'] ?? 'file';
+    }
+
+    /**
+     * 是否启用 file -> wls_memory 接管策略。
+     */
+    private function shouldHijackFileToWlsMemory(): bool
+    {
+        if (\class_exists(\Weline\Server\Service\Runtime\RoutingPolicyRegistry::class)) {
+            return \Weline\Server\Service\Runtime\RoutingPolicyRegistry::shouldHijackCacheFile();
+        }
+        // Master 策略尚未下发时，使用安全默认值（接管 file）
+        return true;
     }
 
     /**

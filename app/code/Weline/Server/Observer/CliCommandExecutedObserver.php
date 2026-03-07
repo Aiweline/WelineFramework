@@ -108,13 +108,22 @@ class CliCommandExecutedObserver implements ObserverInterface
         /** @var ServerInstanceManager $manager */
         $manager = ObjectManager::getInstance(ServerInstanceManager::class);
 
-        // 优先使用 IPC 控制通道（TCP，跨平台即时生效）
+        // 优先使用 IPC 控制通道（TCP，跨平台即时生效）：广播到所有运行中的实例。
         $ipcReloadType = ($reloadType === self::RELOAD_TYPE_CACHE) ? 'cache' : 'code';
-        $ipcSuccess = MasterProcess::sendReloadCommand('default', $ipcReloadType);
+        $instanceNames = $manager->listInstanceNames();
+        $ipcNotified = 0;
+        foreach ($instanceNames as $instanceName) {
+            if (!$manager->isInstanceRunning($instanceName)) {
+                continue;
+            }
+            if (MasterProcess::sendReloadCommand($instanceName, $ipcReloadType)) {
+                $ipcNotified++;
+            }
+        }
         
-        if ($ipcSuccess) {
+        if ($ipcNotified > 0) {
             $typeLabel = $reloadType === self::RELOAD_TYPE_CACHE ? __('仅清缓存') : __('代码重载');
-            $printer->note(__('WLS 重载：已通过 IPC 控制通道通知 Master（%{1}）', [$typeLabel]));
+            $printer->note(__('WLS 重载：已通过 IPC 控制通道通知 Master（%{1}，%{2} 个实例）', [$typeLabel, $ipcNotified]));
             return;
         }
         
@@ -195,6 +204,13 @@ class CliCommandExecutedObserver implements ObserverInterface
     public static function triggerReload(string $type = self::RELOAD_TYPE_CODE): void
     {
         $reloadType = ($type === self::RELOAD_TYPE_CACHE) ? 'cache' : 'code';
-        MasterProcess::sendReloadCommand('default', $reloadType);
+        /** @var ServerInstanceManager $manager */
+        $manager = ObjectManager::getInstance(ServerInstanceManager::class);
+        foreach ($manager->listInstanceNames() as $instanceName) {
+            if (!$manager->isInstanceRunning($instanceName)) {
+                continue;
+            }
+            MasterProcess::sendReloadCommand($instanceName, $reloadType);
+        }
     }
 }

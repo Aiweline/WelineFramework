@@ -51,6 +51,8 @@ class ServerQueryProvider implements QueryProviderInterface
                         ['name' => 'email',       'type' => 'string', 'required' => false, 'description' => __('联系邮箱')],
                         ['name' => 'website_id',  'type' => 'int',    'required' => false, 'description' => __('关联网站 ID')],
                         ['name' => 'provider',    'type' => 'string', 'required' => false, 'description' => __('证书提供商 letsencrypt/litessl')],
+                        ['name' => 'cert_type',   'type' => 'string', 'required' => false, 'description' => __('证书类型 exact|wildcard')],
+                        ['name' => 'cert_strategy', 'type' => 'string', 'required' => false, 'description' => __('策略 single|wildcard_prefer|both')],
                     ],
                 ],
             ],
@@ -79,9 +81,20 @@ class ServerQueryProvider implements QueryProviderInterface
 
         $websiteId = (int) ($params['website_id'] ?? 0);
         $provider = (string) ($params['provider'] ?? SslCertificateService::PROVIDER_LETS_ENCRYPT);
+        $certType = (string) ($params['cert_type'] ?? 'exact');
+        $certStrategy = (string) ($params['cert_strategy'] ?? '');
+
+        $requestedDomain = $domain;
+        if ($certType === 'wildcard' || $certStrategy === 'wildcard_prefer' || $certStrategy === 'both') {
+            $parts = \explode('.', $domain);
+            if (\count($parts) >= 2 && !\str_starts_with($domain, '*.')) {
+                \array_shift($parts);
+                $requestedDomain = '*.' . \implode('.', $parts);
+            }
+        }
 
         $result = $this->sslCertificateService->requestCertificate(
-            $domain,
+            $requestedDomain,
             $webroot,
             $email,
             $websiteId,
@@ -96,7 +109,8 @@ class ServerQueryProvider implements QueryProviderInterface
             'message'  => $result['message'] ?? '',
             'cert_id'  => $certId,
             'cert'     => $cert,
-            'domain'   => $domain,
+            'domain'   => $requestedDomain,
+            'requested_domain' => $domain,
         ];
     }
 }

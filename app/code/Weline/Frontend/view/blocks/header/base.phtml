@@ -1,13 +1,14 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
+use Weline\Framework\Session\SessionFactory;
 /**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
 $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 $host = $this->request->getBaseHost() . '/';
 //$http_host                               = explode('.', $this->request->getServer('HTTP_HOST'));
 //$domain                             = array_pop($http_host);
 //$domain                             = array_pop($http_host) .'.'. $domain;
-/**@var \Weline\Backend\Session\BackendSession $session */
-$session = \Weline\Framework\App\Env::getInstance(\Weline\Backend\Session\BackendSession::class);
+/**@var \Weline\Framework\Session\Auth\AuthenticatedSessionInterface $session */
+$session = SessionFactory::frontend();
 $user_id = $session->getLoginUserID();
 $base_host = $this->request->getPrePath();
 $base_router = $this->request->getRouterData('router');

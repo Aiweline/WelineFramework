@@ -65,6 +65,11 @@ class HttpRedirectProvider extends AbstractServiceProvider
         return 4;
     }
 
+    public function isCriticalRole(): bool
+    {
+        return true;
+    }
+
     public function getReloadStrategy(): string
     {
         return 'immediate';
