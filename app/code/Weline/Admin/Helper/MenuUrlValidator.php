@@ -11,8 +11,9 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Helper;
 
+use Weline\Acl\Model\Acl;
 use Weline\Acl\Model\WhiteAclSource;
-use Weline\Backend\Model\Menu;
+use Weline\Acl\Service\ResourceTreeServiceInterface;
 use Weline\Framework\Manager\ObjectManager;
 
 class MenuUrlValidator
@@ -49,32 +50,26 @@ class MenuUrlValidator
             return in_array($routePath, $cachedPaths, true);
         }
 
-        // 从数据库查询所有启用的后端菜单路径
-        /** @var Menu $menuModel */
-        $menuModel = ObjectManager::getInstance(Menu::class);
-        $menus = $menuModel
-            ->where(Menu::schema_fields_IS_BACKEND, 1)
-            ->where(Menu::schema_fields_IS_ENABLE, 1)
-            ->select()
-            ->fetchArray();
-
-        $menuPaths = [];
-        foreach ($menus as $menu) {
-            $action = $menu[Menu::schema_fields_ACTION] ?? '';
-            if ($action) {
-                // 去除前后斜杠，统一格式
-                $action = trim($action, '/');
-                if ($action) {
-                    $menuPaths[] = $action;
-                }
-            }
-        }
+        // 从 ACL 表查询所有启用的后台菜单路径
+        $menuPaths = self::loadMenuPathsFromAcl();
 
         // 存储到静态缓存和文件缓存
         self::$menuPathsCache = $menuPaths;
         $cache->set(self::CACHE_KEY, $menuPaths, 3600); // 缓存1小时
 
         return in_array($routePath, $menuPaths, true);
+    }
+
+    /**
+     * 从 ACL 表加载菜单路径
+     *
+     * @return array
+     */
+    private static function loadMenuPathsFromAcl(): array
+    {
+        /** @var ResourceTreeServiceInterface $resourceTreeService */
+        $resourceTreeService = ObjectManager::getInstance(ResourceTreeServiceInterface::class);
+        return $resourceTreeService->getEnabledBackendMenuRoutes();
     }
 
     /**
@@ -175,4 +170,3 @@ class MenuUrlValidator
         return true;
     }
 }
-

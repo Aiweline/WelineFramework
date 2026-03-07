@@ -28,7 +28,6 @@ class Cli extends CliAbstract
     public function run(): void
     {
         $args = $this->parseArgs($this->argv);
-        
         // 检查是否是查找命令 (find 或 -f)
         if ($this->isFindCommand($args)) {
             $this->handleFindCommand($args);

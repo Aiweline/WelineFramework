@@ -392,55 +392,220 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
     gap: var(--backend-spacing-sm, 8px);
 }
 
+/* ============================================
+   权限树节点样式美化
+   ============================================ */
+
+/* 顶级节点分组样式 - 卡片化设计 */
+#acl > .jstree-container-ul > .jstree-node {
+    margin-bottom: var(--backend-spacing-md, 12px);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: var(--backend-border-radius-md, 8px);
+    background: var(--backend-color-card-bg, #fff);
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    transition: box-shadow 0.2s ease;
+}
+
+/* 顶级节点标题 - 渐变背景 */
+#acl > .jstree-container-ul > .jstree-node > .jstree-anchor {
+    display: flex;
+    align-items: center;
+    padding: var(--backend-spacing-md, 12px) var(--backend-spacing-lg, 16px);
+    background: linear-gradient(135deg, var(--backend-color-bg-secondary, #f8f9fa) 0%, var(--backend-color-bg-tertiary, #e9ecef) 100%);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--backend-color-text-primary, #212529);
+    transition: all 0.2s ease;
+}
+
+#acl > .jstree-container-ul > .jstree-node > .jstree-anchor:hover {
+    background: linear-gradient(135deg, var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.08)) 0%, var(--backend-color-bg-secondary, #f8f9fa) 100%);
+}
+
+/* 顶级节点选中状态 */
+#acl > .jstree-container-ul > .jstree-node > .jstree-anchor.jstree-clicked {
+    background: linear-gradient(135deg, var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.15)) 0%, var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1)) 100%) !important;
+    color: var(--backend-color-primary, #556ee6) !important;
+    border-bottom-color: var(--backend-color-primary, #556ee6);
+}
+
+/* 顶级节点的子节点容器 */
+#acl > .jstree-container-ul > .jstree-node > .jstree-children {
+    padding: var(--backend-spacing-sm, 8px);
+    background: var(--backend-color-bg-primary, #fff);
+}
+
+/* 子节点样式 */
 #acl .jstree-node {
     margin-bottom: 2px;
 }
 
 #acl .jstree-anchor {
-    padding: 6px 8px;
-    border-radius: var(--backend-border-radius-sm, 4px);
+    padding: 8px 12px;
+    border-radius: var(--backend-border-radius, 6px);
     color: var(--backend-color-text-primary, #212529);
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 #acl .jstree-anchor:hover {
     background: var(--backend-color-bg-secondary, #f8f9fa);
+    transform: translateX(2px);
 }
 
+/* 选中节点样式 - 左侧强调边 */
 #acl .jstree-clicked {
-    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1)) !important;
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.12)) !important;
     color: var(--backend-color-primary, #556ee6) !important;
+    font-weight: 500;
+    box-shadow: inset 3px 0 0 var(--backend-color-primary, #556ee6);
+}
+
+/* wholerow 行样式 */
+#acl .jstree-wholerow {
+    border-radius: var(--backend-border-radius, 6px);
+    transition: all 0.15s ease;
 }
 
 #acl .jstree-wholerow-clicked {
     background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1)) !important;
+    border-radius: var(--backend-border-radius, 6px);
 }
 
 #acl .jstree-wholerow-hovered {
     background: var(--backend-color-bg-secondary, #f8f9fa) !important;
+    border-radius: var(--backend-border-radius, 6px);
 }
 
-/* jstree 自定义图标使用 MDI 字体时需覆盖默认 background，否则不显示 */
+/* 复选框样式美化 */
+#acl .jstree-checkbox {
+    width: 18px;
+    height: 18px;
+    margin-right: 6px;
+    border-radius: var(--backend-border-radius-sm, 4px);
+    border: 2px solid var(--backend-color-border-emphasis, #adb5bd);
+    background: var(--backend-color-input-bg, #fff);
+    transition: all 0.15s ease;
+    position: relative;
+}
+
+#acl .jstree-checkbox:hover {
+    border-color: var(--backend-color-primary, #556ee6);
+}
+
+#acl .jstree-clicked > .jstree-checkbox {
+    background: var(--backend-color-primary, #556ee6);
+    border-color: var(--backend-color-primary, #556ee6);
+}
+
+#acl .jstree-checkbox::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 2px;
+    width: 5px;
+    height: 9px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+#acl .jstree-clicked > .jstree-checkbox::after {
+    opacity: 1;
+}
+
+/* 部分选中状态 */
+#acl .jstree-undetermined > .jstree-checkbox {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.15));
+    border-color: var(--backend-color-primary, #556ee6);
+}
+
+#acl .jstree-undetermined > .jstree-checkbox::after {
+    content: '';
+    opacity: 1;
+    left: 3px;
+    top: 6px;
+    width: 10px;
+    height: 2px;
+    border: none;
+    background: var(--backend-color-primary, #556ee6);
+    transform: none;
+    border-radius: 1px;
+}
+
+/* jstree 自定义图标使用 MDI 字体时需覆盖默认 background */
 #acl .jstree-anchor > .jstree-themeicon.jstree-themeicon-custom.mdi,
 #acl .jstree-anchor > .jstree-themeicon.jstree-themeicon-custom[class*="mdi-"] {
     background: none !important;
     background-image: none !important;
-    font-size: 1.1em;
+    font-size: 1.15em;
     width: auto;
-    min-width: 1em;
+    min-width: 1.2em;
     height: auto;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    color: var(--backend-color-primary, #556ee6);
+    margin-right: 2px;
 }
 
+.weline-acl-module-badge{
+    line-height: 1;
+    background: var(--backend-color-bg-secondary, #f8f9fa) !important;
+    color: var(--backend-color-text-tertiary, #adb5bd) !important;
+}
+
+/* 统计徽章样式 - 简洁数字显示 */
 .weline-acl-module-badge {
-    display: inline-block;
-    font-size: 10px;
-    padding: 2px 6px;
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.7rem;
+    padding: 0;
+    margin-left: 6px;
+    font-weight: 500;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+.weline-acl-module-badge.bg-success {
+    color: var(--backend-color-success, #34c38f) !important;
+}
+
+.weline-acl-module-badge.bg-warning {
+    color: var(--backend-color-warning, #f1b44c) !important;
+}
+
+.weline-acl-module-badge.bg-secondary {
+    color: var(--backend-color-text-tertiary, #adb5bd) !important;
+}
+
+/* 悬停时的节点阴影效果 */
+#acl > .jstree-container-ul > .jstree-node:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* 搜索匹配高亮 */
+#acl .jstree-search {
+    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.2));
     border-radius: var(--backend-border-radius-sm, 4px);
-    background: var(--backend-color-bg-tertiary, #e9ecef);
-    color: var(--backend-color-text-secondary, #6c757d);
-    margin-left: 8px;
+    padding: 2px 4px;
+    font-weight: 500;
+}
+
+/* 动画效果 */
+@keyframes acl-node-select {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.98); }
+    100% { transform: scale(1); }
+}
+
+#acl .jstree-clicked {
+    animation: acl-node-select 0.2s ease;
 }
 
 @media (max-width: 768px) {

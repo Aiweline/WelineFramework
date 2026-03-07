@@ -15,6 +15,7 @@ use Weline\Framework\Log\Context\TraceContext;
 if (!defined('BP')) {
     define('BP', dirname(__DIR__) . DIRECTORY_SEPARATOR);
 }
+
 // 检查安装
 if ((PHP_SAPI !== 'cli') and !file_exists(BP . 'setup' . DIRECTORY_SEPARATOR . 'install.lock')) {
     require BP . 'setup' . DIRECTORY_SEPARATOR . 'index.php';
@@ -23,7 +24,6 @@ if ((PHP_SAPI !== 'cli') and !file_exists(BP . 'setup' . DIRECTORY_SEPARATOR . '
 
 // 统一自动加载：app/code 与 generated/code 优先于 vendor（与 WLS worker 共用 app/autoload.php）
 require __DIR__ . DIRECTORY_SEPARATOR . 'autoload.php';
-
 // 初始化统一的异常处理系统
 ExceptionBootstrap::init(PHP_SAPI === 'cli' ? 'CLI' : 'FPM');
 
@@ -53,7 +53,6 @@ try {
      * 初始化应用...
      */
     $result = \Weline\Framework\App::run();
-    
     // 输出正常响应内容
     if (!empty($result)) {
         echo $result;

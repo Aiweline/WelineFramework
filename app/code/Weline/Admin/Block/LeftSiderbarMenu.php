@@ -11,18 +11,36 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Block;
 
+use Weline\Acl\Service\ResourceTreeServiceInterface;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\SessionFactory;
+
 class LeftSiderbarMenu extends \Weline\Framework\View\Block
 {
-    private \Weline\Backend\Model\Menu $menu;
-
-    public function __construct(\Weline\Backend\Model\Menu $menu, array $data = [])
-    {
-        $this->menu = $menu;
-        parent::__construct($data);
-    }
+    private ?ResourceTreeServiceInterface $resourceTreeService = null;
 
     public function getMenuTree()
     {
-        return $this->menu->getMenuTree();
+        if ($this->resourceTreeService === null) {
+            $this->resourceTreeService = ObjectManager::getInstance(ResourceTreeServiceInterface::class);
+        }
+        
+        // 获取当前登录用户和角色
+        /** @var AuthenticatedSessionInterface $session */
+        $session = SessionFactory::getInstance()->createBackendSession();
+        /** @var \Weline\Backend\Model\BackendUser $user */
+        $user = $session->getLoginUser();
+        
+        if (!$user || !$user->getId()) {
+            return [];
+        }
+        
+        $role = $user->getRoleModel();
+        if (!$role || !$role->getId()) {
+            return [];
+        }
+        
+        return $this->resourceTreeService->getBackendMenuTree($role);
     }
 }

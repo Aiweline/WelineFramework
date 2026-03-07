@@ -31,7 +31,7 @@ class AiUsageLog extends Model
 
     #[Col('int', 0, nullable: false, primaryKey: true, autoIncrement: true, comment: '日志ID')]
     public const schema_fields_ID = 'id';
-    #[Col('int', 0, nullable: false, comment: 'API密钥ID')]
+    #[Col('int', 0, comment: 'API密钥ID（后台调用时为空）')]
     public const schema_fields_API_KEY_ID = 'api_key_id';
     #[Col('int', 0, comment: '租户ID')]
     public const schema_fields_TENANT_ID = 'tenant_id';

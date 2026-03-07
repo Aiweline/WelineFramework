@@ -14,7 +14,6 @@ declare(strict_types=1);
 namespace Weline\Acl\Model;
 
 use Weline\Backend\Model\BackendUser;
-use Weline\Backend\Model\Menu;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Database\Model;
@@ -22,6 +21,8 @@ use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Acl\Service\ResourceTreeService;
+
 /** 复合主键 (role_id, source_id) 用 UNIQUE 约束实现，框架暂不支持复合主键声明 */
 #[Table(comment: '角色资源访问表')]
 #[Index(name: 'uk_role_source', columns: ['role_id', 'source_id'], type: 'UNIQUE', comment: '角色+资源唯一')]
@@ -36,7 +37,23 @@ class RoleAccess extends Model
     public const schema_fields_SOURCE_ID = 'source_id';
 
     private array $exist = [];
-/**
+    
+    private ?ResourceTreeService $resourceTreeService = null;
+
+    /**
+     * 获取资源树服务（延迟加载）
+     * 
+     * @return ResourceTreeService
+     */
+    private function getResourceTreeService(): ResourceTreeService
+    {
+        if ($this->resourceTreeService === null) {
+            $this->resourceTreeService = ObjectManager::getInstance(ResourceTreeService::class);
+        }
+        return $this->resourceTreeService;
+    }
+
+    /**
      * @DESC          # 获取树形菜单【携带角色权限信息】
      *
      * @AUTH    秋枫雁飞
@@ -61,181 +78,18 @@ class RoleAccess extends Model
         string     $order_sort = 'ASC'
     ): array
     {
-        return $this->buildTreeWithMenuAndAcl($role);
+        return $this->buildAclTreeFromAcl($role);
     }
 
     /**
-     * 菜单表 + ACL 表关系树：菜单为主干，acl.parent_source 命中菜单的挂到菜单下，无菜单父级的 ACL 按 parent_source 成树
-     *
-     * @return Acl[] 顶层节点数组（Acl 兼容节点，含 sub）
-     */
-    private function buildTreeWithMenuAndAcl(Role $role): array
-    {
-        $roleId = (int) $role->getId();
-        /** @var Menu $menuModel */
-        $menuModel = ObjectManager::getInstance(Menu::class, [], false);
-        // 加载全部菜单（含禁用模块），权限树需展示完整层级供分配，不按 is_enable 过滤
-        $menuRows = $menuModel->reset()
-            ->order(Menu::schema_fields_PARENT_SOURCE, 'ASC')
-            ->order(Menu::schema_fields_ORDER, 'ASC')
-            ->select()
-            ->fetchArray();
-        $menuSources = array_column($menuRows, Menu::schema_fields_SOURCE);
-        $menuByParent = $this->groupMenusByParent($menuRows);
-
-        /** @var Acl $aclModel */
-        $aclModel = ObjectManager::getInstance(Acl::class, [], false);
-        $aclWithRole = $aclModel->reset()
-            ->joinModel(RoleAccess::class, 'ra', 'main_table.source_id=ra.source_id and ra.role_id=' . $roleId, 'left')
-            ->order(Acl::schema_fields_PARENT_SOURCE, 'ASC')
-            ->order(Acl::schema_fields_ORDER, 'ASC')
-            ->select()
-            ->fetch()
-            ->getItems();
-        $roleSelectedSources = $this->getRoleSelectedSources($roleId);
-        $aclByParent = $this->groupAclByParent($aclWithRole, $roleSelectedSources, 'ra_role_id');
-        $menuSourceSet = array_flip($menuSources);
-
-        $topMenuNodes = $this->buildMenuTreeLevel('', $menuByParent, $aclByParent, $menuSourceSet, $roleSelectedSources);
-        $topAclOnlyNodes = $this->buildAclOnlyTreeLevel('', $aclByParent, $menuSourceSet, $roleSelectedSources);
-
-        return array_merge($topMenuNodes, $topAclOnlyNodes);
-    }
-
-    /** @return array<string, list<array>> */
-    private function groupMenusByParent(array $menuRows): array
-    {
-        $byParent = ['' => []];
-        foreach ($menuRows as $row) {
-            $parent = (string) ($row[Menu::schema_fields_PARENT_SOURCE] ?? '');
-            if (!isset($byParent[$parent])) {
-                $byParent[$parent] = [];
-            }
-            $byParent[$parent][] = $row;
-        }
-        foreach ($byParent as $p => $list) {
-            usort($byParent[$p], static fn($a, $b) => (int) ($a[Menu::schema_fields_ORDER] ?? 0) <=> (int) ($b[Menu::schema_fields_ORDER] ?? 0));
-        }
-        return $byParent;
-    }
-
-    /**
-     * @param Acl[] $aclItems
-     * @return array<string, list<Acl>>
-     */
-    private function groupAclByParent(array $aclItems, array $roleSelectedSources, string $roleIdKey): array
-    {
-        $byParent = ['' => []];
-        foreach ($aclItems as $acl) {
-            $sid = (string) ($acl->getData(Acl::schema_fields_SOURCE_ID) ?? '');
-            $acl->setData('role_id', $acl->getData($roleIdKey) ?: ($roleSelectedSources[$sid] ?? null));
-            $parent = (string) ($acl->getParentSource());
-            if (!isset($byParent[$parent])) {
-                $byParent[$parent] = [];
-            }
-            $byParent[$parent][] = $acl;
-        }
-        foreach ($byParent as $p => $list) {
-            usort($byParent[$p], static fn($a, $b) => (int) ($a->getOrder() ?? 0) <=> (int) ($b->getOrder() ?? 0));
-        }
-        return $byParent;
-    }
-
-    private function getRoleSelectedSources(int $roleId): array
-    {
-        $ra = ObjectManager::getInstance(RoleAccess::class, [], false);
-        $rows = $ra->clear()->where(RoleAccess::schema_fields_ROLE_ID, $roleId)->select()->fetchArray();
-        $out = [];
-        foreach ($rows as $row) {
-            $sid = $row[RoleAccess::schema_fields_SOURCE_ID] ?? '';
-            if ($sid !== '') {
-                $out[$sid] = true;
-            }
-        }
-        return $out;
-    }
-
-    /**
-     * @param array<string, list<array>> $menuByParent
-     * @param array<string, list<Acl>> $aclByParent
-     * @param array<int|string, true> $menuSourceSet
-     * @param array<string, true> $roleSelectedSources
+     * 从 ACL 表构建权限分配树（单一数据源）
+     * 
+     * @param Role $role
      * @return Acl[]
      */
-    private function buildMenuTreeLevel(
-        string $parentSource,
-        array $menuByParent,
-        array $aclByParent,
-        array $menuSourceSet,
-        array $roleSelectedSources
-    ): array {
-        $nodes = [];
-        $menus = $menuByParent[$parentSource] ?? [];
-        foreach ($menus as $menuRow) {
-            $source = (string) ($menuRow[Menu::schema_fields_SOURCE] ?? '');
-            if ($source === '') {
-                continue;
-            }
-            /** @var Acl $node */
-            $node = ObjectManager::getInstance(Acl::class, [], false);
-            $node->setData(Acl::schema_fields_SOURCE_ID, $source);
-            $node->setData(Acl::schema_fields_SOURCE_NAME, $menuRow[Menu::schema_fields_TITLE] ?? $source);
-            $node->setData(Acl::schema_fields_TYPE, Acl::type_MENUS);
-            $node->setData(Acl::schema_fields_ICON, $menuRow[Menu::schema_fields_ICON] ?? '');
-            $node->setData(Acl::schema_fields_MODULE, $menuRow[Menu::schema_fields_MODULE] ?? '');
-            $node->setData(Acl::schema_fields_METHOD, '');
-            $node->setData(Acl::schema_fields_DOCUMENT, __('菜单'));
-            $node->setData('role_id', $roleSelectedSources[$source] ?? null);
-
-            $subMenus = $this->buildMenuTreeLevel($source, $menuByParent, $aclByParent, $menuSourceSet, $roleSelectedSources);
-            $routeChildrenRaw = $aclByParent[$source] ?? [];
-            // 排除已是菜单的 ACL，避免与 subMenus 重复（菜单以 subMenus 为准）
-            $routeChildren = [];
-            foreach ($routeChildrenRaw as $routeAcl) {
-                if (isset($menuSourceSet[$routeAcl->getSourceId()])) {
-                    continue;
-                }
-                $routeAcl->setData('sub', $this->buildAclOnlyTreeLevel(
-                    $routeAcl->getSourceId(),
-                    $aclByParent,
-                    $menuSourceSet,
-                    $roleSelectedSources
-                ));
-                $routeChildren[] = $routeAcl;
-            }
-            $node->setData('sub', array_merge($subMenus, $routeChildren));
-            $nodes[] = $node;
-        }
-        return $nodes;
-    }
-
-    /**
-     * @param array<string, list<Acl>> $aclByParent
-     * @param array<int|string, true> $menuSourceSet
-     * @param array<string, true> $roleSelectedSources
-     * @return Acl[]
-     */
-    private function buildAclOnlyTreeLevel(
-        string $parentSource,
-        array $aclByParent,
-        array $menuSourceSet,
-        array $roleSelectedSources
-    ): array {
-        $candidates = $aclByParent[$parentSource] ?? [];
-        $nodes = [];
-        foreach ($candidates as $acl) {
-            $sid = $acl->getSourceId();
-            if ($sid === '') {
-                continue;
-            }
-            if (isset($menuSourceSet[$sid])) {
-                continue;
-            }
-            $children = $this->buildAclOnlyTreeLevel($sid, $aclByParent, $menuSourceSet, $roleSelectedSources);
-            $acl->setData('sub', $children);
-            $nodes[] = $acl;
-        }
-        return $nodes;
+    private function buildAclTreeFromAcl(Role $role): array
+    {
+        return $this->getResourceTreeService()->getAclAssignmentTree($role);
     }
 
     /**

@@ -36,7 +36,54 @@ class BaiduAiAdapter extends BaseAdapter
      */
     public function generateFeed(array $items): string
     {
-        return parent::generateFeed($items);
+        return json_encode($items, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function pushFeed(string $feed, PlatformAccount $account): PushResult
+    {
+        try {
+            /** @var SecretStoreService $secretStore */
+            $secretStore = ObjectManager::getInstance(SecretStoreService::class);
+            $apiKey = $secretStore->decryptApiKey($account->getData('api_key'));
+            $apiSecret = $secretStore->decryptApiKey($account->getData('api_secret'));
+
+            if (empty($apiKey) || empty($apiSecret)) {
+                return new PushResult(false, 'API密钥解密失败');
+            }
+
+            $accessToken = $this->getBaiduAccessToken($apiKey, $apiSecret);
+            if (empty($accessToken)) {
+                return new PushResult(false, '获取Access Token失败');
+            }
+
+            $headers = [
+                'Content-Type: application/json',
+            ];
+
+            $url = $this->apiEndpoint . '?access_token=' . $accessToken;
+
+            $response = $this->sendHttpRequest(
+                $url,
+                $headers,
+                'POST',
+                $feed
+            );
+
+            if ($this->validateResponse($response)) {
+                return new PushResult(true, 'Feed推送成功', json_decode($response['body'], true), 1);
+            } else {
+                return new PushResult(
+                    false,
+                    "推送失败: HTTP {$response['http_code']}",
+                    ['response' => $response['body']]
+                );
+            }
+        } catch (\Exception $e) {
+            return new PushResult(false, $e->getMessage());
+        }
     }
 
     /**

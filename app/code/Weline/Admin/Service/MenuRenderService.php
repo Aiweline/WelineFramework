@@ -14,7 +14,6 @@ namespace Weline\Admin\Service;
 use Weline\Acl\Model\Role;
 use Weline\Admin\Model\MenuAccessLog;
 use Weline\Backend\Model\BackendUser;
-use Weline\Backend\Model\Menu;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
@@ -33,11 +32,6 @@ use Weline\Framework\Http\Request;
 class MenuRenderService
 {
     /**
-     * @var Menu
-     */
-    private Menu $menuModel;
-
-    /**
      * @var MenuAccessLog
      */
     private MenuAccessLog $menuAccessLogModel;
@@ -50,14 +44,11 @@ class MenuRenderService
     /**
      * 构造函数
      * 
-     * @param Menu $menuModel
      * @param MenuAccessLog $menuAccessLogModel
      */
     public function __construct(
-        Menu $menuModel,
         MenuAccessLog $menuAccessLogModel
     ) {
-        $this->menuModel = $menuModel;
         $this->menuAccessLogModel = $menuAccessLogModel;
         $this->session = SessionFactory::getInstance()->createBackendSession();
     }

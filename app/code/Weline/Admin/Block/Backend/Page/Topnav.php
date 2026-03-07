@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Admin\Block\Backend\Page;
 
 use Weline\Acl\Model\Role;
+use Weline\Acl\Service\ResourceTreeServiceInterface;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Manager\ObjectManager;
@@ -19,17 +20,26 @@ use Weline\Framework\Manager\ObjectManager;
 class Topnav extends \Weline\Framework\View\Block
 {
     public string $_template = 'Weline_Admin::backend/public/topnav.phtml';
-    private \Weline\Backend\Model\Menu $menu;
     private \Weline\Backend\Block\ThemeConfig $themeConfig;
+    private ?ResourceTreeServiceInterface $resourceTreeService = null;
 
     public function __construct(
-        \Weline\Backend\Model\Menu        $menu,
         \Weline\Backend\Block\ThemeConfig $themeConfig,
         array                             $data = []
     ) {
-        $this->menu        = $menu;
         $this->themeConfig = $themeConfig;
         parent::__construct($data);
+    }
+
+    /**
+     * 获取资源树服务
+     */
+    private function getResourceTreeService(): ResourceTreeServiceInterface
+    {
+        if ($this->resourceTreeService === null) {
+            $this->resourceTreeService = ObjectManager::getInstance(ResourceTreeServiceInterface::class);
+        }
+        return $this->resourceTreeService;
     }
 
     public function __init()
@@ -66,7 +76,7 @@ class Topnav extends \Weline\Framework\View\Block
             $roleId = (int) ($user->getRole()->getRoleId() ?: 0);
             if ($roleId > 0) {
                 $role = ObjectManager::getInstance(Role::class, [], false)->load($roleId);
-                $menus = $role->getId() ? $this->menu->getMenuTreeByRole($role) : [];
+                $menus = $role->getId() ? $this->getResourceTreeService()->getBackendMenuTree($role) : [];
             } else {
                 $menus = [];
             }

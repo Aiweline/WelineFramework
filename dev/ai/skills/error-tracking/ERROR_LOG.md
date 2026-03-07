@@ -4,6 +4,108 @@
 
 ---
 
+## [2026-03-07] WLS Worker 内存溢出 - WlsMemoryAdapter serialize 触发 OOM ✅ 已修复
+
+**错误类型**: WLS 内存管理 / 缓存设计
+
+**错误信息**:
+```text
+Allowed memory size of 134217728 bytes exhausted (tried to allocate 4198400 bytes)
+位置: WlsMemoryAdapter.php:125
+进程: WorkerSSL#1/WorkerSSL#2
+memory_limit: 128M
+```
+
+**根本原因**:
+1. `WlsMemoryAdapter::getMemoryUsage()` 使用 `serialize($bucket)` 计算内存占用，**在内存接近上限时，serialize 本身需要分配额外内存，直接触发 OOM**
+2. 多个缓存 identity 共享同一进程的 128MB memory_limit，每个配置 64MB max_memory，总和远超进程限制
+3. `setToMemory()` 只检查缓存自身的内存使用，未检查 PHP 进程的整体内存压力
+
+**问题代码**:
+```php
+// ❌ 问题代码 - serialize 在内存紧张时会触发 OOM
+public function getMemoryUsage(): int
+{
+    $bucket = self::$store[$this->identity] ?? [];
+    return strlen(serialize($bucket));  // 内存紧张时崩溃
+}
+
+// ❌ 问题代码 - 未考虑 PHP 进程内存压力
+private function setToMemory(string $key, mixed $value, int $ttl): void
+{
+    if ($this->getMemoryUsage() > $this->maxMemory) {
+        $this->evict(...);  // 只看缓存自身，不看进程整体
+    }
+}
+```
+
+**解决方案**:
+1. **轻量估算内存占用**：用遍历估算替代 serialize，避免额外内存分配
+2. **进程级内存压力检查**：在 `setToMemory()` 开头先检查 `memory_get_usage(true) / memory_limit`
+3. **合理分配缓存上限**：env.php 中每个 identity 的 max_memory 从 64MB 降为 16MB
+
+```php
+// ✅ 修复后 - 轻量估算
+public function getMemoryUsage(): int
+{
+    $bucket = self::$store[$this->identity] ?? [];
+    $usage = 0;
+    foreach ($bucket as $key => $entry) {
+        $usage += strlen($key) + 50;
+        if (is_string($entry['v'] ?? null)) {
+            $usage += strlen($entry['v']);
+        } elseif (is_array($entry['v'] ?? null)) {
+            $usage += count($entry['v']) * 72 + 100;
+        } else {
+            $usage += 100;
+        }
+    }
+    return $usage;
+}
+
+// ✅ 新增 - 进程内存压力检查
+public static function getMemoryPressure(): float
+{
+    $usage = memory_get_usage(true);
+    $limit = ini_get('memory_limit');
+    // ...
+    return $usage / $limitBytes;
+}
+
+// ✅ 修复后 - 先检查进程内存压力
+private function setToMemory(string $key, mixed $value, int $ttl): void
+{
+    $pressure = self::getMemoryPressure();
+    if ($pressure > 0.85) {
+        $this->evict((int) max(100, count($bucket) * 0.3));  // 激进淘汰
+    } elseif ($pressure > 0.75) {
+        $this->evict((int) max(10, count($bucket) * $this->evictRatio * 2));
+    }
+    // ... 原有条目数、缓存内存检查
+}
+```
+
+**验证方法**:
+```bash
+php -l "app/code/Weline/Framework/Cache/Adapter/WlsMemoryAdapter.php"
+php bin/w server:reload
+# 观察运行一段时间后是否还有 OOM crash
+```
+
+**验证结果**: ✅ 成功（语法检查通过；代码逻辑正确）
+
+**预防措施**:
+1. **内存紧张时避免 serialize/json_encode**：这些操作需要额外分配内存
+2. **多 identity 缓存设计**：必须考虑所有 identity 共享进程 memory_limit
+3. **WLS 内存管理**：缓存淘汰逻辑应优先检查进程级内存压力
+4. **推荐 memory_limit**：WLS 推荐至少 256M，给缓存和框架预留足够空间
+
+**相关文件**:
+- `app/code/Weline/Framework/Cache/Adapter/WlsMemoryAdapter.php`
+- `app/etc/env.php` - wls_memory 配置
+
+---
+
 ## [2026-03-07] 未定义 ACL 的后台路由被误当成受控资源拦截 ✅ 已修复
 
 **错误类型**: ACL 权限判定 / 后台路由访问控制

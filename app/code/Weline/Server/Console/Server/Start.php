@@ -591,7 +591,7 @@ class Start extends CommandAbstract
         $workerScript = $this->ensureWorkerScript($workerSslEnabled);
         
         // 保存实例信息（Master 将从这里读取配置并启动所有进程）
-        $this->saveInstanceInfo($instanceName, $host, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, [], $dispatcherEnabled, $workerPort, $httpRedirectPort, $frontend, $enableLog, $useDirectMode);
+        $this->saveInstanceInfo($instanceName, $host, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, [], $dispatcherEnabled, $workerPort, $httpRedirectPort, $frontend, $enableLog, $useDirectMode, $workerBasePort);
         
         // 保存实例配置（配置记忆：下次 server:start <name> 直接使用相同配置）
         $this->saveInstanceConfig($instanceName, $args, $config);
@@ -679,11 +679,15 @@ class Start extends CommandAbstract
         // Dispatcher 只做 TCP 透传，SSL 握手始终由 Worker 处理
         $workerScript = $this->ensureWorkerScript($sslEnabled);
         $port = (int)($data['port'] ?? 443);
+        $workerPort = (int)($data['worker_port'] ?? $port);
+        $workerBasePort = (int)($data['worker_base_port'] ?? 10000);
+        $workerCount = (int)($data['count'] ?? 1);
         $config = [
             'host' => (string)($data['host'] ?? '127.0.0.1'),
             'port' => $port,
-            'worker_count' => (int)($data['count'] ?? 1),
-            'worker_port' => (int)($data['worker_port'] ?? $data['port'] ?? 443),
+            'worker_count' => $workerCount,
+            'worker_port' => $workerPort,
+            'worker_base_port' => $workerBasePort,
             'daemon' => true,
         ];
         // HTTPS 模式始终启动 HTTP Redirect Worker（从实例文件或智能计算）
@@ -722,6 +726,11 @@ class Start extends CommandAbstract
         $master->setPrinter($this->printer)
             ->setMode($masterMode)
             ->setMainPort($mainPort)
+            // 恢复运行态配置（由 Start.php 保存）
+            ->setDispatcherEnabled($dispatcherEnabled)
+            ->setWorkerCount($workerCount)
+            ->setWorkerBasePort($workerBasePort)
+            ->setWorkerPort($workerPort)
             ->init($instanceName, $config, $workerScript, (string)($data['ssl_cert'] ?? ''), (string)($data['ssl_key'] ?? ''), $sslEnabled, $httpRedirectPort, $frontend)
             ->setWorkerPids($workerPids)
             ->setDispatcherPid((int)($data['dispatcher_pid'] ?? 0))
@@ -735,6 +744,11 @@ class Start extends CommandAbstract
      * Windows：用 PowerShell Start-Process 独立启动 Master，避免 cmd/batch 退出时牵连子进程导致 Master 被关。
      * 传参使用 -ArgumentList 数组，保证 server:start instanceName --master-only 被正确解析。
      * 后台模式下将 Windows + HTTPS 相关提示放在「服务器已在后台运行」之后，便于用户看到。
+     * 
+     * 启动确认机制：
+     * - 轮询检查实例文件中的 master_pid 和 control_port 是否已写入
+     * - 验证 Master 进程是否存活
+     * - 超时（5秒）时输出警告而非假成功
      */
     protected function startMasterInBackground(string $instanceName, bool $sslEnabled = false, string $host = '127.0.0.1', int $port = 443): void
     {
@@ -755,12 +769,69 @@ class Start extends CommandAbstract
             Processer::create($cmd, false);
         }
         
-        $this->printer->success(__('服务器已在后台运行。使用 php bin/w server:status 查看状态，php bin/w server:stop 停止服务。'));
+        // ========== 启动确认机制 ==========
+        // 轮询检查后台 Master 是否成功启动
+        $instanceFile = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $instanceName . '.json';
+        $maxWaitMs = 5000;      // 最大等待 5 秒
+        $waitStepMs = 200;      // 每 200ms 检查一次
+        $waited = 0;
+        $masterStarted = false;
+        $lastMasterPid = 0;
+        $lastControlPort = 0;
+        
+        while ($waited < $maxWaitMs) {
+            \usleep($waitStepMs * 1000);
+            $waited += $waitStepMs;
+            
+            // 检查实例文件是否已更新
+            if (\is_file($instanceFile)) {
+                $content = @\file_get_contents($instanceFile);
+                if ($content !== false) {
+                    $data = \json_decode($content, true);
+                    if (\is_array($data)) {
+                        $masterPid = (int)($data['master_pid'] ?? 0);
+                        $controlPort = (int)($data['control_port'] ?? 0);
+                        
+                        // 检测到新的 master_pid 和 control_port
+                        if ($masterPid > 0 && $controlPort > 0) {
+                            // 验证进程是否存活
+                            if (Processer::processExists($masterPid)) {
+                                $masterStarted = true;
+                                $lastMasterPid = $masterPid;
+                                $lastControlPort = $controlPort;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if ($masterStarted) {
+            $this->printer->success(__('服务器已在后台运行（Master PID: %{1}, 控制端口: %{2}）', [$lastMasterPid, $lastControlPort]));
+            $this->printer->note(__('使用 php bin/w server:status 查看状态，php bin/w server:stop 停止服务。'));
+        } else {
+            // 启动确认失败：输出警告而非假成功
+            $this->printer->warning(__('后台启动已发起，但未能在 %{1} 秒内确认 Master 进程就绪。', [$maxWaitMs / 1000]));
+            $this->printer->note(__('可能原因：'));
+            $this->printer->note(__('  1. 框架加载耗时较长（首次启动或 opcache 未预热）'));
+            $this->printer->note(__('  2. 端口被占用导致启动失败'));
+            $this->printer->note(__('  3. 权限不足（特权端口需要 root/sudo）'));
+            $this->printer->note(__(''));
+            $this->printer->note(__('请执行以下命令检查状态：'));
+            $this->printer->note(__('  php bin/w server:status'));
+            $this->printer->note(__('  php bin/w server:status --all'));
+            
+            // 输出日志文件路径便于排查
+            $logDir = Env::VAR_DIR . 'log' . DS . 'server' . DS;
+            $this->printer->note(__('日志目录：%{1}', [$logDir]));
+        }
+        
         if (\function_exists('flush')) {
             @\flush();
         }
         
-        // Windows + HTTPS 时在「服务器已在后台运行」之后集中提示，避免被前面输出淹没
+        // Windows + HTTPS 时在提示之后集中输出，避免被前面输出淹没
         if (IS_WIN && $sslEnabled) {
             if (!\extension_loaded('event')) {
                 $this->printWindowsEventHttpsWarning();
@@ -1927,10 +1998,21 @@ class Start extends CommandAbstract
         }
         
         // 检查 Worker PIDs
+        // 兼容新旧进程名前缀：
+        // - 新前缀：weline-wls-worker-{instanceName}-{id}
+        // - 旧前缀：weline-master-{instanceName}-worker-{id}
         for ($i = 1; $i <= $count; $i++) {
-            $workerProcessName = '--name=weline-master-' . $instanceName . '-worker-' . $i;
-            $workerPid = (int) Processer::getData($workerProcessName, 'pid');
+            // 优先检查新前缀
+            $workerProcessNameNew = '--name=weline-wls-worker-' . $instanceName . '-' . $i;
+            $workerPid = (int) Processer::getData($workerProcessNameNew, 'pid');
             if ($workerPid > 0 && Processer::isRunningByPid($workerPid)) {
+                return true;
+            }
+            
+            // 兼容旧前缀
+            $workerProcessNameOld = '--name=weline-master-' . $instanceName . '-worker-' . $i;
+            $workerPidOld = (int) Processer::getData($workerProcessNameOld, 'pid');
+            if ($workerPidOld > 0 && Processer::isRunningByPid($workerPidOld)) {
                 return true;
             }
         }
@@ -2282,7 +2364,7 @@ class Start extends CommandAbstract
     /**
      * 保存实例信息
      */
-    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', array $workerPids = [], bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $frontend = false, bool $enableLog = false, bool $useDirectMode = false): void
+    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', array $workerPids = [], bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $frontend = false, bool $enableLog = false, bool $useDirectMode = false, int $workerBasePort = 10000): void
     {
         $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
         if (!\is_dir($instanceDir)) {
@@ -2310,6 +2392,7 @@ class Start extends CommandAbstract
             'dispatcher_port' => $dispatcherEnabled ? $port : 0,
             'dispatcher_pid' => 0,
             'worker_port' => $workerPort ?: $port,  // Worker 实际监听的端口（Dispatcher 模式下为内网端口）
+            'worker_base_port' => $workerBasePort,   // Worker 基础端口（用于计算各 Worker 端口）
             // HTTP 重定向端口（HTTPS 模式下用于 HTTP→HTTPS 跳转）
             'http_redirect_port' => $httpRedirectPort,
             // 前台模式（重启 Worker 时保持可见窗口）
@@ -2882,7 +2965,8 @@ PHP;
     protected function startWithProcOpen(string $phpBinary, string $workerScript, string $host, int $port, int $workerId, string $instanceName, string $logFile, string $sslCert = '', string $sslKey = '', bool $frontend = false): array
     {
         // 进程名包含实例名和 Worker ID，便于多 Master 架构下识别和管理
-        $processName = 'weline-master-' . $instanceName . '-worker-' . $workerId;
+        // 使用新前缀：weline-wls-worker-{instanceName}-{id}
+        $processName = 'weline-wls-worker-' . $instanceName . '-' . $workerId;
         $command = "\"{$phpBinary}\" \"{$workerScript}\" {$host} {$port} {$workerId} {$instanceName}";
         if ($sslCert && $sslKey) {
             $command .= " \"{$sslCert}\" \"{$sslKey}\"";
@@ -2940,7 +3024,8 @@ PHP;
             }
             
             // 进程名包含实例名和 Worker ID
-            $processName = 'weline-master-' . $instanceName . '-worker-' . $workerId;
+            // 使用新前缀：weline-wls-worker-{instanceName}-{id}
+            $processName = 'weline-wls-worker-' . $instanceName . '-' . $workerId;
             $command = "\"{$phpBinary}\" \"{$workerScript}\" {$host} {$port} {$workerId} {$instanceName}";
             if ($sslCert && $sslKey) {
                 $command .= " \"{$sslCert}\" \"{$sslKey}\"";
@@ -2967,7 +3052,8 @@ PHP;
     protected function startWithExec(string $phpBinary, string $workerScript, string $host, int $port, int $workerId, string $instanceName, string $logFile, string $sslCert = '', string $sslKey = '', bool $frontend = false): array
     {
         // 进程名包含实例名和 Worker ID，便于多 Master 架构下识别和管理
-        $processName = 'weline-master-' . $instanceName . '-worker-' . $workerId;
+        // 使用新前缀：weline-wls-worker-{instanceName}-{id}
+        $processName = 'weline-wls-worker-' . $instanceName . '-' . $workerId;
         $command = "\"{$phpBinary}\" \"{$workerScript}\" {$host} {$port} {$workerId} {$instanceName}";
         if ($sslCert && $sslKey) {
             $command .= " \"{$sslCert}\" \"{$sslKey}\"";
