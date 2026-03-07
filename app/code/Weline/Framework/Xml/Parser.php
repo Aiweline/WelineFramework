@@ -31,6 +31,9 @@ class Parser
      */
     protected bool $errorHandlerIsActive = false;
 
+    /** 当前加载的文件路径（用于调试） */
+    protected string $_currentFile = '';
+
     /**
      * Parser 初始函数...
      */
@@ -108,17 +111,24 @@ class Parser
         return $this->_content;
     }
 
+    /** 递归深度上限，防止异常 XML 导致栈溢出/内存耗尽 */
+    private const XML_TO_ARRAY_MAX_DEPTH = 128;
+
     /**
      * @DESC         |xml转数组
      *
      * 参数区：
      *
-     * @param $currentNode
+     * @param \DOMNode|false $currentNode
+     * @param int $depth 当前递归深度
      *
      * @return array|string
      */
-    protected function _xmlToArray($currentNode = false)
+    protected function _xmlToArray($currentNode = false, int $depth = 0)
     {
+        if ($depth > self::XML_TO_ARRAY_MAX_DEPTH) {
+            return [];
+        }
         if (!$currentNode) {
             $currentNode = $this->getDom();
         }
@@ -136,7 +146,7 @@ class Parser
 
                     $value = null;
                     if ($node->hasChildNodes()) {
-                        $value = $this->_xmlToArray($node);
+                        $value = $this->_xmlToArray($node, $depth + 1);
                     }
                     $attributes = [];
                     if ($node->hasAttributes()) {
@@ -188,6 +198,7 @@ class Parser
      */
     public function load(string $file): static
     {
+        $this->_currentFile = $file;
         // 检查文件是否存在
         if (!file_exists($file)) {
             // 文件不存在，创建一个空的 DOMDocument
@@ -216,7 +227,8 @@ class Parser
         });
         
         try {
-            $result = $this->getDom()->load($file);
+            // LIBXML_NONET 禁止网络加载，防止 XXE/实体扩展导致内存耗尽
+            $result = $this->getDom()->load($file, \LIBXML_NONET);
             // 如果加载失败，创建一个空的 DOMDocument
             if (!$result) {
                 $this->_dom = new \DOMDocument();

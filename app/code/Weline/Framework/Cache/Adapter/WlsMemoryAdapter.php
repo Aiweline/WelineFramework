@@ -121,8 +121,74 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
 
     public function getMemoryUsage(): int
     {
+        // 轻量估算：避免 serialize 在内存紧张时触发 OOM
+        // 每个条目约 100 字节开销 + value 估算
+        $bucket = self::$store[$this->identity] ?? [];
+        $usage = 0;
+        foreach ($bucket as $key => $entry) {
+            // 键长度 + 条目结构开销 + 值估算
+            $usage += strlen($key) + 50;
+            if (is_string($entry['v'] ?? null)) {
+                $usage += strlen($entry['v']);
+            } elseif (is_array($entry['v'] ?? null)) {
+                // 数组粗略估算：条目数 × 72 字节
+                $usage += count($entry['v']) * 72 + 100;
+            } else {
+                $usage += 100; // 其他类型估算
+            }
+        }
+        return $usage;
+    }
+
+    /**
+     * 获取精确内存使用（谨慎使用，可能触发 OOM）
+     */
+    public function getMemoryUsagePrecise(): int
+    {
         $bucket = self::$store[$this->identity] ?? [];
         return strlen(serialize($bucket));
+    }
+
+    /**
+     * 检查 PHP 进程内存压力
+     * @return float 0-1 之间，越高越紧张
+     */
+    public static function getMemoryPressure(): float
+    {
+        $usage = memory_get_usage(true);
+        $limit = ini_get('memory_limit');
+        if ($limit === '-1') {
+            return 0.0;
+        }
+        $limitBytes = self::parseMemoryLimit($limit);
+        if ($limitBytes <= 0) {
+            return 0.0;
+        }
+        return $usage / $limitBytes;
+    }
+
+    /**
+     * 解析 memory_limit 字符串
+     */
+    private static function parseMemoryLimit(string $limit): int
+    {
+        $limit = trim($limit);
+        if ($limit === '-1' || $limit === '0') {
+            return 0;
+        }
+        $last = strtolower($limit[strlen($limit) - 1]);
+        $value = (int) $limit;
+        switch ($last) {
+            case 'g':
+                $value *= 1024;
+                // no break
+            case 'm':
+                $value *= 1024;
+                // no break
+            case 'k':
+                $value *= 1024;
+        }
+        return $value;
     }
 
     public function getMemoryItemCount(): int
@@ -223,11 +289,25 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
     {
         $bucket = &self::$store[$this->identity];
 
+        // 1. 检查 PHP 进程内存压力（关键：防止 OOM）
+        $pressure = self::getMemoryPressure();
+        if ($pressure > 0.85) {
+            // 内存压力 > 85%，激进淘汰
+            $evictCount = (int) max(100, count($bucket) * 0.3);
+            $this->evict($evictCount);
+        } elseif ($pressure > 0.75) {
+            // 内存压力 > 75%，温和淘汰
+            $evictCount = (int) max(10, count($bucket) * $this->evictRatio * 2);
+            $this->evict($evictCount);
+        }
+
+        // 2. 检查条目数上限
         if (count($bucket) >= $this->maxItems) {
             $evictCount = (int) max(1, $this->maxItems * $this->evictRatio);
             $this->evict($evictCount);
         }
 
+        // 3. 检查缓存自身内存使用（轻量估算）
         if ($this->getMemoryUsage() > $this->maxMemory) {
             $evictCount = (int) max(1, count($bucket) * $this->evictRatio * 2);
             $this->evict($evictCount);

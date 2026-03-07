@@ -6,22 +6,22 @@ namespace Weline\Backend\Service;
 use Weline\Acl\Model\Role;
 use Weline\Acl\Service\AclService;
 use Weline\Acl\Service\AclServiceInterface;
+use Weline\Acl\Service\ResourceTreeServiceInterface;
 use Weline\Backend\Model\BackendUser;
-use Weline\Backend\Model\Menu;
 use Weline\Framework\Manager\ObjectManager;
 
 class MenuService implements MenuServiceInterface
 {
-    private Menu $menuModel;
+    private ResourceTreeServiceInterface $resourceTreeService;
     private AclServiceInterface $aclService;
     private Role $roleModel;
 
     public function __construct(
-        Menu       $menuModel,
-        AclService $aclService,
-        Role       $roleModel
+        ResourceTreeServiceInterface $resourceTreeService,
+        AclService                   $aclService,
+        Role                         $roleModel
     ) {
-        $this->menuModel = $menuModel;
+        $this->resourceTreeService = $resourceTreeService;
         $this->aclService = $aclService;
         $this->roleModel = $roleModel;
     }
@@ -36,7 +36,7 @@ class MenuService implements MenuServiceInterface
         if (!$role->getId()) {
             return [];
         }
-        return $this->menuModel->getMenuTreeByRole($role);
+        return $this->resourceTreeService->getBackendMenuTree($role);
     }
 
     public function getMenuTreeByUserId(int $userId): array
@@ -53,7 +53,7 @@ class MenuService implements MenuServiceInterface
         if (!$role->getId()) {
             return [];
         }
-        return $this->menuModel->getMenuTreeByRole($role);
+        return $this->resourceTreeService->getBackendMenuTree($role);
     }
 
     public function hasMenuEntry(int $roleId): bool
@@ -103,7 +103,7 @@ class MenuService implements MenuServiceInterface
     }
 
     /**
-     * 在菜单树中按 DFS 顺序找到第一个“可点击”的节点（有 route）。
+     * 在菜单树中按 DFS 顺序找到第一个"可点击"的节点（有 route）。
      *
      * @param array $nodes
      * @return array|null
@@ -111,7 +111,7 @@ class MenuService implements MenuServiceInterface
     private function findFirstClickableNode(array $nodes): ?array
     {
         foreach ($nodes as $node) {
-            $route = $node['route'] ?? $node[Menu::schema_fields_ACTION] ?? '';
+            $route = $node['route'] ?? '';
             $route = trim((string)$route, '/');
             if ($route !== '') {
                 return $node;
@@ -136,7 +136,7 @@ class MenuService implements MenuServiceInterface
     private function searchNodeByRoute(array $nodes, string $routePath): ?array
     {
         foreach ($nodes as $node) {
-            $route = $node['route'] ?? $node[Menu::schema_fields_ACTION] ?? '';
+            $route = $node['route'] ?? '';
             $route = trim((string)$route, '/');
             if ($route === $routePath) {
                 return $node;
@@ -151,4 +151,3 @@ class MenuService implements MenuServiceInterface
         return null;
     }
 }
-

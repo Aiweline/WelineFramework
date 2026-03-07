@@ -6,7 +6,13 @@ namespace Weline\Server\Service\Contract;
 /**
  * 服务启动上下文
  *
- * 包含启动服务所需的全局信息
+ * 包含启动服务所需的全局信息。
+ * 
+ * 运行态字段（runtime fields）优先级高于 envConfig：
+ * - dispatcherEnabled: 本次启动是否启用 Dispatcher（由 CLI 参数或智能决策）
+ * - workerCount: 本次启动的 Worker 数量
+ * - workerBasePort: Worker 基础端口
+ * - workerPort: 首个 Worker 端口
  */
 class ServiceContext
 {
@@ -26,6 +32,11 @@ class ServiceContext
         public readonly bool $frontend,
         public readonly array $envConfig,
         public readonly int $httpRedirectPort = 0,
+        // 运行态字段：由 Start.php 计算后传入，优先级高于 envConfig
+        public readonly ?bool $dispatcherEnabled = null,
+        public readonly int|string|null $workerCount = null,
+        public readonly ?int $workerBasePort = null,
+        public readonly ?int $workerPort = null,
     ) {}
 
     /**
@@ -49,6 +60,10 @@ class ServiceContext
             frontend: $this->frontend,
             envConfig: $this->envConfig,
             httpRedirectPort: $this->httpRedirectPort,
+            dispatcherEnabled: $this->dispatcherEnabled,
+            workerCount: $this->workerCount,
+            workerBasePort: $this->workerBasePort,
+            workerPort: $this->workerPort,
         );
     }
 
@@ -69,18 +84,65 @@ class ServiceContext
     }
 
     /**
+     * 判断是否启用 Dispatcher
+     * 
+     * 优先级：运行态字段 > envConfig
+     */
+    public function isDispatcherEnabled(): bool
+    {
+        // 运行态字段优先
+        if ($this->dispatcherEnabled !== null) {
+            return $this->dispatcherEnabled;
+        }
+        // 回退到 envConfig（仅显式禁用时为 false）
+        $envValue = $this->envConfig['server']['dispatcher_enabled'] ?? null;
+        return $envValue !== false;
+    }
+
+    /**
      * 获取 Worker 基础端口
+     * 
+     * 优先级：运行态字段 > envConfig
      */
     public function getWorkerBasePort(): int
     {
+        // 运行态字段优先
+        if ($this->workerBasePort !== null) {
+            return $this->workerBasePort;
+        }
         return (int) ($this->envConfig['server']['worker_base_port'] ?? 10443);
     }
 
     /**
      * 获取 Worker 数量
+     * 
+     * 优先级：运行态字段 > envConfig
      */
     public function getWorkerCount(): int|string
     {
+        // 运行态字段优先
+        if ($this->workerCount !== null) {
+            return $this->workerCount;
+        }
         return $this->envConfig['server']['worker_count'] ?? 'auto';
+    }
+
+    /**
+     * 获取首个 Worker 端口
+     * 
+     * 优先级：运行态字段 > 基于模式计算
+     */
+    public function getWorkerPort(): int
+    {
+        // 运行态字段优先
+        if ($this->workerPort !== null) {
+            return $this->workerPort;
+        }
+        // 直连模式：Worker 直接监听主端口
+        if ($this->mode === 'linux-direct') {
+            return $this->mainPort;
+        }
+        // Dispatcher 模式或独立端口模式：基于 workerBasePort 计算
+        return $this->getWorkerBasePort() + $this->mainPort;
     }
 }

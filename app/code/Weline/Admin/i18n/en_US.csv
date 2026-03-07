@@ -53,9 +53,9 @@ WelineFramework,WelineFramework
 验证码错误！,"Verification code error!"
 您的账户尚未分配角色，无法登录后台。请联系系统管理员为您分配角色。,您的账户尚未分配角色，无法登录后台。请联系系统管理员为您分配角色。
 登录凭据错误！,"Invalid login credentials!"
-系统菜单无法删除！,"System menu cannot be deleted!"
-"该菜单下有 %{1} 个子菜单，请先删除子菜单！","该菜单下有 %{1} 个子菜单，请先删除子菜单！"
 关键参数ID不存在！,"Key parameter ID does not exist!"
+菜单不存在！,菜单不存在！
+该菜单下有子菜单，请先删除子菜单！,该菜单下有子菜单，请先删除子菜单！
 参数错误：缺少排序数据,参数错误：缺少排序数据
 排序更新成功,排序更新成功
 参数错误：缺少菜单ID,参数错误：缺少菜单ID
@@ -329,6 +329,8 @@ Cms内容管理,"CMS Content Management"
 拦截器名,拦截器名
 目标类,目标类
 个拦截器，来自,个拦截器，来自
+系统菜单无法删除！,"System menu cannot be deleted!"
+"该菜单下有 %{1} 个子菜单，请先删除子菜单！","该菜单下有 %{1} 个子菜单，请先删除子菜单！"
 系统消息通知,"System Notification"
 "用于跨模块发送系统消息通知，由 Weline_Admin 模块监听并写入消息中心。任何模块都可以触发此事件来发送系统消息给管理员。","Used for cross-module system message notifications, monitored by Weline_Admin module and written to the message center. Any module can trigger this event to send system messages to administrators."
 查看全部,"View All"

@@ -36,7 +36,47 @@ class DuckDuckGoAdapter extends BaseAdapter
      */
     public function generateFeed(array $items): string
     {
-        return parent::generateFeed($items);
+        return json_encode($items, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function pushFeed(string $feed, PlatformAccount $account): PushResult
+    {
+        try {
+            /** @var SecretStoreService $secretStore */
+            $secretStore = ObjectManager::getInstance(SecretStoreService::class);
+            $apiKey = $secretStore->decryptApiKey($account->getData('api_key'));
+
+            if (empty($apiKey)) {
+                return new PushResult(false, 'API密钥解密失败');
+            }
+
+            $headers = [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $apiKey,
+            ];
+
+            $response = $this->sendHttpRequest(
+                $this->apiEndpoint,
+                $headers,
+                'POST',
+                $feed
+            );
+
+            if ($this->validateResponse($response)) {
+                return new PushResult(true, 'Feed推送成功', json_decode($response['body'], true), 1);
+            } else {
+                return new PushResult(
+                    false,
+                    "推送失败: HTTP {$response['http_code']}",
+                    ['response' => $response['body']]
+                );
+            }
+        } catch (\Exception $e) {
+            return new PushResult(false, $e->getMessage());
+        }
     }
 
     /**
