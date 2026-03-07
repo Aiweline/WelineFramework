@@ -15,7 +15,6 @@ namespace Weline\Acl\Controller\Backend\Acl;
 use Weline\Acl\Model\Acl;
 use Weline\Acl\Model\RoleAccess;
 use Weline\Backend\Model\BackendUser;
-use Weline\Backend\Model\Menu;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\App\Exception;

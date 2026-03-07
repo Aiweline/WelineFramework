@@ -9,13 +9,10 @@
 
 namespace Weline\Framework\Event;
 
-use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Config\XmlReader;
 use Weline\Framework\App\Exception;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Event\EventData;
 
 class EventsManager
 {
@@ -103,9 +100,10 @@ class EventsManager
         
         // 优先从 generated/events.php 读取观察者（性能优化）
         $registry = $this->eventRegistry->getRegistry();
-        
+        if(empty($registry['events'])) {
+            return [];
+        }
         $observers = [];
-        
         // 先检查精确匹配
         if (isset($registry['events'][$eventName]['observers'])) {
             $observers = $registry['events'][$eventName]['observers'];
