@@ -75,6 +75,12 @@ class MasterProcess
     protected string $sslKey = '';
     protected bool $sslEnabled = false;
     protected int $httpRedirectPort = 0;
+    
+    // 运行态配置（由 Start.php 传递）
+    protected ?bool $dispatcherEnabled = null;
+    protected int|string|null $workerCount = null;
+    protected ?int $workerBasePort = null;
+    protected ?int $workerPort = null;
 
     protected ?Printing $printer = null;
     protected ?WlsLogger $logger = null;
@@ -126,6 +132,42 @@ class MasterProcess
     public function setMainPort(int $port): self
     {
         $this->mainPort = $port;
+        return $this;
+    }
+    
+    /**
+     * 设置 Dispatcher 是否启用（运行态配置）
+     */
+    public function setDispatcherEnabled(?bool $enabled): self
+    {
+        $this->dispatcherEnabled = $enabled;
+        return $this;
+    }
+    
+    /**
+     * 设置 Worker 数量（运行态配置）
+     */
+    public function setWorkerCount(int|string|null $count): self
+    {
+        $this->workerCount = $count;
+        return $this;
+    }
+    
+    /**
+     * 设置 Worker 基础端口（运行态配置）
+     */
+    public function setWorkerBasePort(?int $port): self
+    {
+        $this->workerBasePort = $port;
+        return $this;
+    }
+    
+    /**
+     * 设置首个 Worker 端口（运行态配置）
+     */
+    public function setWorkerPort(?int $port): self
+    {
+        $this->workerPort = $port;
         return $this;
     }
 
@@ -251,6 +293,11 @@ class MasterProcess
             frontend: $this->frontend,
             envConfig: $envConfig,
             httpRedirectPort: $this->httpRedirectPort,
+            // 运行态配置：由 Start.php 传入，优先级高于 envConfig
+            dispatcherEnabled: $this->dispatcherEnabled,
+            workerCount: $this->workerCount,
+            workerBasePort: $this->workerBasePort,
+            workerPort: $this->workerPort,
         );
     }
 

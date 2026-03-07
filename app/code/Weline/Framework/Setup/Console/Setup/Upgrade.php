@@ -142,7 +142,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $command = $composerCommand . ' dump-autoload';
             
             $result = $system->exec($command);
-            
             // 检查返回码
             $returnCode = $result['return_vars'] ?? -1;
             if ($returnCode !== 0) {
@@ -298,7 +297,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         try {
             // ========== 准备阶段 ==========
             $this->prepareUpgrade($lockFile, $lockHandle, $args);
-            
             // 检查系统是否已安装
             if (!$this->checkSystemInstalled()) {
                 $this->releaseLock($lockHandle, $lockFile);

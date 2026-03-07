@@ -21,6 +21,11 @@ class Scan
     private int $keepLevel = 0;
 
     /**
+     * 已扫描目录的 realpath 集合，防止符号链接循环导致无限递归
+     */
+    private array $visitedRealPaths = [];
+
+    /**
      * @DESC         |初始化
      *
      * 参数区：
@@ -29,6 +34,7 @@ class Scan
     {
         $this->dirs = [];
         $this->keepLevel = 0;
+        $this->visitedRealPaths = [];
     }
 
     /**
@@ -46,10 +52,35 @@ class Scan
      *
      * @return array
      */
+    /**
+     * 排除的目录列表（不扫描这些目录）
+     */
+    private const EXCLUDE_DIRS = [
+        'node_modules',
+        'vendor',
+        '.git',
+        '.svn',
+        '.hg',
+        '.idea',
+        '.vscode',
+        '__pycache__',
+        '.pytest_cache',
+        'dist',
+        'build',
+        '.cache',
+    ];
+
     public function scanDirTree(string $dirPath, int $level = 0): array
     {
         $this->keepLevel += 1;
         $dirPath = rtrim($dirPath, DS);
+        $rootRealPath = @realpath($dirPath);
+        if ($rootRealPath !== false && isset($this->visitedRealPaths[$rootRealPath])) {
+            return $this->dirs;
+        }
+        if ($rootRealPath !== false) {
+            $this->visitedRealPaths[$rootRealPath] = true;
+        }
         if (is_dir($dirPath) && $file_handler = opendir($dirPath)) {
             while (false !== ($file = readdir($file_handler))) {
                 // 排除"."".."
@@ -63,6 +94,18 @@ class Scan
                         $relateFilename = str_replace('/', DS, $relateFilename);
                     }
                     if (is_dir($filename)) {
+                        // 排除特定目录（如 node_modules）
+                        if (in_array($file, self::EXCLUDE_DIRS, true)) {
+                            continue;
+                        }
+                        // 防止符号链接循环导致无限递归
+                        $realPath = @realpath($filename);
+                        if ($realPath !== false && isset($this->visitedRealPaths[$realPath])) {
+                            continue;
+                        }
+                        if ($realPath !== false) {
+                            $this->visitedRealPaths[$realPath] = true;
+                        }
                         // 目录层级：是否扫描
                         if ($level) {
                             if ($this->keepLevel < $level) {
@@ -122,31 +165,59 @@ class Scan
         return $this->dirs;
     }
 
-    public function dirToArray($dir)
+    /** 递归深度上限，防止异常目录结构导致栈溢出 */
+    private const DIR_TO_ARRAY_MAX_DEPTH = 128;
+
+    /**
+     * @var array 已访问目录 realpath，防止 dirToArray 符号链接循环
+     */
+    private array $dirToArrayVisited = [];
+
+    public function dirToArray($dir, int $depth = 0): array
     {
+        if ($depth > self::DIR_TO_ARRAY_MAX_DEPTH) {
+            return [];
+        }
+        if ($depth === 0) {
+            $this->dirToArrayVisited = [];
+        }
+        $dir = rtrim($dir, DS);
+        $realPath = @realpath($dir);
+        if ($realPath !== false && isset($this->dirToArrayVisited[$realPath])) {
+            return [];
+        }
+        if ($realPath !== false) {
+            $this->dirToArrayVisited[$realPath] = true;
+        }
         $contents = [];
-        # Foreach node in $dir
-        foreach (scandir($dir) as $node) {
-            # Skip link to current and parent folder
-            if ($node === '.') {
+        if (!is_dir($dir) || ($list = scandir($dir)) === false) {
+            return $contents;
+        }
+        foreach ($list as $node) {
+            if ($node === '.' || $node === '..') {
                 continue;
             }
-            if ($node === '..') {
-                continue;
-            }
-            # Check if it's a node or a folder
-            if (is_dir($dir . DS . $node)) {
-                # Add directory recursively, be sure to pass a valid path
-                # to the function, not just the folder's name
-                $contents[$node] = $this->dirToArray($dir . DS . $node);
+            $path = $dir . DS . $node;
+            if (is_dir($path)) {
+                $subReal = @realpath($path);
+                if ($subReal !== false && isset($this->dirToArrayVisited[$subReal])) {
+                    continue;
+                }
+                $contents[$node] = $this->dirToArray($path, $depth + 1);
             } else {
-                # Add node, the keys will be updated automatically
                 $contents[] = $node;
             }
         }
-        # done
         return $contents;
     }
+
+    /** 递归深度上限，防止异常目录结构导致栈溢出 */
+    private const GLOB_FILE_MAX_DEPTH = 128;
+
+    /**
+     * @var array 已访问目录 realpath，防止 globFile 符号链接循环
+     */
+    private array $globFileVisited = [];
 
     public function globFile(
         $pattern_dir,
@@ -156,12 +227,30 @@ class Scan
         string $replace_path = '',
         bool $remove_ext = false,
         bool $class_path = false,
-        string &$composer_dir = ''
+        string &$composer_dir = '',
+        int $depth = 0
     )
     {
-        foreach (glob($pattern_dir) as $file) {
+        if ($depth > self::GLOB_FILE_MAX_DEPTH) {
+            return $files;
+        }
+        if ($depth === 0) {
+            $this->globFileVisited = [];
+        }
+        $list = glob($pattern_dir);
+        if ($list === false) {
+            return $files;
+        }
+        foreach ($list as $file) {
             if (is_dir($file)) {
-                $this->globFile($file . DS . '*', $files, $ext, $remove_path, $replace_path, $remove_ext, $class_path, $composer_dir);
+                $realPath = @realpath($file);
+                if ($realPath !== false && isset($this->globFileVisited[$realPath])) {
+                    continue;
+                }
+                if ($realPath !== false) {
+                    $this->globFileVisited[$realPath] = true;
+                }
+                $this->globFile($file . DS . '*', $files, $ext, $remove_path, $replace_path, $remove_ext, $class_path, $composer_dir, $depth + 1);
             }
             if (str_ends_with($file, $ext)) {
                 $file_ = $file;
