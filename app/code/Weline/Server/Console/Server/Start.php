@@ -1409,8 +1409,6 @@ class Start extends CommandAbstract
      */
     protected function generateCertificateMap(): void
     {
-        $etcDir = \dirname(Env::path_ENV_FILE) . DS;
-        $sslDir = $etcDir . 'ssl' . DS;
         $mapFile = Env::VAR_DIR . 'server' . DS . 'ssl_certificate_map.json';
         
         // 确保目录存在
@@ -1419,39 +1417,10 @@ class Start extends CommandAbstract
             @\mkdir($mapDir, 0755, true);
         }
         
-        $certFormats = [
-            ['cert' => 'fullchain.pem', 'key' => 'privkey.pem'],
-            ['cert' => 'cert.pem', 'key' => 'key.pem'],
-            ['cert' => 'ssl.crt', 'key' => 'ssl.key'],
-        ];
-        
-        $map = [];
-        
-        if (\is_dir($sslDir)) {
-            $domains = @\scandir($sslDir);
-            if ($domains) {
-                foreach ($domains as $domain) {
-                    if ($domain === '.' || $domain === '..' || !\is_dir($sslDir . $domain)) {
-                        continue;
-                    }
-                    
-                    $domainDir = $sslDir . $domain . DS;
-                    
-                    foreach ($certFormats as $format) {
-                        $certPath = $domainDir . $format['cert'];
-                        $keyPath = $domainDir . $format['key'];
-                        
-                        if (\is_file($certPath) && \is_file($keyPath)) {
-                            $map[$domain] = [
-                                'cert' => $certPath,
-                                'key' => $keyPath,
-                            ];
-                            break;
-                        }
-                    }
-                }
-            }
-        }
+        /** @var SslCertificateService $sslService */
+        $sslService = ObjectManager::getInstance(SslCertificateService::class);
+        $sslService->reconcileCertificateFiles();
+        $map = $sslService->getCertificateMap();
         
         // 保存映射文件
         \file_put_contents($mapFile, \json_encode($map, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));

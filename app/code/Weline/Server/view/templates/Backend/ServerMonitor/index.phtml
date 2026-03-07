@@ -18,6 +18,11 @@ $attacksApiUrl = $block->getUrl('backend/server/server-monitor/attacks');
 $attackLogUrl = $block->getUrl('backend/server/server-monitor/attack-log');
 $apiDocUrl = $block->getUrl('backend/server/server-monitor/api-doc');
 $managerUrl = $block->getUrl('backend/server/server-manager');
+$trafficApiUrl = $block->getUrl('backend/server/server-monitor/traffic');
+$trafficHistoryApiUrl = $block->getUrl('backend/server/server-monitor/traffic-history');
+$benchmarkApiUrl = $block->getUrl('backend/server/server-monitor/benchmark');
+$benchmarksApiUrl = $block->getUrl('backend/server/server-monitor/benchmarks');
+$benchmarkDetailApiUrl = $block->getUrl('backend/server/server-monitor/benchmark-detail');
 
 use Weline\Server\Model\AttackLog;
 use Weline\Server\Model\ServerStatusLog;
@@ -149,30 +154,30 @@ use Weline\Server\Model\ServerStatusLog;
                             </div>
                         <?php else: ?>
                             <?php foreach ($statusLogs as $log): ?>
-                                <?php if ($log[ServerStatusLog::fields_PROCESS_TYPE] === ServerStatusLog::PROCESS_TYPE_WORKER): ?>
-                                    <div class="worker-card <?= $log[ServerStatusLog::fields_STATUS] === ServerStatusLog::STATUS_RUNNING ? 'running' : 'stopped' ?>">
+                                <?php if ($log[ServerStatusLog::schema_fields_PROCESS_TYPE] === ServerStatusLog::PROCESS_TYPE_WORKER): ?>
+                                    <div class="worker-card <?= $log[ServerStatusLog::schema_fields_STATUS] === ServerStatusLog::STATUS_RUNNING ? 'running' : 'stopped' ?>">
                                         <div class="worker-header">
-                                            <span class="worker-id">W#<?= $log[ServerStatusLog::fields_WORKER_ID] ?></span>
-                                            <span class="badge bg-<?= $log[ServerStatusLog::fields_STATUS] === ServerStatusLog::STATUS_RUNNING ? 'success' : 'secondary' ?> badge-sm">
-                                                <?= $log[ServerStatusLog::fields_STATUS] ?>
+                                            <span class="worker-id">W#<?= $log[ServerStatusLog::schema_fields_WORKER_ID] ?></span>
+                                            <span class="badge bg-<?= $log[ServerStatusLog::schema_fields_STATUS] === ServerStatusLog::STATUS_RUNNING ? 'success' : 'secondary' ?> badge-sm">
+                                                <?= $log[ServerStatusLog::schema_fields_STATUS] ?>
                                             </span>
                                         </div>
                                         <div class="worker-stats">
                                             <div class="stat-row">
                                                 <span class="label"><?= __('端口') ?></span>
-                                                <span class="value"><?= $log[ServerStatusLog::fields_PORT] ?></span>
+                                                <span class="value"><?= $log[ServerStatusLog::schema_fields_PORT] ?></span>
                                             </div>
                                             <div class="stat-row">
                                                 <span class="label"><?= __('连接') ?></span>
-                                                <span class="value"><?= $log[ServerStatusLog::fields_CONNECTIONS] ?></span>
+                                                <span class="value"><?= $log[ServerStatusLog::schema_fields_CONNECTIONS] ?></span>
                                             </div>
                                             <div class="stat-row">
                                                 <span class="label"><?= __('请求') ?></span>
-                                                <span class="value"><?= number_format($log[ServerStatusLog::fields_TOTAL_REQUESTS]) ?></span>
+                                                <span class="value"><?= number_format($log[ServerStatusLog::schema_fields_TOTAL_REQUESTS]) ?></span>
                                             </div>
                                             <div class="stat-row">
                                                 <span class="label"><?= __('内存') ?></span>
-                                                <span class="value"><?= round(($log[ServerStatusLog::fields_MEMORY_USAGE] ?? 0) / 1024 / 1024, 1) ?> MB</span>
+                                                <span class="value"><?= round(($log[ServerStatusLog::schema_fields_MEMORY_USAGE] ?? 0) / 1024 / 1024, 1) ?> MB</span>
                                             </div>
                                         </div>
                                     </div>
@@ -315,6 +320,47 @@ use Weline\Server\Model\ServerStatusLog;
             </div>
             
             <!-- 快速操作 -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-speedometer2 me-2"></i><?= __('流量与压测') ?></h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('Host 分组流量（最近5分钟）') ?></label>
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0">
+                                <thead>
+                                <tr>
+                                    <th><?= __('Host') ?></th>
+                                    <th class="text-end"><?= __('请求') ?></th>
+                                    <th class="text-end"><?= __('错误') ?></th>
+                                    <th class="text-end"><?= __('平均延迟(ms)') ?></th>
+                                </tr>
+                                </thead>
+                                <tbody id="traffic-host-table">
+                                <tr><td colspan="4" class="text-center text-muted"><?= __('暂无流量数据') ?></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="input-group input-group-sm mb-2">
+                        <input id="benchmark-target" class="form-control" type="text" placeholder="<?= __('压测目标 URL，例如 http://127.0.0.1:9981/_wls/health') ?>">
+                        <input id="benchmark-concurrency" class="form-control" type="number" min="1" value="50" style="max-width: 90px;">
+                        <input id="benchmark-requests" class="form-control" type="number" min="1" value="1000" style="max-width: 110px;">
+                        <button class="btn btn-outline-primary" onclick="runBenchmark()">
+                            <i class="bi bi-play-circle"></i> <?= __('开始压测') ?>
+                        </button>
+                    </div>
+                    <small class="text-muted d-block mb-2"><?= __('输入参数：目标 URL / 并发 / 请求数') ?></small>
+                    <div id="benchmark-last-result" class="small text-muted"><?= __('暂无压测结果') ?></div>
+                    <div class="mt-2">
+                        <a class="btn btn-sm btn-outline-secondary" href="<?= $managerUrl ?>">
+                            <i class="bi bi-gear"></i> <?= __('前往服务器管理执行重启/热重载') ?>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
             <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0"><i class="bi bi-lightning me-2"></i><?= __('快速操作') ?></h5>
@@ -443,12 +489,18 @@ use Weline\Server\Model\ServerStatusLog;
 <script>
 const STATUS_API_URL = '<?= $statusApiUrl ?>';
 const CLEANUP_API_URL = '<?= $block->getUrl('backend/server/server-monitor/cleanup-logs') ?>';
+const TRAFFIC_API_URL = '<?= $trafficApiUrl ?>';
+const TRAFFIC_HISTORY_API_URL = '<?= $trafficHistoryApiUrl ?>';
+const BENCHMARK_API_URL = '<?= $benchmarkApiUrl ?>';
+const BENCHMARKS_API_URL = '<?= $benchmarksApiUrl ?>';
+const BENCHMARK_DETAIL_API_URL = '<?= $benchmarkDetailApiUrl ?>';
 
 let refreshTimer = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     // 每 30 秒自动刷新
     refreshTimer = setInterval(refreshStatus, 30000);
+    refreshTraffic();
 });
 
 async function refreshStatus() {
@@ -466,6 +518,7 @@ async function refreshStatus() {
         
         if (data.success) {
             updateStats(data.data);
+            renderTrafficHosts((data.data.traffic || {}).hosts || []);
         }
     } catch (error) {
         console.error('Failed to refresh status:', error);
@@ -480,12 +533,98 @@ function updateStats(data) {
     document.getElementById('total-requests').textContent = formatNumber(stats.total_requests || 0);
 }
 
+async function refreshTraffic() {
+    try {
+        const response = await fetch(TRAFFIC_API_URL + '?instance=<?= $instance ?>&window_sec=300', {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (data.success) {
+            renderTrafficHosts((data.data || {}).hosts || []);
+        }
+    } catch (error) {
+        console.error('Failed to refresh traffic:', error);
+    }
+}
+
+function renderTrafficHosts(hosts) {
+    const tbody = document.getElementById('traffic-host-table');
+    if (!tbody) {
+        return;
+    }
+    if (!hosts || hosts.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted"><?= __('暂无流量数据') ?></td></tr>`;
+        return;
+    }
+    tbody.innerHTML = hosts.map(item => {
+        const avg = item.request_count > 0 ? (item.latency_total_ms / item.request_count).toFixed(2) : '0.00';
+        return `
+            <tr>
+                <td>${escapeHtml(item.host || '*')}</td>
+                <td class="text-end">${formatNumber(item.request_count || 0)}</td>
+                <td class="text-end">${formatNumber(item.error_count || 0)}</td>
+                <td class="text-end">${avg}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function runBenchmark() {
+    const target = (document.getElementById('benchmark-target')?.value || '').trim();
+    const concurrency = parseInt(document.getElementById('benchmark-concurrency')?.value || '50', 10);
+    const requests = parseInt(document.getElementById('benchmark-requests')?.value || '1000', 10);
+    if (!target) {
+        AdminToast.warning('<?= __('请先输入压测目标 URL。') ?>');
+        return;
+    }
+    AdminToast.info('<?= __('压测执行中，请稍候...') ?>');
+    try {
+        const response = await fetch(BENCHMARK_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: `instance=<?= $instance ?>&target=${encodeURIComponent(target)}&concurrency=${encodeURIComponent(concurrency)}&requests=${encodeURIComponent(requests)}`,
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (!data.success) {
+            AdminToast.error(data.message || '<?= __('压测失败') ?>');
+            return;
+        }
+        const result = data.data || {};
+        const text = `QPS: ${result.qps || 0}, p95: ${result.latency_p95 || 0}ms, error_rate: ${result.error_rate || 0}%`;
+        document.getElementById('benchmark-last-result').textContent = text;
+        AdminToast.success('<?= __('压测完成') ?>');
+    } catch (error) {
+        AdminToast.error('<?= __('压测失败：请检查网络连接后重试。') ?> ' + error.message);
+    }
+}
+
+function escapeHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = value ?? '';
+    return div.innerHTML;
+}
+
 function formatNumber(num) {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 async function cleanupLogs() {
-    if (!confirm('<?= __('确定要清理过期日志吗？\n- 状态日志：保留7天\n- 攻击日志：保留30天') ?>')) {
+    const confirmed = await BackendConfirm.show('<?= __('确定要清理过期日志吗？状态日志保留 7 天，攻击日志保留 30 天。') ?>', {
+        title: '<?= __('清理过期日志') ?>',
+        type: 'warning',
+        confirmText: '<?= __('确认清理') ?>',
+        cancelText: '<?= __('取消') ?>'
+    });
+    if (!confirmed) {
         return;
     }
     

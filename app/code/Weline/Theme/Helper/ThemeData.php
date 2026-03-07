@@ -631,6 +631,15 @@ class ThemeData
         self::$performanceCache = []; // 清除本地缓存
         self::$initialized = false;
     }
+
+    /**
+     * WLS 请求结束后的请求级状态重置。
+     */
+    public static function resetRequestState(): void
+    {
+        self::clearCache();
+        self::$performanceLoading = false;
+    }
     
     /**
      * 规范化 identify，自动补全前缀

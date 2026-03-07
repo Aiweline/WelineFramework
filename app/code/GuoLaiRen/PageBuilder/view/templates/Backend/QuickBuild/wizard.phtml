@@ -432,7 +432,7 @@ $cdnAccounts = $this->getData('cdnAccounts') ?? [];
             <div class="pb-qb-field">
                 <label><lang>选择域名</lang></label>
                 <button class="pb-qb-btn pb-qb-btn-secondary" id="pb-qb-load-domains-btn" style="margin-top:4px;">
-                    <i class="mdi mdi-refresh"></i> <lang>加载域名列表</lang>
+                    <i class="mdi mdi-refresh"></i> <lang>加载可建站域名</lang>
                 </button>
                 <div id="pb-qb-domain-list-container"></div>
             </div>
@@ -589,6 +589,7 @@ $cdnAccounts = $this->getData('cdnAccounts') ?? [];
     var checkUrl = '<backend-url>pagebuilder/backend/domain-management/check-availability</backend-url>';
     var purchaseUrl = '<backend-url>pagebuilder/backend/domain-management/purchase</backend-url>';
     var domainListUrl = '<backend-url>pagebuilder/backend/domain-management/get-domains</backend-url>';
+    var domainPoolUrl = '<backend-url>pagebuilder/backend/domain-management/get-domain-pool</backend-url>';
     var provisionUrl = '<backend-url>pagebuilder/backend/quick-build/start-provisioning</backend-url>';
 
     function postForm(url, data) {
@@ -773,7 +774,7 @@ $cdnAccounts = $this->getData('cdnAccounts') ?? [];
         });
     }
 
-    // 加载已有域名列表
+    // 加载已有域名列表（仅可建站域名池）
     document.getElementById('pb-qb-load-domains-btn').addEventListener('click', function() {
         var acctId = document.getElementById('pb-qb-account-existing').value;
         if (!acctId) {
@@ -784,10 +785,10 @@ $cdnAccounts = $this->getData('cdnAccounts') ?? [];
         btn.disabled = true;
         btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('加载中...') ?>';
 
-        postForm(domainListUrl, { account_id: acctId })
+        postForm(domainPoolUrl, { site_ready_only: 'true', page: 1, limit: 500 })
             .then(function(res) {
                 btn.disabled = false;
-                btn.innerHTML = '<i class="mdi mdi-refresh"></i> <?= __('加载域名列表') ?>';
+                btn.innerHTML = '<i class="mdi mdi-refresh"></i> <?= __('加载可建站域名') ?>';
                 var container = document.getElementById('pb-qb-domain-list-container');
                 
                 if (!res.success) {
@@ -796,21 +797,11 @@ $cdnAccounts = $this->getData('cdnAccounts') ?? [];
                     return;
                 }
                 
-                // 从 groups 中提取域名列表
-                var domains = [];
-                if (res.data && res.data.groups) {
-                    res.data.groups.forEach(function(group) {
-                        if (group.items && group.items.length) {
-                            group.items.forEach(function(item) {
-                                domains.push(item);
-                            });
-                        }
-                    });
-                }
+                var domains = Array.isArray(res.data) ? res.data : [];
                 
                 if (domains.length === 0) {
                     container.innerHTML = '<div class="pb-qb-result-box">' +
-                        '<i class="mdi mdi-information"></i> <?= __('该账号下暂无域名') ?></div>';
+                        '<i class="mdi mdi-information"></i> <?= __('暂无可建站域名，请先完成域名解析与HTTPS配置') ?></div>';
                     return;
                 }
                 
@@ -823,19 +814,38 @@ $cdnAccounts = $this->getData('cdnAccounts') ?? [];
                     '<div class="pb-qb-domain-list" id="pb-qb-domain-list-inner">';
                 
                 domains.forEach(function(d, idx) {
-                    var domainName = d.domain || d.name || '';
-                    var expireDate = d.expires_at || d.expire_date || d.expiry_date || '';
-                    var status = d.status || '';
-                    var statusBadge = '';
-                    if (status === 'active') {
-                        statusBadge = '<span style="background:var(--backend-color-success,#34c38f);color:#fff;padding:2px 6px;border-radius:3px;font-size:0.75rem;margin-left:8px;"><?= __('正常') ?></span>';
-                    } else if (status === 'expired') {
-                        statusBadge = '<span style="background:var(--backend-color-danger,#f46a6a);color:#fff;padding:2px 6px;border-radius:3px;font-size:0.75rem;margin-left:8px;"><?= __('过期') ?></span>';
+                    var domainName = d.domain || d.full_domain || '';
+                    var resolveStatus = String(d.resolve_status || '').toLowerCase();
+                    var httpsStatus = String(d.https_status || '').toLowerCase();
+                    var siteReady = String(d.site_ready || '0') === '1';
+                    var statusParts = [];
+
+                    if (resolveStatus === 'resolved') {
+                        if (String(d.is_local_server || '0') === '1') {
+                            statusParts.push('<span style="background:var(--backend-color-success,#34c38f);color:var(--backend-color-text-inverse,#fff);padding:2px 6px;border-radius:3px;font-size:0.72rem;"><?= __('解析正常') ?></span>');
+                        } else {
+                            statusParts.push('<span style="background:var(--backend-color-warning,#f1b44c);color:var(--backend-color-text-inverse,#fff);padding:2px 6px;border-radius:3px;font-size:0.72rem;"><?= __('指向外部') ?></span>');
+                        }
+                    } else {
+                        statusParts.push('<span style="background:var(--backend-color-warning,#f1b44c);color:var(--backend-color-text-inverse,#fff);padding:2px 6px;border-radius:3px;font-size:0.72rem;"><?= __('等待解析') ?></span>');
                     }
+
+                    if (httpsStatus === 'valid') {
+                        statusParts.push('<span style="background:var(--backend-color-success,#34c38f);color:var(--backend-color-text-inverse,#fff);padding:2px 6px;border-radius:3px;font-size:0.72rem;">HTTPS</span>');
+                    } else if (httpsStatus === 'pending') {
+                        statusParts.push('<span style="background:var(--backend-color-warning,#f1b44c);color:var(--backend-color-text-inverse,#fff);padding:2px 6px;border-radius:3px;font-size:0.72rem;"><?= __('HTTPS申请中') ?></span>');
+                    } else {
+                        statusParts.push('<span style="background:var(--backend-color-danger,#f46a6a);color:var(--backend-color-text-inverse,#fff);padding:2px 6px;border-radius:3px;font-size:0.72rem;"><?= __('无HTTPS') ?></span>');
+                    }
+
+                    if (siteReady) {
+                        statusParts.push('<span style="background:var(--backend-color-info,#50a5f1);color:var(--backend-color-text-inverse,#fff);padding:2px 6px;border-radius:3px;font-size:0.72rem;"><?= __('可建站') ?></span>');
+                    }
+
                     html += '<div class="pb-qb-domain-item" data-domain="' + escapeHtml(domainName) + '" data-search="' + escapeHtml(domainName.toLowerCase()) + '">' +
                         '<input type="radio" name="pb-qb-existing-domain" id="pb-qb-ed-' + idx + '">' +
-                        '<label for="pb-qb-ed-' + idx + '" style="cursor:pointer;flex:1;">' + escapeHtml(domainName) + statusBadge + '</label>' +
-                        (expireDate ? '<small style="color:var(--backend-color-text-tertiary,#adb5bd);"><?= __('到期') ?>: ' + escapeHtml(expireDate) + '</small>' : '') +
+                        '<label for="pb-qb-ed-' + idx + '" style="cursor:pointer;flex:1;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+                        '<strong>' + escapeHtml(domainName) + '</strong>' + statusParts.join('') + '</label>' +
                         '</div>';
                 });
                 html += '</div>';
@@ -891,7 +901,7 @@ $cdnAccounts = $this->getData('cdnAccounts') ?? [];
             })
             .catch(function(e) {
                 btn.disabled = false;
-                btn.innerHTML = '<i class="mdi mdi-refresh"></i> <?= __('加载域名列表') ?>';
+                btn.innerHTML = '<i class="mdi mdi-refresh"></i> <?= __('加载可建站域名') ?>';
                 AdminToast.error('<?= __('网络错误') ?>: ' + e.message);
             });
     });

@@ -457,7 +457,10 @@ class Dispatcher
     private function handleIpcMessage(array $msg): void
     {
         $type = $msg['type'] ?? '';
-        
+        // 帝王令：已收 shutdown 后不再处理 DRAIN/ADD_WORKER 等其他 IPC
+        if ($type !== ControlMessage::TYPE_SHUTDOWN && $this->ipcReceivedShutdown) {
+            return;
+        }
         switch ($type) {
             case ControlMessage::TYPE_DRAIN:
                 $ports = $msg['ports'] ?? [];
@@ -539,50 +542,68 @@ class Dispatcher
         \socket_set_nonblock($this->serverSocket);
         
         $loopCount = 0;
+        $consecutiveLoopErrors = 0;
+        $maxConsecutiveLoopErrors = 50;
         while ($this->running) {
-            $loopCount++;
-            // 信号处理
-            if (\function_exists('pcntl_signal_dispatch')) {
-                \pcntl_signal_dispatch();
-            }
-            
-            // IPC 控制通道：处理消息（非阻塞读取）
-            if ($this->ipcClient) {
-                if ($this->ipcClient->isConnected()) {
-                    $ipcSocket = $this->ipcClient->getSocket();
-                    if ($ipcSocket && \is_resource($ipcSocket)) {
-                        $ipcRead = [$ipcSocket];
-                        $ipcWrite = [];
-                        $ipcExcept = [];
-                        $ipcChanged = @\stream_select($ipcRead, $ipcWrite, $ipcExcept, 0, 0);
-                        if ($ipcChanged > 0) {
-                            $this->ipcClient->handleReadable();
-                        }
-                    }
-                } elseif (!$this->ipcReceivedShutdown) {
-                    $this->ipcClient->tryReconnect();
+            try {
+                $loopCount++;
+                // 信号处理
+                if (\function_exists('pcntl_signal_dispatch')) {
+                    \pcntl_signal_dispatch();
                 }
+                
+                // IPC 控制通道：处理消息（非阻塞读取）
+                if ($this->ipcClient) {
+                    if ($this->ipcClient->isConnected()) {
+                        $ipcSocket = $this->ipcClient->getSocket();
+                        if ($ipcSocket && \is_resource($ipcSocket)) {
+                            $ipcRead = [$ipcSocket];
+                            $ipcWrite = [];
+                            $ipcExcept = [];
+                            $ipcChanged = @\stream_select($ipcRead, $ipcWrite, $ipcExcept, 0, 0);
+                            if ($ipcChanged > 0) {
+                                $this->ipcClient->handleReadable();
+                            }
+                        }
+                    } elseif (!$this->ipcReceivedShutdown) {
+                        $this->ipcClient->tryReconnect();
+                    }
+                }
+
+                // Master 心跳检查（保留文件方式作为兜底，IPC 断开时使用）
+                if (!$this->ipcClient || !$this->ipcClient->isConnected()) {
+                    $this->checkMasterHeartbeat();
+                }
+                
+                // 孤儿检测：定期检查 Master PID 是否存活
+                $this->checkMasterPidAlive();
+                
+                // Worker 健康探活（定期检查黑名单中的 Worker 是否已恢复）
+                $this->probeWorkerHealth();
+                
+                // 连接超时清理
+                $this->cleanupExpiredConnections();
+                
+                // 事件处理
+                $this->selectAndProcess();
+                
+                // 定期统计
+                $this->printStats();
+                $consecutiveLoopErrors = 0;
+            } catch (\Throwable $e) {
+                $consecutiveLoopErrors++;
+                $this->log(
+                    "事件循环异常 ({$consecutiveLoopErrors}/{$maxConsecutiveLoopErrors}): "
+                    . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine(),
+                    'ERROR'
+                );
+                if ($consecutiveLoopErrors >= $maxConsecutiveLoopErrors) {
+                    $this->log('连续异常过多，Dispatcher 进入保护性退出', 'ERROR');
+                    $this->running = false;
+                    break;
+                }
+                \usleep(10000);
             }
-            
-            // Master 心跳检查（保留文件方式作为兜底，IPC 断开时使用）
-            if (!$this->ipcClient || !$this->ipcClient->isConnected()) {
-                $this->checkMasterHeartbeat();
-            }
-            
-            // 孤儿检测：定期检查 Master PID 是否存活
-            $this->checkMasterPidAlive();
-            
-            // Worker 健康探活（定期检查黑名单中的 Worker 是否已恢复）
-            $this->probeWorkerHealth();
-            
-            // 连接超时清理
-            $this->cleanupExpiredConnections();
-            
-            // 事件处理
-            $this->selectAndProcess();
-            
-            // 定期统计
-            $this->printStats();
         }
         
         $this->shutdown();

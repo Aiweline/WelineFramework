@@ -489,8 +489,15 @@ class WlsRequest extends Request
      */
     public function isKeepAlive(): bool
     {
-        $connection = $this->parsedHeaders['Connection'] ?? '';
-        return \strtolower($connection) === 'keep-alive';
+        $connection = \strtolower(\trim((string)($this->parsedHeaders['Connection'] ?? '')));
+        if ($connection === 'close') {
+            return false;
+        }
+        if ($connection === 'keep-alive') {
+            return true;
+        }
+        // HTTP/1.1 默认 Keep-Alive；仅在明确 close 时关闭
+        return \str_contains($this->rawData, 'HTTP/1.1');
     }
     
     /**
