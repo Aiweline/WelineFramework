@@ -268,9 +268,16 @@ class MasterControlServer
 
         $data = @\fread($socket, 65536);
 
-        // 连接断开：stream_select 已确认可读，fread 返回空即为 TCP FIN
-        if ($data === '' || $data === false) {
+        // 连接断开判定：
+        // - fread=false: 读取错误
+        // - fread='' 且 feof=true: 对端已关闭（TCP FIN）
+        // 注意：非阻塞模式下 fread='' 可能只是暂时无数据，不应直接判定断连。
+        if ($data === false || ($data === '' && @\feof($socket))) {
             $this->removeClient($clientId);
+            return;
+        }
+
+        if ($data === '') {
             return;
         }
 

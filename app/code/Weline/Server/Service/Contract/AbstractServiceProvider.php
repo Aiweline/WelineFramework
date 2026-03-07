@@ -31,6 +31,46 @@ abstract class AbstractServiceProvider implements ServiceProviderInterface
     /**
      * @inheritDoc
      */
+    public function requiresStartupReadyBarrier(): bool
+    {
+        return false;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function supportsDrain(): bool
+    {
+        return $this->getReloadStrategy() === 'graceful';
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function supportsShutdown(): bool
+    {
+        return true;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function supportsReload(): bool
+    {
+        return $this->getReloadStrategy() !== 'none';
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function isCriticalRole(): bool
+    {
+        return false;
+    }
+
+    /**
+     * @inheritDoc
+     */
     public function getPort(int $instanceId, ServiceContext $context): ?int
     {
         return null;

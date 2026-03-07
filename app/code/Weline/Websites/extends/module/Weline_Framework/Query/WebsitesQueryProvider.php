@@ -6,17 +6,20 @@ namespace Weline\Websites\Extends\Module\Weline_Framework\Query;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainRegistrar;
 use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteLanguage;
 use Weline\Websites\Service\DomainPurchaseService;
 use Weline\Websites\Service\DomainRegistrarResolverService;
+use Weline\Websites\Service\DomainSyncService;
 
 class WebsitesQueryProvider implements QueryProviderInterface
 {
     public function __construct(
         private readonly DomainRegistrarResolverService $resolver,
+        private readonly DomainSyncService $domainSyncService,
         private readonly DomainRegistrarAccount $accountModel,
         private readonly DomainRegistrar $registrarModel,
         private readonly Website $websiteModel,
@@ -43,6 +46,14 @@ class WebsitesQueryProvider implements QueryProviderInterface
             'getConfigFields'        => $this->getConfigFields($params),
             'getRegistrarInfo'       => $this->getRegistrarInfo($params),
             'modifyDns'              => $this->modifyDns($params),
+            'getActiveAccounts'      => $this->domainSyncService->getActiveAccounts(),
+            'getDomainStatusOptions' => Domain::getStatusOptions(),
+            'getLastSyncTime'        => $this->getLastSyncTime($params),
+            'getLocalDomains'        => $this->getLocalDomains($params),
+            'getRemoteDomains'       => $this->getRemoteDomains($params),
+            'importDomains'          => $this->importDomains($params),
+            'syncDomains'            => $this->syncDomains($params),
+            'batchOperateDomains'    => $this->batchOperateDomains($params),
             'getWebsiteById'         => $this->getWebsiteById($params),
             'getWebsiteList'         => $this->getWebsiteList($params),
             'getWebsiteLanguageCodes' => $this->getWebsiteLanguageCodes($params),
@@ -147,6 +158,64 @@ class WebsitesQueryProvider implements QueryProviderInterface
                         ['name' => 'account_id', 'type' => 'int', 'required' => true, 'description' => __('账号 ID')],
                         ['name' => 'domain', 'type' => 'string', 'required' => true, 'description' => __('域名')],
                         ['name' => 'nameservers', 'type' => 'string', 'required' => true, 'description' => __('NS 列表，逗号分隔')],
+                    ],
+                ],
+                [
+                    'name'        => 'getActiveAccounts',
+                    'description' => __('获取已启用账号列表（同步业务）'),
+                    'params'      => [],
+                ],
+                [
+                    'name'        => 'getDomainStatusOptions',
+                    'description' => __('获取域名状态选项'),
+                    'params'      => [],
+                ],
+                [
+                    'name'        => 'getLastSyncTime',
+                    'description' => __('获取最后同步时间'),
+                    'params'      => [
+                        ['name' => 'account_id', 'type' => 'int', 'required' => false],
+                    ],
+                ],
+                [
+                    'name'        => 'getLocalDomains',
+                    'description' => __('获取本地域名列表（分页）'),
+                    'params'      => [
+                        ['name' => 'filters', 'type' => 'array', 'required' => false],
+                        ['name' => 'page', 'type' => 'int', 'required' => false],
+                        ['name' => 'limit', 'type' => 'int', 'required' => false],
+                    ],
+                ],
+                [
+                    'name'        => 'getRemoteDomains',
+                    'description' => __('获取远程域名列表（不落库）'),
+                    'params'      => [
+                        ['name' => 'account_id', 'type' => 'int', 'required' => true],
+                    ],
+                ],
+                [
+                    'name'        => 'importDomains',
+                    'description' => __('导入远程域名到本地'),
+                    'params'      => [
+                        ['name' => 'account_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'domains', 'type' => 'array', 'required' => true],
+                        ['name' => 'resolve_mode', 'type' => 'string|bool', 'required' => false],
+                    ],
+                ],
+                [
+                    'name'        => 'syncDomains',
+                    'description' => __('同步账号域名'),
+                    'params'      => [
+                        ['name' => 'account_id', 'type' => 'int', 'required' => false],
+                    ],
+                ],
+                [
+                    'name'        => 'batchOperateDomains',
+                    'description' => __('域名批量操作'),
+                    'params'      => [
+                        ['name' => 'domain_ids', 'type' => 'array', 'required' => true],
+                        ['name' => 'operation', 'type' => 'string', 'required' => true],
+                        ['name' => 'params', 'type' => 'array', 'required' => false],
                     ],
                 ],
                 [
@@ -580,11 +649,61 @@ class WebsitesQueryProvider implements QueryProviderInterface
             }
 
             $credentials = $account->getCredentials();
-            return $adapter->modifyDns($domain, $nameservers, $credentials);
+            /** @var callable $callable */
+            $callable = [$adapter, 'modifyDns'];
+            return \call_user_func($callable, $domain, $nameservers, $credentials);
         } catch (\Throwable $e) {
             w_log_error((string)__('修改 DNS 失败：%{1}', $e->getMessage()), [], 'domain_management');
             return ['success' => false, 'message' => $e->getMessage()];
         }
+    }
+
+    private function getLastSyncTime(array $params): ?string
+    {
+        $accountId = (int)($params['account_id'] ?? 0);
+        return $this->domainSyncService->getLastSyncTime($accountId);
+    }
+
+    private function getLocalDomains(array $params): array
+    {
+        $filters = (array)($params['filters'] ?? []);
+        $page = \max(1, (int)($params['page'] ?? 1));
+        $limit = \max(1, \min(500, (int)($params['limit'] ?? 20)));
+        return $this->domainSyncService->getDomains($filters, $page, $limit);
+    }
+
+    private function getRemoteDomains(array $params): array
+    {
+        $accountId = (int)($params['account_id'] ?? 0);
+        if ($accountId <= 0) {
+            return ['success' => false, 'message' => __('账号 ID 无效'), 'domains' => []];
+        }
+        return $this->domainSyncService->fetchRemoteDomains($accountId);
+    }
+
+    private function importDomains(array $params): array
+    {
+        $accountId = (int)($params['account_id'] ?? 0);
+        $domains = (array)($params['domains'] ?? []);
+        $resolveMode = $params['resolve_mode'] ?? DomainSyncService::RESOLVE_MODE_BATCH_TO_LOCAL;
+        return $this->domainSyncService->importDomains($accountId, $domains, $resolveMode);
+    }
+
+    private function syncDomains(array $params): array
+    {
+        $accountId = (int)($params['account_id'] ?? 0);
+        if ($accountId > 0) {
+            return $this->domainSyncService->syncAccount($accountId);
+        }
+        return $this->domainSyncService->syncAllAccounts();
+    }
+
+    private function batchOperateDomains(array $params): array
+    {
+        $domainIds = (array)($params['domain_ids'] ?? []);
+        $operation = (string)($params['operation'] ?? '');
+        $operationParams = (array)($params['params'] ?? []);
+        return $this->domainSyncService->batchOperate($domainIds, $operation, $operationParams);
     }
 
     private function getWebsiteById(array $params): ?array

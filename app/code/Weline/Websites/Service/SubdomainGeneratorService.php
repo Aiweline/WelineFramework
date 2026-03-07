@@ -75,6 +75,8 @@ class SubdomainGeneratorService
                 $poolDomain->setDescription(__('从根域名 %{1} 自动生成', [$rootDomainName]));
                 $poolDomain->setStatus(DomainPool::STATUS_ACTIVE);
                 $poolDomain->setResolveStatus(DomainPool::RESOLVE_STATUS_PENDING);
+                $poolDomain->setDnsStatus(DomainPool::INFRA_STATUS_PENDING);
+                $poolDomain->setCdnStatus(DomainPool::INFRA_STATUS_PENDING);
                 $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_NONE);
                 $poolDomain->setSiteReady(false);
                 $poolDomain->save();
@@ -145,6 +147,8 @@ class SubdomainGeneratorService
             $poolDomain->setDescription($description);
             $poolDomain->setStatus(DomainPool::STATUS_ACTIVE);
             $poolDomain->setResolveStatus(DomainPool::RESOLVE_STATUS_PENDING);
+            $poolDomain->setDnsStatus(DomainPool::INFRA_STATUS_PENDING);
+            $poolDomain->setCdnStatus(DomainPool::INFRA_STATUS_PENDING);
             $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_NONE);
             $poolDomain->setSiteReady(false);
             $poolDomain->save();

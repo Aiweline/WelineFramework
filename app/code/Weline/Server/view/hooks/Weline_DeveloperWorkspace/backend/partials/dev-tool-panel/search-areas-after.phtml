@@ -104,6 +104,10 @@ $attackLogUrl = $this->getBackendUrl('weline_server/backend/server-monitor/attac
     function loadWlsContent() {
         var content = document.getElementById('dev-tool-content');
         if (!content) return;
+        if (!window.Weline || !window.Weline.Api) {
+            content.innerHTML = '<div class="dev-tool-empty">Weline.Api 未就绪（可能因网络或脚本未加载），请刷新页面或稍后再试。</div>';
+            return;
+        }
         content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>检测 WLS 服务...</div></div>';
         
         // 使用 WLS 健康检查接口获取服务状态，而不是请求当前页面
@@ -247,7 +251,10 @@ $attackLogUrl = $this->getBackendUrl('weline_server/backend/server-monitor/attac
     window.loadWlsAttackStats = function() {
         var container = document.getElementById('wls-attack-stats');
         if (!container) return;
-        
+        if (!window.Weline || !window.Weline.Api) {
+            container.innerHTML = '<p style="font-size: 12px; color: #c66;">Weline.Api 未就绪</p>';
+            return;
+        }
         container.innerHTML = '<p style="font-size: 12px; color: #999;"><i class="fa fa-spinner spinning"></i> 加载中...</p>';
         
         var url = '<?= $this->getBackendUrl('weline_server/backend/server-monitor/attack-stats', ['days' => 7]) ?>';
