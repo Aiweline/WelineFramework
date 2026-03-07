@@ -551,6 +551,32 @@ return __('免运费');
 - 逗号分隔两列，没有额外逗号
 - 每行一个翻译对，没有换行
 
+### i18n 文件编码损坏（NUL/乱码尾段）
+
+**症状：**
+- `zh_Hans_CN.csv` / `en_US.csv` 尾部出现 `?`、乱码、异常控制字符
+- 文件中出现 `NUL (\x00)`，或编辑器显示“可读但内容异常”
+
+**修复步骤（统一流程）：**
+1. 先定位损坏区段（通常是尾段），不要盲目全量重写；
+2. 清理损坏段并恢复为 UTF-8；
+3. 执行 `php bin/w i18n:collect` 回收翻译键；
+4. 最后做三项健康检查：
+   - NUL 计数为 0
+   - UTF-8 strict decode 通过
+   - CSV 每行恰好 2 列
+
+**建议验证脚本（示例）：**
+```python
+from pathlib import Path
+import csv, io
+b = Path("app/code/YourModule/i18n/en_US.csv").read_bytes()
+assert b.count(b"\x00") == 0
+t = b.decode("utf-8")  # strict
+rows = list(csv.reader(io.StringIO(t)))
+assert all(len(r) == 2 for r in rows)
+```
+
 ### Hook 模板中翻译不工作
 
 在 Hook 模板（如 `view/hooks/`）中使用翻译时，模块的翻译可能未加载。在 Hook 模板顶部添加这些行：

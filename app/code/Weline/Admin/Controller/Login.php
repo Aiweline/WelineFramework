@@ -256,9 +256,12 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             return;
         }
         // 登录成功后立即持久化 Session（避免 WLS 下重定向请求读不到登录态导致循环重定向）
-        $this->session->getSession()->save();
+        $rawSession = $this->session->getSession();
+        $rawSession->save();
         // Session::start() 已注册 shutdown 时 save + writeClose，302 前会落盘；此处再显式 writeClose 一次，确保 302 前必已写入
-        $this->session->getSession()->getStrategy()->writeClose();
+        if ($rawSession instanceof \Weline\Framework\Session\Session) {
+            $rawSession->getStrategy()->writeClose();
+        }
         // WLS 下确保 Session Cookie 随 302 响应发出（双重保障，避免 Worker 合并逻辑遗漏）
         $sid = $this->session->getId();
         if ($sid !== '') {

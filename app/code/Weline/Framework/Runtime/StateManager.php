@@ -582,7 +582,8 @@ class StateManager
         
         self::registerStaticReset(\Weline\Framework\App\Env::class, 'maintenanceCached', null);
         self::registerStaticReset(\Weline\Framework\App\Env::class, 'maintenanceLastCheck', 0.0);
-        self::registerStaticReset(\Weline\Framework\App\Env::class, 'mergedCacheConfig', null);
+        // mergedCacheConfig 是进程级热缓存（DB 合并后的 cache 配置），
+        // 每请求清空会导致重复 DB 合并与性能回退，仅在 setConfig('cache')/reload 时失效。
         
         // ========== 8. 主题插槽渲染缓存 ==========
         // SlotRendererService 持有 layoutCache/widgetCache/orphanWidgets，都是请求级数据。
@@ -595,6 +596,27 @@ class StateManager
         
         // Taglib Slot 静态注册表 — 编译期用于重复 slot ID 检测，不能跨请求残留
         self::registerStaticReset(\Weline\Theme\Taglib\Slot::class, 'registeredSlots', []);
+
+        // ThemeData 请求态缓存（当前主题/区域/performance 缓存）在 WLS 下必须每请求清理
+        self::registerResetCallback('theme_data_request_state', function () {
+            if (\class_exists(\Weline\Theme\Helper\ThemeData::class, false)) {
+                \Weline\Theme\Helper\ThemeData::resetRequestState();
+            }
+        });
+
+        // 预览 token 检测结果是请求级静态状态，跨请求会导致预览串用户
+        self::registerResetCallback('preview_token_request_state', function () {
+            if (\class_exists(\Weline\Theme\Service\PreviewTokenService::class, false)) {
+                \Weline\Theme\Service\PreviewTokenService::resetRequestState();
+            }
+        });
+
+        // Session::flushOnShutdown 队列在常驻进程中不会自动按请求清理，需主动重置
+        self::registerResetCallback('session_shutdown_queue', function () {
+            if (\class_exists(\Weline\Framework\Session\Session::class, false)) {
+                \Weline\Framework\Session\Session::resetRequestState();
+            }
+        });
         
         // ========== 9. 缓存事件防重复标志 ==========
         // CacheFlushedObserver：同一请求内多次 flush 只通知 WLS 一次，下次请求重置
@@ -627,6 +649,44 @@ class StateManager
         // 必须在每次请求结束时重置
         self::registerResetCallback('acl_taglib_reset', function () {
             \Weline\Acl\Taglib\Acl::resetRequestState();
+        });
+
+        // ========== 12. Taglib / Widget 请求级静态缓存 ==========
+        // WMeta::$ids — Meta 标签唯一 ID 记录，跨请求会累积导致误判重复
+        self::registerStaticReset(\Weline\Meta\Taglib\WMeta::class, 'ids', []);
+        // Widget::$renderCache — Widget 渲染结果缓存，只应在单次请求内有效
+        self::registerStaticReset(\Weline\Widget\Taglib\Widget::class, 'renderCache', []);
+
+        // ========== 13. DataTable 字段模板缓存 ==========
+        // Field::$templateFields — DataTable 字段定义缓存，必须每请求重置
+        self::registerStaticReset(\Weline\DataTable\Taglib\Field::class, 'templateFields', []);
+
+        // ========== 14. SessionFactory 事件解析缓存 ==========
+        // resolveViaEvent() 的静态缓存可能在不同请求环境下不一致，需请求结束后重置
+        self::registerStaticReset(\Weline\Framework\Session\SessionFactory::class, 'eventResolveCached', false);
+        self::registerStaticReset(\Weline\Framework\Session\SessionFactory::class, 'eventResolveResult', null);
+
+        // ========== 15. 事件观察者缓存 ==========
+        // EventsManager::$observerCache 是实例缓存，WLS 下会跨请求保留，需主动清空
+        self::registerResetCallback('events_manager_observer_cache', function () {
+            if (!\class_exists(\Weline\Framework\Event\EventsManager::class, false)) {
+                return;
+            }
+            $eventsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+            if (\method_exists($eventsManager, 'resetRequestState')) {
+                $eventsManager->resetRequestState();
+                return;
+            }
+            if (\method_exists($eventsManager, 'clearObserverCache')) {
+                $eventsManager->clearObserverCache();
+            }
+        });
+
+        // Widget 渲染缓存只允许请求内命中，防止跨请求模板参数串用
+        self::registerResetCallback('widget_taglib_cache', function () {
+            if (\class_exists(\Weline\Widget\Taglib\Widget::class, false)) {
+                \Weline\Widget\Taglib\Widget::resetRequestState();
+            }
         });
     }
 }

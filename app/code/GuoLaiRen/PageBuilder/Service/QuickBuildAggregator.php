@@ -217,4 +217,86 @@ class QuickBuildAggregator
             'adapter' => $adapter,
         ]);
     }
+
+    /**
+     * 获取已启用域名商账号（同步页使用）
+     */
+    public function getActiveRegistrarAccounts(): array
+    {
+        return $this->queryService->execute('websites', 'getActiveAccounts');
+    }
+
+    /**
+     * 获取域名同步状态选项
+     */
+    public function getDomainStatusOptions(): array
+    {
+        return $this->queryService->execute('websites', 'getDomainStatusOptions');
+    }
+
+    /**
+     * 获取本地域名同步时间
+     */
+    public function getDomainLastSyncTime(int $accountId = 0): ?string
+    {
+        return $this->queryService->execute('websites', 'getLastSyncTime', [
+            'account_id' => $accountId,
+        ]);
+    }
+
+    /**
+     * 获取本地域名列表（已同步）
+     */
+    public function getLocalDomains(array $filters, int $page = 1, int $limit = 20): array
+    {
+        return $this->queryService->execute('websites', 'getLocalDomains', [
+            'filters' => $filters,
+            'page' => $page,
+            'limit' => $limit,
+        ]);
+    }
+
+    /**
+     * 获取远程域名列表（不落库）
+     */
+    public function getRemoteDomains(int $accountId): array
+    {
+        return $this->queryService->execute('websites', 'getRemoteDomains', [
+            'account_id' => $accountId,
+        ]);
+    }
+
+    /**
+     * 导入远程域名到本地
+     */
+    public function importDomains(int $accountId, array $domains, bool|string $resolveMode): array
+    {
+        return $this->queryService->execute('websites', 'importDomains', [
+            'account_id' => $accountId,
+            'domains' => $domains,
+            'resolve_mode' => $resolveMode,
+        ]);
+    }
+
+    /**
+     * 同步单账号或全账号域名
+     */
+    public function syncDomains(int $accountId = 0): array
+    {
+        return $this->queryService->execute('websites', 'syncDomains', [
+            'account_id' => $accountId,
+        ]);
+    }
+
+    /**
+     * 域名批量操作
+     */
+    public function batchOperateDomains(array $domainIds, string $operation, array $params = []): array
+    {
+        return $this->queryService->execute('websites', 'batchOperateDomains', [
+            'domain_ids' => $domainIds,
+            'operation' => $operation,
+            'params' => $params,
+        ]);
+    }
 }

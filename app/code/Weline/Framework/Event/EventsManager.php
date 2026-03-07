@@ -60,6 +60,16 @@ class EventsManager
         $this->eventsObservers = [];
     }
 
+    /**
+     * WLS 每请求重置事件运行期缓存，防止跨请求边界污染。
+     */
+    public function resetRequestState(): void
+    {
+        $this->events = [];
+        // observer/module 状态属于进程级只读缓存，频繁清空会导致每请求重扫事件配置。
+        // 仅重置请求内 Event 实例数据，避免跨请求污染同时保留热缓存性能。
+    }
+
     public function scanEvents()
     {
         if (empty($this->eventsObservers)) {

@@ -1003,6 +1003,8 @@ CNF;
      */
     public function getCertificateMap(): array
     {
+        $this->reconcileCertificateFiles();
+
         $certificates = $this->certModel->clearQuery()
             ->where(SslCertificate::schema_fields_STATUS, SslCertificate::STATUS_ACTIVE)
             ->where(SslCertificate::schema_fields_HTTPS_ENABLED, 1)
@@ -1025,6 +1027,77 @@ CNF;
         }
         
         return $map;
+    }
+
+    /**
+     * 将数据库中的证书文件同步到 app/etc/ssl/{domain}/ 目录。
+     *
+     * @return array{written:int,updated:int,skipped:int,errors:array}
+     */
+    public function reconcileCertificateFiles(): array
+    {
+        $result = [
+            'written' => 0,
+            'updated' => 0,
+            'skipped' => 0,
+            'errors' => [],
+        ];
+
+        $certificates = $this->certModel->clearQuery()
+            ->where(SslCertificate::schema_fields_STATUS, SslCertificate::STATUS_ACTIVE)
+            ->where(SslCertificate::schema_fields_HTTPS_ENABLED, 1)
+            ->select()
+            ->fetchArray();
+
+        foreach ($certificates as $row) {
+            $domain = (string)($row[SslCertificate::schema_fields_DOMAIN] ?? '');
+            $sourceCert = (string)($row[SslCertificate::schema_fields_CERT_PATH] ?? '');
+            $sourceKey = (string)($row[SslCertificate::schema_fields_KEY_PATH] ?? '');
+            if ($domain === '' || $sourceCert === '' || $sourceKey === '') {
+                $result['skipped']++;
+                continue;
+            }
+            if (!\is_file($sourceCert) || !\is_file($sourceKey)) {
+                $result['errors'][] = __('证书源文件不存在：%{1}', [$domain]);
+                continue;
+            }
+
+            $targetDir = \dirname(Env::path_ENV_FILE) . DS . 'ssl' . DS . $domain . DS;
+            if (!\is_dir($targetDir)) {
+                @\mkdir($targetDir, 0755, true);
+            }
+            $targetCert = $targetDir . 'fullchain.pem';
+            $targetKey = $targetDir . 'privkey.pem';
+            $targetExistsBefore = \is_file($targetCert) && \is_file($targetKey);
+
+            try {
+                $copiedCert = $this->copyIfChanged($sourceCert, $targetCert);
+                $copiedKey = $this->copyIfChanged($sourceKey, $targetKey);
+                if ($copiedCert || $copiedKey) {
+                    $result[$targetExistsBefore ? 'updated' : 'written']++;
+                    @\chmod($targetCert, 0644);
+                    @\chmod($targetKey, 0600);
+                } else {
+                    $result['skipped']++;
+                }
+            } catch (\Throwable $e) {
+                $result['errors'][] = __('同步证书失败 %{1}: %{2}', [$domain, $e->getMessage()]);
+            }
+        }
+
+        return $result;
+    }
+
+    private function copyIfChanged(string $source, string $target): bool
+    {
+        if (\is_file($target)) {
+            $sourceHash = @\sha1_file($source);
+            $targetHash = @\sha1_file($target);
+            if ($sourceHash !== false && $sourceHash === $targetHash) {
+                return false;
+            }
+        }
+        return (bool)@\copy($source, $target);
     }
     
     /**
@@ -1827,6 +1900,9 @@ CNF;
         }
         
         // 通过 IPC 控制通道通知 Master 执行缓存重载（含 SSL 证书缓存刷新）
-        MasterProcess::sendCacheClearCommand('default');
+        $masterClass = MasterProcess::class;
+        if (\is_callable([$masterClass, 'sendCacheClearCommand'])) {
+            \call_user_func([$masterClass, 'sendCacheClearCommand'], 'default');
+        }
     }
 }

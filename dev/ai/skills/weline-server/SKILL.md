@@ -596,3 +596,8 @@ cat var/log/master_health_debug.log
     - 原因 2：`WlsMemoryAdapter` 多 identity 缓存配置总和超过进程内存上限
     - 原因 3：缓存条目过大或未正确淘汰
     - 解决：在 `env.php` 中调整 `cache.drivers.wls_memory.max_memory`（建议每个 identity 不超过 16-32MB），或提高 `memory_limit`
+11. **请求稳定慢 3-4 秒（连 401/404 也慢）**：
+    - 典型特征：日志中“准备进入框架处理”到“写回响应”固定卡顿数秒；静态资源和 `/_wls/health` 正常
+    - 高概率原因：`EventsManager` 观察者缓存被按请求清空，导致每请求重扫事件观察者
+    - 快速排查：对同一后台 REST 路径连续 `curl`，若 401/404 也在秒级则优先检查 `StateManager` 对 `EventsManager` 的 reset 策略
+    - 修复原则：`EventsManager::resetRequestState()` 仅清请求级 `$events`，不要在每请求中清 `observerCache/eventsObservers/moduleStatusCache`

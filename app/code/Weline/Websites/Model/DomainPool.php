@@ -32,6 +32,8 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_root_domain', columns: ['root_domain'])]
 #[Index(name: 'idx_status', columns: ['status'])]
 #[Index(name: 'idx_resolve_status', columns: ['resolve_status'])]
+#[Index(name: 'idx_dns_status', columns: ['dns_status'])]
+#[Index(name: 'idx_cdn_status', columns: ['cdn_status'])]
 #[Index(name: 'idx_https_status', columns: ['https_status'])]
 #[Index(name: 'idx_site_ready', columns: ['site_ready'])]
 #[Index(name: 'idx_cert', columns: ['cert_id'])]
@@ -54,6 +56,10 @@ class DomainPool extends Model
     public const schema_fields_STATUS = 'status';
     #[Col('varchar', 20, nullable: true, default: 'pending', comment: '解析状态')]
     public const schema_fields_RESOLVE_STATUS = 'resolve_status';
+    #[Col('varchar', 20, nullable: true, default: 'pending', comment: 'DNS就绪状态')]
+    public const schema_fields_DNS_STATUS = 'dns_status';
+    #[Col('varchar', 20, nullable: true, default: 'pending', comment: 'CDN就绪状态')]
+    public const schema_fields_CDN_STATUS = 'cdn_status';
     #[Col('varchar', 45, nullable: true, default: '', comment: '解析到的IPv4')]
     public const schema_fields_RESOLVED_IP = 'resolved_ip';
     #[Col('varchar', 45, nullable: true, default: '', comment: '解析到的IPv6')]
@@ -89,6 +95,11 @@ class DomainPool extends Model
     public const RESOLVE_STATUS_PENDING = 'pending';
     public const RESOLVE_STATUS_RESOLVED = 'resolved';
     public const RESOLVE_STATUS_ERROR = 'error';
+
+    // DNS/CDN 状态常量
+    public const INFRA_STATUS_PENDING = 'pending';
+    public const INFRA_STATUS_READY = 'ready';
+    public const INFRA_STATUS_ERROR = 'error';
     
     // HTTPS 状态常量
     public const HTTPS_STATUS_NONE = 'none';
@@ -211,6 +222,28 @@ class DomainPool extends Model
     public function getResolveStatus(): string
     {
         return (string) ($this->getData(self::schema_fields_RESOLVE_STATUS) ?: self::RESOLVE_STATUS_PENDING);
+    }
+
+    public function setDnsStatus(string $status): self
+    {
+        $this->setData(self::schema_fields_DNS_STATUS, $status);
+        return $this;
+    }
+
+    public function getDnsStatus(): string
+    {
+        return (string) ($this->getData(self::schema_fields_DNS_STATUS) ?: self::INFRA_STATUS_PENDING);
+    }
+
+    public function setCdnStatus(string $status): self
+    {
+        $this->setData(self::schema_fields_CDN_STATUS, $status);
+        return $this;
+    }
+
+    public function getCdnStatus(): string
+    {
+        return (string) ($this->getData(self::schema_fields_CDN_STATUS) ?: self::INFRA_STATUS_PENDING);
     }
     
     public function setResolvedIp(string $ip): self
@@ -350,6 +383,8 @@ class DomainPool extends Model
     public function calculateSiteReady(): bool
     {
         $isReady = $this->getResolveStatus() === self::RESOLVE_STATUS_RESOLVED
+            && $this->getDnsStatus() === self::INFRA_STATUS_READY
+            && $this->getCdnStatus() === self::INFRA_STATUS_READY
             && $this->isLocalServer()
             && $this->getHttpsStatus() === self::HTTPS_STATUS_VALID;
         
@@ -631,6 +666,8 @@ class DomainPool extends Model
         return $this->clearQuery()
             ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
             ->where(self::schema_fields_RESOLVE_STATUS, self::RESOLVE_STATUS_RESOLVED)
+            ->where(self::schema_fields_DNS_STATUS, self::INFRA_STATUS_READY)
+            ->where(self::schema_fields_CDN_STATUS, self::INFRA_STATUS_READY)
             ->where(self::schema_fields_IS_LOCAL_SERVER, 1)
             ->where(self::schema_fields_HTTPS_STATUS, [self::HTTPS_STATUS_NONE, self::HTTPS_STATUS_EXPIRED, self::HTTPS_STATUS_ERROR], 'IN')
             ->order(self::schema_fields_HTTPS_STATUS, 'ASC')

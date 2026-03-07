@@ -774,6 +774,14 @@ php bin/w server:start websocket
 
 ---
 
+## 登录错误消息（WLS 场景）
+
+- 登录失败提示属于“单条状态反馈”，不要使用可累积写法。
+- `MessageManager::error()` 为追加语义（append），适合需要堆叠提示的通用场景。
+- 登录/验证码失败等场景优先使用 `MessageManager::setSingleError()`，避免常驻进程下重复失败时消息累积。
+
+---
+
 ## Related Skills
 
 - `implement-extends` - **实现扩展点**：使用其他模块定义的扩展点

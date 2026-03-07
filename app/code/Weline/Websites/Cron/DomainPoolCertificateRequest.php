@@ -20,6 +20,8 @@ use Weline\Websites\Model\DomainPool;
 
 class DomainPoolCertificateRequest implements CronTaskInterface
 {
+    private const DEFAULT_CERT_STRATEGY = 'wildcard_prefer';
+
     public function name(): string
     {
         return __('域名池证书自动申请');
@@ -54,60 +56,39 @@ class DomainPoolCertificateRequest implements CronTaskInterface
             $domainPoolModel = ObjectManager::getInstance(DomainPool::class);
             $domains = $domainPoolModel->getDomainsNeedCertificate(50);
             $results['checked'] = \count($domains);
-
             if ($domains === []) {
                 return __('没有需要申请证书的域名池域名');
             }
 
+            $strategy = (string) (Env::get('server.ssl.cert_strategy', self::DEFAULT_CERT_STRATEGY) ?? self::DEFAULT_CERT_STRATEGY);
+            $strategy = \in_array($strategy, ['single', 'wildcard_prefer', 'both'], true) ? $strategy : self::DEFAULT_CERT_STRATEGY;
             $webroot = \defined('PUB') ? PUB : (BP . 'pub');
             $email = Env::getInstance()->getConfig('ssl.contact_email') ?? '';
 
+            $groupedByRoot = [];
             foreach ($domains as $row) {
-                $domain = (string) ($row[DomainPool::schema_fields_DOMAIN] ?? '');
-                $poolId = (int) ($row[DomainPool::schema_fields_ID] ?? 0);
-                if ($domain === '' || $poolId <= 0) {
-                    $results['skipped']++;
-                    continue;
+                $rootDomain = (string) ($row[DomainPool::schema_fields_ROOT_DOMAIN] ?? '');
+                $groupedByRoot[$rootDomain !== '' ? $rootDomain : (string) ($row[DomainPool::schema_fields_DOMAIN] ?? '')][] = $row;
+            }
+
+            foreach ($groupedByRoot as $rootDomain => $rows) {
+                if (($strategy === 'wildcard_prefer' || $strategy === 'both') && $rootDomain !== '') {
+                    $wildResult = $this->requestByRow($rows[0], $webroot, $email, $strategy, true);
+                    $results['requested'] += $wildResult['requested'];
+                    $results['success'] += $wildResult['success'];
+                    $results['failed'] += $wildResult['failed'];
+                    $results['skipped'] += $wildResult['skipped'];
+                    if ($wildResult['success'] > 0 && $strategy === 'wildcard_prefer') {
+                        continue;
+                    }
                 }
 
-                $poolDomain = ObjectManager::getInstance(DomainPool::class, [], false);
-                $poolDomain->setData($row);
-
-                // 标记为 pending 避免重复申请
-                $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_PENDING);
-                $poolDomain->save();
-
-                $reqEmail = $email !== '' ? $email : 'admin@' . $domain;
-                $results['requested']++;
-
-                try {
-                    $result = w_query('server', 'requestCertificate', [
-                        'domain'     => $domain,
-                        'webroot'    => $webroot,
-                        'email'      => $reqEmail,
-                        'website_id' => 0,
-                        'provider'   => 'letsencrypt',
-                    ]);
-
-                    if ($result['success'] ?? false) {
-                        $results['success']++;
-                        // 证书签发成功后由 Weline_Server::domain::certificate_issued 事件
-                        // 触发 SyncHttpsStatus 更新 DomainPool 的 cert_id、https_status
-                        w_log_info(__('[DomainPoolCertificateRequest] %{1} 证书申请成功', [$domain]), [], 'domain_pool_cert');
-                    } else {
-                        $results['failed']++;
-                        $msg = $result['message'] ?? __('未知错误');
-                        $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_ERROR);
-                        $poolDomain->setHttpsError($msg);
-                        $poolDomain->save();
-                        w_log_error(__('[DomainPoolCertificateRequest] %{1} 证书申请失败: %{2}', [$domain, $msg]), [], 'domain_pool_cert');
-                    }
-                } catch (\Throwable $e) {
-                    $results['failed']++;
-                    $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_ERROR);
-                    $poolDomain->setHttpsError($e->getMessage());
-                    $poolDomain->save();
-                    w_log_error(__('[DomainPoolCertificateRequest] %{1} 证书申请异常: %{2}', [$domain, $e->getMessage()]), [], 'domain_pool_cert');
+                foreach ($rows as $row) {
+                    $singleResult = $this->requestByRow($row, $webroot, $email, 'single', false);
+                    $results['requested'] += $singleResult['requested'];
+                    $results['success'] += $singleResult['success'];
+                    $results['failed'] += $singleResult['failed'];
+                    $results['skipped'] += $singleResult['skipped'];
                 }
             }
 
@@ -122,6 +103,87 @@ class DomainPoolCertificateRequest implements CronTaskInterface
             w_log_error('[DomainPoolCertificateRequest] ' . $err, [], 'domain_pool_cert');
             return $err;
         }
+    }
+
+    private function requestByRow(array $row, string $webroot, string $email, string $strategy, bool $isWildcard): array
+    {
+        $counter = [
+            'requested' => 0,
+            'success' => 0,
+            'failed' => 0,
+            'skipped' => 0,
+        ];
+
+        $domain = (string) ($row[DomainPool::schema_fields_DOMAIN] ?? '');
+        $rootDomain = (string) ($row[DomainPool::schema_fields_ROOT_DOMAIN] ?? '');
+        $poolId = (int) ($row[DomainPool::schema_fields_ID] ?? 0);
+        if ($domain === '' || $poolId <= 0) {
+            $counter['skipped']++;
+            return $counter;
+        }
+
+        $requestDomain = $isWildcard && $rootDomain !== '' ? '*.' . $rootDomain : $domain;
+        $poolDomain = ObjectManager::getInstance(DomainPool::class, [], false);
+        $poolDomain->setData($row);
+        $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_PENDING);
+        $poolDomain->setHttpsError('');
+        $poolDomain->save();
+
+        $counter['requested']++;
+        $reqEmail = $email !== '' ? $email : 'admin@' . $domain;
+        try {
+            $result = w_query('server', 'requestCertificate', [
+                'domain' => $requestDomain,
+                'webroot' => $webroot,
+                'email' => $reqEmail,
+                'website_id' => 0,
+                'provider' => 'letsencrypt',
+                'cert_type' => $isWildcard ? 'wildcard' : 'exact',
+                'cert_strategy' => $strategy,
+            ]);
+
+            if ($result['success'] ?? false) {
+                if (!$isWildcard && !$this->validateHttpsAccess($domain)) {
+                    $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_PENDING);
+                    $poolDomain->setHttpsError((string)__('证书已签发，HTTPS 连通性校验未通过，等待下次检测'));
+                    $poolDomain->setSiteReady(false);
+                    $poolDomain->save();
+                }
+                $counter['success']++;
+            } else {
+                $counter['failed']++;
+                $msg = $result['message'] ?? __('未知错误');
+                $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_ERROR);
+                $poolDomain->setHttpsError($msg);
+                $poolDomain->save();
+                w_log_error(__('[DomainPoolCertificateRequest] %{1} 证书申请失败: %{2}', [$requestDomain, $msg]), [], 'domain_pool_cert');
+            }
+        } catch (\Throwable $e) {
+            $counter['failed']++;
+            $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_ERROR);
+            $poolDomain->setHttpsError($e->getMessage());
+            $poolDomain->save();
+            w_log_error(__('[DomainPoolCertificateRequest] %{1} 证书申请异常: %{2}', [$requestDomain, $e->getMessage()]), [], 'domain_pool_cert');
+        }
+
+        return $counter;
+    }
+
+    private function validateHttpsAccess(string $domain): bool
+    {
+        $ch = \curl_init('https://' . $domain);
+        if ($ch === false) {
+            return false;
+        }
+        \curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        \curl_setopt($ch, CURLOPT_NOBODY, true);
+        \curl_setopt($ch, CURLOPT_TIMEOUT, 8);
+        \curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        \curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        @\curl_exec($ch);
+        $httpCode = (int) \curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        \curl_close($ch);
+        return $httpCode >= 200 && $httpCode < 500;
     }
 
     public function unlock_timeout(int $minute = 30): int

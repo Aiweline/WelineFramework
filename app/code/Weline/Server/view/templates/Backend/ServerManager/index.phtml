@@ -11,6 +11,9 @@ $statusApiUrl = $block->getUrl('backend/server/server-manager/status');
 $startApiUrl = $block->getUrl('backend/server/server-manager/start');
 $stopApiUrl = $block->getUrl('backend/server/server-manager/stop');
 $restartApiUrl = $block->getUrl('backend/server/server-manager/restart');
+$reloadApiUrl = $block->getUrl('backend/server/server-manager/reload');
+$maintenanceEnableApiUrl = $block->getUrl('backend/server/server-manager/maintenance-enable');
+$maintenanceDisableApiUrl = $block->getUrl('backend/server/server-manager/maintenance-disable');
 $guideUrl = $block->getUrl('backend/server/optimization-guide');
 ?>
 
@@ -82,6 +85,9 @@ const STATUS_API_URL = '<?= $statusApiUrl ?>';
 const START_API_URL = '<?= $startApiUrl ?>';
 const STOP_API_URL = '<?= $stopApiUrl ?>';
 const RESTART_API_URL = '<?= $restartApiUrl ?>';
+const RELOAD_API_URL = '<?= $reloadApiUrl ?>';
+const MAINTENANCE_ENABLE_API_URL = '<?= $maintenanceEnableApiUrl ?>';
+const MAINTENANCE_DISABLE_API_URL = '<?= $maintenanceDisableApiUrl ?>';
 const GUIDE_URL = '<?= $guideUrl ?>';
 
 let refreshInterval = null;
@@ -299,8 +305,17 @@ function renderContent(data) {
                             <button class="btn btn-sm btn-warning server-action-btn" onclick="restartServer('${escapeHtml(name)}')" title="<?= __('重启') ?>">
                                 <i class="bi bi-arrow-repeat"></i>
                             </button>
+                            <button class="btn btn-sm btn-info server-action-btn" onclick="reloadServer('${escapeHtml(name)}')" title="<?= __('热重载') ?>">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
                             <button class="btn btn-sm btn-danger server-action-btn" onclick="stopServer('${escapeHtml(name)}')" title="<?= __('停止') ?>">
                                 <i class="bi bi-stop-fill"></i>
+                            </button>
+                            <button class="btn btn-sm btn-secondary server-action-btn" onclick="toggleMaintenance('${escapeHtml(name)}', true)" title="<?= __('启用维护模式') ?>">
+                                <i class="bi bi-shield-fill-check"></i>
+                            </button>
+                            <button class="btn btn-sm btn-secondary server-action-btn" onclick="toggleMaintenance('${escapeHtml(name)}', false)" title="<?= __('禁用维护模式') ?>">
+                                <i class="bi bi-shield-x"></i>
                             </button>
                         ` : `
                             <button class="btn btn-sm btn-success server-action-btn" onclick="startServer('${escapeHtml(name)}')" title="<?= __('启动') ?>">
@@ -450,13 +465,82 @@ async function restartServer(instance) {
     }
 }
 
+async function reloadServer(instance) {
+    AdminToast.info('<?= __('正在热重载...') ?>');
+
+    try {
+        const response = await fetch(RELOAD_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: 'instance=' + encodeURIComponent(instance),
+            credentials: 'same-origin'
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            AdminToast.success(data.message || '<?= __('热重载命令已发送') ?>');
+        } else {
+            AdminToast.warning(data.message || '<?= __('热重载命令发送失败') ?>');
+        }
+        setTimeout(loadServerData, 1000);
+    } catch (error) {
+        AdminToast.error('<?= __('热重载失败：请检查网络连接后重试。') ?> ' + error.message);
+    }
+}
+
+async function toggleMaintenance(instance, enabled) {
+    const apiUrl = enabled ? MAINTENANCE_ENABLE_API_URL : MAINTENANCE_DISABLE_API_URL;
+    const actionText = enabled ? '<?= __('启用维护模式') ?>' : '<?= __('禁用维护模式') ?>';
+    const confirmed = await BackendConfirm.show('<?= __('确认执行该操作吗？此操作会影响流量接入状态。') ?>', {
+        title: actionText,
+        type: enabled ? 'warning' : 'info',
+        confirmText: '<?= __('确认') ?>',
+        cancelText: '<?= __('取消') ?>'
+    });
+    if (!confirmed) {
+        return;
+    }
+
+    AdminToast.info(actionText + '...');
+    try {
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: 'instance=' + encodeURIComponent(instance),
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (data.success) {
+            AdminToast.success(data.message || actionText + '<?= __('成功') ?>');
+        } else {
+            AdminToast.warning(data.message || actionText + '<?= __('失败') ?>');
+        }
+        setTimeout(loadServerData, 1000);
+    } catch (error) {
+        AdminToast.error(actionText + '<?= __('失败：请检查网络连接后重试。') ?> ' + error.message);
+    }
+}
+
 function startNewServer() {
-    const workers = prompt('<?= __('请输入 Worker 数量（留空使用默认）') ?>:', '');
-    if (workers !== null) {
+    BackendConfirm.showInput({
+        title: '<?= __('启动新实例') ?>',
+        message: '<?= __('请输入 Worker 数量（留空将使用默认值）') ?>',
+        placeholder: '<?= __('例如：4') ?>',
+        defaultValue: ''
+    }).then(workers => {
+        if (workers === null) {
+            return;
+        }
         AdminToast.info('<?= __('正在启动新实例...') ?>');
-        
-        const body = 'instance=default' + (workers ? '&workers=' + workers : '');
-        
+
+        const body = 'instance=default' + (workers ? '&workers=' + encodeURIComponent(workers) : '');
+
         fetch(START_API_URL, {
             method: 'POST',
             headers: {
@@ -466,14 +550,18 @@ function startNewServer() {
             body: body,
             credentials: 'same-origin'
         })
-        .then(res => res.json())
-        .then(data => {
-            AdminToast.success(data.message || '<?= __('启动成功') ?>');
-            setTimeout(loadServerData, 1000);
-        })
-        .catch(error => {
-            AdminToast.error('<?= __('启动失败') ?>: ' + error.message);
-        });
-    }
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    AdminToast.success(data.message || '<?= __('启动成功') ?>');
+                } else {
+                    AdminToast.warning(data.message || '<?= __('启动命令已发送，请稍后刷新状态。') ?>');
+                }
+                setTimeout(loadServerData, 1000);
+            })
+            .catch(error => {
+                AdminToast.error('<?= __('启动失败：请检查网络连接后重试。') ?> ' + error.message);
+            });
+    });
 }
 </script>

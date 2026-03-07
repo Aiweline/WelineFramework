@@ -82,9 +82,13 @@ class PluginXmlReader extends \Weline\Framework\Config\Reader\XmlReader
                             $module_plugin_interceptors[$plugin['_attribute']['name']][] = $item_interceptor;
                         }
                     } else {
-                        // interceptor有多个值的情况
-                        if (is_array($plugin['_value']['interceptor'])) {
-                            foreach ($plugin['_value']['interceptor'] as $item) {
+                        // interceptor有多个值的情况；单元素时解析为 {_attribute, _value}，需标准化为 [one]
+                        $interceptors = $plugin['_value']['interceptor'];
+                        if (isset($interceptors['_attribute']) && !isset($interceptors[0])) {
+                            $interceptors = [$interceptors];
+                        }
+                        if (is_array($interceptors)) {
+                            foreach ($interceptors as $item) {
                                 if (!isset($item['_attribute'])) {
                                     throw new Core(__('%{1} 拦截器Interceptor没有设置属性：<interceptor name="interceptorName" instance="instanceClass" disabled="false" sort="0"/>', [$module_and_file]));
                                 }

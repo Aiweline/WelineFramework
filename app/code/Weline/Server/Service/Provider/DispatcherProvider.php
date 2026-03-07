@@ -54,6 +54,11 @@ class DispatcherProvider extends AbstractServiceProvider
         return 3;
     }
 
+    public function isCriticalRole(): bool
+    {
+        return true;
+    }
+
     public function buildCommand(int $instanceId, ServiceContext $context): ServiceCommand
     {
         $scriptDir = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'bin';

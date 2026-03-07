@@ -126,7 +126,8 @@ class ResponseTerminateException extends \Exception
         
         // 添加 Connection header
         if (!isset($this->headers['Connection'])) {
-            $response .= "Connection: close\r\n";
+            // WLS 常驻模式下默认保持连接，减少 TLS 重握手开销。
+            $response .= "Connection: keep-alive\r\n";
         }
         
         $response .= "\r\n";

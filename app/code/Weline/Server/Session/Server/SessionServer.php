@@ -95,7 +95,11 @@ final class SessionServer
             @\mkdir($basePath, 0755, true);
         }
         
-        $this->tokenFilePath = $basePath . 'session_server.token';
+        $tokenFileName = (string)($this->config['token_file_name'] ?? 'session_server.token');
+        if ($tokenFileName === '') {
+            $tokenFileName = 'session_server.token';
+        }
+        $this->tokenFilePath = $basePath . $tokenFileName;
         
         $written = @\file_put_contents($this->tokenFilePath, $this->authToken);
         if ($written !== false) {
@@ -170,38 +174,9 @@ final class SessionServer
         $this->store->loadFromFile();
 
         $this->running = true;
-        $this->writeDiscoveryFile();
         $this->log("Started on {$this->host}:{$this->port}");
 
         return true;
-    }
-    
-    /**
-     * 写入服务发现文件
-     *
-     * 外部进程（如 CLI 命令）通过检查此文件判断 Session Server 是否运行。
-     * Session 模块无需知道 WLS 的存在，只需检查此文件。
-     */
-    private function writeDiscoveryFile(): void
-    {
-        $basePath = \defined('BP') ? BP . 'var/session/' : '/tmp/wls_session/';
-        if (!\is_dir($basePath)) {
-            @\mkdir($basePath, 0755, true);
-        }
-        
-        $discoveryFile = $basePath . 'wls.discovery';
-        $data = [
-            'type' => 'wls',
-            'host' => $this->host,
-            'port' => $this->port,
-            'pid' => \getmypid(),
-            'started_at' => \time(),
-        ];
-        
-        $written = @\file_put_contents($discoveryFile, \json_encode($data, JSON_PRETTY_PRINT));
-        if ($written !== false) {
-            $this->log("Discovery file written: {$discoveryFile}");
-        }
     }
 
     /**
@@ -351,8 +326,12 @@ final class SessionServer
         $socket = $this->clients[$clientId]['socket'];
         $data = @\fread($socket, 65536);
 
-        if ($data === false || $data === '') {
+        // 非阻塞模式下空读不一定是断连，需结合 feof 判断。
+        if ($data === false || ($data === '' && @\feof($socket))) {
             $this->disconnectClient($clientId);
+            return 0;
+        }
+        if ($data === '') {
             return 0;
         }
 
@@ -384,7 +363,7 @@ final class SessionServer
             return;
         }
         
-        $sessionId = $msg['sid'] ?? '';
+        $sessionId = $this->resolveStateId($msg);
         $key = $msg['key'] ?? null;
         $value = $msg['val'] ?? null;
         $ttl = (int)($msg['ttl'] ?? 3600);
@@ -710,24 +689,24 @@ final class SessionServer
         if ($this->tokenFilePath && \is_file($this->tokenFilePath)) {
             @\unlink($this->tokenFilePath);
         }
-        $this->cleanupDiscoveryFile();
     }
-    
+
     /**
-     * 清理服务发现文件
+     * Resolve state id with namespace support.
      *
-     * 服务停止时删除 discovery 文件，确保外部进程不会误判服务状态。
+     * Legacy payloads only send sid.
+     * New payloads can send ns + sid for unified memory service.
      */
-    private function cleanupDiscoveryFile(): void
+    private function resolveStateId(array $msg): string
     {
-        $basePath = \defined('BP') ? BP . 'var/session/' : '/tmp/wls_session/';
-        $discoveryFile = $basePath . 'wls.discovery';
-        
-        if (\is_file($discoveryFile)) {
-            $deleted = @\unlink($discoveryFile);
-            if ($deleted) {
-                $this->log("Discovery file removed: {$discoveryFile}");
-            }
+        $sid = (string)($msg['sid'] ?? '');
+        $ns = (string)($msg['ns'] ?? '');
+        if ($ns === '') {
+            return $sid;
         }
+        if ($sid === '') {
+            return '__ns__:' . $ns;
+        }
+        return '__ns__:' . $ns . ':' . $sid;
     }
 }

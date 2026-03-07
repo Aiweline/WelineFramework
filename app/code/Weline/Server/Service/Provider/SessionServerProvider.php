@@ -61,6 +61,16 @@ class SessionServerProvider extends AbstractServiceProvider
         return 1;
     }
 
+    public function requiresStartupReadyBarrier(): bool
+    {
+        return true;
+    }
+
+    public function isCriticalRole(): bool
+    {
+        return true;
+    }
+
     public function buildCommand(int $instanceId, ServiceContext $context): ServiceCommand
     {
         $scriptDir = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'bin';

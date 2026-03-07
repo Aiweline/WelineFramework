@@ -13,42 +13,13 @@ declare(strict_types=1);
 
 namespace Weline\Server\Session\Client;
 
-use Weline\Server\Log\WlsLogger;
 use Weline\Server\Session\Server\SessionProtocol;
+use Weline\Server\Shared\Client\SharedStateClient;
 
 final class SessionClient
 {
-    /** TCP 连接 */
-    private $socket = null;
-
-    /** 连接地址 */
-    private string $host;
-
-    /** 连接端口 */
-    private int $port;
-
-    /** 连接超时（秒） */
-    private float $connectTimeout;
-
-    /** 读写超时（秒） */
-    private float $timeout;
-
-    /** 读缓冲区 */
-    private string $buffer = '';
-
-    /** 重连尝试次数 */
-    private int $reconnectAttempts;
-
-    /** 重连间隔（毫秒） */
-    private int $reconnectIntervalMs;
-
-    /** 认证 Token */
-    private ?string $authToken = null;
-    
-    /** Token 文件路径 */
-    private string $tokenFilePath = '';
-    
-    /** 是否已认证 */
+    private SharedStateClient $stateClient;
+    private bool $connected = false;
     private bool $authenticated = false;
 
     /**
@@ -63,23 +34,13 @@ final class SessionClient
         int $port = 19970,
         array $options = []
     ) {
-        $this->host = $host;
-        $this->port = $port;
-        $this->connectTimeout = (float)($options['connect_timeout'] ?? 1.0);
-        $this->timeout = (float)($options['timeout'] ?? 2.0);
-        $this->reconnectAttempts = (int)($options['reconnect_attempts'] ?? 3);
-        $this->reconnectIntervalMs = (int)($options['reconnect_interval_ms'] ?? 100);
-        
-        $basePath = \defined('BP') ? BP . 'var/session/' : '/tmp/wls_session/';
-        $this->tokenFilePath = $basePath . 'session_server.token';
-    }
-
-    /**
-     * 记录日志（直接使用 WlsLogger）
-     */
-    private function log(string $message): void
-    {
-        WlsLogger::info_('[SessionClient] ' . $message);
+        $this->stateClient = new SharedStateClient($host, $port, [
+            'connect_timeout' => (float)($options['connect_timeout'] ?? 1.0),
+            'timeout' => (float)($options['timeout'] ?? 2.0),
+            'min_idle' => (int)($options['pool_min_idle'] ?? 1),
+            'max_size' => (int)($options['pool_size'] ?? 2),
+            'token_file_name' => (string)($options['token_file_name'] ?? 'session_server.token'),
+        ]);
     }
 
     /**
@@ -89,94 +50,12 @@ final class SessionClient
      */
     public function connect(): bool
     {
-        if ($this->isConnected() && $this->authenticated) {
-            return true;
-        }
-
-        $errno = 0;
-        $errstr = '';
-
-        $this->socket = @\stream_socket_client(
-            "tcp://{$this->host}:{$this->port}",
-            $errno,
-            $errstr,
-            $this->connectTimeout
-        );
-
-        if (!$this->socket) {
-            $this->log("Failed to connect: {$errstr} ({$errno})");
+        $this->connected = $this->stateClient->isHealthy();
+        if (!$this->connected) {
             return false;
         }
-
-        \stream_set_timeout($this->socket, (int)$this->timeout, (int)(($this->timeout - (int)$this->timeout) * 1000000));
-        \stream_set_blocking($this->socket, true);
-
-        $this->buffer = '';
-        $this->authenticated = false;
-        $this->log("Connected to {$this->host}:{$this->port}");
-
-        if (!$this->authenticate()) {
-            $this->disconnect();
-            return false;
-        }
-
-        return true;
-    }
-    
-    /**
-     * 执行认证
-     */
-    private function authenticate(): bool
-    {
-        $token = $this->loadAuthToken();
-        if ($token === null) {
-            $this->authenticated = true;
-            return true;
-        }
-        
-        $request = SessionProtocol::buildAuth($token);
-        $written = @\fwrite($this->socket, $request);
-        if ($written === false || $written === 0) {
-            $this->log('Failed to send auth request');
-            return false;
-        }
-        
-        $response = $this->readResponse();
-        if ($response === null) {
-            $this->log('Auth response timeout');
-            return false;
-        }
-        
-        if (!SessionProtocol::isSuccess($response)) {
-            $this->log('Authentication failed: ' . SessionProtocol::getError($response));
-            return false;
-        }
-        
         $this->authenticated = true;
-        $this->log('Authenticated successfully');
         return true;
-    }
-    
-    /**
-     * 从文件加载认证 Token
-     */
-    private function loadAuthToken(): ?string
-    {
-        if ($this->authToken !== null) {
-            return $this->authToken;
-        }
-        
-        if (!\is_file($this->tokenFilePath)) {
-            return null;
-        }
-        
-        $token = @\file_get_contents($this->tokenFilePath);
-        if ($token === false || $token === '') {
-            return null;
-        }
-        
-        $this->authToken = \trim($token);
-        return $this->authToken;
     }
 
     /**
@@ -184,11 +63,9 @@ final class SessionClient
      */
     public function disconnect(): void
     {
-        if ($this->socket !== null) {
-            @\fclose($this->socket);
-            $this->socket = null;
-            $this->buffer = '';
-        }
+        // Keep process-level pool alive for long-lived reuse.
+        // Real socket shutdown should happen on worker stop.
+        $this->connected = false;
         $this->authenticated = false;
     }
 
@@ -197,29 +74,7 @@ final class SessionClient
      */
     public function isConnected(): bool
     {
-        return $this->socket !== null && \is_resource($this->socket) && !\feof($this->socket);
-    }
-
-    /**
-     * 确保连接（自动重连）
-     */
-    private function ensureConnected(): bool
-    {
-        if ($this->isConnected()) {
-            return true;
-        }
-
-        for ($i = 0; $i < $this->reconnectAttempts; $i++) {
-            if ($i > 0) {
-                \usleep($this->reconnectIntervalMs * 1000);
-            }
-
-            if ($this->connect()) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->connected || $this->stateClient->isHealthy();
     }
 
     /**
@@ -230,63 +85,14 @@ final class SessionClient
      */
     private function sendRequest(string $request): ?array
     {
-        if (!$this->ensureConnected()) {
+        if (!$this->connect()) {
             return null;
         }
-
-        $written = @\fwrite($this->socket, $request);
-        if ($written === false || $written === 0) {
-            $this->disconnect();
+        $msg = SessionProtocol::decode($request);
+        if ($msg === null) {
             return null;
         }
-
-        $response = $this->readResponse();
-        if ($response === null) {
-            $this->disconnect();
-            if ($this->ensureConnected()) {
-                $written = @\fwrite($this->socket, $request);
-                if ($written !== false && $written > 0) {
-                    $response = $this->readResponse();
-                }
-            }
-        }
-
-        return $response;
-    }
-
-    /**
-     * 读取响应
-     */
-    private function readResponse(): ?array
-    {
-        $startTime = \microtime(true);
-        $maxWait = $this->timeout;
-
-        while (true) {
-            if (\microtime(true) - $startTime > $maxWait) {
-                return null;
-            }
-
-            $data = @\fread($this->socket, 65536);
-            if ($data === false) {
-                return null;
-            }
-
-            if ($data === '') {
-                if (\feof($this->socket)) {
-                    return null;
-                }
-                \usleep(1000);
-                continue;
-            }
-
-            $this->buffer .= $data;
-
-            $messages = SessionProtocol::extractMessages($this->buffer);
-            if (!empty($messages)) {
-                return $messages[0];
-            }
-        }
+        return $this->stateClient->request((string)$msg['cmd'], $msg);
     }
 
     // ==================== 高级 API ====================
@@ -442,14 +248,7 @@ final class SessionClient
      */
     public function ping(): bool
     {
-        $request = SessionProtocol::buildPing();
-        $response = $this->sendRequest($request);
-
-        if ($response === null || !SessionProtocol::isSuccess($response)) {
-            return false;
-        }
-
-        return SessionProtocol::getData($response) === 'pong';
+        return $this->stateClient->ping();
     }
     
     /**
@@ -480,18 +279,7 @@ final class SessionClient
      */
     public function healthCheck(): bool
     {
-        if (!$this->isConnected()) {
-            $this->log('Health check: not connected, attempting reconnect');
-            return $this->connect();
-        }
-        
-        if (!$this->ping()) {
-            $this->log('Health check: ping failed, attempting reconnect');
-            $this->disconnect();
-            return $this->connect();
-        }
-        
-        return true;
+        return $this->connect() && $this->ping();
     }
     
     /**
@@ -507,6 +295,6 @@ final class SessionClient
      */
     public function __destruct()
     {
-        $this->disconnect();
+        // Intentionally not closing shared pool to preserve long-lived reuse.
     }
 }

@@ -16,14 +16,6 @@ use Weline\Framework\System\Process\Processer;
  */
 class ServerInstanceInfo
 {
-    /** 服务角色优先级（用于排序显示） */
-    private const ROLE_PRIORITY = [
-        'session_server' => 10,
-        'worker' => 20,
-        'dispatcher' => 30,
-        'redirect' => 40,
-        'maintenance' => 50,
-    ];
 
     /**
      * @param ServiceInfo[] $services 服务实例列表（按优先级排序）
@@ -199,26 +191,39 @@ class ServerInstanceInfo
             }
         }
         \sort($workerPorts);
-        
+
+        $segments = [];
         if ($this->dispatcherEnabled) {
-            if (!empty($workerPorts)) {
-                $workerPortStr = \count($workerPorts) > 2 
-                    ? \min($workerPorts) . '-' . \max($workerPorts)
-                    : \implode(',', $workerPorts);
-            } else {
-                $workerPortStr = '(未启动)';
-            }
-            return "Dispatcher:{$this->port}, Workers:{$workerPortStr}";
+            $segments[] = 'Dispatcher:' . $this->port;
         }
-        
+
         if (!empty($workerPorts)) {
-            return \count($workerPorts) > 2 
+            $workerPortStr = \count($workerPorts) > 2
                 ? \min($workerPorts) . '-' . \max($workerPorts)
                 : \implode(',', $workerPorts);
+            $segments[] = 'Workers:' . $workerPortStr;
+        } else {
+            $endPort = $this->port + $this->workerCount - 1;
+            $segments[] = 'Workers:' . $this->port . '-' . $endPort;
         }
-        
-        $endPort = $this->port + $this->workerCount - 1;
-        return "{$this->port}-{$endPort}";
+
+        // 其余服务端口也动态展示，确保 status 顶部与下方服务树一致
+        $extraRoles = ['session_server' => 'Session', 'memory_server' => 'Memory', 'redirect' => 'Redirect'];
+        foreach ($extraRoles as $role => $label) {
+            $instances = $this->getServicesByRole($role);
+            $ports = [];
+            foreach ($instances as $service) {
+                if ($service->port !== null && $service->port > 0) {
+                    $ports[] = $service->port;
+                }
+            }
+            if (!empty($ports)) {
+                \sort($ports);
+                $segments[] = $label . ':' . \implode(',', $ports);
+            }
+        }
+
+        return \implode(', ', $segments);
     }
 
     /**
@@ -230,8 +235,8 @@ class ServerInstanceInfo
     public static function sortServicesByPriority(array $services): array
     {
         \usort($services, function (ServiceInfo $a, ServiceInfo $b) {
-            $priorityA = self::ROLE_PRIORITY[$a->role] ?? 99;
-            $priorityB = self::ROLE_PRIORITY[$b->role] ?? 99;
+            $priorityA = $a->priority;
+            $priorityB = $b->priority;
             if ($priorityA !== $priorityB) {
                 return $priorityA <=> $priorityB;
             }

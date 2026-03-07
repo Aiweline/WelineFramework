@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Weline\Framework\Session;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Event\EventsManager;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Auth\AreaConfig;
 use Weline\Framework\Session\Auth\AuthenticatedSession;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
@@ -67,6 +65,13 @@ class SessionFactory
     {
         if ($type === '') {
             $type = $this->resolveStorageType();
+        } else {
+            $type = \strtolower(\trim($type));
+            if ($type === '') {
+                $type = $this->resolveStorageType();
+            } elseif ($this->isWlsMode() && $type === 'file' && $this->shouldHijackFileToWls()) {
+                $type = 'wls';
+            }
         }
 
         if (isset(self::$storageInstances[$type])) {
@@ -90,76 +95,39 @@ class SessionFactory
      * 解析存储类型
      *
      * 智能检测存储类型：
-     * 1. WLS Worker 进程内 → 使用 wls_default 配置（默认 wls，可切换为 redis）
-     * 2. 触发事件，由外部模块（如 WLS）声明存储类型
-     * 3. 默认使用配置文件中的 default 类型
+     * 1. 读取 session.default 作为显式驱动
+     * 2. WLS 下仅接管 file -> wls
+     * 3. 非 file 显式驱动保持原样（如 redis）
      */
     private function resolveStorageType(): string
     {
-        // 1. WLS Worker 进程内 → 使用 wls_default
-        if ($this->isWlsMode()) {
-            return $this->config['wls_default'] ?? 'wls';
-        }
-        
-        // 2. 触发事件让外部模块声明存储类型（如 CLI 环境检测 WLS Session Server）
-        $resolved = $this->resolveViaEvent();
-        if ($resolved !== null) {
-            return $resolved;
+        $configured = \strtolower(\trim((string)($this->config['default'] ?? 'file')));
+        if ($configured === '') {
+            $configured = 'file';
         }
 
-        // 3. 默认使用配置
-        return $this->config['default'] ?? 'file';
+        if (!$this->isWlsMode()) {
+            return $configured;
+        }
+
+        // WLS 常驻模式：仅接管 file 驱动，其他显式驱动保持原样
+        if ($configured === 'file' && $this->shouldHijackFileToWls()) {
+            return 'wls';
+        }
+
+        return $configured;
     }
-    
-    /** 事件解析结果缓存 */
-    private static bool $eventResolveCached = false;
-    private static ?string $eventResolveResult = null;
-    
+
     /**
-     * 通过事件解析存储类型
-     *
-     * 触发 Weline_Framework_Session::storage_resolve 事件，允许外部模块
-     * （如 WLS）声明自己的存储类型和配置。这实现了 Session 模块与具体
-     * 存储后端（如 WLS Session Server）的完全解耦。
-     *
-     * @return string|null 解析到的存储类型，或 null 表示未解析
+     * 是否启用 file -> wls 接管策略。
      */
-    private function resolveViaEvent(): ?string
+    private function shouldHijackFileToWls(): bool
     {
-        // 缓存结果，避免重复触发事件
-        if (self::$eventResolveCached) {
-            return self::$eventResolveResult;
+        if (\class_exists(\Weline\Server\Service\Runtime\RoutingPolicyRegistry::class)) {
+            return \Weline\Server\Service\Runtime\RoutingPolicyRegistry::shouldHijackSessionFile();
         }
-        self::$eventResolveCached = true;
-        
-        // 准备事件数据
-        $eventData = [
-            'storage_type' => null,
-            'storage_config' => [],
-        ];
-        
-        // 触发事件，外部模块（如 WlsSessionStorageObserver）可以修改 $eventData
-        /** @var EventsManager $eventsManager */
-        $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $eventsManager->dispatch(
-            'Weline_Framework_Session::storage_resolve',
-            $eventData
-        );
-        
-        // 检查是否有模块设置了存储类型
-        if (!empty($eventData['storage_type'])) {
-            self::$eventResolveResult = $eventData['storage_type'];
-            
-            // 如果外部模块提供了配置，合并到当前配置
-            if (!empty($eventData['storage_config'])) {
-                $this->config['wls'] = \array_merge(
-                    $this->config['wls'] ?? [],
-                    $eventData['storage_config']
-                );
-            }
-        }
-        
-        return self::$eventResolveResult;
+        // Master 策略尚未下发时，使用安全默认值（接管 file）
+        return true;
     }
 
     /**
@@ -387,8 +355,6 @@ class SessionFactory
         }
         self::$storageInstances = [];
         self::$strategyInstances = [];
-        self::$eventResolveCached = false;
-        self::$eventResolveResult = null;
     }
 
     // ==================== 静态便捷方法 ====================

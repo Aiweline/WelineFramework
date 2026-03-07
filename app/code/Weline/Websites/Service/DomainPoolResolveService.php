@@ -75,6 +75,8 @@ class DomainPoolResolveService
         $poolDomain->setResolvedIpv6($ipv6);
         $poolDomain->setIsLocalServer($isLocal);
         $poolDomain->setResolveStatus($resolveStatus);
+        $poolDomain->setDnsStatus($resolved ? DomainPool::INFRA_STATUS_READY : DomainPool::INFRA_STATUS_ERROR);
+        $poolDomain->setCdnStatus($resolved ? DomainPool::INFRA_STATUS_READY : DomainPool::INFRA_STATUS_ERROR);
         $poolDomain->setResolveCheckedAt($now);
         $poolDomain->setResolveError(\trim($error, '; '));
         

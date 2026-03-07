@@ -371,11 +371,11 @@
 "定期检测根域名的 NS 归属情况，识别是否托管到 Cloudflare 等外部 DNS 服务商","定期检测根域名的 NS 归属情况，识别是否托管到 Cloudflare 等外部 DNS 服务商"
 域名池证书自动申请,域名池证书自动申请
 没有需要申请证书的域名池域名,没有需要申请证书的域名池域名
-"[DomainPoolCertificateRequest] %{1} 证书申请成功","[DomainPoolCertificateRequest] %{1} 证书申请成功"
-"[DomainPoolCertificateRequest] %{1} 证书申请失败: %{2}","[DomainPoolCertificateRequest] %{1} 证书申请失败: %{2}"
-"[DomainPoolCertificateRequest] %{1} 证书申请异常: %{2}","[DomainPoolCertificateRequest] %{1} 证书申请异常: %{2}"
 "域名池证书申请完成：检查 %{1} 个，申请 %{2} 个，成功 %{3} 个，失败 %{4} 个","域名池证书申请完成：检查 %{1} 个，申请 %{2} 个，成功 %{3} 个，失败 %{4} 个"
 域名池证书申请任务异常：%{1},域名池证书申请任务异常：%{1}
+"证书已签发，HTTPS 连通性校验未通过，等待下次检测","证书已签发，HTTPS 连通性校验未通过，等待下次检测"
+"[DomainPoolCertificateRequest] %{1} 证书申请失败: %{2}","[DomainPoolCertificateRequest] %{1} 证书申请失败: %{2}"
+"[DomainPoolCertificateRequest] %{1} 证书申请异常: %{2}","[DomainPoolCertificateRequest] %{1} 证书申请异常: %{2}"
 域名池解析状态检测,域名池解析状态检测
 "定期检测域名池（可建站子域名）的 DNS 解析状态，验证是否指向本服务器，更新建站就绪状态","定期检测域名池（可建站子域名）的 DNS 解析状态，验证是否指向本服务器，更新建站就绪状态"
 域名解析状态检测,域名解析状态检测
@@ -426,6 +426,14 @@
 "修改域名 DNS/NS 记录","修改域名 DNS/NS 记录"
 域名,Domain
 "NS 列表，逗号分隔","NS 列表，逗号分隔"
+获取已启用账号列表（同步业务）,获取已启用账号列表（同步业务）
+获取域名状态选项,获取域名状态选项
+获取最后同步时间,获取最后同步时间
+获取本地域名列表（分页）,获取本地域名列表（分页）
+获取远程域名列表（不落库）,获取远程域名列表（不落库）
+导入远程域名到本地,导入远程域名到本地
+同步账号域名,同步账号域名
+域名批量操作,域名批量操作
 "根据 ID 获取站点信息","根据 ID 获取站点信息"
 获取所有站点列表,获取所有站点列表
 获取站点关联的语言代码列表,获取站点关联的语言代码列表
@@ -891,6 +899,7 @@ SEO账户管理请前往：,SEO账户管理请前往：
 维护中,维护中
 关闭维护模式,关闭维护模式
 开启维护模式,开启维护模式
+"[DomainPoolCertificateRequest] %{1} 证书申请成功","[DomainPoolCertificateRequest] %{1} 证书申请成功"
 任务ID,任务ID
 域名商账户ID,域名商账户ID
 "状态: pending, processing, success, failed","状态: pending, processing, success, failed"

@@ -1,0 +1,195 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Weline\Server\Shared\Service;
+
+use Weline\Server\Session\Server\SessionProtocol;
+use Weline\Server\Service\Runtime\RoutingPolicyRegistry;
+use Weline\Server\Shared\Client\SharedStateClient;
+use Weline\Server\Shared\Contract\AtomicMemoryServiceInterface;
+use Weline\Server\Shared\Contract\MemoryServiceInterface;
+
+/**
+ * Unified shared memory service built on top of state server protocol.
+ */
+class SharedMemoryService implements MemoryServiceInterface, AtomicMemoryServiceInterface
+{
+    private SharedStateClient $client;
+
+    public function __construct(
+        string $host = '127.0.0.1',
+        int $port = 0,
+        array $options = []
+    ) {
+        if ($port <= 0) {
+            $endpoint = RoutingPolicyRegistry::getMemoryEndpoint();
+            $host = $endpoint['host'];
+            $port = $endpoint['port'];
+        }
+        if (!isset($options['token_file_name']) || (string)$options['token_file_name'] === '') {
+            $options['token_file_name'] = $port === 19971 ? 'memory_server.token' : 'session_server.token';
+        }
+        $this->client = new SharedStateClient($host, $port, $options);
+    }
+
+    public function get(string $ns, string $key): mixed
+    {
+        $resp = $this->client->request(SessionProtocol::CMD_GET, [
+            'ns' => $ns,
+            'sid' => $this->sid($ns),
+            'key' => $key,
+        ]);
+        if (!\is_array($resp) || !SessionProtocol::isSuccess($resp)) {
+            return null;
+        }
+        return SessionProtocol::getData($resp);
+    }
+
+    public function set(string $ns, string $key, mixed $value, int $ttl = 0): bool
+    {
+        $resp = $this->client->request(SessionProtocol::CMD_SET, [
+            'ns' => $ns,
+            'sid' => $this->sid($ns),
+            'key' => $key,
+            'val' => $value,
+            'ttl' => $this->ttl($ttl),
+        ]);
+        return \is_array($resp) && SessionProtocol::isSuccess($resp);
+    }
+
+    public function delete(string $ns, string $key): bool
+    {
+        $resp = $this->client->request(SessionProtocol::CMD_DELETE, [
+            'ns' => $ns,
+            'sid' => $this->sid($ns),
+            'key' => $key,
+        ]);
+        return \is_array($resp) && SessionProtocol::isSuccess($resp);
+    }
+
+    public function exists(string $ns, string $key): bool
+    {
+        $value = $this->get($ns, $key);
+        return $value !== null;
+    }
+
+    public function touch(string $ns, string $key, int $ttl): bool
+    {
+        if ($key === '') {
+            $resp = $this->client->request(SessionProtocol::CMD_TOUCH, [
+                'ns' => $ns,
+                'sid' => $this->sid($ns),
+                'ttl' => $this->ttl($ttl),
+            ]);
+            return \is_array($resp) && SessionProtocol::isSuccess($resp);
+        }
+
+        $value = $this->get($ns, $key);
+        if ($value === null) {
+            return false;
+        }
+        return $this->set($ns, $key, $value, $ttl);
+    }
+
+    public function mget(string $ns, array $keys): array
+    {
+        $data = [];
+        foreach ($keys as $key) {
+            $data[$key] = $this->get($ns, (string)$key);
+        }
+        return $data;
+    }
+
+    public function mset(string $ns, array $kv, int $ttl = 0): bool
+    {
+        $all = true;
+        foreach ($kv as $key => $value) {
+            if (!$this->set($ns, (string)$key, $value, $ttl)) {
+                $all = false;
+            }
+        }
+        return $all;
+    }
+
+    public function clearNamespace(string $ns): bool
+    {
+        $resp = $this->client->request(SessionProtocol::CMD_DESTROY, [
+            'ns' => $ns,
+            'sid' => $this->sid($ns),
+        ]);
+        return \is_array($resp) && SessionProtocol::isSuccess($resp);
+    }
+
+    public function incr(string $ns, string $key, int $delta = 1, int $ttl = 0): ?int
+    {
+        $resp = $this->client->request(SessionProtocol::CMD_INCREMENT, [
+            'ns' => $ns,
+            'sid' => $this->sid($ns),
+            'key' => $key,
+            'delta' => $delta,
+            'ttl' => $this->ttl($ttl),
+        ]);
+        if (!\is_array($resp) || !SessionProtocol::isSuccess($resp)) {
+            return null;
+        }
+        $data = SessionProtocol::getData($resp);
+        return \is_int($data) ? $data : (int)$data;
+    }
+
+    public function decr(string $ns, string $key, int $delta = 1, int $ttl = 0): ?int
+    {
+        $resp = $this->client->request(SessionProtocol::CMD_DECREMENT, [
+            'ns' => $ns,
+            'sid' => $this->sid($ns),
+            'key' => $key,
+            'delta' => $delta,
+            'ttl' => $this->ttl($ttl),
+        ]);
+        if (!\is_array($resp) || !SessionProtocol::isSuccess($resp)) {
+            return null;
+        }
+        $data = SessionProtocol::getData($resp);
+        return \is_int($data) ? $data : (int)$data;
+    }
+
+    public function append(string $ns, string $key, mixed $value, int $ttl = 0): bool
+    {
+        $resp = $this->client->request(SessionProtocol::CMD_APPEND, [
+            'ns' => $ns,
+            'sid' => $this->sid($ns),
+            'key' => $key,
+            'val' => $value,
+            'ttl' => $this->ttl($ttl),
+        ]);
+        return \is_array($resp) && SessionProtocol::isSuccess($resp);
+    }
+
+    public function cas(string $ns, string $key, mixed $expected, mixed $newValue, int $ttl = 0): bool
+    {
+        $resp = $this->client->request(SessionProtocol::CMD_COMPARE_SET, [
+            'ns' => $ns,
+            'sid' => $this->sid($ns),
+            'key' => $key,
+            'expected' => $expected,
+            'val' => $newValue,
+            'ttl' => $this->ttl($ttl),
+        ]);
+        return \is_array($resp) && SessionProtocol::isSuccess($resp);
+    }
+
+    public function ping(): bool
+    {
+        return $this->client->ping();
+    }
+
+    private function sid(string $ns): string
+    {
+        return '__kv__:' . $ns;
+    }
+
+    private function ttl(int $ttl): int
+    {
+        return $ttl > 0 ? $ttl : 3600;
+    }
+}

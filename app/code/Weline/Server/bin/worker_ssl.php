@@ -28,6 +28,8 @@ $processName = '';
 $isFrontend = false;
 $useReusePort = false;  // 是否使用 SO_REUSEPORT（Linux 直连模式）
 $deferSsl = false;      // 延迟 SSL 模式（用于 TCP 透传架构，先接受 TCP 连接，再手动启用 SSL）
+                        // 注意：延迟 SSL 仅改变握手时机，不消除 TLS 问题。Windows 下若出现 TLS reset，
+                        // 可改用 --no-ssl 或 env.server.https=false 做 HTTP 验证；或安装 event 扩展后再测 HTTPS。
 $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
 
@@ -152,6 +154,30 @@ if (\is_array($envConfig)) {
         $originTokenValidationEnabled = (bool)($originValidationConfig['enabled'] ?? false);
         $originTokenHeader = (string)($originValidationConfig['header'] ?? $originTokenHeader);
         $originTokenAllowLocal = (bool)($originValidationConfig['allow_local'] ?? true);
+    }
+}
+
+// 读取 SNI 证书映射（var/server/ssl_certificate_map.json）
+$sniServerCerts = [];
+$certMapFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'ssl_certificate_map.json';
+if (\is_file($certMapFile)) {
+    try {
+        $raw = (string)@\file_get_contents($certMapFile);
+        $map = \json_decode($raw, true);
+        if (\is_array($map)) {
+            foreach ($map as $domain => $pair) {
+                $certPath = (string)($pair['cert'] ?? '');
+                $keyPath = (string)($pair['key'] ?? '');
+                if ($domain !== '' && $certPath !== '' && $keyPath !== '' && \is_file($certPath) && \is_file($keyPath)) {
+                    $sniServerCerts[(string)$domain] = [
+                        'local_cert' => $certPath,
+                        'local_pk' => $keyPath,
+                    ];
+                }
+            }
+        }
+    } catch (\Throwable) {
+        $sniServerCerts = [];
     }
 }
 
@@ -465,7 +491,8 @@ if ($deferSsl) {
         'ciphers' => 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:HIGH:!aNULL:!MD5:!RC4',
         'single_dh_use' => true,
         'honor_cipher_order' => true,
-        'SNI_enabled' => false,
+        'SNI_enabled' => !empty($sniServerCerts),
+        'SNI_server_certs' => $sniServerCerts,
     ];
 }
 
@@ -583,6 +610,8 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
             'ciphers' => 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:HIGH:!aNULL:!MD5:!RC4',
             'single_dh_use' => true,
             'honor_cipher_order' => true,
+            'SNI_enabled' => !empty($sniServerCerts),
+            'SNI_server_certs' => $sniServerCerts,
         ]
     ]);
     \stream_context_set_params($socket, \stream_context_get_params($sslContext));
@@ -650,6 +679,7 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
 
 } elseif ($deferSsl) {
     // 方案2b：Windows 或未走 2b-socket 时，保持原 stream_socket_server 逻辑不变
+    // Windows 下可能出现 TLS reset（cURL 35），与延迟 SSL 无关，属 PHP stream+OpenSSL 兼容性。
     $socketOptions = [
         'backlog' => 102400,
         'so_reuseaddr' => true,
@@ -701,6 +731,8 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
             'ciphers' => 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:HIGH:!aNULL:!MD5:!RC4',
             'single_dh_use' => true,
             'honor_cipher_order' => true,
+            'SNI_enabled' => !empty($sniServerCerts),
+            'SNI_server_certs' => $sniServerCerts,
         ]
     ]);
 
@@ -724,11 +756,13 @@ WlsLogger::info_("Socket 创建成功，开始监听连接");
 \stream_set_blocking($socket, false);
 
 // ========== IPC 控制通道：连接 Master 并注册 + 上报就绪 ==========
+$kernel = null;
 $ipcClient = null;
 $ipcReceivedShutdown = false;
 $ipcDraining = false; // 是否正在排水（收到 reload 后关闭监听 socket，处理剩余请求）
 $drainStartTime = 0;   // 排水开始时间戳
 $maxDrainTime = 10;     // 排水最大等待时间（秒），超时后强制关闭所有连接退出
+$orphanGuard = new \Weline\Server\IPC\ChildControl\MasterOrphanGuard();
 
 // 如果启用了维护模式
 if ($isMaintenanceWorker) {
@@ -741,35 +775,26 @@ if ($isMaintenanceWorker) {
 }
 
 // 获取控制端口
-if ($controlPort <= 0) {
-    // 从实例文件读取
-    $_instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
-    if (\is_file($_instanceFile)) {
-        $_instData = @\json_decode(\file_get_contents($_instanceFile), true);
-        $controlPort = (int)($_instData['control_port'] ?? 0);
-    }
-    unset($_instanceFile, $_instData);
-}
+$controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
+$ipcRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
 
 if ($controlPort > 0) {
-    $ipcClient = new \Weline\Server\IPC\ControlClient();
     $ipcSelfTag = ($isMaintenanceWorker ? 'Maintenance' : 'Worker') . "#{$workerId}";
-    $ipcClient->setSelfTag($ipcSelfTag);
-    // DEV 模式下输出详细 IPC SEND/RECV 明细
-    $ipcClient->setVerboseLog((\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE));
-    if ($ipcClient->connect('127.0.0.1', $controlPort)) {
-        $ipcRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
-        $ipcClient->register($ipcRole, \getmypid(), $port, $workerId, $orchestratorEpoch, $orchestratorLaunchId);
-        WlsLogger::info_("IPC 控制通道已连接 (控制端口: {$controlPort})");
-        
-        // 框架已初始化 + Socket 已创建 → 上报就绪
-        $ipcClient->sendReady($ipcRole, $workerId, $port, $orchestratorEpoch, $orchestratorLaunchId);
-        WlsLogger::info_("已上报就绪状态");
-        
-        // 设置消息处理器
-        $ipcClient->onMessage(function (array $msg, \Weline\Server\IPC\ControlClient $client) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, $workerId) {
+    $identity = new \Weline\Server\IPC\ChildControl\ChildProcessIdentity(
+        $ipcRole,
+        \getmypid(),
+        $port,
+        $workerId,
+        $orchestratorEpoch,
+        $orchestratorLaunchId
+    );
+    $handler = new \Weline\Server\IPC\ChildControl\Handler\WorkerSslControlHandler(
+        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, $workerId): void {
             $type = $msg['type'] ?? '';
-            
+            // 帝王令：shutdown 至高无上，一旦收到则不再处理其他 IPC（RELOAD/DRAIN/CACHE_CLEAR）
+            if ($type !== \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN && $ipcReceivedShutdown) {
+                return;
+            }
             switch ($type) {
                 case \Weline\Server\IPC\ControlMessage::TYPE_RELOAD:
                     // 代码重载：先清 opcache（共享内存级），确保新 Worker 加载最新文件
@@ -801,6 +826,14 @@ if ($controlPort > 0) {
                     }
                     WlsLogger::info_("收到 cache_clear 命令，已清理缓存（opcache + ObjectManager + 静态文件缓存）");
                     break;
+
+                case \Weline\Server\IPC\ControlMessage::TYPE_ROUTING_POLICY:
+                    $policyData = $msg['data'] ?? [];
+                    if (\is_array($policyData)) {
+                        \Weline\Server\Service\Runtime\RoutingPolicyRegistry::update($policyData);
+                        WlsLogger::info_('收到 routing_policy 命令，已更新进程内路由策略快照');
+                    }
+                    break;
                     
                 case \Weline\Server\IPC\ControlMessage::TYPE_DRAIN:
                     // 排水模式：停止接受新连接，完成现有请求后退出
@@ -822,22 +855,24 @@ if ($controlPort > 0) {
                     WlsLogger::info_("收到 shutdown 命令，准备退出");
                     break;
             }
-        });
-        
-        // 设置断开处理器
-        $ipcClient->onDisconnect(function (bool $receivedShutdown, \Weline\Server\IPC\ControlClient $client) use (&$ipcReceivedShutdown, &$shouldExit, $instanceName, $controlPort, $workerId) {
-            // 已收到 shutdown 或正在退出，不做任何复活/重连操作
-            if ($receivedShutdown || $ipcReceivedShutdown || $shouldExit) {
-                WlsLogger::info_("Master 连接断开（已收到 shutdown，不复活）");
-                return;
-            }
-            WlsLogger::warning_("Master 连接意外断开，控制面已收口，不执行子进程复活。");
-            // 尝试重连
-            $client->tryReconnect();
-        });
+        },
+        static function () use (&$ipcClient): void {
+            $ipcClient?->tryReconnect();
+        }
+    );
+    $kernel = new \Weline\Server\IPC\ChildControl\SubprocessControlKernel(
+        $identity,
+        $handler,
+        $ipcSelfTag,
+        (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE)
+    );
+    if ($kernel->connectAndRegister($controlPort)) {
+        $ipcClient = $kernel->getClient();
+        WlsLogger::info_("IPC 控制通道已连接 (控制端口: {$controlPort})");
+        WlsLogger::info_("已上报就绪状态");
     } else {
         WlsLogger::warning_("IPC 控制通道连接失败 (控制端口: {$controlPort})，继续独立运行");
-        $ipcClient = null;
+        $kernel = null;
     }
 }
 // ========== IPC 控制通道结束 ==========
@@ -950,12 +985,6 @@ if (\function_exists('pcntl_signal')) {
 $consecutiveErrors = 0;
 $maxConsecutiveErrors = 100; // 连续 100 次错误才考虑重启（给予足够的恢复机会）
 
-// ========== 孤儿检测：Master PID 存活检查 ==========
-$lastMasterCheck = \time();
-$masterCheckInterval = 5; // 每 5 秒检查一次
-$masterDeadCount = 0;     // Master 连续不可达计数
-$masterDeadThreshold = 3; // 连续 3 次（15 秒）确认 Master 死亡后自行退出
-
 // 事件循环（Workerman 模式：外层 try-catch 防止意外退出）
 while (true) {
     try {
@@ -968,50 +997,15 @@ while (true) {
     
     $now = \time();
     
-    // ========== 孤儿检测（IPC 优先）：定期检查 Master 是否存活 ==========
-    if ($masterPid > 0 && !$ipcReceivedShutdown && ($now - $lastMasterCheck) >= $masterCheckInterval) {
-        $lastMasterCheck = $now;
-        
-        // IPC 连接正常 → Master 存活，无需 PID 检测
-        if ($ipcClient && $ipcClient->isConnected()) {
-            $masterDeadCount = 0;
-        } else {
-            // IPC 断开，用 PID 检测确认 Master 是否真的死了
-            $masterAlive = false;
-            if (\function_exists('posix_kill')) {
-                // signal 0 只检查进程是否存在，不发送实际信号
-                $masterAlive = @\posix_kill($masterPid, 0);
-                // macOS/Linux: 非 root 进程探测 root 进程时可能返回 EPERM（进程存在但无权限）
-                if (!$masterAlive && \function_exists('posix_get_last_error')) {
-                    $errno = (int)@\posix_get_last_error();
-                    $eperm = 1; // EPERM
-                    if ($errno === $eperm) {
-                        $masterAlive = true;
-                    }
-                }
-            } elseif (\defined('IS_WIN') && IS_WIN) {
-                // Windows: 使用 Processer::isRunningByPid() 检测
-                $masterAlive = \Weline\Framework\System\Process\Processer::isRunningByPid($masterPid);
-            } else {
-                // 兜底：通过 /proc 或 kill -0 检测
-                $masterAlive = @\file_exists("/proc/{$masterPid}");
-                if (!$masterAlive) {
-                    @\exec("kill -0 {$masterPid} 2>/dev/null", $output, $code);
-                    $masterAlive = ($code === 0);
-                }
-            }
-            
-            if ($masterAlive) {
-                $masterDeadCount = 0;
-            } else {
-                $masterDeadCount++;
-                WlsLogger::warning_("Master PID {$masterPid} 不可达且 IPC 断开 ({$masterDeadCount}/{$masterDeadThreshold})");
-                if ($masterDeadCount >= $masterDeadThreshold) {
-                    WlsLogger::warning_("Master PID {$masterPid} 已死亡，Worker 自行退出（孤儿保护）");
-                    $gracefulExit('孤儿检测：Master 已死亡');
-                }
-            }
-        }
+    // ========== 孤儿检测（IPC 优先） ==========
+    if ($orphanGuard->shouldExit(
+        $masterPid,
+        $ipcClient && $ipcClient->isConnected(),
+        $ipcReceivedShutdown,
+        $ipcSelfTag ?? 'Worker'
+    )) {
+        WlsLogger::warning_("Master PID {$masterPid} 已死亡，Worker 自行退出（孤儿保护）");
+        $gracefulExit('孤儿检测：Master 已死亡');
     }
     
     // ========== IPC 控制通道处理 ==========
@@ -1038,13 +1032,13 @@ while (true) {
             
             $drainElapsed = $drainStartTime > 0 ? (\time() - $drainStartTime) : 0;
             
-            // 2. 所有连接已清空 → 排水完成
+            // 2. 所有连接已清空 → 排水完成（帝王令：若已收 shutdown，做完排水仍以 shutdown 名义退出）
             if (empty($connections) && empty($pendingHandshakes)) {
                 if ($ipcClient && $ipcClient->isConnected()) {
                     $ipcClient->sendDrainingComplete($workerId, $port);
                 }
                 WlsLogger::info_("排水完成（{$drainElapsed}秒），Worker 退出");
-                $gracefulExit('热重载');
+                $gracefulExit($ipcReceivedShutdown ? 'shutdown命令' : '热重载');
             }
             
             // 3. 排水超时 → 强制关闭所有剩余连接
@@ -1074,7 +1068,7 @@ while (true) {
                 if ($ipcClient && $ipcClient->isConnected()) {
                     $ipcClient->sendDrainingComplete($workerId, $port);
                 }
-                $gracefulExit('热重载（超时强制退出）');
+                $gracefulExit($ipcReceivedShutdown ? 'shutdown命令' : '热重载（超时强制退出）');
             }
         } elseif (empty($connections) && empty($pendingHandshakes)) {
             // 非排水模式退出（如 shutdown 命令）
@@ -1579,6 +1573,7 @@ while (true) {
             $uriForLog = \parse_url($m[1], \PHP_URL_PATH) ?: $m[1];
         }
         WlsLogger::info_("Worker 开始处理请求 connId={$connId} uri=" . (\strlen($uriForLog) > 80 ? \substr($uriForLog, 0, 80) . '...' : $uriForLog));
+        $handleStartTime = \microtime(true);
         
         // 处理请求
         $response = handleRequest(
@@ -1589,6 +1584,15 @@ while (true) {
             $originTokenHeader,
             $originTokenAllowLocal
         );
+        $responseStatus = 200;
+        if (\preg_match('/^HTTP\/\d\.\d\s+(\d{3})/', $response, $statusMatches)) {
+            $responseStatus = (int)$statusMatches[1];
+        }
+        $responseBytes = 0;
+        $requestHost = getHeaderValue($rawRequest, 'Host') ?? '';
+        if (\str_contains($requestHost, ':')) {
+            $requestHost = (string)\explode(':', $requestHost, 2)[0];
+        }
         
         $activeRequests--;
         
@@ -1653,11 +1657,13 @@ while (true) {
             // 如果全部写完，不需要入队
             if ($totalWritten >= $responseLen) {
                 WlsLogger::info_("Worker 已写完响应 connId={$connId} written={$totalWritten}");
+                $responseBytes = $totalWritten;
                 goto skip_sync_write;
             }
             
             // 没写完，剩余部分放入缓冲区，下次循环继续写
             $remainingBytes = $responseLen - $totalWritten;
+            $responseBytes = $totalWritten;
             $writeBuffers[$connId] = \substr($response, $totalWritten);
             $writableConnections[$connId] = $conn;
             WlsLogger::info_("Worker 响应入队 connId={$connId} written={$totalWritten} total={$responseLen} remaining={$remainingBytes}");
@@ -1762,6 +1768,17 @@ while (true) {
         
         // 更新连接最后活动时间（请求处理完成）
         $connectionLastActivity[$connId] = \time();
+
+        // 上报轻量遥测（失败不影响请求路径）
+        if ($ipcClient && $ipcClient->isConnected()) {
+            $ipcClient->send(\Weline\Server\IPC\ControlMessage::telemetry(
+                $instanceName,
+                $requestHost,
+                $responseStatus,
+                (int)\round((\microtime(true) - $handleStartTime) * 1000, 2),
+                $responseBytes
+            ));
+        }
         
         // H11: 修复 Content-Length mismatch - 只有缓冲区为空才能关闭连接
         // SSE 连接通常是长连接，但处理完成后应该关闭

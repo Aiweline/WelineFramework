@@ -75,24 +75,10 @@ class MessageManager
 
     public static function error(string $msg = '', string $title = '', string $class = 'danger'): void
     {
-        $session = self::session();
-        $session->append('system-message', self::process_message($msg, $title, $class));
-        $session->set('has-error', '1');
+        $title = $title ?: __('错误！');
+        self::setSingleMessage($msg, $title, $class, 'has-error');
     }
 
-    /**
-     * 设置单条错误消息（覆盖旧消息，不追加）。用于登录等场景，避免 WLS 下多次失败时消息累计。
-     * 先清空再 set，读取后由 render() 删除 session。
-     */
-    public static function setSingleError(string $msg = '', string $title = '', string $class = 'danger'): void
-    {
-        $session = self::session();
-        foreach (self::keys as $key) {
-            $session->delete($key);
-        }
-        $session->set('system-message', self::process_message($msg, $title ?: __('错误！'), $class));
-        $session->set('has-error', '1');
-    }
 
     /**
      * @return bool
@@ -126,8 +112,8 @@ class MessageManager
     public static function exception(\Exception $exception, string $title = '', string $class = 'warning'): void
     {
         $msg = $exception->getMessage();
-        self::session()->append('system-message', self::process_message($msg, $title, $class));
-        self::session()->set('has-exception', '1');
+        $title = $title ?: __('异常警告！');
+        self::setSingleMessage($msg, $title, $class, 'has-exception');
     }
 
     /**@return bool
@@ -161,8 +147,7 @@ class MessageManager
     public static function success(string $msg = '', string $title = '', string $class = 'success'): void
     {
         $title = $title ?: __('操作成功！');
-        self::session()->append('system-message', self::process_message($msg, $title, $class));
-        self::session()->set('has-success', '1');
+        self::setSingleMessage($msg, $title, $class, 'has-success');
     }
 
     /**
@@ -197,8 +182,7 @@ class MessageManager
     public static function warning(string $msg = '', string $title = '', string $class = 'warning'): void
     {
         $title = $title ?: __('警告！');
-        self::session()->append('system-message', self::process_message($msg, $title, $class));
-        self::session()->set('has-warning', '1');
+        self::setSingleMessage($msg, $title, $class, 'has-warning');
     }
 
     /**
@@ -233,8 +217,20 @@ class MessageManager
     public static function notes(string $msg = '', string $title = '', string $class = 'notes'): void
     {
         $title = $title ?: __('提示！');
-        self::session()->append('system-message', self::process_message($msg, $title, $class));
-        self::session()->set('has-notes', '1');
+        self::setSingleMessage($msg, $title, $class, 'has-notes');
+    }
+
+    /**
+     * 写入单条消息：清空历史消息后写入当前消息。
+     */
+    private static function setSingleMessage(string $msg, string $title, string $class, string $flagKey): void
+    {
+        $session = self::session();
+        foreach (self::keys as $key) {
+            $session->delete($key);
+        }
+        $session->set('system-message', self::process_message($msg, $title, $class));
+        $session->set($flagKey, '1');
     }
 
     /**

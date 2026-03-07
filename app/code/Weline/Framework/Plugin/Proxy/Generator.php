@@ -231,8 +231,11 @@ ${functionList}
         /** @var string|null $typeName */
         $typeName = null;
         if ($parameter->hasType()) {
-            $typeName = $parameter->getType()->getName();
-            if (class_exists($typeName)) {
+            $refType = $parameter->getType();
+            $typeName = $refType instanceof \ReflectionNamedType
+                ? $refType->getName()
+                : (string) $refType;
+            if (\strpos($typeName, '|') === false && \class_exists($typeName)) {
                 $typeName = '\\' . $typeName;
             }
         }

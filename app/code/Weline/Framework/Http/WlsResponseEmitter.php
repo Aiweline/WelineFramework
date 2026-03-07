@@ -119,7 +119,19 @@ class WlsResponseEmitter implements ResponseEmitterInterface
         
         // Content-Length
         $result .= "Content-Length: " . \strlen($body) . "\r\n";
-        $result .= "Connection: close\r\n";
+        // Keep-Alive 默认开启，避免在 HTTPS 下每个资源都重复握手。
+        // 若业务已显式设置 Connection 头，则以业务头为准。
+        $headers = $headerCollector->getHeaders();
+        $hasConnectionHeader = false;
+        foreach ($headers as $name => $_) {
+            if (\strtolower((string)$name) === 'connection') {
+                $hasConnectionHeader = true;
+                break;
+            }
+        }
+        if (!$hasConnectionHeader) {
+            $result .= "Connection: keep-alive\r\n";
+        }
         $result .= "\r\n";
         $result .= $body;
         

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\IPC\MasterControlServer;
@@ -14,6 +15,8 @@ use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\Contract\ServiceProviderInterface;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\Telemetry\InMemoryMetricsAggregator;
+use Weline\Server\Service\Telemetry\IpcTelemetryGateway;
 
 /**
  * 服务编排器
@@ -118,6 +121,10 @@ class ServiceOrchestrator
     /** 按角色的最近断开记录（用于 escalation 计数） */
     /** @var array<string, array{count: int, windowStart: float}> */
     private array $escalationDisconnects = [];
+    private ?IpcTelemetryGateway $telemetryGateway = null;
+    private ?InMemoryMetricsAggregator $metricsAggregator = null;
+    /** @var array<string, true> */
+    private array $loadedProviderFiles = [];
 
     public function __construct()
     {
@@ -175,22 +182,29 @@ class ServiceOrchestrator
      */
     private function loadBuiltinProviders(): void
     {
-        $builtinProviders = [
+        $builtinConfigPath = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'etc' . DS . 'wls_services.php';
+        if (\is_file($builtinConfigPath)) {
+            $this->loadModuleProviders($builtinConfigPath);
+            return;
+        }
+
+        $fallbackProviders = [
             Provider\SessionServerProvider::class,
             Provider\WorkerProvider::class,
             Provider\DispatcherProvider::class,
             Provider\HttpRedirectProvider::class,
             Provider\MaintenanceWorkerProvider::class,
         ];
-
-        foreach ($builtinProviders as $className) {
-            if (\class_exists($className)) {
-                $provider = new $className();
-                if ($provider instanceof ServiceProviderInterface) {
-                    $this->registry->registerProvider($provider);
-                    WlsLogger::debug_("[Orchestrator] 注册内置 Provider: {$provider->getRole()} ({$provider->getDisplayName()})");
-                }
+        foreach ($fallbackProviders as $className) {
+            if (!\class_exists($className)) {
+                continue;
             }
+            $provider = new $className();
+            if (!$provider instanceof ServiceProviderInterface) {
+                continue;
+            }
+            $this->registry->registerProvider($provider);
+            WlsLogger::debug_("[Orchestrator] 注册内置 Provider(兜底): {$provider->getRole()} ({$provider->getDisplayName()})");
         }
     }
 
@@ -241,6 +255,12 @@ class ServiceOrchestrator
     private function loadModuleProviders(string $servicePath): void
     {
         try {
+            $realPath = \realpath($servicePath) ?: $servicePath;
+            if (isset($this->loadedProviderFiles[$realPath])) {
+                return;
+            }
+            $this->loadedProviderFiles[$realPath] = true;
+
             $providers = require $servicePath;
             if (!\is_array($providers)) {
                 return;
@@ -291,8 +311,15 @@ class ServiceOrchestrator
         $this->escalationWindowSec = (float)$context->getConfig('server.orchestrator.escalation_window_sec', 60.0);
         $this->escalationThreshold = (int)$context->getConfig('server.orchestrator.escalation_threshold', 3);
         $this->stabilizationSec = (float)$context->getConfig('server.orchestrator.stabilization_sec', 15.0);
-        $rawCritical = $context->getConfig('server.orchestrator.critical_roles', ['dispatcher', 'session_server', 'redirect']);
-        $this->criticalRoles = \array_fill_keys(\is_array($rawCritical) ? $rawCritical : [], true);
+        $providersForCritical = $this->registry->getAllProviders();
+        $defaultCriticalRoles = [];
+        foreach ($providersForCritical as $provider) {
+            if ($provider->isCriticalRole()) {
+                $defaultCriticalRoles[] = $provider->getRole();
+            }
+        }
+        $rawCritical = $context->getConfig('server.orchestrator.critical_roles', $defaultCriticalRoles);
+        $this->criticalRoles = \array_fill_keys(\is_array($rawCritical) ? $rawCritical : $defaultCriticalRoles, true);
         $this->escalationDisconnects = [];
         if ($this->registerTimeout < $this->startupGracePeriod) {
             // 防止 register_timeout 过短导致误判，至少与启动宽限一致
@@ -359,18 +386,18 @@ class ServiceOrchestrator
             // 每个服务类型启动完毕后 poll IPC，确保所有 register/ready 消息被处理
             $this->controlServer?->poll(0, 200000);
 
-            // Session Server 就绪后再启动 Worker，避免 Worker 因连不上 Session 而进入降级模式
-            if ($role === 'session_server') {
+            // 对声明了启动屏障能力的服务，在继续后续启动前等待 READY
+            if ($provider->requiresStartupReadyBarrier()) {
                 foreach ($instances as $instance) {
                     if ($instance !== null && $instance->port !== null) {
                         if ($context->frontend) {
-                            echo "\033[33m    等待 Session Server#{$instance->instanceId} 就绪...\033[0m\n";
+                            echo "\033[33m    等待 {$displayName}#{$instance->instanceId} 就绪...\033[0m\n";
                         }
                         $ready = $this->waitForInstanceReady($role, $instance->instanceId, $this->startupTimeout);
                         if (!$ready) {
-                            WlsLogger::warning_("[Orchestrator] Session Server#{$instance->instanceId} 就绪超时 ({$this->startupTimeout}s)，继续启动 Worker");
+                            WlsLogger::warning_("[Orchestrator] {$displayName}#{$instance->instanceId} 就绪超时 ({$this->startupTimeout}s)，继续启动后续服务");
                         } elseif ($context->frontend) {
-                            echo "\033[32m    ✓ Session Server#{$instance->instanceId} 就绪\033[0m\n";
+                            echo "\033[32m    ✓ {$displayName}#{$instance->instanceId} 就绪\033[0m\n";
                         }
                     }
                 }
@@ -388,6 +415,7 @@ class ServiceOrchestrator
 
         // 持久化服务实例信息到实例文件
         $this->persistServicesInfo($context);
+        $this->broadcastRoutingPolicyToWorkers();
     }
     
     /**
@@ -407,9 +435,14 @@ class ServiceOrchestrator
         $allInstances = $this->registry->getAllInstances();
         
         foreach ($allInstances as $instance) {
+            $provider = $this->registry->getProvider($instance->role);
+            if ($provider !== null) {
+                $instance->setMeta('control_capabilities', $this->buildControlCapabilities($provider));
+            }
             $services[] = Contract\ServiceInfo::fromServiceInstance(
                 $instance,
-                $manager->getDisplayName($instance->role)
+                $provider?->getDisplayName() ?? $manager->getDisplayName($instance->role),
+                $provider?->getPriority() ?? 99
             );
         }
         
@@ -459,6 +492,7 @@ class ServiceOrchestrator
             if ($processName !== null) {
                 $instance->setMeta('process_name', $processName);
             }
+            $instance->setMeta('control_capabilities', $this->buildControlCapabilities($provider));
             $instance->setMeta('epoch', $context->epoch);
             $instance->setMeta('launch_id', $launchId);
             
@@ -547,6 +581,7 @@ class ServiceOrchestrator
         if ($processName !== null) {
             $instance->setMeta('process_name', $processName);
         }
+        $instance->setMeta('control_capabilities', $this->buildControlCapabilities($provider));
         $instance->setMeta('epoch', $context->epoch);
         $instance->setMeta('launch_id', $launchId);
 
@@ -760,19 +795,27 @@ class ServiceOrchestrator
     private function broadcastDrainToAll(): void
     {
         $connectedClients = [];
+        if ($this->controlServer === null) {
+            return;
+        }
         foreach ($this->registry->getAllInstances() as $instance) {
-            if ($instance->ipcClientId !== null && $this->controlServer !== null) {
-                $instance->state = ServiceInstance::STATE_DRAINING;
-                $this->registry->updateInstance($instance);
-                $connectedClients[] = "{$instance->role}#{$instance->instanceId}(ipc:{$instance->ipcClientId})";
+            if ($instance->ipcClientId === null) {
+                continue;
             }
+            $provider = $this->registry->getProvider($instance->role);
+            if ($provider === null || !$provider->supportsDrain()) {
+                continue;
+            }
+            $instance->state = ServiceInstance::STATE_DRAINING;
+            $this->registry->updateInstance($instance);
+            $connectedClients[] = "{$instance->role}#{$instance->instanceId}(ipc:{$instance->ipcClientId})";
+            $ports = $instance->port !== null ? [$instance->port] : [];
+            $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::drain($ports));
         }
         
         if (!empty($connectedClients)) {
             WlsLogger::info_('[IPC] DRAIN -> ' . \implode(', ', $connectedClients));
         }
-        
-        $this->controlServer?->broadcast(ControlMessage::drain([]));
     }
 
     /**
@@ -781,10 +824,19 @@ class ServiceOrchestrator
     private function broadcastShutdownToAll(): void
     {
         $connectedClients = [];
+        if ($this->controlServer === null) {
+            return;
+        }
         foreach ($this->registry->getAllInstances() as $instance) {
-            if ($instance->ipcClientId !== null) {
-                $connectedClients[] = "{$instance->role}#{$instance->instanceId}(pid:{$instance->pid},ipc:{$instance->ipcClientId})";
+            if ($instance->ipcClientId === null) {
+                continue;
             }
+            $provider = $this->registry->getProvider($instance->role);
+            if ($provider === null || !$provider->supportsShutdown()) {
+                continue;
+            }
+            $connectedClients[] = "{$instance->role}#{$instance->instanceId}(pid:{$instance->pid},ipc:{$instance->ipcClientId})";
+            $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::shutdown());
         }
         
         if (!empty($connectedClients)) {
@@ -792,8 +844,6 @@ class ServiceOrchestrator
         } else {
             WlsLogger::info_('[IPC] SHUTDOWN -> (无已连接的 IPC 客户端)');
         }
-        
-        $this->controlServer?->broadcast(ControlMessage::shutdown());
     }
 
     /**
@@ -1169,11 +1219,11 @@ class ServiceOrchestrator
             return;
         }
 
-        $strategy = $provider->getReloadStrategy();
-        if ($strategy === 'none') {
+        if (!$provider->supportsReload()) {
             WlsLogger::info_("[Orchestrator] 服务 {$role} 不支持重载");
             return;
         }
+        $strategy = $provider->getReloadStrategy();
 
         WlsLogger::info_("[Orchestrator] 开始重载服务 {$role} (strategy={$strategy}, type={$type})");
 
@@ -1207,9 +1257,16 @@ class ServiceOrchestrator
             }
         }
 
-        // reload 只重启 Worker 进程（代码热更新），Dispatcher/SessionServer 等保持不变
-        WlsLogger::info_("[Orchestrator] 收到重载请求 (type={$type})，滚动重启 Worker");
-        $this->reloadService('worker', $type);
+        $configuredRoles = $this->context?->getConfig('server.orchestrator.reload_roles', ['worker']);
+        $reloadRoles = \is_array($configuredRoles) ? $configuredRoles : ['worker'];
+        if (empty($reloadRoles)) {
+            $reloadRoles = ['worker'];
+        }
+        WlsLogger::info_("[Orchestrator] 收到重载请求 (type={$type})，目标角色: " . \implode(',', $reloadRoles));
+        foreach ($reloadRoles as $role) {
+            $this->reloadService((string)$role, $type);
+        }
+        $this->broadcastRoutingPolicyToWorkers();
     }
 
     /**
@@ -1238,8 +1295,28 @@ class ServiceOrchestrator
                 $this->registry->removeInstance($role, $id);
 
                 WlsLogger::info_("[Orchestrator] 滚动重启 {$role}#{$id}: 启动新实例");
-                $this->startInstance($provider, $id, $this->context);
-                $this->waitForInstanceReady($role, $id, $this->startupTimeout);
+                $started = $this->startInstance($provider, $id, $this->context);
+                if ($started === null) {
+                    WlsLogger::error_("[Orchestrator] 滚动重载 {$role}#{$id} 启动失败");
+                    if ($this->rollingRestartClientId !== null) {
+                        $this->controlServer?->sendTo(
+                            $this->rollingRestartClientId,
+                            ControlMessage::reloadFailed("{$role}#{$id} start failed")
+                        );
+                    }
+                    return;
+                }
+                $ready = $this->waitForInstanceReady($role, $id, $this->startupTimeout);
+                if (!$ready) {
+                    WlsLogger::error_("[Orchestrator] 滚动重载 {$role}#{$id} 未在 {$this->startupTimeout}s 内进入 READY");
+                    if ($this->rollingRestartClientId !== null) {
+                        $this->controlServer?->sendTo(
+                            $this->rollingRestartClientId,
+                            ControlMessage::reloadFailed("{$role}#{$id} not ready within {$this->startupTimeout}s")
+                        );
+                    }
+                    return;
+                }
 
                 WlsLogger::info_("[Orchestrator] 滚动重启 {$role}#{$id}: 完成");
             }
@@ -1836,6 +1913,7 @@ class ServiceOrchestrator
      */
     public function getStatus(): array
     {
+        $this->getMetricsAggregator()->flushDueBuckets(false);
         return [
             'running' => $this->running,
             'shutting_down' => $this->shuttingDown,
@@ -1853,6 +1931,7 @@ class ServiceOrchestrator
                 'full_restart_count' => $this->fullRestartCount,
                 'last_sweep_killed' => $this->lastSweepKilled,
                 'last_sweep_stale_pid_files' => $this->lastSweepStalePidFiles,
+                'telemetry_bucket_count' => \count($this->getMetricsAggregator()->snapshotByHost($this->context?->instanceName ?? 'default', \time() - 300)),
             ],
         ];
     }
@@ -1884,6 +1963,9 @@ class ServiceOrchestrator
 
             case ControlMessage::TYPE_COMMAND:
                 $this->handleCommand($msg, $clientId);
+                return;
+            case ControlMessage::TYPE_TELEMETRY:
+                $this->handleTelemetry($msg);
                 return;
         }
 
@@ -2016,6 +2098,10 @@ class ServiceOrchestrator
         }
         $this->registry->updateInstance($instance);
 
+        if (\in_array($instance->role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)) {
+            $this->sendRoutingPolicyToWorker($instance);
+        }
+
         WlsLogger::debug_("[Orchestrator] IPC 注册: {$instance->role}#{$instance->instanceId} (pid={$pid}, clientId={$clientId}, port={$instance->port}, epoch={$instance->epoch}, launch_id={$instance->launchId})");
         return true;
     }
@@ -2073,6 +2159,10 @@ class ServiceOrchestrator
         // 如果是 Redirect 就绪，通知所有已就绪的 Dispatcher
         if ($instance->role === 'redirect' && $instance->port !== null) {
             $this->notifyDispatcherRedirectReady($instance);
+        }
+
+        if (\in_array($instance->role, [ControlMessage::ROLE_SESSION_SERVER, ControlMessage::ROLE_MEMORY_SERVER], true)) {
+            $this->broadcastRoutingPolicyToWorkers();
         }
         
         // 更新实例文件中的服务信息
@@ -2408,7 +2498,49 @@ class ServiceOrchestrator
                         : ($ip !== null && $ip !== '' ? __('已通知 %{1} 个 Dispatcher 解封 IP %{2}', [$sent, $ip]) : __('未指定 ip 或 clear_all'))
                 ));
                 break;
+            case ControlMessage::ACTION_TELEMETRY_QUERY:
+                $instance = (string)($msg['instance'] ?? ($this->context?->instanceName ?? 'default'));
+                $windowSec = (int)($msg['window_sec'] ?? 300);
+                $host = (string)($msg['host'] ?? '');
+                $sinceTs = \time() - \max(60, $windowSec);
+                $aggregator = $this->getMetricsAggregator();
+                $aggregator->flushDueBuckets(false);
+                $data = [
+                    'global' => $aggregator->snapshotGlobal($instance, $sinceTs),
+                    'hosts' => $aggregator->snapshotByHost($instance, $sinceTs),
+                    'host_detail' => $host !== '' ? $aggregator->snapshotHostDetail($instance, $host, $sinceTs) : null,
+                ];
+                $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, $data, 'Telemetry retrieved'));
+                break;
         }
+    }
+
+    private function handleTelemetry(array $msg): void
+    {
+        $this->getTelemetryGateway()->record([
+            'instance' => (string)($msg['instance'] ?? ($this->context?->instanceName ?? 'default')),
+            'host' => (string)($msg['host'] ?? ''),
+            'status' => (int)($msg['status'] ?? 200),
+            'latency_ms' => (int)($msg['latency_ms'] ?? 0),
+            'bytes_out' => (int)($msg['bytes_out'] ?? 0),
+            'ts' => (int)($msg['ts'] ?? \time()),
+        ]);
+    }
+
+    private function getTelemetryGateway(): IpcTelemetryGateway
+    {
+        if ($this->telemetryGateway === null) {
+            $this->telemetryGateway = ObjectManager::getInstance(IpcTelemetryGateway::class);
+        }
+        return $this->telemetryGateway;
+    }
+
+    private function getMetricsAggregator(): InMemoryMetricsAggregator
+    {
+        if ($this->metricsAggregator === null) {
+            $this->metricsAggregator = ObjectManager::getInstance(InMemoryMetricsAggregator::class);
+        }
+        return $this->metricsAggregator;
     }
 
     /**
@@ -2630,14 +2762,22 @@ class ServiceOrchestrator
 
             $startWait = \microtime(true);
             $maxWait = $this->startupTimeout;
+            $ready = false;
             while ((\microtime(true) - $startWait) < $maxWait) {
                 $this->controlServer?->poll(0, 100000);
 
                 $currentWorker = $this->registry->getInstance('worker', $instanceId);
                 if ($currentWorker !== null && $currentWorker->state === Contract\ServiceInstance::STATE_READY) {
+                    $ready = true;
                     break;
                 }
                 \usleep(100000);
+            }
+
+            if (!$ready) {
+                WlsLogger::error_("[Orchestrator] Worker #{$instanceId} 在 {$maxWait}s 内未进入 READY，滚动重启失败");
+                $this->finishRollingRestart(false, "Worker #{$instanceId} not ready within {$maxWait}s");
+                return;
             }
 
             $restarted++;
@@ -2656,23 +2796,31 @@ class ServiceOrchestrator
     {
         WlsLogger::info_("[Orchestrator] 滚动重启完成: success={$success}, message={$message}, elapsed={$elapsedMs}ms");
 
-        $this->disableMaintenanceMode();
+        // 先清理滚动标志，再禁用维护模式，避免 disableMaintenanceMode() 因“滚动中”被拒绝。
+        $clientId = $this->rollingRestartClientId;
+        $progress = $this->rollingRestartProgress;
+        $total = $this->rollingRestartTotal;
+        $this->rollingRestartInProgress = false;
+        $this->rollingRestartClientId = null;
 
-        if ($this->rollingRestartClientId !== null) {
+        $disableResult = $this->disableMaintenanceMode();
+        if (!($disableResult['success'] ?? false)) {
+            WlsLogger::warning_("[Orchestrator] 滚动重启后禁用维护模式失败: " . ($disableResult['message'] ?? 'unknown'));
+        }
+
+        if ($clientId !== null) {
             $msgType = $success ? ControlMessage::TYPE_RELOAD_COMPLETED : ControlMessage::TYPE_RELOAD_FAILED;
-            $this->controlServer?->sendTo($this->rollingRestartClientId, ControlMessage::encode([
+            $this->controlServer?->sendTo($clientId, ControlMessage::encode([
                 'type' => $msgType,
                 'success' => $success,
                 'message' => $message,
-                'progress' => $this->rollingRestartProgress,
-                'total' => $this->rollingRestartTotal,
+                'progress' => $progress,
+                'total' => $total,
                 'elapsed_ms' => $elapsedMs,
-                'worker_count' => $this->rollingRestartTotal,
+                'worker_count' => $total,
             ]));
         }
 
-        $this->rollingRestartInProgress = false;
-        $this->rollingRestartClientId = null;
         $this->rollingRestartProgress = 0;
         $this->rollingRestartTotal = 0;
 
@@ -2735,7 +2883,140 @@ class ServiceOrchestrator
      */
     private function broadcastCacheClear(): void
     {
-        $this->controlServer?->broadcast(ControlMessage::cacheClear(), ControlMessage::ROLE_WORKER);
+        if ($this->controlServer === null) {
+            return;
+        }
+        $configuredRoles = $this->context?->getConfig('server.orchestrator.cache_clear_roles', ['worker']);
+        $targetRoles = \is_array($configuredRoles) ? $configuredRoles : ['worker'];
+        $targetRoles = \array_values(\array_filter(\array_map('strval', $targetRoles)));
+        if (empty($targetRoles)) {
+            $targetRoles = ['worker'];
+        }
+
+        $targets = [];
+        foreach ($this->registry->getAllInstances() as $instance) {
+            if ($instance->ipcClientId === null) {
+                continue;
+            }
+            if (!\in_array($instance->role, $targetRoles, true)) {
+                continue;
+            }
+            $targets[] = "{$instance->role}#{$instance->instanceId}(ipc:{$instance->ipcClientId})";
+            $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::cacheClear());
+        }
+        WlsLogger::info_('[IPC] CACHE_CLEAR -> ' . (!empty($targets) ? \implode(', ', $targets) : '(无匹配目标)'));
+    }
+
+    /**
+     * 提供统一的子进程控制能力快照，供状态展示与控制面决策使用。
+     */
+    private function buildControlCapabilities(ServiceProviderInterface $provider): array
+    {
+        return [
+            'startup_ready_barrier' => $provider->requiresStartupReadyBarrier(),
+            'drain' => $provider->supportsDrain(),
+            'shutdown' => $provider->supportsShutdown(),
+            'reload' => $provider->supportsReload(),
+            'reload_strategy' => $provider->getReloadStrategy(),
+            'critical_role' => $provider->isCriticalRole(),
+            'resurrection_priority' => $provider->getResurrectionPriority(),
+        ];
+    }
+
+    /**
+     * 发送最新路由策略给单个 Worker。
+     */
+    private function sendRoutingPolicyToWorker(ServiceInstance $instance): void
+    {
+        if ($instance->ipcClientId === null || $this->controlServer === null) {
+            return;
+        }
+        $policy = $this->buildRoutingPolicySnapshot();
+        $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::routingPolicy($policy));
+        WlsLogger::debug_("[Orchestrator] ROUTING_POLICY -> {$instance->role}#{$instance->instanceId}(ipc:{$instance->ipcClientId})");
+    }
+
+    /**
+     * 广播最新路由策略给所有 Worker/Maintenance。
+     */
+    private function broadcastRoutingPolicyToWorkers(): void
+    {
+        if ($this->controlServer === null) {
+            return;
+        }
+        $policy = $this->buildRoutingPolicySnapshot();
+        $message = ControlMessage::routingPolicy($policy);
+        $targets = [];
+
+        foreach ($this->registry->getAllInstances() as $instance) {
+            if ($instance->ipcClientId === null) {
+                continue;
+            }
+            if (!\in_array($instance->role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)) {
+                continue;
+            }
+            $targets[] = "{$instance->role}#{$instance->instanceId}(ipc:{$instance->ipcClientId})";
+            $this->controlServer->sendTo($instance->ipcClientId, $message);
+        }
+
+        WlsLogger::info_('[IPC] ROUTING_POLICY -> ' . (!empty($targets) ? \implode(', ', $targets) : '(无匹配目标)'));
+    }
+
+    /**
+     * 构建 Worker 侧驱动路由策略快照。
+     *
+     * @return array<string, mixed>
+     */
+    private function buildRoutingPolicySnapshot(): array
+    {
+        $sessionEndpoint = $this->resolveServiceEndpoint(ControlMessage::ROLE_SESSION_SERVER, 19970);
+        $memoryEndpoint = $this->resolveServiceEndpoint(ControlMessage::ROLE_MEMORY_SERVER, 19971);
+
+        return [
+            'version' => 1,
+            'effective_at' => \time(),
+            'routing' => [
+                'session' => [
+                    'hijack_file_driver' => true,
+                    'wls_driver' => 'wls',
+                ],
+                'cache' => [
+                    'hijack_file_driver' => true,
+                    'wls_driver' => 'wls_memory',
+                ],
+            ],
+            'endpoints' => [
+                'session' => $sessionEndpoint,
+                'memory' => $memoryEndpoint,
+            ],
+        ];
+    }
+
+    /**
+     * 解析指定角色服务端点。
+     *
+     * @return array{host: string, port: int}
+     */
+    private function resolveServiceEndpoint(string $role, int $defaultPort): array
+    {
+        $host = '127.0.0.1';
+        $port = $defaultPort;
+        $instances = $this->registry->getInstancesByRole($role);
+
+        foreach ($instances as $instance) {
+            if ($instance->state === ServiceInstance::STATE_READY && $instance->port !== null && $instance->port > 0) {
+                return ['host' => $host, 'port' => (int)$instance->port];
+            }
+        }
+
+        foreach ($instances as $instance) {
+            if ($instance->port !== null && $instance->port > 0) {
+                $port = (int)$instance->port;
+                break;
+            }
+        }
+
+        return ['host' => $host, 'port' => $port];
     }
 
     /**

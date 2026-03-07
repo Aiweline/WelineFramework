@@ -460,11 +460,13 @@ WlsLogger::info_("Socket 创建成功，开始监听连接");
 \stream_set_blocking($socket, false);
 
 // ========== IPC 控制通道：连接 Master 并注册 + 上报就绪 ==========
+$kernel = null;
 $ipcClient = null;
 $ipcReceivedShutdown = false;
 $ipcDraining = false; // 是否正在排水
 $drainStartTime = 0;   // 排水开始时间戳
 $maxDrainTime = 10;     // 排水最大等待时间（秒），超时后强制关闭所有连接退出
+$orphanGuard = new \Weline\Server\IPC\ChildControl\MasterOrphanGuard();
 
 // 如果启用了维护模式
 if ($isMaintenanceWorker) {
@@ -477,41 +479,31 @@ if ($isMaintenanceWorker) {
 }
 
 // 获取控制端口
-if ($controlPort <= 0) {
-    $_instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
-    if (\is_file($_instanceFile)) {
-        $_instData = @\json_decode(\file_get_contents($_instanceFile), true);
-        $controlPort = (int)($_instData['control_port'] ?? 0);
-    }
-    unset($_instanceFile, $_instData);
-}
+$controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
+$ipcRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
+$waitingForAck = false;
+$readySentTime = 0.0;
+$ackRetryCount = 0;
+$maxAckRetries = 3;
+$ackTimeout = 10.0;
 
 if ($controlPort > 0) {
-    $ipcClient = new \Weline\Server\IPC\ControlClient();
     $ipcSelfTag = ($isMaintenanceWorker ? 'Maintenance' : 'Worker') . "#{$workerId}";
-    $ipcClient->setSelfTag($ipcSelfTag);
-    // DEV 模式下输出详细 IPC SEND/RECV 明细
-    $ipcClient->setVerboseLog((\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE));
-    if ($ipcClient->connect('127.0.0.1', $controlPort)) {
-        $ipcRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
-        $ipcClient->register($ipcRole, \getmypid(), $port, $workerId, $orchestratorEpoch, $orchestratorLaunchId);
-        WlsLogger::info_("IPC 控制通道已连接 (控制端口: {$controlPort})");
-        
-        // 框架已初始化 + Socket 已创建 → 上报就绪
-        $ipcClient->sendReady($ipcRole, $workerId, $port, $orchestratorEpoch, $orchestratorLaunchId);
-        WlsLogger::info_("已上报就绪状态，等待 Master ACK 确认...");
-        
-        // ACK 等待状态（启动确认协议）
-        $waitingForAck = true;
-        $readySentTime = \microtime(true);
-        $ackRetryCount = 0;
-        $maxAckRetries = 3;
-        $ackTimeout = 10.0; // 秒
-        
-        // 设置消息处理器
-        $ipcClient->onMessage(function (array $msg, \Weline\Server\IPC\ControlClient $client) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$waitingForAck, $workerId) {
+    $identity = new \Weline\Server\IPC\ChildControl\ChildProcessIdentity(
+        $ipcRole,
+        \getmypid(),
+        $port,
+        $workerId,
+        $orchestratorEpoch,
+        $orchestratorLaunchId
+    );
+    $handler = new \Weline\Server\IPC\ChildControl\Handler\WorkerControlHandler(
+        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$waitingForAck, $workerId): void {
             $type = $msg['type'] ?? '';
-            
+            // 帝王令：shutdown 至高无上，一旦收到则不再处理其他 IPC（RELOAD/DRAIN/CACHE_CLEAR 等）
+            if ($type !== \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN && $ipcReceivedShutdown) {
+                return;
+            }
             switch ($type) {
                 case \Weline\Server\IPC\ControlMessage::TYPE_ACK_READY:
                     // 收到 Master ACK 确认，启动完成
@@ -547,6 +539,14 @@ if ($controlPort > 0) {
                     }
                     WlsLogger::info_("收到 cache_clear 命令，已清理缓存");
                     break;
+
+                case \Weline\Server\IPC\ControlMessage::TYPE_ROUTING_POLICY:
+                    $policyData = $msg['data'] ?? [];
+                    if (\is_array($policyData)) {
+                        \Weline\Server\Service\Runtime\RoutingPolicyRegistry::update($policyData);
+                        WlsLogger::info_('收到 routing_policy 命令，已更新进程内路由策略快照');
+                    }
+                    break;
                     
                 case \Weline\Server\IPC\ControlMessage::TYPE_DRAIN:
                     // 排水模式：停止接受新连接，完成现有请求后退出
@@ -567,21 +567,26 @@ if ($controlPort > 0) {
                     WlsLogger::info_("收到 shutdown 命令，准备退出");
                     break;
             }
-        });
-        
-        // 设置断开处理器
-        $ipcClient->onDisconnect(function (bool $receivedShutdown, \Weline\Server\IPC\ControlClient $client) use (&$ipcReceivedShutdown, &$shouldExit, $instanceName, $controlPort, $workerId) {
-            // 已收到 shutdown 或正在退出，不做任何复活/重连操作
-            if ($receivedShutdown || $ipcReceivedShutdown || $shouldExit) {
-                WlsLogger::info_("Master 连接断开（已收到 shutdown，不复活）");
-                return;
-            }
-            WlsLogger::warning_("Master 连接意外断开，控制面已收口，不执行子进程复活。");
-            $client->tryReconnect();
-        });
+        },
+        static function () use (&$ipcClient): void {
+            $ipcClient?->tryReconnect();
+        }
+    );
+    $kernel = new \Weline\Server\IPC\ChildControl\SubprocessControlKernel(
+        $identity,
+        $handler,
+        $ipcSelfTag,
+        (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE)
+    );
+    if ($kernel->connectAndRegister($controlPort)) {
+        $ipcClient = $kernel->getClient();
+        WlsLogger::info_("IPC 控制通道已连接 (控制端口: {$controlPort})");
+        WlsLogger::info_("已上报就绪状态，等待 Master ACK 确认...");
+        $waitingForAck = true;
+        $readySentTime = \microtime(true);
     } else {
         WlsLogger::warning_("IPC 控制通道连接失败 (控制端口: {$controlPort})，继续独立运行");
-        $ipcClient = null;
+        $kernel = null;
     }
 }
 // ========== IPC 控制通道结束 ==========
@@ -775,12 +780,6 @@ if (\function_exists('pcntl_signal')) {
 $consecutiveErrors = 0;
 $maxConsecutiveErrors = 100; // 连续 100 次错误才考虑重启（给予足够的恢复机会）
 
-// ========== 孤儿检测：Master PID 存活检查 ==========
-$lastMasterCheck = \time();
-$masterCheckInterval = 5;
-$masterDeadCount = 0;
-$masterDeadThreshold = 3;
-
 // 事件循环（Workerman 模式：外层 try-catch 防止意外退出）
 while (true) {
     try {
@@ -792,49 +791,16 @@ while (true) {
     WlsLogger::flush_(false);
     
     $now = \time();
-    
-    // ========== 孤儿检测（IPC 优先）：定期检查 Master 是否存活 ==========
-    if ($masterPid > 0 && !$ipcReceivedShutdown && ($now - $lastMasterCheck) >= $masterCheckInterval) {
-        $lastMasterCheck = $now;
-        
-        // IPC 连接正常 → Master 存活，无需 PID 检测
-        if ($ipcClient && $ipcClient->isConnected()) {
-            $masterDeadCount = 0;
-        } else {
-            // IPC 断开，用 PID 检测确认 Master 是否真的死了
-            $masterAlive = false;
-            if (\function_exists('posix_kill')) {
-                $masterAlive = @\posix_kill($masterPid, 0);
-                // macOS/Linux: 非 root 进程探测 root 进程时可能返回 EPERM（进程存在但无权限）
-                if (!$masterAlive && \function_exists('posix_get_last_error')) {
-                    $errno = (int)@\posix_get_last_error();
-                    $eperm = 1; // EPERM
-                    if ($errno === $eperm) {
-                        $masterAlive = true;
-                    }
-                }
-            } elseif (\defined('IS_WIN') && IS_WIN) {
-                // Windows: 使用 Processer::isRunningByPid() 检测
-                $masterAlive = \Weline\Framework\System\Process\Processer::isRunningByPid($masterPid);
-            } else {
-                $masterAlive = @\file_exists("/proc/{$masterPid}");
-                if (!$masterAlive) {
-                    @\exec("kill -0 {$masterPid} 2>/dev/null", $output, $code);
-                    $masterAlive = ($code === 0);
-                }
-            }
-            
-            if ($masterAlive) {
-                $masterDeadCount = 0;
-            } else {
-                $masterDeadCount++;
-                WlsLogger::warning_("Master PID {$masterPid} 不可达且 IPC 断开 ({$masterDeadCount}/{$masterDeadThreshold})");
-                if ($masterDeadCount >= $masterDeadThreshold) {
-                    WlsLogger::warning_("Master PID {$masterPid} 已死亡，Worker 自行退出（孤儿保护）");
-                    $gracefulExit('孤儿检测：Master 已死亡');
-                }
-            }
-        }
+
+    // ========== 孤儿检测（IPC 优先） ==========
+    if ($orphanGuard->shouldExit(
+        $masterPid,
+        $ipcClient && $ipcClient->isConnected(),
+        $ipcReceivedShutdown,
+        $ipcSelfTag ?? 'Worker'
+    )) {
+        WlsLogger::warning_("Master PID {$masterPid} 已死亡，Worker 自行退出（孤儿保护）");
+        $gracefulExit('孤儿检测：Master 已死亡');
     }
     
     // ========== IPC 控制通道处理 ==========
@@ -875,13 +841,13 @@ while (true) {
             
             $drainElapsed = $drainStartTime > 0 ? (\time() - $drainStartTime) : 0;
             
-            // 2. 所有连接已清空 → 排水完成
+            // 2. 所有连接已清空 → 排水完成（帝王令：若已收 shutdown，做完排水仍以 shutdown 名义退出）
             if (empty($connections)) {
                 if ($ipcClient && $ipcClient->isConnected()) {
                     $ipcClient->sendDrainingComplete($workerId, $port);
                 }
                 WlsLogger::info_("排水完成（{$drainElapsed}秒），Worker 退出");
-                $gracefulExit('热重载');
+                $gracefulExit($ipcReceivedShutdown ? 'shutdown命令' : '热重载');
             }
             
             // 3. 排水超时 → 强制关闭所有剩余连接
@@ -899,7 +865,7 @@ while (true) {
                 if ($ipcClient && $ipcClient->isConnected()) {
                     $ipcClient->sendDrainingComplete($workerId, $port);
                 }
-                $gracefulExit('热重载（超时强制退出）');
+                $gracefulExit($ipcReceivedShutdown ? 'shutdown命令' : '热重载（超时强制退出）');
             }
         } elseif (empty($connections)) {
             // 非排水模式退出（如 shutdown 命令）
@@ -1119,6 +1085,15 @@ while (true) {
             $originTokenAllowLocal
         );
         $handleDuration = \round((\microtime(true) - $handleStartTime) * 1000, 2);
+        $responseStatus = 200;
+        if (\preg_match('/^HTTP\/\d\.\d\s+(\d{3})/', $response, $statusMatches)) {
+            $responseStatus = (int)$statusMatches[1];
+        }
+        $responseBytes = 0;
+        $requestHost = getHeaderValue($rawRequest, 'Host') ?? '';
+        if (\str_contains($requestHost, ':')) {
+            $requestHost = (string)\explode(':', $requestHost, 2)[0];
+        }
         
         $activeRequests--;
         
@@ -1181,6 +1156,7 @@ while (true) {
                 unset($requestLogged[$connId]);
                 continue; // 跳过后续的 Keep-Alive 处理
             }
+            $responseBytes = $totalWritten;
         } else {
             // SSE 模式：响应已流式发送，记录日志
             WlsLogger::info_("SSE 流式响应完成 (connId: {$connId})");
@@ -1191,6 +1167,17 @@ while (true) {
         
         // 更新连接最后活动时间（请求处理完成）
         $connectionLastActivity[$connId] = \time();
+
+        // 上报轻量遥测（失败不影响主流程）
+        if ($ipcClient && $ipcClient->isConnected()) {
+            $ipcClient->send(\Weline\Server\IPC\ControlMessage::telemetry(
+                $instanceName,
+                $requestHost,
+                $responseStatus,
+                (int)$handleDuration,
+                $responseBytes
+            ));
+        }
         
         // SSE 连接通常是长连接，但处理完成后应该关闭
         // 普通请求根据 Keep-Alive 决定

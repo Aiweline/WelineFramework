@@ -1538,19 +1538,31 @@ $statusOptions = $this->getData('statusOptions') ?? [];
         });
     }
 
-    function renderDomainAccordion(groups) {
-        if (!groups || groups.length === 0) {
-            domainContainer.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-domain"></i><p><?= __('暂无域名数据') ?></p></div>';
-            paginationEl.style.display = 'none';
-            return;
+    function renderPulledStatusBadge(isPulled) {
+        if (isPulled) {
+            return '<span class="pb-dm-badge pb-dm-badge--ok"><?= __('已拉取') ?></span>';
         }
+        return '<span class="pb-dm-badge pb-dm-badge--warn"><?= __('未拉取') ?></span>';
+    }
 
+    function renderDomainStatusBadge(status) {
         var statusMap = {
             'active': ['<?= __('正常') ?>', 'pb-dm-badge--ok'],
             'pending': ['<?= __('处理中') ?>', 'pb-dm-badge--warn'],
             'expired': ['<?= __('已过期') ?>', 'pb-dm-badge--no'],
             'suspended': ['<?= __('已暂停') ?>', 'pb-dm-badge--no']
         };
+        var key = status ? String(status).toLowerCase() : '';
+        var mapped = statusMap[key] || [status || '-', 'pb-dm-badge--info'];
+        return '<span class="pb-dm-badge ' + mapped[1] + '">' + mapped[0] + '</span>';
+    }
+
+    function renderDomainAccordion(groups) {
+        if (!groups || groups.length === 0) {
+            domainContainer.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-domain"></i><p><?= __('暂无域名数据') ?></p></div>';
+            paginationEl.style.display = 'none';
+            return;
+        }
 
         var html = '';
 
@@ -1601,11 +1613,8 @@ $statusOptions = $this->getData('statusOptions') ?? [];
                     '</tr></thead><tbody>';
 
                 group.items.forEach(function(d) {
-                    var st = statusMap[d.status] || [d.status || '-', 'pb-dm-badge--info'];
                     var isPulled = d.is_pulled === true || d.is_pulled === 1;
-                    var pullBadge = isPulled
-                        ? '<span class="pb-dm-badge pb-dm-badge--ok"><?= __('已拉取') ?></span>'
-                        : '<span class="pb-dm-badge pb-dm-badge--warn"><?= __('未拉取') ?></span>';
+                    var pullBadge = renderPulledStatusBadge(isPulled);
 
                     var checkboxDisabled = '';
 
@@ -1646,7 +1655,7 @@ $statusOptions = $this->getData('statusOptions') ?? [];
                         '<td><strong>' + escapeHtml(d.domain) + '</strong></td>' +
                         '<td>' + providerCell + '</td>' +
                         '<td>' + pullBadge + '</td>' +
-                        '<td><span class="pb-dm-badge ' + st[1] + '">' + st[0] + '</span></td>' +
+                        '<td>' + renderDomainStatusBadge(d.status) + '</td>' +
                         '<td>' + (d.expires_at || '-') + '</td>' +
                         '<td>' + actions + '</td>' +
                         '</tr>';
@@ -3090,9 +3099,7 @@ $statusOptions = $this->getData('statusOptions') ?? [];
 
         foundList.forEach(function(d) {
             var isPulled = d.is_pulled === true || d.is_pulled === 1;
-            var pullBadge = isPulled
-                ? '<span class="pb-dm-badge pb-dm-badge--ok"><?= __('已拉取') ?></span>'
-                : '<span class="pb-dm-badge pb-dm-badge--warn"><?= __('未拉取') ?></span>';
+            var pullBadge = renderPulledStatusBadge(isPulled);
             var checkboxDisabled = isPulled ? ' disabled' : '';
             var checkboxChecked = isPulled ? '' : ' checked';
 
@@ -3371,6 +3378,46 @@ $statusOptions = $this->getData('statusOptions') ?? [];
         });
     }
 
+    function renderResolveStatusBadge(item) {
+        var status = (item && item.resolve_status) ? String(item.resolve_status).toLowerCase() : '';
+        var isLocal = String((item && item.is_local_server) ? item.is_local_server : '0') === '1';
+
+        if (status === 'resolved') {
+            if (isLocal) {
+                return '<span class="pb-dm-badge pb-dm-badge--ok"><?= __('解析正常') ?></span>';
+            }
+            return '<span class="pb-dm-badge pb-dm-badge--warn"><?= __('指向外部') ?></span>';
+        }
+        if (status === 'error') {
+            return '<span class="pb-dm-badge pb-dm-badge--no"><?= __('解析失败') ?></span>';
+        }
+        return '<span class="pb-dm-badge pb-dm-badge--warn"><?= __('等待解析') ?></span>';
+    }
+
+    function renderHttpsStatusBadge(item) {
+        var status = (item && item.https_status) ? String(item.https_status).toLowerCase() : '';
+        if (status === 'valid') {
+            return '<span class="pb-dm-badge pb-dm-badge--ok"><?= __('有效') ?></span>';
+        }
+        if (status === 'pending') {
+            return '<span class="pb-dm-badge pb-dm-badge--warn"><?= __('申请中') ?></span>';
+        }
+        return '<span class="pb-dm-badge pb-dm-badge--no"><?= __('无') ?></span>';
+    }
+
+    function renderSiteReadyBadge(item) {
+        var status = (item && item.status) ? String(item.status).toLowerCase() : '';
+        var siteReady = String((item && item.site_ready) ? item.site_ready : '0') === '1';
+
+        if (siteReady) {
+            return '<span class="pb-dm-badge pb-dm-badge--ok"><?= __('可建站') ?></span>';
+        }
+        if (status !== '' && status !== 'active') {
+            return '<span class="pb-dm-badge pb-dm-badge--no"><?= __('不可用') ?></span>';
+        }
+        return '<span class="pb-dm-badge pb-dm-badge--warn"><?= __('等待中') ?></span>';
+    }
+
     function renderDomainPool(items) {
         var container = document.getElementById('pb-dm-pool-container');
         if (!items || items.length === 0) {
@@ -3390,6 +3437,8 @@ $statusOptions = $this->getData('statusOptions') ?? [];
             '<th><?= __('类型') ?></th>' +
             '<th><?= __('状态') ?></th>' +
             '<th><?= __('解析状态') ?></th>' +
+            '<th><?= __('HTTPS') ?></th>' +
+            '<th><?= __('建站就绪') ?></th>' +
             '<th><?= __('解析IP') ?></th>' +
             '<th><?= __('分配时间') ?></th>' +
             '</tr></thead><tbody>';
@@ -3406,14 +3455,9 @@ $statusOptions = $this->getData('statusOptions') ?? [];
                 statusBadge = '<span class="pb-dm-badge">' + (item.status || '-') + '</span>';
             }
 
-            var resolveBadge = '';
-            if (item.resolve_status === 'resolved') {
-                resolveBadge = '<span class="pb-dm-badge pb-dm-badge--ok"><?= __('已解析') ?></span>';
-            } else if (item.resolve_status === 'unresolved') {
-                resolveBadge = '<span class="pb-dm-badge pb-dm-badge--warn"><?= __('未解析') ?></span>';
-            } else {
-                resolveBadge = '<span class="pb-dm-badge">' + (item.resolve_status || '-') + '</span>';
-            }
+            var resolveBadge = renderResolveStatusBadge(item);
+            var httpsBadge = renderHttpsStatusBadge(item);
+            var siteReadyBadge = renderSiteReadyBadge(item);
 
             var typeText = item.subdomain ? '<?= __('子域名') ?>' : '<?= __('根域') ?>';
 
@@ -3422,6 +3466,8 @@ $statusOptions = $this->getData('statusOptions') ?? [];
                 '<td>' + typeText + '</td>' +
                 '<td>' + statusBadge + '</td>' +
                 '<td>' + resolveBadge + '</td>' +
+                '<td>' + httpsBadge + '</td>' +
+                '<td>' + siteReadyBadge + '</td>' +
                 '<td>' + (item.resolved_ip || '-') + '</td>' +
                 '<td>' + (item.allocated_at || '-') + '</td>' +
                 '</tr>';

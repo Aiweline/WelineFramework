@@ -13,6 +13,7 @@ namespace Weline\Websites\Cron;
 use Weline\Cron\CronTaskInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
+use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Service\DnsProviderDetector;
 
 class DomainNsCheck implements CronTaskInterface
@@ -97,6 +98,28 @@ class DomainNsCheck implements CronTaskInterface
                     // 保存变更
                     if ($needsSave) {
                         $domain->forceCheck(false)->save();
+                    }
+
+                    // 同步根域下 DomainPool 的 DNS/CDN 状态
+                    $poolModel = ObjectManager::getInstance(DomainPool::class);
+                    $poolRows = $poolModel->clearQuery()
+                        ->where(DomainPool::schema_fields_PARENT_DOMAIN_ID, (int) $domain->getDomainId())
+                        ->select()
+                        ->fetchArray();
+                    $dnsStatus = $dnsProvider === '' || $dnsProvider === 'unknown'
+                        ? DomainPool::INFRA_STATUS_PENDING
+                        : DomainPool::INFRA_STATUS_READY;
+                    $cdnStatus = $dnsDetector->isCdnProvider($dnsProvider)
+                        ? DomainPool::INFRA_STATUS_READY
+                        : DomainPool::INFRA_STATUS_PENDING;
+                    foreach ($poolRows as $poolRow) {
+                        $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+                        $pool->setData($poolRow);
+                        $pool->setDnsProvider($dnsProvider);
+                        $pool->setDnsStatus($dnsStatus);
+                        $pool->setCdnStatus($cdnStatus);
+                        $pool->calculateSiteReady();
+                        $pool->save();
                     }
                     
                     if (\stripos($dnsProvider, 'cloudflare') !== false) {
