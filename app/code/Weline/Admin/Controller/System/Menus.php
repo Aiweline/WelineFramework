@@ -13,28 +13,47 @@ namespace Weline\Admin\Controller\System;
 
 use Weline\Admin\Controller\BaseController;
 use Weline\Admin\Helper\MenuUrlValidator;
-use Weline\Backend\Model\Menu;
+use Weline\Acl\Model\Acl;
+use Weline\Acl\Service\ResourceTreeServiceInterface;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
 
 class Menus extends BaseController
 {
+    private ?ResourceTreeServiceInterface $resourceTreeService = null;
+
+    /**
+     * 获取资源树服务
+     */
+    private function getResourceTreeService(): ResourceTreeServiceInterface
+    {
+        if ($this->resourceTreeService === null) {
+            $this->resourceTreeService = ObjectManager::getInstance(ResourceTreeServiceInterface::class);
+        }
+        return $this->resourceTreeService;
+    }
+
     public function index()
     {
-        $menu = $this->getMenu();
-        
         $search = $this->request->getParam('search', '');
         
+        // 从 ACL 表获取所有菜单资源
+        $allMenus = $this->getResourceTreeService()->getAllMenuResources();
+        
+        // 搜索过滤
         if ($search) {
-            $menu->where('name', '%' . $search . '%', 'like')
-                 ->whereOr('title', '%' . $search . '%', 'like')
-                 ->whereOr('source', '%' . $search . '%', 'like')
-                 ->whereOr('module', '%' . $search . '%', 'like');
+            $allMenus = array_filter($allMenus, function($menu) use ($search) {
+                $name = $menu[Acl::schema_fields_SOURCE_NAME] ?? '';
+                $sourceId = $menu[Acl::schema_fields_SOURCE_ID] ?? '';
+                $module = $menu[Acl::schema_fields_MODULE] ?? '';
+                return stripos($name, $search) !== false 
+                    || stripos($sourceId, $search) !== false 
+                    || stripos($module, $search) !== false;
+            });
+            $allMenus = array_values($allMenus);
         }
         
-        $allMenus = $menu->order('order', 'asc')->select()->fetchArray();
-        
-        $menuTree = $this->buildMenuTree($allMenus);
+        $menuTree = $this->getResourceTreeService()->buildMenuManagementTree($allMenus);
         
         $this->assign('menuTree', $menuTree);
         $this->assign('allMenus', $allMenus);
@@ -43,49 +62,30 @@ class Menus extends BaseController
         return $this->fetch();
     }
 
-    /**
-     * 构建菜单树形结构
-     */
-    private function buildMenuTree(array $menus, string $parentSource = ''): array
-    {
-        $tree = [];
-        foreach ($menus as $menu) {
-            if ($menu['parent_source'] === $parentSource) {
-                $children = $this->buildMenuTree($menus, $menu['source']);
-                $menu['children'] = $children;
-                $menu['has_children'] = !empty($children);
-                $tree[] = $menu;
-            }
-        }
-        usort($tree, fn($a, $b) => ($a['order'] ?? 0) <=> ($b['order'] ?? 0));
-        return $tree;
-    }
-
     public function postDelete()
     {
         try {
-            if ($id = $this->request->getPost('id', 0)) {
-                /**@var Menu $menu */
-                $menu = ObjectManager::getInstance(Menu::class)->load($id);
-                if ($menu->isSystem()) {
-                    throw new Exception(__('系统菜单无法删除！'));
-                }
-                
-                $childCount = $this->getMenu()
-                    ->where(Menu::schema_fields_PARENT_SOURCE, $menu->getSource())
-                    ->select()
-                    ->fetchArray();
-                
-                if (!empty($childCount)) {
-                    throw new Exception(__('该菜单下有 %{1} 个子菜单，请先删除子菜单！', count($childCount)));
-                }
-                
-                $menu->delete();
-                MenuUrlValidator::clearCache();
-                return $this->fetchJson(['code' => 200, 'msg' => __('删除成功！'), 'data' => []]);
-            } else {
+            $id = $this->request->getPost('id', 0);
+            if (!$id) {
                 return $this->fetchJson(['code' => 403, 'msg' => __('关键参数ID不存在！'), 'data' => []]);
             }
+            
+            // 加载 ACL 菜单资源
+            $menu = $this->getResourceTreeService()->loadMenuResource($id);
+            if (!$menu || !$menu->getSourceId()) {
+                return $this->fetchJson(['code' => 403, 'msg' => __('菜单不存在！'), 'data' => []]);
+            }
+            
+            // 检查是否有子菜单
+            if ($this->getResourceTreeService()->hasMenuChildren($menu->getSourceId())) {
+                return $this->fetchJson(['code' => 403, 'msg' => __('该菜单下有子菜单，请先删除子菜单！'), 'data' => []]);
+            }
+            
+            // 删除
+            $menu->delete();
+            MenuUrlValidator::clearCache();
+            
+            return $this->fetchJson(['code' => 200, 'msg' => __('删除成功！'), 'data' => []]);
         } catch (\Exception $exception) {
             return $this->fetchJson(['code' => 403, 'msg' => $exception->getMessage(), 'data' => []]);
         }
@@ -96,13 +96,100 @@ class Menus extends BaseController
         try {
             $data = json_decode($this->request->getBodyParams(), true);
             if ($data) {
-                $this->getMenu()->save($data);
+                // 映射字段名以兼容前端提交的数据
+                $mappedData = $this->mapMenuDataToAcl($data);
+                
+                // 获取或创建 ACL 记录
+                $acl = ObjectManager::getInstance(Acl::class);
+                $sourceId = $mappedData[Acl::schema_fields_SOURCE_ID] ?? '';
+                
+                if ($sourceId) {
+                    $acl->load($sourceId, Acl::schema_fields_SOURCE_ID);
+                }
+                
+                $acl->addData($mappedData);
+                
+                // 确保类型为 menus
+                if (!$acl->getType()) {
+                    $acl->setType(Acl::type_MENUS);
+                }
+                
+                $acl->save();
                 MenuUrlValidator::clearCache();
             }
             return json_encode($this->success());
         } catch (\Exception $exception) {
             return json_encode($this->exception($exception));
         }
+    }
+
+    /**
+     * 映射前端数据到 ACL 字段
+     */
+    private function mapMenuDataToAcl(array $data): array
+    {
+        $mapped = [];
+        
+        // source_id
+        if (isset($data['source_id'])) {
+            $mapped[Acl::schema_fields_SOURCE_ID] = $data['source_id'];
+        } elseif (isset($data['source'])) {
+            $mapped[Acl::schema_fields_SOURCE_ID] = $data['source'];
+        }
+        
+        // source_name (title -> source_name)
+        if (isset($data['title'])) {
+            $mapped[Acl::schema_fields_SOURCE_NAME] = $data['title'];
+        } elseif (isset($data['source_name'])) {
+            $mapped[Acl::schema_fields_SOURCE_NAME] = $data['source_name'];
+        }
+        
+        // route (action -> route)
+        if (isset($data['action'])) {
+            $mapped[Acl::schema_fields_ROUTE] = trim($data['action'], '/');
+        } elseif (isset($data['route'])) {
+            $mapped[Acl::schema_fields_ROUTE] = trim($data['route'], '/');
+        }
+        
+        // parent_source
+        if (isset($data['parent_source'])) {
+            $mapped[Acl::schema_fields_PARENT_SOURCE] = $data['parent_source'];
+        }
+        
+        // icon
+        if (isset($data['icon'])) {
+            $mapped[Acl::schema_fields_ICON] = $data['icon'];
+        }
+        
+        // order
+        if (isset($data['order'])) {
+            $mapped[Acl::schema_fields_ORDER] = (int)$data['order'];
+        }
+        
+        // module
+        if (isset($data['module'])) {
+            $mapped[Acl::schema_fields_MODULE] = $data['module'];
+        }
+        
+        // is_enable
+        if (isset($data['is_enable'])) {
+            $mapped[Acl::schema_fields_IS_ENABLE] = (int)$data['is_enable'];
+        }
+        
+        // is_backend
+        if (isset($data['is_backend'])) {
+            $mapped[Acl::schema_fields_IS_BACKEND] = (int)$data['is_backend'];
+        }
+        
+        // type (确保为 menus)
+        $mapped[Acl::schema_fields_TYPE] = Acl::type_MENUS;
+        
+        // acl_id (如果存在)
+        if (isset($data['acl_id'])) {
+            $mapped[Acl::schema_fields_ACL_ID] = $data['acl_id'];
+        }
+        
+        return $mapped;
     }
 
     /**
@@ -116,10 +203,12 @@ class Menus extends BaseController
                 throw new Exception(__('参数错误：缺少排序数据'));
             }
 
+            $acl = ObjectManager::getInstance(Acl::class);
             foreach ($data['orders'] as $item) {
                 if (isset($item['id']) && isset($item['order'])) {
-                    $menu = $this->getMenu()->load($item['id']);
-                    if ($menu->getId()) {
+                    // id 可能是 acl_id 或 source_id
+                    $menu = $this->getResourceTreeService()->loadMenuResource($item['id']);
+                    if ($menu && $menu->getSourceId()) {
                         $menu->setOrder((int)$item['order'])->save();
                     }
                 }
@@ -143,8 +232,8 @@ class Menus extends BaseController
                 throw new Exception(__('参数错误：缺少菜单ID'));
             }
 
-            $menu = $this->getMenu()->load($id);
-            if (!$menu->getId()) {
+            $menu = $this->getResourceTreeService()->loadMenuResource($id);
+            if (!$menu || !$menu->getSourceId()) {
                 throw new Exception(__('菜单不存在'));
             }
 
@@ -156,10 +245,5 @@ class Menus extends BaseController
         } catch (\Exception $exception) {
             return $this->fetchJson(['code' => 403, 'msg' => $exception->getMessage(), 'data' => []]);
         }
-    }
-
-    private function getMenu(): Menu
-    {
-        return ObjectManager::getInstance(Menu::class);
     }
 }

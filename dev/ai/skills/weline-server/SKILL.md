@@ -590,3 +590,9 @@ cat var/log/master_health_debug.log
 7. **直连模式端口语义**：SO_REUSEPORT 直连下多个 Worker 共用主端口（不是 `port + i`）；若出现 Worker 绑定到 444/445 等递增端口，说明模式实现异常，应检查 `MasterProcess` 初始化与启动路径。
 8. **HTTPS 主端口访问 http:// 不跳转（Windows Dispatcher）**：在 Dispatcher 入口识别协议；当实例为 HTTPS 且请求为明文 HTTP 时，直接返回同端口 `301 Location: https://host:port/path`，不要只依赖 HTTP Redirect 独立端口。
 9. **Worker 循环报 `undefined function stream_socket_recv`**：`worker_ssl.php` 需使用 `stream_socket_recvfrom(..., STREAM_PEEK)`，不要调用不存在的 `stream_socket_recv()`；修复后重启并用 HTTP/HTTPS 各请求一次确认。
+10. **Worker 内存溢出（OOM）**：
+    - 检查 `var/log/wls/crash.log`，若出现 `Allowed memory size of ... exhausted`
+    - 原因 1：`memory_limit` 设置过低，WLS 推荐 256M+
+    - 原因 2：`WlsMemoryAdapter` 多 identity 缓存配置总和超过进程内存上限
+    - 原因 3：缓存条目过大或未正确淘汰
+    - 解决：在 `env.php` 中调整 `cache.drivers.wls_memory.max_memory`（建议每个 identity 不超过 16-32MB），或提高 `memory_limit`
