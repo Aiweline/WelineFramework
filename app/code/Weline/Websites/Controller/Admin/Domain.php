@@ -508,8 +508,12 @@ class Domain extends BackendController
             $resolveToLocal = $this->request->getPost('resolve_to_local', $autoResolve ? 'yes' : 'no');
             $subdomainsRaw = $this->request->getPost('subdomains', '');
             $dnsChoice = (string) $this->request->getPost('dns_choice', 'follow_registrar');
+            $dnsProvider = (string) $this->request->getPost('dns_provider', '');
+            $dnsAccountId = (int) $this->request->getPost('dns_account_id', 0);
             $dnsNameservers = (string) $this->request->getPost('dns_nameservers', '');
             $cdnChoice = (string) $this->request->getPost('cdn_choice', 'follow_registrar');
+            $cdnProvider = (string) $this->request->getPost('cdn_provider', '');
+            $cdnAccountId = (int) $this->request->getPost('cdn_account_id', 0);
             $startLifecycle = (string) $this->request->getPost('start_lifecycle', '1');
             $subdomains = \is_string($subdomainsRaw) ? (json_decode($subdomainsRaw, true) ?: \array_map('trim', \explode(',', $subdomainsRaw))) : (array) $subdomainsRaw;
             if ($subdomains === []) {
@@ -536,8 +540,20 @@ class Domain extends BackendController
                 if (!isset($it['dns_nameservers'])) {
                     $it['dns_nameservers'] = $dnsNameservers;
                 }
+                if (!isset($it['dns_provider'])) {
+                    $it['dns_provider'] = $dnsProvider;
+                }
+                if (!isset($it['dns_account_id'])) {
+                    $it['dns_account_id'] = $dnsAccountId;
+                }
                 if (!isset($it['cdn_choice'])) {
                     $it['cdn_choice'] = $cdnChoice;
+                }
+                if (!isset($it['cdn_provider'])) {
+                    $it['cdn_provider'] = $cdnProvider;
+                }
+                if (!isset($it['cdn_account_id'])) {
+                    $it['cdn_account_id'] = $cdnAccountId;
                 }
                 if (!isset($it['start_lifecycle'])) {
                     $it['start_lifecycle'] = $startLifecycle;

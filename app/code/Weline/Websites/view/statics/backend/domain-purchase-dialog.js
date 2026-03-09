@@ -51,21 +51,76 @@
             description: 'Choose how DNS, CDN, and lifecycle monitoring should be handled after the domain is purchased.',
             dnsChoice: 'DNS Strategy',
             dnsFollowRegistrar: 'Follow registrar',
+            dnsSelectProviderAccount: 'Specify provider account',
             dnsCustomNameservers: 'Custom nameservers',
+            dnsProvider: 'DNS Provider',
+            dnsAccount: 'DNS Account',
+            dnsProviderPlaceholder: 'Select provider',
+            dnsAccountPlaceholder: 'Select account',
             dnsNameservers: 'Nameservers',
             dnsNameserversPlaceholder: 'ns1.example.com, ns2.example.com',
             cdnChoice: 'CDN Strategy',
             cdnFollowRegistrar: 'Follow registrar',
+            cdnSelectProviderAccount: 'Specify provider account',
             cdnNone: 'Do not configure CDN',
+            cdnProvider: 'CDN Provider',
+            cdnAccount: 'CDN Account',
+            cdnProviderPlaceholder: 'Select provider',
+            cdnAccountPlaceholder: 'Select account',
             resolveToLocal: 'Resolve @ and www to this server',
             resolveHint: 'The purchase flow will create records for the selected subdomains and monitor their status.',
             subdomains: 'Subdomains',
             subdomainsPlaceholder: '@, www',
             startLifecycle: 'Start lifecycle tracking after purchase',
             startLifecycleHint: 'The system will monitor purchase, DNS, verification, and HTTPS status automatically.',
+            selectAccountRequired: 'Please select the corresponding provider account.',
             confirm: 'Confirm Purchase',
             cancel: 'Cancel'
         }, customLabels || {});
+    }
+
+    function buildProviderMap(accounts) {
+        var providers = {};
+        (accounts || []).forEach(function (account) {
+            if (!account) {
+                return;
+            }
+            var providerCode = String(account.registrar_code || '').trim();
+            if (!providerCode) {
+                return;
+            }
+            if (!providers[providerCode]) {
+                providers[providerCode] = {
+                    code: providerCode,
+                    name: String(account.registrar_name || providerCode),
+                    accounts: []
+                };
+            }
+            providers[providerCode].accounts.push({
+                account_id: String(account.account_id || ''),
+                account_name: String(account.account_name || account.name || ''),
+                registrar_name: String(account.registrar_name || providerCode)
+            });
+        });
+        return providers;
+    }
+
+    function buildOptionsHtml(items, placeholder) {
+        var html = '<option value="">' + escapeHtml(placeholder || '') + '</option>';
+        (items || []).forEach(function (item) {
+            html += '<option value="' + escapeHtml(item.value) + '">' + escapeHtml(item.label) + '</option>';
+        });
+        return html;
+    }
+
+    function showError(message) {
+        if (window.BackendToast && typeof window.BackendToast.error === 'function') {
+            window.BackendToast.error(message);
+            return;
+        }
+        if (window.AdminToast && typeof window.AdminToast.error === 'function') {
+            window.AdminToast.error(message);
+        }
     }
 
     function buildPurchaseErrorMessage(res, fallbackMessage) {
@@ -90,12 +145,23 @@
         var labels = getLabelMap(options.labels);
         var defaults = Object.assign({
             dnsChoice: 'follow_registrar',
+            dnsProvider: '',
+            dnsAccountId: '',
             dnsNameservers: '',
             cdnChoice: 'follow_registrar',
+            cdnProvider: '',
+            cdnAccountId: '',
             resolveToLocal: true,
             subdomains: '@,www',
             startLifecycle: true
         }, options.defaults || {});
+        var providerMap = buildProviderMap(options.accounts || []);
+        var providerOptions = Object.keys(providerMap).map(function (providerCode) {
+            return {
+                value: providerCode,
+                label: providerMap[providerCode].name
+            };
+        });
 
         return new Promise(function (resolve) {
             var overlay = document.createElement('div');
@@ -116,6 +182,7 @@
                 + '        <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.dnsChoice) + '</label>'
                 + '        <select class="weline-domain-purchase-dialog__select" data-role="dns-choice">'
                 + '          <option value="follow_registrar">' + escapeHtml(labels.dnsFollowRegistrar) + '</option>'
+                + '          <option value="provider_account">' + escapeHtml(labels.dnsSelectProviderAccount) + '</option>'
                 + '          <option value="custom_nameservers">' + escapeHtml(labels.dnsCustomNameservers) + '</option>'
                 + '        </select>'
                 + '      </div>'
@@ -123,8 +190,25 @@
                 + '        <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.cdnChoice) + '</label>'
                 + '        <select class="weline-domain-purchase-dialog__select" data-role="cdn-choice">'
                 + '          <option value="follow_registrar">' + escapeHtml(labels.cdnFollowRegistrar) + '</option>'
+                + '          <option value="provider_account">' + escapeHtml(labels.cdnSelectProviderAccount) + '</option>'
                 + '          <option value="none">' + escapeHtml(labels.cdnNone) + '</option>'
                 + '        </select>'
+                + '      </div>'
+                + '      <div class="weline-domain-purchase-dialog__field" data-role="dns-provider-field" hidden>'
+                + '        <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.dnsProvider) + '</label>'
+                + '        <select class="weline-domain-purchase-dialog__select" data-role="dns-provider"></select>'
+                + '      </div>'
+                + '      <div class="weline-domain-purchase-dialog__field" data-role="dns-account-field" hidden>'
+                + '        <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.dnsAccount) + '</label>'
+                + '        <select class="weline-domain-purchase-dialog__select" data-role="dns-account"></select>'
+                + '      </div>'
+                + '      <div class="weline-domain-purchase-dialog__field" data-role="cdn-provider-field" hidden>'
+                + '        <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.cdnProvider) + '</label>'
+                + '        <select class="weline-domain-purchase-dialog__select" data-role="cdn-provider"></select>'
+                + '      </div>'
+                + '      <div class="weline-domain-purchase-dialog__field" data-role="cdn-account-field" hidden>'
+                + '        <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.cdnAccount) + '</label>'
+                + '        <select class="weline-domain-purchase-dialog__select" data-role="cdn-account"></select>'
                 + '      </div>'
                 + '      <div class="weline-domain-purchase-dialog__field weline-domain-purchase-dialog__field--full" data-role="dns-nameservers-field" hidden>'
                 + '        <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.dnsNameservers) + '</label>'
@@ -155,21 +239,64 @@
             var dialog = overlay.querySelector('.weline-domain-purchase-dialog');
             var dnsChoice = dialog.querySelector('[data-role="dns-choice"]');
             var cdnChoice = dialog.querySelector('[data-role="cdn-choice"]');
+            var dnsProviderField = dialog.querySelector('[data-role="dns-provider-field"]');
+            var dnsProvider = dialog.querySelector('[data-role="dns-provider"]');
+            var dnsAccountField = dialog.querySelector('[data-role="dns-account-field"]');
+            var dnsAccount = dialog.querySelector('[data-role="dns-account"]');
+            var cdnProviderField = dialog.querySelector('[data-role="cdn-provider-field"]');
+            var cdnProvider = dialog.querySelector('[data-role="cdn-provider"]');
+            var cdnAccountField = dialog.querySelector('[data-role="cdn-account-field"]');
+            var cdnAccount = dialog.querySelector('[data-role="cdn-account"]');
             var dnsNameserversField = dialog.querySelector('[data-role="dns-nameservers-field"]');
             var dnsNameservers = dialog.querySelector('[data-role="dns-nameservers"]');
             var resolveToLocal = dialog.querySelector('[data-role="resolve-to-local"]');
             var subdomains = dialog.querySelector('[data-role="subdomains"]');
             var startLifecycle = dialog.querySelector('[data-role="start-lifecycle"]');
 
+            dnsProvider.innerHTML = buildOptionsHtml(providerOptions, labels.dnsProviderPlaceholder);
+            cdnProvider.innerHTML = buildOptionsHtml(providerOptions, labels.cdnProviderPlaceholder);
             dnsChoice.value = defaults.dnsChoice;
             cdnChoice.value = defaults.cdnChoice;
+            dnsProvider.value = defaults.dnsProvider || '';
+            cdnProvider.value = defaults.cdnProvider || '';
             dnsNameservers.value = defaults.dnsNameservers || '';
             resolveToLocal.checked = !!defaults.resolveToLocal;
             subdomains.value = defaults.subdomains || '@,www';
             startLifecycle.checked = !!defaults.startLifecycle;
 
+            function syncAccountOptions(providerSelect, accountSelect, placeholder, defaultAccountId) {
+                var providerCode = providerSelect.value || '';
+                var accounts = providerCode && providerMap[providerCode] ? providerMap[providerCode].accounts : [];
+                accountSelect.innerHTML = buildOptionsHtml(accounts.map(function (account) {
+                    return {
+                        value: account.account_id,
+                        label: account.account_name + ' (' + account.registrar_name + ')'
+                    };
+                }), placeholder);
+                if (defaultAccountId) {
+                    accountSelect.value = String(defaultAccountId);
+                } else if (accounts.length === 1) {
+                    accountSelect.value = accounts[0].account_id;
+                }
+            }
+
             function syncDnsField() {
+                var useProviderAccount = dnsChoice.value === 'provider_account';
+                dnsProviderField.hidden = !useProviderAccount;
+                dnsAccountField.hidden = !useProviderAccount;
                 dnsNameserversField.hidden = dnsChoice.value !== 'custom_nameservers';
+                if (useProviderAccount) {
+                    syncAccountOptions(dnsProvider, dnsAccount, labels.dnsAccountPlaceholder, defaults.dnsAccountId || '');
+                }
+            }
+
+            function syncCdnField() {
+                var useProviderAccount = cdnChoice.value === 'provider_account';
+                cdnProviderField.hidden = !useProviderAccount;
+                cdnAccountField.hidden = !useProviderAccount;
+                if (useProviderAccount) {
+                    syncAccountOptions(cdnProvider, cdnAccount, labels.cdnAccountPlaceholder, defaults.cdnAccountId || '');
+                }
             }
 
             function cleanup(value) {
@@ -180,7 +307,15 @@
             }
 
             syncDnsField();
+            syncCdnField();
             dnsChoice.addEventListener('change', syncDnsField);
+            dnsProvider.addEventListener('change', function () {
+                syncAccountOptions(dnsProvider, dnsAccount, labels.dnsAccountPlaceholder, '');
+            });
+            cdnChoice.addEventListener('change', syncCdnField);
+            cdnProvider.addEventListener('change', function () {
+                syncAccountOptions(cdnProvider, cdnAccount, labels.cdnAccountPlaceholder, '');
+            });
 
             overlay.addEventListener('click', function (event) {
                 if (event.target === overlay) {
@@ -195,10 +330,22 @@
             });
 
             overlay.querySelector('[data-action="confirm"]').addEventListener('click', function () {
+                if (dnsChoice.value === 'provider_account' && !dnsAccount.value) {
+                    showError(labels.selectAccountRequired);
+                    return;
+                }
+                if (cdnChoice.value === 'provider_account' && !cdnAccount.value) {
+                    showError(labels.selectAccountRequired);
+                    return;
+                }
                 cleanup({
                     dns_choice: dnsChoice.value,
+                    dns_provider: dnsProvider.value,
+                    dns_account_id: dnsAccount.value,
                     dns_nameservers: dnsNameservers.value.trim(),
                     cdn_choice: cdnChoice.value,
+                    cdn_provider: cdnProvider.value,
+                    cdn_account_id: cdnAccount.value,
                     resolve_to_local: resolveToLocal.checked ? 'yes' : 'no',
                     subdomains: subdomains.value.trim() || '@,www',
                     start_lifecycle: startLifecycle.checked ? '1' : '0'
