@@ -1174,6 +1174,13 @@ class DomainManagement extends BaseController
 
                 if ($result['success']) {
                     $success++;
+                    // 解析成功后直接按目标记录写入域名池（不依赖第三方查询接口返回）
+                    $poolSyncAfterResolve = $this->syncDnsRecordsToDomainPool($domain, [
+                        ['type' => 'A', 'host' => '@', 'value' => $serverIp],
+                        ['type' => 'A', 'host' => 'www', 'value' => $serverIp],
+                    ], false);
+                    $poolAdded += (int) ($poolSyncAfterResolve['added'] ?? 0);
+                    $poolSkipped += (int) ($poolSyncAfterResolve['skipped'] ?? 0);
                     if ($autoTransferToPool) {
                         $poolResult = $subdomainGenerator->generateDefaultSubdomains($domain, $prefixes);
                         $poolAdded += (int) ($poolResult['added'] ?? 0);
@@ -1182,6 +1189,13 @@ class DomainManagement extends BaseController
                 } else {
                     $failed++;
                     $errors[] = $domain->getDomain() . ': ' . \implode('; ', $result['errors'] ?? []);
+                    // 第三方 API 失败时，兜底使用实时 DNS 查询同步域名池（双保险）
+                    $fallbackRecords = $this->collectLiveDnsRecordsForPoolSync($domain);
+                    if ($fallbackRecords !== []) {
+                        $fallbackSync = $this->syncDnsRecordsToDomainPool($domain, $fallbackRecords, false);
+                        $poolAdded += (int) ($fallbackSync['added'] ?? 0);
+                        $poolSkipped += (int) ($fallbackSync['skipped'] ?? 0);
+                    }
                 }
             }
 
@@ -1440,6 +1454,14 @@ class DomainManagement extends BaseController
                 \is_array($result) ? $result : [],
                 false
             );
+            // 再用实时 DNS 查询再做一次兜底同步（避免第三方返回缺失关键记录）
+            $liveRecords = $this->collectLiveDnsRecordsForPoolSync($domain);
+            if ($liveRecords !== []) {
+                $liveSync = $this->syncDnsRecordsToDomainPool($domain, $liveRecords, false);
+                $poolSync['added'] += (int) ($liveSync['added'] ?? 0);
+                $poolSync['marked_non_local'] += (int) ($liveSync['marked_non_local'] ?? 0);
+                $poolSync['skipped'] += (int) ($liveSync['skipped'] ?? 0);
+            }
 
             return $this->fetchJson([
                 'success' => true,
@@ -1454,6 +1476,18 @@ class DomainManagement extends BaseController
                 ],
             ]);
         } catch (\Throwable $e) {
+            // 第三方 DNS API 出错时，仍执行一次实时 DNS 兜底同步，保证域名池自动写入不中断
+            try {
+                $domain = ObjectManager::getInstance(Domain::class, [], false);
+                $domain->load($domainId);
+                if ($domain->getDomainId()) {
+                    $fallbackRecords = $this->collectLiveDnsRecordsForPoolSync($domain);
+                    if ($fallbackRecords !== []) {
+                        $this->syncDnsRecordsToDomainPool($domain, $fallbackRecords, false);
+                    }
+                }
+            } catch (\Throwable $ignored) {
+            }
             $error = (string) $e->getMessage();
             if (\str_starts_with($error, '获取 DNS 记录失败：')) {
                 $error = \trim((string) \mb_substr($error, \mb_strlen('获取 DNS 记录失败：')));
@@ -1593,6 +1627,58 @@ class DomainManagement extends BaseController
     }
 
     /**
+     * 实时 DNS 查询（@ + www）用于域名池同步兜底
+     */
+    private function collectLiveDnsRecordsForPoolSync(Domain $rootDomain): array
+    {
+        $root = \strtolower(\trim((string) $rootDomain->getDomain()));
+        if ($root === '') {
+            return [];
+        }
+
+        $targets = [
+            ['host' => '@', 'fqdn' => $root],
+            ['host' => 'www', 'fqdn' => 'www.' . $root],
+        ];
+
+        $records = [];
+        foreach ($targets as $target) {
+            $host = $target['host'];
+            $fqdn = $target['fqdn'];
+
+            $aRecords = @\dns_get_record($fqdn, \DNS_A);
+            if (\is_array($aRecords)) {
+                foreach ($aRecords as $aRecord) {
+                    $ip = \trim((string) ($aRecord['ip'] ?? ''));
+                    if ($ip !== '') {
+                        $records[] = [
+                            'type' => 'A',
+                            'host' => $host,
+                            'value' => $ip,
+                        ];
+                    }
+                }
+            }
+
+            $aaaaRecords = @\dns_get_record($fqdn, \DNS_AAAA);
+            if (\is_array($aaaaRecords)) {
+                foreach ($aaaaRecords as $aaaaRecord) {
+                    $ip6 = \trim((string) ($aaaaRecord['ipv6'] ?? ''));
+                    if ($ip6 !== '') {
+                        $records[] = [
+                            'type' => 'AAAA',
+                            'host' => $host,
+                            'value' => $ip6,
+                        ];
+                    }
+                }
+            }
+        }
+
+        return $records;
+    }
+
+    /**
      * AJAX: 删除 DNS 解析记录
      */
     public function postDeleteDnsRecord(): string
@@ -1712,6 +1798,8 @@ class DomainManagement extends BaseController
             $success = 0;
             $failed = 0;
             $errors = [];
+            $autoSwitchedProvider = 0;
+            $autoSyncErrors = [];
 
             foreach ($domainIds as $domainId) {
                 $domain = ObjectManager::getInstance(Domain::class, [], false);
@@ -1746,6 +1834,13 @@ class DomainManagement extends BaseController
                     $success++;
                     $domain->setNameservers(\implode(',', $nameserverList));
                     $domain->save();
+                    $autoResult = $this->refreshDomainDnsProviderAndSyncRecords($domain, true);
+                    if (($autoResult['provider_updated'] ?? false) === true) {
+                        $autoSwitchedProvider++;
+                    }
+                    if (($autoResult['sync_error'] ?? '') !== '') {
+                        $autoSyncErrors[] = $domain->getDomain() . ': ' . $autoResult['sync_error'];
+                    }
                 } else {
                     $failed++;
                     $errors[] = $domain->getDomain() . ': ' . ($result['message'] ?? __('切换失败'));
@@ -1762,6 +1857,8 @@ class DomainManagement extends BaseController
                     'failed' => $failed,
                     'errors' => $errors,
                     'target_nameservers' => $nameserverList,
+                    'auto_switched_provider' => $autoSwitchedProvider,
+                    'auto_sync_errors' => $autoSyncErrors,
                 ],
             ]);
         } catch (\Throwable $e) {
@@ -2011,6 +2108,8 @@ class DomainManagement extends BaseController
             $success = 0;
             $failed = 0;
             $errors = [];
+            $autoSwitchedProvider = 0;
+            $autoSyncErrors = [];
 
             foreach ($domainIds as $domainId) {
                 $domain = ObjectManager::getInstance(Domain::class, [], false);
@@ -2056,6 +2155,13 @@ class DomainManagement extends BaseController
                     $success++;
                     $domain->setNameservers($targetNs);
                     $domain->save();
+                    $autoResult = $this->refreshDomainDnsProviderAndSyncRecords($domain, true);
+                    if (($autoResult['provider_updated'] ?? false) === true) {
+                        $autoSwitchedProvider++;
+                    }
+                    if (($autoResult['sync_error'] ?? '') !== '') {
+                        $autoSyncErrors[] = $domain->getDomain() . ': ' . $autoResult['sync_error'];
+                    }
                 } else {
                     $failed++;
                     $errors[] = $domainName . ': ' . ($updateResult['message'] ?? __('切换失败'));
@@ -2071,6 +2177,8 @@ class DomainManagement extends BaseController
                     'success' => $success,
                     'failed' => $failed,
                     'errors' => $errors,
+                    'auto_switched_provider' => $autoSwitchedProvider,
+                    'auto_sync_errors' => $autoSyncErrors,
                 ],
             ]);
         } catch (\Throwable $e) {
@@ -2237,6 +2345,85 @@ class DomainManagement extends BaseController
 
         \sort($nameservers);
         return $nameservers;
+    }
+
+    /**
+     * DNS 切换后自动识别供应商并同步 DNS 记录
+     */
+    private function refreshDomainDnsProviderAndSyncRecords(Domain $domain, bool $forceRefresh = true): array
+    {
+        $domainName = (string) $domain->getDomain();
+        if ($domainName === '') {
+            return ['provider_updated' => false, 'sync_error' => ''];
+        }
+
+        $dnsDetector = ObjectManager::getInstance(\Weline\Websites\Service\DnsProviderDetector::class);
+        $resolveService = ObjectManager::getInstance(\Weline\Websites\Service\DomainResolveService::class);
+        $accountModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainRegistrarAccount::class);
+
+        $registrarCode = '';
+        $accountId = (int) $domain->getAccountId();
+        if ($accountId > 0) {
+            $account = clone $accountModel;
+            $account->load($accountId);
+            $registrarCode = (string) ($account->getRegistrarCode() ?: '');
+        }
+
+        $liveNs = $this->queryLiveNsRecords($domainName);
+        $storedNs = $domain->getNameservers();
+        if ($liveNs !== [] && ($forceRefresh || $liveNs !== $storedNs)) {
+            $domain->setNameservers($liveNs);
+            $storedNs = $liveNs;
+        }
+
+        $detectResult = $dnsDetector->detect($storedNs, $registrarCode);
+        $provider = (string) ($detectResult['provider'] ?? '');
+        $providerUpdated = false;
+
+        if ($provider !== '' && $domain->getDnsProvider() !== $provider) {
+            $domain->setDnsProvider($provider);
+            $providerUpdated = true;
+        }
+
+        if ($provider !== '') {
+            $providerAccount = $resolveService->findAccountByProviderCode($provider);
+            if ($providerAccount !== null) {
+                $providerAccountId = (int) $providerAccount->getAccountId();
+                if ($providerAccountId > 0 && (int) $domain->getDnsAccountId() !== $providerAccountId) {
+                    $domain->setDnsAccountId($providerAccountId);
+                    $providerUpdated = true;
+                }
+
+                if ($dnsDetector->isCdnProvider($provider)) {
+                    if ((int) $domain->getCdnAccountId() !== $providerAccountId) {
+                        $domain->setCdnAccountId($providerAccountId);
+                        $providerUpdated = true;
+                    }
+                    if ((string) $domain->getCdnProvider() !== $provider) {
+                        $domain->setCdnProvider($provider);
+                        $providerUpdated = true;
+                    }
+                }
+            }
+        }
+
+        $domain->forceCheck(false)->save();
+        $this->syncDnsProviderToPool($domainName, $provider, (string) ($domain->getCdnProvider() ?? ''));
+
+        $sync = $resolveService->syncDnsRecords($domain);
+        $syncError = (string) ($sync['error'] ?? '');
+        if ($syncError === '') {
+            $dnsDetails = $resolveService->getDnsDetails($domain);
+            $dnsRecords = \is_array($dnsDetails['records'] ?? null) ? $dnsDetails['records'] : [];
+            if ($dnsRecords !== []) {
+                $this->syncDnsRecordsToDomainPool($domain, $dnsRecords, false);
+            }
+        }
+
+        return [
+            'provider_updated' => $providerUpdated,
+            'sync_error' => $syncError,
+        ];
     }
 
     /**
