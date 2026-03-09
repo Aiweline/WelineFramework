@@ -61,6 +61,11 @@ class WlsLogger
         $this->logDir = LogConfig::getLogDir();
         $this->minLevel = LogConfig::getMinLevel();
         $this->fileEnabled = LogConfig::isEnabled();
+        // 开发模式：所有进程同时输出到控制台并写入日志文件
+        if (LogConfig::isDevMode()) {
+            $this->stdoutEnabled = true;
+            $this->fileEnabled = true;
+        }
     }
 
     /**
