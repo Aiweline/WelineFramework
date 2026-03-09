@@ -1,7 +1,7 @@
 # Weline_Server 验证测试与问题即修复 - 任务进度
 
 > 计划：[plan.md](./plan.md)
-> 最后更新：2026-03-07
+> 最后更新：2026-03-09
 
 ## 状态说明
 
@@ -104,13 +104,16 @@
 
 ## 2026-03-09 请求时延优化（增量）
 
-- [-] `wls-session-deferred-persist`
-  - 目标：`Session` 变更合并到请求末尾统一写入，减少单请求内重复序列化与 RPC
-- [-] `wls-cache-native-batch-ops`
-  - 目标：`exists/touch/mget/mset` 走协议原生命令，去掉 `get()+set()` 模拟
-- [-] `wls-runtime-log-switches`
-  - 目标：增加 `server.performance` 配置，控制性能头、慢请求日志、请求/错误日志
-- [ ] `wls-latency-regression`
-  - 目标：跑定向测试与最小回归，确认 302 / 登录态 / Session / Cache 行为未回退
+- [x] `wls-session-deferred-persist`
+  - 已完成：`WLS Session` 改为请求末尾统一 `save + writeClose`，避免单请求多次 `set/delete` 触发多次 RPC
+- [x] `wls-cache-native-batch-ops`
+  - 已完成：`exists/touch/mget/mset` 改为协议原生命令，去掉 `get()+set()` 与逐 key RPC
+- [x] `wls-runtime-log-switches`
+  - 已完成：增加 `server.performance` 配置入口，控制性能头、慢请求日志、请求/错误日志
+- [-] `wls-latency-regression`
+  - 已验证：`SessionTest`、`SessionStoreTest` 定向单测通过
+  - 已验证：HTTP 级 `/_wls/health`、首页 `/`、后台未登录 `302` 最小回归通过
+  - 观测：`/_wls/health` 基本在 `3-4ms`，首页压测均值约 `28ms`，后台未登录 `302` 热身后约 `3-5ms`
+  - 备注：当前 `env.php` 中 `session.wls_managed=false`，本地前端实例未走 WLS Session Server，Session 延迟写优化需切回托管模式后才能在 HTTP 链路中体现
 - [ ] `wls-linux-direct-followup`
   - 备注：直连模式后置；需先设计 Dispatcher 能力下放 Worker 的方案
