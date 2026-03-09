@@ -1018,17 +1018,59 @@ install_pgsql_linux() {
   run_privileged systemctl stop postgresql 2>/dev/null || run_privileged service postgresql stop 2>/dev/null || true
   run_privileged systemctl disable postgresql 2>/dev/null || true
 
+  # 检测 5432 端口是否被占用，启动失败时输出完整错误并支持用户干预后重试
+  local pg_port=5432
+  is_pg_port_in_use() {
+    (ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep -qE ":${pg_port}([^0-9]|$)" && return 0
+    (lsof -i ":${pg_port}" 2>/dev/null) | grep -q LISTEN && return 0
+    return 1
+  }
+  start_pg_with_retry() {
+    local max_attempts=5
+    local attempt=1
+    while [[ $attempt -le $max_attempts ]]; do
+      if is_pg_port_in_use; then
+        echo "" >&2
+        echo "ERROR: 端口 $pg_port 已被占用，PostgreSQL 无法启动。" >&2
+        echo "  请检查: ss -tlnp | grep $pg_port  或  lsof -i :$pg_port" >&2
+        echo "  常见处理: systemctl stop postgresql  或宝塔面板中停止 PostgreSQL" >&2
+        echo "  处理完成后按 Enter 重试 (第 $attempt/$max_attempts 次)，或 Ctrl+C 退出" >&2
+        read -r
+        attempt=$((attempt + 1))
+        continue
+      fi
+      if run_as_weline env PATH="$pg_bindir:$PATH" "$pg_bindir/pg_ctl" -D "$pgsql_data" -l "$pgsql_data/logfile" start "${pg_ctl_opts[@]}"; then
+        return 0
+      fi
+      echo "" >&2
+      echo "ERROR: pg_ctl 启动失败。详细日志:" >&2
+      if [[ -d "$pgsql_data/log" ]]; then
+        tail -30 "$pgsql_data"/log/postgresql-*.log 2>/dev/null | sed 's/^/  /' >&2
+      else
+        tail -30 "$pgsql_data/logfile" 2>/dev/null | sed 's/^/  /' >&2
+      fi
+      echo "" >&2
+      echo "  请根据日志处理（如停止占用端口的服务），完成后按 Enter 重试 (第 $attempt/$max_attempts 次)，或 Ctrl+C 退出" >&2
+      read -r
+      attempt=$((attempt + 1))
+    done
+    echo "ERROR: PostgreSQL 启动失败次数过多，请手动排查后执行:" >&2
+    echo "  sudo -u $WELINE_USER $pg_bindir/pg_ctl -D $pgsql_data -l $pgsql_data/logfile start ${pg_ctl_opts[*]}" >&2
+    return 1
+  }
+
   pg_ctl_opts=(-o "-k $pgsql_data")
   if [[ -f "$pgsql_data/PG_VERSION" ]]; then
     if ! run_as_weline env PATH="$pg_bindir:$PATH" "$pg_bindir/pg_ctl" -D "$pgsql_data" status 2>/dev/null | grep -q "running"; then
       echo "Starting PostgreSQL cluster at $pgsql_data..."
-      run_as_weline env PATH="$pg_bindir:$PATH" "$pg_bindir/pg_ctl" -D "$pgsql_data" -l "$pgsql_data/logfile" start "${pg_ctl_opts[@]}"
+      start_pg_with_retry || return 1
     fi
   else
     echo "Initializing PostgreSQL data directory at $pgsql_data (run as $WELINE_USER)..."
     [[ "$(id -u)" -eq 0 ]] && run_privileged chown -R "$WELINE_USER":"$WELINE_USER" "$pgsql_data"
     run_as_weline env PATH="$pg_bindir:$PATH" "$pg_bindir/initdb" -D "$pgsql_data" -E UTF8 -U postgres
-    run_as_weline env PATH="$pg_bindir:$PATH" "$pg_bindir/pg_ctl" -D "$pgsql_data" -l "$pgsql_data/logfile" start "${pg_ctl_opts[@]}"
+    echo "Starting PostgreSQL server..."
+    start_pg_with_retry || return 1
   fi
 
   echo "PostgreSQL installed and linked at $dest/bin -> $pg_dir, data at $pgsql_data"
