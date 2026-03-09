@@ -217,6 +217,7 @@ class Provider extends BaseController
     #[Acl('Weline_Ai::ai_provider_edit_offcanvas', '编辑供应商账户（侧边栏）', 'mdi-pencil', '编辑供应商账户（侧边栏）')]
     public function editOffcanvas(): string
     {
+        $this->layoutType = 'default.blank';
         $id = (int)($this->request->getParam('id') ?? 0);
         $account = null;
         if ($id > 0) {
