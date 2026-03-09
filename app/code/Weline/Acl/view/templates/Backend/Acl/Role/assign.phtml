@@ -794,7 +794,7 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
             /**
              * 使用闭包替代全局函数，避免 WLS 常驻内存模式下 "Cannot redeclare function" 错误
              */
-            $getLiAttr = function (\Weline\Acl\Model\RoleAccess|\Weline\Acl\Model\Acl $acl): string {
+            $getLiAttr = function (\Weline\Acl\Model\RoleAccess|\Weline\Acl\Model\Acl|\Weline\Acl\Model\AclNode $acl): string {
                 $type = $acl->getType() ?: '';
                 $icon = $acl->getIcon();
                 if (empty($icon)) {
@@ -832,7 +832,7 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
                 return " class='show_tooltip' title='{$desc}' data-jstree='{\"disabled\":false,\"opened\":false,\"selected\":{$access},\"icon\":\"$icon\"}' ";
             };
 
-            $getTreeNode = function (\Weline\Acl\Model\RoleAccess|\Weline\Acl\Model\Acl $tree) use (&$getTreeNode, $getLiAttr): string {
+            $getTreeNode = function (\Weline\Acl\Model\RoleAccess|\Weline\Acl\Model\Acl|\Weline\Acl\Model\AclNode $tree) use (&$getTreeNode, $getLiAttr): string {
                 $result = '';
                 if ($tree->getSub()) {
                     $result .= '<ul>';

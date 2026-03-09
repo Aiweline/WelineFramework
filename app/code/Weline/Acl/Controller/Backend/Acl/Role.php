@@ -190,7 +190,6 @@ class Role extends \Weline\Admin\Controller\BaseController
     #[\Weline\Framework\Acl\Acl('Weline_Acl::acl_role_assign', '权限分配', '', '')]
     public function getAssign()
     {
-        // 角色
         $id = $this->request->getGet('id');
         if (!$id) {
             $this->redirect(404);
@@ -203,32 +202,63 @@ class Role extends \Weline\Admin\Controller\BaseController
         } else {
             $this->assign('assign_role', $role->getData());
         }
-        // 可分配权限
-        /**@var \Weline\Acl\Model\RoleAccess $roleAccessModel */
-        $roleAccessModel = ObjectManager::getInstance(\Weline\Acl\Model\RoleAccess::class);
-        $trees = $roleAccessModel->clear()->getTreeWithRole($role);
-        // 当前角色权限
-        $current_accesses = $roleAccessModel->clearData()->getRoleAccessList($role);
+
+        /** @var ResourceTreeService $treeService */
+        $treeService = ObjectManager::getInstance(\Weline\Acl\Service\ResourceTreeService::class);
+        $trees = $treeService->getAclAssignmentTree($role);
         $this->assign('trees', $trees);
-        $this->assign('current_accesses', $current_accesses);
-        
-        // 获取统计信息（用于前端显示已选/总数）
-        $statistics = $roleAccessModel->clear()->getTreeStatistics($role);
+
+        // 从已构建的树中直接提取统计、模块列表和类型列表，避免重复查询
+        $statistics = [];
+        $moduleSet = [];
+        $typeSet = [];
+        foreach ($trees as $tree) {
+            $sid = $tree->getSourceId();
+            $stats = $this->countNodeStats($tree, $moduleSet, $typeSet);
+            $statistics[$sid] = [
+                'source_id' => $sid,
+                'source_name' => $tree->getSourceName(),
+                'module' => explode('::', $sid)[0] ?? $sid,
+                'type' => $tree->getType(),
+                'total' => $stats['total'],
+                'selected' => $stats['selected'],
+            ];
+        }
         $this->assign('tree_statistics', $statistics);
-        
-        // 获取模块和类型列表（用于筛选器）
-        $moduleList = $roleAccessModel->getModuleList();
-        $typeList = $roleAccessModel->getTypeList();
-        $this->assign('module_list', $moduleList);
-        $this->assign('type_list', $typeList);
-        
-        // 当前用户角色
-        /**@var AuthenticatedSessionInterface $session */
+        $this->assign('module_list', array_keys($moduleSet));
+        $this->assign('type_list', array_keys($typeSet));
+
+        /** @var AuthenticatedSessionInterface $session */
         $session = SessionFactory::getInstance()->createBackendSession();
         $user = $session->getUser();
         $userRole = ($user instanceof \Weline\Backend\Model\BackendUser) ? $user->getRole() : null;
         $this->assign('user_role', $userRole);
         return $this->fetch('assign');
+    }
+
+    /**
+     * 递归统计节点总数/已选数，同时收集模块和类型
+     */
+    private function countNodeStats(object $node, array &$moduleSet, array &$typeSet): array
+    {
+        $total = 1;
+        $selected = $node->getData('role_id') ? 1 : 0;
+
+        $module = $node->getModule();
+        $type = $node->getType();
+        if ($module !== '' && $module !== null) {
+            $moduleSet[$module] = true;
+        }
+        if ($type !== '' && $type !== null) {
+            $typeSet[$type] = true;
+        }
+
+        foreach ($node->getSub() ?: [] as $sub) {
+            $sub_stats = $this->countNodeStats($sub, $moduleSet, $typeSet);
+            $total += $sub_stats['total'];
+            $selected += $sub_stats['selected'];
+        }
+        return ['total' => $total, 'selected' => $selected];
     }
 
     #[\Weline\Framework\Acl\Acl('Weline_Acl::acl_role_assign_post', '角色权限分配', '', '')]
