@@ -200,6 +200,7 @@ __('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count]
 | Session/Memory 管理页持续“不可用”，但进程全绿 | `session.server_host` 或 `server.memory_service.host` 配置存在但为空串，探活客户端使用空 host 连接失败 | `SharedStateAdminService` 对 host 做 `trim`，为空时回退 `127.0.0.1` |
 | Session 管理列表始终为空（后台已登录） | 协议层内部过滤键 `__domain` 被误用于聚合 payload 字段匹配，真实会话全部被过滤 | `listSessions()` 先清洗 payload 过滤参数，移除 `__*` 内部键后再做业务匹配 |
 | `w_query('server','sessionList')` 返回空数组（已登录） | 核心 `ServerQueryProvider::sessionList()` 仅透传共享列表，缺少“当前后台会话可见”兜底 | 在查询器层统一补齐当前后台会话可见性，调用方保持透传，避免模块级分叉补丁 |
+| Session 统计有数据但列表返回空数组 | 列表接口存在隐式 domain 过滤，且服务端默认跳过空 payload state | 取消默认 `__domain` 注入；`SessionServer::listSessions()` 按“全量”返回，不再丢弃空 payload |
 | 暗色模式过段时间失效（Session 像被重置） | `SessionStore` 读取仅更新 LRU，不刷新 TTL；读多写少场景下 Session 到点过期被 GC 回收 | 在 `SessionStore::get()` 调用 `touch()` 实现滑动过期；并建议对齐 `session_ttl/lifetime` 与 `cookie_lifetime` |
 | WLS 下记住我登录后仍循环跳登录页/登录页反复警告 | 自动登录分支未显式 `save + writeClose + Set-Cookie`，下一跳 ACL 仍判未登录；同时把 `sess_id` 校验做成硬拒绝，且在 `admin/login/post` 也抢先执行记住我分支 | 保留 token 认证为主：`sess_id` 无效时降级为新会话登录；并强制落盘+回写 `WELINE_SESSID`；对 `admin/login/post` 跳过记住我逻辑，避免干扰真实登录 |
 | 后台 EnvManager 页面 404（`.../backend/framework/env-manager`） | 模块后台路由前缀应为 `weline_framework`，且路径顺序应为 `{backend_router}/backend/{controller}`，手写成了 `backend/framework/...` | 菜单 action 与模板 URL 改为 `weline_framework/backend/env-manager`；执行 `setup:upgrade --route` 刷新路由 |
