@@ -15,6 +15,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\IPC;
 
+use Weline\Server\Log\LogLevel;
 use Weline\Server\Log\WlsLogger;
 
 class MasterControlServer
@@ -328,14 +329,22 @@ class MasterControlServer
                 $this->removeClient($clientId);
             }
 
-            // 开发模式：子进程日志汇聚到 Master；前台输出到控制台，始终写入 wls.log
+            // 开发模式：子进程日志汇聚到 Master；前台输出到控制台（着色），始终写入 wls.log（纯文本）
             if ($type === ControlMessage::TYPE_LOG) {
                 $line = $msg['line'] ?? '';
                 if ($line !== '') {
                     if ($this->logToConsole) {
-                        echo $line;
-                        if (\function_exists('flush')) {
-                            @\flush();
+                        $level = $msg['level'] ?? 'INFO';
+                        $pTag  = $msg['process_tag'] ?? '';
+                        $colored = LogLevel::colorLine($line, $level, $pTag);
+                        if (\defined('STDOUT') && \is_resource(STDOUT)) {
+                            @\fwrite(STDOUT, $colored);
+                            @\fflush(STDOUT);
+                        } else {
+                            echo $colored;
+                            if (\function_exists('flush')) {
+                                @\flush();
+                            }
                         }
                     }
                     WlsLogger::getInstance()->appendLineForMaster($line);
