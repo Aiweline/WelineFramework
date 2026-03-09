@@ -699,7 +699,7 @@ class Start extends CommandAbstract
         $workerBasePort = (int)($data['worker_base_port'] ?? 10000);
         $workerCount = (int)($data['count'] ?? 1);
         $config = [
-            'host' => (string)($data['host'] ?? '127.0.0.1'),
+            'host' => (string)($data['host'] ?? '0.0.0.0'),
             'port' => $port,
             'worker_count' => $workerCount,
             'worker_port' => $workerPort,
@@ -766,7 +766,7 @@ class Start extends CommandAbstract
      * - 验证 Master 进程是否存活
      * - 超时（5秒）时输出警告而非假成功
      */
-    protected function startMasterInBackground(string $instanceName, bool $sslEnabled = false, string $host = '127.0.0.1', int $port = 443): void
+    protected function startMasterInBackground(string $instanceName, bool $sslEnabled = false, string $host = '0.0.0.0', int $port = 443): void
     {
         $phpBinary = \defined('PHP_BINARY') ? PHP_BINARY : 'php';
         $script = BP . 'bin' . DS . 'w';
@@ -1158,7 +1158,7 @@ class Start extends CommandAbstract
     {
         // 默认配置（文件监听默认关闭，避免频繁触发热重载导致 Worker 不断重启）
         $defaults = [
-            'host' => '127.0.0.1',
+            'host' => '0.0.0.0',
             'port' => self::DEFAULT_PORT,
             'worker_count' => 'auto',
             'mode' => 'io',
@@ -1289,7 +1289,7 @@ class Start extends CommandAbstract
     {
         /** @var SslCertificateService $sslService */
         $sslService = ObjectManager::getInstance(SslCertificateService::class);
-        $host = $config['host'] ?? '127.0.0.1';
+        $host = $config['host'] ?? '0.0.0.0';
         $syncDomain = $this->resolveSslDomainForSync($host, (string)($config['ssl_domain'] ?? ''));
         
         // 智能判断是否为本地/内网环境（127.x, 10.x, 172.16-31.x, 192.168.x, localhost, *.local 等）
@@ -2611,7 +2611,7 @@ if (PHP_SAPI !== 'cli') {
 }
 
 // 获取参数
-$host = $argv[1] ?? '127.0.0.1';
+$host = $argv[1] ?? '0.0.0.0';
 $port = (int) ($argv[2] ?? 9981);
 $workerId = (int) ($argv[3] ?? 1);
 $instanceName = $argv[4] ?? 'default';
@@ -2714,7 +2714,7 @@ if (PHP_SAPI !== 'cli') {
 }
 
 // 获取参数
-$host = $argv[1] ?? '127.0.0.1';
+$host = $argv[1] ?? '0.0.0.0';
 $port = (int) ($argv[2] ?? 9981);
 $workerId = (int) ($argv[3] ?? 1);
 $instanceName = $argv[4] ?? 'default';
@@ -3548,7 +3548,7 @@ PHP;
                 '--cli' => __('使用 PHP 内置 CLI 服务器（开发模式，无 HTTPS）'),
                 '--strategy' => __('使用跨平台优化策略模式（Linux: SO_REUSEPORT 直连; Windows: TCP 透传）'),
                 '--strategy-info' => __('显示可用策略信息'),
-                '-h, --host <ip>' => __('监听地址（默认：127.0.0.1）'),
+                '-h, --host <ip>' => __('监听地址（默认：0.0.0.0）'),
                 '-p, --port <port>' => __('基础端口（默认：80/443，HTTPS 时用 443；可 -p 9981 等自定义）'),
                 '-c, --count <n>' => __('Worker 进程数（默认：auto 智能模式）'),
                 '--no-daemon' => __('前台运行（查看实时日志）'),
@@ -3895,7 +3895,7 @@ PHP;
         // 创建配置对象
         $serverConfig = new ServerConfig([
             'instance_name' => $instanceName,
-            'host' => $config['host'] ?? '127.0.0.1',
+            'host' => $config['host'] ?? '0.0.0.0',
             'port' => (int) ($config['port'] ?? ($sslEnabled ? 443 : 80)),
             'worker_count' => (int) ($config['worker_count'] ?? 4),
             'worker_base_port' => (int) ($config['worker_base_port'] ?? 10443),

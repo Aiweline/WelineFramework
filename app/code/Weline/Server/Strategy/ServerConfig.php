@@ -98,7 +98,7 @@ final class ServerConfig
     public function __construct(array $config = [])
     {
         $this->instanceName = $config['instance_name'] ?? 'default';
-        $this->host = $config['host'] ?? '127.0.0.1';
+        $this->host = $config['host'] ?? '0.0.0.0';
         $this->port = (int) ($config['port'] ?? 443);
         $this->workerCount = (int) ($config['worker_count'] ?? $this->detectOptimalWorkerCount());
         $this->workerBasePort = (int) ($config['worker_base_port'] ?? 10443);
