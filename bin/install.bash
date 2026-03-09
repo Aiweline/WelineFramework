@@ -33,7 +33,8 @@ usage() {
   exit 0
 }
 
-# 解析参数
+# 解析参数（保留原始参数用于 root→weline 重执行）
+ORIG_ARGS=("$@")
 PATH_ONLY=false
 REBUILD_PHP=false
 BRANCH="master"
@@ -190,6 +191,14 @@ ensure_weline_user() {
 
 # Linux root 安装时：先创建 weline 用户，项目归属及 initdb 均用此用户
 [[ "$PLATFORM" == "linux" ]] && ensure_weline_user
+
+# 原则：任何时候都应由 weline 执行安装。root 仅做最小准备后立即切换为 weline 重执行
+if [[ "$PLATFORM" == "linux" ]] && [[ "$(id -u)" -eq 0 ]] && [[ "${WELINE_AS_USER:-0}" != "1" ]]; then
+  echo "Switching to user $WELINE_USER for all installation steps..."
+  run_privileged chown -R "$WELINE_USER":"$WELINE_USER" "$ROOT" 2>/dev/null || true
+  [[ -d "$ROOT/.git" ]] && run_privileged sudo -u "$WELINE_USER" git config --global --add safe.directory "$ROOT" 2>/dev/null || true
+  exec run_privileged sudo -u "$WELINE_USER" env WELINE_AS_USER=1 PATH="$PATH" bash "$SCRIPT_DIR/install.bash" "${ORIG_ARGS[@]}"
+fi
 
 # 确保 git 已安装（拉取代码时需要）；按平台自动安装
 ensure_git_installed() {
@@ -1230,6 +1239,7 @@ ensure_framework_php_extensions() {
 }
 
 # 若 setup/server_installer/run.php 不存在，说明代码未安装：按 -b 指定分支拉取，未指定则 master
+# 已通过 root→weline 重执行，此处始终由 weline 执行
 if [[ ! -f "$ROOT/setup/server_installer/run.php" ]]; then
   ensure_git_installed || { echo "ERROR: Git is required to install code. Install Git and re-run." >&2; exit 1; }
   echo "run.php not found. Installing framework code from gitee (branch: $BRANCH)..."
@@ -1237,7 +1247,7 @@ if [[ ! -f "$ROOT/setup/server_installer/run.php" ]]; then
     git -C "$ROOT" fetch origin 2>/dev/null || true
     git -C "$ROOT" checkout "$BRANCH" 2>/dev/null || git -C "$ROOT" pull origin "$BRANCH" 2>/dev/null || true
   else
-    tmp_clone=`mktemp -d 2>/dev/null` || tmp_clone="/tmp/weline-clone-$$"
+    tmp_clone=$(mktemp -d 2>/dev/null) || tmp_clone="/tmp/weline-clone-$$"
     if ! git clone -b "$BRANCH" "$WELINE_REPO_URL" "$tmp_clone"; then
       echo "ERROR: Clone failed. Manual: git clone -b $BRANCH $WELINE_REPO_URL ." >&2
       rm -rf "$tmp_clone"
@@ -1277,33 +1287,24 @@ fix_project_ownership() {
   elif [[ "$PLATFORM" == "mac" ]]; then
     # Mac 下需要 sudo 来修改可能由其他用户/root 创建的文件权限
     if sudo -n true 2>/dev/null; then
-      # 已有 sudo 缓存，直接执行
-      sudo chown -R "$current_user":"$current_group" "$ROOT" 2>/dev/null || true
+      sudo chown -R "$owner_user":"$owner_group" "$ROOT" 2>/dev/null || true
     else
-      # 提示用户输入密码
       echo "需要 sudo 权限来设置项目目录所有权（如需输入密码请输入本机登录密码）..."
-      sudo chown -R "$current_user":"$current_group" "$ROOT" 2>/dev/null || {
+      sudo chown -R "$owner_user":"$owner_group" "$ROOT" 2>/dev/null || {
         echo "WARNING: 无法设置项目目录所有权。如遇权限问题，请手动执行："
-        echo "  sudo chown -R $current_user:$current_group $ROOT"
+        echo "  sudo chown -R $owner_user:$owner_group $ROOT"
       }
     fi
   fi
 }
 fix_project_ownership
 
-# root 安装且项目归属 weline 时：添加 safe.directory，避免 git pull 等报 dubious ownership
-if [[ "$PLATFORM" == "linux" ]] && [[ "$(id -u)" -eq 0 ]] && [[ -d "$ROOT/.git" ]]; then
-  run_privileged git config --global --add safe.directory "$ROOT" 2>/dev/null || true
-fi
-
+# root 阶段已在重执行前设置 safe.directory，此处无需重复
 echo ""
 RUN_ARGS=""
 [[ "$FORCE_INSTALL" == true ]] && RUN_ARGS="-f"
-if [[ "$PLATFORM" == "linux" ]] && [[ "$(id -u)" -eq 0 ]]; then
-  run_as_weline bash -c "cd \"$ROOT\" && \"$PHP_EXE\" setup/server_installer/run.php $RUN_ARGS" || exit 1
-else
-  (cd "$ROOT" && "$PHP_EXE" setup/server_installer/run.php $RUN_ARGS) || exit 1
-fi
+# 已通过 root→weline 重执行，此处始终由 weline 执行
+(cd "$ROOT" && "$PHP_EXE" setup/server_installer/run.php $RUN_ARGS) || exit 1
 echo ""
 cd "$ROOT"
 echo "Done. php, pgsql and bin (w command) have been added to PATH (written to shell config)."
