@@ -1177,14 +1177,14 @@ done
 add_to_path "$ROOT/bin"
 
 # 安装后：由 setup/server_installer/run.php 执行（与 Windows 一致；无 PHP 则报错退出）
-# 优先使用系统 PHP（如 /usr/bin/php），系统中无 php 命令时再回落到 extend/server/php 下的 PHP
+# 优先使用项目自编译 PHP（extend/server/php），宝塔环境下避免使用宝塔 PHP
 PHP_EXE=""
-if command -v php &>/dev/null; then
-  PHP_EXE="$(command -v php)"
-elif [[ -x "$SERVER_DIR/php/bin/php" ]]; then
+if [[ -x "$SERVER_DIR/php/bin/php" ]]; then
   PHP_EXE="$SERVER_DIR/php/bin/php"
 elif [[ -x "$SERVER_DIR/php/php" ]]; then
   PHP_EXE="$SERVER_DIR/php/php"
+elif command -v php &>/dev/null; then
+  PHP_EXE="$(command -v php)"
 fi
 if [[ -z "$PHP_EXE" ]] && [[ "$PLATFORM" == "mac" ]]; then
   for p in "$(brew --prefix php@8.4 2>/dev/null)" "$(brew --prefix php@8.3 2>/dev/null)" "$(brew --prefix php 2>/dev/null)"; do
