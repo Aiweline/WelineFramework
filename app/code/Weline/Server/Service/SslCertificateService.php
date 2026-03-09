@@ -894,7 +894,7 @@ CNF;
             /** @var EventsManager $eventsManager */
             $eventsManager = ObjectManager::getInstance(EventsManager::class);
             
-            $eventsManager->dispatch('Weline_Server::domain::certificate_issued', [
+            $data = [
                 'domain' => $domain,
                 'cert_id' => $certId,
                 'cert_path' => $certPath,
@@ -902,7 +902,8 @@ CNF;
                 'issuer' => $issuer,
                 'expires_at' => $expiresAt,
                 'cert_type' => $certType,
-            ]);
+            ];
+            $eventsManager->dispatch('Weline_Server::domain::certificate_issued', $data);
         } catch (\Throwable $e) {
             // 事件调度失败不影响主流程
             w_log_error('[SslCertificateService] ' . __('证书签发事件调度失败：%{1}', [$e->getMessage()]));
@@ -924,11 +925,12 @@ CNF;
             /** @var EventsManager $eventsManager */
             $eventsManager = ObjectManager::getInstance(EventsManager::class);
             
-            $eventsManager->dispatch('Weline_Server::domain::certificate_disabled', [
+            $data = [
                 'domain' => $domain,
                 'cert_id' => $certId,
                 'reason' => $reason,
-            ]);
+            ];
+            $eventsManager->dispatch('Weline_Server::domain::certificate_disabled', $data);
         } catch (\Throwable $e) {
             w_log_error('[SslCertificateService] ' . __('证书禁用事件调度失败：%{1}', [$e->getMessage()]));
         }
@@ -952,12 +954,13 @@ CNF;
             /** @var EventsManager $eventsManager */
             $eventsManager = ObjectManager::getInstance(EventsManager::class);
             
-            $eventsManager->dispatch('Weline_Server::domain::certificate_renewed', [
+            $data = [
                 'domain' => $domain,
                 'cert_id' => $certId,
                 'old_expires_at' => $oldExpiresAt,
                 'new_expires_at' => $newExpiresAt,
-            ]);
+            ];
+            $eventsManager->dispatch('Weline_Server::domain::certificate_renewed', $data);
         } catch (\Throwable $e) {
             w_log_error('[SslCertificateService] ' . __('证书更新事件调度失败：%{1}', [$e->getMessage()]));
         }

@@ -1,3 +1,15 @@
+<?php
+/**
+ * 可视化文件管理器 - 接入 weline_media (MediaManager)
+ *
+ * dir 约定（用于 MediaManager startPath，根为 pub/media）：
+ *   pagebuilder/pages/{handle}
+ * - 按页面 handle 隔离，便于按页面导出/备份
+ * - handle 为空时使用 pagebuilder/common 或提示先填写
+ */
+$weline_media_dir_prefix = 'pagebuilder/pages';
+$media_iframe_base_url = $this->getBackendUrl('media/backend/manager/iframe');
+?>
 <!-- 文件管理器样式与弹窗 -->
 <style>
 .asset-manager-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100002 !important;align-items:center;justify-content:center}
@@ -62,11 +74,8 @@
                 <button type="button" class="btn btn-sm btn-light" onclick="closeAssetManager()"><i class="mdi mdi-close"></i> <?= __('关闭') ?></button>
             </div>
         </div>
-        <div class="asset-manager-toolbar">
-            <button type="button" id="assetUpBtn" class="btn btn-sm btn-outline-secondary" onclick="upAssetDir()" disabled><i class="mdi mdi-arrow-up-bold"></i> <?= __('上一级') ?></button>
-            <button type="button" class="btn btn-sm btn-primary" onclick="pickAssetUpload()"><i class="mdi mdi-upload"></i> <?= __('上传文件') ?></button>
-            <span class="ms-auto small text-muted">Path: <span class="asset-path" id="assetPathText"></span></span>
-            <input id="assetFileInput" type="file" accept="image/*" style="display:none" onchange="handleAssetUpload(event)">
+        <div class="asset-manager-toolbar" id="assetManagerToolbar">
+            <span class="small text-muted"><?= __('目录') ?>: <span class="asset-path" id="assetPathText"></span></span>
         </div>
         <div class="asset-manager-body" id="assetListBody">
             <div class="p-4 text-center text-muted"><i class="mdi mdi-loading mdi-spin"></i> <?= __('加载中...') ?></div>
@@ -85,22 +94,8 @@
 
 <script>
 (function(){
-    // 打开/关闭
-    window.openAssetManager = function() {
-        const modal = document.getElementById('assetManagerModal');
-        if (modal) {
-            loadAssetList();
-            modal.classList.add('active');
-            document.body.style.overflow = 'hidden';
-        }
-    };
-    window.closeAssetManager = function() {
-        const modal = document.getElementById('assetManagerModal');
-        if (modal) {
-            modal.classList.remove('active');
-            document.body.style.overflow = '';
-        }
-    };
+    var WELINE_MEDIA_DIR_PREFIX = '<?= $weline_media_dir_prefix ?>';
+    var MEDIA_IFRAME_BASE = '<?= $media_iframe_base_url ?>';
 
     function getCurrentHandle(){
         var hEl = document.getElementById('handle');
@@ -111,163 +106,57 @@
         return val;
     }
 
-    window.loadAssetList = async function(sub=''){
-        try{
-            const handle = getCurrentHandle();
-            if (!handle){
-                document.getElementById('assetListBody').innerHTML = '<div class="alert alert-warning m-3"><?= __('请先填写页面句柄 handle') ?></div>';
-                return;
-            }
-            // 获取当前选中的网站ID
-            const websiteSelect = document.getElementById('website_id');
-            const websiteId = websiteSelect ? websiteSelect.value : '';
-            const listUrl = '<?= $this->getBackendUrl('pagebuilder/backend/page/listAssets') ?>' +
-                '?handle=' + encodeURIComponent(handle) + 
-                (sub ? ('&sub=' + encodeURIComponent(sub)) : '') +
-                (websiteId ? ('&website_id=' + encodeURIComponent(websiteId)) : '');
-            var res = await window.Weline.Api.get(listUrl, { credentials: 'same-origin', silent: true });
-            const data = (res && res.data) || res;
-            if (!data.success){
-                document.getElementById('assetListBody').innerHTML = '<div class="alert alert-danger m-3">' + (data.message || '<?= __('加载失败') ?>') + '</div>';
-                return;
-            }
-            document.getElementById('assetPathText').textContent = '/pub/media/page-build/' + handle + (data.sub ? '/' + data.sub : '');
-            document.getElementById('assetUpBtn').disabled = (data.sub === '');
-            document.getElementById('assetUpBtn').setAttribute('data-sub', data.sub || '');
+    window.openAssetManager = function() {
+        var modal = document.getElementById('assetManagerModal');
+        var body = document.getElementById('assetListBody');
+        var pathText = document.getElementById('assetPathText');
+        if (!modal || !body) return;
 
-            // 检查是否是图片文件
-            function isImageFile(filename) {
-                const ext = filename.split('.').pop().toLowerCase();
-                return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'].includes(ext);
-            }
-            
-            // 格式化文件大小
-            function formatFileSize(bytes) {
-                if (bytes === 0) return '0 B';
-                const k = 1024;
-                const sizes = ['B', 'KB', 'MB', 'GB'];
-                const i = Math.floor(Math.log(bytes) / Math.log(k));
-                return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-            }
-
-            let html = '<div class="asset-grid">';
-            data.items.forEach(it => {
-                // HTML 转义函数
-                function escapeHtml(text) {
-                    const div = document.createElement('div');
-                    div.textContent = text;
-                    return div.innerHTML;
-                }
-                
-                // 转义 JavaScript 字符串
-                function escapeJs(text) {
-                    return String(text).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
-                }
-                
-                if (it.type === 'dir'){
-                    const dirPath = (data.sub ? data.sub + '/' : '') + it.name;
-                    html += '<div class="asset-card" onclick="enterAssetDir(\'' + escapeJs(dirPath) + '\')">'
-                          + '  <div class="thumb" style="background:#fff3cd">'
-                          + '    <i class="mdi mdi-folder" style="font-size:48px;color:#ff9800"></i>'
-                          + '  </div>'
-                          + '  <div class="meta">'
-                          + '    <div class="name"><strong>' + escapeHtml(it.name) + '</strong></div>'
-                          + '    <div class="desc"><?= __('文件夹') ?></div>'
-                          + '  </div>'
-                          + '</div>';
-                } else {
-                    const isImage = isImageFile(it.name);
-                    const fileSize = formatFileSize(it.size || 0);
-                    const fileDate = new Date(it.mtime * 1000).toLocaleString('zh-CN');
-                    // 完整 URL 用于复制
-                    const escapedUrl = escapeJs(it.url);
-                    // 相对路径用于预览（在当前后台页面显示）
-                    const escapedPreviewUrl = escapeJs(it.relative_url || it.url);
-                    const escapedName = escapeJs(it.name);
-                    const htmlName = escapeHtml(it.name);
-                    
-                    html += '<div class="asset-card">';
-                    if (isImage) {
-                        html += '  <div class="thumb" onclick="previewImage(\'' + escapedPreviewUrl + '\', \'' + escapedName + '\')">'
-                              + '    <img src="' + escapeHtml(it.relative_url || it.url) + '" alt="' + htmlName + '" loading="lazy">'
-                              + '    <div class="preview-overlay"><i class="mdi mdi-eye"></i></div>'
-                              + '  </div>';
-                    } else {
-                        html += '  <div class="thumb" style="background:#e9ecef">'
-                              + '    <i class="mdi mdi-file" style="font-size:42px;color:#6c757d"></i>'
-                              + '  </div>';
-                    }
-                    html += '  <div class="meta">'
-                          + '    <div class="name">' + htmlName + '</div>'
-                          + '    <div class="desc">' + escapeHtml(fileSize) + ' · ' + escapeHtml(fileDate) + '</div>'
-                          + '  </div>';
-                    html += '  <div class="actions">'
-                          + '    <button type="button" onclick="copyAssetUrl(\'' + escapedUrl + '\')"><i class="mdi mdi-content-copy"></i><span><?= __('复制URL') ?></span></button>';
-                    if (isImage) {
-                        html += '    <button type="button" onclick="previewImage(\'' + escapedPreviewUrl + '\', \'' + escapedName + '\')"><i class="mdi mdi-eye"></i><span><?= __('预览') ?></span></button>';
-                    }
-                    html += '  </div>'
-                          + '</div>';
-                }
-            });
-            html += '</div>';
-            document.getElementById('assetListBody').innerHTML = html;
-        }catch(e){
-            document.getElementById('assetListBody').innerHTML = '<div class="alert alert-danger m-3">' + (e && e.message ? e.message : '<?= __('加载失败') ?>') + '</div>';
+        var handle = getCurrentHandle();
+        if (!handle) {
+            body.innerHTML = '<div class="alert alert-warning m-3"><?= __('请先填写页面句柄 handle') ?></div>';
+            if (pathText) pathText.textContent = '';
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            return;
         }
-    }
-    window.enterAssetDir = function(nextSub){ loadAssetList(nextSub); }
-    window.upAssetDir = function(){
-        const btn = document.getElementById('assetUpBtn');
-        const sub = btn.getAttribute('data-sub') || '';
-        if (!sub) return;
-        const parts = sub.split('/').filter(Boolean);
-        parts.pop();
-        loadAssetList(parts.join('/'));
-    }
+
+        var startPath = WELINE_MEDIA_DIR_PREFIX + '/' + handle;
+        var url = MEDIA_IFRAME_BASE + (MEDIA_IFRAME_BASE.indexOf('?') >= 0 ? '&' : '?') +
+            'startPath=' + encodeURIComponent(startPath) + '&lockPath=1';
+        body.innerHTML = '<iframe id="assetManagerIframe" src="' + (url.replace(/"/g, '&quot;')) + '" style="width:100%;height:70vh;min-height:400px;border:0" title="<?= __('媒体管理器') ?>"></iframe>';
+        if (pathText) pathText.textContent = '/pub/media/' + startPath;
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    };
+
+    window.closeAssetManager = function() {
+        var modal = document.getElementById('assetManagerModal');
+        var body = document.getElementById('assetListBody');
+        if (modal) {
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+        if (body) {
+            body.innerHTML = '<div class="p-4 text-center text-muted"><i class="mdi mdi-loading mdi-spin"></i> <?= __('加载中...') ?></div>';
+        }
+    };
+
     window.copyAssetUrl = function(url){
         if (navigator.clipboard && navigator.clipboard.writeText){
-            navigator.clipboard.writeText(url).then(()=>{
-                if (typeof showToast === 'function') showToast('success', '<?= __('已复制') ?>', url);
+            navigator.clipboard.writeText(url).then(function(){
+                if (typeof BackendToast !== 'undefined') BackendToast.success('<?= __('已复制') ?>');
+                else if (typeof showToast === 'function') showToast('success', '<?= __('已复制') ?>', url);
             });
         } else {
-            const ta = document.createElement('textarea');
+            var ta = document.createElement('textarea');
             ta.value = url; document.body.appendChild(ta); ta.select();
-            try{ document.execCommand('copy'); if (typeof showToast === 'function') showToast('success', '<?= __('已复制') ?>', url);}catch(_){}
+            try{ document.execCommand('copy'); if (typeof BackendToast !== 'undefined') BackendToast.success('<?= __('已复制') ?>'); }catch(_){}
             document.body.removeChild(ta);
         }
-    }
-    window.pickAssetUpload = function(){
-        const input = document.getElementById('assetFileInput');
-        if (input) input.click();
-    }
-    window.handleAssetUpload = async function(ev){
-        const files = ev.target.files; if (!files || !files.length) return;
-        const handle = getCurrentHandle();
-        const sub = (document.getElementById('assetUpBtn').getAttribute('data-sub') || '');
-        const fd = new FormData();
-        fd.append('file', files[0]);
-        fd.append('handle', handle);
-        fd.append('sub', sub);
-        try{
-            var url = '<?= $this->getBackendUrl('pagebuilder/backend/page/uploadAssetTo') ?>';
-            var opts = { method: 'POST', body: fd, credentials: 'same-origin' };
-            var res = await window.Weline.Api.request(url, opts);
-            const data = (res && res.data) || res;
-            if (data && data.success){
-                if (typeof showToast === 'function') showToast('success', '<?= __('上传成功') ?>', '');
-                loadAssetList(sub);
-            } else {
-                if (typeof showToast === 'function') showToast('error', '<?= __('上传失败') ?>', (data && data.message) ? data.message : '');
-            }
-        }catch(e){
-            if (typeof showToast === 'function') showToast('error', '<?= __('上传失败') ?>', e && e.message ? e.message : '');
-        } finally {
-            ev.target.value = '';
-        }
-    }
-    
-    // 图片预览功能
+    };
+
+    // 图片预览功能（供其他选择器回调等使用）
     window.previewImage = function(url, name) {
         const modal = document.getElementById('imagePreviewModal');
         const img = document.getElementById('imagePreviewImg');

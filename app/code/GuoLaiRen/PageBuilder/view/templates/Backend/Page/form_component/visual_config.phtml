@@ -799,7 +799,7 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     bottom: 0 !important;
     width: 100vw !important;
     height: 100vh !important;
-    z-index: 99999 !important;
+    z-index: 9999 !important;
     transform: none !important;
 }
 
@@ -5048,7 +5048,8 @@ async function saveComponentOrder() {
 
 // 添加组件到布局
 window.addComponentToLayout = async function(componentData, region, replace = false, position = null) {
-    const pageId = window.visualPageId || 0;
+    // 模板配置模式下使用与预览 iframe 相同的 page_id，确保添加后刷新预览能显示所选组件
+    const pageId = (window.isTemplateConfigMode && window.currentTemplatePageId) ? window.currentTemplatePageId : (window.visualPageId || 0);
     
     // 在操作前保存滚动位置
     const iframe = document.getElementById('previewIframe');
