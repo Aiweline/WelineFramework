@@ -57,10 +57,11 @@ class MenuCollector
     public function collectWithDiagnostics(array $modulesFilter = []): array
     {
         $fileListCount = count($this->menuReader->getFileList());
-        [$modules_xml_menus, , , $file_menu_count] = $this->collectInternal($modulesFilter);
+        [$modules_xml_menus, , , $file_menu_count, $diff] = $this->collectInternal($modulesFilter);
         return [
             'file_menu_count' => $file_menu_count,
             'raw_config_count' => $fileListCount,
+            'diff' => $diff,
             'result' => [$modules_xml_menus, [], []],
         ];
     }
@@ -74,12 +75,12 @@ class MenuCollector
      */
     public function collect(array $modulesFilter = []): array
     {
-        [$modules_xml_menus, , $modules_info, ] = $this->collectInternal($modulesFilter);
+        [$modules_xml_menus, , $modules_info, , ] = $this->collectInternal($modulesFilter);
         return [$modules_xml_menus, [], $modules_info];
     }
 
     /**
-     * @return array{0: array, 1: array, 2: array, 3: int} [modules_xml_menus, update_items, modules_info, file_menu_count]
+     * @return array{0: array, 1: array, 2: array, 3: int, 4: array} [modules_xml_menus, update_items, modules_info, file_menu_count, diff]
      */
     private function collectInternal(array $modulesFilter = []): array
     {
@@ -91,14 +92,14 @@ class MenuCollector
 
         // 保护：未指定模块且文件端为空时，不执行破坏性操作
         if (empty($modulesFilter) && empty($file_menus)) {
-            return [$modules_xml_menus, [], $modules_info, count($file_menus)];
+            return [$modules_xml_menus, [], $modules_info, count($file_menus), []];
         }
 
         $diff = $this->computeDiff($file_menus, $db_menus, $disabledModules);
 
         $this->executeBatch($diff, $file_menus, $db_menus);
 
-        return [$modules_xml_menus, [], $modules_info, count($file_menus)];
+        return [$modules_xml_menus, [], $modules_info, count($file_menus), $diff];
     }
 
     /**
@@ -146,13 +147,14 @@ class MenuCollector
 
     /**
      * 构建数据库端 ACL 菜单状态（source_id => row）
-     * 直接从 weline_acl 读取 type=menus 的记录
+     * 读取 weline_acl 中 type=menus 且 acl_origin != 'user' 的记录。
+     * 不仅限于 acl_origin='menu_xml'，以兼容旧记录（空/NULL acl_origin）。
      */
     private function buildDbAclMenus(array $modulesFilter): array
     {
         $this->acl->reset();
         $this->acl->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
-            ->where(Acl::schema_fields_ACL_ORIGIN, Acl::acl_origin_menu_xml);
+            ->where(Acl::schema_fields_ACL_ORIGIN, Acl::acl_origin_user, '!=');
         
         if (!empty($modulesFilter)) {
             $this->acl->where(Acl::schema_fields_MODULE, $modulesFilter, 'in');
@@ -395,7 +397,7 @@ class MenuCollector
         $children = $this->acl->reset()
             ->where(Acl::schema_fields_PARENT_SOURCE, $parentSource)
             ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
-            ->where(Acl::schema_fields_ACL_ORIGIN, Acl::acl_origin_menu_xml)
+            ->where(Acl::schema_fields_ACL_ORIGIN, Acl::acl_origin_user, '!=')
             ->select()
             ->fetchArray();
         foreach ($children as $child) {
