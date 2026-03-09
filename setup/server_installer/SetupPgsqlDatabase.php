@@ -559,6 +559,7 @@ final class SetupPgsqlDatabase
         return [
             'env' => 'local',
             'db' => [],
+            'server' => ['host' => '0.0.0.0', 'port' => 9981],
             'cache' => ['default' => 'file', 'drivers' => ['file' => ['path' => 'var/cache/']], 'status' => []],
             'session' => ['default' => 'file', 'drivers' => []],
             'log' => ['error' => 'var/log/error.log', 'exception' => 'var/log/exception.log'],
