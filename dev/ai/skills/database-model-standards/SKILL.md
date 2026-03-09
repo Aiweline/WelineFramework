@@ -271,6 +271,7 @@ $sql = "INSERT INTO table (field1, field2) VALUES (?, ?) ON CONFLICT (field1) DO
 **批量唯一键写入注意（PostgreSQL）**:
 - 对唯一键（如 `identify`）做批量写入时，先做“批内去重”，避免同一批次重复键直接冲突。
 - 若升级脚本场景出现批量 upsert 路径不稳定，可采用幂等策略：`where(unique_key IN (...))->delete()->fetch()` 后再 `insert(rows)->fetch()`。
+- 模型复用场景下，删除前请先 `recovery()` 清理模型残留 `id`；否则 `delete()` 可能被委托逻辑降级为“按主键删单条”，导致 `where IN` 条件不生效。
 - 升级/同步类任务优先保证“可重复执行不报错”，再优化为更激进的 upsert。
 
 **PostgreSQL 特别注意：**
