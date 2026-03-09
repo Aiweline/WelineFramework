@@ -174,8 +174,12 @@ class QuickBuildAggregator
             'resolve_to_local' => $options['resolve_to_local'] ?? ($autoResolve ? 'yes' : 'no'),
             'subdomains' => $options['subdomains'] ?? ['@', 'www'],
             'dns_choice' => $options['dns_choice'] ?? 'follow_registrar',
+            'dns_provider' => $options['dns_provider'] ?? '',
+            'dns_account_id' => $options['dns_account_id'] ?? 0,
             'dns_nameservers' => $options['dns_nameservers'] ?? '',
             'cdn_choice' => $options['cdn_choice'] ?? 'follow_registrar',
+            'cdn_provider' => $options['cdn_provider'] ?? '',
+            'cdn_account_id' => $options['cdn_account_id'] ?? 0,
             'start_lifecycle' => $options['start_lifecycle'] ?? '1',
         ]);
     }
