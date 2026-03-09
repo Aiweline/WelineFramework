@@ -123,7 +123,7 @@ __('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count]
 | `upgrade()` 方法不执行 | 已废弃：Model upgrade() 不再被调用 | 表结构用 #[Col] 声明，运行 `php bin/w setup:upgrade`；业务初始化放 Setup/Install.php、Upgrade.php |
 | 数据库字段未添加 | 未用声明式 schema 或未执行 setup:upgrade | 在 Model 上增加 #[Col]，执行 `php bin/w setup:upgrade` |
 | 升级逻辑被跳过 | 已废弃：不再通过版本号触发 Model upgrade | 数据/种子迁移写在 Setup/Upgrade.php，表结构用 #[Col]+setup:upgrade |
-| `setup:upgrade` 在 `UrlManager/Plugin/ModuleUpgradeExecuteAfterPlugin.php` 内存溢出 | 同一方法内顺序加载多份大路由数组，变量驻留到方法末尾 + 重复模块 ID 查询抬高内存峰值 | 抽成分段方法逐文件处理；每段后 `unset($urls)+gc_collect_cycles()`；增加 module->id 缓存 |
+| `setup:upgrade` 在 `UrlManager/Plugin/ModuleUpgradeExecuteAfterPlugin.php` 内存溢出 | 路由文件加载后逐条 `save()` 导致 ORM 中间态与内存峰值持续抬升，128M 容易在 `include` 阶段 OOM | 使用分块批量 upsert：`insert($batchRows, identify)->fetch()`；分段处理后 `unset + gc_collect_cycles()`；必要时仅在 `include` 前临时提升 `memory_limit` 并立即恢复 |
 | `Call to undefined method columnExist()` | 方法名错误 | 使用 `$setup->hasField()` 检查字段 |
 | `addColumn()` 直接在 setup 调用失败 | 需要先获取 alterTable | 使用 `$setup->alterTable()->addColumn()` |
 | `Argument #3 ($type) must be of type string` | alterTable 和 createTable 签名不同 | alterTable: `(name, after, type, len, opt, comment)` |

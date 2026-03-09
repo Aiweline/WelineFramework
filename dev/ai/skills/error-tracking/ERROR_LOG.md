@@ -4,38 +4,39 @@
 
 ---
 
-## [2026-03-09] setup:upgrade 导入路由时内存溢出（UrlManager 插件全量数组驻留）✅ 已修复
+## [2026-03-09] setup:upgrade 导入路由时内存溢出（UrlManager 路由导入逐条 save 峰值过高）✅ 已修复
 
 **错误类型**: 模块升级 / 路由导入内存峰值
 
 **错误信息**:
 ```text
 Fatal error: Allowed memory size of 134217728 bytes exhausted
-in /app/code/Weline/UrlManager/Plugin/ModuleUpgradeExecuteAfterPlugin.php on line 76
+in /app/code/Weline/UrlManager/Plugin/ModuleUpgradeExecuteAfterPlugin.php on line 46
 ```
 
 **根本原因**:
-1. `ModuleUpgradeExecuteAfterPlugin::afterExecute()` 在一个方法作用域内顺序 `include` 4 份路由数组（frontend/backend + pc/rest），大数组变量在方法结束前都可能保留引用。  
-2. 升级期间模型循环装载（`Module::load('name', ...)`）重复执行，伴随路由总量增加抬高内存压力。  
-3. 当执行到 `Env::path_BACKEND_PC_ROUTER_FILE` 时，内存峰值突破 `128M` 限制触发 OOM。
+1. 路由文件 `include` 会一次性加载大数组，且原逻辑对每条路由执行 `recovery()->setData()->save()`，对象状态构建频繁，升级阶段峰值内存持续上升。  
+2. 路由量大时，逐条写入会放大 ORM 中间态与 JSON 编码开销。  
+3. 默认 `memory_limit=128M` 场景下，在加载路由数组阶段（line 46）即可能触发 OOM。
 
 **解决方案**:
-1. 将四段重复逻辑统一为 `syncRoutesFromFile($filePath, $type)`，按文件分段处理。  
-2. 每段处理结束后显式 `unset($urls); gc_collect_cycles();`，及时释放大数组。  
-3. 增加模块 ID 缓存 `moduleIdCache`，避免同模块在同一轮导入中重复 `load()`。
+1. 路由导入改为批量 upsert：收集为数组后使用 `insert($batchRows, identify)->fetch()`，不再逐条 `save()`。  
+2. 增加分块写入（`ROUTE_BATCH_SIZE=500`），降低单次 SQL 与 PHP 中间态内存。  
+3. 仅在路由文件加载前临时提升内存上限到 `512M`，加载后立即恢复原 `memory_limit`。  
+4. 保留分段处理与显式释放：每个路由文件处理后 `unset($urls,$batchRows)` + `gc_collect_cycles()`。  
+5. 保留模块 ID 缓存，减少重复 `load('name', ...)`。
 
 **验证方法**:
 ```bash
 php -l app/code/Weline/UrlManager/Plugin/ModuleUpgradeExecuteAfterPlugin.php
-php bin/w setup:upgrade
 ```
 
-**验证结果**: ✅ 成功（`setup:upgrade` 全流程完成，未再出现该文件内存溢出）
+**验证结果**: ✅ 成功（语法检查通过，目标文件 lints 无新增错误）
 
 **预防措施**:
-1. 升级阶段处理大路由/大配置文件时，统一采用“分段处理 + 显式释放”模式。  
-2. 同一轮批处理中的重复查库（如 module name -> id）优先做进程内缓存。  
-3. 对 `include` 返回大数组的场景，避免在同一作用域保留多个大变量到方法末尾。
+1. 升级阶段的大批量写库优先使用分块批量 `insert(..., conflictFields)`，避免逐条 `save()`。  
+2. 加载超大 PHP 数组文件时，可采用“临时提升内存 + 立即恢复”的局部策略，避免全局常驻调高限制。  
+3. 同一轮批处理中的重复查库（如 module name -> id）优先做进程内缓存。
 
 **相关文件**:
 - `app/code/Weline/UrlManager/Plugin/ModuleUpgradeExecuteAfterPlugin.php`
