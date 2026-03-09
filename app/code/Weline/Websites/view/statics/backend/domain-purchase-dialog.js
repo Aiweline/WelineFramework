@@ -15,13 +15,16 @@
         var style = document.createElement('style');
         style.textContent = [
             '.weline-domain-purchase-dialog-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200000;display:flex;align-items:center;justify-content:center;padding:16px;}',
-            '.weline-domain-purchase-dialog{width:min(640px,100%);background:var(--backend-color-card-bg,#fff);color:var(--backend-color-text-primary,#212529);border:1px solid var(--backend-color-border-default,#dee2e6);border-radius:12px;box-shadow:var(--backend-shadow-lg,0 10px 30px rgba(0,0,0,.18));overflow:hidden;}',
+            '.weline-domain-purchase-dialog{width:min(860px,100%);background:var(--backend-color-card-bg,#fff);color:var(--backend-color-text-primary,#212529);border:1px solid var(--backend-color-border-default,#dee2e6);border-radius:12px;box-shadow:var(--backend-shadow-lg,0 10px 30px rgba(0,0,0,.18));overflow:hidden;}',
             '.weline-domain-purchase-dialog__header{padding:16px 20px;border-bottom:1px solid var(--backend-color-border-default,#dee2e6);display:flex;justify-content:space-between;align-items:center;gap:12px;}',
             '.weline-domain-purchase-dialog__title{font-size:18px;font-weight:600;}',
             '.weline-domain-purchase-dialog__close{background:transparent;border:none;color:var(--backend-color-text-secondary,#6c757d);font-size:22px;cursor:pointer;}',
             '.weline-domain-purchase-dialog__body{padding:20px;display:flex;flex-direction:column;gap:14px;}',
             '.weline-domain-purchase-dialog__desc{color:var(--backend-color-text-secondary,#6c757d);font-size:13px;line-height:1.5;margin-top:-4px;}',
             '.weline-domain-purchase-dialog__grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}',
+            '.weline-domain-purchase-dialog__section{border:1px solid var(--backend-color-border-default,#dee2e6);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px;background:var(--backend-color-bg-primary,#fff);}',
+            '.weline-domain-purchase-dialog__section-title{font-size:14px;font-weight:700;margin:0;}',
+            '.weline-domain-purchase-dialog__section-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}',
             '.weline-domain-purchase-dialog__field{display:flex;flex-direction:column;gap:6px;}',
             '.weline-domain-purchase-dialog__field--full{grid-column:1 / -1;}',
             '.weline-domain-purchase-dialog__label{font-size:13px;font-weight:600;}',
@@ -33,7 +36,7 @@
             '.weline-domain-purchase-dialog__btn--cancel{background:var(--backend-color-bg-secondary,#f8f9fa);color:var(--backend-color-text-primary,#212529);}',
             '.weline-domain-purchase-dialog__btn--confirm{background:var(--backend-color-primary,#556ee6);color:var(--backend-color-text-inverse,#fff);}',
             '.weline-domain-purchase-dialog__field[hidden]{display:none !important;}',
-            '@media (max-width: 768px){.weline-domain-purchase-dialog__grid{grid-template-columns:1fr;}}'
+            '@media (max-width: 768px){.weline-domain-purchase-dialog__grid,.weline-domain-purchase-dialog__section-grid{grid-template-columns:1fr;}}'
         ].join('');
         document.head.appendChild(style);
         styleInjected = true;
@@ -47,35 +50,37 @@
 
     function getLabelMap(customLabels) {
         return Object.assign({
-            title: 'Purchase Domain',
-            description: 'Choose how DNS, CDN, and lifecycle monitoring should be handled after the domain is purchased.',
-            dnsChoice: 'DNS Strategy',
-            dnsFollowRegistrar: 'Follow registrar',
-            dnsSelectProviderAccount: 'Specify provider account',
-            dnsCustomNameservers: 'Custom nameservers',
-            dnsProvider: 'DNS Provider',
-            dnsAccount: 'DNS Account',
-            dnsProviderPlaceholder: 'Select provider',
-            dnsAccountPlaceholder: 'Select account',
-            dnsNameservers: 'Nameservers',
+            title: '购买域名',
+            description: '确认购买后，系统会按所选策略处理 DNS、CDN、解析与后续状态跟踪。',
+            dnsSectionTitle: 'DNS 配置',
+            cdnSectionTitle: 'CDN 配置',
+            dnsChoice: 'DNS 策略',
+            dnsFollowRegistrar: '跟随域名商',
+            dnsSelectProviderAccount: '指定供应商账户',
+            dnsCustomNameservers: '自定义 Nameserver',
+            dnsProvider: 'DNS 服务商',
+            dnsAccount: 'DNS 账户',
+            dnsProviderPlaceholder: '请选择 DNS 服务商',
+            dnsAccountPlaceholder: '请选择 DNS 账户',
+            dnsNameservers: 'Nameserver 列表',
             dnsNameserversPlaceholder: 'ns1.example.com, ns2.example.com',
-            cdnChoice: 'CDN Strategy',
-            cdnFollowRegistrar: 'Follow registrar',
-            cdnSelectProviderAccount: 'Specify provider account',
-            cdnNone: 'Do not configure CDN',
-            cdnProvider: 'CDN Provider',
-            cdnAccount: 'CDN Account',
-            cdnProviderPlaceholder: 'Select provider',
-            cdnAccountPlaceholder: 'Select account',
-            resolveToLocal: 'Resolve @ and www to this server',
-            resolveHint: 'The purchase flow will create records for the selected subdomains and monitor their status.',
-            subdomains: 'Subdomains',
+            cdnChoice: 'CDN 策略',
+            cdnFollowRegistrar: '跟随域名商',
+            cdnSelectProviderAccount: '指定供应商账户',
+            cdnNone: '暂不配置 CDN',
+            cdnProvider: 'CDN 服务商',
+            cdnAccount: 'CDN 账户',
+            cdnProviderPlaceholder: '请选择 CDN 服务商',
+            cdnAccountPlaceholder: '请选择 CDN 账户',
+            resolveToLocal: '自动解析到本服务器',
+            resolveHint: '默认会解析 @ 和 www，并持续检查域名状态。',
+            subdomains: '自动解析子域名',
             subdomainsPlaceholder: '@, www',
-            startLifecycle: 'Start lifecycle tracking after purchase',
-            startLifecycleHint: 'The system will monitor purchase, DNS, verification, and HTTPS status automatically.',
-            selectAccountRequired: 'Please select the corresponding provider account.',
-            confirm: 'Confirm Purchase',
-            cancel: 'Cancel'
+            startLifecycle: '启动全流程状态跟踪',
+            startLifecycleHint: '购买后自动跟踪购买、DNS、验证、HTTPS 等步骤。',
+            selectAccountRequired: '请选择对应的供应商账户。',
+            confirm: '确认购买',
+            cancel: '取消'
         }, customLabels || {});
     }
 
@@ -151,6 +156,8 @@
             cdnChoice: 'follow_registrar',
             cdnProvider: '',
             cdnAccountId: '',
+            currentAccountId: '',
+            currentRegistrarCode: '',
             resolveToLocal: true,
             subdomains: '@,www',
             startLifecycle: true
@@ -178,41 +185,51 @@
                 + '  </div>'
                 + '  <div class="weline-domain-purchase-dialog__body">'
                 + '    <div class="weline-domain-purchase-dialog__grid">'
-                + '      <div class="weline-domain-purchase-dialog__field">'
-                + '        <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.dnsChoice) + '</label>'
-                + '        <select class="weline-domain-purchase-dialog__select" data-role="dns-choice">'
-                + '          <option value="follow_registrar">' + escapeHtml(labels.dnsFollowRegistrar) + '</option>'
-                + '          <option value="provider_account">' + escapeHtml(labels.dnsSelectProviderAccount) + '</option>'
-                + '          <option value="custom_nameservers">' + escapeHtml(labels.dnsCustomNameservers) + '</option>'
-                + '        </select>'
+                + '      <div class="weline-domain-purchase-dialog__section">'
+                + '        <div class="weline-domain-purchase-dialog__section-title">' + escapeHtml(labels.dnsSectionTitle) + '</div>'
+                + '        <div class="weline-domain-purchase-dialog__section-grid">'
+                + '          <div class="weline-domain-purchase-dialog__field weline-domain-purchase-dialog__field--full">'
+                + '            <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.dnsChoice) + '</label>'
+                + '            <select class="weline-domain-purchase-dialog__select" data-role="dns-choice">'
+                + '              <option value="follow_registrar">' + escapeHtml(labels.dnsFollowRegistrar) + '</option>'
+                + '              <option value="provider_account">' + escapeHtml(labels.dnsSelectProviderAccount) + '</option>'
+                + '              <option value="custom_nameservers">' + escapeHtml(labels.dnsCustomNameservers) + '</option>'
+                + '            </select>'
+                + '          </div>'
+                + '          <div class="weline-domain-purchase-dialog__field" data-role="dns-provider-field" hidden>'
+                + '            <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.dnsProvider) + '</label>'
+                + '            <select class="weline-domain-purchase-dialog__select" data-role="dns-provider"></select>'
+                + '          </div>'
+                + '          <div class="weline-domain-purchase-dialog__field" data-role="dns-account-field" hidden>'
+                + '            <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.dnsAccount) + '</label>'
+                + '            <select class="weline-domain-purchase-dialog__select" data-role="dns-account"></select>'
+                + '          </div>'
+                + '          <div class="weline-domain-purchase-dialog__field weline-domain-purchase-dialog__field--full" data-role="dns-nameservers-field" hidden>'
+                + '            <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.dnsNameservers) + '</label>'
+                + '            <input type="text" class="weline-domain-purchase-dialog__input" data-role="dns-nameservers" placeholder="' + escapeHtml(labels.dnsNameserversPlaceholder) + '">'
+                + '          </div>'
+                + '        </div>'
                 + '      </div>'
-                + '      <div class="weline-domain-purchase-dialog__field">'
-                + '        <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.cdnChoice) + '</label>'
-                + '        <select class="weline-domain-purchase-dialog__select" data-role="cdn-choice">'
-                + '          <option value="follow_registrar">' + escapeHtml(labels.cdnFollowRegistrar) + '</option>'
-                + '          <option value="provider_account">' + escapeHtml(labels.cdnSelectProviderAccount) + '</option>'
-                + '          <option value="none">' + escapeHtml(labels.cdnNone) + '</option>'
-                + '        </select>'
-                + '      </div>'
-                + '      <div class="weline-domain-purchase-dialog__field" data-role="dns-provider-field" hidden>'
-                + '        <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.dnsProvider) + '</label>'
-                + '        <select class="weline-domain-purchase-dialog__select" data-role="dns-provider"></select>'
-                + '      </div>'
-                + '      <div class="weline-domain-purchase-dialog__field" data-role="dns-account-field" hidden>'
-                + '        <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.dnsAccount) + '</label>'
-                + '        <select class="weline-domain-purchase-dialog__select" data-role="dns-account"></select>'
-                + '      </div>'
-                + '      <div class="weline-domain-purchase-dialog__field" data-role="cdn-provider-field" hidden>'
-                + '        <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.cdnProvider) + '</label>'
-                + '        <select class="weline-domain-purchase-dialog__select" data-role="cdn-provider"></select>'
-                + '      </div>'
-                + '      <div class="weline-domain-purchase-dialog__field" data-role="cdn-account-field" hidden>'
-                + '        <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.cdnAccount) + '</label>'
-                + '        <select class="weline-domain-purchase-dialog__select" data-role="cdn-account"></select>'
-                + '      </div>'
-                + '      <div class="weline-domain-purchase-dialog__field weline-domain-purchase-dialog__field--full" data-role="dns-nameservers-field" hidden>'
-                + '        <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.dnsNameservers) + '</label>'
-                + '        <input type="text" class="weline-domain-purchase-dialog__input" data-role="dns-nameservers" placeholder="' + escapeHtml(labels.dnsNameserversPlaceholder) + '">'
+                + '      <div class="weline-domain-purchase-dialog__section">'
+                + '        <div class="weline-domain-purchase-dialog__section-title">' + escapeHtml(labels.cdnSectionTitle) + '</div>'
+                + '        <div class="weline-domain-purchase-dialog__section-grid">'
+                + '          <div class="weline-domain-purchase-dialog__field weline-domain-purchase-dialog__field--full">'
+                + '            <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.cdnChoice) + '</label>'
+                + '            <select class="weline-domain-purchase-dialog__select" data-role="cdn-choice">'
+                + '              <option value="follow_registrar">' + escapeHtml(labels.cdnFollowRegistrar) + '</option>'
+                + '              <option value="provider_account">' + escapeHtml(labels.cdnSelectProviderAccount) + '</option>'
+                + '              <option value="none">' + escapeHtml(labels.cdnNone) + '</option>'
+                + '            </select>'
+                + '          </div>'
+                + '          <div class="weline-domain-purchase-dialog__field" data-role="cdn-provider-field" hidden>'
+                + '            <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.cdnProvider) + '</label>'
+                + '            <select class="weline-domain-purchase-dialog__select" data-role="cdn-provider"></select>'
+                + '          </div>'
+                + '          <div class="weline-domain-purchase-dialog__field" data-role="cdn-account-field" hidden>'
+                + '            <label class="weline-domain-purchase-dialog__label">' + escapeHtml(labels.cdnAccount) + '</label>'
+                + '            <select class="weline-domain-purchase-dialog__select" data-role="cdn-account"></select>'
+                + '          </div>'
+                + '        </div>'
                 + '      </div>'
                 + '      <div class="weline-domain-purchase-dialog__field weline-domain-purchase-dialog__field--full">'
                 + '        <label class="weline-domain-purchase-dialog__checkbox"><input type="checkbox" data-role="resolve-to-local"> <span>' + escapeHtml(labels.resolveToLocal) + '</span></label>'
@@ -264,7 +281,7 @@
             subdomains.value = defaults.subdomains || '@,www';
             startLifecycle.checked = !!defaults.startLifecycle;
 
-            function syncAccountOptions(providerSelect, accountSelect, placeholder, defaultAccountId) {
+            function syncAccountOptions(providerSelect, accountSelect, placeholder, preferredAccountId) {
                 var providerCode = providerSelect.value || '';
                 var accounts = providerCode && providerMap[providerCode] ? providerMap[providerCode].accounts : [];
                 accountSelect.innerHTML = buildOptionsHtml(accounts.map(function (account) {
@@ -273,8 +290,8 @@
                         label: account.account_name + ' (' + account.registrar_name + ')'
                     };
                 }), placeholder);
-                if (defaultAccountId) {
-                    accountSelect.value = String(defaultAccountId);
+                if (preferredAccountId) {
+                    accountSelect.value = String(preferredAccountId);
                 } else if (accounts.length === 1) {
                     accountSelect.value = accounts[0].account_id;
                 }
@@ -286,7 +303,15 @@
                 dnsAccountField.hidden = !useProviderAccount;
                 dnsNameserversField.hidden = dnsChoice.value !== 'custom_nameservers';
                 if (useProviderAccount) {
-                    syncAccountOptions(dnsProvider, dnsAccount, labels.dnsAccountPlaceholder, defaults.dnsAccountId || '');
+                    if (!dnsProvider.value && defaults.currentRegistrarCode && providerMap[defaults.currentRegistrarCode]) {
+                        dnsProvider.value = defaults.currentRegistrarCode;
+                    }
+                    syncAccountOptions(
+                        dnsProvider,
+                        dnsAccount,
+                        labels.dnsAccountPlaceholder,
+                        defaults.dnsProvider === dnsProvider.value ? (defaults.dnsAccountId || '') : (defaults.currentRegistrarCode === dnsProvider.value ? defaults.currentAccountId : '')
+                    );
                 }
             }
 
@@ -295,7 +320,15 @@
                 cdnProviderField.hidden = !useProviderAccount;
                 cdnAccountField.hidden = !useProviderAccount;
                 if (useProviderAccount) {
-                    syncAccountOptions(cdnProvider, cdnAccount, labels.cdnAccountPlaceholder, defaults.cdnAccountId || '');
+                    if (!cdnProvider.value && defaults.currentRegistrarCode && providerMap[defaults.currentRegistrarCode]) {
+                        cdnProvider.value = defaults.currentRegistrarCode;
+                    }
+                    syncAccountOptions(
+                        cdnProvider,
+                        cdnAccount,
+                        labels.cdnAccountPlaceholder,
+                        defaults.cdnProvider === cdnProvider.value ? (defaults.cdnAccountId || '') : (defaults.currentRegistrarCode === cdnProvider.value ? defaults.currentAccountId : '')
+                    );
                 }
             }
 

@@ -3,10 +3,12 @@ declare(strict_types=1);
 
 namespace Weline\Saas\Service;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Saas\Model\ProvisioningOrder;
 use Weline\Saas\Model\ProvisioningStep;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
+use Weline\Websites\Service\DomainParserService;
 use Weline\Websites\Service\DomainPoolResolveService;
 use Weline\Websites\Service\DomainResolveService;
 use Weline\Websites\Service\HealthCheckService;
@@ -267,11 +269,24 @@ class DomainLifecycleOrchestrationService
 
     public function getDomainLifecycleStatus(string $domain): array
     {
+        $domain = \strtolower(\trim($domain));
         $order = $this->getOrderByDomain($domain);
+        // 若精确匹配未找到，尝试按根域再查（用户可能输入 www.example.com 而订单存的是 example.com）
+        if ($order === null && \class_exists(DomainParserService::class)) {
+            try {
+                $parser = ObjectManager::getInstance(DomainParserService::class);
+                $rootDomain = $parser->parseRootDomain($domain);
+                if ($rootDomain !== '' && $rootDomain !== $domain) {
+                    $order = $this->getOrderByDomain($rootDomain);
+                }
+            } catch (\Throwable) {
+                // 解析失败时保持 order 为 null
+            }
+        }
         if ($order === null) {
             return [
                 'success' => false,
-                'message' => __('未找到该域名的生命周期订单'),
+                'message' => __('未找到该域名的生命周期订单。若通过域名购买功能购买，请确认购买时已勾选「启动全流程状态跟踪」，且 Weline_Saas 模块已启用。'),
             ];
         }
 
